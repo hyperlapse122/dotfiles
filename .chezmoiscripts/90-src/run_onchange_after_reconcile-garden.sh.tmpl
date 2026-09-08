@@ -5,7 +5,7 @@
 # bootstrap into an automatic step of `chezmoi apply`: whenever the ~/src
 # project registry changes, grow every declared tree and run the custom
 # bootstrap command (setup-upstream). Registering those trees with Orca is the
-# job of the run_after_orca-register script beside this one, which runs on every
+# job of the run_after_register-orca script beside this one, which runs on every
 # apply because Orca's registry is state this repository does not fingerprint.
 #
 # ADDITIVE ONLY. This never removes, relocates, or unlocks a tree, clone, or
@@ -101,38 +101,10 @@ GARDEN_PATH_MIRROR_SOURCED=1
 #
 #    Declaration-derived, so it runs BEFORE grow: the gate in step 2 must
 #    refuse a bad declaration before any directory is created. Paths do not
-#    change across grow, so step 4 reuses this same capture.
-raw_ls="$(garden --config "$reg" ls --all --no-commands --no-gardens --no-groups -v 2>&1)" || {
-  echo "reconcile-garden: 'garden ls' failed — cannot verify the registry:" >&2
-  printf '%s\n' "$raw_ls" >&2
-  exit 1
-}
-
-#    Parse those header lines ONCE into `name<TAB>abspath<TAB>relpath<TAB>url`
-#    records via the shared producer. Both consumers read this one set, so the
-#    header shape is decoded in exactly one place: the gate below wants
-#    name/relpath/url, the completeness check wants name/abspath.
-#
-#    A garden eval failure is reported, never swallowed: silently guessing the
-#    root would strip nothing, and every tree would then fail the gate as
-#    "outside the registry root" with the real cause invisible.
-if ! garden_root="$(garden --config "$reg" eval '${GARDEN_ROOT}' 2>&1)"; then
-  echo "reconcile-garden: 'garden eval' could not resolve the registry root, falling back to \$HOME/src: $garden_root" >&2
-  garden_root="$HOME/src"
-fi
-[ -n "$garden_root" ] || garden_root="$HOME/src"
-tree_records="$(printf '%s\n' "$raw_ls" | garden_path_mirror_records "$garden_root")"
-
-#    Every declared tree must have produced exactly one record. A `garden ls`
-#    that succeeds but whose output this parser no longer recognizes would
-#    otherwise leave both loops iterating zero times — green, with nothing
-#    checked.
-header_count="$(printf '%s\n' "$raw_ls" | garden_path_mirror_header_count)"
-record_count="$(printf '%s' "$tree_records" | grep -c . || true)"
-if [ "$record_count" -ne "$header_count" ] || [ "$header_count" -eq 0 ]; then
-  echo "reconcile-garden: parsed $record_count records from $header_count 'garden ls' tree headers — output format changed; refusing to grow unverified" >&2
-  exit 1
-fi
+#    change across grow, so step 4 reuses this same capture. The `garden ls`
+#    call, the root resolution and the record/header count check live in the
+#    shared helper, which run_after_register-orca.sh.tmpl needs identically.
+tree_records="$(garden_path_mirror_enumerate "$reg" reconcile-garden grow)" || exit 1
 
 # 2. Path-mirror gate — the ~/src layout rule (see TWO HARD GATES above for why
 #    it lives here).

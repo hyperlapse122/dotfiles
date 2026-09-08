@@ -20,11 +20,19 @@
 # `.chezmoiscripts/00-tools/run_after_90-activate-command-links.sh.tmpl` is the
 # same shape for the same reason.
 #
-# PLACEMENT (90-src, after the reconciler). It reads the same registry the
-# reconciler grows from, so it must run after grow: `run_after_` scripts execute
-# in name order and `run_onchange_after_reconcile-garden` sorts before
-# `run_after_orca-register` only by phase, so this script re-verifies each tree
-# is a work tree rather than assuming grow already ran this apply.
+# PLACEMENT (90-src, after the reconciler) — AND THE FILENAME IS LOAD-BEARING.
+# chezmoi strips the `run_`, `before_`/`after_`, `onchange_` attributes and the
+# `.tmpl` suffix before sorting same-phase scripts, so `onchange_` does not
+# order anything: what remains is compared lexically. The earlier name
+# `orca-register` sorted BEFORE `reconcile-garden` and this script ran first,
+# which meant a newly declared tree was registered only on the SECOND apply
+# (grow had not happened yet on the first). `register-orca` sorts after
+# `reconcile-garden`, which is the order this script needs. Renaming it back
+# reintroduces that one-apply lag silently.
+#
+# It still re-verifies each tree is a real work tree rather than assuming grow
+# ran this apply, because on the common apply the onchange reconciler does not
+# run at all.
 #
 # GATING. The container skip lives in the single gated .chezmoiignore block
 # (`.chezmoiscripts/90-src/*.sh`), the same one that skips the reconciler and
@@ -65,31 +73,9 @@ GARDEN_PATH_MIRROR_SOURCED=1
 ORCA_REGISTER_SOURCED=1
 {{ includeTemplate "orca-register.sh" . }}
 
-# One `garden ls -v` call, parsed by the same producer the reconciler uses, so
-# the declared path and the url behind each record are the ones the path-mirror
-# gate already accepted.
-raw_ls="$(garden --config "$reg" ls --all --no-commands --no-gardens --no-groups -v 2>&1)" || {
-  echo "orca-register: 'garden ls' failed — cannot enumerate declared trees:" >&2
-  printf '%s\n' "$raw_ls" >&2
-  exit 1
-}
-
-if ! garden_root="$(garden --config "$reg" eval '${GARDEN_ROOT}' 2>&1)"; then
-  echo "orca-register: 'garden eval' could not resolve the registry root, falling back to \$HOME/src: $garden_root" >&2
-  garden_root="$HOME/src"
-fi
-[ -n "$garden_root" ] || garden_root="$HOME/src"
-tree_records="$(printf '%s\n' "$raw_ls" | garden_path_mirror_records "$garden_root")"
-
-# A parser that silently yields nothing would register nothing and still exit
-# zero, so the record count is checked against the header count exactly as the
-# reconciler checks it.
-header_count="$(printf '%s\n' "$raw_ls" | garden_path_mirror_header_count)"
-record_count="$(printf '%s' "$tree_records" | grep -c . || true)"
-if [ "$record_count" -ne "$header_count" ] || [ "$header_count" -eq 0 ]; then
-  echo "orca-register: parsed $record_count records from $header_count 'garden ls' tree headers — output format changed; refusing to register unverified" >&2
-  exit 1
-fi
+# One `garden ls -v` call through the shared helper, so the declared path and
+# the url behind each record are the ones the path-mirror gate already accepted.
+tree_records="$(garden_path_mirror_enumerate "$reg" orca-register register)" || exit 1
 
 # Only trees that are actually on disk can be registered; a declared-but-not-grown
 # tree is the reconciler's business, not an error here.

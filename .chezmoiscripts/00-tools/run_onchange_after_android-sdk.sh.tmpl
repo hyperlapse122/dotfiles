@@ -63,7 +63,15 @@ fi
 # One AVD is what turns Orca's emulator panel from "not found" into a device
 # list. Created only when there is none: this script re-runs on every render
 # change, and an operator's own AVD must never be displaced.
-if [ -z "$("$ANDROID_BIN" --sdk="$ANDROID_HOME" emulator list 2>/dev/null | tr -d '[:space:]')" ]; then
+# The probe's own exit status decides, not its stdout: `emulator list 2>/dev/null`
+# makes a failing probe indistinguishable from "no AVD exists", so a broken SDK
+# would skip creation and the apply would finish green with exactly the empty
+# device list this script exists to prevent.
+if ! avd_list="$("$ANDROID_BIN" --sdk="$ANDROID_HOME" emulator list 2>&1)"; then
+  echo "android-sdk: 'emulator list' failed: $avd_list" >&2
+  exit 1
+fi
+if [ -z "$(printf '%s' "$avd_list" | tr -d '[:space:]')" ]; then
   echo "android-sdk: creating the default medium_phone AVD"
   "$ANDROID_BIN" --sdk="$ANDROID_HOME" emulator create medium_phone
 fi

@@ -77,11 +77,13 @@ After three consecutive failed attempts at the same objective, MUST stop editing
 Branch, worktree, session, and project-registration lifecycle is Orca-owned
 never with a bare `git worktree add`
 Never hand-remove worktrees; delete through `orca-ide worktree rm`
-that command also deletes the checked-out local branch, so it is destructive to unmerged work
+That command also deletes the checked-out local branch, so it is destructive to unmerged work
 Worktrees that predate Orca ownership are NOT migrated
 Orca registration is not a garden command
 It is ADDITIVE ONLY
 It reports garden drift only; it does not audit Orca registration.
+MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
+Orca has NO command that adopts an already-checked-out worktree
 NEEDLES
 
 while IFS= read -r banned; do

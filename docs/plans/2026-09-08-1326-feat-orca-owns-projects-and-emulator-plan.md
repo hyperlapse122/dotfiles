@@ -166,7 +166,7 @@ flowchart TD
       E -->|broken tree| X
       E -->|ok| F[garden cmd '*' setup-upstream]
     end
-    subgraph always["run_after_orca-register (every apply)"]
+    subgraph always["run_after_register-orca (every apply)"]
       G[garden ls -v, same record parser] --> H{orca-ide status --json}
       H -->|reachable| J[register each tree]
       H -->|appRunning, not reachable| X2[exit 1: desktop runtime unreachable]
@@ -222,7 +222,7 @@ U1 and U2 land together — U2 removes the aoe path U1 replaces, and applying ei
 
 **Files.**
 - `.chezmoitemplates/orca-register.sh` (new)
-- `.chezmoiscripts/90-src/run_after_orca-register.sh.tmpl` (new)
+- `.chezmoiscripts/90-src/run_after_register-orca.sh.tmpl` (new)
 - `.ci/test-orca-register.sh` (new)
 - `.github/workflows/ci.yml`
 
@@ -231,7 +231,7 @@ U1 and U2 land together — U2 removes the aoe path U1 replaces, and applying ei
 2. Give it a CLI-resolution function that prefers `~/.local/bin/orca-ide`, falls back to `/opt/Orca/resources/bin/orca-ide`, and fails naming both paths when neither is executable.
 3. Give it a runtime-acquisition function that reads `orca-ide status --json` and branches three ways (KTD3): reachable, use as-is; `appRunning` true but unreachable, fail naming the unreachable desktop runtime and never invoke `serve`; neither, start `serve` detached on loopback, confirm the listener is loopback-bound, poll `status` to a bounded timeout, and register a trap on `EXIT INT TERM` that stops only the PID it started (KTD4, R18).
 4. Give it a per-tree function that reads a `name<TAB>abspath<TAB>relpath<TAB>url` record and skips the tree only when `orca-ide project setups --host local --json` already carries a setup for that checkout path — the surface R1 and R4 actually name. Otherwise run `repo add --path <abspath>`, tolerating an already-added repo, then `project setup-update` with the display name and `--worktree-base-path` (KTD1). Additive-only means an existing setup is left untouched, never updated (R5).
-5. Write `.chezmoiscripts/90-src/run_after_orca-register.sh.tmpl` as an every-apply script that includes both `garden-path-mirror-check.sh` and `orca-register.sh`, obtains the tree records from its own `garden ls -v` call, and runs the registration (KTD9). The existing `.chezmoiignore` glob `.chezmoiscripts/90-src/*.sh` gates it on containers with no new declaration.
+5. Write `.chezmoiscripts/90-src/run_after_register-orca.sh.tmpl` as an every-apply script that includes both `garden-path-mirror-check.sh` and `orca-register.sh`, obtains the tree records from that checker's shared `garden_path_mirror_enumerate` helper, and runs the registration (KTD9). The name is load-bearing: chezmoi strips the `run_`/`after_`/`onchange_` attributes before sorting same-phase scripts, so `register-orca` sorts after `reconcile-garden` while `orca-register` would sort before it and register a newly declared tree only on the second apply. The existing `.chezmoiignore` glob `.chezmoiscripts/90-src/*.sh` gates it on containers with no new declaration.
 6. Fail the apply on any registration error, naming the tree and the operation (R8).
 7. Wire `.ci/test-orca-register.sh` into `ci.yml` and add its job to `delivery`'s `needs`.
 

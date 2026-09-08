@@ -1,5 +1,5 @@
 # orca-register.sh — registers every declared ~/src tree into Orca, shared by
-# the apply-time script .chezmoiscripts/90-src/run_after_orca-register.sh.tmpl
+# the apply-time script .chezmoiscripts/90-src/run_after_register-orca.sh.tmpl
 # (which inlines it) and .ci/test-orca-register.sh (which drives it against a
 # stubbed CLI). The product rules are owned by the R-IDs of
 # docs/plans/2026-09-08-1326-feat-orca-owns-projects-and-emulator-plan.md; this
@@ -49,8 +49,7 @@ orca_register_cli() {
     printf '%s\n' "$orca_rpm_cli"
     return 0
   fi
-  echo "orca-register: no executable Orca CLI at $orca_home_cli or $orca_rpm_cli" >&2
-  return 1
+  return 2
 }
 
 # The human-readable short form of a declared path: its last two segments.
@@ -92,8 +91,10 @@ orca_register_json_bool() {
   return 1
 }
 
+# Takes an ALREADY-NORMALIZED blob: both snapshots are stripped once in
+# orca_register_main rather than re-stripped for each of the declared trees.
 orca_register_json_has_path() {
-  printf '%s' "$1" | tr -d ' \n\t' | grep -qF "\"path\":\"$2\""
+  printf '%s' "$1" | grep -qF "\"path\":\"$2\""
 }
 
 # The setup id of the entry whose path matches, or empty. The list is flattened
@@ -105,27 +106,35 @@ orca_register_json_has_path() {
 # what keeps the match off the sibling `projectId` and `repoId` keys, whose
 # names end in the same three characters.
 orca_register_setup_id() {
-  printf '%s' "$1" | tr -d ' \n\t' | tr '{' '\n,' | grep -F "\"path\":\"$2\"" |
-    sed 's/^/,/' | grep -o ',"id":"[^"]*"' | head -n 1 |
+  printf '%s' "$1" | tr -d ' \n\t' | sed 's/},{/}\n{/g' | grep -F "\"path\":\"$2\"" |
+    sed 's/{/,/g' | grep -o ',"id":"[^"]*"' | head -n 1 |
     sed 's/^,"id":"//; s/"$//'
 }
 
 # Every endpoint the runtime advertises must be loopback. A runtime this script
 # started is one nobody is watching, so a listener reachable from the LAN is a
 # failure rather than a warning.
+# Returns 0 loopback-bound, 1 definitely not, 2 cannot tell yet (the runtime
+# has not published its transports). Only 1 is a refusal; 2 keeps polling.
 orca_register_is_loopback_bound() {
   orca_lb_file=${ORCA_REGISTER_RUNTIME_FILE:-$HOME/.config/orca/orca-runtime.json}
-  [ -f "$orca_lb_file" ] || return 1
+  [ -f "$orca_lb_file" ] || return 2
   orca_lb_endpoints=$(tr -d ' \n\t' <"$orca_lb_file" |
     tr ',' '\n' | sed -n 's/.*"endpoint":"\([^"]*\)".*/\1/p')
-  [ -n "$orca_lb_endpoints" ] || return 1
-  printf '%s\n' "$orca_lb_endpoints" | while IFS= read -r orca_lb_ep; do
+  [ -n "$orca_lb_endpoints" ] || return 2
+  # Heredoc, not a pipe: a piped `while` runs in a subshell, where a failure
+  # signal would only end the subshell. This loop guards a safety check, so its
+  # refusal must survive any statement a later edit adds after it.
+  while IFS= read -r orca_lb_ep; do
     case "$orca_lb_ep" in
       ws://127.0.0.1:*|ws://localhost:*|ws://\[::1\]:*|wss://127.0.0.1:*|wss://localhost:*|wss://\[::1\]:*) ;;
       /*) ;;
-      *) exit 1 ;;
+      *) return 1 ;;
     esac
-  done
+  done <<ORCA_ENDPOINTS
+$orca_lb_endpoints
+ORCA_ENDPOINTS
+  return 0
 }
 
 orca_register_stop_started_runtime() {
@@ -139,6 +148,10 @@ orca_register_stop_started_runtime() {
 orca_register_acquire_runtime() {
   orca_ar_cli=$1
   orca_ar_status=$("$orca_ar_cli" status --json 2>/dev/null || true)
+  if [ -z "$orca_ar_status" ]; then
+    echo "orca-register: 'orca-ide status' returned nothing; refusing to start a runtime blind" >&2
+    return 1
+  fi
   if orca_register_json_bool "$orca_ar_status" runtimeReachable reachable; then
     return 0
   fi
@@ -158,11 +171,16 @@ orca_register_acquire_runtime() {
   while [ "$orca_ar_waited" -lt "$orca_ar_timeout" ]; do
     orca_ar_status=$("$orca_ar_cli" status --json 2>/dev/null || true)
     if orca_register_json_bool "$orca_ar_status" runtimeReachable reachable; then
-      if orca_register_is_loopback_bound; then
+      orca_register_is_loopback_bound
+      orca_lb_rc=$?
+      if [ "$orca_lb_rc" -eq 0 ]; then
         return 0
       fi
-      echo "orca-register: the runtime this apply started is not loopback-bound; refusing to register through it" >&2
-      return 1
+      if [ "$orca_lb_rc" -eq 1 ]; then
+        echo "orca-register: the runtime this apply started is not loopback-bound; refusing to register through it" >&2
+        return 1
+      fi
+      # rc 2: transports not published yet — keep waiting inside the timeout.
     fi
     sleep 1
     orca_ar_waited=$((orca_ar_waited + 1))
@@ -193,8 +211,14 @@ orca_register_tree() {
     fi
   fi
 
-  orca_rt_setups=$("$orca_rt_cli" project setups --host local --json 2>/dev/null || true)
-  orca_rt_setup_id=$(orca_register_setup_id "$orca_rt_setups" "$orca_rt_abspath")
+  if ! orca_rt_setups=$("$orca_rt_cli" project setups --host local --json 2>&1); then
+    echo "orca-register: '$orca_rt_name' failed at 'project setups': $orca_rt_setups" >&2
+    return 1
+  fi
+  # `|| true`, because the lookup is a pipeline and a no-match is an ordinary
+  # answer here: under the apply script's errexit+pipefail an unguarded
+  # substitution would abort before the diagnostic below could name the tree.
+  orca_rt_setup_id=$(orca_register_setup_id "$orca_rt_setups" "$orca_rt_abspath" || true)
   if [ -z "$orca_rt_setup_id" ]; then
     echo "orca-register: '$orca_rt_name' failed at 'project setups': no local setup for $orca_rt_abspath after adding it" >&2
     return 1
@@ -216,7 +240,19 @@ orca_register_main() {
   orca_records=$(cat)
   [ -n "$orca_records" ] || return 0
 
-  orca_cli=$(orca_register_cli) || return 1
+  # A host with no Orca CLI is a host where Orca is not installed. This script
+  # runs on every managed host and the desktop package is Fedora-only, so that
+  # is a skip with a notice — failing the apply there would break provisioning
+  # on every other platform for a tool that host does not have.
+  # `|| orca_cli_rc=$?`, not a bare assignment: under errexit a substitution
+  # that returns non-zero aborts the script before the status can be read.
+  orca_cli_rc=0
+  orca_cli=$(orca_register_cli) || orca_cli_rc=$?
+  if [ "$orca_cli_rc" -eq 2 ]; then
+    echo "orca-register: no Orca CLI on this host (${ORCA_REGISTER_HOME_CLI:-$HOME/.local/bin/orca-ide} or ${ORCA_REGISTER_RPM_CLI:-/opt/Orca/resources/bin/orca-ide}); skipping registration" >&2
+    return 0
+  fi
+  [ "$orca_cli_rc" -eq 0 ] || return 1
 
   orca_started_pid=
   trap 'orca_register_stop_started_runtime' EXIT INT TERM
@@ -225,8 +261,20 @@ orca_register_main() {
   # Read once. Later reads resolve a setup id for a tree just added; the skip
   # decision stays anchored to the state this run started from, so a tree
   # registered by this same run is never mistaken for one the operator had.
-  orca_setups_snapshot=$("$orca_cli" project setups --host local --json 2>/dev/null || true)
-  orca_repos_snapshot=$("$orca_cli" repo list --json 2>/dev/null || true)
+  # These two reads decide, for every tree, whether it is already Orca's. A
+  # swallowed failure here reads as "Orca knows nothing" and would re-add every
+  # declared tree — the additive-only contract inverted into its opposite. So
+  # they abort with the CLI's own diagnostic instead of defaulting to empty.
+  if ! orca_setups_snapshot=$("$orca_cli" project setups --host local --json 2>&1); then
+    echo "orca-register: 'project setups' failed: $orca_setups_snapshot" >&2
+    return 1
+  fi
+  if ! orca_repos_snapshot=$("$orca_cli" repo list --json 2>&1); then
+    echo "orca-register: 'repo list' failed: $orca_repos_snapshot" >&2
+    return 1
+  fi
+  orca_setups_snapshot=$(printf '%s' "$orca_setups_snapshot" | tr -d ' \n\t')
+  orca_repos_snapshot=$(printf '%s' "$orca_repos_snapshot" | tr -d ' \n\t')
 
   orca_rc=0
   orca_sep=$(printf '\t')

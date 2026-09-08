@@ -56,6 +56,7 @@ case "$sub" in
     exit 0 ;;
   "serve"*)
     : >"$ORCA_STUB_DIR/serve.started"
+    printf '%s\n' "$$" >"$ORCA_STUB_DIR/serve.pid"
     if [ -f "$ORCA_STUB_DIR/serve.fails" ]; then exit 1; fi
     # foreground-only, like the real CLI
     while [ ! -f "$ORCA_STUB_DIR/serve.stop" ]; do sleep 0.1; done
@@ -105,7 +106,12 @@ EOF
 
 run_register() {
   set +e
+  # `set -euo pipefail` mirrors the apply script exactly. Without it this
+  # harness ran the helper under looser shell options than production, and an
+  # errexit abort inside a helper pipeline passed here while killing a real
+  # apply before its own diagnostic could print.
   register_out=$(printf '%s' "$1" | ORCA_REGISTER_SERVE_TIMEOUT=2 bash -c '
+    set -euo pipefail
     ORCA_REGISTER_SOURCED=1
     . "$1"
     orca_register_main
@@ -202,7 +208,10 @@ ORCA_REGISTER_RUNTIME_FILE="$ORCA_STUB_DIR/runtime.json" run_register "$two_tree
 [ "$register_rc" -eq 0 ] || fail "headless run exited $register_rc: $register_out"
 logged 'serve' || fail 'headless run did not invoke serve'
 logged 'repo add --path' || fail 'headless run did not add a repo'
-pass 'no reachable runtime starts serve, then registers'
+serve_pid=$(cat "$ORCA_STUB_DIR/serve.pid" 2>/dev/null || true)
+[ -n "$serve_pid" ] || fail 'headless run recorded no serve pid'
+kill -0 "$serve_pid" 2>/dev/null && fail "the self-started serve ($serve_pid) is still running after a successful run"
+pass 'no reachable runtime starts serve, registers, and stops the runtime it started'
 
 # --- a self-started runtime that is not loopback-bound fails (AE11) ----------
 
@@ -214,7 +223,10 @@ ORCA_REGISTER_RUNTIME_FILE="$ORCA_STUB_DIR/runtime.json" run_register "$two_tree
 [ "$register_rc" -ne 0 ] || fail 'non-loopback self-started runtime exited zero'
 logged 'repo add --path' && fail 'non-loopback run registered a tree anyway'
 case "$register_out" in *loopback*) : ;; *) fail "error did not name the loopback requirement: $register_out" ;; esac
-pass 'a self-started runtime that is not loopback-bound fails before registering'
+serve_pid=$(cat "$ORCA_STUB_DIR/serve.pid" 2>/dev/null || true)
+[ -n "$serve_pid" ] || fail 'loopback-refusal run recorded no serve pid'
+kill -0 "$serve_pid" 2>/dev/null && fail "the refused runtime ($serve_pid) is still listening after the apply failed"
+pass 'a non-loopback self-started runtime fails before registering AND is stopped'
 
 # --- serve that never becomes reachable fails at the bounded timeout ---------
 
@@ -262,15 +274,88 @@ case "$register_out" in *dotfiles*) : ;; *) fail "error did not name the tree: $
 case "$register_out" in *"repo add"*) : ;; *) fail "error did not name the operation: $register_out" ;; esac
 pass 'a failing repo add aborts the run naming the tree and the operation'
 
-# --- no executable CLI on either path fails naming both ----------------------
+# --- no executable CLI on either path SKIPS, naming both ---------------------
+#
+# This script runs on every managed host and the Orca desktop package is
+# Fedora-only, so "Orca is not installed here" must not fail the apply.
 
 make_stub no-cli
 unset ORCA_REGISTER_CLI
 ORCA_REGISTER_HOME_CLI="$scratch/absent/orca-ide" ORCA_REGISTER_RPM_CLI="$scratch/absent/opt-orca-ide" run_register "$two_trees"
-[ "$register_rc" -ne 0 ] || fail 'missing CLI exited zero'
-case "$register_out" in *absent/orca-ide*) : ;; *) fail "error did not name the home CLI path: $register_out" ;; esac
-case "$register_out" in *absent/opt-orca-ide*) : ;; *) fail "error did not name the RPM CLI path: $register_out" ;; esac
-pass 'neither CLI path executable fails naming both paths'
+[ "$register_rc" -eq 0 ] || fail "missing CLI exited $register_rc instead of skipping: $register_out"
+case "$register_out" in *absent/orca-ide*) : ;; *) fail "skip notice did not name the home CLI path: $register_out" ;; esac
+case "$register_out" in *absent/opt-orca-ide*) : ;; *) fail "skip notice did not name the RPM CLI path: $register_out" ;; esac
+case "$register_out" in *skipping*) : ;; *) fail "skip notice did not say it was skipping: $register_out" ;; esac
+pass 'a host with no Orca CLI skips registration instead of failing the apply'
+
+# --- a failed snapshot read aborts instead of re-adding everything -----------
+#
+# An empty snapshot reads as "Orca knows nothing", which would invert the
+# additive-only contract and re-add every declared tree.
+
+make_stub setups-read-fails
+printf 'project setups*\n' >"$ORCA_STUB_DIR/fail_on"
+run_register "$two_trees"
+[ "$register_rc" -ne 0 ] || fail 'a failing project-setups snapshot read exited zero'
+logged 'repo add --path' && fail 'a failing snapshot read still re-added trees'
+case "$register_out" in *"project setups"*) : ;; *) fail "error did not name the failing read: $register_out" ;; esac
+pass 'a failing setups snapshot aborts rather than re-adding every tree'
+
+make_stub repos-read-fails
+printf 'repo list*\n' >"$ORCA_STUB_DIR/fail_on"
+run_register "$two_trees"
+[ "$register_rc" -ne 0 ] || fail 'a failing repo-list snapshot read exited zero'
+logged 'repo add --path' && fail 'a failing repo-list read still re-added trees'
+pass 'a failing repo-list snapshot aborts rather than re-adding every tree'
+
+# --- no matching setup after a successful add names the tree (not errexit) ---
+#
+# The lookup is a pipeline; under the apply script's set -euo pipefail an
+# unguarded substitution aborted here before this diagnostic could print.
+
+make_stub setup-missing-after-add
+printf '{"ok":true,"result":{"setups":[]}}\n' >"$ORCA_STUB_DIR/project_setups.after-add"
+run_register "$two_trees"
+[ "$register_rc" -ne 0 ] || fail 'missing setup after add exited zero'
+case "$register_out" in *dotfiles*) : ;; *) fail "error did not name the tree: $register_out" ;; esac
+case "$register_out" in *"project setups"*) : ;; *) fail "error did not name the operation: $register_out" ;; esac
+pass 'a repo added with no resulting setup names the tree and the operation'
+
+# --- a nested member inside a setup entry does not break the id lookup -------
+#
+# The same flat-vs-nested assumption that already broke the status probe.
+
+make_stub nested-setup-entry
+cat >"$ORCA_STUB_DIR/project_setups.after-add" <<EOF
+{"ok":true,"result":{"setups":[
+  {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","hooks":{"mode":"auto","scripts":{"setup":""}},"path":"$scratch/src/github.com/hyperlapse122/dotfiles"},
+  {"id":"setup-b","projectId":"jpi:products/365flow/pacs-scp","hostId":"local","repoId":"repo-b","hooks":{"mode":"auto","scripts":{"setup":""}},"path":"$scratch/src/git.jpi.app/products/365flow/pacs-scp"}
+]}}
+EOF
+run_register "$two_trees"
+[ "$register_rc" -eq 0 ] || fail "nested setup entry exited $register_rc: $register_out"
+logged '--setup setup-a' || fail 'nested setup entry broke the id lookup'
+pass 'a setup entry carrying a nested member still resolves its own id'
+
+# --- an unreadable status refuses rather than starting a runtime blind -------
+
+make_stub empty-status
+: >"$ORCA_STUB_DIR/status.answer"
+run_register "$two_trees"
+[ "$register_rc" -ne 0 ] || fail 'an empty status probe exited zero'
+logged 'serve' && fail 'an empty status probe started a runtime blind'
+pass 'an unreadable status refuses instead of starting a runtime blind'
+
+# --- a runtime file that has not appeared yet keeps polling ------------------
+
+make_stub runtime-file-late
+printf '{"appRunning":false,"runtimeState":"stopped","runtimeReachable":false}\n' >"$ORCA_STUB_DIR/status.answer"
+printf '{"appRunning":false,"runtimeState":"ready","runtimeReachable":true}\n' >"$ORCA_STUB_DIR/status.after-serve"
+ORCA_REGISTER_RUNTIME_FILE="$ORCA_STUB_DIR/absent-runtime.json" run_register "$two_trees"
+[ "$register_rc" -ne 0 ] || fail 'an absent runtime file exited zero'
+case "$register_out" in *loopback*) fail "an absent runtime file was reported as a loopback refusal: $register_out" ;; esac
+case "$register_out" in *timeout*|*timed\ out*) : ;; *) fail "an absent runtime file did not time out: $register_out" ;; esac
+pass 'a runtime file that never appears times out rather than reading as non-loopback'
 
 # --- the RPM path is used when the home symlink is absent --------------------
 
@@ -288,5 +373,34 @@ run_register ''
 [ "$register_rc" -eq 0 ] || fail "empty run exited $register_rc: $register_out"
 [ ! -s "$ORCA_STUB_LOG" ] || fail "empty run invoked the CLI: $(cat "$ORCA_STUB_LOG")"
 pass 'an empty record set exits zero and invokes no CLI command'
+
+# --- the 90-src script ORDER is load-bearing, so assert it ------------------
+#
+# chezmoi strips run_/before_/after_/onchange_ and .tmpl before sorting
+# same-phase scripts, so the remaining basename decides which runs first.
+# Registration must run AFTER the reconciler grows the trees, or a newly
+# declared tree registers only on the second apply. The earlier name
+# `orca-register` sorted before `reconcile-garden` and had exactly that bug.
+# A comment cannot stop a rename; this can.
+
+strip_attrs() {
+  printf '%s' "${1##*/}" |
+    sed -e 's/\.tmpl$//' -e 's/^run_//' \
+        -e 's/^once_//' -e 's/^onchange_//' \
+        -e 's/^before_//' -e 's/^after_//'
+}
+
+# `|| true` on both: a non-matching glob makes `ls` non-zero, which under this
+# file's own `set -euo pipefail` would abort before the assertion could run.
+reconcile_script=$(ls "$repo_root"/.chezmoiscripts/90-src/ 2>/dev/null | grep 'reconcile-garden' | head -n 1 || true)
+register_script=$(ls "$repo_root"/.chezmoiscripts/90-src/ 2>/dev/null | grep -E 'register-orca|orca-register' | head -n 1 || true)
+[ -n "$reconcile_script" ] || fail 'no 90-src reconcile-garden script found'
+[ -n "$register_script" ] || fail 'no 90-src Orca registration script found'
+
+reconcile_sort=$(strip_attrs "$reconcile_script")
+register_sort=$(strip_attrs "$register_script")
+first=$(printf '%s\n%s\n' "$reconcile_sort" "$register_sort" | LC_ALL=C sort | head -n 1)
+[ "$first" = "$reconcile_sort" ] || fail "90-src ordering inverted: '$register_sort' sorts before '$reconcile_sort', so registration runs before the trees are grown and a newly declared tree registers only on the second apply"
+pass 'the Orca registration script sorts after the garden reconciler'
 
 printf 'test-orca-register: all checks passed\n'
