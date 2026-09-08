@@ -26,13 +26,14 @@
 # mint assertions now loop over both build systems, and the akmods tree is
 # relocated the same way the DKMS one is.
 #
-# AND THE ENROLLMENT ITSELF. `mokutil --import` reads a one-time password from a
-# terminal an apply does not have, so it is driven through expect with the stored
-# passphrase in the ENVIRONMENT. Every precondition (no stored passphrase, no
-# expect, a passphrase that cannot be typed on the MokManager console) is a
-# declared skip that prints the by-hand command, and the import's exit status is
-# propagated. All of that is asserted below, including that the passphrase never
-# reaches an argument vector.
+# AND THE ENROLLMENT ITSELF. `mokutil --import` reads a one-time password an apply
+# has no terminal to type, so the stored passphrase is written to its STDIN by the
+# printf builtin while sudo stays outside the pipe's reader. Every precondition
+# (no stored passphrase, a passphrase that cannot be typed on the MokManager
+# console) is a declared skip that prints the by-hand command, and the import's
+# exit status is propagated. All of that is asserted below, including that the
+# passphrase reaches neither an argument vector nor the privileged process's
+# environment.
 
 set -euxo pipefail
 
@@ -647,9 +648,9 @@ enrolled_out=$(run_enroll enrolled none)
 [[ "${enrolled_out}" == *CONTINUED* ]] ||
   fail 'enroll_dkms_mok must succeed when key is already enrolled'
 # THE PATH, not just the exit status. Falling through this guard reaches
-# `mokutil --import`, which on an enrolled key exits without ever prompting, so
-# expect fails and the whole apply aborts. The done_here message is the proof the
-# guard fired.
+# `mokutil --import`, which on an enrolled key exits without reading its password
+# at all, and the apply used to abort on a host that had already converged. The
+# done_here message is the proof the guard fired.
 [[ "${enrolled_out}" == *'already enrolled; nothing to do'* ]] ||
   fail 'an already-enrolled key must short-circuit; mokutil --test-key exits non-zero for it, and pipefail turned that into a fall-through to the import'
 [[ "$(run_enroll not_enrolled queued)" == *CONTINUED* ]] ||
@@ -769,60 +770,72 @@ printf key > "${mokdir}/mok.key"
 
 # --- Non-interactive enrollment ---------------------------------------------
 #
-# `mokutil --import` reads a one-time enrollment password from the terminal, so on
-# a non-interactive apply it fails -- and the call used to end in
-# `2>/dev/null || true`, which discarded both the error text and the exit status.
-# The apply reported success, no MokNew variable was written, and Secure Boot then
-# rejected the signed module with nothing on screen to say why.
+# `mokutil --import` reads a one-time enrollment password, so on a non-interactive
+# apply it used to end in `2>/dev/null || true`, which discarded both the error
+# text and the exit status. The apply reported success, no MokNew variable was
+# written, and Secure Boot then rejected the signed module with nothing on screen
+# to say why.
 #
-# The password is the stored LUKS passphrase, handed to expect through the
-# ENVIRONMENT. Two properties are load-bearing and asserted here: the passphrase
-# never reaches an argument vector, and the import's exit status is propagated.
+# The password is the stored LUKS passphrase, written to mokutil's STDIN by the
+# `printf` builtin. Three properties are load-bearing and asserted here: the
+# passphrase never reaches an argument vector or the privileged process's
+# environment, sudo stays outside the pipe's reader (it takes its own password
+# from /dev/tty, never from stdin), and the import's exit status is propagated.
 
 # The rendered assignment: base64 for shell safety, and exactly one of them.
 assign_line=$(grep -c 'MOK_ENROLL_PASSPHRASE="\$(printf .%s. .* | base64 -d)"' "${scratch}/enroll.code" || true)
 [[ "${assign_line}" == 1 ]] ||
   fail 'the enrollment passphrase is not assigned through the single base64 form the LUKS wrapper uses'
 
-# ARGV IS THE PROPERTY. `sudo env VAR=...` would put the passphrase in env's own
-# argument vector, readable in the process table by every user on the box. The
-# rendered call must therefore pass it as an ENVIRONMENT PREFIX to an
-# unprivileged expect, which spawns the elevation itself.
-grep -Fq 'MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert"' "${scratch}/enroll.code" ||
-  fail 'the enrollment passphrase is not handed to expect as an environment prefix'
-if grep -Eq 'env[[:space:]]+MOK_ENROLL_PASSPHRASE=' "${scratch}/enroll.code"; then
-  fail 'the passphrase must never reach an argument vector; `sudo env VAR=...` exposes it in the process table'
+# STDIN IS THE CHANNEL, AND `printf` IS WHY IT IS SAFE. A builtin keeps the value
+# in this shell's memory and the pipe; `sudo env VAR=...` would put it in env's own
+# argument vector, readable in the process table by every user on the box.
+grep -Fq $'printf \'%s\\n%s\\n\' "$MOK_ENROLL_PASSPHRASE" "$MOK_ENROLL_PASSPHRASE"' "${scratch}/enroll.code" ||
+  fail 'the enrollment passphrase is not written to stdin by the printf builtin'
+grep -Fq '} | "${SUDO[@]}" mokutil --import "$cert"' "${scratch}/enroll.code" ||
+  fail 'the import must read the passphrase from a pipe with sudo outside the reader'
+if grep -Eq 'env[[:space:]]+MOK_ENROLL_PASSPHRASE=|MOK_ENROLL_PASSPHRASE="\$MOK_ENROLL_PASSPHRASE"' "${scratch}/enroll.code"; then
+  fail 'the passphrase must never reach an argument vector or the privileged process environment'
+fi
+if grep -Eq 'mokutil --import[^|]*\$MOK_ENROLL_PASSPHRASE' "${scratch}/enroll.code"; then
+  fail 'the passphrase must never appear on the mokutil command line'
+fi
+# `-S` would make sudo read ITS OWN password from stdin, consuming the enrollment
+# passphrase as a login-password guess before mokutil ever saw it.
+if grep -Eq 'sudo[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-S' "${scratch}/enroll.code"; then
+  fail 'sudo -S would consume the enrollment passphrase from stdin as its own password'
 fi
 if grep -Eq 'mokutil --import.*(\|\| true|2>/dev/null \|\| true)' "${scratch}/enroll.code"; then
   fail 'the mokutil --import exit status must be propagated, never discarded'
 fi
 
-# The expect script's own hardening. All three prevent a HUNG apply or a re-parse
-# of interpolated data rather than a wrong answer, and all three are read from the
-# comment-stripped copy: this installer explains the shapes it forbids, and a
-# comment naming one must not read as the shape itself.
-grep -Fq 'LC_ALL=C expect -f -' "${scratch}/enroll.code" ||
-  fail 'the expect call is not pinned to LC_ALL=C, so a localized mokutil prompt would not match'
-if grep -Fq 'eval spawn' "${scratch}/enroll.code"; then
-  fail 'spawn must expand the argument list with {*}, not re-parse it through eval'
+# NO expect, AND NO pty. expect drove `sudo mokutil --import` inside a spawned
+# pty; sudoers scopes its credential timestamp to the invoking terminal, so sudo
+# re-prompted in that brand-new pty while expect's own stdin was the heredoc
+# carrying its script, and every enrollment on an interactive apply timed out on
+# `[sudo] password for <user>:`. Read from the comment-stripped copy: the
+# installer explains the shape it retired, and that comment must not read as the
+# shape itself.
+if grep -Eq '(^|[^-])expect ' "${scratch}/enroll.code"; then
+  fail 'the enrollment must not drive mokutil through an expect pty; sudo re-prompts inside a spawned terminal with nobody to answer'
 fi
-grep -Fq 'spawn -noecho {*}$argv' "${scratch}/enroll.code" ||
-  fail 'the expect script does not spawn through a {*}-expanded argument list'
-[[ $(grep -c '^    timeout {' "${scratch}/enroll.code") -ge 3 ]] ||
-  fail 'every expect block needs a timeout action; without one an unmatched prompt blocks in wait and hangs the apply'
+# The producer must survive a reader that never reads: mokutil exits immediately
+# on an already-enrolled certificate, closing the pipe under printf.
+grep -Fq "trap '' PIPE" "${scratch}/enroll.code" ||
+  fail 'the producer must ignore SIGPIPE; mokutil exits without reading on an already-enrolled certificate'
 
-# The extraction contract this heredoc has to respect: every helper is pulled out
-# with `sed -n '<start>,/^}$/p'`, so a `}` at column 0 inside the heredoc would
-# truncate enroll_dkms_mok at that brace and this harness would drive half a
-# function. Assert the whole function arrived.
+# The extraction contract this function has to respect: every helper is pulled out
+# with `sed -n '<start>,/^}$/p'`, so a `}` at column 0 inside it would truncate
+# enroll_dkms_mok at that brace and this harness would drive half a function.
+# Assert the whole function arrived.
 grep -Fq 'is queued for enrollment' "${scratch}/enroll.sh" ||
-  fail 'enroll_dkms_mok was extracted truncated; a line that is exactly } at column 0 inside the expect heredoc ends the extraction early'
+  fail 'enroll_dkms_mok was extracted truncated; a line that is exactly } at column 0 inside it ends the extraction early'
 
-# A PATH with only what the enrollment body reaches, so `command -v expect` is
-# decided by this fixture and not by whatever the runner happens to have.
+# A PATH with only what the enrollment body reaches, so the fixture decides what
+# the body can call and not whatever the runner happens to have.
 minbin="${scratch}/minbin"
 mkdir -p "${minbin}"
-# bash is here for the expect STUB's own shebang, not for the code under test;
+# bash is here for the mokutil STUB's own shebang, not for the code under test;
 # everything else is a tool the enrollment body actually reaches.
 for tool in grep base64 sh sed mkdir rm cat bash; do
   real=$(command -v "${tool}") || fail "the fixture needs ${tool} on PATH"
@@ -840,44 +853,46 @@ else
   printf 'note: openssl is absent, so the enrollment fixtures skip the already-queued fingerprint read\n'
 fi
 
-# Records the whole call surface -- argv, the two environment variables, and the
-# expect script it is fed on stdin -- using only bash builtins, because the
-# fixture PATH deliberately carries almost nothing.
-cat > "${scratch}/expect-stub" <<'STUB'
+# A REAL PROCESS, not a shell function, because the properties under test are
+# process properties: what is in argv, what is in the environment, and what
+# arrives on stdin. A function would inherit the enrollment's own `local`
+# MOK_ENROLL_PASSPHRASE through dynamic scope and report a leak that a separate
+# process could never have. MOKUTIL_READ=no models the already-enrolled reader
+# that exits without reading a byte, which closes the pipe under the producer.
+cat > "${minbin}/mokutil" <<'STUB'
 #!/usr/bin/env bash
-script=$(cat)
 {
   printf 'argv:'
   printf ' %s' "$@"
   printf '\n'
-  if [[ -n "${MOK_ENROLL_PASSPHRASE-}" ]]; then
-    printf 'env-passphrase:%s\n' "${MOK_ENROLL_PASSPHRASE}"
-  fi
-  printf 'env-cert:%s\n' "${MOK_CERT-}"
-  printf 'stdin-bytes:%s\n' "${#script}"
-} >> "${EXPECT_LOG:?}"
-exit "${EXPECT_RC:-0}"
+  printf 'env-passphrase:%s\n' "${MOK_ENROLL_PASSPHRASE-<unset>}"
+} >> "${MOKUTIL_LOG:?}"
+if [[ "${MOKUTIL_READ:-yes}" == yes ]]; then
+  while IFS= read -r line; do printf 'stdin:%s\n' "${line}" >> "${MOKUTIL_LOG}"; done
+fi
+exit "${MOKUTIL_RC:-0}"
 STUB
-chmod 0755 "${scratch}/expect-stub"
+chmod 0755 "${minbin}/mokutil"
 
-# $1 = passphrase to render in, $2 = have-expect (yes|no), $3 = expect exit code.
-# Prints CONTINUED when enroll_dkms_mok succeeded; $EXPECT_LOG records the call.
+# $1 = passphrase to render in, $2 = mokutil exit code, $3 = whether the stub
+# reads stdin (yes|no). Prints CONTINUED when enroll_dkms_mok succeeded;
+# $MOKUTIL_LOG records the import call.
 run_enroll_import() {
-  local passphrase=$1 have_expect=$2 expect_rc=$3
+  local passphrase=$1 mokutil_rc=$2 mokutil_read=${3:-yes}
   rm -rf -- "${scratch}/enroll-home"
-  rm -f -- "${minbin}/expect"
   mkdir -p "${scratch}/enroll-home"
-  : > "${scratch}/expect.log"
-  [[ "${have_expect}" == yes ]] && ln -sf "${scratch}/expect-stub" "${minbin}/expect"
+  : > "${scratch}/mokutil.log"
   # The one fixture rewrite: the rendered assignment is a literal, so drive it
   # from the environment instead. Its shape was asserted above.
   sed -E 's|MOK_ENROLL_PASSPHRASE="\$\(printf .%s. .*\| base64 -d\)"|MOK_ENROLL_PASSPHRASE="${SMOKE_MOK_PASSPHRASE-}"|' \
     "${scratch}/enroll_nogates.sh" > "${scratch}/enroll_import.sh"
   grep -Fq 'MOK_ENROLL_PASSPHRASE="${SMOKE_MOK_PASSPHRASE-}"' "${scratch}/enroll_import.sh" ||
     fail 'the fixture could not redirect the rendered passphrase assignment'
+  # `--test-key` and `--list-new` stay shell functions: they are read for their
+  # OUTPUT, and the import alone is delegated to the real process with `command`.
   env -i HOME="${scratch}/enroll-home" PATH="${minbin}" \
     MOK_DIR="${mokdir}" PLAIN_SUDO_STUB="${plain_sudo_stub}" SMOKE_MOK_PASSPHRASE="${passphrase}" \
-    EXPECT_LOG="${scratch}/expect.log" EXPECT_RC="${expect_rc}" \
+    MOKUTIL_LOG="${scratch}/mokutil.log" MOKUTIL_RC="${mokutil_rc}" MOKUTIL_READ="${mokutil_read}" \
     "${BASH}" -c '
       set -uo pipefail
       . "${PLAIN_SUDO_STUB:?}"
@@ -885,8 +900,9 @@ run_enroll_import() {
         case "${1-}" in
           --test-key) printf "%s is not enrolled\n" "${2-}"; return 0 ;;
           --list-new) return 0 ;;
+          --import) command mokutil "$@" ;;
+          *) return 1 ;;
         esac
-        return 1
       }
       ensure_dkms_mok_generated() { return 0; }
       '"$(relocate "${scratch}/mok_state.sh" "${scratch}/helpers.sh" "${scratch}/enroll_import.sh")"'
@@ -899,52 +915,54 @@ printf cert > "${mokdir}/mok.pub"
 printf key > "${mokdir}/mok.key"
 
 # A `harmless` skip DELETES its state entry -- nothing is outstanding -- so its
-# signal is the operator notice on stdout. Only a record-keeping direction leaves
-# a file behind, which is what the absent-expect case asserts below.
-no_passphrase_out=$(run_enroll_import '' yes 0)
+# signal is the operator notice on stdout, plus the by-hand command on stderr.
+no_passphrase_out=$(run_enroll_import '' 0)
 grep -Fq 'no stored passphrase is available' <<<"${no_passphrase_out}" ||
   fail "an absent enrollment passphrase did not take its declared skip; output was: ${no_passphrase_out}"
 grep -Fq 'sudo mokutil --import' "${scratch}/enroll.err" ||
   fail 'an absent passphrase did not print the by-hand mokutil command'
-[[ ! -s "${scratch}/expect.log" ]] ||
-  fail 'an absent passphrase still invoked expect'
-
-# expect absent: transient-blocking, so it KEEPS its record and self-heals once
-# the base package set installs expect.
-no_expect_out=$(run_enroll_import 'fixture-passphrase' no 0)
-[[ -f "${skips}/install-nvidia-fedora__mok-enroll-no-expect" ]] ||
-  fail "an absent expect did not record its declared skip; output was: ${no_expect_out}"
-grep -Fq 'transient-blocking:expect-present' "${skips}/install-nvidia-fedora__mok-enroll-no-expect" ||
-  fail 'the absent-expect skip is not recorded against its capability probe'
-grep -Fq 'sudo mokutil --import' "${scratch}/enroll.err" ||
-  fail 'an absent expect did not print the by-hand mokutil command'
+[[ ! -s "${scratch}/mokutil.log" ]] ||
+  fail 'an absent passphrase still ran the import'
 
 # A passphrase MokManager cannot accept: it reads on a US-layout UEFI console, so
 # a non-ASCII byte is untypeable there and queueing the request would reboot the
 # host into a prompt it can never satisfy.
-untypeable_out=$(run_enroll_import 'pässphrase' yes 0)
+untypeable_out=$(run_enroll_import 'pässphrase' 0)
 grep -Fq 'not printable US-ASCII' <<<"${untypeable_out}" ||
   fail "a non-ASCII passphrase did not take its declared skip; output was: ${untypeable_out}"
-[[ ! -s "${scratch}/expect.log" ]] ||
+[[ ! -s "${scratch}/mokutil.log" ]] ||
   fail 'a passphrase that cannot be typed at MokManager still queued a request'
 
-# The happy path: expect is driven, and the passphrase arrives in its ENVIRONMENT
-# while its argument vector carries only the script flags.
-[[ "$(run_enroll_import 'fixture-passphrase' yes 0)" == *CONTINUED* ]] ||
-  fail 'a typeable passphrase with expect present did not complete the import'
-grep -Fq 'env-passphrase:fixture-passphrase' "${scratch}/expect.log" ||
-  fail 'the passphrase did not reach expect through the environment'
-grep -Fq 'env-cert:' "${scratch}/expect.log" ||
-  fail 'the certificate path did not reach expect through the environment'
-if grep -F 'argv:' "${scratch}/expect.log" | grep -Fq 'fixture-passphrase'; then
-  fail 'the passphrase reached expect through its ARGUMENT VECTOR, readable in the process table'
+# The happy path: the import runs, and the passphrase arrives TWICE on its STDIN
+# -- once for `input password:` and once for `input password again:` -- while its
+# argument vector and environment carry no trace of it.
+[[ "$(run_enroll_import 'fixture-passphrase' 0)" == *CONTINUED* ]] ||
+  fail 'a typeable passphrase did not complete the import'
+[[ "$(grep -c '^stdin:fixture-passphrase$' "${scratch}/mokutil.log")" == 2 ]] ||
+  fail 'the passphrase did not reach mokutil on stdin twice, once per prompt'
+grep -Fq 'argv: --import' "${scratch}/mokutil.log" ||
+  fail 'the import was not invoked as mokutil --import <cert>'
+if grep -F 'argv:' "${scratch}/mokutil.log" | grep -Fq 'fixture-passphrase'; then
+  fail 'the passphrase reached mokutil through its ARGUMENT VECTOR, readable in the process table'
 fi
-grep -Eq '^stdin-bytes:[1-9][0-9]*$' "${scratch}/expect.log" ||
-  fail 'the expect script was not fed on stdin'
+grep -Fq 'env-passphrase:<unset>' "${scratch}/mokutil.log" ||
+  fail 'the passphrase was exported into the privileged process environment'
+# A queued certificate is a converged step: no enrollment precondition may be left
+# recorded for `dotfiles-skips` to report.
+if compgen -G "${skips}/install-nvidia-fedora__mok-enroll-*" > /dev/null; then
+  fail "a completed enrollment left a skip record behind: $(ls "${skips}")"
+fi
+
+# The already-enrolled reader: mokutil prints `SKIP: <cert> is already enrolled`
+# and exits WITHOUT reading a byte, closing the pipe under printf. The producer
+# ignores SIGPIPE and keeps its status out of pipefail's answer, so this is a
+# success and not a false failure on a host that had already converged.
+[[ "$(run_enroll_import 'fixture-passphrase' 0 no)" == *CONTINUED* ]] ||
+  fail 'an import that exits without reading the pipe must not be reported as a failure'
 
 # A failing import fails the function loudly and says what to run by hand. This is
 # the whole defect the discarded `|| true` created.
-if [[ "$(run_enroll_import 'fixture-passphrase' yes 3)" == *CONTINUED* ]]; then
+if [[ "$(run_enroll_import 'fixture-passphrase' 3)" == *CONTINUED* ]]; then
   fail 'a failed mokutil --import must not be reported as success'
 fi
 grep -Fq 'the certificate was NOT queued' "${scratch}/enroll.err" ||
