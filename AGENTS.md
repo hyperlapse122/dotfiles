@@ -69,7 +69,11 @@ Managed instruction targets are one file per harness, named for the native filen
 
 ## Verification (never deploy live `$HOME`)
 
-The default check uses a per-user scratch directory, stub `op`, empty config, throwaway destination, and `--source "$PWD"`. The stub must return newline-free secrets when parsing rendered JSON/TOML. Render every changed template/script through `chezmoi execute-template`; scripts are not targets and MUST be compared as rendered text on both sides. Disclose any onchange side effects, especially network/service restarts; the first apply that reruns `install-system-30-network` MUST be performed from a local console, not SSH/Tailscale.
+The default check uses a per-user scratch directory, stub `op`, empty config, throwaway destination, and `--source "$PWD"`. Those four are mandatory for EVERY test or validation run, not a default an agent may drop for a quick check.
+
+An agent MUST NOT invoke the real `op`, and MUST NOT let a render reach it. A live `op` read opens the operator's 1Password session, can prompt the desktop, and puts a real secret into rendered output the agent then prints, diffs, or writes to a scratch file. Shadowing the binary is not enough on its own: the check's `PATH` MUST name the stub directory and the system directories only (`"$scratch/bin:/usr/bin:/bin"`), never the inherited `$PATH`, so no code path can fall through to the real binary; resolve `chezmoi` to an absolute path first (`command -v chezmoi`, which zsh accepts and `type -P` does not) because that `PATH` no longer finds it. The stub must return newline-free secrets when parsing rendered JSON/TOML. `.ci/lib/render-gate-helpers.sh` already implements this contract in `render()` — a CI gate MUST use it rather than hand-roll the invocation.
+
+The render MUST read this checkout and write nothing real: `--source "$PWD"` (never a nested worktree, never the deployed source) and a throwaway `--destination` under the scratch directory, never `$HOME`. Render every changed template/script through `chezmoi execute-template`; scripts are not targets and MUST be compared as rendered text on both sides. Disclose any onchange side effects, especially network/service restarts; the first apply that reruns `install-system-30-network` MUST be performed from a local console, not SSH/Tailscale.
 
 `git diff --check`, `git status`, and a diff limited to the requested scope are required. `chezmoi archive --exclude=encrypted,externals,scripts` may compare extracted target trees, but archive bytes are not comparable by mtime and the archive omits scripts; compare rendered scripts separately and state that blind spot. If local rendering is unavailable, use CI artifacts from `.github/workflows/render-dotfiles.yml` and state the limitation.
 
@@ -79,7 +83,8 @@ mkdir -p "$scratch/bin" "$scratch/target"
 : > "$scratch/empty.toml"
 printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' > "$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
-env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$PWD" --destination "$scratch/target" execute-template < .chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl
+chezmoi_bin=$(command -v chezmoi)
+env PATH="$scratch/bin:/usr/bin:/bin" "$chezmoi_bin" --config "$scratch/empty.toml" --source "$PWD" --destination "$scratch/target" execute-template < .chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl
 ```
 
 ## Secrets and encrypted state
