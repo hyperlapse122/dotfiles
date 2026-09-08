@@ -18,7 +18,13 @@
 # derivation and the comparison — the apply gate reads them from `garden ls`,
 # the CI test writes them as literals.
 #
-# CONTRACT. Reads tab-separated `name<TAB>declared-path<TAB>url` records on
+# CONTRACT. `garden_path_mirror_records <root>` turns `garden ls -v` text on
+# stdin into `name<TAB>abspath<TAB>relpath<TAB>url` records — one per declared
+# tree, ALWAYS, even when the tree has no `origin:` line (its url column is then
+# empty, which the check below reports as malformed). Emitting unconditionally is
+# what keeps a remote-less tree from vanishing before the gates see it.
+#
+# `garden_path_mirror_check` reads tab-separated `name<TAB>declared-path<TAB>url` records on
 # stdin, one per line. Declared paths are relative to the registry root; the
 # caller reduces them before calling. Prints one line per deviation or malformed
 # record on stderr and exits 1; prints nothing and exits 0 when every record
@@ -30,6 +36,40 @@
 # to the first :); drop a :port suffix from that authority; take the remainder
 # as the namespace path; strip a leading / and a single trailing .git. No other
 # segment is collapsed and case is preserved.
+
+garden_path_mirror_records() {
+  gpm_records_root=$1
+  # `flush` runs at every boundary — the next header and end of input — so a
+  # header with no `origin:` line still produces a record instead of being
+  # overwritten. The root prefix is stripped with substr, not a regex, so a root
+  # containing regex metacharacters cannot mis-strip it.
+  awk -v root="$gpm_records_root/" '
+    function flush() {
+      if (name != "" && name != ".") {
+        rel = path
+        if (substr(rel, 1, length(root)) == root) {
+          rel = substr(rel, length(root) + 1)
+        }
+        printf "%s\t%s\t%s\t%s\n", name, path, rel, url
+      }
+      name = ""
+      path = ""
+      url = ""
+    }
+    /^#-? / { flush(); name = $2; path = $NF; next }
+    /^[[:space:]]+origin:[[:space:]]/ {
+      if (name != "") { url = $2; flush() }
+      next
+    }
+    END { flush() }
+  '
+}
+
+# Count the tree headers in `garden ls -v` text on stdin, so a caller can prove
+# every declared tree produced a record.
+garden_path_mirror_header_count() {
+  grep -c '^#-\{0,1\} ' || true
+}
 
 garden_path_mirror_derive() {
   gpm_url=$1
@@ -91,6 +131,8 @@ garden_path_mirror_derive() {
   esac
 
   gpm_ns=${gpm_ns#/}
+  # Trailing slash first: `.../fleet.git/` must still lose its .git suffix.
+  gpm_ns=${gpm_ns%/}
   case $gpm_ns in
     *.git) gpm_ns=${gpm_ns%.git} ;;
   esac
@@ -105,9 +147,12 @@ garden_path_mirror_derive() {
 garden_path_mirror_check() {
   gpm_mode=${1:-check}
   gpm_rc=0
+  # Computed once: an IFS command substitution in the loop test would fork a
+  # subshell per record.
+  gpm_tab=$(printf '\t')
 
   # `|| [ -n ... ]` so a final record with no trailing newline is still read.
-  while IFS=$(printf '\t') read -r gpm_name gpm_declared gpm_url || [ -n "$gpm_name" ]; do
+  while IFS="$gpm_tab" read -r gpm_name gpm_declared gpm_url || [ -n "$gpm_name" ]; do
     [ -n "$gpm_name" ] || continue
 
     if [ -z "$gpm_url" ]; then

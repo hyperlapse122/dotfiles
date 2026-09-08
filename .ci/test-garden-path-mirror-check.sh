@@ -28,6 +28,12 @@ pass() { printf '  ok  %s\n' "$*"; }
 
 [ -f "$checker" ] || fail "checker not found at .chezmoitemplates/garden-path-mirror-check.sh"
 
+# Source the helper so the record producer can be driven directly. The guard
+# stops the sourced copy from consuming stdin on its own.
+GARDEN_PATH_MIRROR_SOURCED=1
+# shellcheck source=.chezmoitemplates/garden-path-mirror-check.sh
+. "$checker"
+
 # Run the checker over a stream, capturing status and output together.
 run_checker() {
   set +e
@@ -151,5 +157,97 @@ pass 'every deviation in a stream is reported'
 run_checker "$(rec ExamVueDuo_AI 'git.jpi.app/products/examvue-duo/examvueduo_ai' 'https://git.jpi.app/products/examvue-duo/ExamVueDuo_AI.git')"
 [ "$checker_rc" -ne 0 ] || fail 'a case-folded path was accepted'
 pass 'a path differing only in segment case is a deviation'
+
+# --- reject: a url no path can be derived from ---------------------------------
+
+for bad_url in 'https://onlyhost' 'git@onlyhost' 'https://git.jpi.app/'; do
+  run_checker "$(rec bad 'git.jpi.app/x' "$bad_url")"
+  [ "$checker_rc" -ne 0 ] || fail "underivable url was accepted: $bad_url"
+  case "$checker_out" in
+    *'no path can be derived from'*) ;;
+    *) fail "underivable url gave the wrong message for $bad_url: $checker_out" ;;
+  esac
+done
+pass 'a url with no derivable namespace is rejected'
+
+# --- a trailing slash does not defeat the .git strip ---------------------------
+
+run_checker "$(rec fleet 'git.jpi.app/infra/fleet' 'https://git.jpi.app/infra/fleet.git/')"
+[ "$checker_rc" -eq 0 ] || fail "a trailing slash left .git in the path: $checker_out"
+pass 'a url with a trailing slash after .git derives the same path'
+
+# --- the record producer: garden ls text in, records out -----------------------
+#
+# This half of the gate has no other coverage: CI provisions no `garden`, but
+# the producer is a pure text transform, so recorded output exercises it fully.
+
+ls_fixture=$(cat <<'LS'
+# grown [main] /home/u/src/example.com/ns/grown
+remotes:
+  origin: https://example.com/ns/grown.git
+
+#- ungrown /home/u/src/example.com/ns/ungrown
+remotes:
+  origin: https://example.com/ns/ungrown.git
+
+#- no-remote /home/u/src/totally/wrong/place
+LS
+)
+
+records=$(printf '%s\n' "$ls_fixture" | garden_path_mirror_records '/home/u/src')
+
+[ "$(printf '%s\n' "$records" | grep -c .)" -eq 3 ] ||
+  fail "producer emitted $(printf '%s\n' "$records" | grep -c .) records, expected 3: $records"
+pass 'every tree header produces exactly one record'
+
+case "$records" in
+  *"grown${tab}/home/u/src/example.com/ns/grown${tab}example.com/ns/grown${tab}https://example.com/ns/grown.git"*) ;;
+  *) fail "grown tree record is wrong: $records" ;;
+esac
+case "$records" in
+  *"ungrown${tab}/home/u/src/example.com/ns/ungrown${tab}example.com/ns/ungrown${tab}https://example.com/ns/ungrown.git"*) ;;
+  *) fail "ungrown tree record is wrong: $records" ;;
+esac
+pass 'grown and ungrown headers both pair with their origin line'
+
+# The regression this pins: a tree with no origin line must still emit a record
+# with an empty url, so it reaches the malformed-record path instead of
+# vanishing from both apply-time gates.
+case "$records" in
+  *"no-remote${tab}/home/u/src/totally/wrong/place${tab}totally/wrong/place${tab}"*) ;;
+  *) fail "a tree with no origin line was dropped: $records" ;;
+esac
+pass 'a tree with no origin line still produces a record'
+
+# The reconcile drops the absolute-path column before calling the check, so the
+# fixture does the same; otherwise every record would fail as "outside the root".
+check_out=$(printf '%s\n' "$records" | cut -f1,3,4 | garden_path_mirror_check 2>&1) &&
+  fail 'the no-remote tree passed the check'
+case "$check_out" in
+  *'no-remote'*'declares no remote url'*) ;;
+  *) fail "the no-remote tree was not reported as malformed: $check_out" ;;
+esac
+case "$check_out" in
+  *grown*) fail "a conforming tree was wrongly reported: $check_out" ;;
+  *) ;;
+esac
+pass 'the no-remote tree is reported as malformed, and the others pass'
+
+# --- the header count matches the record count ---------------------------------
+
+[ "$(printf '%s\n' "$ls_fixture" | garden_path_mirror_header_count)" -eq 3 ] ||
+  fail 'header count did not match the three declared trees'
+pass 'the header count matches the number of declared trees'
+
+# --- a garden root containing regex metacharacters -----------------------------
+
+meta_records=$(printf '%s\n' '#- t /home/u/s+rc/example.com/ns/t
+remotes:
+  origin: https://example.com/ns/t.git' | garden_path_mirror_records '/home/u/s+rc')
+case "$meta_records" in
+  *"${tab}example.com/ns/t${tab}"*) ;;
+  *) fail "a root with regex metacharacters mis-stripped: $meta_records" ;;
+esac
+pass 'the root prefix is stripped literally, not as a regex'
 
 printf 'test-garden-path-mirror-check: all cases passed\n'

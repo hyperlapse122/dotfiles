@@ -77,6 +77,12 @@ command -v garden >/dev/null 2>&1 || { echo "reconcile-garden: garden not on PAT
 command -v aoe    >/dev/null 2>&1 || { echo "reconcile-garden: aoe not on PATH (externals not applied? see .chezmoiexternals/ai-agents.toml)" >&2; exit 1; }
 [ -f "$reg" ] || { echo "reconcile-garden: $reg missing (chezmoi apply did not deploy it)" >&2; exit 1; }
 
+# The shared record parser, derivation, and comparison. Inlined here so step 1
+# can use it; .ci/test-garden-path-mirror-check.sh drives the same file with
+# fixtures, which is the only coverage CI can give it (no GPG key, no garden).
+GARDEN_PATH_MIRROR_SOURCED=1
+{{ includeTemplate "garden-path-mirror-check.sh" . }}
+
 # 1. Enumerate declared trees, their resolved paths, AND their remote urls in
 #    ONE `garden ls -v` call, shared by the path-mirror gate (step 2) and the
 #    completeness check (step 4). Capture garden's OWN exit status first: a hard
@@ -101,36 +107,38 @@ raw_ls="$(garden --config "$reg" ls --all --no-commands --no-gardens --no-groups
   printf '%s\n' "$raw_ls" >&2
   exit 1
 }
-tree_info="$(printf '%s\n' "$raw_ls" | sed -n -e 's/^# //p' -e 's/^#- //p')"
 
-# 2. Path-mirror gate — the ~/src layout rule, enforced before anything is
-#    grown. A declared path must equal the one derived from its own url; the
-#    derivation and comparison live in the shared helper below, which the CI
-#    fixture test .ci/test-garden-path-mirror-check.sh drives with the same
-#    record shape. Enforcement is HERE rather than in CI because the registry
-#    is GPG-encrypted and no runner holds the key.
-GARDEN_PATH_MIRROR_SOURCED=1
-{{ includeTemplate "garden-path-mirror-check.sh" . }}
+#    Parse those header lines ONCE into `name<TAB>abspath<TAB>relpath<TAB>url`
+#    records via the shared producer. Both consumers read this one set, so the
+#    header shape is decoded in exactly one place: the gate below wants
+#    name/relpath/url, the completeness check wants name/abspath.
+#
+#    A garden eval failure is reported, never swallowed: silently guessing the
+#    root would strip nothing, and every tree would then fail the gate as
+#    "outside the registry root" with the real cause invisible.
+if ! garden_root="$(garden --config "$reg" eval '${GARDEN_ROOT}' 2>&1)"; then
+  echo "reconcile-garden: 'garden eval' could not resolve the registry root, falling back to \$HOME/src: $garden_root" >&2
+  garden_root="$HOME/src"
+fi
+[ -n "$garden_root" ] || garden_root="$HOME/src"
+tree_records="$(printf '%s\n' "$raw_ls" | garden_path_mirror_records "$garden_root")"
 
-# Pair each header line with the indented `origin:` line that follows it, and
-# reduce the absolute path garden prints to the root-relative form the registry
-# declares and the rule derives. A tree resolved outside the root is passed
-# through as-is, which the helper reports as a deviation.
-garden_root="$(garden --config "$reg" eval '${GARDEN_ROOT}' 2>/dev/null || printf '%s/src' "$HOME")"
-mirror_records="$(printf '%s\n' "$raw_ls" | awk -v root="$garden_root/" '
-  /^#- / { name = $2; path = $NF; next }
-  /^# /  { name = $2; path = $NF; next }
-  /^[[:space:]]+origin:[[:space:]]/ {
-    if (name != "" && name != ".") {
-      rel = path
-      sub("^" root, "", rel)
-      printf "%s\t%s\t%s\n", name, rel, $2
-    }
-    name = ""
-    next
-  }
-')"
-if ! printf '%s\n' "$mirror_records" | garden_path_mirror_check; then
+#    Every declared tree must have produced exactly one record. A `garden ls`
+#    that succeeds but whose output this parser no longer recognizes would
+#    otherwise leave both loops iterating zero times — green, with nothing
+#    checked.
+header_count="$(printf '%s\n' "$raw_ls" | garden_path_mirror_header_count)"
+record_count="$(printf '%s' "$tree_records" | grep -c . || true)"
+if [ "$record_count" -ne "$header_count" ] || [ "$header_count" -eq 0 ]; then
+  echo "reconcile-garden: parsed $record_count records from $header_count 'garden ls' tree headers — output format changed; refusing to grow unverified" >&2
+  exit 1
+fi
+
+# 2. Path-mirror gate — the ~/src layout rule (see TWO HARD GATES above for why
+#    it lives here).
+# The helper's record shape is name/declared-path/url, so drop the absolute
+# path column from the shared records.
+if ! printf '%s\n' "$tree_records" | cut -f1,3,4 | garden_path_mirror_check; then
   echo "reconcile-garden: registry declarations violate the ~/src layout rule (see above) — failing apply before grow" >&2
   echo "reconcile-garden: the rule is owned by the \"Repository layout and garden ownership\" section of the agent instructions" >&2
   exit 1
@@ -156,19 +164,17 @@ check_tree() {
   fi
 }
 
-# tree_info was captured in step 1 from the same `garden ls` call; paths are
-# declaration-derived and do not change across grow.
+# tree_records was parsed in step 1 from the same `garden ls` call; paths are
+# declaration-derived and do not change across grow, and the "." root is
+# already dropped.
 rc=0
+record_sep="$(printf '\t')"
 # Heredoc (not a pipe) so the loop runs in THIS shell and rc survives it.
-while IFS= read -r line; do
-  [ -n "$line" ] || continue
-  name="${line%% *}"
-  # Skip garden's synthesized "." root.
-  case "$name" in ""|.) continue ;; esac
-  tp="${line##* }"
+while IFS="$record_sep" read -r name tp _rel _url; do
+  [ -n "$name" ] || continue
   check_tree "$name" "$tp" || rc=1
 done <<EOF
-$tree_info
+$tree_records
 EOF
 if [ "$rc" -ne 0 ]; then
   echo "reconcile-garden: grow incomplete (see above) — failing apply" >&2
