@@ -212,6 +212,17 @@ export const REGISTRY: Registry = {
     tagPrefix: "compound-engineering-",
   },
 
+  // Google's official android-cli skill, sourced declaratively instead of
+  // through `android init`. That subcommand's only effect is to write the skill
+  // into every agent's global skills directory, unconditionally overwriting what
+  // is already there -- and every one of those directories is the chezmoi-managed
+  // `~/.agents/skills` tree behind a symlink. The same skill ships from
+  // android/skills under `devtools/android-cli/`, which agents.skills.external
+  // pins here and delivers as an ordinary archive external, so the tool no longer
+  // writes into a managed tree and the content is versioned like every other
+  // skill. Single tag train, so no tagPrefix.
+  "android-cli": { kind: "githubRelease", source: "android/skills" },
+
   // The orca skills all ship from one repo, one key each because
   // agents.skills.external looks the lock up by skill name. The repo also tags a
   // `mobile-android-v` train, so `v` selects the desktop release train. The

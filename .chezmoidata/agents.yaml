@@ -41,6 +41,15 @@ agents:
     external:
     - name: agent-browser
       source: vercel-labs/agent-browser
+    # Google's official android-cli skill. `android init` installs this same
+    # skill by writing it into every agent's global skills directory, all of
+    # which are the chezmoi-managed ~/.agents/skills tree behind a symlink, and
+    # it overwrites what is there without asking -- so the SDK script no longer
+    # runs it and the skill is pinned here instead. android/skills files it under
+    # devtools/, not the skills/<name> the github branch assumes, hence skillPath.
+    - name: android-cli
+      source: android/skills
+      skillPath: devtools/android-cli
     - name: improve
       source: shadcn/improve
       ref: main

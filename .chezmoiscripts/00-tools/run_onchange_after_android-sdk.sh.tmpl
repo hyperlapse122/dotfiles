@@ -29,6 +29,14 @@
 #
 # This script re-runs when rendered content changes (e.g. when the android CLI
 # version or the selected ABI updates).
+#
+# It deliberately does NOT run `android init`. That subcommand's only effect is
+# to install the android-cli skill into every agent's global skills directory,
+# and on this host ~/.claude/skills, ~/.codex/skills and ~/.gemini/skills are all
+# symlinks to the chezmoi-managed ~/.agents/skills tree, so it silently
+# overwrites whatever chezmoi put there with unpinned bytes from the CLI bundle.
+# The skill is an ordinary pinned external instead (agents.skills.external ->
+# android/skills devtools/android-cli). `android sdk install` needs no init.
 
 set -euo pipefail
 
@@ -47,9 +55,6 @@ fi
   echo "android-sdk: the android CLI is not on PATH or at ~/.local/bin/android (externals not applied? see .chezmoiexternals/dev-tools.toml)" >&2
   exit 1
 }
-
-# Initialize the agent environment and skills.
-"$ANDROID_BIN" init
 
 # Install required SDK components idempotently.
 "$ANDROID_BIN" --sdk="$ANDROID_HOME" sdk install \
