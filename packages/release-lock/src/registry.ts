@@ -202,6 +202,22 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => `codex-code-mode-host-${rustArch(arch)}-${muslTarget(os)}.tar.gz`,
   },
 
+  // The MCP file-search server, driven over stdio by the agent harnesses.
+  // Upstream ships bare per-target binaries named by full Rust target triple, so
+  // the glibc and musl linux builds differ in that component alone rather than
+  // by a `-musl` infix -- the only linuxMusl tool here shaped that way. `v` pins
+  // the stable train: the repo also carries a rolling `nightly` tag, and
+  // `releases/latest` would follow it the moment upstream stopped flagging it a
+  // prerelease (KTD10, and the same bet the `bun` entry above refuses).
+  "fff-mcp": {
+    kind: "githubRelease",
+    source: "dmtrKovalenko/fff",
+    tagPrefix: "v",
+    linuxMusl: true,
+    asset: ({ os, arch, libc }) =>
+      `fff-mcp-${rustArch(arch)}-${libc === "musl" ? muslTarget(os) : rustTarget(os)}`,
+  },
+
   /* ---------- version-only githubRelease entries ---------- */
 
   "compound-engineering": {

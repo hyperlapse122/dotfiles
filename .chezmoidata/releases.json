@@ -322,7 +322,7 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -344,6 +344,37 @@
           "darwin-arm64": {
             "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.9/docker-credential-osxkeychain-v0.9.9.darwin-arm64",
             "sha256": "3585188b1df1c3568ae536999eddb48ad2c781b3cf07a2f7d7181262d045820c"
+          }
+        }
+      },
+      "fff-mcp": {
+        "kind": "githubRelease",
+        "source": "dmtrKovalenko/fff",
+        "version": "v0.10.6",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-x86_64-unknown-linux-gnu",
+            "sha256": "3b887b272d580f34f9fe6c60cd126be54c4a7cf5f8ffb122d86c81f29b98524e"
+          },
+          "linux-arm64": {
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-aarch64-unknown-linux-gnu",
+            "sha256": "c557a0fc6463d013bd1850e8d2cfbd823b5ff41a7386e0803ab552ef55c6bf31"
+          },
+          "darwin-amd64": {
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-x86_64-apple-darwin",
+            "sha256": "12f374554f1930434cacee8221d9a76afd9e4dde0d9112c3bbc3ea59d5b56e83"
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-aarch64-apple-darwin",
+            "sha256": "02e0f57f5b88fa698494f310d8005a0c34d5bda5a1fcd069520b35f8e2319892"
+          },
+          "linux-amd64-musl": {
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-x86_64-unknown-linux-musl",
+            "sha256": "a44ef64015f1754aa63b690c24d9a748ed16298f05350da7b09554c4c98dfb0f"
+          },
+          "linux-arm64-musl": {
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-aarch64-unknown-linux-musl",
+            "sha256": "028b9e388716a8c0c39de3f153dd8e14e5ee998ffa70d4951f1cd2a3fc42f6ce"
           }
         }
       },
@@ -445,7 +476,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "marksman": {
         "kind": "githubRelease",
@@ -527,47 +558,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197",
+        "version": "v1.4.198",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.197/orca-ide-1.4.197.x86_64.rpm",
-            "sha256": "a324a92045198d4b884575b48f410532d92f88ae54369937ed855b069e6a0995"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.198/orca-ide-1.4.198.x86_64.rpm",
+            "sha256": "c863658471e834c76b2a1d12283ae2a6a1e054cd1159998f6c8fa1ce3931ca44"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.197/orca-ide-1.4.197.aarch64.rpm",
-            "sha256": "53d9234c1363b4db87a380b93c520bf0172591fbefd7c32797ebc45ba64d2535"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.198/orca-ide-1.4.198.aarch64.rpm",
+            "sha256": "2d6a4ded0f83bc979c290b057a49ad8500e3275047c8ce61e5a2ee3a77a2eb85"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.197"
+        "version": "v1.4.198"
       },
       "react-best-practices": {
         "kind": "gitRef",
