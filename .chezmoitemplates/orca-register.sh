@@ -233,6 +233,183 @@ orca_register_tree() {
   fi
 }
 
+# --- project groups ---------------------------------------------------------
+#
+# Orca does model project groups — `projectGroups` in its own state, with every
+# repo carrying a `projectGroupId` — but its CLI exposes no command for them.
+# The three operations exist only as runtime RPC methods (`projectGroup.list`,
+# `projectGroup.create`, `projectGroup.moveProject`), which the desktop app and
+# the CLI both reach through the same client module. So this step talks to the
+# already-acquired runtime through that module instead of through a subcommand
+# that does not exist.
+#
+# BEST EFFORT, UNLIKE REGISTRATION. That RPC surface is internal to Orca: an
+# upgrade may rename it or move the module. Registration failing must fail the
+# apply, because a host without its projects cannot be worked in; grouping
+# failing must not, because it only changes how the sidebar arranges projects
+# that are all already there. Every failure below warns and returns 0.
+#
+# ADDITIVE ONLY, on the same terms as registration: a group with the declared
+# name is reused rather than recreated, and a repo the operator has already
+# filed under some group is left where they put it.
+
+# Resolves the Orca install from the CLI path, the way the vendor's own
+# `bin/orca-ide` wrapper does: follow the symlink chain to the real script under
+# <install>/resources/bin, then read the install root above it. Sets
+# orca_install_node and orca_install_module, or returns non-zero.
+orca_register_resolve_install() {
+  orca_ri_src=$1
+
+  orca_install_node=${ORCA_REGISTER_NODE:-}
+  orca_install_module=${ORCA_REGISTER_RPC_MODULE:-}
+  if [ -n "$orca_install_node" ] && [ -n "$orca_install_module" ]; then
+    return 0
+  fi
+
+  # `readlink` without -f: the flag is a GNU extension, and this file runs
+  # wherever the apply script does.
+  orca_ri_guard=0
+  while [ -h "$orca_ri_src" ] && [ "$orca_ri_guard" -lt 16 ]; do
+    orca_ri_dir=$(cd -P "$(dirname "$orca_ri_src")" 2>/dev/null && pwd) || return 1
+    orca_ri_src=$(readlink "$orca_ri_src") || return 1
+    case $orca_ri_src in
+      /*) ;;
+      *) orca_ri_src="$orca_ri_dir/$orca_ri_src" ;;
+    esac
+    orca_ri_guard=$((orca_ri_guard + 1))
+  done
+
+  orca_ri_bin=$(cd -P "$(dirname "$orca_ri_src")" 2>/dev/null && pwd) || return 1
+  orca_ri_resources=$(cd -P "$orca_ri_bin/.." 2>/dev/null && pwd) || return 1
+  orca_ri_root=$(cd -P "$orca_ri_resources/.." 2>/dev/null && pwd) || return 1
+
+  [ -n "$orca_install_module" ] ||
+    orca_install_module="$orca_ri_resources/app.asar.unpacked/out/cli/runtime-client.js"
+  [ -f "$orca_install_module" ] || return 1
+
+  if [ -z "$orca_install_node" ]; then
+    # The same candidate list the vendor wrapper carries: the Linux executable
+    # is `orca-ide` because Ubuntu GNOME already ships an `orca`.
+    for orca_ri_candidate in orca-ide orca Orca; do
+      if [ -f "$orca_ri_root/$orca_ri_candidate" ] && [ -x "$orca_ri_root/$orca_ri_candidate" ]; then
+        orca_install_node="$orca_ri_root/$orca_ri_candidate"
+        break
+      fi
+    done
+  fi
+  [ -n "$orca_install_node" ] || return 1
+}
+
+# The reconciler itself, in JavaScript because it must read Orca's own JSON.
+# The shell helpers above match exact key/value pairs in whitespace-stripped
+# blobs, which a group name cannot survive: "ExamVue 365 Flow" carries the very
+# spaces that stripping removes. Node is already on the host — it is the Orca
+# binary in ELECTRON_RUN_AS_NODE mode — so the parse is done where a parser
+# exists rather than approximated with sed.
+orca_register_group_program() {
+  cat <<'ORCA_GROUP_JS'
+const { RuntimeClient } = require(process.env.ORCA_GROUP_MODULE);
+const fs = require('node:fs');
+
+const client = new RuntimeClient();
+
+async function call(method, params) {
+  const res = await client.call(method, params);
+  if (res && res.ok === false) {
+    throw new Error(method + ' failed: ' + JSON.stringify(res.error || null));
+  }
+  return (res && res.result) || {};
+}
+
+function records() {
+  return fs
+    .readFileSync(0, 'utf8')
+    .split('\n')
+    .filter((line) => line.includes('\t'))
+    .map((line) => {
+      const at = line.indexOf('\t');
+      return { group: line.slice(0, at), path: line.slice(at + 1) };
+    })
+    .filter((r) => r.group && r.path);
+}
+
+async function main() {
+  const wanted = records();
+  if (wanted.length === 0) return;
+
+  const groups = (await call('projectGroup.list', null)).groups || [];
+  const repos = (await call('repo.list', null)).repos || [];
+
+  const byName = new Map(groups.map((g) => [g.name, g]));
+  const byPath = new Map(repos.map((r) => [r.path, r]));
+
+  // Where the next project lands inside a group: past the last position already
+  // taken there, so an operator's own ordering is appended to, not overwritten.
+  // The highest order, not the member count — a group whose members were
+  // reordered by hand has gaps, and counting would hand out a position that is
+  // already occupied.
+  const lastOrder = new Map();
+  for (const repo of repos) {
+    if (!repo.projectGroupId) continue;
+    const at = typeof repo.projectGroupOrder === 'number' ? repo.projectGroupOrder : -1;
+    const seen = lastOrder.has(repo.projectGroupId) ? lastOrder.get(repo.projectGroupId) : -1;
+    lastOrder.set(repo.projectGroupId, Math.max(seen, at));
+  }
+
+  for (const want of wanted) {
+    const repo = byPath.get(want.path);
+    if (!repo) {
+      console.warn("orca-register: no Orca project at " + want.path + "; not grouped");
+      continue;
+    }
+    if (repo.projectGroupId) continue;
+
+    let group = byName.get(want.group);
+    if (!group) {
+      group = (await call('projectGroup.create', { name: want.group, createdFrom: 'manual' })).group;
+      byName.set(want.group, group);
+    }
+
+    const order = (lastOrder.has(group.id) ? lastOrder.get(group.id) : -1) + 1;
+    await call('projectGroup.moveProject', { repo: repo.id, groupId: group.id, order });
+    lastOrder.set(group.id, order);
+    console.log("orca-register: grouped " + repo.displayName + " under '" + want.group + "'");
+  }
+}
+
+main().catch((err) => {
+  console.error('orca-register: ' + (err && err.message ? err.message : String(err)));
+  process.exit(1);
+});
+ORCA_GROUP_JS
+}
+
+# Reads `group<TAB>abspath` records from ORCA_REGISTER_GROUP_RECORDS. Runs
+# inside orca_register_main so it reuses the runtime that was acquired there.
+orca_register_groups() {
+  orca_gr_records=${ORCA_REGISTER_GROUP_RECORDS:-}
+  [ -n "$orca_gr_records" ] || return 0
+
+  if ! orca_register_resolve_install "$1"; then
+    echo "orca-register: cannot locate the Orca runtime client module beside $1; projects are registered but not grouped" >&2
+    return 0
+  fi
+
+  orca_gr_js=$(mktemp "${TMPDIR:-/tmp}/orca-group.XXXXXX") || return 0
+  orca_register_group_program >"$orca_gr_js"
+
+  orca_gr_out=$(printf '%s\n' "$orca_gr_records" |
+    ORCA_GROUP_MODULE="$orca_install_module" ELECTRON_RUN_AS_NODE=1 \
+      "$orca_install_node" "$orca_gr_js" 2>&1) || {
+    echo "orca-register: project grouping failed; projects are registered but not grouped" >&2
+    printf '%s\n' "$orca_gr_out" >&2
+    rm -f "$orca_gr_js"
+    return 0
+  }
+  rm -f "$orca_gr_js"
+  [ -z "$orca_gr_out" ] || printf '%s\n' "$orca_gr_out"
+}
+
 # Reads `name<TAB>abspath<TAB>relpath<TAB>url` records on stdin. Records are
 # buffered before the first CLI call so that an empty stream costs nothing —
 # not a runtime, not a process.
@@ -285,6 +462,11 @@ orca_register_main() {
   done <<ORCA_RECORDS
 $orca_records
 ORCA_RECORDS
+
+  # Grouping runs only once every declared tree is registered, because it files
+  # projects Orca must already know about, and only when registration succeeded,
+  # because a half-registered host would be grouped half-way.
+  [ "$orca_rc" -ne 0 ] || orca_register_groups "$orca_cli"
 
   orca_register_stop_started_runtime
   trap - EXIT INT TERM

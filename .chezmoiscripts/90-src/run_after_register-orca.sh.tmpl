@@ -91,6 +91,39 @@ done <<EOF
 $tree_records
 EOF
 
+# Orca project groups come from the registry's own `groups:` declarations, so
+# the sidebar arranges projects the way the registry says they belong together
+# and nothing here needs a second source of truth. A group name is free text and
+# may hold spaces, which is why the members are read group by group rather than
+# from one flat listing. Registration does not depend on this: a `garden ls`
+# that reports no groups simply leaves ORCA_REGISTER_GROUP_RECORDS empty.
+#
+# `2>&1` on both listings, like garden_path_mirror_enumerate above: garden
+# prints its tree headers on stderr, so a listing read from stdout alone comes
+# back holding only the blank lines between them.
+group_records=""
+group_names="$(garden --config "$reg" ls --all --no-commands --no-gardens --no-remotes 2>&1 |
+  awk '/^groups:/ { inside = 1; next } /^[^[:space:]]/ { inside = 0 } inside' |
+  sed -n 's/^  - //p')"
+while IFS= read -r group_name; do
+  [ -n "$group_name" ] || continue
+  member_names="$(garden --config "$reg" ls --all --no-commands --no-gardens --no-groups --no-remotes "%$group_name" 2>&1 |
+    sed -n 's/^#-* *\([^ ]*\).*/\1/p')"
+  while IFS= read -r member_name; do
+    [ -n "$member_name" ] || continue
+    member_path="$(printf '%s' "$grown_records" |
+      awk -F"$record_sep" -v want="$member_name" '$1 == want { print $2; exit }')"
+    [ -n "$member_path" ] || continue
+    group_records="$group_records$group_name$record_sep$member_path
+"
+  done <<EOF
+$member_names
+EOF
+done <<EOF
+$group_names
+EOF
+export ORCA_REGISTER_GROUP_RECORDS="$group_records"
+
 echo "orca-register: registering declared trees with Orca"
 printf '%s' "$grown_records" | orca_register_main
 

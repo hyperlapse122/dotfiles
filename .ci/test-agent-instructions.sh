@@ -111,6 +111,8 @@ That command also deletes the checked-out local branch, so it is destructive to 
 Worktrees that predate Orca ownership are NOT migrated
 Orca registration is not a garden command
 It is ADDITIVE ONLY
+Orca sidebar groups come from the registry's own `groups:` block
+Membership is declared, never derived from the path
 It reports garden drift only; it does not audit Orca registration.
 MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
 Orca has NO command that adopts an already-checked-out worktree

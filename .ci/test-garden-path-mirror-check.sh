@@ -49,8 +49,8 @@ rec() { printf '%s%s%s%s%s\n' "$1" "$tab" "$2" "$tab" "$3"; }
 
 conforming=$(
   rec dotfiles 'github.com/hyperlapse122/dotfiles' 'https://github.com/hyperlapse122/dotfiles.git'
-  rec pacs-scp 'git.jpi.app/products/365flow/pacs-scp' 'https://git.jpi.app/products/365flow/pacs-scp.git'
-  rec signet 'git.jpi.app/products/signet' 'https://git.jpi.app/products/signet.git'
+  rec widget-service 'git.example.org/tenants/blue-team/widget-service' 'https://git.example.org/tenants/blue-team/widget-service.git'
+  rec relay-core 'git.example.org/tenants/relay-core' 'https://git.example.org/tenants/relay-core.git'
 )
 run_checker "$conforming"
 [ "$checker_rc" -eq 0 ] || fail "conforming stream exited $checker_rc: $checker_out"
@@ -93,8 +93,8 @@ write_ls_out() {
   cat >"$enum_scratch/ls.out" <<LSOUT
 # dotfiles [main] $enum_scratch/src/github.com/hyperlapse122/dotfiles
     origin: https://github.com/hyperlapse122/dotfiles.git
-# pacs-scp [develop] $enum_scratch/src/git.jpi.app/products/365flow/pacs-scp
-    origin: https://git.jpi.app/products/365flow/pacs-scp.git
+# widget-service [develop] $enum_scratch/src/git.example.org/tenants/blue-team/widget-service
+    origin: https://git.example.org/tenants/blue-team/widget-service.git
 LSOUT
 }
 
@@ -153,37 +153,37 @@ pass 'garden ls output with no recognizable headers refuses to proceed unverifie
 
 # --- reject: an umbrella segment dropped from the declared path ---------------
 
-run_checker "$(rec pacs-scp 'git.jpi.app/365flow/pacs-scp' 'https://git.jpi.app/products/365flow/pacs-scp.git')"
+run_checker "$(rec widget-service 'git.example.org/blue-team/widget-service' 'https://git.example.org/tenants/blue-team/widget-service.git')"
 [ "$checker_rc" -ne 0 ] || fail 'a dropped umbrella segment was accepted'
 case "$checker_out" in
-  *pacs-scp*) ;;
+  *widget-service*) ;;
   *) fail "rejection did not name the tree: $checker_out" ;;
 esac
 case "$checker_out" in
-  *'git.jpi.app/365flow/pacs-scp'*) ;;
+  *'git.example.org/blue-team/widget-service'*) ;;
   *) fail "rejection did not name the declared path: $checker_out" ;;
 esac
 case "$checker_out" in
-  *'git.jpi.app/products/365flow/pacs-scp'*) ;;
+  *'git.example.org/tenants/blue-team/widget-service'*) ;;
   *) fail "rejection did not name the derived path: $checker_out" ;;
 esac
 pass 'a dropped umbrella segment is rejected, naming tree and both paths'
 
 # --- the .git suffix is not part of the namespace ----------------------------
 
-run_checker "$(rec works 'git.jpi.app/hyperlapse/works' 'https://git.jpi.app/hyperlapse/works')"
+run_checker "$(rec toolbox 'git.example.org/tenants/toolbox' 'https://git.example.org/tenants/toolbox')"
 [ "$checker_rc" -eq 0 ] || fail "a url without .git was rejected: $checker_out"
 pass 'a url with and without the .git suffix derive the same path'
 
 # --- ssh remotes in the scp-like form ----------------------------------------
 
-run_checker "$(rec fleet 'git.jpi.app/infra/fleet' 'git@git.jpi.app:infra/fleet.git')"
+run_checker "$(rec nodes 'git.example.org/ops/nodes' 'git@git.example.org:ops/nodes.git')"
 [ "$checker_rc" -eq 0 ] || fail "an ssh remote was rejected: $checker_out"
 pass 'an ssh git@host:namespace/project.git remote derives host/namespace/project'
 
 # --- userinfo and port are not path segments ---------------------------------
 
-run_checker "$(rec fleet 'git.jpi.app/infra/fleet' 'https://deploy@git.jpi.app:8443/infra/fleet.git')"
+run_checker "$(rec nodes 'git.example.org/ops/nodes' 'https://deploy@git.example.org:8443/ops/nodes.git')"
 [ "$checker_rc" -eq 0 ] || fail "userinfo/port were treated as path: $checker_out"
 pass 'userinfo and a port suffix derive the same path as the bare host'
 
@@ -191,9 +191,9 @@ pass 'userinfo and a port suffix derive the same path as the bare host'
 
 for url in \
   'https://github.com/hyperlapse122/dotfiles.git' \
-  'https://git.jpi.app/products/365flow/pacs-scp.git' \
-  'git@git.jpi.app:infra/fleet.git' \
-  'https://deploy@git.jpi.app:8443/infra/fleet.git'; do
+  'https://git.example.org/tenants/blue-team/widget-service.git' \
+  'git@git.example.org:ops/nodes.git' \
+  'https://deploy@git.example.org:8443/ops/nodes.git'; do
   derived=$(printf 'x%sPLACEHOLDER%s%s\n' "$tab" "$tab" "$url" | sh "$checker" --print 2>&1) ||
     fail "--print failed for $url"
   host=${derived%%/*}
@@ -218,13 +218,13 @@ pass 'a derived path recombined with its scheme reconstructs the url'
 
 # --- reject: a declared path outside the registry root ------------------------
 
-run_checker "$(rec fleet '/home/h82/src/git.jpi.app/infra/fleet' 'https://git.jpi.app/infra/fleet.git')"
+run_checker "$(rec nodes '/home/u/src/git.example.org/ops/nodes' 'https://git.example.org/ops/nodes.git')"
 [ "$checker_rc" -ne 0 ] || fail 'an absolute declared path was accepted'
 pass 'a declared path outside the registry root is a deviation'
 
 # --- reject: a record with no remote ------------------------------------------
 
-run_checker "$(rec orphan 'git.jpi.app/infra/orphan' '')"
+run_checker "$(rec orphan 'git.example.org/ops/orphan' '')"
 [ "$checker_rc" -ne 0 ] || fail 'a record with no url was accepted'
 case "$checker_out" in
   *orphan*) ;;
@@ -235,27 +235,27 @@ pass 'a record with an empty url is reported as malformed'
 # --- every deviation is reported, not just the first --------------------------
 
 two_bad=$(
-  rec pacs-scp 'git.jpi.app/365flow/pacs-scp' 'https://git.jpi.app/products/365flow/pacs-scp.git'
-  rec examvue-apps 'git.jpi.app/examvue-duo/examvue-apps' 'https://git.jpi.app/products/examvue-duo/examvue-apps.git'
+  rec widget-service 'git.example.org/blue-team/widget-service' 'https://git.example.org/tenants/blue-team/widget-service.git'
+  rec portal-apps 'git.example.org/green-team/portal-apps' 'https://git.example.org/tenants/green-team/portal-apps.git'
 )
 run_checker "$two_bad"
 [ "$checker_rc" -ne 0 ] || fail 'two deviations were accepted'
 case "$checker_out" in
-  *pacs-scp*examvue-apps* | *examvue-apps*pacs-scp*) ;;
+  *widget-service*portal-apps* | *portal-apps*widget-service*) ;;
   *) fail "only one of two deviations was reported: $checker_out" ;;
 esac
 pass 'every deviation in a stream is reported'
 
 # --- case is part of the namespace -------------------------------------------
 
-run_checker "$(rec ExamVueDuo_AI 'git.jpi.app/products/examvue-duo/examvueduo_ai' 'https://git.jpi.app/products/examvue-duo/ExamVueDuo_AI.git')"
+run_checker "$(rec PortalDuo_AI 'git.example.org/tenants/green-team/portalduo_ai' 'https://git.example.org/tenants/green-team/PortalDuo_AI.git')"
 [ "$checker_rc" -ne 0 ] || fail 'a case-folded path was accepted'
 pass 'a path differing only in segment case is a deviation'
 
 # --- reject: a url no path can be derived from ---------------------------------
 
-for bad_url in 'https://onlyhost' 'git@onlyhost' 'https://git.jpi.app/'; do
-  run_checker "$(rec bad 'git.jpi.app/x' "$bad_url")"
+for bad_url in 'https://onlyhost' 'git@onlyhost' 'https://git.example.org/'; do
+  run_checker "$(rec bad 'git.example.org/x' "$bad_url")"
   [ "$checker_rc" -ne 0 ] || fail "underivable url was accepted: $bad_url"
   case "$checker_out" in
     *'no path can be derived from'*) ;;
@@ -266,7 +266,7 @@ pass 'a url with no derivable namespace is rejected'
 
 # --- a trailing slash does not defeat the .git strip ---------------------------
 
-run_checker "$(rec fleet 'git.jpi.app/infra/fleet' 'https://git.jpi.app/infra/fleet.git/')"
+run_checker "$(rec nodes 'git.example.org/ops/nodes' 'https://git.example.org/ops/nodes.git/')"
 [ "$checker_rc" -eq 0 ] || fail "a trailing slash left .git in the path: $checker_out"
 pass 'a url with a trailing slash after .git derives the same path'
 

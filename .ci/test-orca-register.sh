@@ -88,6 +88,9 @@ STUB
   export ORCA_STUB_DIR="$stub_dir"
   export ORCA_STUB_LOG="$stub_dir/log"
   export ORCA_REGISTER_CLI="$stub_dir/orca-ide"
+  # The group step is opt-in per case: with no records the helper returns before
+  # it looks for a runtime client at all.
+  unset ORCA_REGISTER_GROUP_RECORDS
   : >"$ORCA_STUB_LOG"
   printf '{"appRunning":true,"runtimeState":"ready","runtimeReachable":true}\n' >"$stub_dir/status.answer"
   printf '{"ok":true,"result":{"setups":[]}}\n' >"$stub_dir/project_setups.answer"
@@ -99,7 +102,7 @@ STUB
   cat >"$stub_dir/project_setups.after-add" <<EOF
 {"ok":true,"result":{"setups":[
   {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles","setupState":"ready"},
-  {"id":"setup-b","projectId":"jpi:products/365flow/pacs-scp","hostId":"local","repoId":"repo-b","path":"$scratch/src/git.jpi.app/products/365flow/pacs-scp","setupState":"ready"}
+  {"id":"setup-b","projectId":"git:git.example.org/tenants/blue-team/widget-service","hostId":"local","repoId":"repo-b","path":"$scratch/src/git.example.org/tenants/blue-team/widget-service","setupState":"ready"}
 ]}}
 EOF
 }
@@ -122,9 +125,13 @@ run_register() {
 
 logged() { grep -qF -- "$1" "$ORCA_STUB_LOG"; }
 
+# The second tree carries a namespace deeper than one segment, which is what
+# the display-name and identity cases below actually exercise. Its host and path
+# are invented: this file is public, and the real registry that supplies them at
+# apply time is GPG-encrypted for that reason.
 two_trees=$(
   rec dotfiles "$scratch/src/github.com/hyperlapse122/dotfiles" 'github.com/hyperlapse122/dotfiles' 'https://github.com/hyperlapse122/dotfiles.git'
-  rec pacs-scp "$scratch/src/git.jpi.app/products/365flow/pacs-scp" 'git.jpi.app/products/365flow/pacs-scp' 'https://git.jpi.app/products/365flow/pacs-scp.git'
+  rec widget-service "$scratch/src/git.example.org/tenants/blue-team/widget-service" 'git.example.org/tenants/blue-team/widget-service' 'https://git.example.org/tenants/blue-team/widget-service.git'
 )
 
 # --- reachable runtime: register, never invoke serve (AE3) --------------------
@@ -139,7 +146,7 @@ pass 'a reachable runtime is used as-is and serve is never invoked'
 # --- display name and worktree base path reach setup-update (AE1) ------------
 
 logged 'hyperlapse122 / dotfiles' || fail 'display name short form missing from setup-update'
-logged '365flow / pacs-scp' || fail 'nested namespace short form missing from setup-update'
+logged 'blue-team / widget-service' || fail 'nested namespace short form missing from setup-update'
 logged '--worktree-base-path' || fail 'worktree base path missing from setup-update'
 logged '--setup setup-a' || fail 'setup-update did not use the setup entry id'
 logged '--setup repo-a' && fail 'setup-update used the sibling repoId instead of the setup id'
@@ -248,7 +255,7 @@ EOF
 run_register "$two_trees"
 [ "$register_rc" -eq 0 ] || fail "existing-setup run exited $register_rc: $register_out"
 logged "repo add --path $scratch/src/github.com/hyperlapse122/dotfiles" && fail 'an already-registered tree was re-added'
-logged "repo add --path $scratch/src/git.jpi.app/products/365flow/pacs-scp" || fail 'the unregistered tree was skipped'
+logged "repo add --path $scratch/src/git.example.org/tenants/blue-team/widget-service" || fail 'the unregistered tree was skipped'
 pass 'a tree with a local setup is left untouched while the other is registered'
 
 # --- a repo present without a setup is completed, not skipped ----------------
@@ -329,7 +336,7 @@ make_stub nested-setup-entry
 cat >"$ORCA_STUB_DIR/project_setups.after-add" <<EOF
 {"ok":true,"result":{"setups":[
   {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","hooks":{"mode":"auto","scripts":{"setup":""}},"path":"$scratch/src/github.com/hyperlapse122/dotfiles"},
-  {"id":"setup-b","projectId":"jpi:products/365flow/pacs-scp","hostId":"local","repoId":"repo-b","hooks":{"mode":"auto","scripts":{"setup":""}},"path":"$scratch/src/git.jpi.app/products/365flow/pacs-scp"}
+  {"id":"setup-b","projectId":"git:git.example.org/tenants/blue-team/widget-service","hostId":"local","repoId":"repo-b","hooks":{"mode":"auto","scripts":{"setup":""}},"path":"$scratch/src/git.example.org/tenants/blue-team/widget-service"}
 ]}}
 EOF
 run_register "$two_trees"
@@ -373,6 +380,151 @@ run_register ''
 [ "$register_rc" -eq 0 ] || fail "empty run exited $register_rc: $register_out"
 [ ! -s "$ORCA_STUB_LOG" ] || fail "empty run invoked the CLI: $(cat "$ORCA_STUB_LOG")"
 pass 'an empty record set exits zero and invokes no CLI command'
+
+# --- project groups ----------------------------------------------------------
+#
+# Grouping does not go through the CLI: Orca exposes `projectGroup.list`,
+# `projectGroup.create` and `projectGroup.moveProject` only as runtime RPC
+# methods, which the helper reaches through the CLI's own client module in
+# ELECTRON_RUN_AS_NODE mode. So these cases stub the MODULE, not the CLI: a fake
+# RuntimeClient that logs every call and answers from files. That keeps the real
+# reconciler — the JavaScript the helper emits — under test, which is where the
+# group-name and ordering decisions actually live.
+
+group_module="$scratch/fake-runtime-client.js"
+cat >"$group_module" <<'FAKE'
+const fs = require('node:fs');
+
+let created = 0;
+
+function answer(name, fallback) {
+  const path = process.env.ORCA_RPC_DIR + '/' + name;
+  if (!fs.existsSync(path)) return fallback;
+  return JSON.parse(fs.readFileSync(path, 'utf8'));
+}
+
+class RuntimeClient {
+  async call(method, params) {
+    fs.appendFileSync(process.env.ORCA_RPC_LOG, method + ' ' + JSON.stringify(params) + '\n');
+    if (fs.existsSync(process.env.ORCA_RPC_DIR + '/fail.' + method)) {
+      return { ok: false, error: { code: 'stub', message: 'refusing ' + method } };
+    }
+    if (method === 'projectGroup.list') return { ok: true, result: answer('groups.json', { groups: [] }) };
+    if (method === 'repo.list') return { ok: true, result: answer('repos.json', { repos: [] }) };
+    if (method === 'projectGroup.create') {
+      created += 1;
+      return { ok: true, result: { group: { id: 'group-' + created, name: params.name } } };
+    }
+    return { ok: true, result: {} };
+  }
+}
+
+module.exports = { RuntimeClient };
+FAKE
+
+make_group_stub() {
+  make_stub "$1"
+  rpc_dir="$scratch/rpc.$1"
+  mkdir -p "$rpc_dir"
+  export ORCA_RPC_DIR="$rpc_dir"
+  export ORCA_RPC_LOG="$rpc_dir/log"
+  : >"$ORCA_RPC_LOG"
+  export ORCA_REGISTER_NODE="$node_bin"
+  export ORCA_REGISTER_RPC_MODULE="$group_module"
+  cat >"$rpc_dir/repos.json" <<EOF
+{"repos":[
+  {"id":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles","displayName":"hyperlapse122 / dotfiles"},
+  {"id":"repo-b","path":"$scratch/src/git.example.org/tenants/blue-team/widget-service","displayName":"blue-team / widget-service"}
+]}
+EOF
+  # A group name with spaces on purpose: it is what the group name may hold and
+  # what the shell helpers beside this step cannot carry, which is why the
+  # reconciler parses JSON instead of matching stripped blobs.
+  export ORCA_REGISTER_GROUP_RECORDS="Blue Team Suite${tab}$scratch/src/git.example.org/tenants/blue-team/widget-service
+"
+}
+
+rpc_logged() { grep -qF -- "$1" "$ORCA_RPC_LOG"; }
+
+node_bin=$(command -v node || true)
+if [ -z "$node_bin" ]; then
+  printf '  --  skipping the project-group cases: no node on PATH\n'
+else
+  # --- a declared group is created and the project filed under it ------------
+
+  make_group_stub groups-create
+  run_register "$two_trees"
+  [ "$register_rc" -eq 0 ] || fail "groups-create run exited $register_rc: $register_out"
+  rpc_logged '"name":"Blue Team Suite"' || fail 'the declared group name never reached projectGroup.create'
+  rpc_logged '"repo":"repo-b"' || fail 'the declared member was not moved into the group'
+  rpc_logged '"groupId":"group-1"' || fail 'moveProject did not use the id of the group it just created'
+  grep -qF '"repo":"repo-a"' "$ORCA_RPC_LOG" && fail 'an undeclared project was moved into the group'
+  pass 'a declared group is created once and its declared members are filed under it'
+
+  # --- an existing group of the same name is reused, never recreated ---------
+
+  make_group_stub groups-reuse
+  printf '{"groups":[{"id":"group-existing","name":"Blue Team Suite"}]}\n' >"$ORCA_RPC_DIR/groups.json"
+  run_register "$two_trees"
+  [ "$register_rc" -eq 0 ] || fail "groups-reuse run exited $register_rc: $register_out"
+  rpc_logged 'projectGroup.create' && fail 'an existing group with the declared name was recreated'
+  rpc_logged '"groupId":"group-existing"' || fail 'the existing group id was not used'
+  pass 'a group that already carries the declared name is reused'
+
+  # --- a project the operator already filed somewhere is left alone ----------
+
+  make_group_stub groups-additive
+  cat >"$ORCA_RPC_DIR/repos.json" <<EOF
+{"repos":[
+  {"id":"repo-b","path":"$scratch/src/git.example.org/tenants/blue-team/widget-service","displayName":"blue-team / widget-service","projectGroupId":"group-operator"}
+]}
+EOF
+  run_register "$two_trees"
+  [ "$register_rc" -eq 0 ] || fail "groups-additive run exited $register_rc: $register_out"
+  rpc_logged 'projectGroup.moveProject' && fail "a project the operator had already grouped was moved"
+  pass 'a project that already belongs to a group is never re-filed'
+
+  # --- a new member lands past the last position, not at the member count ----
+
+  make_group_stub groups-order
+  printf '{"groups":[{"id":"group-existing","name":"Blue Team Suite"}]}\n' >"$ORCA_RPC_DIR/groups.json"
+  cat >"$ORCA_RPC_DIR/repos.json" <<EOF
+{"repos":[
+  {"id":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles","displayName":"hyperlapse122 / dotfiles","projectGroupId":"group-existing","projectGroupOrder":5},
+  {"id":"repo-b","path":"$scratch/src/git.example.org/tenants/blue-team/widget-service","displayName":"blue-team / widget-service"}
+]}
+EOF
+  run_register "$two_trees"
+  [ "$register_rc" -eq 0 ] || fail "groups-order run exited $register_rc: $register_out"
+  rpc_logged '"order":6' || fail "a new member did not land past the last taken position: $(cat "$ORCA_RPC_LOG")"
+  pass 'a new group member lands past the last position already taken'
+
+  # --- grouping is best effort: a failing RPC does not fail the apply --------
+
+  make_group_stub groups-soft-fail
+  : >"$ORCA_RPC_DIR/fail.projectGroup.list"
+  run_register "$two_trees"
+  [ "$register_rc" -eq 0 ] || fail "a failing group RPC failed the apply (rc $register_rc): $register_out"
+  logged 'repo add --path' || fail 'the soft-fail run skipped registration'
+  case "$register_out" in
+    *"not grouped"*) ;;
+    *) fail "a failing group RPC produced no warning: $register_out" ;;
+  esac
+  pass 'a failing group RPC warns and leaves the registration green'
+
+  # --- an install with no runtime client module warns and continues ----------
+
+  make_group_stub groups-no-module
+  ORCA_REGISTER_RPC_MODULE="$scratch/absent/runtime-client.js" run_register "$two_trees"
+  [ "$register_rc" -eq 0 ] || fail "a missing runtime client module failed the apply: $register_out"
+  case "$register_out" in
+    *"not grouped"*) ;;
+    *) fail "a missing runtime client module produced no warning: $register_out" ;;
+  esac
+  pass 'an install with no runtime client module warns and registers anyway'
+
+  unset ORCA_REGISTER_GROUP_RECORDS ORCA_REGISTER_NODE ORCA_REGISTER_RPC_MODULE
+fi
 
 # --- the 90-src script ORDER is load-bearing, so assert it ------------------
 #
