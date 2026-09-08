@@ -129,14 +129,16 @@ Membership is declared, never derived from the path
 It reports garden drift only; it does not audit Orca registration.
 MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
 Orca has NO command that adopts an already-checked-out worktree
-that dispatch MUST go through the `orchestration` skill and the Orca CLI it resolves
+When work needs an agent outside the current session — a peer or cross-model reviewer, or a fan-out across several workers — that dispatch MUST go through the `orchestration` skill and the Orca CLI it resolves.
 The harness's own in-process subagent tool is not the dispatch this rule routes.
-never copy command details here, because they change between Orca releases
+Resolve the executable and load the version-matched guide exactly as the `orchestration` skill directs; never copy command details here, because they change between Orca releases.
 MUST NOT run a plugin-bundled job runner, peer-review launcher, or fan-out script to obtain a peer opinion
+in `compound-engineering` today they include `peer-job-runner.py`, `cross-model-adversarial-review.sh`, `cross-model-doc-review.sh`, `cross-model-pov.sh`, and `elevation-dispatch.sh`
 the prohibition covers every script of that shape, named here or not, in this plugin version or a later one
 MUST NOT reach a peer model by running an agent CLI such as `claude -p`, `codex exec`, or `cursor-agent` for that opinion
-is not dispatch and stays allowed
+A bundled script that only computes locally, such as a frontmatter validator or a review-scope calculator, is not dispatch and stays allowed.
 This rule fixes the path a dispatch takes, never whether to dispatch.
+report the blocker with its exact error, continue with the harness's own in-process reasoning, and record that the peer or cross-model pass did not happen
 in an unattended run that record goes in the MR/PR description, beside the unapplied-findings checklist
 It does not stop, and it does not fall back to the bundled script.
 NEEDLES
