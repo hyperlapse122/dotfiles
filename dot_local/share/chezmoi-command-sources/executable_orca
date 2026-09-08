@@ -6,6 +6,7 @@
 
 set -euo pipefail
 
+resolved=
 tried=()
 for candidate in \
   "${ORCA_IDE_CLI:-}" \
@@ -14,15 +15,23 @@ for candidate in \
 do
   [[ -n $candidate ]] || continue
   tried+=("$candidate")
-  [[ -x $candidate ]] || continue
-  exec "$candidate" "$@"
+  if [[ -x $candidate ]]; then
+    resolved=$candidate
+    break
+  fi
 done
 
-screen_reader="${ORCA_SYSTEM_ORCA:-/usr/bin/orca}"
-tried+=("$screen_reader")
-if [[ -x $screen_reader ]]; then
-  exec "$screen_reader" "$@"
+if [[ -z $resolved ]]; then
+  screen_reader="${ORCA_SYSTEM_ORCA:-/usr/bin/orca}"
+  tried+=("$screen_reader")
+  if [[ -x $screen_reader ]]; then
+    resolved=$screen_reader
+  fi
 fi
 
-printf 'orca: no Orca IDE CLI and no screen reader found; tried %s\n' "${tried[*]}" >&2
-exit 127
+if [[ -z $resolved ]]; then
+  printf 'orca: no Orca IDE CLI and no screen reader found; tried %s\n' "${tried[*]}" >&2
+  exit 127
+fi
+
+exec "$resolved" "$@"
