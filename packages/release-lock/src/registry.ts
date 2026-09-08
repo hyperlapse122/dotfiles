@@ -180,12 +180,6 @@ export const REGISTRY: Registry = {
     asset: ({ os, arch }) => `codegraph-${os}-${x64Arch(arch)}.tar.gz`,
   },
 
-  aoe: {
-    kind: "githubRelease",
-    source: "agent-of-empires/agent-of-empires",
-    asset: ({ os, arch }) => `aoe-${os}-${arch}.tar.gz`,
-  },
-
   codex: {
     kind: "githubRelease",
     source: "openai/codex",

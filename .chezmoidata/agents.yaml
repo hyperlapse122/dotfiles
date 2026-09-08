@@ -97,19 +97,6 @@ agents:
       - "*/skills/ce-sweep/references/interview.md"
       os: [linux, darwin]
       container: keep
-  aoe:
-    config.toml:
-      session:
-        custom_agents:
-          zsh: zsh
-          claude: claude
-          codex: codex
-        agent_detect_as:
-          claude: claude
-          codex: codex
-      tmux:
-        status_bar: enabled
-        clipboard: enabled
   claude:
     # Claude Code setting VALUES asserted into the live ~/.claude/settings.json by
     # .chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl, validated at
