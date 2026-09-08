@@ -72,20 +72,42 @@ orca_register_display_name() {
 
 # Whitespace-insensitive lookups over the CLI's JSON. Deliberately not jq: this
 # file must stay runnable in CI with no dependency beyond a POSIX shell, and
-# every lookup here is an exact key/value match on a flat field.
+# every lookup here is an exact key/value match.
+#
+# TWO SPELLINGS, ON PURPOSE. `status --json` nests its answer as
+# `app.running` / `runtime.reachable`, while the human-readable `status` prints
+# the flat `appRunning` / `runtimeReachable`. Matching only the flat names — the
+# ones the non-JSON output shows — silently reports every runtime as
+# unreachable, which sends a host with a running desktop app down the start-serve
+# path this file exists to avoid. Both spellings are accepted so neither output
+# shape can reintroduce that.
 orca_register_json_bool() {
-  printf '%s' "$1" | tr -d ' \n\t' | grep -q "\"$2\":true"
+  orca_jb_blob=$(printf '%s' "$1" | tr -d ' \n\t')
+  shift
+  for orca_jb_key in "$@"; do
+    case "$orca_jb_blob" in
+      *"\"$orca_jb_key\":true"*) return 0 ;;
+    esac
+  done
+  return 1
 }
 
 orca_register_json_has_path() {
   printf '%s' "$1" | tr -d ' \n\t' | grep -qF "\"path\":\"$2\""
 }
 
-# The setupId of the entry whose path matches, or empty. The list is flattened
+# The setup id of the entry whose path matches, or empty. The list is flattened
 # to one entry per line first so a match cannot borrow a neighbour's id.
+#
+# The selector `project setup-update --setup` accepts is the setup's own `id`
+# from `project setups` — verified against the CLI, which rejects the
+# `<projectId>::<hostId>` form its own help example shows. The `[{,]` anchor is
+# what keeps the match off the sibling `projectId` and `repoId` keys, whose
+# names end in the same three characters.
 orca_register_setup_id() {
-  printf '%s' "$1" | tr -d ' \n\t' | tr '{' '\n' | grep -F "\"path\":\"$2\"" |
-    sed -n 's/.*"setupId":"\([^"]*\)".*/\1/p' | head -n 1
+  printf '%s' "$1" | tr -d ' \n\t' | tr '{' '\n,' | grep -F "\"path\":\"$2\"" |
+    sed 's/^/,/' | grep -o ',"id":"[^"]*"' | head -n 1 |
+    sed 's/^,"id":"//; s/"$//'
 }
 
 # Every endpoint the runtime advertises must be loopback. A runtime this script
@@ -117,10 +139,10 @@ orca_register_stop_started_runtime() {
 orca_register_acquire_runtime() {
   orca_ar_cli=$1
   orca_ar_status=$("$orca_ar_cli" status --json 2>/dev/null || true)
-  if orca_register_json_bool "$orca_ar_status" runtimeReachable; then
+  if orca_register_json_bool "$orca_ar_status" runtimeReachable reachable; then
     return 0
   fi
-  if orca_register_json_bool "$orca_ar_status" appRunning; then
+  if orca_register_json_bool "$orca_ar_status" appRunning running; then
     echo "orca-register: the Orca desktop app is running but its runtime is unreachable; not starting a second one" >&2
     return 1
   fi
@@ -135,7 +157,7 @@ orca_register_acquire_runtime() {
   orca_ar_waited=0
   while [ "$orca_ar_waited" -lt "$orca_ar_timeout" ]; do
     orca_ar_status=$("$orca_ar_cli" status --json 2>/dev/null || true)
-    if orca_register_json_bool "$orca_ar_status" runtimeReachable; then
+    if orca_register_json_bool "$orca_ar_status" runtimeReachable reachable; then
       if orca_register_is_loopback_bound; then
         return 0
       fi

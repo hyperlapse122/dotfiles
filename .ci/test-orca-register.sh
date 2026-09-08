@@ -89,11 +89,17 @@ STUB
   export ORCA_REGISTER_CLI="$stub_dir/orca-ide"
   : >"$ORCA_STUB_LOG"
   printf '{"appRunning":true,"runtimeState":"ready","runtimeReachable":true}\n' >"$stub_dir/status.answer"
-  printf '[]\n' >"$stub_dir/project_setups.answer"
-  printf '[]\n' >"$stub_dir/repo_list.answer"
+  printf '{"ok":true,"result":{"setups":[]}}\n' >"$stub_dir/project_setups.answer"
+  printf '{"ok":true,"result":{"repos":[]}}\n' >"$stub_dir/repo_list.answer"
+  # The real `project setups --json` shape, taken from the live CLI: the entry
+  # id is `id`, and `projectId` / `repoId` sit beside it with names ending in
+  # the same three characters. A `setupId` key does not exist, and the
+  # `<projectId>::<hostId>` selector the CLI's own help shows is rejected.
   cat >"$stub_dir/project_setups.after-add" <<EOF
-[{"setupId":"a::local","path":"$scratch/src/github.com/hyperlapse122/dotfiles"},
- {"setupId":"b::local","path":"$scratch/src/git.jpi.app/products/365flow/pacs-scp"}]
+{"ok":true,"result":{"setups":[
+  {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles","setupState":"ready"},
+  {"id":"setup-b","projectId":"jpi:products/365flow/pacs-scp","hostId":"local","repoId":"repo-b","path":"$scratch/src/git.jpi.app/products/365flow/pacs-scp","setupState":"ready"}
+]}}
 EOF
 }
 
@@ -129,7 +135,52 @@ pass 'a reachable runtime is used as-is and serve is never invoked'
 logged 'hyperlapse122 / dotfiles' || fail 'display name short form missing from setup-update'
 logged '365flow / pacs-scp' || fail 'nested namespace short form missing from setup-update'
 logged '--worktree-base-path' || fail 'worktree base path missing from setup-update'
-pass 'setup-update carries the short display name and the worktree base path'
+logged '--setup setup-a' || fail 'setup-update did not use the setup entry id'
+logged '--setup repo-a' && fail 'setup-update used the sibling repoId instead of the setup id'
+logged '--setup github:hyperlapse122/dotfiles' && fail 'setup-update used the sibling projectId instead of the setup id'
+pass 'setup-update carries the short display name, the worktree base path, and the setup entry id'
+
+# --- the real `status --json` nested shape is recognised (AE3) ---------------
+#
+# The live CLI nests its answer as app.running / runtime.reachable and prints
+# the flat appRunning / runtimeReachable only in its human-readable form. A
+# probe that knows only the flat names reads every runtime as unreachable and
+# starts serve underneath a running desktop app — observed for real before this
+# case existed, so it is pinned with the verbatim live shape.
+
+make_stub nested-status
+cat >"$ORCA_STUB_DIR/status.answer" <<'EOF'
+{
+  "id": "local-status",
+  "ok": true,
+  "result": {
+    "target": { "kind": "local" },
+    "app": { "running": true, "pid": 11760, "desktopWindowStatus": "available" },
+    "runtime": {
+      "state": "ready",
+      "reachable": true,
+      "connectionState": "connected",
+      "capabilities": ["runtime.status.compat.v1", "runtime.environments.v1"]
+    }
+  }
+}
+EOF
+run_register "$two_trees"
+[ "$register_rc" -eq 0 ] || fail "nested-status run exited $register_rc: $register_out"
+logged 'serve' && fail 'nested-status run invoked serve under a running desktop app'
+logged 'repo add --path' || fail 'nested-status run did not register'
+pass 'the nested status --json shape is read as reachable and serve is never invoked'
+
+# --- the nested shape with an unreachable runtime still refuses serve --------
+
+make_stub nested-unreachable
+cat >"$ORCA_STUB_DIR/status.answer" <<'EOF'
+{"ok":true,"result":{"app":{"running":true},"runtime":{"state":"starting","reachable":false}}}
+EOF
+run_register "$two_trees"
+[ "$register_rc" -ne 0 ] || fail 'nested app-running-but-unreachable run exited zero'
+logged 'serve' && fail 'nested app-running-but-unreachable run invoked serve'
+pass 'the nested shape with a running app and no runtime fails without serve'
 
 # --- app running with an unreachable runtime: fail, never serve (AE3) --------
 
@@ -178,7 +229,9 @@ pass 'a serve that never becomes reachable fails at the bounded timeout'
 
 make_stub existing-setup
 cat >"$ORCA_STUB_DIR/project_setups.answer" <<EOF
-[{"setupId":"x::local","path":"$scratch/src/github.com/hyperlapse122/dotfiles","worktreeBasePath":"$HOME/.local/share/worktrees"}]
+{"ok":true,"result":{"setups":[
+  {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles","worktreeBasePath":"$HOME/.local/share/worktrees"}
+]}}
 EOF
 run_register "$two_trees"
 [ "$register_rc" -eq 0 ] || fail "existing-setup run exited $register_rc: $register_out"
@@ -190,7 +243,9 @@ pass 'a tree with a local setup is left untouched while the other is registered'
 
 make_stub repo-without-setup
 cat >"$ORCA_STUB_DIR/repo_list.answer" <<EOF
-[{"id":"github:hyperlapse122/dotfiles","path":"$scratch/src/github.com/hyperlapse122/dotfiles"}]
+{"ok":true,"result":{"repos":[
+  {"id":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles"}
+]}}
 EOF
 run_register "$two_trees"
 [ "$register_rc" -eq 0 ] || fail "repo-without-setup run exited $register_rc: $register_out"
