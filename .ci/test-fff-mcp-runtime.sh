@@ -50,8 +50,10 @@ case "$(uname -m)" in
   *) skip "unsupported architecture $(uname -m)" ;;
 esac
 
-# Prefer the musl artifact on a musl host, mirroring command-manifest.tmpl's
-# probe order, and fall back to the glibc key.
+# A musl host must exercise the musl artifact -- the glibc binary would not run
+# there, so testing it would prove nothing. Unlike command-manifest.tmpl, which
+# falls back to the plain key to keep an identity, a missing artifact here is a
+# skip: this gate has nothing to assert without the build its host can execute.
 platform="$os-$arch"
 if [ "$os" = linux ] && ! ldd /bin/ls 2>/dev/null | grep -q 'libc\.so\.6'; then
   platform="$platform-musl"
@@ -77,23 +79,30 @@ got=$(sha256sum "$bin" 2>/dev/null | cut -d' ' -f1) ||
 chmod +x "$bin"
 
 # A fixture repository, so the indexed root is a real git tree this gate owns
-# rather than whatever directory CI happened to start in.
+# rather than whatever directory CI happened to start in. The marker is unique
+# so a hit proves the server indexed THIS tree, not some ambient directory.
 fixture="$scratch/fixture"
 mkdir -p "$fixture"
-printf 'the needle lives here\n' >"$fixture/haystack.txt"
+printf 'fffgatemarker lives here\n' >"$fixture/haystack.txt"
 git -C "$fixture" init -q
 git -C "$fixture" add -A
 git -C "$fixture" -c user.name=ci -c user.email=ci@example.invalid commit -qm init
 
-# One stdio session: initialize, then tools/list. The server speaks
-# newline-delimited JSON-RPC, so the driver writes both requests and reads until
-# it has the response to id 2 or the deadline passes.
-tools=$(cd "$fixture" && python3 - "$bin" <<'PY'
+# One stdio session: initialize, tools/list, then a real grep for the fixture
+# marker. The tool-set assertion alone would pass while the server indexed the
+# wrong directory, so the search is what proves the root. The server blocks on
+# its own scan-ready wait inside grep, so no polling is needed here.
+#
+# --log-file keeps the session log inside the scratch directory. The server
+# otherwise writes a fresh log per startup under $XDG_STATE_HOME/fff (default
+# ~/.local/state/fff), which would put gate output in the operator's real state
+# directory on every local run.
+tools=$(cd "$fixture" && python3 - "$bin" "$scratch/fff_mcp.log" <<'PY'
 import json, subprocess, sys, threading
 
-binary = sys.argv[1]
+binary, log_file = sys.argv[1], sys.argv[2]
 proc = subprocess.Popen(
-    [binary, "--no-update-check"],
+    [binary, "--no-update-check", "--log-file", log_file],
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
     stderr=subprocess.DEVNULL,
@@ -117,11 +126,14 @@ request({
     },
 })
 
-names, error = [], None
+names, error, searched, initialized = [], None, False, False
 
 
 def pump():
-    global names, error
+    # Each later reply is gated on the previous step actually succeeding. Without
+    # that, a stream carrying only an id-2 response satisfies every assertion and
+    # the gate reports a handshake that never happened.
+    global names, error, searched, initialized
     for line in proc.stdout:
         line = line.strip()
         if not line:
@@ -134,19 +146,56 @@ def pump():
             if "error" in msg:
                 error = f"initialize failed: {msg['error']}"
                 return
+            result = msg.get("result")
+            if not isinstance(result, dict) or not (
+                "protocolVersion" in result or "serverInfo" in result
+            ):
+                error = f"initialize returned no usable result: {msg!r}"
+                return
+            initialized = True
             request({"jsonrpc": "2.0", "method": "notifications/initialized"})
             request({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
         elif msg.get("id") == 2:
+            if not initialized:
+                error = "server answered tools/list before initialize succeeded"
+                return
             if "error" in msg:
                 error = f"tools/list failed: {msg['error']}"
                 return
             names = [t["name"] for t in msg.get("result", {}).get("tools", [])]
+            request({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "grep", "arguments": {"query": "fffgatemarker"}},
+            })
+        elif msg.get("id") == 3:
+            if not (initialized and names):
+                error = "server answered tools/call before the handshake completed"
+                return
+            if "error" in msg:
+                error = f"grep failed: {msg['error']}"
+                return
+            result = msg.get("result", {})
+            if result.get("isError"):
+                error = f"grep reported an error result: {result}"
+                return
+            text = "".join(
+                c.get("text", "") for c in result.get("content", []) if isinstance(c, dict)
+            )
+            if "haystack.txt" not in text:
+                error = (
+                    "grep did not find the fixture marker; the server indexed a "
+                    f"different root. Response text: {text[:400]!r}"
+                )
+                return
+            searched = True
             return
 
 
 worker = threading.Thread(target=pump, daemon=True)
 worker.start()
-worker.join(timeout=120)
+worker.join(timeout=180)
 
 proc.kill()
 proc.wait(timeout=10)
@@ -157,13 +206,16 @@ if error:
 if not names:
     print("no tools/list response before the deadline", file=sys.stderr)
     sys.exit(1)
+if not searched:
+    print("no grep response before the deadline", file=sys.stderr)
+    sys.exit(1)
 print(" ".join(sorted(names)))
 PY
-) || fail 'the server did not complete an initialize + tools/list handshake'
+) || fail 'the server did not complete an initialize + tools/list + grep session'
 
 expected='find_files grep multi_grep'
 [ "$tools" = "$expected" ] ||
   fail 'tools/list returned an unexpected tool set' \
     "  expected: $expected"$'\n'"  got:      $tools"
 
-printf 'fff-mcp runtime: ok - %s serves %s\n' "$platform" "$tools"
+printf 'fff-mcp runtime: ok - %s serves %s and indexed the fixture root\n' "$platform" "$tools"
