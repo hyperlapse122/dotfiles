@@ -45,7 +45,11 @@ for peer in "${peer_wrappers[@]}"; do
 done
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/agents-instructions.tmpl
 
-linux_rule='MUST use `orca-ide` for Orca commands, never bare `orca`, which is the GNOME screen reader. This executable rule takes precedence over skill defaults for executable selection.'
+# The darwin-leak sentinel must be a phrase the Linux rule actually contains, or
+# the leak assertion asserts nothing. `/usr/bin/orca` is Linux-only and appears
+# nowhere else in the core, so it moves with `linux_rule` in one edit.
+linux_rule='MUST use `orca-ide` for Orca commands, never bare `orca`, because bare `orca` resolves by PATH order and reaches `/usr/bin/orca`, the GNOME screen reader, on any host where no wrapper precedes `/usr/bin`. This executable rule takes precedence over skill defaults for executable selection.'
+linux_only_sentinel='`/usr/bin/orca`'
 other_os_rule='Resolve the executable as the `orchestration` skill directs.'
 renders=()
 for i in "${!harness_ids[@]}"; do
@@ -60,7 +64,9 @@ for i in "${!harness_ids[@]}"; do
   other_os_render="$scratch/${harness_ids[$i]}-darwin.md"
   render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/$source_wrapper" "$other_os_render"
   grep -Fx "$other_os_rule" "$other_os_render" >/dev/null || fail "$source_wrapper lost its non-Linux executable rule"
-  if grep -F 'GNOME screen reader' "$other_os_render" >/dev/null; then
+  grep -F "$linux_only_sentinel" "$harness_render" >/dev/null \
+    || fail "$source_wrapper lost the Linux-only sentinel, so the Darwin leak check is vacuous"
+  if grep -F "$linux_only_sentinel" "$other_os_render" >/dev/null; then
     fail "$source_wrapper leaked its Linux executable rule into Darwin"
   fi
   if grep -Fx "$other_os_rule" "$harness_render" >/dev/null; then
@@ -170,6 +176,13 @@ After every `worker_done`, success and failure alike, the run MUST release that 
 every settled worker MUST be accounted for before the turn ends
 A run MUST NOT end with a worker it dispatched still resident
 MUST confirm that every dispatch it started is settled and that its release was requested and receipted
+A receipt that reports the worker released settles that dispatch on its own.
+the run MUST read the receipt's retention reason and make one Orca-side query of that dispatch's state
+When that query reports the dispatch still active, the run MUST issue the guide's stop for that dispatch and query once more.
+is settled once the query reports the dispatch no longer active
+A retention Orca could not bind to a process is never settled by that query
+record the dispatch id, the verbatim receipt, and the query's verbatim output as an unproven release
+only after the query itself failed, and then MUST record the command it ran and that command's verbatim error
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
 Every worker under this contract MUST be attached through the guide's lifecycle-supervised worker path, never an unsupervised injected dispatch
