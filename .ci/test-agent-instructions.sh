@@ -159,6 +159,19 @@ Continue with the current agent's own reasoning only, without launching substitu
 record which delegated or cross-model passes did not happen
 in an unattended run that record goes in the MR/PR description, beside the unapplied-findings checklist
 It does not stop, and it does not fall back to the bundled script.
+substituting Orca for a banned bundled runner is one such case, not the boundary
+A dispatch spec MUST name a path to a brief file and MUST NOT inline the brief's content
+Waiting MUST use the guide's blocking wait on `worker_done`, `escalation`, and `question` events with an explicit timeout
+a `sleep` loop, a file-count poll, and a hand-built wait wrapper are forbidden
+Every dispatched worker MUST carry an explicit deadline set before dispatch, and the run MUST hold a wall-clock bound across its rolling waits.
+At a worker's deadline the run MUST stop that worker, release it, and proceed on the artifacts it already holds
+a missing artifact is a recorded gap, never a reason to keep waiting
+After every `worker_done`, success and failure alike, the run MUST release that worker
+every settled worker MUST be accounted for before the turn ends
+A run MUST NOT end with a worker it dispatched still resident
+MUST confirm that every dispatch it started reports a settled, released state in Orca's own per-run worker records
+MUST treat a host process sweep such as `pgrep -af claude` as a secondary signal only
+These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting and do-not-release-on-timeout guidance
 NEEDLES
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
