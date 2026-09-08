@@ -30,8 +30,8 @@
 {{-       $version := includeTemplate "release-lock-ref.tmpl" (dict "ctx" $ctx "tool" $unit.tool) -}}
 {{- /* The identity must name the artifact this host actually downloads, so on a
        musl host the musl lock key is probed first (R30: a re-published musl
-       asset has to move the identity). Only bun, claude, mise and
-       agent-browser carry -musl keys; every other external falls through to
+       asset has to move the identity). Only bun, claude, mise, agent-browser
+       and fff-mcp carry -musl keys; every other external falls through to
        the plain platform key, which keeps its digest instead of regressing to
        a bare version. */ -}}
 {{-       $isMuslLinux := eq (includeTemplate "musl-probe.tmpl" (dict "ctx" $ctx)) "true" -}}

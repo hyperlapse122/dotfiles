@@ -151,6 +151,17 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": "codex-x86_64-apple-darwin.tar.gz",
     "darwin-arm64": "codex-aarch64-apple-darwin.tar.gz",
   },
+  "fff-mcp": {
+    // Upstream names every asset by full Rust target triple, so the linux
+    // glibc and musl builds differ only in that component -- unlike the other
+    // linuxMusl tools, which carry a `-musl` infix on an otherwise equal name.
+    "linux-amd64": "fff-mcp-x86_64-unknown-linux-gnu",
+    "linux-arm64": "fff-mcp-aarch64-unknown-linux-gnu",
+    "linux-amd64-musl": "fff-mcp-x86_64-unknown-linux-musl",
+    "linux-arm64-musl": "fff-mcp-aarch64-unknown-linux-musl",
+    "darwin-amd64": "fff-mcp-x86_64-apple-darwin",
+    "darwin-arm64": "fff-mcp-aarch64-apple-darwin",
+  },
   "codex-code-mode-host": {
     "linux-amd64": "codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
     "linux-arm64": "codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
@@ -227,6 +238,7 @@ describe("rolling-release tag pinning", () => {
   test.each([
     ["bun", "bun-v"],
     ["shellcheck", "v"],
+    ["fff-mcp", "v"],
   ])("%s pins its release train with tagPrefix %s", (tool, prefix) => {
     const spec = REGISTRY[tool as keyof typeof REGISTRY] as ToolSpec;
     expect(spec.kind).toBe("githubRelease");
@@ -239,6 +251,20 @@ describe("rolling-release tag pinning", () => {
     expect("v0.11.0".startsWith(prefix)).toBe(true);
     expect("latest".startsWith(prefix)).toBe(false);
     expect("stable".startsWith(prefix)).toBe(false);
+  });
+});
+
+describe("fff-mcp tag pinning", () => {
+  // dmtrKovalenko/fff carries a rolling `nightly` tag beside the `v` train, so
+  // `releases/latest` is correct only while upstream keeps flagging every
+  // nightly a prerelease. The prefix removes that dependency, exactly as the
+  // bun entry does for `canary`.
+  test("the prefix admits the stable train and excludes the nightly tags", () => {
+    const prefix = (REGISTRY["fff-mcp"] as { tagPrefix?: string }).tagPrefix ?? "";
+    expect(prefix).not.toBe("");
+    expect("v0.10.6".startsWith(prefix)).toBe(true);
+    expect("nightly".startsWith(prefix)).toBe(false);
+    expect("0.10.7-nightly.d84c0a1".startsWith(prefix)).toBe(false);
   });
 });
 

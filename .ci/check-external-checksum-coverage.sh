@@ -145,6 +145,7 @@ EXPECTED_LOCK_BACKED = frozenset(
         "claude",
         "codegraph",
         "codex",
+        "fff-mcp",
         "garden",
         "gh",
         "marksman",

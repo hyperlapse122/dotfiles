@@ -66,6 +66,18 @@ commands:
       legacy:
         path: .local/bin/agent-browser
 
+    # No legacy block: fff-mcp has never been installed outside chezmoi, so there
+    # is no pre-existing ~/.local/bin file for the reconciler to adopt.
+    fff-mcp:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: fff-mcp
+      commands:
+        - name: fff-mcp
+
     codex:
       producer: external
       # Two native binaries share this unit: the codex entrypoint and the

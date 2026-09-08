@@ -176,7 +176,7 @@ macos_ext = externals(macos_units)
 
 # Every declared external unit renders without a template error and carries an identity.
 all_ext = set(linux_ext) | set(macos_ext)
-assert len(all_ext) == 29, f"expected 29 external units across both platforms, got {len(all_ext)}"
+assert len(all_ext) == 30, f"expected 30 external units across both platforms, got {len(all_ext)}"
 for scope in (linux_ext, macos_ext):
     for unit_id, unit in scope.items():
         assert unit["identity"], f"external unit {unit_id} rendered an empty identity"
@@ -257,7 +257,7 @@ assert musl_ext["bun"]["identity"] != linux_ext["bun"]["identity"]
 assert musl_ext["bun"]["identity"] == musl_ext["bunx"]["identity"]
 
 # Every tool carrying a -musl lock key moves with the host libc.
-for unit_id in ("bun", "claude", "mise", "agent-browser"):
+for unit_id in ("bun", "claude", "mise", "agent-browser", "fff-mcp"):
     assert musl_ext[unit_id]["identity"] != linux_ext[unit_id]["identity"], unit_id
 
 # R30 on the musl leg: a re-published musl asset moves the identity.

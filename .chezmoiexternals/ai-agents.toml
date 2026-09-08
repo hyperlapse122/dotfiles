@@ -1,8 +1,8 @@
-{{- /* AI coding agents and adjacent tooling: claude, agy, agent-browser, codegraph, codex, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, agy, agent-browser, codegraph, codex, fff-mcp, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
-       static-musl build. Used by the agent-browser external below; probed here so the
-       `ldd` subprocess runs once per render rather than once per consumer. See
+       static-musl build. Used by the agent-browser and fff-mcp externals below; probed
+       here so the `ldd` subprocess runs once per render rather than once per consumer. See
        .chezmoitemplates/musl-probe.tmpl for the probe and its
        `renderOverrides.muslLinux` render-time override. */ -}}
 {{- $isMuslLinux := eq (includeTemplate "musl-probe.tmpl" (dict "ctx" .)) "true" -}}
@@ -104,6 +104,25 @@ path = '{{ printf "codex-code-mode-host-%s-%s" $codexRustArch $codexRustTarget }
 
 [codex-code-mode-host.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex-code-mode-host" "field" "sha256" "platform" "auto") }}'
+
+{{- /* ---------- fff-mcp (dmtrKovalenko/fff) — the MCP file-search server the
+       harnesses drive over stdio; declared in agents.mcp.servers as `fff`.
+       Upstream ships bare per-target binaries named by full Rust target triple,
+       with distinct glibc and static-musl linux builds (KTD11), so the probe
+       result above selects the lock key. Digests come from the release API
+       through the lock, so this render performs no network I/O. The `fff` server
+       entry passes --no-update-check: started bare the binary calls the GitHub
+       API on every launch and appends a `curl … install-mcp.sh | bash` notice to
+       its own MCP instructions, advertising an install path around this lock. */}}
+
+[fff-mcp]
+type = "file"
+targetPath = '.local/share/chezmoi-commands/incomplete/fff-mcp/fff-mcp'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "fff-mcp" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
+executable = true
+
+[fff-mcp.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "fff-mcp" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
 
 {{- /* ---------- agent skills (~/.agents/skills/<name>) — formerly dotagents remote skills.
        The LIST is data in .chezmoidata/agents.yaml (agents.skills.external); this section
