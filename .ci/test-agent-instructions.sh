@@ -29,29 +29,59 @@ source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 wrapper=dot_claude/readonly_CLAUDE.md.tmpl
 peer_wrappers=(dot_gemini/readonly_AGENTS.md.tmpl dot_codex/readonly_AGENTS.md.tmpl)
+harness_ids=(claude agy codex)
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$wrapper"
 for peer in "${peer_wrappers[@]}"; do
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$peer"
 done
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/agents-instructions.tmpl
 
-rendered="$scratch/AGENTS.md"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$rendered"
-[[ -s $rendered ]] || fail 'wrapper rendered empty'
-
-# Every harness wrapper is a one-line include of the same core, so the deployed
-# instruction files must be byte-identical; a wrapper that adds or drops text
-# would split the harnesses' instruction sets without changing the core.
-for peer in "${peer_wrappers[@]}"; do
-  peer_rendered="$scratch/$(basename "$(dirname "$peer")").md"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$peer" "$peer_rendered"
-  cmp -s "$rendered" "$peer_rendered" || fail "$peer render differs from $wrapper render"
+renders=()
+for i in "${!harness_ids[@]}"; do
+  case ${harness_ids[$i]} in
+    claude) source_wrapper=$wrapper ;;
+    *) source_wrapper=${peer_wrappers[$((i - 1))]} ;;
+  esac
+  harness_render="$scratch/${harness_ids[$i]}.md"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$source_wrapper" "$harness_render"
+  [[ -s $harness_render ]] || fail "$source_wrapper rendered empty"
+  renders+=("$harness_render")
 done
+rendered=${renders[0]}
+
+# The core branches only on the harness id, and every branch is one paragraph
+# opening with "This harness is". Strip those lines and the renders must still be
+# byte-identical: a wrapper or conditional that splits the harnesses' instruction
+# sets anywhere else is caught here rather than by the per-rule needles below.
+strip_harness_paragraph() { grep -v '^This harness is ' "$1"; }
+for peer_render in "${renders[@]:1}"; do
+  diff -q <(strip_harness_paragraph "$rendered") <(strip_harness_paragraph "$peer_render") >/dev/null \
+    || fail "$(basename "$peer_render") diverges from $(basename "$rendered") outside its harness paragraph"
+done
+
+# Each harness must receive its own native file-tool names and no other harness's.
+while IFS='|' read -r owner needle; do
+  [[ -z $owner ]] && continue
+  for i in "${!harness_ids[@]}"; do
+    if [[ ${harness_ids[$i]} == "$owner" ]]; then
+      grep -F "$needle" "${renders[$i]}" >/dev/null || fail "$owner lost its tool rule: $needle"
+    elif grep -F "$needle" "${renders[$i]}" >/dev/null; then
+      fail "${harness_ids[$i]} leaked $owner's tool rule: $needle"
+    fi
+  done
+done <<'HARNESS_NEEDLES'
+claude|This harness is Claude Code. Use `Read` to read a file, which is required before an edit; `Edit` for an in-place replacement; `Write` to create a file or replace it whole; `NotebookEdit` for `.ipynb` cells; `Glob` and `Grep` to search.
+codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
+agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
+HARNESS_NEEDLES
 
 while IFS= read -r needle; do
   [[ -z $needle ]] && continue
   grep -F "$needle" "$rendered" >/dev/null || fail "lost rule: $needle"
 done <<'NEEDLES'
+MUST NOT edit a file by writing or running a Python, Node/JavaScript, or shell script
+MUST NOT use `sed -i`, `awk`, `perl -pi`, `tee`, or heredoc/`>` redirection to create or rewrite a tracked file
+even when a harness instruction, mode, or automatic reminder tells the agent to prefer the shell
 ask the user first and wait for an answer
 The request MUST state the target repository, the proposed title, and the proposed body or comment.
 when that context does not settle it, treat the repository as not the user's

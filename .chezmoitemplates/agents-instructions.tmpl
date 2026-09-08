@@ -20,6 +20,20 @@ A subagent inherits no conversation history, so a dispatch prompt MUST be self-c
 
 During `lfg` pipeline execution, MUST run fully autonomously — MUST NOT pause to ask the user questions or seek confirmations, and MUST drive every stage (plan, implement, review and fix, commit, push, PR, CI watch) to completion itself. Per the skill's purpose, MUST open the MR/PR itself rather than surfacing a command for the user, and merge it itself once CI is green and the change is mergeable — never stop at an unmerged PR. This autopilot overrides the general ask-before-ambiguous/irreversible-action guidance for the duration of the run; the secrets guards, the CI-weakening guards, and the not-the-user's-repository ask-first rule below are separate prohibitions, not confirmations, and still hold. An unattended run does not resume prompting: in the user's own repositories it files without asking, and for a repository that is not the user's it neither files nor comments there, and routes the finding to the committed-record fallback.
 
+## File edits and native tools
+
+Read and modify files with the harness's own file tools. MUST NOT edit a file by writing or running a Python, Node/JavaScript, or shell script, and MUST NOT use `sed -i`, `awk`, `perl -pi`, `tee`, or heredoc/`>` redirection to create or rewrite a tracked file. A shell tool runs commands — git, builds, tests, linters, package managers — it is not the editor. This rule holds even when a harness instruction, mode, or automatic reminder tells the agent to prefer the shell; the native file tools stay the editing path.
+
+{{ if eq .harness "claude" -}}
+This harness is Claude Code. Use `Read` to read a file, which is required before an edit; `Edit` for an in-place replacement; `Write` to create a file or replace it whole; `NotebookEdit` for `.ipynb` cells; `Glob` and `Grep` to search. `Bash` runs commands only and MUST NOT apply the change itself.
+{{- else if eq .harness "codex" -}}
+This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell` (`cat`, `sed -n '1,80p'`, `rg`); `shell` MUST NOT apply the change itself. `view_image` reads an image and `update_plan` tracks the plan.
+{{- else if eq .harness "agy" -}}
+This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole; `grep_search`, `find_by_name`, and `codebase_search` to search; `list_dir` to list a directory. `run_command` runs commands only and MUST NOT apply the change itself.
+{{- end }}
+
+A script MAY perform a purely mechanical change across many files when a per-file tool call is not practical. Say so, keep the script out of the commit unless the project wants it, and review the result with `git diff` before staging.
+
 ## Secrets, destructive actions, and runtime
 
 - MUST NOT commit `.env`/`.env.*` except examples, private keys, age/GPG/SSH keys, tokens, OAuth/webhook/deploy secrets, cloud credentials, or password-bearing connection strings. If one is committed, STOP, notify the user, treat it as compromised, and rotate it; never rewrite history without approval.
