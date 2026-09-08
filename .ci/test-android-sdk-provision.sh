@@ -41,9 +41,13 @@ mkdir -p "$scratch/target" "$scratch/render-home"
 # No secret tooling is involved: this template reads only host facts and the
 # release lock, so the render runs with an empty environment and a bare PATH.
 # Nothing here stands in for a credential store.
+# Resolved absolutely: CI installs chezmoi outside /usr/bin (a runner temp dir
+# on $GITHUB_PATH), so the hermetic `env -i` below cannot find it by name.
+chezmoi_bin=$(command -v chezmoi)
+
 render() {
   env -i HOME="$scratch/render-home" PATH="/usr/bin:/bin" \
-    chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
+    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
     --destination "$scratch/target" execute-template <"$template"
 }
 

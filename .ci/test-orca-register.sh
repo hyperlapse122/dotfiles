@@ -390,10 +390,17 @@ strip_attrs() {
         -e 's/^before_//' -e 's/^after_//'
 }
 
-# `|| true` on both: a non-matching glob makes `ls` non-zero, which under this
-# file's own `set -euo pipefail` would abort before the assertion could run.
-reconcile_script=$(ls "$repo_root"/.chezmoiscripts/90-src/ 2>/dev/null | grep 'reconcile-garden' | head -n 1 || true)
-register_script=$(ls "$repo_root"/.chezmoiscripts/90-src/ 2>/dev/null | grep -E 'register-orca|orca-register' | head -n 1 || true)
+# A glob loop, not `ls | grep`: shellcheck rejects the latter (SC2010) and a
+# non-matching glob would otherwise abort this file's own `set -euo pipefail`.
+reconcile_script=''
+register_script=''
+for candidate in "$repo_root"/.chezmoiscripts/90-src/*; do
+  [ -e "$candidate" ] || continue
+  case "${candidate##*/}" in
+    *reconcile-garden*) [ -n "$reconcile_script" ] || reconcile_script=$candidate ;;
+    *register-orca*|*orca-register*) [ -n "$register_script" ] || register_script=$candidate ;;
+  esac
+done
 [ -n "$reconcile_script" ] || fail 'no 90-src reconcile-garden script found'
 [ -n "$register_script" ] || fail 'no 90-src Orca registration script found'
 
