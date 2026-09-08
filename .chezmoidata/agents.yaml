@@ -22,6 +22,16 @@ agents:
       - mcp
       - "--tools"
       - all
+    # --no-update-check is load-bearing, not tidiness: started bare the server
+    # calls the GitHub API on every launch and appends a
+    # `curl … install-mcp.sh | bash` notice to its own MCP instructions, which
+    # would advertise an install path around .chezmoidata/releases.json. Same
+    # reason Claude Code carries DISABLE_AUTOUPDATER.
+    - name: fff
+      transport: stdio
+      command: fff-mcp
+      args:
+      - "--no-update-check"
     - name: context7
       transport: http
       url: https://mcp.context7.com/mcp
