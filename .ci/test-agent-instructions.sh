@@ -45,6 +45,8 @@ for peer in "${peer_wrappers[@]}"; do
 done
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/agents-instructions.tmpl
 
+linux_rule='MUST use `orca-ide` for Orca commands, never bare `orca`, which is the GNOME screen reader. This executable rule takes precedence over skill defaults for executable selection.'
+other_os_rule='Resolve the executable as the `orchestration` skill directs.'
 renders=()
 for i in "${!harness_ids[@]}"; do
   case ${harness_ids[$i]} in
@@ -54,14 +56,22 @@ for i in "${!harness_ids[@]}"; do
   harness_render="$scratch/${harness_ids[$i]}.md"
   render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$source_wrapper" "$harness_render"
   [[ -s $harness_render ]] || fail "$source_wrapper rendered empty"
+  grep -Fx "$linux_rule" "$harness_render" >/dev/null || fail "$source_wrapper lost its Linux executable rule"
+  other_os_render="$scratch/${harness_ids[$i]}-darwin.md"
+  render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/$source_wrapper" "$other_os_render"
+  grep -Fx "$other_os_rule" "$other_os_render" >/dev/null || fail "$source_wrapper lost its non-Linux executable rule"
+  if grep -F 'GNOME screen reader' "$other_os_render" >/dev/null; then
+    fail "$source_wrapper leaked its Linux executable rule into Darwin"
+  fi
+  if grep -Fx "$other_os_rule" "$harness_render" >/dev/null; then
+    fail "$source_wrapper leaked its non-Linux executable rule into Linux"
+  fi
+  diff -q <(grep -Fvx "$linux_rule" "$harness_render") <(grep -Fvx "$other_os_rule" "$other_os_render") >/dev/null \
+    || fail "$source_wrapper differs across OSes outside its executable rule"
   renders+=("$harness_render")
 done
 rendered=${renders[0]}
 
-# The core branches only on the harness id, and every branch is one paragraph
-# opening with "This harness is". Strip those lines and the renders must still be
-# byte-identical: a wrapper or conditional that splits the harnesses' instruction
-# sets anywhere else is caught here rather than by the per-rule needles below.
 strip_harness_paragraph() { grep -v '^This harness is ' "$1"; }
 for peer_render in "${renders[@]:1}"; do
   diff -q <(strip_harness_paragraph "$rendered") <(strip_harness_paragraph "$peer_render") >/dev/null \
@@ -129,16 +139,24 @@ Membership is declared, never derived from the path
 It reports garden drift only; it does not audit Orca registration.
 MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
 Orca has NO command that adopts an already-checked-out worktree
-When work needs an agent outside the current session — a peer or cross-model reviewer, or a fan-out across several workers — that dispatch MUST go through the `orchestration` skill and the Orca CLI it resolves.
-The harness's own in-process subagent tool is not the dispatch this rule routes.
-Resolve the executable and load the version-matched guide exactly as the `orchestration` skill directs; never copy command details here, because they change between Orca releases.
+Before launching ANY subagent, worker, or peer reviewer, MUST open and read the `orchestration` skill, load its version-matched guide, and use its Orca dispatch workflow.
+This includes same-model reviews, background agents, parallel workers, and cross-model reviews such as Codex -> Claude and Claude -> Codex.
+Native in-process subagents are NOT exempt: MUST NOT use the harness's Agent, Task, spawn_agent, or equivalent tool as an alternative to Orca.
+A skill or workflow that directs delegation, including Claude Code's delegation carve-out below, MUST follow this same routing rule.
+Load the version-matched guide from that executable before using its dispatch commands
 MUST NOT run a plugin-bundled job runner, peer-review launcher, or fan-out script to obtain a peer opinion
 in `compound-engineering` today they include `peer-job-runner.py`, `cross-model-adversarial-review.sh`, `cross-model-doc-review.sh`, `cross-model-pov.sh`, and `elevation-dispatch.sh`
 the prohibition covers every script of that shape, named here or not, in this plugin version or a later one
 MUST NOT reach a peer model by running an agent CLI such as `claude -p`, `codex exec`, or `cursor-agent` for that opinion
 A bundled script that only computes locally, such as a frontmatter validator or a review-scope calculator, is not dispatch and stays allowed.
 This rule fixes the path a dispatch takes, never whether to dispatch.
-report the blocker with its exact error, continue with the harness's own in-process reasoning, and record that the peer or cross-model pass did not happen
+The ban on bundled dispatchers and direct peer CLIs is NOT a reason to skip a requested or workflow-required review.
+MUST first load the `orchestration` skill and attempt its supported Orca workflow.
+MUST NOT declare orchestration unavailable without an observed failure
+if the app is stopped, follow the skill's startup procedure before declaring it blocked
+report the failed path or command and its exact error
+Continue with the current agent's own reasoning only, without launching substitute agents
+record which delegated or cross-model passes did not happen
 in an unattended run that record goes in the MR/PR description, beside the unapplied-findings checklist
 It does not stop, and it does not fall back to the bundled script.
 NEEDLES
@@ -154,6 +172,7 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
+The harness's own in-process subagent tool is not the dispatch this rule routes.
 viewerPermission
 project_access
 group_access
