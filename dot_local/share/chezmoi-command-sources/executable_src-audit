@@ -1,6 +1,9 @@
 #!/bin/sh
 # src-audit — read-only drift report for the ~/src project layout
-# (~/src/<host>/[<group>/]<project>; registry: ~/.config/garden/garden.yaml).
+# (~/src/<host>/<remote-namespace-path>, mirrored verbatim from each clone url;
+# registry: ~/.config/garden/garden.yaml). The rule is owned by the "Repository
+# layout and garden ownership" section of the agent instructions and enforced at
+# `chezmoi apply`; this report never validates path shape.
 #
 # Reports three kinds of drift:
 #   missing    declared in garden.yaml but not grown on this host. Informational
