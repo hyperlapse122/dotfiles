@@ -98,6 +98,11 @@
           }
         }
       },
+      "android-cli": {
+        "kind": "githubRelease",
+        "source": "android/skills",
+        "version": "v1.0.11"
+      },
       "aoe": {
         "kind": "githubRelease",
         "source": "agent-of-empires/agent-of-empires",

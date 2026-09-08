@@ -126,14 +126,17 @@ sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "codex
        chezmoi at render time rather than fetched by `dotagents install`. Two fetch forms,
        keyed on the entry's `host` (default github; unknown values fail):
 
-       host: github — every source repo keeps its skill in a skills/<name>/ subdir, so
-       stripComponents=3 drops the <repo>-<ref>/skills/<name>/ prefix (leaving SKILL.md +
-       references/ at the target root) and the include (anchored on the skills/<name>/ path
-       segment) isolates exactly that one skill — it excludes repo-root files, a repo's own
-       dot-claude skills tree or nested package skills trees, and any sibling skill in the
-       same repo (a source repo can ship several skills under skills/). exact=true so a
-       skill update removes deleted files. The GitHub archive URL form takes a tag OR a
-       commit.
+       host: github — the skill's subtree inside the repo is `skillPath`, defaulting to
+       the skills/<name>/ subdir nearly every source repo uses; android/skills files its
+       skills under a topic directory (devtools/android-cli/) and declares its own.
+       stripComponents drops the <repo>-<ref>/<skillPath>/ prefix (leaving SKILL.md +
+       references/ at the target root) and so counts the archive's own top-level directory
+       plus every skillPath segment — 3 for the two-segment skills/<name> default, and 3
+       for devtools/android-cli too. The include (anchored on those segments) isolates that
+       one skill — it excludes repo-root files, a repo's own dot-claude skills tree or
+       nested package skills trees, and any sibling skill in the same repo (a source repo
+       can ship several skills under skills/). exact=true so a skill update removes deleted
+       files. The GitHub archive URL form takes a tag OR a commit.
 
        host: gitlab — a raw single-file external, for a skill whose subtree is exactly one
        SKILL.md (glab's bundled skills, whose `skillPath` is
@@ -201,12 +204,22 @@ type = "file"
 url = '{{ printf "https://gitlab.com/%s/-/raw/%s/%s/SKILL.md?ref_type=tags" .source $ref .skillPath }}'
 {{- else }}
 
+{{- $skillPath := printf "skills/%s" .name -}}
+{{- if hasKey . "skillPath" -}}{{- $skillPath = .skillPath -}}{{- end -}}
+{{- /* The path is spliced straight into an include glob and a component count, so a
+       leading, trailing, or doubled separator would silently shift both off the real
+       subtree rather than fail. Reject those shapes instead. */ -}}
+{{- $segments := splitList "/" $skillPath -}}
+{{- if or (eq $skillPath "") (has "" $segments) (has "." $segments) (has ".." $segments) -}}
+  {{- fail (printf "%s skill: skillPath %q must be a clean relative path" .name $skillPath) -}}
+{{- end }}
+
 [".agents/skills/{{ .name }}"]
 type = "archive"
 url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" .source $ref }}'
 exact = true
-stripComponents = 3
-include = ["*/skills/{{ .name }}/**"]
+stripComponents = {{ add 1 (len $segments) }}
+include = ["*/{{ $skillPath }}/**"]
 {{- end }}
 {{- end }}
 
