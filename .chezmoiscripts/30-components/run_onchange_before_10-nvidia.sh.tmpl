@@ -3,12 +3,10 @@
 {{- if or $isFedora $isUbuntu -}}
 {{- $nvidiaCtkPresent := "" -}}
 {{- $akmodsKeyPresent := "" -}}
-{{- $expectPresent := "" -}}
 {{- $mokPassphrase := "" -}}
 {{- if $isFedora -}}
 {{-   $nvidiaCtkPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "nvidia-ctk-present") -}}
 {{-   $akmodsKeyPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "akmods-signing-key-present") -}}
-{{-   $expectPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "expect-present") -}}
 {{- /* The MOK enrollment password is the LUKS passphrase the config already
      stores: the operator has to retype this value at the MokManager screen on the
      next boot, and a generated one would have to be recorded somewhere for them
@@ -23,7 +21,7 @@
 #!/usr/bin/env bash
 
 {{ if $isFedora -}}
-# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent) (dict "name" "akmods-signing-key-present" "value" $akmodsKeyPresent) (dict "name" "expect-present" "value" $expectPresent))) }}
+# fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "nvidia-ctk-present" "value" $nvidiaCtkPresent) (dict "name" "akmods-signing-key-present" "value" $akmodsKeyPresent))) }}
 #
 # SECURITY NOTES for the MOK enrollment passphrase below, identical in shape to
 # run_onchange_after_luks-tpm2.sh.tmpl's, because it is the same stored secret:
@@ -33,10 +31,12 @@
 #     which chezmoi writes mode-0700 and deletes after execution. Avoid
 #     `chezmoi apply --verbose` / `--dry-run` with a real passphrase stored --
 #     those print rendered script contents.
-#   * The passphrase is handed to expect through the environment ONLY, never
-#     argv, so it is not visible in the process table.
-#   * A blank prompt, an unreachable or locked keyring, or an absent expect all
-#     render the declared skip path instead, so no passphrase is rendered at all.
+#   * The passphrase is written to mokutil's stdin by the `printf` BUILTIN, so it
+#     reaches neither argv (the process table) nor a temporary file, and sudo --
+#     which reads its own password from /dev/tty and never from stdin -- never
+#     sees it.
+#   * A blank prompt, or an unreachable or locked keyring, renders the declared
+#     skip path instead, so no passphrase is rendered at all.
 #   * shim consumes MokAuth at boot and does not expose it as a runtime efivar,
 #     so the queued hash has no persistent runtime read surface.
 {{ end -}}
@@ -323,10 +323,11 @@ dkms_mok_state() {
 # pipefail`, where `mokutil --test-key ... | grep -q ...` therefore evaluates
 # FALSE in exactly the case the guard exists to catch. The apply fell through to
 # `mokutil --import`, which prints `SKIP: <cert> is already enrolled` and exits
-# WITHOUT prompting; expect met eof where it wanted a password, returned 91, and
-# the whole apply aborted on a host that had already converged. Capturing the
-# output first keeps the status out of the decision, which is the same reason
-# dkms_mok_state exists.
+# WITHOUT reading a password, and the whole apply aborted on a host that had
+# already converged. Capturing the output first keeps the status out of the
+# decision, which is the same reason dkms_mok_state exists. (The import itself no
+# longer breaks on that case either -- its producer ignores SIGPIPE -- but this
+# guard is what keeps a converged host from re-queueing at all.)
 mok_key_is_enrolled() {
   local out=''
   out="$("${SUDO[@]}" mokutil --test-key "$1" 2>/dev/null)" || true
@@ -539,12 +540,15 @@ enroll_dkms_mok() {
     return 0
   fi
 
-  # THE IMPORT NEEDS A TERMINAL AND AN APPLY HAS NONE. `mokutil --import` reads a
-  # one-time enrollment password from the tty (`input password:` twice), so on a
-  # non-interactive apply it fails -- and this call used to discard both the error
-  # text and the exit status, so the apply reported success while no MokNew
-  # variable was ever written. Secure Boot then rejected the signed module with
-  # nothing on screen to say why.
+  # THE IMPORT READS ITS PASSWORD FROM STDIN, AND THAT IS THE WHOLE MECHANISM.
+  # `mokutil --import` asks for the one-time enrollment password twice (`input
+  # password:`, then `input password again:`) through read_hidden_line(), which
+  # turns echoing off ONLY when stdin is a terminal and otherwise just getline()s
+  # the answer -- so a pipe satisfies both prompts on an apply that has no
+  # terminal of its own. This call used to discard both the error text and the
+  # exit status, so the apply reported success while no MokNew variable was ever
+  # written, and Secure Boot then rejected the signed module with nothing on
+  # screen to say why. The status is PROPAGATED.
   #
   # THE PASSWORD IS THE STORED LUKS PASSPHRASE. The operator must retype this
   # value at the MokManager screen on the next boot, so it has to be a value they
@@ -568,14 +572,6 @@ enroll_dkms_mok() {
     return 0
   fi
 
-  if ! command -v expect >/dev/null 2>&1; then
-    (
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-nvidia-fedora" "site" "mok-enroll-no-expect" "direction" "transient-blocking" "probe" "expect-present" "reason" "expect is not installed, so the enrollment password cannot be supplied without a terminal; run the printed mokutil command by hand instead") | trim | indent 6 }}
-    )
-    report_manual_mok_import "$cert"
-    return 0
-  fi
-
   # Queueing a request the operator cannot complete is worse than not queueing
   # it: the machine reboots into a MokManager prompt it can never satisfy.
   if ! mok_passphrase_is_typeable "$MOK_ENROLL_PASSPHRASE"; then
@@ -586,52 +582,46 @@ enroll_dkms_mok() {
     return 0
   fi
 
-  # EXPECT RUNS UNPRIVILEGED AND SPAWNS THE ELEVATION ITSELF, rather than running
-  # under sudo. Handing the secret to a privileged child would mean either `sudo
-  # -E` (which sudoers may strip) or `sudo env VAR=...` -- and that second form
-  # puts the passphrase in env's ARGV, visible in the process table to every user
-  # on the box. Inheriting it into an unprivileged expect keeps it in that
-  # process's own environment, which only its owner and root can read.
+  # SUDO STAYS IN THIS SCRIPT'S TERMINAL, WHICH IS WHY THERE IS NO expect HERE.
+  # The previous shape drove `sudo mokutil --import` inside an expect pty. sudoers
+  # scopes its credential timestamp to the invoking terminal (`timestamp_type`
+  # defaults to `tty`) and `spawn` gives the child a BRAND NEW pty, so sudo
+  # re-prompted inside it however recently the apply had authenticated -- while
+  # expect's own stdin was the heredoc carrying its script, so nobody could
+  # answer. Enrollment on an interactive apply sat on `[sudo] password for
+  # <user>:` until the 30s timeout and failed with exit 90, on exactly the hosts
+  # the enrollment exists for. A pipe needs no pty: sudo prompts on the terminal
+  # the apply already has, reuses the ticket the elevation ladder primed, or goes
+  # through the askpass helper, exactly like every other privileged call in this
+  # file. It also removes the prompt matching (and with it the LC_ALL pinning a
+  # localized mokutil would have defeated) and every way this could hang, because
+  # stdin reaches EOF instead of blocking on a prompt nothing answers.
   #
-  # The exit status is PROPAGATED: a discarded one is the whole defect this
-  # replaced.
+  # SUDO NEVER SEES THE PASSPHRASE. Without `-S`, sudo reads its own password from
+  # /dev/tty and never from stdin, so the pipe reaches mokutil untouched. A host
+  # with neither a terminal nor an askpass helper fails on sudo's own diagnostic
+  # rather than having the enrollment passphrase tried as a login password.
   #
-  # LC_ALL=C, an explicit timeout action, and {*} rather than eval. The prompt
-  # strings below are matched literally, so a localized mokutil would defeat them
-  # -- the same reason the fingerprint installer pins its authselect call. Without
-  # a timeout action an unmatched prompt would fall through to `expect eof` and
-  # then block in `wait` on a process still reading stdin, hanging the apply
-  # instead of failing it. And `eval spawn $argv` would re-parse the certificate
-  # path as Tcl; {*} expands the list without a second parse.
+  # AND IT REACHES NO ARGUMENT VECTOR OR FILE. `printf` is a shell BUILTIN, so the
+  # value stays in this shell's memory and the pipe: never in argv, where the
+  # process table would expose it to every user on the box, never in a temporary
+  # file, and never in the privileged process's environment.
   #
-  # THE INDENTATION IS LOAD-BEARING, unusually for Tcl. Every helper here is
-  # extracted by `sed -n '<start>,/^}$/p'`, so a line that is exactly `}` at
-  # column 0 inside this heredoc truncates enroll_dkms_mok at that brace and the
-  # smoke harness drives half a function. Keep the closing braces indented.
-  if ! MOK_ENROLL_PASSPHRASE="$MOK_ENROLL_PASSPHRASE" MOK_CERT="$cert" \
-    MOK_SUDO="${SUDO[*]-}" LC_ALL=C expect -f - <<'EXPECT'; then
-set timeout 30
-set pw $env(MOK_ENROLL_PASSPHRASE)
-set cert $env(MOK_CERT)
-set argv [concat $env(MOK_SUDO) [list mokutil --import $cert]]
-spawn -noecho {*}$argv
-expect {
-    "input password:" { send -- "$pw\r" }
-    timeout { puts stderr "mokutil did not ask for the enrollment password"; exit 90 }
-    eof { puts stderr "mokutil exited before asking for the enrollment password"; exit 91 }
-  }
-expect {
-    "input password again:" { send -- "$pw\r" }
-    timeout { puts stderr "mokutil did not ask for the password confirmation"; exit 92 }
-    eof { puts stderr "mokutil exited before confirming the enrollment password"; exit 93 }
-  }
-expect {
-    eof {}
-    timeout { puts stderr "mokutil did not exit after the enrollment password"; exit 94 }
-  }
-catch wait result
-exit [lindex $result 3]
-EXPECT
+  # `trap '' PIPE` AND `|| true` IN THE PRODUCER. mokutil exits WITHOUT reading
+  # anything when the certificate is already enrolled (`SKIP: <cert> is already
+  # enrolled`), which closes the pipe under printf; the trap makes that an
+  # ordinary write error instead of a SIGPIPE death, and `|| true` keeps the
+  # producer out of `set -o pipefail`'s answer, so the pipeline reports mokutil's
+  # exit status and nothing else.
+  #
+  # THE INDENTATION IS LOAD-BEARING. Every helper here is extracted by
+  # `sed -n '<start>,/^}$/p'`, so a line that is exactly `}` at column 0 inside
+  # this function truncates enroll_dkms_mok at that brace and the smoke harness
+  # drives half a function. Keep the group's closing brace indented.
+  if ! {
+    trap '' PIPE
+    printf '%s\n%s\n' "$MOK_ENROLL_PASSPHRASE" "$MOK_ENROLL_PASSPHRASE" || true
+  } | "${SUDO[@]}" mokutil --import "$cert"; then
     printf 'install-nvidia-fedora.sh: mokutil --import failed for %s; the certificate was NOT queued.\n' "$cert" >&2
     report_manual_mok_import "$cert"
     return 1
