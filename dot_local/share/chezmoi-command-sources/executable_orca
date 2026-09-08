@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
-# Orca hardcodes bare `orca` in its queued-message pointer and its injected worker preamble, and
-# /usr/bin/orca on Linux is the GNOME screen reader, so a dispatched agent starts speech before it
-# can read the orca-ide rule. Candidates are explicit paths: a PATH lookup of `orca` finds this
-# wrapper and recurses. The overrides exist so the CI gate can exercise every branch.
+# One name, two programs: Orca hardcodes bare `orca` in its queued-message pointer and its injected
+# worker preamble, and /usr/bin/orca on Linux is the GNOME screen reader that a desktop autostart or
+# an accessibility toggle launches under the same name. Argv shape separates them, because GNOME
+# Orca accepts no positional argument while every Orca IDE CLI entry point is a bare subcommand
+# word: a bare-word first argument is the Orca IDE CLI, no argument or a leading `-` is the screen
+# reader. An Orca-IDE-shaped invocation with no Orca IDE CLI is an error, never a fall through to
+# speech, which is the incident this wrapper exists to prevent. Candidates are explicit paths: a
+# PATH lookup of `orca` finds this wrapper and recurses. The overrides exist so the CI gate can
+# exercise every branch.
 
 set -euo pipefail
 
-resolved=
-tried=()
-for candidate in \
-  "${ORCA_IDE_CLI:-}" \
-  "${HOME:-}/.local/bin/orca-ide" \
-  "${ORCA_PREFIX:-/opt/Orca}/resources/bin/orca-ide"
-do
-  [[ -n $candidate ]] || continue
-  tried+=("$candidate")
-  if [[ -x $candidate ]]; then
-    resolved=$candidate
-    break
-  fi
-done
-
-if [[ -z $resolved ]]; then
-  screen_reader="${ORCA_SYSTEM_ORCA:-/usr/bin/orca}"
-  tried+=("$screen_reader")
-  if [[ -x $screen_reader ]]; then
-    resolved=$screen_reader
-  fi
-fi
-
-if [[ -z $resolved ]]; then
-  printf 'orca: no Orca IDE CLI and no screen reader found; tried %s\n' "${tried[*]}" >&2
+if (( $# > 0 )) && [[ $1 != -* ]]; then
+  tried=()
+  for candidate in \
+    "${ORCA_IDE_CLI:-}" \
+    "${HOME:-}/.local/bin/orca-ide" \
+    "${ORCA_PREFIX:-/opt/Orca}/resources/bin/orca-ide"
+  do
+    [[ -n $candidate ]] || continue
+    tried+=("$candidate")
+    if [[ -x $candidate ]]; then
+      exec "$candidate" "$@"
+    fi
+  done
+  printf 'orca: no Orca IDE CLI found; tried %s\n' "${tried[*]}" >&2
   exit 127
 fi
 
-exec "$resolved" "$@"
+screen_reader="${ORCA_SYSTEM_ORCA:-/usr/bin/orca}"
+if [[ ! -x $screen_reader ]]; then
+  printf 'orca: no GNOME screen reader found; tried %s\n' "$screen_reader" >&2
+  exit 127
+fi
+
+exec "$screen_reader" "$@"
