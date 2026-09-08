@@ -120,6 +120,7 @@ jobs:
           .ci/check-external-checksum-coverage.sh
           .ci/test-check-external-checksum-coverage.sh
           .ci/test-fff-mcp-runtime.sh
+          .ci/test-orca-cli-shadow.sh
 
   fatal-boundary-gates:
     name: fatal boundary gates
@@ -257,7 +258,6 @@ jobs:
           .ci/test-ci-wiring.sh
           .ci/test-garden-path-mirror-check.sh
           .ci/test-orca-register.sh
-          .ci/test-orca-cli-shadow.sh
           .ci/test-op-reference-form.sh
           .ci/test-merge-commit-only-gates.sh
           .ci/test-git-prune-local-branches.sh

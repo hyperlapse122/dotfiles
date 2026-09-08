@@ -169,9 +169,11 @@ a missing artifact is a recorded gap, never a reason to keep waiting
 After every `worker_done`, success and failure alike, the run MUST release that worker
 every settled worker MUST be accounted for before the turn ends
 A run MUST NOT end with a worker it dispatched still resident
-MUST confirm that every dispatch it started reports a settled, released state in Orca's own per-run worker records
-MUST treat a host process sweep such as `pgrep -af claude` as a secondary signal only
-These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting and do-not-release-on-timeout guidance
+MUST confirm that every dispatch it started is settled and that its release was requested and receipted
+MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
+These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
+Every worker under this contract MUST be attached through the guide's lifecycle-supervised worker path, never an unsupervised injected dispatch
+When the run's own wall-clock bound expires the run MUST do the same for every dispatch still outstanding
 NEEDLES
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are

@@ -214,12 +214,12 @@ U1 and U2 land together — a needle asserting text the template does not carry 
 - **Dependencies:** U3.
 - **Files:**
   - `.ci/test-orca-cli-shadow.sh` (create, executable).
-  - `.github/workflows/ci.yml` (modify; add the gate to the `repo-meta` job's step list).
+  - `.github/workflows/ci.yml` (modify; add the gate to the `render-gates` job's step list).
 - **Approach:**
   1. Follow the `AGENTS.md` verification contract: a scratch directory under `${XDG_RUNTIME_DIR:-$HOME/.cache}`, an empty chezmoi config, a stub `op`, a throwaway destination, and `--source "$PWD"`. Use `render()` from `.ci/lib/render-gate-helpers.sh` for the manifest assertions rather than hand-rolling the invocation.
   2. Assert the wrapper source is executable in the repository tree.
   3. Drive every behavior test through the KTD4 environment knobs and a stubbed `HOME`, so no test depends on a real Orca install on the runner.
-  4. Wire the script into the `repo-meta` job. `.ci/test-ci-wiring.sh` fails otherwise, and `repo-meta` is already in `delivery.needs`.
+  4. Wire the script into the `render-gates` job, which installs the locked chezmoi the manifest render needs. `.ci/test-ci-wiring.sh` fails on an unwired gate, and `render-gates` is already in `delivery.needs`.
 - **Patterns to follow:** `.ci/test-orca-register.sh` for stub-binary construction and scratch handling; `.ci/test-agent-instructions.sh` for the `fail()` helper shape; `.ci/test-command-manifest.sh` for asserting against a rendered manifest.
 - **Test scenarios:**
   - With a stub at `$HOME/.local/bin/orca-ide`, the wrapper execs it and forwards `orchestration check --run run_x` unchanged.
@@ -230,7 +230,7 @@ U1 and U2 land together — a needle asserting text the template does not carry 
   - With no candidate at all, the wrapper exits non-zero and its message names every candidate it tried.
   - The wrapper never re-enters itself when its own directory is first on `PATH`.
   - The manifest rendered for `linux` declares the `orca` command; rendered for `darwin` it does not.
-  - `.ci/test-ci-wiring.sh` passes, proving the new gate is invoked and `repo-meta` is still aggregated.
+  - `.ci/test-ci-wiring.sh` passes, proving the new gate is invoked and `render-gates` is still aggregated.
 - **Verification:** `.ci/test-orca-cli-shadow.sh`, `.ci/test-command-manifest.sh`, and `.ci/test-ci-wiring.sh` all pass locally.
 
 ### U5. Committed upstream-report record
