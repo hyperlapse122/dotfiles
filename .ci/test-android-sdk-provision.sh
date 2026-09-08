@@ -36,14 +36,13 @@ scratch=$(mktemp -d "$scratch_parent/android-sdk-provision.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
 printf '[data]\n' >"$scratch/empty.toml"
-mkdir -p "$scratch/target" "$scratch/render-home" "$scratch/render-bin"
-# facts.tmpl reaches for `op` on some paths; a stub keeps the render hermetic,
-# the same way .ci/test-agent-instructions.sh does.
-printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/render-bin/op"
-chmod +x "$scratch/render-bin/op"
+mkdir -p "$scratch/target" "$scratch/render-home"
 
+# No secret tooling is involved: this template reads only host facts and the
+# release lock, so the render runs with an empty environment and a bare PATH.
+# Nothing here stands in for a credential store.
 render() {
-  env PATH="$scratch/render-bin:$PATH" HOME="$scratch/render-home" \
+  env -i HOME="$scratch/render-home" PATH="/usr/bin:/bin" \
     chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
     --destination "$scratch/target" execute-template <"$template"
 }
