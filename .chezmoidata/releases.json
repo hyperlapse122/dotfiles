@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.37.0",
+        "version": "v0.37.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.0/agent-browser-linux-x64",
-            "sha256": "78e0c5a14a7fa1f3d1ae2acdbdcc94a047b435b998a8c505fcc49d7fa4935a49"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-x64",
+            "sha256": "f8e5f9294bd0da70dda61854f12004fd61c668cd682bfb600cdf6d0df73dea69"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.0/agent-browser-linux-arm64",
-            "sha256": "0315a8c4f7bf167cc5fd5eeaea79009b0e6b5d2ae8b3057bf6f96be978483426"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-arm64",
+            "sha256": "d54d3e1262dc1aa0906e0677adc6d0cbb40d1274631f4cf77136bf23a0bc20e9"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.0/agent-browser-darwin-x64",
-            "sha256": "f402c96350ffd2adc68d0e5e4d83aa49cf7735fef29882a8866be36cc2fc67e9"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-darwin-x64",
+            "sha256": "c79d1e0525c0bf79df9eec355269ae40bcda9c4a3fce3f242c24faecaaaeef84"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.0/agent-browser-darwin-arm64",
-            "sha256": "da5a2b4ef7be8ba279b1258c542c33877f480b1951d0d94de607fc1528edd380"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-darwin-arm64",
+            "sha256": "e52f06476ea0f1d14357c1924ce1d7f1bf08279f2642d74ccfa7ee935c46aea1"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.0/agent-browser-linux-musl-x64",
-            "sha256": "5cff3bc7b2486867aba2901f92c9ce6029bd2a37951630d9feec1c5b3fee402e"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-musl-x64",
+            "sha256": "5318f2ed03a9fae04a9e1f8d274d1a0fd6bf7fd427f32a44224be11f2dc3a37d"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.0/agent-browser-linux-musl-arm64",
-            "sha256": "db67c0e84e0668c052c2cbdca325c57f896e309c3723755dcdd65b700f8a2b52"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-musl-arm64",
+            "sha256": "ab7afc4e74d1218d32bd12519474dbd6ed9bf32b3a905d7648e9d9400f50083d"
           }
         }
       },
@@ -461,7 +461,7 @@
       "i-have-adhd": {
         "kind": "gitRef",
         "source": "ayghri/i-have-adhd",
-        "version": "58494af57962b2d7a996b4d419474380a299af5e"
+        "version": "24d22f783e57cb73c957848b588c6f651b6f9cd8"
       },
       "improve": {
         "kind": "gitRef",
