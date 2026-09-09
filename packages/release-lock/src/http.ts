@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from "node:timers/promises";
+
 /**
  * Shared HTTP fetch wrapper with exponential backoff retry.
  *
@@ -29,28 +31,29 @@ function isNullBodyStatus(status: number): boolean {
   return status === 101 || status === 204 || status === 205 || status === 304;
 }
 
+/** The cooldown the server itself named, in ms, or null when it named none. */
+export function serverNamedDelayMs(response: Response | undefined): number | null {
+  const retryAfter = response?.headers.get("retry-after")?.trim();
+  if (!retryAfter) return null;
+  if (/^\d+$/.test(retryAfter)) {
+    return parseInt(retryAfter, 10) * 1000;
+  }
+  const dateMs = Date.parse(retryAfter);
+  if (!Number.isNaN(dateMs) && dateMs > Date.now()) {
+    return dateMs - Date.now();
+  }
+  return null;
+}
+
 export function computeDelayMs(
   attempt: number,
   response: Response | undefined,
   baseDelayMs = DEFAULT_BASE_DELAY_MS,
   maxDelayMs = DEFAULT_MAX_DELAY_MS,
 ): number {
-  if (response) {
-    const retryAfter = response.headers.get("retry-after");
-    if (retryAfter !== null && retryAfter.trim() !== "") {
-      const trimmed = retryAfter.trim();
-      if (/^\d+$/.test(trimmed)) {
-        const seconds = parseInt(trimmed, 10);
-        return Math.min(Math.max(0, seconds * 1000), maxDelayMs);
-      }
-      const dateMs = Date.parse(trimmed);
-      if (!Number.isNaN(dateMs)) {
-        const diffMs = dateMs - Date.now();
-        if (diffMs > 0) {
-          return Math.min(diffMs, maxDelayMs);
-        }
-      }
-    }
+  const named = serverNamedDelayMs(response);
+  if (named !== null) {
+    return Math.min(named, maxDelayMs);
   }
 
   const backoff = baseDelayMs * 2 ** Math.max(0, attempt - 1);
@@ -90,17 +93,19 @@ export async function fetchWithRetry(
   const budgetMs = options?.budgetMs ?? DEFAULT_BUDGET_MS;
 
   const startTime = Date.now();
-  let lastResponse: Response | undefined;
-  let lastError: unknown;
+  let lastOutcome: { response: Response } | { error: unknown } | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    if (attempt > 1 && Date.now() - startTime >= budgetMs) {
+    // The attempt's own timeout is clamped to what is left of the budget, so a
+    // hanging upstream cannot spend a full attempt timeout past the deadline.
+    const remainingBefore = budgetMs - (Date.now() - startTime);
+    if (attempt > 1 && remainingBefore <= 0) {
       break;
     }
 
     let currentResponse: Response | undefined;
     try {
-      const signal = AbortSignal.timeout(attemptTimeoutMs);
+      const signal = AbortSignal.timeout(Math.min(attemptTimeoutMs, Math.max(1, remainingBefore)));
       const attemptInit: RequestInit = { ...init, signal };
       const rawResponse = await fetch(url, attemptInit);
       const response = await bufferResponse(rawResponse);
@@ -110,9 +115,9 @@ export async function fetchWithRetry(
       }
 
       currentResponse = response;
-      lastResponse = response;
+      lastOutcome = { response };
     } catch (error) {
-      lastError = error;
+      lastOutcome = { error };
       currentResponse = undefined;
     }
 
@@ -126,21 +131,24 @@ export async function fetchWithRetry(
       break;
     }
 
+    // A cooldown longer than this call can honor makes every remaining attempt
+    // a request inside the window the server just asked us to stay out of.
+    const named = serverNamedDelayMs(currentResponse);
+    if (currentResponse && named !== null && named > Math.min(maxDelayMs, remainingBudget)) {
+      return currentResponse;
+    }
+
     const delayMs = computeDelayMs(attempt, currentResponse, baseDelayMs, maxDelayMs);
     const sleepMs = Math.min(delayMs, remainingBudget);
     if (sleepMs > 0) {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      setTimeout(resolve, sleepMs);
-      await promise;
-    }
-
-    if (Date.now() - startTime >= budgetMs) {
-      break;
+      await sleep(sleepMs);
     }
   }
 
-  if (lastResponse) {
-    return lastResponse;
+  // The caller sees the LAST attempt's outcome, never an earlier response that
+  // a later network failure superseded.
+  if (lastOutcome && "response" in lastOutcome) {
+    return lastOutcome.response;
   }
-  throw lastError;
+  throw lastOutcome?.error;
 }

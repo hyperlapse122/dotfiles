@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   computeDelayMs,
@@ -154,18 +155,20 @@ describe("fetchWithRetry", () => {
     let calls = 0;
     globalThis.fetch = (async () => {
       calls++;
-      if (calls === 1) {
-        return largeSecondsResponse;
-      }
-      return new Response("ok", { status: 200 });
+      return new Response("rate limited", {
+        status: 429,
+        headers: { "retry-after": "3600" },
+      });
     }) as typeof globalThis.fetch;
 
+    // A cooldown the call cannot honor ends the retries: further attempts would
+    // land inside the window the server just named.
     const response = await fetchWithRetry("https://example.com/api", undefined, {
       baseDelayMs: 0,
-      maxDelayMs: 0,
+      maxDelayMs: 500,
     });
-    expect(calls).toBe(2);
-    expect(response.status).toBe(200);
+    expect(calls).toBe(1);
+    expect(response.status).toBe(429);
   });
 
   test("stops after max attempts when upstream continuously returns 503 and returns the last 503", async () => {
@@ -229,10 +232,10 @@ describe("fetchWithRetry", () => {
     let calls = 0;
     globalThis.fetch = (async () => {
       calls++;
-      // Real timer exercises the wall-clock budget comparison against platform time.
-      const { promise, resolve } = Promise.withResolvers<void>();
-      setTimeout(resolve, 20);
-      await promise;
+      // Real timer exercises the wall-clock budget comparison against platform
+      // time. The sleep is an order of magnitude over the budget so scheduler
+      // jitter cannot flip the assertion.
+      await sleep(200);
       return new Response("still busy", { status: 503 });
     }) as typeof globalThis.fetch;
 
@@ -245,6 +248,99 @@ describe("fetchWithRetry", () => {
 
     expect(calls).toBe(1);
     expect(response.status).toBe(503);
+  });
+
+  test("does not start a further attempt once the backoff delay spends the budget", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response("busy", { status: 503 });
+    }) as typeof globalThis.fetch;
+
+    const response = await fetchWithRetry("https://example.com/api", undefined, {
+      maxAttempts: 5,
+      budgetMs: 30,
+      baseDelayMs: 200,
+      maxDelayMs: 200,
+    });
+
+    expect(calls).toBe(1);
+    expect(response.status).toBe(503);
+  });
+
+  test("clamps each attempt's timeout to the remaining wall-clock budget", async () => {
+    const timeouts: number[] = [];
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const signal = init?.signal;
+      timeouts.push(signal ? 1 : 0);
+      await sleep(60);
+      return new Response("still busy", { status: 503 });
+    }) as typeof globalThis.fetch;
+
+    const started = Date.now();
+    const response = await fetchWithRetry("https://example.com/api", undefined, {
+      maxAttempts: 4,
+      attemptTimeoutMs: 10_000,
+      budgetMs: 100,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+    });
+
+    // Without clamping, one attempt alone could run for the full 10s timeout.
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(response.status).toBe(503);
+    expect(timeouts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("rethrows the final attempt's error instead of an earlier retryable response", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      if (calls === 1) {
+        return new Response("busy", { status: 503 });
+      }
+      throw new TypeError("network connection dropped");
+    }) as typeof globalThis.fetch;
+
+    await expect(
+      fetchWithRetry("https://example.com/api", undefined, {
+        maxAttempts: 3,
+        baseDelayMs: 0,
+        maxDelayMs: 0,
+      }),
+    ).rejects.toThrow("network connection dropped");
+
+    expect(calls).toBe(3);
+  });
+
+  test("retries 408 and 425 alongside 429 and 5xx", async () => {
+    for (const status of [408, 425]) {
+      let calls = 0;
+      globalThis.fetch = (async () => {
+        calls++;
+        return calls === 1 ? new Response("wait", { status }) : new Response("ok", { status: 200 });
+      }) as typeof globalThis.fetch;
+
+      const response = await fetchWithRetry("https://example.com/api", undefined, {
+        baseDelayMs: 0,
+        maxDelayMs: 0,
+      });
+
+      expect(calls).toBe(2);
+      expect(response.status).toBe(200);
+    }
+  });
+
+  test("passes null-body statuses through without constructing a body", async () => {
+    for (const status of [204, 304]) {
+      globalThis.fetch = (async () =>
+        new Response(null, { status, headers: { "x-probe": "1" } })) as typeof globalThis.fetch;
+
+      const response = await fetchWithRetry("https://example.com/api");
+
+      expect(response.status).toBe(status);
+      expect(response.headers.get("x-probe")).toBe("1");
+    }
   });
 
   test("retries when response body stream throws an error mid-stream and delivers readable final body", async () => {

@@ -362,6 +362,21 @@ describe("resolveVendorManifest onePassword", () => {
     expect((error as Error).message).toContain(ONE_PASSWORD_SOURCE);
   });
 
+  test("raises ResolutionError after retries when the feed keeps failing", async () => {
+    // 503 with `retry-after: 0` walks the retry ladder without real backoff.
+    stubRoutes({
+      [ONE_PASSWORD_SOURCE]: () =>
+        new Response("unavailable", { status: 503, headers: { "retry-after": "0" } }),
+    });
+
+    const retried = await resolveVendorManifest("1password", onePasswordSpec()).catch(
+      (e: unknown) => e,
+    );
+
+    expect(retried).toBeInstanceOf(ResolutionError);
+    expect((retried as Error).message).toContain("returned HTTP 503");
+  });
+
   test("raises ResolutionError when the feed fetch fails", async () => {
     stubRoutes({ [ONE_PASSWORD_SOURCE]: () => new Response("unavailable", { status: 404 }) });
 
@@ -457,6 +472,18 @@ describe("resolveVendorManifest flutter", () => {
       `${FLUTTER_SOURCE}/releases_linux.json`,
       `${FLUTTER_SOURCE}/releases_macos.json`,
     ]);
+  });
+
+  test("raises ResolutionError after retries when the manifest keeps failing", async () => {
+    stubRoutes({
+      [`${FLUTTER_SOURCE}/releases_linux.json`]: () =>
+        new Response("failed", { status: 500, headers: { "retry-after": "0" } }),
+      [`${FLUTTER_SOURCE}/releases_macos.json`]: text(FLUTTER_MACOS_MANIFEST),
+    });
+
+    const retried = await resolveVendorManifest("flutter", flutterSpec()).catch((e: unknown) => e);
+    expect(retried).toBeInstanceOf(ResolutionError);
+    expect((retried as Error).message).toContain("returned HTTP 500");
   });
 
   test("raises ResolutionError when manifest request fails", async () => {
