@@ -256,6 +256,41 @@ agents:
       completion.notify: "off"
       error.notify: "off"
       ask.notify: "off"
+      # astGrep.enabled is pinned on so omp can run the structural AST search
+      # named in .chezmoitemplates/agents-instructions.tmpl.
+      #
+      # The instruction file names both ast_grep and ast_edit as omp file tools.
+      # On the pinned build astEdit.enabled already defaults to true, while
+      # astGrep.enabled defaults to false. This key gates only ast_grep.
+      astGrep.enabled: true
+      # Project-scope skill and command discovery is closed so an omp dispatch
+      # never executes untrusted instructions from a repository checkout.
+      #
+      # User-scope discovery remains enabled for ~/.agents/skills (the managed
+      # skills tree). Project scope is disabled across all harnesses that omp
+      # recognizes: skills.enableAgentsProject, skills.enableClaudeProject,
+      # skills.enablePiProject, commands.enableClaudeProject, and
+      # commands.enableOpencodeProject.
+      #
+      # The four user-scope twins (skills.enableClaudeUser,
+      # skills.enableCodexUser, commands.enableClaudeUser,
+      # commands.enableOpencodeUser) already default to false. They are declared
+      # anyway because undeclared keys survive the next apply.
+      #
+      # Cost: this repository's own committed .agents/skills and .claude/skills
+      # trees become invisible to an omp worker dispatched here, while claude
+      # and codex in the same worktree still read them. The asymmetry is
+      # accepted deliberately, because no signal distinguishes a first-party
+      # checkout from an arbitrary one at settings-assertion time.
+      skills.enableAgentsProject: false
+      skills.enableClaudeProject: false
+      skills.enablePiProject: false
+      commands.enableClaudeProject: false
+      commands.enableOpencodeProject: false
+      skills.enableClaudeUser: false
+      skills.enableCodexUser: false
+      commands.enableClaudeUser: false
+      commands.enableOpencodeUser: false
       enabledModels:
       - google-antigravity/gemini-3.8-flash
       - google-antigravity/gemini-3.1-flash-lite

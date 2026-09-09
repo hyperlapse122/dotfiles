@@ -25,14 +25,10 @@ case ":$PATH:" in
 esac
 export PATH
 
-if ! command -v omp >/dev/null 2>&1; then
-  printf '%s\n' 'config-omp-settings: omp is unavailable; skipping settings assertion.' >&2
-  exit 0
-fi
-if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' 'config-omp-settings: jq is unavailable; skipping settings assertion.' >&2
-  exit 0
-fi
+die() { printf 'config-omp-settings: %s\n' "$*" >&2; exit 1; }
+
+command -v omp >/dev/null 2>&1 || die 'preflight: omp is not on PATH'
+command -v jq >/dev/null 2>&1 || die 'preflight: jq is not on PATH'
 
 scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-omp-settings"
 mkdir -p "$scratch"
