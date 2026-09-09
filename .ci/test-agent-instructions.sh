@@ -42,8 +42,12 @@ fail() { printf 'agent instructions: %s\n' "$*" >&2; exit 1; }
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 wrapper=dot_claude/readonly_CLAUDE.md.tmpl
-peer_wrappers=(dot_gemini/readonly_AGENTS.md.tmpl dot_codex/readonly_AGENTS.md.tmpl)
-harness_ids=(claude agy codex)
+peer_wrappers=(
+  dot_gemini/readonly_AGENTS.md.tmpl
+  dot_codex/readonly_AGENTS.md.tmpl
+  dot_omp/private_agent/private_readonly_AGENTS.md.tmpl
+)
+harness_ids=(claude agy codex omp)
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$wrapper"
 for peer in "${peer_wrappers[@]}"; do
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$peer"
@@ -121,6 +125,7 @@ claude|When a skill, command, or workflow the user invoked by name directs a sub
 claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
 agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
+omp|This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch against a content-hash anchor; `write` to create a file or replace it whole;
 HARNESS_NEEDLES
 
 # Asserted against every render's SHARED BODY, not just the Claude render. A
