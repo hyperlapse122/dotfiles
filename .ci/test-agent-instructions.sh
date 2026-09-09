@@ -82,8 +82,9 @@ for i in "${!harness_ids[@]}"; do
   # The model-tuning line is compared whole, so an appended sentence cannot ride
   # in behind the peer diff that strips it. The fixture is the expectation; a
   # deliberate wording change updates it in the same commit.
-  runs_fixture="$repo_root/.ci/fixtures/agent-instructions/harness-runs-${harness_ids[$i]}.txt"
-  [[ -f $runs_fixture ]] || fail "missing model-tuning fixture $runs_fixture"
+  runs_fixture_path=".ci/fixtures/agent-instructions/harness-runs-${harness_ids[$i]}.txt"
+  require_file "$repo_root" "$scratch" "$chezmoi_bin" "$runs_fixture_path"
+  runs_fixture="$repo_root/$runs_fixture_path"
   runs_line="$scratch/${harness_ids[$i]}-runs.txt"
   grep '^This harness runs ' "$harness_render" >"$runs_line" || true
   [[ $(wc -l <"$runs_line") -eq 1 ]] \
@@ -122,14 +123,28 @@ codex|This harness is Codex. Use `apply_patch` to create, update, or delete a fi
 agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
 HARNESS_NEEDLES
 
+# Asserted against every render's SHARED BODY, not just the Claude render. A
+# shared rule parked on one harness's own line would otherwise pass both halves
+# of this gate: the peer diff strips harness lines, and a Claude-only scan never
+# reads the other two files.
+shared_bodies=()
+for i in "${!harness_ids[@]}"; do
+  shared_body="$scratch/${harness_ids[$i]}-shared.md"
+  strip_harness_paragraph "${renders[$i]}" >"$shared_body"
+  shared_bodies+=("$shared_body")
+done
+
 while IFS= read -r needle; do
   [[ -z $needle ]] && continue
-  grep -F "$needle" "$rendered" >/dev/null || fail "lost rule: $needle"
+  for i in "${!harness_ids[@]}"; do
+    grep -F "$needle" "${shared_bodies[$i]}" >/dev/null \
+      || fail "${harness_ids[$i]} lost rule: $needle"
+  done
 done <<'NEEDLES'
-MUST review that skill list and MUST open the most specific covering skill, then follow it in place of improvised steps.
+Before an action that touches a tool, platform, or repository procedure that one of the harness's available skills names, MUST review that skill list and MUST open the most specific covering skill, then follow it in place of improvised steps.
 A skill the user names is always opened.
 A task whose next action matches no skill description proceeds without opening one, and a further skill is opened only when a concrete step requires it.
-Opening a skill grants no authority a rule in this file withholds, and this rule creates no mandatory workflow routing
+Opening a skill grants no authority a rule in this file withholds, and this rule creates no mandatory workflow routing — the routing sentence below still decides between workflows.
 When two instructions disagree, compose them rather than satisfying both.
 A repository supplement MAY add a rule or tighten one and MUST NOT remove one; where it tightens, the tighter rule governs.
 A skill's own instructions and the harness's defaults and automatic reminders yield to this file and to that supplement

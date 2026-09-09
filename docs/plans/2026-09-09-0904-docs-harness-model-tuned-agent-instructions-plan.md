@@ -188,7 +188,7 @@ Match the existing gate's whitespace control (`{{ if ... -}}`, `{{- else if ... 
 
 **Requirements:** R10, R11, R12.
 
-**Files:** `.ci/test-agent-instructions.sh`, `.ci/fixtures/harness-runs-claude.txt`, `.ci/fixtures/harness-runs-codex.txt`, `.ci/fixtures/harness-runs-agy.txt`.
+**Files:** `.ci/test-agent-instructions.sh`, `.ci/fixtures/agent-instructions/harness-runs-claude.txt`, `.ci/fixtures/agent-instructions/harness-runs-codex.txt`, `.ci/fixtures/agent-instructions/harness-runs-agy.txt`.
 
 **Approach:** Change `strip_harness_paragraph` to `grep -vE '^This harness (is|runs) '` (KTD2). Write each harness's rendered `This harness runs ` line to a fixture file under `.ci/fixtures/`, following the naming of files already there. In the per-harness loop, extract that render's `This harness runs ` lines, assert there is exactly one, and compare it byte-for-byte against that harness's fixture; fail with the harness id and the fixture path when they differ. Because the fixture holds the whole line, no `HARNESS_NEEDLES` row is added for the new paragraphs (KTD3) — leave the existing rows for the `This harness is ` lines untouched.
 
@@ -238,7 +238,7 @@ Global:
 - R1 through R16 are satisfied in the committed source.
 - SC1 through SC3 hold for all three rendered files.
 - `.ci/test-agent-instructions.sh` and `.ci/test-ci-wiring.sh` pass.
-- The diff touches only `.chezmoitemplates/agents-instructions.tmpl`, `.ci/test-agent-instructions.sh`, `.ci/fixtures/harness-runs-*.txt`, `AGENTS.md`, and this plan.
+- The diff touches only `.chezmoitemplates/agents-instructions.tmpl`, `.ci/test-agent-instructions.sh`, `.ci/fixtures/agent-instructions/harness-runs-*.txt`, `AGENTS.md`, and this plan.
 - No existing rule in the core was reworded, reordered, or removed.
 - No model or effort declaration in `.chezmoidata/agents.yaml` changed.
 - No experimental or dead-end text is left in the template, the fixtures, or the gate script.
