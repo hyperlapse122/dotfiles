@@ -14,8 +14,12 @@ set -euo pipefail
 # appears.
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
-chezmoi_bin=${CHEZMOI:-chezmoi}
-command -v "$chezmoi_bin" >/dev/null 2>&1 || { echo "chezmoi is not on PATH" >&2; exit 1; }
+# An ABSOLUTE path, resolved against the caller's PATH: `render` below narrows
+# PATH so a stub `op` shadows the real 1Password CLI, and `env` would then look
+# a bare name up in that narrowed PATH instead. Every sibling gate that renders
+# a template resolves chezmoi the same way for the same reason.
+chezmoi_bin=$(command -v "${CHEZMOI:-chezmoi}") ||
+  { echo "chezmoi is not on PATH" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required to run this test" >&2; exit 1; }
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-mcp-render
