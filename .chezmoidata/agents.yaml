@@ -202,12 +202,17 @@ agents:
     # selectable set: pinning role values alone leaves /model free to pick an
     # unapproved provider, and an undeclared key survives the next apply.
     #
-    # startup.setupWizard and setupVersion are the one non-model exception.
-    # A first-run wizard blocks non-interactive use and writes config that
-    # competes with these assertions.
+    # startup.setupWizard, setupVersion and symbolPreset are the non-model
+    # exceptions. A first-run wizard blocks non-interactive use and writes
+    # config that competes with these assertions. symbolPreset is a glyph-set
+    # enum, not a family: `nerd` is safe because .chezmoidata/fonts.yaml
+    # installs the Nerd Font archives on every managed host and families.mono
+    # is JetBrainsMono Nerd Font, so omp's icons render instead of falling
+    # back to boxes.
     settings:
       startup.setupWizard: false
       setupVersion: 1
+      symbolPreset: nerd
       enabledModels:
       - google-antigravity/gemini-3.8-flash
       - google-antigravity/gemini-3.1-flash-lite

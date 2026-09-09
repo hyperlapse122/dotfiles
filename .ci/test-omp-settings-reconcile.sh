@@ -41,6 +41,7 @@ for needle in \
   '"startup.setupWizard"' \
   '"enabledModels"' \
   '"disabledProviders"' \
+  '"symbolPreset": "nerd"' \
   'omp config set'
 do
   grep -F "$needle" "$script" >/dev/null || fail "rendered script lost: $needle"
@@ -124,6 +125,7 @@ live_drifted="$scratch/live-drifted.json"
 cat >"$live_drifted" <<'EOF'
 {"startup.setupWizard": {"value": true},
  "setupVersion": {"value": 0},
+ "symbolPreset": {"value": "unicode"},
  "enabledModels": {"value": ["something/else"]},
  "disabledProviders": {"value": []},
  "modelRoles": {"value": {"default": "something/else"}}}
