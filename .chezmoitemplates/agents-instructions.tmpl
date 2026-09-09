@@ -2,6 +2,12 @@
 
 This file is the common user-scoped instruction core, rendered into each managed harness's user-scoped instruction file (`~/.claude/CLAUDE.md` for Claude Code, `~/.gemini/AGENTS.md` for Antigravity, `~/.codex/AGENTS.md` for Codex). Use RFC 2119 terms literally. When working in any repository, the repository root `AGENTS.md` (or repo instruction file) is the local supplement and may add stricter project-specific rules. Edit this source template (`.chezmoitemplates/agents-instructions.tmpl` in dotfiles), never deployed instruction targets.
 
+## Skills and instruction precedence
+
+Before an action that touches a tool, platform, or repository procedure that one of the harness's available skills names, MUST review that skill list and MUST open the most specific covering skill, then follow it in place of improvised steps. A skill the user names is always opened. A task whose next action matches no skill description proceeds without opening one, and a further skill is opened only when a concrete step requires it. Opening a skill grants no authority a rule in this file withholds, and this rule creates no mandatory workflow routing — the routing sentence below still decides between workflows.
+
+When two instructions disagree, compose them rather than satisfying both. A repository supplement MAY add a rule or tighten one and MUST NOT remove one; where it tightens, the tighter rule governs. A skill's own instructions and the harness's defaults and automatic reminders yield to this file and to that supplement, and a named local exception in this file — the executable-selection rule, the `lfg` autopilot override — stays authoritative for its own subject. The secrets, destructive-action, and dispatch-routing prohibitions in this file sit outside this composition: they bind whatever the conflicting instruction is and wherever it comes from, the active conversation included.
+
 ## Writing and language
 
 All agent-authored natural-language text MUST be clear, concise, and direct. This baseline applies to responses, technical documentation, README content, code comments, commit messages, and PR/MR text that the agent writes or substantially revises.
@@ -49,6 +55,16 @@ This harness is Antigravity. Use `view_file` to read; `replace_file_content` to 
 {{- end }}
 
 A script MAY perform a purely mechanical change across many files when a per-file tool call is not practical. Say so, keep the script out of the commit unless the project wants it, and review the result with `git diff` before staging.
+
+## Harness and model tuning
+
+{{ if eq .harness "claude" -}}
+This harness runs Anthropic Claude models. They verify and correct their own work without being told, so add no re-check or double-check pass beyond one an instruction or an acceptance criterion already names. Deliver the requested scope: make routine judgment calls yourself, and when the request looks mistaken say so in a sentence and continue rather than quietly widening, narrowing, or transforming it, unless a rule in this file requires you to stop and ask. Lead with the outcome, keep caveats short, and match a written document's length to its substance. Say in one sentence what you are about to do before the first tool call, then give an update only on a finding or a change of direction. Correct an earlier statement only when the error changes the user's code, conclusions, or decisions.
+{{- else if eq .harness "codex" -}}
+This harness runs OpenAI Codex models. They follow the smallest sufficient instruction set and degrade on padded or contradictory guidance, so resolve a conflict by the precedence rule above instead of satisfying both sides. Reasoning effort is read from configuration and MUST NOT be simulated by asking for more thinking in prose. State the goal, the boundary, and the definition of done before the first tool call. Batch independent reads in one step rather than issuing them one at a time, and calibrate verification to the risk of the change — an authentication or migration change earns a full test pass, a comment fix does not. MUST NOT invent a value that already exists somewhere — an identifier, a version, a price, a path; read it or ask.
+{{- else if eq .harness "agy" -}}
+This harness runs Google Gemini Flash models. They follow a direct instruction literally and answer tersely, so ask for the elaboration you want instead of assuming it arrives. Omit chain-of-thought scaffolding, role framing, and repeated restatement; those were workarounds for older Gemini versions and degrade these. In a brief or prompt you write for a Gemini-family worker, put the long context first and the instruction last, so the request anchors the reading. Leave that worker's sampling parameters and thinking level to its configuration rather than requesting them in prose.
+{{- end }}
 
 ## Secrets, destructive actions, and runtime
 
