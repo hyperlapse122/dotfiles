@@ -226,7 +226,12 @@ if the app is stopped, follow the skill's startup procedure before declaring it 
 report the failed path or command and its exact error
 Continue with the current agent's own reasoning only, without launching substitute agents
 record which delegated or cross-model passes did not happen
-in an unattended run that record goes in the MR/PR description, beside the unapplied-findings checklist
+in an unattended run that record goes in the MR/PR description.
+A run MUST NOT end with an actionable finding that is only listed
+is a working note, never a delivery
+or resolved into a filed tracker issue whose link replaces the entry, or resolved into the committed record file whose path replaces the entry
+the section itself MUST then be deleted from the MR/PR description and from the run's final report
+An entry that survives as a bare checkbox, with no fix and no link, is an incomplete run.
 It does not stop, and it does not fall back to the bundled script.
 Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
 MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
@@ -274,6 +279,8 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
+the MR/PR description's unapplied-findings checklist is an acceptable record instead
+beside the unapplied-findings checklist
 climbs `claude` one rung at a time
 Climb on evidence — a failed attempt, an escalation, or a plan section that leaves the approach open — never on a guess before the first attempt.
 counting a receipt that reclaimed no process as satisfying that
