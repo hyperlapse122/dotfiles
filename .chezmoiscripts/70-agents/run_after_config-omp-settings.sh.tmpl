@@ -67,11 +67,16 @@ bounded_read() {
     waited=$((waited + 1))
   done
   if kill -0 "$pid" 2>/dev/null; then
+    # Signal the children too. The read is a CLI that forks a helper for its
+    # network call, so killing only the recorded pid leaves that helper running
+    # as an orphan past the deadline the bound exists to enforce.
+    pkill -TERM -P "$pid" 2>/dev/null || true
     kill -TERM "$pid" 2>/dev/null || true
     while [[ $termed -lt 2 ]] && kill -0 "$pid" 2>/dev/null; do
       sleep 1
       termed=$((termed + 1))
     done
+    pkill -KILL -P "$pid" 2>/dev/null || true
     kill -KILL "$pid" 2>/dev/null || true
   fi
   wait "$pid" 2>/dev/null || true
@@ -155,16 +160,20 @@ while IFS=$'\t' read -r state path value; do
     { printf 'config-omp-settings: could not assert %s\n' "$path" >&2; exit 1; }
   asserted=$((asserted + 1))
 done < <(jq -r --slurpfile liveDoc "$live" --arg liveOk "$live_ok" '
-  . as $declaredDoc
-  | ($liveDoc[0] // {}) as $live
+  ($liveDoc[0] // {}) as $live
   | to_entries[]
   | .key as $path
   | .value as $want
-  | ($live | getpath($path | split(".")))          as $have
-  | ($live | has($path | split(".") | .[0]))       as $topSeen
-  | (if   $liveOk != "true"       then "differs"
-     elif $have == $want          then "equal"
-     elif ($have == null and ($topSeen | not)) then "unknown"
+  # `omp config list --json` is a FLAT map keyed by the whole dotted path, whose
+  # entries are objects carrying the current value under `value`. It is not a
+  # nested tree: the key is the literal string "startup.setupWizard". Reading it
+  # as a tree finds nothing and reports every declared path as unknown.
+  | ($live[$path] // null)                                   as $entry
+  | (($entry | type) == "object" and ($entry | has("value"))) as $entryHasValue
+  | (if $entryHasValue then $entry.value else null end)      as $have
+  | (if   $liveOk != "true"        then "differs"
+     elif ($live | has($path) | not) then "unknown"
+     elif ($entryHasValue and $have == $want) then "equal"
      else "differs" end) as $state
   | [$state, $path, (if ($want | type) == "string" then $want else ($want | tojson) end)]
   | @tsv

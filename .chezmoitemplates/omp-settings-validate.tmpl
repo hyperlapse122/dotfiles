@@ -28,7 +28,7 @@
 {{- $rejected := list "plugins" "marketplaces" "mcpServers" -}}
 {{- $modelSelectorKeys := list "modelRoles" -}}
 {{- range $path, $value := $settings -}}
-{{-   if not (regexMatch "^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*$" $path) -}}
+{{-   if not (regexMatch "^[A-Za-z][A-Za-z0-9_-]*([.][A-Za-z][A-Za-z0-9_-]*)*$" $path) -}}
 {{-     fail (printf "omp-settings-validate: %q is not a dot-separated settings path" $path) -}}
 {{-   end -}}
 {{-   $head := (splitList "." $path) | first -}}

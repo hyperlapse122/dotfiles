@@ -43,6 +43,19 @@ restore does **not** clean it up:
   registrations apart, leave them alone; a stranded token is a smaller problem
   than a broken surviving harness.
 
+- **The old permissive posture survives.** The reconciler owns only the leaves
+  it declares, so every other key the pre-retirement declaration wrote is still
+  in `~/.omp/agent/config.yml` exactly as it was. The one to inspect before the
+  first run is the approval posture, which that declaration set to its most
+  permissive value:
+
+  ```sh
+  omp config list --json | jq '{approval: (."tools.approvalMode" // empty)}'
+  ```
+
+  This restore takes no position on it — it is outside the managed surface — so
+  decide it deliberately rather than inheriting it.
+
 - **The old plaintext credential is gone on the next apply.** The retirement
   left `~/.omp/agent/.env` in the prune set and it stays there, because the
   restored MCP target resolves the Exa key at render time instead.

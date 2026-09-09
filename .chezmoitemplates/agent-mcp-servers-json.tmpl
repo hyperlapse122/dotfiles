@@ -18,8 +18,8 @@ Optional server applicability fields in .chezmoidata/agents.yaml:
   harnessSkip: [<harness id>]   omitted means every harness
 
 harnessSkip is an EXCLUSION list — the set generalization of `container: skip`
-— so an omitted field keeps the server everywhere. claude, agy, and codex are
-the managed harnesses and the callers; a harnessSkip entry naming a retired
+— so an omitted field keeps the server everywhere. claude, agy, codex, and omp
+are the managed harnesses and the callers; a harnessSkip entry naming a retired
 harness fails as unknown rather than silently no-op'ing.
 */ -}}
 {{- if not (kindIs "map" .) -}}

@@ -62,7 +62,7 @@ mkdir -p "$bin" "$market/.claude-plugin" "$market/skills/demo"
 build_market() {
   rm -rf "$market"
   mkdir -p "$market/.claude-plugin" "$market/skills/demo"
-  printf '{"name":"compound-engineering-omp","plugins":[{"name":"compound-engineering"}]}\n' \
+  printf '{"name":"compound-engineering-plugin","plugins":[{"name":"compound-engineering"}]}\n' \
     > "$market/.claude-plugin/marketplace.json"
   printf -- '---\nname: demo\n---\n' > "$market/skills/demo/SKILL.md"
 }
@@ -129,7 +129,10 @@ esac
 EOF
 chmod 0700 "$bin/omp"
 
-run_omp() { env HOME="$home" PATH="$bin:$PATH" OMP_CALLS="$omp_calls" bash "$omp_test"; }
+# A bounded PATH, not the inherited one: the reconciler shells out to jq, and an
+# inherited PATH can resolve it through a version-manager shim that fails for
+# reasons unrelated to this script, which would look like a preflight refusal.
+run_omp() { env HOME="$home" PATH="$bin:/usr/bin:/bin" OMP_CALLS="$omp_calls" bash "$omp_test"; }
 
 # --- happy path ------------------------------------------------------------ #
 
@@ -138,14 +141,19 @@ reset_home
 run_omp || fail 'first run failed'
 [[ -e $home/.omp/plugins/installed ]] || fail 'plugin was not installed'
 [[ -e $home/.omp/plugins/enabled ]] || fail 'plugin was not enabled'
-grep -Fq "plugin install --scope user --force compound-engineering@compound-engineering-omp" \
-  "$omp_calls" || fail 'install was not called with the name@marketplace id'
+# The id must come from the manifest's own name, NOT from the chezmoi registry
+# key that resolved the source. The fixture manifest deliberately carries the
+# upstream name so a script that used the key would fail here.
+grep -Fq "plugin install --scope user --force compound-engineering@compound-engineering-plugin" \
+  "$omp_calls" || fail 'install did not use the marketplace id from the source manifest'
+grep -Fq "compound-engineering@compound-engineering-omp" "$omp_calls" &&
+  fail 'install built the id from the chezmoi registry key instead of the manifest'
 
 # --- convergence: a second run re-points instead of failing ---------------- #
 
 : > "$omp_calls"
 run_omp || fail 'second run failed instead of converging'
-grep -Fq 'plugin marketplace remove compound-engineering-omp' "$omp_calls" ||
+grep -Fq 'plugin marketplace remove compound-engineering-plugin' "$omp_calls" ||
   fail 'second run did not remove the stale marketplace registration'
 [[ -e $home/.omp/plugins/enabled ]] || fail 'plugin lost its enabled state on re-run'
 
@@ -166,7 +174,7 @@ rm -f "$market/plugin.json"
 
 build_market
 reset_home
-printf '{"name":"compound-engineering-omp","plugins":[{"name":"something-else"}]}\n' \
+printf '{"name":"compound-engineering-plugin","plugins":[{"name":"something-else"}]}\n' \
   > "$market/.claude-plugin/marketplace.json"
 if run_omp 2>"$scratch/manifest.err"; then
   fail 'a manifest that does not declare the plugin was accepted'
@@ -185,15 +193,20 @@ fi
 grep -q 'no marketplace manifest' "$scratch/missing.err" ||
   fail 'the missing-manifest refusal did not name its reason'
 
-# --- a host without omp skips and succeeds --------------------------------- #
+# --- a host without omp fails loudly --------------------------------------- #
 
+# The command manifest installs omp in the same apply, so an absent binary here
+# is a provisioning failure, not a host that opted out. A silent success would
+# also be an undeclared conditional exit, which check-skip-declarations rejects.
 build_market
 reset_home
 no_omp="$scratch/no-omp-bin"
 mkdir -p "$no_omp"
-env HOME="$home" PATH="$no_omp:/usr/bin:/bin" OMP_CALLS="$omp_calls" bash "$omp_test" \
-  2>"$scratch/skip.err" || fail 'a host without omp did not exit successfully'
-grep -q 'omp is unavailable' "$scratch/skip.err" ||
-  fail 'the omp-absent skip did not state its reason'
+if env HOME="$home" PATH="$no_omp:/usr/bin:/bin" OMP_CALLS="$omp_calls" bash "$omp_test" \
+  2>"$scratch/skip.err"; then
+  fail 'a host without omp exited successfully instead of failing loudly'
+fi
+grep -q 'omp is not on PATH' "$scratch/skip.err" ||
+  fail 'the omp-absent failure did not state its reason'
 
 printf 'omp plugin reconcile: ok\n'

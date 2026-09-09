@@ -17,6 +17,7 @@ set -euo pipefail
 
 usage='usage: test-omp-settings-reconcile.sh OMP_SETTINGS_SCRIPT'
 script=${1:?$usage}
+source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-settings-fixtures
 mkdir -p -- "$scratch_root"
@@ -50,11 +51,15 @@ grep -F 'gemini-3.7-flash' "$script" >/dev/null &&
 
 # run_after_ is load-bearing: omp edits config.yml without changing any chezmoi
 # source fingerprint, so an onchange script would record a clean skip and never
-# re-assert an overwritten value.
-case "run_after_config-omp-settings.sh.tmpl" in
-  run_after_*) ;;
-  *) fail 'the settings reconciler must use the run_after_ lifecycle' ;;
-esac
+# re-assert an overwritten value. The lifecycle lives in the SOURCE filename, not
+# in the rendered output this test is handed, so it is asserted against the
+# source tree — and the onchange spelling must not exist alongside it.
+phase_dir="$source_root/.chezmoiscripts/70-agents"
+[ -f "$phase_dir/run_after_config-omp-settings.sh.tmpl" ] ||
+  fail 'the settings reconciler must use the run_after_ lifecycle'
+for stray in "$phase_dir"/run_onchange_*config-omp-settings.sh.tmpl; do
+  [ -e "$stray" ] && fail "an onchange settings reconciler would never re-assert live drift: $stray"
+done
 
 bash -n "$script" || fail 'rendered script is not valid bash'
 
@@ -111,12 +116,17 @@ cat >"$partial_catalog" <<'EOF'
 ]}
 EOF
 
-# A live config whose every reported top-level key differs from the declaration.
+# `omp config list --json` is a FLAT map keyed by the whole dotted path, whose
+# entries are objects carrying the current value under `value` — it reports
+# every schema key, set or not. A nested-tree fixture would let a reconciler
+# that reads paths as a tree pass here and then fail on every real host.
 live_drifted="$scratch/live-drifted.json"
 cat >"$live_drifted" <<'EOF'
-{"startup":{"setupWizard":true},"setupVersion":0,
- "enabledModels":["something/else"],"disabledProviders":[],
- "modelRoles":{"default":"something/else"}}
+{"startup.setupWizard": {"value": true},
+ "setupVersion": {"value": 0},
+ "enabledModels": {"value": ["something/else"]},
+ "disabledProviders": {"value": []},
+ "modelRoles": {"value": {"default": "something/else"}}}
 EOF
 
 # A live config that already equals the declaration is built from it at runtime.
@@ -173,13 +183,8 @@ script, out = sys.argv[1], sys.argv[2]
 body = open(script).read()
 block = re.search(r"cat >\"\$declared\" <<'JSON'\n(.*?)\nJSON\n", body, re.S)
 declared = json.loads(block.group(1))
-live = {}
-for path, value in declared.items():
-    node = live
-    parts = path.split(".")
-    for p in parts[:-1]:
-        node = node.setdefault(p, {})
-    node[parts[-1]] = value
+# The flat, dotted-key, entry-object shape omp actually emits.
+live = {path: {"value": value} for path, value in declared.items()}
 json.dump(live, open(out, "w"))
 PY
 
@@ -211,6 +216,37 @@ elapsed=$(( $(date +%s) - start ))
 [[ $elapsed -lt 60 ]] || fail "a wedged catalog read was not bounded (took ${elapsed}s)"
 grep -q 'model catalog unavailable' "$scratch/hang.err" ||
   fail 'the wedged read did not fall through to the fail-open branch'
+
+# --- an unreadable live config falls open and still asserts ---------------- #
+
+reset
+live_bad="$scratch/live-bad.json"
+printf 'not json at all\n' > "$live_bad"
+run "$full_catalog" "$live_bad" >"$scratch/badlive.out" 2>"$scratch/badlive.err" ||
+  fail 'an unreadable live config was treated as a failure'
+grep -q 'could not read the live config' "$scratch/badlive.err" ||
+  fail 'the unreadable-live-config skip did not state its reason'
+grep -Fq 'config set modelRoles' "$state" ||
+  fail 'the fail-open run did not fall through to asserting every declared path'
+
+# --- a host without jq skips and succeeds ---------------------------------- #
+
+# A PATH holding omp and nothing else: the jq check is a shell builtin lookup
+# that runs before the script's first external command, so it is reached even
+# without coreutils on PATH.
+reset
+no_jq="$scratch/no-jq-bin"
+mkdir -p "$no_jq"
+cp "$bin/omp" "$no_jq/omp"
+bash_bin=$(command -v bash) || fail 'bash is not on PATH'
+env HOME="$home" PATH="$no_jq" \
+  OMP_CALLS="$calls" OMP_STATE="$state" \
+  OMP_CATALOG="$full_catalog" OMP_LIVE="$live_converged" "$bash_bin" "$script" \
+  >"$scratch/nojq.out" 2>"$scratch/nojq.err" ||
+  fail 'a host without jq did not exit successfully'
+grep -q 'jq is unavailable' "$scratch/nojq.err" ||
+  fail 'the jq-absent skip did not state its reason'
+[[ ! -s $state ]] || fail 'the jq-absent run still wrote settings'
 
 # --- a host without omp skips and succeeds --------------------------------- #
 

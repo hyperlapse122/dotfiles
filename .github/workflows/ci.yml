@@ -70,6 +70,7 @@ jobs:
             "$RUNNER_TEMP/codex-plugins.sh"
           .ci/test-omp-plugin-reconcile.sh "$RUNNER_TEMP/omp-plugins.sh"
           .ci/test-omp-settings-reconcile.sh "$RUNNER_TEMP/omp-settings.sh"
+          .ci/test-omp-mcp-render.sh
           .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
           .ci/test-codex-tokscale-wrapper.sh
           .ci/test-codex-skills-guard.sh
