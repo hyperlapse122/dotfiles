@@ -292,10 +292,11 @@ The source-only trees are also excluded from taplo formatting via
 
 ## Managed agent harnesses
 
-This repository manages **Claude Code** (`claude`), **Google Antigravity CLI** (`agy`), and **OpenAI Codex CLI** (`codex`).
+This repository manages **Claude Code** (`claude`), **Google Antigravity CLI** (`agy`), **OpenAI Codex CLI** (`codex`), and **oh-my-pi** (`omp`).
 
 - **Single source of truth:** `.chezmoidata/agents.yaml` defines MCP servers (`agents.mcp.servers` including Exa web search and Context7), external skills (`agents.skills.external`), and harness settings.
-- **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time, and asserts the same servers into `~/.codex/config.toml`.
+- **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time, renders the same servers into `~/.omp/agent/mcp.json`, and asserts them into `~/.codex/config.toml`.
+- **One model for omp:** every omp role runs `google-antigravity/gemini-3.8-flash:high`, with `tiny` the single exception on `gemini-3.1-flash-lite:minimal`. The allowlist and provider denylist keep the selectable set closed to those two.
 - **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills`, `~/.gemini/skills`, and `~/.codex/skills` pointing to `~/.agents/skills`.
 - **Codex headless metering:** `~/.local/bin/codex` is a wrapper that routes `codex exec` through tokscale and passes every other subcommand to the real binary at `~/.local/bin/codex-bin`.
 
