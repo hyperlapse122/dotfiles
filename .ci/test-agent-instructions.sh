@@ -120,6 +120,8 @@ while IFS='|' read -r owner needle; do
   done
 done <<'HARNESS_NEEDLES'
 claude|This harness is Claude Code. Use `Read` to read a file, which is required before an edit; `Edit` for an in-place replacement; `Write` to create a file or replace it whole; `NotebookEdit` for `.ipynb` cells; `Glob` and `Grep` to search.
+claude|`Bash` also runs a command in the background, and every wait on a dispatched Orca worker MUST run that way (`run_in_background: true`), never in the foreground: a foreground wait holds the turn, so a worker's message, escalation, or question is queued and reaches the run only when the command returns.
+claude|The run stays idle while that wait runs, answers what arrives, and returns to waiting; only the execution mode changes, so the command MUST still be the guide's blocking wait with its explicit timeout, and the run MUST NOT poll the background command's output on a timer.
 claude|One delegation carve-out also applies here: a standing harness instruction may tell the agent not to call the Agent (Task) tool, workflows, or deep research unless the user requested it, and this file is a recognized exception source for it.
 claude|When a skill, command, or workflow the user invoked by name directs a subagent dispatch, that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation; a skill the agent selected on its own does not qualify, and a subagent does not re-claim this carve-out for dispatches of its own.
 claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
