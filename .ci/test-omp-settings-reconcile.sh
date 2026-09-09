@@ -271,18 +271,9 @@ jq -e '(."symbolPreset".value == "nerd") and (."startup.setupWizard".value == fa
 
 # --- convergence: an already-equal host writes nothing --------------------- #
 
-# Build a live config that deep-equals the declaration by replaying the very
-# `config set` calls the drifted run just made.
-python3 - "$script" "$live_converged" <<'PY'
-import json, re, sys
-script, out = sys.argv[1], sys.argv[2]
-body = open(script).read()
-block = re.search(r"cat >\"\$declared\" <<'JSON'\n(.*?)\nJSON\n", body, re.S)
-declared = json.loads(block.group(1))
-# The flat, dotted-key, entry-object shape omp actually emits.
-live = {path: {"value": value} for path, value in declared.items()}
-json.dump(live, open(out, "w"))
-PY
+# Build a live config that deep-equals the declaration, in the flat,
+# dotted-key, entry-object shape omp actually emits.
+jq 'with_entries(.value = {"value": .value})' "$declared_json" > "$live_converged"
 
 reset
 run "$full_catalog" "$live_converged" >"$scratch/conv.out" 2>"$scratch/conv.err" ||
