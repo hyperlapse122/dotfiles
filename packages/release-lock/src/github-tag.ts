@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "./http.js";
 import { authHeaders, ResolutionError } from "./github.js";
 import type { LockedTool, ToolSpec } from "./types.js";
 
@@ -18,9 +19,12 @@ export async function resolveGitHubTag(
   spec: ToolSpec,
   token: string | undefined,
 ): Promise<LockedTool> {
-  const response = await fetch(`https://api.github.com/repos/${spec.source}/tags?per_page=5`, {
-    headers: authHeaders(token),
-  });
+  const response = await fetchWithRetry(
+    `https://api.github.com/repos/${spec.source}/tags?per_page=5`,
+    {
+      headers: authHeaders(token),
+    },
+  );
   if (!response.ok) {
     throw new ResolutionError(spec.source, `tags returned HTTP ${response.status}`);
   }

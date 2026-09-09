@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "./http.js";
 import { ResolutionError } from "./github.js";
 import type { LockedTool, ToolSpec } from "./types.js";
 
@@ -16,7 +17,7 @@ interface GitLabRelease {
 }
 
 export async function resolveGitLabRelease(name: string, spec: ToolSpec): Promise<LockedTool> {
-  const response = await fetch(`${spec.source}/releases/permalink/latest`, {
+  const response = await fetchWithRetry(`${spec.source}/releases/permalink/latest`, {
     headers: { "user-agent": "h82-release-lock" },
   });
   if (!response.ok) {

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { ResolutionError } from "./github.js";
 import { ALL_PLATFORMS, platformKey, type PlatformKey } from "./platforms.js";
 import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
+import { fetchWithRetry } from "./http.js";
 
 export { ResolutionError };
 /**
@@ -21,7 +22,7 @@ export { ResolutionError };
 const HEADERS = { "user-agent": "h82-release-lock" } as const;
 
 async function fetchOrThrow(source: string, url: string): Promise<Response> {
-  const response = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(30_000) });
+  const response = await fetchWithRetry(url, { headers: HEADERS });
   if (!response.ok) {
     throw new ResolutionError(source, `${url} returned HTTP ${response.status}`);
   }
@@ -158,10 +159,9 @@ function sameRegistrableDomain(a: string, b: string): boolean {
 async function resolveTeamViewer(name: string, spec: ToolSpec): Promise<LockedTool> {
   // `fetchOrThrow` checks `response.ok`, which is false for the 302 this
   // resolver exists to read, so the redirect is taken manually here.
-  const response = await fetch(spec.source, {
+  const response = await fetchWithRetry(spec.source, {
     headers: HEADERS,
     redirect: "manual",
-    signal: AbortSignal.timeout(30_000),
   });
   const location = response.headers.get("location");
   if (location === null) {

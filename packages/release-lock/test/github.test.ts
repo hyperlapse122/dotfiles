@@ -147,11 +147,51 @@ describe("resolveGitHubRelease", () => {
     expect(locked.artifacts).toBeUndefined();
   });
 
-  test("a non-200 response fails with the source named", async () => {
-    globalThis.fetch = (async () =>
-      new Response("nope", { status: 404 })) as typeof globalThis.fetch;
+  test("a stub returning 504 once and then a valid release JSON resolves normally", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      if (calls === 1) {
+        return new Response("gateway timeout", {
+          status: 504,
+          headers: { "retry-after": "0" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          tag_name: "v1.2.3",
+          assets: [asset("tool-linux-amd64", `sha256:${SHA}`)],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }) as typeof globalThis.fetch;
 
-    await expect(resolveGitHubRelease("tool", spec(), undefined)).rejects.toThrow(/owner\/repo/);
+    const locked = await resolveGitHubRelease(
+      "tool",
+      spec({
+        asset: ({ os, arch }) => (os === "linux" && arch === "amd64" ? `tool-${os}-${arch}` : null),
+      }),
+      undefined,
+    );
+
+    expect(locked.version).toBe("v1.2.3");
+    expect(calls).toBe(2);
+  });
+
+  test("a stub returning 404 produces the current ResolutionError message and calls fetch exactly once", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response("not found", { status: 404 });
+    }) as typeof globalThis.fetch;
+
+    const error = await resolveGitHubRelease("tool", spec(), undefined).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toBe("owner/repo: releases/latest returned HTTP 404");
+    expect(calls).toBe(1);
   });
 });
 

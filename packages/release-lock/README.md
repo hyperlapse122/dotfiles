@@ -75,6 +75,24 @@ audit and reproducibility; it is not an approval gate. A resolver failure exits
 non-zero and preserves the prior whole entry, so incomplete upstream evidence
 cannot silently shrink the desired lock.
 
+## Retry policy
+
+All upstream HTTP requests pass through the shared `fetchWithRetry` wrapper.
+Transient failures — network and body-read errors, request timeouts, and HTTP
+408, 425, 429, and 5xx responses — are retried automatically. Non-retryable
+responses (2xx success, 3xx redirects, and client errors such as 404) return
+immediately on the first attempt. Retries use exponential backoff with jitter and
+follow standard defaults: 4 attempts (1 initial attempt plus 3 retries), a
+250 ms base delay, a 4 s delay cap, a 30 s timeout per attempt, and a 45 s
+wall-clock budget for the entire operation — each attempt's own timeout is
+clamped to what remains of that budget, so the budget bounds the whole call and
+not just the gaps between attempts. An upstream `Retry-After` header (seconds or
+HTTP-date) is honored within the 4 s delay cap; when the server names a cooldown
+longer than the call can honor, the retries stop and that response is returned
+rather than spending the remaining attempts inside the window the server asked
+us to stay out of. If a source still fails after all retries are exhausted, the
+process exits non-zero while keeping that source's previous lock entry.
+
 ## Adding a tool
 
 Add an entry to [`src/registry.ts`](src/registry.ts) naming its resolver kind,

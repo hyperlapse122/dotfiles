@@ -60,19 +60,27 @@ function capture(): { values: string[]; write(value: string): void } {
 interface SourceStub {
   status: number;
   tagName?: string;
+  headers?: Record<string, string>;
 }
 
 /** Route fetch by the `/repos/<source>/` in the URL; anything unmatched throws. */
 function stubFetchBySource(stubs: Record<string, SourceStub>): void {
   globalThis.fetch = (async (input) => {
-    const url = String(input);
+    const url = input instanceof Request ? input.url : String(input);
     for (const [source, stub] of Object.entries(stubs)) {
       if (!url.includes(`/repos/${source}/`)) continue;
-      if (stub.status !== 200) return new Response("nope", { status: stub.status });
-      return new Response(JSON.stringify({ tag_name: stub.tagName, assets: [] }), {
+      if (stub.status !== 200) {
+        const init: ResponseInit = { status: stub.status };
+        if (stub.headers) init.headers = stub.headers;
+        return new Response("nope", init);
+      }
+      const init: ResponseInit = {
         status: 200,
-        headers: { "content-type": "application/json" },
-      });
+        headers: stub.headers
+          ? { "content-type": "application/json", ...stub.headers }
+          : { "content-type": "application/json" },
+      };
+      return new Response(JSON.stringify({ tag_name: stub.tagName, assets: [] }), init);
     }
     throw new Error(`unexpected fetch: ${url}`);
   }) as typeof globalThis.fetch;
@@ -150,6 +158,24 @@ describe("resolveAll", () => {
     expect(failures[0]).toContain("owner/bad");
   });
 
+  test("a source that keeps returning 5xx stays in failures while other sources resolve", async () => {
+    const registry: Registry = {
+      good: { kind: "githubRelease", source: "owner/good" },
+      failed: { kind: "githubRelease", source: "owner/failed" },
+    };
+    stubFetchBySource({
+      "owner/good": { status: 200, tagName: "v1" },
+      "owner/failed": { status: 503, headers: { "retry-after": "0" } },
+    });
+
+    const { lock, failures } = await resolveAll(undefined, registry);
+
+    expect(Object.keys(lock.releases.tools)).toEqual(["good"]);
+    expect(lock.releases.tools["good"]?.version).toBe("v1");
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("owner/failed");
+  });
+
   test("an empty registry resolves to an empty lock with no failures", async () => {
     const { lock, failures } = await resolveAll(undefined, {});
     expect(lock).toEqual({ releases: { tools: {} } });
@@ -199,6 +225,34 @@ describe("runCli", () => {
       version: "1.0.0",
     });
     expect(written.releases.tools["retired"]?.version).toBe("v1");
+  });
+
+  test("a source that keeps returning 5xx stays in failures while other sources resolve, and the CLI exit code is 1", async () => {
+    const path = join(await scratch(), "releases.json");
+    await writeFile(path, `${JSON.stringify(locked("v1"))}\n`);
+    const stdout = capture();
+    const stderr = capture();
+    const registry: Registry = {
+      good: { kind: "githubRelease", source: "owner/good" },
+      failed: { kind: "githubRelease", source: "owner/failed" },
+    };
+    stubFetchBySource({
+      "owner/good": { status: 200, tagName: "v2" },
+      "owner/failed": { status: 503, headers: { "retry-after": "0" } },
+    });
+
+    const exit = await runCli([], {
+      defaultPath: path,
+      stdout,
+      stderr,
+      resolve: () => resolveAll(undefined, registry),
+    });
+
+    expect(exit).toBe(1);
+    expect(stderr.values.join("")).toContain("owner/failed");
+    const written = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
+    expect(written.releases.tools["good"]?.version).toBe("v2");
+    expect(written.releases.tools["failed"]?.version).toBe("1.0.0");
   });
 
   test("a clean default refresh prunes retired entries", async () => {

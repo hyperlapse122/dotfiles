@@ -38,10 +38,36 @@ describe("resolveGitLabRelease", () => {
   });
 
   test("a non-200 response fails with the source named", async () => {
-    stubRelease("nope", 500);
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response("nope", {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof globalThis.fetch;
 
     const error = await resolveGitLabRelease("glab", SPEC).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ResolutionError);
     expect((error as Error).message).toMatch(/34675721/);
+    expect((error as Error).message).toContain("releases/permalink/latest returned HTTP 404");
+    expect(calls).toBe(1);
+  });
+
+  test("a persistent 503 is retried and still fails with the source named", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      // `retry-after: 0` keeps the exhaustion path fast without real backoff.
+      return new Response("unavailable", {
+        status: 503,
+        headers: { "retry-after": "0" },
+      });
+    }) as typeof globalThis.fetch;
+
+    const error = await resolveGitLabRelease("glab", SPEC).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ResolutionError);
+    expect((error as Error).message).toContain("releases/permalink/latest returned HTTP 503");
+    expect(calls).toBeGreaterThan(1);
   });
 });
