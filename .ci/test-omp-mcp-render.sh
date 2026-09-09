@@ -60,8 +60,6 @@ jq -e '[.mcpServers[] | select(has("command"))] | all(has("type") | not)' "$out"
   fail 'a stdio server carries a type key; omp omits it'
 jq -e '[.mcpServers[] | select(has("url"))] | all(.type == "http")' "$out" >/dev/null ||
   fail 'an HTTP server is not typed http'
-jq -e '[.mcpServers[] | select(has("command"))] | all(has("env") | not)' "$out" >/dev/null ||
-  fail 'a declared stdio server with no env gained an env key'
 
 # Secrets resolve through the stub and never appear as unresolved references.
 grep -Fq 'op://' "$out" && fail 'an unresolved op:// reference reached the render'

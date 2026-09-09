@@ -4,8 +4,8 @@ set -euo pipefail
 # Proves the omp plugin reconciler rendered from
 # .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:
 # it carries the declared row, re-points the marketplace instead of trusting an
-# already-registered one, converges on a re-run, skips a host without omp,
-# recovers previous marketplace registration on refresh failures, and
+# already-registered one, converges on a re-run, fails loudly on a host without
+# omp, recovers the previous marketplace registration on refresh failures, and
 # refuses a marketplace source that would make omp drop most of its skills.
 #
 # It is separate from test-claude-agy-plugin-reconcile.sh because omp's identity
@@ -103,7 +103,6 @@ register_marketplace() {
   local mid=$1 msrc=$2
   mkdir -p "$home/.omp/plugins/marketplaces"
   printf '%s\n' "$msrc" >"$home/.omp/plugins/marketplaces/$mid"
-  printf '%s\n' "$msrc" >"$home/.omp/plugins/declared-marketplace"
 }
 
 get_registered_marketplace() {
@@ -165,13 +164,11 @@ case "$*" in
     [[ -e $state/marketplaces/$id ]] &&
       { printf 'marketplace already registered: %s\n' "$id" >&2; exit 1; }
     printf '%s\n' "$src" >"$state/marketplaces/$id"
-    printf '%s\n' "$src" >"$state/declared-marketplace"
     ;;
   "plugin marketplace remove "*)
     id=$4
     if [[ -e $state/marketplaces/$id ]]; then
       rm -f "$state/marketplaces/$id"
-      rm -f "$state/declared-marketplace"
     else
       printf 'no such marketplace: %s\n' "$id" >&2; exit 1
     fi

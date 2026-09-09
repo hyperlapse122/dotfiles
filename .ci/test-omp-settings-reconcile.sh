@@ -55,6 +55,9 @@ for needle in \
   '"skills.enableCodexUser": false' \
   '"commands.enableClaudeUser": false' \
   '"commands.enableOpencodeUser": false' \
+  '"skills.enabled": true' \
+  '"skills.enableAgentsUser": true' \
+  '"skills.enablePiUser": true' \
   'omp config set'
 do
   grep -F "$needle" "$script" >/dev/null || fail "rendered script lost: $needle"
@@ -212,6 +215,9 @@ cat >"$live_drifted" <<'EOF'
  "skills.enableCodexUser": {"value": true},
  "commands.enableClaudeUser": {"value": true},
  "commands.enableOpencodeUser": {"value": true},
+ "skills.enabled": {"value": false},
+ "skills.enableAgentsUser": {"value": false},
+ "skills.enablePiUser": {"value": false},
  "enabledModels": {"value": ["something/else"]},
  "disabledProviders": {"value": []},
  "modelRoles": {"value": {"default": "something/else"}}}
@@ -276,6 +282,13 @@ for path in \
 do
   [[ $(grep -Fxc "config set $path false" "$state") == 1 ]] ||
     fail "the drifted run did not turn $path false exactly once"
+done
+# The managed skills tree is pinned ON, so a host that drifted it off is
+# restored. Leaving these undeclared would let one /settings toggle blank the
+# tree with no apply that puts it back.
+for path in skills.enabled skills.enableAgentsUser skills.enablePiUser; do
+  [[ $(grep -Fxc "config set $path true" "$state") == 1 ]] ||
+    fail "the drifted run did not turn $path true exactly once"
 done
 grep -q 'declared paths asserted' "$scratch/ok.out" ||
   fail 'the run did not report how many paths it asserted'
@@ -373,28 +386,31 @@ no_jq="$scratch/no-jq-bin"
 mkdir -p "$no_jq"
 cp "$bin/omp" "$no_jq/omp"
 bash_bin=$(command -v bash) || fail 'bash is not on PATH'
-if env HOME="$home" PATH="$no_jq" \
+env HOME="$home" PATH="$no_jq" \
   OMP_CALLS="$calls" OMP_STATE="$state" \
   OMP_CATALOG="$full_catalog" OMP_LIVE="$live_converged" "$bash_bin" "$script" \
-  >"$scratch/nojq.out" 2>"$scratch/nojq.err"; then
-  fail 'a host without jq exited successfully'
-fi
-grep -q 'preflight: jq is not on PATH' "$scratch/nojq.err" ||
-  fail 'the jq-absent failure did not name the missing binary'
+  >"$scratch/nojq.out" 2>"$scratch/nojq.err" ||
+  fail 'a host without jq aborted the apply instead of reporting a skip'
+grep -q 'declared settings were NOT asserted' "$scratch/nojq.err" ||
+  fail 'the jq-absent skip did not say the settings were not asserted'
 [[ ! -s $state ]] || fail 'the jq-absent run still wrote settings'
 
-# --- a host without omp fails the apply ------------------------------------ #
+# --- a host without omp skips loudly and lets the apply continue ----------- #
+
+# 65-commands fails open by design, so omp can be legitimately absent here, and
+# this run_after_ script runs on every apply. Aborting would permanently strand
+# 80-keys and 90-src, which have nothing to do with omp. What the skip must not
+# do is read as a converged host, so the message has to disclaim the assertion.
 
 reset
 no_omp="$scratch/no-omp-bin"
 mkdir -p "$no_omp"
-if env HOME="$home" PATH="$no_omp:/usr/bin:/bin" OMP_CALLS="$calls" OMP_STATE="$state" \
+env HOME="$home" PATH="$no_omp:/usr/bin:/bin" OMP_CALLS="$calls" OMP_STATE="$state" \
   OMP_CATALOG="$full_catalog" OMP_LIVE="$live_converged" bash "$script" \
-  >"$scratch/skip.out" 2>"$scratch/skip.err"; then
-  fail 'a host without omp exited successfully'
-fi
-grep -q 'preflight: omp is not on PATH' "$scratch/skip.err" ||
-  fail 'the omp-absent failure did not name the missing binary'
+  >"$scratch/skip.out" 2>"$scratch/skip.err" ||
+  fail 'a host without omp aborted the apply instead of reporting a skip'
+grep -q 'declared settings were NOT asserted' "$scratch/skip.err" ||
+  fail 'the omp-absent skip did not say the settings were not asserted'
 [[ ! -s $state ]] || fail 'the omp-absent run still wrote settings'
 
 printf 'omp settings reconcile: ok\n'

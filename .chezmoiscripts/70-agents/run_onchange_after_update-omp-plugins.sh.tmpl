@@ -9,9 +9,12 @@
 # omp identifies an installed plugin as <name>@<marketplace>, so a row's
 # marketplace is part of its identity rather than only a source-resolution
 # detail. The install verbs are not idempotent the way agy's are: a marketplace
-# already registered under the same name keeps its old source, so each row is
-# re-pointed by removing the marketplace, adding it back at the pinned path, and
-# installing with --force.
+# already registered under the same name keeps its old source, so a row whose
+# registration points somewhere else is re-pointed by removing the marketplace,
+# adding it back at the pinned path, and installing with --force. A row already
+# registered at the pinned path skips the remove and the add, and a failure
+# after a re-point restores the previous registration rather than leaving the
+# host with none.
 #
 # THE MARKETPLACE ID IS NOT THE REGISTRY KEY. omp takes the id from the `name`
 # field inside the source's .claude-plugin/marketplace.json, which is the
@@ -68,30 +71,45 @@ marketplace_id() {
 
 # Reads the source path currently registered for a marketplace id from
 # `omp plugin marketplace list`, skipping the header and non-indented lines.
+# The loop accumulates rather than returning on the first match: a conditional
+# `return 0` is an undeclared success exit, which check-skip-declarations
+# rejects. An unregistered id yields the empty string.
+# An UNREADABLE listing is not an absent registration. Swallowing the read's
+# exit status would report every id as unregistered, which skips the remove and
+# then hard-fails the add against a registration omp still holds — turning a
+# converged host into a failing one on every apply.
 registered_marketplace_source() {
-  local target_id=$1 line id rest
+  local target_id=$1 listing line id rest found=
+  listing=$(omp plugin marketplace list 2>/dev/null) ||
+    die "cannot read the omp marketplace registry while resolving $target_id"
   while IFS= read -r line; do
     [[ $line =~ ^[[:space:]]+([^[:space:]]+)[[:space:]]+(.*)$ ]] || continue
     id=${BASH_REMATCH[1]}
     rest=${BASH_REMATCH[2]}
-    if [[ $id == "$target_id" ]]; then
-      printf '%s\n' "$rest"
-      return 0
+    if [[ $id == "$target_id" && -z $found ]]; then
+      found=$rest
     fi
-  done < <(omp plugin marketplace list 2>/dev/null || true)
-  return 0
+  done <<<"$listing"
+  printf '%s\n' "$found"
 }
 
-# Restores the previously registered source if a refresh step fails after
-# removal. Because omp allows only one registration per id, restoring after
-# a successful replacement add removes that replacement first.
+# Dies with the original failure, first restoring the previously registered
+# source when this row actually re-pointed the marketplace. Nothing was
+# re-pointed when the id was unregistered or already carried the desired
+# source, and re-adding then is churn that can fail on its own. Because omp
+# allows only one registration per id, restoring after a successful
+# replacement add removes that replacement first.
 restore_marketplace() {
-  local market_id=$1 prev_source=$2 orig_err=$3
+  local market_id=$1 prev_source=$2 desired=$3 orig_err=$4 restored=
+  [[ -n $prev_source && $prev_source != "$desired" ]] || die "$orig_err"
   omp plugin marketplace remove "$market_id" >/dev/null 2>&1 || true
-  if ! omp plugin marketplace add "$prev_source" >/dev/null 2>&1 || \
-     [[ $(registered_marketplace_source "$market_id") != "$prev_source" ]]; then
+  # The verification read runs in a subshell so a registry it cannot read ends
+  # as an empty result here rather than replacing the original failure with a
+  # read error.
+  restored=$(omp plugin marketplace add "$prev_source" >/dev/null 2>&1 &&
+    registered_marketplace_source "$market_id") || restored=
+  [[ $restored == "$prev_source" ]] ||
     die "$orig_err; failed to restore marketplace $market_id at $prev_source"
-  fi
   die "$orig_err"
 }
 
@@ -152,41 +170,24 @@ for row in "${PLUGINS[@]}"; do
     die "preflight: cannot read the marketplace id for $market"
   id="${name}@${market_id}"
   prev_source=$(registered_marketplace_source "$market_id")
-  if [[ $prev_source == "$source" ]]; then
-    :
-  else
+  if [[ $prev_source != "$source" ]]; then
     # Re-point rather than update: a registered marketplace keeps its recorded
     # source, so a version bump would otherwise install the superseded path.
     if [[ -n $prev_source ]]; then
       omp plugin marketplace remove "$market_id" >/dev/null 2>&1 || true
     fi
-    if ! omp plugin marketplace add "$source"; then
-      orig_err="marketplace add failed for $market ($market_id)"
-      if [[ -n $prev_source ]]; then
-        restore_marketplace "$market_id" "$prev_source" "$orig_err"
-      else
-        die "$orig_err"
-      fi
-    fi
+    omp plugin marketplace add "$source" ||
+      restore_marketplace "$market_id" "$prev_source" "$source" \
+        "marketplace add failed for $market ($market_id)"
   fi
 
-  if ! omp plugin install --scope user --force "$id"; then
-    orig_err="plugin install failed for $id"
-    if [[ -n $prev_source && $prev_source != "$source" ]]; then
-      restore_marketplace "$market_id" "$prev_source" "$orig_err"
-    else
-      die "$orig_err"
-    fi
-  fi
+  omp plugin install --scope user --force "$id" ||
+    restore_marketplace "$market_id" "$prev_source" "$source" \
+      "plugin install failed for $id"
 
-  if ! omp plugin enable --scope user "$id"; then
-    orig_err="plugin enable failed for $id"
-    if [[ -n $prev_source && $prev_source != "$source" ]]; then
-      restore_marketplace "$market_id" "$prev_source" "$orig_err"
-    else
-      die "$orig_err"
-    fi
-  fi
+  omp plugin enable --scope user "$id" ||
+    restore_marketplace "$market_id" "$prev_source" "$source" \
+      "plugin enable failed for $id"
 done
 {{- end }}
 {{- end }}
