@@ -13,7 +13,7 @@ set -euo pipefail
 #   - convergence is read-then-compare, so a converged host writes nothing
 #   - a declared path omp does not report is a typo, not a silent skip
 #   - a wedged omp read is bounded without GNU timeout
-#   - a host without omp or jq skips and still succeeds
+#   - a host without omp or jq fails the apply
 
 usage='usage: test-omp-settings-reconcile.sh OMP_SETTINGS_SCRIPT'
 script=${1:?$usage}
@@ -45,6 +45,19 @@ for needle in \
   '"completion.notify": "off"' \
   '"error.notify": "off"' \
   '"ask.notify": "off"' \
+  '"astGrep.enabled": true' \
+  '"skills.enableAgentsProject": false' \
+  '"skills.enableClaudeProject": false' \
+  '"skills.enablePiProject": false' \
+  '"commands.enableClaudeProject": false' \
+  '"commands.enableOpencodeProject": false' \
+  '"skills.enableClaudeUser": false' \
+  '"skills.enableCodexUser": false' \
+  '"commands.enableClaudeUser": false' \
+  '"commands.enableOpencodeUser": false' \
+  '"skills.enabled": true' \
+  '"skills.enableAgentsUser": true' \
+  '"skills.enablePiUser": true' \
   'omp config set'
 do
   grep -F "$needle" "$script" >/dev/null || fail "rendered script lost: $needle"
@@ -192,11 +205,23 @@ cat >"$live_drifted" <<'EOF'
  "error.notify": {"value": "on"},
  "ask.notify": {"value": "on"},
  "theme": {"value": "dark"},
+ "astGrep.enabled": {"value": false},
+ "skills.enableAgentsProject": {"value": true},
+ "skills.enableClaudeProject": {"value": true},
+ "skills.enablePiProject": {"value": true},
+ "commands.enableClaudeProject": {"value": true},
+ "commands.enableOpencodeProject": {"value": true},
+ "skills.enableClaudeUser": {"value": true},
+ "skills.enableCodexUser": {"value": true},
+ "commands.enableClaudeUser": {"value": true},
+ "commands.enableOpencodeUser": {"value": true},
+ "skills.enabled": {"value": false},
+ "skills.enableAgentsUser": {"value": false},
+ "skills.enablePiUser": {"value": false},
  "enabledModels": {"value": ["something/else"]},
  "disabledProviders": {"value": []},
  "modelRoles": {"value": {"default": "something/else"}}}
 EOF
-
 # A live config that already equals the declaration is built from it at runtime.
 live_converged="$scratch/live-converged.json"
 
@@ -242,6 +267,29 @@ for path in completion.notify error.notify ask.notify; do
   [[ $(grep -Fxc "config set $path off" "$state") == 1 ]] ||
     fail "the drifted run did not turn $path off exactly once"
 done
+[[ $(grep -Fxc "config set astGrep.enabled true" "$state") == 1 ]] ||
+  fail "the drifted run did not turn astGrep.enabled true exactly once"
+for path in \
+  skills.enableAgentsProject \
+  skills.enableClaudeProject \
+  skills.enablePiProject \
+  commands.enableClaudeProject \
+  commands.enableOpencodeProject \
+  skills.enableClaudeUser \
+  skills.enableCodexUser \
+  commands.enableClaudeUser \
+  commands.enableOpencodeUser
+do
+  [[ $(grep -Fxc "config set $path false" "$state") == 1 ]] ||
+    fail "the drifted run did not turn $path false exactly once"
+done
+# The managed skills tree is pinned ON, so a host that drifted it off is
+# restored. Leaving these undeclared would let one /settings toggle blank the
+# tree with no apply that puts it back.
+for path in skills.enabled skills.enableAgentsUser skills.enablePiUser; do
+  [[ $(grep -Fxc "config set $path true" "$state") == 1 ]] ||
+    fail "the drifted run did not turn $path true exactly once"
+done
 grep -q 'declared paths asserted' "$scratch/ok.out" ||
   fail 'the run did not report how many paths it asserted'
 
@@ -268,6 +316,18 @@ jq -e '.theme.value == "dark"' "$live_applied" >/dev/null ||
 jq -e '(."symbolPreset".value == "nerd") and (."startup.setupWizard".value == false)' \
   "$live_applied" >/dev/null ||
   fail 'the pre-existing declared keys did not converge alongside the new ones'
+jq -e '
+  (."astGrep.enabled".value == true) and
+  (."skills.enableAgentsProject".value == false) and
+  (."skills.enableClaudeProject".value == false) and
+  (."skills.enablePiProject".value == false) and
+  (."commands.enableClaudeProject".value == false) and
+  (."commands.enableOpencodeProject".value == false) and
+  (."skills.enableClaudeUser".value == false) and
+  (."skills.enableCodexUser".value == false) and
+  (."commands.enableClaudeUser".value == false) and
+  (."commands.enableOpencodeUser".value == false)' "$live_applied" >/dev/null ||
+  fail 'the new declared keys did not converge to their boolean values'
 
 # --- convergence: an already-equal host writes nothing --------------------- #
 
@@ -316,7 +376,7 @@ grep -q 'could not read the live config' "$scratch/badlive.err" ||
 grep -Fq 'config set modelRoles' "$state" ||
   fail 'the fail-open run did not fall through to asserting every declared path'
 
-# --- a host without jq skips and succeeds ---------------------------------- #
+# --- a host without jq fails the apply ------------------------------------- #
 
 # A PATH holding omp and nothing else: the jq check is a shell builtin lookup
 # that runs before the script's first external command, so it is reached even
@@ -330,12 +390,17 @@ env HOME="$home" PATH="$no_jq" \
   OMP_CALLS="$calls" OMP_STATE="$state" \
   OMP_CATALOG="$full_catalog" OMP_LIVE="$live_converged" "$bash_bin" "$script" \
   >"$scratch/nojq.out" 2>"$scratch/nojq.err" ||
-  fail 'a host without jq did not exit successfully'
-grep -q 'jq is unavailable' "$scratch/nojq.err" ||
-  fail 'the jq-absent skip did not state its reason'
+  fail 'a host without jq aborted the apply instead of reporting a skip'
+grep -q 'declared settings were NOT asserted' "$scratch/nojq.err" ||
+  fail 'the jq-absent skip did not say the settings were not asserted'
 [[ ! -s $state ]] || fail 'the jq-absent run still wrote settings'
 
-# --- a host without omp skips and succeeds --------------------------------- #
+# --- a host without omp skips loudly and lets the apply continue ----------- #
+
+# 65-commands fails open by design, so omp can be legitimately absent here, and
+# this run_after_ script runs on every apply. Aborting would permanently strand
+# 80-keys and 90-src, which have nothing to do with omp. What the skip must not
+# do is read as a converged host, so the message has to disclaim the assertion.
 
 reset
 no_omp="$scratch/no-omp-bin"
@@ -343,8 +408,9 @@ mkdir -p "$no_omp"
 env HOME="$home" PATH="$no_omp:/usr/bin:/bin" OMP_CALLS="$calls" OMP_STATE="$state" \
   OMP_CATALOG="$full_catalog" OMP_LIVE="$live_converged" bash "$script" \
   >"$scratch/skip.out" 2>"$scratch/skip.err" ||
-  fail 'a host without omp did not exit successfully'
-grep -q 'omp is unavailable' "$scratch/skip.err" ||
-  fail 'the omp-absent skip did not state its reason'
+  fail 'a host without omp aborted the apply instead of reporting a skip'
+grep -q 'declared settings were NOT asserted' "$scratch/skip.err" ||
+  fail 'the omp-absent skip did not say the settings were not asserted'
+[[ ! -s $state ]] || fail 'the omp-absent run still wrote settings'
 
 printf 'omp settings reconcile: ok\n'

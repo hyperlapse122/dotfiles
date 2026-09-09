@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Proves dot_omp/private_agent/private_readonly_mcp.json.tmpl renders omp's
 # native MCP schema, which differs from every sibling: stdio entries omit
-# `type`, HTTP entries carry `type: "http"`, and OAuth metadata is an
-# `auth: {type: "oauth"}` record. Those three shapes are the whole reason omp
-# has its own renderer instead of reusing the universal one, and nothing else
-# in CI exercises them.
+# `type` and forward `env`, HTTP entries carry `type: "http"`, and OAuth
+# metadata is an `auth: {type: "oauth"}` record. Those shapes are the whole
+# reason omp has its own renderer instead of reusing the universal one, and
+# nothing else in CI exercises them.
 #
 # 1Password references are resolved through a STUB `op`, never the real vault:
 # a render that reached the live store would leave working Context7 and Exa
@@ -73,6 +73,23 @@ render "$oauth" "$scratch/oauth.json" "$scratch/oauth.err" ||
   { cat "$scratch/oauth.err" >&2; fail 'an oauth server failed to render'; }
 jq -e '.mcpServers.oauthy.auth.type == "oauth"' "$scratch/oauth.json" >/dev/null ||
   fail 'oauth metadata did not render as an auth record'
+
+# --- stdio env forwarding and http env exclusion --------------------------- #
+
+env_override='{"chezmoi":{"os":"linux"},"agents":{"mcp":{"servers":[
+  {"name":"custom_stdio","transport":"stdio","command":"dummy-cmd","args":["--flag"],"env":{"FOO":"bar","NUM_VAR":"123"}},
+  {"name":"bare_stdio","transport":"stdio","command":"bare-cmd","args":[]},
+  {"name":"http_with_env","transport":"http","url":"https://example.invalid/mcp","env":{"IGNORED":"true"}}
+]}}}'
+render "$env_override" "$scratch/env.json" "$scratch/env.err" ||
+  { cat "$scratch/env.err" >&2; fail 'env override failed to render'; }
+
+jq -e '.mcpServers.custom_stdio.env == {"FOO":"bar","NUM_VAR":"123"}' "$scratch/env.json" >/dev/null ||
+  fail 'stdio server with env did not render the expected env map'
+jq -e '.mcpServers.bare_stdio | has("env") | not' "$scratch/env.json" >/dev/null ||
+  fail 'stdio server without env rendered an env key'
+jq -e '.mcpServers.http_with_env | has("env") | not' "$scratch/env.json" >/dev/null ||
+  fail 'http server rendered an env key; env forwarding is stdio-only'
 
 # --- the two fail-closed guards -------------------------------------------- #
 
