@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-09-07T01:13:26Z"
+    cursor: "2026-09-09T03:38:35Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -713,7 +713,7 @@ items:
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "refactor(ghostty): declare the quick-terminal chord as a KDE desktop action"
+    body: "refactor(ghostty): declare the quick-terminal chord as a KDE desktop action - the quick-terminal shortcut is bound inside Ghostty's own config, so KDE cannot see or arbitrate it; declaring it as a desktop action would let the shortcut live where the rest of the desktop's bindings live."
     author_class: "teammate"
     category: "chore"
     existing_ack: true
@@ -721,12 +721,12 @@ items:
     id: "hyperlapse122/dotfiles#371"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/371"
-    updated_at: "2026-09-07T01:03:32Z"
+    updated_at: "2026-09-07T01:18:03Z"
   "gh-issues:hyperlapse122/dotfiles#395":
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "refactor(agents): replace the skills symlink with per-skill links on every harness"
+    body: "refactor(agents): replace the skills symlink with per-skill links on every harness - a single directory symlink couples every harness to one skills tree, so per-skill links would let each harness receive only the skills it declares."
     author_class: "teammate"
     category: "chore"
     existing_ack: true
@@ -734,7 +734,7 @@ items:
     id: "hyperlapse122/dotfiles#395"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/395"
-    updated_at: "2026-09-07T01:07:11Z"
+    updated_at: "2026-09-07T01:18:08Z"
   "gh-issues:hyperlapse122/dotfiles#396":
     source: "gh-issues"
     status: "closed"
@@ -867,7 +867,7 @@ items:
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "docs(agents): close the gaps that let a review finding go unapplied - the agents instruction template already says an agent must fix review findings in the run that found them"
+    body: "docs(agents): close the gaps that let a review finding go unapplied - the instruction core does not fully pin when a review finding may be deferred instead of fixed in the reviewed change, so an actionable finding can slip out of the run that found it."
     author_class: "teammate"
     category: "docs"
     existing_ack: true
@@ -875,19 +875,120 @@ items:
     id: "hyperlapse122/dotfiles#404"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/404"
-    updated_at: "2026-09-07T01:13:26Z"
+    updated_at: "2026-09-07T01:18:25Z"
+  "gh-issues:hyperlapse122/dotfiles#436":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "feat(agents): trust ~/src and ~/.local/share/worktrees on every agent harness - each harness asks a per-directory trust question and stores the answer in its own place, and a newly minted Orca worktree re-triggers it; an unattended run cannot answer, so the harness blocks or runs degraded. Open design questions remain on prefix-versus-per-path trust and on Antigravity's trust store."
+    author_class: "teammate"
+    category: "feature"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#436"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/436"
+    updated_at: "2026-09-08T11:16:56Z"
+  "gh-issues:hyperlapse122/dotfiles#438":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(agents): bound and reap Orca-dispatched review workers - the instruction core routes every dispatch through Orca and bans the bundled runners, but nothing replaced the bounding contract those runners provided; a cross-model review pass hung about 52 minutes and 143k tokens with no verdict and left 11 agent processes resident. Covers five defects, four fixable in this repo and one an upstream Orca bug filed with its local mitigation."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#438"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/438"
+    updated_at: "2026-09-08T13:19:32Z"
+  "gh-issues:hyperlapse122/dotfiles#446":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(omp): keep the old marketplace registered when a plugin refresh fails - the omp plugin reconciler removes the existing marketplace before add, install, and enable, so any failure in that window leaves no marketplace registered, and the run_onchange script will not retry until its rendered content changes. P2 review finding left unapplied on PR #445."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#446"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/446"
+    updated_at: "2026-09-09T03:38:17Z"
+  "gh-issues:hyperlapse122/dotfiles#447":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(omp): declare the skill discovery scope the restore left to upstream defaults - the pre-retirement declaration set the three skills.enable* keys to false, and the omp restore did not carry them back, so project-scope skill discovery follows whatever upstream defaults to while omp runs inside arbitrary repository checkouts. P2 security-lens finding left unapplied on PR #445."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#447"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/447"
+    updated_at: "2026-09-09T03:38:20Z"
+  "gh-issues:hyperlapse122/dotfiles#448":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "docs(agents): settle whether omp's instruction may name ast_grep - a reviewer claims a fresh omp install disables astGrep by default, which would make the shared instruction name a tool the agent cannot call; upstream documentation contradicts the claim, so the question needs a verified answer on a real install. P2 finding left unapplied on PR #445."
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#448"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/448"
+    updated_at: "2026-09-09T03:38:22Z"
+  "gh-issues:hyperlapse122/dotfiles#449":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(omp): make the settings reconciler's missing-precondition skips visible - the omp settings reconciler exits successfully when omp or jq is absent, so a host that never receives its model policy looks identical to one that did and dotfiles-skips reports nothing. The reviewer's contract-violation claim is wrong, but the visibility gap survives. P2 finding left unapplied on PR #445."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#449"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/449"
+    updated_at: "2026-09-09T03:38:30Z"
+  "gh-issues:hyperlapse122/dotfiles#450":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "test(omp): cover the plugin removal loop the empty declaration renders away - the removal set is declared empty, so the rendered reconciler omits the uninstall loop entirely and no test can reach it; the loop builds its uninstall id from the registry key rather than the manifest, an asymmetry worth pinning before the first removal activates it. P2 testing-lens finding left unapplied on PR #445."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#450"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/450"
+    updated_at: "2026-09-09T03:38:32Z"
+  "gh-issues:hyperlapse122/dotfiles#451":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(omp): forward stdio env in the omp MCP renderer, or say why not - omp's MCP template drops the stdio env field that the universal renderer forwards, latent only because no declared server carries env today; the first one that does will reach omp without its environment and look like a broken server. P3 maintainability finding left unapplied on PR #445."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#451"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/451"
+    updated_at: "2026-09-09T03:38:35Z"
 last_run:
-  timestamp: "2026-09-07T10:17:00+09:00"
+  timestamp: "2026-09-09T11:48:56Z"
   outcome: "completed"
-  writer: "sweep-MS-7D91-dffeb1cc-2026-09-07"
+  writer: "sweep-MS-7D91-f95e4373-2026-09-09"
   counts:
     gh-issues:
       ack_deferred: 0
-      acknowledged: 11
-      closed: 3
+      already_acked: 3
+      closed: 0
       fetched: 11
-      in_plan: 11
       media_analyzed: 0
-      new: 11
-      new_ack_labels: 11
-      new_closeout_labels: 3
+      newly_acked: 8
