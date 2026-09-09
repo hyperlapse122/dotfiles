@@ -262,14 +262,15 @@ describe("resolveVendorManifest teamviewer", () => {
   const versioned =
     "https://dl.teamviewer.invalid/download/linux/version_15x/teamviewer_15.81.5.x86_64.rpm";
 
-  test("records the redirect target's version, version-only", async () => {
+  test("the TeamViewer 302-with-location stub still resolves the version with a single fetch call", async () => {
     const requests = stubRoutes({ [source]: redirect(versioned) });
 
     const locked = await resolveVendorManifest("teamviewer", spec);
 
     expect(locked.version).toBe("15.81.5");
     expect(locked.artifacts).toBeUndefined();
-    // The 115 MB package body is never fetched: only the rolling URL is requested.
+    // The 115 MB package body is never fetched: only the rolling URL is requested once.
+    expect(requests).toHaveLength(1);
     expect(requests).toEqual([source]);
   });
 
@@ -362,7 +363,7 @@ describe("resolveVendorManifest onePassword", () => {
   });
 
   test("raises ResolutionError when the feed fetch fails", async () => {
-    stubRoutes({ [ONE_PASSWORD_SOURCE]: () => new Response("unavailable", { status: 503 }) });
+    stubRoutes({ [ONE_PASSWORD_SOURCE]: () => new Response("unavailable", { status: 404 }) });
 
     const error = await resolveVendorManifest("1password", onePasswordSpec()).catch(
       (e: unknown) => e,
@@ -460,7 +461,7 @@ describe("resolveVendorManifest flutter", () => {
 
   test("raises ResolutionError when manifest request fails", async () => {
     stubRoutes({
-      [`${FLUTTER_SOURCE}/releases_linux.json`]: () => new Response("failed", { status: 500 }),
+      [`${FLUTTER_SOURCE}/releases_linux.json`]: () => new Response("failed", { status: 404 }),
       [`${FLUTTER_SOURCE}/releases_macos.json`]: text(FLUTTER_MACOS_MANIFEST),
     });
 

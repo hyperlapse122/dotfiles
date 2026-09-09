@@ -4,6 +4,7 @@ import {
   platformKey,
   type PlatformKey,
 } from "./platforms.js";
+import { fetchWithRetry } from "./http.js";
 import { ResolutionError } from "./types.js";
 import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
 
@@ -57,7 +58,7 @@ async function fetchReleaseJson(
   label: string,
   token: string | undefined,
 ): Promise<unknown> {
-  const response = await fetch(`https://api.github.com/repos/${source}/${path}`, {
+  const response = await fetchWithRetry(`https://api.github.com/repos/${source}/${path}`, {
     headers: authHeaders(token),
   });
   if (!response.ok) {

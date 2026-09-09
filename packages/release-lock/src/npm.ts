@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "./http.js";
 import { ResolutionError } from "./github.js";
 import type { LockedTool, ToolSpec } from "./types.js";
 
@@ -18,7 +19,7 @@ interface NpmLatest {
 }
 
 export async function resolveNpmPackage(name: string, spec: ToolSpec): Promise<LockedTool> {
-  const response = await fetch(`https://registry.npmjs.org/${spec.source}/latest`, {
+  const response = await fetchWithRetry(`https://registry.npmjs.org/${spec.source}/latest`, {
     headers: { accept: "application/json", "user-agent": "h82-release-lock" },
   });
   if (!response.ok) {
