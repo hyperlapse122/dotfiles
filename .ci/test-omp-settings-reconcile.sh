@@ -42,6 +42,9 @@ for needle in \
   '"enabledModels"' \
   '"disabledProviders"' \
   '"symbolPreset": "nerd"' \
+  '"completion.notify": "off"' \
+  '"error.notify": "off"' \
+  '"ask.notify": "off"' \
   'omp config set'
 do
   grep -F "$needle" "$script" >/dev/null || fail "rendered script lost: $needle"
@@ -63,6 +66,55 @@ for stray in "$phase_dir"/run_onchange_*config-omp-settings.sh.tmpl; do
 done
 
 bash -n "$script" || fail 'rendered script is not valid bash'
+
+# --- the notification leaves are enum tokens, not booleans ----------------- #
+
+# The needles above prove the three paths survived the render. They cannot prove
+# the VALUES stayed strings: `off` is a YAML 1.1 boolean spelling, so a parser
+# change or a hand edit could turn them into `false`, which omp's enum would
+# reject. Quoting alone is not the guard either -- go-yaml already reads
+# unquoted `off` as the string "off", so removing the quotes changes nothing and
+# is not a failure case worth a fixture. The type and the value are.
+declared_of() {
+  python3 - "$1" <<'PY'
+import json, re, sys
+body = open(sys.argv[1]).read()
+block = re.search(r"cat >\"\$declared\" <<'JSON'\n(.*?)\nJSON\n", body, re.S)
+if block is None:
+    raise SystemExit('no declaration heredoc in the rendered script')
+print(json.dumps(json.loads(block.group(1))))
+PY
+}
+
+notify_offenders() {
+  jq -r --argjson want '["completion.notify","error.notify","ask.notify"]' '
+    . as $d
+    | $want[]
+    | select((($d[.] | type) != "string") or ($d[.] != "off"))
+    | "\(.) is \($d[.] | tojson), want the string \"off\""' "$1"
+}
+
+declared_json="$scratch/declared.json"
+declared_of "$script" > "$declared_json"
+
+offenders=$(notify_offenders "$declared_json")
+[[ -z $offenders ]] || fail "notification leaves must be the string \"off\": $offenders"
+
+# Force the failure branch. A guard that only ever sees today's correct
+# declaration never executes its own failure path, so it can rot unnoticed.
+printf '{"completion.notify": false, "error.notify": "off", "ask.notify": "off"}\n' \
+  > "$scratch/notify-boolean.json"
+notify_offenders "$scratch/notify-boolean.json" | grep -q '^completion.notify is false' ||
+  fail 'a boolean notification value was not flagged'
+
+printf '{"completion.notify": "on", "error.notify": "off", "ask.notify": "off"}\n' \
+  > "$scratch/notify-on.json"
+notify_offenders "$scratch/notify-on.json" | grep -q '^completion.notify is "on"' ||
+  fail 'a re-enabled notification value was not flagged'
+
+printf '{"error.notify": "off", "ask.notify": "off"}\n' > "$scratch/notify-absent.json"
+notify_offenders "$scratch/notify-absent.json" | grep -q '^completion.notify is null' ||
+  fail 'a dropped notification declaration was not flagged'
 
 # --- fixtures -------------------------------------------------------------- #
 
@@ -88,6 +140,16 @@ case "$*" in
     ;;
   "config set "*)
     printf '%s\n' "$*" >>"$OMP_STATE"
+    # With OMP_LIVE_WRITE set, the stub also APPLIES the write, so a scenario
+    # can assert the resulting config and not just the call log. A reconciler
+    # that emits the right calls but writes nothing looks identical in
+    # $OMP_STATE alone.
+    if [[ -n ${OMP_LIVE_WRITE:-} ]]; then
+      jq --arg k "$3" --arg v "$4" \
+        '.[$k] = {"value": (try ($v | fromjson) catch $v)}' \
+        "$OMP_LIVE_WRITE" >"$OMP_LIVE_WRITE.next"
+      mv "$OMP_LIVE_WRITE.next" "$OMP_LIVE_WRITE"
+    fi
     ;;
   *) printf 'unexpected omp call: %s\n' "$*" >&2; exit 64 ;;
 esac
@@ -126,6 +188,10 @@ cat >"$live_drifted" <<'EOF'
 {"startup.setupWizard": {"value": true},
  "setupVersion": {"value": 0},
  "symbolPreset": {"value": "unicode"},
+ "completion.notify": {"value": "on"},
+ "error.notify": {"value": "on"},
+ "ask.notify": {"value": "on"},
+ "theme": {"value": "dark"},
  "enabledModels": {"value": ["something/else"]},
  "disabledProviders": {"value": []},
  "modelRoles": {"value": {"default": "something/else"}}}
@@ -172,23 +238,42 @@ grep -Fq 'config set enabledModels' "$state" ||
   fail 'the model allowlist was not asserted'
 grep -Fq 'config set disabledProviders' "$state" ||
   fail 'the provider denylist was not asserted'
+for path in completion.notify error.notify ask.notify; do
+  [[ $(grep -Fxc "config set $path off" "$state") == 1 ]] ||
+    fail "the drifted run did not turn $path off exactly once"
+done
 grep -q 'declared paths asserted' "$scratch/ok.out" ||
   fail 'the run did not report how many paths it asserted'
 
+# --- postcondition: the resulting config, not just the call log ------------ #
+
+# The call log proves what the reconciler asked for. This proves what the host
+# ended up with, and that the keys nobody declared came through untouched.
+reset
+live_applied="$scratch/live-applied.json"
+cp "$live_drifted" "$live_applied"
+env HOME="$home" PATH="$bin:/usr/bin:/bin" \
+  OMP_CALLS="$calls" OMP_STATE="$state" \
+  OMP_CATALOG="$full_catalog" OMP_LIVE="$live_applied" OMP_LIVE_WRITE="$live_applied" \
+  bash "$script" >"$scratch/applied.out" 2>"$scratch/applied.err" ||
+  fail 'the applying run failed'
+
+jq -e '
+  (."completion.notify".value == "off") and
+  (."error.notify".value == "off") and
+  (."ask.notify".value == "off")' "$live_applied" >/dev/null ||
+  fail 'the notification keys were not off after the run'
+jq -e '.theme.value == "dark"' "$live_applied" >/dev/null ||
+  fail 'an undeclared key did not survive the run'
+jq -e '(."symbolPreset".value == "nerd") and (."startup.setupWizard".value == false)' \
+  "$live_applied" >/dev/null ||
+  fail 'the pre-existing declared keys did not converge alongside the new ones'
+
 # --- convergence: an already-equal host writes nothing --------------------- #
 
-# Build a live config that deep-equals the declaration by replaying the very
-# `config set` calls the drifted run just made.
-python3 - "$script" "$live_converged" <<'PY'
-import json, re, sys
-script, out = sys.argv[1], sys.argv[2]
-body = open(script).read()
-block = re.search(r"cat >\"\$declared\" <<'JSON'\n(.*?)\nJSON\n", body, re.S)
-declared = json.loads(block.group(1))
-# The flat, dotted-key, entry-object shape omp actually emits.
-live = {path: {"value": value} for path, value in declared.items()}
-json.dump(live, open(out, "w"))
-PY
+# Build a live config that deep-equals the declaration, in the flat,
+# dotted-key, entry-object shape omp actually emits.
+jq 'with_entries(.value = {"value": .value})' "$declared_json" > "$live_converged"
 
 reset
 run "$full_catalog" "$live_converged" >"$scratch/conv.out" 2>"$scratch/conv.err" ||
