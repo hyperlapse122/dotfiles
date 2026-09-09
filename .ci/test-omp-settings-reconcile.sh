@@ -42,6 +42,8 @@ for needle in \
   '"enabledModels"' \
   '"disabledProviders"' \
   '"symbolPreset": "nerd"' \
+  '"tui.resizeScrollback": "rebuild"' \
+  '"display.showTokenUsage": true' \
   '"completion.notify": "off"' \
   '"error.notify": "off"' \
   '"ask.notify": "off"' \
@@ -201,6 +203,8 @@ cat >"$live_drifted" <<'EOF'
 {"startup.setupWizard": {"value": true},
  "setupVersion": {"value": 0},
  "symbolPreset": {"value": "unicode"},
+ "tui.resizeScrollback": {"value": "none"},
+ "display.showTokenUsage": {"value": false},
  "completion.notify": {"value": "on"},
  "error.notify": {"value": "on"},
  "ask.notify": {"value": "on"},

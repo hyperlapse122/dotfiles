@@ -232,6 +232,18 @@ agents:
       startup.setupWizard: false
       setupVersion: 1
       symbolPreset: nerd
+      # Two presentation keys carried over from the pre-retirement declaration.
+      # Both are terminal-side only; neither touches the model or tool surface.
+      #
+      # tui.resizeScrollback: rebuild redraws the scrollback on a terminal
+      # resize instead of leaving reflowed lines broken, which is what a
+      # dispatched worker's transcript needs to stay readable after the pane
+      # changes width.
+      #
+      # display.showTokenUsage: true keeps per-turn token usage on screen, the
+      # one signal that says a worker is burning quota before its turn ends.
+      tui.resizeScrollback: rebuild
+      display.showTokenUsage: true
       # Desktop notifications are pinned off. omp runs here only as an
       # orchestration subagent, so a turn-completion popup per worker is noise
       # nobody is watching for.
