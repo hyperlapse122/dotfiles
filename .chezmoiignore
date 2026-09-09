@@ -176,3 +176,7 @@
 # dotagents (dotagents.sentry.dev)
 ./agents.toml
 ./agents.lock
+
+# Orca configurations
+./orca.yaml
+./orca.schema.json
