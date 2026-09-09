@@ -127,7 +127,16 @@ claude|When a skill, command, or workflow the user invoked by name directs a sub
 claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
 claude|Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker to `omp` by default. Name the agent and nothing else.
 claude|MUST NOT request a model or a reasoning effort for `omp`: that agent refuses launch-time model selection, so the dispatch fails outright instead of falling back to a default.
-claude|When `omp` is unavailable, or its worker fails, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`. A Unit that defeats that tier climbs `claude` one rung at a time: `sonnet`, then `opus`, then `fable`.
+claude|When `omp` is unavailable, or its worker fails, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`. A Unit that defeats that tier moves to `claude`, and the run picks its rung by sizing the Unit, never by a fixed retry ladder.
+claude|Size the Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
+claude|`sonnet` takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
+claude|`opus` takes a Unit that keeps real design judgment inside its own bounds — the plan names the outcome and not the approach, the change crosses a module, process, or service boundary, or the surface is correctness-critical, such as authentication, a schema or data migration, concurrency, money, or anything that can lose data.
+claude|`fable` takes a Unit whose context no lower rung can hold at once and that the plan cannot split.
+claude|Prefer splitting a Unit over raising its rung, and MUST try the split before `fable`: a Unit too wide for `opus` is usually two Units.
+claude|A Unit the sizing places at `opus` or above MAY open directly on `claude` at that rung, skipping `omp` and `codex`, and the run MUST record the signals that justified the skip; a Unit whose approach the plan fixes MUST NOT take that bypass.
+claude|A failure re-opens that sizing and never replaces it, so classify a failure only after the Unit is sized: a mechanical failure — a dispatch error, a missing tool, an unavailable agent, an environment or permission fault — carries no information about the Unit, so re-dispatch at the rung the sizing already gives and do not raise it for that; a substantive failure — a wrong approach, an escalation that asks a design question, verification that fails on approach grounds and not on a typo — is new evidence about depth or blast radius, so feed it back into the four signals and re-size before dispatching again.
+claude|MUST NOT open at `fable` on a guess the sizing does not support, and MUST NOT re-dispatch the same Unit at the same rung with the same brief — sharpen the brief, split the Unit, or re-size on evidence.
+claude|The three-consecutive-failure rule below still bounds this loop: the third substantive failure stops the dispatch and consults, it does not buy another rung.
 claude|This paragraph narrows the dispatch-target rule above for Implementation Units only.
 claude|that review MUST run `codex`, `claude`, and `omp` over the same brief file, and MUST weigh each reviewer's findings on their own evidence.
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
@@ -263,6 +272,8 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
+climbs `claude` one rung at a time
+Climb on evidence — a failed attempt, an escalation, or a plan section that leaves the approach open — never on a guess before the first attempt.
 counting a receipt that reclaimed no process as satisfying that
 The harness's own in-process subagent tool is not the dispatch this rule routes.
 viewerPermission
