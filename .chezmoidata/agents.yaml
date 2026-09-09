@@ -185,6 +185,53 @@ agents:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-omp }
     pluginsRemoved: []
+    # omp config.yml VALUES asserted into the live ~/.omp/agent/config.yml by
+    # .chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl.
+    #
+    # config.yml is NOT a chezmoi target: omp rewrites it through /model,
+    # /settings, and first-run setup, so a managed-readonly target produced
+    # permanent drift.
+    #
+    # The declaration is deliberately narrow. Every role runs one model, so a
+    # seat's model is predictable without reading a tier table; `tiny` is the
+    # single exception, because a background seat on the main model wastes
+    # quota that is the scarce resource here. The role NAMES are omp's own
+    # schema, so the set is kept whole rather than trimmed.
+    #
+    # enabledModels and disabledProviders are what actually close the
+    # selectable set: pinning role values alone leaves /model free to pick an
+    # unapproved provider, and an undeclared key survives the next apply.
+    #
+    # startup.setupWizard and setupVersion are the one non-model exception.
+    # A first-run wizard blocks non-interactive use and writes config that
+    # competes with these assertions.
+    settings:
+      startup.setupWizard: false
+      setupVersion: 1
+      enabledModels:
+      - google-antigravity/gemini-3.8-flash
+      - google-antigravity/gemini-3.1-flash-lite
+      disabledProviders:
+      - anthropic
+      - github-copilot
+      - kimi-code
+      - openai-codex
+      - openrouter
+      - zai
+      modelRoles:
+        advisor: "@worker"
+        claude: google-antigravity/gemini-3.8-flash:high
+        commit: "@worker"
+        default: google-antigravity/gemini-3.8-flash:high
+        fable: google-antigravity/gemini-3.8-flash:high
+        gemini: google-antigravity/gemini-3.8-flash:high
+        plan: "@fable"
+        reviewer: google-antigravity/gemini-3.8-flash:high
+        skim: google-antigravity/gemini-3.8-flash:high
+        slow: google-antigravity/gemini-3.8-flash:high
+        smol: google-antigravity/gemini-3.8-flash:high
+        tiny: google-antigravity/gemini-3.1-flash-lite:minimal
+        worker: google-antigravity/gemini-3.8-flash:high
   codex:
     # Codex CLI config.toml VALUES asserted into the live ~/.codex/config.toml by
     # the codex settings reconciler. Each key is a dot-separated path to a LEAF;

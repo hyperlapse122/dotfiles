@@ -1,0 +1,83 @@
+{{- /* omp-settings-validate.tmpl — render-time validation of agents.omp.settings.
+
+     The declaration is a flat map of dot-separated paths to leaf values, the
+     same grammar the claude and codex settings declarations use. This partial
+     is the render-time gate: a typo, an unsupported namespace, or a shape omp
+     cannot accept fails the render rather than being asserted and silently
+     ignored by the tool.
+
+     Ownership boundary. Namespaces another writer owns are REJECTED here, not
+     merely avoided by convention:
+       - plugins and marketplaces belong to the plugin reconciler
+       - mcpServers belongs to the managed mcp.json target
+     Declaring one would make two writers fight over the same record.
+
+     Usage:
+       includeTemplate "omp-settings-validate.tmpl" (dict "settings" .agents.omp.settings)
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "omp-settings-validate: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- if not (hasKey . "settings") -}}
+{{-   fail "omp-settings-validate: missing required argument settings" -}}
+{{- end -}}
+{{- $settings := .settings -}}
+{{- if not (kindIs "map" $settings) -}}
+{{-   fail (printf "omp-settings-validate: agents.omp.settings must be a map, got %s" (kindOf $settings)) -}}
+{{- end -}}
+{{- $rejected := list "plugins" "marketplaces" "mcpServers" -}}
+{{- $modelSelectorKeys := list "modelRoles" -}}
+{{- range $path, $value := $settings -}}
+{{-   if not (regexMatch "^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*$" $path) -}}
+{{-     fail (printf "omp-settings-validate: %q is not a dot-separated settings path" $path) -}}
+{{-   end -}}
+{{-   $head := (splitList "." $path) | first -}}
+{{-   if has $head $rejected -}}
+{{-     fail (printf "omp-settings-validate: %q belongs to another writer; declaring it here would fight that writer for the same record" $path) -}}
+{{-   end -}}
+{{-   if kindIs "invalid" $value -}}
+{{-     fail (printf "omp-settings-validate: %q declares a null value; omp has no reset semantics in this reconciler" $path) -}}
+{{-   end -}}
+{{- end -}}
+{{- /* Every model selector must name a provider or an @role alias. A bare model
+     id with no provider is the shape that silently resolves to whatever
+     provider happens to serve it. */ -}}
+{{- range $path, $value := $settings -}}
+{{-   if has $path $modelSelectorKeys -}}
+{{-     if not (kindIs "map" $value) -}}
+{{-       fail (printf "omp-settings-validate: %q must be a map of role to selector, got %s" $path (kindOf $value)) -}}
+{{-     end -}}
+{{-     range $role, $selector := $value -}}
+{{-       if not (kindIs "string" $selector) -}}
+{{-         fail (printf "omp-settings-validate: %s.%s must be a string, got %s" $path $role (kindOf $selector)) -}}
+{{-       end -}}
+{{-       if not (or (hasPrefix "@" $selector) (contains "/" $selector)) -}}
+{{-         fail (printf "omp-settings-validate: %s.%s selector %q names no provider and is not an @role alias" $path $role $selector) -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- /* An allowlist that does not cover every declared selector would let omp
+     resolve a role to a model the allowlist excludes, or refuse to resolve it
+     at all. Alias values (@role) are indirections, not selectors. */ -}}
+{{- if hasKey $settings "enabledModels" -}}
+{{-   $enabled := index $settings "enabledModels" -}}
+{{-   if not (kindIs "slice" $enabled) -}}
+{{-     fail (printf "omp-settings-validate: enabledModels must be a list, got %s" (kindOf $enabled)) -}}
+{{-   end -}}
+{{-   if eq (len $enabled) 0 -}}
+{{-     fail "omp-settings-validate: enabledModels is empty; omp would have no selectable model" -}}
+{{-   end -}}
+{{-   range $path, $value := $settings -}}
+{{-     if has $path $modelSelectorKeys -}}
+{{-       range $role, $selector := $value -}}
+{{-         if not (hasPrefix "@" $selector) -}}
+{{-           $bare := (splitList ":" $selector) | first -}}
+{{-           if not (has $bare $enabled) -}}
+{{-             fail (printf "omp-settings-validate: %s.%s names %q, which enabledModels does not allow" $path $role $selector) -}}
+{{-           end -}}
+{{-         end -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}

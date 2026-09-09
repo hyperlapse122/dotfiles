@@ -1,0 +1,181 @@
+{{- $settings := .agents.omp.settings -}}
+{{- includeTemplate "omp-settings-validate.tmpl" (dict "settings" $settings) -}}
+#!/usr/bin/env bash
+# Asserts the declared omp settings paths (agents.omp.settings in
+# .chezmoidata/agents.yaml) into omp's own ~/.omp/agent/config.yml on every apply.
+#
+# config.yml is deliberately NOT a chezmoi target: omp rewrites it through
+# /model, /settings, and first-run setup, so a managed-readonly target produced
+# permanent drift. run_after_ (not run_onchange_) because a live vendor edit does
+# not change a chezmoi source fingerprint, so an onchange script would not
+# re-assert a declared value omp overwrote until the DATA changed.
+#
+# Ownership boundary: each declared path is asserted on its own, so any path omp
+# writes BESIDE the declared set survives byte-identical. A declared path whose
+# type is a record is owned WHOLESALE — `omp config set` replaces the record —
+# so a member omp adds inside a declared record does not survive an apply. That
+# is intended for source-declared roles.
+set -euo pipefail
+
+# chezmoi's non-interactive script environment omits ~/.local/bin, where omp
+# lands. Prepend rather than append so this omp wins over any other on PATH.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+
+if ! command -v omp >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: omp is unavailable; skipping settings assertion.' >&2
+  exit 0
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: jq is unavailable; skipping settings assertion.' >&2
+  exit 0
+fi
+
+scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-omp-settings"
+mkdir -p "$scratch"
+chmod 0700 "$scratch"
+# No suffix after the X run: BSD mktemp(1) only substitutes trailing X's.
+declared="$(mktemp "$scratch/declared.XXXXXX")"
+catalog="$(mktemp "$scratch/catalog.XXXXXX")"
+live="$(mktemp "$scratch/live.XXXXXX")"
+cleanup() { rm -f -- "$declared" "$catalog" "$live"; }
+trap cleanup EXIT HUP INT TERM
+
+# The declaration reaches the shell through a quoted heredoc and jq, never
+# spliced into script source at render time: a value embedded in source would
+# only need one quote to become a statement.
+cat >"$declared" <<'JSON'
+{{ $settings | toPrettyJson }}
+JSON
+
+# Neither omp read is bounded on its own: the catalog probe is a network call and
+# `config list` has been observed to wedge. The deadline is enforced without
+# `timeout`, which BSD/macOS hosts do not ship. SIGTERM is catchable and a probe
+# may be wedged in the very call the deadline exists to survive, so escalate
+# rather than `wait` on a process that will not die.
+bounded_read() {
+  local destination=$1 deadline=$2
+  shift 2
+  local pid waited=0 termed=0
+  "$@" >"$destination" 2>/dev/null &
+  pid=$!
+  while [[ $waited -lt $deadline ]] && kill -0 "$pid" 2>/dev/null; do
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+    while [[ $termed -lt 2 ]] && kill -0 "$pid" 2>/dev/null; do
+      sleep 1
+      termed=$((termed + 1))
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+
+# Fail OPEN: an unauthenticated provider returns a partial catalog with exit 0,
+# so exit status alone cannot tell "absent selector" from "absent credentials".
+# Only a provider the catalog speaks for can prove a selector absent.
+bounded_read "$catalog" 15 omp models --json
+
+if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >/dev/null 2>&1; then
+  # Precomputed once: a per-selector jq would re-parse the whole catalog. Model
+  # ids carry no spaces, so space-padded substring matching is exact.
+  covered=" $(jq -r '[.models[].provider] | unique | join(" ")' "$catalog") "
+  known=" $(jq -r '[.models[].selector] | join(" ")' "$catalog") "
+  while IFS=$'\t' read -r where selector; do
+    [[ -n $selector ]] || continue
+    provider=${selector%%/*}
+    case "$covered" in
+      *" $provider "*) ;;
+      *)
+        printf 'config-omp-settings: catalog has no %s models; not validating %s\n' "$provider" "$where" >&2
+        continue
+        ;;
+    esac
+    case "$known" in
+      *" $selector "*) ;;
+      *)
+        printf 'config-omp-settings: %s names %s, which provider %s does not serve.\n' "$where" "$selector" "$provider" >&2
+        exit 1
+        ;;
+    esac
+  done < <(jq -r '
+    def strip_thinking: sub(":(off|minimal|low|medium|high|xhigh|max)$"; "");
+    [ ((.modelRoles // {}) | to_entries[] | {where: ("modelRoles." + .key), sel: .value}) ]
+    | map(select((.sel | type) == "string"))
+    | map(select(.sel | startswith("@") | not))
+    | map(.sel |= strip_thinking)
+    | map(select(.sel | endswith("/*") | not))
+    | map(select(.sel | contains("/")))
+    | .[] | [.where, .sel] | @tsv
+  ' "$declared")
+else
+  printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
+fi
+
+# Fail OPEN: a provisioner that cannot see live state still delivers the declared
+# set. A key omp reports at its default while the stored config differs reads as
+# drift and is re-asserted exactly as an unconditional set would have done.
+live_ok=true
+bounded_read "$live" 15 omp config list --json
+if ! jq -e 'type == "object"' "$live" >/dev/null 2>&1; then
+  printf '%s\n' 'config-omp-settings: could not read the live config; asserting every declared path.' >&2
+  printf '{}\n' >"$live"
+  live_ok=false
+fi
+
+# Read-then-compare, not a blind set per path: an unconditional loop spends a
+# full `omp config set` on every declared path on every apply, which is the cost
+# this comparison exists to avoid. `state` leads so a stray tab inside a value
+# cannot corrupt the record. Deep equality is what preserves wholesale record
+# ownership: a member omp adds inside a declared record makes the live record
+# unequal, so the record is replaced.
+#
+# `unknown` is a loud state, not a silent skip: omp lists every schema key even
+# when unset, so a declared path a successful live listing does not carry at all
+# is a typo until proven otherwise.
+examined=0
+asserted=0
+while IFS=$'\t' read -r state path value; do
+  [[ -n $path ]] || continue
+  examined=$((examined + 1))
+  case "$state" in
+    equal) continue ;;
+    unknown)
+      printf 'config-omp-settings: %s is not a key omp reports; check the declaration for a typo.\n' "$path" >&2
+      exit 1
+      ;;
+  esac
+  omp config set "$path" "$value" >/dev/null ||
+    { printf 'config-omp-settings: could not assert %s\n' "$path" >&2; exit 1; }
+  asserted=$((asserted + 1))
+done < <(jq -r --slurpfile liveDoc "$live" --arg liveOk "$live_ok" '
+  . as $declaredDoc
+  | ($liveDoc[0] // {}) as $live
+  | to_entries[]
+  | .key as $path
+  | .value as $want
+  | ($live | getpath($path | split(".")))          as $have
+  | ($live | has($path | split(".") | .[0]))       as $topSeen
+  | (if   $liveOk != "true"       then "differs"
+     elif $have == $want          then "equal"
+     elif ($have == null and ($topSeen | not)) then "unknown"
+     else "differs" end) as $state
+  | [$state, $path, (if ($want | type) == "string" then $want else ($want | tojson) end)]
+  | @tsv
+' "$declared")
+
+# The declared count is a render-time constant, so a stream that ends early —
+# a jq crash, a truncated pipe — is detectable rather than reported as success.
+declared_count=$(jq -r 'length' "$declared")
+if [[ $examined -ne $declared_count ]]; then
+  printf 'config-omp-settings: examined %s of %s declared paths; the projection ended early.\n' \
+    "$examined" "$declared_count" >&2
+  exit 1
+fi
+printf 'config-omp-settings: %s of %s declared paths asserted.\n' "$asserted" "$declared_count"
