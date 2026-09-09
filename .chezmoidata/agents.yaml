@@ -167,6 +167,24 @@ agents:
       inputNeededNotifEnabled: true
       agentPushNotifEnabled: true
       remoteControlAtStartup: false
+      # Retention is pinned off so Tokscale keeps aggregating past the 30-day
+      # default: this value drives the sweep that deletes ~/.claude/projects
+      # transcripts, and a deleted transcript can never be re-aggregated.
+      #
+      # Unlike the env leaves below, this one MUST render as a JSON number. Quote
+      # it and Claude Code rejects the settings file on z.int() and falls back to
+      # 30 days; .ci/test-claude-settings-reconcile.sh is what catches that.
+      #
+      # The cost is unbounded growth. The same cutoff also sweeps ~/.claude's
+      # tasks/, shell-snapshots/, backups/ and tool-result files, so none of them
+      # shrink again.
+      #
+      # 9999999999 days is 8.64e17 ms, past the JS Date range, so the cutoff is an
+      # Invalid Date and every mtime comparison against it is false. That NaN
+      # comparison is what actually stops the deletion, so a Claude Code bump in
+      # .chezmoidata/releases.json must be checked for a cutoff-validity guard
+      # that would resume it.
+      cleanupPeriodDays: 9999999999
       # Values under env reach the tool as strings; an unquoted scalar renders as a
       # JSON number and is ignored. .ci/test-claude-settings-reconcile.sh asserts the
       # type, because the leaf-equality assertion alone cannot see it.
