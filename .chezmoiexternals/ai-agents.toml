@@ -1,4 +1,4 @@
-{{- /* AI coding agents and adjacent tooling: claude, agy, agent-browser, codegraph, codex, fff-mcp, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
+{{- /* AI coding agents and adjacent tooling: claude, agy, agent-browser, omp, codegraph, codex, fff-mcp, and the agent skills listed in .chezmoidata/agents.yaml (agents.skills.external). */ -}}
 
 {{- /* Host libc, probed once: true on a musl Linux, where some upstreams ship a separate
        static-musl build. Used by the agent-browser and fff-mcp externals below; probed
@@ -53,6 +53,21 @@ executable = true
 
 [agent-browser.checksum]
 sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "agent-browser" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
+
+{{- /* ---------- omp (oh-my-pi, can1357) — a lone per-platform binary, a raw
+       executable staged for the command manifest via type="file" with
+       executable=true. No pi-style archive extraction; the tag, per-platform
+       URL and sha256 come from the release lock's per-asset digest, and musl
+       linux hosts pick the static-musl binary. ---------- */}}
+
+[omp]
+type = "file"
+targetPath = '.local/share/chezmoi-commands/incomplete/omp/omp'
+url = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" "field" "url" "platform" "auto" "musl" $isMuslLinux) }}'
+executable = true
+
+[omp.checksum]
+sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "omp" "field" "sha256" "platform" "auto" "musl" $isMuslLinux) }}'
 
 
 {{- /* ---------- codegraph ---------- */ -}}

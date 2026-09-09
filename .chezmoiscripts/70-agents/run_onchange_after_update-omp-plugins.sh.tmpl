@@ -1,0 +1,133 @@
+{{- $ctx := . -}}
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "omp" "field" "plugins") -}}
+{{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "omp" "field" "pluginsRemoved") -}}
+#!/usr/bin/env bash
+# Reconciles every eligible agents.omp.plugins row into oh-my-pi.
+#
+# omp identifies an installed plugin as <name>@<marketplace>, so a row's
+# marketplace is part of its identity rather than only a source-resolution
+# detail. The install verbs are not idempotent the way agy's are: a marketplace
+# already registered under the same name keeps its old source, so each row is
+# re-pointed by removing the marketplace, adding it back at the pinned path, and
+# installing with --force.
+#
+# THE MARKETPLACE ID IS NOT THE REGISTRY KEY. omp takes the id from the `name`
+# field inside the source's .claude-plugin/marketplace.json, which is the
+# upstream archive's own name and does not change when this repository files
+# the same archive under a second registry key. Building the id from the key
+# would register one marketplace and address another, so the id is read from
+# the manifest at run time and the key stays a source-resolution detail.
+#
+# WHICH ARCHIVE. agents.omp.plugins must name the omp-only marketplace, whose
+# archive excludes the ROOT plugin.json. With that file present omp classifies
+# the tree as an agent-plugins package and rejects every SKILL.md carrying
+# Claude Code or Codex frontmatter keys, which silently drops 30 of 33 skills
+# (cb30ed4). The preflight below proves the source is the pruned copy rather
+# than trusting the declaration.
+#
+# The whole eligible set is a render-time constant, so an empty set renders a
+# notice and no loop at all rather than a runtime branch over an empty array.
+set -euo pipefail
+
+# chezmoi's non-interactive script environment omits ~/.local/bin, where omp
+# lands. Prepend rather than append so this omp wins over any other on PATH.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+export PATH
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $fingerprintInputs) }}
+{{- if and (eq $rows "") (eq $removedRows "") }}
+printf 'update-omp-plugins: %s\n' 'no eligible plugins or removals are declared for this host'
+{{- else -}}
+{{- if ne $rows "" }}
+
+PLUGINS=(
+{{ $rows }}
+)
+{{- end }}
+{{- if ne $removedRows "" }}
+PLUGINS_REMOVED=(
+{{ $removedRows }}
+)
+{{- end }}
+
+die() { printf 'update-omp-plugins: %s\n' "$*" >&2; exit 1; }
+
+# omp's marketplace id comes from the source manifest, never from the registry
+# key that resolved the source. Fails closed on an absent, unreadable, or
+# nameless manifest rather than guessing an id the install would not find.
+marketplace_id() {
+  local source=$1 id
+  id=$(jq -r '.name // empty' "$source/.claude-plugin/marketplace.json" 2>/dev/null) || return 1
+  [[ -n $id ]] || return 1
+  printf '%s\n' "$id"
+}
+
+[[ -n ${HOME:-} && -d $HOME && -w $HOME ]] || die 'preflight: HOME is not writable'
+# The command manifest installs omp in the same apply, so an absent binary at
+# this phase is a real provisioning failure, not a host that opted out. The
+# claude, agy, and codex reconcilers die here for the same reason.
+command -v omp >/dev/null 2>&1 || die 'preflight: omp is not on PATH'
+command -v jq >/dev/null 2>&1 || die 'preflight: jq is not on PATH'
+for parent in "$HOME/.omp" "$HOME/.omp/plugins"; do
+  if [[ -e $parent ]]; then
+    [[ -d $parent && -w $parent ]] || die "preflight: user path is not writable: $parent"
+  else
+    ancestor=$parent
+    while [[ ! -e $ancestor ]]; do ancestor=${ancestor%/*}; done
+    [[ -d $ancestor && -w $ancestor ]] || die "preflight: cannot create user path below $ancestor"
+  fi
+done
+mkdir -p "$HOME/.omp/plugins" || die 'preflight: failed to create omp user paths'
+{{- if ne $removedRows "" }}
+
+# Removals run first and tolerate an already-absent plugin, which is the normal
+# state on a host that never installed it.
+for row in "${PLUGINS_REMOVED[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market <<<"$row"
+  # A removed row's source is gone, so its marketplace id cannot be read from a
+  # manifest. The registry key is the only id left to try, and an id omp does
+  # not know is the same no-op as an already-uninstalled plugin.
+  omp plugin uninstall --scope user "${name}@${market}" >/dev/null 2>&1 || true
+done
+{{- end }}
+{{- if ne $rows "" }}
+
+# Preflight every row before the first mutation: a half-applied set would leave
+# omp pointed at a marketplace it can no longer resolve.
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  [[ -d $source ]] || die "preflight: $kind marketplace $market is missing: $source"
+  manifest="$source/.claude-plugin/marketplace.json"
+  [[ -f $manifest ]] ||
+    die "preflight: $market has no marketplace manifest: $manifest"
+  jq -e --arg n "$name" '[.plugins[]?.name] | index($n) != null' "$manifest" >/dev/null 2>&1 ||
+    die "preflight: $manifest does not declare plugin $name; $market is not the expected bundle"
+  marketplace_id "$source" >/dev/null ||
+    die "preflight: $manifest declares no marketplace name; omp would have no id to install from"
+  # The pruned copy is what omp must see. A root plugin.json here means the row
+  # points at the shared archive, and installing it would drop most skills.
+  [[ ! -e $source/plugin.json ]] ||
+    die "preflight: $market carries a root plugin.json; omp needs the pruned archive copy"
+done
+
+for row in "${PLUGINS[@]}"; do
+  row=${row//\\t/$'\t'}
+  IFS=$'\t' read -r name market kind source <<<"$row"
+  market_id=$(marketplace_id "$source") ||
+    die "preflight: cannot read the marketplace id for $market"
+  id="${name}@${market_id}"
+  # Re-point rather than update: a registered marketplace keeps its recorded
+  # source, so a version bump would otherwise install the superseded path.
+  omp plugin marketplace remove "$market_id" >/dev/null 2>&1 || true
+  omp plugin marketplace add "$source" || die "marketplace add failed for $market ($market_id)"
+  omp plugin install --scope user --force "$id" || die "plugin install failed for $id"
+  omp plugin enable --scope user "$id" || die "plugin enable failed for $id"
+done
+{{- end }}
+{{- end }}

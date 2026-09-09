@@ -176,7 +176,7 @@ macos_ext = externals(macos_units)
 
 # Every declared external unit renders without a template error and carries an identity.
 all_ext = set(linux_ext) | set(macos_ext)
-assert len(all_ext) == 30, f"expected 30 external units across both platforms, got {len(all_ext)}"
+assert len(all_ext) == 31, f"expected 31 external units across both platforms, got {len(all_ext)}"
 for scope in (linux_ext, macos_ext):
     for unit_id, unit in scope.items():
         assert unit["identity"], f"external unit {unit_id} rendered an empty identity"

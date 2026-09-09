@@ -54,6 +54,18 @@ commands:
           relPath: agy
       legacy:
         path: .local/bin/agy
+
+    omp:
+      producer: external
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      tool: omp
+      commands:
+        - name: omp
+      legacy:
+        path: .local/bin/omp
     agent-browser:
       producer: external
       safetyProfile: native-single-file

@@ -151,6 +151,7 @@ EXPECTED_LOCK_BACKED = frozenset(
         "marksman",
         "minikube",
         "mise",
+        "omp",
         "protoc-gen-buf-breaking",
         "protoc-gen-buf-lint",
         "rust-analyzer",

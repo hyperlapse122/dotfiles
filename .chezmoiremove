@@ -45,20 +45,27 @@
 # containers, so every host received the file, and it holds no live state.
 .codex/codex.toml
 
-# The omp harness was retired: dot_omp/ and the four phase-70 reconcilers are
-# gone, so nothing deploys into ~/.omp/agent any more. Every path below was
-# WRITTEN BY CHEZMOI and is un-written here, one entry per managed target rather
-# than a directory entry, because ~/.omp/ also holds state omp itself created —
-# agent.db carries live Figma OAuth tokens — and apply must not reach it. The
-# operator removes the binary and the remaining runtime state by hand; see
-# docs/decommission/omp.md.
+# omp came back as a managed harness, but only for a narrow surface: the
+# instruction file, mcp.json, the compound-engineering plugin, and a model
+# policy asserted into omp's own config.yml. Everything the 2026-09-03
+# retirement un-wrote and this restore did NOT take back is still un-written
+# here, one entry per managed target rather than a directory entry, because
+# ~/.omp/ also holds state omp itself created — agent.db carries live Figma
+# OAuth tokens — and apply must not reach it.
+#
+# AGENTS.md and mcp.json are deliberately absent from this list: they are
+# managed targets again, and pruning a path chezmoi writes in the same apply
+# would delete the file it just produced.
+#
+# models.yml stays pruned. The restored model policy lives in config.yml, which
+# omp writes itself and the reconciler asserts leaf by leaf; models.yml was the
+# custom-provider baseline, and nothing declares one now.
 #
 # .env is included: run_after_config-omp-auth.sh.tmpl resolved EXA_API_KEY from
 # 1Password and wrote it there in plaintext, so leaving it behind strands a live
-# credential in a directory nothing manages any more.
-.omp/agent/AGENTS.md
+# credential in a directory nothing manages any more. The restored MCP target
+# resolves that key at render time instead.
 .omp/agent/CLAUDE.md
-.omp/agent/mcp.json
 .omp/agent/models.yml
 .omp/agent/APPEND_SYSTEM.md
 .omp/agent/TITLE_SYSTEM.md
