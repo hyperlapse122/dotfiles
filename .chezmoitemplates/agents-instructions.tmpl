@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This file is the common user-scoped instruction core, rendered into each managed harness's user-scoped instruction file (`~/.claude/CLAUDE.md` for Claude Code, `~/.gemini/AGENTS.md` for Antigravity, `~/.codex/AGENTS.md` for Codex). Use RFC 2119 terms literally. When working in any repository, the repository root `AGENTS.md` (or repo instruction file) is the local supplement and may add stricter project-specific rules. Edit this source template (`.chezmoitemplates/agents-instructions.tmpl` in dotfiles), never deployed instruction targets.
+This file is the common user-scoped instruction core, rendered into each managed harness's user-scoped instruction file (`~/.claude/CLAUDE.md` for Claude Code, `~/.gemini/AGENTS.md` for Antigravity, `~/.codex/AGENTS.md` for Codex, `~/.omp/agent/AGENTS.md` for oh-my-pi). Use RFC 2119 terms literally. When working in any repository, the repository root `AGENTS.md` (or repo instruction file) is the local supplement and may add stricter project-specific rules. Edit this source template (`.chezmoitemplates/agents-instructions.tmpl` in dotfiles), never deployed instruction targets.
 
 ## Skills and instruction precedence
 
@@ -52,6 +52,10 @@ This harness is Claude Code. Use `Read` to read a file, which is required before
 This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell` (`cat`, `sed -n '1,80p'`, `rg`); `shell` MUST NOT apply the change itself. `view_image` reads an image and `update_plan` tracks the plan.
 {{- else if eq .harness "agy" -}}
 This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole; `grep_search`, `find_by_name`, and `codebase_search` to search; `list_dir` to list a directory. `run_command` runs commands only and MUST NOT apply the change itself.
+{{- else if eq .harness "omp" -}}
+This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch against a content-hash anchor; `write` to create a file or replace it whole; `ast_edit` for a structural rewrite; `grep`, `glob`, and `ast_grep` to search. `bash` and `eval` run commands only and MUST NOT apply the change itself.
+{{- else -}}
+{{- fail (printf "agents-instructions.tmpl: unknown harness %q; valid values: claude, codex, agy, omp" .harness) -}}
 {{- end }}
 
 A script MAY perform a purely mechanical change across many files when a per-file tool call is not practical. Say so, keep the script out of the commit unless the project wants it, and review the result with `git diff` before staging.
@@ -64,6 +68,10 @@ This harness runs Anthropic Claude models. They verify and correct their own wor
 This harness runs OpenAI Codex models. They follow the smallest sufficient instruction set and degrade on padded or contradictory guidance, so resolve a conflict by the precedence rule above instead of satisfying both sides. Reasoning effort is read from configuration and MUST NOT be simulated by asking for more thinking in prose. State the goal, the boundary, and the definition of done before the first tool call. Batch independent reads in one step rather than issuing them one at a time, and calibrate verification to the risk of the change — an authentication or migration change earns a full test pass, a comment fix does not. MUST NOT invent a value that already exists somewhere — an identifier, a version, a price, a path; read it or ask.
 {{- else if eq .harness "agy" -}}
 This harness runs Google Gemini Flash models. They follow a direct instruction literally and answer tersely, so ask for the elaboration you want instead of assuming it arrives. Omit chain-of-thought scaffolding, role framing, and repeated restatement; those were workarounds for older Gemini versions and degrade these. In a brief or prompt you write for a Gemini-family worker, put the long context first and the instruction last, so the request anchors the reading. Leave that worker's sampling parameters and thinking level to its configuration rather than requesting them in prose.
+{{- else if eq .harness "omp" -}}
+This harness runs Google Gemini Flash models. They follow a direct instruction literally and answer tersely, so ask for the elaboration you want instead of assuming it arrives. Omit chain-of-thought scaffolding, role framing, and repeated restatement; those were workarounds for older Gemini versions and degrade these. In a brief or prompt you write for a Gemini-family worker, put the long context first and the instruction last, so the request anchors the reading. Leave that worker's sampling parameters and thinking level to its configuration rather than requesting them in prose.
+{{- else -}}
+{{- fail (printf "agents-instructions.tmpl: unknown harness %q; valid values: claude, codex, agy, omp" .harness) -}}
 {{- end }}
 
 ## Secrets, destructive actions, and runtime

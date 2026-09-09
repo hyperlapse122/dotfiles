@@ -54,7 +54,7 @@ harness fails as unknown rather than silently no-op'ing.
 {{- end -}}
 {{- $validOS := $ctx.agents.validOS -}}
 {{- $validContainers := list "keep" "skip" -}}
-{{- $validHarness := list "claude" "agy" "codex" -}}
+{{- $validHarness := list "claude" "agy" "codex" "omp" -}}
 {{- $skippableHarness := $validHarness -}}
 {{- $harness := .harness -}}
 {{- if not (has $harness $validHarness) -}}
