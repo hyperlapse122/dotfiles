@@ -59,7 +59,7 @@ env PATH="$bin:$PATH" chezmoi \
 # The rendered script resolves CURRENT="$BASE_DIR/v<semver>" with BASE_DIR under $HOME.
 # Point HOME at a scratch tree and build the matching structure there.
 home="$scratch/home"
-version=$(grep -oE 'CURRENT="\$BASE_DIR/[^"]+"' "$prov" | sed -E 's|.*/(v[0-9][0-9.]+)"$|\1|')
+version=$(grep -oE '"\$HOME/\.local/share/compound-engineering/v[0-9][0-9.]*"' "$prov" | sed -E 's|.*/(v[0-9][0-9.]+)"$|\1|' | head -1)
 [ -n "$version" ] || { echo "could not resolve CE version from rendered script" >&2; exit 1; }
 # The run_after_ name is load-bearing: the destination sits in a deliberately
 # additive, third-party-writable tree, so the reference has to be re-asserted on
@@ -74,6 +74,11 @@ esac
 ce_base="$home/.local/share/compound-engineering"
 overlays="$home/.local/share/compound-engineering-overlays"
 current="$ce_base/$version"
+# omp's own copy of the same archive. It carries no root plugin.json, because
+# that file makes omp misclassify the tree and drop 30 of 33 skills (cb30ed4),
+# while agy needs it present in the copy above. The provisioner must overlay
+# both copies, or omp gets a ce-sweep whose references are missing.
+omp_current="$home/.local/share/compound-engineering-omp/$version"
 
 build_fake_ce() {
   rm -rf "$home"
@@ -86,6 +91,8 @@ build_fake_ce() {
     printf 'upstream %s\n' "$f" > "$current/skills/ce-sweep/references/sources/$f.md"
     cp "$current/skills/ce-sweep/references/sources/$f.md" "$scratch/expected-$f.md"
   done
+  mkdir -p "$omp_current/skills/ce-sweep/references/sources"
+  cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$omp_current/skills/ce-sweep/SKILL.md"
   mkdir -p "$overlays"
   cp -Rp "$root/dot_local/share/compound-engineering-overlays/." "$overlays/"
 }
@@ -111,6 +118,15 @@ cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" "$src" \
   || { echo "injected persona differs from overlay source" >&2; exit 1; }
 cmp -s "$overlays/skills/ce-sweep/references/interview.md" "$interview" \
   || { echo "injected interview differs from overlay source" >&2; exit 1; }
+# The omp copy is overlaid too, and it never gains a root plugin.json.
+cmp -s "$overlays/skills/ce-sweep/references/sources/gitlab-issues.md" \
+  "$omp_current/skills/ce-sweep/references/sources/gitlab-issues.md" \
+  || { echo "persona not injected into the omp archive copy" >&2; exit 1; }
+cmp -s "$overlays/skills/ce-sweep/references/interview.md" \
+  "$omp_current/skills/ce-sweep/references/interview.md" \
+  || { echo "interview not injected into the omp archive copy" >&2; exit 1; }
+[ ! -e "$omp_current/plugin.json" ] \
+  || { echo "omp archive copy gained a root plugin.json" >&2; exit 1; }
 # A later archive reconciliation restores archive-owned files. The provisioner
 # must reinstall only the reference and leave every archive-owned file unchanged.
 cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$skill"

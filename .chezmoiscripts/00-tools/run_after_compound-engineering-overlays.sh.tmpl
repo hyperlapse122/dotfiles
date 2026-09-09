@@ -1,8 +1,6 @@
 
 {{- $ctx := . -}}
-{{- $name := "compound-engineering-plugin" -}}
-{{- $ceVersion := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "segment") -}}
-{{- $ceAuthority := index .agents.marketplaces $name -}}
+{{- $ceAuthority := index .agents.marketplaces "compound-engineering-plugin" -}}
 
 #!/usr/bin/env bash
 #
@@ -31,12 +29,24 @@
 
 set -euo pipefail
 
-BASE_DIR="$HOME/{{ $ceAuthority.externalPath }}"
-CURRENT="$BASE_DIR/{{ $ceVersion }}"
-OVERLAYS="${BASE_DIR}-overlays"
+# Every localArchive copy of the compound-engineering archive, not just one:
+# omp gets its own copy with the root plugin.json excluded, and it needs the
+# same overlay files. The overlay source directory is shared — it is keyed off
+# the first authority's externalPath — because the overlay content is identical
+# for every copy.
+OVERLAYS="$HOME/{{ $ceAuthority.externalPath }}-overlays"
+TARGET_DIRS=(
+{{- range $mName, $mAuthority := .agents.marketplaces }}
+{{-   if eq (printf "%v" (index $mAuthority "kind")) "localArchive" }}
+{{-     if eq (printf "%v" (index $mAuthority "source")) "EveryInc/compound-engineering-plugin" }}
+  "$HOME/{{ $mAuthority.externalPath }}/{{ includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $mName "field" "segment") }}"
+{{-     end }}
+{{-   end }}
+{{- end }}
+)
 
-# Both directories must exist after the file phase. Match the prune script's defensive skip.
-if [ ! -d "$OVERLAYS" ] || [ ! -d "$CURRENT" ]; then
+# The overlay source must exist after the file phase. Match the prune script's defensive skip.
+if [ ! -d "$OVERLAYS" ]; then
   exit 0
 fi
 # Archive-owned directory chain: create what is missing, but never traverse a
@@ -47,6 +57,8 @@ OVERLAY_FILES=(
   "skills/ce-sweep/references/interview.md"
 )
 
+for CURRENT in "${TARGET_DIRS[@]}"; do
+[ -d "$CURRENT" ] || continue
 for RELATIVE in "${OVERLAY_FILES[@]}"; do
   SOURCE="$OVERLAYS/$RELATIVE"
   DESTINATION="$CURRENT/$RELATIVE"
@@ -80,4 +92,5 @@ for RELATIVE in "${OVERLAY_FILES[@]}"; do
   TEMP="$DESTINATION.chezmoi-$$.tmp"
   cp -p -- "$SOURCE" "$TEMP"
   mv -f -- "$TEMP" "$DESTINATION"
+done
 done

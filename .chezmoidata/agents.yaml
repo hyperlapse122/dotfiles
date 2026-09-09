@@ -116,6 +116,25 @@ agents:
       - "*/skills/ce-sweep/references/interview.md"
       os: [linux, darwin]
       container: keep
+    # omp's own copy of the same archive, differing in one file: the ROOT
+    # plugin.json is excluded. That file is what makes omp classify the tree as
+    # an agent-plugins package and reject every SKILL.md carrying Claude Code or
+    # Codex frontmatter keys, dropping 30 of 33 skills (cb30ed4). agy needs the
+    # same file present as its bundle manifest, and .ci/test-compound-engineering-overlays.sh
+    # asserts it survives, so the two requirements cannot share one copy. The
+    # `*/` prefix matches only the archive's own top directory, so nested
+    # plugin.json files inside skills are untouched. versionSource is shared, so
+    # both copies always resolve the same version segment.
+    compound-engineering-omp:
+      kind: localArchive
+      source: EveryInc/compound-engineering-plugin
+      externalPath: .local/share/compound-engineering-omp
+      versionSource: compoundEngineeringRelease
+      exclude:
+      - "*/skills/ce-sweep/references/interview.md"
+      - "*/plugin.json"
+      os: [linux, darwin]
+      container: keep
   claude:
     # Claude Code setting VALUES asserted into the live ~/.claude/settings.json by
     # .chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl, validated at
