@@ -211,6 +211,15 @@ Continue with the current agent's own reasoning only, without launching substitu
 record which delegated or cross-model passes did not happen
 in an unattended run that record goes in the MR/PR description, beside the unapplied-findings checklist
 It does not stop, and it does not fall back to the bundled script.
+Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
+MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
+is the argument grammar of those banned scripts, so it constrains nothing once the dispatch moves to Orca
+Choose the Orca recipient from the agents the environment actually has.
+A recipient that vocabulary cannot name is a valid choice, never a routing blocker.
+Dispatch targets are the `claude`, `codex`, and `omp` agents, and `omp` serves a Gemini model.
+SHOULD go to `omp`, because a Gemini Flash worker settles it for a fraction of the cost and the unit does not reward a frontier model
+Reasoning-heavy authoring, planning, and adjudication SHOULD stay on `claude` or `codex`.
+the run SHOULD add an `omp` reviewer over the same brief file
 substituting Orca for a banned bundled runner is one such case, not the boundary
 A dispatch spec MUST name a path to a brief file and MUST NOT inline the brief's content
 Waiting MUST use the guide's blocking wait on `worker_done`, `escalation`, and `question` events with an explicit timeout
