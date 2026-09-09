@@ -45,6 +45,36 @@ declared=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
   chezmoi --config "$render_config" --source "$repo_root" \
   execute-template <<<'{{ .agents.claude.settings | toJson }}')
 
+# Assert the DECLARATION itself, not just the live file. cleanupPeriodDays is parsed
+# with z.int(), and there are two ways to break it -- only one of them obvious.
+# Quoting it makes it a string; a fractional value stays a JSON number and still
+# fails z.int(). Either way Claude Code rejects the settings file and falls back to
+# the 30-day default, and every other check here is blind to it:
+# assert_declared_present compares the live value against this same rendered
+# declaration, so a bad value matches itself, and the numeric_leaf_offenders sweep
+# below selects leaves BY their declared type, so a string declaration selects
+# nothing at all. Named outright rather than derived, exactly as env_type_offenders
+# hardcodes `.env`.
+cleanup_period_offender() {
+  jq -r 'if (has("cleanupPeriodDays") | not) then empty
+         elif (.cleanupPeriodDays | type) != "number" then "cleanupPeriodDays as a \(.cleanupPeriodDays | type)"
+         elif .cleanupPeriodDays != (.cleanupPeriodDays | floor) then "cleanupPeriodDays as a fractional number"
+         else empty end' <<<"$1"
+}
+
+cleanup_offender=$(cleanup_period_offender "$declared")
+[[ -z $cleanup_offender ]] \
+  || fail "agents.yaml declares $cleanup_offender; Claude Code parses this key with z.int(), rejects the settings file, and falls back to the 30-day default"
+
+# Force both failure branches. Neither runs against today's correct declaration, so
+# without these the guard could go quiet and nothing would say so.
+[[ -n $(cleanup_period_offender '{"cleanupPeriodDays":"9999999999"}') ]] \
+  || fail 'the cleanupPeriodDays guard did not flag a quoted declaration'
+[[ -n $(cleanup_period_offender '{"cleanupPeriodDays":9999999999.5}') ]] \
+  || fail 'the cleanupPeriodDays guard did not flag a fractional declaration'
+[[ -z $(cleanup_period_offender '{"cleanupPeriodDays":9999999999}') ]] \
+  || fail 'the cleanupPeriodDays guard flagged a correct integer declaration'
+
 assert_declared_present() {
   local file=$1 label=$2
   jq -e --argjson d "$declared" '
@@ -98,6 +128,53 @@ printf '%s' '{"language":"English"}' >"$env_absent"
 [[ -z $(env_type_offenders "$env_absent") ]] \
   || fail 'the env-type sweep flagged a file that declares no env record'
 
+# The mirror image of the env record. cleanupPeriodDays is parsed with z.int(), so
+# a QUOTED value is rejected outright and Claude Code falls back to its 30-day
+# default -- the opposite failure from env, and invisible in the same way:
+# assert_declared_present compares the live value against the SAME rendered
+# declaration, so a quoted value is a string on both sides and matches. Swept over
+# every declared leaf whose declared value is a number, so a later number-typed
+# leaf inherits the guard. getpath is wrapped because it raises on a scalar
+# ancestor, and an absent leaf is assert_declared_present's business, not this
+# sweep's.
+numeric_leaf_offenders() {
+  jq -r --argjson d "$declared" '
+    . as $live
+    | $d
+    | to_entries[]
+    | select(.value | type == "number")
+    | .key as $k
+    | (try ($live | getpath($k | split("."))) catch null) as $v
+    | select($v != null and ($v | type) != "number")
+    | $k' "$1"
+}
+
+assert_numeric_leaves() {
+  local file=$1 label=$2 offenders
+  offenders=$(numeric_leaf_offenders "$file")
+  [[ -z $offenders ]] \
+    || fail "$label: declared numeric leaves reached the settings file as non-numbers: $offenders"
+}
+
+# Same reasoning as the env fixtures above: the sweep only ever runs against files
+# the reconciler built from today's correctly typed declaration, so its FAILURE
+# branch would never execute in CI. These fixtures force it and are written by hand
+# so they cannot go quiet if agents.yaml changes.
+mistyped_string=$scratch/cleanup-string.json
+printf '%s' '{"cleanupPeriodDays":"9999999999"}' >"$mistyped_string"
+[[ $(numeric_leaf_offenders "$mistyped_string") == 'cleanupPeriodDays' ]] \
+  || fail 'the numeric-leaf sweep did not flag a quoted cleanupPeriodDays by name'
+
+numeric_clean=$scratch/cleanup-number.json
+printf '%s' '{"cleanupPeriodDays":9999999999}' >"$numeric_clean"
+[[ -z $(numeric_leaf_offenders "$numeric_clean") ]] \
+  || fail 'the numeric-leaf sweep flagged a correctly typed cleanupPeriodDays'
+
+numeric_absent=$scratch/cleanup-absent.json
+printf '%s' '{"language":"English"}' >"$numeric_absent"
+[[ -z $(numeric_leaf_offenders "$numeric_absent") ]] \
+  || fail 'the numeric-leaf sweep flagged a file that declares no cleanupPeriodDays'
+
 # Every other writer's key, plus two values deliberately left undeclared so they
 # stay adjustable through the interface.
 fixture=$scratch/settings.json
@@ -121,6 +198,7 @@ before_other_model=$(jq -Sc '.modelSettings["other-model"]' "$fixture")
 run "$fixture" >/dev/null
 assert_declared_present "$fixture" 'drift run'
 assert_env_types_are_strings "$fixture" 'drift run'
+assert_numeric_leaves "$fixture" 'drift run'
 
 # Leaf ownership: the enclosing record keeps its other members, and every key the
 # declaration does not name survives. This is the assertion the old top-level
@@ -149,6 +227,7 @@ run "$created" >/dev/null
 assert_declared_present "$created" 'missing target'
 
 assert_env_types_are_strings "$created" 'missing target'
+assert_numeric_leaves "$created" 'missing target'
 
 # The env record has a co-writer: Claude Code's own legacy `autoUpdates` migration
 # writes into it, and .chezmoidata/agents.yaml claims convergence with that. The
@@ -162,6 +241,7 @@ run "$env_sibling" >/dev/null
   || fail 'an env key another writer owns did not survive the assert'
 assert_declared_present "$env_sibling" 'env co-writer'
 assert_env_types_are_strings "$env_sibling" 'env co-writer'
+assert_numeric_leaves "$env_sibling" 'env co-writer'
 
 # A malformed live file is preserved and reported, never rebuilt: rebuilding from
 # the declaration alone would drop everything the other writers own.
@@ -266,6 +346,7 @@ grep -qF 'was empty' <<<"$zero_err" || fail 'an empty target was not reported on
 [[ -f "$zero.bak" ]] || fail 'an empty target was not copied aside'
 assert_declared_present "$zero" 'empty target'
 assert_env_types_are_strings "$zero" 'empty target'
+assert_numeric_leaves "$zero" 'empty target'
 
 # cp follows a symlink at the DESTINATION, so a planted .bak would redirect the
 # backup write into whatever it points at -- and this script runs as chezmoi_t,
