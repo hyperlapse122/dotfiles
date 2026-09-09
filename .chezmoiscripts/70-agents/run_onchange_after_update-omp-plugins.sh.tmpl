@@ -66,6 +66,35 @@ marketplace_id() {
   printf '%s\n' "$id"
 }
 
+# Reads the source path currently registered for a marketplace id from
+# `omp plugin marketplace list`, skipping the header and non-indented lines.
+registered_marketplace_source() {
+  local target_id=$1 line id rest
+  while IFS= read -r line; do
+    [[ $line =~ ^[[:space:]]+([^[:space:]]+)[[:space:]]+(.*)$ ]] || continue
+    id=${BASH_REMATCH[1]}
+    rest=${BASH_REMATCH[2]}
+    if [[ $id == "$target_id" ]]; then
+      printf '%s\n' "$rest"
+      return 0
+    fi
+  done < <(omp plugin marketplace list 2>/dev/null || true)
+  return 0
+}
+
+# Restores the previously registered source if a refresh step fails after
+# removal. Because omp allows only one registration per id, restoring after
+# a successful replacement add removes that replacement first.
+restore_marketplace() {
+  local market_id=$1 prev_source=$2 orig_err=$3
+  omp plugin marketplace remove "$market_id" >/dev/null 2>&1 || true
+  if ! omp plugin marketplace add "$prev_source" >/dev/null 2>&1 || \
+     [[ $(registered_marketplace_source "$market_id") != "$prev_source" ]]; then
+    die "$orig_err; failed to restore marketplace $market_id at $prev_source"
+  fi
+  die "$orig_err"
+}
+
 [[ -n ${HOME:-} && -d $HOME && -w $HOME ]] || die 'preflight: HOME is not writable'
 # The command manifest installs omp in the same apply, so an absent binary at
 # this phase is a real provisioning failure, not a host that opted out. The
@@ -122,12 +151,42 @@ for row in "${PLUGINS[@]}"; do
   market_id=$(marketplace_id "$source") ||
     die "preflight: cannot read the marketplace id for $market"
   id="${name}@${market_id}"
-  # Re-point rather than update: a registered marketplace keeps its recorded
-  # source, so a version bump would otherwise install the superseded path.
-  omp plugin marketplace remove "$market_id" >/dev/null 2>&1 || true
-  omp plugin marketplace add "$source" || die "marketplace add failed for $market ($market_id)"
-  omp plugin install --scope user --force "$id" || die "plugin install failed for $id"
-  omp plugin enable --scope user "$id" || die "plugin enable failed for $id"
+  prev_source=$(registered_marketplace_source "$market_id")
+  if [[ $prev_source == "$source" ]]; then
+    :
+  else
+    # Re-point rather than update: a registered marketplace keeps its recorded
+    # source, so a version bump would otherwise install the superseded path.
+    if [[ -n $prev_source ]]; then
+      omp plugin marketplace remove "$market_id" >/dev/null 2>&1 || true
+    fi
+    if ! omp plugin marketplace add "$source"; then
+      orig_err="marketplace add failed for $market ($market_id)"
+      if [[ -n $prev_source ]]; then
+        restore_marketplace "$market_id" "$prev_source" "$orig_err"
+      else
+        die "$orig_err"
+      fi
+    fi
+  fi
+
+  if ! omp plugin install --scope user --force "$id"; then
+    orig_err="plugin install failed for $id"
+    if [[ -n $prev_source && $prev_source != "$source" ]]; then
+      restore_marketplace "$market_id" "$prev_source" "$orig_err"
+    else
+      die "$orig_err"
+    fi
+  fi
+
+  if ! omp plugin enable --scope user "$id"; then
+    orig_err="plugin enable failed for $id"
+    if [[ -n $prev_source && $prev_source != "$source" ]]; then
+      restore_marketplace "$market_id" "$prev_source" "$orig_err"
+    else
+      die "$orig_err"
+    fi
+  fi
 done
 {{- end }}
 {{- end }}
