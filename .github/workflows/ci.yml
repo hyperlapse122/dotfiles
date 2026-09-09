@@ -47,6 +47,7 @@ jobs:
             ".chezmoiscripts/70-agents/run_onchange_after_update-claude-plugins.sh.tmpl:claude-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-agy-plugins.sh.tmpl:agy-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-codex-plugins.sh.tmpl:codex-plugins.sh" \
+            ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:omp-plugins.sh" \
             ".chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl:claude-settings.sh"
           do
             source_path=${item%%:*}
@@ -57,7 +58,8 @@ jobs:
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
           chmod 700 "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
-            "$RUNNER_TEMP/codex-plugins.sh" "$RUNNER_TEMP/claude-settings.sh"
+            "$RUNNER_TEMP/codex-plugins.sh" "$RUNNER_TEMP/omp-plugins.sh" \
+            "$RUNNER_TEMP/claude-settings.sh"
       - name: Test agent reconciliation
         run: |
           set -euo pipefail
@@ -65,6 +67,7 @@ jobs:
             "$RUNNER_TEMP/claude-plugins.sh" \
             "$RUNNER_TEMP/agy-plugins.sh" \
             "$RUNNER_TEMP/codex-plugins.sh"
+          .ci/test-omp-plugin-reconcile.sh "$RUNNER_TEMP/omp-plugins.sh"
           .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
           .ci/test-codex-tokscale-wrapper.sh
           .ci/test-codex-skills-guard.sh

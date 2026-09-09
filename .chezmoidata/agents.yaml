@@ -179,6 +179,12 @@ agents:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     pluginsRemoved: []
+  omp:
+    # The omp-only archive copy, never the shared one: installing the copy that
+    # still carries a root plugin.json makes omp drop 30 of 33 skills.
+    plugins:
+    - { name: compound-engineering, marketplace: compound-engineering-omp }
+    pluginsRemoved: []
   codex:
     # Codex CLI config.toml VALUES asserted into the live ~/.codex/config.toml by
     # the codex settings reconciler. Each key is a dot-separated path to a LEAF;
