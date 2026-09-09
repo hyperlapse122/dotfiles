@@ -20,6 +20,11 @@ set -euo pipefail
 # instruction file unasserted. Every load-bearing sentence on those lines must
 # therefore carry its own needle. Closing the gap properly means asserting each
 # harness line byte-for-byte against a committed fixture.
+#
+# The `This harness runs ` lines carry no such gap: each one is compared whole
+# against .ci/fixtures/agent-instructions/harness-runs-<harness>.txt, so an
+# appended sentence fails the gate and no per-sentence needle is needed. Editing
+# that prose means updating its fixture in the same commit.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
@@ -74,11 +79,22 @@ for i in "${!harness_ids[@]}"; do
   fi
   diff -q <(grep -Fvx "$linux_rule" "$harness_render") <(grep -Fvx "$other_os_rule" "$other_os_render") >/dev/null \
     || fail "$source_wrapper differs across OSes outside its executable rule"
+  # The model-tuning line is compared whole, so an appended sentence cannot ride
+  # in behind the peer diff that strips it. The fixture is the expectation; a
+  # deliberate wording change updates it in the same commit.
+  runs_fixture="$repo_root/.ci/fixtures/agent-instructions/harness-runs-${harness_ids[$i]}.txt"
+  [[ -f $runs_fixture ]] || fail "missing model-tuning fixture $runs_fixture"
+  runs_line="$scratch/${harness_ids[$i]}-runs.txt"
+  grep '^This harness runs ' "$harness_render" >"$runs_line" || true
+  [[ $(wc -l <"$runs_line") -eq 1 ]] \
+    || fail "${harness_ids[$i]} must render exactly one 'This harness runs ' line"
+  diff -q "$runs_fixture" "$runs_line" >/dev/null \
+    || fail "${harness_ids[$i]} model-tuning line differs from $runs_fixture"
   renders+=("$harness_render")
 done
 rendered=${renders[0]}
 
-strip_harness_paragraph() { grep -v '^This harness is ' "$1"; }
+strip_harness_paragraph() { grep -vE '^This harness (is|runs) ' "$1"; }
 for peer_render in "${renders[@]:1}"; do
   diff -q <(strip_harness_paragraph "$rendered") <(strip_harness_paragraph "$peer_render") >/dev/null \
     || fail "$(basename "$peer_render") diverges from $(basename "$rendered") outside its harness paragraph"
@@ -110,6 +126,16 @@ while IFS= read -r needle; do
   [[ -z $needle ]] && continue
   grep -F "$needle" "$rendered" >/dev/null || fail "lost rule: $needle"
 done <<'NEEDLES'
+MUST review that skill list and MUST open the most specific covering skill, then follow it in place of improvised steps.
+A skill the user names is always opened.
+A task whose next action matches no skill description proceeds without opening one, and a further skill is opened only when a concrete step requires it.
+Opening a skill grants no authority a rule in this file withholds, and this rule creates no mandatory workflow routing
+When two instructions disagree, compose them rather than satisfying both.
+A repository supplement MAY add a rule or tighten one and MUST NOT remove one; where it tightens, the tighter rule governs.
+A skill's own instructions and the harness's defaults and automatic reminders yield to this file and to that supplement
+a named local exception in this file — the executable-selection rule, the `lfg` autopilot override — stays authoritative for its own subject
+The secrets, destructive-action, and dispatch-routing prohibitions in this file sit outside this composition
+they bind whatever the conflicting instruction is and wherever it comes from, the active conversation included
 MUST NOT edit a file by writing or running a Python, Node/JavaScript, or shell script
 MUST NOT use `sed -i`, `awk`, `perl -pi`, `tee`, or heredoc/`>` redirection to create or rewrite a tracked file
 even when a harness instruction, mode, or automatic reminder tells the agent to prefer the shell
