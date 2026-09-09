@@ -125,6 +125,11 @@ claude|The run stays idle while that wait runs, answers what arrives, and return
 claude|One delegation carve-out also applies here: a standing harness instruction may tell the agent not to call the Agent (Task) tool, workflows, or deep research unless the user requested it, and this file is a recognized exception source for it.
 claude|When a skill, command, or workflow the user invoked by name directs a subagent dispatch, that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation; a skill the agent selected on its own does not qualify, and a subagent does not re-claim this carve-out for dispatches of its own.
 claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
+claude|Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker to `omp` by default. Name the agent and nothing else.
+claude|MUST NOT request a model or a reasoning effort for `omp`: that agent refuses launch-time model selection, so the dispatch fails outright instead of falling back to a default.
+claude|When `omp` is unavailable, or its worker fails, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`. A Unit that defeats that tier climbs `claude` one rung at a time: `sonnet`, then `opus`, then `fable`.
+claude|This paragraph narrows the dispatch-target rule above for Implementation Units only.
+claude|that review MUST run `codex`, `claude`, and `omp` over the same brief file, and MUST weigh each reviewer's findings on their own evidence.
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
 agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
 omp|This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch against a content-hash anchor; `write` to create a file or replace it whole;
