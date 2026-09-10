@@ -317,7 +317,7 @@ pins_rejects eval-missing-status \
   --eval
 
 pins_rejects status-without-eval \
-  '--commit-status and --image-status are only valid with --eval' \
+  'status overrides are only valid with --eval' \
   'pins gate refuses status flags outside --eval' \
   --commit-status identical
 
@@ -391,5 +391,109 @@ pins_accepts committed-files \
   --eval \
   --commit-status identical \
   --image-status ok
+
+# --------------------------------------------------------------------------- #
+# Submodule reachability (the build's other three remote dependencies)
+# --------------------------------------------------------------------------- #
+
+pins_accepts submodules-ok \
+  'pins gate passes when every submodule commit is still served' \
+  --eval --commit-status identical --image-status ok \
+  --submodule-status 'lib/chibios=ok' \
+  --submodule-status 'lib/chibios-contrib=ok' \
+  --submodule-status 'lib/printf=ok'
+
+pins_rejects submodule-gone \
+  'no longer serves' \
+  'pins gate fails when a submodule commit is no longer served' \
+  --eval --commit-status identical --image-status ok \
+  --submodule-status 'lib/chibios=ok' \
+  --submodule-status 'lib/printf=error:lib/printf pins qmk/printf@dead, which qmk/printf no longer serves'
+
+pins_rejects submodule-unresolvable \
+  'points outside github.com' \
+  'pins gate fails when a submodule cannot be resolved rather than passing it' \
+  --eval --commit-status identical --image-status ok \
+  --submodule-status 'lib/printf=error:lib/printf points outside github.com (git://example.invalid/x); cannot check reachability'
+
+# Every broken dependency is named in one run, not just the first reached.
+case_name='all-three-streams-fail'
+out=$("$pins_gate" \
+  --eval --commit-status diverged --behind-by 2 --image-status error:HTTP_404 \
+  --submodule-status 'lib/printf=error:lib/printf pins qmk/printf@dead, which qmk/printf no longer serves' 2>&1) || true
+for expected in 'has diverged from' 'is not reachable in registry' 'no longer serves'; do
+  case "$out" in
+    *"$expected"*) ;;
+    *) fail "combined failure output does not name '$expected'" ;;
+  esac
+done
+pass 'pins gate names the fork, image and submodule failures together (failure isolation)'
+
+# --------------------------------------------------------------------------- #
+# 404 disambiguation: a stranded commit and a deleted one need different fixes
+# --------------------------------------------------------------------------- #
+
+pins_rejects commit-stranded \
+  'still exists in' \
+  'pins gate says the commit survives but left the branch when it does' \
+  --eval --commit-status 404 --commit-exists yes --image-status ok
+
+pins_rejects commit-deleted \
+  'no longer exists in' \
+  'pins gate says the commit is gone when it is' \
+  --eval --commit-status 404 --commit-exists no --image-status ok
+
+pins_rejects commit-404-unknown \
+  'not found in' \
+  'pins gate falls back to the unqualified message when existence is unknown' \
+  --eval --commit-status 404 --image-status ok
+
+# --------------------------------------------------------------------------- #
+# Registry reference parsing (the part of the OCI client testable offline)
+# --------------------------------------------------------------------------- #
+
+# The gate guards main() behind a source check, so this pulls in its functions
+# without running it.
+# shellcheck source=.ci/check-gem80-firmware-pins.sh
+source "$repo_root/.ci/check-gem80-firmware-pins.sh"
+
+case_name='registry-manifest-url'
+out=$(registry_manifest_url 'ghcr.io/qmk/qmk_cli@sha256:abc') || fail 'rejected a valid reference'
+[ "$out" = 'https://ghcr.io/v2/qmk/qmk_cli/manifests/sha256:abc' ] ||
+  fail "built the wrong manifest URL: $out"
+pass 'registry reference splits into registry, repository and digest'
+
+case_name='registry-manifest-url-rejects'
+out=
+registry_manifest_url 'ghcr.io/qmk/qmk_cli' >/dev/null 2>&1 &&
+  fail 'accepted a reference with no digest'
+registry_manifest_url 'qmk_cli@sha256:abc' >/dev/null 2>&1 &&
+  fail 'accepted a reference with no registry'
+pass 'registry reference parsing rejects references it cannot address'
+
+case_name='registry-token-url'
+out=$(registry_token_url 'Www-Authenticate: Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:qmk/qmk_cli:pull"' 'qmk/qmk_cli')
+[ "$out" = 'https://ghcr.io/token?service=ghcr.io&scope=repository:qmk/qmk_cli:pull' ] ||
+  fail "built the wrong token URL: $out"
+pass 'auth challenge becomes the token request it implies'
+
+case_name='registry-token-url-defaults'
+out=$(registry_token_url 'Www-Authenticate: Bearer realm="https://ghcr.io/token"' 'qmk/qmk_cli')
+[ "$out" = 'https://ghcr.io/token?scope=repository:qmk/qmk_cli:pull' ] ||
+  fail "wrong fallback token URL: $out"
+registry_token_url 'Www-Authenticate: Basic' 'qmk/qmk_cli' >/dev/null 2>&1 &&
+  fail 'accepted a challenge with no realm'
+pass 'auth challenge falls back to a pull scope and refuses a realmless challenge'
+
+# --------------------------------------------------------------------------- #
+# Rebuild gate: the build-failure branch and the committed artifact
+# --------------------------------------------------------------------------- #
+
+rebuild_rejects build-failure \
+  'build failure: firmware build failed' \
+  'rebuild gate reports a build failure distinctly from an output mismatch (R10)' \
+  --eval-build-failed --eval "$matching_sha" \
+  --build-info "$fixtures/build-info-valid.json" \
+  --firmware-yaml "$fixtures/firmware-build-only.yaml"
 
 printf 'gem80-firmware-pin-gates: all cases passed\n'

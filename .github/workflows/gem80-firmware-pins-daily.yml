@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  # The failure step files or updates the incident issue.
+  issues: write
 
 concurrency:
   group: gem80-firmware-pins-daily
@@ -41,3 +43,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: .ci/check-gem80-firmware-pins.sh
+
+      - name: Report the break
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .ci/report-gem80-firmware-break.sh daily \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

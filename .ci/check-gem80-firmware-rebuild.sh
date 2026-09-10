@@ -57,6 +57,7 @@ Rebuild gate for NuPhy Gem80 hostrgb firmware.
 
 Options:
   --eval, --eval-decision  Evaluate decision logic on a known hash without building
+  --eval-build-failed      Eval only: report the build-failure branch and exit non-zero
   --sha, --actual-sha <h>  Specify the rebuilt artifact hash for eval mode
   --build-info <path>      Path to build-info.json (default: repo build record)
   --firmware-yaml <path>   Path to firmware.yaml (default: .chezmoidata/firmware.yaml)
@@ -68,6 +69,7 @@ EOF
 source "$repo_root/.ci/lib/gem80-firmware-data.sh"
 
 eval_mode=false
+eval_build_failed=false
 actual_sha=""
 custom_build_info=""
 custom_firmware_yaml=""
@@ -81,6 +83,10 @@ while [[ $# -gt 0 ]]; do
         actual_sha="$1"
         shift
       fi
+      ;;
+    --eval-build-failed)
+      eval_build_failed=true
+      shift
       ;;
     --sha | --actual-sha)
       shift
@@ -161,6 +167,42 @@ validate_inputs() {
   esac
 }
 
+# One caller for the build-failure message, so the fixture test and the real
+# build path cannot report it differently.
+report_build_failure() {
+  fail "build failure: firmware build failed in scratch tree"
+}
+
+# The rebuild proves the source still builds; it says nothing about the binary
+# that is actually committed and flashed. A committed artifact that no longer
+# matches its own record — an LFS mishap, a hand-edit, a bad merge — would sail
+# through a passing rebuild, so it is checked separately and by name.
+verify_committed_artifact() {
+  local dist_bin="$1" rec_sha="$2"
+
+  if [[ ! -f $dist_bin ]]; then
+    printf 'check-gem80-firmware-rebuild: committed artifact absent (%s); skipping its check\n' "$dist_bin"
+    printf '::warning::check-gem80-firmware-rebuild: committed artifact not present; only the rebuild was checked\n'
+    return 0
+  fi
+
+  # An unfetched LFS pointer is a small text file, not firmware. Hashing it would
+  # report a mismatch with a misleading cause.
+  if head -c 64 -- "$dist_bin" | grep -q '^version https://git-lfs'; then
+    printf 'check-gem80-firmware-rebuild: committed artifact is an unfetched Git LFS pointer; skipping its check\n'
+    printf '::warning::check-gem80-firmware-rebuild: committed artifact is an LFS pointer; run git lfs pull to check it\n'
+    return 0
+  fi
+
+  local dist_sha
+  dist_sha=$(sha256sum -- "$dist_bin" | cut -d' ' -f1)
+  if [[ $dist_sha != "$rec_sha" ]]; then
+    fail "committed artifact mismatch: $dist_bin hashes to $dist_sha but the record says $rec_sha"
+  fi
+  printf 'check-gem80-firmware-rebuild: ok - committed artifact matches its record\n'
+  return 0
+}
+
 evaluate_rebuild_result() {
   local act_sha="$1"
   local rec_sha="$2"
@@ -192,6 +234,14 @@ evaluate_rebuild_result() {
 }
 
 if [[ $eval_mode == true ]]; then
+  if [[ $eval_build_failed == true ]]; then
+    # The build-failure branch is otherwise only reachable by making a real build
+    # fail, which no fixture can arrange. It reports through the same call the
+    # real path uses, so a test here covers the message the operator would see.
+    validate_inputs
+    report_build_failure
+  fi
+
   [[ -n $actual_sha ]] || fail "eval mode requires an actual sha256 argument"
   [[ $actual_sha =~ ^[0-9a-f]{64}$ ]] ||
     fail "actual sha256 '$actual_sha' is not a 64-character lowercase hex digest"
@@ -207,6 +257,9 @@ command -v podman >/dev/null 2>&1 || fail "podman is required on PATH; rootless 
 command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required on PATH"
 
 validate_inputs
+
+# Before the build, while the committed tree is still the only thing on disk.
+verify_committed_artifact "$repo_root/firmware/nuphy-gem80-hostrgb/dist/$recorded_name" "$recorded_sha"
 
 # $XDG_RUNTIME_DIR is tmpfs on Fedora and the repository copy is a few hundred MB,
 # so the scratch tree lives under the cache directory rather than in RAM. This
@@ -249,7 +302,7 @@ chmod 700 "$rendered_cmd"
 
 printf 'check-gem80-firmware-rebuild: building firmware in scratch tree\n'
 if ! "$rendered_cmd" build; then
-  fail "build failure: firmware build failed in scratch tree"
+  report_build_failure
 fi
 
 built_bin="$scratch_repo/firmware/nuphy-gem80-hostrgb/dist/$recorded_name"

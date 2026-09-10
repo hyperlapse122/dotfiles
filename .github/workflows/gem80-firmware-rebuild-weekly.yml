@@ -15,6 +15,8 @@ on:
 
 permissions:
   contents: read
+  # The failure step files or updates the incident issue.
+  issues: write
 
 concurrency:
   group: gem80-firmware-rebuild-weekly
@@ -30,7 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # lfs so the gate can also check the committed binary against its record;
+      # without it the artifact arrives as a pointer and that check is skipped.
       - uses: actions/checkout@v7
+        with:
+          lfs: true
 
       # The gate runs the firmware build in a container and refuses to start
       # without podman. The helper short-circuits when the runner image already
@@ -57,3 +63,11 @@ jobs:
 
       - name: Rebuild firmware and check against record
         run: .ci/check-gem80-firmware-rebuild.sh
+
+      - name: Report the break
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .ci/report-gem80-firmware-break.sh weekly \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

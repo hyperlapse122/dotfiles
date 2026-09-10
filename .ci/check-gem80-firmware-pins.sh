@@ -4,7 +4,7 @@ set -euo pipefail
 # Validates the reachability of the pinned QMK fork commit and toolchain image
 # digest for the NuPhy Gem80 hostrgb firmware.
 #
-# TWO CHECKS.
+# THREE CHECKS.
 #   1. Fork commit reachability: The pinned commit in .chezmoidata/firmware.yaml
 #      must still be an ancestor of the declared branch in the remote fork.
 #      Commit object existence alone is insufficient — an orphaned commit can
@@ -13,13 +13,15 @@ set -euo pipefail
 #   2. Toolchain image digest reachability: the digest-pinned container image
 #      must still be served by its registry.
 #
-# WHAT THIS DOES NOT WATCH. The build also fetches three submodules
-# (lib/chibios, lib/chibios-contrib, lib/printf) from repositories this gate
-# never queries. If one of those disappears, this gate stays green and only the
-# weekly rebuild notices, so the blind spot is up to a week wide. That split is
-# deliberate — resolving submodule pins needs the fork's tree, which is the
-# clone this gate exists to avoid — but do not read a green run here as "the
-# whole build path is fine".
+#   3. Submodule reachability: the build fetches lib/chibios,
+#      lib/chibios-contrib and lib/printf by the commit the fork's tree records.
+#      Each of those commits must still be served by its own repository.
+#
+# WHY EXISTENCE IS THE RIGHT QUESTION FOR SUBMODULES. Check 1 demands ancestry
+# because a fork branch moves and can strand the pin. A submodule pin is a bare
+# commit the build fetches by SHA and nothing claims it sits on any branch, so
+# the answerable question is whether the commit is still served — which is what
+# repository deletion, renaming, or a switch to private actually breaks.
 #
 # RUN PROFILE. Runs daily via .github/workflows/gem80-firmware-pins-daily.yml and
 # can be dispatched manually. Lookup-only, non-mutating: does not clone the
@@ -30,9 +32,9 @@ set -euo pipefail
 # are reachable ONLY under `--eval`: a gate that could be silenced by an ambient
 # environment variable would report healthy through the outage it exists to catch.
 #
-# FAILURE ISOLATION. Both checks run on every invocation. If one fails, the other
-# is still checked so all broken dependencies are reported together, distinguishing
-# fork commit unreachability from toolchain image unreachability.
+# FAILURE ISOLATION. Every check runs on every invocation. One failing does not
+# stop the others, so a single run names every broken dependency rather than the
+# first one it happened to reach.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
@@ -209,8 +211,22 @@ judge_commit_reachability() {
       return 1
       ;;
     404 | not_found)
-      printf 'fork commit %s or ref %s not found in %s' \
-        "$sha" "$ref" "$source"
+      # 404 from the compare endpoint covers two different incidents, and the
+      # operator's next move differs: a commit that is gone needs a new pin,
+      # while a commit that still exists off-branch may just need the ref
+      # updated. `commit_exists` distinguishes them when it is known.
+      case "${6:-unknown}" in
+        yes)
+          printf 'fork commit %s still exists in %s but is no longer on %s' \
+            "$sha" "$source" "$ref"
+          ;;
+        no)
+          printf 'fork commit %s no longer exists in %s' "$sha" "$source"
+          ;;
+        *)
+          printf 'fork commit %s or ref %s not found in %s' "$sha" "$ref" "$source"
+          ;;
+      esac
       return 1
       ;;
     *)
@@ -221,6 +237,126 @@ judge_commit_reachability() {
   esac
 }
 
+# The three paths `gem80-firmware build` initialises. Listed here rather than
+# discovered, so a submodule the build does not fetch cannot quietly widen this
+# gate, and one the build gains without being added here fails the build loudly
+# instead of being watched wrongly.
+BUILD_SUBMODULE_PATHS=(lib/chibios lib/chibios-contrib lib/printf)
+
+github_api() {
+  local path="$1"
+  local auth_headers=()
+  local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+  [ -n "$token" ] && auth_headers=(-H "Authorization: Bearer $token")
+
+  local body_file http_code
+  body_file=$(mktemp)
+  http_code=$(curl -sS "${CURL_TIMEOUTS[@]}" -o "$body_file" -w "%{http_code}" \
+    -H "Accept: application/vnd.github+json" \
+    "${auth_headers[@]}" \
+    "https://api.github.com/$path") || true
+  http_code="${http_code##*$'\n'}"
+  http_code="${http_code:-000}"
+
+  printf '%s\t%s\n' "$http_code" "$body_file"
+}
+
+# Resolves one submodule's repository and pinned commit from the fork's tree,
+# then asks that repository whether the commit is still served.
+query_submodule_reachability() {
+  local source="$1" fork_sha="$2" path="$3"
+
+  local probe http_code body_file
+  probe=$(github_api "repos/${source}/contents/${path}?ref=${fork_sha}")
+  IFS=$'\t' read -r http_code body_file <<<"$probe"
+
+  if [ "$http_code" != "200" ]; then
+    rm -f "$body_file"
+    printf 'error:could not read %s from %s (HTTP %s)\n' "$path" "$source" "$http_code"
+    return 0
+  fi
+
+  local entry_type sub_url sub_sha
+  entry_type=$(jq -r '.type // empty' "$body_file" 2>/dev/null || true)
+  sub_url=$(jq -r '.submodule_git_url // empty' "$body_file" 2>/dev/null || true)
+  sub_sha=$(jq -r '.sha // empty' "$body_file" 2>/dev/null || true)
+  rm -f "$body_file"
+
+  if [ "$entry_type" != "submodule" ] || [ -z "$sub_url" ] || [ -z "$sub_sha" ]; then
+    printf 'error:%s is not a submodule in %s at the pinned commit\n' "$path" "$source"
+    return 0
+  fi
+
+  # Only a GitHub-hosted submodule can be asked this way. Anything else is
+  # reported as unresolvable rather than assumed healthy.
+  local sub_repo="${sub_url#https://github.com/}"
+  sub_repo="${sub_repo%.git}"
+  if [ "$sub_repo" = "$sub_url" ]; then
+    printf 'error:%s points outside github.com (%s); cannot check reachability\n' "$path" "$sub_url"
+    return 0
+  fi
+
+  probe=$(github_api "repos/${sub_repo}/commits/${sub_sha}")
+  IFS=$'\t' read -r http_code body_file <<<"$probe"
+  rm -f "$body_file"
+
+  case "$http_code" in
+    200) printf 'ok\n' ;;
+    404) printf 'error:%s pins %s@%s, which %s no longer serves\n' "$path" "$sub_repo" "$sub_sha" "$sub_repo" ;;
+    *) printf 'error:%s reachability query for %s failed (HTTP %s)\n' "$path" "$sub_repo" "$http_code" ;;
+  esac
+  return 0
+}
+
+judge_submodule_reachability() {
+  local path="$1" status="$2"
+  case "$status" in
+    ok) return 0 ;;
+    *)
+      printf 'submodule %s' "${status#error:}"
+      return 1
+      ;;
+  esac
+}
+
+# Splits a digest-pinned reference into the three parts the manifest URL needs.
+# Its own function so a fixture can check the split without a network call —
+# the surrounding client is curl and cannot be exercised offline.
+registry_manifest_url() {
+  local image="$1"
+  local ref="${image#*@}"
+  local repo_full="${image%@*}"
+  local registry="${repo_full%%/*}"
+  local repo="${repo_full#*/}"
+
+  if [ "$ref" = "$image" ] || [ "$registry" = "$repo_full" ] || [ -z "$repo" ]; then
+    return 1
+  fi
+  printf 'https://%s/v2/%s/manifests/%s\n' "$registry" "$repo" "$ref"
+}
+
+# Reads the registry's 401 challenge into the token request it implies. The
+# realm is required; service is optional; an absent scope falls back to a pull
+# scope for this repository.
+registry_token_url() {
+  local auth_header="$1" repo="$2"
+
+  [[ $auth_header =~ realm=\"([^\"]+)\" ]] || return 1
+  local realm="${BASH_REMATCH[1]}"
+
+  local service="" scope=""
+  [[ $auth_header =~ service=\"([^\"]+)\" ]] && service="${BASH_REMATCH[1]}"
+  if [[ $auth_header =~ scope=\"([^\"]+)\" ]]; then
+    scope="${BASH_REMATCH[1]}"
+  else
+    scope="repository:${repo}:pull"
+  fi
+
+  local token_url="${realm}?"
+  [ -n "$service" ] && token_url="${token_url}service=${service}&"
+  printf '%s%s\n' "$token_url" "scope=${scope}"
+}
+
 query_image_registry() {
   local image="$1"
 
@@ -229,10 +365,14 @@ query_image_registry() {
   # firmware the digest resolves without a single packet reaching the registry —
   # and the check would report healthy for an image ghcr no longer serves. The
   # registry HTTP API is the only thing that actually answers the question.
-  local ref="${image#*@}"
   local repo_full="${image%@*}"
-  local registry="${repo_full%%/*}"
   local repo="${repo_full#*/}"
+
+  local manifest_url
+  manifest_url=$(registry_manifest_url "$image") || {
+    printf 'error:unparseable image reference %s\n' "$image"
+    return 0
+  }
 
   local accept_headers=(
     -H "Accept: application/vnd.oci.image.index.v1+json"
@@ -241,7 +381,6 @@ query_image_registry() {
     -H "Accept: application/vnd.docker.distribution.manifest.v2+json"
   )
 
-  local manifest_url="https://${registry}/v2/${repo}/manifests/${ref}"
   local headers_file
   headers_file=$(mktemp)
   # shellcheck disable=SC2064
@@ -266,23 +405,11 @@ query_image_registry() {
   # Anonymous pull: the registry answers 401 with the token endpoint to use.
   local auth_header
   auth_header=$(grep -i '^www-authenticate:' "$headers_file" | tr -d '\r' | head -n 1 || true)
-  if [[ ! $auth_header =~ realm=\"([^\"]+)\" ]]; then
+  local token_url
+  token_url=$(registry_token_url "$auth_header" "$repo") || {
     printf 'error:HTTP_401_no_auth_challenge\n'
     return 0
-  fi
-  local realm="${BASH_REMATCH[1]}"
-
-  local service="" scope=""
-  [[ $auth_header =~ service=\"([^\"]+)\" ]] && service="${BASH_REMATCH[1]}"
-  if [[ $auth_header =~ scope=\"([^\"]+)\" ]]; then
-    scope="${BASH_REMATCH[1]}"
-  else
-    scope="repository:${repo}:pull"
-  fi
-
-  local token_url="${realm}?"
-  [ -n "$service" ] && token_url="${token_url}service=${service}&"
-  token_url="${token_url}scope=${scope}"
+  }
 
   local token_json token
   token_json=$(curl -sS "${CURL_TIMEOUTS[@]}" "$token_url") || token_json=''
@@ -331,11 +458,12 @@ judge_firmware_pins() {
   local behind_by="$5"
   local toolchain_image="$6"
   local image_status="$7"
+  local commit_exists="$8"
 
   local errors=()
 
   local commit_err
-  if ! commit_err=$(judge_commit_reachability "$fork_source" "$fork_ref" "$fork_sha" "$commit_status" "$behind_by"); then
+  if ! commit_err=$(judge_commit_reachability "$fork_source" "$fork_ref" "$fork_sha" "$commit_status" "$behind_by" "$commit_exists"); then
     errors+=("$commit_err")
   fi
 
@@ -343,6 +471,18 @@ judge_firmware_pins() {
   if ! img_err=$(judge_image_reachability "$toolchain_image" "$image_status"); then
     errors+=("$img_err")
   fi
+
+  # Submodule statuses arrive as "<path>=<status>" pairs in the remaining
+  # arguments, so every one is judged even after an earlier failure.
+  shift 8
+  local pair path status sub_err
+  for pair in "$@"; do
+    path="${pair%%=*}"
+    status="${pair#*=}"
+    if ! sub_err=$(judge_submodule_reachability "$path" "$status"); then
+      errors+=("$sub_err")
+    fi
+  done
 
   if [ ${#errors[@]} -gt 0 ]; then
     for err in "${errors[@]}"; do
@@ -368,6 +508,8 @@ Options:
   --commit-status <status>   Eval only: GitHub compare status (e.g. identical, ahead, diverged, 404)
   --behind-by <n>            Eval only: behind_by commit count (default: 0)
   --image-status <status>    Eval only: image reachability status (e.g. ok, error:HTTP_404)
+  --commit-exists yes|no     Eval only: whether the pinned commit still exists (404 branch)
+  --submodule-status P=S     Eval only: one submodule path and its status; repeatable
   -h, --help                 Show this help message
 EOF
 }
@@ -379,6 +521,8 @@ main() {
   local commit_status=""
   local behind_by="0"
   local image_status=""
+  local commit_exists="unknown"
+  local submodule_statuses=()
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -406,6 +550,14 @@ main() {
         image_status="$2"
         shift 2
         ;;
+      --commit-exists)
+        commit_exists="$2"
+        shift 2
+        ;;
+      --submodule-status)
+        submodule_statuses+=("$2")
+        shift 2
+        ;;
       -h|--help)
         show_usage
         exit 0
@@ -429,8 +581,8 @@ main() {
       validation_error "--eval requires --commit-status and --image-status"
       exit 1
     fi
-  elif [ -n "$commit_status" ] || [ -n "$image_status" ]; then
-    validation_error "--commit-status and --image-status are only valid with --eval"
+  elif [ -n "$commit_status" ] || [ -n "$image_status" ] || [ ${#submodule_statuses[@]} -gt 0 ]; then
+    validation_error "status overrides are only valid with --eval"
     exit 1
   fi
 
@@ -449,9 +601,28 @@ main() {
     cmp_result=$(query_github_compare "$fork_source" "$fork_ref" "$fork_sha")
     IFS=$'\t' read -r commit_status behind_by <<<"$cmp_result"
     image_status=$(query_image_registry "$toolchain_image")
+
+    # Only on the branch of a 404, and only to name which incident it is.
+    if [ "$commit_status" = "404" ]; then
+      local probe code body
+      probe=$(github_api "repos/${fork_source}/commits/${fork_sha}")
+      IFS=$'\t' read -r code body <<<"$probe"
+      rm -f "$body"
+      case "$code" in
+        200) commit_exists=yes ;;
+        404) commit_exists=no ;;
+        *) commit_exists=unknown ;;
+      esac
+    fi
+
+    local path
+    for path in "${BUILD_SUBMODULE_PATHS[@]}"; do
+      submodule_statuses+=("$path=$(query_submodule_reachability "$fork_source" "$fork_sha" "$path")")
+    done
   fi
 
-  judge_firmware_pins "$fork_source" "$fork_ref" "$fork_sha" "$commit_status" "$behind_by" "$toolchain_image" "$image_status" || exit 1
+  judge_firmware_pins "$fork_source" "$fork_ref" "$fork_sha" "$commit_status" "$behind_by" \
+    "$toolchain_image" "$image_status" "$commit_exists" "${submodule_statuses[@]+"${submodule_statuses[@]}"}" || exit 1
   exit 0
 }
 
