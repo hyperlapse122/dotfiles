@@ -31,6 +31,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Without PyYAML the shared reader falls back to sed, so CI would exercise
+      # a different decoder than the fixture test in ci.yml does. `-` because a
+      # library package has no binary to probe.
+      - name: Install PyYAML
+        run: .ci/lib/apt-install.sh - python3-yaml
+
       - name: Check firmware fork commit and toolchain reachability
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

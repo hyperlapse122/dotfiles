@@ -6,14 +6,20 @@ set -euo pipefail
 #
 # TWO CHECKS.
 #   1. Fork commit reachability: The pinned commit in .chezmoidata/firmware.yaml
-#      must still be reachable from the declared branch in the remote fork
-#      repository. Checking branch ancestry via the GitHub compare API ensures
-#      the fetch path is intact — commit object existence alone is insufficient,
-#      as an orphaned commit may survive temporarily after a force-push while the
-#      build fetch path is already broken.
-#   2. Toolchain image digest reachability: The digest-pinned container image
-#      recorded in firmware/nuphy-gem80-hostrgb/dist/build-info.json must be
-#      available from the container registry (ghcr.io).
+#      must still be an ancestor of the declared branch in the remote fork.
+#      Commit object existence alone is insufficient — an orphaned commit can
+#      survive for a while after a force-push while the build's fetch is already
+#      broken.
+#   2. Toolchain image digest reachability: the digest-pinned container image
+#      must still be served by its registry.
+#
+# WHAT THIS DOES NOT WATCH. The build also fetches three submodules
+# (lib/chibios, lib/chibios-contrib, lib/printf) from repositories this gate
+# never queries. If one of those disappears, this gate stays green and only the
+# weekly rebuild notices, so the blind spot is up to a week wide. That split is
+# deliberate — resolving submodule pins needs the fork's tree, which is the
+# clone this gate exists to avoid — but do not read a green run here as "the
+# whole build path is fine".
 #
 # RUN PROFILE. Runs daily via .github/workflows/gem80-firmware-pins-daily.yml and
 # can be dispatched manually. Lookup-only, non-mutating: does not clone the
@@ -30,9 +36,44 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
+# shellcheck source=.ci/lib/gem80-firmware-data.sh
+source "$repo_root/.ci/lib/gem80-firmware-data.sh"
+
+# Without these a stalled TLS handshake blocks on the kernel socket timeout,
+# which outlives the workflow's own timeout and reports as an ambiguous job
+# cancellation rather than an unreachable dependency.
+CURL_TIMEOUTS=(--connect-timeout 10 --max-time 30)
+
 validation_error() {
   printf 'check-gem80-firmware-pins: %s\n' "$1" >&2
   printf '::error::check-gem80-firmware-pins: %s\n' "$1"
+}
+
+# The build runs the image baked into the rendered gem80-firmware command, while
+# this gate reads the one the last build recorded. They are separate values, so
+# bumping the command without rebuilding would leave this gate vouching for an
+# image the build no longer uses.
+assert_image_matches_command() {
+  local recorded="$1"
+  local template="$repo_root/dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl"
+
+  [ -f "$template" ] || {
+    validation_error "gem80-firmware template not found: $template"
+    return 1
+  }
+
+  local command_image
+  command_image=$(sed -n -E 's/^IMAGE="([^"]+)".*/\1/p' "$template" | head -n 1)
+  if ! [[ $command_image =~ @sha256:[0-9a-f]{64}$ ]]; then
+    validation_error "could not read a digest-pinned IMAGE from $template"
+    return 1
+  fi
+
+  if [ "$command_image" != "$recorded" ]; then
+    validation_error "toolchain image drift: the build command uses $command_image but the build record says $recorded"
+    return 1
+  fi
+  return 0
 }
 
 validate_firmware_pins_inputs() {
@@ -49,60 +90,10 @@ validate_firmware_pins_inputs() {
     return 1
   fi
 
-  local fork_source="" fork_ref="" fork_sha=""
-  if command -v python3 >/dev/null 2>&1; then
-    local fw_vals
-    fw_vals=$(python3 -c '
-import sys
-try:
-    import yaml
-    with open(sys.argv[1], "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    fork = data.get("firmware", {}).get("gem80", {}).get("qmkFork", {})
-    s = fork.get("source", "") or ""
-    r = fork.get("ref", "") or ""
-    h = fork.get("sha", "") or ""
-    print(f"{s}\t{r}\t{h}")
-except Exception:
-    sys.exit(1)
-' "$fw_yaml" 2>/dev/null || true)
-    if [ -n "$fw_vals" ]; then
-      IFS=$'\t' read -r fork_source fork_ref fork_sha <<<"$fw_vals"
-    fi
-  fi
-
-  if [ -z "$fork_source" ] || [ -z "$fork_ref" ] || [ -z "$fork_sha" ]; then
-    if command -v yq >/dev/null 2>&1; then
-      local yq_vals
-      yq_vals=$(yq -r '[.firmware.gem80.qmkFork.source // "", .firmware.gem80.qmkFork.ref // "", .firmware.gem80.qmkFork.sha // ""] | @tsv' "$fw_yaml" 2>/dev/null || true)
-      if [ -n "$yq_vals" ]; then
-        IFS=$'\t' read -r fork_source fork_ref fork_sha <<<"$yq_vals"
-      fi
-    fi
-  fi
-
-  if [ -z "$fork_source" ] || [ -z "$fork_ref" ] || [ -z "$fork_sha" ]; then
-    local awk_vals
-    awk_vals=$(awk '
-      /^ *firmware:/ { in_fw=1; next }
-      in_fw && /^ *gem80:/ { in_gem=1; next }
-      in_gem && /^ *qmkFork:/ { in_fork=1; next }
-      in_fork && /^ *[a-zA-Z0-9_-]+:/ && !/^ *(source|ref|sha):/ {
-        if (match($0, /^ +/) < 6) { in_fork=0 }
-      }
-      in_fork && /^ *source:/ { sub(/^ *source:[ \t]*/, ""); gsub(/["\047]/, ""); src=$0 }
-      in_fork && /^ *ref:/ { sub(/^ *ref:[ \t]*/, ""); gsub(/["\047]/, ""); ref=$0 }
-      in_fork && /^ *sha:/ { sub(/^ *sha:[ \t]*/, ""); gsub(/["\047]/, ""); sha=$0 }
-      END {
-        if (src && ref && sha) {
-          printf "%s\t%s\t%s\n", src, ref, sha
-        }
-      }
-    ' "$fw_yaml")
-    if [ -n "$awk_vals" ]; then
-      IFS=$'\t' read -r fork_source fork_ref fork_sha <<<"$awk_vals"
-    fi
-  fi
+  local fork_source fork_ref fork_sha
+  fork_source=$(gem80_firmware_yaml_get "$fw_yaml" firmware.gem80.qmkFork.source || true)
+  fork_ref=$(gem80_firmware_yaml_get "$fw_yaml" firmware.gem80.qmkFork.ref || true)
+  fork_sha=$(gem80_firmware_yaml_get "$fw_yaml" firmware.gem80.qmkFork.sha || true)
 
   if [ -z "$fork_source" ] || [ -z "$fork_ref" ] || [ -z "$fork_sha" ]; then
     validation_error "firmware manifest missing required fields (firmware.gem80.qmkFork: source, ref, sha): $fw_yaml"
@@ -152,17 +143,26 @@ query_github_compare() {
   local resp_file
   resp_file=$(mktemp)
   local http_code
-  http_code=$(curl -s -S -o "$resp_file" -w "%{http_code}" \
+  # curl -w already writes 000 when it cannot connect, so an `|| echo 000` here
+  # would emit it twice and the caller would read a two-line status.
+  http_code=$(curl -sS "${CURL_TIMEOUTS[@]}" -o "$resp_file" -w "%{http_code}" \
     -H "Accept: application/vnd.github+json" \
     "${auth_headers[@]}" \
-    "$url" || echo "000")
+    "$url") || true
+  http_code="${http_code##*$'\n'}"
+  http_code="${http_code:-000}"
 
   if [ "$http_code" = "200" ]; then
-    local status behind_by
-    status=$(jq -r '.status // empty' "$resp_file")
-    behind_by=$(jq -r '.behind_by // 0' "$resp_file")
+    # A captive portal or proxy can answer 200 with HTML. Unparsed output is an
+    # error to report, never a status to act on.
+    local parsed
+    if ! parsed=$(jq -r '[.status // "", .behind_by // 0] | @tsv' "$resp_file" 2>/dev/null); then
+      rm -f "$resp_file"
+      printf 'error:malformed JSON in a 200 response\t0\n'
+      return 0
+    fi
     rm -f "$resp_file"
-    printf '%s\t%s\n' "$status" "$behind_by"
+    printf '%s\n' "$parsed"
     return 0
   elif [ "$http_code" = "404" ]; then
     rm -f "$resp_file"
@@ -170,7 +170,8 @@ query_github_compare() {
     return 0
   else
     local msg
-    msg=$(jq -r '.message // empty' "$resp_file" 2>/dev/null || echo "HTTP $http_code")
+    msg=$(jq -r '.message // empty' "$resp_file" 2>/dev/null || true)
+    [ -n "$msg" ] || msg="HTTP $http_code"
     rm -f "$resp_file"
     printf 'error:%s\t0\n' "$msg"
     return 0
@@ -223,20 +224,11 @@ judge_commit_reachability() {
 query_image_registry() {
   local image="$1"
 
-  # Fast path: try podman manifest inspect if available
-  if command -v podman >/dev/null 2>&1; then
-    if podman manifest inspect "$image" >/dev/null 2>&1; then
-      printf 'ok\n'
-      return 0
-    fi
-  elif command -v docker >/dev/null 2>&1; then
-    if docker manifest inspect "$image" >/dev/null 2>&1; then
-      printf 'ok\n'
-      return 0
-    fi
-  fi
-
-  # Fallback to direct OCI Registry HTTP API query via curl
+  # No container-tool fast path. `podman manifest inspect` and its docker shim
+  # answer from local image storage, so on any host that has ever built this
+  # firmware the digest resolves without a single packet reaching the registry —
+  # and the check would report healthy for an image ghcr no longer serves. The
+  # registry HTTP API is the only thing that actually answers the question.
   local ref="${image#*@}"
   local repo_full="${image%@*}"
   local registry="${repo_full%%/*}"
@@ -252,54 +244,66 @@ query_image_registry() {
   local manifest_url="https://${registry}/v2/${repo}/manifests/${ref}"
   local headers_file
   headers_file=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f -- '$headers_file'" RETURN
+
   local http_code
-  http_code=$(curl -s -S -o /dev/null -D "$headers_file" -w "%{http_code}" "${accept_headers[@]}" "$manifest_url" || echo "000")
+  http_code=$(curl -sS "${CURL_TIMEOUTS[@]}" -o /dev/null -D "$headers_file" -w "%{http_code}" \
+    "${accept_headers[@]}" "$manifest_url") || true
+  http_code="${http_code##*$'\n'}"
+  http_code="${http_code:-000}"
 
   if [ "$http_code" = "200" ]; then
-    rm -f "$headers_file"
     printf 'ok\n'
     return 0
-  elif [ "$http_code" = "401" ]; then
-    local auth_header
-    auth_header=$(grep -i '^www-authenticate:' "$headers_file" | tr -d '\r' | head -n 1)
-    rm -f "$headers_file"
-
-    if [[ "$auth_header" =~ realm=\"([^\"]+)\" ]]; then
-      local realm="${BASH_REMATCH[1]}"
-      local service=""
-      local scope=""
-      if [[ "$auth_header" =~ service=\"([^\"]+)\" ]]; then
-        service="${BASH_REMATCH[1]}"
-      fi
-      if [[ "$auth_header" =~ scope=\"([^\"]+)\" ]]; then
-        scope="${BASH_REMATCH[1]}"
-      else
-        scope="repository:${repo}:pull"
-      fi
-
-      local token_url="${realm}?"
-      [ -n "$service" ] && token_url="${token_url}service=${service}&"
-      [ -n "$scope" ] && token_url="${token_url}scope=${scope}"
-
-      local token_json
-      token_json=$(curl -s -S "$token_url" || echo "{}")
-      local token
-      token=$(echo "$token_json" | jq -r '.token // .access_token // empty')
-
-      if [ -n "$token" ]; then
-        http_code=$(curl -s -S -o /dev/null -w "%{http_code}" \
-          -H "Authorization: Bearer $token" \
-          "${accept_headers[@]}" "$manifest_url" || echo "000")
-        if [ "$http_code" = "200" ]; then
-          printf 'ok\n'
-          return 0
-        fi
-      fi
-    fi
-  else
-    rm -f "$headers_file"
   fi
 
+  if [ "$http_code" != "401" ]; then
+    printf 'error:HTTP_%s\n' "$http_code"
+    return 0
+  fi
+
+  # Anonymous pull: the registry answers 401 with the token endpoint to use.
+  local auth_header
+  auth_header=$(grep -i '^www-authenticate:' "$headers_file" | tr -d '\r' | head -n 1 || true)
+  if [[ ! $auth_header =~ realm=\"([^\"]+)\" ]]; then
+    printf 'error:HTTP_401_no_auth_challenge\n'
+    return 0
+  fi
+  local realm="${BASH_REMATCH[1]}"
+
+  local service="" scope=""
+  [[ $auth_header =~ service=\"([^\"]+)\" ]] && service="${BASH_REMATCH[1]}"
+  if [[ $auth_header =~ scope=\"([^\"]+)\" ]]; then
+    scope="${BASH_REMATCH[1]}"
+  else
+    scope="repository:${repo}:pull"
+  fi
+
+  local token_url="${realm}?"
+  [ -n "$service" ] && token_url="${token_url}service=${service}&"
+  token_url="${token_url}scope=${scope}"
+
+  local token_json token
+  token_json=$(curl -sS "${CURL_TIMEOUTS[@]}" "$token_url") || token_json=''
+  # A gateway can answer the token endpoint with an HTML error page, which jq
+  # cannot parse; an empty token then falls through to the failure below.
+  token=$(printf '%s' "$token_json" | jq -r '.token // .access_token // empty' 2>/dev/null || true)
+  if [ -z "$token" ]; then
+    printf 'error:HTTP_401_token_unavailable\n'
+    return 0
+  fi
+
+  http_code=$(curl -sS "${CURL_TIMEOUTS[@]}" -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $token" \
+    "${accept_headers[@]}" "$manifest_url") || true
+  http_code="${http_code##*$'\n'}"
+  http_code="${http_code:-000}"
+
+  if [ "$http_code" = "200" ]; then
+    printf 'ok\n'
+    return 0
+  fi
   printf 'error:HTTP_%s\n' "$http_code"
   return 0
 }
@@ -342,8 +346,7 @@ judge_firmware_pins() {
 
   if [ ${#errors[@]} -gt 0 ]; then
     for err in "${errors[@]}"; do
-      printf 'check-gem80-firmware-pins: %s\n' "$err" >&2
-      printf '::error::check-gem80-firmware-pins: %s\n' "$err"
+      validation_error "$err"
     done
     return 1
   fi
@@ -444,6 +447,8 @@ main() {
   IFS=$'\t' read -r fork_source fork_ref fork_sha toolchain_image <<<"$parsed"
 
   if [ "$eval_mode" = false ]; then
+    assert_image_matches_command "$toolchain_image" || exit 1
+
     local cmp_result
     cmp_result=$(query_github_compare "$fork_source" "$fork_ref" "$fork_sha")
     IFS=$'\t' read -r commit_status behind_by <<<"$cmp_result"

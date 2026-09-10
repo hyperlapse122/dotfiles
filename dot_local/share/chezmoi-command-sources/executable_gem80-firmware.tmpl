@@ -49,8 +49,8 @@ usage() {
 # order, so the record's key set always equals the file set that was compiled.
 KEYMAP_FILES=()
 collect_keymap_files() {
-  # `build` collects, then calls `cmd_verify`, which collects again. Appending to
-  # a stale array doubled every name and failed the file-set check on every build.
+  # `build` collects, then calls `cmd_verify`, which collects again, so this must
+  # rebuild the list rather than append to whatever a previous call left behind.
   KEYMAP_FILES=()
   [[ -d $KEYMAP_DIR ]] || die "keymap source is missing: $KEYMAP_DIR"
   # `cp -- "$KEYMAP_DIR"/*` copies flat files only, so a subdirectory would be

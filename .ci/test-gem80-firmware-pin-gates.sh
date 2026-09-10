@@ -50,33 +50,27 @@ pass() {
   printf 'gem80-firmware-pin-gates: ok - %s\n' "$1"
 }
 
-run_rebuild() {
-  out=$("$rebuild_gate" "$@" 2>&1) && return 0 || return $?
-}
-
-run_pins() {
-  out=$("$pins_gate" "$@" 2>&1) && return 0 || return $?
-}
-
-rebuild_accepts() {
-  case_name=$1
-  local what=$2
-  shift 2
+# Both gates are asserted the same way, so the scaffolding takes the gate as an
+# argument. Per-gate copies drift: strengthening one assertion and forgetting its
+# twin weakens half the suite without failing anything.
+gate_accepts() {
+  local gate=$1 what=$3
+  case_name=$2
+  shift 3
   out=
   local rc=0
-  run_rebuild "$@" || rc=$?
+  out=$("$gate" "$@" 2>&1) || rc=$?
   [ "$rc" -eq 0 ] || fail "expected exit 0, got exit $rc"
   pass "$what"
 }
 
-rebuild_rejects() {
-  case_name=$1
-  local expected=$2
-  local what=$3
-  shift 3
+gate_rejects() {
+  local gate=$1 expected=$3 what=$4
+  case_name=$2
+  shift 4
   out=
   local rc=0
-  run_rebuild "$@" || rc=$?
+  out=$("$gate" "$@" 2>&1) || rc=$?
   [ "$rc" -eq 1 ] || fail "expected exit 1, got exit $rc"
   case "$out" in
     *"$expected"*) ;;
@@ -85,34 +79,15 @@ rebuild_rejects() {
   pass "$what"
 }
 
-pins_accepts() {
-  case_name=$1
-  local what=$2
-  shift 2
-  out=
-  local rc=0
-  run_pins "$@" || rc=$?
-  [ "$rc" -eq 0 ] || fail "expected exit 0, got exit $rc"
-  pass "$what"
-}
+rebuild_accepts() { gate_accepts "$rebuild_gate" "$@"; }
+rebuild_rejects() { gate_rejects "$rebuild_gate" "$@"; }
+pins_accepts() { gate_accepts "$pins_gate" "$@"; }
+pins_rejects() { gate_rejects "$pins_gate" "$@"; }
 
-pins_rejects() {
-  case_name=$1
-  local expected=$2
-  local what=$3
-  shift 3
-  out=
-  local rc=0
-  run_pins "$@" || rc=$?
-  [ "$rc" -eq 1 ] || fail "expected exit 1, got exit $rc"
-  case "$out" in
-    *"$expected"*) ;;
-    *) fail "output does not name '$expected'" ;;
-  esac
-  pass "$what"
-}
-
-matching_sha="964eed3f305427f11363e8227c151a25097ab594524edcd5aa224627b825a2c4"
+# From the fixture these cases actually point the gate at. Reading the live
+# record here would fail these fixture cases the day the firmware is rebuilt;
+# the committed-files case below reads that record separately, on purpose.
+matching_sha=$(jq -r '.binary.sha256' "$fixtures/build-info-valid.json")
 mismatch_sha="0000000000000000000000000000000000000000000000000000000000000000"
 
 # --------------------------------------------------------------------------- #
@@ -174,6 +149,15 @@ rebuild_rejects missing-binary-name \
   'rebuild gate rejects build record missing binary.name' \
   --eval "$matching_sha" \
   --build-info "$fixtures/build-info-missing-binary-name.json" \
+  --firmware-yaml "$fixtures/firmware-build-only.yaml"
+
+# binary.name selects the path the gate hashes, so a record pointing outside
+# dist/ must be refused rather than silently compared against another file.
+rebuild_rejects traversal-binary-name \
+  "this board's artifact is" \
+  'rebuild gate rejects a build record naming a path outside the artifact' \
+  --eval "$matching_sha" \
+  --build-info "$fixtures/build-info-traversal-binary-name.json" \
   --firmware-yaml "$fixtures/firmware-build-only.yaml"
 
 rebuild_rejects invalid-binary-sha \
@@ -285,16 +269,18 @@ pins_rejects image-unreachable \
   --build-info "$fixtures/build-info-valid.json"
 
 # Covers R10: failure isolation reports BOTH commit and image errors when both fail.
+# Written out rather than through gate_rejects, which asserts one substring and
+# so cannot express that both causes must appear.
 case_name=dual-failure-isolation
 out=
 rc=0
-run_pins \
+out=$("$pins_gate" \
   --eval \
   --commit-status diverged \
   --behind-by 3 \
   --image-status error:HTTP_500 \
   --firmware-yaml "$fixtures/firmware-build-only.yaml" \
-  --build-info "$fixtures/build-info-valid.json" || rc=$?
+  --build-info "$fixtures/build-info-valid.json" 2>&1) || rc=$?
 [ "$rc" -eq 1 ] || fail "expected exit 1, got exit $rc"
 case "$out" in
   *"has diverged from"*) ;;

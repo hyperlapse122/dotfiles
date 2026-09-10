@@ -37,6 +37,10 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
+# The one artifact `nuphy/gem80/ansi:hostrgb` produces. Pinned here so the build
+# record cannot redirect the comparison at a different file.
+EXPECTED_BIN_NAME=nuphy_gem80_ansi_hostrgb.bin
+
 fail() {
   printf 'check-gem80-firmware-rebuild: %s\n' "$1" >&2
   [ -z "${2:-}" ] || printf '%s\n' "$2" >&2
@@ -60,26 +64,8 @@ Options:
 EOF
 }
 
-read_rebuild_mode() {
-  local yaml_file="$1"
-  [[ -f $yaml_file ]] || return 1
-  if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; then
-    python3 -c '
-import sys, yaml
-try:
-    with open(sys.argv[1], "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    if not isinstance(data, dict):
-        sys.exit(1)
-    val = data.get("firmware", {}).get("gem80", {}).get("rebuildMode")
-    if val is not None:
-        print(val)
-except Exception:
-    sys.exit(1)
-' "$yaml_file" 2>/dev/null && return 0
-  fi
-  sed -n -E 's/^[[:space:]]*rebuildMode:[[:space:]]*["'"'"']?([a-zA-Z0-9_-]+)["'"'"']?[[:space:]]*$/\1/p' "$yaml_file" | head -n 1
-}
+# shellcheck source=.ci/lib/gem80-firmware-data.sh
+source "$repo_root/.ci/lib/gem80-firmware-data.sh"
 
 eval_mode=false
 actual_sha=""
@@ -158,13 +144,18 @@ validate_inputs() {
   recorded_name=$(jq -r '.binary.name // empty' "$build_info")
   recorded_sha=$(jq -r '.binary.sha256 // empty' "$build_info")
 
+  # binary.name selects the path this gate hashes, so a record naming
+  # ../../README.md would have the gate compare a source file instead of the
+  # firmware. Only a bare filename is a legal artifact name.
   [[ -n $recorded_name ]] || fail "build record carries no binary.name: $build_info"
+  [[ $recorded_name == "$EXPECTED_BIN_NAME" ]] ||
+    fail "build record names '$recorded_name'; this board's artifact is '$EXPECTED_BIN_NAME'"
   [[ $recorded_sha =~ ^[0-9a-f]{64}$ ]] ||
     fail "build record carries no valid binary.sha256: $build_info"
 
   [[ -f $firmware_yaml ]] || fail "firmware data file not found: $firmware_yaml"
 
-  rebuild_mode=$(read_rebuild_mode "$firmware_yaml")
+  rebuild_mode=$(gem80_firmware_yaml_get "$firmware_yaml" firmware.gem80.rebuildMode || true)
   case "$rebuild_mode" in
     build-only | match-sha256) ;;
     *)
@@ -193,8 +184,12 @@ evaluate_rebuild_result() {
     fail "output mismatch: rebuilt binary sha256 ($act_sha) does not match recorded sha256 ($rec_sha) (mode: match-sha256)"
   fi
 
+  # Surfaced as a workflow warning, not just stdout: build-only is a one-word
+  # setting that switches off the strongest assertion this gate makes, and a
+  # divergence under it should be visible without opening the log.
   printf 'check-gem80-firmware-rebuild: notice: output sha256 (%s) differs from recorded sha256 (%s); accepted under build-only mode\n' \
     "$act_sha" "$rec_sha"
+  printf '::warning::check-gem80-firmware-rebuild: rebuild did not reproduce the recorded binary; accepted because rebuildMode is build-only\n'
   printf 'check-gem80-firmware-rebuild: ok - build succeeded (rebuildMode: build-only)\n'
   return 0
 }
@@ -228,11 +223,20 @@ trap 'rm -rf -- "$scratch"' EXIT
 scratch_repo="$scratch/repo"
 mkdir -p "$scratch_repo"
 printf 'check-gem80-firmware-rebuild: copying repository to scratch (%s)\n' "$scratch_repo"
+# The build reads the source tree through chezmoi, which needs no history, and
+# copying .git would multiply the copy cost for nothing. tar keeps the fallback
+# on the same exclusions as the rsync path so the two produce the same tree.
 if command -v rsync >/dev/null 2>&1; then
   rsync -a --exclude='.git' --exclude='node_modules' --exclude='.codegraph' "$repo_root/" "$scratch_repo/"
 else
-  cp -R "$repo_root"/. "$scratch_repo/"
+  tar -C "$repo_root" --exclude='./.git' --exclude='./node_modules' --exclude='./.codegraph' -cf - . |
+    tar -C "$scratch_repo" -xf -
 fi
+
+# The copy carries the committed binary at exactly the path this gate hashes
+# afterwards. Left in place, a build that silently produced nothing would leave
+# that file to be hashed and the gate would report a perfect match.
+rm -rf -- "$scratch_repo/firmware/nuphy-gem80-hostrgb/dist"
 
 rendered_cmd="$scratch/gem80-firmware"
 template="$scratch_repo/dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl"

@@ -38,6 +38,12 @@ jobs:
       - name: Ensure podman
         run: .ci/lib/apt-install.sh podman podman
 
+      # Without PyYAML the shared reader falls back to sed, so CI would exercise
+      # a different decoder than the fixture test in ci.yml does. `-` because a
+      # library package has no binary to probe.
+      - name: Install PyYAML
+        run: .ci/lib/apt-install.sh - python3-yaml
+
       - name: Install locked chezmoi
         run: |
           set -euo pipefail
