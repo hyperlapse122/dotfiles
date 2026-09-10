@@ -33,6 +33,7 @@ BIN_NAME="nuphy_gem80_ansi_hostrgb.bin"
 
 FIRMWARE_DIR="$SOURCE_DIR/firmware/nuphy-gem80-hostrgb"
 KEYMAP_DIR="$FIRMWARE_DIR/keymap"
+PATCHES_DIR="$FIRMWARE_DIR/patches"
 DIST_DIR="$FIRMWARE_DIR/dist"
 BUILD_INFO="$DIST_DIR/build-info.json"
 
@@ -63,6 +64,20 @@ collect_keymap_files() {
     KEYMAP_FILES+=("$name")
   done < <(find "$KEYMAP_DIR" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
   [[ ${#KEYMAP_FILES[@]} -gt 0 ]] || die "keymap source directory is empty: $KEYMAP_DIR"
+}
+
+PATCH_FILES=()
+collect_patch_files() {
+  PATCH_FILES=()
+  [[ -d $PATCHES_DIR ]] || die "patch source is missing: $PATCHES_DIR"
+  if [[ -n $(find "$PATCHES_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit) ]]; then
+    die "patches/ contains a subdirectory; the build applies flat files only"
+  fi
+  local name
+  while IFS= read -r name; do
+    PATCH_FILES+=("$name")
+  done < <(find "$PATCHES_DIR" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
+  [[ ${#PATCH_FILES[@]} -gt 0 ]] || die "patch source directory is empty: $PATCHES_DIR"
 }
 
 VERIFY_FAILURES=0
@@ -96,6 +111,7 @@ cmd_verify() {
   local bin="$DIST_DIR/$BIN_NAME"
   [[ -f $bin ]] || die "firmware binary is missing: $bin"
   collect_keymap_files
+  collect_patch_files
 
   printf 'gem80-firmware: verifying %s against the current source\n' "$BUILD_INFO"
 
@@ -138,6 +154,20 @@ cmd_verify() {
       "$(sha256sum -- "$KEYMAP_DIR/$name" | cut -d' ' -f1)"
   done
 
+  local recorded_patch_names actual_patch_names
+  recorded_patch_names="$(jq -r '.patches // {} | keys[]' "$BUILD_INFO" | LC_ALL=C sort)"
+  actual_patch_names="$(printf '%s\n' "${PATCH_FILES[@]}")"
+  if [[ $recorded_patch_names != "$actual_patch_names" ]]; then
+    verify_fail "patch file set: record covers [$(tr '\n' ' ' <<<"$recorded_patch_names")], source has [$(tr '\n' ' ' <<<"$actual_patch_names")]"
+  else
+    verify_ok "patch file set (${#PATCH_FILES[@]} files)"
+  fi
+
+  for name in "${PATCH_FILES[@]}"; do
+    verify_field "patches/$name" ".patches[\"$name\"]" \
+      "$(sha256sum -- "$PATCHES_DIR/$name" | cut -d' ' -f1)"
+  done
+
   if ((VERIFY_FAILURES > 0)); then
     die "$VERIFY_FAILURES check(s) failed; do not flash $BIN_NAME"
   fi
@@ -148,6 +178,7 @@ cmd_build() {
   command -v podman >/dev/null 2>&1 || die 'podman is required; rootless podman builds this firmware (R3).'
   command -v git >/dev/null 2>&1 || die 'git is required to fetch the pinned fork commit.'
   collect_keymap_files
+  collect_patch_files
 
   # The QMK tree with its submodules is several GB. /tmp is tmpfs on Fedora, so the
   # scratch tree lives under the cache directory instead of in RAM.
@@ -192,6 +223,14 @@ cmd_build() {
   mkdir -p "$keymap_dest"
   cp -- "$KEYMAP_DIR"/* "$keymap_dest/"
 
+  local patch
+  for patch in "${PATCH_FILES[@]}"; do
+    printf 'gem80-firmware: applying patch %s\n' "$patch"
+    if ! git -C "$scratch" apply -- "$PATCHES_DIR/$patch"; then
+      die "failed to apply patch $patch"
+    fi
+  done
+
   printf 'gem80-firmware: building %s\n' "$MAKE_TARGET"
   podman run --rm -v "$scratch:/qmk_firmware:z" -w /qmk_firmware "$IMAGE" \
     make "$MAKE_TARGET" || die 'container build failed'
@@ -205,7 +244,7 @@ cmd_build() {
   # QMK leaves the artifact executable; it is flashed, never run.
   chmod 0644 -- "$DIST_DIR/$BIN_NAME"
 
-  local bin_sha256 bin_bytes keymap_json name
+  local bin_sha256 bin_bytes keymap_json patches_json name
   bin_sha256="$(sha256sum -- "$DIST_DIR/$BIN_NAME" | cut -d' ' -f1)"
   bin_bytes="$(stat -c '%s' -- "$DIST_DIR/$BIN_NAME")"
 
@@ -214,6 +253,12 @@ cmd_build() {
     keymap_json+=$'\n'"    \"$name\": \"$(sha256sum -- "$KEYMAP_DIR/$name" | cut -d' ' -f1)\","
   done
   keymap_json="${keymap_json%,}"
+
+  patches_json=''
+  for name in "${PATCH_FILES[@]}"; do
+    patches_json+=$'\n'"    \"$name\": \"$(sha256sum -- "$PATCHES_DIR/$name" | cut -d' ' -f1)\","
+  done
+  patches_json="${patches_json%,}"
 
   # `gem80-firmware verify` gates the flash on this record: it re-derives every
   # hash from the current source and exits non-zero when one disagrees (R12, U6).
@@ -232,6 +277,8 @@ cmd_build() {
     "sha256": "$bin_sha256"
   },
   "keymap": {$keymap_json
+  },
+  "patches": {$patches_json
   }
 }
 JSON
