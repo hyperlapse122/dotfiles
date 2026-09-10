@@ -1,6 +1,15 @@
 {{- $ctx := . -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
+{{- /* The dotfiles-claude-plugin tree is a dependency, not just a target: Claude
+       Code serves the COPY under ~/.claude/plugins/cache/<marketplace>/<plugin>/
+       <version>, so an edit to that tree only reaches a session if this script
+       re-runs and reinstalls. Without this glob the script's fingerprint sees
+       only agents.yaml and releases.json, and a hook edit would deploy to
+       ~/.local/share and never run. The plugin's version is derived from the
+       same tree so the reinstall resolves a new cache directory; both halves
+       are required. Named literally because it is the only localDir marketplace
+       — generalize when a second one exists, not before. */ -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" "dot_local/share/dotfiles-claude-plugin/**" -}}
 {{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "plugins") -}}
 {{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "pluginsRemoved") -}}
 {{- $removedMarketplaceRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "marketplacesRemoved") -}}
