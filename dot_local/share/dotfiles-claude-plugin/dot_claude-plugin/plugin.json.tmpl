@@ -12,8 +12,19 @@
   re-triggers the script that performs the install. Both halves are required. */ -}}
 {{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-claude-plugin" -}}
 {{- $parts := "" -}}
-{{- range $rel := (list "hooks/executable_orca-team-lead-orchestration.sh" "hooks/hooks.json") -}}
-{{-   $parts = printf "%s%s" $parts (include (joinPath $root $rel) | sha256sum) -}}
+{{- /* The WHOLE tree, not just hooks/: this plugin is the standing home for this
+       checkout's Claude Code extensions, so a commands/ or agents/ file added
+       later must move the version too. Anything narrower re-runs the reconciler
+       on that edit and then resolves the same version, so the new file deploys
+       to ~/.local/share and never reaches the cache Claude Code serves. The
+       reconciler fingerprints this same tree with `**`; the two must agree. */ -}}
+{{- range $f := (glob (joinPath $root "**")) -}}
+{{-   if not (stat $f).isDir -}}
+{{-     $parts = printf "%s%s" $parts (include $f | sha256sum) -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq $parts "" -}}
+{{-   fail "plugin.json.tmpl: the hooks tree matched no files, so the version would not track the hook content" -}}
 {{- end -}}
 {{- $version := printf "0.1.0-%s" (substr 0 12 (sha256sum $parts)) -}}
 {

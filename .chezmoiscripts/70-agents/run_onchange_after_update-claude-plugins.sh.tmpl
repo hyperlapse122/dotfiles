@@ -96,6 +96,12 @@ for row in "${PLUGINS[@]}"; do
   [[ -d $source ]] || die "preflight: $kind marketplace $market is missing: $source"
   [[ -f $source/.claude-plugin/marketplace.json ]] ||
     die "preflight: $kind marketplace $market has no Claude Code manifest: $source/.claude-plugin/marketplace.json"
+  # The plugin manifest is what carries the version, and the version is the cache
+  # key. Without this check a half-deployed tree installs happily at an unknown
+  # version and every later edit resolves that same key, so the source updates
+  # and the served copy never does.
+  [[ -f $source/.claude-plugin/plugin.json ]] ||
+    die "preflight: $kind marketplace $market has no plugin manifest: $source/.claude-plugin/plugin.json"
 done
 
 for row in "${PLUGINS[@]}"; do

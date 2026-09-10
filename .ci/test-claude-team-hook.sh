@@ -57,25 +57,27 @@ for tool in bash mktemp sleep rm; do
 done
 
 # Every case runs with a stub PATH so no real Orca CLI is reached.
-make_cli() {
-  local dir=$1 body=$2
+make_stub() {
+  local dir=$1 name=$2 body=$3
   mkdir -p -- "$scratch/$dir"
-  printf '#!/bin/sh\n%s\n' "$body" >"$scratch/$dir/orca-ide"
-  chmod 0700 -- "$scratch/$dir/orca-ide"
+  printf '#!/bin/sh\n%s\n' "$body" >"$scratch/$dir/$name"
+  chmod 0700 -- "$scratch/$dir/$name"
 }
+make_cli() { make_stub "$1" orca-ide "$2"; }
 make_cli cli-ok 'printf "GUIDE BODY MARKER\n"'
 make_cli cli-fail 'exit 3'
 make_cli cli-hang 'sleep 60'
 
-run_hook() {
-  local bindir=$1
-  shift
+run_hook_in() {
+  local home=$1 bindir=$2
+  shift 2
   env -i \
     PATH="$scratch/$bindir:$scratch/bin" \
-    HOME="$scratch/home" \
+    HOME="$home" \
     "$@" \
     "$scratch/bin/bash" "$hook"
 }
+run_hook() { run_hook_in "$scratch/home" "$@"; }
 
 lead_env=(CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 TMUX_PANE=%1 ORCA_AGENT_TEAMS_LEADER_PANE=%1)
 
@@ -84,19 +86,43 @@ context_of() {
 }
 
 # --- The lead injects, and carries both texts (AE1) ---
+#
+# `$(...)` reads stdout to EOF, which is the assertion that matters: a background
+# job holding the write end keeps the reader waiting long after the hook exits.
+# A content-only check cannot see that, and it is how a five-second stall on the
+# one path the feature exists for once passed this gate green.
+lead_start=$SECONDS
 out=$(run_hook cli-ok "${lead_env[@]}") || fail 'lead-shaped run exited non-zero'
+lead_elapsed=$((SECONDS - lead_start))
 ctx=$(printf '%s' "$out" | context_of) || fail 'lead-shaped run emitted no additionalContext'
 [[ $ctx == *"SKILL BODY MARKER"* ]] || fail 'injected context is missing the SKILL.md body'
 [[ $ctx == *"GUIDE BODY MARKER"* ]] || fail 'injected context is missing the Orca guide body'
-pass 'the lead pane receives both the skill body and the guide'
+(( lead_elapsed <= 2 )) ||
+  fail "the lead path held stdout for ${lead_elapsed}s; a fast guide read must not wait on the watchdog"
+pass 'the lead pane receives both the skill body and the guide, without holding stdout'
+
+# --- The hook leaves no background job behind on the fast path ---
+#
+# The watchdog's own `sleep` is the one that held stdout. It is signalled through
+# its process group, so nothing of the hook survives a fast guide read.
+sleep 1
+if pgrep -f "$scratch/hook.sh" >/dev/null 2>&1; then
+  fail 'the hook left a background job running after it exited'
+fi
+pass 'the hook leaves no background job behind'
 
 # --- Every non-lead shape stays silent ---
-assert_silent() {
-  local label=$1 bindir=$2
-  shift 2
+assert_silent_in() {
+  local label=$1 home=$2 bindir=$3
+  shift 3
   local result
-  result=$(run_hook "$bindir" "$@") || fail "$label exited non-zero"
+  result=$(run_hook_in "$home" "$bindir" "$@") || fail "$label exited non-zero"
   [[ $result == '{}' ]] || fail "$label emitted $result instead of {}"
+}
+assert_silent() {
+  local label=$1
+  shift
+  assert_silent_in "$label" "$scratch/home" "$@"
 }
 
 # A teammate pane: the team flag is inherited, the pane variables are not. This
@@ -142,25 +168,85 @@ err=$(run_hook bin "${lead_env[@]}" 2>&1 >/dev/null) || fail 'the no-CLI run exi
 [[ -z $err ]] || fail "the no-CLI run wrote to stderr: $err"
 
 mkdir -p "$scratch/home-no-skill"
-out=$(env -i PATH="$scratch/cli-ok:$scratch/bin" HOME="$scratch/home-no-skill" \
-  "${lead_env[@]}" "$scratch/bin/bash" "$hook") || fail 'the missing-SKILL.md run exited non-zero'
-[[ $out == '{}' ]] || fail "the missing-SKILL.md run emitted $out instead of {}"
+assert_silent_in 'a lead pane with no skill body' "$scratch/home-no-skill" cli-ok "${lead_env[@]}"
 pass 'a missing CLI, a failing CLI and a missing skill body all fail open in silence'
 
 # --- The 5-second bound holds, and does not come from timeout(1) ---
+# The stub forks a descendant and waits on it, so the bound is reached only by
+# signalling the whole group, and the descendant must not outlive the hook.
+descendant_marker="ce-team-hook-descendant-$$"
+cp -- "$(command -v sleep)" "$scratch/bin/$descendant_marker"
+make_stub cli-hang orca-ide "\"$scratch/bin/$descendant_marker\" 300 & wait"
 start=$SECONDS
 assert_silent 'a lead pane whose Orca CLI hangs' cli-hang "${lead_env[@]}"
 elapsed=$((SECONDS - start))
+sleep 1
+if pgrep -f "$descendant_marker" >/dev/null 2>&1; then
+  pkill -f "$descendant_marker" 2>/dev/null
+  fail 'a CLI descendant outlived the bound'
+fi
 (( elapsed >= 3 )) || fail "the hanging run returned in ${elapsed}s, so the bound was not exercised"
-(( elapsed <= 15 )) || fail "the hanging run took ${elapsed}s, past the declared 5s bound"
+# Tight enough to fail a bound that drifts: a 15s ceiling would pass a hook that
+# waits ten seconds, which is the guarantee this case exists to hold.
+(( elapsed <= 8 )) || fail "the hanging run took ${elapsed}s, past the declared 5s bound"
 
 # macOS ships no timeout(1) and this plugin is declared for darwin. Shadowing it
 # with a failing stub proves the bound never calls it.
-mkdir -p "$scratch/cli-ok-notimeout"
-cp -- "$scratch/cli-ok/orca-ide" "$scratch/cli-ok-notimeout/orca-ide"
-printf '#!/bin/sh\nexit 127\n' >"$scratch/cli-ok-notimeout/timeout"
-chmod 0700 -- "$scratch/cli-ok-notimeout/timeout"
+make_cli cli-ok-notimeout 'printf "GUIDE BODY MARKER\n"'
+make_stub cli-ok-notimeout timeout 'exit 127'
 ctx=$(run_hook cli-ok-notimeout "${lead_env[@]}" | context_of) ||
   fail 'the run with timeout(1) shadowed emitted no additionalContext'
 [[ $ctx == *"GUIDE BODY MARKER"* ]] || fail 'shadowing timeout(1) broke the guide read'
 pass 'the 5s bound holds and does not depend on timeout(1)'
+
+# --- A bare `orca` override never reaches the GNOME screen reader ---
+#
+# On Linux `orca` resolves to /usr/bin/orca, the screen reader, which would start
+# speech in the user's session. The stubs are distinguishable so the assertion
+# names which binary actually ran.
+make_stub cli-both orca-ide 'printf "SAFE CLI MARKER\n"'
+make_stub cli-both orca 'printf "SCREEN READER MARKER\n"'
+for unsafe in orca /usr/bin/orca; do
+  ctx=$(run_hook cli-both "${lead_env[@]}" ORCA_CLI_COMMAND="$unsafe" | context_of) ||
+    fail "ORCA_CLI_COMMAND=$unsafe produced no additionalContext"
+  [[ $ctx != *"SCREEN READER MARKER"* ]] ||
+    fail "ORCA_CLI_COMMAND=$unsafe launched the GNOME screen reader"
+  [[ $ctx == *"SAFE CLI MARKER"* ]] ||
+    fail "ORCA_CLI_COMMAND=$unsafe did not fall back to orca-ide"
+done
+make_stub cli-custom orca-ide 'printf "SAFE CLI MARKER\n"'
+make_stub cli-custom my-orca 'printf "CUSTOM CLI MARKER\n"'
+ctx=$(run_hook cli-custom "${lead_env[@]}" ORCA_CLI_COMMAND=my-orca | context_of) ||
+  fail 'a custom ORCA_CLI_COMMAND produced no additionalContext'
+[[ $ctx == *"CUSTOM CLI MARKER"* ]] ||
+  fail 'a custom ORCA_CLI_COMMAND was not honoured'
+pass 'a bare orca override is remapped, and a real custom override still runs'
+
+# --- The declared hook command is the script that was tested ---
+#
+# Every case above runs a copy of the source directly. That leaves the wiring
+# untested: a typo in the hooks.json command path, or a matcher that merely
+# contains the right words, ships silently while this gate stays green.
+[[ $("$jq_bin" -r '.hooks.SessionStart | length' <"$hooks_json") -eq 1 ]] ||
+  fail 'hooks.json declares more than one SessionStart matcher group'
+[[ $matcher == 'startup|resume|clear|compact' ]] ||
+  fail "hooks.json matcher is '$matcher', not the exact declared expression"
+declared_command=$("$jq_bin" -r '.hooks.SessionStart[0].hooks[0].command' <"$hooks_json")
+[[ $("$jq_bin" -r '.hooks.SessionStart[0].hooks[0].type' <"$hooks_json") == command ]] ||
+  fail 'the declared SessionStart hook is not a command hook'
+
+plugin_root="$scratch/plugin-root"
+mkdir -p "$plugin_root/hooks"
+cp -- "$hook_src" "$plugin_root/hooks/orca-team-lead-orchestration.sh"
+chmod 0700 -- "$plugin_root/hooks/orca-team-lead-orchestration.sh"
+resolved_command=${declared_command//\$\{CLAUDE_PLUGIN_ROOT\}/$plugin_root}
+resolved_command=${resolved_command//\"/}
+[[ -x $resolved_command ]] ||
+  fail "hooks.json points at $declared_command, which is not an executable file under the plugin root"
+ctx=$(env -i PATH="$scratch/cli-ok:$scratch/bin" HOME="$scratch/home" \
+  CLAUDE_PLUGIN_ROOT="$plugin_root" "${lead_env[@]}" \
+  "$scratch/bin/bash" "$resolved_command" | context_of) ||
+  fail 'invoking the exact declared hook command produced no additionalContext'
+[[ $ctx == *"GUIDE BODY MARKER"* ]] ||
+  fail 'the declared hook command did not inject the guide'
+pass 'the command hooks.json declares resolves under the plugin root and injects'
