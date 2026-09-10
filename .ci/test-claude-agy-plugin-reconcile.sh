@@ -131,14 +131,36 @@ cat >"$home/.agents/plugins/marketplace.json" <<'EOF'
 EOF
 ln -s "$market" "$home/.agents/plugins/compound-engineering-plugin"
 
+# The localDir marketplace this checkout ships. Unlike the localArchive above, no
+# external downloads it -- chezmoi deploys it as an ordinary target -- so the
+# fixture has to stand it up itself or the reconciler's preflight has nothing to
+# find. Both manifests are present because Claude Code reads the plugin manifest
+# from .claude-plugin/plugin.json, not from the tree root.
+local_dir_market="$home/.local/share/dotfiles-claude-plugin"
+mkdir -p "$local_dir_market/.claude-plugin" "$local_dir_market/hooks"
+cat >"$local_dir_market/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"dotfiles-claude-plugin","plugins":[{"name":"dotfiles-claude","source":"./"}]}
+EOF
+cat >"$local_dir_market/.claude-plugin/plugin.json" <<'EOF'
+{"name":"dotfiles-claude","version":"0.1.0-test"}
+EOF
+
 rewrite() {
   local rendered=$1 target=$2
-  local row path
+  local row path local_row local_path
   row=$(grep -m1 'compound-engineering\\tcompound-engineering-plugin\\tlocalArchive\\t' "$rendered") ||
     fail "no compound-engineering row in $rendered"
   path=${row#*localArchive\\t}
   path=${path%%\"*}
-  sed "s|$path|$market|g" "$rendered" >"$target"
+  # The localDir row exists only in the Claude script; the substitution is a
+  # no-op for the other harnesses.
+  if local_row=$(grep -m1 'dotfiles-claude\\tdotfiles-claude-plugin\\tlocalDir\\t' "$rendered"); then
+    local_path=${local_row#*localDir\\t}
+    local_path=${local_path%%\"*}
+    sed -e "s|$path|$market|g" -e "s|$local_path|$local_dir_market|g" "$rendered" >"$target"
+  else
+    sed "s|$path|$market|g" "$rendered" >"$target"
+  fi
   chmod 0700 "$target"
 }
 
@@ -149,6 +171,8 @@ rewrite "$claude_script" "$claude_test"
 rewrite "$agy_script" "$agy_test"
 rewrite "$codex_script" "$codex_test"
 grep -F "$market" "$claude_test" >/dev/null || fail 'claude fixture path rewrite did not take'
+grep -F "$local_dir_market" "$claude_test" >/dev/null ||
+  fail 'claude localDir fixture path rewrite did not take'
 grep -F "$market" "$agy_test" >/dev/null || fail 'agy fixture path rewrite did not take'
 grep -F "$market" "$codex_test" >/dev/null || fail 'codex fixture path rewrite did not take'
 
@@ -266,8 +290,53 @@ run_claude >"$scratch/claude-2.out" 2>&1 || {
   cat "$scratch/claude-2.out" >&2
   fail 'converged Claude Code re-run failed on the already-enabled plugin'
 }
-[[ $(grep -c 'plugin enable --scope user' "$claude_calls") -eq 2 ]] ||
-  fail 'Claude Code reconcile did not re-assert the enabled state'
+# Counted per plugin rather than in total: the declaration now carries more than
+# one Claude Code plugin, and a total would drift every time another is added.
+for declared in compound-engineering@compound-engineering-plugin \
+  dotfiles-claude@dotfiles-claude-plugin; do
+  [[ $(grep -c "plugin enable --scope user $declared" "$claude_calls") -eq 2 ]] ||
+    fail "Claude Code reconcile did not re-assert the enabled state for $declared"
+done
+
+# --- Claude Code: the localDir marketplace --------------------------------- #
+
+# This is the first localDir consumer in the repository, so the branch in
+# agent-plugin-rows.tmpl that resolves `path` against $HOME had no coverage until
+# here. The reconciler does not branch on kind, so the same add/install/update
+# sequence must reach it.
+grep -Fx "plugin marketplace add $local_dir_market" "$claude_calls" >/dev/null ||
+  fail 'Claude Code reconcile did not register the localDir marketplace'
+grep -Fx 'plugin install --scope user dotfiles-claude@dotfiles-claude-plugin' "$claude_calls" >/dev/null ||
+  fail 'Claude Code reconcile did not install the localDir plugin'
+grep -Fx 'plugin update --scope user dotfiles-claude@dotfiles-claude-plugin' "$claude_calls" >/dev/null ||
+  fail 'Claude Code reconcile did not update the localDir plugin'
+
+# Claude Code reads a plugin's manifest from .claude-plugin/plugin.json and
+# serves the COPY it caches, so the manifest sitting on the wrong surface in the
+# source tree would install a marketplace with no usable plugin.
+[[ -f "$source_root/dot_local/share/dotfiles-claude-plugin/dot_claude-plugin/plugin.json.tmpl" ]] ||
+  fail 'the shipped plugin tree carries no .claude-plugin/plugin.json manifest'
+
+local_dir_missing="$scratch/no-local-dir"
+sed "s|$local_dir_market|$local_dir_missing|g" "$claude_test" >"$scratch/claude-nolocaldir.sh"
+chmod 0700 "$scratch/claude-nolocaldir.sh"
+if env HOME="$home" PATH="$bin:$PATH" CLAUDE_CALLS="$claude_calls" \
+  bash "$scratch/claude-nolocaldir.sh" >"$scratch/claude-nolocaldir.out" 2>&1; then
+  fail 'Claude Code reconcile accepted a localDir marketplace whose directory is absent'
+fi
+grep -F 'dotfiles-claude-plugin' "$scratch/claude-nolocaldir.out" >/dev/null ||
+  fail 'the absent localDir marketplace was rejected without naming it'
+
+local_dir_bare="$scratch/local-dir-no-manifest"
+mkdir -p "$local_dir_bare"
+sed "s|$local_dir_market|$local_dir_bare|g" "$claude_test" >"$scratch/claude-localdir-bare.sh"
+chmod 0700 "$scratch/claude-localdir-bare.sh"
+if env HOME="$home" PATH="$bin:$PATH" CLAUDE_CALLS="$claude_calls" \
+  bash "$scratch/claude-localdir-bare.sh" >"$scratch/claude-localdir-bare.out" 2>&1; then
+  fail 'Claude Code reconcile accepted a localDir marketplace with no Claude Code manifest'
+fi
+grep -F '.claude-plugin/marketplace.json' "$scratch/claude-localdir-bare.out" >/dev/null ||
+  fail 'the manifest-less localDir marketplace was rejected without naming the manifest path'
 
 # --- Claude Code: a source that cannot serve this harness ------------------ #
 
