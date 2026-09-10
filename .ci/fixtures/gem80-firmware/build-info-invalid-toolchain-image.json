@@ -1,0 +1,7 @@
+{
+  "toolchainImage": "ghcr.io/qmk/qmk_cli:latest",
+  "binary": {
+    "name": "nuphy_gem80_ansi_hostrgb.bin",
+    "sha256": "964eed3f305427f11363e8227c151a25097ab594524edcd5aa224627b825a2c4"
+  }
+}
