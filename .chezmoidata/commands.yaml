@@ -475,6 +475,16 @@ commands:
       legacy:
         path: .local/bin/encryption-status
 
+    gem80-firmware:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl
+      commands:
+        - name: gem80-firmware
+
     git-prune-local-branches:
       producer: source
       safetyProfile: interpreted

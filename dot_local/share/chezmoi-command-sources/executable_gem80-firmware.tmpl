@@ -1,0 +1,115 @@
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $fork := .firmware.gem80.qmkFork -}}
+#!/usr/bin/env bash
+# gem80-firmware — build the NuPhy Gem80 `hostrgb` firmware from the pinned fork commit.
+#
+# Every repo path below is baked in at RENDER time. The command is staged into
+# ~/.local/bin and runs from wherever the operator happens to be, so it cannot
+# discover the source tree at run time: $PWD is never consulted, and $PWD is
+# never mounted into the container.
+#
+# The fork SHA comes from .chezmoidata/firmware.yaml, deliberately NOT from the
+# release lock: .github/workflows/refresh-release-lock.yml re-resolves every lock
+# entry hourly and auto-commits, so a lock-held SHA would drift away from the
+# committed .bin on its own (KTD1).
+
+set -euo pipefail
+
+SOURCE_DIR="{{ $sourceDir }}"
+FORK_SOURCE="{{ $fork.source }}"
+FORK_REF="{{ $fork.ref }}"
+FORK_SHA="{{ $fork.sha }}"
+FORK_URL="https://github.com/{{ $fork.source }}.git"
+MAKE_TARGET="nuphy/gem80/ansi:hostrgb"
+IMAGE="ghcr.io/qmk/qmk_cli"
+BIN_NAME="nuphy_gem80_ansi_hostrgb.bin"
+
+FIRMWARE_DIR="$SOURCE_DIR/firmware/nuphy-gem80-hostrgb"
+KEYMAP_DIR="$FIRMWARE_DIR/keymap"
+DIST_DIR="$FIRMWARE_DIR/dist"
+
+die() {
+  printf 'gem80-firmware: %s\n' "$1" >&2
+  exit 1
+}
+
+command -v podman >/dev/null 2>&1 || die 'podman is required; rootless podman builds this firmware (R3).'
+command -v git >/dev/null 2>&1 || die 'git is required to fetch the pinned fork commit.'
+[[ -d $KEYMAP_DIR ]] || die "keymap source is missing: $KEYMAP_DIR"
+
+# The QMK tree with its submodules is several GB. /tmp is tmpfs on Fedora, so the
+# scratch tree lives under the cache directory instead of in RAM.
+scratch_root="${XDG_CACHE_HOME:-$HOME/.cache}/gem80-firmware"
+mkdir -p "$scratch_root"
+scratch="$(mktemp -d "$scratch_root/build.XXXXXXXX")"
+trap 'rm -rf -- "$scratch"' EXIT
+
+printf 'gem80-firmware: fetching %s at %s\n' "$FORK_SOURCE" "$FORK_SHA"
+git init -q "$scratch"
+git -C "$scratch" remote add origin "$FORK_URL"
+
+# The pinned SHA lagging behind the branch head is the normal state, so a
+# `clone --depth 1` of the head followed by `checkout <sha>` dies with a pathspec
+# error. Ask for that one commit; fall back to the branch, then to full history
+# for a server that refuses by-SHA fetch.
+if ! git -C "$scratch" fetch --depth 1 origin "$FORK_SHA" 2>/dev/null; then
+  if ! { git -C "$scratch" fetch --depth 1 origin "$FORK_REF" 2>/dev/null \
+    && git -C "$scratch" cat-file -e "$FORK_SHA^{commit}" 2>/dev/null; }; then
+    printf 'gem80-firmware: shallow fetch could not reach the pinned commit; fetching full history\n'
+    git -C "$scratch" fetch --tags origin || die "fetch failed for $FORK_URL"
+  fi
+fi
+git -C "$scratch" checkout -q --detach "$FORK_SHA" || die "pinned commit $FORK_SHA is not in the fetched history"
+
+printf 'gem80-firmware: fetching build submodules\n'
+git -C "$scratch" submodule update --init --depth 1 \
+  lib/chibios lib/chibios-contrib lib/printf || die 'submodule fetch failed'
+
+keymap_dest="$scratch/keyboards/nuphy/gem80/ansi/keymaps/hostrgb"
+mkdir -p "$keymap_dest"
+cp -- "$KEYMAP_DIR"/* "$keymap_dest/"
+
+printf 'gem80-firmware: building %s\n' "$MAKE_TARGET"
+podman run --rm -v "$scratch:/qmk_firmware:z" -w /qmk_firmware "$IMAGE" \
+  make "$MAKE_TARGET" || die 'container build failed'
+
+# QMK writes the artifact into the tree it built in, not into dist/.
+built_bin="$scratch/$BIN_NAME"
+[[ -f $built_bin ]] || die "build produced no $BIN_NAME in the scratch tree"
+
+mkdir -p "$DIST_DIR"
+cp -- "$built_bin" "$DIST_DIR/$BIN_NAME"
+# QMK leaves the artifact executable; it is flashed, never run.
+chmod 0644 -- "$DIST_DIR/$BIN_NAME"
+
+bin_sha256="$(sha256sum -- "$DIST_DIR/$BIN_NAME" | cut -d' ' -f1)"
+bin_bytes="$(stat -c '%s' -- "$DIST_DIR/$BIN_NAME")"
+keymap_c_sha256="$(sha256sum -- "$KEYMAP_DIR/keymap.c" | cut -d' ' -f1)"
+keymap_inc_sha256="$(sha256sum -- "$KEYMAP_DIR/rgb_matrix_user.inc" | cut -d' ' -f1)"
+keymap_rules_sha256="$(sha256sum -- "$KEYMAP_DIR/rules.mk" | cut -d' ' -f1)"
+
+# U6 gates the flash on this record: it re-derives every hash from the current
+# source and refuses to write to the device when one disagrees (R12). The make
+# target is recorded so a wrong-board build is caught before that irreversible step.
+cat > "$DIST_DIR/build-info.json" <<JSON
+{
+  "schemaVersion": 1,
+  "forkSource": "$FORK_SOURCE",
+  "forkRef": "$FORK_REF",
+  "forkSha": "$FORK_SHA",
+  "makeTarget": "$MAKE_TARGET",
+  "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "binary": {
+    "name": "$BIN_NAME",
+    "bytes": $bin_bytes,
+    "sha256": "$bin_sha256"
+  },
+  "keymap": {
+    "keymap.c": "$keymap_c_sha256",
+    "rgb_matrix_user.inc": "$keymap_inc_sha256",
+    "rules.mk": "$keymap_rules_sha256"
+  }
+}
+JSON
+
+printf '%s\n' "$DIST_DIR/$BIN_NAME"
