@@ -102,7 +102,8 @@ expected_settings=$(render <<<'{{ .agents.codex.settings | toJson }}' \
 # checkout's own Codex plugin hook. Codex refuses a third-party plugin hook until
 # that record exists in the user config, and the failure is silent, so the value
 # is asserted rather than merely tolerated. It was verified against every real
-# trust record on the authoring host: 8 computed, 8 matched.
+# trust record the authoring host's own hooks.json had recorded (8 of 8), and a
+# wider pass over that host's project hooks files matched 14 of 14.
 #
 # Nothing else may appear under hooks. Codex owns the rest of that table.
 expected_trust_key='dotfiles-codex@dotfiles:hooks/hooks.json:session_start:0:0'

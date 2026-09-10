@@ -32,9 +32,12 @@
       when it differs from the 2500 default
     - matcher is omitted for user_prompt_submit, stop, and interrupt
 
-  Verified against every trust record on the authoring host: 8 computed, 8
-  matched, 0 mismatched. Re-verify against a live record before trusting a
-  change to this file. */ -}}
+  Verified twice, by two independent implementations. A Python transcription of
+  the recipe reproduced all 8 trust records the authoring host's own
+  ~/.codex/hooks.json had recorded, and a wider pass over that host's project
+  hooks files reproduced 14 of 14 including entries that exercise `matcher` and
+  `statusMessage`. This template then reproduced the same digest for its own
+  declaration. Re-verify against a live record before trusting a change here. */ -}}
 {{- $ctx := .ctx -}}
 {{- $plugin := "dotfiles-codex" -}}
 {{- $relPath := "hooks/hooks.json" -}}

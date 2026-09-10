@@ -290,6 +290,13 @@ for i in "${!core_renders[@]}"; do
   if grep -Fx "$other_os_rule" "$linux_core" >/dev/null; then
     fail "$(basename "$linux_core") leaked its non-Linux executable rule into Linux"
   fi
+  # The executable rule is the ONLY OS-conditional text the shared core may
+  # carry. Comparing the two OS renders with just that rule removed is what
+  # catches a second `.ctx.chezmoi.os` branch added to the core later: the
+  # harness-to-harness diff below cannot, because such a branch would diverge
+  # both renders identically.
+  diff -q <(grep -Fvx "$linux_rule" "$linux_core") <(grep -Fvx "$other_os_rule" "$darwin_core") >/dev/null \
+    || fail "$(basename "$linux_core") differs across OSes outside its executable rule"
 done
 everyone_linux_renders=("$everyone_claude_linux" "$everyone_codex_linux" "$everyone_omp_linux")
 everyone_darwin_renders=("$everyone_claude_darwin" "$everyone_codex_darwin" "$everyone_omp_darwin")
