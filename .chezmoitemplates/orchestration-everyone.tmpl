@@ -1,0 +1,32 @@
+{{- /* Orchestration rules that bind every agent, whatever its role.
+
+       Rendered into three delivery paths: the Claude Code plugin payload, the
+       Codex plugin payload, and the omp instruction wrapper. Never rendered
+       into the shared instruction core, which keeps only the pointer.
+
+       The first and last lines are sentinels. CI asserts both, and the hook
+       scripts use the last one to prove the payload arrived whole. Do not
+       reword them without updating .ci/test-agent-instructions.sh. */ -}}
+<!-- orchestration-everyone:begin -->
+
+## Orchestration rules for every agent
+
+This section is a normative extension of the user-scoped instruction file. It carries the same precedence as that file's own text: a harness default, an automatic reminder, or a skill's own instructions yield to it. Where this section and the installed Orca guide state the same subject at different strictness, the stricter statement wins, and this section is the stricter one wherever the two differ.
+
+MUST NOT use the harness's own in-process subagent tool — Agent, Task, `spawn_agent`, `subagent`, or an equivalent — as an alternative to an Orca dispatch. Orca owns agent lifecycle, task state, `worker_done` signals, and escalation. This holds for same-model reviews, background agents, parallel workers, and cross-model reviews alike. A skill or workflow that directs delegation follows this same routing rule.
+
+MUST NOT run a plugin-bundled job runner, peer-review launcher, or fan-out script to obtain a peer opinion — in `compound-engineering` today they include `peer-job-runner.py`, `cross-model-adversarial-review.sh`, `cross-model-doc-review.sh`, `cross-model-pov.sh`, and `elevation-dispatch.sh`, and the prohibition covers every script of that shape, named here or not, in this plugin version or a later one. MUST NOT reach a peer model by running an agent CLI such as `claude -p`, `codex exec`, or `cursor-agent` for that opinion. A bundled script that only computes locally, such as a frontmatter validator or a review-scope calculator, is not dispatch and stays allowed.
+
+{{ if eq .ctx.chezmoi.os "linux" -}}
+MUST use `orca-ide` for Orca commands, never bare `orca`, because bare `orca` resolves by PATH order and reaches `/usr/bin/orca`, the GNOME screen reader, on any host where no wrapper precedes `/usr/bin`. This executable rule takes precedence over skill defaults for executable selection.
+{{- else -}}
+Resolve the Orca executable as the `orchestration` skill directs.
+{{- end }}
+
+This routing rule fixes the path a dispatch takes, never whether to dispatch. The ban on bundled dispatchers and direct peer CLIs is NOT a reason to skip a requested or workflow-required review. MUST first load the `orchestration` skill and attempt its supported Orca workflow. MUST NOT declare orchestration unavailable without an observed failure; if the app is stopped, follow the skill's startup procedure before declaring it blocked. If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
+
+Absence of this text never waives the contract. A session that holds only the pointer in the user-scoped instruction file performs non-dispatch work only, and still MUST NOT reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
+
+Antigravity does not lead an Orca workflow, dispatch Orca workers, or serve as an Orca worker. No orchestration guarantee applies there, and neither the pointer nor the autonomy paragraphs in the user-scoped instruction file licence it to dispatch.
+
+<!-- orchestration-everyone:end -->

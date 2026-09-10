@@ -1,1 +1,15 @@
-{{- includeTemplate "agents-instructions.tmpl" (dict "ctx" . "harness" "omp") -}}
+{{- /* omp has no injection point that can vary by role: its extensions receive
+       session_start only after the system prompt is committed, and their
+       additionalContext return value is consumed for session_stop alone. So the
+       everyone-payload rides in this instruction file instead, ungated.
+
+       The block sits AFTER the shared core so the core's precedence paragraph
+       governs it, and inside delimiters that appear exactly once here and
+       nowhere in any other harness render. .ci/test-agent-instructions.sh
+       extracts the bounded block before comparing the four cores; changing a
+       delimiter means changing that extractor too. */ -}}
+{{- includeTemplate "agents-instructions.tmpl" (dict "ctx" . "harness" "omp") }}
+
+<!-- omp-orchestration-payload:begin -->
+{{ includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "omp") }}
+<!-- omp-orchestration-payload:end -->

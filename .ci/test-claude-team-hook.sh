@@ -11,14 +11,18 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-hook_src="$repo_root/dot_local/share/dotfiles-claude-plugin/hooks/executable_orca-team-lead-orchestration.sh"
+hook_tmpl="$repo_root/dot_local/share/dotfiles-claude-plugin/hooks/executable_orca-team-lead-orchestration.sh.tmpl"
 hooks_json="$repo_root/dot_local/share/dotfiles-claude-plugin/hooks/hooks.json"
+everyone_payload_tmpl="$repo_root/dot_local/share/dotfiles-claude-plugin/payloads/readonly_everyone.md.tmpl"
+coordinator_payload_tmpl="$repo_root/dot_local/share/dotfiles-claude-plugin/payloads/readonly_coordinator.md.tmpl"
 
 fail() { printf 'claude team hook: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'claude team hook: %s\n' "$*"; }
 
-[[ -f $hook_src ]] || fail "missing hook source $hook_src"
+[[ -f $hook_tmpl ]] || fail "missing hook template $hook_tmpl"
 [[ -f $hooks_json ]] || fail "missing $hooks_json"
+[[ -f $everyone_payload_tmpl ]] || fail "missing $everyone_payload_tmpl"
+[[ -f $coordinator_payload_tmpl ]] || fail "missing $coordinator_payload_tmpl"
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/claude-team-hook
 mkdir -p -- "$scratch_root"
@@ -27,9 +31,31 @@ scratch=$(mktemp -d "$scratch_root/run.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
 mkdir -p "$scratch/bin" "$scratch/home/.agents/skills/orchestration"
+chezmoi_bin=$(command -v chezmoi || true)
+[[ -n $chezmoi_bin ]] || fail 'no chezmoi binary found on PATH'
+
+# Stub op and empty config so execute-template never touches live 1Password
+mkdir -p "$scratch/op-bin" "$scratch/target"
+printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' > "$scratch/op-bin/op"
+chmod 0700 -- "$scratch/op-bin/op"
+printf '[data]\n' > "$scratch/empty.toml"
+
+render_tmpl() {
+  local tmpl=$1 out=$2
+  env HOME="$scratch/home" PATH="$scratch/op-bin:/usr/bin:/bin" \
+    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
+      --destination "$scratch/target" execute-template <"$tmpl" >"$out"
+}
+
+plugin_root="$scratch/plugin-root"
+mkdir -p "$plugin_root/hooks" "$plugin_root/payloads"
 hook="$scratch/hook.sh"
-cp -- "$hook_src" "$hook"
+render_tmpl "$hook_tmpl" "$hook"
 chmod 0700 -- "$hook"
+cp -- "$hook" "$plugin_root/hooks/orca-team-lead-orchestration.sh"
+chmod 0700 -- "$plugin_root/hooks/orca-team-lead-orchestration.sh"
+render_tmpl "$everyone_payload_tmpl" "$plugin_root/payloads/everyone.md"
+render_tmpl "$coordinator_payload_tmpl" "$plugin_root/payloads/coordinator.md"
 
 printf 'SKILL BODY MARKER\n' >"$scratch/home/.agents/skills/orchestration/SKILL.md"
 
@@ -51,7 +77,7 @@ ln -sf -- "$jq_bin" "$scratch/bin/jq"
 # Orca installs /usr/bin/orca-ide, so a PATH that keeps the system directories
 # cannot express "no Orca CLI". Every case runs against this closed base holding
 # only what the hook itself needs.
-for tool in bash mktemp sleep rm; do
+for tool in bash mktemp sleep rm uname; do
   tool_path=$(command -v "$tool") || fail "the hook needs $tool and it is not on PATH"
   ln -sf -- "$tool_path" "$scratch/bin/$tool"
 done
@@ -74,12 +100,13 @@ run_hook_in() {
   env -i \
     PATH="$scratch/$bindir:$scratch/bin" \
     HOME="$home" \
+    CLAUDE_PLUGIN_ROOT="$plugin_root" \
     "$@" \
     "$scratch/bin/bash" "$hook"
 }
 run_hook() { run_hook_in "$scratch/home" "$@"; }
 
-lead_env=(CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 TMUX_PANE=%1 ORCA_AGENT_TEAMS_LEADER_PANE=%1)
+lead_env=(ORCA_TERMINAL_HANDLE=term_1 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 TMUX_PANE=%1 ORCA_AGENT_TEAMS_LEADER_PANE=%1)
 
 context_of() {
   "$jq_bin" -er '.hookSpecificOutput.additionalContext' 2>/dev/null
@@ -97,21 +124,17 @@ lead_elapsed=$((SECONDS - lead_start))
 ctx=$(printf '%s' "$out" | context_of) || fail 'lead-shaped run emitted no additionalContext'
 [[ $ctx == *"SKILL BODY MARKER"* ]] || fail 'injected context is missing the SKILL.md body'
 [[ $ctx == *"GUIDE BODY MARKER"* ]] || fail 'injected context is missing the Orca guide body'
+[[ $ctx == *"<!-- orchestration-everyone:begin -->"* ]] || fail 'lead envelope missing everyone begin sentinel'
+[[ $ctx == *"<!-- orchestration-everyone:end -->"* ]] || fail 'lead envelope missing everyone end sentinel'
+[[ $ctx == *"<!-- orchestration-coordinator:begin -->"* ]] || fail 'lead envelope missing coordinator begin sentinel'
+[[ $ctx == *"<!-- orchestration-coordinator:end -->"* ]] || fail 'lead envelope missing coordinator end sentinel'
+last_line=$(printf '%s' "$ctx" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' | tail -n 1)
+[[ $last_line == '<!-- orchestration-coordinator:end -->' ]] ||
+  fail "lead envelope did not end with coordinator sentinel line: '$last_line'"
 (( lead_elapsed <= 2 )) ||
   fail "the lead path held stdout for ${lead_elapsed}s; a fast guide read must not wait on the watchdog"
-pass 'the lead pane receives both the skill body and the guide, without holding stdout'
+pass 'the lead pane receives the skill body, the guide, and both payloads ending with coordinator sentinel'
 
-# --- The hook leaves no background job behind on the fast path ---
-#
-# The watchdog's own `sleep` is the one that held stdout. It is signalled through
-# its process group, so nothing of the hook survives a fast guide read.
-sleep 1
-if pgrep -f "$scratch/hook.sh" >/dev/null 2>&1; then
-  fail 'the hook left a background job running after it exited'
-fi
-pass 'the hook leaves no background job behind'
-
-# --- Every non-lead shape stays silent ---
 assert_silent_in() {
   local label=$1 home=$2 bindir=$3
   shift 3
@@ -125,25 +148,75 @@ assert_silent() {
   assert_silent_in "$label" "$scratch/home" "$@"
 }
 
-# A teammate pane: the team flag is inherited, the pane variables are not. This
-# is the case a bare equality test gets wrong.
-assert_silent 'a teammate pane' cli-ok CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-assert_silent 'a pane whose id differs from the leader' cli-ok \
-  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 TMUX_PANE=%2 ORCA_AGENT_TEAMS_LEADER_PANE=%1
-# Only the presence guard rejects this one; the equality test would accept it if
-# the leader variable were also allowed to be empty.
-assert_silent 'a pane with no leader variable' cli-ok \
-  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 TMUX_PANE=%1
-assert_silent 'a session outside team mode' cli-ok TMUX_PANE=%1 ORCA_AGENT_TEAMS_LEADER_PANE=%1
-pass 'teammate, mismatched, leaderless and non-team sessions inject nothing'
+# --- The role table ---
+# 1. handle set with lead pane equal to TMUX_PANE gives the lead envelope (proven above)
+
+# 2. handle set with no lead pane gives the everyone-payload only
+out_w1=$(run_hook cli-ok ORCA_TERMINAL_HANDLE=term_1 TMUX_PANE=%1) || fail 'worker (no lead pane) exited non-zero'
+ctx_w1=$(printf '%s' "$out_w1" | context_of) || fail 'worker (no lead pane) emitted no additionalContext'
+[[ $ctx_w1 == *"<!-- orchestration-everyone:end -->"* ]] || fail 'worker result missing everyone sentinel'
+[[ $ctx_w1 != *"orchestration-coordinator"* ]] || fail 'worker result contains coordinator sentinel'
+[[ $ctx_w1 != *"GUIDE BODY MARKER"* ]] || fail 'worker result contains guide body'
+[[ $ctx_w1 != *"SKILL BODY MARKER"* ]] || fail 'worker result contains skill body'
+
+# 3. handle set with a lead pane unequal to TMUX_PANE gives the worker result
+out_w2=$(run_hook cli-ok ORCA_TERMINAL_HANDLE=term_1 TMUX_PANE=%2 ORCA_AGENT_TEAMS_LEADER_PANE=%1) ||
+  fail 'worker (unequal pane) exited non-zero'
+ctx_w2=$(printf '%s' "$out_w2" | context_of) || fail 'worker (unequal pane) emitted no additionalContext'
+[[ $ctx_w2 == *"<!-- orchestration-everyone:end -->"* ]] || fail 'worker result missing everyone sentinel'
+[[ $ctx_w2 != *"orchestration-coordinator"* ]] || fail 'worker result contains coordinator sentinel'
+
+# 4. handle set to the empty string with lead pane and TMUX_PANE set and equal gives {}
+assert_silent 'empty handle with matching lead pane' cli-ok \
+  ORCA_TERMINAL_HANDLE='' TMUX_PANE=%1 ORCA_AGENT_TEAMS_LEADER_PANE=%1
+
+# 5. handle unset gives {}
+assert_silent 'unset handle with matching lead pane' cli-ok \
+  TMUX_PANE=%1 ORCA_AGENT_TEAMS_LEADER_PANE=%1
+assert_silent 'a teammate pane with no handle' cli-ok CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+assert_silent 'a session outside team mode with no handle' cli-ok TMUX_PANE=%1 ORCA_AGENT_TEAMS_LEADER_PANE=%1
+pass 'the role table resolves lead, worker, and silent none as expected'
+
+# --- Two half-available lead cases ---
+# 1. Orca CLI fails but the payload is readable
+assert_silent 'half-available: Orca CLI fails but payload is readable' cli-fail "${lead_env[@]}"
+
+# 2. Payload is unreadable but the CLI succeeds
+mkdir -p "$scratch/unreadable-payloads/payloads"
+touch "$scratch/unreadable-payloads/payloads/everyone.md" "$scratch/unreadable-payloads/payloads/coordinator.md"
+chmod 0000 "$scratch/unreadable-payloads/payloads/coordinator.md"
+assert_silent 'half-available: coordinator payload unreadable but CLI succeeds' cli-ok \
+  CLAUDE_PLUGIN_ROOT="$scratch/unreadable-payloads" "${lead_env[@]}"
+chmod 0600 "$scratch/unreadable-payloads/payloads/coordinator.md"
+
+mkdir -p "$scratch/unreadable-everyone/payloads"
+touch "$scratch/unreadable-everyone/payloads/everyone.md" "$scratch/unreadable-everyone/payloads/coordinator.md"
+chmod 0000 "$scratch/unreadable-everyone/payloads/everyone.md"
+assert_silent 'half-available: everyone payload unreadable but CLI succeeds' cli-ok \
+  CLAUDE_PLUGIN_ROOT="$scratch/unreadable-everyone" "${lead_env[@]}"
+chmod 0600 "$scratch/unreadable-everyone/payloads/everyone.md"
+pass 'both half-available lead cases produce exactly {} and no partial envelope'
+
+# --- The hook leaves no background job behind on the fast path ---
+#
+# The watchdog's own `sleep` is the one that held stdout. It is signalled through
+# its process group, so nothing of the hook survives a fast guide read.
+sleep 1
+if pgrep -f "$scratch/hook.sh" >/dev/null 2>&1; then
+  fail 'the hook left a background job running after it exited'
+fi
+pass 'the hook leaves no background job behind'
+
 
 # --- Compaction re-injects (AE3) ---
 "$jq_bin" -er '.hooks.SessionStart[0].matcher' <"$hooks_json" >"$scratch/matcher" ||
   fail 'hooks.json declares no SessionStart matcher'
 matcher=$(<"$scratch/matcher")
-for source in startup resume clear compact; do
+for source in startup resume clear compact fork; do
   [[ $matcher == *"$source"* ]] || fail "hooks.json matcher does not register the $source source: $matcher"
 done
+[[ $matcher == 'startup|resume|clear|compact|fork' ]] ||
+  fail "hooks.json matcher is '$matcher', not the exact declared expression"
 out=$(printf '{"hook_event_name":"SessionStart","source":"compact"}' | run_hook cli-ok "${lead_env[@]}") ||
   fail 'compact-source run exited non-zero'
 ctx=$(printf '%s' "$out" | context_of) || fail 'compact-source run emitted no additionalContext'
@@ -229,16 +302,13 @@ pass 'a bare orca override is remapped, and a real custom override still runs'
 # contains the right words, ships silently while this gate stays green.
 [[ $("$jq_bin" -r '.hooks.SessionStart | length' <"$hooks_json") -eq 1 ]] ||
   fail 'hooks.json declares more than one SessionStart matcher group'
-[[ $matcher == 'startup|resume|clear|compact' ]] ||
+[[ $matcher == 'startup|resume|clear|compact|fork' ]] ||
   fail "hooks.json matcher is '$matcher', not the exact declared expression"
 declared_command=$("$jq_bin" -r '.hooks.SessionStart[0].hooks[0].command' <"$hooks_json")
 [[ $("$jq_bin" -r '.hooks.SessionStart[0].hooks[0].type' <"$hooks_json") == command ]] ||
   fail 'the declared SessionStart hook is not a command hook'
 
-plugin_root="$scratch/plugin-root"
-mkdir -p "$plugin_root/hooks"
-cp -- "$hook_src" "$plugin_root/hooks/orca-team-lead-orchestration.sh"
-chmod 0700 -- "$plugin_root/hooks/orca-team-lead-orchestration.sh"
+# plugin_root is already populated and verified during setup
 resolved_command=${declared_command//\$\{CLAUDE_PLUGIN_ROOT\}/$plugin_root}
 resolved_command=${resolved_command//\"/}
 [[ -x $resolved_command ]] ||

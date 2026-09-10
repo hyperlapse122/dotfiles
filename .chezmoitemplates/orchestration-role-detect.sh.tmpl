@@ -1,0 +1,25 @@
+{{- /* Orca session role resolution, shared by every orchestration hook.
+
+       Rendered into each plugin's hook script so the precedence rule has one
+       source and the Claude Code and Codex hooks cannot drift.
+
+       Precedence, in order:
+         - ORCA_TERMINAL_HANDLE unset or empty        -> none    (not Orca-managed)
+         - handle set, and ORCA_AGENT_TEAMS_LEADER_PANE
+           and TMUX_PANE are both non-empty and equal -> lead
+         - any other non-empty handle                 -> worker
+
+       An empty string counts as unset everywhere. Comparing two unset
+       variables matches empty against empty, which would classify every
+       teammate as the lead, so every leg tests presence before equality.
+       Pane variables alone never produce lead or worker: without the Orca
+       terminal handle the session is not Orca-managed at all.
+
+       Writes the role word to stdout and nothing to stderr, on every path. */ -}}
+orchestration_role() {
+  [ -n "${ORCA_TERMINAL_HANDLE:-}" ] || { printf 'none\n'; return 0; }
+  [ -n "${ORCA_AGENT_TEAMS_LEADER_PANE:-}" ] || { printf 'worker\n'; return 0; }
+  [ -n "${TMUX_PANE:-}" ] || { printf 'worker\n'; return 0; }
+  [ "$TMUX_PANE" = "$ORCA_AGENT_TEAMS_LEADER_PANE" ] || { printf 'worker\n'; return 0; }
+  printf 'lead\n'
+}

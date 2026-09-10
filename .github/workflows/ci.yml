@@ -73,6 +73,7 @@ jobs:
           .ci/test-omp-mcp-render.sh
           .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
           .ci/test-claude-team-hook.sh
+          .ci/test-codex-orchestration-hook.sh
           .ci/test-codex-tokscale-wrapper.sh
           .ci/test-codex-skills-guard.sh
           .ci/test-android-skill-ownership.sh

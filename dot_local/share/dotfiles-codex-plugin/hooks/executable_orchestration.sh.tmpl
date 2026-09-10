@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Codex SessionStart hook: deliver the everyone-payload to an Orca-managed session.
+#
+# Claude Code is the only harness that leads, so this hook carries no lead
+# branch. Any Orca session — worker or lead-shaped — gets the everyone-payload,
+# which is the lower-privilege outcome the role rule already requires. A session
+# outside Orca gets nothing.
+#
+# Every path prints nothing or valid JSON and exits 0. Codex treats plain
+# non-JSON stdout as model context verbatim, so a stray echo would silently
+# become injected text; there are none.
+#
+# This file is a chezmoi template. Without the .tmpl extension the
+# includeTemplate below would deploy as literal text and the role test would
+# never run.
+set -u
+
+# Codex pipes the event JSON to this hook. Exiting before reading it produces a
+# broken pipe on the writer, which is how the earlier haptic plugin broke. An
+# unbounded read would let a stalled producer delay session start, so the read is
+# bounded: take at most 64 KiB and stop, whether or not the producer closes.
+drain_stdin() {
+  if [ -t 0 ]; then
+    return 0
+  fi
+  head -c 65536 >/dev/null 2>&1 || true
+}
+
+emit_nothing() {
+  drain_stdin
+  exit 0
+}
+
+{{ includeTemplate "orchestration-role-detect.sh.tmpl" . }}
+
+drain_stdin
+
+role="$(orchestration_role)"
+[ "$role" = none ] && exit 0
+
+command -v jq >/dev/null 2>&1 || exit 0
+
+# chezmoi strips the readonly_ prefix and the .tmpl suffix, so the deployed
+# payload name is plain. Codex sets CLAUDE_PLUGIN_ROOT as a compatibility shim
+# rather than a guaranteed contract, so resolve from this script's own location
+# first and fall back to the variable.
+PLUGIN_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd)"
+[ -n "$PLUGIN_ROOT" ] || PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
+[ -n "$PLUGIN_ROOT" ] || exit 0
+
+EVERYONE_PAYLOAD="$PLUGIN_ROOT/payloads/everyone.md"
+[ -r "$EVERYONE_PAYLOAD" ] || exit 0
+
+PREAMBLE='The orchestration rules below are a normative extension of your user-scoped instruction file and carry the same precedence as its own text. Where they and the Orca guide state one subject at different strictness, the stricter statement wins.'
+
+jq -n \
+  --arg preamble "$PREAMBLE" \
+  --rawfile everyone "$EVERYONE_PAYLOAD" \
+  '{
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext: ($preamble + "\n\n" + $everyone)
+    }
+  }' 2>/dev/null || exit 0

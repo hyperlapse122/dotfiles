@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
-# SessionStart hook: place the Orca orchestration skill in a team lead's context.
+# SessionStart hook: deliver the orchestration payload this session's role can act on.
+#
+# A lead gets one composed envelope — authority preamble, the Orca skill, the
+# version-matched guide, the everyone-payload, then the coordinator payload. A
+# dispatched worker gets the everyone-payload alone and never pays for the Orca
+# CLI call. A session outside Orca gets nothing.
 #
 # Every failure path prints an empty JSON object and exits 0. A SessionStart hook
 # that errors would delay or block session start, so nothing here is allowed to
-# fail loudly.
+# fail loudly. Delivery is atomic: a lead envelope missing any half emits `{}`
+# rather than a partial contract.
+#
+# This file is a chezmoi template. Without the .tmpl extension the
+# includeTemplate below would deploy as literal text and the role test would
+# never run.
 set -u
 
 emit_nothing() {
@@ -11,16 +21,38 @@ emit_nothing() {
   exit 0
 }
 
-# A tmux-backed teammate pane inherits CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS but
-# NOT TMUX_PANE or ORCA_AGENT_TEAMS_LEADER_PANE. Comparing the two variables
-# without checking presence first matches empty against empty, which injects into
-# every teammate instead of the lead alone.
-[ -n "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" ] || emit_nothing
-[ -n "${TMUX_PANE:-}" ] || emit_nothing
-[ -n "${ORCA_AGENT_TEAMS_LEADER_PANE:-}" ] || emit_nothing
-[ "$TMUX_PANE" = "$ORCA_AGENT_TEAMS_LEADER_PANE" ] || emit_nothing
+{{ includeTemplate "orchestration-role-detect.sh.tmpl" . }}
+
+role="$(orchestration_role)"
+[ "$role" = none ] && emit_nothing
 
 command -v jq >/dev/null 2>&1 || emit_nothing
+
+# chezmoi strips the readonly_ prefix and the .tmpl suffix, so the deployed
+# payload names are plain.
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+EVERYONE_PAYLOAD="$PLUGIN_ROOT/payloads/everyone.md"
+COORDINATOR_PAYLOAD="$PLUGIN_ROOT/payloads/coordinator.md"
+
+[ -r "$EVERYONE_PAYLOAD" ] || emit_nothing
+
+PREAMBLE='The orchestration rules below are a normative extension of your user-scoped instruction file and carry the same precedence as its own text. Where they and the Orca guide state one subject at different strictness, the stricter statement wins.'
+
+if [ "$role" = worker ]; then
+  jq -n \
+    --arg preamble "$PREAMBLE" \
+    --rawfile everyone "$EVERYONE_PAYLOAD" \
+    '{
+      hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: ($preamble + "\n\n" + $everyone)
+      }
+    }' 2>/dev/null || emit_nothing
+  exit 0
+fi
+
+# Lead path. Everything below must succeed or the envelope is not delivered.
+[ -r "$COORDINATOR_PAYLOAD" ] || emit_nothing
 
 SKILL_PATH="${HOME}/.agents/skills/orchestration/SKILL.md"
 [ -r "$SKILL_PATH" ] || emit_nothing
@@ -73,15 +105,21 @@ wait "$watchdog_pid" 2>/dev/null
 [ -s "$guide_file" ] || emit_nothing
 
 jq -n \
+  --arg preamble "$PREAMBLE" \
   --rawfile skill "$SKILL_PATH" \
   --rawfile guide "$guide_file" \
+  --rawfile everyone "$EVERYONE_PAYLOAD" \
+  --rawfile coordinator "$COORDINATOR_PAYLOAD" \
   '{
     hookSpecificOutput: {
       hookEventName: "SessionStart",
       additionalContext: (
-        "This session is the lead of an Orca-managed Claude Code team. The Orca orchestration skill is loaded below so that any dispatch of a subagent, worker, or peer reviewer follows it rather than a native subagent tool.\n\nBoth texts below were read at session start from this host'"'"'s installed Orca CLI. The guide is the current output of `skills get orchestration`, so do not re-fetch it.\n\n"
+        $preamble
+        + "\n\nThis session is the lead of an Orca-managed Claude Code team. Both texts below were read at session start from this host'"'"'s installed Orca CLI. The guide is the current output of `skills get orchestration`, so do not re-fetch it.\n\n"
         + "--- orchestration SKILL.md ---\n\n" + $skill
         + "\n\n--- version-matched Orca orchestration guide ---\n\n" + $guide
+        + "\n\n" + $everyone
+        + "\n\n" + $coordinator
       )
     }
   }' 2>/dev/null || emit_nothing

@@ -1,0 +1,97 @@
+{{- /* Pre-seeded trust for this checkout's own Codex hook.
+
+  Codex refuses to run a third-party plugin hook until a trusted_hash for it
+  exists in the USER config (~/.codex/config.toml); project and managed layers
+  can discover hooks but may not write hook state. Without this record the hook
+  this repository ships never runs, and the failure is silent by design.
+
+  The record attests the hook DECLARATION, not the delivered text. The hash
+  covers the event, matcher, and normalized handler config only, so the script
+  the command runs and the payload files it reads change with no re-trust. That
+  is a deliberate, recorded consequence, not an oversight.
+
+  Key grammar (codex-rs/hooks/src/lib.rs, declarations.rs, plugin_id.rs):
+    <plugin>@<personal marketplace>:<path inside the plugin>:<event>:<group>:<handler>
+  A plugin hook's key carries NO version segment, so a plugin version bump
+  leaves both key and hash unchanged. Group and handler indices are positional:
+  adding an entry before ours in the same event re-keys it, which is why the
+  hook is the only handler in its group.
+
+  Hash recipe (codex-rs/hooks/src/engine/discovery.rs, config/src/fingerprint.rs):
+  serialize {event_name, matcher?, hooks:[normalized handler]} as JSON with keys
+  sorted recursively and no whitespace, then sha256, prefixed `sha256:`. Go's
+  json.Marshal sorts map keys and emits no spaces, so `toJson` over dicts
+  reproduces it. It also HTML-escapes <, > and &; the declared command contains
+  none, and introducing one would silently break the hash.
+
+  Normalization this template reproduces:
+    - timeout is always present: declared value, else 600, floored at 1
+    - async is always present as a bool, default false
+    - statusMessage appears only when set
+    - additionalContextLimit appears only for the events that honour it and only
+      when it differs from the 2500 default
+    - matcher is omitted for user_prompt_submit, stop, and interrupt
+
+  Verified against every trust record on the authoring host: 8 computed, 8
+  matched, 0 mismatched. Re-verify against a live record before trusting a
+  change to this file. */ -}}
+{{- $ctx := .ctx -}}
+{{- $plugin := "dotfiles-codex" -}}
+{{- $relPath := "hooks/hooks.json" -}}
+{{- $market := includeTemplate "codex-personal-marketplace.tmpl" (dict "ctx" $ctx "caller" "codex-hook-trust") -}}
+{{- $hooksPath := joinPath $ctx.chezmoi.sourceDir "dot_local/share/dotfiles-codex-plugin/hooks/hooks.json" -}}
+{{- if not (stat $hooksPath) -}}
+{{-   fail "codex-hook-trust.tmpl: the Codex plugin hooks.json is missing, so no trust record can be computed" -}}
+{{- end -}}
+{{- $doc := include $hooksPath | fromJson -}}
+{{- $eventLabels := dict
+      "PreToolUse" "pre_tool_use"
+      "PermissionRequest" "permission_request"
+      "PostToolUse" "post_tool_use"
+      "PreCompact" "pre_compact"
+      "PostCompact" "post_compact"
+      "SessionStart" "session_start"
+      "SessionEnd" "session_end"
+      "UserPromptSubmit" "user_prompt_submit"
+      "SubagentStart" "subagent_start"
+      "SubagentStop" "subagent_stop"
+      "Stop" "stop"
+      "Interrupt" "interrupt" -}}
+{{- $limitEvents := list "pre_tool_use" "post_tool_use" "session_start" "user_prompt_submit" "subagent_start" -}}
+{{- $matcherlessEvents := list "user_prompt_submit" "stop" "interrupt" -}}
+{{- $records := dict -}}
+{{- range $event, $groups := (index $doc "hooks") -}}
+{{-   if not (hasKey $eventLabels $event) -}}
+{{-     fail (printf "codex-hook-trust.tmpl: unknown hook event %q" $event) -}}
+{{-   end -}}
+{{-   $label := index $eventLabels $event -}}
+{{-   range $gi, $group := $groups -}}
+{{-     range $hi, $handler := (index $group "hooks") -}}
+{{-       $normalized := dict "type" (default "command" (get $handler "type")) "command" (get $handler "command") -}}
+{{-       $timeout := 600 -}}
+{{-       if hasKey $handler "timeout" -}}{{- $timeout = get $handler "timeout" -}}{{- end -}}
+{{-       if lt $timeout 1 -}}{{- $timeout = 1 -}}{{- end -}}
+{{-       $_ := set $normalized "timeout" $timeout -}}
+{{-       $_ := set $normalized "async" (eq (default false (get $handler "async")) true) -}}
+{{-       if get $handler "statusMessage" -}}
+{{-         $_ := set $normalized "statusMessage" (get $handler "statusMessage") -}}
+{{-       end -}}
+{{-       if hasKey $handler "additionalContextLimit" -}}
+{{-         $limit := get $handler "additionalContextLimit" -}}
+{{-         if and (has $label $limitEvents) (ne $limit 2500) -}}
+{{-           $_ := set $normalized "additionalContextLimit" $limit -}}
+{{-         end -}}
+{{-       end -}}
+{{-       $identity := dict "event_name" $label "hooks" (list $normalized) -}}
+{{-       if and (get $group "matcher") (not (has $label $matcherlessEvents)) -}}
+{{-         $_ := set $identity "matcher" (get $group "matcher") -}}
+{{-       end -}}
+{{-       $key := printf "%s@%s:%s:%s:%d:%d" $plugin $market $relPath $label $gi $hi -}}
+{{-       $_ := set $records $key (dict "trusted_hash" (printf "sha256:%s" (toJson $identity | sha256sum))) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq (len $records) 0 -}}
+{{-   fail "codex-hook-trust.tmpl: the Codex plugin declares no hook handler, so no trust record was computed" -}}
+{{- end -}}
+{{- dict "state" $records | toJson -}}
