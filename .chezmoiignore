@@ -118,6 +118,7 @@
 # never linked into $HOME (mirrors ./system above).
 ./crates
 ./packages
+./firmware
 
 {{- if $f.jetson }}
 .chezmoiscripts/50-linux-kde/*.sh
