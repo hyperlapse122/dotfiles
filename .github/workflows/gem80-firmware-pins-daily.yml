@@ -1,0 +1,37 @@
+name: Gem80 firmware pins daily
+
+# Validates reachability of the pinned QMK fork commit and toolchain image
+# digest for the NuPhy Gem80 hostrgb firmware.
+#
+# Runs daily via schedule and can be dispatched manually. Lookup-only,
+# non-mutating: does not clone the multi-GB QMK fork or pull container layers.
+# Neither commits nor pushes; failures surface strictly as a failed job.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gem80-firmware-pins-daily
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check-pins:
+    name: Check Gem80 firmware pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check firmware fork commit and toolchain reachability
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .ci/check-gem80-firmware-pins.sh
