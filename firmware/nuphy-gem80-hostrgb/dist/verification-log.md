@@ -1,7 +1,8 @@
 # Gem80 hostrgb — 하드웨어 검증 로그
 
-- 일시: 2026-09-10T01:59:18Z
-- 펌웨어: `nuphy_gem80_ansi_hostrgb.bin` (73672 bytes, sha256 1a261a0eaade3051…)
+- 일시: 2026-09-10T01:59:18Z (최초 플래시) ~ 2026-09-10T02:33:24Z (재플래시, 최종)
+- 검증된 펌웨어(커밋됨): `nuphy_gem80_ansi_hostrgb.bin` (73684 bytes, sha256 332004230de77a088ed8188d9906fd1d09eba7788f3cf947a22adae08b8148e3) — `dist/build-info.json`과 일치
+- 최초 플래시 펌웨어(재플래시로 대체됨): 73672 bytes, sha256 1a261a0eaade3051… — raw_hid_send 수정 전 빌드. 5단계에서 이 빌드를 먼저 플래시했으나 dfuMANIFEST에서 멈췄고(6단계), 조작자가 수정본으로 재플래시했다(재플래시 절 참고)
 - 플래시 전 bcdDevice: 0118 (순정 v1.1.8)
 - 백업: `QMK_firmware_nuphy_gem80_trimode_ansi_v2.1.5.bin` (VIA 키맵은 커스텀 없음으로 생략)
 
@@ -58,7 +59,7 @@ Transitioning to dfuMANIFEST state
 ## 재플래시 (raw_hid_send 수정본)
 
 - 일시: 2026-09-10T02:33:24Z
-- 크기: 73684 bytes (수정 전 73656 → +10, raw_hid_send 호출 3개)
+- 크기: 73684 bytes (DfuSe element 크기 73656 → 73668, raw_hid_send 호출 3개 추가)
 - 출처 게이트: 통과
 
 ```
@@ -110,8 +111,9 @@ LEDs per packet: 9
 
 ### frame 0 255 0 (R7)
 ```
-89 LEDs / 9 per packet = 10 packets (9x9=81 + 8)
 ```
+
+비고 (표준출력 아님, 조작자 주석): 89개 LED / 패킷당 9개 = 10개 패킷 (9x9=81 + 8). `cmd_frame`은 `_write_only`를 거치며 성공 시 표준출력을 내지 않는다 — 위 빈 코드 블록이 실제로 캡처된 출력이다.
 
 **R7 관찰 결과: 충족.** 조작자 확인 — "every key is green except logo and upper strip". 89개 키 LED 전체가 호스트 프레임으로 덮였고, 앞서 빨강이던 인덱스 0도 초록으로 갱신되었다.
 
@@ -119,8 +121,9 @@ LEDs per packet: 9
 
 ### exit (AE2)
 ```
-60 01 00 sent, exit code 0
 ```
+
+비고 (표준출력 아님, 조작자 주석): `60 01 00` 페이로드 전송, exit code 0. `cmd_exit`도 `_write_only`를 거치며 표준출력이 없다 — 위 빈 코드 블록이 실제로 캡처된 출력이다.
 
 **AE2 관찰 결과: 충족.** 조작자 확인 — "default effect works for usb connection". `60 01 00` 이후 EEPROM에 저장된 효과로 복귀. R6, R7, R8 모두 충족.
 

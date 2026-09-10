@@ -1,3 +1,3 @@
 # STM32 ROM DFU bootloader access for firmware flashing.
-# Bootloader mode only appears when the operator enters it deliberately; this is not a standing exposure.
+# Matches every STM32 ROM DFU device, not only the Gem80: 0483:df11 is ST's generic bootloader identity.
 SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="df11", TAG+="uaccess"

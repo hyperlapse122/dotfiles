@@ -4,6 +4,7 @@
   "forkRef": "refs/heads/nuphy-keyboards",
   "forkSha": "9847cb81729fa6540ffed1a583b9acdaaa20607b",
   "makeTarget": "nuphy/gem80/ansi:hostrgb",
+  "toolchainImage": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
   "builtAt": "2026-09-10T02:32:54Z",
   "binary": {
     "name": "nuphy_gem80_ansi_hostrgb.bin",
