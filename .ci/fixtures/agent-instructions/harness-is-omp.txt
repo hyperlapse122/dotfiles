@@ -1,0 +1,1 @@
+This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch against a content-hash anchor; `write` to create a file or replace it whole; `ast_edit` for a structural rewrite; `grep`, `glob`, and `ast_grep` to search. `bash` and `eval` run commands only and MUST NOT apply the change itself.

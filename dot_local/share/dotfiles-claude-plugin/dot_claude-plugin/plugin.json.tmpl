@@ -1,0 +1,37 @@
+{{- /* plugin.json — the manifest Claude Code reads for this plugin.
+
+  `version` is derived from the hook tree's content on purpose. Claude Code
+  installs a plugin by COPYING the source tree into
+  ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/, and
+  run_onchange_after_update-claude-plugins.sh.tmpl records that `plugin install`
+  is a no-op once the plugin is present at ANY version. A fixed version would
+  therefore pin the first copy forever and every later hook edit would land in
+  the source tree and never run.
+
+  The same tree is a fingerprint input of that reconciler, so an edit also
+  re-triggers the script that performs the install. Both halves are required. */ -}}
+{{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-claude-plugin" -}}
+{{- $parts := "" -}}
+{{- /* The WHOLE tree, not just hooks/: this plugin is the standing home for this
+       checkout's Claude Code extensions, so a commands/ or agents/ file added
+       later must move the version too. Anything narrower re-runs the reconciler
+       on that edit and then resolves the same version, so the new file deploys
+       to ~/.local/share and never reaches the cache Claude Code serves. The
+       reconciler fingerprints this same tree with `**`; the two must agree. */ -}}
+{{- range $f := (glob (joinPath $root "**")) -}}
+{{-   if not (stat $f).isDir -}}
+{{-     $parts = printf "%s%s" $parts (include $f | sha256sum) -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq $parts "" -}}
+{{-   fail "plugin.json.tmpl: the hooks tree matched no files, so the version would not track the hook content" -}}
+{{- end -}}
+{{- $version := printf "0.1.0-%s" (substr 0 12 (sha256sum $parts)) -}}
+{
+  "name": "dotfiles-claude",
+  "version": "{{ $version }}",
+  "description": "Hooks, agents, and commands this dotfiles checkout ships to Claude Code",
+  "author": {
+    "name": "hyperlapse122"
+  }
+}

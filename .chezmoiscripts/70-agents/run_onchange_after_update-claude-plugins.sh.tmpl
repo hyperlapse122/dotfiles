@@ -1,6 +1,15 @@
 {{- $ctx := . -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" -}}
+{{- /* The dotfiles-claude-plugin tree is a dependency, not just a target: Claude
+       Code serves the COPY under ~/.claude/plugins/cache/<marketplace>/<plugin>/
+       <version>, so an edit to that tree only reaches a session if this script
+       re-runs and reinstalls. Without this glob the script's fingerprint sees
+       only agents.yaml and releases.json, and a hook edit would deploy to
+       ~/.local/share and never run. The plugin's version is derived from the
+       same tree so the reinstall resolves a new cache directory; both halves
+       are required. Named literally because it is the only localDir marketplace
+       — generalize when a second one exists, not before. */ -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" "dot_local/share/dotfiles-claude-plugin/**" -}}
 {{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "plugins") -}}
 {{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "pluginsRemoved") -}}
 {{- $removedMarketplaceRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "claude" "field" "marketplacesRemoved") -}}
@@ -87,6 +96,12 @@ for row in "${PLUGINS[@]}"; do
   [[ -d $source ]] || die "preflight: $kind marketplace $market is missing: $source"
   [[ -f $source/.claude-plugin/marketplace.json ]] ||
     die "preflight: $kind marketplace $market has no Claude Code manifest: $source/.claude-plugin/marketplace.json"
+  # The plugin manifest is what carries the version, and the version is the cache
+  # key. Without this check a half-deployed tree installs happily at an unknown
+  # version and every later edit resolves that same key, so the source updates
+  # and the served copy never does.
+  [[ -f $source/.claude-plugin/plugin.json ]] ||
+    die "preflight: $kind marketplace $market has no plugin manifest: $source/.claude-plugin/plugin.json"
 done
 
 for row in "${PLUGINS[@]}"; do

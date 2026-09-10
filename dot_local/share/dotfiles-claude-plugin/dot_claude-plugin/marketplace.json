@@ -1,0 +1,20 @@
+{
+  "name": "dotfiles-claude-plugin",
+  "owner": {
+    "name": "hyperlapse122"
+  },
+  "metadata": {
+    "description": "Claude Code extensions owned by this dotfiles checkout",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "dotfiles-claude",
+      "description": "Hooks, agents, and commands this dotfiles checkout ships to Claude Code",
+      "author": {
+        "name": "hyperlapse122"
+      },
+      "source": "./"
+    }
+  ]
+}

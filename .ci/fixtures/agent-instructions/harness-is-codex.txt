@@ -1,0 +1,1 @@
+This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell` (`cat`, `sed -n '1,80p'`, `rg`); `shell` MUST NOT apply the change itself. `view_image` reads an image and `update_plan` tracks the plan.

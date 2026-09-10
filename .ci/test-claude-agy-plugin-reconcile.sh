@@ -29,8 +29,15 @@ scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/claude-agy-plugin-fixtures
 mkdir -p -- "$scratch_root"
 chmod 0700 -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/run.XXXXXX")
+# The propagation case below writes one probe file into the source tree, because
+# the version it asserts is derived from that tree. Clearing it here means an
+# interrupted run cannot leave it behind.
+propagation_probe=''
+propagation_probe_dir=''
 cleanup() {
   rm -rf -- "$scratch"
+  [[ -z $propagation_probe ]] || rm -f -- "$propagation_probe"
+  [[ -z $propagation_probe_dir ]] || rmdir -- "$propagation_probe_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -89,6 +96,19 @@ for script in "$claude_script" "$agy_script" "$codex_script"; do
   done
 done
 
+# Claude Code serves the COPY it caches per version, never the deployed source,
+# so an edit reaches a session only if this script re-runs and reinstalls. That
+# depends on the plugin tree being one of this script's fingerprint inputs, and
+# dropping the glob would leave hook edits deployed but never served -- with
+# every other assertion here still green.
+claude_fingerprints=$(grep '^#   ' "$claude_script" || true)
+printf '%s\n' "$claude_fingerprints" |
+  grep -F '#   dot_local/share/dotfiles-claude-plugin/' >/dev/null ||
+  fail 'rendered Claude updater does not fingerprint the dotfiles-claude-plugin tree'
+printf '%s\n' "$claude_fingerprints" |
+  grep -F '#   dot_local/share/dotfiles-claude-plugin/hooks/executable_orca-team-lead-orchestration.sh  ' >/dev/null ||
+  fail 'rendered Claude updater does not fingerprint the hook script itself'
+
 # Neither script may reach a conditional `exit 0`: chezmoi records that as a
 # successful run, and an empty declared set is decided at render time instead.
 for script in "$claude_script" "$agy_script" "$codex_script"; do
@@ -131,14 +151,36 @@ cat >"$home/.agents/plugins/marketplace.json" <<'EOF'
 EOF
 ln -s "$market" "$home/.agents/plugins/compound-engineering-plugin"
 
+# The localDir marketplace this checkout ships. Unlike the localArchive above, no
+# external downloads it -- chezmoi deploys it as an ordinary target -- so the
+# fixture has to stand it up itself or the reconciler's preflight has nothing to
+# find. Both manifests are present because Claude Code reads the plugin manifest
+# from .claude-plugin/plugin.json, not from the tree root.
+local_dir_market="$home/.local/share/dotfiles-claude-plugin"
+mkdir -p "$local_dir_market/.claude-plugin" "$local_dir_market/hooks"
+cat >"$local_dir_market/.claude-plugin/marketplace.json" <<'EOF'
+{"name":"dotfiles-claude-plugin","plugins":[{"name":"dotfiles-claude","source":"./"}]}
+EOF
+cat >"$local_dir_market/.claude-plugin/plugin.json" <<'EOF'
+{"name":"dotfiles-claude","version":"0.1.0-test"}
+EOF
+
 rewrite() {
   local rendered=$1 target=$2
-  local row path
+  local row path local_row local_path
   row=$(grep -m1 'compound-engineering\\tcompound-engineering-plugin\\tlocalArchive\\t' "$rendered") ||
     fail "no compound-engineering row in $rendered"
   path=${row#*localArchive\\t}
   path=${path%%\"*}
-  sed "s|$path|$market|g" "$rendered" >"$target"
+  # The localDir row exists only in the Claude script; the substitution is a
+  # no-op for the other harnesses.
+  if local_row=$(grep -m1 'dotfiles-claude\\tdotfiles-claude-plugin\\tlocalDir\\t' "$rendered"); then
+    local_path=${local_row#*localDir\\t}
+    local_path=${local_path%%\"*}
+    sed -e "s|$path|$market|g" -e "s|$local_path|$local_dir_market|g" "$rendered" >"$target"
+  else
+    sed "s|$path|$market|g" "$rendered" >"$target"
+  fi
   chmod 0700 "$target"
 }
 
@@ -149,6 +191,8 @@ rewrite "$claude_script" "$claude_test"
 rewrite "$agy_script" "$agy_test"
 rewrite "$codex_script" "$codex_test"
 grep -F "$market" "$claude_test" >/dev/null || fail 'claude fixture path rewrite did not take'
+grep -F "$local_dir_market" "$claude_test" >/dev/null ||
+  fail 'claude localDir fixture path rewrite did not take'
 grep -F "$market" "$agy_test" >/dev/null || fail 'agy fixture path rewrite did not take'
 grep -F "$market" "$codex_test" >/dev/null || fail 'codex fixture path rewrite did not take'
 
@@ -239,7 +283,7 @@ codex_calls="$scratch/codex-calls"
 : >"$agy_calls"
 : >"$codex_calls"
 
-run_claude() { env HOME="$home" PATH="$bin:$PATH" CLAUDE_CALLS="$claude_calls" bash "$claude_test"; }
+run_claude() { env HOME="$home" PATH="$bin:$PATH" CLAUDE_CALLS="$claude_calls" bash "${1:-$claude_test}"; }
 run_agy() { env HOME="$home" PATH="$bin:$PATH" AGY_CALLS="$agy_calls" bash "$agy_test"; }
 run_codex() {
   env HOME="$home" PATH="$bin:$PATH" CODEX_CALLS="$codex_calls" CODEX_STATE="$scratch/codex-state" \
@@ -266,8 +310,65 @@ run_claude >"$scratch/claude-2.out" 2>&1 || {
   cat "$scratch/claude-2.out" >&2
   fail 'converged Claude Code re-run failed on the already-enabled plugin'
 }
-[[ $(grep -c 'plugin enable --scope user' "$claude_calls") -eq 2 ]] ||
-  fail 'Claude Code reconcile did not re-assert the enabled state'
+# Counted per plugin rather than in total: the declaration now carries more than
+# one Claude Code plugin, and a total would drift every time another is added.
+for declared in compound-engineering@compound-engineering-plugin \
+  dotfiles-claude@dotfiles-claude-plugin; do
+  [[ $(grep -c "plugin enable --scope user $declared" "$claude_calls") -eq 2 ]] ||
+    fail "Claude Code reconcile did not re-assert the enabled state for $declared"
+done
+
+# --- Claude Code: the localDir marketplace --------------------------------- #
+
+# This is the first localDir consumer in the repository, so the branch in
+# agent-plugin-rows.tmpl that resolves `path` against $HOME had no coverage until
+# here. The reconciler does not branch on kind, so the same add/install/update
+# sequence must reach it.
+grep -Fx "plugin marketplace add $local_dir_market" "$claude_calls" >/dev/null ||
+  fail 'Claude Code reconcile did not register the localDir marketplace'
+grep -Fx 'plugin install --scope user dotfiles-claude@dotfiles-claude-plugin' "$claude_calls" >/dev/null ||
+  fail 'Claude Code reconcile did not install the localDir plugin'
+grep -Fx 'plugin update --scope user dotfiles-claude@dotfiles-claude-plugin' "$claude_calls" >/dev/null ||
+  fail 'Claude Code reconcile did not update the localDir plugin'
+
+# Claude Code reads a plugin's manifest from .claude-plugin/plugin.json and
+# serves the COPY it caches, so the manifest sitting on the wrong surface in the
+# source tree would install a marketplace with no usable plugin.
+[[ -f "$source_root/dot_local/share/dotfiles-claude-plugin/dot_claude-plugin/plugin.json.tmpl" ]] ||
+  fail 'the shipped plugin tree carries no .claude-plugin/plugin.json manifest'
+
+local_dir_missing="$scratch/no-local-dir"
+sed "s|$local_dir_market|$local_dir_missing|g" "$claude_test" >"$scratch/claude-nolocaldir.sh"
+chmod 0700 "$scratch/claude-nolocaldir.sh"
+if run_claude "$scratch/claude-nolocaldir.sh" >"$scratch/claude-nolocaldir.out" 2>&1; then
+  fail 'Claude Code reconcile accepted a localDir marketplace whose directory is absent'
+fi
+grep -F 'dotfiles-claude-plugin' "$scratch/claude-nolocaldir.out" >/dev/null ||
+  fail 'the absent localDir marketplace was rejected without naming it'
+
+local_dir_bare="$scratch/local-dir-no-manifest"
+mkdir -p "$local_dir_bare"
+sed "s|$local_dir_market|$local_dir_bare|g" "$claude_test" >"$scratch/claude-localdir-bare.sh"
+chmod 0700 "$scratch/claude-localdir-bare.sh"
+if run_claude "$scratch/claude-localdir-bare.sh" >"$scratch/claude-localdir-bare.out" 2>&1; then
+  fail 'Claude Code reconcile accepted a localDir marketplace with no Claude Code manifest'
+fi
+grep -F '.claude-plugin/marketplace.json' "$scratch/claude-localdir-bare.out" >/dev/null ||
+  fail 'the manifest-less localDir marketplace was rejected without naming the manifest path'
+
+# A tree with the marketplace manifest but no plugin manifest used to install
+# happily at an unknown version. The version is the cache key, so that state
+# serves one copy forever and every later edit is deployed but never served.
+local_dir_no_plugin="$scratch/local-dir-no-plugin"
+mkdir -p "$local_dir_no_plugin/.claude-plugin"
+cp "$local_dir_market/.claude-plugin/marketplace.json" "$local_dir_no_plugin/.claude-plugin/"
+sed "s|$local_dir_market|$local_dir_no_plugin|g" "$claude_test" >"$scratch/claude-localdir-noplugin.sh"
+chmod 0700 "$scratch/claude-localdir-noplugin.sh"
+if run_claude "$scratch/claude-localdir-noplugin.sh" >"$scratch/claude-localdir-noplugin.out" 2>&1; then
+  fail 'Claude Code reconcile installed a localDir marketplace with no plugin manifest'
+fi
+grep -F '.claude-plugin/plugin.json' "$scratch/claude-localdir-noplugin.out" >/dev/null ||
+  fail 'the plugin-manifest-less marketplace was rejected without naming the plugin manifest'
 
 # --- Claude Code: a source that cannot serve this harness ------------------ #
 
@@ -441,6 +542,48 @@ render() {
   env PATH="$render_bin:$PATH" "$chezmoi_bin" --config "$scratch/empty.toml" --source "$source_root" \
     --destination "$scratch/render-target" execute-template "$@"
 }
+
+# --- propagation: the plugin version must move with the plugin tree ---------- #
+#
+# `plugin install` is a no-op once the plugin exists at ANY version, so the
+# version rendered here IS the cache key. A version that does not move when the
+# tree does leaves every later edit deployed to ~/.local/share and never served.
+# The tree is a standing home for hooks, agents and commands, so this asserts
+# against a file outside hooks/ -- the shape that a hooks-only digest would miss.
+plugin_manifest_tmpl="$source_root/dot_local/share/dotfiles-claude-plugin/dot_claude-plugin/plugin.json.tmpl"
+[[ -f $plugin_manifest_tmpl ]] || fail "missing $plugin_manifest_tmpl"
+
+render_plugin_version() {
+  render <"$plugin_manifest_tmpl" 2>"$scratch/plugin-manifest.err" |
+    jq -er '.version' 2>/dev/null
+}
+
+version_before=$(render_plugin_version) || {
+  cat "$scratch/plugin-manifest.err" >&2
+  fail 'plugin.json.tmpl failed to render'
+}
+[[ -n $version_before ]] || fail 'plugin.json.tmpl rendered no version'
+
+version_repeat=$(render_plugin_version) || fail 'plugin.json.tmpl failed to re-render'
+[[ $version_repeat == "$version_before" ]] ||
+  fail "plugin version is unstable across renders of unchanged source: $version_before then $version_repeat"
+
+probe_dir="$source_root/dot_local/share/dotfiles-claude-plugin/commands"
+[[ -d $probe_dir ]] || propagation_probe_dir="$probe_dir"
+mkdir -p "$probe_dir"
+propagation_probe="$probe_dir/.ce-propagation-probe"
+printf 'propagation probe\n' >"$propagation_probe"
+version_after=$(render_plugin_version) || version_after=''
+rm -f -- "$propagation_probe"
+propagation_probe=''
+[[ -z $propagation_probe_dir ]] || { rmdir -- "$propagation_probe_dir" 2>/dev/null; propagation_probe_dir=''; }
+[[ -n $version_after ]] || fail 'plugin.json.tmpl failed to render with an extra tree file'
+[[ $version_after != "$version_before" ]] ||
+  fail 'adding a file outside hooks/ left the plugin version unchanged, so that file would never reach the cache'
+
+version_restored=$(render_plugin_version) || fail 'plugin.json.tmpl failed to render after the probe was removed'
+[[ $version_restored == "$version_before" ]] ||
+  fail "removing the probe did not restore the plugin version: $version_before then $version_restored"
 
 marketplace_tmpl="$source_root/dot_agents/plugins/readonly_marketplace.json.tmpl"
 symlink_tmpl="$source_root/dot_agents/plugins/symlink_compound-engineering-plugin.tmpl"
