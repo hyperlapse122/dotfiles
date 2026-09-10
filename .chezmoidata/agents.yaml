@@ -135,6 +135,25 @@ agents:
       - "*/plugin.json"
       os: [linux, darwin]
       container: keep
+    # This checkout's own Claude Code plugin, and the only localDir marketplace:
+    # the tree is deployed by chezmoi rather than downloaded, so it needs no
+    # source, externalPath or version selector. It exists because a Claude Code
+    # hook cannot be declared through agents.claude.settings — hooks belongs to
+    # aoe and claude-settings-validate.tmpl rejects any declared path under it at
+    # render time. A plugin carries hooks without touching that key.
+    #
+    # The plugin's own version is derived from its hook tree's content
+    # (dot_local/share/dotfiles-claude-plugin/dot_claude-plugin/plugin.json.tmpl),
+    # because `plugin install` is a no-op once the plugin is present at ANY
+    # version and Claude Code serves the copy under
+    # ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>, never the source
+    # tree. The same tree is a fingerprint input of the Claude plugin reconciler
+    # so the script re-runs at all; both halves are required for an edit to land.
+    dotfiles-claude-plugin:
+      kind: localDir
+      path: .local/share/dotfiles-claude-plugin
+      os: [linux, darwin]
+      container: keep
   claude:
     # Claude Code setting VALUES asserted into the live ~/.claude/settings.json by
     # .chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl, validated at
@@ -191,6 +210,7 @@ agents:
       env.DISABLE_AUTOUPDATER: "1"
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    - { name: dotfiles-claude, marketplace: dotfiles-claude-plugin }
     pluginsRemoved: []
   agy:
     settings: {}
