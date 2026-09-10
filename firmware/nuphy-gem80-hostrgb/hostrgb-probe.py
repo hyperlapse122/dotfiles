@@ -695,10 +695,14 @@ def cmd_hold(args, err=None) -> int:
                         transport, node_name, [mode_payload], args, err
                     )
                     if failure != EXIT_OK:
-                        return failure
+                        return _hold_give_back(transport, node_name, args, err, failure)
                     continue
                 if failure != EXIT_OK:
-                    return failure
+                    # The transport still works; leaving direct mode held would
+                    # strand the last frame until the watchdog expires, which
+                    # for a long deadline is minutes of a keyboard that looks
+                    # broken.
+                    return _hold_give_back(transport, node_name, args, err, failure)
             # Reached only after a successful entry, so direct mode always has
             # to be handed back.
             return _write_confirmed(
@@ -709,6 +713,16 @@ def cmd_hold(args, err=None) -> int:
                 signal.signal(signum, handler)
 
     return _with_device(args, err, action)
+
+
+def _hold_give_back(transport, node_name, args, err, failure: int) -> int:
+    """Best-effort exit so a failed hold does not strand the last frame.
+
+    The original failure is what the caller hears about; a failing exit write on
+    top of it says nothing new.
+    """
+    _write_confirmed(transport, node_name, [build_mode_payload(mask=0)], args, err)
+    return failure
 
 
 def _byte_value(text: str) -> int:

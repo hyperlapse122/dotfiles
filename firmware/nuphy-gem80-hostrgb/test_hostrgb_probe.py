@@ -699,6 +699,17 @@ class WriteCommandTests(PatchedProbeTestCase):
         self.assertEqual([packet[2] for packet in self.device.written], [0x00, 0x01, 0x03, 0x01])
         self.assertLess(clock[0], 5.0)
 
+    def test_enter_refuses_a_device_still_on_revision_one(self):
+        # AE10. This is the pre-flash check: the board still carries revision 1
+        # when it runs, and after the flash the precondition is gone for good.
+        self.use_echoing_device(rev=1, led_count=89, side_first=89)
+        err = io.StringIO()
+        code = hostrgb_probe.cmd_enter(make_args(values=["keys", "5000"]), err=err)
+        self.assertEqual(code, hostrgb_probe.EXIT_UNEXPECTED_PROTOCOL)
+        # The probe went out and nothing followed it: no mode packet reached a
+        # firmware that would not have understood it.
+        self.assertEqual(len(self.device.written), 1)
+
     def test_frame_refuses_a_packet_width_the_payload_cannot_hold(self):
         # A device reporting 10 LEDs per packet would overrun the 32-byte
         # payload. That has to read as a protocol failure, not a traceback.
@@ -850,12 +861,49 @@ class ConstantSyncTests(unittest.TestCase):
         return int(match.group(1), 0)
 
     def enum_value(self, name: str) -> int:
-        match = re.search(rf"^\s*{name}\s*=\s*(\S+?),", self.keymap_source(), re.M)
+        match = re.search(rf"^\s*{name}\s*=\s*([^,]+?),", self.keymap_source(), re.M)
         self.assertIsNotNone(match, f"{name} not found in {self.KEYMAP}")
-        return int(match.group(1), 0)
+        return self.c_integer(match.group(1))
+
+    def c_integer(self, text: str) -> int:
+        """Reads the literal forms this keymap uses: plain, hex, and `1 << n`."""
+        text = text.strip()
+        shift = re.fullmatch(r"(\S+)\s*<<\s*(\S+)", text)
+        if shift:
+            return int(shift.group(1), 0) << int(shift.group(2), 0)
+        return int(text, 0)
 
     def test_command_byte_matches(self):
         self.assertEqual(self.define_value("HOSTRGB_CMD"), hostrgb_probe.HOSTRGB_CMD)
+
+    def test_deadline_unit_matches(self):
+        # A drift here silently rescales every deadline the host sends.
+        self.assertEqual(
+            self.define_value("HOSTRGB_DEADLINE_UNIT_MS"),
+            hostrgb_probe.HOSTRGB_DEADLINE_UNIT_MS,
+        )
+
+    def test_rejection_bit_matches(self):
+        self.assertEqual(
+            self.define_value("HOSTRGB_SUB_REJECTED"),
+            hostrgb_probe.HOSTRGB_SUB_REJECTED,
+        )
+
+    def test_region_bits_match(self):
+        self.assertEqual(
+            self.enum_value("HOSTRGB_REGION_KEYS"), hostrgb_probe.REGION_KEYS
+        )
+        self.assertEqual(
+            self.enum_value("HOSTRGB_REGION_SIDE"), hostrgb_probe.REGION_SIDE
+        )
+
+    def test_side_region_lengths_match(self):
+        self.assertEqual(
+            self.define_value("HOSTRGB_SIDE_STRIP_COUNT"), hostrgb_probe.SIDE_STRIP_COUNT
+        )
+        self.assertEqual(
+            self.define_value("HOSTRGB_SIDE_LOGO_COUNT"), hostrgb_probe.SIDE_LOGO_COUNT
+        )
 
     def test_protocol_revision_matches(self):
         self.assertEqual(
