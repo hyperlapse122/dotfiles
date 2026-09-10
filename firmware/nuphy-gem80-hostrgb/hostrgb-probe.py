@@ -23,7 +23,11 @@ HOSTRGB_SUB_SET = 0x02
 
 PAYLOAD_SIZE = 32
 LEDS_PER_PACKET = 9
-EXPECTED_LED_COUNT = 88
+# The board's own config.h undefines the 88 derived from keyboard.json's
+# rgb_matrix layout and redefines RGB_MATRIX_LED_COUNT as 89; index 88 sits
+# in the WS2812 chain with no layout entry. The 12 side LEDs are a separate
+# chain and are not counted here.
+EXPECTED_LED_COUNT = 89
 DEFAULT_TIMEOUT = 1.0
 
 EXIT_OK = 0

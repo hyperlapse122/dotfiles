@@ -185,10 +185,10 @@ class FrameArithmeticTests(unittest.TestCase):
         payloads = hostrgb_probe.build_frame_payloads(10, 20, 30)
         self.assertEqual(len(payloads), 10)
 
-    def test_last_packet_count_is_seven(self):
-        # 88 LEDs at 9 per packet: 9 packets of 9 (81) + 1 packet of 7.
+    def test_last_packet_count_is_eight(self):
+        # 89 LEDs at 9 per packet: 9 packets of 9 (81) + 1 packet of 8.
         payloads = hostrgb_probe.build_frame_payloads(10, 20, 30)
-        self.assertEqual(payloads[-1][3], 7)
+        self.assertEqual(payloads[-1][3], 8)
 
     def test_first_nine_packets_carry_nine_leds(self):
         payloads = hostrgb_probe.build_frame_payloads(10, 20, 30)
@@ -200,17 +200,17 @@ class FrameArithmeticTests(unittest.TestCase):
         starts = [payload[2] for payload in payloads]
         self.assertEqual(starts, [0, 9, 18, 27, 36, 45, 54, 63, 72, 81])
 
-    def test_total_led_count_covered_is_88(self):
+    def test_total_led_count_covered_is_89(self):
         payloads = hostrgb_probe.build_frame_payloads(10, 20, 30)
-        self.assertEqual(sum(payload[3] for payload in payloads), 88)
+        self.assertEqual(sum(payload[3] for payload in payloads), 89)
 
 
 class ProbeResponseParsingTests(unittest.TestCase):
     def test_parses_rev_led_count_and_leds_per_packet(self):
-        response = bytes([0x60, 0x00, 1, 88, 9]) + bytes(27)
+        response = bytes([0x60, 0x00, 1, 89, 9]) + bytes(27)
         result = hostrgb_probe.parse_probe_response(response)
         self.assertEqual(result.protocol_rev, 1)
-        self.assertEqual(result.led_count, 88)
+        self.assertEqual(result.led_count, 89)
         self.assertEqual(result.leds_per_packet, 9)
 
     def test_rejects_truncated_response(self):
@@ -288,8 +288,8 @@ class ProbeStopConditionTests(unittest.TestCase):
         code = hostrgb_probe.cmd_probe(make_args(), out=out, err=err)
         return code, err.getvalue()
 
-    def test_88_leds_succeeds(self):
-        response = bytes([0x60, 0x00, 1, 88, 9]) + bytes(27)
+    def test_89_leds_succeeds(self):
+        response = bytes([0x60, 0x00, 1, 89, 9]) + bytes(27)
         code, _ = self._run_probe_with_response(response)
         self.assertEqual(code, hostrgb_probe.EXIT_OK)
 
@@ -330,13 +330,13 @@ class WriteOnlyCommandTests(unittest.TestCase):
         self.assertEqual(len(self.device.written), 10)
 
     def test_frame_last_packet_carries_the_remainder(self):
-        # 88 LEDs at 9 per packet is 9 full packets plus a remainder of 7.
+        # 89 LEDs at 9 per packet is 9 full packets plus a remainder of 8.
         # An earlier draft of the plan said 4; assert the arithmetic so a
         # regression cannot silently drop three keys from a full frame.
         payloads = hostrgb_probe.build_frame_payloads(1, 2, 3)
         self.assertEqual(payloads[-1][2], 81)
-        self.assertEqual(payloads[-1][3], 7)
-        self.assertEqual(sum(p[3] for p in payloads), 88)
+        self.assertEqual(payloads[-1][3], 8)
+        self.assertEqual(sum(p[3] for p in payloads), 89)
 
 
 if __name__ == "__main__":
