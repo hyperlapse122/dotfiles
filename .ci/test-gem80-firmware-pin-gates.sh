@@ -18,6 +18,7 @@ set -euo pipefail
 #   * R10: Error distinction: failure messages identify the specific cause
 #     (commit ahead/behind/diverged/404/query error, image unreachable,
 #     build output mismatch) and report all failing checks together.
+#   * R16: The weekly rebuild copies `patches/` into its scratch source tree.
 #   * Manifest and build record validation: malformed JSON, missing fields,
 #     invalid sha/digest formats, and missing files are rejected.
 #   * Baseline: committed repository files pass both gates in eval mode.
@@ -119,6 +120,36 @@ rebuild_rejects match-sha256-mismatch \
 rebuild_accepts build-only-mismatch \
   'rebuild gate passes when output differs from recorded sha256 in build-only mode (R8)' \
   --eval "$mismatch_sha" \
+  --build-info "$fixtures/build-info-valid.json" \
+  --firmware-yaml "$fixtures/firmware-build-only.yaml"
+
+# The weekly gate copies the source tree before rendering the build command.
+# Eval mode runs that copy against small source fixtures so this path stays
+# testable without a container or network access.
+rebuild_accepts patches-carried-to-scratch \
+  'rebuild gate carries patches into its scratch source copy' \
+  --eval "$matching_sha" \
+  --source-fixture "$fixtures/source-with-patches" \
+  --build-info "$fixtures/build-info-valid.json" \
+  --firmware-yaml "$fixtures/firmware-build-only.yaml"
+
+case_name=patches-carried-to-scratch-output
+out=$("$rebuild_gate" \
+  --eval "$matching_sha" \
+  --source-fixture "$fixtures/source-with-patches" \
+  --build-info "$fixtures/build-info-valid.json" \
+  --firmware-yaml "$fixtures/firmware-build-only.yaml" 2>&1)
+case "$out" in
+  *'scratch copy carries patches/'*) ;;
+  *) fail 'rebuild gate did not report patches in the scratch source copy' ;;
+esac
+pass 'rebuild gate reports that the scratch source copy carries patches'
+
+rebuild_rejects scratch-copy-missing-patches \
+  'scratch source is missing patches/' \
+  'rebuild gate rejects a scratch source copy without patches' \
+  --eval "$matching_sha" \
+  --source-fixture "$fixtures/source-without-patches" \
   --build-info "$fixtures/build-info-valid.json" \
   --firmware-yaml "$fixtures/firmware-build-only.yaml"
 
