@@ -573,7 +573,7 @@ class WriteCommandTests(PatchedProbeTestCase):
         self.assertEqual(self.device.written, [])
         self.assertIn("deadline", err.getvalue())
 
-    def test_frame_writes_a_probe_then_ten_packets(self):
+    def test_frame_writes_a_probe_then_twelve_packets(self):
         self.use_echoing_device()
         code = hostrgb_probe.cmd_frame(make_args(r=1, g=2, b=3))
         self.assertEqual(code, hostrgb_probe.EXIT_OK)
@@ -676,20 +676,95 @@ class WriteCommandTests(PatchedProbeTestCase):
 
     def test_hold_repeats_heartbeat_before_deadline_and_exits_on_signal(self):
         self.use_echoing_device()
+        clock = [0.0]
         sleep_calls = []
 
         def fake_sleep(interval):
             sleep_calls.append(interval)
-            if len(sleep_calls) == 2:
-                handler = signal.getsignal(signal.SIGTERM)
-                handler(signal.SIGTERM, None)
+            clock[0] += interval
+            # Stop once a heartbeat has actually gone out, so the assertion
+            # below covers a full cycle rather than a fixed number of sleeps.
+            if any(packet[2] == hostrgb_probe.HOSTRGB_SUB_HEARTBEAT for packet in self.device.written):
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
 
         err = io.StringIO()
-        with mock.patch.object(hostrgb_probe.time, "sleep", side_effect=fake_sleep):
+        with (
+            mock.patch.object(hostrgb_probe.time, "sleep", side_effect=fake_sleep),
+            mock.patch.object(hostrgb_probe.time, "monotonic", side_effect=lambda: clock[0]),
+        ):
             code = hostrgb_probe.cmd_hold(make_args(values=["side", "5000"]), err=err)
         self.assertEqual(code, hostrgb_probe.EXIT_OK)
-        self.assertLess(sleep_calls[0], 5.0)
+        # The heartbeat lands inside the 5 s deadline, and direct mode is handed
+        # back on the way out.
         self.assertEqual([packet[2] for packet in self.device.written], [0x00, 0x01, 0x03, 0x01])
+        self.assertLess(clock[0], 5.0)
+
+    def test_frame_refuses_a_packet_width_the_payload_cannot_hold(self):
+        # A device reporting 10 LEDs per packet would overrun the 32-byte
+        # payload. That has to read as a protocol failure, not a traceback.
+        self.use_echoing_device(leds_per_packet=10)
+        err = io.StringIO()
+        code = hostrgb_probe.cmd_frame(make_args(r=0, g=0, b=255), err=err)
+        self.assertEqual(code, hostrgb_probe.EXIT_UNEXPECTED_PROTOCOL)
+        # Only the probe went out; no frame packet followed.
+        self.assertEqual(len(self.device.written), 1)
+
+    def test_hold_re_enters_when_the_watchdog_reclaimed_the_region(self):
+        # The firmware refuses a heartbeat sent outside direct mode. Without
+        # acting on that, hold would keep writing frames nothing displays.
+        rejected: list[bool] = []
+        answer_probe = firmware_echo()
+
+        def reject_heartbeats_once(payload):
+            data = bytearray(answer_probe(payload))
+            if data[1] == hostrgb_probe.HOSTRGB_SUB_HEARTBEAT and not rejected:
+                rejected.append(True)
+                data[1] |= hostrgb_probe.HOSTRGB_SUB_REJECTED
+            return bytes(data)
+
+        self.use_device(FakeHidDevice(echo=True, echo_transform=reject_heartbeats_once))
+        clock = [0.0]
+
+        def fake_sleep(interval):
+            clock[0] += interval
+            if len(self.device.written) >= 5:
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+
+        err = io.StringIO()
+        with (
+            mock.patch.object(hostrgb_probe.time, "sleep", side_effect=fake_sleep),
+            mock.patch.object(hostrgb_probe.time, "monotonic", side_effect=lambda: clock[0]),
+        ):
+            code = hostrgb_probe.cmd_hold(make_args(values=["side", "5000"]), err=err)
+
+        self.assertEqual(code, hostrgb_probe.EXIT_OK)
+        # probe, enter, refused heartbeat, re-enter, ... , exit
+        sent = [packet[2] for packet in self.device.written]
+        self.assertEqual(sent[:4], [0x00, 0x01, 0x03, 0x01])
+        self.assertEqual(sent[-1], 0x01)
+        self.assertIn("re-entering", err.getvalue())
+
+    def test_hold_never_sleeps_past_the_stop_poll_interval(self):
+        # A signal does not cut time.sleep() short (PEP 475), so a single long
+        # sleep would leave an operator's Ctrl-C hanging for the whole interval.
+        self.use_echoing_device()
+        clock = [0.0]
+        sleep_calls = []
+
+        def fake_sleep(interval):
+            sleep_calls.append(interval)
+            clock[0] += interval
+            if any(packet[2] == hostrgb_probe.HOSTRGB_SUB_HEARTBEAT for packet in self.device.written):
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+
+        with (
+            mock.patch.object(hostrgb_probe.time, "sleep", side_effect=fake_sleep),
+            mock.patch.object(hostrgb_probe.time, "monotonic", side_effect=lambda: clock[0]),
+        ):
+            hostrgb_probe.cmd_hold(make_args(values=["side", "60000"]), err=io.StringIO())
+
+        self.assertTrue(sleep_calls)
+        self.assertLessEqual(max(sleep_calls), hostrgb_probe.HOLD_POLL_SECONDS)
 
 
 class ArgumentParsingTests(unittest.TestCase):

@@ -46,43 +46,66 @@ usage() {
   printf 'usage: gem80-firmware [build|verify]\n'
 }
 
-# Populates KEYMAP_FILES with the basenames the build consumes, in a stable
+# Populates the named array with the basenames the build consumes, in a stable
 # order, so the record's key set always equals the file set that was compiled.
-KEYMAP_FILES=()
-collect_keymap_files() {
-  # `build` collects, then calls `cmd_verify`, which collects again, so this must
-  # rebuild the list rather than append to whatever a previous call left behind.
-  KEYMAP_FILES=()
-  [[ -d $KEYMAP_DIR ]] || die "keymap source is missing: $KEYMAP_DIR"
-  # `cp -- "$KEYMAP_DIR"/*` copies flat files only, so a subdirectory would be
-  # compiled-in-name-only and silently absent from the record.
-  if [[ -n $(find "$KEYMAP_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit) ]]; then
-    die "keymap/ contains a subdirectory; the build copies flat files only"
+# `build` collects, then calls `cmd_verify`, which collects again, so this
+# rebuilds the list rather than appending to whatever a previous call left.
+collect_flat_files() {
+  local -n out_files=$1
+  local dir=$2 label=$3 verb=$4
+
+  out_files=()
+  [[ -d $dir ]] || die "$label source is missing: $dir"
+  # The build reaches flat files only, so a subdirectory would be present in
+  # name and silently absent from both the build and the record.
+  if [[ -n $(find "$dir" -mindepth 1 -maxdepth 1 -type d -print -quit) ]]; then
+    die "$label/ contains a subdirectory; the build $verb flat files only"
   fi
   local name
   while IFS= read -r name; do
-    KEYMAP_FILES+=("$name")
-  done < <(find "$KEYMAP_DIR" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
-  [[ ${#KEYMAP_FILES[@]} -gt 0 ]] || die "keymap source directory is empty: $KEYMAP_DIR"
+    out_files+=("$name")
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
+  [[ ${#out_files[@]} -gt 0 ]] || die "$label source directory is empty: $dir"
+}
+
+KEYMAP_FILES=()
+collect_keymap_files() {
+  collect_flat_files KEYMAP_FILES "$KEYMAP_DIR" keymap copies
 }
 
 PATCH_FILES=()
 collect_patch_files() {
-  PATCH_FILES=()
-  [[ -d $PATCHES_DIR ]] || die "patch source is missing: $PATCHES_DIR"
-  if [[ -n $(find "$PATCHES_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit) ]]; then
-    die "patches/ contains a subdirectory; the build applies flat files only"
-  fi
-  local name
-  while IFS= read -r name; do
-    PATCH_FILES+=("$name")
-  done < <(find "$PATCHES_DIR" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
-  [[ ${#PATCH_FILES[@]} -gt 0 ]] || die "patch source directory is empty: $PATCHES_DIR"
+  collect_flat_files PATCH_FILES "$PATCHES_DIR" patches applies
 }
 
 VERIFY_FAILURES=0
 verify_ok() {
   printf '  ok        %s\n' "$1"
+}
+
+# Checks one recorded hash section -- that the record's key set equals the file
+# set on disk, then each file's digest. The record is only worth trusting if
+# both halves hold: matching hashes over a short key set would pass while a
+# file the build consumed went unrecorded.
+verify_file_section() {
+  local section=$1 dir=$2
+  shift 2
+  local files=("$@")
+
+  local recorded actual
+  recorded="$(jq -r ".${section} // {} | keys[]" "$BUILD_INFO" | LC_ALL=C sort)"
+  actual="$(printf '%s\n' "${files[@]}")"
+  if [[ $recorded != "$actual" ]]; then
+    verify_fail "$section file set: record covers [$(tr '\n' ' ' <<<"$recorded")], source has [$(tr '\n' ' ' <<<"$actual")]"
+  else
+    verify_ok "$section file set (${#files[@]} files)"
+  fi
+
+  local name
+  for name in "${files[@]}"; do
+    verify_field "$section/$name" ".${section}[\"$name\"]" \
+      "$(sha256sum -- "$dir/$name" | cut -d' ' -f1)"
+  done
 }
 verify_fail() {
   printf '  MISMATCH  %s\n' "$1" >&2
@@ -139,34 +162,8 @@ cmd_verify() {
   verify_field 'binary.bytes' '(.binary.bytes | select(. != null) | tostring)' "$actual_bytes"
   verify_field 'binary.sha256' '.binary.sha256' "$actual_sha"
 
-  local recorded_names actual_names
-  recorded_names="$(jq -r '.keymap // {} | keys[]' "$BUILD_INFO" | LC_ALL=C sort)"
-  actual_names="$(printf '%s\n' "${KEYMAP_FILES[@]}")"
-  if [[ $recorded_names != "$actual_names" ]]; then
-    verify_fail "keymap file set: record covers [$(tr '\n' ' ' <<<"$recorded_names")], source has [$(tr '\n' ' ' <<<"$actual_names")]"
-  else
-    verify_ok "keymap file set (${#KEYMAP_FILES[@]} files)"
-  fi
-
-  local name
-  for name in "${KEYMAP_FILES[@]}"; do
-    verify_field "keymap/$name" ".keymap[\"$name\"]" \
-      "$(sha256sum -- "$KEYMAP_DIR/$name" | cut -d' ' -f1)"
-  done
-
-  local recorded_patch_names actual_patch_names
-  recorded_patch_names="$(jq -r '.patches // {} | keys[]' "$BUILD_INFO" | LC_ALL=C sort)"
-  actual_patch_names="$(printf '%s\n' "${PATCH_FILES[@]}")"
-  if [[ $recorded_patch_names != "$actual_patch_names" ]]; then
-    verify_fail "patch file set: record covers [$(tr '\n' ' ' <<<"$recorded_patch_names")], source has [$(tr '\n' ' ' <<<"$actual_patch_names")]"
-  else
-    verify_ok "patch file set (${#PATCH_FILES[@]} files)"
-  fi
-
-  for name in "${PATCH_FILES[@]}"; do
-    verify_field "patches/$name" ".patches[\"$name\"]" \
-      "$(sha256sum -- "$PATCHES_DIR/$name" | cut -d' ' -f1)"
-  done
+  verify_file_section keymap "$KEYMAP_DIR" "${KEYMAP_FILES[@]}"
+  verify_file_section patches "$PATCHES_DIR" "${PATCH_FILES[@]}"
 
   if ((VERIFY_FAILURES > 0)); then
     die "$VERIFY_FAILURES check(s) failed; do not flash $BIN_NAME"

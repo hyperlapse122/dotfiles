@@ -40,7 +40,12 @@ REGION_BITS = {"keys": REGION_KEYS, "side": REGION_SIDE}
 PAYLOAD_SIZE = 32
 LEDS_PER_PACKET = 9
 HOSTRGB_DEADLINE_UNIT_MS = 10
+# Longest `hold` will keep sleeping before it notices a stop signal.
+HOLD_POLL_SECONDS = 0.1
 MAX_DEADLINE_UNITS = 0xFFFF
+# A write packet spends 4 bytes on the header before the RGB triples, so this is
+# the most LEDs any packet can carry whatever a device claims.
+MAX_LEDS_PER_PACKET = (PAYLOAD_SIZE - 4) // 3
 MAX_DEADLINE_MS = MAX_DEADLINE_UNITS * HOSTRGB_DEADLINE_UNIT_MS
 SIDE_STRIP_COUNT = 5
 SIDE_LOGO_COUNT = 7
@@ -230,14 +235,16 @@ def build_frame_payloads(
     r: int,
     g: int,
     b: int,
-    total_leds: int | None = None,
+    total_leds: int,
     leds_per_packet: int = LEDS_PER_PACKET,
 ) -> list[bytes]:
     """Split a single flat color across `total_leds` LEDs into `0x60 0x02` packets."""
-    if total_leds is None or total_leds < 0:
+    if total_leds < 0:
         raise ValueError("total LED count must come from the probe response")
-    if leds_per_packet < 1:
-        raise ValueError(f"leds per packet must be at least 1, got {leds_per_packet}")
+    if not 1 <= leds_per_packet <= MAX_LEDS_PER_PACKET:
+        raise ValueError(
+            f"leds per packet must be 1-{MAX_LEDS_PER_PACKET}, got {leds_per_packet}"
+        )
     payloads = []
     start = 0
     while start < total_leds:
@@ -429,10 +436,10 @@ def _check_probe_result(result: ProbeResult, err) -> int:
             file=err,
         )
         return EXIT_UNEXPECTED_LED_COUNT
-    if result.leds_per_packet < 1:
+    if not 1 <= result.leds_per_packet <= MAX_LEDS_PER_PACKET:
         print(
-            f"device reports {result.leds_per_packet} LEDs per packet -- stop: "
-            "no frame can be built from that.",
+            f"device reports {result.leds_per_packet} LEDs per packet, outside "
+            f"1-{MAX_LEDS_PER_PACKET} -- stop: no frame can be built from that.",
             file=err,
         )
         return EXIT_UNEXPECTED_PROTOCOL
@@ -654,32 +661,49 @@ def cmd_hold(args, err=None) -> int:
         }
         for signum in previous_handlers:
             signal.signal(signum, request_stop)
-        entered = False
         try:
             mode_payload = build_mode_payload(mask=mask, deadline_units=deadline_units)
             failure = _write_confirmed(transport, node_name, [mode_payload], args, err)
             if failure != EXIT_OK:
                 return failure
-            entered = True
             heartbeat_payload = build_heartbeat_payload(deadline_units)
             interval = deadline_units * HOSTRGB_DEADLINE_UNIT_MS / 2000
             while not stop_requested:
-                try:
-                    time.sleep(interval)
-                except InterruptedError:
-                    continue
+                # A signal does not cut time.sleep() short: the handler runs and
+                # the sleep resumes (PEP 475). Sleeping in slices is what makes
+                # Ctrl-C land promptly while an operator is at the keyboard.
+                wake_at = time.monotonic() + interval
+                while not stop_requested:
+                    remaining = wake_at - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(HOLD_POLL_SECONDS, remaining))
                 if stop_requested:
                     break
                 failure = _write_confirmed(
                     transport, node_name, [heartbeat_payload], args, err
                 )
+                if failure == EXIT_COMMAND_REJECTED:
+                    # The watchdog reclaimed the region while we were asleep.
+                    # Re-entering is the point of holding: the alternative is a
+                    # daemon that keeps writing frames nothing displays.
+                    print(
+                        f"/dev/{node_name} reclaimed the region; re-entering direct mode",
+                        file=err,
+                    )
+                    failure = _write_confirmed(
+                        transport, node_name, [mode_payload], args, err
+                    )
+                    if failure != EXIT_OK:
+                        return failure
+                    continue
                 if failure != EXIT_OK:
                     return failure
-            if entered:
-                return _write_confirmed(
-                    transport, node_name, [build_mode_payload(mask=0)], args, err
-                )
-            return EXIT_OK
+            # Reached only after a successful entry, so direct mode always has
+            # to be handed back.
+            return _write_confirmed(
+                transport, node_name, [build_mode_payload(mask=0)], args, err
+            )
         finally:
             for signum, handler in previous_handlers.items():
                 signal.signal(signum, handler)

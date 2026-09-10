@@ -44,7 +44,7 @@ The state in which the keyboard's own effect engine yields a region's LEDs to a 
 The 89 LEDs on the key matrix chain. Which firmware indicators reach it is a user setting rather than a fixed property: caps lock, Win-lock, and numlock each paint a key here under settings the user can change and the keyboard remembers, and the keyboard's own indicator pass runs after the host's pixels. A host holding this region cannot see it happen.
 
 ### SIDE region
-The 12 LEDs on the logo and upper-strip chain. It is where the keyboard talks to the person: battery level, charging, and RF link render here and outrank host writes, applied after the host's pixels rather than suppressed by them. Caps lock is the exception — it is ceded to the host while the region is in Direct mode.
+The 12 LEDs on the logo and upper-strip chain — five on the strip, then seven on the logo, each driven by its own effect loop. It is where the keyboard talks to the person: battery level and charging render here and outrank host writes, applied after the host's pixels rather than suppressed by them. Caps lock is the exception — it is ceded to the host while the region is in Direct mode. The RF-link indicator also lives on this chain but reaches it by a different path, so its ordering against host pixels is not settled.
 
 ### Heartbeat deadline
 The time a host declares, with each heartbeat, before which it will be heard from again. It is carried per heartbeat rather than fixed in firmware, so a status indicator that is silent for hours and an animation pushing frames choose different values without either one reflashing the keyboard.

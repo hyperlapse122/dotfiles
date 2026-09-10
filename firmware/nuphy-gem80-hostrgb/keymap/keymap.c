@@ -41,19 +41,25 @@ rgb_t hostrgb_buf[RGB_MATRIX_LED_COUNT];
 rgb_t hostrgb_side_buf[HOSTRGB_SIDE_LED_COUNT];
 
 static uint8_t  hostrgb_regions      = 0;
-static uint16_t hostrgb_deadline     = 0; // in HOSTRGB_DEADLINE_UNIT_MS units
+static uint32_t hostrgb_deadline_ms  = 0; // resolved on arm; the loop only compares
 static uint32_t hostrgb_signal_timer = 0;
 
 // The RGB matrix mode is global, so only the KEYS bit may switch it. Reacting
 // to a non-zero mask instead would take the 89 stored key effects away from a
 // client that asked for SIDE alone.
 static void hostrgb_apply_regions(uint8_t mask) {
+    // Only a change in who owns KEYS may touch the matrix. Acting on the bit's
+    // value instead would restart the user's running effect from frame zero
+    // every time a SIDE-only client re-entered.
+    bool keys_were_held = (hostrgb_regions & HOSTRGB_REGION_KEYS) != 0;
+    bool keys_now_held  = (mask & HOSTRGB_REGION_KEYS) != 0;
+
     hostrgb_regions = mask;
 
-    if (mask & HOSTRGB_REGION_KEYS) {
+    if (keys_now_held && !keys_were_held) {
         rgb_matrix_enable_noeeprom();
         rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_host_direct);
-    } else {
+    } else if (!keys_now_held && keys_were_held) {
         rgb_matrix_reload_from_eeprom();
     }
 }
@@ -63,13 +69,19 @@ static void hostrgb_apply_regions(uint8_t mask) {
 // inherit.
 static void hostrgb_leave_direct(void) {
     hostrgb_apply_regions(0);
-    hostrgb_deadline     = 0;
+    hostrgb_deadline_ms  = 0;
     hostrgb_signal_timer = 0;
 }
 
+// The host declares its deadline in 10 ms units; resolve it to milliseconds
+// here, on the arm, rather than on every pass of the main loop below.
 static void hostrgb_arm(uint16_t deadline) {
-    hostrgb_deadline     = deadline;
+    hostrgb_deadline_ms  = (uint32_t)deadline * HOSTRGB_DEADLINE_UNIT_MS;
     hostrgb_signal_timer = timer_read32();
+}
+
+static bool hostrgb_deadline_passed(void) {
+    return timer_elapsed32(hostrgb_signal_timer) >= hostrgb_deadline_ms;
 }
 
 // Returning true tells quantum/via.c the command was fully handled *including*
@@ -91,9 +103,13 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
             return true;
 
         case HOSTRGB_SUB_MODE: {
-            uint8_t mask = data[2] & HOSTRGB_REGION_ALL;
+            uint8_t mask = data[2];
 
-            if (mask) {
+            if (mask & ~HOSTRGB_REGION_ALL) {
+                // Masking an unknown bit away would turn it into a mask of 0,
+                // and the host would read a refused command as a clean exit.
+                data[1] |= HOSTRGB_SUB_REJECTED;
+            } else if (mask) {
                 uint16_t deadline = (uint16_t)data[3] | ((uint16_t)data[4] << 8);
                 // A zero deadline would enter direct mode unarmed, which is the
                 // stuck-frame state the watchdog exists to prevent.
@@ -133,9 +149,20 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
 
         case HOSTRGB_SUB_HEARTBEAT: {
             uint16_t deadline = (uint16_t)data[2] | ((uint16_t)data[3] << 8);
-            if (deadline) {
+            // A heartbeat outside direct mode is refused, not honoured. Arming
+            // a region nobody holds would leave the host writing frames that
+            // nothing displays, with no signal that the watchdog took it back.
+            //
+            // A heartbeat that arrives after its own deadline is refused too,
+            // and takes the region back on the spot. It may have been queued
+            // before the host died, and honouring it would extend direct mode
+            // past the cutoff the host itself declared.
+            if (deadline && hostrgb_regions && !hostrgb_deadline_passed()) {
                 hostrgb_arm(deadline);
             } else {
+                if (hostrgb_regions && hostrgb_deadline_passed()) {
+                    hostrgb_leave_direct();
+                }
                 data[1] |= HOSTRGB_SUB_REJECTED;
             }
             raw_hid_send(data, length);
@@ -153,7 +180,7 @@ void housekeeping_task_user(void) {
         return;
     }
 
-    if (timer_elapsed32(hostrgb_signal_timer) >= (uint32_t)hostrgb_deadline * HOSTRGB_DEADLINE_UNIT_MS) {
+    if (hostrgb_deadline_passed()) {
         // No raw_hid_send() here: this answers no host request.
         hostrgb_leave_direct();
     }
