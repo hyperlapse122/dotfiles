@@ -51,7 +51,7 @@ fail() {
 usage() {
   cat <<'EOF'
 usage: check-gem80-firmware-rebuild.sh [options] [repo_dir]
-       check-gem80-firmware-rebuild.sh --eval <sha256> [build-info.json] [firmware.yaml]
+       check-gem80-firmware-rebuild.sh --eval <sha256> [--build-info P] [--firmware-yaml P]
 
 Rebuild gate for NuPhy Gem80 hostrgb firmware.
 
@@ -114,13 +114,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       if [[ $eval_mode == true ]]; then
-        if [[ -z $custom_build_info ]]; then
-          custom_build_info="$1"
-        elif [[ -z $custom_firmware_yaml ]]; then
-          custom_firmware_yaml="$1"
-        else
-          fail "unexpected extra argument in eval mode: $1"
-        fi
+        # Named only. The sibling pins gate took its two files in the opposite
+        # order, and a positional pair that silently swaps meaning between two
+        # gates doing the same job is worth more than the keystrokes it saves.
+        fail "unexpected argument '$1'; pass files as --build-info and --firmware-yaml"
       elif [[ -d $1 ]]; then
         repo_root=$(cd -- "$1" && pwd)
       else

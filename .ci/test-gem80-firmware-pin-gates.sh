@@ -122,6 +122,24 @@ rebuild_accepts build-only-mismatch \
   --build-info "$fixtures/build-info-valid.json" \
   --firmware-yaml "$fixtures/firmware-build-only.yaml"
 
+# Passing is only half of R8. build-only accepting a divergence silently would
+# make the weaker mode indistinguishable from a clean reproduction, so the
+# notice is the part worth asserting.
+case_name=build-only-mismatch-notice
+out=$("$rebuild_gate" \
+  --eval "$mismatch_sha" \
+  --build-info "$fixtures/build-info-valid.json" \
+  --firmware-yaml "$fixtures/firmware-build-only.yaml" 2>&1)
+case "$out" in
+  *'notice: output sha256'*) ;;
+  *) fail 'build-only mode accepted a divergence without reporting it' ;;
+esac
+case "$out" in
+  *'::warning::'*) ;;
+  *) fail 'build-only divergence did not surface as a workflow warning' ;;
+esac
+pass 'rebuild gate reports the divergence it accepts under build-only mode (R8)'
+
 # Rebuild input validation and malformed fixture rejection.
 rebuild_rejects invalid-actual-sha \
   'is not a 64-character lowercase hex digest' \

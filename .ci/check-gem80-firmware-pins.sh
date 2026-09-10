@@ -357,7 +357,7 @@ judge_firmware_pins() {
 
 show_usage() {
   cat <<'EOF'
-Usage: check-gem80-firmware-pins.sh [options] [firmware_yaml] [build_info_json]
+Usage: check-gem80-firmware-pins.sh [options]
 
 Validates reachability of the pinned QMK fork commit and toolchain image digest.
 
@@ -380,7 +380,6 @@ main() {
   local behind_by="0"
   local image_status=""
 
-  local positional=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --firmware-yaml)
@@ -412,18 +411,15 @@ main() {
         exit 0
         ;;
       *)
-        positional+=("$1")
-        shift
+        # Named only. The sibling rebuild gate took its two files in the
+        # opposite order, and a positional pair that silently swaps meaning
+        # between two gates doing the same job is worth more than the
+        # keystrokes it saves.
+        validation_error "unexpected argument '$1'; pass files as --firmware-yaml and --build-info"
+        exit 1
         ;;
     esac
   done
-
-  if [ -z "$fw_yaml" ] && [ ${#positional[@]} -ge 1 ]; then
-    fw_yaml="${positional[0]}"
-  fi
-  if [ -z "$b_info" ] && [ ${#positional[@]} -ge 2 ]; then
-    b_info="${positional[1]}"
-  fi
 
   fw_yaml="${fw_yaml:-$repo_root/.chezmoidata/firmware.yaml}"
   b_info="${b_info:-$repo_root/firmware/nuphy-gem80-hostrgb/dist/build-info.json}"
