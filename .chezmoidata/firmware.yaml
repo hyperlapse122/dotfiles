@@ -3,7 +3,7 @@
 # `build-only` requires a successful container build; `match-sha256` requires bit reproducibility against the committed build record (R7, R8).
 firmware:
   gem80:
-    rebuildMode: build-only
+    rebuildMode: match-sha256
     qmkFork:
       source: ryodeushii/qmk-firmware
       ref: refs/heads/nuphy-keyboards
