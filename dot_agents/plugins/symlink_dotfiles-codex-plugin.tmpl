@@ -1,0 +1,39 @@
+{{- /* ~/.agents/plugins/dotfiles-codex-plugin -> the chezmoi-deployed plugin tree.
+
+       Same role as symlink_compound-engineering-plugin.tmpl beside this file,
+       but for a localDir marketplace rather than a localArchive one. That source
+       fails closed on any kind but localArchive because an archive is the only
+       kind with a pinned version path to link; a localDir marketplace already
+       carries its own $HOME-relative path, so this one resolves that instead.
+
+       The source filename hardcodes the agents.marketplaces registry key. A
+       second localDir marketplace needs a second symlink source.
+
+       The reconciler preflights that this link exists and points at the row's
+       resolved source directory, and dies otherwise. That check runs after
+       chezmoi has already written the instruction targets, so this source must
+       land in the same commit as the agents.codex.plugins row. */ -}}
+{{- $key := "dotfiles-codex-plugin" -}}
+{{- if not (hasKey .agents.marketplaces $key) -}}
+{{-   fail (printf "symlink_%s: agents.marketplaces has no entry %q" $key $key) -}}
+{{- end -}}
+{{- $authority := index .agents.marketplaces $key -}}
+{{- $kind := "" -}}
+{{- if hasKey $authority "kind" -}}{{- $kind = printf "%v" (index $authority "kind") -}}{{- end -}}
+{{- if ne $kind "localDir" -}}
+{{-   fail (printf "symlink_%s: marketplace %q has kind %q; this source links a localDir tree" $key $key $kind) -}}
+{{- end -}}
+{{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" . "harness" "codex" "field" "plugins") -}}
+{{- $target := "" -}}
+{{- if ne $rows "" -}}
+{{-   range $line := splitList "\n" $rows -}}
+{{-     $fields := splitList "\t" (printf "%v" (fromJson (trim $line))) -}}
+{{-     if and (eq $target "") (eq (index $fields 1) $key) -}}
+{{-       $target = index $fields 3 -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq $target "" -}}
+{{-   fail (printf "symlink_%s: no eligible agents.codex.plugins row references marketplace %q on this host" $key $key) -}}
+{{- end -}}
+{{- $target -}}

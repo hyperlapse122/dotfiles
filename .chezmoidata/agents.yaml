@@ -135,7 +135,8 @@ agents:
       - "*/plugin.json"
       os: [linux, darwin]
       container: keep
-    # This checkout's own Claude Code plugin, and the only localDir marketplace:
+    # This checkout's own Claude Code plugin. It and dotfiles-codex-plugin below
+    # are the two localDir marketplaces:
     # the tree is deployed by chezmoi rather than downloaded, so it needs no
     # source, externalPath or version selector. It exists because a Claude Code
     # hook cannot be declared through agents.claude.settings — hooks belongs to
@@ -152,6 +153,22 @@ agents:
     dotfiles-claude-plugin:
       kind: localDir
       path: .local/share/dotfiles-claude-plugin
+      os: [linux, darwin]
+      container: keep
+    # This checkout's own Codex plugin. Same shape and same reason as the Claude
+    # one above: Codex's hooks.json at ~/.codex/hooks.json is written by Orca, so
+    # dotfiles composes beside it through a plugin rather than rewriting it.
+    # Codex has no local-directory plugin install — a local path enters only as a
+    # marketplace — so this row needs the matching
+    # dot_agents/plugins/symlink_dotfiles-codex-plugin.tmpl source in the same
+    # commit, or the reconciler preflight dies after the instruction targets have
+    # already been written.
+    #
+    # The os/container gates match the Claude entry deliberately: a host that
+    # declares the row but has no `codex` on PATH makes the reconciler die.
+    dotfiles-codex-plugin:
+      kind: localDir
+      path: .local/share/dotfiles-codex-plugin
       os: [linux, darwin]
       container: keep
   claude:
@@ -369,6 +386,16 @@ agents:
     # and marketplaces belong to other writers (the MCP reconciler, Codex itself,
     # and the plugin reconciler) and must not be declared here.
     #
+    # Two of those tables are nonetheless asserted by the reconciler SCRIPT, the
+    # way mcp_servers already was: it declares each eligible mcp_servers.<name>
+    # table, and exactly one leaf under hooks — the trusted_hash for this
+    # checkout's own Codex hook. Codex refuses a third-party plugin hook until a
+    # trusted_hash for it exists in the USER config, so without that leaf the
+    # hook this repository ships never runs and the failure is silent. Codex
+    # writes its own records into the same hooks.state table (8 on the authoring
+    # host) and the recursive overlay leaves every one of them untouched. The
+    # record attests the hook DECLARATION, not the script or payload it reads.
+    #
     # The headless posture below runs `codex exec` unattended inside the
     # workspace sandbox with network access. model and model_reasoning_effort are
     # the operator's chosen pair and are asserted on every apply, so a model or
@@ -385,4 +412,10 @@ agents:
     personalMarketplace: dotfiles
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    # The install id is dotfiles-codex@dotfiles — the personal marketplace above,
+    # not the registry key. That id is also the first segment of the hook trust
+    # key the codex settings reconciler asserts, so renaming either half breaks
+    # trust silently: a stale trusted_hash disables the hook exactly like no
+    # record at all.
+    - { name: dotfiles-codex, marketplace: dotfiles-codex-plugin }
     pluginsRemoved: []

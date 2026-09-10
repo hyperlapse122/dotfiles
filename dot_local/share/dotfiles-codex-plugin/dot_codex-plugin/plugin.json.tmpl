@@ -1,0 +1,46 @@
+{{- /* plugin.json — the manifest Codex reads for this plugin.
+
+  `version` is derived from content for the same reason the Claude plugin's is:
+  Codex caches the plugin under
+  ~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/ and `codex plugin add`
+  is idempotent, so a fixed version would pin the first copy forever and every
+  later edit would land in the source tree and never run.
+
+  The payload body lives in .chezmoitemplates and reaches this plugin through a
+  one-line includeTemplate wrapper under payloads/, whose own source text never
+  changes. Hashing the tree alone would therefore never see a reworded rule, so
+  the body is hashed explicitly. The codex plugin reconciler fingerprints the
+  same paths; both halves are required for an edit to land.
+
+  Note the trust interaction: the hook's trust key and hash carry no version
+  segment, so a version bump here does NOT invalidate the pre-seeded trust
+  record. Changing the hook's declared command in hooks/hooks.json does. */ -}}
+{{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-codex-plugin" -}}
+{{- $payloadBodies := list
+      "orchestration-everyone.tmpl"
+      "orchestration-role-detect.sh.tmpl" -}}
+{{- $parts := "" -}}
+{{- range $body := $payloadBodies -}}
+{{-   $bodyPath := joinPath $.chezmoi.sourceDir ".chezmoitemplates" $body -}}
+{{-   if not (stat $bodyPath) -}}
+{{-     fail (printf "plugin.json.tmpl: payload body %q is missing, so the version would not track it" $body) -}}
+{{-   end -}}
+{{-   $parts = printf "%s%s" $parts (include $bodyPath | sha256sum) -}}
+{{- end -}}
+{{- range $f := (glob (joinPath $root "**")) -}}
+{{-   if not (stat $f).isDir -}}
+{{-     $parts = printf "%s%s" $parts (include $f | sha256sum) -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq $parts "" -}}
+{{-   fail "plugin.json.tmpl: the plugin tree matched no files, so the version would not track its content" -}}
+{{- end -}}
+{{- $version := printf "0.1.0-%s" (substr 0 12 (sha256sum $parts)) -}}
+{
+  "name": "dotfiles-codex",
+  "version": "{{ $version }}",
+  "description": "Hooks this dotfiles checkout ships to Codex",
+  "author": {
+    "name": "hyperlapse122"
+  }
+}

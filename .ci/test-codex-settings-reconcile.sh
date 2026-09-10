@@ -95,8 +95,22 @@ jq -e 'type == "object"' <<<"$declared" >/dev/null \
 # tables, read back from agents.yaml the same way the script does.
 expected_settings=$(render <<<'{{ .agents.codex.settings | toJson }}' \
   | jq -c 'reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))')
-[[ $(jq -Sc 'del(.mcp_servers)' <<<"$declared") == "$(jq -Sc . <<<"$expected_settings")" ]] \
+[[ $(jq -Sc 'del(.mcp_servers) | del(.hooks)' <<<"$declared") == "$(jq -Sc . <<<"$expected_settings")" ]] \
   || fail 'the declared settings leaves do not expand to the rendered agents.codex.settings'
+
+# The script declares exactly one leaf under hooks: the trusted_hash for this
+# checkout's own Codex plugin hook. Codex refuses a third-party plugin hook until
+# that record exists in the user config, and the failure is silent, so the value
+# is asserted rather than merely tolerated. It was verified against every real
+# trust record the authoring host's own hooks.json had recorded (8 of 8), and a
+# wider pass over that host's project hooks files matched 14 of 14.
+#
+# Nothing else may appear under hooks. Codex owns the rest of that table.
+expected_trust_key='dotfiles-codex@dotfiles:hooks/hooks.json:session_start:0:0'
+expected_trust_hash='sha256:f0e71f6f167e87739d4c897ad644325ec87816d2c026301f54337bda4fbb73f8'
+[[ $(jq -Sc '.hooks' <<<"$declared") == "$(jq -Sc --arg k "$expected_trust_key" --arg h "$expected_trust_hash" \
+  '{state: {($k): {trusted_hash: $h}}}' <<<'{}')" ]] \
+  || fail 'the declared hooks table is not exactly the one expected Codex hook trust record'
 jq -e '.approval_policy == "never" and .sandbox_mode == "workspace-write"
   and .sandbox_workspace_write.network_access == true
   and .model_reasoning_effort == "max" and .model == "gpt-5.6-luna"' <<<"$declared" >/dev/null \

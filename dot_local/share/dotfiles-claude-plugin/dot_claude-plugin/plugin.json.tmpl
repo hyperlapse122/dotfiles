@@ -10,8 +10,25 @@
 
   The same tree is a fingerprint input of that reconciler, so an edit also
   re-triggers the script that performs the install. Both halves are required. */ -}}
+{{- /* The payload bodies live in .chezmoitemplates and reach this plugin through
+       one-line includeTemplate wrappers under payloads/. Hashing the tree alone
+       would therefore never see a payload edit: the wrapper's own source text
+       never changes. Hash those bodies explicitly so a reworded rule moves the
+       version and the reinstall reaches the cache Claude Code serves. The
+       reconciler fingerprints the same three paths; the two must agree. */ -}}
 {{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-claude-plugin" -}}
+{{- $payloadBodies := list
+      "orchestration-everyone.tmpl"
+      "orchestration-coordinator.tmpl"
+      "orchestration-role-detect.sh.tmpl" -}}
 {{- $parts := "" -}}
+{{- range $body := $payloadBodies -}}
+{{-   $bodyPath := joinPath $.chezmoi.sourceDir ".chezmoitemplates" $body -}}
+{{-   if not (stat $bodyPath) -}}
+{{-     fail (printf "plugin.json.tmpl: payload body %q is missing, so the version would not track it" $body) -}}
+{{-   end -}}
+{{-   $parts = printf "%s%s" $parts (include $bodyPath | sha256sum) -}}
+{{- end -}}
 {{- /* The WHOLE tree, not just hooks/: this plugin is the standing home for this
        checkout's Claude Code extensions, so a commands/ or agents/ file added
        later must move the version too. Anything narrower re-runs the reconciler

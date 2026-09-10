@@ -41,6 +41,16 @@
 {{- if gt (len $servers) 0 -}}
 {{-   $declared = set $declared "mcp_servers" $servers -}}
 {{- end -}}
+{{- /* One hooks leaf, declared by this script rather than through
+   agents.codex.settings — the same shape as mcp_servers above, and for the same
+   reason: the settings key owns scalar leaves and codex-settings-validate.tmpl
+   rejects every Codex-owned prefix there. The reconciler's recursive overlay
+   changes only declared values, so Codex's own records under hooks.state (there
+   were 8 on the authoring host) survive untouched.
+   Without this record Codex never runs the hook this checkout ships, and the
+   failure is silent. See .chezmoitemplates/codex-hook-trust.tmpl. */ -}}
+{{- $hookTrust := includeTemplate "codex-hook-trust.tmpl" (dict "ctx" .) | fromJson -}}
+{{- $declared = set $declared "hooks" $hookTrust -}}
 {{- if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 #!/usr/bin/env bash
 # Asserts the declared Codex config.toml content into the live ~/.codex/config.toml
