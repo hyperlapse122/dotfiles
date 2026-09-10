@@ -25,6 +25,13 @@ set -euo pipefail
 # against .ci/fixtures/agent-instructions/harness-runs-<harness>.txt, so an
 # appended sentence fails the gate and no per-sentence needle is needed. Editing
 # that prose means updating its fixture in the same commit.
+#
+# The shared-body autonomy paragraphs (the `lfg` autonomy paragraph and the
+# workflow-required-step paragraph) carry no such gap either: each is compared
+# whole against its committed fixture (.ci/fixtures/agent-instructions/lfg-autonomy.txt
+# and .ci/fixtures/agent-instructions/workflow-required-autonomy.txt), matched
+# exactly once per harness on linux and darwin. Editing that prose means updating
+# its fixture in the same commit.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
@@ -36,7 +43,6 @@ printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod +x "$scratch/bin/op"
 chezmoi_bin=$(type -P chezmoi)
-
 fail() { printf 'agent instructions: %s\n' "$*" >&2; exit 1; }
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
@@ -53,6 +59,12 @@ for peer in "${peer_wrappers[@]}"; do
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$peer"
 done
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/agents-instructions.tmpl
+lfg_fixture_path=".ci/fixtures/agent-instructions/lfg-autonomy.txt"
+workflow_fixture_path=".ci/fixtures/agent-instructions/workflow-required-autonomy.txt"
+require_file "$repo_root" "$scratch" "$chezmoi_bin" "$lfg_fixture_path"
+require_file "$repo_root" "$scratch" "$chezmoi_bin" "$workflow_fixture_path"
+lfg_fixture="$repo_root/$lfg_fixture_path"
+workflow_fixture="$repo_root/$workflow_fixture_path"
 
 # The darwin-leak sentinel must be a phrase the Linux rule actually contains, or
 # the leak assertion asserts nothing. `/usr/bin/orca` is Linux-only and appears
@@ -95,6 +107,26 @@ for i in "${!harness_ids[@]}"; do
     || fail "${harness_ids[$i]} must render exactly one 'This harness runs ' line"
   diff -q "$runs_fixture" "$runs_line" >/dev/null \
     || fail "${harness_ids[$i]} model-tuning line differs from $runs_fixture"
+  for target_os in linux darwin; do
+    case $target_os in
+      linux) target_render=$harness_render ;;
+      darwin) target_render=$other_os_render ;;
+    esac
+
+    lfg_line="$scratch/${harness_ids[$i]}-$target_os-lfg.txt"
+    grep -F 'During `lfg` pipeline execution, MUST run fully autonomously' "$target_render" >"$lfg_line" || true
+    [[ $(wc -l <"$lfg_line") -eq 1 ]] \
+      || fail "${harness_ids[$i]} ($target_os) must render exactly one 'During \`lfg\` pipeline execution' line"
+    diff -q "$lfg_fixture" "$lfg_line" >/dev/null \
+      || fail "${harness_ids[$i]} ($target_os) lfg autonomy paragraph differs from $lfg_fixture_path"
+
+    wf_line="$scratch/${harness_ids[$i]}-$target_os-wf.txt"
+    grep -F 'A step that a skill, command, or workflow the user invoked by name declares mandatory' "$target_render" >"$wf_line" || true
+    [[ $(wc -l <"$wf_line") -eq 1 ]] \
+      || fail "${harness_ids[$i]} ($target_os) must render exactly one workflow-required autonomy line"
+    diff -q "$workflow_fixture" "$wf_line" >/dev/null \
+      || fail "${harness_ids[$i]} ($target_os) workflow-required autonomy paragraph differs from $workflow_fixture_path"
+  done
   renders+=("$harness_render")
 done
 rendered=${renders[0]}
@@ -170,7 +202,7 @@ Opening a skill grants no authority a rule in this file withholds, and this rule
 When two instructions disagree, compose them rather than satisfying both.
 A repository supplement MAY add a rule or tighten one and MUST NOT remove one; where it tightens, the tighter rule governs.
 A skill's own instructions and the harness's defaults and automatic reminders yield to this file and to that supplement
-a named local exception in this file — the executable-selection rule, the `lfg` autopilot override — stays authoritative for its own subject
+a named local exception in this file — the executable-selection rule, the `lfg` autopilot override, the workflow-required-step rule — stays authoritative for its own subject
 The secrets, destructive-action, and dispatch-routing prohibitions in this file sit outside this composition
 they bind whatever the conflicting instruction is and wherever it comes from, the active conversation included
 MUST NOT edit a file by writing or running a Python, Node/JavaScript, or shell script
@@ -266,6 +298,14 @@ MUST treat a host process sweep over the agent CLI's own process name as a secon
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
 Every worker under this contract MUST be attached through the guide's lifecycle-supervised worker path, never an unsupervised injected dispatch
 When the run's own wall-clock bound expires the run MUST do the same for every dispatch still outstanding
+A step that a skill, command, or workflow the user invoked by name declares mandatory MUST be carried out without a confirming question
+This authority is transitive: it reaches the mandatory steps of every skill the invoked skill itself invokes as part of its own mandatory flow
+It covers the step's dispatch scale — the worker count, the reviewer set, and the cross-model fan-out that the workflow's own rules produce
+That exception never licenses a question that confirms whether a mandatory step runs, or at what dispatch scale.
+During an `lfg` run the autopilot paragraph above governs and these exceptions do not apply.
+Before a mandatory step sends work outside the current session, the agent MUST state what it is about to do and MUST proceed past that statement in the same turn: it is a disclosure, never a confirmation prompt.
+The disclosure MUST name the resolved dispatch count, so the operator can interrupt a fan-out they did not expect without being asked to approve it.
+This rule authorizes no dispatch the invoked skill does not itself define.
 NEEDLES
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
