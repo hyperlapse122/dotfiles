@@ -1,4 +1,5 @@
 #include "../default/keymap.c"
+#include "raw_hid.h"
 
 #define HOSTRGB_CMD 0x60
 #define HOSTRGB_PROTOCOL 0x01
@@ -12,6 +13,10 @@ enum hostrgb_sub {
 
 uint8_t hostrgb_buf[RGB_MATRIX_LED_COUNT][3];
 
+// Returning true tells quantum/via.c the command was fully handled *including*
+// the reply, so each handled branch must call raw_hid_send() itself. Returning
+// true without it makes the device swallow the command and answer nothing --
+// not even VIA's id_unhandled, which is what an unknown command id returns.
 bool via_command_kb(uint8_t *data, uint8_t length) {
     if (length < 2 || data[0] != HOSTRGB_CMD) {
         return false;
@@ -22,6 +27,7 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
             data[2] = HOSTRGB_PROTOCOL;
             data[3] = RGB_MATRIX_LED_COUNT;
             data[4] = HOSTRGB_LEDS_PER_PACKET;
+            raw_hid_send(data, length);
             return true;
 
         case HOSTRGB_SUB_MODE:
@@ -30,6 +36,7 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
             } else {
                 rgb_matrix_reload_from_eeprom();
             }
+            raw_hid_send(data, length);
             return true;
 
         case HOSTRGB_SUB_SET: {
@@ -47,6 +54,7 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
                 hostrgb_buf[led][1] = data[5 + i * 3];
                 hostrgb_buf[led][2] = data[6 + i * 3];
             }
+            raw_hid_send(data, length);
             return true;
         }
     }
