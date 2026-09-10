@@ -174,3 +174,59 @@ LEDs per packet: 9
 침범하는 것은 조작자가 명시적으로 누를 때만 뜨는 디바운스 표시다. 일시적이고 사용자가 유발하는 성격이라 상시 경합이 아니며, `keyboards/nuphy/gem80/ansi/keymaps/default/keymap.c`의 Fn 레이어에서 `Ins`/`Home`/`PgUp` = `DEBOUNCE_PRESS_*`, `Del`/`End`/`PgDn` = `DEBOUNCE_RELEASE_*`로 확인된다.
 
 계획대로 이 충돌은 기록만 하고 고치지 않는다. 우선순위 정책은 후속 작업이다.
+
+## 3차 플래시 (코드 리뷰 반영본)
+
+- 일시: 2026-09-10T04:29:30Z
+- 크기: 73688 bytes, sha256 964eed3f305427f1…
+- 변경: `hostrgb_buf`를 fork의 packed `rgb_t`로 전환, direct 모드 진입 시 `rgb_matrix_enable_noeeprom()` 호출 (RGB_TOG로 꺼둔 상태에서도 켜지도록)
+- 출처 게이트: `gem80-firmware verify` 통과 (종료 코드 0)
+
+```
+dfu-util 0.11
+
+Copyright 2005-2009 Weston Schmidt, Harald Welte and OpenMoko Inc.
+Copyright 2010-2021 Tormod Volden and Stefan Schmidt
+This program is Free Software and has ABSOLUTELY NO WARRANTY
+Please report bugs to http://sourceforge.net/p/dfu-util/tickets/
+
+Opening DFU capable USB device...
+Device ID 0483:df11
+Device DFU version 011a
+Claiming USB DFU Interface...
+Setting Alternate Interface #0 ...
+Determining device status...
+DFU state(10) = dfuERROR, status(10) = Device's firmware is corrupt. It cannot return to run-time (non-DFU) operations
+Clearing status
+Determining device status...
+DFU state(2) = dfuIDLE, status(0) = No error condition is present
+DFU mode device DFU version 011a
+Device returned transfer size 2048
+DfuSe interface name: "Internal Flash  "
+Downloading element to address = 0x08000000, size = 73672
+Erase   	[                         ]   0%            0 bytesErase   	[                         ]   0%            0 bytesErase   	[                         ]   2%         2048 bytesErase   	[=                        ]   5%         4096 bytesErase   	[==                       ]   8%         6144 bytesErase   	[==                       ]  11%         8192 bytesErase   	[===                      ]  13%        10240 bytesErase   	[====                     ]  16%        12288 bytesErase   	[====                     ]  19%        14336 bytesErase   	[=====                    ]  22%        16384 bytesErase   	[======                   ]  25%        18432 bytesErase   	[======                   ]  27%        20480 bytesErase   	[=======                  ]  30%        22528 bytesErase   	[========                 ]  33%        24576 bytesErase   	[=========                ]  36%        26624 bytesErase   	[=========                ]  38%        28672 bytesErase   	[==========               ]  41%        30720 bytesErase   	[===========              ]  44%        32768 bytesErase   	[===========              ]  47%        34816 bytesErase   	[============             ]  50%        36864 bytesErase   	[=============            ]  52%        38912 bytesErase   	[==============           ]  58%        43008 bytesErase   	[===============          ]  61%        45056 bytesErase   	[===============          ]  63%        47104 bytesErase   	[================         ]  66%        49152 bytesErase   	[=================        ]  69%        51200 bytesErase   	[==================       ]  72%        53248 bytesErase   	[==================       ]  75%        55296 bytesErase   	[===================      ]  77%        57344 bytesErase   	[====================     ]  80%        59392 bytesErase   	[====================     ]  83%        61440 bytesErase   	[=====================    ]  86%        63488 bytesErase   	[======================   ]  88%        65536 bytesErase   	[======================   ]  91%        67584 bytesErase   	[=======================  ]  94%        69632 bytesErase   	[======================== ]  97%        71680 bytesErase   	[=========================] 100%        73672 bytes
+Erase    done.
+Download	[                         ]   0%            0 bytesDownload	[                         ]   2%         2048 bytesDownload	[=                        ]   5%         4096 bytesDownload	[==                       ]   8%         6144 bytesDownload	[==                       ]  11%         8192 bytesDownload	[===                      ]  13%        10240 bytesDownload	[====                     ]  16%        12288 bytesDownload	[====                     ]  19%        14336 bytesDownload	[=====                    ]  22%        16384 bytesDownload	[======                   ]  25%        18432 bytesDownload	[======                   ]  27%        20480 bytesDownload	[=======                  ]  30%        22528 bytesDownload	[========                 ]  33%        24576 bytesDownload	[=========                ]  36%        26624 bytesDownload	[=========                ]  38%        28672 bytesDownload	[==========               ]  41%        30720 bytesDownload	[===========              ]  44%        32768 bytesDownload	[===========              ]  47%        34816 bytesDownload	[============             ]  50%        36864 bytesDownload	[=============            ]  52%        38912 bytesDownload	[=============            ]  55%        40960 bytesDownload	[==============           ]  58%        43008 bytesDownload	[===============          ]  61%        45056 bytesDownload	[===============          ]  63%        47104 bytesDownload	[================         ]  66%        49152 bytesDownload	[=================        ]  69%        51200 bytesDownload	[==================       ]  72%        53248 bytesDownload	[==================       ]  75%        55296 bytesDownload	[===================      ]  77%        57344 bytesDownload	[====================     ]  80%        59392 bytesDownload	[====================     ]  83%        61440 bytesDownload	[=====================    ]  86%        63488 bytesDownload	[======================   ]  88%        65536 bytesDownload	[======================   ]  91%        67584 bytesDownload	[=======================  ]  94%        69632 bytesDownload	[======================== ]  97%        71680 bytesDownload	[=========================] 100%        73672 bytes
+Download done.
+File downloaded successfully
+Submitting leave request...
+Transitioning to dfuMANIFEST state
+```
+
+### 3차 플래시 후 검증
+
+프로토콜 회귀 없음: `probe` -> 노드 `/dev/hidraw5`, 프로토콜 rev 1, LED 89, 패킷당 9, 종료 코드 0.
+
+**`rgb_t` 전환의 채널 순서 보존: 확인.** `enter` 후 `set 0 255 0 0`을 보내자 조작자가 ESC의 빨강 점등을 확인했다. `hostrgb_buf`를 `uint8_t[3]`에서 fork의 packed `rgb_t`로 바꾼 변경이 메모리 레이아웃을 깨뜨리지 않았다는 뜻이다 — 어긋났다면 다른 색으로 나왔을 자리다.
+
+**매트릭스 enable 수정: 양쪽 절반 모두 확인.** 이 키맵에는 `RGB_TOG`가 없어 전제 조건에 도달할 수 없었으나, 조작자가 VIA로 `RM_TOGG`를 추가해 검증이 가능해졌다.
+
+| 단계 | 관찰 |
+| --- | --- |
+| `RM_TOGG`로 조명을 끔 | 키보드 깜깜 |
+| `enter` + `frame 0 0 255` | **전체가 파랑으로 점등** — 수정 전이었다면 매트릭스가 꺼진 채라 쓰기만 승인되고 화면은 깜깜했을 것이다 |
+| `exit` | **다시 깜깜해짐** — 저장된 "꺼짐"이 복원되었다 |
+
+두 번째 행이 없으면 호스트는 "정상 동작"과 "아무것도 보이지 않음"을 종료 코드로 구분할 수 없다. 세 번째 행은 `enable_noeeprom` 변형을 고른 판단이 옳았음을 보인다: direct 모드가 조작자의 저장된 선호를 일시적으로만 덮고, 나가면서 되돌린다. 데몬이 물러난 뒤 사용자 설정이 조용히 바뀌지 않는다는 뜻이므로, 후속 데몬 작업이 이 성질에 기댈 수 있다.
+
+에코 확인도 함께 실증되었다. 이번 빌드의 `enter`/`set`/`frame`/`exit`은 펌웨어 응답을 받은 뒤에 0을 반환하므로, 위 종료 코드들은 "바이트가 호스트를 떠났다"가 아니라 "장치가 명령을 처리했다"를 뜻한다.

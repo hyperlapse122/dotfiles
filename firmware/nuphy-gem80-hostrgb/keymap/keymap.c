@@ -11,7 +11,7 @@ enum hostrgb_sub {
     HOSTRGB_SUB_SET   = 0x02,
 };
 
-uint8_t hostrgb_buf[RGB_MATRIX_LED_COUNT][3];
+rgb_t hostrgb_buf[RGB_MATRIX_LED_COUNT];
 
 // Returning true tells quantum/via.c the command was fully handled *including*
 // the reply, so each handled branch must call raw_hid_send() itself. Returning
@@ -32,6 +32,7 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
 
         case HOSTRGB_SUB_MODE:
             if (data[2]) {
+                rgb_matrix_enable_noeeprom();
                 rgb_matrix_mode_noeeprom(RGB_MATRIX_CUSTOM_host_direct);
             } else {
                 rgb_matrix_reload_from_eeprom();
@@ -50,9 +51,9 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
                 if (led >= RGB_MATRIX_LED_COUNT) {
                     break;
                 }
-                hostrgb_buf[led][0] = data[4 + i * 3];
-                hostrgb_buf[led][1] = data[5 + i * 3];
-                hostrgb_buf[led][2] = data[6 + i * 3];
+                hostrgb_buf[led].r = data[4 + i * 3];
+                hostrgb_buf[led].g = data[5 + i * 3];
+                hostrgb_buf[led].b = data[6 + i * 3];
             }
             raw_hid_send(data, length);
             return true;

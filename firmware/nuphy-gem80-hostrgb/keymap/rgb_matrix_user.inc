@@ -5,7 +5,7 @@ RGB_MATRIX_EFFECT(host_direct)
 #ifdef RGB_MATRIX_CUSTOM_EFFECT_IMPLS
 
 extern rgb_config_t rgb_matrix_config;
-extern uint8_t      hostrgb_buf[RGB_MATRIX_LED_COUNT][3];
+extern rgb_t        hostrgb_buf[RGB_MATRIX_LED_COUNT];
 
 static bool game_mode(effect_params_t* params) {
     RGB_MATRIX_USE_LIMITS(led_min, led_max);
@@ -50,7 +50,7 @@ static bool host_direct(effect_params_t* params) {
     RGB_MATRIX_USE_LIMITS(led_min, led_max);
 
     for (uint8_t i = led_min; i < led_max; i++) {
-        rgb_matrix_set_color(i, hostrgb_buf[i][0], hostrgb_buf[i][1], hostrgb_buf[i][2]);
+        rgb_matrix_set_color(i, hostrgb_buf[i].r, hostrgb_buf[i].g, hostrgb_buf[i].b);
     }
 
     return rgb_matrix_check_finished_leds(led_max);
