@@ -1,8 +1,9 @@
 [tools]
 aube = "latest"
+bun = "latest"
 "npm:@colbymchenry/codegraph" = "latest"
 "npm:@sentry/dotagents" = "latest"
-rust = { version = "1.98.0", components = "rust-analyzer,rust-src" }
+rust = { version = "latest", components = "rust-analyzer,rust-src" }
 
 [hooks]
 postinstall = [
@@ -14,4 +15,4 @@ postinstall = [
 ]
 
 [settings]
-lockfile = false
+lockfile = true
