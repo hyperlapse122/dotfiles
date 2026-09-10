@@ -14,17 +14,38 @@ set -euo pipefail
 # branch/worktree/session mandates Orca replaced, which no wrapper may
 # reintroduce without this gate catching it.
 #
-# KNOWN GAP: the `This harness is ` lines are sampled by substring, never
-# compared whole. The peer diff strips them and the needles only assert that
-# quoted text is present, so text APPENDED to a harness line reaches a deployed
-# instruction file unasserted. Every load-bearing sentence on those lines must
-# therefore carry its own needle. Closing the gap properly means asserting each
-# harness line byte-for-byte against a committed fixture.
+# Every paragraph this gate protects is compared WHOLE against a committed
+# fixture, so an appended clause that reverses a MUST fails even when every
+# needle still matches. Editing any of that prose means updating its fixture in
+# the same commit. The fixtures are:
 #
-# The `This harness runs ` lines carry no such gap: each one is compared whole
-# against .ci/fixtures/agent-instructions/harness-runs-<harness>.txt, so an
-# appended sentence fails the gate and no per-sentence needle is needed. Editing
-# that prose means updating its fixture in the same commit.
+#   harness-runs-<harness>.txt  the `This harness runs ` model-tuning line
+#   harness-is-<harness>.txt    every `This harness is ` line for that harness
+#   lfg-autonomy.txt            the `lfg` autonomy paragraph
+#   workflow-required-autonomy.txt  the workflow-required-step paragraph
+#
+# The `This harness is ` fixtures close a former gap: the peer diff strips those
+# lines and the needles only assert that quoted text is present, so text APPENDED
+# to a harness line used to reach a deployed instruction file unasserted. Claude
+# renders two such lines; the fixture holds both, in order.
+#
+# The two autonomy paragraphs are additionally ANCHORED to each other: the
+# workflow-required-step paragraph must render exactly two lines below the `lfg`
+# paragraph. Without that, a copy of the fixture text parked elsewhere would
+# satisfy the whole-line comparison while the paragraph in the operative position
+# was rewritten, and an inserted heading could move the paragraph out of the
+# section its own "above" references depend on.
+#
+# The darwin arm of that loop is belt-and-braces: the cross-OS diff below already
+# forces the two renders to be byte-identical outside the executable rule, so the
+# darwin assertions cannot fail alone. They are kept so that weakening the
+# cross-OS diff cannot silently drop darwin coverage.
+#
+# RESIDUAL, not closed: a contradicting sentence added elsewhere in the shared
+# body is not caught by any fixture, because no fixture bounds a section. The
+# BANNED list below is the mechanism for a retired or forbidden phrasing, and it
+# matches literal text only. Semantic consistency across the whole file is a
+# review obligation, not a machine-checked one.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
@@ -36,8 +57,13 @@ printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod +x "$scratch/bin/op"
 chezmoi_bin=$(type -P chezmoi)
-
 fail() { printf 'agent instructions: %s\n' "$*" >&2; exit 1; }
+# A render-assertion failure records and continues, so a single lost sentence
+# reports BOTH its fixture mismatch and the requirement needle it dropped. Only
+# these assertions are soft; every other `fail` still exits at once, because the
+# checks after them read files an earlier `fail` proved present.
+soft_failed=0
+soft_fail() { printf 'agent instructions: %s\n' "$*" >&2; soft_failed=1; }
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
@@ -53,6 +79,12 @@ for peer in "${peer_wrappers[@]}"; do
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$peer"
 done
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/agents-instructions.tmpl
+lfg_fixture_path=".ci/fixtures/agent-instructions/lfg-autonomy.txt"
+workflow_fixture_path=".ci/fixtures/agent-instructions/workflow-required-autonomy.txt"
+require_file "$repo_root" "$scratch" "$chezmoi_bin" "$lfg_fixture_path"
+require_file "$repo_root" "$scratch" "$chezmoi_bin" "$workflow_fixture_path"
+lfg_fixture="$repo_root/$lfg_fixture_path"
+workflow_fixture="$repo_root/$workflow_fixture_path"
 
 # The darwin-leak sentinel must be a phrase the Linux rule actually contains, or
 # the leak assertion asserts nothing. `/usr/bin/orca` is Linux-only and appears
@@ -95,6 +127,38 @@ for i in "${!harness_ids[@]}"; do
     || fail "${harness_ids[$i]} must render exactly one 'This harness runs ' line"
   diff -q "$runs_fixture" "$runs_line" >/dev/null \
     || fail "${harness_ids[$i]} model-tuning line differs from $runs_fixture"
+  is_fixture_path=".ci/fixtures/agent-instructions/harness-is-${harness_ids[$i]}.txt"
+  require_file "$repo_root" "$scratch" "$chezmoi_bin" "$is_fixture_path"
+  is_lines="$scratch/${harness_ids[$i]}-is.txt"
+  grep '^This harness is ' "$harness_render" >"$is_lines" || true
+  diff -q "$repo_root/$is_fixture_path" "$is_lines" >/dev/null \
+    || soft_fail "${harness_ids[$i]} 'This harness is ' lines differ from $is_fixture_path"
+
+  for target_os in linux darwin; do
+    case $target_os in
+      linux) target_render=$harness_render ;;
+      darwin) target_render=$other_os_render ;;
+    esac
+
+    # -Fxn: whole-line matches against the fixture body, so a paraphrased
+    # paragraph is a miss rather than a partial hit, and the line number is what
+    # anchors the two paragraphs to each other below.
+    # `|| true` is load-bearing: a paragraph that no longer matches its fixture
+    # makes grep exit 1, and under `set -e` a bare command substitution would
+    # kill the run with no message instead of reporting which paragraph drifted.
+    lfg_hits=$(grep -Fxn -f "$lfg_fixture" "$target_render" | cut -d: -f1 || true)
+    wf_hits=$(grep -Fxn -f "$workflow_fixture" "$target_render" | cut -d: -f1 || true)
+    lfg_count=$(printf '%s' "$lfg_hits" | grep -c . || true)
+    wf_count=$(printf '%s' "$wf_hits" | grep -c . || true)
+
+    if [[ $lfg_count -ne 1 ]]; then
+      soft_fail "${harness_ids[$i]} ($target_os) must render the lfg autonomy paragraph exactly once, matching $lfg_fixture_path (found $lfg_count)"
+    elif [[ $wf_count -ne 1 ]]; then
+      soft_fail "${harness_ids[$i]} ($target_os) must render the workflow-required autonomy paragraph exactly once, matching $workflow_fixture_path (found $wf_count)"
+    elif [[ $wf_hits -ne $((lfg_hits + 2)) ]]; then
+      soft_fail "${harness_ids[$i]} ($target_os) workflow-required autonomy paragraph must render two lines below the lfg autonomy paragraph (lfg at $lfg_hits, workflow at $wf_hits); its 'above' references depend on that placement"
+    fi
+  done
   renders+=("$harness_render")
 done
 rendered=${renders[0]}
@@ -123,7 +187,7 @@ claude|This harness is Claude Code. Use `Read` to read a file, which is required
 claude|`Bash` also runs a command in the background, and every wait on a dispatched Orca worker MUST run that way (`run_in_background: true`), never in the foreground: a foreground wait holds the turn, so a worker's message, escalation, or question is queued and reaches the run only when the command returns.
 claude|The run stays idle while that wait runs, answers what arrives, and returns to waiting; only the execution mode changes, so the command MUST still be the guide's blocking wait with its explicit timeout, and the run MUST NOT poll the background command's output on a timer.
 claude|One delegation carve-out also applies here: a standing harness instruction may tell the agent not to call the Agent (Task) tool, workflows, or deep research unless the user requested it, and this file is a recognized exception source for it.
-claude|When a skill, command, or workflow the user invoked by name directs a subagent dispatch, that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation; a skill the agent selected on its own does not qualify, and a subagent does not re-claim this carve-out for dispatches of its own.
+claude|When a skill, command, or workflow the user invoked by name directs a subagent dispatch, that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation; a skill the agent selected on its own outside a mandatory workflow sequence does not qualify, and a subagent does not re-claim this carve-out for dispatches of its own.
 claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
 claude|Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker to `omp` by default. Name the agent and nothing else.
 claude|MUST NOT request a model or a reasoning effort for `omp`: that agent refuses launch-time model selection, so the dispatch fails outright instead of falling back to a default.
@@ -170,8 +234,8 @@ Opening a skill grants no authority a rule in this file withholds, and this rule
 When two instructions disagree, compose them rather than satisfying both.
 A repository supplement MAY add a rule or tighten one and MUST NOT remove one; where it tightens, the tighter rule governs.
 A skill's own instructions and the harness's defaults and automatic reminders yield to this file and to that supplement
-a named local exception in this file — the executable-selection rule, the `lfg` autopilot override — stays authoritative for its own subject
-The secrets, destructive-action, and dispatch-routing prohibitions in this file sit outside this composition
+a named local exception in this file — the executable-selection rule, the `lfg` autopilot override, the workflow-required-step rule — stays authoritative for its own subject
+The secrets, destructive-action, dispatch-routing, and not-the-user's-repository prohibitions in this file sit outside this composition
 they bind whatever the conflicting instruction is and wherever it comes from, the active conversation included
 MUST NOT edit a file by writing or running a Python, Node/JavaScript, or shell script
 MUST NOT use `sed -i`, `awk`, `perl -pi`, `tee`, or heredoc/`>` redirection to create or rewrite a tracked file
@@ -266,6 +330,15 @@ MUST treat a host process sweep over the agent CLI's own process name as a secon
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
 Every worker under this contract MUST be attached through the guide's lifecycle-supervised worker path, never an unsupervised injected dispatch
 When the run's own wall-clock bound expires the run MUST do the same for every dispatch still outstanding
+A step that a skill, command, or workflow the user invoked by name declares mandatory MUST be carried out without a confirming question
+This authority is transitive: it reaches the mandatory steps of every skill the invoked skill itself invokes as part of its own mandatory flow
+It covers the step's dispatch scale — the worker count, the reviewer set, and the cross-model fan-out that the workflow's own rules produce
+That exception never licenses a question that confirms whether a mandatory step runs, or at what dispatch scale.
+During an `lfg` run the autopilot paragraph above governs and these exceptions do not apply.
+Before a mandatory step sends work outside the current session, the agent MUST state what it is about to do; unless a prohibition in this file gates that send, the agent MUST proceed past that statement in the same turn
+When the step dispatches workers, the disclosure MUST name the resolved dispatch count, so the user can interrupt a fan-out they did not expect without being asked to approve it
+This rule authorizes no dispatch the invoked skill does not itself define, and the authority follows the skill chain inside one session rather than travelling to a dispatched worker
+MUST NOT send outside the current session a document, message, or artifact carrying a credential, a secret, or material the user has marked confidential. That is a stop-and-ask, never a disclosure
 NEEDLES
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
@@ -315,4 +388,5 @@ the aoe worktree name
 Never put project identity in an aoe title
 BANNED
 
+[[ $soft_failed -eq 0 ]] || exit 1
 printf 'agent instruction gates passed\n'
