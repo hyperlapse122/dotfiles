@@ -87,7 +87,7 @@ system/linux/etc/locale.conf
 | `etc/systemd/logind.conf.d/` | laptop lid behaviour (`battery` gate): suspend on lid close on battery, ignore on external power and while docked |
 | `etc/systemd/sleep.conf.d/` | laptop sleep policy (`battery` gate): `suspend-then-hibernate`, reusing the swapfile and resume path `install-system-26-swap-hibernate` provisions |
 | `etc/sysctl.d/` | sysctl drop-ins: TCP MTU probing, inotify watch limits, ptrace scope, and IPv4/IPv6 forwarding for the Tailscale exit-node path |
-| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
+| `etc/udev/rules.d/` | udev rules: NuPhy Gem80 VIA/WebHID access, STM32 ROM DFU bootloader access, Logitech receiver wake disable, DualSense touchpad libinput ignore, Sennheiser BTD 600/700 dongle hidraw access |
 | `etc/udev/rules.d/80-nvidia-integrated-only.rules` | `integratedOnly`-gated: sets `power/control=auto` on the driverless discrete NVIDIA GPU so its root port enters D3cold; the device stays enumerated |
 
 ## The modular install-system script set (30-linux)
