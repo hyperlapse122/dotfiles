@@ -30,7 +30,7 @@ command -v jq >/dev/null 2>&1 || emit_nothing
 
 # chezmoi strips the readonly_ prefix and the .tmpl suffix, so the deployed
 # payload names are plain.
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)}"
 EVERYONE_PAYLOAD="$PLUGIN_ROOT/payloads/everyone.md"
 COORDINATOR_PAYLOAD="$PLUGIN_ROOT/payloads/coordinator.md"
 

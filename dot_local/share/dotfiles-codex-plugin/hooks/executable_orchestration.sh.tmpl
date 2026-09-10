@@ -44,7 +44,7 @@ command -v jq >/dev/null 2>&1 || exit 0
 # payload name is plain. Codex sets CLAUDE_PLUGIN_ROOT as a compatibility shim
 # rather than a guaranteed contract, so resolve from this script's own location
 # first and fall back to the variable.
-PLUGIN_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd)"
+PLUGIN_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd)"
 [ -n "$PLUGIN_ROOT" ] || PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 [ -n "$PLUGIN_ROOT" ] || exit 0
 
