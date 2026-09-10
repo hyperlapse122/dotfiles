@@ -5,3 +5,8 @@
 # Built firmware binaries (firmware/*/dist/*.bin) are tracked with Git LFS:
 # KTD7 keeps the pattern narrow to avoid unintended LFS tracking of other binaries.
 firmware/*/dist/*.bin filter=lfs diff=lfs merge=lfs -text
+
+# Upstream patches carry unified-diff context lines, whose leading space is load
+# bearing: a blank context line is a single space, which `git diff --check`
+# reports as trailing whitespace. Stripping it would stop the patch applying.
+firmware/*/patches/*.patch -whitespace
