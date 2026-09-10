@@ -456,12 +456,12 @@
       "helm": {
         "kind": "githubRelease",
         "source": "helm/helm",
-        "version": "v4.2.4"
+        "version": "v4.3.0"
       },
       "i-have-adhd": {
         "kind": "gitRef",
         "source": "ayghri/i-have-adhd",
-        "version": "24d22f783e57cb73c957848b588c6f651b6f9cd8"
+        "version": "ff690b6fbd3383e4fce6a7e50c7b409ca9a6a804"
       },
       "improve": {
         "kind": "gitRef",
