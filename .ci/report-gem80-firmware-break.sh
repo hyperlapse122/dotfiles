@@ -22,7 +22,9 @@ usage() {
 
 cadence="${1:-}"
 run_url="${2:-}"
-[ -n "$cadence" ] && [ -n "$run_url" ] || usage
+if [ -z "$cadence" ] || [ -z "$run_url" ]; then
+  usage
+fi
 
 command -v gh >/dev/null 2>&1 || {
   printf 'report-gem80-firmware-break: gh is required on PATH\n' >&2
