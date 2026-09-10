@@ -20,7 +20,7 @@ Do not flash an LFS pointer file. Flashing a pointer file bricks the keyboard.
 ## Building
 
 `dist/` already holds a built binary, so most hosts never need to build.
-Rebuild only after the keymap or the pinned fork commit changes:
+Rebuild only after the keymap, a patch, or the pinned fork commit changes:
 
 ```sh
 gem80-firmware build
@@ -28,10 +28,22 @@ gem80-firmware build
 
 The command is staged by `chezmoi apply` and runs from any directory — every repo
 path is baked in when chezmoi renders it. It clones the fork into a scratch tree,
-copies `keymap/` into `keyboards/nuphy/gem80/ansi/keymaps/hostrgb/`, builds
-`nuphy/gem80/ansi:hostrgb` with rootless Podman and a digest-pinned
-`ghcr.io/qmk/qmk_cli` image, writes the result into `dist/`, and deletes the scratch
-tree. It prints the `.bin` path.
+copies `keymap/` into `keyboards/nuphy/gem80/ansi/keymaps/hostrgb/`, applies every
+patch in `patches/` in sorted order, builds `nuphy/gem80/ansi:hostrgb` with
+rootless Podman and a digest-pinned `ghcr.io/qmk/qmk_cli` image, writes the result
+into `dist/`, and deletes the scratch tree. It prints the `.bin` path.
+
+## Patches
+
+`patches/` holds diffs against fork-owned files. The keymap alone cannot reach the
+side chain: the host buffer has to land in the effect stage, ahead of the firmware's
+battery and charging indicators, and those live in shared fork code. The directory
+must exist and be non-empty — an absent patch would silently build different
+firmware than the record describes.
+
+A patch that no longer applies fails the build rather than being skipped. When the
+pinned fork commit moves, expect to refresh these; the daily pin watch tells you the
+commit moved before the next build does.
 
 The fork commit is pinned in `.chezmoidata/firmware.yaml` under
 `firmware.gem80.qmkFork`, not in the release lock: the lock refresh job re-resolves
@@ -40,7 +52,7 @@ Change the fork revision there and rebuild.
 
 `dist/build-info.json` records what produced the binary: the fork source, ref, and
 SHA; the make target; the pinned toolchain image digest; the build time; the
-binary's size and sha256; and a hash of each file in `keymap/`.
+binary's size and sha256; and a hash of each file in `keymap/` and `patches/`.
 
 ## Verifying the Build Record
 
