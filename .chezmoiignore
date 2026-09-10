@@ -1,5 +1,6 @@
 # Repository files
 ./AGENTS.md
+./CONCEPTS.md
 ./STRATEGY.md
 ./agents
 ./agents.lock
@@ -118,6 +119,7 @@
 # never linked into $HOME (mirrors ./system above).
 ./crates
 ./packages
+./firmware
 
 {{- if $f.jetson }}
 .chezmoiscripts/50-linux-kde/*.sh

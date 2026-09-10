@@ -1,0 +1,244 @@
+{{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $fork := .firmware.gem80.qmkFork -}}
+#!/usr/bin/env bash
+# gem80-firmware — build and verify the NuPhy Gem80 `hostrgb` firmware from the
+# pinned fork commit.
+#
+#   gem80-firmware [build]   rebuild dist/ and rewrite dist/build-info.json
+#   gem80-firmware verify    re-derive every hash the record claims and compare
+#
+# Every repo path below is baked in at RENDER time. The command is staged into
+# ~/.local/bin and runs from wherever the operator happens to be, so it cannot
+# discover the source tree at run time: $PWD is never consulted, and $PWD is
+# never mounted into the container.
+#
+# The fork SHA comes from .chezmoidata/firmware.yaml, deliberately NOT from the
+# release lock: .github/workflows/refresh-release-lock.yml re-resolves every lock
+# entry hourly and auto-commits, so a lock-held SHA would drift away from the
+# committed .bin on its own (KTD1).
+
+set -euo pipefail
+
+SOURCE_DIR={{ $sourceDir | quote }}
+FORK_SOURCE={{ $fork.source | quote }}
+FORK_REF={{ $fork.ref | quote }}
+FORK_SHA={{ $fork.sha | quote }}
+FORK_URL="https://github.com/$FORK_SOURCE.git"
+MAKE_TARGET="nuphy/gem80/ansi:hostrgb"
+# Pinned by digest, not by `:latest`: a moved tag would swap the toolchain that
+# produced a binary `verify` reports as good, and every other recorded field
+# would still match. Update this by hand alongside the fork SHA.
+IMAGE="ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a"
+BIN_NAME="nuphy_gem80_ansi_hostrgb.bin"
+
+FIRMWARE_DIR="$SOURCE_DIR/firmware/nuphy-gem80-hostrgb"
+KEYMAP_DIR="$FIRMWARE_DIR/keymap"
+DIST_DIR="$FIRMWARE_DIR/dist"
+BUILD_INFO="$DIST_DIR/build-info.json"
+
+die() {
+  printf 'gem80-firmware: %s\n' "$1" >&2
+  exit 1
+}
+
+usage() {
+  printf 'usage: gem80-firmware [build|verify]\n'
+}
+
+# Populates KEYMAP_FILES with the basenames the build consumes, in a stable
+# order, so the record's key set always equals the file set that was compiled.
+KEYMAP_FILES=()
+collect_keymap_files() {
+  [[ -d $KEYMAP_DIR ]] || die "keymap source is missing: $KEYMAP_DIR"
+  # `cp -- "$KEYMAP_DIR"/*` copies flat files only, so a subdirectory would be
+  # compiled-in-name-only and silently absent from the record.
+  if [[ -n $(find "$KEYMAP_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit) ]]; then
+    die "keymap/ contains a subdirectory; the build copies flat files only"
+  fi
+  local name
+  while IFS= read -r name; do
+    KEYMAP_FILES+=("$name")
+  done < <(find "$KEYMAP_DIR" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
+  [[ ${#KEYMAP_FILES[@]} -gt 0 ]] || die "keymap source directory is empty: $KEYMAP_DIR"
+}
+
+VERIFY_FAILURES=0
+verify_ok() {
+  printf '  ok        %s\n' "$1"
+}
+verify_fail() {
+  printf '  MISMATCH  %s\n' "$1" >&2
+  VERIFY_FAILURES=$((VERIFY_FAILURES + 1))
+}
+
+# Compares one recorded scalar against the value the current source implies.
+verify_field() {
+  local label="$1" filter="$2" expected="$3" actual
+  actual="$(jq -r "$filter // empty" "$BUILD_INFO")"
+  if [[ -z $actual ]]; then
+    verify_fail "$label: the record carries no value"
+  elif [[ $actual != "$expected" ]]; then
+    verify_fail "$label: record says '$actual', source says '$expected'"
+  else
+    verify_ok "$label"
+  fi
+}
+
+cmd_verify() {
+  command -v jq >/dev/null 2>&1 || die 'jq is required to read the build record.'
+  command -v sha256sum >/dev/null 2>&1 || die 'sha256sum is required to verify the build record.'
+  [[ -f $BUILD_INFO ]] || die "build record is missing: $BUILD_INFO"
+  jq -e 'type == "object"' "$BUILD_INFO" >/dev/null 2>&1 \
+    || die "build record is not a JSON object: $BUILD_INFO"
+  local bin="$DIST_DIR/$BIN_NAME"
+  [[ -f $bin ]] || die "firmware binary is missing: $bin"
+  collect_keymap_files
+
+  printf 'gem80-firmware: verifying %s against the current source\n' "$BUILD_INFO"
+
+  verify_field 'forkSource' '.forkSource' "$FORK_SOURCE"
+  verify_field 'forkRef' '.forkRef' "$FORK_REF"
+  verify_field 'forkSha' '.forkSha' "$FORK_SHA"
+  verify_field 'makeTarget' '.makeTarget' "$MAKE_TARGET"
+  verify_field 'toolchainImage' '.toolchainImage' "$IMAGE"
+  verify_field 'binary.name' '.binary.name' "$BIN_NAME"
+
+  # A pointer is ~130 bytes of text; flashing one bricks the keyboard, so it is
+  # rejected on its own evidence rather than on a hash that would also differ.
+  if LC_ALL=C head -c 64 -- "$bin" | grep -aq '^version https://git-lfs'; then
+    verify_fail "$BIN_NAME is a Git LFS pointer, not firmware; run 'git lfs pull'"
+  else
+    verify_ok "$BIN_NAME is not a Git LFS pointer"
+  fi
+
+  local actual_bytes actual_sha
+  actual_bytes="$(stat -c '%s' -- "$bin")"
+  actual_sha="$(sha256sum -- "$bin" | cut -d' ' -f1)"
+  if ((actual_bytes <= 1024)); then
+    verify_fail "binary.bytes: $bin is $actual_bytes bytes, too small to be firmware"
+  fi
+  verify_field 'binary.bytes' '(.binary.bytes | select(. != null) | tostring)' "$actual_bytes"
+  verify_field 'binary.sha256' '.binary.sha256' "$actual_sha"
+
+  local recorded_names actual_names
+  recorded_names="$(jq -r '.keymap // {} | keys[]' "$BUILD_INFO" | LC_ALL=C sort)"
+  actual_names="$(printf '%s\n' "${KEYMAP_FILES[@]}")"
+  if [[ $recorded_names != "$actual_names" ]]; then
+    verify_fail "keymap file set: record covers [$(tr '\n' ' ' <<<"$recorded_names")], source has [$(tr '\n' ' ' <<<"$actual_names")]"
+  else
+    verify_ok "keymap file set (${#KEYMAP_FILES[@]} files)"
+  fi
+
+  local name
+  for name in "${KEYMAP_FILES[@]}"; do
+    verify_field "keymap/$name" ".keymap[\"$name\"]" \
+      "$(sha256sum -- "$KEYMAP_DIR/$name" | cut -d' ' -f1)"
+  done
+
+  if ((VERIFY_FAILURES > 0)); then
+    die "$VERIFY_FAILURES check(s) failed; do not flash $BIN_NAME"
+  fi
+  printf 'gem80-firmware: build record matches the current source\n'
+}
+
+cmd_build() {
+  command -v podman >/dev/null 2>&1 || die 'podman is required; rootless podman builds this firmware (R3).'
+  command -v git >/dev/null 2>&1 || die 'git is required to fetch the pinned fork commit.'
+  collect_keymap_files
+
+  # The QMK tree with its submodules is several GB. /tmp is tmpfs on Fedora, so the
+  # scratch tree lives under the cache directory instead of in RAM.
+  local scratch_root scratch
+  scratch_root="${XDG_CACHE_HOME:-$HOME/.cache}/gem80-firmware"
+  mkdir -p "$scratch_root"
+  scratch="$(mktemp -d "$scratch_root/build.XXXXXXXX")"
+  trap 'rm -rf -- "$scratch"' EXIT
+
+  printf 'gem80-firmware: fetching %s at %s\n' "$FORK_SOURCE" "$FORK_SHA"
+  git init -q "$scratch"
+  git -C "$scratch" remote add origin "$FORK_URL"
+
+  # The pinned SHA lagging behind the branch head is the normal state, so a
+  # `clone --depth 1` of the head followed by `checkout <sha>` dies with a pathspec
+  # error. Ask for that one commit; fall back to the branch, then to full history
+  # for a server that refuses by-SHA fetch.
+  if ! git -C "$scratch" fetch --depth 1 origin "$FORK_SHA" 2>/dev/null; then
+    if ! { git -C "$scratch" fetch --depth 1 origin "$FORK_REF" 2>/dev/null \
+      && git -C "$scratch" cat-file -e "$FORK_SHA^{commit}" 2>/dev/null; }; then
+      printf 'gem80-firmware: shallow fetch could not reach the pinned commit; fetching full history\n'
+      # A plain fetch keeps the shallow boundary a preceding --depth 1 left behind,
+      # so the older pinned commit would never arrive. --unshallow is fatal on a
+      # complete repository, which is the state when both fetches above failed outright.
+      if [[ $(git -C "$scratch" rev-parse --is-shallow-repository) == true ]]; then
+        git -C "$scratch" fetch --tags --unshallow origin || die "fetch failed for $FORK_URL"
+      else
+        git -C "$scratch" fetch --tags origin || die "fetch failed for $FORK_URL"
+      fi
+    fi
+  fi
+  git -C "$scratch" checkout -q --detach "$FORK_SHA" || die "pinned commit $FORK_SHA is not in the fetched history"
+
+  printf 'gem80-firmware: fetching build submodules\n'
+  git -C "$scratch" submodule update --init --depth 1 \
+    lib/chibios lib/chibios-contrib lib/printf || die 'submodule fetch failed'
+
+  local keymap_dest="$scratch/keyboards/nuphy/gem80/ansi/keymaps/hostrgb"
+  mkdir -p "$keymap_dest"
+  cp -- "$KEYMAP_DIR"/* "$keymap_dest/"
+
+  printf 'gem80-firmware: building %s\n' "$MAKE_TARGET"
+  podman run --rm -v "$scratch:/qmk_firmware:z" -w /qmk_firmware "$IMAGE" \
+    make "$MAKE_TARGET" || die 'container build failed'
+
+  # QMK writes the artifact into the tree it built in, not into dist/.
+  local built_bin="$scratch/$BIN_NAME"
+  [[ -f $built_bin ]] || die "build produced no $BIN_NAME in the scratch tree"
+
+  mkdir -p "$DIST_DIR"
+  cp -- "$built_bin" "$DIST_DIR/$BIN_NAME"
+  # QMK leaves the artifact executable; it is flashed, never run.
+  chmod 0644 -- "$DIST_DIR/$BIN_NAME"
+
+  local bin_sha256 bin_bytes keymap_json name
+  bin_sha256="$(sha256sum -- "$DIST_DIR/$BIN_NAME" | cut -d' ' -f1)"
+  bin_bytes="$(stat -c '%s' -- "$DIST_DIR/$BIN_NAME")"
+
+  keymap_json=''
+  for name in "${KEYMAP_FILES[@]}"; do
+    keymap_json+=$'\n'"    \"$name\": \"$(sha256sum -- "$KEYMAP_DIR/$name" | cut -d' ' -f1)\","
+  done
+  keymap_json="${keymap_json%,}"
+
+  # `gem80-firmware verify` gates the flash on this record: it re-derives every
+  # hash from the current source and exits non-zero when one disagrees (R12, U6).
+  cat > "$BUILD_INFO" <<JSON
+{
+  "schemaVersion": 1,
+  "forkSource": "$FORK_SOURCE",
+  "forkRef": "$FORK_REF",
+  "forkSha": "$FORK_SHA",
+  "makeTarget": "$MAKE_TARGET",
+  "toolchainImage": "$IMAGE",
+  "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "binary": {
+    "name": "$BIN_NAME",
+    "bytes": $bin_bytes,
+    "sha256": "$bin_sha256"
+  },
+  "keymap": {$keymap_json
+  }
+}
+JSON
+
+  cmd_verify
+
+  printf '%s\n' "$DIST_DIR/$BIN_NAME"
+}
+
+[[ $# -le 1 ]] || die 'too many arguments; usage: gem80-firmware [build|verify]'
+case "${1:-build}" in
+  build) cmd_build ;;
+  verify) cmd_verify ;;
+  -h | --help | help) usage ;;
+  *) die "unknown subcommand: $1 (expected 'build' or 'verify')" ;;
+esac

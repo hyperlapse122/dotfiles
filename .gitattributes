@@ -1,3 +1,7 @@
 # age-encrypted chezmoi sources (encrypted_*.age) are ciphertext, not text:
 # `binary` turns off textual diffs, merges, and eol normalization for them.
 *.age binary
+
+# Built firmware binaries (firmware/*/dist/*.bin) are tracked with Git LFS:
+# KTD7 keeps the pattern narrow to avoid unintended LFS tracking of other binaries.
+firmware/*/dist/*.bin filter=lfs diff=lfs merge=lfs -text

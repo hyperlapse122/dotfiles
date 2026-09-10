@@ -146,6 +146,12 @@ NODE
 # manifest override gate lookup, and the hardware installer gained the
 # integrated-only blacklist in its file array plus a gated retirement loop.
 #
+# REBASELINED again for install-system-16-udev when the STM32 ROM DFU rule was
+# added. The installer's fingerprint block emits one hashed line per file its
+# globs match, and that block is deliberately not normalized away above, so a
+# new managed /etc file moves this digest exactly once -- the same reason the
+# hardware installer moved when the hybrid-graphics drop-ins landed.
+#
 # SCOPE, precisely: the fixture pins `desktop: none`, so these digests watch the
 # ladder's THREE-rung shape only. The askpass rung the kde and gnome shapes add
 # is not byte-pinned here; `.ci/test-sudo-elevation-guard.sh` is what covers all
@@ -155,7 +161,7 @@ declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=ef94d0c1c3c5168850c475e4e459af4966c17a698a43a5f604f0d8c8ff09ba64
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=5e054c7bb0099089a34704bdd6e0959145b8e974d35e5aec7be6b538ae486b05
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=9cb1c64794359eb9949dda94d30f492a30d8258b425d0a3f9969416eea7d7b09
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=9da312914a7fd569c3cf8bf1e1a9dd6950f278598fa2f4e9303d45355c2c884c
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=67684abe76778a327bd4df7f937639309978681908cf0635f862ee7dea74fc10
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "forkSource": "ryodeushii/qmk-firmware",
+  "forkRef": "refs/heads/nuphy-keyboards",
+  "forkSha": "9847cb81729fa6540ffed1a583b9acdaaa20607b",
+  "makeTarget": "nuphy/gem80/ansi:hostrgb",
+  "toolchainImage": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
+  "builtAt": "2026-09-10T04:28:48Z",
+  "binary": {
+    "name": "nuphy_gem80_ansi_hostrgb.bin",
+    "bytes": 73688,
+    "sha256": "964eed3f305427f11363e8227c151a25097ab594524edcd5aa224627b825a2c4"
+  },
+  "keymap": {
+    "keymap.c": "f144bade497d54e5d90a53a3e24715db1aac3e78f07b165e5e732f9412b80e81",
+    "rgb_matrix_user.inc": "14f26c77dd1c5ad3db37b3a8b94a4384ba6c0ea7e0796c8e68e6c680763b5616",
+    "rules.mk": "c5c71a94a9714a742cbb4f33b5469003394ffd36f2e61330afafb5ada2b97acb"
+  }
+}
