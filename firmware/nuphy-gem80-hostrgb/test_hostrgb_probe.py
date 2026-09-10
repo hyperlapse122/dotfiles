@@ -13,6 +13,7 @@ import importlib.util
 import io
 import os
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _MODULE_PATH = Path(__file__).parent / "hostrgb-probe.py"
@@ -84,6 +85,26 @@ class FakeHidDevice:
 
 def make_args(timeout: float = 0.05, **extra) -> "hostrgb_probe.argparse.Namespace":
     return hostrgb_probe.argparse.Namespace(timeout=timeout, **extra)
+
+
+class PatchedProbeTestCase(unittest.TestCase):
+    """Patches the two module seams the CLI tests stub.
+
+    mock.patch always restores, so a future test class cannot forget the
+    tearDown half and leak a stub into a later test -- which is the failure
+    the three hand-rolled save/restore pairs this replaces were exposed to.
+    """
+
+    def patch_nodes(self, nodes):
+        patcher = mock.patch.object(hostrgb_probe, "find_matching_nodes", lambda: nodes)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def patch_device(self, device):
+        patcher = mock.patch.object(hostrgb_probe, "open_device", lambda node_name: device)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(device.close)
 
 
 class ReportDescriptorParsingTests(unittest.TestCase):
@@ -218,29 +239,19 @@ class ProbeResponseParsingTests(unittest.TestCase):
             hostrgb_probe.parse_probe_response(bytes([0x60, 0x00]))
 
 
-class ThreeWayOutcomeCliTests(unittest.TestCase):
+class ThreeWayOutcomeCliTests(PatchedProbeTestCase):
     """AE3: node-not-found, permission-denied and no-response must be distinct."""
 
-    def setUp(self):
-        self._orig_find = hostrgb_probe.find_matching_nodes
-        self._orig_open = hostrgb_probe.open_device
-        self._devices_to_close: list[FakeHidDevice] = []
-
-    def tearDown(self):
-        hostrgb_probe.find_matching_nodes = self._orig_find
-        hostrgb_probe.open_device = self._orig_open
-        for device in self._devices_to_close:
-            device.close()
 
     def test_no_node_found_exits_with_dedicated_code(self):
-        hostrgb_probe.find_matching_nodes = lambda: []
+        self.patch_nodes([])
         err = io.StringIO()
         code = hostrgb_probe.cmd_probe(make_args(), err=err)
         self.assertEqual(code, hostrgb_probe.EXIT_NO_NODE)
         self.assertIn("no raw HID endpoint found", err.getvalue())
 
     def test_permission_denied_exits_with_dedicated_code(self):
-        hostrgb_probe.find_matching_nodes = lambda: ["hidraw1"]
+        self.patch_nodes(["hidraw1"])
 
         def raise_permission_error(node_name):
             raise PermissionError("Permission denied")
@@ -252,10 +263,9 @@ class ThreeWayOutcomeCliTests(unittest.TestCase):
         self.assertIn("could not open it", err.getvalue())
 
     def test_no_response_exits_with_dedicated_code(self):
-        hostrgb_probe.find_matching_nodes = lambda: ["hidraw1"]
+        self.patch_nodes(["hidraw1"])
         device = FakeHidDevice(incoming=None)
-        self._devices_to_close.append(device)
-        hostrgb_probe.open_device = lambda node_name: device
+        self.patch_device(device)
 
         err = io.StringIO()
         code = hostrgb_probe.cmd_probe(make_args(timeout=0.05), err=err)
@@ -271,19 +281,11 @@ class ThreeWayOutcomeCliTests(unittest.TestCase):
         self.assertEqual(len(codes), 3)
 
 
-class ProbeStopConditionTests(unittest.TestCase):
-    def setUp(self):
-        self._orig_find = hostrgb_probe.find_matching_nodes
-        self._orig_open = hostrgb_probe.open_device
-
-    def tearDown(self):
-        hostrgb_probe.find_matching_nodes = self._orig_find
-        hostrgb_probe.open_device = self._orig_open
-
+class ProbeStopConditionTests(PatchedProbeTestCase):
     def _run_probe_with_response(self, response: bytes) -> tuple[int, str]:
-        hostrgb_probe.find_matching_nodes = lambda: ["hidraw1"]
+        self.patch_nodes(["hidraw1"])
         device = FakeHidDevice(incoming=response)
-        hostrgb_probe.open_device = lambda node_name: device
+        self.patch_device(device)
         out, err = io.StringIO(), io.StringIO()
         code = hostrgb_probe.cmd_probe(make_args(), out=out, err=err)
         return code, err.getvalue()
@@ -300,20 +302,13 @@ class ProbeStopConditionTests(unittest.TestCase):
         self.assertIn("42", err)
 
 
-class WriteOnlyCommandTests(unittest.TestCase):
+class WriteOnlyCommandTests(PatchedProbeTestCase):
     """enter/exit/set/frame only need to reach the device with the right bytes."""
 
     def setUp(self):
-        self._orig_find = hostrgb_probe.find_matching_nodes
-        self._orig_open = hostrgb_probe.open_device
-        hostrgb_probe.find_matching_nodes = lambda: ["hidraw1"]
+        self.patch_nodes(["hidraw1"])
         self.device = FakeHidDevice(incoming=None)
-        hostrgb_probe.open_device = lambda node_name: self.device
-
-    def tearDown(self):
-        hostrgb_probe.find_matching_nodes = self._orig_find
-        hostrgb_probe.open_device = self._orig_open
-        self.device.close()
+        self.patch_device(self.device)
 
     def test_set_writes_a_single_33_byte_packet(self):
         code = hostrgb_probe.cmd_set(make_args(index=0, r=255, g=0, b=0))

@@ -216,14 +216,14 @@ def open_device(node_name: str):
 # --- CLI ------------------------------------------------------------------
 
 
-def _select_node(out) -> str | None:
+def _select_node(err) -> str | None:
     candidates = find_matching_nodes()
     if not candidates:
         print(
             f"no raw HID endpoint found (usage page 0x{HOSTRGB_USAGE_PAGE:04x}, "
             f"usage 0x{HOSTRGB_USAGE:02x}). The keyboard may be off, disconnected, "
             "or in a mode that does not expose the raw endpoint (see R9).",
-            file=out,
+            file=err,
         )
         return None
     if len(candidates) > 1:
@@ -232,12 +232,12 @@ def _select_node(out) -> str | None:
             f"multiple raw HID endpoints matched usage page "
             f"0x{HOSTRGB_USAGE_PAGE:04x} / usage 0x{HOSTRGB_USAGE:02x}: "
             f"using {candidates[0]}, also found {others}",
-            file=out,
+            file=err,
         )
     return candidates[0]
 
 
-def _open_transport(node_name: str, out):
+def _open_transport(node_name: str, err):
     try:
         device = open_device(node_name)
     except PermissionError as exc:
@@ -246,19 +246,33 @@ def _open_transport(node_name: str, out):
             "Bluetooth-attached node has no USB ancestor for the uaccess udev "
             "rule to match, so this is a distinct outcome from 'not found' "
             "(see R9).",
-            file=out,
+            file=err,
         )
         return None
     return device
 
 
-def cmd_probe(args, out=sys.stdout, err=sys.stderr) -> int:
+def _acquire_device(err) -> tuple[object | None, str | None, int | None]:
+    """Select the raw HID node and open it.
+
+    Returns (device, node_name, None) on success, or (None, None, exit_code)
+    carrying the outcome-specific code. Both callers must stay in lockstep on
+    the three distinct wireless outcomes R9 depends on, so the sequence lives
+    here once. The node name comes back because callers name it in diagnostics.
+    """
     node_name = _select_node(err)
     if node_name is None:
-        return EXIT_NO_NODE
+        return None, None, EXIT_NO_NODE
     device = _open_transport(node_name, err)
     if device is None:
-        return EXIT_PERMISSION_DENIED
+        return None, None, EXIT_PERMISSION_DENIED
+    return device, node_name, None
+
+
+def cmd_probe(args, out=sys.stdout, err=sys.stderr) -> int:
+    device, node_name, failure = _acquire_device(err)
+    if device is None:
+        return failure
     try:
         transport = HidRawTransport(device)
         transport.write_payload(build_probe_payload())
@@ -291,12 +305,9 @@ def cmd_probe(args, out=sys.stdout, err=sys.stderr) -> int:
 
 
 def _write_only(payloads: list[bytes], args, err=sys.stderr) -> int:
-    node_name = _select_node(err)
-    if node_name is None:
-        return EXIT_NO_NODE
-    device = _open_transport(node_name, err)
+    device, node_name, failure = _acquire_device(err)
     if device is None:
-        return EXIT_PERMISSION_DENIED
+        return failure
     try:
         transport = HidRawTransport(device)
         for payload in payloads:
