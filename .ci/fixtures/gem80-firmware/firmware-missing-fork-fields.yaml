@@ -1,0 +1,5 @@
+firmware:
+  gem80:
+    rebuildMode: build-only
+    qmkFork:
+      source: ryodeushii/qmk-firmware

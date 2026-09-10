@@ -49,6 +49,9 @@ usage() {
 # order, so the record's key set always equals the file set that was compiled.
 KEYMAP_FILES=()
 collect_keymap_files() {
+  # `build` collects, then calls `cmd_verify`, which collects again, so this must
+  # rebuild the list rather than append to whatever a previous call left behind.
+  KEYMAP_FILES=()
   [[ -d $KEYMAP_DIR ]] || die "keymap source is missing: $KEYMAP_DIR"
   # `cp -- "$KEYMAP_DIR"/*` copies flat files only, so a subdirectory would be
   # compiled-in-name-only and silently absent from the record.
@@ -148,9 +151,12 @@ cmd_build() {
 
   # The QMK tree with its submodules is several GB. /tmp is tmpfs on Fedora, so the
   # scratch tree lives under the cache directory instead of in RAM.
-  local scratch_root scratch
+  local scratch_root
   scratch_root="${XDG_CACHE_HOME:-$HOME/.cache}/gem80-firmware"
   mkdir -p "$scratch_root"
+  # `scratch` stays global: the EXIT trap runs after this function returns, so a
+  # local would be out of scope by then and `set -u` would fail the trap — turning
+  # a successful build into a non-zero exit.
   scratch="$(mktemp -d "$scratch_root/build.XXXXXXXX")"
   trap 'rm -rf -- "$scratch"' EXIT
 

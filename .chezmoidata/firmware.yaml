@@ -1,6 +1,9 @@
 # Pinned outside the release lock deliberately; see KTD1 in docs/plans/2026-09-10-0915-feat-gem80-hostrgb-firmware-verification-plan.md.
+# rebuildMode declares the weekly rebuild gate expectation in data (KTD3):
+# `build-only` requires a successful container build; `match-sha256` requires bit reproducibility against the committed build record (R7, R8).
 firmware:
   gem80:
+    rebuildMode: match-sha256
     qmkFork:
       source: ryodeushii/qmk-firmware
       ref: refs/heads/nuphy-keyboards

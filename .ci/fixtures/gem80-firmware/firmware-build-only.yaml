@@ -1,0 +1,7 @@
+firmware:
+  gem80:
+    rebuildMode: build-only
+    qmkFork:
+      source: ryodeushii/qmk-firmware
+      ref: refs/heads/nuphy-keyboards
+      sha: 9847cb81729fa6540ffed1a583b9acdaaa20607b

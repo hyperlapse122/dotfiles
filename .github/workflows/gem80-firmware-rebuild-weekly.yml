@@ -1,0 +1,73 @@
+name: Gem80 firmware rebuild weekly
+
+# Rebuilds the NuPhy Gem80 hostrgb firmware from the pinned fork commit and
+# compares the rebuilt artifact hash against the committed build record.
+#
+# Runs weekly on Sunday and can be dispatched manually.
+# Installs locked chezmoi with digest verification from .chezmoidata/releases.json.
+# Does not re-run the daily reachability gate: rebuild inherently proves reachability.
+# Neither commits nor pushes; failures surface strictly as a failed job.
+
+on:
+  schedule:
+    - cron: "0 6 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The failure step files or updates the incident issue.
+  issues: write
+
+concurrency:
+  group: gem80-firmware-rebuild-weekly
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  rebuild:
+    name: Rebuild Gem80 firmware
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # lfs so the gate can also check the committed binary against its record;
+      # without it the artifact arrives as a pointer and that check is skipped.
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      # The gate runs the firmware build in a container and refuses to start
+      # without podman. The helper short-circuits when the runner image already
+      # ships it, so this costs nothing on images that do.
+      - name: Ensure podman
+        run: .ci/lib/apt-install.sh podman podman
+
+      # Without PyYAML the shared reader falls back to sed, so CI would exercise
+      # a different decoder than the fixture test in ci.yml does. `-` because a
+      # library package has no binary to probe.
+      - name: Install PyYAML
+        run: .ci/lib/apt-install.sh - python3-yaml
+
+      - name: Install locked chezmoi
+        run: |
+          set -euo pipefail
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Rebuild firmware and check against record
+        run: .ci/check-gem80-firmware-rebuild.sh
+
+      - name: Report the break
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .ci/report-gem80-firmware-break.sh weekly \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

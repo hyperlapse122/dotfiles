@@ -1,0 +1,6 @@
+{
+  "toolchainImage": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
+  "binary": {
+    "sha256": "964eed3f305427f11363e8227c151a25097ab594524edcd5aa224627b825a2c4"
+  }
+}

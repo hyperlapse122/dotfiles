@@ -1,0 +1,53 @@
+name: Gem80 firmware pins daily
+
+# Validates reachability of the pinned QMK fork commit and toolchain image
+# digest for the NuPhy Gem80 hostrgb firmware.
+#
+# Runs daily via schedule and can be dispatched manually. Lookup-only,
+# non-mutating: does not clone the multi-GB QMK fork or pull container layers.
+# Neither commits nor pushes; failures surface strictly as a failed job.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The failure step files or updates the incident issue.
+  issues: write
+
+concurrency:
+  group: gem80-firmware-pins-daily
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check-pins:
+    name: Check Gem80 firmware pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Without PyYAML the shared reader falls back to sed, so CI would exercise
+      # a different decoder than the fixture test in ci.yml does. `-` because a
+      # library package has no binary to probe.
+      - name: Install PyYAML
+        run: .ci/lib/apt-install.sh - python3-yaml
+
+      - name: Check firmware fork commit and toolchain reachability
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .ci/check-gem80-firmware-pins.sh
+
+      - name: Report the break
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .ci/report-gem80-firmware-break.sh daily \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
