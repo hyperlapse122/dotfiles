@@ -135,7 +135,8 @@ agents:
       - "*/plugin.json"
       os: [linux, darwin]
       container: keep
-    # This checkout's own Claude Code plugin, and the only localDir marketplace:
+    # This checkout's own Claude Code plugin. It and dotfiles-codex-plugin below
+    # are the two localDir marketplaces:
     # the tree is deployed by chezmoi rather than downloaded, so it needs no
     # source, externalPath or version selector. It exists because a Claude Code
     # hook cannot be declared through agents.claude.settings — hooks belongs to

@@ -106,8 +106,19 @@ printf '%s\n' "$claude_fingerprints" |
   grep -F '#   dot_local/share/dotfiles-claude-plugin/' >/dev/null ||
   fail 'rendered Claude updater does not fingerprint the dotfiles-claude-plugin tree'
 printf '%s\n' "$claude_fingerprints" |
-  grep -F '#   dot_local/share/dotfiles-claude-plugin/hooks/executable_orca-team-lead-orchestration.sh  ' >/dev/null ||
+  grep -F '#   dot_local/share/dotfiles-claude-plugin/hooks/executable_orca-team-lead-orchestration.sh.tmpl  ' >/dev/null ||
   fail 'rendered Claude updater does not fingerprint the hook script itself'
+
+# The payload bodies live outside the plugin tree, reached through one-line
+# includeTemplate wrappers whose own source never changes. Without them as
+# fingerprint inputs a reworded orchestration rule re-renders nothing, so the
+# edit deploys to ~/.local/share and never reaches the cache Claude Code serves
+# -- the same silent failure the tree glob above exists to prevent.
+for body in orchestration-everyone.tmpl orchestration-coordinator.tmpl orchestration-role-detect.sh.tmpl; do
+  printf '%s\n' "$claude_fingerprints" |
+    grep -F "#   .chezmoitemplates/$body  " >/dev/null ||
+    fail "rendered Claude updater does not fingerprint payload body $body"
+done
 
 # Neither script may reach a conditional `exit 0`: chezmoi records that as a
 # successful run, and an empty declared set is decided at render time instead.
@@ -147,7 +158,7 @@ printf -- '---\nname: demo\n---\n' >"$market/skills/demo/SKILL.md"
 # personal marketplace manifest and the registry-key symlink onto the archive.
 mkdir -p "$home/.agents/plugins"
 cat >"$home/.agents/plugins/marketplace.json" <<'EOF'
-{"name":"dotfiles","plugins":[{"name":"compound-engineering","source":{"source":"local","path":"./.agents/plugins/compound-engineering-plugin"}}]}
+{"name":"dotfiles","plugins":[{"name":"compound-engineering","source":{"source":"local","path":"./.agents/plugins/compound-engineering-plugin"}},{"name":"dotfiles-codex","source":{"source":"local","path":"./.agents/plugins/dotfiles-codex-plugin"}}]}
 EOF
 ln -s "$market" "$home/.agents/plugins/compound-engineering-plugin"
 
@@ -165,6 +176,21 @@ cat >"$local_dir_market/.claude-plugin/plugin.json" <<'EOF'
 {"name":"dotfiles-claude","version":"0.1.0-test"}
 EOF
 
+# The Codex half of the same story. Its reconciler preflights three things in
+# order -- the source directory, its .codex-plugin/plugin.json, and a
+# ~/.agents/plugins/<registry key> symlink pointing at that directory -- and dies
+# on the first miss. That die runs AFTER chezmoi has already written the
+# instruction targets, so a row declared without its symlink source would leave
+# the reduced instruction files on disk and abort the rest of the apply. The
+# fixture stands up all three so the preflight is actually exercised rather than
+# skipped.
+codex_dir_market="$home/.local/share/dotfiles-codex-plugin"
+mkdir -p "$codex_dir_market/.codex-plugin" "$codex_dir_market/hooks"
+cat >"$codex_dir_market/.codex-plugin/plugin.json" <<'EOF'
+{"name":"dotfiles-codex","version":"0.1.0-test"}
+EOF
+ln -s "$codex_dir_market" "$home/.agents/plugins/dotfiles-codex-plugin"
+
 rewrite() {
   local rendered=$1 target=$2
   local row path local_row local_path
@@ -172,15 +198,22 @@ rewrite() {
     fail "no compound-engineering row in $rendered"
   path=${row#*localArchive\\t}
   path=${path%%\"*}
-  # The localDir row exists only in the Claude script; the substitution is a
-  # no-op for the other harnesses.
+  # Each harness carries at most one localDir row: dotfiles-claude in the Claude
+  # script, dotfiles-codex in the Codex one. Each substitution is a no-op where
+  # its row is absent.
+  local codex_row codex_path
+  local -a subs=("-e" "s|$path|$market|g")
   if local_row=$(grep -m1 'dotfiles-claude\\tdotfiles-claude-plugin\\tlocalDir\\t' "$rendered"); then
     local_path=${local_row#*localDir\\t}
     local_path=${local_path%%\"*}
-    sed -e "s|$path|$market|g" -e "s|$local_path|$local_dir_market|g" "$rendered" >"$target"
-  else
-    sed "s|$path|$market|g" "$rendered" >"$target"
+    subs+=("-e" "s|$local_path|$local_dir_market|g")
   fi
+  if codex_row=$(grep -m1 'dotfiles-codex\\tdotfiles-codex-plugin\\tlocalDir\\t' "$rendered"); then
+    codex_path=${codex_row#*localDir\\t}
+    codex_path=${codex_path%%\"*}
+    subs+=("-e" "s|$codex_path|$codex_dir_market|g")
+  fi
+  sed "${subs[@]}" "$rendered" >"$target"
   chmod 0700 "$target"
 }
 

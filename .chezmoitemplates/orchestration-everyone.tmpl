@@ -17,11 +17,7 @@ MUST NOT use the harness's own in-process subagent tool — Agent, Task, `spawn_
 
 MUST NOT run a plugin-bundled job runner, peer-review launcher, or fan-out script to obtain a peer opinion — in `compound-engineering` today they include `peer-job-runner.py`, `cross-model-adversarial-review.sh`, `cross-model-doc-review.sh`, `cross-model-pov.sh`, and `elevation-dispatch.sh`, and the prohibition covers every script of that shape, named here or not, in this plugin version or a later one. MUST NOT reach a peer model by running an agent CLI such as `claude -p`, `codex exec`, or `cursor-agent` for that opinion. A bundled script that only computes locally, such as a frontmatter validator or a review-scope calculator, is not dispatch and stays allowed.
 
-{{ if eq .ctx.chezmoi.os "linux" -}}
-MUST use `orca-ide` for Orca commands, never bare `orca`, because bare `orca` resolves by PATH order and reaches `/usr/bin/orca`, the GNOME screen reader, on any host where no wrapper precedes `/usr/bin`. This executable rule takes precedence over skill defaults for executable selection.
-{{- else -}}
-Resolve the Orca executable as the `orchestration` skill directs.
-{{- end }}
+The executable-selection rule that keeps a bare `orca` from reaching the GNOME screen reader is NOT repeated here. It stays in the user-scoped instruction file, because it binds any session that types an Orca command — including one outside Orca that receives no injection at all.
 
 This routing rule fixes the path a dispatch takes, never whether to dispatch. The ban on bundled dispatchers and direct peer CLIs is NOT a reason to skip a requested or workflow-required review. MUST first load the `orchestration` skill and attempt its supported Orca workflow. MUST NOT declare orchestration unavailable without an observed failure; if the app is stopped, follow the skill's startup procedure before declaring it blocked. If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
 

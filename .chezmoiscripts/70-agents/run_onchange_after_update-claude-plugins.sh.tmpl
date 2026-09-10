@@ -7,8 +7,9 @@
        only agents.yaml and releases.json, and a hook edit would deploy to
        ~/.local/share and never run. The plugin's version is derived from the
        same tree so the reinstall resolves a new cache directory; both halves
-       are required. Named literally because it is the only localDir marketplace
-       — generalize when a second one exists, not before. */ -}}
+       are required. Named literally rather than derived: this script reconciles
+       Claude rows only, and the Codex updater names its own tree the same way.
+       Generalize when a harness carries two localDir trees, not before. */ -}}
 {{- /* The orchestration payload bodies are dependencies too. The plugin's
        payloads/ wrappers are one-line includeTemplate calls whose own source
        never changes, so the tree glob above cannot see a reworded rule. Without

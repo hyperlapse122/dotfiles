@@ -16,19 +16,19 @@
 set -u
 
 # Codex pipes the event JSON to this hook. Exiting before reading it produces a
-# broken pipe on the writer, which is how the earlier haptic plugin broke. An
-# unbounded read would let a stalled producer delay session start, so the read is
-# bounded: take at most 64 KiB and stop, whether or not the producer closes.
+# broken pipe on the writer, which is how the earlier haptic plugin broke.
+#
+# The read must be bounded in TIME, not only in bytes. Codex sends one JSON line
+# and may keep the descriptor open afterwards, so a byte-counting read such as
+# `head -c <n>` would sit waiting for EOF or for bytes that never come, and would
+# hold up session start indefinitely — the delay this hook must never cause.
+# Stop at the event's own newline, with a timeout as the backstop for a producer
+# that sends none.
 drain_stdin() {
   if [ -t 0 ]; then
     return 0
   fi
-  head -c 65536 >/dev/null 2>&1 || true
-}
-
-emit_nothing() {
-  drain_stdin
-  exit 0
+  IFS= read -r -t 5 _ <&0 2>/dev/null || true
 }
 
 {{ includeTemplate "orchestration-role-detect.sh.tmpl" . }}

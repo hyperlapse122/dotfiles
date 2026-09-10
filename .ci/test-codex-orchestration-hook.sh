@@ -157,6 +157,35 @@ pipe_ctx=$(printf '%s' "$pipe_out" | context_of) ||
   fail 'hook with unclosed stdin producer did not output the everyone payload'
 pass 'the hook reads stdin and exits zero promptly without waiting on an unclosed producer'
 
+# The flood above is the easy case: a byte-counting read reaches its bound almost
+# immediately, so it passes even when the read is wrong. The real shape is one
+# short JSON event followed by a producer that keeps the write end open — a
+# byte-counting read then waits for bytes that never come and stalls session
+# start. Codex sends exactly one line, so the read must return at that newline.
+short_fifo="$scratch/short-event.fifo"
+rm -f "$short_fifo"
+mkfifo "$short_fifo"
+# `exec 3>` holds the write end open past the printf, which a plain redirection
+# would close and turn into the easy EOF case. The writer is backgrounded and
+# read through the FIFO so the timing below measures the HOOK, not the producer:
+# a command substitution over a pipeline would wait for the sleep either way.
+( exec 3>"$short_fifo"; printf '{"hook_event_name":"SessionStart"}\n' >&3; sleep 30 ) &
+short_writer=$!
+start_time=$SECONDS
+short_out=$(run_hook ORCA_TERMINAL_HANDLE=term_1 TMUX_PANE=%1 <"$short_fifo") ||
+  fail 'hook with a short event and an open writer exited non-zero'
+short_elapsed=$((SECONDS - start_time))
+kill "$short_writer" 2>/dev/null || true
+wait "$short_writer" 2>/dev/null || true
+rm -f "$short_fifo"
+(( short_elapsed <= 2 )) ||
+  fail "hook took ${short_elapsed}s on a short event with an open writer; expected prompt exit <= 2s"
+short_ctx=$(printf '%s' "$short_out" | context_of) ||
+  fail 'hook with a short event and an open writer emitted no additionalContext'
+[[ $short_ctx == *"<!-- orchestration-everyone:end -->"* ]] ||
+  fail 'hook with a short event and an open writer did not output the everyone payload'
+pass 'the hook returns at the event newline rather than waiting for a byte bound'
+
 # --- 3. The role table ---
 # Codex carries no lead branch: lead-shaped and worker-shaped Orca sessions both
 # deliver the everyone-payload; non-Orca sessions produce no output at all.
@@ -282,13 +311,17 @@ orig_version=$(render_tmpl "$plugin_manifest_tmpl" /dev/stdout | "$jq_bin" -r '.
 bump_scratch="$scratch/repo-bump"
 mkdir -p "$bump_scratch"
 for entry in "$repo_root"/* "$repo_root"/.*; do
-  entry_name=$(basename "$entry")
+  # Builtin suffix strip rather than a basename fork: every $entry comes from a
+  # glob rooted at an absolute path, so it always carries a slash.
+  entry_name=${entry##*/}
   [[ $entry_name == "." || $entry_name == ".." || $entry_name == "dot_local" ]] && continue
   ln -sf -- "$entry" "$bump_scratch/$entry_name"
 done
 mkdir -p "$bump_scratch/dot_local/share"
 for entry in "$repo_root/dot_local/share"/*; do
-  entry_name=$(basename "$entry")
+  # Builtin suffix strip rather than a basename fork: every $entry comes from a
+  # glob rooted at an absolute path, so it always carries a slash.
+  entry_name=${entry##*/}
   [[ $entry_name == "dotfiles-codex-plugin" ]] && continue
   ln -sf -- "$entry" "$bump_scratch/dot_local/share/$entry_name"
 done

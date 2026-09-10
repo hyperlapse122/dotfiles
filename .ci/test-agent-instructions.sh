@@ -102,7 +102,7 @@ workflow_fixture="$repo_root/$workflow_fixture_path"
 # The darwin-leak sentinel must be a phrase the Linux rule actually contains, or
 # the leak assertion asserts nothing. `/usr/bin/orca` is Linux-only and appears
 # nowhere else in the payload, so it moves with `linux_rule` in one edit.
-linux_rule='MUST use `orca-ide` for Orca commands, never bare `orca`, because bare `orca` resolves by PATH order and reaches `/usr/bin/orca`, the GNOME screen reader, on any host where no wrapper precedes `/usr/bin`. This executable rule takes precedence over skill defaults for executable selection.'
+linux_rule='MUST use `orca-ide` for Orca commands, never bare `orca`, because bare `orca` resolves by PATH order and reaches `/usr/bin/orca`, the GNOME screen reader, on any host where no wrapper precedes `/usr/bin`. This executable rule takes precedence over skill defaults for executable selection. It stays in this file rather than the injected contract because it binds any session that types an Orca command, including one outside Orca that never receives an injection, and because starting a screen reader on the user'"'"'s machine is destructive.'
 linux_only_sentinel='`/usr/bin/orca`'
 other_os_rule='Resolve the Orca executable as the `orchestration` skill directs.'
 
@@ -263,31 +263,45 @@ core_renders=("${renders[@]}")
 core_renders[3]=$omp_linux_core
 rendered=${core_renders[0]}
 
+# The executable-selection rule stays in the shared core, not the injected
+# payload. It binds any session that types an Orca command -- including one
+# started outside Orca, which receives no injection at all -- and a bare `orca`
+# on this host starts the GNOME screen reader, so losing it is destructive
+# rather than merely inconvenient. Assert it per harness core, on both OS
+# branches, and assert the payload does NOT repeat it: one rule, one owner.
+darwin_core_renders=(
+  "$scratch/claude-darwin.md"
+  "$scratch/agy-darwin.md"
+  "$scratch/codex-darwin.md"
+  "$omp_darwin_core"
+)
+for i in "${!core_renders[@]}"; do
+  linux_core=${core_renders[$i]}
+  darwin_core=${darwin_core_renders[$i]}
+  grep -Fx "$linux_rule" "$linux_core" >/dev/null \
+    || fail "$(basename "$linux_core") lost its Linux executable rule"
+  grep -Fx "$other_os_rule" "$darwin_core" >/dev/null \
+    || fail "$(basename "$darwin_core") lost its non-Linux executable rule"
+  grep -F "$linux_only_sentinel" "$linux_core" >/dev/null \
+    || fail "$(basename "$linux_core") lost the Linux-only sentinel, so the Darwin leak check is vacuous"
+  if grep -F "$linux_only_sentinel" "$darwin_core" >/dev/null; then
+    fail "$(basename "$darwin_core") leaked its Linux executable rule into Darwin"
+  fi
+  if grep -Fx "$other_os_rule" "$linux_core" >/dev/null; then
+    fail "$(basename "$linux_core") leaked its non-Linux executable rule into Linux"
+  fi
+done
 everyone_linux_renders=("$everyone_claude_linux" "$everyone_codex_linux" "$everyone_omp_linux")
 everyone_darwin_renders=("$everyone_claude_darwin" "$everyone_codex_darwin" "$everyone_omp_darwin")
 for i in "${!everyone_linux_renders[@]}"; do
   linux_payload=${everyone_linux_renders[$i]}
   darwin_payload=${everyone_darwin_renders[$i]}
-  grep -Fx "$linux_rule" "$linux_payload" >/dev/null \
-    || fail "$(basename "$linux_payload") lost its Linux executable rule"
-  grep -Fx "$other_os_rule" "$darwin_payload" >/dev/null \
-    || fail "$(basename "$darwin_payload") lost its non-Linux executable rule"
-  grep -F "$linux_only_sentinel" "$linux_payload" >/dev/null \
-    || fail "$(basename "$linux_payload") lost the Linux-only sentinel, so the Darwin leak check is vacuous"
-  if grep -F "$linux_only_sentinel" "$darwin_payload" >/dev/null; then
-    fail "$(basename "$darwin_payload") leaked its Linux executable rule into Darwin"
+  if grep -F "$linux_only_sentinel" "$linux_payload" >/dev/null \
+    || grep -Fx "$other_os_rule" "$linux_payload" >/dev/null; then
+    fail "$(basename "$linux_payload") duplicated the executable rule the shared core owns"
   fi
-  if grep -Fx "$other_os_rule" "$linux_payload" >/dev/null; then
-    fail "$(basename "$linux_payload") leaked its non-Linux executable rule into Linux"
-  fi
-  diff -q <(grep -Fvx "$linux_rule" "$linux_payload") <(grep -Fvx "$other_os_rule" "$darwin_payload") >/dev/null \
-    || fail "$(basename "$linux_payload") differs across OSes outside its executable rule"
-done
-for i in "${!core_renders[@]}"; do
-  if grep -F "$linux_rule" "${core_renders[$i]}" >/dev/null \
-    || grep -F "$other_os_rule" "${core_renders[$i]}" >/dev/null; then
-    fail "$(basename "${core_renders[$i]}") duplicated an executable rule from the everyone payload"
-  fi
+  diff -q "$linux_payload" "$darwin_payload" >/dev/null \
+    || fail "$(basename "$linux_payload") differs across OSes; the payload carries no OS branch"
 done
 
 strip_harness_paragraph() { grep -vE '^This harness (is|runs) ' "$1"; }
