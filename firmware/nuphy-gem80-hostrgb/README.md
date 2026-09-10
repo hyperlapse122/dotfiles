@@ -58,6 +58,35 @@ or `MISMATCH` for each check. It also rejects a Git LFS pointer in place of the
 binary. It exits non-zero if any check fails or the binary is a pointer. Do not
 flash when it does.
 
+## Is the build path still alive?
+
+CI watches the pins this firmware is built from, so you learn that the build
+path broke before you plan work that needs it — not when you next try to build.
+
+- **Daily** (`.github/workflows/gem80-firmware-pins-daily.yml`) checks that the
+  pinned fork commit is still reachable from its declared branch, and that the
+  pinned toolchain image digest is still served. It requires the commit to be the
+  branch tip or an ancestor of it: after a force-push the commit object can still
+  be served for a while, while the fetch the build performs is already broken.
+- **Weekly** (`.github/workflows/gem80-firmware-rebuild-weekly.yml`) rebuilds from
+  the pinned source in a scratch copy and compares the result against
+  `dist/build-info.json`. `dist/` itself is never touched.
+
+A break shows up as a failed workflow run and nothing else — no issue is filed
+and no notification is sent anywhere. Run either workflow on demand from the
+Actions tab when you want an answer now.
+
+`firmware.gem80.rebuildMode` in `.chezmoidata/firmware.yaml` decides what the
+weekly check treats as success. `build-only` requires the build to succeed and
+reports a hash difference without failing; `match-sha256` also requires the
+rebuilt binary to match the recorded hash exactly. The comparison runs in both
+modes, so the reported result is what tells you whether the stricter mode is
+warranted.
+
+**This watch keeps no copy of anything.** If the fork disappears, the alert
+arrives after the fact and cannot undo it — flashing still works from the
+committed `dist/` binary, but rebuilding does not.
+
 ## Flashing
 
 Flashing is effectively irreversible: the only way back is to flash the stock
