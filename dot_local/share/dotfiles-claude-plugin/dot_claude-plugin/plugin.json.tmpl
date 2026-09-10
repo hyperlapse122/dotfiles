@@ -1,0 +1,26 @@
+{{- /* plugin.json — the manifest Claude Code reads for this plugin.
+
+  `version` is derived from the hook tree's content on purpose. Claude Code
+  installs a plugin by COPYING the source tree into
+  ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/, and
+  run_onchange_after_update-claude-plugins.sh.tmpl records that `plugin install`
+  is a no-op once the plugin is present at ANY version. A fixed version would
+  therefore pin the first copy forever and every later hook edit would land in
+  the source tree and never run.
+
+  The same tree is a fingerprint input of that reconciler, so an edit also
+  re-triggers the script that performs the install. Both halves are required. */ -}}
+{{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-claude-plugin" -}}
+{{- $parts := "" -}}
+{{- range $rel := (list "hooks/executable_orca-team-lead-orchestration.sh" "hooks/hooks.json") -}}
+{{-   $parts = printf "%s%s" $parts (include (joinPath $root $rel) | sha256sum) -}}
+{{- end -}}
+{{- $version := printf "0.1.0-%s" (substr 0 12 (sha256sum $parts)) -}}
+{
+  "name": "dotfiles-claude",
+  "version": "{{ $version }}",
+  "description": "Hooks, agents, and commands this dotfiles checkout ships to Claude Code",
+  "author": {
+    "name": "hyperlapse122"
+  }
+}
