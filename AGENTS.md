@@ -97,6 +97,25 @@ env PATH="$scratch/bin:/usr/bin:/bin" "$chezmoi_bin" --config "$scratch/empty.to
 
 Secrets resolve through a live `onepasswordRead` of their `op://` reference at render time, with no cache; the private-key import (`.chezmoiscripts/80-keys/run_once_before_import-gpg-key.sh.tmpl`) bootstraps the GPG key used for `encrypted_` files. The sole sanctioned repository ciphertext is `dot_config/garden/encrypted_readonly_garden.yaml.asc` (GPG); edit the garden via the wrapper (`chezmoi edit ~/.config/garden/garden.yaml`), never commit plaintext. Host LUKS/MOK prompts are AES-encrypted with a key only in the user keyring; read consumers fail soft when unavailable, and only the nonblank prompt path may create a key. Never infer that desktop-mediated `op read` is unavailable from a failed interactive `op whoami`. GitLab PAT setup is data-driven; `auth-glab` remains OAuth fallback.
 
+## Garden registry and `~/src` provisioning
+
+This repository owns the garden registry and the apply-time provisioning of `~/src`. The user-scoped instruction core (`.chezmoitemplates/agents-instructions.tmpl`) keeps only the `~/src` layout rule and the worktree ownership rules and points here; every registry and provisioning detail lives in this section.
+
+Edit the garden with `chezmoi edit ~/.config/garden/garden.yaml`, or decrypt/encrypt `dot_config/garden/encrypted_readonly_garden.yaml.asc` non-interactively, then apply. The deployed target is the 0444 plaintext `~/.config/garden/garden.yaml`. Never commit plaintext. The registry is its own only copy, so verify the round trip BEFORE overwriting the source: decrypt the freshly re-encrypted file again, confirm it parses and that both the tree count and the recipient key-id set are unchanged, and only then move it over the source.
+
+On apply, `.chezmoiscripts/90-src/` runs the bootstrap automatically whenever the manifest changes — grow-all then the `setup-upstream` bootstrap — and a separate every-apply script registers every grown tree with Orca, so a manifest edit is normally self-provisioning (and fails the apply if a grow, bootstrap, or registration fails). The commands below are the same idempotent bootstrap, for first-host/manual or debug use:
+
+```sh
+garden grow <name>
+garden cmd <name> setup-upstream
+```
+
+`garden grow` accepts multiple queries; `garden cmd` takes exactly one query, then command names. Use `'@*'` (or another glob carrying the `@` tree prefix) for many trees. A bare `'*'` resolves against gardens and groups BEFORE trees, so once the registry declares a `groups:` entry it matches that group and silently covers only its members — which is why `run_onchange_after_reconcile-garden.sh.tmpl` calls `grow '@*'` and `cmd '@*' setup-upstream`. Always prefix a wildcard with `@`. Grow creates the plain repo checkout with shallow history (`--depth 1`, `single-branch: false`) by default; run `garden cmd <name> unshallow` (or `'@*'`) to retrieve full history on demand for active development, rebasing, or log audits. `setup-upstream` ensures remote origin/HEAD is configured.
+
+Orca registration is not a garden command: the apply-time script derives each project's Orca identity from the same remote url the layout rule reads, and sets the display name and the `~/.local/share/worktrees` base path. It is ADDITIVE ONLY — a project Orca already knows is left exactly as it is, so a rename or a deletion made in the Orca UI survives the next apply. Orca sidebar groups come from the registry's own `groups:` block: each declared group becomes an Orca project group of the same name, and the group name is the human product name, not the namespace segment (`ExamVue 365 Flow`, not `365flow`). Membership is declared, never derived from the path — a namespace holding several trees is not a group until the registry says so. Grouping is the one best-effort step: it is carried out over an internal Orca RPC surface, so it warns and leaves registration green rather than failing the apply. A project the operator has already filed under some group is never re-filed.
+
+`src-audit` is read-only: missing tree => grow on demand; broken tree => grow; unmanaged => surface, never delete. A branch whose pull lacks tracking => rerun `setup-upstream` (audit does not check upstreams). It reports garden drift only; it does not audit Orca registration.
+
 ## Single source of truth
 
 Edit data, not generated scripts or rendered targets:
