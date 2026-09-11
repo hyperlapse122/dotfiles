@@ -324,6 +324,11 @@
         "source": "stablyai/orca",
         "version": "v1.4.199"
       },
+      "deslop": {
+        "kind": "gitRef",
+        "source": "cursor/plugins",
+        "version": "f5bdd6826fd0a0d9cbc4347134c3a74a200b9d9d"
+      },
       "docker-credential-helpers": {
         "kind": "githubRelease",
         "source": "docker/docker-credential-helpers",
@@ -691,6 +696,11 @@
         "kind": "vendorManifest",
         "source": "https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm",
         "version": "15.81.5"
+      },
+      "unslop": {
+        "kind": "gitRef",
+        "source": "cursor/plugins",
+        "version": "f5bdd6826fd0a0d9cbc4347134c3a74a200b9d9d"
       },
       "uv": {
         "kind": "githubRelease",

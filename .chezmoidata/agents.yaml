@@ -106,6 +106,20 @@ agents:
       host: gitlab
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
+    # cursor/plugins is a monorepo publishing no releases and no tags, so each
+    # skill needs both a skillPath for its subtree and a branch ref -- the
+    # no-ref branch of .chezmoiexternals/ai-agents.toml expects a release tag.
+    # The branch head is unreviewed upstream: the hourly release-lock refresh
+    # advances both pins with no human in the loop, the same posture the
+    # vercel-labs and shadcn entries above already carry.
+    - name: unslop
+      source: cursor/plugins
+      ref: main
+      skillPath: pstack/skills/unslop
+    - name: deslop
+      source: cursor/plugins
+      ref: main
+      skillPath: cursor-team-kit/skills/deslop
   marketplaces:
     compound-engineering-plugin:
       kind: localArchive
