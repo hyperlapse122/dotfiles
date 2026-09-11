@@ -36,8 +36,14 @@
 # provisioning that would otherwise follow (/etc, host, network, desktop,
 # agent plugins, key import) — none of that depends on the garden.
 #
+# TREE-ONLY QUERIES. Both garden calls below use `'@*'`, not `'*'`. A bare
+# glob resolves against gardens and groups before trees, so once the registry
+# declared its first `groups:` entry, `'*'` matched that group name and grew
+# only its members — every tree outside the group was silently skipped and the
+# completeness check failed the apply. The `@` prefix forces tree resolution.
+#
 # HARD-FAIL. A grow or bootstrap failure fails the apply (set -euo pipefail).
-# But `garden grow '*'` exits 0 even when a tree fails to clone, so its exit
+# But `garden grow '@*'` exits 0 even when a tree fails to clone, so its exit
 # code alone does NOT enforce that — the completeness check below re-verifies
 # every declared tree is actually a valid clone and exits non-zero (naming the
 # tree) on any missing, broken, or half-cloned tree. It never auto-repairs
@@ -117,10 +123,10 @@ if ! printf '%s\n' "$tree_records" | cut -f1,3,4 | garden_path_mirror_check; the
 fi
 
 # 3. Grow every declared tree (idempotent; already-grown trees are no-ops).
-echo "reconcile-garden: garden grow '*'"
-garden --config "$reg" grow '*'
+echo "reconcile-garden: garden grow '@*'"
+garden --config "$reg" grow '@*'
 
-# 4. Completeness check — the second hard-fail gate. `garden grow '*'` exits 0
+# 4. Completeness check — the second hard-fail gate. `garden grow '@*'` exits 0
 #    even when trees fail to clone, so re-verify each DECLARED tree is a valid
 #    git work tree. Missing/broken/half-cloned => exit non-zero, naming the
 #    tree, so a silent clone failure fails the apply.
@@ -154,7 +160,7 @@ if [ "$rc" -ne 0 ]; then
 fi
 
 # 5. Bootstrap: set each tree's upstream on its default branch. Idempotent.
-echo "reconcile-garden: garden cmd '*' setup-upstream"
-garden --config "$reg" cmd '*' setup-upstream
+echo "reconcile-garden: garden cmd '@*' setup-upstream"
+garden --config "$reg" cmd '@*' setup-upstream
 
 echo "reconcile-garden: done"
