@@ -5,15 +5,18 @@
   "forkSha": "9847cb81729fa6540ffed1a583b9acdaaa20607b",
   "makeTarget": "nuphy/gem80/ansi:hostrgb",
   "toolchainImage": "ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a",
-  "builtAt": "2026-09-10T04:28:48Z",
+  "builtAt": "2026-09-10T11:02:02Z",
   "binary": {
     "name": "nuphy_gem80_ansi_hostrgb.bin",
-    "bytes": 73688,
-    "sha256": "964eed3f305427f11363e8227c151a25097ab594524edcd5aa224627b825a2c4"
+    "bytes": 74132,
+    "sha256": "5fa2aa5790b2a84aa20e150500152b667f0118b0e8f0332b4eb518f5fd52a5dd"
   },
   "keymap": {
-    "keymap.c": "f144bade497d54e5d90a53a3e24715db1aac3e78f07b165e5e732f9412b80e81",
+    "keymap.c": "b57b34a64f04a5dc6b6b6ae346e6a20859e7275d6892b71e1c7344e0abbb5b46",
     "rgb_matrix_user.inc": "14f26c77dd1c5ad3db37b3a8b94a4384ba6c0ea7e0796c8e68e6c680763b5616",
     "rules.mk": "c5c71a94a9714a742cbb4f33b5469003394ffd36f2e61330afafb5ada2b97acb"
+  },
+  "patches": {
+    "0001-hostrgb-side-region.patch": "fdb8bb85e42f1bc3dfeb66f3956e5b80182e4da51cacbb5f70207a7f7790f8eb"
   }
 }

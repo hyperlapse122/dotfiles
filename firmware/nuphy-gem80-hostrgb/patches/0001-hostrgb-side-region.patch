@@ -1,0 +1,146 @@
+diff --git a/keyboards/nuphy/common/core/keyboard.c b/keyboards/nuphy/common/core/keyboard.c
+index 99b9280..6423ff6 100644
+--- a/keyboards/nuphy/common/core/keyboard.c
++++ b/keyboards/nuphy/common/core/keyboard.c
+@@ -11,6 +11,18 @@
+ __attribute((weak)) extern void side_led_show(void) {}
+ __attribute((weak)) extern void rgb_test_show(void) {}
+ 
++// A keymap that drives the side chain from the host overrides these. The weak
++// defaults read as "no host owns the side chain", so every other keymap links
++// and behaves exactly as before.
++__attribute((weak)) bool hostrgb_side_direct_active(void) {
++    return false;
++}
++
++__attribute((weak)) void hostrgb_side_direct_show(uint8_t first, uint8_t count) {
++    (void)first;
++    (void)count;
++}
++
+ #ifndef NUPHY_OS_SWITCH_HIGH_IS_WIN
+ #    define NUPHY_OS_SWITCH_HIGH_IS_WIN 0
+ #endif
+@@ -566,9 +578,13 @@ bool rgb_matrix_indicators_nuphy(void) {
+     }
+ 
+     if (showCapsLock) {
++        // Caps lock is plain state, not a safety signal, so the host keeps the
++        // side chain while it owns it. The under-key side stays firmware drawn.
++        bool side_is_host_owned = hostrgb_side_direct_active();
++
+         switch (keyboard_config.common.caps_indicator_type) {
+             case CAPS_INDICATOR_SIDE:
+-                set_indicator_on_side(0X00, 0x80, 0x80);
++                if (!side_is_host_owned) set_indicator_on_side(0X00, 0x80, 0x80);
+ 
+                 break;
+             case CAPS_INDICATOR_UNDER_KEY:
+@@ -576,7 +592,7 @@ bool rgb_matrix_indicators_nuphy(void) {
+ 
+                 break;
+             case CAPS_INDICATOR_BOTH:
+-                set_indicator_on_side(0X00, 0x80, 0x80);
++                if (!side_is_host_owned) set_indicator_on_side(0X00, 0x80, 0x80);
+                 user_set_rgb_color(caps_key_led_idx, 0, 0x80, 0x80);
+ 
+                 break;
+diff --git a/keyboards/nuphy/common/core/keyboard.h b/keyboards/nuphy/common/core/keyboard.h
+index 7538eed..ebe65e8 100644
+--- a/keyboards/nuphy/common/core/keyboard.h
++++ b/keyboards/nuphy/common/core/keyboard.h
+@@ -6,6 +6,9 @@ void housekeeping_task_nuphy(void);
+ void keyboard_post_init_nuphy(void);
+ bool rgb_matrix_indicators_nuphy(void);
+ 
++bool hostrgb_side_direct_active(void);
++void hostrgb_side_direct_show(uint8_t first, uint8_t count);
++
+ void set_indicator_on_side(uint8_t r, uint8_t g, uint8_t b);
+ void set_side_rgb(uint8_t r, uint8_t g, uint8_t b);
+ void side_rgb_refresh(void);
+diff --git a/keyboards/nuphy/gem80/side.c b/keyboards/nuphy/gem80/side.c
+index 7210886..8095ee2 100644
+--- a/keyboards/nuphy/gem80/side.c
++++ b/keyboards/nuphy/gem80/side.c
+@@ -55,6 +55,8 @@ RGB  side_leds[SIDE_LED_NUM] = {0};
+ void side_ws2812_setleds(RGB *ledarray, uint16_t leds);
+ void rgb_matrix_update_pwm_buffers(void);
+ void logo_led_loop(void);
++bool hostrgb_side_direct_active(void);
++void hostrgb_side_direct_show(uint8_t first, uint8_t count);
+ 
+ /**
+  * @brief  side leds set color vaule.
+@@ -615,22 +617,28 @@ void side_led_show(void) {
+     side_play_cnt += timer_elapsed32(side_play_timer);
+     side_play_timer = timer_read32();
+ 
+-    switch (keyboard_config.lights.side_mode) {
+-        case SIDE_WAVE:
+-            side_wave_mode_show();
+-            break;
+-        case SIDE_MIX:
+-            side_spectrum_mode_show();
+-            break;
+-        case SIDE_BREATH:
+-            side_breathe_mode_show();
+-            break;
+-        case SIDE_STATIC:
+-            side_static_mode_show();
+-            break;
+-        case SIDE_OFF:
+-            side_off_mode_show();
+-            break;
++    // The host buffer replaces the effect, not bat_led_show() below it, so the
++    // low-battery and charging indicators still land on top.
++    if (hostrgb_side_direct_active()) {
++        hostrgb_side_direct_show(0, SIDE_LINE);
++    } else {
++        switch (keyboard_config.lights.side_mode) {
++            case SIDE_WAVE:
++                side_wave_mode_show();
++                break;
++            case SIDE_MIX:
++                side_spectrum_mode_show();
++                break;
++            case SIDE_BREATH:
++                side_breathe_mode_show();
++                break;
++            case SIDE_STATIC:
++                side_static_mode_show();
++                break;
++            case SIDE_OFF:
++                side_off_mode_show();
++                break;
++        }
+     }
+ 
+ #if (WORK_MODE == THREE_MODE)
+diff --git a/keyboards/nuphy/gem80/side_logo.c b/keyboards/nuphy/gem80/side_logo.c
+index c30d8f4..24f4d51 100644
+--- a/keyboards/nuphy/gem80/side_logo.c
++++ b/keyboards/nuphy/gem80/side_logo.c
+@@ -14,6 +14,8 @@ extern const uint8_t flow_rainbow_color_tab[FLOW_COLOR_TAB_LEN][3];
+ extern const uint8_t side_color_lib[9][3];
+ extern uint8_t       r_temp, g_temp, b_temp;
+ extern void          side_rgb_set_color(int index, uint8_t red, uint8_t green, uint8_t blue);
++extern bool          hostrgb_side_direct_active(void);
++extern void          hostrgb_side_direct_show(uint8_t first, uint8_t count);
+ 
+ const uint8_t logo_led_index_tab[LOGO_LINE] = {
+     5, 6, 7, 8, 9, 10, 11,
+@@ -213,6 +215,13 @@ void logo_led_loop(void) {
+     logo_play_cnt += timer_elapsed32(logo_play_timer);
+     logo_play_timer = timer_read32();
+ 
++    // This is a second effect loop, not an overlay. Without the same host
++    // buffer the logo would fall back to the firmware effect every frame.
++    if (hostrgb_side_direct_active()) {
++        hostrgb_side_direct_show(SIDE_LINE, LOGO_LINE);
++        return;
++    }
++
+     switch (keyboard_config.lights.ambient_mode) {
+         case SIDE_WAVE:
+             logo_wave_mode_show();

@@ -33,6 +33,7 @@ BIN_NAME="nuphy_gem80_ansi_hostrgb.bin"
 
 FIRMWARE_DIR="$SOURCE_DIR/firmware/nuphy-gem80-hostrgb"
 KEYMAP_DIR="$FIRMWARE_DIR/keymap"
+PATCHES_DIR="$FIRMWARE_DIR/patches"
 DIST_DIR="$FIRMWARE_DIR/dist"
 BUILD_INFO="$DIST_DIR/build-info.json"
 
@@ -45,29 +46,66 @@ usage() {
   printf 'usage: gem80-firmware [build|verify]\n'
 }
 
-# Populates KEYMAP_FILES with the basenames the build consumes, in a stable
+# Populates the named array with the basenames the build consumes, in a stable
 # order, so the record's key set always equals the file set that was compiled.
-KEYMAP_FILES=()
-collect_keymap_files() {
-  # `build` collects, then calls `cmd_verify`, which collects again, so this must
-  # rebuild the list rather than append to whatever a previous call left behind.
-  KEYMAP_FILES=()
-  [[ -d $KEYMAP_DIR ]] || die "keymap source is missing: $KEYMAP_DIR"
-  # `cp -- "$KEYMAP_DIR"/*` copies flat files only, so a subdirectory would be
-  # compiled-in-name-only and silently absent from the record.
-  if [[ -n $(find "$KEYMAP_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit) ]]; then
-    die "keymap/ contains a subdirectory; the build copies flat files only"
+# `build` collects, then calls `cmd_verify`, which collects again, so this
+# rebuilds the list rather than appending to whatever a previous call left.
+collect_flat_files() {
+  local -n out_files=$1
+  local dir=$2 label=$3 verb=$4
+
+  out_files=()
+  [[ -d $dir ]] || die "$label source is missing: $dir"
+  # The build reaches flat files only, so a subdirectory would be present in
+  # name and silently absent from both the build and the record.
+  if [[ -n $(find "$dir" -mindepth 1 -maxdepth 1 -type d -print -quit) ]]; then
+    die "$label/ contains a subdirectory; the build $verb flat files only"
   fi
   local name
   while IFS= read -r name; do
-    KEYMAP_FILES+=("$name")
-  done < <(find "$KEYMAP_DIR" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
-  [[ ${#KEYMAP_FILES[@]} -gt 0 ]] || die "keymap source directory is empty: $KEYMAP_DIR"
+    out_files+=("$name")
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
+  [[ ${#out_files[@]} -gt 0 ]] || die "$label source directory is empty: $dir"
+}
+
+KEYMAP_FILES=()
+collect_keymap_files() {
+  collect_flat_files KEYMAP_FILES "$KEYMAP_DIR" keymap copies
+}
+
+PATCH_FILES=()
+collect_patch_files() {
+  collect_flat_files PATCH_FILES "$PATCHES_DIR" patches applies
 }
 
 VERIFY_FAILURES=0
 verify_ok() {
   printf '  ok        %s\n' "$1"
+}
+
+# Checks one recorded hash section -- that the record's key set equals the file
+# set on disk, then each file's digest. The record is only worth trusting if
+# both halves hold: matching hashes over a short key set would pass while a
+# file the build consumed went unrecorded.
+verify_file_section() {
+  local section=$1 dir=$2
+  shift 2
+  local files=("$@")
+
+  local recorded actual
+  recorded="$(jq -r ".${section} // {} | keys[]" "$BUILD_INFO" | LC_ALL=C sort)"
+  actual="$(printf '%s\n' "${files[@]}")"
+  if [[ $recorded != "$actual" ]]; then
+    verify_fail "$section file set: record covers [$(tr '\n' ' ' <<<"$recorded")], source has [$(tr '\n' ' ' <<<"$actual")]"
+  else
+    verify_ok "$section file set (${#files[@]} files)"
+  fi
+
+  local name
+  for name in "${files[@]}"; do
+    verify_field "$section/$name" ".${section}[\"$name\"]" \
+      "$(sha256sum -- "$dir/$name" | cut -d' ' -f1)"
+  done
 }
 verify_fail() {
   printf '  MISMATCH  %s\n' "$1" >&2
@@ -96,6 +134,7 @@ cmd_verify() {
   local bin="$DIST_DIR/$BIN_NAME"
   [[ -f $bin ]] || die "firmware binary is missing: $bin"
   collect_keymap_files
+  collect_patch_files
 
   printf 'gem80-firmware: verifying %s against the current source\n' "$BUILD_INFO"
 
@@ -123,20 +162,8 @@ cmd_verify() {
   verify_field 'binary.bytes' '(.binary.bytes | select(. != null) | tostring)' "$actual_bytes"
   verify_field 'binary.sha256' '.binary.sha256' "$actual_sha"
 
-  local recorded_names actual_names
-  recorded_names="$(jq -r '.keymap // {} | keys[]' "$BUILD_INFO" | LC_ALL=C sort)"
-  actual_names="$(printf '%s\n' "${KEYMAP_FILES[@]}")"
-  if [[ $recorded_names != "$actual_names" ]]; then
-    verify_fail "keymap file set: record covers [$(tr '\n' ' ' <<<"$recorded_names")], source has [$(tr '\n' ' ' <<<"$actual_names")]"
-  else
-    verify_ok "keymap file set (${#KEYMAP_FILES[@]} files)"
-  fi
-
-  local name
-  for name in "${KEYMAP_FILES[@]}"; do
-    verify_field "keymap/$name" ".keymap[\"$name\"]" \
-      "$(sha256sum -- "$KEYMAP_DIR/$name" | cut -d' ' -f1)"
-  done
+  verify_file_section keymap "$KEYMAP_DIR" "${KEYMAP_FILES[@]}"
+  verify_file_section patches "$PATCHES_DIR" "${PATCH_FILES[@]}"
 
   if ((VERIFY_FAILURES > 0)); then
     die "$VERIFY_FAILURES check(s) failed; do not flash $BIN_NAME"
@@ -148,6 +175,7 @@ cmd_build() {
   command -v podman >/dev/null 2>&1 || die 'podman is required; rootless podman builds this firmware (R3).'
   command -v git >/dev/null 2>&1 || die 'git is required to fetch the pinned fork commit.'
   collect_keymap_files
+  collect_patch_files
 
   # The QMK tree with its submodules is several GB. /tmp is tmpfs on Fedora, so the
   # scratch tree lives under the cache directory instead of in RAM.
@@ -192,6 +220,14 @@ cmd_build() {
   mkdir -p "$keymap_dest"
   cp -- "$KEYMAP_DIR"/* "$keymap_dest/"
 
+  local patch
+  for patch in "${PATCH_FILES[@]}"; do
+    printf 'gem80-firmware: applying patch %s\n' "$patch"
+    if ! git -C "$scratch" apply -- "$PATCHES_DIR/$patch"; then
+      die "failed to apply patch $patch"
+    fi
+  done
+
   printf 'gem80-firmware: building %s\n' "$MAKE_TARGET"
   podman run --rm -v "$scratch:/qmk_firmware:z" -w /qmk_firmware "$IMAGE" \
     make "$MAKE_TARGET" || die 'container build failed'
@@ -205,7 +241,7 @@ cmd_build() {
   # QMK leaves the artifact executable; it is flashed, never run.
   chmod 0644 -- "$DIST_DIR/$BIN_NAME"
 
-  local bin_sha256 bin_bytes keymap_json name
+  local bin_sha256 bin_bytes keymap_json patches_json name
   bin_sha256="$(sha256sum -- "$DIST_DIR/$BIN_NAME" | cut -d' ' -f1)"
   bin_bytes="$(stat -c '%s' -- "$DIST_DIR/$BIN_NAME")"
 
@@ -214,6 +250,12 @@ cmd_build() {
     keymap_json+=$'\n'"    \"$name\": \"$(sha256sum -- "$KEYMAP_DIR/$name" | cut -d' ' -f1)\","
   done
   keymap_json="${keymap_json%,}"
+
+  patches_json=''
+  for name in "${PATCH_FILES[@]}"; do
+    patches_json+=$'\n'"    \"$name\": \"$(sha256sum -- "$PATCHES_DIR/$name" | cut -d' ' -f1)\","
+  done
+  patches_json="${patches_json%,}"
 
   # `gem80-firmware verify` gates the flash on this record: it re-derives every
   # hash from the current source and exits non-zero when one disagrees (R12, U6).
@@ -232,6 +274,8 @@ cmd_build() {
     "sha256": "$bin_sha256"
   },
   "keymap": {$keymap_json
+  },
+  "patches": {$patches_json
   }
 }
 JSON

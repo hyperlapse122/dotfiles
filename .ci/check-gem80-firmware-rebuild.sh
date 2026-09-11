@@ -51,7 +51,7 @@ fail() {
 usage() {
   cat <<'EOF'
 usage: check-gem80-firmware-rebuild.sh [options] [repo_dir]
-       check-gem80-firmware-rebuild.sh --eval <sha256> [--build-info P] [--firmware-yaml P]
+       check-gem80-firmware-rebuild.sh --eval <sha256> [--source-fixture P] [--build-info P] [--firmware-yaml P]
 
 Rebuild gate for NuPhy Gem80 hostrgb firmware.
 
@@ -61,6 +61,7 @@ Options:
   --sha, --actual-sha <h>  Specify the rebuilt artifact hash for eval mode
   --build-info <path>      Path to build-info.json (default: repo build record)
   --firmware-yaml <path>   Path to firmware.yaml (default: .chezmoidata/firmware.yaml)
+  --source-fixture <path>  Eval only: copy a source fixture and check its patches/
   -h, --help               Show this help message
 EOF
 }
@@ -73,6 +74,7 @@ eval_build_failed=false
 actual_sha=""
 custom_build_info=""
 custom_firmware_yaml=""
+source_fixture=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -114,6 +116,16 @@ while [[ $# -gt 0 ]]; do
       custom_firmware_yaml="${1#*=}"
       shift
       ;;
+    --source-fixture)
+      shift
+      [[ $# -gt 0 ]] || fail "missing argument for --source-fixture"
+      source_fixture="$1"
+      shift
+      ;;
+    --source-fixture=*)
+      source_fixture="${1#*=}"
+      shift
+      ;;
     -h | --help | help)
       usage
       exit 0
@@ -133,6 +145,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -n $source_fixture && $eval_mode != true ]]; then
+  fail "--source-fixture is only valid with --eval"
+fi
 
 build_info="${custom_build_info:-$repo_root/firmware/nuphy-gem80-hostrgb/dist/build-info.json}"
 firmware_yaml="${custom_firmware_yaml:-$repo_root/.chezmoidata/firmware.yaml}"
@@ -165,6 +181,30 @@ validate_inputs() {
       fail "invalid or missing rebuildMode in $firmware_yaml (expected 'build-only' or 'match-sha256', got '${rebuild_mode:-<empty>}')"
       ;;
   esac
+}
+
+copy_repo_to_scratch() {
+  local source_dir="$1" scratch_dir="$2"
+
+  [[ -d $source_dir ]] || fail "source tree not found: $source_dir"
+  mkdir -p -- "$scratch_dir"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude='.git' --exclude='node_modules' --exclude='.codegraph' "$source_dir/" "$scratch_dir/"
+  else
+    tar -C "$source_dir" --exclude='./.git' --exclude='./node_modules' --exclude='./.codegraph' -cf - . |
+      tar -C "$scratch_dir" -xf -
+  fi
+}
+
+assert_scratch_carries_patches() {
+  local scratch_dir="$1"
+  local patches_dir="$scratch_dir/firmware/nuphy-gem80-hostrgb/patches"
+
+  [[ -d $patches_dir ]] ||
+    fail "scratch source is missing patches/: $patches_dir"
+  [[ -n $(find "$patches_dir" -mindepth 1 -maxdepth 1 -type f -print -quit) ]] ||
+    fail "scratch source patches/ is empty: $patches_dir"
+  printf 'check-gem80-firmware-rebuild: ok - scratch copy carries patches/ (%s)\n' "$patches_dir"
 }
 
 # One caller for the build-failure message, so the fixture test and the real
@@ -247,6 +287,16 @@ if [[ $eval_mode == true ]]; then
     fail "actual sha256 '$actual_sha' is not a 64-character lowercase hex digest"
 
   validate_inputs
+  if [[ -n $source_fixture ]]; then
+    eval_scratch_root="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/gem80-rebuild-eval"
+    mkdir -p -- "$eval_scratch_root"
+    chmod 0700 -- "$eval_scratch_root"
+    eval_scratch=$(mktemp -d "$eval_scratch_root/eval.XXXXXX")
+    trap 'rm -rf -- "$eval_scratch"' EXIT
+    eval_scratch_repo="$eval_scratch/repo"
+    copy_repo_to_scratch "$source_fixture" "$eval_scratch_repo"
+    assert_scratch_carries_patches "$eval_scratch_repo"
+  fi
   evaluate_rebuild_result "$actual_sha" "$recorded_sha" "$recorded_name" "$rebuild_mode"
   exit 0
 fi
@@ -271,17 +321,9 @@ scratch=$(mktemp -d "$scratch_root/rebuild.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
 scratch_repo="$scratch/repo"
-mkdir -p "$scratch_repo"
 printf 'check-gem80-firmware-rebuild: copying repository to scratch (%s)\n' "$scratch_repo"
-# The build reads the source tree through chezmoi, which needs no history, and
-# copying .git would multiply the copy cost for nothing. tar keeps the fallback
-# on the same exclusions as the rsync path so the two produce the same tree.
-if command -v rsync >/dev/null 2>&1; then
-  rsync -a --exclude='.git' --exclude='node_modules' --exclude='.codegraph' "$repo_root/" "$scratch_repo/"
-else
-  tar -C "$repo_root" --exclude='./.git' --exclude='./node_modules' --exclude='./.codegraph' -cf - . |
-    tar -C "$scratch_repo" -xf -
-fi
+copy_repo_to_scratch "$repo_root" "$scratch_repo"
+assert_scratch_carries_patches "$scratch_repo"
 
 # The copy carries the committed binary at exactly the path this gate hashes
 # afterwards. Left in place, a build that silently produced nothing would leave

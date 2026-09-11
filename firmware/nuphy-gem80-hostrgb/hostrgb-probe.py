@@ -9,7 +9,9 @@ import argparse
 import os
 import re
 import select
+import signal
 import sys
+import time
 from pathlib import Path
 
 HIDRAW_ROOT = Path("/sys/class/hidraw")
@@ -20,22 +22,34 @@ HOSTRGB_USAGE = 0x61
 HOSTRGB_VENDOR_ID = 0x19F5
 HOSTRGB_PRODUCT_ID = 0x3275
 
-# Mirrored in keymap/keymap.c (HOSTRGB_CMD, HOSTRGB_PROTOCOL,
-# HOSTRGB_LEDS_PER_PACKET, enum hostrgb_sub). test_hostrgb_probe.py parses that
-# file and fails if the two drift apart.
+# Mirrored in keymap/keymap.c. test_hostrgb_probe.py parses that file and fails
+# if the wire constants drift apart.
 HOSTRGB_CMD = 0x60
 HOSTRGB_SUB_PROBE = 0x00
 HOSTRGB_SUB_MODE = 0x01
 HOSTRGB_SUB_SET = 0x02
-HOSTRGB_PROTOCOL_REV = 1
+HOSTRGB_SUB_HEARTBEAT = 0x03
+HOSTRGB_PROTOCOL_REV = 2
+HOSTRGB_SUB_REJECTED = 0x80
+
+REGION_KEYS = 1 << 0
+REGION_SIDE = 1 << 1
+REGION_ALL = REGION_KEYS | REGION_SIDE
+REGION_BITS = {"keys": REGION_KEYS, "side": REGION_SIDE}
 
 PAYLOAD_SIZE = 32
 LEDS_PER_PACKET = 9
-# The board's own config.h undefines the 88 derived from keyboard.json's
-# rgb_matrix layout and redefines RGB_MATRIX_LED_COUNT as 89; index 88 sits
-# in the WS2812 chain with no layout entry. The 12 side LEDs are a separate
-# chain and are not counted here.
-EXPECTED_LED_COUNT = 89
+HOSTRGB_DEADLINE_UNIT_MS = 10
+# Longest `hold` will keep sleeping before it notices a stop signal.
+HOLD_POLL_SECONDS = 0.1
+MAX_DEADLINE_UNITS = 0xFFFF
+# A write packet spends 4 bytes on the header before the RGB triples, so this is
+# the most LEDs any packet can carry whatever a device claims.
+MAX_LEDS_PER_PACKET = (PAYLOAD_SIZE - 4) // 3
+MAX_DEADLINE_MS = MAX_DEADLINE_UNITS * HOSTRGB_DEADLINE_UNIT_MS
+SIDE_STRIP_COUNT = 5
+SIDE_LOGO_COUNT = 7
+SIDE_LED_COUNT = SIDE_STRIP_COUNT + SIDE_LOGO_COUNT
 DEFAULT_TIMEOUT = 1.0
 
 # These values already appear in the committed verification log; keep them.
@@ -47,6 +61,8 @@ EXIT_UNEXPECTED_LED_COUNT = 5
 EXIT_MALFORMED_RESPONSE = 6
 EXIT_UNEXPECTED_PROTOCOL = 7
 EXIT_DEVICE_ERROR = 8
+EXIT_COMMAND_REJECTED = 9
+EXIT_INVALID_ARGUMENT = 10
 
 
 # --- HID report descriptor parsing (usage page / usage node selection) -----
@@ -165,11 +181,31 @@ def build_probe_payload() -> bytes:
     return bytes(payload)
 
 
-def build_mode_payload(enter: bool) -> bytes:
+def build_mode_payload(mask: int, deadline_units: int | None = None) -> bytes:
+    if not 0 <= mask <= 0xFF or mask & ~REGION_ALL:
+        raise ValueError(f"invalid region mask: {mask}")
+    if mask and not 1 <= (deadline_units or 0) <= MAX_DEADLINE_UNITS:
+        raise ValueError("direct mode requires a non-zero 16-bit deadline")
+    if not mask and deadline_units not in (None, 0):
+        raise ValueError("exit mode cannot carry a deadline")
     payload = bytearray(PAYLOAD_SIZE)
     payload[0] = HOSTRGB_CMD
     payload[1] = HOSTRGB_SUB_MODE
-    payload[2] = 1 if enter else 0
+    payload[2] = mask
+    if mask:
+        payload[3] = deadline_units & 0xFF
+        payload[4] = (deadline_units >> 8) & 0xFF
+    return bytes(payload)
+
+
+def build_heartbeat_payload(deadline_units: int) -> bytes:
+    if not 1 <= deadline_units <= MAX_DEADLINE_UNITS:
+        raise ValueError("heartbeat requires a non-zero 16-bit deadline")
+    payload = bytearray(PAYLOAD_SIZE)
+    payload[0] = HOSTRGB_CMD
+    payload[1] = HOSTRGB_SUB_HEARTBEAT
+    payload[2] = deadline_units & 0xFF
+    payload[3] = (deadline_units >> 8) & 0xFF
     return bytes(payload)
 
 
@@ -199,12 +235,16 @@ def build_frame_payloads(
     r: int,
     g: int,
     b: int,
-    total_leds: int = EXPECTED_LED_COUNT,
+    total_leds: int,
     leds_per_packet: int = LEDS_PER_PACKET,
 ) -> list[bytes]:
     """Split a single flat color across `total_leds` LEDs into `0x60 0x02` packets."""
-    if leds_per_packet < 1:
-        raise ValueError(f"leds per packet must be at least 1, got {leds_per_packet}")
+    if total_leds < 0:
+        raise ValueError("total LED count must come from the probe response")
+    if not 1 <= leds_per_packet <= MAX_LEDS_PER_PACKET:
+        raise ValueError(
+            f"leds per packet must be 1-{MAX_LEDS_PER_PACKET}, got {leds_per_packet}"
+        )
     payloads = []
     start = 0
     while start < total_leds:
@@ -218,15 +258,22 @@ def build_frame_payloads(
 
 
 class ProbeResult:
-    def __init__(self, protocol_rev: int, led_count: int, leds_per_packet: int):
+    def __init__(
+        self,
+        protocol_rev: int,
+        led_count: int,
+        leds_per_packet: int,
+        side_first: int = 0,
+    ):
         self.protocol_rev = protocol_rev
         self.led_count = led_count
         self.leds_per_packet = leds_per_packet
+        self.side_first = side_first
 
 
 def parse_probe_response(response: bytes) -> ProbeResult:
-    """Read the rev/LED-count/per-packet fields the firmware writes at data[2:5] (R6)."""
-    if len(response) < 5:
+    """Read the revision, LED layout, and packet-size fields from a probe."""
+    if len(response) < 6:
         raise ValueError(f"probe response too short: {len(response)} bytes")
     if response[0] != HOSTRGB_CMD or response[1] != HOSTRGB_SUB_PROBE:
         raise ValueError(
@@ -237,6 +284,7 @@ def parse_probe_response(response: bytes) -> ProbeResult:
         protocol_rev=response[2],
         led_count=response[3],
         leds_per_packet=response[4],
+        side_first=response[5],
     )
 
 
@@ -366,13 +414,6 @@ def _probe_device(transport, node_name, args, err) -> tuple[ProbeResult | None, 
 
 def _check_probe_result(result: ProbeResult, err) -> int:
     """Refuse to drive a device whose reported protocol this tool does not implement."""
-    if result.led_count != EXPECTED_LED_COUNT:
-        print(
-            f"LED count {result.led_count} != expected {EXPECTED_LED_COUNT} -- "
-            "stop: the keymap may be built against the wrong board.",
-            file=err,
-        )
-        return EXIT_UNEXPECTED_LED_COUNT
     if result.protocol_rev != HOSTRGB_PROTOCOL_REV:
         print(
             f"protocol revision {result.protocol_rev} != expected "
@@ -381,10 +422,24 @@ def _check_probe_result(result: ProbeResult, err) -> int:
             file=err,
         )
         return EXIT_UNEXPECTED_PROTOCOL
-    if result.leds_per_packet < 1:
+    if result.led_count < 1:
         print(
-            f"device reports {result.leds_per_packet} LEDs per packet -- stop: "
-            "no frame can be built from that.",
+            f"device reports {result.led_count} LEDs -- stop: no LED address "
+            "space can be driven.",
+            file=err,
+        )
+        return EXIT_UNEXPECTED_LED_COUNT
+    if not 0 <= result.side_first <= result.led_count:
+        print(
+            f"side LED boundary {result.side_first} is outside the reported "
+            f"LED range 0-{result.led_count} -- stop: the probe is unusable.",
+            file=err,
+        )
+        return EXIT_UNEXPECTED_LED_COUNT
+    if not 1 <= result.leds_per_packet <= MAX_LEDS_PER_PACKET:
+        print(
+            f"device reports {result.leds_per_packet} LEDs per packet, outside "
+            f"1-{MAX_LEDS_PER_PACKET} -- stop: no frame can be built from that.",
             file=err,
         )
         return EXIT_UNEXPECTED_PROTOCOL
@@ -403,6 +458,7 @@ def cmd_probe(args, out=None, err=None) -> int:
         print(f"protocol revision: {result.protocol_rev}", file=out)
         print(f"LED count: {result.led_count}", file=out)
         print(f"LEDs per packet: {result.leds_per_packet}", file=out)
+        print(f"side LED first index: {result.side_first}", file=out)
         return _check_probe_result(result, err)
 
     return _with_device(args, err, action)
@@ -425,7 +481,21 @@ def _write_confirmed(transport, node_name, payloads: list[bytes], args, err) -> 
                 file=err,
             )
             return EXIT_NO_RESPONSE
-        if len(response) < 2 or response[0] != payload[0] or response[1] != payload[1]:
+        if len(response) < 2 or response[0] != payload[0]:
+            print(
+                f"/dev/{node_name} answered command 0x{payload[0]:02x} "
+                f"0x{payload[1]:02x} with an unexpected echo: {response[:2].hex(' ')}.",
+                file=err,
+            )
+            return EXIT_MALFORMED_RESPONSE
+        if response[1] == payload[1] | HOSTRGB_SUB_REJECTED:
+            print(
+                f"/dev/{node_name} rejected command 0x{payload[0]:02x} "
+                f"0x{payload[1]:02x}.",
+                file=err,
+            )
+            return EXIT_COMMAND_REJECTED
+        if response[1] != payload[1]:
             print(
                 f"/dev/{node_name} answered command 0x{payload[0]:02x} "
                 f"0x{payload[1]:02x} with an unexpected echo: {response[:2].hex(' ')}.",
@@ -444,17 +514,99 @@ def _write_only(payloads: list[bytes], args, err=None) -> int:
     return _with_device(args, err, action)
 
 
-def cmd_enter(args) -> int:
-    return _write_only([build_mode_payload(enter=True)], args)
+def _deadline_units(milliseconds: int, err) -> int | None:
+    if milliseconds <= 0 or milliseconds > MAX_DEADLINE_MS:
+        print(
+            f"deadline must be between {HOSTRGB_DEADLINE_UNIT_MS} and "
+            f"{MAX_DEADLINE_MS} milliseconds.",
+            file=err,
+        )
+        return None
+    units = milliseconds // HOSTRGB_DEADLINE_UNIT_MS
+    if units < 1:
+        print(
+            f"deadline must be at least {HOSTRGB_DEADLINE_UNIT_MS} milliseconds.",
+            file=err,
+        )
+        return None
+    return units
 
 
-def cmd_exit(args) -> int:
-    return _write_only([build_mode_payload(enter=False)], args)
+def _parse_regions_and_deadline(values, err) -> tuple[int, int | None, int]:
+    values = list(values or [])
+    if not values:
+        print("a region and deadline are required", file=err)
+        return 0, None, EXIT_INVALID_ARGUMENT
+    try:
+        milliseconds = int(values[-1])
+    except ValueError:
+        print("the final argument must be a deadline in milliseconds", file=err)
+        return 0, None, EXIT_INVALID_ARGUMENT
+    names = values[:-1] or ["keys"]
+    mask = 0
+    for name in names:
+        bit = REGION_BITS.get(name)
+        if bit is None:
+            print(f"unknown region {name!r}; use keys or side", file=err)
+            return 0, None, EXIT_INVALID_ARGUMENT
+        mask |= bit
+    units = _deadline_units(milliseconds, err)
+    if units is None:
+        return 0, None, EXIT_INVALID_ARGUMENT
+    return mask, units, EXIT_OK
 
 
-def cmd_set(args) -> int:
-    payload = build_set_payload(args.index, [(args.r, args.g, args.b)])
-    return _write_only([payload], args)
+def _probe_and_check(transport, node_name, args, err) -> tuple[ProbeResult | None, int]:
+    result, failure = _probe_device(transport, node_name, args, err)
+    if result is None:
+        return None, failure
+    failure = _check_probe_result(result, err)
+    if failure != EXIT_OK:
+        return None, failure
+    return result, EXIT_OK
+
+
+def cmd_enter(args, err=None) -> int:
+    err = sys.stderr if err is None else err
+    mask, deadline_units, failure = _parse_regions_and_deadline(
+        getattr(args, "values", []), err
+    )
+    if failure != EXIT_OK:
+        return failure
+
+    def action(transport, node_name):
+        result, failure = _probe_and_check(transport, node_name, args, err)
+        if result is None:
+            return failure
+        payload = build_mode_payload(mask=mask, deadline_units=deadline_units)
+        return _write_confirmed(transport, node_name, [payload], args, err)
+
+    return _with_device(args, err, action)
+
+
+def cmd_exit(args, err=None) -> int:
+    err = sys.stderr if err is None else err
+    return _write_only([build_mode_payload(mask=0)], args, err=err)
+
+
+def cmd_set(args, err=None) -> int:
+    err = sys.stderr if err is None else err
+
+    def action(transport, node_name):
+        result, failure = _probe_and_check(transport, node_name, args, err)
+        if result is None:
+            return failure
+        if args.index >= result.led_count:
+            print(
+                f"LED index {args.index} is outside the reported range "
+                f"0-{result.led_count - 1}.",
+                file=err,
+            )
+            return EXIT_UNEXPECTED_LED_COUNT
+        payload = build_set_payload(args.index, [(args.r, args.g, args.b)])
+        return _write_confirmed(transport, node_name, [payload], args, err)
+
+    return _with_device(args, err, action)
 
 
 def cmd_frame(args, err=None) -> int:
@@ -462,11 +614,8 @@ def cmd_frame(args, err=None) -> int:
     err = sys.stderr if err is None else err
 
     def action(transport, node_name):
-        result, failure = _probe_device(transport, node_name, args, err)
+        result, failure = _probe_and_check(transport, node_name, args, err)
         if result is None:
-            return failure
-        failure = _check_probe_result(result, err)
-        if failure != EXIT_OK:
             return failure
         payloads = build_frame_payloads(
             args.r,
@@ -480,6 +629,102 @@ def cmd_frame(args, err=None) -> int:
     return _with_device(args, err, action)
 
 
+def cmd_heartbeat(args, err=None) -> int:
+    err = sys.stderr if err is None else err
+    units = _deadline_units(args.deadline_ms, err)
+    if units is None:
+        return EXIT_INVALID_ARGUMENT
+    return _write_only([build_heartbeat_payload(units)], args, err=err)
+
+
+def cmd_hold(args, err=None) -> int:
+    err = sys.stderr if err is None else err
+    mask, deadline_units, failure = _parse_regions_and_deadline(
+        getattr(args, "values", []), err
+    )
+    if failure != EXIT_OK:
+        return failure
+
+    def action(transport, node_name):
+        result, failure = _probe_and_check(transport, node_name, args, err)
+        if result is None:
+            return failure
+
+        stop_requested = False
+
+        def request_stop(_signum, _frame):
+            nonlocal stop_requested
+            stop_requested = True
+
+        previous_handlers = {
+            signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)
+        }
+        for signum in previous_handlers:
+            signal.signal(signum, request_stop)
+        try:
+            mode_payload = build_mode_payload(mask=mask, deadline_units=deadline_units)
+            failure = _write_confirmed(transport, node_name, [mode_payload], args, err)
+            if failure != EXIT_OK:
+                return failure
+            heartbeat_payload = build_heartbeat_payload(deadline_units)
+            interval = deadline_units * HOSTRGB_DEADLINE_UNIT_MS / 2000
+            while not stop_requested:
+                # A signal does not cut time.sleep() short: the handler runs and
+                # the sleep resumes (PEP 475). Sleeping in slices is what makes
+                # Ctrl-C land promptly while an operator is at the keyboard.
+                wake_at = time.monotonic() + interval
+                while not stop_requested:
+                    remaining = wake_at - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(HOLD_POLL_SECONDS, remaining))
+                if stop_requested:
+                    break
+                failure = _write_confirmed(
+                    transport, node_name, [heartbeat_payload], args, err
+                )
+                if failure == EXIT_COMMAND_REJECTED:
+                    # The watchdog reclaimed the region while we were asleep.
+                    # Re-entering is the point of holding: the alternative is a
+                    # daemon that keeps writing frames nothing displays.
+                    print(
+                        f"/dev/{node_name} reclaimed the region; re-entering direct mode",
+                        file=err,
+                    )
+                    failure = _write_confirmed(
+                        transport, node_name, [mode_payload], args, err
+                    )
+                    if failure != EXIT_OK:
+                        return _hold_give_back(transport, node_name, args, err, failure)
+                    continue
+                if failure != EXIT_OK:
+                    # The transport still works; leaving direct mode held would
+                    # strand the last frame until the watchdog expires, which
+                    # for a long deadline is minutes of a keyboard that looks
+                    # broken.
+                    return _hold_give_back(transport, node_name, args, err, failure)
+            # Reached only after a successful entry, so direct mode always has
+            # to be handed back.
+            return _write_confirmed(
+                transport, node_name, [build_mode_payload(mask=0)], args, err
+            )
+        finally:
+            for signum, handler in previous_handlers.items():
+                signal.signal(signum, handler)
+
+    return _with_device(args, err, action)
+
+
+def _hold_give_back(transport, node_name, args, err, failure: int) -> int:
+    """Best-effort exit so a failed hold does not strand the last frame.
+
+    The original failure is what the caller hears about; a failing exit write on
+    top of it says nothing new.
+    """
+    _write_confirmed(transport, node_name, [build_mode_payload(mask=0)], args, err)
+    return failure
+
+
 def _byte_value(text: str) -> int:
     value = int(text)
     if not 0 <= value <= 255:
@@ -488,12 +733,10 @@ def _byte_value(text: str) -> int:
 
 
 def _led_index_value(text: str) -> int:
-    """Bound the `set` index by the LED count, which the firmware silently clamps."""
+    """Bound the `set` index to the wire field; the device reports the LED count."""
     value = int(text)
-    if not 0 <= value < EXPECTED_LED_COUNT:
-        raise argparse.ArgumentTypeError(
-            f"{text!r} is not in range 0-{EXPECTED_LED_COUNT - 1}"
-        )
+    if not 0 <= value <= 0xFF:
+        raise argparse.ArgumentTypeError(f"{text!r} is not in range 0-255")
     return value
 
 
@@ -511,9 +754,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("probe", help="query protocol rev / LED count / per-packet")
+    subparsers.add_parser("probe", help="query protocol rev / LED layout / per-packet")
 
-    subparsers.add_parser("enter", help="enter host-direct mode (60 01 01)")
+    enter_parser = subparsers.add_parser(
+        "enter", help="enter host-direct mode for keys or side with a deadline"
+    )
+    enter_parser.add_argument("values", nargs="*", metavar="REGION_OR_MS")
 
     subparsers.add_parser("exit", help="leave host-direct mode, restore EEPROM effect (60 01 00)")
 
@@ -524,11 +770,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("b", type=_byte_value)
 
     frame_parser = subparsers.add_parser(
-        "frame", help=f"set all {EXPECTED_LED_COUNT} LEDs to one color (60 02 x10)"
+        "frame", help="set all probed LEDs to one color (60 02)"
     )
     frame_parser.add_argument("r", type=_byte_value)
     frame_parser.add_argument("g", type=_byte_value)
     frame_parser.add_argument("b", type=_byte_value)
+
+    heartbeat_parser = subparsers.add_parser(
+        "heartbeat", help="refresh the watchdog deadline (60 03)"
+    )
+    heartbeat_parser.add_argument("deadline_ms", type=int)
+
+    hold_parser = subparsers.add_parser(
+        "hold", help="hold direct mode until interrupted, then exit cleanly"
+    )
+    hold_parser.add_argument("values", nargs="*", metavar="REGION_OR_MS")
 
     return parser
 
@@ -542,6 +798,8 @@ def main(argv: list[str] | None = None) -> int:
         "exit": cmd_exit,
         "set": cmd_set,
         "frame": cmd_frame,
+        "heartbeat": cmd_heartbeat,
+        "hold": cmd_hold,
     }
     return handlers[args.command](args)
 
