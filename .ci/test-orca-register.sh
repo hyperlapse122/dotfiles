@@ -93,17 +93,22 @@ STUB
   unset ORCA_REGISTER_GROUP_RECORDS
   : >"$ORCA_STUB_LOG"
   printf '{"appRunning":true,"runtimeState":"ready","runtimeReachable":true}\n' >"$stub_dir/status.answer"
-  printf '{"ok":true,"result":{"setups":[]}}\n' >"$stub_dir/project_setups.answer"
-  printf '{"ok":true,"result":{"repos":[]}}\n' >"$stub_dir/repo_list.answer"
+  printf '{"id":"rpc-envelope-id","ok":true,"result":{"setups":[]}}\n' >"$stub_dir/project_setups.answer"
+  printf '{"id":"rpc-envelope-id","ok":true,"result":{"repos":[]}}\n' >"$stub_dir/repo_list.answer"
   # The real `project setups --json` shape, taken from the live CLI: the entry
   # id is `id`, and `projectId` / `repoId` sit beside it with names ending in
   # the same three characters. A `setupId` key does not exist, and the
   # `<projectId>::<hostId>` selector the CLI's own help shows is rejected.
+  #
+  # The envelope's OWN `id` (the request id) leads every response and the
+  # `_meta` block trails it. Both are here because the id lookup has to reach
+  # past them: matching the first `"id"` on the line resolved the request id
+  # for whichever tree came first in the list.
   cat >"$stub_dir/project_setups.after-add" <<EOF
-{"ok":true,"result":{"setups":[
+{"id":"rpc-envelope-id","ok":true,"result":{"setups":[
   {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles","setupState":"ready"},
   {"id":"setup-b","projectId":"git:git.example.org/tenants/blue-team/widget-service","hostId":"local","repoId":"repo-b","path":"$scratch/src/git.example.org/tenants/blue-team/widget-service","setupState":"ready"}
-]}}
+]},"_meta":{"runtimeId":"rpc-runtime-id"}}
 EOF
 }
 
@@ -220,7 +225,7 @@ serve_pid=$(cat "$ORCA_STUB_DIR/serve.pid" 2>/dev/null || true)
 kill -0 "$serve_pid" 2>/dev/null && fail "the self-started serve ($serve_pid) is still running after a successful run"
 pass 'no reachable runtime starts serve, registers, and stops the runtime it started'
 
-# --- a self-started runtime that is not loopback-bound fails (AE11) ----------
+# --- a self-started runtime with NO local transport fails (AE11) -------------
 
 make_stub non-loopback
 printf '{"appRunning":false,"runtimeState":"stopped","runtimeReachable":false}\n' >"$ORCA_STUB_DIR/status.answer"
@@ -233,7 +238,23 @@ case "$register_out" in *loopback*) : ;; *) fail "error did not name the loopbac
 serve_pid=$(cat "$ORCA_STUB_DIR/serve.pid" 2>/dev/null || true)
 [ -n "$serve_pid" ] || fail 'loopback-refusal run recorded no serve pid'
 kill -0 "$serve_pid" 2>/dev/null && fail "the refused runtime ($serve_pid) is still listening after the apply failed"
-pass 'a non-loopback self-started runtime fails before registering AND is stopped'
+pass 'a self-started runtime with no local transport fails before registering AND is stopped'
+
+# --- the real `orca serve` shape: unix socket + 0.0.0.0 websocket ------------
+# Orca binds its websocket to 0.0.0.0 and offers no bind-address option, so the
+# runtime always advertises one exposed endpoint beside its unix socket. The
+# local transport is what registration travels over, so the run proceeds and
+# only warns about the exposed listener.
+
+make_stub mixed-transports
+printf '{"appRunning":false,"runtimeState":"stopped","runtimeReachable":false}\n' >"$ORCA_STUB_DIR/status.answer"
+printf '{"appRunning":false,"runtimeState":"ready","runtimeReachable":true}\n' >"$ORCA_STUB_DIR/status.after-serve"
+printf '{"transports":[{"kind":"unix","endpoint":"/tmp/orca-test.sock"},{"kind":"websocket","endpoint":"ws://0.0.0.0:6768"}]}\n' >"$ORCA_STUB_DIR/runtime.json"
+ORCA_REGISTER_RUNTIME_FILE="$ORCA_STUB_DIR/runtime.json" run_register "$two_trees"
+[ "$register_rc" -eq 0 ] || fail "mixed-transport run exited $register_rc: $register_out"
+logged 'repo add --path' || fail 'mixed-transport run did not register'
+case "$register_out" in *'beyond loopback'*) : ;; *) fail "the exposed listener was not warned about: $register_out" ;; esac
+pass 'a unix socket beside a 0.0.0.0 websocket registers and warns'
 
 # --- serve that never becomes reachable fails at the bounded timeout ---------
 
@@ -248,9 +269,9 @@ pass 'a serve that never becomes reachable fails at the bounded timeout'
 
 make_stub existing-setup
 cat >"$ORCA_STUB_DIR/project_setups.answer" <<EOF
-{"ok":true,"result":{"setups":[
+{"id":"rpc-envelope-id","ok":true,"result":{"setups":[
   {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","path":"$scratch/src/github.com/hyperlapse122/dotfiles","worktreeBasePath":"$HOME/.local/share/worktrees"}
-]}}
+]},"_meta":{"runtimeId":"rpc-runtime-id"}}
 EOF
 run_register "$two_trees"
 [ "$register_rc" -eq 0 ] || fail "existing-setup run exited $register_rc: $register_out"
@@ -321,7 +342,7 @@ pass 'a failing repo-list snapshot aborts rather than re-adding every tree'
 # unguarded substitution aborted here before this diagnostic could print.
 
 make_stub setup-missing-after-add
-printf '{"ok":true,"result":{"setups":[]}}\n' >"$ORCA_STUB_DIR/project_setups.after-add"
+printf '{"id":"rpc-envelope-id","ok":true,"result":{"setups":[]}}\n' >"$ORCA_STUB_DIR/project_setups.after-add"
 run_register "$two_trees"
 [ "$register_rc" -ne 0 ] || fail 'missing setup after add exited zero'
 case "$register_out" in *dotfiles*) : ;; *) fail "error did not name the tree: $register_out" ;; esac
@@ -334,13 +355,14 @@ pass 'a repo added with no resulting setup names the tree and the operation'
 
 make_stub nested-setup-entry
 cat >"$ORCA_STUB_DIR/project_setups.after-add" <<EOF
-{"ok":true,"result":{"setups":[
+{"id":"rpc-envelope-id","ok":true,"result":{"setups":[
   {"id":"setup-a","projectId":"github:hyperlapse122/dotfiles","hostId":"local","repoId":"repo-a","hooks":{"mode":"auto","scripts":{"setup":""}},"path":"$scratch/src/github.com/hyperlapse122/dotfiles"},
   {"id":"setup-b","projectId":"git:git.example.org/tenants/blue-team/widget-service","hostId":"local","repoId":"repo-b","hooks":{"mode":"auto","scripts":{"setup":""}},"path":"$scratch/src/git.example.org/tenants/blue-team/widget-service"}
-]}}
+]},"_meta":{"runtimeId":"rpc-runtime-id"}}
 EOF
 run_register "$two_trees"
 [ "$register_rc" -eq 0 ] || fail "nested setup entry exited $register_rc: $register_out"
+logged '--setup rpc-envelope-id' && fail 'the id lookup resolved the response envelope id'
 logged '--setup setup-a' || fail 'nested setup entry broke the id lookup'
 pass 'a setup entry carrying a nested member still resolves its own id'
 

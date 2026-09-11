@@ -105,35 +105,59 @@ orca_register_json_has_path() {
 # `<projectId>::<hostId>` form its own help example shows. The `[{,]` anchor is
 # what keeps the match off the sibling `projectId` and `repoId` keys, whose
 # names end in the same three characters.
+#
+# The response envelope is dropped BEFORE the match. The CLI answers
+# `{"id":"<request id>","ok":true,"result":{"setups":[{"id":"<setup id>",…`, so
+# the first flattened line carries the request id ahead of the first entry's
+# own. Without the `"setups":[` cut, a tree that happens to be the first entry
+# resolves to the request id and `project setup-update --setup` then fails with
+# an unknown selector — which is exactly how every newly added tree failed.
 orca_register_setup_id() {
-  printf '%s' "$1" | tr -d ' \n\t' | sed 's/},{/}\n{/g' | grep -F "\"path\":\"$2\"" |
+  printf '%s' "$1" | tr -d ' \n\t' | sed 's/},{/}\n{/g' | sed 's/.*"setups":\[//' |
+    grep -F "\"path\":\"$2\"" |
     sed 's/{/,/g' | grep -o ',"id":"[^"]*"' | head -n 1 |
     sed 's/^,"id":"//; s/"$//'
 }
 
-# Every endpoint the runtime advertises must be loopback. A runtime this script
-# started is one nobody is watching, so a listener reachable from the LAN is a
-# failure rather than a warning.
-# Returns 0 loopback-bound, 1 definitely not, 2 cannot tell yet (the runtime
-# has not published its transports). Only 1 is a refusal; 2 keeps polling.
+# The runtime must publish a transport this host can reach without the network:
+# a unix socket, or a loopback websocket. That is the transport the CLI actually
+# registers through, and it is what this check requires.
+#
+# It used to require EVERY advertised endpoint to be loopback. `orca serve` binds
+# its websocket to 0.0.0.0 and has no bind-address option (only --port and
+# --pairing-address, which changes the advertised address alone), so from Orca
+# 1.4.200 that rule could never be satisfied and every app-not-running apply
+# failed here. A non-loopback websocket is now reported as a warning instead of
+# a refusal; a runtime that offers NO local transport is still refused, because
+# registering would then have to travel over the network.
+#
+# Returns 0 a local transport exists, 1 endpoints are published but none is
+# local, 2 cannot tell yet (the runtime has not published its transports).
+# Only 1 is a refusal; 2 keeps polling.
 orca_register_is_loopback_bound() {
   orca_lb_file=${ORCA_REGISTER_RUNTIME_FILE:-$HOME/.config/orca/orca-runtime.json}
   [ -f "$orca_lb_file" ] || return 2
   orca_lb_endpoints=$(tr -d ' \n\t' <"$orca_lb_file" |
     tr ',' '\n' | sed -n 's/.*"endpoint":"\([^"]*\)".*/\1/p')
   [ -n "$orca_lb_endpoints" ] || return 2
-  # Heredoc, not a pipe: a piped `while` runs in a subshell, where a failure
-  # signal would only end the subshell. This loop guards a safety check, so its
-  # refusal must survive any statement a later edit adds after it.
+  orca_lb_local=
+  orca_lb_exposed=
+  # Heredoc, not a pipe: a piped `while` runs in a subshell, where the flags set
+  # below would be discarded with it. This loop guards a safety check, so its
+  # result must survive any statement a later edit adds after it.
   while IFS= read -r orca_lb_ep; do
     case "$orca_lb_ep" in
-      ws://127.0.0.1:*|ws://localhost:*|ws://\[::1\]:*|wss://127.0.0.1:*|wss://localhost:*|wss://\[::1\]:*) ;;
-      /*) ;;
-      *) return 1 ;;
+      ws://127.0.0.1:*|ws://localhost:*|ws://\[::1\]:*|wss://127.0.0.1:*|wss://localhost:*|wss://\[::1\]:*) orca_lb_local=1 ;;
+      /*) orca_lb_local=1 ;;
+      *) orca_lb_exposed="$orca_lb_exposed $orca_lb_ep" ;;
     esac
   done <<ORCA_ENDPOINTS
 $orca_lb_endpoints
 ORCA_ENDPOINTS
+  [ -n "$orca_lb_local" ] || return 1
+  if [ -n "$orca_lb_exposed" ]; then
+    echo "orca-register: the runtime this apply started also listens beyond loopback:${orca_lb_exposed} — registering over its local transport" >&2
+  fi
   return 0
 }
 
@@ -177,7 +201,7 @@ orca_register_acquire_runtime() {
         return 0
       fi
       if [ "$orca_lb_rc" -eq 1 ]; then
-        echo "orca-register: the runtime this apply started is not loopback-bound; refusing to register through it" >&2
+        echo "orca-register: the runtime this apply started publishes no loopback or unix transport; refusing to register over the network" >&2
         return 1
       fi
       # rc 2: transports not published yet — keep waiting inside the timeout.
