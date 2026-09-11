@@ -396,11 +396,8 @@ never with a bare `git worktree add`
 Never hand-remove worktrees; delete through `orca-ide worktree rm`
 That command also deletes the checked-out local branch, so it is destructive to unmerged work
 Worktrees that predate Orca ownership are NOT migrated
-Orca registration is not a garden command
-It is ADDITIVE ONLY
-Orca sidebar groups come from the registry's own `groups:` block
-Membership is declared, never derived from the path
-It reports garden drift only; it does not audit Orca registration.
+Garden entries MUST be declared in the encrypted registry source and MUST NOT declare `worktree:` trees.
+see its `AGENTS.md`, section "Garden registry and `~/src` provisioning"
 MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
 Orca has NO command that adopts an already-checked-out worktree
 Before launching ANY subagent, worker, or peer reviewer, MUST open and read the `orchestration` skill, load its version-matched guide, and use its Orca dispatch workflow.
@@ -423,6 +420,24 @@ When the step dispatches workers, the disclosure MUST name the resolved dispatch
 This rule authorizes no dispatch the invoked skill does not itself define, and the authority follows the skill chain inside one session rather than travelling to a dispatched worker
 MUST NOT send outside the current session a document, message, or artifact carrying a credential, a secret, or material the user has marked confidential. That is a stop-and-ask, never a disclosure
 NEEDLES
+
+# The garden registry mechanics the core used to carry now live in this
+# repository's own supplement, which the core points at. Assert them where they
+# moved, so the move stays a relocation rather than a deletion.
+agents_md="$repo_root/AGENTS.md"
+[[ -f $agents_md ]] || fail "AGENTS.md is missing; the core's garden pointer has no target"
+while IFS= read -r needle; do
+  [[ -z $needle ]] && continue
+  grep -F "$needle" "$agents_md" >/dev/null \
+    || fail "AGENTS.md lost the relocated garden rule: $needle"
+done <<'SUPPLEMENT_NEEDLES'
+## Garden registry and `~/src` provisioning
+Orca registration is not a garden command
+It is ADDITIVE ONLY
+Orca sidebar groups come from the registry's own `groups:` block
+Membership is declared, never derived from the path
+It reports garden drift only; it does not audit Orca registration.
+SUPPLEMENT_NEEDLES
 
 # Asserted against every rendered everyone-payload delivery. The Claude and
 # Codex wrappers and the extracted omp block must all retain the same rules.
