@@ -123,10 +123,10 @@ codex_mem_offender=$(codex_memory_offenders "$raw_codex_settings")
 [[ -z $(codex_memory_offenders '{"features.memories":false}') ]] \
   || fail 'the features.memories guard flagged a correct false declaration'
 
-# The script declares exactly one leaf under hooks: the trusted_hash for this
-# checkout's own Codex plugin hook. Codex refuses a third-party plugin hook until
-# that record exists in the user config, and the failure is silent, so the value
-# is asserted rather than merely tolerated. It was verified against every real
+# The script declares one leaf under hooks per declared Codex hook event: the
+# trusted_hash for this checkout's own Codex plugin hooks. Codex refuses a
+# third-party plugin hook until that record exists in the user config, and the
+# failure is silent, so the values are asserted rather than merely tolerated. It was verified against every real
 # trust record the authoring host's own hooks.json had recorded (8 of 8), and a
 # wider pass over that host's project hooks files matched 14 of 14.
 #
@@ -137,19 +137,27 @@ codex_mem_offender=$(codex_memory_offenders "$raw_codex_settings")
 # directory and a pinned constant would fail everywhere except the machine that
 # wrote it. The structure is asserted instead, which still catches a second
 # leaf, a re-keyed record, a table Codex owns leaking in, and a malformed hash.
-expected_trust_key='dotfiles-codex@dotfiles:hooks/hooks.json:session_start:0:0'
+# Both declared events, each keyed positionally WITHIN its own event. The count
+# is asserted so a dropped record — which disables that hook silently — fails
+# here rather than in a session nobody is watching.
+expected_trust_keys=(
+  'dotfiles-codex@dotfiles:hooks/hooks.json:session_start:0:0'
+  'dotfiles-codex@dotfiles:hooks/hooks.json:pre_tool_use:0:0'
+)
 [[ $(jq -Sc '.hooks | keys' <<<"$declared") == '["state"]' ]] \
   || fail 'the declared hooks table must carry exactly the trust state, nothing Codex owns'
-[[ $(jq -r '.hooks.state | keys | length' <<<"$declared") == 1 ]] \
-  || fail 'the declared trust state must carry exactly one record'
-jq -e --arg k "$expected_trust_key" '.hooks.state | has($k)' <<<"$declared" >/dev/null \
-  || fail 'the Codex trust record key changed; a re-keyed record disables the hook silently'
-jq -e --arg k "$expected_trust_key" '.hooks.state[$k] | keys == ["trusted_hash"]' \
-  <<<"$declared" >/dev/null \
-  || fail 'the Codex trust record must carry exactly a trusted_hash'
-jq -e --arg k "$expected_trust_key" \
-  '.hooks.state[$k].trusted_hash | test("^sha256:[0-9a-f]{64}$")' <<<"$declared" >/dev/null \
-  || fail 'the Codex trust record carries no well-formed sha256 hash'
+[[ $(jq -r '.hooks.state | keys | length' <<<"$declared") == "${#expected_trust_keys[@]}" ]] \
+  || fail "the declared trust state must carry exactly ${#expected_trust_keys[@]} records"
+for expected_trust_key in "${expected_trust_keys[@]}"; do
+  jq -e --arg k "$expected_trust_key" '.hooks.state | has($k)' <<<"$declared" >/dev/null \
+    || fail "the Codex trust record key changed ($expected_trust_key); a re-keyed record disables the hook silently"
+  jq -e --arg k "$expected_trust_key" '.hooks.state[$k] | keys == ["trusted_hash"]' \
+    <<<"$declared" >/dev/null \
+    || fail "the Codex trust record must carry exactly a trusted_hash ($expected_trust_key)"
+  jq -e --arg k "$expected_trust_key" \
+    '.hooks.state[$k].trusted_hash | test("^sha256:[0-9a-f]{64}$")' <<<"$declared" >/dev/null \
+    || fail "the Codex trust record carries no well-formed sha256 hash ($expected_trust_key)"
+done
 jq -e '.approval_policy == "never" and .sandbox_mode == "workspace-write"
   and .sandbox_workspace_write.network_access == true
   and .model_reasoning_effort == "max" and .model == "gpt-5.6-luna"

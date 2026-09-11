@@ -16,6 +16,14 @@
        The command is an absolute path resolved at render time, so no runtime
        variable expansion is needed either.
 
+       The PreToolUse entry is the launch gate: it denies a shell launch of
+       codex, claude or omp while Orca manages the session. Its matcher is
+       `Bash` because that is the tool name the captured fixture
+       (packages/orchestration-hook/test/fixtures/pretooluse-claude.json)
+       carries, and Bash is Claude Code's only shell tool. Its timeout is
+       shorter than SessionStart's: this runs on every tool call, and the guard
+       fails open, so waiting longer buys nothing.
+
        Takes the chezmoi context as its argument. */ -}}
 {{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
 {
@@ -29,6 +37,19 @@
             "command": {{ $binary | quote }},
             "args": ["hook", "--harness", "claude"],
             "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ $binary | quote }},
+            "args": ["guard", "--harness", "claude"],
+            "timeout": 10
           }
         ]
       }
