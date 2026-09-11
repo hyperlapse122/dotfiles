@@ -9,7 +9,7 @@
        paths are listed for that reason. The plugin's version is derived from the
        same inputs so the re-add resolves a new cache directory; both halves are
        required. */ -}}
-{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" "dot_local/share/dotfiles-codex-plugin/**" ".chezmoitemplates/orchestration-everyone.tmpl" ".chezmoitemplates/orchestration-role-detect.sh.tmpl" -}}
+{{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" "dot_local/share/dotfiles-codex-plugin/**" ".chezmoitemplates/orchestration-everyone.tmpl" ".chezmoitemplates/codex-hook-declaration.tmpl" -}}
 {{- $personal := includeTemplate "codex-personal-marketplace.tmpl" (dict "ctx" . "caller" "update-codex-plugins") -}}
 {{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "plugins") -}}
 {{- $removedRows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "pluginsRemoved") -}}

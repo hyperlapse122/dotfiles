@@ -1,0 +1,43 @@
+{{- /* The Codex plugin's hooks.json body, rendered.
+
+       It lives here rather than only in the plugin tree because three consumers
+       must agree on the SAME rendered bytes:
+
+         - dot_local/share/dotfiles-codex-plugin/hooks/hooks.json.tmpl, the file
+           Codex actually reads;
+         - codex-hook-trust.tmpl, which attests that declaration — a record
+           computed from different bytes is indistinguishable from no record,
+           and the hook then stops running with no session-visible symptom;
+         - the plugin's plugin.json.tmpl version digest, which must move when
+           the declaration changes or the harness keeps serving a cached tree.
+
+       The command is an absolute path resolved at render time, so the hook
+       needs no runtime variable expansion to find the binary.
+
+       It stays a command STRING rather than moving to an exec-form `args`
+       array. codex-hook-trust.tmpl normalizes `type`, `command`, `timeout`,
+       `async`, `statusMessage` and `additionalContextLimit` and has no `args`
+       member, so an `args` key would sit outside the hashed identity — the
+       silent-untrust failure the record exists to prevent. Whether Codex even
+       accepts exec form is unsettled; adopting it here means extending that
+       normalization in the same change.
+
+       Takes the chezmoi context as its argument. */ -}}
+{{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf "%s hook --harness codex" $binary | quote }},
+            "timeout": 15,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ]
+  }
+}

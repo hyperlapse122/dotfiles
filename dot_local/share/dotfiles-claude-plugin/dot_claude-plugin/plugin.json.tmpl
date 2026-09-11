@@ -17,11 +17,14 @@
        version and the reinstall reaches the cache Claude Code serves. The
        reconciler fingerprints the same three paths; the two must agree. */ -}}
 {{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-claude-plugin" -}}
+{{- /* hooks/hooks.json.tmpl is a one-line includeTemplate wrapper, so the tree
+       walk below never sees a change to the declaration it renders. Hash the
+       RENDERED declaration here, or the cache Claude Code serves keeps a stale
+       hooks.json while the source moves. */ -}}
 {{- $payloadBodies := list
       "orchestration-everyone.tmpl"
-      "orchestration-coordinator.tmpl"
-      "orchestration-role-detect.sh.tmpl" -}}
-{{- $parts := "" -}}
+      "orchestration-coordinator.tmpl" -}}
+{{- $parts := includeTemplate "claude-hook-declaration.tmpl" . | sha256sum -}}
 {{- range $body := $payloadBodies -}}
 {{-   $bodyPath := joinPath $.chezmoi.sourceDir ".chezmoitemplates" $body -}}
 {{-   if not (stat $bodyPath) -}}
@@ -39,9 +42,6 @@
 {{-   if not (stat $f).isDir -}}
 {{-     $parts = printf "%s%s" $parts (include $f | sha256sum) -}}
 {{-   end -}}
-{{- end -}}
-{{- if eq $parts "" -}}
-{{-   fail "plugin.json.tmpl: the hooks tree matched no files, so the version would not track the hook content" -}}
 {{- end -}}
 {{- $version := printf "0.1.0-%s" (substr 0 12 (sha256sum $parts)) -}}
 {

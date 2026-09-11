@@ -1,0 +1,37 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{- /* Assert the binary each plugin's hooks.json declares is actually there.
+
+   This is `run_after_`, not `run_onchange_`, and that is the whole point. Every
+   other candidate tracks SOURCE content: the 60-build script and both
+   70-agents plugin reconcilers re-run only when their fingerprint moves. So a
+   binary deleted from a converged host — a pruned libexec, a manual cleanup, a
+   full disk during an earlier staging — re-triggers none of them. The
+   declaration keeps naming a path that is not there, the hook's own fail-open
+   code never runs because the binary never starts, and the apply converges
+   green. A bare host would be correct and an existing host permanently broken,
+   with no error on either.
+
+   Unlike its run_after_ neighbours in this phase, this one FAILS the apply.
+   Their fail-open posture is right for a settings leaf that a later apply can
+   re-assert; a missing hook binary is the silent-delivery failure this whole
+   package exists to remove. The cost — chezmoi stopping before 80-keys and
+   90-src — is the cost the build script already accepts for a failed compile. */ -}}
+{{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+BINARY={{ $binary | quote }}
+
+if [[ ! -f "$BINARY" ]]; then
+  printf '%s\n' "assert-orchestration-hook: $BINARY is missing; the orchestration hook each plugin declares cannot run. Re-apply to rebuild it, or investigate what removed it." >&2
+  exit 1
+fi
+
+if [[ ! -x "$BINARY" ]]; then
+  printf '%s\n' "assert-orchestration-hook: $BINARY is not executable; the orchestration hook each plugin declares cannot run." >&2
+  exit 1
+fi
+
+# Silent on a converged host: a run_after_ script that printed on every apply
+# would bury the output that matters.
+{{ end -}}

@@ -1,0 +1,37 @@
+{{- /* The Claude Code plugin's hooks.json body, rendered.
+
+       It lives here rather than only in the plugin tree so the plugin's
+       plugin.json.tmpl version digest can hash the SAME rendered bytes the
+       harness serves. A one-line wrapper's own source text never changes when
+       this partial does, so a digest over the wrapper alone would freeze while
+       the deployed declaration moved.
+
+       Exec form is required, not preferred. Claude Code runs a bare `command`
+       string through `sh -c` and spawns the binary directly only when `args` is
+       present, so omitting `args` would put a shell back on the session-start
+       path that this package exists to remove. Claude Code keeps no trust
+       record, so `args` raises none of the normalization concern the Codex
+       declaration carries.
+
+       The command is an absolute path resolved at render time, so no runtime
+       variable expansion is needed either.
+
+       Takes the chezmoi context as its argument. */ -}}
+{{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ $binary | quote }},
+            "args": ["hook", "--harness", "claude"],
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
