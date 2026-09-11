@@ -2,13 +2,28 @@
 {{- includeTemplate "orca-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- $home := .chezmoi.homeDir -}}
 {{- $resolved := dict -}}
+{{- $placeholderRe := "@[A-Za-z0-9_-]+@" -}}
 {{- range $path, $value := $settings -}}
 {{-   if kindIs "string" $value -}}
 {{-     $substituted := replace "@homeDir@" $home $value -}}
-{{-     if regexMatch "@[A-Za-z0-9_-]+@" $substituted -}}
+{{-     if regexMatch $placeholderRe $substituted -}}
 {{-       fail (printf "orca-settings-reconcile: %s still holds an unresolved @…@ placeholder after substitution: %q" $path $substituted) -}}
 {{-     end -}}
 {{-     $_ := set $resolved $path $substituted -}}
+{{-   else if kindIs "slice" $value -}}
+{{-     $elements := list -}}
+{{-     range $element := $value -}}
+{{-       if kindIs "string" $element -}}
+{{-         $substituted := replace "@homeDir@" $home $element -}}
+{{-         if regexMatch $placeholderRe $substituted -}}
+{{-           fail (printf "orca-settings-reconcile: %s holds an array element with an unresolved @…@ placeholder after substitution: %q" $path $substituted) -}}
+{{-         end -}}
+{{-         $elements = append $elements $substituted -}}
+{{-       else -}}
+{{-         $elements = append $elements $element -}}
+{{-       end -}}
+{{-     end -}}
+{{-     $_ := set $resolved $path $elements -}}
 {{-   else -}}
 {{-     $_ := set $resolved $path $value -}}
 {{-   end -}}
@@ -129,20 +144,37 @@ if [ "$mode" = assert ] && orca_is_running; then
   exit 0
 fi
 
-live="$(jq -e -c 'if type == "object" then . else empty end' "$data" 2>/dev/null || true)"
+# One reader, two callers. The race check below compares its result against this
+# snapshot, and that comparison only means anything while both sides normalize
+# the same way -- a one-sided edit would make them differ forever, and the
+# reconciler would report "changed while staging" and silently never write.
+read_live() {
+  jq -e -c 'if type == "object" then . else empty end' "$data" 2>/dev/null || true
+}
+
+live="$(read_live)"
 if [ -z "$live" ]; then
   printf '%s: %s is not a JSON object; reconciled nothing. Repair or remove it, then re-run.\n' "$self" "$data" >&2
   exit 0
 fi
 
 scratch="$(mktemp "${TMPDIR:-/tmp}/orca-settings-classify.XXXXXX")"
+live_file="$(mktemp "${TMPDIR:-/tmp}/orca-settings-live.XXXXXX")"
 staged=''
-cleanup() { rm -f -- "$scratch" ${staged:+"$staged"}; }
+cleanup() { rm -f -- "$scratch" "$live_file" ${staged:+"$staged"}; }
 # A signal handler that does not exit lets execution resume at the next
 # statement, so an interrupt between the re-read and the rename would delete the
 # staged file and then try to move it. Terminate explicitly.
 trap cleanup EXIT
 trap 'cleanup; exit 1' HUP INT TERM
+
+# The live document reaches jq as a FILE, never as an --argjson argument. Linux
+# caps one argv entry at MAX_ARG_STRLEN (128 KiB); a real orca-data.json is
+# comfortably past that -- measured at 262 KiB on the authoring host -- so the
+# argument form fails with E2BIG on every run against a real profile while
+# passing against any small fixture. Written from the same snapshot the race
+# check compares, so the two cannot normalize differently.
+printf '%s' "$live" >"$live_file"
 
 # One classification pass per declared leaf, reading the PARENT rather than the
 # leaf: `getpath` cannot tell a missing key from one holding null, and those are
@@ -151,14 +183,14 @@ trap 'cleanup; exit 1' HUP INT TERM
 # quiet no-op a renamed setting must not become. getpath raises on an ancestor
 # holding a scalar, so the probe is wrapped and `blocked` travels as a state on
 # the stream rather than aborting it.
-jq -rn --argjson live "$live" --argjson declared "$DECLARED" '
+jq -rn --slurpfile live "$live_file" --argjson declared "$DECLARED" '
   $declared
   | to_entries[]
   | . as $e
   | ($e.key | split(".")) as $p
   | ($p[:-1]) as $parent_path
   | ($p[-1]) as $leaf
-  | (try {parent: ($live | getpath($parent_path))} catch {blocked: true}) as $probe
+  | (try {parent: ($live[0] | getpath($parent_path))} catch {blocked: true}) as $probe
   | (if ($probe | has("blocked")) then "blocked"
      elif ($probe.parent == null) then "unknown"
      elif (($probe.parent | type) != "object") then "blocked"
@@ -170,14 +202,12 @@ jq -rn --argjson live "$live" --argjson declared "$DECLARED" '
 
 examined=0
 drifted=0
-# Strings rather than arrays: bash 3.2 errors on empty-array expansion under
-# `set -u`, and every path already passed the render-time grammar so none can
-# carry a newline.
+# Strings rather than arrays: drifted_paths goes straight into jq's split("\n"),
+# and every path passed the render-time grammar, so none can carry a newline.
 drifted_paths=''
 unknown_paths=''
 blocked_paths=''
-tab="$(printf '\t')"
-while IFS="$tab" read -r state path; do
+while IFS=$'\t' read -r state path; do
   [ -n "$path" ] || continue
   examined=$((examined + 1))
   case "$state" in
@@ -208,14 +238,17 @@ fi
 if [ "$mode" = report ]; then
   if [ "$drifted" -gt 0 ]; then
     printf '%s: %d of %d declared paths differ from %s:\n' "$self" "$drifted" "$examined" "$data" >&2
-    printf '%s' "$drifted_paths" | while IFS= read -r path; do
-      [ -n "$path" ] || continue
-      jq -rn --argjson live "$live" --argjson declared "$DECLARED" --arg k "$path" '
-        ($k | split(".")) as $p
-        | (try ($live | getpath($p)) catch null) as $current
-        | "  \($k): declared \($declared[$k] | tojson), live \($current | tojson)"
-      ' >&2
-    done
+    # One jq for the whole list. This runs on every `chezmoi apply`, and a
+    # per-path fork would re-serialize and re-parse the entire live document and
+    # declaration once for each drifted path.
+    printf '%s' "$drifted_paths" | jq -Rrn --slurpfile live "$live_file" --argjson declared "$DECLARED" '
+      inputs
+      | select(length > 0)
+      | . as $k
+      | ($k | split(".")) as $p
+      | (try ($live[0] | getpath($p)) catch null) as $current
+      | "  \($k): declared \($declared[$k] | tojson), live \($current | tojson)"
+    ' >&2
     printf '%s: these converge at the next graphical session start.\n' "$self" >&2
   fi
   exit 0
@@ -234,15 +267,15 @@ chmod 0644 "$staged"
 # `drifted_paths` is the classifier's verdict, not the declaration: an unknown or
 # blocked path never reaches setpath, which would otherwise abort under `set -e`
 # with a bare jq error naming nothing.
-jq -n --argjson live "$live" --argjson declared "$DECLARED" --arg write_paths "$drifted_paths" '
+jq -n --slurpfile live "$live_file" --argjson declared "$DECLARED" --arg write_paths "$drifted_paths" '
   ($write_paths | split("\n") | map(select(length > 0))) as $keys
-  | reduce $keys[] as $k ($live; setpath($k | split("."); $declared[$k]))
+  | reduce $keys[] as $k ($live[0]; setpath($k | split("."); $declared[$k]))
 ' >"$staged"
 
 # Orca may have started between the read and now. Compare CONTENT rather than
 # inode and mtime: an in-place rewrite keeps the inode and can land in the same
 # whole second, so an identity check would pass while the write is silently lost.
-if [ "$(jq -e -c 'if type == "object" then . else empty end' "$data" 2>/dev/null || true)" != "$live" ]; then
+if [ "$(read_live)" != "$live" ]; then
   printf '%s: %s changed while this run staged its replacement; discarded the staged file and reconciled nothing. The next run retries.\n' "$self" "$data" >&2
   exit 0
 fi

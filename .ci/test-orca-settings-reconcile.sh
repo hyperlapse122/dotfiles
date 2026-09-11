@@ -21,31 +21,35 @@ usage='usage: test-orca-settings-reconcile.sh RECONCILE_SCRIPT'
 reconcile_script=${1:?$usage}
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
-scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/orca-settings-reconcile-fixtures
-mkdir -p -- "$scratch_root"
-chmod 0700 -- "$scratch_root"
-scratch=$(mktemp -d "$scratch_root/run.XXXXXX")
-cleanup() { rm -rf -- "$scratch"; }
-trap cleanup EXIT
-
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 ok() { printf '  ok: %s\n' "$*"; }
 
 command -v jq >/dev/null 2>&1 || fail "jq is required to run this guard"
 
-# Renders resolve secrets live, so isolate them from host state: a scratch HOME
-# plus a stub op answering newline-free.
-render_config="$scratch/render.toml"
-printf '[data]\n' >"$render_config"
-neg_home="$scratch/neg-home"
-neg_bin="$scratch/neg-bin"
-mkdir -p "$neg_home" "$neg_bin"
-printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$neg_bin/op"
-chmod 0700 "$neg_bin/op"
+# The scratch root, the stub `op` and the empty chezmoi config are the same three
+# things every render gate needs, and the repo already factored them out after
+# each gate had drifted its own copy. Use that helper rather than adding a fourth.
+# shellcheck source=.ci/lib/render-scratch.sh
+. "$repo_root/.ci/lib/render-scratch.sh"
+setup_render_scratch orca-settings-reconcile
+# AGENTS.md requires every render gate to use this helper rather than hand-roll
+# the invocation: it pins PATH to the stub and system directories only -- never
+# the inherited PATH, so no code path can fall through to the real `op` -- and
+# writes through a throwaway --destination.
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+. "$repo_root/.ci/lib/render-gate-helpers.sh"
+chezmoi_bin=$(command -v chezmoi) || fail 'chezmoi is required to run this guard'
+mkdir -p -- "$scratch/home"
 
-render() {
-  env HOME="$neg_home" PATH="$neg_bin:$PATH" \
-    chezmoi --config "$render_config" --source "$repo_root" execute-template
+# The helper renders file-to-file; these checks are easier to read as a here-doc
+# pipeline, so wrap it rather than reimplement it. The template's own render
+# failure is the assertion in half of them, so the exit status must survive.
+render_stdin() {
+  local in="$scratch/render.in" out="$scratch/render.out" rc=0
+  cat >"$in"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$in" "$out" || rc=$?
+  if [[ -s $out ]]; then cat -- "$out"; fi
+  return "$rc"
 }
 
 # ---------------------------------------------------------------------------
@@ -58,7 +62,7 @@ validate_call='{{ includeTemplate "orca-settings-validate.tmpl" (dict "ctx" . "s
 
 expect_reject() {
   local what=$1 settings_expr=$2 want=$3 out
-  if out=$(render <<<"${validate_call/SETTINGS/$settings_expr}" 2>&1); then
+  if out=$(render_stdin <<<"${validate_call/SETTINGS/$settings_expr}" 2>&1); then
     fail "declaration guard accepted $what; it must fail the render"
   fi
   grep -q -- "$want" <<<"$out" \
@@ -68,7 +72,7 @@ expect_reject() {
 
 expect_accept() {
   local what=$1 settings_expr=$2 out
-  out=$(render <<<"${validate_call/SETTINGS/$settings_expr}" 2>&1) \
+  out=$(render_stdin <<<"${validate_call/SETTINGS/$settings_expr}" 2>&1) \
     || fail "declaration guard rejected $what, which is legal: $out"
   [[ $out == *accepted* ]] || fail "declaration guard produced no output for $what: $out"
   ok "accepts $what"
@@ -82,6 +86,8 @@ expect_reject 'an array holding a container' \
   '(dict "settings.a" (list (dict "k" "v")))' 'must hold scalars only'
 expect_reject 'an unsubstituted placeholder' \
   '(dict "settings.a" "@homeDir@/x/@nope@")' 'does not substitute'
+expect_reject 'an unsubstituted placeholder inside an array element' \
+  '(dict "settings.a" (list "@nope@"))' 'does not substitute'
 expect_reject 'a path that is an ancestor of another' \
   '(dict "settings.voice" "x" "settings.voice.enabled" true)' 'is an ancestor of'
 expect_reject 'an empty path segment' \
@@ -99,7 +105,7 @@ expect_accept 'an empty declaration' '(dict)'
 # ---------------------------------------------------------------------------
 printf 'declaration content\n'
 
-declared_source=$(render <<<'{{ .orca.settings | toJson }}')
+declared_source=$(render_stdin <<<'{{ .orca.settings | toJson }}')
 declared=$(sed -n "s/^DECLARED=\"\$(decode_b64 '\([A-Za-z0-9+/=]*\)')\"$/\1/p" "$reconcile_script" | base64 --decode)
 [[ -n $declared ]] || fail 'could not read the declaration payload out of the rendered reconciler'
 
@@ -189,6 +195,16 @@ ok 'assert converges the declared leaf and preserves every sibling'
 
 # Declared JSON types survive the round trip. A boolean written as a string is
 # the failure this catches: Orca rejects the value and falls back to its default.
+# Drift the typed leaves to the WRONG type first -- a fixture built from the
+# declaration already holds the right ones, so without this the check would pass
+# on values assert never wrote.
+reset_fixture
+tmp="$scratch/types.json"
+jq --argjson declared "$declared" '
+  reduce ($declared | to_entries[] | select(.value | type == "boolean" or type == "number")) as $e
+    (.; setpath($e.key | split("."); "wrong-type"))
+' "$data" >"$tmp" && mv -- "$tmp" "$data"
+run --mode assert >/dev/null 2>&1
 type_offenders=$(jq -r --argjson declared "$declared" '
   . as $live
   | $declared
@@ -211,14 +227,37 @@ assert_json 'an array leaf was merged instead of replaced whole' \
   '.settings.disabledTuiAgents == ["antigravity"]'
 ok 'an array leaf is replaced whole'
 
+# A real orca-data.json is a quarter of a megabyte, and Linux caps a single argv
+# entry at MAX_ARG_STRLEN (128 KiB). Passing the document as a jq argument fails
+# with E2BIG against every real profile while passing against every small
+# fixture, so the fixture must be grown past that limit or this guard is blind to
+# the whole class.
+reset_fixture
+tmp="$scratch/big.json"
+jq '.worktreeMeta.bulk = ([range(6000)] | map({key: "w\(.)", value: {branch: "feature/padding-\(.)", note: "padding to exceed the single-argument limit"}}) | from_entries)' \
+  "$data" >"$tmp" && mv -- "$tmp" "$data"
+data_bytes=$(wc -c <"$data")
+[[ $data_bytes -gt 131072 ]] \
+  || fail "the oversized fixture is only $data_bytes bytes; it must exceed 131072 to exercise the argv limit"
+drift_one
+run --mode assert >/dev/null 2>&1 || fail 'assert failed on a realistically sized document'
+assert_json 'assert did not converge against an oversized document' \
+  '.settings.appFontFamily == "Pretendard"'
+assert_json 'assert lost the bulk metadata of an oversized document' \
+  '(.worktreeMeta.bulk | length) == 6000'
+report_out=$(run --mode report 2>&1) || fail 'report failed on a realistically sized document'
+ok "assert and report handle a ${data_bytes}-byte document (past the 131072-byte argv limit)"
+
 # Report never writes and never fails, whatever it finds.
 reset_fixture
 drift_one
 before=$(cat "$data")
 report_out=$(run --mode report 2>&1) || fail 'report exited non-zero; drift must never fail an apply'
 [[ $(cat "$data") == "$before" ]] || fail 'report wrote to the live document'
-grep -q 'settings.appFontFamily' <<<"$report_out" || fail "report did not name the drifted path: $report_out"
-grep -q 'DriftedFont' <<<"$report_out" || fail "report did not show the live value: $report_out"
+# Match the whole line, not a substring: a raw-output flag lost from the jq call
+# wraps every line in JSON quotes and escapes, which a substring grep still finds.
+grep -qx '  settings\.appFontFamily: declared "Pretendard", live "DriftedFont"' <<<"$report_out" \
+  || fail "report did not print the drift line in raw form; got: $report_out"
 ok 'report names the drift, changes nothing, and exits zero'
 
 # ---------------------------------------------------------------------------
@@ -226,6 +265,11 @@ ok 'report names the drift, changes nothing, and exits zero'
 # behind, and skipping forever on it is the silent failure this guard exists for.
 # ---------------------------------------------------------------------------
 printf 'running-application detection\n'
+
+# Read once: the reconciler compares the lock's hostname against this value, so
+# recomputing it per case would suggest it can change mid-run, which is exactly
+# the semantics these cases are pinning down.
+this_host=$(uname -n)
 
 expect_lock() {
   local what=$1 target=$2 want=$3
@@ -247,8 +291,8 @@ expect_lock() {
   ok "$what -> $want"
 }
 
-expect_lock 'a lock naming this host and a live pid' "$(uname -n)-$$" skipped
-expect_lock 'a lock naming this host and a dead pid' "$(uname -n)-999999" written
+expect_lock 'a lock naming this host and a live pid' "$this_host-$$" skipped
+expect_lock 'a lock naming this host and a dead pid' "$this_host-999999" written
 expect_lock 'a lock naming another host' "someotherhost-$$" written
 expect_lock 'a lock whose target does not parse' 'garbage' written
 
@@ -256,7 +300,7 @@ expect_lock 'a lock whose target does not parse' 'garbage' written
 # the common case, and it is exactly when they need to see drift.
 reset_fixture
 drift_one
-ln -sfn "$(uname -n)-$$" "$lock"
+ln -sfn "$this_host-$$" "$lock"
 report_out=$(run --mode report 2>&1) || fail 'report exited non-zero while Orca was running'
 grep -q 'settings.appFontFamily' <<<"$report_out" \
   || fail 'report stayed silent while Orca was running; drift must still be visible'
@@ -307,6 +351,70 @@ printf 'not json' >"$data"
 run --mode assert >/dev/null 2>&1 || fail 'assert failed on an unreadable document'
 [[ $(cat "$data") == 'not json' ]] || fail 'assert rebuilt an unreadable document instead of leaving it alone'
 ok 'an unreadable document is left alone'
+
+# Without jq there is no classifier at all. The reconciler must say so rather than
+# exit quietly, because silence reads as "the declared values are pinned".
+nojq_bin=$scratch/nojq
+mkdir -p -- "$nojq_bin"
+for cmd in bash uname readlink mktemp mv rm chmod dirname printf base64 kill; do
+  target=$(command -v "$cmd" 2>/dev/null) && ln -sf "$target" "$nojq_bin/$cmd"
+done
+reset_fixture
+drift_one
+before=$(cat "$data")
+nojq_err=$(env -i HOME="$scratch/home" PATH="$nojq_bin" ORCA_SETTINGS_CONFIG_DIR="$fixtures" \
+  bash "$reconcile_script" --mode assert 2>&1 >/dev/null) \
+  || fail 'a missing jq should not fail the run'
+grep -qF 'jq is unavailable' <<<"$nojq_err" || fail "a missing jq was not reported; stderr was: $nojq_err"
+[[ $(cat "$data") == "$before" ]] || fail 'the reconciler wrote without jq'
+ok 'a missing jq is reported and nothing is written'
+
+# ---------------------------------------------------------------------------
+# The concurrent-write guard. No fixture can reach this by content alone -- the
+# competing write must land BETWEEN the reconciler's read and its rename. Shadow
+# jq so the classification pass, identifiable by its -rn flags, rewrites the
+# document on its way out, exactly as a co-writer using open(O_TRUNC) would.
+# Deleting the guard from the reconciler must fail here.
+# ---------------------------------------------------------------------------
+printf 'concurrent writer\n'
+
+race_bin=$scratch/race
+mkdir -p -- "$race_bin"
+# Call the real jq through the ORIGINAL PATH, not an absolute path. `command -v
+# jq` can resolve to a version-manager shim that re-resolves `jq` through PATH
+# itself, and with the shadow directory prepended that shim would find this file
+# again and recurse until the run is killed.
+orig_path=$PATH
+cat >"$race_bin/jq" <<RACE
+#!/usr/bin/env bash
+PATH="$orig_path" jq "\$@"; rc=\$?
+if [[ ! -e "\$RACE_MARK" ]]; then
+  for a in "\$@"; do
+    if [[ \$a == -rn ]]; then
+      : >"\$RACE_MARK"
+      printf '%s' "\$RACE_CONTENT" >"\$RACE_TARGET"
+      break
+    fi
+  done
+fi
+exit \$rc
+RACE
+chmod 0700 "$race_bin/jq"
+
+reset_fixture
+drift_one
+race_content=$(jq -c '.settings.injectedByOtherWriter = true' "$data")
+race_err=$(RACE_MARK="$scratch/race.mark" RACE_CONTENT="$race_content" RACE_TARGET="$data" \
+  PATH="$race_bin:$PATH" ORCA_SETTINGS_CONFIG_DIR="$fixtures" \
+  bash "$reconcile_script" --mode assert 2>&1 >/dev/null) \
+  || fail 'a concurrent write should not fail the run'
+grep -qF 'changed while this run staged its replacement' <<<"$race_err" \
+  || fail "the concurrent write was not reported; stderr was: $race_err"
+[[ $(cat "$data") == "$race_content" ]] \
+  || fail "the staged file overwrote the concurrent writer's content"
+[[ -z $(find "$(dirname "$data")" -maxdepth 1 -name '.orca-data.*' -print -quit) ]] \
+  || fail 'the discarded staged file was left behind'
+ok 'a concurrent write is detected, reported, and never overwritten'
 
 # ---------------------------------------------------------------------------
 # Argument handling.

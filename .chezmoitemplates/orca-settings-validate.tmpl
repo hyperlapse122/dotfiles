@@ -42,7 +42,7 @@ skip, because a declaration this file rejects is wrong on every host.
 {{- if not $ctx -}}{{- fail "orca-settings-validate.tmpl: ctx is required" -}}{{- end -}}
 {{- $settings := .settings -}}
 {{- if not (kindIs "map" $settings) -}}
-{{-   fail (printf "config-orca-settings: orca.settings must be a map, got %s" (kindOf $settings)) -}}
+{{-   fail (printf "orca-settings-reconcile: orca.settings must be a map, got %s" (kindOf $settings)) -}}
 {{- end -}}
 {{- /* Segments start with a letter and admit digits, underscore and hyphen. The
    trailing hyphen in the class is a literal, not a range. This regexp rejects an
@@ -52,25 +52,28 @@ skip, because a declaration this file rejects is wrong on every host.
 {{- $placeholderRe := "@[A-Za-z0-9_-]+@" -}}
 {{- range $path, $value := $settings -}}
 {{-   if not (regexMatch $pathRe $path) -}}
-{{-     fail (printf "config-orca-settings: %q is not a valid settings path; use dot-separated segments naming a leaf in orca-data.json, each segment non-empty and starting with a letter" $path) -}}
+{{-     fail (printf "orca-settings-reconcile: %q is not a valid settings path; use dot-separated segments naming a leaf in orca-data.json, each segment non-empty and starting with a letter" $path) -}}
 {{-   end -}}
 {{-   if not (hasPrefix "settings." $path) -}}
-{{-     fail (printf "config-orca-settings: declared path %s is outside the settings namespace; orca-data.json also holds worktree metadata, workspace session state, automations and telemetry that only Orca may write, so every declared path must start with settings." $path) -}}
+{{-     fail (printf "orca-settings-reconcile: declared path %s is outside the settings namespace; orca-data.json also holds worktree metadata, workspace session state, automations and telemetry that only Orca may write, so every declared path must start with settings." $path) -}}
 {{-   end -}}
 {{-   if kindIs "map" $value -}}
-{{-     fail (printf "config-orca-settings: %s declares a map value, but a declared path must name a leaf; asserting a record would replace it wholesale and destroy every sibling Orca put there. Declare each leaf separately" $path) -}}
+{{-     fail (printf "orca-settings-reconcile: %s declares a map value, but a declared path must name a leaf; asserting a record would replace it wholesale and destroy every sibling Orca put there. Declare each leaf separately" $path) -}}
 {{-   end -}}
 {{-   if kindIs "slice" $value -}}
 {{-     range $element := $value -}}
 {{-       if or (kindIs "map" $element) (kindIs "slice" $element) -}}
-{{-         fail (printf "config-orca-settings: %s declares an array holding a %s; an array leaf is replaced whole and must hold scalars only" $path (kindOf $element)) -}}
+{{-         fail (printf "orca-settings-reconcile: %s declares an array holding a %s; an array leaf is replaced whole and must hold scalars only" $path (kindOf $element)) -}}
+{{-       end -}}
+{{-       if kindIs "string" $element -}}
+{{-         if regexMatch $placeholderRe (replace "@homeDir@" "" $element) -}}
+{{-           fail (printf "orca-settings-reconcile: %s holds array element %q carrying an @…@ placeholder the reconciler does not substitute; the only one it resolves is @homeDir@ (-> .chezmoi.homeDir)" $path $element) -}}
+{{-         end -}}
 {{-       end -}}
 {{-     end -}}
-{{-   else -}}
-{{-     if kindIs "string" $value -}}
-{{-       if regexMatch $placeholderRe (replace "@homeDir@" "" $value) -}}
-{{-         fail (printf "config-orca-settings: %s has value %q carrying an @…@ placeholder the reconciler does not substitute; the only one it resolves is @homeDir@ (-> .chezmoi.homeDir)" $path $value) -}}
-{{-       end -}}
+{{-   else if kindIs "string" $value -}}
+{{-     if regexMatch $placeholderRe (replace "@homeDir@" "" $value) -}}
+{{-       fail (printf "orca-settings-reconcile: %s has value %q carrying an @…@ placeholder the reconciler does not substitute; the only one it resolves is @homeDir@ (-> .chezmoi.homeDir)" $path $value) -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}
@@ -80,7 +83,7 @@ skip, because a declaration this file rejects is wrong on every host.
 {{- range $path, $value := $settings -}}
 {{-   range $other, $_ := $settings -}}
 {{-     if and (ne $other $path) (hasPrefix (printf "%s." $path) $other) -}}
-{{-       fail (printf "config-orca-settings: declared path %s is an ancestor of %s; only one of them can name a leaf, and declaring both aborts the apply with no usable diagnostic" $path $other) -}}
+{{-       fail (printf "orca-settings-reconcile: declared path %s is an ancestor of %s; only one of them can name a leaf, and declaring both aborts the apply with no usable diagnostic" $path $other) -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}

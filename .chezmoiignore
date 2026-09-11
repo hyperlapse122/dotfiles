@@ -162,8 +162,8 @@
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
 # above so the encrypted project registry cannot be decrypted here, and the
 # 90-src scripts (grow/bootstrap, Orca registration, the Orca settings drift
-# report) would have nothing to provision — no registry, and no Orca profile —
-# and would hard-fail on the then-absent registry — skip both.
+# report) would hard-fail on the then-absent registry or have no Orca profile
+# to report against — skip the scripts and the registry.
 .chezmoiscripts/90-src/*.sh
 .config/garden/garden.yaml
 # Both of these resolve host-only vault references at RENDER time -- the
