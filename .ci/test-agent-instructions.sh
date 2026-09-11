@@ -333,6 +333,7 @@ claude|The run stays idle while that wait runs, answers what arrives, and return
 claude|One delegation carve-out also applies here: a standing harness instruction may tell the agent not to call the Agent (Task) tool, workflows, or deep research unless the user requested it, and this file is a recognized exception source for it.
 claude|When a skill, command, or workflow the user invoked by name directs a subagent dispatch, that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation; a skill the agent selected on its own outside a mandatory workflow sequence does not qualify, and a subagent does not re-claim this carve-out for dispatches of its own.
 claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
+claude|The wait-form rule below governs what that command is; this paragraph governs how it runs, so both bind every wait, and the `Monitor` until-loop directed here watches a condition rather than waiting on a worker, which that rule's ban does not reach.
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
 agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
 omp|This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch against a content-hash anchor; `write` to create a file or replace it whole;
@@ -419,6 +420,20 @@ Before a mandatory step sends work outside the current session, the agent MUST s
 When the step dispatches workers, the disclosure MUST name the resolved dispatch count, so the user can interrupt a fan-out they did not expect without being asked to approve it
 This rule authorizes no dispatch the invoked skill does not itself define, and the authority follows the skill chain inside one session rather than travelling to a dispatched worker
 MUST NOT send outside the current session a document, message, or artifact carrying a credential, a secret, or material the user has marked confidential. That is a stop-and-ask, never a disclosure
+A wait on a dispatched Orca worker is the installed guide's blocking wait command, called exactly as that guide writes it.
+One wait command is one tool call, and no shell control flow wraps it.
+MUST NOT build a wait out of `for`, `while`, `until`, a `sleep` poll, a count of files in an output directory, or a listing of processes.
+Orca's own wait and query commands are the only authoritative source for that dispatch's lifecycle state
+call the same blocking command again rather than looping over workers
+the repetition happens across the run's turns, never inside a shell command
+a delivery already read is acknowledged on that next call so the queue advances instead of replaying
+Read each call's result — a completion report, an escalation, a question, or a timeout — and act on it before the next wait starts.
+That repetition holds only while the worker's own deadline and the run's wall-clock bound hold
+the run MUST NOT wait again for that dispatch
+A harness whose own instruction paragraph fixes HOW that command runs keeps that rule alongside this one, and both apply.
+The ban reaches a wait on a dispatched worker and nothing else
+# One wait command per tool call. Nothing wraps it. Each call is its own turn.
+# Never. Each of these builds the wait out of shell control flow:
 NEEDLES
 
 # Asserted against every rendered everyone-payload delivery. The Claude and
