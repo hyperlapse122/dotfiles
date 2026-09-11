@@ -250,6 +250,13 @@ function scanSegmentTokens(tokens: string[]): Invocation[] {
 
     idx++;
 
+    // `command -v foo` and `command -V foo` ask where foo is; they never run
+    // it. Unwrapping them would make a lookup indistinguishable from a bare
+    // launch, and the launch check would deny a presence probe.
+    if (name === "command" && tokens[idx] !== undefined && /^-[vV]$/.test(tokens[idx]!)) {
+      return [];
+    }
+
     const flagArgTable = WRAPPER_OPTION_WITH_ARG[name];
 
     // Skip option flags and their arguments

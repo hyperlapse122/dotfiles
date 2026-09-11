@@ -23,9 +23,14 @@ describe("scanInvocations", () => {
       ]);
     });
 
-    it("unwraps command wrapper and options without next non-flag token", () => {
-      expect(scanInvocations("command -v codex")).toMatchObject([
-        { program: "codex", next: undefined },
+    it("yields nothing for a command -v lookup, which runs nothing", () => {
+      expect(scanInvocations("command -v codex")).toMatchObject([]);
+      expect(scanInvocations("command -V codex")).toMatchObject([]);
+    });
+
+    it("still unwraps a command wrapper that does run something", () => {
+      expect(scanInvocations("command codex exec")).toMatchObject([
+        { program: "codex", next: "exec" },
       ]);
     });
 
