@@ -1,0 +1,31 @@
+[Unit]
+Description=Reconcile declared Orca application settings before the desktop session
+Documentation=file://%h/.local/bin/orca-settings-reconcile
+# Orca reads orca-data.json once at startup and never re-reads it from disk, and
+# while it runs it rewrites the whole document from memory. The only moment a
+# declared value can be written and survive is one where the application is
+# down, so this runs ahead of the graphical session rather than at apply time.
+Before=graphical-session.target
+
+[Service]
+Type=oneshot
+# No RemainAfterExit: this must run again on every target activation, not once
+# per boot. The command is idempotent -- it writes nothing when the live
+# document already matches the declaration.
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/.local/bin/orca-settings-reconcile --mode assert
+# A failure here must never keep the operator out of their desktop, and it does
+# not: Before= only orders, and no target Requires= this unit, so a failed run
+# leaves the session untouched. That is why the exit status is NOT laundered --
+# `systemctl --user status` is the only place a broken reconciler shows up.
+# Before= makes the target wait for this unit, so an unbounded start would hold
+# the desktop for DefaultTimeoutStartSec (90s) if the home directory stalls on
+# I/O. The reconciler is idempotent and runs again at the next target
+# activation, so a truncated run costs nothing but the delay it avoids.
+TimeoutStartSec=20s
+
+[Install]
+# Both targets on purpose. graphical-session-pre.target is the per-session
+# trigger; default.target covers a boot with lingering enabled, and keeps the
+# unit reachable on a desktop that does not drive graphical-session-pre.
+WantedBy=default.target graphical-session-pre.target

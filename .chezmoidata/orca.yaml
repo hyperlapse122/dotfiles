@@ -1,0 +1,60 @@
+# Orca IDE application settings this repository declares.
+#
+# WHY A LEAF DECLARATION AND NOT A TARGET. The live file is
+# ~/.config/orca/profiles/<activeProfileId>/orca-data.json, and it mixes these
+# settings with worktree metadata, workspace session state and telemetry that
+# only the application may write. A managed target would fight all of that, so
+# each key below names one LEAF and only that leaf is asserted.
+#
+# WHY THE RECONCILER RUNS AT SESSION START AND NOT AT APPLY TIME. Orca reads
+# orca-data.json once at startup and never re-reads it from disk; while it runs
+# it rewrites the whole document from memory (measured at roughly one write
+# every nine seconds on an idle session). A value written during `chezmoi apply`
+# is therefore ignored and then overwritten. The assertion runs from the
+# orca-settings-reconcile.service user unit, before the graphical session; apply
+# only reports drift.
+#
+# PATHS ARE ROOTED AT THE DOCUMENT, not at its `settings` object, so every key
+# here begins with `settings.`. orca-settings-validate.tmpl rejects anything
+# outside that prefix at render time.
+#
+# @homeDir@ is the one placeholder: .chezmoidata files are static data and are
+# never rendered as templates, so the reconciler substitutes it with
+# .chezmoi.homeDir at render time and fails on any other unresolved @…@.
+# .chezmoidata/kde.yaml uses the same convention.
+orca:
+  settings:
+    # The worktree base path AGENTS.md mandates for every Orca-managed worktree.
+    settings.workspaceDir: "@homeDir@/.local/share/worktrees"
+
+    settings.appFontFamily: Pretendard
+    settings.editorFontFamily: JetBrainsMono NF
+    settings.terminalFontFamily: JetBrainsMono NF
+
+    settings.defaultTuiAgent: claude-agent-teams
+
+    # Only the codex entry of the agentDefaultArgs map is declared; the other
+    # twenty-five agents keep whatever the application defaults them to.
+    settings.agentDefaultArgs.codex: --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust
+
+    # An array leaf is compared and replaced whole -- this grammar has no path
+    # syntax for list membership. An agent disabled by hand in the UI is
+    # therefore restored on the next convergence.
+    settings.disabledTuiAgents:
+      - antigravity
+
+    settings.voice.enabled: true
+    settings.voice.sttModel: zipformer-streaming-korean
+
+    settings.refreshLocalBaseRefOnWorktreeCreate: true
+
+    # Source control actions split deliberately: the three generating actions run
+    # on the plain agent, the five that fix or resolve run on the team agent.
+    settings.sourceControlAi.actions.commitMessage.agentId: claude
+    settings.sourceControlAi.actions.pullRequest.agentId: claude
+    settings.sourceControlAi.actions.branchName.agentId: claude
+    settings.sourceControlAi.actions.fixCommitFailure.agentId: claude-agent-teams
+    settings.sourceControlAi.actions.fixPushFailure.agentId: claude-agent-teams
+    settings.sourceControlAi.actions.fixChecks.agentId: claude-agent-teams
+    settings.sourceControlAi.actions.resolveConflicts.agentId: claude-agent-teams
+    settings.sourceControlAi.actions.resolveComments.agentId: claude-agent-teams
