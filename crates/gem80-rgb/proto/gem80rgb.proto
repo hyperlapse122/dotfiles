@@ -17,6 +17,13 @@ enum RejectionReason {
   REJECTION_REASON_PERMISSION_DENIED = 4;
   // Malformed or invalid argument in an otherwise well-formed message.
   REJECTION_REASON_INVALID_ARGUMENT = 5;
+  // The daemon is at a limit right now: the boundary queue is saturated or the
+  // connection cap is reached. The request was well formed; retrying later can
+  // succeed. Distinct from the reasons above, which never succeed on retry.
+  REJECTION_REASON_BUSY = 6;
+  // The render thread did not answer within its bound. The request may or may
+  // not have taken effect, so a client that cares must re-read state.
+  REJECTION_REASON_TIMEOUT = 7;
 }
 
 // Blend mode placeholder for future compositing support (v1: only overwrite R11).
