@@ -1270,22 +1270,14 @@ mod tests {
     }
 
     fn socket_path_in(dir: &std::path::Path) -> std::path::PathBuf {
-        dir.join("gem80-rgb-test.sock")
+        crate::paths::test_socket_path(dir)
     }
 
     struct TempDir(std::path::PathBuf);
 
     impl TempDir {
         fn new(tag: &str) -> Self {
-            // The snapshotted temp root, not `std::env::temp_dir()`: the paths tests
-            // replace `TMPDIR` process-wide while these run.
-            let base = crate::paths::ambient_temp_dir().join(format!(
-                "gem80-rgb-server-{tag}-{}-{:?}",
-                std::process::id(),
-                thread::current().id()
-            ));
-            std::fs::create_dir_all(&base).expect("create temp dir");
-            Self(base)
+            Self(crate::paths::test_socket_dir(tag))
         }
 
         fn path(&self) -> &std::path::Path {

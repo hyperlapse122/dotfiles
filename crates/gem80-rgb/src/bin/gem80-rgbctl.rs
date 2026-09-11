@@ -678,15 +678,43 @@ mod tests {
         path: PathBuf,
     }
 
+    /// The socket a test binds inside a [`TestDir`].
+    fn socket_path_in(dir: &Path) -> PathBuf {
+        dir.join("s.sock")
+    }
+
     impl TestDir {
+        /// The library has the same helper, but a binary links the library as an
+        /// external crate where its `#[cfg(test)]` items do not exist, so this is
+        /// its own copy rather than a shared one.
+        ///
+        /// `sockaddr_un.sun_path` holds 104 bytes on macOS and 108 on Linux, and a
+        /// macOS temp root is roughly fifty of them, so the name stays short and
+        /// the shortest usable root wins.
         fn new(prefix: &str) -> Self {
             static COUNTER: AtomicU64 = AtomicU64::new(0);
             let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-            let path = std::env::temp_dir()
-                .join(format!("gem80-ctl-{prefix}-{}-{id}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&path);
-            std::fs::create_dir_all(&path).expect("create test temp dir");
-            Self { path }
+            let name = format!("g80c-{prefix}-{:x}-{id:x}", std::process::id());
+
+            let ambient = std::env::temp_dir();
+            let mut roots = vec![ambient.clone()];
+            if !ambient.as_os_str().as_encoded_bytes().starts_with(b"/tmp") {
+                roots.push(PathBuf::from("/tmp"));
+            }
+            roots.sort_by_key(|r| r.as_os_str().len());
+
+            for root in &roots {
+                let path = root.join(&name);
+                let _ = std::fs::remove_dir_all(&path);
+                if std::fs::create_dir_all(&path).is_ok()
+                    && socket_path_in(&path).as_os_str().len() < 100
+                {
+                    return Self { path };
+                }
+                let _ = std::fs::remove_dir_all(&path);
+            }
+
+            panic!("no temp root gives a socket path under the platform limit: {roots:?}");
         }
 
         fn path(&self) -> &Path {
@@ -712,7 +740,7 @@ mod tests {
     impl TestServer {
         fn start_with_state(device_state: DeviceState) -> Self {
             let socket_dir = TestDir::new("srv");
-            let socket_path = socket_dir.path().join("test.sock");
+            let socket_path = socket_path_in(socket_dir.path());
 
             let (sender, receiver) = boundary_channel(64);
             let compositor = Arc::new(Mutex::new(Compositor::with_base_color(Color::rgb(

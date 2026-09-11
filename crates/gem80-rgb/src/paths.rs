@@ -98,6 +98,53 @@ pub(crate) fn ambient_temp_dir() -> &'static std::path::Path {
     AMBIENT.as_path()
 }
 
+/// A fresh directory for a test that binds an AF_UNIX socket.
+///
+/// `sockaddr_un.sun_path` holds 104 bytes on macOS and 108 on Linux, and the
+/// ambient temp root is not short everywhere: a macOS runner hands out roughly
+/// fifty bytes under `/var/folders`, which the tag and process id this needs for
+/// isolation no longer fit inside. So take the shortest root that works, keep the
+/// name compact, and prove the result fits — a socket path that is one byte too
+/// long fails with an error naming neither the path nor the limit.
+#[cfg(test)]
+pub(crate) fn test_socket_dir(tag: &str) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    let name = format!(
+        "g80-{tag}-{:x}-{:x}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    );
+
+    let mut roots = vec![ambient_temp_dir().to_path_buf()];
+    if !roots[0].as_os_str().as_encoded_bytes().starts_with(b"/tmp") {
+        roots.push(PathBuf::from("/tmp"));
+    }
+    roots.sort_by_key(|r| r.as_os_str().len());
+
+    for root in &roots {
+        let dir = root.join(&name);
+        if std::fs::create_dir_all(&dir).is_ok() {
+            let longest = test_socket_path(&dir);
+            if longest.as_os_str().len() < 100 {
+                return dir;
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    panic!(
+        "no temp root gives a socket path under the platform limit; tried {roots:?} with name {name}"
+    );
+}
+
+/// The socket path a test binds inside a [`test_socket_dir`].
+#[cfg(test)]
+pub(crate) fn test_socket_path(dir: &std::path::Path) -> PathBuf {
+    dir.join("s.sock")
+}
+
 #[cfg(test)]
 pub(crate) struct EnvGuard {
     _lock: std::sync::MutexGuard<'static, ()>,

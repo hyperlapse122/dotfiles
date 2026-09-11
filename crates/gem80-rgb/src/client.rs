@@ -928,20 +928,12 @@ mod tests {
 
     impl TestDir {
         fn new(prefix: &str) -> Self {
-            use std::sync::atomic::AtomicU64;
-            static COUNTER: AtomicU64 = AtomicU64::new(0);
-            let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-            // The ambient temp root, not the crate's build directory: an AF_UNIX
-            // path must fit in SUN_LEN (~108 bytes), and a path under a worktree
-            // checkout does not. Sibling tests that write plain files use the
-            // crate directory instead, where no such limit applies. It comes from
-            // the snapshot rather than `std::env::temp_dir()` because the paths
-            // tests replace `TMPDIR` process-wide while these run.
-            let path = crate::paths::ambient_temp_dir()
-                .join(format!("gem80-{prefix}-{}-{id}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&path);
-            std::fs::create_dir_all(&path).expect("create test temp dir");
-            Self { path }
+            // Sibling tests that write plain files use the crate's build directory;
+            // these bind a socket, so they need a path short enough for SUN_LEN on
+            // every platform. `test_socket_dir` owns that choice.
+            Self {
+                path: crate::paths::test_socket_dir(prefix),
+            }
         }
 
         fn path(&self) -> &Path {
@@ -1005,8 +997,8 @@ mod tests {
         }
 
         fn start() -> Self {
-            let socket_dir = TestDir::new("client-test");
-            let socket_path = socket_dir.path().join("gem80-test.sock");
+            let socket_dir = TestDir::new("cli");
+            let socket_path = crate::paths::test_socket_path(socket_dir.path());
             Self::start_with_path(socket_dir, socket_path)
         }
 
@@ -1166,8 +1158,8 @@ mod tests {
 
     #[test]
     fn reconnect_reregisters_held_layers_r16() {
-        let socket_dir = TestDir::new("reconnect-test");
-        let socket_path = socket_dir.path().join("gem80-reconnect.sock");
+        let socket_dir = TestDir::new("rec");
+        let socket_path = crate::paths::test_socket_path(socket_dir.path());
 
         // 1. Start initial daemon instance
         let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
@@ -1187,7 +1179,7 @@ mod tests {
         server.stop();
 
         // 3. Start a new daemon instance on the exact same socket path
-        let new_socket_dir = TestDir::new("reconnect-test-new");
+        let new_socket_dir = TestDir::new("rec2");
         let _server2 = TestServer::start_with_path(new_socket_dir, socket_path.clone());
 
         // 4. Reconnect the client (R16): held layer is re-registered with its colors
@@ -1212,8 +1204,8 @@ mod tests {
 
     #[test]
     fn transparent_auto_reconnect_on_update_when_daemon_restarted() {
-        let socket_dir = TestDir::new("auto-reconnect-test");
-        let socket_path = socket_dir.path().join("gem80-auto-reconnect.sock");
+        let socket_dir = TestDir::new("ar");
+        let socket_path = crate::paths::test_socket_path(socket_dir.path());
 
         let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
         let client = Client::connect_to(&socket_path).expect("connect client");
@@ -1227,7 +1219,7 @@ mod tests {
         server.stop();
 
         // Restart new daemon on same path
-        let new_socket_dir = TestDir::new("auto-reconnect-test-2");
+        let new_socket_dir = TestDir::new("ar2");
         let _server2 = TestServer::start_with_path(new_socket_dir, socket_path);
 
         // Calling set_pixel directly without explicit client.reconnect() must succeed!
@@ -1366,8 +1358,8 @@ mod tests {
     /// Test scenario: 받아들여진 픽셀만 재연결에서 재적용된다 (E1, R16).
     #[test]
     fn only_accepted_pixels_are_replayed_on_reconnect_e1() {
-        let socket_dir = TestDir::new("e1-replay");
-        let socket_path = socket_dir.path().join("gem80-e1-replay.sock");
+        let socket_dir = TestDir::new("e1");
+        let socket_path = crate::paths::test_socket_path(socket_dir.path());
         let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
         let client = Client::connect_to(&socket_path).expect("connect client");
 
@@ -1384,7 +1376,7 @@ mod tests {
         assert_eq!(cached_pixels(&client, &handle).len(), 1);
 
         server.stop();
-        let new_dir = TestDir::new("e1-replay-2");
+        let new_dir = TestDir::new("e1b");
         let _server2 = TestServer::start_with_path(new_dir, socket_path);
         client.reconnect().expect("reconnect");
 
@@ -1404,8 +1396,8 @@ mod tests {
     /// Test scenario: 재연결은 남은 수명을 알리고, 이미 만료된 레이어는 되살리지 않는다 (E3).
     #[test]
     fn reconnect_reannounces_the_remaining_lifetime_e3() {
-        let socket_dir = TestDir::new("e3-lifetime");
-        let socket_path = socket_dir.path().join("gem80-e3.sock");
+        let socket_dir = TestDir::new("e3");
+        let socket_path = crate::paths::test_socket_path(socket_dir.path());
         let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
         let client = Client::connect_to(&socket_path).expect("connect client");
 
@@ -1429,7 +1421,7 @@ mod tests {
         // Time passes with the daemon gone, and the short lease runs out.
         server.stop();
         thread::sleep(Duration::from_millis(400));
-        let new_dir = TestDir::new("e3-lifetime-2");
+        let new_dir = TestDir::new("e3b");
         let _server2 = TestServer::start_with_path(new_dir, socket_path);
         client.reconnect().expect("reconnect");
 
@@ -1498,8 +1490,8 @@ mod tests {
     fn a_response_for_another_request_is_refused_e5() {
         use std::io::Write;
 
-        let dir = TestDir::new("e5-mismatch");
-        let socket_path = dir.path().join("gem80-e5.sock");
+        let dir = TestDir::new("e5");
+        let socket_path = crate::paths::test_socket_path(dir.path());
         let listener =
             std::os::unix::net::UnixListener::bind(&socket_path).expect("bind a stub daemon");
 
@@ -1548,8 +1540,8 @@ mod tests {
     /// the strict matching of E5 must not turn it into a bare mismatch error.
     #[test]
     fn the_connection_limit_notice_reaches_the_client_as_a_rejection_e5() {
-        let socket_dir = TestDir::new("e5-limit");
-        let socket_path = socket_dir.path().join("gem80-e5-limit.sock");
+        let socket_dir = TestDir::new("e5l");
+        let socket_path = crate::paths::test_socket_path(socket_dir.path());
 
         let (sender, receiver) = boundary_channel(16);
         let compositor = Arc::new(Mutex::new(Compositor::new()));
@@ -1609,8 +1601,8 @@ mod tests {
     /// 무효화되어, 다음 호출이 재연결하면서 데몬이 그 레이어를 정리한다 (E2, R13, R16).
     #[test]
     fn a_failed_release_reports_and_invalidates_the_stream_e2() {
-        let socket_dir = TestDir::new("e2-release");
-        let socket_path = socket_dir.path().join("gem80-e2.sock");
+        let socket_dir = TestDir::new("e2");
+        let socket_path = crate::paths::test_socket_path(socket_dir.path());
         let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
         let client = Client::connect_to(&socket_path).expect("connect client");
 
@@ -1636,7 +1628,7 @@ mod tests {
 
         // A replacement daemon takes over; the next call reconnects cleanly and the
         // released layer is not re-announced.
-        let new_dir = TestDir::new("e2-release-2");
+        let new_dir = TestDir::new("e2b");
         let _server2 = TestServer::start_with_path(new_dir, socket_path);
         let layers = client.layers().expect("layers on the new daemon");
         assert!(
@@ -1650,8 +1642,8 @@ mod tests {
     fn a_composite_frame_with_trailing_bytes_is_refused_e6() {
         use std::io::Write;
 
-        let dir = TestDir::new("e6-trailing");
-        let socket_path = dir.path().join("gem80-e6.sock");
+        let dir = TestDir::new("e6");
+        let socket_path = crate::paths::test_socket_path(dir.path());
         let listener =
             std::os::unix::net::UnixListener::bind(&socket_path).expect("bind a stub daemon");
 
