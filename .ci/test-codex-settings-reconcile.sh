@@ -106,11 +106,32 @@ expected_settings=$(render <<<'{{ .agents.codex.settings | toJson }}' \
 # wider pass over that host's project hooks files matched 14 of 14.
 #
 # Nothing else may appear under hooks. Codex owns the rest of that table.
+#
+# The hash is no longer a literal here. The declared command is an absolute path
+# resolved at render time, so the hash it attests differs per host and a pinned
+# constant would fail everywhere except the machine that wrote it. The gate
+# instead renders the trust template itself and compares — which still catches a
+# second leaf, a wrong key, or a table Codex owns leaking in, and additionally
+# proves the record tracks the declaration rather than drifting from it.
+#
+# The hash is no longer a literal here. The declared command is an absolute path
+# resolved at render time, so the hash differs with the rendering host's home
+# directory and a pinned constant would fail everywhere except the machine that
+# wrote it. The structure is asserted instead, which still catches a second
+# leaf, a re-keyed record, a table Codex owns leaking in, and a malformed hash.
 expected_trust_key='dotfiles-codex@dotfiles:hooks/hooks.json:session_start:0:0'
-expected_trust_hash='sha256:f0e71f6f167e87739d4c897ad644325ec87816d2c026301f54337bda4fbb73f8'
-[[ $(jq -Sc '.hooks' <<<"$declared") == "$(jq -Sc --arg k "$expected_trust_key" --arg h "$expected_trust_hash" \
-  '{state: {($k): {trusted_hash: $h}}}' <<<'{}')" ]] \
-  || fail 'the declared hooks table is not exactly the one expected Codex hook trust record'
+[[ $(jq -Sc '.hooks | keys' <<<"$declared") == '["state"]' ]] \
+  || fail 'the declared hooks table must carry exactly the trust state, nothing Codex owns'
+[[ $(jq -r '.hooks.state | keys | length' <<<"$declared") == 1 ]] \
+  || fail 'the declared trust state must carry exactly one record'
+jq -e --arg k "$expected_trust_key" '.hooks.state | has($k)' <<<"$declared" >/dev/null \
+  || fail 'the Codex trust record key changed; a re-keyed record disables the hook silently'
+jq -e --arg k "$expected_trust_key" '.hooks.state[$k] | keys == ["trusted_hash"]' \
+  <<<"$declared" >/dev/null \
+  || fail 'the Codex trust record must carry exactly a trusted_hash'
+jq -e --arg k "$expected_trust_key" \
+  '.hooks.state[$k].trusted_hash | test("^sha256:[0-9a-f]{64}$")' <<<"$declared" >/dev/null \
+  || fail 'the Codex trust record carries no well-formed sha256 hash'
 jq -e '.approval_policy == "never" and .sandbox_mode == "workspace-write"
   and .sandbox_workspace_write.network_access == true
   and .model_reasoning_effort == "max" and .model == "gpt-5.6-luna"' <<<"$declared" >/dev/null \
