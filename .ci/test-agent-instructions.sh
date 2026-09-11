@@ -81,15 +81,7 @@ done
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/agents-instructions.tmpl
 everyone_template=.chezmoitemplates/orchestration-everyone.tmpl
 coordinator_template=.chezmoitemplates/orchestration-coordinator.tmpl
-everyone_payload_wrapper=dot_local/share/dotfiles-claude-plugin/payloads/readonly_everyone.md.tmpl
-codex_everyone_payload_wrapper=dot_local/share/dotfiles-codex-plugin/payloads/readonly_everyone.md.tmpl
-coordinator_payload_wrapper=dot_local/share/dotfiles-claude-plugin/payloads/readonly_coordinator.md.tmpl
-for payload_source in \
-  "$everyone_template" \
-  "$coordinator_template" \
-  "$everyone_payload_wrapper" \
-  "$codex_everyone_payload_wrapper" \
-  "$coordinator_payload_wrapper"; do
+for payload_source in "$everyone_template" "$coordinator_template"; do
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$payload_source"
 done
 lfg_fixture_path=".ci/fixtures/agent-instructions/lfg-autonomy.txt"
@@ -109,13 +101,19 @@ other_os_rule='Resolve the Orca executable as the `orchestration` skill directs.
 omp_payload_begin='<!-- omp-orchestration-payload:begin -->'
 omp_payload_end='<!-- omp-orchestration-payload:end -->'
 
-# Render the payload wrappers separately from the four user-scoped instruction
-# cores. The scratch wrappers provide the other harness ids needed to exercise
-# the coordinator's Claude-only branch and the canonical everyone body for omp.
+# Render the payload bodies separately from the four user-scoped instruction
+# cores. Every wrapper is built here rather than read from a plugin tree: the
+# bodies are the single source, and the plugin trees no longer carry payload
+# files at all — the compiled hook binary embeds the same bytes and each body
+# is verified against the binary's own output by the hook gates.
+everyone_payload_wrapper="$scratch/claude-everyone.md.tmpl"
+codex_everyone_payload_wrapper="$scratch/codex-everyone.md.tmpl"
+coordinator_payload_wrapper="$scratch/claude-coordinator.md.tmpl"
 omp_everyone_wrapper="$scratch/omp-everyone.md.tmpl"
-coordinator_codex_wrapper="$scratch/coordinator-codex.md.tmpl"
+printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$everyone_payload_wrapper"
+printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "codex") -}}' >"$codex_everyone_payload_wrapper"
+printf '%s\n' '{{- includeTemplate "orchestration-coordinator.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$coordinator_payload_wrapper"
 printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "omp") -}}' >"$omp_everyone_wrapper"
-printf '%s\n' '{{- includeTemplate "orchestration-coordinator.tmpl" (dict "ctx" . "harness" "codex") -}}' >"$coordinator_codex_wrapper"
 
 everyone_claude_linux="$scratch/everyone-claude-linux.md"
 everyone_claude_darwin="$scratch/everyone-claude-darwin.md"
@@ -125,17 +123,15 @@ everyone_omp_linux="$scratch/everyone-omp-linux.md"
 everyone_omp_darwin="$scratch/everyone-omp-darwin.md"
 coordinator_claude_linux="$scratch/coordinator-claude-linux.md"
 coordinator_claude_darwin="$scratch/coordinator-claude-darwin.md"
-coordinator_codex_linux="$scratch/coordinator-codex-linux.md"
 
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$everyone_payload_wrapper" "$everyone_claude_linux"
-render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/$everyone_payload_wrapper" "$everyone_claude_darwin"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$codex_everyone_payload_wrapper" "$everyone_codex_linux"
-render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/$codex_everyone_payload_wrapper" "$everyone_codex_darwin"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_payload_wrapper" "$everyone_claude_linux"
+render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$everyone_payload_wrapper" "$everyone_claude_darwin"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$codex_everyone_payload_wrapper" "$everyone_codex_linux"
+render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$codex_everyone_payload_wrapper" "$everyone_codex_darwin"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$omp_everyone_wrapper" "$everyone_omp_linux"
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$omp_everyone_wrapper" "$everyone_omp_darwin"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$coordinator_payload_wrapper" "$coordinator_claude_linux"
-render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/$coordinator_payload_wrapper" "$coordinator_claude_darwin"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_codex_wrapper" "$coordinator_codex_linux"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_payload_wrapper" "$coordinator_claude_linux"
+render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$coordinator_payload_wrapper" "$coordinator_claude_darwin"
 
 for payload_render in \
   "$everyone_claude_linux" "$everyone_claude_darwin" \
@@ -143,7 +139,7 @@ for payload_render in \
   "$everyone_omp_linux" "$everyone_omp_darwin"; do
   [[ -s $payload_render ]] || fail "$(basename "$payload_render") rendered empty"
 done
-for coordinator_render in "$coordinator_claude_linux" "$coordinator_claude_darwin" "$coordinator_codex_linux"; do
+for coordinator_render in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   [[ -s $coordinator_render ]] || fail "$(basename "$coordinator_render") rendered empty"
 done
 diff -q "$everyone_claude_linux" "$everyone_codex_linux" >/dev/null \
@@ -509,13 +505,17 @@ MUST treat a host process sweep over the agent CLI's own process name as a secon
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
 COORDINATOR_NEEDLES
 
+# These rules used to be fenced off by a harness conditional inside the
+# coordinator body. They are unconditional there now, because the body must
+# carry no template actions for the hook binary to embed its bytes. What keeps
+# them away from a non-leading harness moved with them: the binary never puts
+# the coordinator payload in a Codex envelope at all, whatever role that session
+# resolves to, and packages/orchestration-hook/test/envelope.test.ts asserts it.
+# So this loop checks only that the Claude payload still carries each rule.
 while IFS= read -r needle; do
   [[ -z $needle ]] && continue
   grep -F "$needle" "$coordinator_claude_linux" >/dev/null \
     || fail "Claude coordinator payload lost Claude-only rule: $needle"
-  if grep -F "$needle" "$coordinator_codex_linux" >/dev/null; then
-    fail "Codex coordinator render leaked Claude-only rule: $needle"
-  fi
 done <<'CLAUDE_COORDINATOR_NEEDLES'
 This harness is Claude Code, so it also picks the Orca recipient for the Implementation Units that the `compound-engineering` skills produce.
 Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker to `omp` by default.

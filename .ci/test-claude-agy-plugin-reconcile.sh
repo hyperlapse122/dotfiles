@@ -105,16 +105,22 @@ claude_fingerprints=$(grep '^#   ' "$claude_script" || true)
 printf '%s\n' "$claude_fingerprints" |
   grep -F '#   dot_local/share/dotfiles-claude-plugin/' >/dev/null ||
   fail 'rendered Claude updater does not fingerprint the dotfiles-claude-plugin tree'
+# The hook's own body is no longer in that tree — it is a compiled binary staged
+# outside it, invoked by absolute path. What the tree still carries is the
+# DECLARATION naming that path, and hooks/hooks.json.tmpl is a one-line
+# includeTemplate wrapper whose source text never changes when the declaration
+# does. So the partial is the input that must be fingerprinted here; without it
+# a changed command would deploy and never reach the cache Claude Code serves.
 printf '%s\n' "$claude_fingerprints" |
-  grep -F '#   dot_local/share/dotfiles-claude-plugin/hooks/executable_orca-team-lead-orchestration.sh.tmpl  ' >/dev/null ||
-  fail 'rendered Claude updater does not fingerprint the hook script itself'
+  grep -F '#   .chezmoitemplates/claude-hook-declaration.tmpl  ' >/dev/null ||
+  fail 'rendered Claude updater does not fingerprint the hook declaration partial'
 
 # The payload bodies live outside the plugin tree, reached through one-line
 # includeTemplate wrappers whose own source never changes. Without them as
 # fingerprint inputs a reworded orchestration rule re-renders nothing, so the
 # edit deploys to ~/.local/share and never reaches the cache Claude Code serves
 # -- the same silent failure the tree glob above exists to prevent.
-for body in orchestration-everyone.tmpl orchestration-coordinator.tmpl orchestration-role-detect.sh.tmpl; do
+for body in orchestration-everyone.tmpl orchestration-coordinator.tmpl; do
   printf '%s\n' "$claude_fingerprints" |
     grep -F "#   .chezmoitemplates/$body  " >/dev/null ||
     fail "rendered Claude updater does not fingerprint payload body $body"

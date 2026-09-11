@@ -42,11 +42,13 @@
 {{- $plugin := "dotfiles-codex" -}}
 {{- $relPath := "hooks/hooks.json" -}}
 {{- $market := includeTemplate "codex-personal-marketplace.tmpl" (dict "ctx" $ctx "caller" "codex-hook-trust") -}}
-{{- $hooksPath := joinPath $ctx.chezmoi.sourceDir "dot_local/share/dotfiles-codex-plugin/hooks/hooks.json" -}}
-{{- if not (stat $hooksPath) -}}
-{{-   fail "codex-hook-trust.tmpl: the Codex plugin hooks.json is missing, so no trust record can be computed" -}}
-{{- end -}}
-{{- $doc := include $hooksPath | fromJson -}}
+{{- /* The source is a template: the hook command carries an absolute path
+       resolved at render time, so the bytes Codex reads are the RENDERED ones.
+       Hashing the raw template text instead would attest a declaration that
+       never reaches disk, and the trust record would silently disagree with the
+       deployed file — indistinguishable from no record at all, which is how a
+       hook stops running with no session-visible symptom. */ -}}
+{{- $doc := includeTemplate "codex-hook-declaration.tmpl" $ctx | fromJson -}}
 {{- $eventLabels := dict
       "PreToolUse" "pre_tool_use"
       "PermissionRequest" "permission_request"

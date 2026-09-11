@@ -1,12 +1,3 @@
-{{- /* Orchestration rules that bind every agent, whatever its role.
-
-       Rendered into three delivery paths: the Claude Code plugin payload, the
-       Codex plugin payload, and the omp instruction wrapper. Never rendered
-       into the shared instruction core, which keeps only the pointer.
-
-       The first and last lines are sentinels. CI asserts both, and the hook
-       scripts use the last one to prove the payload arrived whole. Do not
-       reword them without updating .ci/test-agent-instructions.sh. */ -}}
 <!-- orchestration-everyone:begin -->
 
 ## Orchestration rules for every agent

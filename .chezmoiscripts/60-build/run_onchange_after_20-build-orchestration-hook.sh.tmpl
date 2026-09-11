@@ -1,0 +1,123 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
+{{- /* The two payload bodies are build inputs — src/payload.ts embeds their
+   bytes — but they sit outside the packages/ workspace root, where no vite
+   `input` base reaches. Hash them here and hand the digest to the build task's
+   cache key, the same way `bun-version` carries the locked bun. Without it a
+   reworded rule re-triggers this script, vp replays a cached dist, and the
+   stale binary installs while the run reports success. */ -}}
+{{- $payloadBodies := list "orchestration-everyone.tmpl" "orchestration-coordinator.tmpl" -}}
+{{- $payloadParts := "" -}}
+{{- range $body := $payloadBodies -}}
+{{-   $bodyPath := joinPath $sourceDir ".chezmoitemplates" $body -}}
+{{-   if not (stat $bodyPath) -}}
+{{-     fail (printf "build-orchestration-hook: payload body %q is missing, so the binary would embed nothing" $body) -}}
+{{-   end -}}
+{{-   $payloadParts = printf "%s%s" $payloadParts (include $bodyPath | sha256sum) -}}
+{{- end -}}
+{{- $payloadDigest := substr 0 16 (sha256sum $payloadParts) -}}
+{{- /* The build id answers "did my edit reach this host" in one command. It
+   covers both halves the binary's behavior depends on: the payload text and
+   the package sources. */ -}}
+{{- $srcParts := $payloadParts -}}
+{{- range $f := (glob (joinPath $sourceDir "packages/orchestration-hook/src/**")) -}}
+{{-   if not (stat $f).isDir -}}
+{{-     $srcParts = printf "%s%s" $srcParts (include $f | sha256sum) -}}
+{{-   end -}}
+{{- end -}}
+{{- if eq $srcParts $payloadParts -}}
+{{-   fail "build-orchestration-hook: the package source glob matched no files, so the build id would not track the code" -}}
+{{- end -}}
+{{- $buildId := substr 0 16 (sha256sum $srcParts) -}}
+#!/usr/bin/env bash
+set -euo pipefail
+{{- /* The src glob is deliberately absent from this list: $buildId above already
+   digests every file under it, plus both payload bodies, so passing the glob
+   here would read and hash the same files a second time on every render. The
+   re-trigger condition is identical either way, and the zero-match guards stay
+   — the build-id loop fails on an empty src glob and fingerprint.tmpl fails on
+   an empty value. */ -}}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/orchestration-hook/package.json" "packages/orchestration-hook/tsconfig.json" "packages/orchestration-hook/vite.config.ts")
+      "values" (list (dict "name" "bun-version" "value" $bunVersion)
+                     (dict "name" "payload-digest" "value" $payloadDigest)
+                     (dict "name" "hook-build-id" "value" $buildId))) }}
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$HOME/.local/sbin:"*) ;;
+  *) PATH="$HOME/.local/sbin:$PATH" ;;
+esac
+export PATH
+
+SRC="{{ $sourceDir }}"
+export DOTFILES_BUN_VERSION="{{ $bunVersion }}"
+export DOTFILES_PAYLOAD_DIGEST="{{ $payloadDigest }}"
+export DOTFILES_HOOK_BUILD_ID="{{ $buildId }}"
+DIST="$SRC/packages/orchestration-hook/dist/orchestration-hook"
+LIBEXEC_DIR="$HOME/.local/libexec"
+TARGET="$LIBEXEC_DIR/orchestration-hook"
+
+# Fail-open belongs to the hook, never to this build. A build that converged on
+# failure would leave the previous binary in place and void the guarantee that
+# one apply carries a rule edit to the next session, with no signal anywhere.
+# The staging rung is not optional. On a fresh host's first apply the public
+# ~/.local/bin link does not exist yet, and the only mise on disk is the one an
+# external just wrote to the staging directory. Without this rung that host
+# aborts here, before 70-agents ever installs a plugin. bun-resolve.sh.tmpl
+# carries the matching rung for the same reason.
+MISE_BIN="mise"
+if ! command -v "$MISE_BIN" >/dev/null 2>&1; then
+  if [[ -x "$HOME/.local/bin/mise" ]]; then
+    MISE_BIN="$HOME/.local/bin/mise"
+  elif [[ -x "$HOME/.local/share/chezmoi-commands/incomplete/mise/mise" ]]; then
+    MISE_BIN="$HOME/.local/share/chezmoi-commands/incomplete/mise/mise"
+  else
+    printf '%s\n' 'build-orchestration-hook: mise is not installed; the orchestration hook cannot be built' >&2
+    exit 1
+  fi
+fi
+
+{{ includeTemplate "bun-resolve.sh.tmpl" | trim }}
+
+# `vp run build` spawns `bun build --compile` as a subprocess that resolves bun
+# from PATH, so an absolute BUN_BIN alone builds under mise and still fails one
+# level down. The partial above is what prepends the directory.
+if [[ -z "$BUN_BIN" ]]; then
+  printf '%s\n' 'build-orchestration-hook: bun is not installed; the build compiles with bun' >&2
+  exit 1
+fi
+
+if ! "$MISE_BIN" -C "$SRC/packages" exec -- vp install --frozen-lockfile; then
+  printf '%s\n' 'build-orchestration-hook: dependency installation failed; fix the package lock or registry access, then re-apply.' >&2
+  exit 1
+fi
+if ! "$MISE_BIN" -C "$SRC/packages/orchestration-hook" exec -- vp run build; then
+  printf '%s\n' 'build-orchestration-hook: build failed; fix the orchestration-hook build error, then re-apply.' >&2
+  exit 1
+fi
+
+if [[ ! -f "$DIST" || ! -x "$DIST" ]]; then
+  printf '%s\n' 'build-orchestration-hook: build completed without an executable dist artifact; inspect the build output, then re-apply.' >&2
+  exit 1
+fi
+
+# Atomic staging: a session that starts mid-copy would exec a truncated file and
+# get ENOEXEC, which is not a fail-open path — the hook's own code never runs.
+# The rename leaves the declared path holding either the complete previous
+# binary or the complete new one.
+mkdir -p "$LIBEXEC_DIR"
+temporary="$(mktemp "$LIBEXEC_DIR/.orchestration-hook.XXXXXX")"
+trap 'rm -f -- "$temporary"' EXIT
+chmod 0600 "$temporary"
+cp -- "$DIST" "$temporary"
+chmod 0755 "$temporary"
+
+mv -f -- "$temporary" "$TARGET"
+temporary=''
+printf '%s\n' 'build-orchestration-hook: installed ~/.local/libexec/orchestration-hook'
+{{ end -}}

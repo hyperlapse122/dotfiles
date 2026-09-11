@@ -6,20 +6,23 @@
   is idempotent, so a fixed version would pin the first copy forever and every
   later edit would land in the source tree and never run.
 
-  The payload body lives in .chezmoitemplates and reaches this plugin through a
-  one-line includeTemplate wrapper under payloads/, whose own source text never
-  changes. Hashing the tree alone would therefore never see a reworded rule, so
-  the body is hashed explicitly. The codex plugin reconciler fingerprints the
-  same paths; both halves are required for an edit to land.
+  The payload body lives in .chezmoitemplates and no longer reaches this tree at
+  all — the compiled hook binary embeds it, and the binary is staged outside the
+  tree. It is hashed anyway because the version must move when the rules an
+  agent receives change, and the tree walk cannot see it. The codex plugin
+  reconciler fingerprints the same paths; both halves are required for an edit
+  to land.
 
   Note the trust interaction: the hook's trust key and hash carry no version
   segment, so a version bump here does NOT invalidate the pre-seeded trust
   record. Changing the hook's declared command in hooks/hooks.json does. */ -}}
 {{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-codex-plugin" -}}
-{{- $payloadBodies := list
-      "orchestration-everyone.tmpl"
-      "orchestration-role-detect.sh.tmpl" -}}
-{{- $parts := "" -}}
+{{- /* hooks/hooks.json.tmpl is a one-line includeTemplate wrapper, so the tree
+       walk below never sees a change to the declaration it renders. Hash the
+       RENDERED declaration here, or the cache Codex serves keeps a stale
+       hooks.json while the source moves. */ -}}
+{{- $payloadBodies := list "orchestration-everyone.tmpl" -}}
+{{- $parts := includeTemplate "codex-hook-declaration.tmpl" . | sha256sum -}}
 {{- range $body := $payloadBodies -}}
 {{-   $bodyPath := joinPath $.chezmoi.sourceDir ".chezmoitemplates" $body -}}
 {{-   if not (stat $bodyPath) -}}
@@ -31,9 +34,6 @@
 {{-   if not (stat $f).isDir -}}
 {{-     $parts = printf "%s%s" $parts (include $f | sha256sum) -}}
 {{-   end -}}
-{{- end -}}
-{{- if eq $parts "" -}}
-{{-   fail "plugin.json.tmpl: the plugin tree matched no files, so the version would not track its content" -}}
 {{- end -}}
 {{- $version := printf "0.1.0-%s" (substr 0 12 (sha256sum $parts)) -}}
 {

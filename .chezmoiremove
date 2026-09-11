@@ -188,3 +188,16 @@ src/garden.yaml
 # Claude Desktop autostart was decommissioned; deleting the source stops managing it
 # but leaves the already-deployed copy behind — prune it here.
 .config/autostart/claude-desktop.desktop
+
+# The bash orchestration hooks and their payload wrappers were replaced by one
+# compiled binary at ~/.local/libexec/orchestration-hook, which each plugin's
+# hooks.json now names by absolute path. Deleting the managed sources stopped
+# chezmoi managing these targets but left the already-deployed copies behind.
+# They must go: a host that kept them would have both the retired scripts and
+# the new binary on disk, and the stale payload files would read as the current
+# rules to anyone inspecting the plugin tree.
+.local/share/dotfiles-claude-plugin/hooks/orca-team-lead-orchestration.sh
+.local/share/dotfiles-claude-plugin/payloads/everyone.md
+.local/share/dotfiles-claude-plugin/payloads/coordinator.md
+.local/share/dotfiles-codex-plugin/hooks/orchestration.sh
+.local/share/dotfiles-codex-plugin/payloads/everyone.md

@@ -10,18 +10,21 @@
 
   The same tree is a fingerprint input of that reconciler, so an edit also
   re-triggers the script that performs the install. Both halves are required. */ -}}
-{{- /* The payload bodies live in .chezmoitemplates and reach this plugin through
-       one-line includeTemplate wrappers under payloads/. Hashing the tree alone
-       would therefore never see a payload edit: the wrapper's own source text
-       never changes. Hash those bodies explicitly so a reworded rule moves the
-       version and the reinstall reaches the cache Claude Code serves. The
-       reconciler fingerprints the same three paths; the two must agree. */ -}}
+{{- /* The payload bodies live in .chezmoitemplates and no longer reach this tree
+       at all — the compiled hook binary embeds them, and the binary is staged
+       outside the tree. They are hashed anyway because the version must move
+       when the rules an agent receives change, and the tree walk below cannot
+       see them. The reconciler fingerprints the same paths; the two must
+       agree. */ -}}
 {{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-claude-plugin" -}}
+{{- /* hooks/hooks.json.tmpl is a one-line includeTemplate wrapper, so the tree
+       walk below never sees a change to the declaration it renders. Hash the
+       RENDERED declaration here, or the cache Claude Code serves keeps a stale
+       hooks.json while the source moves. */ -}}
 {{- $payloadBodies := list
       "orchestration-everyone.tmpl"
-      "orchestration-coordinator.tmpl"
-      "orchestration-role-detect.sh.tmpl" -}}
-{{- $parts := "" -}}
+      "orchestration-coordinator.tmpl" -}}
+{{- $parts := includeTemplate "claude-hook-declaration.tmpl" . | sha256sum -}}
 {{- range $body := $payloadBodies -}}
 {{-   $bodyPath := joinPath $.chezmoi.sourceDir ".chezmoitemplates" $body -}}
 {{-   if not (stat $bodyPath) -}}
@@ -39,9 +42,6 @@
 {{-   if not (stat $f).isDir -}}
 {{-     $parts = printf "%s%s" $parts (include $f | sha256sum) -}}
 {{-   end -}}
-{{- end -}}
-{{- if eq $parts "" -}}
-{{-   fail "plugin.json.tmpl: the hooks tree matched no files, so the version would not track the hook content" -}}
 {{- end -}}
 {{- $version := printf "0.1.0-%s" (substr 0 12 (sha256sum $parts)) -}}
 {
