@@ -27,6 +27,20 @@ An absolute system path declared for removal so that every machine deletes the o
 ### Elevation ladder
 The ordered resolution of how a privileged script obtains root: already root, a non-prompting sudo, a sudo that can prompt on a terminal, or a sudo that prompts through a desktop askpass helper. The ladder fails loudly when no rung succeeds, rather than handing a script a privilege it cannot honour. The askpass rung is distro-shaped and is inert where its helper is not installed.
 
+## Agent orchestration
+
+### Session role
+The classification a session resolves for itself at start — `lead`, `worker`, or `none` — which decides how much of the orchestration rule set it receives. It is read from the Orca terminal handle and the leader pane, and an unset value and an empty string mean the same thing at every step, because a bare equality test between two empty values would classify every teammate as the lead.
+
+### Everyone payload
+The orchestration rules that bind every agent whatever its role. Every Orca-managed session receives it. A harness with no session-start injection point receives it through its rendered instruction file instead of a hook, so the rules are in force there unconditionally rather than by role.
+
+### Coordinator payload
+The additional rules only a session that can dispatch is able to act on. It is delivered on top of the Everyone payload, and only to a lead in the harness that leads.
+
+### Lead envelope
+The single composed delivery a lead receives at session start: the authority preamble, the orchestration skill text, the version-matched guide read from the installed CLI, the Everyone payload, and the Coordinator payload. Delivery is atomic — a lead envelope missing any half is not delivered at all, because a partial rule set is worse than none.
+
 ## Repository layout
 
 ### Primary checkout
