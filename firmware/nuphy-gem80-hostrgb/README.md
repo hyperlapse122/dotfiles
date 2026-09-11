@@ -134,3 +134,16 @@ If the keyboard does not enumerate as a DFU device, or `dfu-util` exits with an
 error, remove the Caps Lock keycap and hold the small black button beside its
 switch while plugging the keyboard back in. This forces bootloader entry so you
 can retry the flash.
+
+## HostRGB Probe and Daemon Concurrency
+
+`hostrgb-probe.py` provides standalone, direct raw HID testing for the `0x60` vendor command.
+
+Do not run `hostrgb-probe.py` while the `gem80-rgbd` daemon is running.
+Linux hidraw nodes provide no exclusive locking.
+When two host processes communicate with the same hidraw node concurrently, they intercept each other's 32-byte input reports.
+During physical verification (`dist/verification-log.md`), running `hold` and `frame` concurrently caused both processes to steal each other's responses: the heartbeat routine received probe responses (`0x60 0x00`), and the exit command received set responses (`0x60 0x02`), resulting in `EXIT_MALFORMED_RESPONSE` (exit code 6).
+
+The `gem80-rgbd` daemon assumes sole ownership of the keyboard's raw HID interface.
+To inspect lighting state or add temporary layers while the daemon is running, use `gem80-rgbctl` over the local AF_UNIX socket instead.
+Stop `gem80-rgbd` before running `hostrgb-probe.py`.

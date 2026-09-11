@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package gem80rgb;
+
+// Rejection reasons for structured error responses (R17, KTD8).
+// Syntactic and framing errors close the connection (R18).
+// Semantic errors return this structured rejection while keeping the connection open.
+enum RejectionReason {
+  REJECTION_REASON_UNSPECIFIED = 0;
+  // Requested feature is not implemented in this daemon version (e.g. blend mode, opacity, push frames).
+  REJECTION_REASON_UNIMPLEMENTED = 1;
+  // Referenced layer does not exist, has expired, or is invalid.
+  REJECTION_REASON_LAYER_NOT_FOUND = 2;
+  // LED index is outside valid range (0..100 for Gem80).
+  REJECTION_REASON_LED_INDEX_OUT_OF_BOUNDS = 3;
+  // Operation attempted on a layer owned by another connection.
+  REJECTION_REASON_PERMISSION_DENIED = 4;
+  // Malformed or invalid argument in an otherwise well-formed message.
+  REJECTION_REASON_INVALID_ARGUMENT = 5;
+  // The daemon is at a limit right now: the boundary queue is saturated or the
+  // connection cap is reached. The request was well formed; retrying later can
+  // succeed. Distinct from the reasons above, which never succeed on retry.
+  REJECTION_REASON_BUSY = 6;
+  // The render thread did not answer within its bound. The request may or may
+  // not have taken effect, so a client that cares must re-read state.
+  REJECTION_REASON_TIMEOUT = 7;
+}
+
+// Blend mode placeholder for future compositing support (v1: only overwrite R11).
+enum BlendMode {
+  BLEND_MODE_UNSPECIFIED = 0;
+  // v1 default: overwrite lower layer pixels (R11).
+  BLEND_MODE_OVERWRITE = 1;
+  // Future: linear light alpha blending.
+  BLEND_MODE_ALPHA = 2;
+  // Future: additive blending.
+  BLEND_MODE_ADDITIVE = 3;
+}
+
+// Device connection and hardware state for status queries (R20).
+enum DeviceState {
+  DEVICE_STATE_UNSPECIFIED = 0;
+  DEVICE_STATE_ABSENT = 1;
+  DEVICE_STATE_PROBING = 2;
+  DEVICE_STATE_INCOMPATIBLE = 3;
+  DEVICE_STATE_ENTERING = 4;
+  DEVICE_STATE_DIRECT_ALL = 5;
+}
+
+// RGB color for an individual LED on the keyboard.
+message LedColor {
+  uint32 led_index = 1;
+  uint32 red = 2;
+  uint32 green = 3;
+  uint32 blue = 4;
+}
+
+// Register a new compositing layer.
+message RegisterLayerRequest {
+  string name = 1;
+  // Z-order for compositing: higher z sits on top (R7).
+  int32 z_order = 2;
+  // Optional lifetime in milliseconds. If unset or 0, layer lives until released or disconnected (R10).
+  optional uint32 lifetime_ms = 3;
+
+  // Reserved fields for future features (wide wire contract, narrow v1 implementation):
+  optional BlendMode blend_mode = 4;
+  // Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
+  optional float opacity = 5;
+  // Push frame target rate in FPS (0 or unset = sparse update mode).
+  optional uint32 push_fps = 6;
+}
+
+message RegisterLayerResponse {
+  uint32 layer_id = 1;
+}
+
+// Update an existing layer's pixels (sparse update R14, pixel retraction R24).
+message UpdateLayerRequest {
+  uint32 layer_id = 1;
+  // Sparse pixel updates: only specified LEDs are painted.
+  repeated LedColor set_pixels = 2;
+  // R24: Retract specified LEDs so lower layers show through (distinct from painting black).
+  repeated uint32 retract_leds = 3;
+}
+
+message UpdateLayerResponse {
+  uint32 layer_id = 1;
+}
+
+// Dedicated pixel retraction request (R24).
+message RetractPixelsRequest {
+  uint32 layer_id = 1;
+  // LEDs to retract so lower layer colors show through.
+  repeated uint32 led_indices = 2;
+}
+
+message RetractPixelsResponse {
+  uint32 layer_id = 1;
+}
+
+// Release (unregister) a layer.
+message ReleaseLayerRequest {
+  uint32 layer_id = 1;
+}
+
+message ReleaseLayerResponse {
+  uint32 layer_id = 1;
+}
+
+// Status query for CLI and inspection (R20).
+message GetStatusRequest {
+  bool include_layers = 1;
+  bool include_composite_frame = 2;
+}
+
+message LayerSummary {
+  uint32 layer_id = 1;
+  string name = 2;
+  int32 z_order = 3;
+  optional uint32 remaining_lifetime_ms = 4;
+  uint32 pixel_count = 5;
+}
+
+message GetStatusResponse {
+  DeviceState device_state = 1;
+  repeated LayerSummary layers = 2;
+  // 101 RGB values (303 bytes) if requested.
+  bytes composite_pixels = 3;
+}
+
+// Rejection response when a request is rejected by the daemon (R17, KTD8).
+message RejectionResponse {
+  RejectionReason reason = 1;
+  string message = 2;
+  optional uint32 layer_id = 3;
+}
+
+// Client-to-daemon top-level control message.
+message ClientMessage {
+  uint64 request_id = 1;
+  oneof payload {
+    RegisterLayerRequest register_layer = 2;
+    UpdateLayerRequest update_layer = 3;
+    ReleaseLayerRequest release_layer = 4;
+    RetractPixelsRequest retract_pixels = 5;
+    GetStatusRequest get_status = 6;
+  }
+}
+
+// Daemon-to-client top-level control message.
+message ServerMessage {
+  uint64 request_id = 1;
+  oneof payload {
+    RegisterLayerResponse register_layer = 2;
+    UpdateLayerResponse update_layer = 3;
+    ReleaseLayerResponse release_layer = 4;
+    RetractPixelsResponse retract_pixels = 5;
+    GetStatusResponse get_status = 6;
+    RejectionResponse rejection = 7;
+  }
+}

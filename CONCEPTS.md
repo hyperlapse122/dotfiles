@@ -60,5 +60,11 @@ The 89 LEDs on the key matrix chain. Which firmware indicators reach it is a use
 ### SIDE region
 The 12 LEDs on the logo and upper-strip chain — five on the strip, then seven on the logo, each driven by its own effect loop. It is where the keyboard talks to the person: battery level and charging render here and outrank host writes, applied after the host's pixels rather than suppressed by them. Caps lock is the exception — it is ceded to the host while the region is in Direct mode. The RF-link indicator also lives on this chain but reaches it by a different path, so its ordering against host pixels is not settled.
 
+### Layer
+One client's contribution to the lighting, held for as long as that client's connection is. Layers are stacked by a declared order and the client above wins a shared LED; a layer names only the LEDs it cares about, so a three-key indicator stays three pixels. Losing the connection removes the layer, which is what keeps a dead client from holding the keyboard.
+
+### Base layer
+The bottom Layer, rendered from configuration rather than by any client. It exists because Direct mode is all-or-nothing per region: the moment a host takes a region to paint a few LEDs, the keyboard's own effect stops covering the rest, and the base layer is what stands in for it.
+
 ### Heartbeat deadline
 The time a host declares, with each heartbeat, before which it will be heard from again. It is carried per heartbeat rather than fixed in firmware, so a status indicator that is silent for hours and an animation pushing frames choose different values without either one reflashing the keyboard.
