@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-09-09T03:38:35Z"
+    cursor: "2026-09-11T10:02:11Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -880,7 +880,7 @@ items:
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "feat(agents): trust ~/src and ~/.local/share/worktrees on every agent harness - each harness asks a per-directory trust question and stores the answer in its own place, and a newly minted Orca worktree re-triggers it; an unattended run cannot answer, so the harness blocks or runs degraded. Open design questions remain on prefix-versus-per-path trust and on Antigravity's trust store."
+    body: "feat(agents): trust ~/src and ~/.local/share/worktrees on every agent harness — Seed trust for the primary source trees and Orca worktrees across managed harnesses without changing unrelated trust entries."
     author_class: "teammate"
     category: "feature"
     existing_ack: true
@@ -888,12 +888,12 @@ items:
     id: "hyperlapse122/dotfiles#436"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/436"
-    updated_at: "2026-09-08T11:16:56Z"
+    updated_at: "2026-09-09T11:46:41Z"
   "gh-issues:hyperlapse122/dotfiles#438":
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "fix(agents): bound and reap Orca-dispatched review workers - the instruction core routes every dispatch through Orca and bans the bundled runners, but nothing replaced the bounding contract those runners provided; a cross-model review pass hung about 52 minutes and 143k tokens with no verdict and left 11 agent processes resident. Covers five defects, four fixable in this repo and one an upstream Orca bug filed with its local mitigation."
+    body: "fix(agents): bound and reap Orca-dispatched review workers — Replace unbounded waits with bounded orchestration handling, release settled workers, and avoid oversized inline dispatch arguments."
     author_class: "teammate"
     category: "bug"
     existing_ack: true
@@ -901,51 +901,60 @@ items:
     id: "hyperlapse122/dotfiles#438"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/438"
-    updated_at: "2026-09-08T13:19:32Z"
+    updated_at: "2026-09-11T06:26:11Z"
   "gh-issues:hyperlapse122/dotfiles#446":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
-    body: "fix(omp): keep the old marketplace registered when a plugin refresh fails - the omp plugin reconciler removes the existing marketplace before add, install, and enable, so any failure in that window leaves no marketplace registered, and the run_onchange script will not retry until its rendered content changes. P2 review finding left unapplied on PR #445."
+    body: "fix(omp): keep the old marketplace registered when a plugin refresh fails — Add rollback or equivalent protection so a failed refresh does not remove the working marketplace registration."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/457"
+    verified_merge_sha: "bb48c22d05941ff7f525e9f4cf247d0be4ebbe97"
+    verified_at: "2026-09-11T10:20:00Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#446"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/446"
-    updated_at: "2026-09-09T03:38:17Z"
+    updated_at: "2026-09-09T13:28:06Z"
   "gh-issues:hyperlapse122/dotfiles#447":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
-    body: "fix(omp): declare the skill discovery scope the restore left to upstream defaults - the pre-retirement declaration set the three skills.enable* keys to false, and the omp restore did not carry them back, so project-scope skill discovery follows whatever upstream defaults to while omp runs inside arbitrary repository checkouts. P2 security-lens finding left unapplied on PR #445."
+    body: "fix(omp): declare the skill discovery scope the restore left to upstream defaults — Pin project and user skill discovery settings to the intended restricted scope."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/457"
+    verified_merge_sha: "bb48c22d05941ff7f525e9f4cf247d0be4ebbe97"
+    verified_at: "2026-09-11T10:20:00Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#447"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/447"
-    updated_at: "2026-09-09T03:38:20Z"
+    updated_at: "2026-09-09T13:28:07Z"
   "gh-issues:hyperlapse122/dotfiles#448":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
-    body: "docs(agents): settle whether omp's instruction may name ast_grep - a reviewer claims a fresh omp install disables astGrep by default, which would make the shared instruction name a tool the agent cannot call; upstream documentation contradicts the claim, so the question needs a verified answer on a real install. P2 finding left unapplied on PR #445."
+    body: "docs(agents): settle whether omp's instruction may name ast_grep — Align the instruction with omp's default astGrep policy by enabling the tool explicitly or removing unsupported tool names."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/457"
+    verified_merge_sha: "bb48c22d05941ff7f525e9f4cf247d0be4ebbe97"
+    verified_at: "2026-09-11T10:20:00Z"
     author_class: "teammate"
     category: "docs"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#448"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/448"
-    updated_at: "2026-09-09T03:38:22Z"
+    updated_at: "2026-09-09T13:28:08Z"
   "gh-issues:hyperlapse122/dotfiles#449":
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "fix(omp): make the settings reconciler's missing-precondition skips visible - the omp settings reconciler exits successfully when omp or jq is absent, so a host that never receives its model policy looks identical to one that did and dotfiles-skips reports nothing. The reviewer's contract-violation claim is wrong, but the visibility gap survives. P2 finding left unapplied on PR #445."
+    body: "fix(omp): make the settings reconciler's missing-precondition skips visible — Record declared skip states when omp or jq is unavailable instead of silently reporting success."
     author_class: "teammate"
     category: "bug"
     existing_ack: true
@@ -953,42 +962,220 @@ items:
     id: "hyperlapse122/dotfiles#449"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/449"
-    updated_at: "2026-09-09T03:38:30Z"
+    updated_at: "2026-09-09T11:46:56Z"
   "gh-issues:hyperlapse122/dotfiles#450":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
-    body: "test(omp): cover the plugin removal loop the empty declaration renders away - the removal set is declared empty, so the rendered reconciler omits the uninstall loop entirely and no test can reach it; the loop builds its uninstall id from the registry key rather than the manifest, an asymmetry worth pinning before the first removal activates it. P2 testing-lens finding left unapplied on PR #445."
+    body: "test(omp): cover the plugin removal loop the empty declaration renders away — Add a reachable test for the plugin-removal path that is omitted when the removal declaration is empty."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/457"
+    verified_merge_sha: "bb48c22d05941ff7f525e9f4cf247d0be4ebbe97"
+    verified_at: "2026-09-11T10:20:00Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#450"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/450"
-    updated_at: "2026-09-09T03:38:32Z"
+    updated_at: "2026-09-09T13:28:09Z"
   "gh-issues:hyperlapse122/dotfiles#451":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    body: "fix(omp): forward stdio env in the omp MCP renderer, or say why not — Resolve the renderer's omission of stdio environment variables or document and test the supported behavior."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/457"
+    verified_merge_sha: "bb48c22d05941ff7f525e9f4cf247d0be4ebbe97"
+    verified_at: "2026-09-11T10:20:00Z"
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: true
+    id: "hyperlapse122/dotfiles#451"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/451"
+    updated_at: "2026-09-09T13:28:06Z"
+  "gh-issues:hyperlapse122/dotfiles#459":
     source: "gh-issues"
     status: "acknowledged"
     sensitive: false
-    body: "fix(omp): forward stdio env in the omp MCP renderer, or say why not - omp's MCP template drops the stdio env field that the universal renderer forwards, latent only because no declared server carries env today; the first one that does will reach omp without its environment and look like a broken server. P3 maintainability finding left unapplied on PR #445."
+    body: "feat(gem80): host-driven per-key rgb via custom qmk firmware — Build host-side control for the keyboard's per-key RGB LEDs, including a firmware protocol, a daemon, and declarative clients."
+    author_class: "teammate"
+    category: "feature"
+    existing_ack: true
+    existing_closeout: false
+    fix_claim: "PR #466. Flashed and observed; the plan and its evidence are in\n`docs/plans/2026-09-10-1800-feat-gem80-firmware-watchdog-side-region-plan.md`\nand `firmware/nuphy-gem80-hostrgb/dist/verification-log.md`.\n\n[#475](https://github.com/hyperlapse122/dotfiles/pull/475) is merged: `crates/gem80-rgb` — the daemon that owns the HID device and composites client layers onto all 101 LEDs, the client library, and the operator CLI."
+    id: "hyperlapse122/dotfiles#459"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/459"
+    updated_at: "2026-09-11T04:48:38Z"
+  "gh-issues:hyperlapse122/dotfiles#460":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    body: "docs(agents): settle whether a workflow-required dispatch may stop to ask — Decide whether mandatory dispatch fan-out proceeds after disclosure in interactive workflows and encode the rule in shared instructions."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/461"
+    verified_merge_sha: "9637dce321b2fdcc9123811da52b653076bd96ad"
+    verified_at: "2026-09-11T10:20:00Z"
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_closeout: true
+    id: "hyperlapse122/dotfiles#460"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/460"
+    updated_at: "2026-09-10T02:02:19Z"
+  "gh-issues:hyperlapse122/dotfiles#467":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "docs(agents): forbid shell loops when waiting on Orca workers — Clarify that workers must be awaited with direct blocking Orca calls and that shell polling loops are forbidden."
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#467"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/467"
+    updated_at: "2026-09-11T06:26:04Z"
+  "gh-issues:hyperlapse122/dotfiles#469":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(release-lock): fail the refresh when a pinned skill subtree disappears — Validate that each pinned skill path exists at its resolved revision so missing upstream content fails the refresh instead of silently deleting the skill."
     author_class: "teammate"
     category: "bug"
     existing_ack: true
     existing_closeout: false
-    id: "hyperlapse122/dotfiles#451"
+    id: "hyperlapse122/dotfiles#469"
     media: []
-    origin: "https://github.com/hyperlapse122/dotfiles/issues/451"
-    updated_at: "2026-09-09T03:38:35Z"
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/469"
+    updated_at: "2026-09-11T02:38:54Z"
+  "gh-issues:hyperlapse122/dotfiles#470":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    body: "docs(agents): prefer omp for frontend design and document authoring — Update dispatch guidance so frontend and prose authoring prefer omp while decisions and verdicts remain on stronger reasoning paths."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/476"
+    verified_merge_sha: "794556911a49dc10d9c85b6d045900217b5cac61"
+    verified_at: "2026-09-11T10:20:00Z"
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_closeout: true
+    fix_claim: "#473 merged. The proposed change and the points to settle are unaffected — the dispatch-target paragraph is still in the coordinator body, and it is still coordinator-only."
+    id: "hyperlapse122/dotfiles#470"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/470"
+    updated_at: "2026-09-11T05:01:46Z"
+  "gh-issues:hyperlapse122/dotfiles#471":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    body: "docs(agents): carry mcp-only design context into dispatches — Require coordinators to materialize MCP-only context in briefs and make routing depend on recipient capabilities."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/476"
+    verified_merge_sha: "794556911a49dc10d9c85b6d045900217b5cac61"
+    verified_at: "2026-09-11T10:20:00Z"
+    author_class: "teammate"
+    category: "docs"
+    existing_ack: true
+    existing_closeout: true
+    fix_claim: "#473 merged. The proposed change is unaffected — both payload bodies keep their single source and the coordinator body is still the place to state the rule."
+    id: "hyperlapse122/dotfiles#471"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/471"
+    updated_at: "2026-09-11T05:01:46Z"
+  "gh-issues:hyperlapse122/dotfiles#472":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "feat(agents): gate cli launches in team mode, drop codex wrapper — Enforce Orca dispatch for direct agent-CLI launches in managed teams and resolve whether the Codex Tokscale wrapper can be removed."
+    author_class: "teammate"
+    category: "feature"
+    existing_ack: true
+    existing_closeout: false
+    fix_claim: "#473 merged and moved the ground this issue's Scope section stands on."
+    id: "hyperlapse122/dotfiles#472"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/472"
+    updated_at: "2026-09-11T03:53:33Z"
+  "gh-issues:hyperlapse122/dotfiles#474":
+    source: "gh-issues"
+    status: "closed"
+    sensitive: false
+    body: "chore(agents): disable the built-in memory feature on every harness — Turn off harness-owned memory through declarations or explicit instruction safeguards while leaving existing memory files untouched."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/480"
+    verified_merge_sha: "476f5b990ca1518283787ea5f9fea32263f62231"
+    verified_at: "2026-09-11T10:20:00Z"
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: true
+    id: "hyperlapse122/dotfiles#474"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/474"
+    updated_at: "2026-09-11T07:30:52Z"
+  "gh-issues:hyperlapse122/dotfiles#478":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "chore(commands): retire the tokscale codex wrapper — Decide whether headless Codex metering still has a consumer, then remove or retain the wrapper and clean up stale published artifacts accordingly."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#478"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/478"
+    updated_at: "2026-09-11T07:16:06Z"
+  "gh-issues:hyperlapse122/dotfiles#482":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(orca): register the settings reconcile unit without relying on an unrelated daemon-reload — The user manager may not see the new unit during an active session because apply relies on an unrelated reload."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#482"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/482"
+    updated_at: "2026-09-11T10:01:58Z"
+  "gh-issues:hyperlapse122/dotfiles#483":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "test(orca): cover the reconciler's argument branches — Add coverage for the equals-form mode flag, help output, and a missing mode value."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#483"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/483"
+    updated_at: "2026-09-11T10:02:10Z"
+  "gh-issues:hyperlapse122/dotfiles#484":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(orca): preserve orca-data.json's mode instead of hardcoding 0644 — The reconciler currently replaces the file with mode 0644; preserve the existing mode or default to 0600 so future permission tightening is not undone."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#484"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/484"
+    updated_at: "2026-09-11T10:02:11Z"
 last_run:
-  timestamp: "2026-09-09T11:48:56Z"
+  timestamp: "2026-09-11T10:22:00Z"
   outcome: "completed"
-  writer: "sweep-MS-7D91-f95e4373-2026-09-09"
+  writer: "sweep-MS-7D91-b5a19a8e-2026-09-11"
   counts:
     gh-issues:
       ack_deferred: 0
-      already_acked: 3
-      closed: 0
-      fetched: 11
+      acked: 12
+      already_acked: 8
+      closed: 9
+      fetched: 20
       media_analyzed: 0
-      newly_acked: 8
