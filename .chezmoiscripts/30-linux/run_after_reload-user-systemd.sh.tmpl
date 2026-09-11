@@ -1,0 +1,21 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $userManagerBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "user-manager-bus-present") -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "user-manager-bus-present" "value" $userManagerBusPresent))) }}
+
+user_manager_deadline_secs=${CAPABILITY_PROBE_DEADLINE_SECS:-5}
+user_manager_term_grace_secs=${CAPABILITY_PROBE_TERM_GRACE_SECS:-2}
+[[ "$user_manager_deadline_secs" =~ ^[1-9][0-9]*$ &&
+  "$user_manager_term_grace_secs" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "reload-user-systemd: user-manager deadlines must be positive integer seconds" >&2; exit 1; }
+
+if timeout -k "$user_manager_term_grace_secs" "$user_manager_deadline_secs" \
+  systemctl --user show-environment >/dev/null 2>&1; then
+  timeout -k "$user_manager_term_grace_secs" "$user_manager_deadline_secs" \
+    systemctl --user daemon-reload
+else
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "reload-user-systemd" "site" "no-user-manager-bus" "direction" "transient-blocking" "probe" "user-manager-bus-present" "reason" "the user manager bus is unavailable; user-unit daemon-reload is deferred") | trim | indent 2 }}
+fi
+{{ end -}}
