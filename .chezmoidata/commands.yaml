@@ -116,6 +116,16 @@ commands:
       legacy:
         path: .local/bin/codex
 
+    orca-settings-reconcile:
+      producer: source
+      safetyProfile: interpreted
+      proofEligible: false
+      mode: "0755"
+      platforms: [linux]
+      sourcePath: dot_local/share/chezmoi-command-sources/executable_orca-settings-reconcile.tmpl
+      commands:
+        - name: orca-settings-reconcile
+
     orca-wrapper:
       producer: source
       safetyProfile: interpreted

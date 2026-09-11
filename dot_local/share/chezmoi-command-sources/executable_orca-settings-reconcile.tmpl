@@ -1,0 +1,253 @@
+{{- $settings := .orca.settings -}}
+{{- includeTemplate "orca-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
+{{- $home := .chezmoi.homeDir -}}
+{{- $resolved := dict -}}
+{{- range $path, $value := $settings -}}
+{{-   if kindIs "string" $value -}}
+{{-     $substituted := replace "@homeDir@" $home $value -}}
+{{-     if regexMatch "@[A-Za-z0-9_-]+@" $substituted -}}
+{{-       fail (printf "orca-settings-reconcile: %s still holds an unresolved @…@ placeholder after substitution: %q" $path $substituted) -}}
+{{-     end -}}
+{{-     $_ := set $resolved $path $substituted -}}
+{{-   else -}}
+{{-     $_ := set $resolved $path $value -}}
+{{-   end -}}
+{{- end -}}
+#!/usr/bin/env bash
+#
+# Asserts the declared Orca application settings leaves (orca.settings in
+# .chezmoidata/orca.yaml) into the live orca-data.json, or reports how the live
+# document differs from them.
+#
+# TWO MODES, ONE CLASSIFIER. `--mode assert` writes; `--mode report` never does.
+# They share the classification pass so a report can never describe a convergence
+# the assert would not perform. `report` is the default, so an operator who runs
+# the bare command changes nothing.
+#
+# WHY THIS DOES NOT RUN AT APPLY TIME. Orca reads orca-data.json once at startup
+# and never re-reads it from disk, and while it runs it rewrites the whole
+# document from its in-memory copy -- measured at roughly one write every nine
+# seconds on an otherwise idle session. A value written during `chezmoi apply` is
+# therefore both ignored and overwritten. orca-settings-reconcile.service asserts
+# at graphical-session start, when the application is down; the apply-time script
+# only reports.
+#
+# WHY THE RUNNING CHECK READS THE LOCK TARGET AND NOT JUST ITS EXISTENCE. Orca's
+# userData SingletonLock is a symlink whose target is `<hostname>-<pid>`. A crash
+# or `kill -9` leaves that symlink behind, so testing existence alone would skip
+# every future convergence while apply kept reporting "converges at next session
+# start" -- the silent failure this design exists to avoid. A lock naming another
+# host, an unparseable target, or a dead pid all mean not running. A recycled pid
+# can still read as running; the cost of that is one skipped convergence, and the
+# next session start retries.
+#
+# OWNERSHIP BOUNDARY. Each declared path names a leaf and only that leaf is
+# written, so a key this declaration does not name -- a sibling, another member of
+# an enclosing record, or a whole top-level key such as worktreeMeta -- survives
+# untouched. An array leaf is the exception the grammar allows: it is compared and
+# replaced whole, because there is no path syntax for list membership.
+set -euo pipefail
+
+self=orca-settings-reconcile
+mode=report
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --mode)
+      [ "$#" -ge 2 ] || { printf '%s: --mode needs a value (assert or report)\n' "$self" >&2; exit 2; }
+      mode=$2
+      shift 2
+      ;;
+    --mode=*) mode=${1#--mode=}; shift ;;
+    -h|--help)
+      printf 'usage: %s [--mode assert|report]\n' "$self"
+      exit 0
+      ;;
+    *) printf '%s: unknown argument %s\n' "$self" "$1" >&2; exit 2 ;;
+  esac
+done
+case "$mode" in
+  assert|report) ;;
+  *) printf '%s: --mode must be assert or report, got %s\n' "$self" "$mode" >&2; exit 2 ;;
+esac
+
+config_dir=${ORCA_SETTINGS_CONFIG_DIR:-$HOME/.config/orca}
+index="$config_dir/orca-profile-index.json"
+lock="$config_dir/SingletonLock"
+
+decode_b64() {
+  printf '%s' "$1" | base64 --decode 2>/dev/null || printf '%s' "$1" | base64 -D
+}
+
+DECLARED="$(decode_b64 '{{ $resolved | toJson | b64enc }}')"
+
+{{ if eq (len $settings) 0 -}}
+printf '%s: orca.settings declares no paths; nothing to reconcile.\n' "$self" >&2
+exit 0
+{{- else -}}
+# A silent skip is the failure mode this reconciler cannot afford: the
+# declaration is authoritative, so an operator who sees nothing believes the
+# values are pinned.
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s: jq is unavailable; declared Orca settings were NOT reconciled.\n' "$self" >&2
+  exit 0
+fi
+
+# Orca has never run on this host, or the profile was removed. Either way there
+# is nothing to converge and the next launch writes the defaults this reconciler
+# will assert against on the session start after it.
+if [ ! -f "$index" ]; then
+  printf '%s: %s is missing (Orca has not run on this host); nothing to reconcile.\n' "$self" "$index" >&2
+  exit 0
+fi
+profile="$(jq -r 'if type == "object" and (.activeProfileId | type) == "string" then .activeProfileId else empty end' "$index" 2>/dev/null || true)"
+if [ -z "$profile" ]; then
+  printf '%s: %s names no activeProfileId; nothing to reconcile.\n' "$self" "$index" >&2
+  exit 0
+fi
+data="$config_dir/profiles/$profile/orca-data.json"
+if [ ! -f "$data" ]; then
+  printf '%s: %s is missing; nothing to reconcile.\n' "$self" "$data" >&2
+  exit 0
+fi
+
+orca_is_running() {
+  [ -L "$lock" ] || return 1
+  local target host pid
+  target="$(readlink "$lock" 2>/dev/null)" || return 1
+  # `<hostname>-<pid>`; the hostname itself may hold hyphens, so split on the last.
+  pid=${target##*-}
+  host=${target%-*}
+  case "$pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$host" = "$(uname -n)" ] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+if [ "$mode" = assert ] && orca_is_running; then
+  printf '%s: Orca is running; declared settings were not asserted (it would overwrite them from memory). They converge at the next session start.\n' "$self" >&2
+  exit 0
+fi
+
+live="$(jq -e -c 'if type == "object" then . else empty end' "$data" 2>/dev/null || true)"
+if [ -z "$live" ]; then
+  printf '%s: %s is not a JSON object; reconciled nothing. Repair or remove it, then re-run.\n' "$self" "$data" >&2
+  exit 0
+fi
+
+scratch="$(mktemp "${TMPDIR:-/tmp}/orca-settings-classify.XXXXXX")"
+staged=''
+cleanup() { rm -f -- "$scratch" ${staged:+"$staged"}; }
+# A signal handler that does not exit lets execution resume at the next
+# statement, so an interrupt between the re-read and the rename would delete the
+# staged file and then try to move it. Terminate explicitly.
+trap cleanup EXIT
+trap 'cleanup; exit 1' HUP INT TERM
+
+# One classification pass per declared leaf, reading the PARENT rather than the
+# leaf: `getpath` cannot tell a missing key from one holding null, and those are
+# different states here. A key Orca does not carry is `unknown` -- writing it
+# would produce a key the application silently ignores, which is exactly the
+# quiet no-op a renamed setting must not become. getpath raises on an ancestor
+# holding a scalar, so the probe is wrapped and `blocked` travels as a state on
+# the stream rather than aborting it.
+jq -rn --argjson live "$live" --argjson declared "$DECLARED" '
+  $declared
+  | to_entries[]
+  | . as $e
+  | ($e.key | split(".")) as $p
+  | ($p[:-1]) as $parent_path
+  | ($p[-1]) as $leaf
+  | (try {parent: ($live | getpath($parent_path))} catch {blocked: true}) as $probe
+  | (if ($probe | has("blocked")) then "blocked"
+     elif ($probe.parent == null) then "unknown"
+     elif (($probe.parent | type) != "object") then "blocked"
+     elif ($probe.parent | has($leaf) | not) then "unknown"
+     elif ($probe.parent[$leaf] == $e.value) then "converged"
+     else "drift" end) as $state
+  | "\($state)\t\($e.key)"
+' >"$scratch"
+
+examined=0
+drifted=0
+# Strings rather than arrays: bash 3.2 errors on empty-array expansion under
+# `set -u`, and every path already passed the render-time grammar so none can
+# carry a newline.
+drifted_paths=''
+unknown_paths=''
+blocked_paths=''
+tab="$(printf '\t')"
+while IFS="$tab" read -r state path; do
+  [ -n "$path" ] || continue
+  examined=$((examined + 1))
+  case "$state" in
+    drift)
+      drifted=$((drifted + 1))
+      drifted_paths="${drifted_paths}${path}"$'\n'
+      ;;
+    unknown) unknown_paths="${unknown_paths:+$unknown_paths }$path" ;;
+    blocked) blocked_paths="${blocked_paths:+$blocked_paths }$path" ;;
+  esac
+done <"$scratch"
+
+# A truncated read is the one failure the loop cannot see: every iteration that
+# DID run succeeded. Comparing against the render-time count turns that into a
+# failure instead of a clean exit that reconciled part of the declaration.
+if [ "$examined" -ne {{ len $settings }} ]; then
+  printf '%s: classified %d of {{ len $settings }} declared paths; the stream ended early and nothing was reconciled.\n' "$self" "$examined" >&2
+  exit 1
+fi
+
+if [ -n "$unknown_paths" ]; then
+  printf '%s: Orca does not carry %s. A renamed or removed setting key cannot be asserted -- writing it would add a key Orca ignores. Update .chezmoidata/orca.yaml.\n' "$self" "$unknown_paths" >&2
+fi
+if [ -n "$blocked_paths" ]; then
+  printf '%s: an ancestor of %s holds a scalar or an array, so that leaf cannot be written and it was left alone. Repair that key in %s.\n' "$self" "$blocked_paths" "$data" >&2
+fi
+
+if [ "$mode" = report ]; then
+  if [ "$drifted" -gt 0 ]; then
+    printf '%s: %d of %d declared paths differ from %s:\n' "$self" "$drifted" "$examined" "$data" >&2
+    printf '%s' "$drifted_paths" | while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      jq -rn --argjson live "$live" --argjson declared "$DECLARED" --arg k "$path" '
+        ($k | split(".")) as $p
+        | (try ($live | getpath($p)) catch null) as $current
+        | "  \($k): declared \($declared[$k] | tojson), live \($current | tojson)"
+      ' >&2
+    done
+    printf '%s: these converge at the next graphical session start.\n' "$self" >&2
+  fi
+  exit 0
+fi
+
+# Convergence is the success case, not a skip: exit silently and write nothing, so
+# a second run on an unchanged host changes zero bytes.
+if [ "$drifted" -eq 0 ]; then
+  exit 0
+fi
+
+# Staged in the target's own directory so the replacement is a same-filesystem
+# rename; staging under TMPDIR would cross filesystems.
+staged="$(mktemp "$(dirname "$data")/.orca-data.XXXXXX")"
+chmod 0644 "$staged"
+# `drifted_paths` is the classifier's verdict, not the declaration: an unknown or
+# blocked path never reaches setpath, which would otherwise abort under `set -e`
+# with a bare jq error naming nothing.
+jq -n --argjson live "$live" --argjson declared "$DECLARED" --arg write_paths "$drifted_paths" '
+  ($write_paths | split("\n") | map(select(length > 0))) as $keys
+  | reduce $keys[] as $k ($live; setpath($k | split("."); $declared[$k]))
+' >"$staged"
+
+# Orca may have started between the read and now. Compare CONTENT rather than
+# inode and mtime: an in-place rewrite keeps the inode and can land in the same
+# whole second, so an identity check would pass while the write is silently lost.
+if [ "$(jq -e -c 'if type == "object" then . else empty end' "$data" 2>/dev/null || true)" != "$live" ]; then
+  printf '%s: %s changed while this run staged its replacement; discarded the staged file and reconciled nothing. The next run retries.\n' "$self" "$data" >&2
+  exit 0
+fi
+
+mv -- "$staged" "$data"
+staged=''
+printf '%s: reconciled %d of %d declared settings paths\n' "$self" "$drifted" "$examined"
+{{- end }}

@@ -161,7 +161,8 @@
 .local/share/applications/wezterm.desktop
 # The ~/src garden is a host concept: the 80-keys GPG key import is skipped
 # above so the encrypted project registry cannot be decrypted here, and the
-# 90-src scripts (grow/bootstrap, Orca registration) would have nothing to provision
+# 90-src scripts (grow/bootstrap, Orca registration, the Orca settings drift
+# report) would have nothing to provision — no registry, and no Orca profile —
 # and would hard-fail on the then-absent registry — skip both.
 .chezmoiscripts/90-src/*.sh
 .config/garden/garden.yaml
