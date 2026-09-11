@@ -41,11 +41,23 @@ set -euo pipefail
 # so the darwin assertions cannot fail alone. They remain so that weakening the
 # cross-OS comparison cannot silently drop darwin coverage.
 #
-# RESIDUAL, not closed: a contradicting sentence added elsewhere in the shared
-# body is not caught by any fixture, because no fixture bounds a section. The
-# BANNED list below is the mechanism for a retired or forbidden phrasing, and it
-# matches literal text only. Semantic consistency across the whole file is a
-# review obligation, not a machine-checked one.
+# One shared-body section IS bounded by a fixture:
+#
+#   waiting-on-dispatched-workers.txt  the whole `## Waiting on dispatched
+#                                      workers` section, heading to next heading
+#
+# Needles prove a rule is present; they cannot prove nothing contradicts it. A
+# reworded exception appended anywhere inside that section would satisfy every
+# needle while reversing the rule, and the section is a prohibition, so that is
+# the edit that matters. Bounding it whole also pins the worked example's body,
+# which needles alone would let vanish behind its comment headers. Rewording the
+# section means regenerating its fixture in the same commit.
+#
+# RESIDUAL, not closed: every OTHER shared-body section is still unbounded, so a
+# contradicting sentence added outside the one section above is caught by no
+# fixture. The BANNED list below is the mechanism for a retired or forbidden
+# phrasing, and it matches literal text only. Semantic consistency across the
+# whole file is a review obligation, not a machine-checked one.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
@@ -90,6 +102,21 @@ require_file "$repo_root" "$scratch" "$chezmoi_bin" "$lfg_fixture_path"
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$workflow_fixture_path"
 lfg_fixture="$repo_root/$lfg_fixture_path"
 workflow_fixture="$repo_root/$workflow_fixture_path"
+wait_section_heading="## Waiting on dispatched workers"
+wait_section_fixture_path=".ci/fixtures/agent-instructions/waiting-on-dispatched-workers.txt"
+require_file "$repo_root" "$scratch" "$chezmoi_bin" "$wait_section_fixture_path"
+wait_section_fixture="$repo_root/$wait_section_fixture_path"
+
+# Prints the section from its heading up to the next `## ` heading. The awk
+# condition reassigns `inside` on every `## ` line, so a heading that is not the
+# wait section closes it; body lines that merely start with `#` (the example
+# block's comments) never touch it.
+extract_wait_section() {
+  awk -v want="$wait_section_heading" '
+    /^## / { inside = ($0 == want) }
+    inside
+  ' "$1"
+}
 
 # The darwin-leak sentinel must be a phrase the Linux rule actually contains, or
 # the leak assertion asserts nothing. `/usr/bin/orca` is Linux-only and appears
@@ -188,6 +215,17 @@ for i in "${!harness_ids[@]}"; do
       linux) target_render=$harness_render ;;
       darwin) target_render=$other_os_render ;;
     esac
+
+    # The wait-form section is a prohibition, so an appended exception anywhere
+    # inside it is the edit that matters and no needle can see it. Compare the
+    # bounded section whole, per harness and per OS.
+    wait_section="$scratch/${harness_ids[$i]}-$target_os-wait-section.txt"
+    extract_wait_section "$target_render" >"$wait_section"
+    if [[ ! -s $wait_section ]]; then
+      soft_fail "${harness_ids[$i]} ($target_os) renders no '$wait_section_heading' section; it is asserted whole against $wait_section_fixture_path"
+    elif ! diff -q "$wait_section_fixture" "$wait_section" >/dev/null; then
+      soft_fail "${harness_ids[$i]} ($target_os) '$wait_section_heading' section differs from $wait_section_fixture_path; reword and fixture must land in one commit"
+    fi
 
     # -Fxn: whole-line matches against the fixture body, so a paraphrased
     # paragraph is a miss rather than a partial hit, and the line number is what
@@ -423,17 +461,20 @@ MUST NOT send outside the current session a document, message, or artifact carry
 A wait on a dispatched Orca worker is the installed guide's blocking wait command, called exactly as that guide writes it.
 One wait command is one tool call, and no shell control flow wraps it.
 MUST NOT build a wait out of `for`, `while`, `until`, a `sleep` poll, a count of files in an output directory, or a listing of processes.
-Orca's own wait and query commands are the only authoritative source for that dispatch's lifecycle state
-call the same blocking command again rather than looping over workers
-the repetition happens across the run's turns, never inside a shell command
-a delivery already read is acknowledged on that next call so the queue advances instead of replaying
+While the run waits on a dispatch, Orca's own wait and query commands are the only authoritative source for that dispatch's lifecycle state; the end-of-run residency check is untouched by this, and a host process sweep stays a secondary signal there.
+When a wait returns and a dispatch is still outstanding, call the same blocking command again rather than looping over workers: the repetition happens across the run's turns, never inside a shell command, and a delivery already read is acknowledged on that next call so the queue advances instead of replaying.
 Read each call's result — a completion report, an escalation, a question, or a timeout — and act on it before the next wait starts.
-That repetition holds only while the worker's own deadline and the run's wall-clock bound hold
-the run MUST NOT wait again for that dispatch
+That repetition holds only while the worker's own deadline and the run's wall-clock bound hold; when either expires, the dispatch contract's stop, release, and record-the-gap path takes over, and the run MUST NOT wait again for that dispatch.
+This rule governs the command's FORM.
 A harness whose own instruction paragraph fixes HOW that command runs keeps that rule alongside this one, and both apply.
-The ban reaches a wait on a dispatched worker and nothing else
+The ban reaches a wait on a dispatched worker and nothing else: a watcher armed over a condition outside the dispatch — a service coming up, a build finishing — is a different thing and is untouched.
+That watcher MUST NOT be armed over a worker's artifacts, output files, dispatch state, or processes, because watching those IS the wait this rule governs and routing it through a watcher is the same poll under another name.
 # One wait command per tool call. Nothing wraps it. Each call is its own turn.
+turn 1:  <the guide's blocking wait command>                       -> worker A reports done: release it, start the next wait, end the turn
+turn 2:  <the same command, acknowledging the delivery just read>  -> worker B asks a question: reply, start the next wait, end the turn
 # Never. Each of these builds the wait out of shell control flow:
+until [ "$(ls out/*.json | wc -l)" -ge 7 ]; do sleep 20; done
+for w in $workers; do <the guide's blocking wait command>; done
 NEEDLES
 
 # Asserted against every rendered everyone-payload delivery. The Claude and
