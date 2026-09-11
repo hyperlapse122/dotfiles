@@ -264,6 +264,7 @@ cat >"$fixture" <<'JSON'
 {
   "language": "English",
   "autoMemoryEnabled": true,
+  "autoDreamEnabled": true,
   "modelSettings": { "other-model": { "effortLevel": "low" } },
   "hooks": { "SessionStart": [ { "hooks": [ { "type": "command", "command": "true" } ] } ] },
   "enabledPlugins": { "compound-engineering@compound-engineering-plugin": true },

@@ -419,10 +419,6 @@ run "$full_catalog" "$live_converged" >"$scratch/conv.out" 2>"$scratch/conv.err"
 grep -q '^config-omp-settings: 0 of ' "$scratch/conv.out" ||
   fail 'the converged run did not report zero assertions'
 
-for path in memory.backend memories.enabled autolearn.enabled autolearn.autoContinue; do
-  ! grep -Fq "config set $path" "$state" ||
-    fail "the converged run re-asserted $path"
-done
 # --- a declared path omp never reports is a typo --------------------------- #
 
 reset

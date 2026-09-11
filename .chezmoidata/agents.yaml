@@ -261,6 +261,13 @@ agents:
       # to an explicit false value, that environment variable overrides these
       # leaves and forces memory ON.
       #
+      # Claude Code parses settings.json with a zod schema, so a renamed or
+      # retired leaf is dropped rather than reported: the reconciler keeps
+      # writing the stale key, every CI guard stays green, and memory comes back
+      # on. A Claude Code bump in .chezmoidata/releases.json must therefore
+      # re-check that autoMemoryEnabled and autoDreamEnabled still exist in the
+      # settings schema, the same duty the omp and Codex pins below record.
+      #
       # To re-enable memory, remove these two lines or set them to true and run a
       # single chezmoi apply. Existing files under ~/.claude/projects/*/memory/
       # are preserved and never pruned by this declaration.
@@ -370,10 +377,19 @@ agents:
       # flipped through /settings would survive the next apply. Declaring is what
       # pins, for the same reason error.notify is declared above.
       #
-      # These four are the whole memory surface confirmed in the pinned omp
-      # version in .chezmoidata/releases.json. Because this enumeration is tied
-      # to that version, an omp bump must re-check `omp config list --json` for
-      # any new memory or autolearn keys.
+      # These four are the whole MASTER-SWITCH surface confirmed in the pinned
+      # omp version in .chezmoidata/releases.json, not the whole key surface:
+      # that build reports 47 memory-related keys, the rest being tuning values
+      # (memories.* rollout limits, mnemopi.*, sharpshooter.*,
+      # providers.memoryModel, autolearn.minToolCalls) that only run once one of
+      # these four opens a path. Because this enumeration is tied to that
+      # version, an omp bump must re-check `omp config list --json` for a new
+      # switch, and for a tuning key that has become independently load-bearing.
+      #
+      # A renamed key is not a silent failure here: the reconciler treats a
+      # declared path omp no longer reports as a typo and exits non-zero, which
+      # halts the whole apply before 80-keys and 90-src. That is deliberate, and
+      # it is why the recheck belongs in the bump checklist.
       #
       # "off" is an enum token rather than a boolean; quoting is the notation
       # convention that indicates this.
