@@ -91,6 +91,17 @@ run_hook() {
   env -i PATH="$path" HOME="$scratch/home" $role_env "$binary" hook --harness "$harness" </dev/null
 }
 
+
+run_guard() {
+  local harness=$1 role_env=$2 command=$3
+  local event
+  event=$(jq -nc --arg c "$command" \
+    '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$c}}')
+  # shellcheck disable=SC2086
+  printf '%s' "$event" \
+    | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness"
+}
+
 # ------------------------------------------------------- fail-open contracts
 out=$(run_hook claude "")
 [[ $out == "{}" ]] || fail "Claude Code outside Orca must print exactly {} (got: $out)"
@@ -270,6 +281,139 @@ codex_command=$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/codex-
 jq -e '.hooks.SessionStart[0].hooks[0] | has("args") | not' "$scratch/codex-hooks.json" >/dev/null \
   || fail 'the Codex declaration must carry no args key while the trust record cannot hash one'
 pass 'Codex declares the staged binary without an args key the trust record would miss'
+
+
+# ------------------------------------------------------------- the launch gate
+# The gate's whole value is that it denies in a real session and stays out of
+# the way otherwise. Both halves are invisible in a diff: a wrong tool-name
+# assumption, or a fail-open path that swallowed the decision, leaves the unit
+# tests green while the deployed hook denies nothing at all.
+TEAM='ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1'
+WORKER_ENV='ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%9'
+
+for harness in claude codex; do
+  out=$(run_guard "$harness" "$TEAM" 'codex exec "do the thing"')
+  decision=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') \
+    || fail "$harness: a launch in a team session must return a decision document (got: $out)"
+  [[ $decision == deny ]] || fail "$harness: a launch must be denied (got: $decision)"
+  event_name=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.hookEventName')
+  [[ $event_name == PreToolUse ]] || fail "$harness: the deny must name PreToolUse (got: $event_name)"
+  reason=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecisionReason')
+  [[ $reason == *Orca* ]] || fail "$harness: the deny must name the Orca dispatch path"
+done
+pass 'a shell launch of an agent CLI is denied in a team session, on both harnesses'
+
+out=$(run_guard claude "$WORKER_ENV" 'codex exec x')
+[[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') == deny ]] \
+  || fail 'a worker starting its own peer is the same bypass and must be denied'
+pass 'the gate binds every Orca role, not the lead alone'
+
+# Outside Orca the same command must run untouched. This is the case that keeps
+# the gate from becoming a machine-wide block on the user's own shell.
+for harness in claude codex; do
+  out=$(run_guard "$harness" "" 'codex exec x')
+  [[ $out == '{}' ]] || fail "$harness: outside Orca the gate must allow (got: $out)"
+done
+pass 'a session outside Orca runs the same command unchanged'
+
+# Allowed surface. `codex plugin add` runs during chezmoi apply, so a gate that
+# blocked it would break provisioning on this very repository.
+while IFS= read -r command; do
+  out=$(run_guard claude "$TEAM" "$command")
+  [[ $out == '{}' ]] || fail "the gate must allow: $command (got: $out)"
+done <<'ALLOWED'
+git status
+echo "ask claude about it"
+codex plugin add foo
+codex mcp list
+claude update
+claude --version
+command -v codex
+ALLOWED
+pass 'CLI management and unrelated commands are untouched'
+
+# Evasion. Each of these reached the real binary in a shell string; a scanner
+# that split naively, or that only looked at the first word, would miss them.
+while IFS= read -r command; do
+  out=$(run_guard claude "$TEAM" "$command")
+  [[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision' 2>/dev/null) == deny ]] \
+    || fail "the gate must deny: $command (got: $out)"
+done <<'DENIED'
+codex
+bash -c 'codex exec x'
+sh -c "bash -c 'codex exec x'"
+git status && omp
+FOO=bar env claude -p hi
+timeout 5 codex exec
+/usr/bin/codex exec
+DENIED
+pass 'wrapped, chained and assigned-prefix launches are all denied'
+
+# Fail open. A guard that errored would break every tool call in the session,
+# which is strictly worse than a launch it failed to catch.
+# shellcheck disable=SC2086
+out=$(printf 'not json' | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
+[[ $out == '{}' ]] || fail "a body that is not JSON must allow (got: $out)"
+# shellcheck disable=SC2086
+out=$(printf '' | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
+[[ $out == '{}' ]] || fail "an empty body must allow (got: $out)"
+# shellcheck disable=SC2086
+out=$(printf '%s' '{"tool_input":{"command":"codex exec x"}}' \
+  | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard)
+[[ $out == '{}' ]] || fail "a missing --harness must allow (got: $out)"
+pass 'every malformed guard input allows rather than failing the tool call'
+
+# A pretty-printed body is the shape that breaks a newline-terminated read: it
+# would truncate to invalid JSON, parse as nothing, and silently allow.
+pretty=$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"codex exec x"}}')
+[[ $pretty == *$'\n'* ]] || fail 'the pretty-printed fixture must actually contain newlines'
+# shellcheck disable=SC2086
+out=$(printf '%s' "$pretty" | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
+[[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision' 2>/dev/null) == deny ]] \
+  || fail 'a multi-line event body must still be read whole and denied'
+pass 'a pretty-printed event body is read to completion, not truncated at a newline'
+
+
+# The PreToolUse declarations. A gate that is not declared never runs, and the
+# unit tests cannot see that.
+claude_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/claude-hooks.json")
+[[ $claude_guard == "$expected_binary" ]] \
+  || fail "Claude Code must declare the guard by absolute path (got: $claude_guard)"
+jq -e '.hooks.PreToolUse[0].hooks[0].args == ["guard","--harness","claude"]' \
+  "$scratch/claude-hooks.json" >/dev/null \
+  || fail 'the Claude guard must be declared in exec form'
+# Bash is the tool name the captured fixture carries, and Claude Code's only
+# shell tool; a matcher that missed it would make the gate inert.
+jq -e '.hooks.PreToolUse[0].matcher == "Bash"' "$scratch/claude-hooks.json" >/dev/null \
+  || fail 'the Claude guard must match the Bash tool'
+pass 'Claude Code declares the launch gate in exec form, matching its shell tool'
+
+codex_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/codex-hooks.json")
+[[ $codex_guard == "$expected_binary guard --harness codex" ]] \
+  || fail "Codex must declare the guard by absolute path (got: $codex_guard)"
+jq -e '.hooks.PreToolUse[0].hooks[0] | has("args") | not' "$scratch/codex-hooks.json" >/dev/null \
+  || fail 'the Codex guard must carry no args key the trust record cannot hash'
+# No matcher, deliberately: Codex renames its shell handler between versions, so
+# a matcher written against today's name would silently stop matching and the
+# gate would go inert with every gate here still green.
+jq -e '.hooks.PreToolUse[0] | has("matcher") | not' "$scratch/codex-hooks.json" >/dev/null \
+  || fail 'the Codex guard must carry no matcher while the shell tool name is unpinned'
+pass 'Codex declares the launch gate without an args key or an unpinnable matcher'
+
+# The trust record is the silent-failure surface: a Codex hook whose recorded
+# hash disagrees with the deployed declaration simply never runs. Adding an
+# event must not disturb the SessionStart record, whose key is positional
+# WITHIN its own event.
+trust_wrapper="$scratch/trust-wrapper.tmpl"
+printf '{{ includeTemplate "codex-hook-trust.tmpl" (dict "ctx" .) }}\n' >"$trust_wrapper"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$trust_wrapper" "$scratch/trust.json"
+session_keys=$(jq -r '.state | keys[] | select(endswith(":session_start:0:0"))' "$scratch/trust.json")
+[[ -n $session_keys ]] || fail 'the SessionStart trust record disappeared'
+pretool_keys=$(jq -r '.state | keys[] | select(endswith(":pre_tool_use:0:0"))' "$scratch/trust.json")
+[[ -n $pretool_keys ]] || fail 'the PreToolUse hook has no trust record, so Codex would never run it'
+[[ $(jq -r ".state[\"$session_keys\"].trusted_hash" "$scratch/trust.json") == sha256:* ]] \
+  || fail 'the SessionStart trust hash is not a sha256 record'
+pass 'both Codex hooks carry their own trust record, keyed per event'
 
 # --------------------------------------------------- every-apply path assertion
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \

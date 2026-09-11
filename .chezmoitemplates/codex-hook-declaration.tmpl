@@ -22,10 +22,43 @@
        accepts exec form is unsettled; adopting it here means extending that
        normalization in the same change.
 
+       The PreToolUse entry is the launch gate: it denies a shell launch of
+       codex, claude or omp while Orca manages the session.
+
+       It carries NO matcher, deliberately. A matcher here would filter on the
+       shell tool's name, and that name is not stable: rust-v0.154.0 ships its
+       shell handler as `exec_command` under `unified_exec` and carries no
+       `shell` handler at all, so a matcher written against today's name would
+       silently stop matching after an upgrade — and a gate that never fires is
+       indistinguishable from one with nothing to deny. Without a matcher the
+       hook runs on every tool call and the guard decides, which costs a process
+       spawn per call and is the price of not going quietly inert. Add a matcher
+       only once a captured Codex PreToolUse event pins the tool name, and pin
+       that name in the fixture in the same change.
+
+       Adding this event does not disturb the SessionStart trust record.
+       codex-hook-trust.tmpl indexes group and handler positionally WITHIN one
+       event (`…:<event>:<group>:<handler>`), so a new event key gets its own
+       record and `…:session_start:0:0` keeps both its key and its hash. The
+       trust template already maps PreToolUse to `pre_tool_use` and already
+       lists that event as honouring additionalContextLimit.
+
        Takes the chezmoi context as its argument. */ -}}
 {{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf "%s guard --harness codex" $binary | quote }},
+            "timeout": 10,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact",
