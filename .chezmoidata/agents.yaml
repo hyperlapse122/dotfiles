@@ -106,6 +106,30 @@ agents:
       host: gitlab
       versionSource: glabRelease
       skillPath: internal/commands/skills/bundled/assets/glab-stack
+    # cursor/plugins is a monorepo publishing no releases and no tags, so each
+    # skill needs both a skillPath for its subtree and a branch ref -- the
+    # no-ref branch of .chezmoiexternals/ai-agents.toml expects a release tag.
+    #
+    # The branch head is unreviewed upstream: the hourly release-lock refresh
+    # advances both pins with no human in the loop. The vercel-labs and shadcn
+    # entries above carry the same TRUST posture, but not the same cost: both
+    # of those repos are dormant, while cursor/plugins commits several times a
+    # day across 65 skills, so the pin and both 8.7 MB tarball fetches turn over
+    # roughly daily to re-extract two files totalling 7 KB.
+    #
+    # deslop, unlike unslop, ships no disable-model-invocation key, so an agent
+    # may select it on its own. Its guidance removes "extra comments" and
+    # "defensive checks ... abnormal for trusted code paths" -- which pulls
+    # against this repository's own rule to keep comments that record a
+    # non-obvious constraint. The repository's rule wins.
+    - name: unslop
+      source: cursor/plugins
+      ref: main
+      skillPath: pstack/skills/unslop
+    - name: deslop
+      source: cursor/plugins
+      ref: main
+      skillPath: cursor-team-kit/skills/deslop
   marketplaces:
     compound-engineering-plugin:
       kind: localArchive
