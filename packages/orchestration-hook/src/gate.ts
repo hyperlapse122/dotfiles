@@ -21,8 +21,14 @@ import { scanInvocations, type Invocation } from "./command-scan.js";
 import type { Harness } from "./envelope.js";
 import { resolveRole, type RoleEnv } from "./role.js";
 
-/** The agent CLIs whose launch belongs to Orca. */
-export const BLOCKED_PROGRAMS: readonly string[] = ["codex", "claude", "omp"];
+/**
+ * The agent CLIs whose launch belongs to Orca.
+ *
+ * `codex-bin` is the tokscale wrapper's public link to the real Codex binary.
+ * It exists on every provisioned host today, so omitting it would leave a
+ * one-word bypass of this whole gate.
+ */
+export const BLOCKED_PROGRAMS: readonly string[] = ["codex", "codex-bin", "claude", "omp"];
 
 /**
  * Subcommands that manage a CLI rather than start an agent with it.
@@ -46,8 +52,13 @@ const NON_LAUNCH_SUBCOMMANDS: ReadonlySet<string> = new Set([
   "version",
 ]);
 
-/** Flags that ask the CLI about itself instead of starting it. */
-const NON_LAUNCH_FLAGS: ReadonlySet<string> = new Set(["--version", "-V", "--help", "-h", "help"]);
+/**
+ * Flags that ask the CLI about itself instead of starting it.
+ *
+ * Flags only: a bare `help` word is a subcommand and is matched by
+ * NON_LAUNCH_SUBCOMMANDS before this set is ever consulted.
+ */
+const NON_LAUNCH_FLAGS: ReadonlySet<string> = new Set(["--version", "-V", "--help", "-h"]);
 
 /**
  * What each harness calls its shell tool, as observed in the captured
@@ -89,14 +100,24 @@ export function extractCommand(event: ToolEvent): string | readonly string[] | n
   return null;
 }
 
-/** Whether this invocation of a blocked program would start an agent. */
+/**
+ * Whether this invocation of a blocked program would start an agent.
+ *
+ * A subcommand only counts in the subcommand POSITION. Reading the first
+ * non-flag token anywhere let a flag's value stand in for one, and requiring
+ * only that SOME argument be `--version` let `claude -p --version` through
+ * while `-p` started an agent.
+ */
 export function isLaunch(invocation: Invocation): boolean {
-  const { next, args } = invocation;
+  const { args } = invocation;
   if (args.length === 0) return true;
-  if (next !== undefined) return !NON_LAUNCH_SUBCOMMANDS.has(next);
-  // Flags only. `--version` and `--help` answer and exit; anything else is an
-  // agent started with options, such as `claude -p "..."`.
-  return !args.some((arg) => NON_LAUNCH_FLAGS.has(arg));
+
+  const first = args[0]!;
+  if (!first.startsWith("-")) return !NON_LAUNCH_SUBCOMMANDS.has(first);
+
+  // Flags only: every one of them must be a self-describing probe. One flag
+  // that is not turns the whole invocation back into a launch.
+  return !args.every((arg) => NON_LAUNCH_FLAGS.has(arg));
 }
 
 function denyReason(program: string): string {

@@ -14,6 +14,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -99,33 +100,51 @@ async function readStdin(
 ): Promise<string> {
   if (process.stdin.isTTY) return "";
   return await new Promise<string>((resolve) => {
+    // A multi-byte character can straddle two chunks; decoding each chunk on
+    // its own would corrupt it and change the text the scanner sees.
+    const decoder = new StringDecoder("utf8");
     let text = "";
     let done = false;
+    const onData = (chunk: Buffer) => {
+      text += decoder.write(chunk);
+      if (isComplete(chunk, text)) finish();
+    };
     const finish = () => {
       if (done) return;
       done = true;
       clearTimeout(timer);
-      process.stdin.removeAllListeners("data");
+      // Every listener, not just "data": process.stdin is a singleton, so a
+      // leaked "end" or "error" closure accumulates across calls.
+      process.stdin.removeListener("data", onData);
+      process.stdin.removeListener("end", finish);
+      process.stdin.removeListener("error", finish);
       process.stdin.pause();
-      resolve(text);
+      resolve(text + decoder.end());
     };
     const timer = setTimeout(finish, deadlineMs);
-    process.stdin.on("data", (chunk: Buffer) => {
-      text += chunk.toString("utf8");
-      if (isComplete(chunk, text)) finish();
-    });
+    process.stdin.on("data", onData);
     process.stdin.on("end", finish);
     process.stdin.on("error", finish);
     process.stdin.resume();
   });
 }
 
-function parsesAsJson(text: string): boolean {
+/**
+ * The parsed document, or null while it is still incomplete or malformed.
+ *
+ * Returning the value rather than a boolean is what keeps the guard to ONE
+ * parse: the completion check already built the object graph, and discarding it
+ * to rebuild it a line later doubles the cost on a per-tool-call path. The
+ * cheap suffix test in front skips the throw-and-catch entirely for the common
+ * partial chunk.
+ */
+function parseWhenComplete(text: string): unknown {
+  const trimmed = text.trimEnd();
+  if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) return null;
   try {
-    JSON.parse(text);
-    return true;
+    return JSON.parse(trimmed);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -236,32 +255,42 @@ async function runGuard(argv: readonly string[], io: Io): Promise<number> {
     return 0;
   }
 
-  const body =
-    io.stdin ??
-    (await readStdin(io.deadlines?.guardStdinMs ?? GUARD_STDIN_DEADLINE_MS, (_c, text) =>
-      parsesAsJson(text),
-    ));
+  // Outside Orca the verdict is already known, so the body is drained but never
+  // parsed. That is the common case on this per-tool-call path: an ordinary
+  // session pays a drain, not a JSON decode, on every command it runs.
+  const gated = resolveRole(io.env as RoleEnv) !== "none";
 
-  // An unnamed harness still drains stdin first, so a producer holding the
-  // descriptor never sees a broken pipe.
-  if (harness === null) {
+  let parsed: unknown = null;
+  if (io.stdin !== undefined) {
+    parsed = gated ? parseWhenComplete(io.stdin) : null;
+  } else {
+    const deadline = io.deadlines?.guardStdinMs ?? GUARD_STDIN_DEADLINE_MS;
+    if (gated) {
+      // The completion check hands back the document it already built, so the
+      // event is parsed exactly once.
+      await readStdin(deadline, (_chunk, text) => {
+        parsed = parseWhenComplete(text);
+        return parsed !== null;
+      });
+    } else {
+      // Drain without decoding: outside Orca the verdict is already known. Stop
+      // at a newline OR at a closing brace, because a producer that sends one
+      // JSON line with no trailing newline would otherwise sit on the full
+      // deadline on every single tool call.
+      await readStdin(
+        deadline,
+        (chunk, text) => chunk.includes(0x0a) || text.trimEnd().endsWith("}"),
+      );
+    }
+  }
+
+  // An unnamed harness still drained stdin first, for the same reason.
+  if (harness === null || !gated || typeof parsed !== "object" || parsed === null) {
     io.stdout(guardAllowOutput());
     return 0;
   }
 
-  let event: unknown;
-  try {
-    event = JSON.parse(body);
-  } catch {
-    io.stdout(guardAllowOutput());
-    return 0;
-  }
-  if (typeof event !== "object" || event === null) {
-    io.stdout(guardAllowOutput());
-    return 0;
-  }
-
-  const decision = decide(event as ToolEvent, io.env);
+  const decision = decide(parsed as ToolEvent, io.env);
   io.stdout(decision.deny ? guardDenyOutput(decision.reason) : guardAllowOutput());
   return 0;
 }

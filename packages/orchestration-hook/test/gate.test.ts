@@ -145,3 +145,75 @@ describe("SHELL_TOOL_NAMES", () => {
     expect(SHELL_TOOL_NAMES.claude).toContain(fixture.tool_name);
   });
 });
+
+describe("evasion", () => {
+  // Each of these reached a blocked CLI while the gate allowed it. They are
+  // regression cases, not hypotheticals.
+  it("denies a launch hidden behind shell grammar", () => {
+    for (const command of [
+      "{ codex exec; }",
+      "(codex exec)",
+      "( codex exec )",
+      "if true; then codex exec; fi",
+      "for i in 1; do codex exec; done",
+      "while true; do codex exec; done",
+      "eval 'codex exec'",
+      'eval "codex exec"',
+    ]) {
+      expect(decide(bash(command), LEAD).deny, command).toBe(true);
+    }
+  });
+
+  it("denies a launch whose output is redirected", () => {
+    expect(decide(bash("codex exec > /tmp/out"), LEAD).deny).toBe(true);
+    expect(decide(bash("codex exec 2>&1 | tee log"), LEAD).deny).toBe(true);
+  });
+
+  it("still allows a management command whose output is redirected", () => {
+    // Redirection is plumbing. Reading `>` as the subcommand denied a version
+    // probe, which is the false-deny half of the same bug.
+    for (const command of [
+      "codex --version > /tmp/v",
+      "claude --version 2>&1",
+      "codex plugin add x > out",
+      "claude update | tee log",
+    ]) {
+      expect(decide(bash(command), LEAD).deny, command).toBe(false);
+    }
+  });
+});
+
+describe("evasion, second pass", () => {
+  // Every case here reached a blocked CLI while the gate allowed it.
+  it("denies when an argument carries an unresolvable expansion", () => {
+    // The program is already known; only the argument is opaque. Dropping the
+    // whole segment there was the bypass.
+    expect(decide(bash("codex exec $(date)"), LEAD).deny).toBe(true);
+    expect(decide(bash('codex exec "${HOME}"'), LEAD).deny).toBe(true);
+  });
+
+  it("denies when a wrapper flag takes the value that hid the program", () => {
+    for (const command of [
+      "env -u FOO codex exec",
+      "xargs -n 1 codex exec",
+      "exec -a nm codex exec",
+      "sudo -D /tmp codex exec",
+    ]) {
+      expect(decide(bash(command), LEAD).deny, command).toBe(true);
+    }
+  });
+
+  it("denies the real binary behind the wrapper's public link", () => {
+    expect(decide(bash("codex-bin exec"), LEAD).deny).toBe(true);
+  });
+
+  it("denies a launch flag paired with a version probe", () => {
+    // `--version` present is not enough: `-p` starts an agent.
+    expect(decide(bash("claude -p --version"), LEAD).deny).toBe(true);
+  });
+
+  it("applies the wrapper walk to an argv array too", () => {
+    expect(decide(bash(["env", "codex", "exec"]), LEAD).deny).toBe(true);
+    expect(decide(bash(["sudo", "-u", "me", "codex", "exec"]), LEAD).deny).toBe(true);
+  });
+});

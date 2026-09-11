@@ -15,42 +15,120 @@ export interface Invocation {
   args: readonly string[];
 }
 
-const WRAPPERS: Record<string, true> = {
-  env: true,
-  command: true,
-  exec: true,
-  sudo: true,
-  doas: true,
-  nice: true,
-  time: true,
-  xargs: true,
-  nohup: true,
-  timeout: true,
-  stdbuf: true,
-  setsid: true,
+/** Commands that run another command, so the program is further along. */
+const WRAPPERS: ReadonlySet<string> = new Set([
+  "env",
+  "command",
+  "exec",
+  "sudo",
+  "doas",
+  "nice",
+  "time",
+  "xargs",
+  "nohup",
+  "timeout",
+  "stdbuf",
+  "setsid",
+]);
+
+const SHELLS: ReadonlySet<string> = new Set(["bash", "sh", "zsh"]);
+
+/**
+ * Shell grammar words that precede a command rather than being one.
+ *
+ * Without these, `{ codex exec; }` scans `{` as the program and allows, and so
+ * do `if true; then codex exec; fi` and every loop body. They are syntax, not
+ * executables, so stepping over them is what makes the program the thing that
+ * actually runs.
+ */
+const SHELL_KEYWORDS: ReadonlySet<string> = new Set([
+  "{",
+  "}",
+  "(",
+  ")",
+  "!",
+  "if",
+  "then",
+  "elif",
+  "else",
+  "fi",
+  "for",
+  "while",
+  "until",
+  "do",
+  "done",
+  "case",
+  "esac",
+  "in",
+  "select",
+  "function",
+  "coproc",
+]);
+
+/**
+ * Redirections are plumbing, not arguments.
+ *
+ * `codex --version > /tmp/v` must stay allowed: leaving `>` in the token stream
+ * makes it read as the subcommand, and a version probe gets denied.
+ */
+const REDIRECTION = /^\d*(?:>>?|<<?|&>|>&|<>)/;
+
+/** Drop redirection operators and the targets that belong to them. */
+function stripRedirections(tokens: readonly string[]): string[] {
+  const kept: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (!REDIRECTION.test(token)) {
+      kept.push(token);
+      continue;
+    }
+    // A bare operator takes the next token as its target; `2>&1` and `>file`
+    // already carry theirs.
+    if (/^\d*(?:>>?|<<?|&>|>&|<>)$/.test(token)) i++;
+  }
+  return kept;
+}
+
+/** Wrapper flags that consume a following separate argument. */
+const WRAPPER_OPTION_WITH_ARG: Record<string, ReadonlySet<string>> = {
+  timeout: new Set(["-s", "-k", "--signal", "--kill-after"]),
+  sudo: new Set(["-u", "-g", "-h", "-p", "-r", "-t", "-C", "-D"]),
+  doas: new Set(["-u", "-C"]),
+  nice: new Set(["-n"]),
+  stdbuf: new Set(["-i", "-o", "-e"]),
+  // Without these the flag's VALUE is read as the program: `env -u FOO codex`
+  // stops at FOO and never sees codex.
+  env: new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]),
+  xargs: new Set(["-n", "-I", "-L", "-s", "-d", "-P", "-E", "-a"]),
+  exec: new Set(["-a"]),
 };
 
-const SHELLS: Record<string, true> = {
-  bash: true,
-  sh: true,
-  zsh: true,
-};
+/** A leading `NAME=VALUE` token, which sets the environment rather than naming the program. */
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
-/** Flags known to take a following separate argument for common wrappers */
-const WRAPPER_OPTION_WITH_ARG: Record<string, Record<string, true>> = {
-  timeout: { "-s": true, "-k": true, "--signal": true, "--kill-after": true },
-  sudo: { "-u": true, "-g": true, "-h": true, "-p": true, "-r": true, "-t": true, "-C": true },
-  doas: { "-u": true, "-C": true },
-  nice: { "-n": true },
-  stdbuf: { "-i": true, "-o": true, "-e": true },
-};
+/** The first token that is not an option flag, which is where a subcommand sits. */
+function firstNonFlag(tokens: readonly string[]): string | undefined {
+  return tokens.find((token) => !token.startsWith("-"));
+}
+
+/**
+ * The invocation a shell wrapper's `-c` argument describes, or null when this
+ * is not a shell wrapper.
+ *
+ * Shared by the string and argv paths: both have to look past `bash -lc` the
+ * same way, and two copies of that rule drift apart exactly where a missed
+ * unwrap becomes a missed launch.
+ */
+function scanShellDashC(program: string, rest: readonly string[]): Invocation[] | null {
+  if (!SHELLS.has(program)) return null;
+  const flagIndex = rest.findIndex(isShellFlagWithC);
+  if (flagIndex < 0) return null;
+  const inner = rest[flagIndex + 1];
+  return inner === undefined ? [] : scanInvocations(inner);
+}
 
 function isShellFlagWithC(flag: string): boolean {
   return flag.startsWith("-") && !flag.startsWith("--") && flag.slice(1).includes("c");
-}
-
-interface SegmentRaw {
-  text: string;
 }
 
 /**
@@ -59,8 +137,8 @@ interface SegmentRaw {
  * Bare ( opens a subshell and segments; $( is command substitution and stays together.
  * Returns null if quotes are unmatched or escape is dangling.
  */
-function splitSegments(input: string): SegmentRaw[] | null {
-  const segments: SegmentRaw[] = [];
+function splitSegments(input: string): string[] | null {
+  const segments: string[] = [];
   let current = "";
   let inSingle = false;
   let inDouble = false;
@@ -96,36 +174,43 @@ function splitSegments(input: string): SegmentRaw[] | null {
     if (!inSingle && !inDouble) {
       if (char === "\n" || char === ";") {
         if (current.trim().length > 0) {
-          segments.push({ text: current });
+          segments.push(current);
         }
         current = "";
         continue;
       }
 
-      // Bare ( is a subshell boundary; $( is command substitution and remains intact
-      if (char === "(") {
-        if (i > 0 && input[i - 1] === "$") {
+      // Bare ( and ) bound a subshell; $( is command substitution and remains
+      // intact. Both sides are boundaries, so punctuation never clings to a
+      // token and turn `--version)` into an unrecognized subcommand.
+      if (char === "(" || char === ")") {
+        if (char === "(" && i > 0 && input[i - 1] === "$") {
           current += char;
           continue;
         }
         if (current.trim().length > 0) {
-          segments.push({ text: current });
+          segments.push(current);
         }
         current = "";
         continue;
       }
 
       if (char === "&") {
+        // `2>&1` and `>&2` are one redirection, not a background operator.
+        if (current.endsWith(">") || current.endsWith("<")) {
+          current += char;
+          continue;
+        }
         if (input[i + 1] === "&") {
           if (current.trim().length > 0) {
-            segments.push({ text: current });
+            segments.push(current);
           }
           current = "";
           i++;
           continue;
         }
         if (current.trim().length > 0) {
-          segments.push({ text: current });
+          segments.push(current);
         }
         current = "";
         continue;
@@ -134,14 +219,14 @@ function splitSegments(input: string): SegmentRaw[] | null {
       if (char === "|") {
         if (input[i + 1] === "|") {
           if (current.trim().length > 0) {
-            segments.push({ text: current });
+            segments.push(current);
           }
           current = "";
           i++;
           continue;
         }
         if (current.trim().length > 0) {
-          segments.push({ text: current });
+          segments.push(current);
         }
         current = "";
         continue;
@@ -156,7 +241,7 @@ function splitSegments(input: string): SegmentRaw[] | null {
   }
 
   if (current.trim().length > 0) {
-    segments.push({ text: current });
+    segments.push(current);
   }
 
   return segments;
@@ -164,7 +249,13 @@ function splitSegments(input: string): SegmentRaw[] | null {
 
 /**
  * Tokenize a single segment into words, stripping outer quotes from tokens.
- * Returns null if the segment contains unresolvable constructs ($(, `, ${).
+ *
+ * An unresolvable construct ($(, `, ${) names something this scanner cannot
+ * resolve. Where it sits decides what that means. BEFORE the program token, the
+ * program itself is unknown and the segment yields nothing — R9 allows. AFTER
+ * it, the program is already known and only an argument is opaque, so the
+ * tokens gathered so far are returned; dropping them there let
+ * `codex exec $(date)` through.
  */
 function tokenizeSegment(segmentText: string): string[] | null {
   const tokens: string[] = [];
@@ -203,11 +294,12 @@ function tokenizeSegment(segmentText: string): string[] | null {
     }
 
     if (!inSingle) {
-      if (char === "`") {
-        return null;
-      }
-      if (char === "$" && (segmentText[i + 1] === "(" || segmentText[i + 1] === "{")) {
-        return null;
+      const unresolvable =
+        char === "`" ||
+        (char === "$" && (segmentText[i + 1] === "(" || segmentText[i + 1] === "{"));
+      if (unresolvable) {
+        if (inToken) tokens.push(currentToken);
+        return tokens.length > 0 ? tokens : null;
       }
     }
 
@@ -231,20 +323,36 @@ function tokenizeSegment(segmentText: string): string[] | null {
   return tokens;
 }
 
-function scanSegmentTokens(tokens: string[]): Invocation[] {
+function scanSegmentTokens(rawTokens: readonly string[]): Invocation[] {
+  const tokens = stripRedirections(rawTokens);
   let idx = 0;
 
   // 1. Skip leading NAME=VALUE tokens
-  while (idx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[idx]!)) {
+  while (idx < tokens.length && ENV_ASSIGNMENT.test(tokens[idx]!)) {
     idx++;
   }
 
-  // 2. While the next token is a wrapper, skip it and its flags, then skip assignments
+  // 2. Step over shell grammar words and wrappers until a real program is next.
   while (idx < tokens.length) {
     const rawToken = tokens[idx]!;
+
+    if (SHELL_KEYWORDS.has(rawToken)) {
+      idx++;
+      while (idx < tokens.length && ENV_ASSIGNMENT.test(tokens[idx]!)) {
+        idx++;
+      }
+      continue;
+    }
+
     const name = basename(rawToken);
 
-    if (WRAPPERS[name] !== true) {
+    // `eval` runs the string it is handed, so the program is inside it.
+    if (name === "eval") {
+      const inner = tokens[idx + 1];
+      return inner === undefined ? [] : scanInvocations(inner);
+    }
+
+    if (!WRAPPERS.has(name)) {
       break;
     }
 
@@ -263,7 +371,7 @@ function scanSegmentTokens(tokens: string[]): Invocation[] {
     while (idx < tokens.length && tokens[idx]!.startsWith("-")) {
       const flag = tokens[idx]!;
       idx++;
-      if (flagArgTable?.[flag] === true && idx < tokens.length) {
+      if (flagArgTable?.has(flag) === true && idx < tokens.length) {
         idx++;
       }
     }
@@ -274,7 +382,7 @@ function scanSegmentTokens(tokens: string[]): Invocation[] {
     }
 
     // Skip assignments again
-    while (idx < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[idx]!)) {
+    while (idx < tokens.length && ENV_ASSIGNMENT.test(tokens[idx]!)) {
       idx++;
     }
   }
@@ -287,30 +395,12 @@ function scanSegmentTokens(tokens: string[]): Invocation[] {
   const progName = basename(token);
 
   // 3. Shell wrapper check: bash, sh, zsh with -c flag
-  if (SHELLS[progName] === true) {
-    for (let j = idx + 1; j < tokens.length; j++) {
-      const candidate = tokens[j]!;
-      if (isShellFlagWithC(candidate)) {
-        const subCommand = tokens[j + 1];
-        if (subCommand !== undefined) {
-          return scanInvocations(subCommand);
-        }
-        return [];
-      }
-    }
-  }
+  const rest = tokens.slice(idx + 1);
+  const viaShell = scanShellDashC(progName, rest);
+  if (viaShell !== null) return viaShell;
 
   // 4. Otherwise program is basename of token; next is following non-flag token
-  let nextToken: string | undefined;
-  for (let j = idx + 1; j < tokens.length; j++) {
-    const candidate = tokens[j]!;
-    if (!candidate.startsWith("-")) {
-      nextToken = candidate;
-      break;
-    }
-  }
-
-  return [{ program: progName, next: nextToken, args: tokens.slice(idx + 1) }];
+  return [{ program: progName, next: firstNonFlag(rest), args: rest }];
 }
 
 export function scanInvocations(command: string | readonly string[]): Invocation[] {
@@ -319,32 +409,10 @@ export function scanInvocations(command: string | readonly string[]): Invocation
       return [];
     }
 
-    const first = command[0]!;
-    const firstProg = basename(first);
-
-    if (SHELLS[firstProg] === true) {
-      for (let i = 1; i < command.length; i++) {
-        const arg = command[i]!;
-        if (isShellFlagWithC(arg)) {
-          const subCommand = command[i + 1];
-          if (subCommand !== undefined) {
-            return scanInvocations(subCommand);
-          }
-          return [];
-        }
-      }
-    }
-
-    let nextToken: string | undefined;
-    for (let i = 1; i < command.length; i++) {
-      const arg = command[i]!;
-      if (!arg.startsWith("-")) {
-        nextToken = arg;
-        break;
-      }
-    }
-
-    return [{ program: firstProg, next: nextToken, args: command.slice(1) }];
+    // The same walk as a string segment: an argv array carries wrappers,
+    // assignments and shell keywords too, and a separate simpler path here let
+    // `["env","codex","exec"]` through as the program `env`.
+    return scanSegmentTokens(command);
   }
 
   const segments = splitSegments(command);
@@ -354,7 +422,7 @@ export function scanInvocations(command: string | readonly string[]): Invocation
 
   const results: Invocation[] = [];
   for (const seg of segments) {
-    const tokens = tokenizeSegment(seg.text);
+    const tokens = tokenizeSegment(seg);
     if (tokens === null) {
       continue;
     }
