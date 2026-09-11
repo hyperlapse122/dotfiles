@@ -217,3 +217,30 @@ describe("evasion, second pass", () => {
     expect(decide(bash(["sudo", "-u", "me", "codex", "exec"]), LEAD).deny).toBe(true);
   });
 });
+
+describe("evasion, wrapper options", () => {
+  it("denies a command carried inside env --split-string", () => {
+    // The command lives INSIDE the option's value, so consuming that value as
+    // an opaque argument lost the program entirely.
+    for (const command of [
+      'env -S "codex exec"',
+      'env --split-string "codex exec"',
+      'env -S"codex exec"',
+      'env --split-string="codex exec"',
+    ]) {
+      expect(decide(bash(command), LEAD).deny, command).toBe(true);
+    }
+  });
+
+  it("denies when a long wrapper option consumes the value that hid the program", () => {
+    for (const command of [
+      "xargs --max-args 1 codex exec",
+      "sudo --user me codex exec",
+      "nice --adjustment 5 codex exec",
+      "stdbuf --output L codex exec",
+      "timeout --kill-after 1 5 codex exec",
+    ]) {
+      expect(decide(bash(command), LEAD).deny, command).toBe(true);
+    }
+  });
+});

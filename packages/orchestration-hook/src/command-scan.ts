@@ -91,15 +91,51 @@ function stripRedirections(tokens: readonly string[]): string[] {
 
 /** Wrapper flags that consume a following separate argument. */
 const WRAPPER_OPTION_WITH_ARG: Record<string, ReadonlySet<string>> = {
-  timeout: new Set(["-s", "-k", "--signal", "--kill-after"]),
-  sudo: new Set(["-u", "-g", "-h", "-p", "-r", "-t", "-C", "-D"]),
+  timeout: new Set(["-s", "--signal", "-k", "--kill-after"]),
+  sudo: new Set([
+    "-u",
+    "--user",
+    "-g",
+    "--group",
+    "-h",
+    "--host",
+    "-p",
+    "--prompt",
+    "-r",
+    "--role",
+    "-t",
+    "--type",
+    "-C",
+    "--close-from",
+    "-D",
+    "--chdir",
+    "-R",
+    "--chroot",
+  ]),
   doas: new Set(["-u", "-C"]),
-  nice: new Set(["-n"]),
-  stdbuf: new Set(["-i", "-o", "-e"]),
+  nice: new Set(["-n", "--adjustment"]),
+  stdbuf: new Set(["-i", "--input", "-o", "--output", "-e", "--error"]),
   // Without these the flag's VALUE is read as the program: `env -u FOO codex`
   // stops at FOO and never sees codex.
-  env: new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]),
-  xargs: new Set(["-n", "-I", "-L", "-s", "-d", "-P", "-E", "-a"]),
+  env: new Set(["-u", "--unset", "-C", "--chdir"]),
+  xargs: new Set([
+    "-n",
+    "--max-args",
+    "-I",
+    "--replace",
+    "-L",
+    "--max-lines",
+    "-s",
+    "--max-chars",
+    "-d",
+    "--delimiter",
+    "-P",
+    "--max-procs",
+    "-E",
+    "--eof",
+    "-a",
+    "--arg-file",
+  ]),
   exec: new Set(["-a"]),
 };
 
@@ -125,6 +161,20 @@ function scanShellDashC(program: string, rest: readonly string[]): Invocation[] 
   if (flagIndex < 0) return null;
   const inner = rest[flagIndex + 1];
   return inner === undefined ? [] : scanInvocations(inner);
+}
+
+/**
+ * The command string an `env -S` / `--split-string` option carries, or null.
+ *
+ * Accepts `-S x`, `-Sx`, `--split-string x` and `--split-string=x`.
+ */
+function splitStringArgument(tokens: readonly string[], idx: number): string | null {
+  const token = tokens[idx];
+  if (token === undefined) return null;
+  if (token === "-S" || token === "--split-string") return tokens[idx + 1] ?? null;
+  if (token.startsWith("--split-string=")) return token.slice("--split-string=".length);
+  if (token.startsWith("-S") && token.length > 2) return token.slice(2);
+  return null;
 }
 
 function isShellFlagWithC(flag: string): boolean {
@@ -363,6 +413,15 @@ function scanSegmentTokens(rawTokens: readonly string[]): Invocation[] {
     // launch, and the launch check would deny a presence probe.
     if (name === "command" && tokens[idx] !== undefined && /^-[vV]$/.test(tokens[idx]!)) {
       return [];
+    }
+
+    // `env -S "codex exec"` carries the command INSIDE the option's own value,
+    // so consuming that value as an opaque argument loses the program entirely.
+    // Every spelling GNU env accepts is handled: separate, attached, and
+    // `--split-string=`.
+    if (name === "env") {
+      const split = splitStringArgument(tokens, idx);
+      if (split !== null) return scanInvocations(split);
     }
 
     const flagArgTable = WRAPPER_OPTION_WITH_ARG[name];
