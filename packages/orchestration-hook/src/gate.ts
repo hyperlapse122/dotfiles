@@ -47,26 +47,20 @@ const NON_LAUNCH_SUBCOMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 /** Flags that ask the CLI about itself instead of starting it. */
-const NON_LAUNCH_FLAGS: ReadonlySet<string> = new Set([
-  "--version",
-  "-V",
-  "--help",
-  "-h",
-  "help",
-]);
+const NON_LAUNCH_FLAGS: ReadonlySet<string> = new Set(["--version", "-V", "--help", "-h", "help"]);
 
 /**
- * Shell tool names per harness, as read from the captured PreToolUse fixtures
- * in `test/fixtures/`.
+ * What each harness calls its shell tool, as observed in the captured
+ * PreToolUse fixtures under `test/fixtures/`.
  *
- * This set selects which events to scan by name. It is deliberately NOT the
- * only path: `extractCommand` below scans any event that carries a command,
- * whatever the tool is called. Codex renames its shell handler between
- * versions — rust-v0.154.0 ships `exec_command` under `unified_exec` and has no
- * `shell` handler at all — so a name list alone would silently stop denying
- * after an upgrade, with every test still green.
+ * Reference only — `decide` never consults it. Codex renames this handler
+ * between versions: rust-v0.154.0 ships `exec_command` under `unified_exec` and
+ * carries no `shell` handler at all. A gate keyed on the name would therefore
+ * stop denying after an upgrade with every test still green, so the scan keys
+ * on the event carrying a command instead. The list is kept because it records
+ * that hazard and pins the fixture.
  */
-const SHELL_TOOL_NAMES: Record<Harness, readonly string[]> = {
+export const SHELL_TOOL_NAMES: Record<Harness, readonly string[]> = {
   claude: ["Bash"],
   codex: ["exec_command", "unified_exec", "shell", "local_shell"],
 };
@@ -119,20 +113,16 @@ function denyReason(program: string): string {
 }
 
 /** Decide whether this tool call may proceed. */
-export function decide(harness: Harness, event: ToolEvent, env: RoleEnv): Decision {
+export function decide(event: ToolEvent, env: RoleEnv): Decision {
   if (resolveRole(env) === "none") return { deny: false };
 
   const command = extractCommand(event);
   if (command === null) return { deny: false };
 
-  // A recognized shell tool is scanned because it is one. An unrecognized tool
-  // carrying a command is scanned too, per the naming hazard above.
-  const toolName = typeof event.tool_name === "string" ? event.tool_name : "";
-  const known = SHELL_TOOL_NAMES[harness].some(
-    (name) => name.toLowerCase() === toolName.toLowerCase(),
-  );
-  if (!known && toolName === "") return { deny: false };
-
+  // Carrying a command is the test, not the tool's name. `SHELL_TOOL_NAMES`
+  // documents what each harness calls its shell tool today; it deliberately
+  // does not gate the scan, because a renamed or absent name would then make
+  // the gate allow everything while every test stayed green.
   for (const invocation of scanInvocations(command)) {
     if (!BLOCKED_PROGRAMS.includes(invocation.program)) continue;
     if (isLaunch(invocation)) return { deny: true, reason: denyReason(invocation.program) };

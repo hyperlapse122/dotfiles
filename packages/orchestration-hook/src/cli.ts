@@ -1,12 +1,13 @@
 /**
  * Command surface for the orchestration hook.
  *
- * `hook` is the only subcommand that fails open: every error, unknown flag, and
- * unparsable argument still yields the harness's empty output and exit 0,
- * because a SessionStart hook that errors delays or blocks session start. Every
- * other subcommand uses ordinary CLI conventions — diagnostics on stderr and a
- * non-zero exit — so an operator's typo and a session-start failure never share
- * one code path.
+ * `hook` and `guard` fail open: every error, unknown flag, and unparsable
+ * argument still yields that harness's no-op output and exit 0. A SessionStart
+ * hook that errors delays or blocks session start, and a PreToolUse hook that
+ * errors breaks every tool call in the session. Both are worse than the thing
+ * the hook failed to do. Every other subcommand uses ordinary CLI conventions —
+ * diagnostics on stderr and a non-zero exit — so an operator's typo and a
+ * session failure never share one code path.
  *
  * This surface is for operators and tests. No MCP tool, skill, or slash command
  * wraps it.
@@ -23,6 +24,8 @@ import {
   isHarness,
   sessionStartEnvelope,
 } from "./envelope.js";
+import { decide, type ToolEvent } from "./gate.js";
+import { scanInvocations } from "./command-scan.js";
 import { isPayloadBody, payload } from "./payload.js";
 import { resolveRole, type RoleEnv } from "./role.js";
 import { fetchGuide, resolveOrcaCommand } from "./orca.js";
@@ -31,6 +34,12 @@ import { fetchGuide, resolveOrcaCommand } from "./orca.js";
 const HOOK_DEADLINE_MS = 8_000;
 /** Stops at the event's own newline; this is the backstop for a producer that sends none. */
 const STDIN_DEADLINE_MS = 3_000;
+/**
+ * The guard's own stdin bound, deliberately much smaller than the SessionStart
+ * one: this path runs on EVERY tool call, so the budget is a latency cost the
+ * user pays all day rather than once at session start.
+ */
+const GUARD_STDIN_DEADLINE_MS = 500;
 
 // Dot notation, not a bracket read: `bun build --define` substitutes this exact
 // expression at compile time, which is what puts the id inside the binary. The
@@ -43,7 +52,13 @@ export interface Io {
   stderr: (text: string) => void;
   env: NodeJS.ProcessEnv;
   /** Overrides the production bounds. Tests set these; the hook path does not. */
-  deadlines?: { hookMs?: number; stdinMs?: number } | undefined;
+  deadlines?: { hookMs?: number; stdinMs?: number; guardStdinMs?: number } | undefined;
+  /**
+   * Supplies the event body instead of reading the real stdin. Tests set it;
+   * the deployed hook never does, so the production path stays the one the
+   * built-binary gate exercises.
+   */
+  stdin?: string | undefined;
 }
 
 function flagValue(argv: readonly string[], name: string): string | undefined {
@@ -66,8 +81,25 @@ function requestedHarness(argv: readonly string[]): Harness | null {
  * start. Stop at the newline; the timer is only the backstop.
  */
 async function drainStdin(deadlineMs: number): Promise<void> {
-  if (process.stdin.isTTY) return;
-  await new Promise<void>((resolve) => {
+  await readStdin(deadlineMs, (chunk) => chunk.includes(0x0a));
+}
+
+/**
+ * Read stdin until `isComplete` accepts what has arrived, EOF, or the deadline.
+ *
+ * `hook` stops at the first newline and throws the bytes away. `guard` needs
+ * the bytes and cannot stop at a newline: a pretty-printed event body has one
+ * after every field, and stopping there would truncate the JSON into garbage
+ * that parses as nothing — which fails open, so the gate would silently stop
+ * denying.
+ */
+async function readStdin(
+  deadlineMs: number,
+  isComplete: (chunk: Buffer, text: string) => boolean,
+): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  return await new Promise<string>((resolve) => {
+    let text = "";
     let done = false;
     const finish = () => {
       if (done) return;
@@ -75,16 +107,26 @@ async function drainStdin(deadlineMs: number): Promise<void> {
       clearTimeout(timer);
       process.stdin.removeAllListeners("data");
       process.stdin.pause();
-      resolve();
+      resolve(text);
     };
     const timer = setTimeout(finish, deadlineMs);
     process.stdin.on("data", (chunk: Buffer) => {
-      if (chunk.includes(0x0a)) finish();
+      text += chunk.toString("utf8");
+      if (isComplete(chunk, text)) finish();
     });
     process.stdin.on("end", finish);
     process.stdin.on("error", finish);
     process.stdin.resume();
   });
+}
+
+function parsesAsJson(text: string): boolean {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function unameS(): string | undefined {
@@ -146,6 +188,84 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
   return 0;
 }
 
+/**
+ * What a harness receives from `guard` when nothing is denied.
+ *
+ * `{}` for both, not `emptyOutput`'s empty string for Codex. SessionStart
+ * treats bare Codex stdout as model context, which is why that path emits
+ * nothing; a PreToolUse response is parsed as a decision document instead, and
+ * an empty body risks a deserialization error on a path that must never fail
+ * loudly. `{}` is the same "no decision" on both harnesses.
+ */
+function guardAllowOutput(): string {
+  return "{}";
+}
+
+function guardDenyOutput(reason: string): string {
+  return JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: reason,
+    },
+  });
+}
+
+/**
+ * The PreToolUse launch gate.
+ *
+ * Fails open on every path. A hook that errors on a per-tool-call surface would
+ * break every tool call in the session, which is a far worse outcome than a
+ * launch this gate misses — the standing rule still covers that case in text.
+ */
+async function runGuard(argv: readonly string[], io: Io): Promise<number> {
+  const harness = requestedHarness(argv);
+
+  const explained = flagValue(argv, "--explain");
+  if (explained !== undefined) {
+    const role = resolveRole(io.env as RoleEnv);
+    const decision = decide({ tool_input: { command: explained } }, io.env);
+    const invocations = scanInvocations(explained)
+      .map((i) => `${i.program}${i.next === undefined ? "" : ` ${i.next}`}`)
+      .join(", ");
+    io.stdout(
+      `role=${role}\nverdict=${decision.deny ? "deny" : "allow"}\n` +
+        `invocations=${invocations === "" ? "(none)" : invocations}\n` +
+        (decision.deny ? `reason=${decision.reason}\n` : ""),
+    );
+    return 0;
+  }
+
+  const body =
+    io.stdin ??
+    (await readStdin(io.deadlines?.guardStdinMs ?? GUARD_STDIN_DEADLINE_MS, (_c, text) =>
+      parsesAsJson(text),
+    ));
+
+  // An unnamed harness still drains stdin first, so a producer holding the
+  // descriptor never sees a broken pipe.
+  if (harness === null) {
+    io.stdout(guardAllowOutput());
+    return 0;
+  }
+
+  let event: unknown;
+  try {
+    event = JSON.parse(body);
+  } catch {
+    io.stdout(guardAllowOutput());
+    return 0;
+  }
+  if (typeof event !== "object" || event === null) {
+    io.stdout(guardAllowOutput());
+    return 0;
+  }
+
+  const decision = decide(event as ToolEvent, io.env);
+  io.stdout(decision.deny ? guardDenyOutput(decision.reason) : guardAllowOutput());
+  return 0;
+}
+
 function runPrintPayload(argv: readonly string[], io: Io): number {
   const body = flagValue(argv, "--body") ?? "everyone";
   if (!isPayloadBody(body)) {
@@ -188,6 +308,17 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     return 0;
   }
 
+  if (command === "guard") {
+    try {
+      return await runGuard(rest, io);
+    } catch {
+      // Fail open: this path runs on every tool call, so an internal fault must
+      // never turn into a denied or broken tool call.
+      io.stdout(guardAllowOutput());
+      return 0;
+    }
+  }
+
   if (command === "hook") {
     try {
       return await runHook(rest, io);
@@ -210,7 +341,9 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     default:
       io.stderr(
         `orchestration-hook: unknown command ${JSON.stringify(command)}\n` +
-          "usage: orchestration-hook <hook --harness <claude|codex> | print-payload [--body <everyone|coordinator>] | role | --version>\n",
+          "usage: orchestration-hook <hook --harness <claude|codex> | " +
+          "guard --harness <claude|codex> [--explain <command>] | " +
+          "print-payload [--body <everyone|coordinator>] | role | --version>\n",
       );
       return 2;
   }

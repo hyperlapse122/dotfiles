@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import { decide, extractCommand, isLaunch, type ToolEvent } from "../src/gate.js";
+import { decide, extractCommand, isLaunch, SHELL_TOOL_NAMES, type ToolEvent } from "../src/gate.js";
 import { scanInvocations } from "../src/command-scan.js";
 import type { RoleEnv } from "../src/role.js";
 
@@ -23,20 +23,20 @@ function bash(command: string | readonly string[]): ToolEvent {
 
 describe("decide", () => {
   it("allows everything when the session is not Orca-managed", () => {
-    expect(decide("claude", bash("codex exec x"), NONE).deny).toBe(false);
+    expect(decide(bash("codex exec x"), NONE).deny).toBe(false);
   });
 
   it("denies a launch for a worker, not only the lead", () => {
-    expect(decide("claude", bash("codex exec x"), WORKER).deny).toBe(true);
-    expect(decide("claude", bash("codex exec x"), LEAD).deny).toBe(true);
+    expect(decide(bash("codex exec x"), WORKER).deny).toBe(true);
+    expect(decide(bash("codex exec x"), LEAD).deny).toBe(true);
   });
 
   it("treats an empty ORCA_TERMINAL_HANDLE as unset", () => {
-    expect(decide("claude", bash("codex exec x"), { ORCA_TERMINAL_HANDLE: "" }).deny).toBe(false);
+    expect(decide(bash("codex exec x"), { ORCA_TERMINAL_HANDLE: "" }).deny).toBe(false);
   });
 
   it("names the program, Orca, and the unreachable-Orca fallback in the reason", () => {
-    const decision = decide("claude", bash("omp"), LEAD);
+    const decision = decide(bash("omp"), LEAD);
     expect(decision.deny).toBe(true);
     if (!decision.deny) return;
     expect(decision.reason).toContain("omp");
@@ -45,30 +45,28 @@ describe("decide", () => {
   });
 
   it("allows a tool call that carries no command", () => {
-    expect(decide("claude", { tool_name: "Read", tool_input: { file_path: "/x" } }, LEAD).deny).toBe(
-      false,
-    );
+    expect(decide({ tool_name: "Read", tool_input: { file_path: "/x" } }, LEAD).deny).toBe(false);
   });
 
   it("scans an unrecognized tool that still carries a command", () => {
     // Codex renames its shell handler between versions; a name list alone
     // would stop denying with every test still green.
     const event = { tool_name: "some_future_exec", tool_input: { command: "omp" } };
-    expect(decide("codex", event, LEAD).deny).toBe(true);
+    expect(decide(event, LEAD).deny).toBe(true);
   });
 
   it("denies an argv-array command", () => {
-    expect(decide("codex", bash(["bash", "-lc", "codex exec x"]), LEAD).deny).toBe(true);
+    expect(decide(bash(["bash", "-lc", "codex exec x"]), LEAD).deny).toBe(true);
   });
 
   it("allows an unrelated command", () => {
-    expect(decide("claude", bash("git status"), LEAD).deny).toBe(false);
-    expect(decide("claude", bash('echo "ask claude about it"'), LEAD).deny).toBe(false);
+    expect(decide(bash("git status"), LEAD).deny).toBe(false);
+    expect(decide(bash('echo "ask claude about it"'), LEAD).deny).toBe(false);
   });
 
   it("denies a launch hidden behind a shell wrapper", () => {
-    expect(decide("claude", bash("bash -c 'codex exec x'"), LEAD).deny).toBe(true);
-    expect(decide("claude", bash("git status && omp"), LEAD).deny).toBe(true);
+    expect(decide(bash("bash -c 'codex exec x'"), LEAD).deny).toBe(true);
+    expect(decide(bash("git status && omp"), LEAD).deny).toBe(true);
   });
 
   it("allows the CLI-management surface", () => {
@@ -80,13 +78,13 @@ describe("decide", () => {
       "omp --help",
       "command -v codex",
     ]) {
-      expect(decide("claude", bash(command), LEAD).deny, command).toBe(false);
+      expect(decide(bash(command), LEAD).deny, command).toBe(false);
     }
   });
 
   it("denies a bare invocation and an exec", () => {
     for (const command of ["codex", "claude", "omp", "codex exec", 'claude -p "hi"']) {
-      expect(decide("claude", bash(command), LEAD).deny, command).toBe(true);
+      expect(decide(bash(command), LEAD).deny, command).toBe(true);
     }
   });
 
@@ -95,10 +93,10 @@ describe("decide", () => {
       readFileSync(join(import.meta.dirname, "fixtures", "pretooluse-claude.json"), "utf8"),
     ) as ToolEvent;
     expect(extractCommand(fixture)).toBe("echo capture-probe");
-    expect(decide("claude", fixture, LEAD).deny).toBe(false);
+    expect(decide(fixture, LEAD).deny).toBe(false);
 
     const launching = { ...fixture, tool_input: { command: "codex exec x" } };
-    expect(decide("claude", launching, LEAD).deny).toBe(true);
+    expect(decide(launching, LEAD).deny).toBe(true);
   });
 });
 
@@ -136,5 +134,14 @@ describe("isLaunch", () => {
 
   it("counts flags that are not version or help as a launch", () => {
     expect(isLaunch(only('claude -p "hi"'))).toBe(true);
+  });
+});
+
+describe("SHELL_TOOL_NAMES", () => {
+  it("lists the tool name the captured Claude fixture actually carries", () => {
+    const fixture = JSON.parse(
+      readFileSync(join(import.meta.dirname, "fixtures", "pretooluse-claude.json"), "utf8"),
+    ) as { tool_name: string };
+    expect(SHELL_TOOL_NAMES.claude).toContain(fixture.tool_name);
   });
 });
