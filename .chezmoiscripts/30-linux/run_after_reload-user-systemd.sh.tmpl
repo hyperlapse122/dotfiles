@@ -1,0 +1,54 @@
+{{ if eq .chezmoi.os "linux" -}}
+{{ $userManagerBusPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "user-manager-bus-present") -}}
+#!/usr/bin/env bash
+#
+# Makes the user units this repository deploys visible to the user manager that is
+# already running, so `systemctl --user` knows a newly deployed unit in the session
+# the apply ran in rather than only after the next login.
+#
+# WHY A BARE run_after_. systemd's user manager notices a new unit file only after a
+# daemon-reload, and chezmoi writes unit files as ordinary targets. run_after_ is the
+# only lifecycle that runs after every file target is written, on every apply --
+# which is what this needs, because a unit can be deployed, re-enabled, or edited
+# without any source fingerprint changing. A run_onchange_ keyed on the unit sources
+# would stay silent for exactly the cases this exists to cover, and would additionally
+# demand a new owner row in the frozen .ci/skip-declaration-site-matrix.yaml
+# inventory, which covers run_onchange_/run_once_ lifecycles.
+#
+# WHY THE FINGERPRINT. The no-bus exit below is a transient-blocking skip: it exits 0
+# so later phases survive, so it can only re-run on its own once the precondition
+# appears. Hashing the user-manager-bus-present probe is what changes this script's
+# rendered content when that happens.
+#
+# WHY A RUNTIME RE-PROBE ON TOP OF THAT TOKEN. The capability token is resolved at
+# render time and the bus can be gone by the time the script runs (a container, an
+# SSH session, a manager that stopped between render and apply), so liveness is asked
+# again here rather than assumed from the token.
+set -euo pipefail
+
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "user-manager-bus-present" "value" $userManagerBusPresent))) }}
+
+user_manager_deadline_secs=${CAPABILITY_PROBE_DEADLINE_SECS:-5}
+user_manager_term_grace_secs=${CAPABILITY_PROBE_TERM_GRACE_SECS:-2}
+# The probe is a liveness question and answers in milliseconds; the reload is real
+# work -- a busy manager reserializing many units legitimately outruns the probe's
+# deadline -- so it gets its own, larger budget rather than borrowing that one.
+user_manager_reload_deadline_secs=${USER_MANAGER_RELOAD_DEADLINE_SECS:-30}
+[[ "$user_manager_deadline_secs" =~ ^[1-9][0-9]*$ &&
+  "$user_manager_term_grace_secs" =~ ^[1-9][0-9]*$ &&
+  "$user_manager_reload_deadline_secs" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "reload-user-systemd: user-manager deadlines must be positive integer seconds" >&2; exit 1; }
+
+if timeout -k "$user_manager_term_grace_secs" "$user_manager_deadline_secs" \
+  systemctl --user show-environment >/dev/null 2>&1; then
+  # A failed reload must not abort the apply. `chezmoi apply` stops at the first
+  # script error and --keep-going is flag-only, so exiting non-zero here would
+  # strand every later phase over a unit-visibility convenience that the next
+  # login supplies anyway.
+  timeout -k "$user_manager_term_grace_secs" "$user_manager_reload_deadline_secs" \
+    systemctl --user daemon-reload \
+    || echo "reload-user-systemd: systemctl --user daemon-reload failed; newly deployed user units stay invisible until the next login." >&2
+else
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "reload-user-systemd" "site" "no-user-manager-bus" "direction" "transient-blocking" "probe" "user-manager-bus-present" "reason" "the user manager bus is unavailable; user-unit daemon-reload is deferred") | trim | indent 2 }}
+fi
+{{ end -}}

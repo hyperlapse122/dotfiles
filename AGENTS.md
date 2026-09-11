@@ -29,7 +29,7 @@ Never add teardown/revert scripts. Delete managed source, use `.chezmoidata/syst
 | `10-auth` | GitHub/GitLab/Docker auth and Tailscale login |
 | `20-base`, `20-darwin`, `20-linux-ubuntu` | base system and toolchain provisioning (Fedora, macOS Homebrew, Jetson APT) |
 | `30-components` | modular feature-scoped package provisioning across OSes (NVIDIA, Podman, Tailscale, Flatpaks, .NET tools, Desktop IME, Apps, DevTools), plus the direct-RPM reconciler for vendors that publish no signed repository |
-| `30-linux` | `/etc` manifest, host/network, chsh, TPM2, Wi-Fi, browser, Podman, VSCodium |
+| `30-linux` | `/etc` manifest, host/network, chsh, TPM2, Wi-Fi, browser, Podman, VSCodium, systemd user-manager daemon-reload |
 | `50-linux-kde`, `50-linux-gnome` | desktop configuration |
 | `60-build` | Vite+ helper/CLI builds |
 | `65-commands` | full command reconciliation, drift repair, and proof-classified pruning |

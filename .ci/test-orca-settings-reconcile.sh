@@ -177,9 +177,59 @@ assert_json() {
 # Converged input writes nothing at all.
 reset_fixture
 before=$(cat "$data")
+before_mode=$(stat -c %a -- "$data")
 run --mode assert >/dev/null 2>&1
 [[ $(cat "$data") == "$before" ]] || fail 'assert rewrote an already-converged document; a second apply must change zero bytes'
-ok 'a converged document is left byte-identical'
+[[ $(stat -c %a -- "$data") == "$before_mode" ]] || fail 'assert changed the mode of an already-converged document'
+ok 'a converged document is left byte-identical and mode-identical'
+
+# Both directions, because the failure this guards is one-way in only one of them:
+# 0600 must not widen, and 0644 must not be clamped to the fallback. 0400 is here
+# because a preserved mode with no owner-write bit is what breaks a staged write
+# that chmods before it fills the file.
+for mode_octal in 600 644 400; do
+  reset_fixture
+  drift_one
+  chmod "0$mode_octal" "$data"
+  run --mode assert >/dev/null 2>&1
+  assert_json "assert did not converge the 0$mode_octal drifted document" \
+    '.settings.appFontFamily == "Pretendard"'
+  [[ $(stat -c %a -- "$data") == "$mode_octal" ]] \
+    || fail "assert changed the mode of a 0$mode_octal document"
+  ok "a drifted 0$mode_octal document preserves its mode"
+done
+
+# The one direction preservation must NOT take. This document decides the flags Orca
+# hands a spawned agent, so a group- or other-write bit already on it is never
+# carried into the replacement.
+for mode_octal in 664 666 660; do
+  reset_fixture
+  drift_one
+  chmod "0$mode_octal" "$data"
+  run --mode assert >/dev/null 2>&1
+  assert_json "assert did not converge the 0$mode_octal drifted document" \
+    '.settings.appFontFamily == "Pretendard"'
+  [[ $(stat -c %a -- "$data") == 600 ]] \
+    || fail "assert carried a group/other-writable 0$mode_octal forward instead of clamping to 0600"
+  ok "a drifted 0$mode_octal document is clamped to 0600"
+done
+
+# The fallback branch is where the direction rule actually lives, so it needs its own
+# case: with the mode unreadable the replacement must take 0600, never 0644.
+reset_fixture
+drift_one
+chmod 0644 "$data"
+stat_stub="$scratch/stat-stub"
+mkdir -p -- "$stat_stub"
+printf '#!/bin/sh\nexit 1\n' >"$stat_stub/stat"
+chmod 0755 "$stat_stub/stat"
+ORCA_SETTINGS_CONFIG_DIR="$fixtures" PATH="$stat_stub:$PATH" \
+  bash "$reconcile_script" --mode assert >/dev/null 2>&1
+assert_json 'assert did not converge when the mode read failed' \
+  '.settings.appFontFamily == "Pretendard"'
+[[ $(stat -c %a -- "$data") == 600 ]] \
+  || fail 'an unreadable mode did not fall back to 0600'
+ok 'an unreadable mode falls back to 0600'
 
 # Drift converges, and everything the declaration does not name survives.
 reset_fixture
@@ -432,5 +482,49 @@ if run --mode wat >/dev/null 2>&1; then
   fail 'an unknown --mode was accepted'
 fi
 ok 'an unknown --mode is rejected'
+
+reset_fixture
+drift_one
+run --mode=assert >/dev/null 2>&1 || fail 'the --mode=assert form exited non-zero'
+assert_json '--mode=assert did not converge the drifted leaf' \
+  '.settings.appFontFamily == "Pretendard"'
+ok 'the --mode=assert form converges the drifted leaf'
+
+for help_arg in -h --help; do
+  reset_fixture
+  before=$(cat "$data")
+  help_out=$(run "$help_arg") || fail "$help_arg exited non-zero"
+  [[ $help_out == 'usage: orca-settings-reconcile [--mode assert|report]' ]] \
+    || fail "$help_arg did not print the usage line: $help_out"
+  [[ $(cat "$data") == "$before" ]] || fail "$help_arg changed the live document"
+  ok "$help_arg prints usage and leaves the live document untouched"
+done
+
+reset_fixture
+missing_mode_err="$scratch/missing-mode.err"
+if run --mode >/dev/null 2>"$missing_mode_err"; then
+  fail 'a --mode with no value was accepted'
+else
+  missing_mode_rc=$?
+fi
+[[ $missing_mode_rc -eq 2 ]] || fail "a --mode with no value exited $missing_mode_rc instead of 2"
+grep -qxF 'orca-settings-reconcile: --mode needs a value (assert or report)' "$missing_mode_err" \
+  || fail "a --mode with no value printed the wrong error: $(cat "$missing_mode_err")"
+ok 'a --mode with no value reports its full error and exits 2'
+
+# The catch-all arm. Without it a typo such as --mode-assert would be ignored and the
+# command would silently run in its default report mode while the caller believed it
+# had asserted.
+reset_fixture
+unknown_arg_err="$scratch/unknown-arg.err"
+if run --mode-assert >/dev/null 2>"$unknown_arg_err"; then
+  fail 'an unknown argument was accepted'
+else
+  unknown_arg_rc=$?
+fi
+[[ $unknown_arg_rc -eq 2 ]] || fail "an unknown argument exited $unknown_arg_rc instead of 2"
+grep -qxF 'orca-settings-reconcile: unknown argument --mode-assert' "$unknown_arg_err" \
+  || fail "an unknown argument printed the wrong error: $(cat "$unknown_arg_err")"
+ok 'an unknown argument reports its full error and exits 2'
 
 printf '\nall orca settings reconciler checks passed\n'

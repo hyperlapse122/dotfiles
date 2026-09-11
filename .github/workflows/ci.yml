@@ -46,6 +46,12 @@ jobs:
             > "$RUNNER_TEMP/op-stub/op"
           chmod 700 "$RUNNER_TEMP/op-stub/op"
           printf '[data]\n' > "$RUNNER_TEMP/empty.toml"
+          mkdir -p "$RUNNER_TEMP/render-target"
+          # AGENTS.md makes both mandatory for every render: a PATH naming only the
+          # stub and the system directories, so no code path falls through to a real
+          # `op`, and a throwaway --destination so nothing writes into the runner's
+          # home. chezmoi is resolved first because that PATH no longer finds it.
+          chezmoi_bin=$(command -v chezmoi)
           for item in \
             ".chezmoiscripts/70-agents/run_onchange_after_update-claude-plugins.sh.tmpl:claude-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-agy-plugins.sh.tmpl:agy-plugins.sh" \
@@ -53,19 +59,21 @@ jobs:
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:omp-plugins.sh" \
             ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:omp-settings.sh" \
             ".chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl:claude-settings.sh" \
-            "dot_local/share/chezmoi-command-sources/executable_orca-settings-reconcile.tmpl:orca-settings-reconcile.sh"
+            "dot_local/share/chezmoi-command-sources/executable_orca-settings-reconcile.tmpl:orca-settings-reconcile.sh" \
+            ".chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl:user-systemd-reload.sh"
           do
             source_path=${item%%:*}
             output_name=${item#*:}
-            PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            env PATH="$RUNNER_TEMP/op-stub:/usr/bin:/bin" "$chezmoi_bin" \
               --config "$RUNNER_TEMP/empty.toml" \
               --source "$GITHUB_WORKSPACE" \
+              --destination "$RUNNER_TEMP/render-target" \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
           chmod 700 "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
             "$RUNNER_TEMP/codex-plugins.sh" "$RUNNER_TEMP/omp-plugins.sh" \
             "$RUNNER_TEMP/omp-settings.sh" "$RUNNER_TEMP/claude-settings.sh" \
-            "$RUNNER_TEMP/orca-settings-reconcile.sh"
+            "$RUNNER_TEMP/orca-settings-reconcile.sh" "$RUNNER_TEMP/user-systemd-reload.sh"
       - name: Test agent reconciliation
         run: |
           set -euo pipefail
@@ -78,6 +86,7 @@ jobs:
           .ci/test-omp-mcp-render.sh
           .ci/test-claude-settings-reconcile.sh "$RUNNER_TEMP/claude-settings.sh"
           .ci/test-orca-settings-reconcile.sh "$RUNNER_TEMP/orca-settings-reconcile.sh"
+          .ci/test-user-systemd-reload.sh "$RUNNER_TEMP/user-systemd-reload.sh"
           .ci/test-orchestration-hook.sh
           .ci/test-codex-tokscale-wrapper.sh
           .ci/test-codex-skills-guard.sh
