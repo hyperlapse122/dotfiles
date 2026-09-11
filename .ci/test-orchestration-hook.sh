@@ -130,7 +130,7 @@ out=$(run_hook claude "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE
 context=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.additionalContext') \
   || fail 'a lead with a healthy Orca CLI must receive a SessionStart envelope'
 for half in 'CI ORCHESTRATION SKILL BODY' 'CI GUIDE BODY' 'orchestration-everyone:begin' 'orchestration-coordinator:begin'; do
-  printf '%s' "$context" | grep -q "$half" || fail "the lead envelope is missing: $half"
+  [[ $context == *"$half"* ]] || fail "the lead envelope is missing: $half"
 done
 pass 'a lead with a healthy Orca CLI receives all four halves in one envelope'
 
@@ -152,7 +152,7 @@ for configured in orca /usr/bin/orca; do
     "$remap_bin")
   [[ -e "$scratch/screen-reader-ran" ]] \
     && fail "ORCA_CLI_COMMAND=$configured reached the screen reader instead of orca-ide"
-  printf '%s' "$out" | grep -q 'SAFE GUIDE' \
+  [[ $out == *'SAFE GUIDE'* ]] \
     || fail "ORCA_CLI_COMMAND=$configured did not remap to orca-ide"
 done
 pass 'a configured bare orca remaps to orca-ide; the screen reader is never launched'
@@ -163,19 +163,19 @@ chmod 0755 "$remap_bin/orca-dev"
 out=$(run_hook claude \
   "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1 ORCA_CLI_COMMAND=$remap_bin/orca-dev" \
   "$remap_bin")
-printf '%s' "$out" | grep -q 'CUSTOM GUIDE' \
+[[ $out == *'CUSTOM GUIDE'* ]] \
   || fail 'an explicitly configured non-screen-reader command was not honoured'
 pass 'an unrelated configured Orca command is used as given'
 
 out=$(run_hook claude "ORCA_TERMINAL_HANDLE=term_ci")
-printf '%s' "$out" | grep -q 'orchestration-everyone:begin' \
+[[ $out == *'orchestration-everyone:begin'* ]] \
   || fail 'an Orca-managed worker must receive the everyone payload'
-printf '%s' "$out" | grep -q 'orchestration-coordinator:begin' \
+[[ $out == *'orchestration-coordinator:begin'* ]] \
   && fail 'a worker must not receive the coordinator payload'
 pass 'an Orca-managed worker receives the everyone payload alone'
 
 out=$(run_hook codex "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1")
-printf '%s' "$out" | grep -q 'orchestration-coordinator:begin' \
+[[ $out == *'orchestration-coordinator:begin'* ]] \
   && fail 'Codex must never receive the coordinator payload, whatever its role'
 pass 'Codex receives the everyone payload even when it resolves as lead'
 

@@ -41,6 +41,12 @@ The additional rules only a session that can dispatch is able to act on. It is d
 ### Lead envelope
 The single composed delivery a lead receives at session start: the authority preamble, the orchestration skill text, the version-matched guide read from the installed CLI, the Everyone payload, and the Coordinator payload. Delivery is atomic — a lead envelope missing any half is not delivered at all, because a partial rule set is worse than none.
 
+### Brief file
+The file a dispatch names by path to carry context the dispatch spec itself cannot hold. A spec travels as an argv string, so context large enough to exceed the kernel argument limit is written to a brief instead of inlined. It is also where a coordinator materializes content only it can reach, such as facts extracted from an MCP the recipient has no access to.
+
+### Brief defect
+A worker escalation or failure caused by context missing from its brief rather than by the difficulty of the work. It carries no information about the unit's blast radius or judgment depth, so it never raises the model rung; the coordinator repairs the brief and re-dispatches at the same rung.
+
 ## Repository layout
 
 ### Primary checkout
