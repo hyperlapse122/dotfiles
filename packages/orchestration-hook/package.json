@@ -1,0 +1,16 @@
+{
+  "name": "@h82/orchestration-hook",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SessionStart orchestration payload delivery for Claude Code and Codex.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "typescript": "7.0.2",
+    "vite-plus": "catalog:"
+  }
+}

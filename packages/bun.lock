@@ -27,6 +27,15 @@
         "vite-plus": "catalog:",
       },
     },
+    "orchestration-hook": {
+      "name": "@h82/orchestration-hook",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "24.13.2",
+        "typescript": "7.0.2",
+        "vite-plus": "catalog:",
+      },
+    },
     "release-lock": {
       "name": "@h82/release-lock",
       "version": "0.0.0",
@@ -74,6 +83,8 @@
     "@h82/command-reconcile": ["@h82/command-reconcile@workspace:command-reconcile"],
 
     "@h82/mxm4-haptic": ["@h82/mxm4-haptic@workspace:mxm4-haptic"],
+
+    "@h82/orchestration-hook": ["@h82/orchestration-hook@workspace:orchestration-hook"],
 
     "@h82/release-lock": ["@h82/release-lock@workspace:release-lock"],
 
