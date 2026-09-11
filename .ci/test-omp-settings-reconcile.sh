@@ -285,8 +285,19 @@ cat >"$live_drifted" <<'EOF'
  "skills.enablePiUser": {"value": false},
  "enabledModels": {"value": ["something/else"]},
  "disabledProviders": {"value": []},
- "modelRoles": {"value": {"default": "something/else"}}}
+ "modelRoles": {"value": {"default": "something/else"}},
+ "model.loopGuard.enabled": {"value": true}}
 EOF
+
+# This fixture is the one live config written by hand, so it is the one that can
+# fall behind the declaration. When it does, the reconciler correctly reports the
+# new key as a typo omp does not serve and every scenario using this fixture
+# fails with a message that names the key but not the stale fixture. Name it here
+# instead.
+missing_from_drifted=$(jq -r --slurpfile live "$live_drifted" '
+  keys[] | select(. as $k | ($live[0] | has($k)) | not)
+' "$declared_json")
+[[ -z $missing_from_drifted ]] || fail "live-drifted.json does not carry declared key(s): $(tr '\n' ' ' <<<"$missing_from_drifted")"
 # A live config that already equals the declaration is built from it at runtime.
 live_converged="$scratch/live-converged.json"
 
