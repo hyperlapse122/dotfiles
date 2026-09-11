@@ -263,18 +263,29 @@ fi
 # The replacement carries the target's own mode rather than a fixed one: Orca owns
 # this file and writes it 0644 itself, so clamping would be undone within seconds
 # of the next launch, while hardcoding 0644 would silently undo any future
-# tightening. An unreadable mode falls back to 0600, never 0644 -- the direction
-# that must never happen is widening.
-data_mode="$(stat -c %a -- "$data" 2>/dev/null || true)"
+# tightening.
+#
+# Only a mode with no group- or other-write bit is carried forward, and one with a
+# setuid/setgid/sticky bit never is. This file holds agentDefaultArgs, so write
+# access to it decides the flags Orca hands a spawned agent; a live document that
+# already carries g+w or o+w -- a bad umask, a restore from a permissive archive --
+# must not have that re-asserted on every run. The old unconditional `chmod 0644`
+# stripped such a bit incidentally, and preserving the mode would otherwise lose
+# that. Anything rejected falls back to 0600, never 0644: the direction that must
+# never happen is widening.
+#
+# `%04a` rather than `%a` because the latter drops leading zeros -- 0044 prints as
+# `44` -- and an unpadded read would send every mode below 0100 to the fallback,
+# undoing exactly the tightening this exists to preserve.
+data_mode="$(stat -c %04a -- "$data" 2>/dev/null || true)"
 case "$data_mode" in
-  [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) ;;
+  0[0-7][0145][0145]) ;;
   *) data_mode=0600 ;;
 esac
 
 # Staged in the target's own directory so the replacement is a same-filesystem
 # rename; staging under TMPDIR would cross filesystems.
 staged="$(mktemp "$(dirname "$data")/.orca-data.XXXXXX")"
-chmod "$data_mode" "$staged"
 # `drifted_paths` is the classifier's verdict, not the declaration: an unknown or
 # blocked path never reaches setpath, which would otherwise abort under `set -e`
 # with a bare jq error naming nothing.
@@ -282,6 +293,9 @@ jq -n --slurpfile live "$live_file" --argjson declared "$DECLARED" --arg write_p
   ($write_paths | split("\n") | map(select(length > 0))) as $keys
   | reduce $keys[] as $k ($live[0]; setpath($k | split("."); $declared[$k]))
 ' >"$staged"
+# After the write, never before it: a preserved mode may carry no owner-write bit
+# (0400, 0444), and chmod'ing first would make the redirect above fail.
+chmod "$data_mode" "$staged"
 
 # Orca may have started between the read and now. Compare CONTENT rather than
 # inode and mtime: an in-place rewrite keeps the inode and can land in the same

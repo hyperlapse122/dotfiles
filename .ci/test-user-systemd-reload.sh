@@ -68,7 +68,12 @@ case "$*" in
     esac
     ;;
   '--user daemon-reload')
-    [[ "${FIXTURE_RELOAD_MODE:-success}" == success ]]
+    case "${FIXTURE_RELOAD_MODE:-success}" in
+      success) exit 0 ;;
+      fail) exit 1 ;;
+      hang) exec sleep "${FIXTURE_HANG_SECS:-30}" ;;
+      *) exit 1 ;;
+    esac
     ;;
   *) exit 1 ;;
 esac
@@ -83,11 +88,12 @@ reset_fixture() {
 }
 
 run_script() {
-  local mode=$1 deadline=$2
+  local mode=$1 deadline=$2 reload_mode=${3:-success} reload_deadline=${4:-30}
   env HOME="$fixture_home" XDG_STATE_HOME="$fixture_state" \
     PATH="$bin:/usr/bin:/bin" SYSTEMCTL_CALLS="$systemctl_calls" \
     FIXTURE_SHOW_MODE="$mode" CAPABILITY_PROBE_DEADLINE_SECS="$deadline" \
-    CAPABILITY_PROBE_TERM_GRACE_SECS=1 FIXTURE_RELOAD_MODE=success \
+    CAPABILITY_PROBE_TERM_GRACE_SECS=1 FIXTURE_RELOAD_MODE="$reload_mode" \
+    USER_MANAGER_RELOAD_DEADLINE_SECS="$reload_deadline" \
     bash "$rendered_script" \
     >"$scratch/stdout" 2>"$scratch/stderr" </dev/null
 }
@@ -124,5 +130,52 @@ elapsed=$((SECONDS - started))
 (( elapsed <= 4 )) || fail "the timed-out probe exceeded its bound (${elapsed}s)"
 [[ $(reload_count) -eq 0 ]] || fail 'the timed-out probe still called daemon-reload'
 assert_declared_skip
+
+# A reload that fails or hangs must not abort the apply: chezmoi stops at the first
+# script error, so a non-zero exit here would strand every later phase.
+reset_fixture
+run_script success 5 fail || fail 'a failed daemon-reload aborted the script'
+[[ $(reload_count) -eq 1 ]] || fail 'the failed-reload case did not attempt the reload'
+grep -qF 'daemon-reload failed' "$scratch/stderr" \
+  || fail 'the failed reload did not warn on stderr'
+
+reset_fixture
+started=$SECONDS
+run_script success 5 hang 1 || fail 'a timed-out daemon-reload aborted the script'
+elapsed=$((SECONDS - started))
+(( elapsed <= 5 )) || fail "the timed-out reload exceeded its bound (${elapsed}s)"
+grep -qF 'daemon-reload failed' "$scratch/stderr" \
+  || fail 'the timed-out reload did not warn on stderr'
+
+# An empty value is not an invalid one: every deadline is read through `${VAR:-default}`,
+# whose `:-` form substitutes the default for unset AND empty alike, so an empty
+# environment value is the default and must be accepted.
+reset_fixture
+run_script success '' || fail 'an empty probe deadline was rejected instead of taking the default'
+[[ $(reload_count) -eq 1 ]] || fail 'an empty probe deadline did not fall through to the default'
+
+# The deadline guard is what keeps `timeout -k 0 0` -- an unbounded call -- from ever
+# being constructed, so every rejected shape needs its own case.
+for bad_deadline in 0 x; do
+  reset_fixture
+  if run_script success "$bad_deadline"; then
+    fail "an invalid probe deadline ($bad_deadline) was accepted"
+  fi
+  grep -qF 'must be positive integer seconds' "$scratch/stderr" \
+    || fail "an invalid probe deadline ($bad_deadline) printed the wrong error"
+  [[ $(reload_count) -eq 0 ]] \
+    || fail "an invalid probe deadline ($bad_deadline) still reloaded"
+done
+
+for bad_reload_deadline in 0 x; do
+  reset_fixture
+  if run_script success 5 success "$bad_reload_deadline"; then
+    fail "an invalid reload deadline ($bad_reload_deadline) was accepted"
+  fi
+  grep -qF 'must be positive integer seconds' "$scratch/stderr" \
+    || fail "an invalid reload deadline ($bad_reload_deadline) printed the wrong error"
+  [[ $(reload_count) -eq 0 ]] \
+    || fail "an invalid reload deadline ($bad_reload_deadline) still reloaded"
+done
 
 printf 'user-systemd-reload: PASS\n'

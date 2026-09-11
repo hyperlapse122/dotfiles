@@ -46,6 +46,12 @@ jobs:
             > "$RUNNER_TEMP/op-stub/op"
           chmod 700 "$RUNNER_TEMP/op-stub/op"
           printf '[data]\n' > "$RUNNER_TEMP/empty.toml"
+          mkdir -p "$RUNNER_TEMP/render-target"
+          # AGENTS.md makes both mandatory for every render: a PATH naming only the
+          # stub and the system directories, so no code path falls through to a real
+          # `op`, and a throwaway --destination so nothing writes into the runner's
+          # home. chezmoi is resolved first because that PATH no longer finds it.
+          chezmoi_bin=$(command -v chezmoi)
           for item in \
             ".chezmoiscripts/70-agents/run_onchange_after_update-claude-plugins.sh.tmpl:claude-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-agy-plugins.sh.tmpl:agy-plugins.sh" \
@@ -58,9 +64,10 @@ jobs:
           do
             source_path=${item%%:*}
             output_name=${item#*:}
-            PATH="$RUNNER_TEMP/op-stub:$PATH" chezmoi \
+            env PATH="$RUNNER_TEMP/op-stub:/usr/bin:/bin" "$chezmoi_bin" \
               --config "$RUNNER_TEMP/empty.toml" \
               --source "$GITHUB_WORKSPACE" \
+              --destination "$RUNNER_TEMP/render-target" \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
           chmod 700 "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
