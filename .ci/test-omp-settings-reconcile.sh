@@ -47,6 +47,10 @@ for needle in \
   '"completion.notify": "off"' \
   '"error.notify": "off"' \
   '"ask.notify": "off"' \
+  '"memory.backend": "off"' \
+  '"memories.enabled": false' \
+  '"autolearn.enabled": false' \
+  '"autolearn.autoContinue": false' \
   '"astGrep.enabled": true' \
   '"skills.enableAgentsProject": false' \
   '"skills.enableClaudeProject": false' \
@@ -131,6 +135,59 @@ printf '{"error.notify": "off", "ask.notify": "off"}\n' > "$scratch/notify-absen
 notify_offenders "$scratch/notify-absent.json" | grep -q '^completion.notify is null' ||
   fail 'a dropped notification declaration was not flagged'
 
+# --- memory and autolearn leaves are pinned off ---------------------------- #
+
+# memory.backend is an enum selecting the backend and must be the string "off".
+# memories.enabled, autolearn.enabled, and autolearn.autoContinue are independent
+# booleans and must be false.
+memory_offenders() {
+  jq -r '
+    . as $d
+    | (
+        if ($d | has("memory.backend") | not) then "memory.backend is missing, want the string \"off\""
+        elif (($d["memory.backend"] | type) != "string") or ($d["memory.backend"] != "off")
+        then "memory.backend is \($d["memory.backend"] | tojson), want the string \"off\""
+        else empty end
+      ),
+      (
+        ["memories.enabled", "autolearn.enabled", "autolearn.autoContinue"][] as $k
+        | if ($d | has($k) | not) then "\($k) is missing, want boolean false"
+          elif (($d[$k] | type) != "boolean") or ($d[$k] != false)
+          then "\($k) is \($d[$k] | tojson), want boolean false"
+          else empty end
+      )' "$1"
+}
+
+mem_offenders=$(memory_offenders "$declared_json")
+[[ -z $mem_offenders ]] || fail "memory leaves must match declared types and values: $mem_offenders"
+
+# Force the failure branch. Hand-crafted fixtures verify that mistyped or missing
+# memory declarations fail loudly.
+printf '{"memory.backend": "local", "memories.enabled": false, "autolearn.enabled": false, "autolearn.autoContinue": false}\n' \
+  > "$scratch/memory-backend-local.json"
+memory_offenders "$scratch/memory-backend-local.json" | grep -q '^memory.backend is "local"' ||
+  fail 'a non-off memory.backend value was not flagged'
+
+printf '{"memory.backend": "off", "memories.enabled": "false", "autolearn.enabled": false, "autolearn.autoContinue": false}\n' \
+  > "$scratch/memory-string.json"
+memory_offenders "$scratch/memory-string.json" | grep -q '^memories.enabled is "false"' ||
+  fail 'a string memories.enabled value was not flagged'
+
+printf '{"memories.enabled": false, "autolearn.enabled": false, "autolearn.autoContinue": false}\n' \
+  > "$scratch/memory-absent.json"
+memory_offenders "$scratch/memory-absent.json" | grep -q '^memory.backend is missing' ||
+  fail 'a dropped memory.backend declaration was not flagged'
+
+printf '{"memory.backend": "off", "autolearn.enabled": false, "autolearn.autoContinue": false}\n' \
+  > "$scratch/memories-enabled-absent.json"
+memory_offenders "$scratch/memories-enabled-absent.json" | grep -q '^memories.enabled is missing' ||
+  fail 'a dropped memories.enabled declaration was not flagged'
+
+printf '{"memory.backend": "off", "memories.enabled": false, "autolearn.enabled": false, "autolearn.autoContinue": false}\n' \
+  > "$scratch/memory-clean.json"
+[[ -z $(memory_offenders "$scratch/memory-clean.json") ]] ||
+  fail 'a correct memory declaration was flagged as an offender'
+
 # --- fixtures -------------------------------------------------------------- #
 
 home="$scratch/home"
@@ -208,6 +265,10 @@ cat >"$live_drifted" <<'EOF'
  "completion.notify": {"value": "on"},
  "error.notify": {"value": "on"},
  "ask.notify": {"value": "on"},
+ "memory.backend": {"value": "local"},
+ "memories.enabled": {"value": true},
+ "autolearn.enabled": {"value": true},
+ "autolearn.autoContinue": {"value": true},
  "theme": {"value": "dark"},
  "astGrep.enabled": {"value": false},
  "skills.enableAgentsProject": {"value": true},
@@ -271,6 +332,12 @@ for path in completion.notify error.notify ask.notify; do
   [[ $(grep -Fxc "config set $path off" "$state") == 1 ]] ||
     fail "the drifted run did not turn $path off exactly once"
 done
+[[ $(grep -Fxc "config set memory.backend off" "$state") == 1 ]] ||
+  fail "the drifted run did not turn memory.backend off exactly once"
+for path in memories.enabled autolearn.enabled autolearn.autoContinue; do
+  [[ $(grep -Fxc "config set $path false" "$state") == 1 ]] ||
+    fail "the drifted run did not turn $path false exactly once"
+done
 [[ $(grep -Fxc "config set astGrep.enabled true" "$state") == 1 ]] ||
   fail "the drifted run did not turn astGrep.enabled true exactly once"
 for path in \
@@ -315,6 +382,12 @@ jq -e '
   (."error.notify".value == "off") and
   (."ask.notify".value == "off")' "$live_applied" >/dev/null ||
   fail 'the notification keys were not off after the run'
+jq -e '
+  (."memory.backend".value == "off") and
+  (."memories.enabled".value == false) and
+  (."autolearn.enabled".value == false) and
+  (."autolearn.autoContinue".value == false)' "$live_applied" >/dev/null ||
+  fail 'the memory keys were not off/false after the run'
 jq -e '.theme.value == "dark"' "$live_applied" >/dev/null ||
   fail 'an undeclared key did not survive the run'
 jq -e '(."symbolPreset".value == "nerd") and (."startup.setupWizard".value == false)' \

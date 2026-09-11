@@ -245,6 +245,34 @@ agents:
       # .chezmoidata/releases.json must be checked for a cutoff-validity guard
       # that would resume it.
       cleanupPeriodDays: 9999999999
+      # Auto-memory is pinned off. This repository declares standing
+      # instructions rather than accumulating them, and harness-owned memory is
+      # an unreviewed, unreconciled second source of state.
+      #
+      # autoDreamEnabled is the background memory consolidation pass layered on
+      # top of auto-memory, so it is disabled alongside autoMemoryEnabled.
+      #
+      # Both values MUST render as JSON booleans. Quoting them produces strings
+      # that fail Claude Code's z.boolean() parsing, which causes Claude Code to
+      # reject the entire settings file and fall back to defaults;
+      # .ci/test-claude-settings-reconcile.sh guards this type.
+      #
+      # Do not use CLAUDE_CODE_DISABLE_AUTO_MEMORY as a backup switch: when set
+      # to an explicit false value, that environment variable overrides these
+      # leaves and forces memory ON.
+      #
+      # Claude Code parses settings.json with a zod schema, so a renamed or
+      # retired leaf is dropped rather than reported: the reconciler keeps
+      # writing the stale key, every CI guard stays green, and memory comes back
+      # on. A Claude Code bump in .chezmoidata/releases.json must therefore
+      # re-check that autoMemoryEnabled and autoDreamEnabled still exist in the
+      # settings schema, the same duty the omp and Codex pins below record.
+      #
+      # To re-enable memory, remove these two lines or set them to true and run a
+      # single chezmoi apply. Existing files under ~/.claude/projects/*/memory/
+      # are preserved and never pruned by this declaration.
+      autoMemoryEnabled: false
+      autoDreamEnabled: false
       # Values under env reach the tool as strings; an unquoted scalar renders as a
       # JSON number and is ignored. .ci/test-claude-settings-reconcile.sh asserts the
       # type, because the leaf-equality assertion alone cannot see it.
@@ -254,6 +282,12 @@ agents:
     - { name: dotfiles-claude, marketplace: dotfiles-claude-plugin }
     pluginsRemoved: []
   agy:
+    # agy supports automated memories, but its off-switch is a server-side
+    # account setting (disable_auto_generate_memories / force_disable); local
+    # ~/.gemini/config/config.json userSettings has no memory fields and no
+    # reconciler reads agents.agy.settings, so declaring leaves here would not
+    # assert them. The substitute is the instruction prohibition in
+    # .chezmoitemplates/agents-instructions.tmpl.
     settings: {}
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
@@ -329,6 +363,44 @@ agents:
       completion.notify: "off"
       error.notify: "off"
       ask.notify: "off"
+      # Harness-owned memory and turn-end autolearn are pinned off. This
+      # repository declares standing instructions rather than accumulating them,
+      # and harness-owned memory is an unreviewed, unreconciled second source.
+      #
+      # A master switch alone is not enough: memory.backend is an enum selecting
+      # the backend pipeline, while memories.enabled (rollout summaries),
+      # autolearn.enabled, and autolearn.autoContinue (turn-end lesson capture)
+      # are independent booleans.
+      #
+      # All four default to off in the pinned omp version. They are declared
+      # anyway because this reconciler leaves an UNDECLARED key alone: a value
+      # flipped through /settings would survive the next apply. Declaring is what
+      # pins, for the same reason error.notify is declared above.
+      #
+      # These four are the whole MASTER-SWITCH surface confirmed in the pinned
+      # omp version in .chezmoidata/releases.json, not the whole key surface:
+      # that build reports 47 memory-related keys, the rest being tuning values
+      # (memories.* rollout limits, mnemopi.*, sharpshooter.*,
+      # providers.memoryModel, autolearn.minToolCalls) that only run once one of
+      # these four opens a path. Because this enumeration is tied to that
+      # version, an omp bump must re-check `omp config list --json` for a new
+      # switch, and for a tuning key that has become independently load-bearing.
+      #
+      # A renamed key is not a silent failure here: the reconciler treats a
+      # declared path omp no longer reports as a typo and exits non-zero, which
+      # halts the whole apply before 80-keys and 90-src. That is deliberate, and
+      # it is why the recheck belongs in the bump checklist.
+      #
+      # "off" is an enum token rather than a boolean; quoting is the notation
+      # convention that indicates this.
+      #
+      # Note that autolearn.enabled gates not only turn-end lesson capture but
+      # also the manage_skill tool in pinned omp (KTD8); keeping it disabled
+      # retains today's behavior where manage_skill is inactive.
+      memory.backend: "off"
+      memories.enabled: false
+      autolearn.enabled: false
+      autolearn.autoContinue: false
       # astGrep.enabled is pinned on so omp can run the structural AST search
       # named in .chezmoitemplates/agents-instructions.tmpl.
       #
@@ -433,6 +505,22 @@ agents:
       sandbox_workspace_write.network_access: true
       model: gpt-5.6-luna
       model_reasoning_effort: max
+      # Codex memories feature is pinned off. This repository declares standing
+      # instructions rather than accumulating them.
+      #
+      # [features] is the table written by `codex features enable/disable`, so
+      # this declaration reverts any interactive changes on the next apply. In
+      # today's build, stage is `stable` and default is false (with no [features]
+      # table in live config.toml), so this declaration is a pin against an
+      # upstream default flip.
+      #
+      # Codex silently ignores unknown feature keys. If the feature name
+      # changes, this pin will silently become a no-op; re-verify that `memories`
+      # appears in `codex features list` on every Codex version bump.
+      #
+      # external_agent_memory_import is deliberately NOT declared: its stage is
+      # `under development` and subject to rename, which would silently die (R9).
+      features.memories: false
     personalMarketplace: dotfiles
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }

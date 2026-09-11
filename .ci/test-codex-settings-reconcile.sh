@@ -93,10 +93,35 @@ jq -e 'type == "object"' <<<"$declared" >/dev/null \
 
 # The settings half must be exactly the dotted declaration expanded into nested
 # tables, read back from agents.yaml the same way the script does.
-expected_settings=$(render <<<'{{ .agents.codex.settings | toJson }}' \
-  | jq -c 'reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))')
+raw_codex_settings=$(render <<<'{{ .agents.codex.settings | toJson }}')
+expected_settings=$(jq -c 'reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))' <<<"$raw_codex_settings")
 [[ $(jq -Sc 'del(.mcp_servers) | del(.hooks)' <<<"$declared") == "$(jq -Sc . <<<"$expected_settings")" ]] \
   || fail 'the declared settings leaves do not expand to the rendered agents.codex.settings'
+
+# features.memories MUST be a JSON boolean false. Codex features list reports
+# memories as stable and defaulting to false; declaring it pins against an
+# upstream default flip. Codex silently ignores unknown feature keys, so a
+# mistyped or renamed feature becomes a silent no-op.
+codex_memory_offenders() {
+  jq -r '
+    if (has("features.memories") | not) then "features.memories is missing, want boolean false"
+    elif (."features.memories" | type) != "boolean" then "features.memories as a \(."features.memories" | type), want boolean false"
+    elif ."features.memories" != false then "features.memories as \(."features.memories" | tojson), want boolean false"
+    else empty end' <<<"$1"
+}
+
+codex_mem_offender=$(codex_memory_offenders "$raw_codex_settings")
+[[ -z $codex_mem_offender ]] || fail "agents.yaml declares $codex_mem_offender"
+
+# Force the failure branch with synthetic fixtures.
+[[ $(codex_memory_offenders '{"features.memories":"false"}') == 'features.memories as a string, want boolean false' ]] \
+  || fail 'the features.memories guard did not flag a quoted declaration'
+[[ $(codex_memory_offenders '{"features.memories":true}') == 'features.memories as true, want boolean false' ]] \
+  || fail 'the features.memories guard did not flag a true declaration'
+[[ $(codex_memory_offenders '{}') == 'features.memories is missing, want boolean false' ]] \
+  || fail 'the features.memories guard did not flag a missing declaration'
+[[ -z $(codex_memory_offenders '{"features.memories":false}') ]] \
+  || fail 'the features.memories guard flagged a correct false declaration'
 
 # The script declares one leaf under hooks per declared Codex hook event: the
 # trusted_hash for this checkout's own Codex plugin hooks. Codex refuses a
@@ -135,7 +160,8 @@ for expected_trust_key in "${expected_trust_keys[@]}"; do
 done
 jq -e '.approval_policy == "never" and .sandbox_mode == "workspace-write"
   and .sandbox_workspace_write.network_access == true
-  and .model_reasoning_effort == "max" and .model == "gpt-5.6-luna"' <<<"$declared" >/dev/null \
+  and .model_reasoning_effort == "max" and .model == "gpt-5.6-luna"
+  and .features.memories == false' <<<"$declared" >/dev/null \
   || fail 'the declared headless posture is not the one agents.yaml declares'
 
 # The MCP half must carry exactly the codex-eligible inventory, in Codex's shape.
@@ -186,6 +212,9 @@ cat >"$seeded/config.toml" <<'TOML'
 approval_policy = "on-request"
 notify = ["notify-send"]
 
+[features]
+memories = true
+
 [projects."/tmp/repo"]
 trust_level = "trusted"
 
@@ -200,6 +229,8 @@ assert_declared_present "$seeded/config.toml" 'seeded run'
 seeded_json=$(toml_json "$seeded/config.toml")
 [[ $(jq -r '.approval_policy' <<<"$seeded_json") == never ]] \
   || fail 'a hand-changed approval_policy was not reverted to the declared value'
+[[ $(jq -r '.features.memories' <<<"$seeded_json") == false ]] \
+  || fail 'a hand-enabled [features.memories] was not reverted to false'
 [[ $(jq -Sc '.projects' <<<"$seeded_json") == '{"/tmp/repo":{"trust_level":"trusted"}}' ]] \
   || fail 'the Codex-owned projects table did not survive the assert'
 [[ $(jq -Sc '.mcp_servers.foo' <<<"$seeded_json") == '{"args":["--bar"],"command":"foo"}' ]] \

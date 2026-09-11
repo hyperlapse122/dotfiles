@@ -75,6 +75,36 @@ cleanup_offender=$(cleanup_period_offender "$declared")
 [[ -z $(cleanup_period_offender '{"cleanupPeriodDays":9999999999}') ]] \
   || fail 'the cleanupPeriodDays guard flagged a correct integer declaration'
 
+# autoMemoryEnabled and autoDreamEnabled MUST be JSON booleans and MUST be false.
+# Quoting them produces a string that Claude Code's z.boolean() rejects, causing
+# Claude Code to discard settings.json entirely and fall back to defaults.
+# This guard inspects the DECLARATION directly.
+memory_leaf_offenders() {
+  jq -r --argjson keys '["autoMemoryEnabled","autoDreamEnabled"]' '
+    . as $d
+    | $keys[] as $k
+    | if ($d | has($k) | not) then "\($k) is missing"
+      elif ($d[$k] | type) != "boolean" then "\($k) as a \($d[$k] | type)"
+      elif $d[$k] != false then "\($k) as true"
+      else empty end' <<<"$1"
+}
+
+memory_offender=$(memory_leaf_offenders "$declared")
+[[ -z $memory_offender ]] \
+  || fail "agents.yaml declares $memory_offender; auto-memory leaves must be declared as boolean false"
+
+# Force the failure branches for the targeted memory declaration guard.
+[[ $(memory_leaf_offenders '{"autoMemoryEnabled":"false","autoDreamEnabled":false}') == 'autoMemoryEnabled as a string' ]] \
+  || fail 'the memory guard did not flag a quoted declaration by name and type'
+[[ $(memory_leaf_offenders '{"autoMemoryEnabled":true,"autoDreamEnabled":false}') == 'autoMemoryEnabled as true' ]] \
+  || fail 'the memory guard did not flag a true declaration'
+[[ $(memory_leaf_offenders '{"autoDreamEnabled":false}') == 'autoMemoryEnabled is missing' ]] \
+  || fail 'the memory guard did not flag a missing autoMemoryEnabled declaration'
+[[ $(memory_leaf_offenders '{"autoMemoryEnabled":false}') == 'autoDreamEnabled is missing' ]] \
+  || fail 'the memory guard did not flag a missing autoDreamEnabled declaration'
+[[ -z $(memory_leaf_offenders '{"autoMemoryEnabled":false,"autoDreamEnabled":false}') ]] \
+  || fail 'the memory guard flagged a correct false declaration'
+
 assert_declared_present() {
   local file=$1 label=$2
   jq -e --argjson d "$declared" '
@@ -175,12 +205,66 @@ printf '%s' '{"language":"English"}' >"$numeric_absent"
 [[ -z $(numeric_leaf_offenders "$numeric_absent") ]] \
   || fail 'the numeric-leaf sweep flagged a file that declares no cleanupPeriodDays'
 
+# The boolean mirror of the numeric sweep above. autoMemoryEnabled and
+# autoDreamEnabled must remain JSON booleans in the live file; if live drift
+# replaces either with a string or other non-boolean, Claude Code rejects the
+# entire settings file. Swept over every declared leaf whose declared value is
+# boolean. getpath is wrapped because it raises on a scalar ancestor, and an
+# absent leaf is assert_declared_present's business, not this sweep's.
+boolean_leaf_offenders() {
+  local target=$1
+  local decl=${2:-$declared}
+  jq -r --argjson d "$decl" '
+    . as $live
+    | $d
+    | to_entries[]
+    | select(.value | type == "boolean")
+    | .key as $k
+    | (try ($live | getpath($k | split("."))) catch null) as $v
+    | select($v != null and ($v | type) != "boolean")
+    | "\($k) as a \($v | type)"' "$target"
+}
+
+assert_boolean_leaves() {
+  local file=$1 label=$2 offenders
+  offenders=$(boolean_leaf_offenders "$file")
+  [[ -z $offenders ]] \
+    || fail "$label: declared boolean leaves reached the settings file as non-booleans: $offenders"
+}
+
+# Same reasoning as the numeric and env fixtures: the sweep only ever runs against
+# files the reconciler built from today's correctly typed declaration, so its
+# FAILURE branch would never execute in CI. These fixtures force it.
+mistyped_bool=$scratch/memory-string.json
+printf '%s' '{"autoMemoryEnabled":"false"}' >"$mistyped_bool"
+[[ $(boolean_leaf_offenders "$mistyped_bool") == 'autoMemoryEnabled as a string' ]] \
+  || fail 'the boolean-leaf sweep did not flag a quoted autoMemoryEnabled by name and type'
+
+# Proves the division of labor between the targeted declaration check and the live sweep:
+# when the declaration itself has a quoted string, boolean_leaf_offenders selects nothing,
+# so only memory_leaf_offenders catches it (KTD2).
+quoted_decl='{"autoMemoryEnabled":"false","autoDreamEnabled":false}'
+[[ -z $(boolean_leaf_offenders "$mistyped_bool" "$quoted_decl") ]] \
+  || fail 'the boolean-leaf sweep flagged a quoted declaration where no boolean leaf was selected'
+
+bool_clean=$scratch/memory-clean.json
+printf '%s' '{"autoMemoryEnabled":false,"autoDreamEnabled":false}' >"$bool_clean"
+[[ -z $(boolean_leaf_offenders "$bool_clean") ]] \
+  || fail 'the boolean-leaf sweep flagged a correctly typed boolean leaf'
+
+bool_absent=$scratch/memory-absent.json
+printf '%s' '{"language":"English"}' >"$bool_absent"
+[[ -z $(boolean_leaf_offenders "$bool_absent") ]] \
+  || fail 'the boolean-leaf sweep flagged a file that declares no boolean leaves'
+
 # Every other writer's key, plus two values deliberately left undeclared so they
 # stay adjustable through the interface.
 fixture=$scratch/settings.json
 cat >"$fixture" <<'JSON'
 {
   "language": "English",
+  "autoMemoryEnabled": true,
+  "autoDreamEnabled": true,
   "modelSettings": { "other-model": { "effortLevel": "low" } },
   "hooks": { "SessionStart": [ { "hooks": [ { "type": "command", "command": "true" } ] } ] },
   "enabledPlugins": { "compound-engineering@compound-engineering-plugin": true },
@@ -199,6 +283,9 @@ run "$fixture" >/dev/null
 assert_declared_present "$fixture" 'drift run'
 assert_env_types_are_strings "$fixture" 'drift run'
 assert_numeric_leaves "$fixture" 'drift run'
+assert_boolean_leaves "$fixture" 'drift run'
+[[ $(jq -r '.autoMemoryEnabled' "$fixture") == false ]] || fail 'autoMemoryEnabled was not converged to false'
+[[ $(jq -r '.autoDreamEnabled' "$fixture") == false ]] || fail 'autoDreamEnabled was not converged to false'
 
 # Leaf ownership: the enclosing record keeps its other members, and every key the
 # declaration does not name survives. This is the assertion the old top-level
@@ -228,6 +315,7 @@ assert_declared_present "$created" 'missing target'
 
 assert_env_types_are_strings "$created" 'missing target'
 assert_numeric_leaves "$created" 'missing target'
+assert_boolean_leaves "$created" 'missing target'
 
 # The env record has a co-writer: Claude Code's own legacy `autoUpdates` migration
 # writes into it, and .chezmoidata/agents.yaml claims convergence with that. The
@@ -242,6 +330,7 @@ run "$env_sibling" >/dev/null
 assert_declared_present "$env_sibling" 'env co-writer'
 assert_env_types_are_strings "$env_sibling" 'env co-writer'
 assert_numeric_leaves "$env_sibling" 'env co-writer'
+assert_boolean_leaves "$env_sibling" 'env co-writer'
 
 # A malformed live file is preserved and reported, never rebuilt: rebuilding from
 # the declaration alone would drop everything the other writers own.
@@ -347,6 +436,7 @@ grep -qF 'was empty' <<<"$zero_err" || fail 'an empty target was not reported on
 assert_declared_present "$zero" 'empty target'
 assert_env_types_are_strings "$zero" 'empty target'
 assert_numeric_leaves "$zero" 'empty target'
+assert_boolean_leaves "$zero" 'empty target'
 
 # cp follows a symlink at the DESTINATION, so a planted .bak would redirect the
 # backup write into whatever it points at -- and this script runs as chezmoi_t,
