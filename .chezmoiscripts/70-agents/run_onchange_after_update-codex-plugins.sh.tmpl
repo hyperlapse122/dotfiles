@@ -1,14 +1,15 @@
 {{- $ctx := . -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
-{{- /* The dotfiles-codex-plugin tree and the orchestration payload bodies are
-       dependencies, not just targets: Codex serves the COPY under
-       ~/.codex/plugins/cache/<marketplace>/<plugin>/<version>, so an edit only
-       reaches a session if this script re-runs and re-adds. The plugin's
-       payloads/ wrapper is a one-line includeTemplate whose own source never
-       changes, so the tree glob alone cannot see a reworded rule — the two body
-       paths are listed for that reason. The plugin's version is derived from the
-       same inputs so the re-add resolves a new cache directory; both halves are
-       required. */ -}}
+{{- /* The dotfiles-codex-plugin tree, the everyone payload body, and the hook
+       declaration partial are dependencies, not just targets: Codex serves the
+       COPY under ~/.codex/plugins/cache/<marketplace>/<plugin>/<version>, so an
+       edit only reaches a session if this script re-runs and re-adds. Two of
+       those three sit outside the tree glob — the payload body because the hook
+       binary embeds it from .chezmoitemplates, and the declaration because
+       hooks/hooks.json.tmpl is a one-line includeTemplate wrapper whose own
+       source never changes. Both are listed for that reason. The plugin's
+       version is derived from the same inputs so the re-add resolves a new cache
+       directory; both halves are required. */ -}}
 {{- $fingerprintInputs := list ".chezmoidata/agents.yaml" ".chezmoidata/releases.json" "dot_local/share/dotfiles-codex-plugin/**" ".chezmoitemplates/orchestration-everyone.tmpl" ".chezmoitemplates/codex-hook-declaration.tmpl" -}}
 {{- $personal := includeTemplate "codex-personal-marketplace.tmpl" (dict "ctx" . "caller" "update-codex-plugins") -}}
 {{- $rows := includeTemplate "agent-plugin-rows.tmpl" (dict "ctx" $ctx "harness" "codex" "field" "plugins") -}}

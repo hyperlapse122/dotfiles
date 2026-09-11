@@ -1,3 +1,6 @@
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { main, type Io } from "../src/cli.js";
 import { payload } from "../src/payload.js";
@@ -13,7 +16,7 @@ function capture(env: NodeJS.ProcessEnv = {}): { io: Io; out: string[]; err: str
       stdout: (t) => out.push(t),
       stderr: (t) => err.push(t),
       env,
-      deadlines: { stdinMs: 20, hookMs: 500 },
+      deadlines: { stdinMs: 0, hookMs: 500 },
     },
     out,
     err,
@@ -54,6 +57,83 @@ describe("hook fail-open contract", () => {
     const { io, err } = capture(ORCA_WORKER);
     expect(await main(["hook", "--harness", "claude", "--nope"], io)).toBe(0);
     expect(err.join("")).toBe("");
+  });
+
+  it("charges the stdin drain against the whole-run budget, not on top of it", async () => {
+    // The drain and the Orca call share one budget. If the clock started after
+    // the drain resolved, a slow producer plus a slow CLI would sum past the
+    // bound the harness's own hook timeout sits above.
+    const { io } = capture({
+      ORCA_TERMINAL_HANDLE: "term_abc",
+      ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+      TMUX_PANE: "%7",
+    });
+    io.deadlines = { stdinMs: 120, hookMs: 60 };
+    const started = Date.now();
+    expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+    // The drain alone already outruns the budget, so the run must end there
+    // rather than starting a fresh 60 ms for the lead path.
+    expect(Date.now() - started).toBeLessThan(400);
+  });
+
+  it("drives the whole lead path and assembles all four halves", async () => {
+    // The lead branch wires readOrchestrationSkill + resolveOrcaCommand +
+    // fetchGuide together. Each is unit-tested on its own; without this case the
+    // assembled path is only exercised by the CI gate against the built binary.
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-lead-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      writeFileSync(cli, '#!/usr/bin/env bash\nprintf "GUIDE BODY\\n"\n');
+      chmodSync(cli, 0o755);
+
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+      const parsed = JSON.parse(out.join("")) as {
+        hookSpecificOutput: { additionalContext: string };
+      };
+      const context = parsed.hookSpecificOutput.additionalContext;
+      for (const half of [
+        "SKILL BODY",
+        "GUIDE BODY",
+        payload("everyone"),
+        payload("coordinator"),
+      ]) {
+        expect(context).toContain(half);
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("delivers nothing to a lead whose Orca CLI fails", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-lead-fail-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      writeFileSync(cli, "#!/usr/bin/env bash\nexit 3\n");
+      chmodSync(cli, 0o755);
+
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it("emits a SessionStart envelope for an Orca-managed worker", async () => {
@@ -116,6 +196,16 @@ describe("version and unknown commands", () => {
     const { io, out } = capture();
     expect(await main(["--version"], io)).toBe(0);
     expect(out.join("").trim()).not.toBe("");
+  });
+
+  it("fails open on a bare invocation, the shape a harness can produce by accident", async () => {
+    // If a harness ignores the exec-form args array it spawns the binary with
+    // no arguments; the usage branch would answer a SessionStart with exit 2
+    // and stderr.
+    const { io, out, err } = capture();
+    expect(await main([], io)).toBe(0);
+    expect(out.join("")).toBe("");
+    expect(err.join("")).toBe("");
   });
 
   it("fails loudly on an unknown command", async () => {

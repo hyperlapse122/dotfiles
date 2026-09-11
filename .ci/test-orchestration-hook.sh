@@ -28,24 +28,19 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 fail() { printf 'orchestration hook: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'orchestration hook: %s\n' "$*"; }
 
-scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
-mkdir -p "$scratch_parent"
-scratch=$(mktemp -d "$scratch_parent/orchestration-hook.XXXXXX")
-trap 'rm -rf -- "$scratch"' EXIT
-mkdir -p "$scratch/home" "$scratch/target" "$scratch/bin"
+chezmoi_bin=$(type -P chezmoi) || fail 'no chezmoi binary found on PATH'
+# shellcheck source=.ci/lib/render-scratch.sh
+source "$repo_root/.ci/lib/render-scratch.sh"
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# Builds the sandbox render() assumes — scratch dir, EXIT trap, bin/ and target/,
+# the `op` stub and the empty config. This gate adds only what is its own.
+setup_render_scratch orchestration-hook
 # The lead path reads this before it ever calls the Orca CLI, and delivers
 # nothing when it is absent. Without it the lead cases below would short-circuit
 # and the Orca-retrieval assertions would pass without reaching the CLI at all.
 mkdir -p "$scratch/home/.agents/skills/orchestration"
 printf 'CI ORCHESTRATION SKILL BODY\n' >"$scratch/home/.agents/skills/orchestration/SKILL.md"
-printf '[data]\n' >"$scratch/empty.toml"
-printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' \
-  >"$scratch/bin/op"
-chmod 0755 "$scratch/bin/op"
-
-chezmoi_bin=$(type -P chezmoi) || fail 'no chezmoi binary found on PATH'
-# shellcheck source=.ci/lib/render-gate-helpers.sh
-source "$repo_root/.ci/lib/render-gate-helpers.sh"
 # shellcheck source=.ci/lib/bun.sh
 source "$repo_root/.ci/lib/bun.sh"
 
@@ -117,7 +112,11 @@ started=$(date +%s)
 out=$(run_hook claude "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1" "$hang_bin")
 elapsed=$(( $(date +%s) - started ))
 [[ $out == "{}" ]] || fail 'a lead whose Orca CLI hangs must print exactly {}'
-(( elapsed < 30 )) || fail "a hanging Orca CLI held the hook for ${elapsed}s"
+# The ceiling is the code's own budget plus CI margin, not a loose sanity bound.
+# Each hooks.json declares `timeout: 15`, so a gate that tolerated 30s would go
+# green on a hook the harness had already killed — the exact green-while-red
+# shape this gate exists to catch.
+(( elapsed <= 12 )) || fail "a hanging Orca CLI held the hook for ${elapsed}s, past its 8s budget"
 # The stub sleeps, so a run that returns instantly never reached it — the lead
 # path short-circuited somewhere earlier and this case asserted nothing.
 (( elapsed >= 1 )) || fail 'the hanging-CLI case returned instantly, so the Orca call was never made'
@@ -134,6 +133,39 @@ for half in 'CI ORCHESTRATION SKILL BODY' 'CI GUIDE BODY' 'orchestration-everyon
   printf '%s' "$context" | grep -q "$half" || fail "the lead envelope is missing: $half"
 done
 pass 'a lead with a healthy Orca CLI receives all four halves in one envelope'
+
+# The screen-reader remap, end to end. On a non-Darwin host the bare name
+# reaches /usr/bin/orca, the GNOME screen reader, and running it would start
+# speech in the user's session — so this guard is the destructive one in the
+# whole package. Unit tests cover resolveOrcaCommand's branches with an injected
+# platform; only this case drives the real uname(1) call behind it.
+remap_bin="$scratch/remap-bin"
+mkdir -p "$remap_bin"
+printf '#!/usr/bin/env bash\ntouch %q\nprintf "SCREEN READER GUIDE\\n"\n' "$scratch/screen-reader-ran" \
+  >"$remap_bin/orca"
+printf '#!/usr/bin/env bash\nprintf "SAFE GUIDE\\n"\n' >"$remap_bin/orca-ide"
+chmod 0755 "$remap_bin/orca" "$remap_bin/orca-ide"
+for configured in orca /usr/bin/orca; do
+  rm -f "$scratch/screen-reader-ran"
+  out=$(run_hook claude \
+    "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1 ORCA_CLI_COMMAND=$configured" \
+    "$remap_bin")
+  [[ -e "$scratch/screen-reader-ran" ]] \
+    && fail "ORCA_CLI_COMMAND=$configured reached the screen reader instead of orca-ide"
+  printf '%s' "$out" | grep -q 'SAFE GUIDE' \
+    || fail "ORCA_CLI_COMMAND=$configured did not remap to orca-ide"
+done
+pass 'a configured bare orca remaps to orca-ide; the screen reader is never launched'
+
+# An unrelated configured command is honoured rather than overridden.
+printf '#!/usr/bin/env bash\nprintf "CUSTOM GUIDE\\n"\n' >"$remap_bin/orca-dev"
+chmod 0755 "$remap_bin/orca-dev"
+out=$(run_hook claude \
+  "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1 ORCA_CLI_COMMAND=$remap_bin/orca-dev" \
+  "$remap_bin")
+printf '%s' "$out" | grep -q 'CUSTOM GUIDE' \
+  || fail 'an explicitly configured non-screen-reader command was not honoured'
+pass 'an unrelated configured Orca command is used as given'
 
 out=$(run_hook claude "ORCA_TERMINAL_HANDLE=term_ci")
 printf '%s' "$out" | grep -q 'orchestration-everyone:begin' \
@@ -155,6 +187,29 @@ for bad in "--harness nonesuch" "--harness" ""; do
   [[ -s "$scratch/stderr" ]] && fail "hook must keep stderr silent on malformed arguments (${bad:-none})"
 done
 pass 'malformed hook arguments still exit 0 with a silent stderr'
+
+# The drain stops at the event's own newline. Nothing else exercises that: every
+# case above closes stdin immediately, so the hook would pass them even if it
+# waited for EOF. Here a writer sends one JSON line and then holds the
+# descriptor open for far longer than the drain's backstop — which is what Codex
+# actually does.
+#
+# A FIFO, not a pipeline: `$( )` waits for every process in a pipeline, so the
+# writer's own sleep would be what the clock measured rather than the hook's.
+# The writer is detached here and the hook alone is timed.
+fifo="$scratch/stdin.fifo"
+mkfifo "$fifo"
+{ printf '{"hook_event_name":"SessionStart"}\n'; sleep 30; } >"$fifo" &
+writer=$!
+started=$(date +%s)
+out=$(env -i PATH="$closed_path" HOME="$scratch/home" "$binary" hook --harness codex <"$fifo")
+elapsed=$(( $(date +%s) - started ))
+kill "$writer" 2>/dev/null || true
+wait "$writer" 2>/dev/null || true
+rm -f "$fifo"
+[[ -z $out ]] || fail 'a Codex session outside Orca must print nothing even when stdin stays open'
+(( elapsed <= 12 )) || fail "the hook waited ${elapsed}s on a held-open stdin instead of stopping at the newline"
+pass "a held-open stdin is consumed at its newline (${elapsed}s), not waited on for EOF"
 
 # Every other subcommand takes the opposite contract: loud, non-zero, stderr.
 if env -i PATH="$closed_path" "$binary" role --nope </dev/null >/dev/null 2>&1; then

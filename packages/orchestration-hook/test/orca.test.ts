@@ -8,11 +8,13 @@ describe("resolveOrcaCommand", () => {
   it("remaps the bare name on a non-Darwin host", () => {
     // /usr/bin/orca is the GNOME screen reader there; running it would start
     // speech in the user's session.
-    expect(resolveOrcaCommand({ configured: "orca", platform: "Linux" })).toBe("orca-ide");
+    expect(resolveOrcaCommand({ configured: "orca", platform: () => "Linux" })).toBe("orca-ide");
   });
 
   it("remaps the absolute screen-reader path on a non-Darwin host", () => {
-    expect(resolveOrcaCommand({ configured: "/usr/bin/orca", platform: "Linux" })).toBe("orca-ide");
+    expect(resolveOrcaCommand({ configured: "/usr/bin/orca", platform: () => "Linux" })).toBe(
+      "orca-ide",
+    );
   });
 
   it("remaps when the platform could not be read", () => {
@@ -20,15 +22,17 @@ describe("resolveOrcaCommand", () => {
   });
 
   it("honours the bare name on a confirmed Darwin", () => {
-    expect(resolveOrcaCommand({ configured: "orca", platform: "Darwin" })).toBe("orca");
+    expect(resolveOrcaCommand({ configured: "orca", platform: () => "Darwin" })).toBe("orca");
   });
 
   it("falls back to the safe CLI when nothing is configured", () => {
-    expect(resolveOrcaCommand({ platform: "Darwin" })).toBe("orca-ide");
+    expect(resolveOrcaCommand({ platform: () => "Darwin" })).toBe("orca-ide");
   });
 
   it("leaves an unrelated configured command alone", () => {
-    expect(resolveOrcaCommand({ configured: "orca-dev", platform: "Linux" })).toBe("orca-dev");
+    expect(resolveOrcaCommand({ configured: "orca-dev", platform: () => "Linux" })).toBe(
+      "orca-dev",
+    );
   });
 });
 
@@ -51,22 +55,22 @@ describe("fetchGuide", () => {
 
   it("returns the guide a healthy CLI prints", async () => {
     const cli = stub("cli-ok", 'printf "GUIDE BODY\\n"');
-    const { guide } = await fetchGuide({ command: cli, deadlineMs: 5_000 });
+    const guide = await fetchGuide({ command: cli, deadlineMs: 5_000 });
     expect(guide).toContain("GUIDE BODY");
   });
 
   it("returns null when the CLI exits non-zero", async () => {
     const cli = stub("cli-fail", 'printf "partial\\n"; exit 3');
-    expect((await fetchGuide({ command: cli, deadlineMs: 5_000 })).guide).toBeNull();
+    expect(await fetchGuide({ command: cli, deadlineMs: 5_000 })).toBeNull();
   });
 
   it("returns null when the CLI succeeds with empty output", async () => {
     const cli = stub("cli-empty", "exit 0");
-    expect((await fetchGuide({ command: cli, deadlineMs: 5_000 })).guide).toBeNull();
+    expect(await fetchGuide({ command: cli, deadlineMs: 5_000 })).toBeNull();
   });
 
   it("returns null when the command does not exist", async () => {
-    const { guide } = await fetchGuide({
+    const guide = await fetchGuide({
       command: join(dir, "not-installed"),
       deadlineMs: 5_000,
     });
@@ -75,13 +79,13 @@ describe("fetchGuide", () => {
 
   it("returns null when the deadline has already passed", async () => {
     const cli = stub("cli-unused", 'printf "GUIDE\\n"');
-    expect((await fetchGuide({ command: cli, deadlineMs: 0 })).guide).toBeNull();
+    expect(await fetchGuide({ command: cli, deadlineMs: 0 })).toBeNull();
   });
 
   it("gives up at the deadline rather than waiting for a hanging CLI", async () => {
     const cli = stub("cli-hang", "sleep 30");
     const started = Date.now();
-    const { guide } = await fetchGuide({ command: cli, deadlineMs: 300 });
+    const guide = await fetchGuide({ command: cli, deadlineMs: 300 });
     expect(guide).toBeNull();
     expect(Date.now() - started).toBeLessThan(3_000);
   });
@@ -91,7 +95,7 @@ describe("fetchGuide", () => {
     // direct child alone leaves that descendant alive and the stream open.
     const cli = stub("cli-launcher", "sleep 30 & wait");
     const started = Date.now();
-    const { guide } = await fetchGuide({ command: cli, deadlineMs: 300 });
+    const guide = await fetchGuide({ command: cli, deadlineMs: 300 });
     expect(guide).toBeNull();
     expect(Date.now() - started).toBeLessThan(3_000);
   });

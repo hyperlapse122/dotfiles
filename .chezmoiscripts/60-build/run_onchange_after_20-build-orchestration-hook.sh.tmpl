@@ -32,10 +32,17 @@
 {{- $buildId := substr 0 16 (sha256sum $srcParts) -}}
 #!/usr/bin/env bash
 set -euo pipefail
+{{- /* The src glob is deliberately absent from this list: $buildId above already
+   digests every file under it, plus both payload bodies, so passing the glob
+   here would read and hash the same files a second time on every render. The
+   re-trigger condition is identical either way, and the zero-match guards stay
+   — the build-id loop fails on an empty src glob and fingerprint.tmpl fails on
+   an empty value. */ -}}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
-      "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/orchestration-hook/package.json" "packages/orchestration-hook/tsconfig.json" "packages/orchestration-hook/vite.config.ts" "packages/orchestration-hook/src/**")
+      "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/orchestration-hook/package.json" "packages/orchestration-hook/tsconfig.json" "packages/orchestration-hook/vite.config.ts")
       "values" (list (dict "name" "bun-version" "value" $bunVersion)
-                     (dict "name" "payload-digest" "value" $payloadDigest))) }}
+                     (dict "name" "payload-digest" "value" $payloadDigest)
+                     (dict "name" "hook-build-id" "value" $buildId))) }}
 
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
@@ -58,10 +65,17 @@ TARGET="$LIBEXEC_DIR/orchestration-hook"
 # Fail-open belongs to the hook, never to this build. A build that converged on
 # failure would leave the previous binary in place and void the guarantee that
 # one apply carries a rule edit to the next session, with no signal anywhere.
+# The staging rung is not optional. On a fresh host's first apply the public
+# ~/.local/bin link does not exist yet, and the only mise on disk is the one an
+# external just wrote to the staging directory. Without this rung that host
+# aborts here, before 70-agents ever installs a plugin. bun-resolve.sh.tmpl
+# carries the matching rung for the same reason.
 MISE_BIN="mise"
 if ! command -v "$MISE_BIN" >/dev/null 2>&1; then
   if [[ -x "$HOME/.local/bin/mise" ]]; then
     MISE_BIN="$HOME/.local/bin/mise"
+  elif [[ -x "$HOME/.local/share/chezmoi-commands/incomplete/mise/mise" ]]; then
+    MISE_BIN="$HOME/.local/share/chezmoi-commands/incomplete/mise/mise"
   else
     printf '%s\n' 'build-orchestration-hook: mise is not installed; the orchestration hook cannot be built' >&2
     exit 1

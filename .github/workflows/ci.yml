@@ -23,6 +23,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      # The orchestration hook gate compiles the real binary and runs it; every
+      # other gate in this job only renders templates.
+      - uses: oven-sh/setup-bun@v2
       - name: Install locked chezmoi
         run: |
           set -euo pipefail

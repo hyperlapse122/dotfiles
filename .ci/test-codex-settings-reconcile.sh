@@ -108,13 +108,6 @@ expected_settings=$(render <<<'{{ .agents.codex.settings | toJson }}' \
 # Nothing else may appear under hooks. Codex owns the rest of that table.
 #
 # The hash is no longer a literal here. The declared command is an absolute path
-# resolved at render time, so the hash it attests differs per host and a pinned
-# constant would fail everywhere except the machine that wrote it. The gate
-# instead renders the trust template itself and compares — which still catches a
-# second leaf, a wrong key, or a table Codex owns leaking in, and additionally
-# proves the record tracks the declaration rather than drifting from it.
-#
-# The hash is no longer a literal here. The declared command is an absolute path
 # resolved at render time, so the hash differs with the rendering host's home
 # directory and a pinned constant would fail everywhere except the machine that
 # wrote it. The structure is asserted instead, which still catches a second

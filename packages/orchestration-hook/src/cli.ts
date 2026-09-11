@@ -52,6 +52,12 @@ function flagValue(argv: readonly string[], name: string): string | undefined {
   return argv[index + 1];
 }
 
+/** The harness this invocation names, or null when it names none this binary serves. */
+function requestedHarness(argv: readonly string[]): Harness | null {
+  const requested = flagValue(argv, "--harness") ?? "";
+  return isHarness(requested) ? requested : null;
+}
+
 /**
  * Consume the event JSON the harness writes to stdin.
  *
@@ -99,19 +105,25 @@ function readOrchestrationSkill(env: NodeJS.ProcessEnv): string {
 }
 
 async function runHook(argv: readonly string[], io: Io): Promise<number> {
-  const requested = flagValue(argv, "--harness") ?? "";
-  const harness: Harness = isHarness(requested) ? requested : "codex";
+  // The clock starts here, before the drain, because the budget bounds the
+  // WHOLE run. Starting it after the drain resolved would hand the Orca call a
+  // full budget on top of however long the drain took, so a slow producer and
+  // a slow CLI could sum past the bound the harness's own hook timeout sits
+  // above.
+  const started = Date.now();
+  const harness = requestedHarness(argv);
 
   // Codex pipes the event JSON and would see a broken pipe if this exited
   // first. Drain before any decision, including the not-Orca-managed one.
   await drainStdin(io.deadlines?.stdinMs ?? STDIN_DEADLINE_MS);
 
-  if (!isHarness(requested)) {
-    io.stdout(emptyOutput(harness));
+  // An unnamed or unknown harness takes the quieter of the two empty outputs:
+  // a stray byte on a Codex session's stdout becomes injected model context.
+  if (harness === null) {
+    io.stdout(emptyOutput("codex"));
     return 0;
   }
 
-  const started = Date.now();
   const role = resolveRole(io.env as RoleEnv);
 
   let leadParts: { skill: string; guide: string } | null = null;
@@ -120,11 +132,11 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
     if (skill !== "") {
       const command = resolveOrcaCommand({
         configured: io.env["ORCA_CLI_COMMAND"],
-        platform: unameS(),
+        platform: unameS,
       });
       const budget = io.deadlines?.hookMs ?? HOOK_DEADLINE_MS;
       const remaining = budget - (Date.now() - started);
-      const { guide } = await fetchGuide({ command, deadlineMs: remaining });
+      const guide = await fetchGuide({ command, deadlineMs: remaining });
       if (guide !== null) leadParts = { skill, guide };
     }
   }
@@ -164,13 +176,24 @@ function runRole(argv: readonly string[], io: Io): number {
 export async function main(argv: readonly string[], io: Io): Promise<number> {
   const [command = "", ...rest] = argv;
 
+  // A bare invocation fails open rather than printing usage. This is the one
+  // shape a harness can produce by accident on the session-start path: if it
+  // ignores the exec-form `args` array it spawns the binary with no arguments
+  // at all, and the usage branch below would answer a SessionStart with a
+  // non-zero exit and stderr — the single non-fail-open outcome there. An
+  // operator who types the bare name loses a usage message; a session never
+  // loses its start.
+  if (argv.length === 0) {
+    io.stdout(emptyOutput("codex"));
+    return 0;
+  }
+
   if (command === "hook") {
     try {
       return await runHook(rest, io);
     } catch {
       // Fail open: never let an internal fault reach session start as an error.
-      const requested = flagValue(rest, "--harness") ?? "";
-      io.stdout(emptyOutput(isHarness(requested) ? requested : "codex"));
+      io.stdout(emptyOutput(requestedHarness(rest) ?? "codex"));
       return 0;
     }
   }

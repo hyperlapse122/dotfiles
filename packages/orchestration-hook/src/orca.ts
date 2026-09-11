@@ -20,8 +20,16 @@ import { spawn } from "node:child_process";
 export interface ResolveOrcaOptions {
   /** Operator-supplied command, from ORCA_CLI_COMMAND. */
   configured?: string | undefined;
-  /** Result of `uname -s`, or undefined when it could not be read. */
-  platform?: string | undefined;
+  /**
+   * Reads `uname -s`, or returns undefined when it could not be read.
+   *
+   * A thunk, not a value: only the screen-reader branch consults it, and that
+   * branch needs an explicitly configured `orca`. With ORCA_CLI_COMMAND unset —
+   * the normal case — an eager read would fork a process on every lead session
+   * start and discard the result, on the very path this package exists to take
+   * a shell off.
+   */
+  platform?: (() => string | undefined) | undefined;
 }
 
 const SCREEN_READER_NAMES = new Set(["orca", "/usr/bin/orca"]);
@@ -32,12 +40,7 @@ export function resolveOrcaCommand(options: ResolveOrcaOptions): string {
   const configured = options.configured ?? "";
   if (configured === "") return SAFE_CLI;
   if (!SCREEN_READER_NAMES.has(configured)) return configured;
-  return options.platform === "Darwin" ? configured : SAFE_CLI;
-}
-
-export interface GuideResult {
-  /** Guide text, or null when retrieval failed for any reason. */
-  guide: string | null;
+  return options.platform?.() === "Darwin" ? configured : SAFE_CLI;
 }
 
 export interface FetchGuideOptions {
@@ -53,10 +56,10 @@ export interface FetchGuideOptions {
  * deadline — every one of which the caller turns into no envelope rather than
  * a partial one.
  */
-export async function fetchGuide(options: FetchGuideOptions): Promise<GuideResult> {
-  if (options.deadlineMs <= 0) return { guide: null };
+export async function fetchGuide(options: FetchGuideOptions): Promise<string | null> {
+  if (options.deadlineMs <= 0) return null;
 
-  return await new Promise<GuideResult>((resolve) => {
+  return await new Promise<string | null>((resolve) => {
     let settled = false;
     const chunks: Buffer[] = [];
 
@@ -71,7 +74,7 @@ export async function fetchGuide(options: FetchGuideOptions): Promise<GuideResul
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ guide });
+      resolve(guide);
     };
 
     const killGroup = () => {

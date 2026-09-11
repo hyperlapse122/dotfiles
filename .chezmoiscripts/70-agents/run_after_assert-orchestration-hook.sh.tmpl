@@ -22,13 +22,20 @@ set -euo pipefail
 
 BINARY={{ $binary | quote }}
 
+# The recovery this names has to be the one that actually works. A plain
+# re-apply does NOT rebuild: the 60-build script is run_onchange_ and its
+# fingerprint covers source content, which a deleted binary does not change. So
+# the build stays skipped, this assertion fails again, and every apply is wedged
+# until the recorded script hash is dropped.
+RECOVERY='run `chezmoi state delete-bucket --bucket=scriptState` and re-apply to force the build, or investigate what removed it'
+
 if [[ ! -f "$BINARY" ]]; then
-  printf '%s\n' "assert-orchestration-hook: $BINARY is missing; the orchestration hook each plugin declares cannot run. Re-apply to rebuild it, or investigate what removed it." >&2
+  printf '%s\n' "assert-orchestration-hook: $BINARY is missing; the orchestration hook each plugin declares cannot run. To recover, $RECOVERY." >&2
   exit 1
 fi
 
 if [[ ! -x "$BINARY" ]]; then
-  printf '%s\n' "assert-orchestration-hook: $BINARY is not executable; the orchestration hook each plugin declares cannot run." >&2
+  printf '%s\n' "assert-orchestration-hook: $BINARY is not executable; the orchestration hook each plugin declares cannot run. To recover, $RECOVERY." >&2
   exit 1
 fi
 
