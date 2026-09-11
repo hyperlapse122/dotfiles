@@ -1,0 +1,68 @@
+[package]
+name = "gem80-rgb"
+version = "0.1.0"
+edition = "2021"
+description = "NuPhy Gem80 host RGB daemon and client library"
+license = "MIT"
+
+[lib]
+name = "gem80_rgb"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gem80-rgbd"
+path = "src/bin/gem80-rgbd.rs"
+required-features = ["daemon"]
+
+[[bin]]
+name = "gem80-rgbctl"
+path = "src/bin/gem80-rgbctl.rs"
+
+[features]
+default = []
+daemon = ["dep:hidapi"]
+
+[dependencies]
+# Cross-platform raw-HID access (Linux hidraw, macOS IOKit shared).
+# Optional: only the daemon links this; client libraries and CLI remain hidapi-free.
+hidapi = { version = "=2.6.7", optional = true, default-features = false, features = [
+    "linux-static-hidraw",
+    "macos-shared-device",
+] }
+
+# Protobuf runtime for control plane RPCs
+prost = "=0.14.4"
+
+# Serialization and configuration
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+toml = "=1.1.5"
+
+# Error handling
+thiserror = "=2.0.20"
+
+# Logging
+log = "=0.4.34"
+
+# File locking (advisory flock for single-instance guard)
+rustix = { version = "=1.1.4", features = ["fs"] }
+
+# Signal handling for clean daemon shutdown
+signal-hook = "=0.4.4"
+
+# CLI argument parsing
+clap = { version = "=4.6.6", features = ["derive"] }
+
+[build-dependencies]
+prost-build = "=0.14.4"
+protox = "=0.9.1"
+
+[profile.release]
+# No hot loops; smaller binaries page in faster.
+opt-level = "z"
+# Cross-crate inlining trims dead standard-library paths.
+lto = true
+# Better optimization trades build parallelism.
+codegen-units = 1
+# Drop symbols to keep binaries near 300 KB instead of 4 MB.
+strip = true

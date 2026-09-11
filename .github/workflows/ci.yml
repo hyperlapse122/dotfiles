@@ -296,16 +296,17 @@ jobs:
 
 
   rust-crate:
-    name: Rust crate (crates/mxm4-haptic/, ${{ matrix.os }})
+    name: Rust crate (${{ matrix.crate }}/, ${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-26]
+        crate: [crates/mxm4-haptic, crates/gem80-rgb]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: crates/mxm4-haptic
+        working-directory: ${{ matrix.crate }}
     steps:
       - uses: actions/checkout@v7
       - name: Install libudev (hidapi linux-static-hidraw backend)
@@ -315,11 +316,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "crates/mxm4-haptic -> target"
+          workspaces: "${{ matrix.crate }} -> target"
           cache-all-targets: "true"
       - run: cargo build --all-targets
-      - run: cargo test
+      - name: Build with daemon feature
+        if: matrix.crate == 'crates/gem80-rgb'
+        run: cargo build --all-targets --features daemon
+      - run: cargo test --all-features
       - run: cargo fmt --check
+      - name: Verify client dependency isolation (no hidapi in default features)
+        if: matrix.crate == 'crates/gem80-rgb'
+        run: |
+          if cargo tree --no-default-features | grep -q '\bhidapi\b'; then
+            echo "hidapi must not appear in default features dependency tree" >&2
+            exit 1
+          fi
 
   compound-engineering-overlays:
     name: compound-engineering overlays
