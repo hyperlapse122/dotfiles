@@ -25,7 +25,13 @@ export default defineConfig({
   run: {
     tasks: {
       build: {
-        command: "bun build --compile ./src/cli.ts --outfile ./dist/orchestration-hook",
+        // DOTFILES_HOOK_BUILD_ID is baked in with --define rather than read at
+        // runtime: the deployed binary runs with an empty environment, so a
+        // runtime process.env read would always be empty. The build script
+        // computes the id from the same sources the fingerprint covers, which
+        // is what makes `--version` answer "did my edit reach this host".
+        command:
+          "bun build --compile --define process.env.DOTFILES_HOOK_BUILD_ID=\"'$DOTFILES_HOOK_BUILD_ID'\" ./src/cli.ts --outfile ./dist/orchestration-hook",
         // Two build inputs live outside this workspace root and out of reach of
         // any `input` base: the locked bun version in .chezmoidata/releases.json
         // (the compiled binary embeds a bun runtime) and the two payload bodies
@@ -34,7 +40,7 @@ export default defineConfig({
         // Without this, `bun build --compile` runs as an external process whose
         // reads automatic tracking cannot see, and a payload edit would replay a
         // cached dist while reporting success.
-        env: ["DOTFILES_BUN_VERSION", "DOTFILES_PAYLOAD_DIGEST"],
+        env: ["DOTFILES_BUN_VERSION", "DOTFILES_PAYLOAD_DIGEST", "DOTFILES_HOOK_BUILD_ID"],
         input: [
           "src/**",
           "package.json",

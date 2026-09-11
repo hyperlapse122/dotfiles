@@ -32,7 +32,11 @@ const HOOK_DEADLINE_MS = 8_000;
 /** Stops at the event's own newline; this is the backstop for a producer that sends none. */
 const STDIN_DEADLINE_MS = 3_000;
 
-const BUILD_ID = process.env["DOTFILES_HOOK_BUILD_ID"] ?? "dev";
+// Dot notation, not a bracket read: `bun build --define` substitutes this exact
+// expression at compile time, which is what puts the id inside the binary. The
+// deployed hook runs with an empty environment, so a runtime read is always
+// empty and `--version` would say nothing useful.
+const BUILD_ID: string = process.env.DOTFILES_HOOK_BUILD_ID ?? "dev";
 
 export interface Io {
   stdout: (text: string) => void;
