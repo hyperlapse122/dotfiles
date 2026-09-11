@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use prost::Message as _;
 
 use crate::compositor::{Color, Compositor, CompositorError};
+use crate::sync::MutexExt;
 use crate::wire::{
     proto, ClientMessage, CompositeZIndex, ConnectionId, DeviceState, FixedPixelFrame,
     GetStatusResponse, LayerId, RejectionReason, RejectionResponse, ServerMessage,
@@ -36,6 +37,25 @@ pub const DEFAULT_MAX_CONNECTIONS: usize = 64;
 /// answering with a structured rejection (KTD7, KTD8).
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(1500);
 
+/// How long a freshly accepted connection may stay silent before it is dropped.
+///
+/// A peer that connects and then says nothing would otherwise hold a connection
+/// thread and one of the `max_connections` slots for good: opening the limit's
+/// worth of sockets and sending nothing would lock every real client out. The
+/// bound covers only the silence before the first request; a client that has
+/// asked for something keeps its connection, and its layers, for as long as it
+/// stays attached (R12, R15).
+pub const DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long a write to a client may take before the connection is abandoned.
+pub const DEFAULT_CONNECTION_WRITE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Upper bound on layers one connection may hold (R12).
+pub const MAX_LAYERS_PER_CONNECTION: usize = 32;
+
+/// Upper bound on layers all connections may hold together.
+pub const MAX_TOTAL_LAYERS: usize = 512;
+
 /// Interval the accept loop sleeps after a transient accept error.
 const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(50);
 
@@ -44,6 +64,10 @@ const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(50);
 pub struct ServerConfig {
     pub max_connections: usize,
     pub response_timeout: Duration,
+    /// Silence allowed before a connection's first request (see [`DEFAULT_HANDSHAKE_TIMEOUT`]).
+    pub handshake_timeout: Duration,
+    /// Bound on a single write to a client.
+    pub write_timeout: Duration,
 }
 
 impl Default for ServerConfig {
@@ -51,6 +75,8 @@ impl Default for ServerConfig {
         Self {
             max_connections: DEFAULT_MAX_CONNECTIONS,
             response_timeout: DEFAULT_RESPONSE_TIMEOUT,
+            handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
+            write_timeout: DEFAULT_CONNECTION_WRITE_TIMEOUT,
         }
     }
 }
@@ -92,12 +118,56 @@ pub enum BoundaryResponse {
     Rejected(RejectionResponse),
 }
 
+/// A cancellable deadline shared by a connection thread and the render thread.
+///
+/// The connection thread answers `Timeout` once its own wait expires, and the
+/// client is entitled to treat that as a failure and retry. A mutation that then
+/// ran anyway would leave the daemon holding state the client believes it never
+/// created, so the queued call is cancelled with the answer (A2, KTD7).
+#[derive(Debug, Clone, Default)]
+pub struct CallDeadline(Arc<AtomicBool>);
+
+impl CallDeadline {
+    /// A deadline that has not expired.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Abandons the call: its mutation must not be applied.
+    pub fn abandon(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether the caller has stopped waiting for this call.
+    pub fn is_abandoned(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
 /// A request paired with its one-shot reply channel.
 #[derive(Debug)]
 pub struct BoundaryCall {
     pub connection: ConnectionId,
     pub request: BoundaryRequest,
     pub reply: mpsc::Sender<BoundaryResponse>,
+    /// Cleared by the caller when it gives up waiting (A2).
+    pub deadline: CallDeadline,
+}
+
+impl BoundaryCall {
+    /// Builds a call whose caller is still waiting for the answer.
+    pub fn new(
+        connection: ConnectionId,
+        request: BoundaryRequest,
+        reply: mpsc::Sender<BoundaryResponse>,
+    ) -> Self {
+        Self {
+            connection,
+            request,
+            reply,
+            deadline: CallDeadline::new(),
+        }
+    }
 }
 
 /// Everything the render thread receives over the boundary.
@@ -141,6 +211,18 @@ struct BoundaryShared {
     ready: Condvar,
 }
 
+impl BoundaryShared {
+    /// Number of ordinary requests currently queued.
+    fn pending_calls(&self) -> usize {
+        self.queue.lock_unpoisoned().calls.len()
+    }
+
+    /// Whether the ordinary-request queue is at capacity.
+    fn is_saturated(&self) -> bool {
+        self.pending_calls() >= self.capacity
+    }
+}
+
 /// Sending half of the boundary channel, held by connection threads.
 #[derive(Debug)]
 pub struct BoundarySender {
@@ -176,7 +258,7 @@ pub fn boundary_channel(capacity: usize) -> (BoundarySender, BoundaryReceiver) {
 impl BoundarySender {
     /// Queues an ordinary request. Never blocks; rejects when the queue is full.
     pub fn try_send_call(&self, call: BoundaryCall) -> Result<(), BoundarySendError> {
-        let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let mut queue = self.shared.queue.lock_unpoisoned();
         if !queue.receiver_alive {
             return Err(BoundarySendError::Disconnected(call));
         }
@@ -190,8 +272,23 @@ impl BoundarySender {
     }
 
     /// Queues connection cleanup on reserved capacity. Always accepted (R13).
+    ///
+    /// Cleanup keeps its priority over ordinary requests so a saturated queue can
+    /// never strand a dead client's layers. That priority is only safe because the
+    /// connection's own queued calls are dropped here: a `RegisterLayer` that was
+    /// queued before the disconnect but ran after the cleanup would create a layer
+    /// owned by a closed connection, with nothing left to remove it (A1, R13).
     pub fn send_connection_closed(&self, connection: ConnectionId) {
-        let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let mut queue = self.shared.queue.lock_unpoisoned();
+        let before = queue.calls.len();
+        queue.calls.retain(|call| call.connection != connection);
+        let discarded = before - queue.calls.len();
+        if discarded > 0 {
+            log::debug!(
+                "gem80-rgb: discarded {discarded} queued request(s) from closed connection {}",
+                connection.0
+            );
+        }
         queue.cleanups.push_back(connection);
         drop(queue);
         self.shared.ready.notify_one();
@@ -199,20 +296,19 @@ impl BoundarySender {
 
     /// Number of ordinary requests currently queued.
     pub fn pending_calls(&self) -> usize {
-        let queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
-        queue.calls.len()
+        self.shared.pending_calls()
     }
 
     /// Whether the ordinary-request queue is at capacity.
     pub fn is_saturated(&self) -> bool {
-        self.pending_calls() >= self.shared.capacity
+        self.shared.is_saturated()
     }
 }
 
 impl Clone for BoundarySender {
     fn clone(&self) -> Self {
         {
-            let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+            let mut queue = self.shared.queue.lock_unpoisoned();
             queue.senders += 1;
         }
         Self {
@@ -224,7 +320,7 @@ impl Clone for BoundarySender {
 impl Drop for BoundarySender {
     fn drop(&mut self) {
         {
-            let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+            let mut queue = self.shared.queue.lock_unpoisoned();
             queue.senders = queue.senders.saturating_sub(1);
         }
         self.shared.ready.notify_all();
@@ -234,7 +330,7 @@ impl Drop for BoundarySender {
 impl BoundaryReceiver {
     /// Takes the next message, cleanup first, without blocking.
     pub fn try_recv(&self) -> Result<BoundaryMessage, BoundaryRecvError> {
-        let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let mut queue = self.shared.queue.lock_unpoisoned();
         match take_next(&mut queue) {
             Some(msg) => Ok(msg),
             None if queue.senders == 0 => Err(BoundaryRecvError::Disconnected),
@@ -245,7 +341,7 @@ impl BoundaryReceiver {
     /// Takes the next message, cleanup first, waiting up to `timeout`.
     pub fn recv_timeout(&self, timeout: Duration) -> Result<BoundaryMessage, BoundaryRecvError> {
         let deadline = Instant::now() + timeout;
-        let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let mut queue = self.shared.queue.lock_unpoisoned();
         loop {
             if let Some(msg) = take_next(&mut queue) {
                 return Ok(msg);
@@ -268,7 +364,7 @@ impl BoundaryReceiver {
 
     /// Drains everything currently queued, cleanup first.
     pub fn drain(&self) -> Vec<BoundaryMessage> {
-        let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let mut queue = self.shared.queue.lock_unpoisoned();
         let mut drained = Vec::with_capacity(queue.cleanups.len() + queue.calls.len());
         while let Some(msg) = take_next(&mut queue) {
             drained.push(msg);
@@ -276,27 +372,37 @@ impl BoundaryReceiver {
         drained
     }
 
+    /// Drains only the connection cleanups, leaving ordinary requests queued.
+    ///
+    /// This is what a frame write may take between packets: cleanup is O(1) and
+    /// cannot wait, while a request that changes the composite has to wait for the
+    /// tick boundary so the frame in flight still matches the hardware mirror it
+    /// was planned against (C1, R13, KTD12).
+    pub fn drain_cleanups(&self) -> Vec<ConnectionId> {
+        let mut queue = self.shared.queue.lock_unpoisoned();
+        queue.cleanups.drain(..).collect()
+    }
+
     /// Number of ordinary requests currently queued.
     pub fn pending_calls(&self) -> usize {
-        let queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
-        queue.calls.len()
+        self.shared.pending_calls()
     }
 
     /// Whether the ordinary-request queue is at capacity.
     pub fn is_saturated(&self) -> bool {
-        self.pending_calls() >= self.shared.capacity
+        self.shared.is_saturated()
     }
 
     /// Whether a connection cleanup is waiting on reserved capacity.
     pub fn has_pending_cleanup(&self) -> bool {
-        let queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let queue = self.shared.queue.lock_unpoisoned();
         !queue.cleanups.is_empty()
     }
 }
 
 impl Drop for BoundaryReceiver {
     fn drop(&mut self) {
-        let mut queue = self.shared.queue.lock().unwrap_or_else(|p| p.into_inner());
+        let mut queue = self.shared.queue.lock_unpoisoned();
         queue.receiver_alive = false;
     }
 }
@@ -330,17 +436,27 @@ pub fn apply_boundary_message(
         connection,
         request,
         reply,
+        deadline,
     } = call;
+
+    // The caller already answered `Timeout` and may have retried by now. Applying
+    // the mutation anyway would duplicate what the retry created (A2).
+    if deadline.is_abandoned() {
+        return;
+    }
 
     let response = match request {
         BoundaryRequest::RegisterLayer {
             name,
             z_order,
             lifetime,
-        } => {
-            let id = compositor.register_layer(Some(connection), name, z_order, lifetime);
-            BoundaryResponse::LayerRegistered(id)
-        }
+        } => match layer_budget(compositor, connection) {
+            Err(rejection) => BoundaryResponse::Rejected(rejection),
+            Ok(()) => {
+                let id = compositor.register_layer(Some(connection), name, z_order, lifetime);
+                BoundaryResponse::LayerRegistered(id)
+            }
+        },
         BoundaryRequest::UpdateLayer {
             layer,
             set_pixels,
@@ -389,6 +505,33 @@ pub fn apply_boundary_message(
 
     // The caller may already have timed out; that is not an error here.
     let _ = reply.send(response);
+}
+
+/// Confirms the connection may register one more layer.
+///
+/// Nothing else bounds the compositor's map: a client stuck in a registration
+/// loop would grow it until the daemon ran out of memory, and a client that
+/// wanted to could do it on purpose. Both caps answer `Busy`, which the client
+/// contract already defines as retryable rather than fatal (A5, R17).
+fn layer_budget(
+    compositor: &Compositor,
+    connection: ConnectionId,
+) -> Result<(), RejectionResponse> {
+    if compositor.layer_count() >= MAX_TOTAL_LAYERS {
+        return Err(reject(
+            RejectionReason::Busy,
+            format!("the daemon is holding its limit of {MAX_TOTAL_LAYERS} layers"),
+            None,
+        ));
+    }
+    if compositor.connection_layer_count(connection) >= MAX_LAYERS_PER_CONNECTION {
+        return Err(reject(
+            RejectionReason::Busy,
+            format!("this connection is holding its limit of {MAX_LAYERS_PER_CONNECTION} layers"),
+            None,
+        ));
+    }
+    Ok(())
 }
 
 /// Confirms the layer exists and belongs to this connection.
@@ -543,7 +686,7 @@ impl ServerHandle {
             let _ = join.join();
         }
         {
-            let mut streams = self.streams.lock().unwrap_or_else(|p| p.into_inner());
+            let mut streams = self.streams.lock_unpoisoned();
             for (_, stream) in streams.drain() {
                 let _ = stream.shutdown(std::net::Shutdown::Both);
             }
@@ -605,12 +748,21 @@ fn accept_loop(
         }
 
         let connection = ConnectionId(next_connection.fetch_add(1, Ordering::SeqCst));
+
+        // Both halves are bounded before the thread exists, so no code path can
+        // reach a blocking read or write on this stream (A3, KTD7).
+        if let Err(e) = bound_stream(&stream, config) {
+            log::warn!(
+                "gem80-rgb: refusing connection {} without I/O timeouts ({e})",
+                connection.0
+            );
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            continue;
+        }
+
         active.fetch_add(1, Ordering::SeqCst);
         if let Ok(clone) = stream.try_clone() {
-            streams
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .insert(connection, clone);
+            streams.lock_unpoisoned().insert(connection, clone);
         }
 
         let connection_sender = sender.clone();
@@ -619,27 +771,53 @@ fn accept_loop(
         let spawned = thread::Builder::new()
             .name(format!("gem80-rgb-conn-{}", connection.0))
             .spawn(move || {
+                // The guard, not the statements after the call: a panic inside
+                // `serve_connection` would otherwise leak the slot and leave the
+                // layers behind (A4, R13).
+                let _slot = ConnectionSlot {
+                    connection,
+                    sender: &connection_sender,
+                    active: &connection_active,
+                    streams: &connection_streams,
+                };
                 serve_connection(connection, &stream, &connection_sender, config);
                 let _ = stream.shutdown(std::net::Shutdown::Both);
-                // Cleanup rides reserved capacity: it reaches the render thread even
-                // while ordinary requests are being rejected for saturation (R13).
-                connection_sender.send_connection_closed(connection);
-                connection_streams
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .remove(&connection);
-                connection_active.fetch_sub(1, Ordering::SeqCst);
             });
 
         if let Err(e) = spawned {
             log::warn!("gem80-rgb: could not spawn connection thread ({e})");
             active.fetch_sub(1, Ordering::SeqCst);
-            streams
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .remove(&connection);
+            streams.lock_unpoisoned().remove(&connection);
             sender.send_connection_closed(connection);
         }
+    }
+}
+
+/// Applies the accepted stream's read and write bounds (A3).
+fn bound_stream(stream: &UnixStream, config: ServerConfig) -> io::Result<()> {
+    stream.set_read_timeout(Some(config.handshake_timeout))?;
+    stream.set_write_timeout(Some(config.write_timeout))?;
+    Ok(())
+}
+
+/// Releases one connection's slot, stream entry and layers exactly once.
+///
+/// Written as a guard so the release also happens when the connection thread
+/// unwinds (A4).
+struct ConnectionSlot<'a> {
+    connection: ConnectionId,
+    sender: &'a BoundarySender,
+    active: &'a AtomicUsize,
+    streams: &'a SharedStreams,
+}
+
+impl Drop for ConnectionSlot<'_> {
+    fn drop(&mut self) {
+        // Cleanup rides reserved capacity: it reaches the render thread even
+        // while ordinary requests are being rejected for saturation (R13).
+        self.sender.send_connection_closed(self.connection);
+        self.streams.lock_unpoisoned().remove(&self.connection);
+        self.active.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -651,15 +829,31 @@ fn serve_connection(
     config: ServerConfig,
 ) {
     let mut reader = stream;
+    let mut requests_served: u64 = 0;
     loop {
         let frame = match crate::wire::read_frame_optional(&mut reader) {
             Ok(Some(frame)) => frame,
             Ok(None) => return,
+            // A peer that has never asked for anything does not get to hold a
+            // connection slot indefinitely. One that has is entitled to sit idle
+            // for as long as it likes: its layers live with the connection (A3).
+            Err(crate::wire::FramingError::IdleTimeout) => {
+                if requests_served == 0 {
+                    log::debug!(
+                        "gem80-rgb: closing connection {} after {:?} of silence",
+                        connection.0,
+                        config.handshake_timeout
+                    );
+                    return;
+                }
+                continue;
+            }
             Err(e) => {
                 log::debug!("gem80-rgb: closing connection {} ({e})", connection.0);
                 return;
             }
         };
+        requests_served += 1;
 
         let response = match frame.0 {
             WireMessageDiscriminator::Control => match ClientMessage::decode(frame.1.as_slice()) {
@@ -711,11 +905,8 @@ fn handle_client_message(
     };
 
     let (reply_tx, reply_rx) = mpsc::channel();
-    let call = BoundaryCall {
-        connection,
-        request,
-        reply: reply_tx,
-    };
+    let call = BoundaryCall::new(connection, request, reply_tx);
+    let deadline = call.deadline.clone();
 
     match sender.try_send_call(call) {
         Ok(()) => {}
@@ -744,17 +935,22 @@ fn handle_client_message(
     // A silent render thread must not hang or close this connection (KTD7, KTD8).
     match reply_rx.recv_timeout(config.response_timeout) {
         Ok(response) => server_message(request_id, response),
-        Err(_) => rejection_message(
-            request_id,
-            reject(
-                RejectionReason::Timeout,
-                format!(
-                    "daemon did not answer within {} ms",
-                    config.response_timeout.as_millis()
+        Err(_) => {
+            // We are about to tell the client this failed, so the queued call must
+            // not still be applied behind that answer (A2).
+            deadline.abandon();
+            rejection_message(
+                request_id,
+                reject(
+                    RejectionReason::Timeout,
+                    format!(
+                        "daemon did not answer within {} ms",
+                        config.response_timeout.as_millis()
+                    ),
+                    None,
                 ),
-                None,
-            ),
-        ),
+            )
+        }
     }
 }
 
@@ -1081,7 +1277,9 @@ mod tests {
 
     impl TempDir {
         fn new(tag: &str) -> Self {
-            let base = std::env::temp_dir().join(format!(
+            // The snapshotted temp root, not `std::env::temp_dir()`: the paths tests
+            // replace `TMPDIR` process-wide while these run.
+            let base = crate::paths::ambient_temp_dir().join(format!(
                 "gem80-rgb-server-{tag}-{}-{:?}",
                 std::process::id(),
                 thread::current().id()
@@ -1248,9 +1446,17 @@ mod tests {
         bad.write_all(&[crate::wire::CONTROL_MESSAGE_MARKER, 0, 0])
             .expect("write bad body");
 
+        // A closed peer reaches the reader as either a clean EOF or ECONNRESET:
+        // the server discards the oversized frame without draining it, so the
+        // kernel may answer the close with RST instead of FIN. Both mean the
+        // offending connection is gone, which is what R18 requires.
         let mut sink = [0u8; 64];
-        let read = std::io::Read::read(&mut bad, &mut sink).expect("read from closed connection");
-        assert_eq!(read, 0, "the offending connection must be closed");
+        match std::io::Read::read(&mut bad, &mut sink) {
+            Ok(0) => {}
+            Ok(n) => panic!("the offending connection must be closed, but it sent {n} bytes"),
+            Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
+            Err(e) => panic!("unexpected error reading the offending connection: {e}"),
+        }
 
         // The healthy connection still answers and still owns its layer.
         let status = good.status();
@@ -1603,5 +1809,254 @@ mod tests {
             BoundaryMessage::ConnectionClosed(connection),
         );
         assert!(!compositor.has_layer(layer));
+    }
+
+    /// Test scenario: 끊긴 연결이 남긴 큐의 호출은 정리 뒤에 실행되지 않는다. 정리를
+    /// 먼저 배수해도 고아 레이어가 생기지 않는다 (A1, R13).
+    #[test]
+    fn test_cleanup_discards_that_connections_queued_calls_a1() {
+        let (sender, receiver) = boundary_channel(BOUNDARY_CHANNEL_CAPACITY);
+        let dying = ConnectionId(1);
+        let survivor = ConnectionId(2);
+
+        // Both connections queue a registration. Neither has been drained yet.
+        let (dying_reply, dying_rx) = mpsc::channel();
+        sender
+            .try_send_call(BoundaryCall::new(
+                dying,
+                BoundaryRequest::RegisterLayer {
+                    name: "orphan".to_string(),
+                    z_order: CompositeZIndex(1),
+                    lifetime: None,
+                },
+                dying_reply,
+            ))
+            .expect("queue the dying connection's call");
+        let (survivor_reply, survivor_rx) = mpsc::channel();
+        sender
+            .try_send_call(BoundaryCall::new(
+                survivor,
+                BoundaryRequest::RegisterLayer {
+                    name: "keeper".to_string(),
+                    z_order: CompositeZIndex(2),
+                    lifetime: None,
+                },
+                survivor_reply,
+            ))
+            .expect("queue the survivor's call");
+
+        // The first connection dies before either call runs.
+        sender.send_connection_closed(dying);
+
+        let mut compositor = Compositor::new();
+        for message in receiver.drain() {
+            apply_boundary_message(&mut compositor, DeviceState::Absent, message);
+        }
+
+        assert_eq!(
+            compositor.layer_count(),
+            1,
+            "the dead connection's queued registration must not have created a layer"
+        );
+        assert_eq!(compositor.connection_layer_count(dying), 0);
+        assert_eq!(compositor.connection_layer_count(survivor), 1);
+        assert!(
+            dying_rx.try_recv().is_err(),
+            "the discarded call gets no answer; its caller is gone"
+        );
+        assert!(
+            matches!(
+                survivor_rx.try_recv(),
+                Ok(BoundaryResponse::LayerRegistered(_))
+            ),
+            "the other connection's call is untouched"
+        );
+    }
+
+    /// Test scenario: 응답을 포기한 뒤에 실행되는 호출은 상태를 바꾸지 않는다 (A2).
+    #[test]
+    fn test_an_abandoned_call_is_not_applied_a2() {
+        let mut compositor = Compositor::new();
+        let connection = ConnectionId(4);
+        let (reply, rx) = mpsc::channel();
+        let call = BoundaryCall::new(
+            connection,
+            BoundaryRequest::RegisterLayer {
+                name: "retried".to_string(),
+                z_order: CompositeZIndex(1),
+                lifetime: None,
+            },
+            reply,
+        );
+
+        // The connection thread gave up waiting and answered `Timeout`.
+        call.deadline.abandon();
+
+        apply_boundary_message(
+            &mut compositor,
+            DeviceState::Absent,
+            BoundaryMessage::Call(call),
+        );
+
+        assert_eq!(
+            compositor.layer_count(),
+            0,
+            "a client told the request failed must not find a layer created anyway"
+        );
+        assert!(rx.try_recv().is_err(), "no answer goes to a gone caller");
+    }
+
+    /// Test scenario: 렌더 스레드가 답하지 않아 타임아웃이 난 등록은 나중에도 적용되지
+    /// 않는다. 클라이언트가 재시도해도 레이어가 중복 생성되지 않는다 (A2).
+    #[test]
+    fn test_timed_out_register_is_not_applied_later_a2() {
+        let dir = TempDir::new("a2-late");
+        // Nothing drains the channel while the client's request times out.
+        let (sender, receiver) = boundary_channel(BOUNDARY_CHANNEL_CAPACITY);
+        let server = SocketServer::bind(socket_path_in(dir.path())).expect("bind");
+        let handle = server
+            .spawn(
+                sender,
+                ServerConfig {
+                    response_timeout: Duration::from_millis(50),
+                    ..ServerConfig::default()
+                },
+            )
+            .expect("spawn");
+
+        let mut client = TestClient::connect(handle.path());
+        let response = client.call(proto::client_message::Payload::RegisterLayer(
+            RegisterLayerRequest {
+                name: "ghost".to_string(),
+                z_order: 1,
+                ..Default::default()
+            },
+        ));
+        assert_eq!(rejection(&response).reason, RejectionReason::Timeout as i32);
+
+        // The render thread only gets round to the queued call afterwards.
+        let mut compositor = Compositor::new();
+        for message in receiver.drain() {
+            apply_boundary_message(&mut compositor, DeviceState::Absent, message);
+        }
+        assert_eq!(
+            compositor.layer_count(),
+            0,
+            "the abandoned registration must not land after the client was told it failed"
+        );
+    }
+
+    /// Test scenario: 연결만 하고 말이 없는 클라이언트는 유계 시간 뒤에 정리되어 슬롯을
+    /// 돌려준다. 말을 한 연결은 그 뒤로 조용해도 유지된다 (A3, R12).
+    #[test]
+    fn test_a_silent_connection_does_not_hold_its_slot_a3() {
+        let dir = TempDir::new("a3");
+        let config = ServerConfig {
+            max_connections: 1,
+            handshake_timeout: Duration::from_millis(150),
+            ..ServerConfig::default()
+        };
+        let (handle, _render) = start_server(&dir, config);
+
+        // A peer that connects and says nothing takes the only slot.
+        let silent = UnixStream::connect(handle.path()).expect("silent connect");
+        assert!(wait_until(|| handle.active_connections() == 1));
+
+        // It is dropped without ever having asked for anything, and the slot
+        // becomes available again.
+        assert!(
+            wait_until(|| handle.active_connections() == 0),
+            "a connection that never spoke must not hold its slot indefinitely"
+        );
+        drop(silent);
+
+        // A real client now gets in, and stays in while it sits idle for longer
+        // than the handshake bound.
+        let mut client = TestClient::connect(handle.path());
+        let layer_id = client.register("talkative", 1);
+        thread::sleep(Duration::from_millis(400));
+        let status = client.status();
+        assert_eq!(
+            status.layers.len(),
+            1,
+            "an idle client that has spoken keeps its connection and its layers"
+        );
+        assert_eq!(status.layers[0].layer_id, layer_id);
+    }
+
+    /// Test scenario: 등록 루프에 빠진 클라이언트는 연결당 상한에서 `Busy`로 거절되고,
+    /// 연결도 다른 연결의 레이어도 살아남는다 (A5, R17).
+    #[test]
+    fn test_layer_registration_is_capped_per_connection_a5() {
+        let dir = TempDir::new("a5");
+        let (handle, _render) = start_server(&dir, ServerConfig::default());
+        let mut greedy = TestClient::connect(handle.path());
+
+        for i in 0..MAX_LAYERS_PER_CONNECTION {
+            greedy.register(&format!("layer-{i}"), 1);
+        }
+
+        let response = greedy.call(proto::client_message::Payload::RegisterLayer(
+            RegisterLayerRequest {
+                name: "one-too-many".to_string(),
+                z_order: 1,
+                ..Default::default()
+            },
+        ));
+        let reject = rejection(&response);
+        assert_eq!(reject.reason, RejectionReason::Busy as i32);
+        assert!(
+            reject.message.contains("limit"),
+            "the rejection must say what the limit was, got {:?}",
+            reject.message
+        );
+
+        // The connection still works, and a second connection has its own budget.
+        assert_eq!(
+            greedy.status().layers.len(),
+            MAX_LAYERS_PER_CONNECTION,
+            "the cap holds the map at the limit instead of letting it grow"
+        );
+        let mut other = TestClient::connect(handle.path());
+        assert!(other.register("mine", 2) > 0);
+    }
+
+    /// Test scenario: 연결 스레드가 패닉으로 풀려도 슬롯·스트림 항목·레이어 정리가
+    /// 모두 실행된다 (A4, R13).
+    #[test]
+    fn test_a_panicking_connection_thread_still_releases_its_slot_a4() {
+        let (sender, receiver) = boundary_channel(BOUNDARY_CHANNEL_CAPACITY);
+        let connection = ConnectionId(11);
+        let active = Arc::new(AtomicUsize::new(1));
+        let streams: SharedStreams = Arc::new(Mutex::new(HashMap::new()));
+
+        // An entry for this connection, as the accept loop would have left.
+        let (left, _right) = UnixStream::pair().expect("socket pair");
+        streams.lock_unpoisoned().insert(connection, left);
+
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _slot = ConnectionSlot {
+                connection,
+                sender: &sender,
+                active: &active,
+                streams: &streams,
+            };
+            panic!("simulated connection thread failure");
+        }));
+        assert!(panicked.is_err(), "the panic must have propagated");
+
+        assert_eq!(
+            active.load(Ordering::SeqCst),
+            0,
+            "the connection slot must be given back on the panic path"
+        );
+        assert!(
+            !streams.lock_unpoisoned().contains_key(&connection),
+            "the stream entry must be removed on the panic path"
+        );
+        assert!(
+            receiver.has_pending_cleanup(),
+            "the layers of a panicked connection must still be cleaned up"
+        );
     }
 }

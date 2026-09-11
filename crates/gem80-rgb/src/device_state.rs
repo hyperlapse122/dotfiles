@@ -19,17 +19,26 @@ use crate::wire::DeviceState as WireDeviceState;
 pub const TICK_PERIOD: Duration = Duration::from_millis(20);
 
 /// Firmware watchdog deadline `D` armed on every MODE and HEARTBEAT.
-pub const FIRMWARE_DEADLINE: Duration = Duration::from_millis(300);
+///
+/// KTD12 needs `D/2` above `F_budget + T + jitter`, which is 340 ms here, so `D`
+/// cannot go below 680 ms. It is not raised far past that either: `D` is also how
+/// long the lighting stays frozen on the last host frame after the daemon dies.
+pub const FIRMWARE_DEADLINE: Duration = Duration::from_millis(800);
 
 /// Heartbeat period: half the firmware deadline (R3).
-pub const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(150);
+pub const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(400);
 
 /// Per-command read timeout. Exceeding it is an I/O failure, not a longer wait:
 /// the state drops to `Absent` and the mirror is invalidated (KTD7, KTD12).
-pub const COMMAND_READ_TIMEOUT_MS: u32 = 6;
+///
+/// The verified reference implementation, `firmware/nuphy-gem80-hostrgb/hostrgb-probe.py`,
+/// waits a full second. A timeout tight enough to be crossed by ordinary scheduler
+/// jitter is an expensive false alarm: it costs a node reopen, a reprobe, a
+/// re-entry and a full repaint.
+pub const COMMAND_READ_TIMEOUT_MS: u32 = 20;
 
 /// Allowance for the write half of one request-response round trip.
-pub const COMMAND_WRITE_ALLOWANCE_MS: u32 = 2;
+pub const COMMAND_WRITE_ALLOWANCE_MS: u32 = 5;
 
 /// Upper bound on one request-response round trip (KTD1).
 pub const ROUND_TRIP_BUDGET_MS: u32 = COMMAND_READ_TIMEOUT_MS + COMMAND_WRITE_ALLOWANCE_MS;
@@ -282,7 +291,7 @@ pub fn transition(state: DeviceStateKind, event: DeviceEvent) -> Option<Transiti
     match (state, event) {
         (S::Absent, E::Enumerated) => Some(Transition::to(S::Probing)),
 
-        (S::Probing, E::ProbeCompatible) => Some(Transition::to(S::Entering).resetting_backoff()),
+        (S::Probing, E::ProbeCompatible) => Some(Transition::to(S::Entering)),
         (S::Probing, E::ProbeIncompatible) => Some(Transition::to(S::Incompatible).closing()),
         (S::Probing, E::IoFailure) => Some(Transition::to(S::Absent).closing().growing_backoff()),
 
@@ -290,7 +299,10 @@ pub fn transition(state: DeviceStateKind, event: DeviceEvent) -> Option<Transiti
             Some(Transition::to(S::Absent).resetting_backoff())
         }
 
-        (S::Entering, E::ModeAccepted) => Some(Transition::to(S::DirectAll)),
+        // An accepted MODE is the first edge that proves the whole path works:
+        // enumeration, open, probe and entry all succeeded. A probe answer alone
+        // does not, so the backoff is cleared here and not there (B4).
+        (S::Entering, E::ModeAccepted) => Some(Transition::to(S::DirectAll).resetting_backoff()),
         (S::Entering, E::IoFailure) => Some(
             Transition::to(S::Absent)
                 .closing()
@@ -299,9 +311,14 @@ pub fn transition(state: DeviceStateKind, event: DeviceEvent) -> Option<Transiti
         ),
 
         (S::DirectAll, E::HeartbeatRejected) => Some(Transition::to(S::Entering)),
-        (S::DirectAll, E::IoFailure) | (S::DirectAll, E::WriteFailure) => {
-            Some(Transition::to(S::Absent).closing().invalidating())
-        }
+        // A persistent write or command failure must not reopen, reprobe and
+        // re-enter every tick period: that hammers the hardware 50 times a second.
+        (S::DirectAll, E::IoFailure) | (S::DirectAll, E::WriteFailure) => Some(
+            Transition::to(S::Absent)
+                .closing()
+                .invalidating()
+                .growing_backoff(),
+        ),
 
         _ => None,
     }
@@ -324,22 +341,22 @@ mod tests {
             timing.jitter_allowance,
             timing.deadline / 2
         );
-        assert_eq!(timing.frame_budget(), Duration::from_millis(96));
-        assert_eq!(timing.deadline / 2, Duration::from_millis(150));
+        assert_eq!(timing.frame_budget(), Duration::from_millis(300));
+        assert_eq!(timing.deadline / 2, Duration::from_millis(400));
     }
 
     /// Test scenario: 상수를 불변식이 깨지는 값으로 바꾸면 이 검사가 실패한다.
     #[test]
     fn test_invariant_check_rejects_a_budget_that_overruns_half_the_deadline() {
         let broken = Timing {
-            // 30 round trips of 8 ms overruns D/2 = 150 ms on its own.
+            // 30 round trips of 25 ms overruns D/2 = 400 ms on its own.
             max_frame_packets: 30,
             ..Timing::DEFAULT
         };
         assert!(!broken.invariant_holds());
 
         let also_broken = Timing {
-            deadline: Duration::from_millis(200),
+            deadline: Duration::from_millis(600),
             ..Timing::DEFAULT
         };
         assert!(!also_broken.invariant_holds());
@@ -397,13 +414,32 @@ mod tests {
         }
     }
 
-    /// R23: a failed frame packet drops to `Absent` with the mirror invalid.
+    /// R23: a failed frame packet drops to `Absent` with the mirror invalid, and
+    /// backs off rather than reopening on the next tick (B4).
     #[test]
     fn test_write_failure_invalidates_mirror_and_drops_to_absent() {
-        let t = transition(DeviceStateKind::DirectAll, DeviceEvent::WriteFailure).unwrap();
-        assert_eq!(t.next, DeviceStateKind::Absent);
-        assert!(t.invalidate_mirror);
-        assert!(t.close_node);
+        for event in [DeviceEvent::WriteFailure, DeviceEvent::IoFailure] {
+            let t = transition(DeviceStateKind::DirectAll, event).unwrap();
+            assert_eq!(t.next, DeviceStateKind::Absent);
+            assert!(t.invalidate_mirror);
+            assert!(t.close_node);
+            assert!(
+                t.grow_probe_backoff,
+                "{event:?} out of DirectAll must back off before reopening"
+            );
+        }
+    }
+
+    /// The probe backoff clears on the edge proven to work end to end, not on a
+    /// probe answer that may still be followed by a failed entry (B4).
+    #[test]
+    fn test_only_an_accepted_mode_clears_the_probe_backoff() {
+        let probed = transition(DeviceStateKind::Probing, DeviceEvent::ProbeCompatible).unwrap();
+        assert!(!probed.reset_probe_backoff);
+
+        let entered = transition(DeviceStateKind::Entering, DeviceEvent::ModeAccepted).unwrap();
+        assert_eq!(entered.next, DeviceStateKind::DirectAll);
+        assert!(entered.reset_probe_backoff);
     }
 
     /// KTD9: only enumeration leaves `Incompatible`.

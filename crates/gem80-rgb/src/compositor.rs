@@ -123,12 +123,7 @@ pub struct LedDiff {
 
 impl From<LedDiff> for crate::wire::LedColor {
     fn from(diff: LedDiff) -> Self {
-        crate::wire::LedColor {
-            led_index: diff.led_index as u32,
-            red: diff.color.r as u32,
-            green: diff.color.g as u32,
-            blue: diff.color.b as u32,
-        }
+        (diff.led_index, diff.color).into()
     }
 }
 
@@ -403,6 +398,14 @@ impl Compositor {
         self.layers.len()
     }
 
+    /// Count of active layers owned by one client connection.
+    pub fn connection_layer_count(&self, connection: ConnectionId) -> usize {
+        self.layers
+            .values()
+            .filter(|layer| layer.owner == Some(connection))
+            .count()
+    }
+
     /// Sets a pixel on an existing layer (R14).
     pub fn set_pixel(
         &mut self,
@@ -483,7 +486,6 @@ impl Compositor {
     /// The base layer sits at lowest z (i32::MIN) and registration sequence 0 (R8).
     /// Returns the complete 101-LED color buffer.
     pub fn compose(&self) -> [Color; GEM80_TOTAL_LEDS] {
-        // Collect all layers: base_layer plus all client layers
         let mut ordered_layers: Vec<&Layer> = Vec::with_capacity(1 + self.layers.len());
         ordered_layers.push(&self.base_layer);
         ordered_layers.extend(self.layers.values());
@@ -510,9 +512,7 @@ impl Compositor {
         let mut bytes = [0u8; GEM80_PIXEL_BUFFER_BYTES];
         for (i, color) in frame.iter().enumerate() {
             let offset = i * 3;
-            bytes[offset] = color.r;
-            bytes[offset + 1] = color.g;
-            bytes[offset + 2] = color.b;
+            bytes[offset..offset + 3].copy_from_slice(&color.to_bytes());
         }
         bytes
     }
@@ -1016,5 +1016,107 @@ mod tests {
         for chunk in bytes.chunks_exact(3) {
             assert_eq!(chunk, &[1, 2, 3]);
         }
+    }
+
+    /// Test scenario: 예약된 베이스 레이어 ID로는 등록할 수 없다 (R8, H4).
+    #[test]
+    fn test_register_with_id_rejects_the_reserved_base_layer() {
+        let mut compositor = Compositor::new();
+        let err = compositor
+            .register_layer_with_id(
+                BASE_LAYER_ID,
+                Some(ConnectionId(1)),
+                "impostor",
+                CompositeZIndex(5),
+                None,
+            )
+            .expect_err("the base layer ID is daemon-owned");
+        assert_eq!(err, CompositorError::BaseLayerImmutable);
+        assert_eq!(compositor.layer_count(), 0);
+        assert_eq!(compositor.base_layer().name, "base");
+    }
+
+    /// Test scenario: 이미 있는 ID로 다시 등록하면 거절되고 기존 레이어는 그대로다 (H4).
+    #[test]
+    fn test_register_with_id_rejects_a_duplicate_id() {
+        let mut compositor = Compositor::new();
+        let id = LayerId(7);
+        compositor
+            .register_layer_with_id(id, Some(ConnectionId(1)), "first", CompositeZIndex(1), None)
+            .expect("the first registration must succeed");
+
+        let err = compositor
+            .register_layer_with_id(
+                id,
+                Some(ConnectionId(2)),
+                "second",
+                CompositeZIndex(2),
+                None,
+            )
+            .expect_err("a duplicate ID must be rejected");
+        assert_eq!(err, CompositorError::LayerAlreadyExists(id));
+
+        let existing = compositor.get_layer(id).expect("the first layer survives");
+        assert_eq!(existing.name, "first");
+        assert_eq!(existing.owner, Some(ConnectionId(1)));
+        assert_eq!(compositor.layer_count(), 1);
+    }
+
+    /// Test scenario: 명시적 ID 등록이 할당자를 그 ID 너머로 밀어, 다음 자동 할당이
+    /// 충돌하지 않는다 (H4).
+    #[test]
+    fn test_register_with_id_advances_the_allocator() {
+        let mut compositor = Compositor::new();
+        compositor
+            .register_layer_with_id(
+                LayerId(40),
+                Some(ConnectionId(1)),
+                "reloaded",
+                CompositeZIndex(1),
+                None,
+            )
+            .expect("explicit registration must succeed");
+
+        let next =
+            compositor.register_layer(Some(ConnectionId(1)), "fresh", CompositeZIndex(2), None);
+        assert_eq!(
+            next,
+            LayerId(41),
+            "the allocator must not hand out an ID at or below one already taken"
+        );
+
+        // A lower explicit ID leaves the allocator where it is.
+        compositor
+            .register_layer_with_id(
+                LayerId(3),
+                Some(ConnectionId(1)),
+                "lower",
+                CompositeZIndex(3),
+                None,
+            )
+            .expect("a lower explicit ID must still register");
+        let after =
+            compositor.register_layer(Some(ConnectionId(1)), "after", CompositeZIndex(4), None);
+        assert_eq!(after, LayerId(42));
+    }
+
+    /// Test scenario: 연결별 레이어 수를 세어 상한 집행의 근거가 된다 (A5).
+    #[test]
+    fn test_connection_layer_count_is_per_connection() {
+        let mut compositor = Compositor::new();
+        let first = ConnectionId(1);
+        let second = ConnectionId(2);
+
+        compositor.register_layer(Some(first), "a", CompositeZIndex(1), None);
+        compositor.register_layer(Some(first), "b", CompositeZIndex(2), None);
+        let theirs = compositor.register_layer(Some(second), "c", CompositeZIndex(3), None);
+
+        assert_eq!(compositor.connection_layer_count(first), 2);
+        assert_eq!(compositor.connection_layer_count(second), 1);
+        assert_eq!(compositor.connection_layer_count(ConnectionId(3)), 0);
+
+        compositor.remove_layer(theirs).expect("remove");
+        assert_eq!(compositor.connection_layer_count(second), 0);
+        assert_eq!(compositor.connection_layer_count(first), 2);
     }
 }

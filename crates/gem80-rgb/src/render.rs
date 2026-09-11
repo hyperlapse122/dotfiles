@@ -3,8 +3,11 @@
 //! The render thread is the sole owner of the HID device (KTD7). Every tick it
 //! drains the boundary channel, sweeps layer lifetimes, advances the device state
 //! machine, and writes the difference between the composed frame and the hardware
-//! mirror (R9). A write that spans several packets drains the boundary channel
-//! between packets, so a repaint's round trips do not land on request latency.
+//! mirror (R9). A write that spans several packets drains connection cleanups
+//! between packets — those are O(1) and cannot wait (R13) — while requests that
+//! change the composite wait for the next tick boundary, so the packets in flight
+//! still describe the frame they were planned from and the round trips they cost
+//! stay inside `F_budget` (C1, KTD12).
 //!
 //! Nothing here blocks without a bound: every device command carries a read
 //! timeout, and enumeration is a non-blocking scan. A tick runs to completion with
@@ -17,7 +20,8 @@ use std::time::Instant;
 
 use crate::compositor::{Color, Compositor, LedDiff};
 use crate::device::protocol::{
-    DeviceError, HOSTRGB_LEDS_PER_PACKET, HOSTRGB_LED_COUNT, HOSTRGB_REGION_ALL,
+    DeviceError, HOSTRGB_LEDS_PER_PACKET, HOSTRGB_LED_COUNT, HOSTRGB_PROTOCOL, HOSTRGB_REGION_ALL,
+    HOSTRGB_SIDE_FIRST,
 };
 use crate::device::{Gem80Device, Transport};
 use crate::device_state::{transition, DeviceEvent, DeviceStateKind, ProbeBackoff, Timing};
@@ -81,22 +85,13 @@ impl DeviceSource for HidDeviceSource {
     type Transport = crate::device::HidTransport;
 
     fn is_present(&mut self) -> bool {
-        use crate::device::protocol::{
-            HOSTRGB_PRODUCT_ID, HOSTRGB_USAGE, HOSTRGB_USAGE_PAGE, HOSTRGB_VENDOR_ID,
-        };
-
         let Some(api) = self.api() else {
             return false;
         };
         if api.refresh_devices().is_err() {
             return false;
         }
-        api.device_list().any(|d| {
-            d.vendor_id() == HOSTRGB_VENDOR_ID
-                && d.product_id() == HOSTRGB_PRODUCT_ID
-                && d.usage_page() == HOSTRGB_USAGE_PAGE
-                && (d.usage() == HOSTRGB_USAGE || d.usage() == 0)
-        })
+        api.device_list().any(crate::device::is_gem80_interface)
     }
 
     fn open(&mut self) -> Result<Option<Self::Transport>, DeviceError> {
@@ -123,7 +118,11 @@ pub struct LedPacket {
 /// that it would need more packets than a full repaint is sent as a full repaint
 /// instead — that cap is what keeps the worst-case sparse update inside `F_budget`
 /// (KTD12).
-pub fn plan_packets(diff: &[LedDiff], frame: &[Color; GEM80_TOTAL_LEDS]) -> Vec<LedPacket> {
+pub fn plan_packets(
+    diff: &[LedDiff],
+    frame: &[Color; GEM80_TOTAL_LEDS],
+    max_frame_packets: usize,
+) -> Vec<LedPacket> {
     let mut packets = Vec::new();
     let mut i = 0;
     while i < diff.len() {
@@ -139,7 +138,10 @@ pub fn plan_packets(diff: &[LedDiff], frame: &[Color; GEM80_TOTAL_LEDS]) -> Vec<
         });
     }
 
-    if packets.len() > Timing::DEFAULT.max_frame_packets {
+    // The cap comes from the caller's own timing, never from the default
+    // constants: `F_budget` is computed from the same field, so reading a
+    // different one here would void KTD12's invariant without any test noticing.
+    if packets.len() > max_frame_packets {
         return full_frame_packets(frame);
     }
     packets
@@ -303,6 +305,13 @@ impl<S: DeviceSource> RenderThread<S> {
         }
     }
 
+    /// Applies only the connection cleanups waiting on reserved capacity (C1, R13).
+    fn drain_cleanups(&mut self) {
+        for connection in self.boundary.drain_cleanups() {
+            self.compositor.remove_connection_layers(connection);
+        }
+    }
+
     /// Advances the state machine until it settles or the per-tick bound is hit.
     fn advance_device(&mut self, now: Instant) {
         for _ in 0..MAX_TRANSITIONS_PER_TICK {
@@ -337,7 +346,13 @@ impl<S: DeviceSource> RenderThread<S> {
                 self.device = Some(Gem80Device::new(transport));
                 Some(DeviceEvent::Enumerated)
             }
-            Ok(None) => None,
+            // A keyboard switched to wireless is absent for as long as the user
+            // leaves it that way. Scanning every tick period would enumerate fifty
+            // times a second, indefinitely, for an answer that will not change (B5).
+            Ok(None) => {
+                self.retry_at = Some(now + self.backoff.advance());
+                None
+            }
             Err(err) => {
                 log::debug!("opening the Gem80 node failed: {err}");
                 self.retry_at = Some(now + self.backoff.advance());
@@ -354,11 +369,26 @@ impl<S: DeviceSource> RenderThread<S> {
 
         match outcome {
             Ok(probe) if probe.is_compatible() => Some(DeviceEvent::ProbeCompatible),
-            // An explicit answer that is not revision 2 is the one verdict that
-            // stops probing for good (R4, KTD9).
-            Ok(_) | Err(DeviceError::IncompatibleProtocol { .. }) => {
+            // An explicit answer this daemon cannot drive — the wrong revision, or
+            // the right revision over a geometry the renderer does not address — is
+            // the one verdict that stops probing for good (R4, G3, KTD9).
+            Ok(probe) => {
                 log::warn!(
-                    "Gem80 firmware is not a revision 2 hostrgb build; not entering direct mode"
+                    "Gem80 firmware reports revision {} with {} LEDs, {} per packet, side chain \
+                     at {}; this daemon drives revision {HOSTRGB_PROTOCOL} with \
+                     {HOSTRGB_LED_COUNT}/{HOSTRGB_LEDS_PER_PACKET}/{HOSTRGB_SIDE_FIRST}. Not \
+                     entering direct mode.",
+                    probe.protocol,
+                    probe.led_count,
+                    probe.leds_per_packet,
+                    probe.side_first
+                );
+                Some(DeviceEvent::ProbeIncompatible)
+            }
+            Err(DeviceError::IncompatibleProtocol { expected, actual }) => {
+                log::warn!(
+                    "Gem80 firmware is revision {actual}, not the revision {expected} hostrgb \
+                     build; not entering direct mode"
                 );
                 Some(DeviceEvent::ProbeIncompatible)
             }
@@ -397,7 +427,28 @@ impl<S: DeviceSource> RenderThread<S> {
             }
             Err(err) => {
                 log::debug!("entering direct mode failed: {err}");
+                // The firmware applies MODE and only then answers, so a lost
+                // answer leaves the keyboard in direct mode with nobody left to
+                // heartbeat it: the host reads I/O failure and drops to `Absent`
+                // while the device holds the regions until its watchdog fires.
+                // MODE(0) here restores the stored effect straight away (B3, R5).
+                if matches!(err, DeviceError::Timeout { .. } | DeviceError::Io(_)) {
+                    self.exit_direct_mode_best_effort();
+                }
                 Some(DeviceEvent::IoFailure)
+            }
+        }
+    }
+
+    /// Asks the firmware to leave direct mode, logging rather than propagating.
+    ///
+    /// Used where the daemon is already on its way out of direct mode and the
+    /// device may or may not still be listening.
+    fn exit_direct_mode_best_effort(&mut self) {
+        let timeout = self.timing.command_timeout_ms;
+        if let Some(device) = self.device.as_mut() {
+            if let Err(err) = device.exit_direct_mode(timeout) {
+                log::debug!("the MODE(0) cleanup did not get through: {err}");
             }
         }
     }
@@ -461,10 +512,12 @@ impl<S: DeviceSource> RenderThread<S> {
 
     /// Writes the difference between the composed frame and the hardware mirror.
     ///
-    /// An invalid mirror makes the diff all 101 LEDs (KTD3). The boundary channel is
-    /// drained between packets so a repaint's round trips do not add to request
-    /// latency. A failed packet invalidates the mirror and drops to `Absent`, and
-    /// the next successful write cycle sends all 101 LEDs again (R23).
+    /// An invalid mirror makes the diff all 101 LEDs (KTD3). Connection cleanups
+    /// are drained between packets, because they are O(1) and R13 does not let them
+    /// wait; state-changing requests are not, so the packets still in flight keep
+    /// describing the frame they were planned from (C1). A failed packet invalidates
+    /// the mirror and drops to `Absent`, and the next successful write cycle sends
+    /// all 101 LEDs again (R23).
     fn write_frame(&mut self, now: Instant) {
         let frame = self.compositor.compose();
         let diff = self.compositor.diff_against_mirror(&frame);
@@ -472,14 +525,14 @@ impl<S: DeviceSource> RenderThread<S> {
             return;
         }
         let was_invalid = !self.compositor.is_mirror_valid();
-        let packets = plan_packets(&diff, &frame);
+        let packets = plan_packets(&diff, &frame, self.timing.max_frame_packets);
 
         let Some(mut device) = self.device.take() else {
             return;
         };
         let mut failure = None;
         for packet in &packets {
-            self.drain_boundary();
+            self.drain_cleanups();
             let outcome =
                 device.set_leds(packet.start, &packet.colors, self.timing.command_timeout_ms);
             match outcome {
@@ -528,6 +581,16 @@ impl RenderHandle {
     pub fn is_shutting_down(&self) -> bool {
         self.shutdown.load(Ordering::SeqCst)
     }
+
+    /// Whether the render thread is still running.
+    ///
+    /// `panic = "abort"` is deliberately not set, so a panic in the render thread
+    /// leaves the rest of the process alive: the socket stays bound and the lock
+    /// stays held, and no replacement daemon can start while a frozen one holds
+    /// them. The daemon polls this so it can exit instead (C4).
+    pub fn is_running(&self) -> bool {
+        self.join.as_ref().is_some_and(|join| !join.is_finished())
+    }
 }
 
 impl Drop for RenderHandle {
@@ -566,6 +629,7 @@ mod tests {
     };
     use crate::device::FakeTransport;
     use crate::server::{boundary_channel, BoundaryCall, BoundaryRequest, BoundarySender};
+    use crate::sync::MutexExt;
     use crate::wire::{CompositeZIndex, ConnectionId};
 
     /// Firmware plus the observations a test wants: what was written, and whether a
@@ -585,6 +649,12 @@ mod tests {
             BoundarySender,
             std::sync::mpsc::Sender<crate::server::BoundaryResponse>,
         )>,
+        /// Subcommand whose answers are lost after the firmware has applied them.
+        swallow_answers_for_sub: Option<u8>,
+        /// Index of the SET packet after which a connection cleanup is injected.
+        inject_cleanup_at_set: Option<usize>,
+        /// The cleanup injected mid-repaint, sent once.
+        inject_cleanup: Option<(BoundarySender, ConnectionId)>,
         /// Wall time each write costs, so a watcher thread can observe ordering.
         write_delay: Duration,
     }
@@ -599,6 +669,9 @@ mod tests {
                 sets_since_frame: 0,
                 inject_at_set: None,
                 inject: None,
+                swallow_answers_for_sub: None,
+                inject_cleanup_at_set: None,
+                inject_cleanup: None,
                 write_delay: Duration::ZERO,
             }
         }
@@ -635,7 +708,7 @@ mod tests {
         }
 
         fn lock(&self) -> MutexGuard<'_, FakeDevice> {
-            self.0.lock().unwrap_or_else(|p| p.into_inner())
+            self.0.lock_unpoisoned()
         }
     }
 
@@ -651,21 +724,33 @@ mod tests {
                     failed = device.fail_set_at == Some(index);
                     if device.inject_at_set == Some(index) {
                         if let Some((sender, reply)) = device.inject.take() {
-                            let _ = sender.try_send_call(BoundaryCall {
-                                connection: ConnectionId(3),
-                                request: BoundaryRequest::GetStatus {
+                            let _ = sender.try_send_call(BoundaryCall::new(
+                                ConnectionId(3),
+                                BoundaryRequest::GetStatus {
                                     include_layers: false,
                                     include_composite_frame: false,
                                 },
                                 reply,
-                            });
+                            ));
+                        }
+                    }
+                    if device.inject_cleanup_at_set == Some(index) {
+                        if let Some((sender, connection)) = device.inject_cleanup.take() {
+                            sender.send_connection_closed(connection);
                         }
                     }
                 }
                 let outcome = if failed {
                     Err(DeviceError::Io("simulated mid-frame packet failure".into()))
                 } else {
-                    device.firmware.write_payload(payload)
+                    let outcome = device.firmware.write_payload(payload);
+                    // The firmware applied the command and then its answer was
+                    // lost on the way back, which is a different hazard from a
+                    // device that stopped listening.
+                    if device.swallow_answers_for_sub == Some(payload[1]) {
+                        device.firmware.rx_queue.pop_back();
+                    }
+                    outcome
                 };
                 (outcome, device.write_delay)
             };
@@ -730,22 +815,39 @@ mod tests {
                 receiver,
                 FakeSource::new(device.clone()),
             );
+            // Host and firmware start from one instant so every later advance moves
+            // both by the same amount (H2).
+            let now = Instant::now();
+            device.lock().firmware.simulated_now = Some(now);
             Self {
                 render,
                 device,
                 sender,
-                now: Instant::now(),
+                now,
             }
         }
 
+        /// Runs one tick and moves both clocks one tick period on.
+        ///
+        /// The firmware's simulated clock has to move with the host's: a fake that
+        /// froze the device's notion of time while ticks accumulated would never
+        /// let a deadline pass, and the watchdog paths it is supposed to exercise
+        /// would go untested (H2).
         fn tick(&mut self) {
             self.render.tick_at(self.now);
-            self.now += self.render.timing().tick_period;
+            self.advance(self.render.timing().tick_period);
         }
 
         fn advance(&mut self, by: Duration) {
             self.now += by;
             self.device.lock().firmware.advance_time(by);
+        }
+
+        /// Moves both clocks past the firmware's armed deadline, so the next
+        /// heartbeat is late and the firmware takes the regions back.
+        fn advance_past_the_firmware_deadline(&mut self) {
+            let deadline = self.render.timing().deadline;
+            self.advance(deadline + Duration::from_millis(50));
         }
 
         /// Drives the machine to `DirectAll` with the base frame committed.
@@ -762,11 +864,7 @@ mod tests {
     ) -> std::sync::mpsc::Receiver<crate::server::BoundaryResponse> {
         let (reply, rx) = std::sync::mpsc::channel();
         sender
-            .try_send_call(BoundaryCall {
-                connection,
-                request,
-                reply,
-            })
+            .try_send_call(BoundaryCall::new(connection, request, reply))
             .expect("boundary must accept the call");
         rx
     }
@@ -829,7 +927,8 @@ mod tests {
             device.present = false;
             device.firmware.drop_responses = true;
         }
-        h.advance(Duration::from_millis(200));
+        // Past the heartbeat period, so the tick actually reaches for the device.
+        h.advance(h.render.timing().heartbeat_interval);
         h.tick();
         assert_eq!(h.render.state(), DeviceStateKind::Absent);
         assert!(!h.render.compositor().is_mirror_valid());
@@ -867,7 +966,7 @@ mod tests {
     fn test_entry_and_reentry_always_request_region_all() {
         let mut h = Harness::new();
         h.settle();
-        h.advance(Duration::from_millis(400));
+        h.advance_past_the_firmware_deadline();
         h.tick(); // heartbeat is rejected, re-entry follows
         h.tick();
 
@@ -893,7 +992,7 @@ mod tests {
 
         // Past the firmware deadline: the next heartbeat is rejected and the
         // firmware takes the regions back.
-        h.advance(Duration::from_millis(400));
+        h.advance_past_the_firmware_deadline();
         h.tick();
 
         assert_eq!(h.render.state(), DeviceStateKind::DirectAll);
@@ -974,6 +1073,8 @@ mod tests {
             device.fail_set_at = None;
             device.clear_log();
         }
+        // The write failure armed a retry delay, so the reopen waits for it (B4).
+        h.advance(h.render.timing().probe_backoff_initial + Duration::from_millis(10));
         h.tick();
 
         let device = h.device.lock();
@@ -981,11 +1082,102 @@ mod tests {
         assert_eq!(device.leds_written(), HOSTRGB_LED_COUNT);
     }
 
+    /// Test scenario: 쓰기가 계속 실패해도 tick마다 재개방·재프로브·재진입을 반복하지
+    /// 않고 간격을 늘려 간다 (B4).
+    #[test]
+    fn test_persistent_write_failure_backs_off_instead_of_hammering() {
+        let mut h = Harness::new();
+        h.device.lock().fail_set_at = Some(0);
+
+        h.tick();
+        assert_eq!(h.render.state(), DeviceStateKind::Absent);
+        let probes_after_first_failure = h.render.stats().probes_sent;
+        assert_eq!(probes_after_first_failure, 1);
+
+        // Four more tick periods stay inside the first backoff window.
+        for _ in 0..4 {
+            h.tick();
+        }
+        assert_eq!(
+            h.render.stats().probes_sent,
+            probes_after_first_failure,
+            "the backoff must hold the reopen back, not one reopen per tick"
+        );
+
+        h.advance(h.render.timing().probe_backoff_initial);
+        h.tick();
+        assert_eq!(
+            h.render.stats().probes_sent,
+            probes_after_first_failure + 1,
+            "once the window passes, the daemon tries again"
+        );
+    }
+
+    /// Test scenario: MODE 응답이 유실되어 호스트가 `Absent`로 내려가도, 장치에는
+    /// `MODE(0)` 정리가 나가 사용자의 저장된 효과가 돌아온다 (B3, R5).
+    #[test]
+    fn test_a_lost_mode_answer_still_sends_the_mode_zero_cleanup() {
+        let mut h = Harness::new();
+        h.settle();
+
+        // Only MODE answers are lost from here on. The firmware still applies them,
+        // which is the hazard: it holds direct mode and the host cannot tell.
+        {
+            let mut device = h.device.lock();
+            device.clear_log();
+            device.swallow_answers_for_sub = Some(HOSTRGB_SUB_MODE);
+        }
+        // A late heartbeat is answered and rejected, so the machine reaches
+        // `Entering`; the MODE it then sends is applied and goes unanswered.
+        h.advance_past_the_firmware_deadline();
+        h.tick();
+
+        assert_eq!(
+            h.render.state(),
+            DeviceStateKind::Absent,
+            "a lost MODE answer reads as an I/O failure"
+        );
+        let device = h.device.lock();
+        let modes: Vec<_> = device
+            .written
+            .iter()
+            .filter(|p| p[1] == HOSTRGB_SUB_MODE)
+            .collect();
+        assert_eq!(
+            modes.last().map(|m| m[2]),
+            Some(0),
+            "the last MODE on the wire must be the MODE(0) cleanup, got {modes:?}"
+        );
+        assert_eq!(
+            device.firmware.regions, 0,
+            "the device must not be left holding direct mode"
+        );
+    }
+
     /// Test scenario: 개정 2가 아닌 프로브 응답에서는 모드 명령이 한 번도 나가지 않는다. Covers AE14.
     #[test]
     fn test_incompatible_firmware_never_sends_mode() {
         let mut h = Harness::new();
         h.device.lock().firmware.protocol_revision = 1;
+
+        for _ in 0..5 {
+            h.tick();
+        }
+
+        assert_eq!(h.render.state(), DeviceStateKind::Incompatible);
+        let device = h.device.lock();
+        assert_eq!(device.subcommands(HOSTRGB_SUB_MODE), 0);
+        assert_eq!(device.subcommands(HOSTRGB_SUB_SET), 0);
+    }
+
+    /// Test scenario: 개정이 2라도 보고된 LED 기하가 다르면 direct mode에 들어가지 않는다.
+    /// Covers G3.
+    #[test]
+    fn test_firmware_with_a_different_led_geometry_never_sends_mode() {
+        let mut h = Harness::new();
+        // Revision 2, but 96 LEDs: writing this device at the renderer's addresses
+        // would paint the wrong LEDs.
+        h.device.lock().firmware.reported_geometry = (96, 9, 89);
 
         for _ in 0..5 {
             h.tick();
@@ -1112,10 +1304,15 @@ mod tests {
         );
     }
 
-    /// Test scenario: 전체 재도색이 진행되는 동안 도착한 요청이 그 재도색이 끝나기 전에
-    /// 응답을 받는다.
+    /// Test scenario: 재도색 중에 도착한 상태 변경 호출은 그 재도색 안에서 적용되지 않고
+    /// 다음 tick 경계에서 처리된다 (C1).
+    ///
+    /// Draining calls between packets would run arbitrary compositing inside the
+    /// window `F_budget` is supposed to bound, and would change the composite while
+    /// stale packets were still going out, so the hardware mirror would end up
+    /// describing a frame the keyboard never received.
     #[test]
-    fn test_requests_arriving_during_a_repaint_are_answered_within_it() {
+    fn test_calls_arriving_during_a_repaint_wait_for_the_tick_boundary() {
         let mut h = Harness::new();
         h.settle();
         h.device.lock().clear_log();
@@ -1140,13 +1337,25 @@ mod tests {
 
         let watcher = std::thread::spawn(move || {
             let response = rx
-                .recv_timeout(Duration::from_secs(2))
-                .expect("the render thread must answer during the repaint");
+                .recv_timeout(Duration::from_secs(5))
+                .expect("the render thread must answer at the next tick");
             let packets = device.lock().subcommands(HOSTRGB_SUB_SET);
-            *recorder.lock().unwrap_or_else(|p| p.into_inner()) = Some(packets);
+            *recorder.lock_unpoisoned() = Some(packets);
             response
         });
 
+        h.tick();
+        assert_eq!(
+            h.device.lock().subcommands(HOSTRGB_SUB_SET),
+            PACKETS_PER_FULL_FRAME,
+            "the repaint must complete without the queued call interrupting it"
+        );
+        assert!(
+            h.render.boundary.pending_calls() > 0,
+            "the call must still be queued when the repaint ends"
+        );
+
+        // The next tick drains it.
         h.tick();
         let response = watcher.join().expect("watcher thread must finish");
         assert!(matches!(
@@ -1155,16 +1364,69 @@ mod tests {
         ));
 
         let packets_at_answer = answered_after
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+            .lock_unpoisoned()
             .expect("the answer must have been observed");
         assert!(
-            packets_at_answer < PACKETS_PER_FULL_FRAME,
-            "the request was answered only after the whole repaint ({packets_at_answer} packets in)"
+            packets_at_answer >= PACKETS_PER_FULL_FRAME,
+            "the call was applied inside the repaint ({packets_at_answer} packets in)"
+        );
+    }
+
+    /// Test scenario: 재도색 중에 들어온 연결 정리는 패킷 사이에서 곧바로 처리된다
+    /// (C1, R13).
+    #[test]
+    fn test_connection_cleanup_is_drained_between_packets() {
+        let mut h = Harness::new();
+        h.settle();
+
+        // A client paints one LED, so its layer is visible in the composite.
+        let rx = call(
+            &h.sender,
+            ConnectionId(3),
+            BoundaryRequest::RegisterLayer {
+                name: "doomed".to_string(),
+                z_order: CompositeZIndex(1),
+                lifetime: None,
+            },
+        );
+        h.tick();
+        let layer = match rx.try_recv().expect("register must answer") {
+            crate::server::BoundaryResponse::LayerRegistered(id) => id,
+            other => panic!("unexpected response: {other:?}"),
+        };
+        let _rx = call(
+            &h.sender,
+            ConnectionId(3),
+            BoundaryRequest::UpdateLayer {
+                layer,
+                set_pixels: vec![(5, Color::rgb(9, 9, 9))],
+                retract_leds: vec![],
+            },
+        );
+        h.tick();
+        assert_eq!(h.render.compositor().layer_count(), 1);
+
+        // Force a full repaint, and let the connection die as its second packet
+        // goes out.
+        h.render.compositor.invalidate_mirror();
+        {
+            let mut device = h.device.lock();
+            device.clear_log();
+            device.inject_cleanup_at_set = Some(1);
+            device.inject_cleanup = Some((h.sender.clone(), ConnectionId(3)));
+        }
+
+        h.tick();
+
+        assert_eq!(
+            h.render.compositor().layer_count(),
+            0,
+            "cleanup must not wait for the repaint to finish (R13)"
         );
         assert_eq!(
             h.device.lock().subcommands(HOSTRGB_SUB_SET),
-            PACKETS_PER_FULL_FRAME
+            PACKETS_PER_FULL_FRAME,
+            "the repaint in flight still completes"
         );
     }
 
@@ -1243,7 +1505,7 @@ mod tests {
             .collect();
         assert_eq!(diff.len(), 12);
 
-        let packets = plan_packets(&diff, &frame);
+        let packets = plan_packets(&diff, &frame, timing.max_frame_packets);
         assert!(packets.len() <= timing.max_frame_packets);
 
         // Scattered every second LED: 51 changed LEDs, more round trips than a full
@@ -1260,7 +1522,7 @@ mod tests {
             })
             .collect();
         assert_eq!(diff.len(), 51);
-        let packets = plan_packets(&diff, &frame);
+        let packets = plan_packets(&diff, &frame, timing.max_frame_packets);
         assert!(
             packets.len() <= timing.max_frame_packets,
             "{} packets exceeds the {}-packet cap",
@@ -1275,13 +1537,17 @@ mod tests {
         assert!(worst + timing.tick_period + timing.jitter_allowance < timing.deadline / 2);
     }
 
-    /// A diff that would need more packets than a repaint becomes a repaint.
+    /// A diff that would need more packets than the cap allows becomes a repaint.
+    ///
+    /// The cap has to be crossed for the fallback to run at all. A diff that only
+    /// reaches it takes the ordinary path, so a test built on one could not fail.
     #[test]
     fn test_pathologically_sparse_diff_falls_back_to_a_full_repaint() {
         let mut frame = [Color::BLACK; GEM80_TOTAL_LEDS];
+        // One changed LED per nine-LED window: the most packets any diff over 101
+        // LEDs can need, which is exactly the full-frame count.
         let diff: Vec<LedDiff> = (0..GEM80_TOTAL_LEDS)
             .step_by(HOSTRGB_LEDS_PER_PACKET)
-            .take(13)
             .map(|led_index| {
                 frame[led_index] = Color::rgb(7, 7, 7);
                 LedDiff {
@@ -1290,11 +1556,59 @@ mod tests {
                 }
             })
             .collect();
+        assert_eq!(diff.len(), PACKETS_PER_FULL_FRAME);
 
-        let packets = plan_packets(&diff, &frame);
-        assert!(packets.len() <= PACKETS_PER_FULL_FRAME);
-        let covered: usize = packets.iter().map(|p| p.colors.len()).sum();
-        assert!(covered <= HOSTRGB_LED_COUNT);
+        // At the cap, the sparse plan stands: 12 one-LED packets, not a repaint.
+        let at_cap = plan_packets(&diff, &frame, PACKETS_PER_FULL_FRAME);
+        assert_eq!(at_cap.len(), PACKETS_PER_FULL_FRAME);
+        assert!(at_cap.iter().all(|p| p.colors.len() == 1));
+
+        // Past it, the planner sends the whole frame instead.
+        let over_cap = plan_packets(&diff, &frame, PACKETS_PER_FULL_FRAME - 1);
+        assert_eq!(over_cap, full_frame_packets(&frame));
+        let covered: usize = over_cap.iter().map(|p| p.colors.len()).sum();
+        assert_eq!(covered, HOSTRGB_LED_COUNT);
+    }
+
+    /// The cap is read from the caller's timing, not from the default constants,
+    /// so `F_budget` and the planner can never disagree (C2).
+    #[test]
+    fn test_the_packet_cap_comes_from_the_timing_in_force() {
+        let timing = Timing {
+            max_frame_packets: 2,
+            // Fewer packets than the default leaves the invariant satisfied.
+            ..Timing::DEFAULT
+        };
+        assert!(timing.invariant_holds());
+
+        let device = SharedDevice::new();
+        let (_sender, receiver) = boundary_channel(16);
+        let mut render = RenderThread::with_timing(
+            Compositor::with_base_color(Color::rgb(4, 4, 4)),
+            receiver,
+            FakeSource::new(device.clone()),
+            timing,
+        );
+        render.tick();
+        assert_eq!(render.state(), DeviceStateKind::DirectAll);
+        device.lock().clear_log();
+
+        // Three scattered LEDs would need three packets, one over this cap.
+        render
+            .compositor
+            .set_base_pixels([
+                (0, Color::rgb(1, 1, 1)),
+                (40, Color::rgb(2, 2, 2)),
+                (80, Color::rgb(3, 3, 3)),
+            ])
+            .expect("base pixels are in range");
+        render.tick();
+
+        assert_eq!(
+            device.lock().subcommands(HOSTRGB_SUB_SET),
+            PACKETS_PER_FULL_FRAME,
+            "a diff over this instance's cap must fall back to a full repaint"
+        );
     }
 
     /// Consecutive changed LEDs share one packet instead of one packet each.
@@ -1311,7 +1625,7 @@ mod tests {
             })
             .collect();
 
-        let packets = plan_packets(&diff, &frame);
+        let packets = plan_packets(&diff, &frame, Timing::DEFAULT.max_frame_packets);
         assert_eq!(packets.len(), 1);
         assert_eq!(packets[0].start, 10);
         assert_eq!(packets[0].colors.len(), 5);

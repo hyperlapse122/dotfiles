@@ -31,27 +31,38 @@ enum ColorDef {
     Hex(String),
 }
 
-fn parse_hex_color(s: &str) -> Result<Color, String> {
+/// Parses `#RGB`, `#RRGGBB`, `RGB`, or `RRGGBB` into a color.
+///
+/// Every bad input is an error, never a panic: configuration parsing has to fall
+/// back to the built-in base layer whatever the file says (R8, AE18), and the same
+/// function backs the CLI's `--color`. Byte length alone would not do — slicing a
+/// six-byte string of multi-byte characters would land inside a character.
+pub fn parse_hex_color(s: &str) -> Result<Color, String> {
     let hex = s.trim().trim_start_matches('#');
-    match hex.len() {
-        6 => {
-            let r = u8::from_str_radix(&hex[0..2], 16)
-                .map_err(|e| format!("invalid red hex in '{s}': {e}"))?;
-            let g = u8::from_str_radix(&hex[2..4], 16)
-                .map_err(|e| format!("invalid green hex in '{s}': {e}"))?;
-            let b = u8::from_str_radix(&hex[4..6], 16)
-                .map_err(|e| format!("invalid blue hex in '{s}': {e}"))?;
-            Ok(Color::new(r, g, b))
-        }
-        3 => {
-            let r = u8::from_str_radix(&hex[0..1], 16)
-                .map_err(|e| format!("invalid red hex in '{s}': {e}"))?;
-            let g = u8::from_str_radix(&hex[1..2], 16)
-                .map_err(|e| format!("invalid green hex in '{s}': {e}"))?;
-            let b = u8::from_str_radix(&hex[2..3], 16)
-                .map_err(|e| format!("invalid blue hex in '{s}': {e}"))?;
-            Ok(Color::new(r * 17, g * 17, b * 17))
-        }
+    let digits: &[u8] = hex.as_bytes();
+    if !hex.is_ascii() {
+        return Err(format!(
+            "invalid hex color '{s}': expected ASCII hex digits"
+        ));
+    }
+
+    let channel = |bytes: &[u8], name: &str| -> Result<u8, String> {
+        let text =
+            std::str::from_utf8(bytes).map_err(|e| format!("invalid {name} hex in '{s}': {e}"))?;
+        u8::from_str_radix(text, 16).map_err(|e| format!("invalid {name} hex in '{s}': {e}"))
+    };
+
+    match digits.len() {
+        6 => Ok(Color::new(
+            channel(&digits[0..2], "red")?,
+            channel(&digits[2..4], "green")?,
+            channel(&digits[4..6], "blue")?,
+        )),
+        3 => Ok(Color::new(
+            channel(&digits[0..1], "red")? * 17,
+            channel(&digits[1..2], "green")? * 17,
+            channel(&digits[2..3], "blue")? * 17,
+        )),
         other => Err(format!(
             "invalid hex color '{s}': expected 3 or 6 hex digits, got {other}"
         )),
@@ -224,18 +235,17 @@ impl Config {
     /// alongside the default configuration so the caller can observe what went wrong.
     pub fn load_from_path_or_default(path: impl AsRef<Path>) -> (Self, Option<ConfigError>) {
         let path = path.as_ref();
-        if !path.exists() {
-            log::info!(
-                "Config file not found at {}; using built-in default base layer",
-                path.display()
-            );
-            return (Self::default(), None);
-        }
-
         match Self::load_from_path(path) {
             Ok(cfg) => {
                 log::info!("Loaded base layer configuration from {}", path.display());
                 (cfg, None)
+            }
+            Err(ConfigError::Io(_, e)) if e.kind() == std::io::ErrorKind::NotFound => {
+                log::info!(
+                    "Config file not found at {}; using built-in default base layer",
+                    path.display()
+                );
+                (Self::default(), None)
             }
             Err(err) => {
                 log::warn!(
@@ -372,6 +382,45 @@ side_color = [110, 120, 130]
         assert_eq!(base_layer.pixels.get(&5), Some(&Color::new(200, 201, 202)));
         assert_eq!(base_layer.pixels.get(&0), Some(&Color::new(80, 90, 100)));
         assert_eq!(base_layer.pixels.get(&90), Some(&Color::new(110, 120, 130)));
+    }
+
+    /// Test scenario: 어떤 나쁜 색 문자열도 오류로 끝나고 패닉하지 않는다 (G1, R8, AE18).
+    #[test]
+    fn test_bad_hex_colors_are_errors_not_panics() {
+        // Six bytes, two characters: byte-length alone would slice mid-character.
+        for input in ["한글", "#한글", "가나다", "ßßß", "ßßßßßß"] {
+            let err = parse_hex_color(input).expect_err("non-ASCII input must be rejected");
+            assert!(
+                err.contains("invalid hex color"),
+                "unexpected error for {input:?}: {err}"
+            );
+        }
+
+        for input in ["", "#", "12", "1234567", "#zz00ff", "gg0"] {
+            assert!(
+                parse_hex_color(input).is_err(),
+                "{input:?} must be rejected"
+            );
+        }
+
+        assert_eq!(parse_hex_color("#0A0b0C").unwrap(), Color::new(10, 11, 12));
+        assert_eq!(parse_hex_color(" f0a ").unwrap(), Color::new(255, 0, 170));
+    }
+
+    /// A configuration whose colour is unparseable still leaves the daemon with a
+    /// usable base layer rather than taking the process down (R8, AE18).
+    #[test]
+    fn test_non_ascii_color_in_toml_falls_back_to_the_default_base_layer() {
+        let temp_dir = test_dir("gem80-cfg-test-nonascii");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let path = temp_dir.join("nonascii.toml");
+        std::fs::write(&path, "[base]\ncolor = \"한글\"\n".as_bytes()).unwrap();
+
+        let (config, err) = Config::load_from_path_or_default(&path);
+        assert!(err.is_some(), "an unparseable colour must be observable");
+        assert_eq!(config.base.color, crate::compositor::DEFAULT_BASE_COLOR);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

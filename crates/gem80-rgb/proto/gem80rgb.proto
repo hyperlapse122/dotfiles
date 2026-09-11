@@ -160,11 +160,3 @@ message ServerMessage {
     RejectionResponse rejection = 7;
   }
 }
-
-// Unified control message container (supports decoding either side).
-message ControlMessage {
-  oneof message {
-    ClientMessage client = 1;
-    ServerMessage server = 2;
-  }
-}

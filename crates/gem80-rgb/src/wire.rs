@@ -1,7 +1,6 @@
 //! Wire protocol framing, protobuf message definitions, and fixed pixel frames.
 
 use prost::Message;
-use std::collections::HashMap;
 use std::io::{Read, Write};
 
 pub mod proto {
@@ -9,10 +8,10 @@ pub mod proto {
 }
 
 pub use proto::{
-    BlendMode, ClientMessage, ControlMessage, DeviceState, GetStatusRequest, GetStatusResponse,
-    LayerSummary, LedColor, RegisterLayerRequest, RegisterLayerResponse, RejectionReason,
-    RejectionResponse, ReleaseLayerRequest, ReleaseLayerResponse, RetractPixelsRequest,
-    RetractPixelsResponse, ServerMessage, UpdateLayerRequest, UpdateLayerResponse,
+    BlendMode, ClientMessage, DeviceState, GetStatusRequest, GetStatusResponse, LayerSummary,
+    LedColor, RegisterLayerRequest, RegisterLayerResponse, RejectionReason, RejectionResponse,
+    ReleaseLayerRequest, ReleaseLayerResponse, RetractPixelsRequest, RetractPixelsResponse,
+    ServerMessage, UpdateLayerRequest, UpdateLayerResponse,
 };
 
 /// Big-endian 4-byte length prefix configuration (Approach 1b).
@@ -99,6 +98,13 @@ pub enum FramingError {
     EmptyFrame,
     #[error("Unknown message discriminator: {0:#04x}")]
     InvalidDiscriminator(u8),
+    /// The read timeout expired with no frame started.
+    ///
+    /// Distinct from [`FramingError::Io`], which covers a timeout that landed
+    /// mid-frame: there the stream position is lost and the connection has to go,
+    /// while here nothing was in flight and the caller may decide to keep waiting.
+    #[error("Read timed out with no frame in progress")]
+    IdleTimeout,
     #[error("I/O error: {0}")]
     Io(String),
 }
@@ -112,19 +118,6 @@ pub enum PixelFrameError {
     InvalidPayloadLength { expected: usize, actual: usize },
     #[error("Invalid pixel count: expected {expected}, got {actual}")]
     InvalidPixelCount { expected: u16, actual: u16 },
-}
-
-/// Layer ownership validation errors (Approach 1b).
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum LayerOwnershipError {
-    #[error("Connection {connection:?} is not the owner of layer {layer_id:?} (actual owner: {actual_owner:?})")]
-    NotOwner {
-        connection: ConnectionId,
-        layer_id: LayerId,
-        actual_owner: Option<ConnectionId>,
-    },
-    #[error("Layer {0:?} not found in ownership registry")]
-    LayerNotFound(LayerId),
 }
 
 /// High-level errors across the wire module.
@@ -143,8 +136,6 @@ pub enum WireError {
         expected: WireMessageDiscriminator,
         actual: WireMessageDiscriminator,
     },
-    #[error(transparent)]
-    Ownership(#[from] LayerOwnershipError),
 }
 
 /// Fixed pixel frame bypassing Protobuf serialization (Approach 1b, KTD5).
@@ -236,95 +227,19 @@ impl FixedPixelFrame {
     }
 }
 
-/// Daemon-side registry tracking layer issuance and connection ownership (Approach 1b).
-#[derive(Debug, Default)]
-pub struct LayerOwnershipRegistry {
-    next_id: u32,
-    layer_to_owner: HashMap<LayerId, ConnectionId>,
-}
-
-impl LayerOwnershipRegistry {
-    pub fn new() -> Self {
-        Self {
-            next_id: 1,
-            layer_to_owner: HashMap::new(),
-        }
+/// Reads a 4-byte big-endian length prefix and rejects empty and oversized frames.
+fn decode_payload_len(len_bytes: [u8; LENGTH_PREFIX_WIDTH_BYTES]) -> Result<usize, FramingError> {
+    let payload_len = u32::from_be_bytes(len_bytes) as usize;
+    if payload_len == 0 {
+        return Err(FramingError::EmptyFrame);
     }
-
-    /// Allocates a new unique layer ID for the given client connection.
-    pub fn allocate_layer_id(&mut self, owner: ConnectionId) -> LayerId {
-        let id = LayerId(self.next_id);
-        self.next_id = self.next_id.checked_add(1).expect("layer ID exhaustion");
-        self.layer_to_owner.insert(id, owner);
-        id
-    }
-
-    /// Explicitly registers an existing layer ID for a connection (used during state reload).
-    pub fn register_with_id(
-        &mut self,
-        owner: ConnectionId,
-        layer: LayerId,
-    ) -> Result<(), LayerOwnershipError> {
-        if let Some(existing) = self.layer_to_owner.get(&layer) {
-            if *existing != owner {
-                return Err(LayerOwnershipError::NotOwner {
-                    connection: owner,
-                    layer_id: layer,
-                    actual_owner: Some(*existing),
-                });
-            }
-        }
-        self.layer_to_owner.insert(layer, owner);
-        Ok(())
-    }
-
-    /// Checks whether the connection owns the referenced layer ID.
-    pub fn check_ownership(
-        &self,
-        connection: ConnectionId,
-        layer: LayerId,
-    ) -> Result<(), LayerOwnershipError> {
-        match self.layer_to_owner.get(&layer) {
-            Some(&owner) if owner == connection => Ok(()),
-            Some(&owner) => Err(LayerOwnershipError::NotOwner {
-                connection,
-                layer_id: layer,
-                actual_owner: Some(owner),
-            }),
-            None => Err(LayerOwnershipError::LayerNotFound(layer)),
-        }
-    }
-
-    /// Releases a layer ID, verifying connection ownership first.
-    pub fn release_layer(
-        &mut self,
-        connection: ConnectionId,
-        layer: LayerId,
-    ) -> Result<(), LayerOwnershipError> {
-        self.check_ownership(connection, layer)?;
-        self.layer_to_owner.remove(&layer);
-        Ok(())
-    }
-
-    /// Releases all layers owned by a connection (called when a client disconnects, R13).
-    pub fn release_all_for_connection(&mut self, connection: ConnectionId) -> Vec<LayerId> {
-        let mut released = Vec::new();
-        self.layer_to_owner.retain(|&layer, owner| {
-            if *owner == connection {
-                released.push(layer);
-                false
-            } else {
-                true
-            }
+    if payload_len > MAX_FRAME_PAYLOAD_BYTES {
+        return Err(FramingError::OversizedFrame {
+            size: payload_len,
+            max: MAX_FRAME_PAYLOAD_BYTES,
         });
-        released.sort();
-        released
     }
-
-    /// Query if a connection owns a layer ID.
-    pub fn is_owner(&self, connection: ConnectionId, layer: LayerId) -> bool {
-        self.check_ownership(connection, layer).is_ok()
-    }
+    Ok(payload_len)
 }
 
 /// Encodes a framed message with a 4-byte big-endian length prefix and a 1-byte discriminator.
@@ -356,17 +271,7 @@ pub fn decode_frame(frame_bytes: &[u8]) -> Result<(WireMessageDiscriminator, &[u
         .into());
     }
     let payload_len =
-        u32::from_be_bytes(frame_bytes[..LENGTH_PREFIX_WIDTH_BYTES].try_into().unwrap()) as usize;
-    if payload_len == 0 {
-        return Err(FramingError::EmptyFrame.into());
-    }
-    if payload_len > MAX_FRAME_PAYLOAD_BYTES {
-        return Err(FramingError::OversizedFrame {
-            size: payload_len,
-            max: MAX_FRAME_PAYLOAD_BYTES,
-        }
-        .into());
-    }
+        decode_payload_len(frame_bytes[..LENGTH_PREFIX_WIDTH_BYTES].try_into().unwrap())?;
     let total_expected = LENGTH_PREFIX_WIDTH_BYTES + payload_len;
     if frame_bytes.len() < total_expected {
         return Err(FramingError::Truncated {
@@ -420,7 +325,19 @@ pub fn read_frame<R: Read>(
     }
 }
 
+/// Whether an I/O error is a read timeout on a socket that carries one.
+fn is_read_timeout(e: &std::io::Error) -> bool {
+    matches!(
+        e.kind(),
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+    )
+}
+
 /// Reads a frame from a stream, returning `Ok(None)` cleanly on immediate EOF before any bytes are read.
+///
+/// A read timeout that arrives before the first byte of the length prefix is
+/// reported as [`FramingError::IdleTimeout`], so a caller that bounds an idle
+/// connection can tell "said nothing yet" from "stopped mid-frame".
 pub fn read_frame_optional<R: Read>(
     reader: &mut R,
 ) -> Result<Option<(WireMessageDiscriminator, Vec<u8>)>, FramingError> {
@@ -439,20 +356,14 @@ pub fn read_frame_optional<R: Read>(
             }
             Ok(n) => read_bytes += n,
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) if read_bytes == 0 && is_read_timeout(&e) => {
+                return Err(FramingError::IdleTimeout)
+            }
             Err(e) => return Err(FramingError::Io(e.to_string())),
         }
     }
 
-    let payload_len = u32::from_be_bytes(len_buf) as usize;
-    if payload_len == 0 {
-        return Err(FramingError::EmptyFrame);
-    }
-    if payload_len > MAX_FRAME_PAYLOAD_BYTES {
-        return Err(FramingError::OversizedFrame {
-            size: payload_len,
-            max: MAX_FRAME_PAYLOAD_BYTES,
-        });
-    }
+    let payload_len = decode_payload_len(len_buf)?;
 
     let mut payload = vec![0u8; payload_len];
     let mut payload_read = 0;
@@ -501,16 +412,7 @@ impl FrameDecoder {
         }
         let len_bytes: [u8; LENGTH_PREFIX_WIDTH_BYTES] =
             self.buffer[..LENGTH_PREFIX_WIDTH_BYTES].try_into().unwrap();
-        let payload_len = u32::from_be_bytes(len_bytes) as usize;
-        if payload_len == 0 {
-            return Err(FramingError::EmptyFrame);
-        }
-        if payload_len > MAX_FRAME_PAYLOAD_BYTES {
-            return Err(FramingError::OversizedFrame {
-                size: payload_len,
-                max: MAX_FRAME_PAYLOAD_BYTES,
-            });
-        }
+        let payload_len = decode_payload_len(len_bytes)?;
         let total_frame_len = LENGTH_PREFIX_WIDTH_BYTES + payload_len;
         if self.buffer.len() < total_frame_len {
             return Ok(None);
@@ -578,24 +480,6 @@ pub fn decode_server_frame(frame_bytes: &[u8]) -> Result<ServerMessage, WireErro
         });
     }
     ServerMessage::decode(body).map_err(WireError::ProtobufDecode)
-}
-
-/// Encodes a unified `ControlMessage` into a framed wire byte buffer.
-pub fn encode_control_frame(msg: &ControlMessage) -> Result<Vec<u8>, WireError> {
-    let body = msg.encode_to_vec();
-    encode_frame(WireMessageDiscriminator::Control, &body).map_err(WireError::Framing)
-}
-
-/// Decodes a unified `ControlMessage` from a framed wire byte slice.
-pub fn decode_control_frame(frame_bytes: &[u8]) -> Result<ControlMessage, WireError> {
-    let (discriminator, body) = decode_frame(frame_bytes)?;
-    if discriminator != WireMessageDiscriminator::Control {
-        return Err(WireError::DiscriminatorMismatch {
-            expected: WireMessageDiscriminator::Control,
-            actual: discriminator,
-        });
-    }
-    ControlMessage::decode(body).map_err(WireError::ProtobufDecode)
 }
 
 /// Encodes a `FixedPixelFrame` into a framed wire byte buffer.
@@ -765,36 +649,6 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_ownership_check_catches_other_connection() {
-        let mut registry = LayerOwnershipRegistry::new();
-        let conn1 = ConnectionId(1);
-        let conn2 = ConnectionId(2);
-
-        let layer1 = registry.allocate_layer_id(conn1);
-        assert!(registry.check_ownership(conn1, layer1).is_ok());
-
-        let err = registry
-            .check_ownership(conn2, layer1)
-            .expect_err("conn2 should not own layer1");
-        assert_eq!(
-            err,
-            LayerOwnershipError::NotOwner {
-                connection: conn2,
-                layer_id: layer1,
-                actual_owner: Some(conn1),
-            }
-        );
-
-        // Connection 1 can release its own layer
-        assert!(registry.release_layer(conn1, layer1).is_ok());
-        // Layer is now gone
-        let err_not_found = registry
-            .check_ownership(conn1, layer1)
-            .expect_err("released layer not found");
-        assert_eq!(err_not_found, LayerOwnershipError::LayerNotFound(layer1));
-    }
-
-    #[test]
     fn test_discriminator_distinguishes_control_and_pixel_frame() {
         let control_msg = ClientMessage {
             request_id: 1,
@@ -884,29 +738,6 @@ mod tests {
         let (disc, body) = read_frame(&mut cursor).unwrap();
         assert_eq!(disc, WireMessageDiscriminator::Control);
         assert_eq!(body, data);
-    }
-
-    #[test]
-    fn test_ownership_release_all_on_disconnect() {
-        let mut registry = LayerOwnershipRegistry::new();
-        let conn1 = ConnectionId(1);
-        let conn2 = ConnectionId(2);
-
-        let l1 = registry.allocate_layer_id(conn1);
-        let l2 = registry.allocate_layer_id(conn1);
-        let l3 = registry.allocate_layer_id(conn2);
-
-        assert!(registry.is_owner(conn1, l1));
-        assert!(registry.is_owner(conn1, l2));
-        assert!(registry.is_owner(conn2, l3));
-
-        // When conn1 disconnects, release all its layers (R13)
-        let released = registry.release_all_for_connection(conn1);
-        assert_eq!(released, vec![l1, l2]);
-
-        assert!(!registry.is_owner(conn1, l1));
-        assert!(!registry.is_owner(conn1, l2));
-        assert!(registry.is_owner(conn2, l3)); // conn2 untouched
     }
 
     #[test]

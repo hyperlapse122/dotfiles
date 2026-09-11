@@ -81,23 +81,6 @@ impl<T: Transport> Gem80Device<T> {
         parse_set_response(&resp)
     }
 
-    /// Send a full 101-LED frame, chunked into exactly 12 packets via SET (0x60 0x02).
-    ///
-    /// Each packet is written and its response read and verified sequentially.
-    /// If any packet fails or times out, transmission halts and returns the error immediately.
-    pub fn send_frame(
-        &mut self,
-        colors: &[(u8, u8, u8); HOSTRGB_LED_COUNT],
-        timeout_ms: u32,
-    ) -> Result<(), DeviceError> {
-        let packets = build_frame_packets(colors);
-        for packet in packets {
-            let resp = self.transport.exchange(&packet, timeout_ms)?;
-            parse_set_response(&resp)?;
-        }
-        Ok(())
-    }
-
     /// Send a watchdog HEARTBEAT (0x60 0x03) before the previous deadline expires.
     ///
     /// `deadline_ms` is the new watchdog deadline in milliseconds.
@@ -164,23 +147,6 @@ mod tests {
     }
 
     #[test]
-    fn test_device_send_frame_updates_all_101_leds() {
-        let transport = FakeTransport::new();
-        let mut dev = Gem80Device::new(transport);
-
-        let mut frame = [(0u8, 0u8, 0u8); HOSTRGB_LED_COUNT];
-        for (i, c) in frame.iter_mut().enumerate() {
-            *c = (i as u8, (255 - i) as u8, ((i * 7) % 256) as u8);
-        }
-
-        dev.send_frame(&frame, 100)
-            .expect("send_frame must succeed");
-
-        // Verify the fake transport's LED buffer matches the sent frame
-        assert_eq!(dev.transport().led_buffer, frame);
-    }
-
-    #[test]
     fn test_all_commands_timeout_when_device_silent() {
         let mut transport = FakeTransport::new();
         transport.drop_responses = true; // Transport never replies
@@ -224,17 +190,7 @@ mod tests {
             }
         );
 
-        // 5. send_frame
-        let frame = [(10, 20, 30); HOSTRGB_LED_COUNT];
-        let err_frame = dev.send_frame(&frame, timeout).unwrap_err();
-        assert_eq!(
-            err_frame,
-            DeviceError::Timeout {
-                timeout_ms: timeout
-            }
-        );
-
-        // 6. heartbeat
+        // 5. heartbeat
         let err_hb = dev.heartbeat(300, timeout).unwrap_err();
         assert_eq!(
             err_hb,

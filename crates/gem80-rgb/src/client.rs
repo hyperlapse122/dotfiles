@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use prost::Message;
 
@@ -64,6 +64,38 @@ pub enum ClientError {
 
     #[error("internal client synchronization failure: {0}")]
     LockPoisoned(String),
+
+    #[error("daemon answered request {expected} with a response to request {actual}")]
+    ResponseMismatch { expected: u64, actual: u64 },
+
+    #[error("lifetime {0:?} is outside the 1 ms..={max} ms the wire can carry", max = u32::MAX)]
+    LifetimeOutOfRange(Duration),
+}
+
+/// Turns a daemon rejection into the client's own error.
+///
+/// One place, so the mapping cannot drift between the six call sites that need it.
+fn rejected(rejection: crate::wire::RejectionResponse) -> ClientError {
+    ClientError::Rejected {
+        reason: proto::RejectionReason::try_from(rejection.reason)
+            .unwrap_or(RejectionReason::Unspecified),
+        message: rejection.message,
+        layer_id: rejection.layer_id,
+    }
+}
+
+/// Converts a caller's lifetime into the wire's millisecond field (E4).
+///
+/// Neither boundary may be truncated: a sub-millisecond lifetime would round to
+/// zero, which the daemon reads as "no lifetime" and turns into a permanent layer,
+/// and anything past `u32::MAX` would wrap into a short lease or zero. Both are
+/// refused outright rather than silently reinterpreted.
+fn lifetime_to_millis(lifetime: Duration) -> Result<u32, ClientError> {
+    let millis = lifetime.as_millis();
+    if millis == 0 || millis > u128::from(u32::MAX) {
+        return Err(ClientError::LifetimeOutOfRange(lifetime));
+    }
+    Ok(millis as u32)
 }
 
 /// High-level device connection and hardware status.
@@ -127,7 +159,11 @@ pub struct DaemonStatus {
 struct LayerRegistration {
     name: String,
     z_order: i32,
-    lifetime_ms: Option<u32>,
+    /// When this layer's lifetime runs out, if it has one.
+    ///
+    /// The deadline is kept rather than the original duration: a reconnect has to
+    /// re-announce what is left, not start the lease again (E3, R10).
+    expires_at: Option<Instant>,
     daemon_layer_id: Option<u32>,
     pixels: HashMap<u32, Color>,
 }
@@ -199,6 +235,12 @@ impl ClientInner {
     }
 
     fn reregister_all_layers(&mut self) -> Result<(), ClientError> {
+        // A lease that ran out while the client was disconnected does not come
+        // back: the layer would have expired on the old daemon too (E3, R10).
+        let now = Instant::now();
+        self.layers
+            .retain(|_, reg| reg.expires_at.is_none_or(|at| at > now));
+
         let mut layers_to_reregister: Vec<LayerReannounce> = self
             .layers
             .iter()
@@ -206,18 +248,19 @@ impl ClientInner {
                 let pixels = reg
                     .pixels
                     .iter()
-                    .map(|(&led, color)| LedColor {
-                        led_index: led,
-                        red: color.r as u32,
-                        green: color.g as u32,
-                        blue: color.b as u32,
-                    })
+                    .map(|(&led, &color)| LedColor::from((led as usize, color)))
                     .collect();
                 LayerReannounce {
                     handle_id,
                     name: reg.name.clone(),
                     z_order: reg.z_order,
-                    lifetime_ms: reg.lifetime_ms,
+                    // What is left of the lease, not what it started as: a 30 s
+                    // layer reconnecting at 25 s asks for the remaining 5 s.
+                    lifetime_ms: reg.expires_at.map(|at| {
+                        at.saturating_duration_since(now)
+                            .as_millis()
+                            .clamp(1, u128::from(u32::MAX)) as u32
+                    }),
                     pixels,
                 }
             })
@@ -265,22 +308,12 @@ impl ClientInner {
                         if let Some(proto::server_message::Payload::Rejection(rej)) =
                             update_resp.payload
                         {
-                            return Err(ClientError::Rejected {
-                                reason: proto::RejectionReason::try_from(rej.reason)
-                                    .unwrap_or(RejectionReason::Unspecified),
-                                message: rej.message,
-                                layer_id: rej.layer_id,
-                            });
+                            return Err(rejected(rej));
                         }
                     }
                 }
                 Some(proto::server_message::Payload::Rejection(rej)) => {
-                    return Err(ClientError::Rejected {
-                        reason: proto::RejectionReason::try_from(rej.reason)
-                            .unwrap_or(RejectionReason::Unspecified),
-                        message: rej.message,
-                        layer_id: rej.layer_id,
-                    });
+                    return Err(rejected(rej));
                 }
                 other => {
                     return Err(ClientError::UnexpectedResponse(format!("{other:?}")));
@@ -302,15 +335,45 @@ impl ClientInner {
             )));
         }
         let server_msg = ServerMessage::decode(resp_body.as_slice())?;
+
+        // The protocol is one answer per request on one stream, so a mismatched ID
+        // means a late answer is still in the stream and everything after it would
+        // be read one response out of step. The stream is no longer usable (E5).
+        if server_msg.request_id != msg.request_id {
+            self.stream = None;
+
+            // Request IDs start at 1, so zero marks a notice the daemon sent on its
+            // own initiative rather than an answer to anything: the connection-limit
+            // rejection it writes before closing a refused connection. Reporting
+            // that as a mismatch would hide why the connection went away.
+            if server_msg.request_id == 0 {
+                if let Some(proto::server_message::Payload::Rejection(rej)) = server_msg.payload {
+                    return Err(rejected(rej));
+                }
+            }
+
+            let mismatch = ClientError::ResponseMismatch {
+                expected: msg.request_id,
+                actual: server_msg.request_id,
+            };
+            log::debug!("gem80-rgb client: {mismatch}; dropping the stream");
+            return Err(mismatch);
+        }
         Ok(server_msg)
+    }
+
+    /// Drops the stream so the next call reconnects (R16).
+    fn invalidate_stream(&mut self) {
+        self.stream = None;
     }
 
     fn register_layer(
         &mut self,
         name: String,
         z_order: i32,
-        lifetime_ms: Option<u32>,
+        lifetime: Option<Duration>,
     ) -> Result<u64, ClientError> {
+        let lifetime_ms = lifetime.map(lifetime_to_millis).transpose()?;
         self.ensure_connected()?;
         let handle_id = self.next_handle_id;
         self.next_handle_id += 1;
@@ -360,19 +423,14 @@ impl ClientInner {
                     LayerRegistration {
                         name,
                         z_order,
-                        lifetime_ms,
+                        expires_at: lifetime.map(|d| Instant::now() + d),
                         daemon_layer_id: Some(reg_resp.layer_id),
                         pixels: HashMap::new(),
                     },
                 );
                 Ok(handle_id)
             }
-            Some(proto::server_message::Payload::Rejection(rej)) => Err(ClientError::Rejected {
-                reason: proto::RejectionReason::try_from(rej.reason)
-                    .unwrap_or(RejectionReason::Unspecified),
-                message: rej.message,
-                layer_id: rej.layer_id,
-            }),
+            Some(proto::server_message::Payload::Rejection(rej)) => Err(rejected(rej)),
             other => Err(ClientError::UnexpectedResponse(format!("{other:?}"))),
         }
     }
@@ -383,7 +441,6 @@ impl ClientInner {
         set_pixels: Vec<(usize, Color)>,
         retract_leds: Vec<usize>,
     ) -> Result<(), ClientError> {
-        // Validate LED indices within bounds
         for (idx, _) in &set_pixels {
             if *idx >= GEM80_TOTAL_LEDS {
                 return Err(ClientError::InvalidLedIndex {
@@ -401,31 +458,30 @@ impl ClientInner {
             }
         }
 
-        let reg = self
+        let daemon_layer_id = self
             .layers
-            .get_mut(&handle_id)
-            .ok_or(ClientError::LayerReleased)?;
+            .get(&handle_id)
+            .ok_or(ClientError::LayerReleased)?
+            .daemon_layer_id
+            .ok_or(ClientError::NotConnected)?;
 
-        for (idx, col) in &set_pixels {
-            reg.pixels.insert(*idx as u32, *col);
+        let proto_set: Vec<LedColor> = set_pixels.iter().copied().map(LedColor::from).collect();
+        let proto_retract: Vec<u32> = retract_leds.iter().map(|idx| *idx as u32).collect();
+
+        self.send_update_layer_request(handle_id, daemon_layer_id, proto_set, proto_retract)?;
+
+        // Only now, with the daemon's acceptance in hand. The cache is what a
+        // reconnect replays, so writing a pixel the daemon rejected would reapply
+        // on the next reconnect the very state the API reported as refused (E1).
+        if let Some(reg) = self.layers.get_mut(&handle_id) {
+            for (idx, color) in &set_pixels {
+                reg.pixels.insert(*idx as u32, *color);
+            }
+            for idx in &retract_leds {
+                reg.pixels.remove(&(*idx as u32));
+            }
         }
-        for idx in &retract_leds {
-            reg.pixels.remove(&(*idx as u32));
-        }
-
-        let daemon_layer_id = reg.daemon_layer_id.ok_or(ClientError::NotConnected)?;
-        let proto_set: Vec<LedColor> = set_pixels
-            .into_iter()
-            .map(|(idx, col)| LedColor {
-                led_index: idx as u32,
-                red: col.r as u32,
-                green: col.g as u32,
-                blue: col.b as u32,
-            })
-            .collect();
-        let proto_retract: Vec<u32> = retract_leds.into_iter().map(|idx| idx as u32).collect();
-
-        self.send_update_layer_request(handle_id, daemon_layer_id, proto_set, proto_retract)
+        Ok(())
     }
 
     fn send_update_layer_request(
@@ -442,8 +498,8 @@ impl ClientInner {
             payload: Some(proto::client_message::Payload::UpdateLayer(
                 UpdateLayerRequest {
                     layer_id,
-                    set_pixels: set_pixels.clone(),
-                    retract_leds: retract_leds.clone(),
+                    set_pixels,
+                    retract_leds,
                 },
             )),
         };
@@ -459,15 +515,16 @@ impl ClientInner {
                     .and_then(|r| r.daemon_layer_id)
                     .ok_or(ClientError::LayerReleased)?;
 
+                // The retry reuses the pixels of the request just built, so the
+                // successful path never copies them.
+                let Some(proto::client_message::Payload::UpdateLayer(mut update)) = req.payload
+                else {
+                    return Err(e);
+                };
+                update.layer_id = new_layer_id;
                 let retry_req = ClientMessage {
                     request_id: self.next_request_id(),
-                    payload: Some(proto::client_message::Payload::UpdateLayer(
-                        UpdateLayerRequest {
-                            layer_id: new_layer_id,
-                            set_pixels,
-                            retract_leds,
-                        },
-                    )),
+                    payload: Some(proto::client_message::Payload::UpdateLayer(update)),
                 };
                 let retry_resp = self.send_message_direct(&retry_req)?;
                 self.handle_update_response(retry_resp)
@@ -479,12 +536,7 @@ impl ClientInner {
     fn handle_update_response(&self, resp: ServerMessage) -> Result<(), ClientError> {
         match resp.payload {
             Some(proto::server_message::Payload::UpdateLayer(_)) => Ok(()),
-            Some(proto::server_message::Payload::Rejection(rej)) => Err(ClientError::Rejected {
-                reason: proto::RejectionReason::try_from(rej.reason)
-                    .unwrap_or(RejectionReason::Unspecified),
-                message: rej.message,
-                layer_id: rej.layer_id,
-            }),
+            Some(proto::server_message::Payload::Rejection(rej)) => Err(rejected(rej)),
             other => Err(ClientError::UnexpectedResponse(format!("{other:?}"))),
         }
     }
@@ -495,29 +547,40 @@ impl ClientInner {
             None => return Ok(()),
         };
 
-        if let Some(daemon_layer_id) = reg.daemon_layer_id {
-            if self.stream.is_some() {
-                let req = ClientMessage {
-                    request_id: self.next_request_id(),
-                    payload: Some(proto::client_message::Payload::ReleaseLayer(
-                        ReleaseLayerRequest {
-                            layer_id: daemon_layer_id,
-                        },
-                    )),
-                };
-                if let Ok(resp) = self.send_message_direct(&req) {
-                    if let Some(proto::server_message::Payload::Rejection(rej)) = resp.payload {
-                        return Err(ClientError::Rejected {
-                            reason: proto::RejectionReason::try_from(rej.reason)
-                                .unwrap_or(RejectionReason::Unspecified),
-                            message: rej.message,
-                            layer_id: rej.layer_id,
-                        });
-                    }
-                }
-            }
+        let Some(daemon_layer_id) = reg.daemon_layer_id else {
+            return Ok(());
+        };
+        if self.stream.is_none() {
+            return Ok(());
         }
-        Ok(())
+
+        let req = ClientMessage {
+            request_id: self.next_request_id(),
+            payload: Some(proto::client_message::Payload::ReleaseLayer(
+                ReleaseLayerRequest {
+                    layer_id: daemon_layer_id,
+                },
+            )),
+        };
+        match self.send_message_direct(&req) {
+            Ok(resp) => match resp.payload {
+                Some(proto::server_message::Payload::Rejection(rej)) => Err(rejected(rej)),
+                _ => Ok(()),
+            },
+            // Swallowing this would leave the daemon holding a layer the client has
+            // already forgotten, painting pixels nothing can retract. Dropping the
+            // stream makes the next call reconnect, and the daemon releases every
+            // layer of the closed connection itself (E2, R13, R16).
+            Err(e @ (ClientError::Io(_) | ClientError::Framing(_))) => {
+                log::debug!(
+                    "gem80-rgb client: release of layer {daemon_layer_id} did not get through \
+                     ({e}); dropping the stream so the daemon cleans up"
+                );
+                self.invalidate_stream();
+                Err(e)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn get_status(
@@ -564,15 +627,26 @@ impl ClientInner {
                     .into_iter()
                     .map(LayerInfo::from)
                     .collect();
-                let composite_pixels = if !status_resp.composite_pixels.is_empty() {
-                    let (chunks, _) = status_resp.composite_pixels.as_chunks::<3>();
-                    let pixels = chunks
-                        .iter()
-                        .map(|chunk| Color::new(chunk[0], chunk[1], chunk[2]))
-                        .collect();
-                    Some(pixels)
-                } else {
+                let composite_pixels = if status_resp.composite_pixels.is_empty() {
                     None
+                } else {
+                    // A trailing partial pixel is a protocol violation, not
+                    // something to discard: dropping the remainder would let a
+                    // 304-byte body parse as 101 pixels and pass the count check
+                    // that is supposed to catch exactly this (E6).
+                    let (chunks, remainder) = status_resp.composite_pixels.as_chunks::<3>();
+                    if !remainder.is_empty() {
+                        return Err(ClientError::UnexpectedResponse(format!(
+                            "composite frame of {} bytes is not a whole number of RGB pixels",
+                            status_resp.composite_pixels.len()
+                        )));
+                    }
+                    Some(
+                        chunks
+                            .iter()
+                            .map(|&chunk| Color::from_bytes(chunk))
+                            .collect(),
+                    )
                 };
 
                 Ok(DaemonStatus {
@@ -581,12 +655,7 @@ impl ClientInner {
                     composite_pixels,
                 })
             }
-            Some(proto::server_message::Payload::Rejection(rej)) => Err(ClientError::Rejected {
-                reason: proto::RejectionReason::try_from(rej.reason)
-                    .unwrap_or(RejectionReason::Unspecified),
-                message: rej.message,
-                layer_id: rej.layer_id,
-            }),
+            Some(proto::server_message::Payload::Rejection(rej)) => Err(rejected(rej)),
             other => Err(ClientError::UnexpectedResponse(format!("{other:?}"))),
         }
     }
@@ -598,13 +667,14 @@ pub struct Client {
     inner: Arc<Mutex<ClientInner>>,
 }
 
-impl Client {
-    fn lock_inner(&self) -> Result<MutexGuard<'_, ClientInner>, ClientError> {
-        self.inner
-            .lock()
-            .map_err(|e| ClientError::LockPoisoned(e.to_string()))
-    }
+/// Locks the shared client state, turning a poisoned lock into a typed error.
+fn lock_inner(inner: &Mutex<ClientInner>) -> Result<MutexGuard<'_, ClientInner>, ClientError> {
+    inner
+        .lock()
+        .map_err(|e| ClientError::LockPoisoned(e.to_string()))
+}
 
+impl Client {
     /// Connects to the daemon using the default runtime socket path.
     pub fn connect() -> Result<Self, ClientError> {
         let path = crate::paths::socket_path();
@@ -628,7 +698,7 @@ impl Client {
         write_timeout: Duration,
     ) -> Result<Self, ClientError> {
         {
-            let mut inner = self.lock_inner()?;
+            let mut inner = lock_inner(&self.inner)?;
             inner.read_timeout = read_timeout;
             inner.write_timeout = write_timeout;
             if let Some(stream) = inner.stream.as_mut() {
@@ -641,20 +711,20 @@ impl Client {
 
     /// Reconnects to the daemon and re-registers all held layers (R16).
     pub fn reconnect(&self) -> Result<(), ClientError> {
-        let mut inner = self.lock_inner()?;
+        let mut inner = lock_inner(&self.inner)?;
         inner.reconnect_internal()
     }
 
     /// Returns whether the client currently holds an active connection.
     pub fn is_connected(&self) -> bool {
-        self.lock_inner()
+        lock_inner(&self.inner)
             .map(|i| i.stream.is_some())
             .unwrap_or(false)
     }
 
     /// Returns the number of layers currently registered and held by this client.
     pub fn active_layer_count(&self) -> usize {
-        self.lock_inner().map(|i| i.layers.len()).unwrap_or(0)
+        lock_inner(&self.inner).map(|i| i.layers.len()).unwrap_or(0)
     }
 
     /// Registers a new compositing layer with indefinite lifetime (R12).
@@ -667,6 +737,9 @@ impl Client {
     }
 
     /// Registers a new compositing layer with an optional lifetime duration (R10, R12).
+    ///
+    /// A lifetime the wire's millisecond field cannot carry is refused rather than
+    /// truncated: see [`lifetime_to_millis`] (E4).
     pub fn register_layer_with_lifetime(
         &self,
         name: impl Into<String>,
@@ -674,10 +747,9 @@ impl Client {
         lifetime: Option<Duration>,
     ) -> Result<LayerHandle, ClientError> {
         let name = name.into();
-        let lifetime_ms = lifetime.map(|d| d.as_millis() as u32);
         let handle_id = {
-            let mut inner = self.lock_inner()?;
-            inner.register_layer(name, z_order, lifetime_ms)?
+            let mut inner = lock_inner(&self.inner)?;
+            inner.register_layer(name, z_order, lifetime)?
         };
         Ok(LayerHandle {
             inner: Arc::clone(&self.inner),
@@ -697,7 +769,7 @@ impl Client {
         include_layers: bool,
         include_composite_frame: bool,
     ) -> Result<DaemonStatus, ClientError> {
-        let mut inner = self.lock_inner()?;
+        let mut inner = lock_inner(&self.inner)?;
         inner.get_status(include_layers, include_composite_frame)
     }
 
@@ -734,18 +806,12 @@ pub struct LayerHandle {
 }
 
 impl LayerHandle {
-    fn lock_inner(&self) -> Result<MutexGuard<'_, ClientInner>, ClientError> {
-        self.inner
-            .lock()
-            .map_err(|e| ClientError::LockPoisoned(e.to_string()))
-    }
-
     /// Returns the daemon-assigned layer ID, if currently registered.
     pub fn layer_id(&self) -> Result<u32, ClientError> {
         if self.released {
             return Err(ClientError::LayerReleased);
         }
-        let inner = self.lock_inner()?;
+        let inner = lock_inner(&self.inner)?;
         inner
             .layers
             .get(&self.handle_id)
@@ -758,7 +824,7 @@ impl LayerHandle {
         if self.released {
             return Err(ClientError::LayerReleased);
         }
-        let inner = self.lock_inner()?;
+        let inner = lock_inner(&self.inner)?;
         inner
             .layers
             .get(&self.handle_id)
@@ -771,7 +837,7 @@ impl LayerHandle {
         if self.released {
             return Err(ClientError::LayerReleased);
         }
-        let inner = self.lock_inner()?;
+        let inner = lock_inner(&self.inner)?;
         inner
             .layers
             .get(&self.handle_id)
@@ -816,7 +882,7 @@ impl LayerHandle {
         }
         let set: Vec<(usize, Color)> = set_pixels.into_iter().collect();
         let retract: Vec<usize> = retract_leds.into_iter().collect();
-        let mut inner = self.lock_inner()?;
+        let mut inner = lock_inner(&self.inner)?;
         inner.update_layer(self.handle_id, set, retract)
     }
 
@@ -826,7 +892,7 @@ impl LayerHandle {
             return Err(ClientError::LayerReleased);
         }
         self.released = true;
-        let mut inner = self.lock_inner()?;
+        let mut inner = lock_inner(&self.inner)?;
         inner.release_layer(self.handle_id)
     }
 }
@@ -868,9 +934,11 @@ mod tests {
             // The ambient temp root, not the crate's build directory: an AF_UNIX
             // path must fit in SUN_LEN (~108 bytes), and a path under a worktree
             // checkout does not. Sibling tests that write plain files use the
-            // crate directory instead, where no such limit applies.
-            let path =
-                std::env::temp_dir().join(format!("gem80-{prefix}-{}-{id}", std::process::id()));
+            // crate directory instead, where no such limit applies. It comes from
+            // the snapshot rather than `std::env::temp_dir()` because the paths
+            // tests replace `TMPDIR` process-wide while these run.
+            let path = crate::paths::ambient_temp_dir()
+                .join(format!("gem80-{prefix}-{}-{id}", std::process::id()));
             let _ = std::fs::remove_dir_all(&path);
             std::fs::create_dir_all(&path).expect("create test temp dir");
             Self { path }
@@ -1237,5 +1305,388 @@ mod tests {
         assert_eq!(frame[30], Color::rgb(10, 20, 30), "30 retracted to base");
         assert_eq!(frame[31], Color::rgb(2, 2, 2), "31 still set");
         assert_eq!(frame[32], Color::rgb(10, 20, 30), "32 retracted to base");
+    }
+
+    /// Every LED the replay cache currently holds for a handle.
+    fn cached_pixels(client: &Client, handle: &LayerHandle) -> HashMap<u32, Color> {
+        client
+            .inner
+            .lock()
+            .expect("client lock")
+            .layers
+            .get(&handle.handle_id)
+            .expect("the handle's registration")
+            .pixels
+            .clone()
+    }
+
+    /// Test scenario: 데몬이 거절한 픽셀은 재생 캐시에 남지 않는다. 받아들여진 것만 남아
+    /// 재연결 때 다시 적용된다 (E1, R16).
+    #[test]
+    fn rejected_update_does_not_enter_the_replay_cache_e1() {
+        let server = TestServer::start();
+        let client = Client::connect_to(&server.socket_path).expect("connect client");
+
+        // A layer the daemon expires on its own while the client keeps the handle.
+        let handle = client
+            .register_layer_with_lifetime("ephemeral", 10, Some(Duration::from_millis(50)))
+            .expect("register with a short lifetime");
+        handle
+            .set_pixel(3, Color::rgb(1, 2, 3))
+            .expect("the first write is accepted");
+        assert_eq!(
+            cached_pixels(&client, &handle).get(&3),
+            Some(&Color::rgb(1, 2, 3)),
+            "an accepted write belongs in the cache"
+        );
+
+        // Once the lifetime is up the daemon no longer has the layer, so the next
+        // write comes back as a refusal.
+        thread::sleep(Duration::from_millis(300));
+        let err = handle.set_pixel(7, Color::rgb(9, 9, 9));
+        match err {
+            Err(ClientError::Rejected { reason, .. }) => {
+                assert_eq!(reason, RejectionReason::LayerNotFound)
+            }
+            other => panic!("the write must be refused, got {other:?}"),
+        }
+
+        let cached = cached_pixels(&client, &handle);
+        assert!(
+            !cached.contains_key(&7),
+            "a refused write must not sit in the cache waiting to be replayed, got {cached:?}"
+        );
+        assert_eq!(
+            cached.get(&3),
+            Some(&Color::rgb(1, 2, 3)),
+            "the refusal must not disturb what was accepted"
+        );
+    }
+
+    /// Test scenario: 받아들여진 픽셀만 재연결에서 재적용된다 (E1, R16).
+    #[test]
+    fn only_accepted_pixels_are_replayed_on_reconnect_e1() {
+        let socket_dir = TestDir::new("e1-replay");
+        let socket_path = socket_dir.path().join("gem80-e1-replay.sock");
+        let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
+        let client = Client::connect_to(&socket_path).expect("connect client");
+
+        let handle = client.register_layer("cached", 10).expect("register layer");
+        handle
+            .set_pixel(3, Color::rgb(1, 2, 3))
+            .expect("an accepted pixel");
+
+        // A write the API refuses, for any reason, must leave no trace to replay.
+        assert!(matches!(
+            handle.set_pixel(GEM80_TOTAL_LEDS, Color::rgb(9, 9, 9)),
+            Err(ClientError::InvalidLedIndex { .. })
+        ));
+        assert_eq!(cached_pixels(&client, &handle).len(), 1);
+
+        server.stop();
+        let new_dir = TestDir::new("e1-replay-2");
+        let _server2 = TestServer::start_with_path(new_dir, socket_path);
+        client.reconnect().expect("reconnect");
+
+        let frame = client.composite_frame().expect("composite after reconnect");
+        assert_eq!(
+            frame[3],
+            Color::rgb(1, 2, 3),
+            "the accepted pixel is replayed"
+        );
+        assert_eq!(
+            frame[GEM80_TOTAL_LEDS - 1],
+            Color::rgb(10, 20, 30),
+            "nothing the API refused reappears"
+        );
+    }
+
+    /// Test scenario: 재연결은 남은 수명을 알리고, 이미 만료된 레이어는 되살리지 않는다 (E3).
+    #[test]
+    fn reconnect_reannounces_the_remaining_lifetime_e3() {
+        let socket_dir = TestDir::new("e3-lifetime");
+        let socket_path = socket_dir.path().join("gem80-e3.sock");
+        let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
+        let client = Client::connect_to(&socket_path).expect("connect client");
+
+        let _long = client
+            .register_layer_with_lifetime("long", 10, Some(Duration::from_millis(3000)))
+            .expect("register the long-lived layer");
+        let _short = client
+            .register_layer_with_lifetime("short", 20, Some(Duration::from_millis(120)))
+            .expect("register the short-lived layer");
+        assert_eq!(client.active_layer_count(), 2);
+
+        let before = client
+            .status()
+            .expect("status")
+            .layers
+            .iter()
+            .find(|l| l.name == "long")
+            .and_then(|l| l.remaining_lifetime)
+            .expect("the long layer reports a lifetime");
+
+        // Time passes with the daemon gone, and the short lease runs out.
+        server.stop();
+        thread::sleep(Duration::from_millis(400));
+        let new_dir = TestDir::new("e3-lifetime-2");
+        let _server2 = TestServer::start_with_path(new_dir, socket_path);
+        client.reconnect().expect("reconnect");
+
+        let layers = client.status().expect("status after reconnect").layers;
+        assert_eq!(
+            layers.len(),
+            1,
+            "a lease that expired while disconnected must not come back, got {layers:?}"
+        );
+        let after = layers[0]
+            .remaining_lifetime
+            .expect("the surviving layer keeps a lifetime");
+        assert_eq!(layers[0].name, "long");
+        assert!(
+            after < before,
+            "the reconnect must announce what is left ({after:?}), not the original lease ({before:?})"
+        );
+        assert_eq!(client.active_layer_count(), 1);
+    }
+
+    /// Test scenario: 밀리초로 표현할 수 없는 수명은 잘리지 않고 거절된다 (E4).
+    #[test]
+    fn lifetimes_outside_the_wire_range_are_refused_e4() {
+        let server = TestServer::start();
+        let client = Client::connect_to(&server.socket_path).expect("connect client");
+
+        // Under a millisecond would round to zero, which the daemon reads as "no
+        // lifetime": a layer asked to live 500 us would become permanent.
+        let err = client.register_layer_with_lifetime(
+            "sub-millisecond",
+            1,
+            Some(Duration::from_micros(500)),
+        );
+        assert!(
+            matches!(err, Err(ClientError::LifetimeOutOfRange(_))),
+            "a sub-millisecond lifetime must not silently become permanent, got {err:?}"
+        );
+
+        // Past u32::MAX milliseconds would wrap into a short lease or zero.
+        let err = client.register_layer_with_lifetime(
+            "too-long",
+            1,
+            Some(Duration::from_millis(u64::from(u32::MAX) + 1)),
+        );
+        assert!(
+            matches!(err, Err(ClientError::LifetimeOutOfRange(_))),
+            "an oversized lifetime must not wrap, got {err:?}"
+        );
+
+        assert_eq!(client.active_layer_count(), 0);
+        // The boundaries themselves are accepted.
+        client
+            .register_layer_with_lifetime("exactly-one-ms", 1, Some(Duration::from_millis(1)))
+            .expect("1 ms is representable");
+        client
+            .register_layer_with_lifetime(
+                "largest",
+                2,
+                Some(Duration::from_millis(u64::from(u32::MAX))),
+            )
+            .expect("u32::MAX ms is representable");
+    }
+
+    /// Test scenario: 요청 ID가 어긋난 응답은 받아들이지 않고 스트림을 버린다 (E5).
+    #[test]
+    fn a_response_for_another_request_is_refused_e5() {
+        use std::io::Write;
+
+        let dir = TestDir::new("e5-mismatch");
+        let socket_path = dir.path().join("gem80-e5.sock");
+        let listener =
+            std::os::unix::net::UnixListener::bind(&socket_path).expect("bind a stub daemon");
+
+        // A stub daemon that answers every request with request_id 999.
+        let stub = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let (_, _body) = crate::wire::read_frame(&mut stream).expect("read the request");
+            let response = ServerMessage {
+                request_id: 999,
+                payload: Some(proto::server_message::Payload::GetStatus(
+                    crate::wire::GetStatusResponse {
+                        device_state: DeviceState::Absent as i32,
+                        layers: Vec::new(),
+                        composite_pixels: Vec::new(),
+                    },
+                )),
+            };
+            let body = prost::Message::encode_to_vec(&response);
+            let frame = crate::wire::encode_frame(WireMessageDiscriminator::Control, &body)
+                .expect("encode the response");
+            stream.write_all(&frame).expect("write the response");
+            // Hold the connection so the client's own read is what ends the
+            // exchange, not an EOF.
+            thread::sleep(Duration::from_millis(300));
+        });
+
+        let client = Client::connect_to(&socket_path).expect("connect client");
+        let err = client.get_status(false, false);
+        match err {
+            Err(ClientError::ResponseMismatch { expected, actual }) => {
+                assert_eq!(actual, 999);
+                assert_ne!(expected, 999);
+            }
+            other => panic!("a mismatched response must be an error, got {other:?}"),
+        }
+        assert!(
+            !client.is_connected(),
+            "a stream one response out of step is unusable and must be dropped"
+        );
+        let _ = stub.join();
+    }
+
+    /// Test scenario: 연결 상한에 걸린 클라이언트는 왜 거절되었는지 그대로 받는다.
+    ///
+    /// The daemon writes that notice on its own initiative with request ID zero, so
+    /// the strict matching of E5 must not turn it into a bare mismatch error.
+    #[test]
+    fn the_connection_limit_notice_reaches_the_client_as_a_rejection_e5() {
+        let socket_dir = TestDir::new("e5-limit");
+        let socket_path = socket_dir.path().join("gem80-e5-limit.sock");
+
+        let (sender, receiver) = boundary_channel(16);
+        let compositor = Arc::new(Mutex::new(Compositor::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread_compositor = Arc::clone(&compositor);
+        let thread_stop = Arc::clone(&stop);
+        let render = thread::spawn(move || {
+            while !thread_stop.load(Ordering::SeqCst) {
+                match receiver.recv_timeout(Duration::from_millis(5)) {
+                    Ok(msg) => {
+                        let mut guard = thread_compositor.lock().expect("lock");
+                        apply_boundary_message(&mut guard, DeviceState::Absent, msg);
+                    }
+                    Err(BoundaryRecvError::Timeout) | Err(BoundaryRecvError::Empty) => {}
+                    Err(BoundaryRecvError::Disconnected) => break,
+                }
+            }
+        });
+
+        let server = SocketServer::bind(&socket_path).expect("bind");
+        let handle = server
+            .spawn(
+                sender,
+                ServerConfig {
+                    max_connections: 1,
+                    ..ServerConfig::default()
+                },
+            )
+            .expect("spawn");
+
+        let first = Client::connect_to(&socket_path).expect("the first client gets in");
+        first
+            .get_status(false, false)
+            .expect("the first client works");
+
+        // The second client is over the limit.
+        let second = Client::connect_to(&socket_path).expect("connect is accepted, then refused");
+        match second.get_status(false, false) {
+            Err(ClientError::Rejected {
+                reason, message, ..
+            }) => {
+                assert_eq!(reason, RejectionReason::Busy);
+                assert!(
+                    message.contains("connection limit"),
+                    "the reason must survive, got {message:?}"
+                );
+            }
+            other => panic!("the limit notice must arrive as a rejection, got {other:?}"),
+        }
+
+        drop(handle);
+        stop.store(true, Ordering::SeqCst);
+        let _ = render.join();
+    }
+
+    /// Test scenario: 레이어 해제가 전송 단계에서 실패하면 오류가 돌아오고 스트림이
+    /// 무효화되어, 다음 호출이 재연결하면서 데몬이 그 레이어를 정리한다 (E2, R13, R16).
+    #[test]
+    fn a_failed_release_reports_and_invalidates_the_stream_e2() {
+        let socket_dir = TestDir::new("e2-release");
+        let socket_path = socket_dir.path().join("gem80-e2.sock");
+        let mut server = TestServer::start_with_path(socket_dir, socket_path.clone());
+        let client = Client::connect_to(&socket_path).expect("connect client");
+
+        let handle = client
+            .register_layer("released", 10)
+            .expect("register layer");
+        handle.set_pixel(2, Color::rgb(5, 5, 5)).expect("set pixel");
+        assert!(client.is_connected());
+
+        // The daemon goes away, so the release cannot get through.
+        server.stop();
+
+        let err = handle.release();
+        assert!(
+            matches!(err, Err(ClientError::Io(_)) | Err(ClientError::Framing(_))),
+            "a release that did not reach the daemon must not be reported as success, got {err:?}"
+        );
+        assert!(
+            !client.is_connected(),
+            "the stream must be dropped so the next call reconnects"
+        );
+        assert_eq!(client.active_layer_count(), 0);
+
+        // A replacement daemon takes over; the next call reconnects cleanly and the
+        // released layer is not re-announced.
+        let new_dir = TestDir::new("e2-release-2");
+        let _server2 = TestServer::start_with_path(new_dir, socket_path);
+        let layers = client.layers().expect("layers on the new daemon");
+        assert!(
+            layers.is_empty(),
+            "the released layer must not come back, got {layers:?}"
+        );
+    }
+
+    /// Test scenario: 합성 프레임 뒤에 붙은 잉여 바이트는 프로토콜 위반으로 거절된다 (E6).
+    #[test]
+    fn a_composite_frame_with_trailing_bytes_is_refused_e6() {
+        use std::io::Write;
+
+        let dir = TestDir::new("e6-trailing");
+        let socket_path = dir.path().join("gem80-e6.sock");
+        let listener =
+            std::os::unix::net::UnixListener::bind(&socket_path).expect("bind a stub daemon");
+
+        // 304 bytes: 101 whole pixels and one byte over. Discarding the remainder
+        // would let this pass the pixel-count check.
+        let stub = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let (_, body) = crate::wire::read_frame(&mut stream).expect("read the request");
+            let request: ClientMessage =
+                prost::Message::decode(body.as_slice()).expect("decode the request");
+            let response = ServerMessage {
+                request_id: request.request_id,
+                payload: Some(proto::server_message::Payload::GetStatus(
+                    crate::wire::GetStatusResponse {
+                        device_state: DeviceState::DirectAll as i32,
+                        layers: Vec::new(),
+                        composite_pixels: vec![7u8; GEM80_TOTAL_LEDS * 3 + 1],
+                    },
+                )),
+            };
+            let body = prost::Message::encode_to_vec(&response);
+            let frame = crate::wire::encode_frame(WireMessageDiscriminator::Control, &body)
+                .expect("encode the response");
+            stream.write_all(&frame).expect("write the response");
+            thread::sleep(Duration::from_millis(300));
+        });
+
+        let client = Client::connect_to(&socket_path).expect("connect client");
+        match client.get_status(false, true) {
+            Err(ClientError::UnexpectedResponse(message)) => assert!(
+                message.contains("304"),
+                "the error must name the offending length, got {message:?}"
+            ),
+            other => panic!("trailing bytes must be refused, got {other:?}"),
+        }
+        let _ = stub.join();
     }
 }

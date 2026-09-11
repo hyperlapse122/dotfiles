@@ -54,7 +54,13 @@ fn main() -> ExitCode {
     let args = Args::parse();
 
     // 1. Single-instance lock, before the socket and before the HID node (R22, KTD4).
-    let lock_path = args.lock.unwrap_or_else(gem80_rgb::paths::lock_path);
+    //    The socket path is resolved first so the default lock is derived from it:
+    //    two independently resolved paths would let a second daemon take a
+    //    different lock, delete this one's socket and open the same HID node (B1).
+    let socket_path = args.socket.unwrap_or_else(gem80_rgb::paths::socket_path);
+    let lock_path = args
+        .lock
+        .unwrap_or_else(|| gem80_rgb::paths::lock_path_for_socket(&socket_path));
     let guard = match SingleInstanceGuard::acquire_at(&lock_path) {
         Ok(guard) => guard,
         Err(err) => {
@@ -77,7 +83,6 @@ fn main() -> ExitCode {
     config.base.apply_to_compositor(&mut compositor);
 
     // 3. Socket server. It opens whether or not a keyboard is attached (R2, AE4).
-    let socket_path = args.socket.unwrap_or_else(gem80_rgb::paths::socket_path);
     if let Err(err) = guard.clean_stale_socket(&socket_path) {
         eprintln!(
             "gem80-rgbd: could not remove the stale socket at {}: {err}",
@@ -124,7 +129,17 @@ fn main() -> ExitCode {
 
     eprintln!("gem80-rgbd: listening on {}", socket_path.display());
 
+    // `panic = "abort"` is deliberately not set, so a panic in the render thread
+    // leaves this one alive with the socket bound and the lock held: a daemon that
+    // answers requests but never paints again, and no replacement able to start.
+    // Noticing and exiting is what releases both (C4, R22).
+    let mut render_died = false;
     while !shutdown.load(Ordering::SeqCst) {
+        if !render.is_running() {
+            eprintln!("gem80-rgbd: the render thread stopped unexpectedly; shutting down");
+            render_died = true;
+            break;
+        }
         std::thread::sleep(SHUTDOWN_POLL_INTERVAL);
     }
 
@@ -133,7 +148,11 @@ fn main() -> ExitCode {
     server.shutdown();
     drop(guard);
     eprintln!("gem80-rgbd: stopped");
-    ExitCode::SUCCESS
+    if render_died {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 #[cfg(test)]
@@ -150,6 +169,7 @@ mod tests {
     use gem80_rgb::device::{FakeTransport, Transport};
     use gem80_rgb::render::DeviceSource;
     use gem80_rgb::server::boundary_channel;
+    use gem80_rgb::sync::MutexExt;
 
     #[derive(Debug, Clone)]
     struct SharedFake(Arc<Mutex<(FakeTransport, Vec<[u8; PAYLOAD_SIZE]>)>>);
@@ -162,7 +182,7 @@ mod tests {
 
     impl Transport for SharedFake {
         fn write_payload(&mut self, payload: &[u8; PAYLOAD_SIZE]) -> Result<(), DeviceError> {
-            let mut guard = self.0.lock().unwrap_or_else(|p| p.into_inner());
+            let mut guard = self.0.lock_unpoisoned();
             guard.1.push(*payload);
             guard.0.write_payload(payload)
         }
@@ -171,11 +191,7 @@ mod tests {
             &mut self,
             timeout_ms: u32,
         ) -> Result<[u8; PAYLOAD_SIZE], DeviceError> {
-            self.0
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .0
-                .read_payload_timeout(timeout_ms)
+            self.0.lock_unpoisoned().0.read_payload_timeout(timeout_ms)
         }
     }
 
@@ -213,16 +229,13 @@ mod tests {
         // Wait until direct mode is actually held before signalling.
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
-            let held = device.0.lock().unwrap_or_else(|p| p.into_inner()).0.regions;
+            let held = device.0.lock_unpoisoned().0.regions;
             if held == HOSTRGB_REGION_ALL || Instant::now() >= deadline {
                 break;
             }
             std::thread::sleep(Duration::from_millis(5));
         }
-        assert_eq!(
-            device.0.lock().unwrap_or_else(|p| p.into_inner()).0.regions,
-            HOSTRGB_REGION_ALL
-        );
+        assert_eq!(device.0.lock_unpoisoned().0.regions, HOSTRGB_REGION_ALL);
 
         signal_hook::low_level::raise(signal).expect("raising the signal must succeed");
 
@@ -237,7 +250,7 @@ mod tests {
 
         handle.shutdown();
 
-        let guard = device.0.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = device.0.lock_unpoisoned();
         assert_eq!(
             guard.0.regions, 0,
             "the firmware must be out of direct mode"
@@ -253,5 +266,53 @@ mod tests {
     fn test_sigterm_and_sigint_exit_through_mode_zero() {
         assert_signal_exits_through_mode_zero(signal_hook::consts::SIGTERM);
         assert_signal_exits_through_mode_zero(signal_hook::consts::SIGINT);
+    }
+
+    /// A source that panics the first time the render thread reaches for a device.
+    struct PanickingSource;
+
+    impl DeviceSource for PanickingSource {
+        type Transport = SharedFake;
+
+        fn is_present(&mut self) -> bool {
+            true
+        }
+
+        fn open(&mut self) -> Result<Option<Self::Transport>, DeviceError> {
+            panic!("simulated render thread failure");
+        }
+    }
+
+    /// Test scenario: 렌더 스레드가 패닉으로 죽으면 주 루프가 그것을 알아채고 빠져나온다.
+    /// Covers C4.
+    ///
+    /// Without this the daemon would keep answering socket requests while the
+    /// lighting stayed frozen, and would hold the lock that a replacement daemon
+    /// needs (R22).
+    #[test]
+    fn test_main_loop_notices_a_dead_render_thread() {
+        let (_sender, receiver) = boundary_channel(16);
+        let render = RenderThread::new(
+            Compositor::with_base_color(Color::rgb(1, 1, 1)),
+            receiver,
+            PanickingSource,
+        );
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let render = render::spawn(render, Arc::clone(&shutdown)).expect("render must start");
+
+        // The same condition the daemon's poll loop watches.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while render.is_running() && Instant::now() < deadline {
+            std::thread::sleep(SHUTDOWN_POLL_INTERVAL);
+        }
+
+        assert!(
+            !render.is_running(),
+            "a panicked render thread must be observable as stopped"
+        );
+        assert!(
+            !shutdown.load(Ordering::SeqCst),
+            "the flag is untouched: the death itself is what the loop must notice"
+        );
     }
 }

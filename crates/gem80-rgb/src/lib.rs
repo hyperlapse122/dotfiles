@@ -6,6 +6,7 @@ pub mod config;
 pub mod paths;
 pub mod server;
 pub mod single_instance;
+pub mod sync;
 pub mod wire;
 
 #[cfg(feature = "daemon")]

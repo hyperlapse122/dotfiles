@@ -21,8 +21,9 @@ use std::time::Duration;
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 
-use gem80_rgb::client::{Client, ClientDeviceState, ClientError};
+use gem80_rgb::client::{Client, ClientDeviceState, ClientError, LayerInfo};
 use gem80_rgb::compositor::Color;
+use gem80_rgb::config::parse_hex_color;
 use gem80_rgb::wire::GEM80_TOTAL_LEDS;
 
 /// Emits the CLI specification in usage KDL format (<https://usage.jdx.dev>).
@@ -180,10 +181,7 @@ pub fn parse_color(s: &str) -> Result<Color, String> {
 
     let hex_str = s.strip_prefix('#').unwrap_or(s);
     if hex_str.len() == 6 && hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
-        let r = u8::from_str_radix(&hex_str[0..2], 16).map_err(|e| e.to_string())?;
-        let g = u8::from_str_radix(&hex_str[2..4], 16).map_err(|e| e.to_string())?;
-        let b = u8::from_str_radix(&hex_str[4..6], 16).map_err(|e| e.to_string())?;
-        return Ok(Color::rgb(r, g, b));
+        return parse_hex_color(hex_str);
     }
 
     let parts: Vec<&str> = s.split(',').map(|p| p.trim()).collect();
@@ -306,6 +304,65 @@ pub fn format_device_state(state: ClientDeviceState) -> (&'static str, &'static 
     }
 }
 
+/// Each layer's rank in actual registration order, by position in `layers`.
+///
+/// The daemon answers `GetStatus` with layers sorted by z-order, so a listing's own
+/// position says nothing about when a layer was registered. Numbering by position
+/// would present z-order under the name "registration order" (G4). Layer IDs are
+/// handed out monotonically, so their rank is the registration order whatever order
+/// the caller chose to display.
+fn registration_ranks(layers: &[LayerInfo]) -> Vec<usize> {
+    let mut by_id: Vec<u32> = layers.iter().map(|l| l.layer_id).collect();
+    by_id.sort_unstable();
+    layers
+        .iter()
+        .map(|l| {
+            by_id
+                .binary_search(&l.layer_id)
+                .map(|i| i + 1)
+                .unwrap_or(usize::MAX)
+        })
+        .collect()
+}
+
+/// Converts layers into their JSON form, numbering them by registration order.
+fn json_layer_summaries(layers: &[LayerInfo]) -> Vec<JsonLayerSummary> {
+    let ranks = registration_ranks(layers);
+    layers
+        .iter()
+        .zip(ranks)
+        .map(|(l, rank)| JsonLayerSummary {
+            registration_order: rank,
+            layer_id: l.layer_id,
+            name: l.name.clone(),
+            z_order: l.z_order,
+            pixel_count: l.pixel_count,
+            remaining_lifetime_ms: l.remaining_lifetime.map(|d| d.as_millis() as u64),
+        })
+        .collect()
+}
+
+/// Writes one indented text line per layer, numbered by registration order.
+fn write_layer_lines(
+    layers: &[LayerInfo],
+    out: &mut dyn std::io::Write,
+) -> Result<(), ClientError> {
+    let ranks = registration_ranks(layers);
+    for (layer, rank) in layers.iter().zip(ranks) {
+        let lt_str = match layer.remaining_lifetime {
+            Some(d) => format!("{}ms remaining", d.as_millis()),
+            None => "indefinite".to_string(),
+        };
+        writeln!(
+            out,
+            "  #{}: Layer ID: {}, Name: \"{}\", Z-order: {}, Pixels: {}, Lifetime: {}",
+            rank, layer.layer_id, layer.name, layer.z_order, layer.pixel_count, lt_str
+        )
+        .map_err(ClientError::Io)?;
+    }
+    Ok(())
+}
+
 /// Handles the `status` command (R20, AE14).
 pub fn handle_status(
     client: &Client,
@@ -316,26 +373,12 @@ pub fn handle_status(
     let (state_name, state_desc, is_incompatible) = format_device_state(status.device_state);
 
     if json {
-        let json_layers: Vec<JsonLayerSummary> = status
-            .layers
-            .iter()
-            .enumerate()
-            .map(|(idx, l)| JsonLayerSummary {
-                registration_order: idx + 1,
-                layer_id: l.layer_id,
-                name: l.name.clone(),
-                z_order: l.z_order,
-                pixel_count: l.pixel_count,
-                remaining_lifetime_ms: l.remaining_lifetime.map(|d| d.as_millis() as u64),
-            })
-            .collect();
-
         let json_status = JsonStatus {
             daemon: "running",
             device_state: state_name.to_string(),
             incompatible_firmware: is_incompatible,
             layer_count: status.layers.len(),
-            layers: json_layers,
+            layers: json_layer_summaries(&status.layers),
         };
         let formatted = serde_json::to_string_pretty(&json_status)
             .map_err(|e| ClientError::UnexpectedResponse(e.to_string()))?;
@@ -344,25 +387,7 @@ pub fn handle_status(
         writeln!(out, "Daemon: running").map_err(ClientError::Io)?;
         writeln!(out, "Device state: {state_name} ({state_desc})").map_err(ClientError::Io)?;
         writeln!(out, "Active layers: {}", status.layers.len()).map_err(ClientError::Io)?;
-        if !status.layers.is_empty() {
-            for (idx, layer) in status.layers.iter().enumerate() {
-                let lt_str = match layer.remaining_lifetime {
-                    Some(d) => format!("{}ms remaining", d.as_millis()),
-                    None => "indefinite".to_string(),
-                };
-                writeln!(
-                    out,
-                    "  #{}: Layer ID: {}, Name: \"{}\", Z-order: {}, Pixels: {}, Lifetime: {}",
-                    idx + 1,
-                    layer.layer_id,
-                    layer.name,
-                    layer.z_order,
-                    layer.pixel_count,
-                    lt_str
-                )
-                .map_err(ClientError::Io)?;
-            }
-        }
+        write_layer_lines(&status.layers, out)?;
     }
     Ok(())
 }
@@ -374,46 +399,17 @@ pub fn handle_layers(
     out: &mut dyn std::io::Write,
 ) -> Result<(), ClientError> {
     let mut layers = client.layers()?;
-    // Sort by registration order (layer_id) to present registration sequence clearly
     layers.sort_by_key(|l| l.layer_id);
 
     if json {
-        let json_layers: Vec<JsonLayerSummary> = layers
-            .iter()
-            .enumerate()
-            .map(|(idx, l)| JsonLayerSummary {
-                registration_order: idx + 1,
-                layer_id: l.layer_id,
-                name: l.name.clone(),
-                z_order: l.z_order,
-                pixel_count: l.pixel_count,
-                remaining_lifetime_ms: l.remaining_lifetime.map(|d| d.as_millis() as u64),
-            })
-            .collect();
-        let formatted = serde_json::to_string_pretty(&json_layers)
+        let formatted = serde_json::to_string_pretty(&json_layer_summaries(&layers))
             .map_err(|e| ClientError::UnexpectedResponse(e.to_string()))?;
         writeln!(out, "{formatted}").map_err(ClientError::Io)?;
     } else if layers.is_empty() {
         writeln!(out, "No active layers").map_err(ClientError::Io)?;
     } else {
         writeln!(out, "Active layers ({}):", layers.len()).map_err(ClientError::Io)?;
-        for (idx, layer) in layers.iter().enumerate() {
-            let lt_str = match layer.remaining_lifetime {
-                Some(d) => format!("{}ms remaining", d.as_millis()),
-                None => "indefinite".to_string(),
-            };
-            writeln!(
-                out,
-                "  #{}: Layer ID: {}, Name: \"{}\", Z-order: {}, Pixels: {}, Lifetime: {}",
-                idx + 1,
-                layer.layer_id,
-                layer.name,
-                layer.z_order,
-                layer.pixel_count,
-                lt_str
-            )
-            .map_err(ClientError::Io)?;
-        }
+        write_layer_lines(&layers, out)?;
     }
     Ok(())
 }
@@ -750,6 +746,7 @@ mod tests {
                     ServerConfig {
                         max_connections: 8,
                         response_timeout: Duration::from_secs(2),
+                        ..ServerConfig::default()
                     },
                 )
                 .expect("spawn test server");
@@ -919,6 +916,75 @@ mod tests {
         drop(h2);
     }
 
+    /// Test scenario: `status`는 z 순서로 정렬된 목록을 받지만, 번호는 실제 등록 순서를
+    /// 나타낸다. Covers G4.
+    #[test]
+    fn test_status_numbers_layers_by_actual_registration_order() {
+        let server = TestServer::start_with_state(DeviceState::DirectAll);
+        let client = Client::connect_to(&server.socket_path).expect("connect");
+
+        // Registered first but sorted last by z-order, so the two orders differ.
+        let h1 = client.register_layer("first", 90).expect("register first");
+        let h2 = client
+            .register_layer("second", 10)
+            .expect("register second");
+
+        let cli = Cli {
+            socket: Some(server.socket_path.clone()),
+            usage: false,
+            command: Some(Commands::Status { json: true }),
+        };
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        assert_eq!(run_cli(cli, &mut out, &mut err), ExitCode::SUCCESS);
+
+        let v: serde_json::Value =
+            serde_json::from_str(&String::from_utf8(out).expect("utf8")).expect("valid json");
+        let layers = v["layers"].as_array().expect("layers array");
+        assert_eq!(layers.len(), 2);
+
+        // The daemon answers in z-order, so "second" leads the listing.
+        assert_eq!(layers[0]["name"], "second");
+        assert_eq!(layers[1]["name"], "first");
+
+        // The numbering must still say which was registered first.
+        let ordinal = |name: &str| -> u64 {
+            layers
+                .iter()
+                .find(|l| l["name"] == name)
+                .and_then(|l| l["registration_order"].as_u64())
+                .expect("registration_order")
+        };
+        assert_eq!(
+            ordinal("first"),
+            1,
+            "the layer registered first must be #1, not whatever z-order put first"
+        );
+        assert_eq!(ordinal("second"), 2);
+
+        // The human output carries the same numbering.
+        let cli_text = Cli {
+            socket: Some(server.socket_path.clone()),
+            usage: false,
+            command: Some(Commands::Status { json: false }),
+        };
+        let mut text_out = Vec::new();
+        let mut text_err = Vec::new();
+        assert_eq!(
+            run_cli(cli_text, &mut text_out, &mut text_err),
+            ExitCode::SUCCESS
+        );
+        let text = String::from_utf8(text_out).expect("utf8");
+        assert!(
+            text.contains("#1: Layer ID: 1, Name: \"first\""),
+            "the text listing must number by registration order too, got:\n{text}"
+        );
+        assert!(text.contains("#2: Layer ID: 2, Name: \"second\""));
+
+        drop(h1);
+        drop(h2);
+    }
+
     /// Test scenario: 합성 프레임 덤프를 보여주는 읽기 명령
     #[test]
     fn test_composite_frame_dump() {
@@ -1048,19 +1114,43 @@ mod tests {
         );
     }
 
-    /// Test scenario: CLI 바이너리가 `hidapi`를 링크하지 않는다.
+    /// Test scenario: CLI 바이너리가 `hidapi`를 링크하지 않는다 (R19).
     ///
-    /// 이 크레이트를 `--all-features`로 빌드하면 `daemon`이 모든 타깃에 켜지므로
-    /// 그 구성에서는 이 검사가 성립하지 않는다. 실제 배포 구성인 기본 피처에서만
-    /// 확인한다 — `--no-default-features` 의존성 트리 검사가 검증 계약에서 같은
-    /// 불변식을 한 번 더 잡는다.
+    /// `/proc/self/maps`만 보는 검사로는 잡히지 않는다. 이 크레이트의 `hidapi`는
+    /// 정적으로 링크되므로 적재된 공유 라이브러리 목록에는 애초에 나타나지 않고,
+    /// 링크되어 있을 때조차 그 검사는 통과한다. 그래서 심벌을 직접 본다.
+    ///
+    /// `--all-features`에서는 `daemon`이 모든 타깃에 켜져 링크가 정당하므로 제외한다.
+    /// 그 구성에서 실제로 심벌이 있다는 대조군은 CI의 `rust-crate` 작업이 두 산출물을
+    /// 따로 빌드해 확인한다.
     #[cfg(not(feature = "daemon"))]
     #[test]
     fn test_cli_binary_does_not_link_hidapi() {
-        if let Ok(maps) = std::fs::read_to_string("/proc/self/maps") {
+        // The needles are assembled byte by byte at run time on purpose: written as
+        // string literals they would be compiled into this very binary's read-only
+        // data, and the test would find itself and fail on a clean build.
+        let needle = |suffix: &[u8]| -> Vec<u8> {
+            let mut name = vec![b'h', b'i', b'd', b'_'];
+            name.extend_from_slice(suffix);
+            name
+        };
+        // The symbols hidapi's C backends define. A debug build keeps its symbol
+        // table, which is the configuration this test runs in.
+        let symbols = [
+            needle(&[b'i', b'n', b'i', b't']),
+            needle(&[b'o', b'p', b'e', b'n', b'_', b'p', b'a', b't', b'h']),
+            needle(&[b'w', b'r', b'i', b't', b'e']),
+        ];
+
+        let Ok(binary) = std::fs::read("/proc/self/exe") else {
+            // Not Linux, or /proc is not mounted. The CI job checks the artifact.
+            return;
+        };
+        for symbol in &symbols {
             assert!(
-                !maps.contains("hidapi"),
-                "CLI process must not link or load libhidapi: found in /proc/self/maps"
+                !binary.windows(symbol.len()).any(|w| w == symbol.as_slice()),
+                "the CLI must stay hidapi-free, but {} appears in its symbols",
+                String::from_utf8_lossy(symbol)
             );
         }
     }

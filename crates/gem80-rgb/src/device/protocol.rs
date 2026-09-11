@@ -24,7 +24,7 @@ pub const HOSTRGB_SIDE_STRIP_COUNT: usize = 5;
 pub const HOSTRGB_SIDE_LOGO_COUNT: usize = 7;
 
 /// Total number of side LEDs (strip + logo).
-pub const HOSTRGB_SIDE_LED_COUNT: usize = HOSTRGB_SIDE_STRIP_COUNT + HOSTRGB_SIDE_LOGO_COUNT; // 12
+pub const HOSTRGB_SIDE_LED_COUNT: usize = HOSTRGB_SIDE_STRIP_COUNT + HOSTRGB_SIDE_LOGO_COUNT;
 
 /// Deadline unit resolution in milliseconds (10 ms per unit).
 pub const HOSTRGB_DEADLINE_UNIT_MS: u32 = 10;
@@ -59,8 +59,7 @@ pub const MAX_DEADLINE_MS: u32 = (MAX_DEADLINE_UNITS as u32) * HOSTRGB_DEADLINE_
 
 /// Total number of packets required to send a full 101-LED frame.
 /// 11 packets of 9 LEDs (99 LEDs) + 1 packet of 2 LEDs = 12 packets.
-pub const PACKETS_PER_FULL_FRAME: usize =
-    (HOSTRGB_LED_COUNT + HOSTRGB_LEDS_PER_PACKET - 1) / HOSTRGB_LEDS_PER_PACKET;
+pub const PACKETS_PER_FULL_FRAME: usize = HOSTRGB_LED_COUNT.div_ceil(HOSTRGB_LEDS_PER_PACKET);
 
 /// Error type for Gem80 device protocol and transport operations.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -113,9 +112,21 @@ pub struct ProbeResponse {
 }
 
 impl ProbeResponse {
-    /// Check whether the reported protocol revision is compatible (revision 2).
+    /// Whether this daemon can drive the device that answered.
+    ///
+    /// The revision alone is not enough. The renderer addresses LEDs with the
+    /// constants above baked in — 101 LEDs, 9 per packet, the side chain starting
+    /// at 89 — so a revision 2 device that reports a different geometry would be
+    /// entered into direct mode and then written at the wrong addresses (G3, KTD3).
     pub fn is_compatible(&self) -> bool {
-        self.protocol == HOSTRGB_PROTOCOL
+        self.protocol == HOSTRGB_PROTOCOL && self.geometry_matches()
+    }
+
+    /// Whether the reported LED geometry is the one the renderer is built for.
+    pub fn geometry_matches(&self) -> bool {
+        usize::from(self.led_count) == HOSTRGB_LED_COUNT
+            && usize::from(self.leds_per_packet) == HOSTRGB_LEDS_PER_PACKET
+            && usize::from(self.side_first) == HOSTRGB_SIDE_FIRST
     }
 }
 
@@ -160,7 +171,7 @@ pub fn deadline_ms_to_units(deadline_ms: u32) -> Result<u16, DeviceError> {
         });
     }
     // Round up to ensure the watchdog deadline is not shorter than requested
-    let units = (deadline_ms + HOSTRGB_DEADLINE_UNIT_MS - 1) / HOSTRGB_DEADLINE_UNIT_MS;
+    let units = deadline_ms.div_ceil(HOSTRGB_DEADLINE_UNIT_MS);
     if units > MAX_DEADLINE_UNITS as u32 {
         return Err(DeviceError::InvalidDeadline {
             deadline_ms,
@@ -188,8 +199,7 @@ pub fn build_mode_packet(mask: u8, deadline_ms: u32) -> Result<[u8; PAYLOAD_SIZE
     packet[0] = HOSTRGB_CMD;
     packet[1] = HOSTRGB_SUB_MODE;
     packet[2] = mask;
-    packet[3] = (deadline_units & 0xFF) as u8;
-    packet[4] = ((deadline_units >> 8) & 0xFF) as u8;
+    packet[3..5].copy_from_slice(&deadline_units.to_le_bytes());
     Ok(packet)
 }
 
@@ -262,8 +272,7 @@ pub fn build_heartbeat_packet(deadline_ms: u32) -> Result<[u8; PAYLOAD_SIZE], De
     let mut packet = [0u8; PAYLOAD_SIZE];
     packet[0] = HOSTRGB_CMD;
     packet[1] = HOSTRGB_SUB_HEARTBEAT;
-    packet[2] = (deadline_units & 0xFF) as u8;
-    packet[3] = ((deadline_units >> 8) & 0xFF) as u8;
+    packet[2..4].copy_from_slice(&deadline_units.to_le_bytes());
     Ok(packet)
 }
 
@@ -332,6 +341,35 @@ mod tests {
         assert_eq!(probe.leds_per_packet, 9);
         assert_eq!(probe.side_first, 89);
         assert!(probe.is_compatible());
+    }
+
+    /// Test scenario: 개정은 2지만 보고된 기하가 렌더러의 상수와 다르면 호환되지 않는다
+    /// (G3, KTD3).
+    #[test]
+    fn test_probe_response_with_mismatched_geometry_is_incompatible() {
+        let base = |led_count: u8, leds_per_packet: u8, side_first: u8| {
+            let mut resp = [0u8; PAYLOAD_SIZE];
+            resp[0] = HOSTRGB_CMD;
+            resp[1] = HOSTRGB_SUB_PROBE;
+            resp[2] = HOSTRGB_PROTOCOL;
+            resp[3] = led_count;
+            resp[4] = leds_per_packet;
+            resp[5] = side_first;
+            parse_probe_response(&resp).expect("a revision 2 answer still decodes")
+        };
+
+        assert!(base(101, 9, 89).is_compatible());
+
+        for (led_count, leds_per_packet, side_first) in
+            [(96, 9, 89), (101, 8, 89), (101, 9, 84), (0, 0, 0)]
+        {
+            let probe = base(led_count, leds_per_packet, side_first);
+            assert!(
+                !probe.is_compatible(),
+                "geometry {led_count}/{leds_per_packet}/{side_first} must not be driven"
+            );
+            assert!(!probe.geometry_matches());
+        }
     }
 
     #[test]

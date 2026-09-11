@@ -28,8 +28,6 @@ pub struct SingleInstanceGuard {
     path: PathBuf,
 }
 
-pub type SingleInstance = SingleInstanceGuard;
-
 impl SingleInstanceGuard {
     /// Attempts to acquire the single-instance lock at the default path ($RUNTIME_DIR/gem80-rgb.lock).
     pub fn acquire() -> Result<Self, SingleInstanceError> {
@@ -41,10 +39,8 @@ impl SingleInstanceGuard {
         let path = path.as_ref().to_path_buf();
 
         if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| SingleInstanceError::Io(path.clone(), e))?;
-            }
+            std::fs::create_dir_all(parent)
+                .map_err(|e| SingleInstanceError::Io(path.clone(), e))?;
         }
 
         let mut options = std::fs::OpenOptions::new();
@@ -101,11 +97,6 @@ impl SingleInstanceGuard {
             Ok(false)
         }
     }
-}
-
-/// Convenience free function to acquire the single-instance lock at the default path.
-pub fn acquire() -> Result<SingleInstanceGuard, SingleInstanceError> {
-    SingleInstanceGuard::acquire()
 }
 
 /// Convenience free function to acquire the single-instance lock at a custom path.
@@ -226,6 +217,38 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
+    /// Environment variable naming the lockfile the child holder must take.
+    const HOLDER_LOCK_ENV: &str = "GEM80_RGB_TEST_HOLD_LOCK";
+
+    /// The child half of `test_process_termination_releases_lock`.
+    ///
+    /// Ignored by default and a no-op unless the parent set the environment
+    /// variable, so an ordinary `--include-ignored` run neither hangs nor locks
+    /// anything. It acquires the lock, says so on stdout, and then waits to be
+    /// killed: an orderly exit would release the lock through `Drop` and prove
+    /// nothing about what the kernel does when a holder dies.
+    #[test]
+    #[ignore = "spawned by test_process_termination_releases_lock as the lock holder"]
+    fn hold_lock_until_killed() {
+        let Ok(lock_file) = std::env::var(HOLDER_LOCK_ENV) else {
+            return;
+        };
+        let guard = acquire_at(&lock_file).expect("the child holder must acquire the lock");
+        println!("LOCKED");
+        use std::io::Write;
+        std::io::stdout().flush().expect("flush the handshake");
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            std::hint::black_box(&guard);
+        }
+    }
+
+    /// Test scenario: 락을 쥔 프로세스가 급사하면 OS가 flock을 풀어 주고, 다음 데몬이
+    /// 곧바로 락을 얻는다. Covers AE12.
+    ///
+    /// The holder is this same test binary re-executed, not an interpreter: the
+    /// fact under test belongs to the kernel, and reaching for `python3` would tie
+    /// the suite to whatever the CI image happens to ship.
     #[test]
     fn test_process_termination_releases_lock() {
         use std::io::{BufRead, BufReader};
@@ -235,40 +258,46 @@ mod tests {
         std::fs::create_dir_all(&temp_dir).unwrap();
         let lock_file = temp_dir.join("process.lock");
 
-        // Spawn a child python process that acquires advisory flock and holds it
-        let mut child = Command::new("python3")
+        let mut child = Command::new(std::env::current_exe().expect("locate the test binary"))
             .args([
-                "-c",
-                &format!(
-                    "import fcntl, time, sys\n\
-                     f = open('{}', 'w')\n\
-                     fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)\n\
-                     sys.stdout.write('LOCKED\\n')\n\
-                     sys.stdout.flush()\n\
-                     time.sleep(30)",
-                    lock_file.display()
-                ),
+                "--exact",
+                "single_instance::tests::hold_lock_until_killed",
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
             ])
+            .env(HOLDER_LOCK_ENV, &lock_file)
             .stdout(Stdio::piped())
             .spawn()
-            .expect("spawn python child locker");
+            .expect("spawn the child lock holder");
 
-        // Wait until child has acquired lock
-        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        // Wait until the child actually holds the lock: testing before that would
+        // prove nothing.
+        let mut stdout = BufReader::new(child.stdout.take().expect("child stdout"));
         let mut line = String::new();
-        stdout.read_line(&mut line).unwrap();
-        assert_eq!(line.trim(), "LOCKED");
+        loop {
+            line.clear();
+            let read = stdout
+                .read_line(&mut line)
+                .expect("read the child handshake");
+            assert_ne!(read, 0, "the child exited before it took the lock");
+            // The harness writes `test <name> ... ` with no newline before the
+            // test's own output, so the signal lands at the end of that line.
+            if line.trim_end().ends_with("LOCKED") {
+                break;
+            }
+        }
 
-        // While child is running, acquiring from Rust fails
-        let err = acquire_at(&lock_file).expect_err("must fail while child holds lock");
+        // While the holder lives, acquiring the same lock fails.
+        let err = acquire_at(&lock_file).expect_err("must fail while the holder lives");
         assert!(matches!(err, SingleInstanceError::AlreadyRunning(_)));
 
-        // Terminate child process (simulates process crash/exit)
-        child.kill().expect("kill child process");
+        // The holder dies without unlocking anything itself.
+        child.kill().expect("kill the child lock holder");
         let _ = child.wait();
 
-        // After child termination, acquiring from Rust succeeds immediately
-        let guard = acquire_at(&lock_file).expect("must succeed after child terminated");
+        // The kernel released the flock with the process, so the next daemon starts.
+        let guard = acquire_at(&lock_file).expect("must succeed once the holder is gone");
         drop(guard);
 
         let _ = std::fs::remove_dir_all(&temp_dir);

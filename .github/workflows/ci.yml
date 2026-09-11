@@ -324,13 +324,39 @@ jobs:
         run: cargo build --all-targets --features daemon
       - run: cargo test --all-features
       - run: cargo fmt --check
-      - name: Verify client dependency isolation (no hidapi in default features)
+      # `cargo tree --no-default-features` proved nothing: `default = []`, so the
+      # flag turns nothing off, and the tree it printed was not the one the shipped
+      # CLI is built from. This inspects the artifact instead, and checks the daemon
+      # first so a detection that has stopped working fails loudly rather than
+      # passing everything.
+      - name: Verify client dependency isolation (no hidapi in the shipped CLI)
         if: matrix.crate == 'crates/gem80-rgb'
         run: |
-          if cargo tree --no-default-features | grep -q '\bhidapi\b'; then
-            echo "hidapi must not appear in default features dependency tree" >&2
+          set -euo pipefail
+          # A separate target directory: a build that also asks for `daemon`
+          # unifies the feature back onto the CLI in the shared one.
+          isolation_dir="$RUNNER_TEMP/gem80-rgb-isolation"
+          cargo build --bin gem80-rgbctl --target-dir "$isolation_dir"
+          cargo build --bin gem80-rgbd --features daemon --target-dir "$isolation_dir"
+          hidapi_symbols() {
+            nm -a "$1" 2>/dev/null | grep -c -E 'hid_init|hid_open|hid_write' || true
+          }
+          daemon_hits=$(hidapi_symbols "$isolation_dir/debug/gem80-rgbd")
+          if [[ $daemon_hits -eq 0 ]]; then
+            echo "this check is broken: no hidapi symbols found in the daemon either" >&2
             exit 1
           fi
+          cli_hits=$(hidapi_symbols "$isolation_dir/debug/gem80-rgbctl")
+          if [[ $cli_hits -ne 0 ]]; then
+            echo "gem80-rgbctl links hidapi ($cli_hits symbols); the client must stay hidapi-free" >&2
+            exit 1
+          fi
+          echo "gem80-rgbctl is hidapi-free ($daemon_hits hidapi symbols in the daemon)"
+      # `cargo test --all-features` above never exercises the default build's own
+      # test set, which is what a client library consumer compiles.
+      - name: Test with default features
+        if: matrix.crate == 'crates/gem80-rgb'
+        run: cargo test
 
   compound-engineering-overlays:
     name: compound-engineering overlays
