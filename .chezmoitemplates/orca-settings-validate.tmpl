@@ -1,0 +1,86 @@
+{{- /*
+orca-settings-validate.tmpl — fail the apply LOUDLY on a bad Orca settings
+declaration, before the reconciler renders a single line of script.
+
+Modelled on claude-settings-validate.tmpl, which is the same guard for
+~/.claude/settings.json. Two checks differ because the target differs, and both
+differences are the reason this is a separate partial rather than a parameter:
+
+  - ORCA'S DOCUMENT IS NOT ITS SETTINGS OBJECT. orca-data.json holds
+    worktreeMeta, workspaceSession, automations and telemetry beside `settings`,
+    and only the application may write those. Check 3 pins every declared path
+    under `settings.` so a data edit cannot reach them.
+  - AN ARRAY LEAF IS LEGAL HERE. disabledTuiAgents is a list Orca replaces
+    wholesale, and the repository owns the whole list (see .chezmoidata/orca.yaml).
+    A map is still rejected: writing one would replace a record and destroy the
+    siblings the application put in it.
+
+Every check aborts the whole chezmoi command. None can be satisfied by a runtime
+skip, because a declaration this file rejects is wrong on every host.
+
+  1. SHAPE. orca.settings is a map. An EMPTY map is valid and means "manage
+     nothing" -- the reconciler renders a notice and no assertion loop.
+  2. PATH GRAMMAR. Each key is a dot-separated path to a leaf in orca-data.json.
+     Every dot is a separator, so a segment must be non-empty.
+  3. SETTINGS NAMESPACE ONLY. A path outside `settings.` addresses application
+     state this repository must not assert.
+  4. NO MAP VALUES. A map value would be written wholesale by setpath and would
+     destroy every sibling the application put inside that record.
+  5. ONE PLACEHOLDER. @homeDir@ is the only @…@ form the reconciler substitutes;
+     any other would reach orca-data.json unresolved and corrupt the value. The
+     check strips every @homeDir@ before looking for what is left, so a value
+     carrying both the resolved placeholder and an unresolved one still fails.
+  6. NO PATH OVERLAP. Two declared paths where one is an ancestor of the other
+     pass every per-path check, then the write applies them in sequence against
+     progressively mutated state and dies on a scalar it created itself. Under
+     `set -e` that aborts the apply with a bare jq error naming no path, so only
+     this render-time check can report it usefully.
+
+  {{ includeTemplate "orca-settings-validate.tmpl" (dict "ctx" . "settings" $settings) }}
+*/ -}}
+{{- $ctx := .ctx -}}
+{{- if not $ctx -}}{{- fail "orca-settings-validate.tmpl: ctx is required" -}}{{- end -}}
+{{- $settings := .settings -}}
+{{- if not (kindIs "map" $settings) -}}
+{{-   fail (printf "config-orca-settings: orca.settings must be a map, got %s" (kindOf $settings)) -}}
+{{- end -}}
+{{- /* Segments start with a letter and admit digits, underscore and hyphen. The
+   trailing hyphen in the class is a literal, not a range. This regexp rejects an
+   empty path, an empty segment, and any segment carrying a character an
+   orca-data.json key cannot hold. */ -}}
+{{- $pathRe := "^[A-Za-z][A-Za-z0-9_-]*([.][A-Za-z][A-Za-z0-9_-]*)*$" -}}
+{{- $placeholderRe := "@[A-Za-z0-9_-]+@" -}}
+{{- range $path, $value := $settings -}}
+{{-   if not (regexMatch $pathRe $path) -}}
+{{-     fail (printf "config-orca-settings: %q is not a valid settings path; use dot-separated segments naming a leaf in orca-data.json, each segment non-empty and starting with a letter" $path) -}}
+{{-   end -}}
+{{-   if not (hasPrefix "settings." $path) -}}
+{{-     fail (printf "config-orca-settings: declared path %s is outside the settings namespace; orca-data.json also holds worktree metadata, workspace session state, automations and telemetry that only Orca may write, so every declared path must start with settings." $path) -}}
+{{-   end -}}
+{{-   if kindIs "map" $value -}}
+{{-     fail (printf "config-orca-settings: %s declares a map value, but a declared path must name a leaf; asserting a record would replace it wholesale and destroy every sibling Orca put there. Declare each leaf separately" $path) -}}
+{{-   end -}}
+{{-   if kindIs "slice" $value -}}
+{{-     range $element := $value -}}
+{{-       if or (kindIs "map" $element) (kindIs "slice" $element) -}}
+{{-         fail (printf "config-orca-settings: %s declares an array holding a %s; an array leaf is replaced whole and must hold scalars only" $path (kindOf $element)) -}}
+{{-       end -}}
+{{-     end -}}
+{{-   else -}}
+{{-     if kindIs "string" $value -}}
+{{-       if regexMatch $placeholderRe (replace "@homeDir@" "" $value) -}}
+{{-         fail (printf "config-orca-settings: %s has value %q carrying an @…@ placeholder the reconciler does not substitute; the only one it resolves is @homeDir@ (-> .chezmoi.homeDir)" $path $value) -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- /* Overlap is checked only after EVERY path has passed the grammar rule above:
+   Go template map iteration has no defined order, so a shared pass would let this
+   check fire on a malformed path and report the wrong reason. */ -}}
+{{- range $path, $value := $settings -}}
+{{-   range $other, $_ := $settings -}}
+{{-     if and (ne $other $path) (hasPrefix (printf "%s." $path) $other) -}}
+{{-       fail (printf "config-orca-settings: declared path %s is an ancestor of %s; only one of them can name a leaf, and declaring both aborts the apply with no usable diagnostic" $path $other) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
