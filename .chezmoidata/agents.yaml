@@ -298,142 +298,20 @@ agents:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-omp }
     pluginsRemoved: []
-    # omp config.yml VALUES asserted into the live ~/.omp/agent/config.yml by
-    # .chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl.
-    #
-    # config.yml is NOT a chezmoi target: omp rewrites it through /model,
-    # /settings, and first-run setup, so a managed-readonly target produced
-    # permanent drift.
-    #
-    # The declaration is deliberately narrow. Every role runs one model, so a
-    # seat's model is predictable without reading a tier table; `tiny` is the
-    # single exception, because a background seat on the main model wastes
-    # quota that is the scarce resource here. The role NAMES are omp's own
-    # schema, so the set is kept whole rather than trimmed.
-    #
-    # enabledModels and disabledProviders are what actually close the
-    # selectable set: pinning role values alone leaves /model free to pick an
-    # unapproved provider, and an undeclared key survives the next apply.
-    #
-    # startup.setupWizard, setupVersion, symbolPreset and the three notification
-    # leaves are the non-model exceptions. A first-run wizard blocks
-    # non-interactive use and writes
-    # config that competes with these assertions. symbolPreset is a glyph-set
-    # enum, not a family: `nerd` is safe because .chezmoidata/fonts.yaml
-    # installs the Nerd Font archives on every managed host and families.mono
-    # is JetBrainsMono Nerd Font, so omp's icons render instead of falling
-    # back to boxes.
     settings:
       startup.setupWizard: false
       setupVersion: 1
       symbolPreset: nerd
-      # Two presentation keys carried over from the pre-retirement declaration.
-      # Both are terminal-side only; neither touches the model or tool surface.
-      #
-      # tui.resizeScrollback: rebuild redraws the scrollback on a terminal
-      # resize instead of leaving reflowed lines broken, which is what a
-      # dispatched worker's transcript needs to stay readable after the pane
-      # changes width.
-      #
-      # display.showTokenUsage: true keeps per-turn token usage on screen, the
-      # one signal that says a worker is burning quota before its turn ends.
       tui.resizeScrollback: rebuild
       display.showTokenUsage: true
-      # Desktop notifications are pinned off. omp runs here only as an
-      # orchestration subagent, so a turn-completion popup per worker is noise
-      # nobody is watching for.
-      #
-      # These three are the whole desktop-notification surface of the pinned omp
-      # in .chezmoidata/releases.json: its settings schema emits a notification
-      # only from a key named `*.notify`, delivered through notify-send/gdbus on
-      # Linux and osascript on macOS. The rest of omp's own "Notifications" UI
-      # group -- ask.timeout, recap.* -- is a timeout and a terminal recap, not a
-      # popup. That enumeration is tied to the pinned version, so an omp bump
-      # must re-check whether a new `*.notify` key appeared.
-      #
-      # error.notify already defaults to off. It is declared anyway because this
-      # reconciler leaves an UNDECLARED key alone: a value flipped through
-      # /settings would otherwise survive the next apply. Declaring is what pins.
-      #
-      # The values are enum tokens, not booleans. Quoting is the notation that
-      # says so; the guard that actually holds them is the JSON type-and-value
-      # check in .ci/test-omp-settings-reconcile.sh, because the parser here
-      # (go-yaml v3) already reads unquoted off as the string "off" -- so
-      # removing the quotes would change nothing and cannot be a failure case.
       completion.notify: "off"
       error.notify: "off"
       ask.notify: "off"
-      # Harness-owned memory and turn-end autolearn are pinned off. This
-      # repository declares standing instructions rather than accumulating them,
-      # and harness-owned memory is an unreviewed, unreconciled second source.
-      #
-      # A master switch alone is not enough: memory.backend is an enum selecting
-      # the backend pipeline, while memories.enabled (rollout summaries),
-      # autolearn.enabled, and autolearn.autoContinue (turn-end lesson capture)
-      # are independent booleans.
-      #
-      # All four default to off in the pinned omp version. They are declared
-      # anyway because this reconciler leaves an UNDECLARED key alone: a value
-      # flipped through /settings would survive the next apply. Declaring is what
-      # pins, for the same reason error.notify is declared above.
-      #
-      # These four are the whole MASTER-SWITCH surface confirmed in the pinned
-      # omp version in .chezmoidata/releases.json, not the whole key surface:
-      # that build reports 47 memory-related keys, the rest being tuning values
-      # (memories.* rollout limits, mnemopi.*, sharpshooter.*,
-      # providers.memoryModel, autolearn.minToolCalls) that only run once one of
-      # these four opens a path. Because this enumeration is tied to that
-      # version, an omp bump must re-check `omp config list --json` for a new
-      # switch, and for a tuning key that has become independently load-bearing.
-      #
-      # A renamed key is not a silent failure here: the reconciler treats a
-      # declared path omp no longer reports as a typo and exits non-zero, which
-      # halts the whole apply before 80-keys and 90-src. That is deliberate, and
-      # it is why the recheck belongs in the bump checklist.
-      #
-      # "off" is an enum token rather than a boolean; quoting is the notation
-      # convention that indicates this.
-      #
-      # Note that autolearn.enabled gates not only turn-end lesson capture but
-      # also the manage_skill tool in pinned omp (KTD8); keeping it disabled
-      # retains today's behavior where manage_skill is inactive.
       memory.backend: "off"
       memories.enabled: false
       autolearn.enabled: false
       autolearn.autoContinue: false
-      # astGrep.enabled is pinned on so omp can run the structural AST search
-      # named in .chezmoitemplates/agents-instructions.tmpl.
-      #
-      # The instruction file names both ast_grep and ast_edit as omp file tools.
-      # On the pinned build astEdit.enabled already defaults to true, while
-      # astGrep.enabled defaults to false. This key gates only ast_grep.
       astGrep.enabled: true
-      # Project-scope skill and command discovery is closed, so a SKILL.md or a
-      # .claude/commands/*.md committed to a dispatched checkout cannot reach
-      # the agent as a skill or a command. It is NOT a claim that the checkout
-      # reaches the agent with nothing: omp still loads a project's own
-      # instruction files (AGENTS.md, CLAUDE.md), which the shared instruction
-      # core names as the binding local supplement, and no omp setting gates
-      # them. Project scope is disabled across every harness omp recognizes:
-      # skills.enableAgentsProject, skills.enableClaudeProject,
-      # skills.enablePiProject, commands.enableClaudeProject, and
-      # commands.enableOpencodeProject.
-      #
-      # The four user-scope twins (skills.enableClaudeUser,
-      # skills.enableCodexUser, commands.enableClaudeUser,
-      # commands.enableOpencodeUser) already default to false. They are declared
-      # anyway because undeclared keys survive the next apply.
-      #
-      # The three load-bearing user-scope keys are pinned ON for the same
-      # reason. ~/.agents/skills is the managed tree this harness exists to
-      # use, and leaving its switches undeclared means one /settings toggle
-      # blanks it with no apply that restores it.
-      #
-      # Cost: this repository's own committed .agents/skills and .claude/skills
-      # trees become invisible to an omp worker dispatched here, while claude
-      # and codex in the same worktree still read them. The asymmetry is
-      # accepted deliberately, because no signal distinguishes a first-party
-      # checkout from an arbitrary one at settings-assertion time.
       skills.enableAgentsProject: false
       skills.enableClaudeProject: false
       skills.enablePiProject: false
@@ -470,6 +348,7 @@ agents:
         smol: google-antigravity/gemini-3.8-flash:high
         tiny: google-antigravity/gemini-3.1-flash-lite:minimal
         worker: google-antigravity/gemini-3.8-flash:high
+      model.loopGuard.enabled: false
   codex:
     # Codex CLI config.toml VALUES asserted into the live ~/.codex/config.toml by
     # the codex settings reconciler. Each key is a dot-separated path to a LEAF;
