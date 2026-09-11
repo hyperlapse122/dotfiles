@@ -260,10 +260,21 @@ if [ "$drifted" -eq 0 ]; then
   exit 0
 fi
 
+# The replacement carries the target's own mode rather than a fixed one: Orca owns
+# this file and writes it 0644 itself, so clamping would be undone within seconds
+# of the next launch, while hardcoding 0644 would silently undo any future
+# tightening. An unreadable mode falls back to 0600, never 0644 -- the direction
+# that must never happen is widening.
+data_mode="$(stat -c %a -- "$data" 2>/dev/null || true)"
+case "$data_mode" in
+  [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) ;;
+  *) data_mode=0600 ;;
+esac
+
 # Staged in the target's own directory so the replacement is a same-filesystem
 # rename; staging under TMPDIR would cross filesystems.
 staged="$(mktemp "$(dirname "$data")/.orca-data.XXXXXX")"
-chmod 0644 "$staged"
+chmod "$data_mode" "$staged"
 # `drifted_paths` is the classifier's verdict, not the declaration: an unknown or
 # blocked path never reaches setpath, which would otherwise abort under `set -e`
 # with a bare jq error naming nothing.

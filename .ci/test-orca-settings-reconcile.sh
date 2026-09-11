@@ -177,9 +177,29 @@ assert_json() {
 # Converged input writes nothing at all.
 reset_fixture
 before=$(cat "$data")
+before_mode=$(stat -c %a -- "$data")
 run --mode assert >/dev/null 2>&1
 [[ $(cat "$data") == "$before" ]] || fail 'assert rewrote an already-converged document; a second apply must change zero bytes'
-ok 'a converged document is left byte-identical'
+[[ $(stat -c %a -- "$data") == "$before_mode" ]] || fail 'assert changed the mode of an already-converged document'
+ok 'a converged document is left byte-identical and mode-identical'
+
+reset_fixture
+drift_one
+chmod 0600 "$data"
+run --mode assert >/dev/null 2>&1
+assert_json 'assert did not converge the 0600 drifted document' \
+  '.settings.appFontFamily == "Pretendard"'
+[[ $(stat -c %a -- "$data") == 600 ]] || fail 'assert widened a 0600 document'
+ok 'a drifted 0600 document preserves its mode'
+
+reset_fixture
+drift_one
+chmod 0644 "$data"
+run --mode assert >/dev/null 2>&1
+assert_json 'assert did not converge the 0644 drifted document' \
+  '.settings.appFontFamily == "Pretendard"'
+[[ $(stat -c %a -- "$data") == 644 ]] || fail 'assert narrowed a 0644 document'
+ok 'a drifted 0644 document preserves its mode'
 
 # Drift converges, and everything the declaration does not name survives.
 reset_fixture
@@ -432,5 +452,34 @@ if run --mode wat >/dev/null 2>&1; then
   fail 'an unknown --mode was accepted'
 fi
 ok 'an unknown --mode is rejected'
+
+reset_fixture
+drift_one
+run --mode=assert >/dev/null 2>&1 || fail 'the --mode=assert form exited non-zero'
+assert_json '--mode=assert did not converge the drifted leaf' \
+  '.settings.appFontFamily == "Pretendard"'
+ok 'the --mode=assert form converges the drifted leaf'
+
+for help_arg in -h --help; do
+  reset_fixture
+  before=$(cat "$data")
+  help_out=$(run "$help_arg") || fail "$help_arg exited non-zero"
+  [[ $help_out == 'usage: orca-settings-reconcile [--mode assert|report]' ]] \
+    || fail "$help_arg did not print the usage line: $help_out"
+  [[ $(cat "$data") == "$before" ]] || fail "$help_arg changed the live document"
+  ok "$help_arg prints usage and leaves the live document untouched"
+done
+
+reset_fixture
+missing_mode_err="$scratch/missing-mode.err"
+if run --mode >/dev/null 2>"$missing_mode_err"; then
+  fail 'a --mode with no value was accepted'
+else
+  missing_mode_rc=$?
+fi
+[[ $missing_mode_rc -eq 2 ]] || fail "a --mode with no value exited $missing_mode_rc instead of 2"
+grep -qxF 'orca-settings-reconcile: --mode needs a value (assert or report)' "$missing_mode_err" \
+  || fail "a --mode with no value printed the wrong error: $(cat "$missing_mode_err")"
+ok 'a --mode with no value reports its full error and exits 2'
 
 printf '\nall orca settings reconciler checks passed\n'
