@@ -1,0 +1,31 @@
+{{- $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+#
+# Asserts project trust across claude, codex, and antigravity harnesses for
+# every git checkout in ~/src and worktree in ~/.local/share/worktrees.
+#
+# RUNS ON EVERY APPLY (run_after): worktrees created outside chezmoi between
+# applies must be discovered and trusted on the next apply.
+#
+# PLACEMENT (90-src, after reconcile-garden and register-orca): chezmoi sorts
+# same-phase scripts lexically after stripping run_, after_, and .tmpl, so
+# `trust-agent-worktrees` sorts after `reconcile-garden` and `register-orca`,
+# ensuring newly grown garden checkouts are present before trust is stamped.
+#
+# Dependency fingerprint -- this script runs on every apply, so the fingerprint
+# below is not what triggers it. It is here so a registry edit re-renders the
+# script and the diff shows the two are coupled. Comment-only; never executed.
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "dot_config/garden/encrypted_readonly_garden.yaml.asc")) }}
+set -euo pipefail
+
+reconcile="${AGENT_TRUST_RECONCILER:-$HOME/.local/bin/agent-trust-reconcile}"
+if [[ ! -x "$reconcile" ]]; then
+  reconcile="{{ .chezmoi.sourceDir }}/dot_local/share/chezmoi-command-sources/executable_agent-trust-reconcile"
+fi
+
+if [[ ! -x "$reconcile" ]]; then
+  echo "trust-agent-worktrees: agent-trust-reconcile is not present; skipped trust seeding." >&2
+  exit 0
+fi
+
+"$reconcile" --all || true

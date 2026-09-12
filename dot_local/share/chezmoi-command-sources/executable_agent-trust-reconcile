@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""
+agent-trust-reconcile - Assert project trust across managed agent harnesses.
+
+Enforces trust for git checkouts and worktrees in:
+  - claude: ~/.claude.json (projects.<path>.hasTrustDialogAccepted = true)
+  - codex: ~/.codex/config.toml ([projects."<path>"] trust_level = "trusted")
+  - agy: ~/.gemini/antigravity-cli/settings.json (trustedWorkspaces: [ ... ])
+
+Supports explicit directory paths or scans ~/src and ~/.local/share/worktrees.
+All writes are strictly additive and atomic (0600 mode).
+"""
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def discover_checkouts(roots):
+    discovered = []
+    for root in roots:
+        root_path = Path(root).expanduser().resolve()
+        if not root_path.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(root_path):
+            if ".git" in dirnames or ".git" in filenames:
+                discovered.append(str(Path(dirpath).resolve()))
+                dirnames.clear()
+    return sorted(list(set(discovered)))
+
+
+def atomic_write_json(target_path, data):
+    target = Path(target_path).expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp_fd, temp_path = tempfile.mkstemp(
+        prefix=f".{target.name}.", dir=target.parent, text=True
+    )
+    try:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        os.chmod(temp_path, 0o600)
+        os.replace(temp_path, target)
+    except Exception:
+        if os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+        raise
+
+
+def reconcile_claude(claude_json_path, paths, verbose=False):
+    target = Path(claude_json_path).expanduser().resolve()
+    data = {}
+    if target.is_file():
+        try:
+            with open(target, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+        except Exception as e:
+            sys.stderr.write(f"agent-trust-reconcile: warning: failed reading {target}: {e}\n")
+            return False
+
+    if not isinstance(data, dict):
+        sys.stderr.write(f"agent-trust-reconcile: warning: {target} root is not an object\n")
+        return False
+
+    projects = data.setdefault("projects", {})
+    if not isinstance(projects, dict):
+        sys.stderr.write(f"agent-trust-reconcile: warning: {target} 'projects' is not an object\n")
+        return False
+
+    changed = False
+    for path in paths:
+        proj = projects.setdefault(path, {})
+        if not isinstance(proj, dict):
+            continue
+        if proj.get("hasTrustDialogAccepted") is not True:
+            proj["hasTrustDialogAccepted"] = True
+            changed = True
+
+    if changed:
+        atomic_write_json(target, data)
+        if verbose:
+            print(f"agent-trust-reconcile: updated claude trust in {target}")
+    return True
+
+
+def reconcile_antigravity(agy_settings_path, paths, verbose=False):
+    target = Path(agy_settings_path).expanduser().resolve()
+    data = {}
+    if target.is_file():
+        try:
+            with open(target, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+        except Exception as e:
+            sys.stderr.write(f"agent-trust-reconcile: warning: failed reading {target}: {e}\n")
+            return False
+
+    if not isinstance(data, dict):
+        sys.stderr.write(f"agent-trust-reconcile: warning: {target} root is not an object\n")
+        return False
+
+    trusted = data.setdefault("trustedWorkspaces", [])
+    if not isinstance(trusted, list):
+        sys.stderr.write(f"agent-trust-reconcile: warning: {target} 'trustedWorkspaces' is not a list\n")
+        return False
+
+    existing = set(trusted)
+    changed = False
+    for path in paths:
+        if path not in existing:
+            trusted.append(path)
+            existing.add(path)
+            changed = True
+
+    if changed:
+        atomic_write_json(target, data)
+        if verbose:
+            print(f"agent-trust-reconcile: updated antigravity trust in {target}")
+    return True
+
+
+def find_settings_reconciler():
+    env_rec = os.environ.get("RECONCILER")
+    if env_rec and os.path.isfile(env_rec) and os.access(env_rec, os.X_OK):
+        return env_rec
+    local_rec = Path.home() / ".local" / "bin" / "settings-reconcile"
+    if local_rec.is_file() and os.access(str(local_rec), os.X_OK):
+        return str(local_rec)
+    which_rec = shutil.which("settings-reconcile")
+    if which_rec:
+        return which_rec
+    return None
+
+
+def reconcile_codex(codex_home_path, codex_config_path, paths, verbose=False):
+    codex_home = Path(codex_home_path).expanduser().resolve()
+    target = Path(codex_config_path).expanduser().resolve()
+
+    missing_paths = []
+    existing_text = ""
+    if target.is_file():
+        try:
+            with open(target, "r", encoding="utf-8") as f:
+                existing_text = f.read()
+        except Exception as e:
+            sys.stderr.write(f"agent-trust-reconcile: warning: failed reading {target}: {e}\n")
+            return False
+
+        for path in paths:
+            header1 = f'[projects."{path}"]'
+            header2 = f"[projects.'{path}']"
+            if header1 not in existing_text and header2 not in existing_text:
+                missing_paths.append(path)
+    else:
+        missing_paths = list(paths)
+
+    if not missing_paths:
+        return True
+
+    codex_home.mkdir(parents=True, exist_ok=True)
+    overlay = {
+        "projects": {
+            path: {"trust_level": "trusted"}
+            for path in missing_paths
+        }
+    }
+
+    reconciler = find_settings_reconciler()
+    if reconciler:
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
+            json.dump(overlay, tmp)
+            tmp_path = tmp.name
+        try:
+            cmd = [reconciler, "settings", str(codex_home), target.name, tmp_path]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode != 0:
+                sys.stderr.write(f"agent-trust-reconcile: settings-reconcile failed: {res.stderr}\n")
+                return False
+            if verbose:
+                print(f"agent-trust-reconcile: updated codex trust via settings-reconcile in {target}")
+            return True
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    # Fallback if settings-reconcile binary is not present
+    append_chunks = []
+    for path in missing_paths:
+        safe_path = path.replace('"', '\\"')
+        append_chunks.append(f'\n[projects."{safe_path}"]\ntrust_level = "trusted"\n')
+
+    new_text = existing_text
+    if new_text and not new_text.endswith("\n"):
+        new_text += "\n"
+    new_text += "".join(append_chunks)
+
+    temp_fd, temp_path = tempfile.mkstemp(
+        prefix=f".{target.name}.", dir=target.parent, text=True
+    )
+    try:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        os.chmod(temp_path, 0o600)
+        os.replace(temp_path, target)
+        if verbose:
+            print(f"agent-trust-reconcile: updated codex trust via fallback in {target}")
+    except Exception:
+        if os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+        raise
+
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Assert project trust across claude, codex, and antigravity harnesses."
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="Paths to git checkouts or worktrees to trust (defaults to scanning ~/src and ~/.local/share/worktrees)",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Scan ~/src and ~/.local/share/worktrees in addition to explicit paths",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Verbose output"
+    )
+
+    args = parser.parse_args()
+
+    default_roots = [
+        os.environ.get("WORKTREES_DIR", str(Path.home() / ".local" / "share" / "worktrees")),
+        os.environ.get("SRC_DIR", str(Path.home() / "src")),
+    ]
+
+    target_paths = []
+    if args.paths:
+        for p in args.paths:
+            resolved = str(Path(p).expanduser().resolve())
+            target_paths.append(resolved)
+
+    if args.all or not args.paths:
+        target_paths.extend(discover_checkouts(default_roots))
+
+    target_paths = sorted(list(set(target_paths)))
+    if not target_paths:
+        if args.verbose:
+            print("agent-trust-reconcile: no checkouts found or specified.")
+        return 0
+
+    claude_json = os.environ.get(
+        "CLAUDE_CONFIG_FILE", str(Path.home() / ".claude.json")
+    )
+    agy_settings = os.environ.get(
+        "ANTIGRAVITY_SETTINGS_FILE",
+        str(
+            Path(os.environ.get("ANTIGRAVITY_DATA_DIR", str(Path.home() / ".gemini" / "antigravity-cli")))
+            / "settings.json"
+        ),
+    )
+    codex_home = os.environ.get(
+        "CODEX_HOME", str(Path.home() / ".codex")
+    )
+    codex_config = os.environ.get(
+        "CODEX_CONFIG_FILE", str(Path(codex_home) / "config.toml")
+    )
+
+    ok = True
+    ok &= reconcile_claude(claude_json, target_paths, verbose=args.verbose)
+    ok &= reconcile_antigravity(agy_settings, target_paths, verbose=args.verbose)
+    ok &= reconcile_codex(codex_home, codex_config, target_paths, verbose=args.verbose)
+
+    if args.verbose:
+        print(f"agent-trust-reconcile: reconciled trust for {len(target_paths)} path(s)")
+
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

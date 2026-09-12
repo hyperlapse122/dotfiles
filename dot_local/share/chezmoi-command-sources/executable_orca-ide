@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Wraps the Orca IDE CLI (`orca-ide`) to ensure agent trust is automatically
+# seeded whenever a new worktree is created via `orca-ide worktree create`.
+#
+# Direct pass-through (`exec`) for all other commands.
+set -euo pipefail
+
+self="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || echo "$0")"
+real_orca=""
+for candidate in \
+  "${ORCA_REAL_BIN:-}" \
+  "${ORCA_IDE_CLI:-}" \
+  "${ORCA_PREFIX:-/opt/Orca}/resources/bin/orca-ide" \
+  "/Applications/Orca.app/Contents/Resources/bin/orca-ide"
+do
+  [[ -n "$candidate" ]] || continue
+  cand_real="$(realpath "$candidate" 2>/dev/null || readlink -f "$candidate" 2>/dev/null || echo "$candidate")"
+  [[ "$cand_real" != "$self" ]] || continue
+  if [[ -x "$candidate" ]]; then
+    real_orca="$candidate"
+    break
+  fi
+done
+
+if [[ -z "$real_orca" ]]; then
+  printf 'orca-ide: no underlying Orca IDE binary found\n' >&2
+  exit 127
+fi
+
+is_worktree_create=0
+prev=""
+for arg in "$@"; do
+  if [[ "$prev" == "worktree" && "$arg" == "create" ]]; then
+    is_worktree_create=1
+    break
+  fi
+  prev="$arg"
+done
+
+if [[ $is_worktree_create -eq 0 ]]; then
+  exec "$real_orca" "$@"
+fi
+
+tmproot="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
+tmp_out="$(mktemp "$tmproot/orca-wt-create.XXXXXX")"
+cleanup() { rm -f -- "$tmp_out"; }
+trap cleanup EXIT
+
+set +e
+"$real_orca" "$@" > "$tmp_out"
+status=$?
+set -e
+
+cat "$tmp_out"
+
+if [[ $status -eq 0 ]]; then
+  reconciler_cmd="${AGENT_TRUST_RECONCILER:-}"
+  if [[ -z "$reconciler_cmd" ]]; then
+    if command -v agent-trust-reconcile >/dev/null 2>&1; then
+      reconciler_cmd="agent-trust-reconcile"
+    elif [[ -x "$HOME/.local/bin/agent-trust-reconcile" ]]; then
+      reconciler_cmd="$HOME/.local/bin/agent-trust-reconcile"
+    fi
+  fi
+
+  if [[ -n "$reconciler_cmd" ]]; then
+    created_path="$(python3 -c '
+import sys, json
+content = sys.stdin.read().strip()
+path = None
+try:
+    data = json.loads(content)
+    if isinstance(data, dict):
+        res = data.get("result", data)
+        if isinstance(res, dict):
+            wt = res.get("worktree", res.get("git", {}))
+            if isinstance(wt, dict) and "path" in wt:
+                path = wt["path"]
+except Exception:
+    pass
+if not path:
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("path:"):
+            path = line.split(":", 1)[1].strip()
+            break
+if path:
+    print(path)
+' < "$tmp_out" 2>/dev/null || true)"
+
+    if [[ -n "$created_path" && -d "$created_path" ]]; then
+      "$reconciler_cmd" "$created_path" >/dev/null 2>&1 || true
+    else
+      "$reconciler_cmd" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+
+exit $status
