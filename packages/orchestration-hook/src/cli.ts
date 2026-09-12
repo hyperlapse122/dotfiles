@@ -210,17 +210,30 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
 /**
  * What a harness receives from `guard` when nothing is denied.
  *
- * `{}` for both, not `emptyOutput`'s empty string for Codex. SessionStart
- * treats bare Codex stdout as model context, which is why that path emits
- * nothing; a PreToolUse response is parsed as a decision document instead, and
- * an empty body risks a deserialization error on a path that must never fail
- * loudly. `{}` is the same "no decision" on both harnesses.
+ * `{}` on every harness, not `emptyOutput`'s empty string for Codex.
+ * SessionStart treats bare Codex stdout as model context, which is why that
+ * path emits nothing; a tool-use response is parsed as a decision document
+ * instead, and an empty body risks a deserialization error on a path that must
+ * never fail loudly. `{}` is "no decision" everywhere.
+ *
+ * Antigravity would also accept an explicit allow here, and it must not get
+ * one: an allow from a hook overrides that harness's own permission prompt, so
+ * this gate would quietly auto-approve every tool call it did not deny. Saying
+ * nothing leaves the user's permission rules to decide.
  */
 function guardAllowOutput(): string {
   return "{}";
 }
 
-function guardDenyOutput(reason: string): string {
+/**
+ * The denial, in the document shape the harness actually reads.
+ *
+ * A response in the wrong shape is silently ignored, which reads as a gate that
+ * denies nothing at all — the failure the whole real-binary gate exists to
+ * catch, and one no diff shows.
+ */
+function guardDenyOutput(harness: Harness, reason: string): string {
+  if (harness === "agy") return JSON.stringify({ decision: "deny", reason });
   return JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -291,7 +304,7 @@ async function runGuard(argv: readonly string[], io: Io): Promise<number> {
   }
 
   const decision = decide(parsed as ToolEvent, io.env);
-  io.stdout(decision.deny ? guardDenyOutput(decision.reason) : guardAllowOutput());
+  io.stdout(decision.deny ? guardDenyOutput(harness, decision.reason) : guardAllowOutput());
   return 0;
 }
 

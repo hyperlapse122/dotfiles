@@ -434,6 +434,30 @@ describe("guard decisions", () => {
     expect(out.join("")).toBe("{}");
   });
 
+  it("denies in the document shape Antigravity reads", async () => {
+    // A response in the other harness's shape is ignored rather than rejected,
+    // so the gate would deny nothing at all and no diff would show it.
+    const body = JSON.stringify({
+      toolCall: { name: "run_command", args: { CommandLine: "claude -p x" } },
+    });
+    const { io, out } = guardIo(LEAD_ENV, body);
+    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
+    const parsed = JSON.parse(out.join("")) as { decision: string; reason: string };
+    expect(parsed.decision).toBe("deny");
+    expect(parsed.reason).toContain("Orca");
+  });
+
+  it("decides nothing when it does not deny on Antigravity", async () => {
+    // An explicit allow there overrides the harness's own permission prompt,
+    // which would turn this gate into a blanket auto-approval.
+    const body = JSON.stringify({
+      toolCall: { name: "run_command", args: { CommandLine: "echo hi" } },
+    });
+    const { io, out } = guardIo(LEAD_ENV, body);
+    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
+    expect(JSON.parse(out.join(""))).toEqual({});
+  });
+
   it("parses a pretty-printed body rather than stopping at the first newline", async () => {
     const pretty = JSON.stringify(
       { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "codex exec x" } },
