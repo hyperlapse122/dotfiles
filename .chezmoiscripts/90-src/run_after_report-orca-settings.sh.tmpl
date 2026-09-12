@@ -1,17 +1,36 @@
 {{- $sourceDir := .chezmoi.sourceDir -}}
 #!/usr/bin/env bash
 #
-# Reports how the live Orca settings differ from the declaration in
-# .chezmoidata/orca.yaml. It never writes: the reconciler it calls runs in
-# report mode, and the write itself belongs to orca-settings-reconcile.service
-# at graphical-session start.
+# Converges the live Orca settings onto the declaration in .chezmoidata/orca.yaml
+# when the application is down, then reports whatever still differs.
 #
-# WHY APPLY CANNOT WRITE THIS SURFACE. Orca reads orca-data.json once at startup
-# and never re-reads it, and while it runs it rewrites the whole document from
-# memory -- measured at roughly one write every nine seconds on an idle session.
-# `chezmoi apply` normally runs from a terminal inside Orca, so a value written
-# here would be both ignored and overwritten before the operator could restart.
-# Reporting is the only honest thing apply can do.
+# WHY APPLY MAY WRITE WHEN ORCA IS DOWN, AND ONLY THEN. Orca reads orca-data.json
+# once at startup and never re-reads it, and while it runs it rewrites the whole
+# document from memory -- measured at roughly one write every nine seconds on an
+# idle session. `chezmoi apply` usually runs from a terminal inside Orca, and a
+# value written there would be both ignored and overwritten before the operator
+# could restart; reporting is the only honest thing that apply can do. An apply on
+# a host where Orca is NOT running is the same safe moment the service unit waits
+# for, so it converges here instead of making the operator wait for a session
+# start that may be hours away.
+#
+# THE RUNNING CHECK IS NOT REPEATED HERE. orca-settings-reconcile owns it: in
+# `--mode assert` it reads the userData SingletonLock target and refuses to write
+# while a live Orca owns the document. Re-deriving that here would give the repo
+# two answers to one question, and the weaker of the two would decide. So this
+# script asks unconditionally for the assert and lets the reconciler decline it.
+#
+# WHY THE SERVICE RATHER THAN THE COMMAND. orca-settings-reconcile.service is the
+# one place that already declares how an assert runs -- its PATH, its 20s deadline
+# and its journal record -- so an apply-time convergence and a session-start
+# convergence stay the same event. The direct call is only the fallback for a host
+# with no usable user manager (a macOS host, an SSH session with no bus), where
+# the unit cannot run at all but the command still can.
+#
+# THE REPORT STILL RUNS AFTERWARDS, and it is the only apply-time output that
+# describes the outcome: the unit's own stdout goes to the journal, not to this
+# terminal. Silence after a convergence means the document matches; drift lines
+# mean Orca was running and the write was declined.
 #
 # WHY run_after AND NOT run_onchange. Drift is created by the application and by
 # the operator's own UI edits, and neither changes a chezmoi source fingerprint.
@@ -19,12 +38,19 @@
 # surface. run_after_register-orca.sh.tmpl beside it is the same shape for the
 # same reason.
 #
+# THE FILENAME STAYS `report-orca-settings` THOUGH THIS NOW ALSO WRITES. chezmoi
+# sorts same-phase scripts on the name left after stripping `run_`, `after_` and
+# `.tmpl`, so the name is load-bearing ordering, not a label: every rename that
+# reads better -- `reconcile-orca-settings`, `assert-orca-settings` -- sorts ahead
+# of `register-orca` and moves this script before Orca registration.
+#
 # GATING. The container skip lives in the single gated .chezmoiignore block
 # (`.chezmoiscripts/90-src/*.sh`), the same one that skips the reconciler and
 # the registry. No new declaration.
 #
-# NEVER FAILS THE APPLY. Drift is information, not an error: an operator who
-# deliberately left a setting alone should not have their apply go red for it.
+# NEVER FAILS THE APPLY. Drift is information, not an error, and neither a dead
+# user manager nor a failed unit is worth stranding every later phase over:
+# `chezmoi apply` stops at the first script error and --keep-going is flag-only.
 #
 # Dependency fingerprint -- this script runs on every apply, so the fingerprint
 # below is not what triggers it. It is here so a declaration edit re-renders the
@@ -33,12 +59,41 @@
 set -euo pipefail
 
 reconcile="$HOME/.local/bin/orca-settings-reconcile"
+unit=orca-settings-reconcile.service
 
 # The command is materialized by the command manifest earlier in the same apply.
 # A host that has not reached that step yet simply has nothing to report against.
 if [ ! -x "$reconcile" ]; then
   echo "report-orca-settings: $reconcile is not present yet; skipped the drift report." >&2
   exit 0
+fi
+{{ includeTemplate "user-manager-deadline-guard.sh.tmpl" (dict "ctx" . "name" "report-orca-settings") }}
+# The liveness probe answers in milliseconds and borrows its deadline from the
+# capability probes; starting the unit is real work and gets its own budget. It
+# is larger than the unit's own TimeoutStartSec=20s on purpose, so a unit that
+# hits its deadline reports that failure rather than being cut off here first.
+orca_settings_start_deadline_secs=${ORCA_SETTINGS_START_DEADLINE_SECS:-30}
+[[ "$orca_settings_start_deadline_secs" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "report-orca-settings: ORCA_SETTINGS_START_DEADLINE_SECS must be positive integer seconds" >&2; exit 1; }
+
+# The user manager is asked for liveness again at runtime rather than assumed
+# from a render-time token: the bus can be gone by the time this runs.
+started_unit=false
+if command -v systemctl >/dev/null 2>&1 &&
+  timeout -k "$user_manager_term_grace_secs" "$user_manager_deadline_secs" \
+    systemctl --user show-environment >/dev/null 2>&1; then
+  # run_after_reload-user-systemd.sh.tmpl (30-linux) has already daemon-reloaded
+  # in this same apply, so a unit deployed moments ago is visible here.
+  if timeout -k "$user_manager_term_grace_secs" "$orca_settings_start_deadline_secs" \
+    systemctl --user start "$unit"; then
+    started_unit=true
+  else
+    echo "report-orca-settings: $unit did not run (see journalctl --user -u $unit); asserting directly instead." >&2
+  fi
+fi
+
+if [ "$started_unit" = false ]; then
+  "$reconcile" --mode assert || true
 fi
 
 "$reconcile" --mode report || true
