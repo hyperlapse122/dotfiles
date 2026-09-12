@@ -1078,7 +1078,8 @@ cp -- "$repo_root/.chezmoidata/.capability-registry.tsv" \
   "$podman_source/.chezmoidata/.capability-registry.tsv"
 cp -- "$repo_root/.chezmoidata/facts.yaml" "$podman_source/.chezmoidata/facts.yaml"
 for shared in capability-cache-identity.sh capabilities.tmpl fingerprint.tmpl skip.sh.tmpl \
-  facts.tmpl facts-sh.tmpl facts-validate.tmpl shared-host-guard.sh.tmpl; do
+  facts.tmpl facts-sh.tmpl facts-validate.tmpl shared-host-guard.sh.tmpl \
+  user-manager-deadline-guard.sh.tmpl; do
   cp -- "$repo_root/.chezmoitemplates/$shared" "$podman_source/.chezmoitemplates/$shared"
 done
 cp -- "$repo_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
