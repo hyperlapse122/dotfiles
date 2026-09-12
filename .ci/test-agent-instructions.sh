@@ -142,6 +142,9 @@ done
 for coordinator_render in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   [[ -s $coordinator_render ]] || fail "$(basename "$coordinator_render") rendered empty"
 done
+if grep -F 'This harness is Claude Code' "$coordinator_claude_linux" >/dev/null; then
+  fail 'the coordinator payload identifies its reader as Claude Code'
+fi
 diff -q "$everyone_claude_linux" "$everyone_codex_linux" >/dev/null \
   || fail "Claude and Codex everyone payloads differ on Linux"
 diff -q "$everyone_claude_darwin" "$everyone_codex_darwin" >/dev/null \
@@ -250,6 +253,11 @@ omp_linux_core="$scratch/omp-linux-core.md"
 omp_darwin_core="$scratch/omp-darwin-core.md"
 extract_omp_payload "$omp_linux_render" "$omp_linux_body" "$omp_linux_core"
 extract_omp_payload "$omp_darwin_render" "$omp_darwin_body" "$omp_darwin_core"
+for omp_render in "$omp_linux_render" "$omp_darwin_render"; do
+  if grep -F '<!-- orchestration-coordinator:begin -->' "$omp_render" >/dev/null; then
+    fail "$(basename "$omp_render") carries the coordinator payload"
+  fi
+done
 diff -q "$omp_linux_body" "$everyone_omp_linux" >/dev/null \
   || fail "the extracted Linux omp payload differs from its standalone everyone render"
 diff -q "$omp_darwin_body" "$everyone_omp_darwin" >/dev/null \
@@ -480,8 +488,8 @@ A URL kept beside a usable extraction is provenance, not a defect.
 <!-- orchestration-everyone:end -->
 EVERYONE_NEEDLES
 
-# The coordinator payload is Claude-owned. Its generic contract remains
-# observable in the Claude render, while the alternate harness render proves the
+# The coordinator payload is lead-only. Its generic contract remains observable
+# in the Claude render, while the alternate harness render proves the
 # Unit-sizing branch cannot leak to another harness.
 while IFS= read -r needle; do
   [[ -z $needle ]] && continue
@@ -494,12 +502,12 @@ the coordinator MUST fetch that content itself when it holds that MCP and materi
 When neither the coordinator nor any available agent holds it, the run MUST record that gap and say in the brief that the source was unreachable, rather than stall or let a worker guess.
 For a design source that means frame or node identity, layout and spacing measurements, color and type tokens, component and variant names, copy strings, and repo-relative paths for exported assets and reference screenshots.
 A dispatch prompt or brief MUST NOT hand a worker an MCP-only URL as the sole path to required context.
-Dispatch targets are the `claude`, `codex`, and `omp` agents, and `omp` serves a Gemini model.
-SHOULD go to `omp`, because a Gemini Flash worker settles it for a fraction of the cost and the unit does not reward a frontier model.
-Frontend design work — component markup and styling, layout, design-system application, visual polish, screen mockups — and document authoring — prose documents, README and docs pages, plan and requirements text, merge-request bodies, explainers — SHOULD go to `omp`
-Adjudication, a verdict, and a document whose deliverable is the judgment itself rather than the prose carrying it — such as a `ce-pov` output or a review verdict — SHOULD stay on `claude` or `codex`
+Dispatch targets are the `claude`, `codex`, and `agy` agents.
+SHOULD go to the Gemini Flash serving family, because a worker from that family settles it for a fraction of the cost
+Frontend design work — component markup and styling, layout, design-system application, visual polish, screen mockups — and document authoring — prose documents, README and docs pages, plan and requirements text, merge-request bodies, explainers — SHOULD go to the Gemini Flash serving family
+Adjudication, a verdict, and a document whose deliverable is the judgment itself rather than the prose carrying it — such as a `ce-pov` output or a review verdict — SHOULD stay on a frontier serving family
 The preference leaves the Implementation Unit sizing ladder intact: a frontend or authoring unit the four signals place at `opus` or above keeps that rung
-the run SHOULD add an `omp` reviewer over the same brief file, because a third serving family catches what two frontier families agree to miss.
+When a review already runs across two frontier serving families, the run SHOULD add a Gemini Flash reviewer over the same brief file, because a third serving family catches what two frontier families agree to miss.
 An agent that authored the document under review MUST NOT serve as a reviewer of it; that review runs with the reviewers that remain, rather than substituting another agent.
 Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
 MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
@@ -546,25 +554,25 @@ while IFS= read -r needle; do
   grep -F "$needle" "$coordinator_claude_linux" >/dev/null \
     || fail "Claude coordinator payload lost Claude-only rule: $needle"
 done <<'CLAUDE_COORDINATOR_NEEDLES'
-This harness is Claude Code, so it also picks the Orca recipient for the Implementation Units that the `compound-engineering` skills produce.
-Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker to `omp` by default.
+The lead agent also picks the Orca recipient for the Implementation Units that the `compound-engineering` skills produce.
+Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker according to the work-shape and serving-family preferences above.
 A Unit that needs live MCP access its intended recipient does not hold MUST NOT be dispatched to that recipient
-MUST NOT request a model or a reasoning effort for `omp`: that agent refuses launch-time model selection, so the dispatch fails outright instead of falling back to a default.
-When `omp` is unavailable, or its worker fails substantively, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`; this step is subordinate to the failure classification below and MUST NOT fire on a mechanical fault.
+Whether `agy` honours a launch-time model or reasoning effort through Orca is unverified, so do not request either for it until a dispatch receipt reports those values took effect; its own configuration pins a Gemini Flash model meanwhile.
+When `agy` is unavailable, or its worker fails substantively, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`; this step is subordinate to the failure classification below and MUST NOT fire on a mechanical fault.
 A Unit that defeats that tier moves to `claude`, and the run picks its rung by sizing the Unit, never by a fixed retry ladder.
 Size the Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
 `sonnet` takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
 `opus` takes a Unit that keeps real design judgment inside its own bounds — the plan names the outcome and not the approach, the change crosses a module, process, or service boundary, or the surface is correctness-critical, such as authentication, a schema or data migration, concurrency, money, or anything that can lose data.
 `fable` takes a Unit whose context no lower rung can hold at once and that the plan cannot split.
 Prefer splitting a Unit over raising its rung, and MUST try the split before `fable`: a Unit too wide for `opus` is usually two Units.
-A Unit the sizing places at `opus` or above MAY open directly on `claude` at that rung, skipping `omp` and `codex`, and the run MUST record the signals that justified the skip; a Unit whose approach the plan fixes MUST NOT take that bypass.
+A Unit the sizing places at `opus` or above MAY open directly on a frontier serving family at that rung, skipping the cheaper serving family, and the run MUST record the signals that justified the skip; a Unit whose approach the plan fixes MUST NOT take that bypass.
 A failure re-opens that sizing and never replaces it, so classify a failure only after the Unit is sized: a mechanical failure — a dispatch error, a missing tool, an unavailable agent, an environment or permission fault, or a worker terminal closed from outside the run, which Orca reports as `termination_reason: operator_close` over `stage: process_exited` — carries no information about the Unit, so re-dispatch at the rung the sizing already gives and do not raise it for that; a substantive failure — a wrong approach, an escalation that asks a design question, verification that fails on approach grounds and not on a typo — is new evidence about depth or blast radius, so feed it back into the four signals and re-size before dispatching again.
 is classified as a brief defect: it does not raise the model rung, so the coordinator extracts what was missing into the brief and re-dispatches at the same rung.
 MUST NOT open at `fable` on a guess the sizing does not support, and MUST NOT re-dispatch the same Unit at the same rung with the same brief — sharpen the brief, split the Unit, or re-size on evidence.
 The three-consecutive-failure rule stops the dispatch and consults on the third substantive failure; it does not buy another rung.
 This paragraph narrows the dispatch-target rule above for Implementation Units only.
-It leaves scout reads, lookups, and mechanical steps on `omp`, and it leaves adjudication on `claude` and `codex`; authoring the prose of a plan or requirements document follows the dispatch-target rule above.
-except that an agent excluded as the document's own author is dropped rather than replaced
+It leaves scout reads, lookups, and mechanical steps on the Gemini Flash serving family, and it leaves adjudication on a frontier serving family; authoring the prose of a plan or requirements document follows the dispatch-target rule above.
+It also tightens the cross-model review: that review MUST run `codex`, `claude`, and `agy` over the same brief file, except that an agent excluded as the document's own author is dropped rather than replaced, and MUST weigh each reviewer's findings on their own evidence.
 Model and effort apply to a fresh agent terminal only; the version-matched Orca guide owns their spelling and reports which values took effect.
 CLAUDE_COORDINATOR_NEEDLES
 

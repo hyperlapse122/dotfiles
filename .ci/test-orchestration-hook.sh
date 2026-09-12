@@ -242,6 +242,11 @@ diff -q "$scratch/everyone.rendered" "$scratch/everyone.binary" >/dev/null \
   || fail 'the binary emits a different everyone payload than the source body renders'
 diff -q "$scratch/coordinator.rendered" "$scratch/coordinator.binary" >/dev/null \
   || fail 'the binary emits a different coordinator payload than the source body renders'
+for payload_render in "$scratch/coordinator.rendered" "$scratch/coordinator.binary"; do
+  if grep -F '{{' "$payload_render" >/dev/null || grep -F '}}' "$payload_render" >/dev/null; then
+    fail "$(basename "$payload_render") contains template action delimiters"
+  fi
+done
 
 # The third reader: omp has no session-start injection point, so its payload
 # rides in a rendered instruction file instead of this binary. All three must
@@ -250,6 +255,9 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_omp/private_agent/private_readonly_AGENTS.md.tmpl" "$scratch/omp.rendered"
 awk '/<!-- omp-orchestration-payload:begin -->/{flag=1; next} /<!-- omp-orchestration-payload:end -->/{flag=0} flag' \
   "$scratch/omp.rendered" >"$scratch/omp.block"
+if grep -F 'orchestration-coordinator:begin' "$scratch/omp.rendered" >/dev/null; then
+  fail "omp's instruction file carries the coordinator payload"
+fi
 grep -q 'orchestration-everyone:begin' "$scratch/omp.block" \
   || fail "omp's instruction file carries no everyone payload block"
 grep -Fxq "$(head -1 "$scratch/everyone.binary")" "$scratch/omp.block" \
