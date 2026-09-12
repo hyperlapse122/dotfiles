@@ -89,6 +89,7 @@ jobs:
           .ci/test-codex-skills-guard.sh
           .ci/test-android-skill-ownership.sh
           .ci/test-agent-instructions.sh
+          .ci/test-agent-trust-reconcile.sh
 
   render-gates:
     name: render gates
