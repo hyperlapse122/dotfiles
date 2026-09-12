@@ -4,6 +4,7 @@ import {
   emptyOutput,
   leadContext,
   PREAMBLE,
+  deliveryEnvelope,
   sessionStartEnvelope,
   workerContext,
   isHarness,
@@ -137,8 +138,23 @@ describe("output shape", () => {
     expect(parsed.hookSpecificOutput.additionalContext).toBe("BODY");
   });
 
-  it("gives Claude Code an empty JSON object and Codex nothing at all", () => {
+  it("gives a document to the harnesses that parse one, and Codex nothing at all", () => {
     expect(emptyOutput("claude")).toBe("{}");
+    expect(emptyOutput("agy")).toBe("{}");
     expect(emptyOutput("codex")).toBe("");
+  });
+
+  it("keeps the SessionStart shape for the harnesses that have that event", () => {
+    for (const harness of ["claude", "codex"] as const) {
+      expect(deliveryEnvelope(harness, "BODY")).toBe(sessionStartEnvelope("BODY"));
+    }
+  });
+
+  it("delivers the whole envelope to Antigravity as one ephemeral step", () => {
+    const parsed = JSON.parse(deliveryEnvelope("agy", "BODY")) as {
+      injectSteps: { ephemeralMessage?: string }[];
+    };
+    expect(parsed.injectSteps).toHaveLength(1);
+    expect(parsed.injectSteps[0]?.ephemeralMessage).toBe("BODY");
   });
 });

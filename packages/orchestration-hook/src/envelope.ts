@@ -65,11 +65,24 @@ export function leadContext(parts: LeadParts): string | null {
   ].join("\n");
 }
 
-/** The SessionStart envelope both harnesses accept, as a JSON string. */
+/** The SessionStart envelope Claude Code and Codex accept, as a JSON string. */
 export function sessionStartEnvelope(additionalContext: string): string {
   return JSON.stringify({
     hookSpecificOutput: { hookEventName: "SessionStart", additionalContext },
   });
+}
+
+/**
+ * The delivery document for one harness, carrying the composed context.
+ *
+ * Antigravity has no session-start event: its pre-model hook injects steps
+ * before every invocation, so the whole envelope rides in one ephemeral step
+ * and is re-injected each time rather than delivered once. That repetition is
+ * the accepted cost of never leaving a lead with half a rule set.
+ */
+export function deliveryEnvelope(harness: Harness, context: string): string {
+  if (harness !== "agy") return sessionStartEnvelope(context);
+  return JSON.stringify({ injectSteps: [{ ephemeralMessage: context }] });
 }
 
 /**

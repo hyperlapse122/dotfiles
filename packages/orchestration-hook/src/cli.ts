@@ -20,10 +20,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   composeContext,
+  deliveryEnvelope,
   emptyOutput,
   type Harness,
   isHarness,
-  sessionStartEnvelope,
 } from "./envelope.js";
 import { decide, type ToolEvent } from "./gate.js";
 import { scanInvocations } from "./command-scan.js";
@@ -203,7 +203,7 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
   }
 
   const context = composeContext(harness, role, () => leadParts);
-  io.stdout(context === null ? emptyOutput(harness) : sessionStartEnvelope(context));
+  io.stdout(context === null ? emptyOutput(harness) : deliveryEnvelope(harness, context));
   return 0;
 }
 
