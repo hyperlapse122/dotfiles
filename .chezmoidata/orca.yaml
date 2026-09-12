@@ -31,7 +31,7 @@ orca:
     settings.editorFontFamily: JetBrainsMono NF
     settings.terminalFontFamily: JetBrainsMono NF
 
-    settings.defaultTuiAgent: claude-agent-teams
+    settings.defaultTuiAgent: claude
 
     # Only the codex entry of the agentDefaultArgs map is declared; the other
     # twenty-five agents keep whatever the application defaults them to.
@@ -52,13 +52,11 @@ orca:
 
     settings.refreshLocalBaseRefOnWorktreeCreate: true
 
-    # Source control actions split deliberately: the three generating actions run
-    # on the plain agent, the five that fix or resolve run on the team agent.
     settings.sourceControlAi.actions.commitMessage.agentId: claude
     settings.sourceControlAi.actions.pullRequest.agentId: claude
     settings.sourceControlAi.actions.branchName.agentId: claude
-    settings.sourceControlAi.actions.fixCommitFailure.agentId: claude-agent-teams
-    settings.sourceControlAi.actions.fixPushFailure.agentId: claude-agent-teams
-    settings.sourceControlAi.actions.fixChecks.agentId: claude-agent-teams
-    settings.sourceControlAi.actions.resolveConflicts.agentId: claude-agent-teams
-    settings.sourceControlAi.actions.resolveComments.agentId: claude-agent-teams
+    settings.sourceControlAi.actions.fixCommitFailure.agentId: claude
+    settings.sourceControlAi.actions.fixPushFailure.agentId: claude
+    settings.sourceControlAi.actions.fixChecks.agentId: claude
+    settings.sourceControlAi.actions.resolveConflicts.agentId: claude
+    settings.sourceControlAi.actions.resolveComments.agentId: claude
