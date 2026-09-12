@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-09-11T10:02:11Z"
+    cursor: "2026-09-12T04:57:12Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -1027,13 +1027,16 @@ items:
     updated_at: "2026-09-10T02:02:19Z"
   "gh-issues:hyperlapse122/dotfiles#467":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "docs(agents): forbid shell loops when waiting on Orca workers — Clarify that workers must be awaited with direct blocking Orca calls and that shell polling loops are forbidden."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/477"
+    verified_merge_sha: "e46216b91a3d36af2690a750182fab431b875382"
+    verified_at: "2026-09-12T05:27:00Z"
     author_class: "teammate"
     category: "docs"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#467"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/467"
@@ -1130,52 +1133,113 @@ items:
     updated_at: "2026-09-11T07:16:06Z"
   "gh-issues:hyperlapse122/dotfiles#482":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(orca): register the settings reconcile unit without relying on an unrelated daemon-reload — The user manager may not see the new unit during an active session because apply relies on an unrelated reload."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/485"
+    verified_merge_sha: "e51b3cf3d598f62655a8ab15fbb45eb7a18833b0"
+    verified_at: "2026-09-12T05:27:00Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#482"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/482"
     updated_at: "2026-09-11T10:01:58Z"
   "gh-issues:hyperlapse122/dotfiles#483":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "test(orca): cover the reconciler's argument branches — Add coverage for the equals-form mode flag, help output, and a missing mode value."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/485"
+    verified_merge_sha: "e51b3cf3d598f62655a8ab15fbb45eb7a18833b0"
+    verified_at: "2026-09-12T05:27:00Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#483"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/483"
     updated_at: "2026-09-11T10:02:10Z"
   "gh-issues:hyperlapse122/dotfiles#484":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(orca): preserve orca-data.json's mode instead of hardcoding 0644 — The reconciler currently replaces the file with mode 0644; preserve the existing mode or default to 0600 so future permission tightening is not undone."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/485"
+    verified_merge_sha: "e51b3cf3d598f62655a8ab15fbb45eb7a18833b0"
+    verified_at: "2026-09-12T05:27:00Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#484"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/484"
     updated_at: "2026-09-11T10:02:11Z"
+  "gh-issues:hyperlapse122/dotfiles#486":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "fix(ci): decide whether the frozen skip matrix admits post-freeze sites — Decide whether to add an owner row to .ci/skip-declaration-site-matrix.yaml for reload-user-systemd/no-user-manager-bus or exclude run_after_ scripts from the frozen boundary."
+    author_class: "teammate"
+    category: "bug"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#486"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/486"
+    updated_at: "2026-09-11T11:21:36Z"
+  "gh-issues:hyperlapse122/dotfiles#487":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "refactor(scripts): share the user-manager deadline guard between 30-linux scripts — Extract the duplicated deadline read-and-validate block from reload-user-systemd and setup-podman-cluster into a shared partial."
+    author_class: "teammate"
+    category: "refactor"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#487"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/487"
+    updated_at: "2026-09-11T11:22:00Z"
+  "gh-issues:hyperlapse122/dotfiles#488":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "chore(ci): move the user-systemd reload gate to fatal-boundary-gates — Move test-user-systemd-reload.sh from agent-reconciliation to fatal-boundary-gates so failures report under the matching CI job."
+    author_class: "teammate"
+    category: "chore"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#488"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/488"
+    updated_at: "2026-09-11T11:22:01Z"
+  "gh-issues:hyperlapse122/dotfiles#489":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "feat(orca): assert declared settings at apply time when Orca is not running — Assert declared settings at apply time when Orca is not running so newly deployed settings converge without waiting for next session login."
+    author_class: "teammate"
+    category: "feature"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#489"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/489"
+    updated_at: "2026-09-12T04:57:12Z"
 last_run:
-  timestamp: "2026-09-11T10:22:00Z"
+  timestamp: "2026-09-12T05:32:11Z"
   outcome: "completed"
-  writer: "sweep-MS-7D91-b5a19a8e-2026-09-11"
+  writer: "sweep-agy-7a76c7dc-2026-09-12"
   counts:
     gh-issues:
       ack_deferred: 0
-      acked: 12
-      already_acked: 8
-      closed: 9
-      fetched: 20
+      acked: 4
+      already_acked: 4
+      closed: 4
+      fetched: 8
       media_analyzed: 0
