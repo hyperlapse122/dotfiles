@@ -1,0 +1,55 @@
+{{- /* The Antigravity plugin's hooks.json body, rendered.
+
+       It lives here rather than only in the plugin tree so the agy plugin
+       reconciler can fingerprint the SAME rendered bytes the CLI serves. The
+       tree's own hooks.json.tmpl is a one-line includeTemplate wrapper, so its
+       source text never changes when this partial does; a fingerprint over the
+       wrapper alone would freeze while the deployed declaration moved.
+
+       Antigravity has no session-start event. PreInvocation fires before every
+       model call and its response injects steps, so it is the delivery point;
+       the binary re-injects the whole envelope each time rather than once.
+
+       PreToolUse carries the launch gate. Its matcher is deliberately `*`.
+       Antigravity derives a tool name from its step type, so a name pinned
+       today can be renamed by an upgrade — and the matcher is evaluated BEFORE
+       the handler, so a stale name means the gate never runs at all while every
+       test here stays green. The adapter decides instead, on whether the event
+       carries a command. Codex's declaration omits its matcher for the same
+       reason.
+
+       Handlers run through `sh -c`, so the absolute path is shell-quoted: a
+       home directory containing a space would otherwise break the command
+       before the binary could fail open.
+
+       Timeouts are whole seconds. The injection side must exceed the binary's
+       own guide-fetch budget or a lead would lose its envelope to the harness
+       clock rather than to a missing guide; the gate side is smaller because it
+       is paid on every tool call.
+
+       Takes the chezmoi context as its argument. */ -}}
+{{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
+{{- $quoted := printf "'%s'" (replace "'" "'\\''" $binary) -}}
+{
+  "dotfiles-orchestration": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": {{ printf "%s hook --harness agy" $quoted | quote }},
+        "timeout": 15
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf "%s guard --harness agy" $quoted | quote }},
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
