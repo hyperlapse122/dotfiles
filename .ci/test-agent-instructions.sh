@@ -412,7 +412,7 @@ Before launching ANY subagent, worker, or peer reviewer, MUST open and read the 
 Orca owns dispatch.
 The detailed contract does not live in this file: an Orca-managed session receives it by injection at session start, as a normative extension of this file carrying the same precedence as this file's own text.
 A session outside Orca receives no injection, and its absence never waives the contract: perform non-dispatch work only, and never reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
-Antigravity does not lead an Orca workflow, dispatch Orca workers, or serve as an Orca worker. No orchestration guarantee applies there. Neither this pointer nor the autonomy paragraphs below are a dispatch licence for it.
+Antigravity leads, dispatches, and serves as a worker on the same terms as any other managed harness.
 A run MUST NOT end with an actionable finding that is only listed
 is a working note, never a delivery
 or resolved into a filed tracker issue whose link replaces the entry, or resolved into the committed record file whose path replaces the entry
@@ -481,8 +481,7 @@ MUST NOT declare orchestration unavailable without an observed failure; if the a
 If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
 Absence of this text never waives the contract.
 A session that holds only the pointer in the user-scoped instruction file performs non-dispatch work only, and still MUST NOT reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
-Antigravity does not lead an Orca workflow, dispatch Orca workers, or serve as an Orca worker.
-No orchestration guarantee applies there, and neither the pointer nor the autonomy paragraphs in the user-scoped instruction file licence it to dispatch.
+Every managed harness leads, dispatches, and serves as a worker on the same terms.
 A brief defect is required context the brief does not carry.
 A URL kept beside a usable extraction is provenance, not a defect.
 <!-- orchestration-everyone:end -->

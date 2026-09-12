@@ -37,11 +37,15 @@ orca:
     # twenty-five agents keep whatever the application defaults them to.
     settings.agentDefaultArgs.codex: --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust
 
+    # Empty because antigravity now leads and serves as a worker like any other
+    # managed harness; leaving it here would keep Orca from launching the agent
+    # whose hooks this checkout ships.
+    #
     # An array leaf is compared and replaced whole -- this grammar has no path
     # syntax for list membership. An agent disabled by hand in the UI is
-    # therefore restored on the next convergence.
-    settings.disabledTuiAgents:
-      - antigravity
+    # therefore restored on the next convergence, and with the list empty that
+    # restoration re-enables every agent an operator turned off.
+    settings.disabledTuiAgents: []
 
     settings.voice.enabled: true
     settings.voice.sttModel: zipformer-streaming-korean

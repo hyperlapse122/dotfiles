@@ -274,7 +274,7 @@ tmp="$scratch/arr.json"
 jq '.settings.disabledTuiAgents = ["antigravity", "addedByHand"]' "$data" >"$tmp" && mv -- "$tmp" "$data"
 run --mode assert >/dev/null 2>&1
 assert_json 'an array leaf was merged instead of replaced whole' \
-  '.settings.disabledTuiAgents == ["antigravity"]'
+  '.settings.disabledTuiAgents == []'
 ok 'an array leaf is replaced whole'
 
 # A real orca-data.json is a quarter of a megabyte, and Linux caps a single argv
