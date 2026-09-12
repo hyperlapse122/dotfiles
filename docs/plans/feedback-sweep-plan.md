@@ -1,15 +1,26 @@
 ---
 title: Feedback Sweep - Plan
 date: 2026-09-12
+type: fix
 topic: feedback-sweep
 artifact_contract: ce-unified-plan/v1
-artifact_readiness: requirements-only
+artifact_readiness: implementation-ready
 product_contract_source: ce-sweep
+execution: code
+origin: https://github.com/hyperlapse122/dotfiles/issues/489
 ---
+
+# Feedback Sweep - Plan
 
 ## Goal Capsule
 
-Triage and drive to resolution the open feedback items captured below: acknowledge each at its source, land fixes, and verify they merged.
+**Objective.** Assert declared Orca settings at apply time when Orca is not running so newly deployed settings converge without waiting for login, and make never-run state visible when Orca is running and settings remain drifted.
+
+**Means:** Move the `orca_is_running` check below classification in `executable_orca-settings-reconcile.tmpl` so converged hosts remain silent, call assert before report in `run_after_report-orca-settings.sh.tmpl`, detect unspawned units via `ExecMainStartTimestamp` to guide operators, and update documentation and tests.
+
+**Authority hierarchy.** This plan's Product Contract (R22-R52) is the ce-sweep ledger and outranks the Planning Contract. Only R52 leaves the ledger as the active implementation unit this run; every other requirement stays in the ledger untouched, with the evidence that deferred it recorded under Scope Boundaries. A KTD may not outrank a preserved requirement.
+
+**Stop conditions.** Stop and report if `.ci/test-orca-settings-reconcile.sh` fails or if `.ci/check-skip-declarations.sh` fails.
 
 ## Human Notes
 
@@ -19,9 +30,24 @@ Triage and drive to resolution the open feedback items captured below: acknowled
 
 ## Product Contract
 
+**Product Contract preservation:** unchanged. R22-R52 keep the meaning and IDs the ce-sweep ledger assigned. No requirement was rewritten, split, or reclassified by this enrichment.
+
 ### Summary
 
-Nine items are open. Four closed this run with verified merge: R43 (#469, PR #495), R49 (#486, PR #493), R50 (#487, PR #496), and R51 (#488, PR #494). Five items remain in Outstanding Questions (R22, R32, R33, R34, R41).
+Nine items are open. Four closed in previous sweeps. R52 (#489) is the active implementation unit for this run. Eight items remain deferred (R22, R24, R32, R33, R34, R38, R41, R44).
+
+### Problem Frame
+
+Issue #489 identifies that `.chezmoiscripts/90-src/run_after_report-orca-settings.sh.tmpl` was historically report-only by design, relying on `orca-settings-reconcile.service` at graphical-session start. This left a gap: during the initial apply that installs the unit, the unit has not yet run in the active session and will not run until the next session start.
+
+When Orca is down, apply time is safe to converge settings immediately. Furthermore, placing the `orca_is_running` check before drift classification caused false-alarm skip messages on converged hosts. Moving the check below classification ensures silence when converged, while asserting when down and reporting helpful remediation when running with drift.
+
+### Key Decisions
+
+- **Gate below classification:** In `executable_orca-settings-reconcile.tmpl`, move `orca_is_running` below the classification pass. If `drifted == 0`, exit 0 silently. If `drifted > 0` and Orca is running, print the skip notice and exit 0. Governs R52.
+- **Convenience assert in apply script:** In `run_after_report-orca-settings.sh.tmpl`, execute `--mode assert` (via the service if systemd is responsive, else direct) before running `--mode report`. Governs R52.
+- **Check `ExecMainStartTimestamp`:** When drift remains and `systemctl` is available, check if `orca-settings-reconcile.service` has an empty `ExecMainStartTimestamp`. If empty, notify the operator that the unit has never run in this session lifetime. Governs R52.
+- **Ensure `mv -f` on replacement:** Use `mv -f` so read-only modes (such as 0400) do not trigger interactive overwrite prompts. Governs R52.
 
 ### Requirements
 
@@ -55,6 +81,17 @@ Nine items are open. Four closed this run with verified merge: R43 (#469, PR #49
   > "Severity: **P2** — a declared surface stayed unconverged for nine hours with no failure anywhere, discovered while debugging why `--dangerously-bypass-hook-trust` never reached Codex." "`.chezmoiscripts/90-src/run_after_report-orca-settings.sh.tmpl` is report-only by design, and the write belongs to `orca-settings-reconcile.service` at graphical-session start. That split leaves one uncovered window: **the apply that first installs the unit**."
 <!-- sweep-items:end -->
 
+### Scope Boundaries
+
+#### Active in this plan
+- **R52 — Assert declared Orca settings at apply time when Orca is not running.** Governs U1, U2, U3, U4.
+
+#### Deferred for later
+- **R22, R32, R33, R34, R41 — questions pending decision.** Each recorded in Outstanding Questions with the specific call it waits on.
+- **R24 — separate change.** Replacing skills symlinks touches a wide multi-harness surface.
+- **R38 — omp settings reconciler.** Separate harness, separate script.
+- **R44 — launch gate core.** Shipped in PR #479; follow-up tracked separately.
+
 ### Outstanding Questions
 
 - **R22 — mechanism.** Earlier research found the proposed KDE desktop-action mechanism absent from the shipped Ghostty. The requirement stands; its proposed means does not.
@@ -65,6 +102,111 @@ Nine items are open. Four closed this run with verified merge: R43 (#469, PR #49
 
 ### Sources / Research
 
-- State file: `docs/feedback-sweep/state.yml` — the authoritative record of every item's lifecycle.
-- Last run: the `last_run` block in the state file (outcome + per-source counts).
-- Previous plan, archived unmodified: `docs/plans/feedback-sweep-plan-2026-09-12-r49.md`.
+- State file: `docs/feedback-sweep/state.yml` — authoritative record of item lifecycle.
+- Issue #489: `feat(orca): assert declared settings at apply time when Orca is not running`.
+- `dot_local/share/chezmoi-command-sources/executable_orca-settings-reconcile.tmpl`.
+- `.chezmoiscripts/90-src/run_after_report-orca-settings.sh.tmpl`.
+- `.chezmoidata/orca.yaml`.
+- `.ci/test-orca-settings-reconcile.sh`.
+
+---
+
+## Planning Contract
+
+### Key Technical Decisions
+
+- **KTD1 — Position the running check below classification.** In `executable_orca-settings-reconcile.tmpl`, move `orca_is_running` below classification. If `drifted == 0`, exit silently with 0. If `drifted > 0` and Orca is running, print:
+  `printf '%s: Orca is running; declared settings were not asserted (it would overwrite them from memory).\n' "$self" >&2`
+  (omitting the trailing sentence since report follows it). Use `mv -f` for staging replacement. Governs U1.
+- **KTD2 — Enhance apply-time script with never-run warning.** In `run_after_report-orca-settings.sh.tmpl`, after report runs, if drift remains and `systemctl` is available, query `systemctl --user show -p ExecMainStartTimestamp --value "$unit"`. If empty, output a notice that the service has not run in this session lifetime. Governs U2.
+- **KTD3 — Qualify documentation in orca.yaml.** In `.chezmoidata/orca.yaml`, update the header to state that the reconciler asserts at session start and at apply time when the application is down. Governs U3.
+- **KTD4 — Test running and unspawned states.** In `.ci/test-orca-settings-reconcile.sh`, verify converged-and-running stays silent and drift-and-running prints the skip line. Governs U4.
+
+### Sequencing
+
+- U1 (reconciler template gate repositioning and `mv -f`)
+- U2 (apply-time report script enhancement)
+- U3 (orca.yaml documentation update)
+- U4 (CI test coverage additions)
+
+---
+
+## Implementation Units
+
+### U1. Position running gate below classification in reconciler template
+
+**Goal.** Converged Orca settings stay silent when Orca is running; drifted settings print a concise skip notice without duplicate sentences; `mv -f` prevents hanging on 0400 files.
+
+**Requirements.** R52.
+
+**Files.**
+- `dot_local/share/chezmoi-command-sources/executable_orca-settings-reconcile.tmpl` (modify)
+
+**Approach.**
+1. Remove lines 142-145 (the early `orca_is_running` check).
+2. After classification (lines 257-261), when `drifted > 0`: check `if [ "$mode" = assert ] && orca_is_running; then printf '%s: Orca is running; declared settings were not asserted (it would overwrite them from memory).\n' "$self" >&2; exit 0; fi`.
+3. In line 308, change `mv -- "$staged" "$data"` to `mv -f -- "$staged" "$data"`.
+
+**Verification.** Reconciler exits 0 and prints nothing when converged with Orca running.
+
+### U2. Add never-ran visibility to report-orca-settings
+
+**Goal.** When drift remains at apply time and the service unit has never run in this user-manager session, provide actionable operator guidance.
+
+**Requirements.** R52.
+
+**Files.**
+- `.chezmoiscripts/90-src/run_after_report-orca-settings.sh.tmpl` (modify)
+
+**Approach.**
+1. Update comments explaining the convenience assert and never-ran probe.
+2. In the report script, after `"$reconcile" --mode report`, inspect if drift occurred (or check `systemctl --user show -p ExecMainStartTimestamp --value "$unit"`). If `ExecMainStartTimestamp` is empty, print that the owning unit has never run in this user-manager lifetime and suggest restarting Orca or running `systemctl --user start orca-settings-reconcile.service`.
+
+**Verification.** Script renders cleanly and syntax passes `shellcheck`.
+
+### U3. Qualify documentation in .chezmoidata/orca.yaml
+
+**Goal.** Header in `.chezmoidata/orca.yaml` accurately describes apply-time assert when Orca is down.
+
+**Requirements.** R52.
+
+**Files.**
+- `.chezmoidata/orca.yaml` (modify)
+
+**Approach.**
+Update lines 9-15 of `.chezmoidata/orca.yaml` to explain that assertion runs at session start via the user unit and at apply time when the application is down.
+
+**Verification.** Diff check confirms accurate wording.
+
+### U4. Add test coverage in .ci/test-orca-settings-reconcile.sh
+
+**Goal.** Test suite exercises converged-and-running and drift-and-running behaviors.
+
+**Requirements.** R52.
+
+**Files.**
+- `.ci/test-orca-settings-reconcile.sh` (modify)
+
+**Approach.**
+Add tests in `.ci/test-orca-settings-reconcile.sh`:
+1. Converged document with running lock: `run --mode assert` must be silent and exit 0.
+2. Drifted document with running lock: `run --mode assert` must print the single skip line and exit 0 without writing.
+
+**Verification.** `.ci/test-orca-settings-reconcile.sh "$RENDERED"` exits 0.
+
+---
+
+## Verification Contract
+
+Gates that must pass:
+- `.ci/test-orca-settings-reconcile.sh` passes all tests.
+- `.ci/check-skip-declarations.sh` passes.
+- `.ci/test-agent-instructions.sh` passes.
+- `git diff` clean.
+
+## Definition of Done
+
+- Enriched plan is fully implementation-ready.
+- All implementation units executed and verified.
+- Review passes with zero unaddressed findings.
+- PR opened, babysat to merge.

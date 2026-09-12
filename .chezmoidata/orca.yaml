@@ -6,13 +6,14 @@
 # only the application may write. A managed target would fight all of that, so
 # each key below names one LEAF and only that leaf is asserted.
 #
-# WHY THE RECONCILER RUNS AT SESSION START AND NOT AT APPLY TIME. Orca reads
-# orca-data.json once at startup and never re-reads it from disk; while it runs
-# it rewrites the whole document from memory (measured at roughly one write
-# every nine seconds on an idle session). A value written during `chezmoi apply`
-# is therefore ignored and then overwritten. The assertion runs from the
-# orca-settings-reconcile.service user unit, before the graphical session; apply
-# only reports drift.
+# WHY THE RECONCILER RUNS AT SESSION START AND AT APPLY TIME WHEN ORCA IS DOWN.
+# Orca reads orca-data.json once at startup and never re-reads it from disk;
+# while it runs it rewrites the whole document from memory (measured at roughly
+# one write every nine seconds on an idle session). A value written during
+# `chezmoi apply` while Orca is up is therefore ignored and then overwritten.
+# The assertion runs from the orca-settings-reconcile.service user unit before
+# the graphical session, and at apply time when Orca is down; when Orca is up,
+# apply only reports drift.
 #
 # PATHS ARE ROOTED AT THE DOCUMENT, not at its `settings` object, so every key
 # here begins with `settings.`. orca-settings-validate.tmpl rejects anything

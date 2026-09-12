@@ -39,13 +39,13 @@
 # the assert would not perform. `report` is the default, so an operator who runs
 # the bare command changes nothing.
 #
-# WHY THIS DOES NOT RUN AT APPLY TIME. Orca reads orca-data.json once at startup
-# and never re-reads it from disk, and while it runs it rewrites the whole
-# document from its in-memory copy -- measured at roughly one write every nine
-# seconds on an otherwise idle session. A value written during `chezmoi apply` is
-# therefore both ignored and overwritten. orca-settings-reconcile.service asserts
-# at graphical-session start, when the application is down; the apply-time script
-# only reports.
+# WHY THE ASSERT DOES NOT WRITE WHILE ORCA RUNS. Orca reads orca-data.json once at
+# startup and never re-reads it from disk, and while it runs it rewrites the
+# whole document from its in-memory copy -- measured at roughly one write every
+# nine seconds on an otherwise idle session. A value written during `chezmoi apply`
+# while Orca is up is therefore both ignored and overwritten.
+# orca-settings-reconcile.service asserts at graphical-session start, and the
+# apply-time script asserts when Orca is down, reporting drift when Orca is up.
 #
 # WHY THE RUNNING CHECK READS THE LOCK TARGET AND NOT JUST ITS EXISTENCE. Orca's
 # userData SingletonLock is a symlink whose target is `<hostname>-<pid>`. A crash
@@ -139,10 +139,6 @@ orca_is_running() {
   kill -0 "$pid" 2>/dev/null
 }
 
-if [ "$mode" = assert ] && orca_is_running; then
-  printf '%s: Orca is running; declared settings were not asserted (it would overwrite them from memory). They converge at the next session start.\n' "$self" >&2
-  exit 0
-fi
 
 # One reader, two callers. The race check below compares its result against this
 # snapshot, and that comparison only means anything while both sides normalize
@@ -260,6 +256,11 @@ if [ "$drifted" -eq 0 ]; then
   exit 0
 fi
 
+if [ "$mode" = assert ] && orca_is_running; then
+  printf '%s: Orca is running; declared settings were not asserted (it would overwrite them from memory).\n' "$self" >&2
+  exit 0
+fi
+
 # The replacement carries the target's own mode rather than a fixed one: Orca owns
 # this file and writes it 0644 itself, so clamping would be undone within seconds
 # of the next launch, while hardcoding 0644 would silently undo any future
@@ -305,7 +306,7 @@ if [ "$(read_live)" != "$live" ]; then
   exit 0
 fi
 
-mv -- "$staged" "$data"
+mv -f -- "$staged" "$data"
 staged=''
 printf '%s: reconciled %d of %d declared settings paths\n' "$self" "$drifted" "$examined"
 {{- end }}

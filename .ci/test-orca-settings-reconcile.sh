@@ -357,6 +357,29 @@ grep -q 'settings.appFontFamily' <<<"$report_out" \
 rm -f -- "$lock"
 ok 'report still names drift while Orca is running'
 
+# Converged document while Orca is running: assert must stay silent and write nothing.
+reset_fixture
+ln -sfn "$this_host-$$" "$lock"
+assert_converged_out=$(run --mode assert 2>&1) || fail 'assert exited non-zero on converged running instance'
+[[ -z "$assert_converged_out" ]] || fail "assert was not silent on converged document while Orca was running; got: $assert_converged_out"
+rm -f -- "$lock"
+ok 'assert stays silent on converged document while Orca is running'
+
+# Drifted document while Orca is running: assert must print the skip line exactly once and exit 0 without writing.
+reset_fixture
+drift_one
+ln -sfn "$this_host-$$" "$lock"
+assert_drift_out=$(run --mode assert 2>&1) || fail 'assert exited non-zero on drifted running instance'
+grep -q 'Orca is running; declared settings were not asserted' <<<"$assert_drift_out" \
+  || fail "assert did not print skip notice while Orca was running; got: $assert_drift_out"
+! grep -q 'They converge at the next session start' <<<"$assert_drift_out" \
+  || fail "assert skip message carried duplicate trailing sentence: $assert_drift_out"
+live=$(jq -r '.settings.appFontFamily' "$data")
+[[ $live == DriftedFont ]] || fail 'assert wrote while Orca was running'
+rm -f -- "$lock"
+ok 'assert prints skip notice once without writing while Orca is running'
+
+
 # ---------------------------------------------------------------------------
 # States that are not drift: a key Orca no longer carries, an unwritable
 # ancestor, and a host with no Orca profile.
