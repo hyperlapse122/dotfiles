@@ -11,9 +11,10 @@
 # only lifecycle that runs after every file target is written, on every apply --
 # which is what this needs, because a unit can be deployed, re-enabled, or edited
 # without any source fingerprint changing. A run_onchange_ keyed on the unit sources
-# would stay silent for exactly the cases this exists to cover, and would additionally
-# demand a new owner row in the frozen .ci/skip-declaration-site-matrix.yaml
-# inventory, which covers run_onchange_/run_once_ lifecycles.
+# would stay silent for exactly the cases this exists to cover. The skip_here
+# declaration below provides runtime reporting via dotfiles-skips while being
+# lifecycle-excluded from .ci/skip-declaration-site-matrix.yaml per the historical
+# R5 boundary contract (#486).
 #
 # WHY THE FINGERPRINT. The no-bus exit below is a transient-blocking skip: it exits 0
 # so later phases survive, so it can only re-run on its own once the precondition

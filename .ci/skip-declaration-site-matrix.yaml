@@ -15,9 +15,15 @@
 # AUDIT BOUNDARY (what counts as one owner).
 #   * Scope: run_onchange_* / run_once_* templates plus the four shared guard
 #     partials — exactly the surface U8's rendered guard scans. run_after_*
-#     lifecycles are U4 territory and are never owners here; the two renamed GNOME
-#     extension jobs appear only as gnome-guard CONSUMER instances, which is what
-#     keeps that guard's fan-out at eight.
+#     lifecycles are excluded by lifecycle and are never owners here;
+#     they run on every apply and cannot strand unprovisioned work. Sites
+#     declared in run_after_* scripts after the R5 freeze (such as
+#     reload-user-systemd/no-user-manager-bus) participate in runtime skip reporting
+#     via dotfiles-skips, but are permanently excluded from this matrix and MUST NOT
+#     be added as owner rows. The two renamed GNOME extension jobs appear only as
+#     gnome-guard CONSUMER instances, which is what keeps that guard's fan-out at eight.
+#     The frozen totals (136 classified owners / 206 instances / 131 phase-local
+#     instances) remain strictly pinned.
 #   * One owner per skip decision that abandons a declared step or the whole script.
 #     Per-item notices inside an iteration over discovered items (per touchpad
 #     feature, per MOK certificate, per direct RPM, per gated system file, per
