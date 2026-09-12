@@ -181,11 +181,25 @@ function isShellFlagWithC(flag: string): boolean {
   return flag.startsWith("-") && !flag.startsWith("--") && flag.slice(1).includes("c");
 }
 
+/** The delimiter a `<<`/`<<-` redirection opens, or null when this is not one. */
+function heredocDelimiter(current: string): string | null {
+  const match = /<<-?\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))\s*$/.exec(current);
+  if (match === null) return null;
+  return match[1] ?? match[2] ?? match[3] ?? null;
+}
+
 /**
  * Split command line into segments on ; && || | & newline (
  * only outside single quotes, double quotes, and backslash escapes.
  * Bare ( opens a subshell and segments; $( is command substitution and stays together.
  * Returns null if quotes are unmatched or escape is dangling.
+ *
+ * A heredoc body is data the shell hands to a program, never commands it runs,
+ * so the body is skipped between the opening delimiter and its terminator. File
+ * editing tools deliver a patch this way, and a patch is full of text that
+ * parses as shell: a TypeScript union like `"claude" | "codex"` reads as two
+ * pipeline stages naming bare programs, which denied the very edits that widen
+ * that union. Skipping the body keeps a real launch after the heredoc visible.
  */
 function splitSegments(input: string): string[] | null {
   const segments: string[] = [];
@@ -193,9 +207,22 @@ function splitSegments(input: string): string[] | null {
   let inSingle = false;
   let inDouble = false;
   let escaped = false;
+  let heredoc: string | null = null;
 
   for (let i = 0; i < input.length; i++) {
     const char = input[i]!;
+
+    if (heredoc !== null) {
+      if (char !== "\n") continue;
+      const rest = input.slice(i + 1);
+      const lineEnd = rest.indexOf("\n");
+      const line = lineEnd === -1 ? rest : rest.slice(0, lineEnd);
+      if (line.trim() === heredoc) {
+        heredoc = null;
+        i += lineEnd === -1 ? rest.length : lineEnd;
+      }
+      continue;
+    }
 
     if (escaped) {
       current += char;
@@ -223,10 +250,12 @@ function splitSegments(input: string): string[] | null {
 
     if (!inSingle && !inDouble) {
       if (char === "\n" || char === ";") {
+        const opened = char === "\n" ? heredocDelimiter(current) : null;
         if (current.trim().length > 0) {
           segments.push(current);
         }
         current = "";
+        if (opened !== null) heredoc = opened;
         continue;
       }
 

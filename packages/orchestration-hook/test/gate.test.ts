@@ -244,3 +244,73 @@ describe("evasion, wrapper options", () => {
     }
   });
 });
+
+describe("a heredoc body is data, not commands", () => {
+  const patchBody = [
+    "apply_patch <<'PATCH'",
+    "*** Update File: src/envelope.ts",
+    '-export type Harness = "claude" | "codex";',
+    '+export type Harness = "claude" | "codex" | "agy";',
+    "PATCH",
+  ].join("\n");
+
+  it("allows a patch whose content names blocked programs", () => {
+    // The union's `|` sits outside quotes, so the splitter read it as two
+    // pipeline stages naming bare programs and denied the very edit that
+    // widens that union.
+    expect(decide(bash(patchBody), LEAD).deny).toBe(false);
+  });
+
+  it("still denies a launch that follows the heredoc", () => {
+    expect(decide(bash(`${patchBody}\ncodex exec x`), LEAD).deny).toBe(true);
+  });
+
+  it("reads an unquoted and a dash-suppressed delimiter the same way", () => {
+    for (const opener of ["cat <<EOF", "cat <<-EOF", 'cat <<"EOF"']) {
+      const command = [opener, "codex", "EOF"].join("\n");
+      expect(decide(bash(command), LEAD).deny, opener).toBe(false);
+    }
+  });
+});
+
+describe("the Antigravity event shape", () => {
+  function agy(name: string, args: Record<string, unknown>): ToolEvent {
+    return { toolCall: { name, args } };
+  }
+
+  it("reads the command out of a nested tool call", () => {
+    expect(extractCommand(agy("run_command", { CommandLine: "codex exec x" }))).toBe(
+      "codex exec x",
+    );
+  });
+
+  it("denies a launch carried in that shape", () => {
+    expect(decide(agy("run_command", { CommandLine: "claude -p hi" }), LEAD).deny).toBe(true);
+  });
+
+  it("allows a tool whose args carry no command at all", () => {
+    expect(decide(agy("list_dir", { DirectoryPath: "/tmp" }), LEAD).deny).toBe(false);
+  });
+
+  it("denies the Antigravity CLI under both published names", () => {
+    for (const program of ["agy", "antigravity"]) {
+      expect(decide(bash(`${program} -p hi`), LEAD).deny, program).toBe(true);
+    }
+  });
+
+  it("leaves the CLI's own management commands alone", () => {
+    for (const command of ["agy plugin list", "agy --version", "antigravity mcp"]) {
+      expect(decide(bash(command), LEAD).deny, command).toBe(false);
+    }
+  });
+
+  it("matches the captured fixtures", () => {
+    const read = (name: string) =>
+      JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", name), "utf8")) as ToolEvent;
+    expect(extractCommand(read("pretooluse-agy.json"))).toBe("echo capture-probe");
+    expect(extractCommand(read("pretooluse-agy-nonshell.json"))).toBeNull();
+    expect(SHELL_TOOL_NAMES.agy).toContain(
+      (read("pretooluse-agy.json").toolCall as { name: string }).name,
+    );
+  });
+});

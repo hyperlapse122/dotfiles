@@ -28,7 +28,14 @@ import { resolveRole, type RoleEnv } from "./role.js";
  * It exists on every provisioned host today, so omitting it would leave a
  * one-word bypass of this whole gate.
  */
-export const BLOCKED_PROGRAMS: readonly string[] = ["codex", "codex-bin", "claude", "omp"];
+export const BLOCKED_PROGRAMS: readonly string[] = [
+  "codex",
+  "codex-bin",
+  "claude",
+  "omp",
+  "agy",
+  "antigravity",
+];
 
 /**
  * Subcommands that manage a CLI rather than start an agent with it.
@@ -80,25 +87,38 @@ export const SHELL_TOOL_NAMES: Record<Harness, readonly string[]> = {
 export interface ToolEvent {
   tool_name?: unknown;
   tool_input?: unknown;
+  toolCall?: unknown;
 }
 
 export type Decision = { deny: true; reason: string } | { deny: false };
 
-/**
- * The command this event would run, or null when it carries none.
- *
- * Accepts a string and an argv array because the two harnesses differ and a
- * future one may differ again.
- */
-export function extractCommand(event: ToolEvent): string | readonly string[] | null {
-  const input = event.tool_input;
+/** A `command` or `CommandLine` field on this object, when it holds one. */
+function commandField(input: unknown): string | readonly string[] | null {
   if (typeof input !== "object" || input === null) return null;
-  const command = (input as { command?: unknown }).command;
+  const holder = input as { command?: unknown; CommandLine?: unknown };
+  const command = holder.command ?? holder.CommandLine;
   if (typeof command === "string") return command;
   if (Array.isArray(command) && command.every((part) => typeof part === "string")) {
     return command as readonly string[];
   }
   return null;
+}
+
+/**
+ * The command this event would run, or null when it carries none.
+ *
+ * Accepts a string and an argv array because the harnesses differ, and reads
+ * two event shapes: a flat `tool_input` and Antigravity's nested `toolCall`
+ * with its args. Carrying a command is still the whole test — a tool that
+ * carries none, whatever it is called, is not a launch.
+ */
+export function extractCommand(event: ToolEvent): string | readonly string[] | null {
+  const flat = commandField(event.tool_input);
+  if (flat !== null) return flat;
+
+  const call = event.toolCall;
+  if (typeof call !== "object" || call === null) return null;
+  return commandField((call as { args?: unknown }).args);
 }
 
 /**
