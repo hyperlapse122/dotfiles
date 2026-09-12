@@ -1,0 +1,9 @@
+{
+  "artifactDirectoryPath": "/REDACTED/brain/00000000-0000-0000-0000-000000000000",
+  "conversationId": "00000000-0000-0000-0000-000000000000",
+  "initialNumSteps": 1,
+  "invocationNum": 0,
+  "modelName": "REDACTED-model",
+  "transcriptPath": "/REDACTED/transcript_full.jsonl",
+  "workspacePaths": []
+}

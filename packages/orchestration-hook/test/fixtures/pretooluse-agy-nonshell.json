@@ -1,0 +1,16 @@
+{
+  "artifactDirectoryPath": "/REDACTED/brain/00000000-0000-0000-0000-000000000000",
+  "conversationId": "00000000-0000-0000-0000-000000000000",
+  "modelName": "REDACTED-model",
+  "stepIdx": 2,
+  "toolCall": {
+    "args": {
+      "DirectoryPath": "/REDACTED/dir",
+      "toolAction": "List directory",
+      "toolSummary": "List directory"
+    },
+    "name": "list_dir"
+  },
+  "transcriptPath": "/REDACTED/transcript_full.jsonl",
+  "workspacePaths": []
+}
