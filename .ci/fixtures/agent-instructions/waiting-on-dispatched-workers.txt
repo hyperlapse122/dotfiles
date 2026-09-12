@@ -1,0 +1,17 @@
+## Waiting on dispatched workers
+
+A wait on a dispatched Orca worker is the installed guide's blocking wait command, called exactly as that guide writes it. One wait command is one tool call, and no shell control flow wraps it. MUST NOT build a wait out of `for`, `while`, `until`, a `sleep` poll, a count of files in an output directory, or a listing of processes. The blocking command already receives every event the run is waiting for, so wrapping it per worker binds the wait window to one worker and leaves another worker's escalation or question unanswered, and a hand-written exit condition throws away the checkpoint the command's own timeout flag gives it. While the run waits on a dispatch, Orca's own wait and query commands are the only authoritative source for that dispatch's lifecycle state; the end-of-run residency check is untouched by this, and a host process sweep stays a secondary signal there. When a wait returns and a dispatch is still outstanding, call the same blocking command again rather than looping over workers: the repetition happens across the run's turns, never inside a shell command, and a delivery already read is acknowledged on that next call so the queue advances instead of replaying. Read each call's result — a completion report, an escalation, a question, or a timeout — and act on it before the next wait starts. That repetition holds only while the worker's own deadline and the run's wall-clock bound hold; when either expires, the dispatch contract's stop, release, and record-the-gap path takes over, and the run MUST NOT wait again for that dispatch. This rule governs the command's FORM. A harness whose own instruction paragraph fixes HOW that command runs keeps that rule alongside this one, and both apply. The ban reaches a wait on a dispatched worker and nothing else: a watcher armed over a condition outside the dispatch — a service coming up, a build finishing — is a different thing and is untouched. That watcher MUST NOT be armed over a worker's artifacts, output files, dispatch state, or processes, because watching those IS the wait this rule governs and routing it through a watcher is the same poll under another name.
+
+```text
+# One wait command per tool call. Nothing wraps it. Each call is its own turn.
+turn 1:  <the guide's blocking wait command>                       -> worker A reports done: release it, start the next wait, end the turn
+turn 2:  <the same command, acknowledging the delivery just read>  -> worker B asks a question: reply, start the next wait, end the turn
+turn 3:  <the same command, acknowledging the delivery just read>  -> worker C reports done: release it, nothing outstanding, stop waiting
+
+# Never. Each of these builds the wait out of shell control flow:
+until [ "$(ls out/*.json | wc -l)" -ge 7 ]; do sleep 20; done
+while ! grep -q finished status.txt; do sleep 30; done
+for w in $workers; do <the guide's blocking wait command>; done
+pgrep -f agent-cli >/dev/null && sleep 60
+```
+
