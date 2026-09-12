@@ -8,10 +8,17 @@ Affected product: Orca IDE 1.4.198 (`/opt/Orca`, `orca-ide` RPM)
 
 ## Why these are recorded rather than filed
 
-All three defects are in Orca, not in this repository. The shared instruction core requires the agent to
-ask the user before filing an issue in a repository that is not theirs, and forbids an unattended
-run from asking. The run that found them was unattended, so it uses the committed-record fallback:
-the reports are drafted here for the operator to file unchanged.
+The shared instruction core requires the agent to ask the user before filing an issue in a repository that is
+not theirs, and forbids an unattended run from asking. In session-settled brainstorming, the operator directed
+to track/watch upstream issues locally without creating comments or issues on `stablyai/orca`.
+
+- Defect 3 (`identity_unproven` release receipts) was reported upstream by the community and is tracked at
+  [stablyai/orca#19166](https://github.com/stablyai/orca/issues/19166).
+- Defects 1 and 2 remain documented here as local tracking and historical reference.
+- Acceptance item 3 of [#438](https://github.com/hyperlapse122/dotfiles/issues/438) (residency verification
+  command) is resolved by treating the version-matched guide's query commands as authoritative, keeping the
+  instruction core command-agnostic.
+
 
 ## Defect 1 — `task-create --spec` cannot carry a review-sized prompt
 
@@ -124,3 +131,17 @@ distinct from the reasons that mean "there was nothing to reclaim". Second, for 
 with `--worktree current`, bind the release to the worktree identity already recorded in the
 dispatch's own `start_options`, so `identity_unproven` does not fire for a dispatch the runtime
 started itself.
+
+**Upstream tracking:** tracked upstream in [stablyai/orca#19166](https://github.com/stablyai/orca/issues/19166) (`[Bug]: worker-release can never reclaim a settled worker whose PTY vanished (retained/identity_unproven on every retry)`).
+
+## Resolution of issue #438 acceptance criteria
+
+All acceptance criteria defined in [#438](https://github.com/hyperlapse122/dotfiles/issues/438) are satisfied:
+
+1. **Review contract in instruction core:** PR #439 added the contract, PR #477 prohibited shell wait loops, commit `133630a` tightened the residency clause, and PR #497 moved coordinator dispatch rules to `.chezmoitemplates/orchestration-coordinator.tmpl`.
+2. **Worker release after every `worker_done`:** Required and enforced in `.chezmoitemplates/orchestration-coordinator.tmpl`.
+3. **Residency verification command:** Resolved by requiring "one Orca-side query of that dispatch's state" in coordinator instructions while treating the version-matched guide (`orca-ide skills get orchestration`) as authoritative for command spellings (`worker-show --dispatch <id>`, `worker-list --run <run_id> --terminal-state reclaimable`), keeping the core command-agnostic.
+4. **Bare `orca` safety:** PR #439 added `~/.local/bin/orca` wrapper, and [#440](https://github.com/hyperlapse122/dotfiles/issues/440) added argv routing so desktop accessibility autostart remains unaffected while bare subcommands route to `orca-ide`.
+5. **Rendered targets in sync:** Verified across all harnesses (`~/.claude/CLAUDE.md`, `~/.gemini/AGENTS.md`, `~/.codex/AGENTS.md`) by `.ci/test-agent-instructions.sh`.
+6. **Upstream defect reporting:** Defect 3 tracked at [stablyai/orca#19166](https://github.com/stablyai/orca/issues/19166); Defects 1 and 2 documented here as local committed tracking without external issues or comments per operator directive.
+
