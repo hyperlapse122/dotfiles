@@ -368,6 +368,16 @@ export const REGISTRY: Registry = {
   // is the only ref that exists. One key per skill, because
   // agents.skills.external looks the lock up by skill name and the two live in
   // different top-level directories of the same monorepo.
-  unslop: { kind: "gitRef", source: "cursor/plugins", ref: "refs/heads/main" },
-  deslop: { kind: "gitRef", source: "cursor/plugins", ref: "refs/heads/main" },
+  unslop: {
+    kind: "gitRef",
+    source: "cursor/plugins",
+    ref: "refs/heads/main",
+    skillPath: "pstack/skills/unslop",
+  },
+  deslop: {
+    kind: "gitRef",
+    source: "cursor/plugins",
+    ref: "refs/heads/main",
+    skillPath: "cursor-team-kit/skills/deslop",
+  },
 };

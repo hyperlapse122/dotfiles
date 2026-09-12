@@ -2,7 +2,7 @@ import { REGISTRY } from "./registry.js";
 import { resolveGitHubRelease } from "./github.js";
 import { resolveGitHubTag } from "./github-tag.js";
 import { resolveGitLabRelease } from "./gitlab.js";
-import { resolveGitRef } from "./git-ref.js";
+import { defaultExec, resolveGitRef } from "./git-ref.js";
 import { resolveNpmPackage } from "./npm.js";
 import { resolveVendorManifest } from "./vendor-manifest.js";
 import { sortTools } from "./lock.js";
@@ -25,8 +25,8 @@ export type ResolverFn = (
 
 /**
  * The kind -> resolver dispatch, as a table so its wiring is directly
- * assertable. `gitRef` takes a wrapper because `resolveGitRef`'s third
- * parameter is the `GitExec`, not the token.
+ * assertable. `gitRef` takes a wrapper because `resolveGitRef` accepts `exec`
+ * before `token`.
  */
 export const RESOLVERS: Record<ResolverKind, ResolverFn> = {
   githubRelease: resolveGitHubRelease,
@@ -34,7 +34,7 @@ export const RESOLVERS: Record<ResolverKind, ResolverFn> = {
   gitlabRelease: resolveGitLabRelease,
   npm: resolveNpmPackage,
   vendorManifest: resolveVendorManifest,
-  gitRef: (name, spec) => resolveGitRef(name, spec),
+  gitRef: (name, spec, token) => resolveGitRef(name, spec, defaultExec, token),
 };
 
 export async function resolveAll(

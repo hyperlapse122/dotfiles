@@ -342,3 +342,10 @@ describe("bun tag pinning", () => {
     );
   });
 });
+
+describe("gitRef skillPath declarations", () => {
+  test("custom subtree paths are declared for unslop and deslop", () => {
+    expect(REGISTRY.unslop?.skillPath).toBe("pstack/skills/unslop");
+    expect(REGISTRY.deslop?.skillPath).toBe("cursor-team-kit/skills/deslop");
+  });
+});
