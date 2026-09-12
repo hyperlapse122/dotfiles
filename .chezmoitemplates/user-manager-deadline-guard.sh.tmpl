@@ -1,0 +1,39 @@
+{{- /*
+user-manager-deadline-guard.sh.tmpl — read and validate user-manager deadlines.
+
+Shared between .chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl and
+.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl.
+
+Validates that all configured deadline variables are positive integer seconds so
+unbounded `timeout` calls or invalid values cannot wedge the chezmoi command.
+
+ARGUMENTS — a dict:
+  ctx: .
+  name: script name for error messages (e.g. "reload-user-systemd", "setup-podman-cluster")
+  includeReload: (optional bool) whether to also read and validate user_manager_reload_deadline_secs
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "user-manager-deadline-guard.sh.tmpl: expected a dict, got a %s (%v). Pass the call as data: {{ includeTemplate \"user-manager-deadline-guard.sh.tmpl\" (dict \"ctx\" . \"name\" %q) }}" (kindOf .) . .) -}}
+{{- end -}}
+{{- if not (hasKey . "name") -}}
+{{-   fail "user-manager-deadline-guard.sh.tmpl: missing required parameter 'name'" -}}
+{{- end -}}
+{{- $name := .name -}}
+{{- $includeReload := false -}}
+{{- if hasKey . "includeReload" -}}{{- $includeReload = .includeReload -}}{{- end -}}
+user_manager_deadline_secs=${CAPABILITY_PROBE_DEADLINE_SECS:-5}
+user_manager_term_grace_secs=${CAPABILITY_PROBE_TERM_GRACE_SECS:-2}
+{{- if $includeReload }}
+# The probe is a liveness question and answers in milliseconds; the reload is real
+# work -- a busy manager reserializing many units legitimately outruns the probe's
+# deadline -- so it gets its own, larger budget rather than borrowing that one.
+user_manager_reload_deadline_secs=${USER_MANAGER_RELOAD_DEADLINE_SECS:-30}
+[[ "$user_manager_deadline_secs" =~ ^[1-9][0-9]*$ &&
+  "$user_manager_term_grace_secs" =~ ^[1-9][0-9]*$ &&
+  "$user_manager_reload_deadline_secs" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "{{ $name }}: user-manager deadlines must be positive integer seconds" >&2; exit 1; }
+{{- else }}
+[[ "$user_manager_deadline_secs" =~ ^[1-9][0-9]*$ &&
+  "$user_manager_term_grace_secs" =~ ^[1-9][0-9]*$ ]] ||
+  { echo "{{ $name }}: user-manager deadlines must be positive integer seconds" >&2; exit 1; }
+{{- end -}}

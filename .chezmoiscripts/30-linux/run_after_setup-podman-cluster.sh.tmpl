@@ -66,11 +66,7 @@ set -euo pipefail
 # `systemctl --user` can block independently of the session-bus environment.
 # Match the hook's portable bounded-child convention so every-apply recovery
 # remains retryable instead of wedging the whole chezmoi command.
-user_manager_deadline_secs=${CAPABILITY_PROBE_DEADLINE_SECS:-5}
-user_manager_term_grace_secs=${CAPABILITY_PROBE_TERM_GRACE_SECS:-2}
-[[ "$user_manager_deadline_secs" =~ ^[1-9][0-9]*$ &&
-  "$user_manager_term_grace_secs" =~ ^[1-9][0-9]*$ ]] ||
-  { echo "setup-podman-cluster: user-manager deadlines must be positive integer seconds" >&2; exit 1; }
+{{ includeTemplate "user-manager-deadline-guard.sh.tmpl" (dict "ctx" . "name" "setup-podman-cluster") }}
 
 run_user_systemctl() {
   local pid watchdog_pid sleep_pid rc

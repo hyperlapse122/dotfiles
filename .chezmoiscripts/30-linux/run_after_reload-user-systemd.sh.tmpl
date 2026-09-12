@@ -29,16 +29,7 @@ set -euo pipefail
 
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "user-manager-bus-present" "value" $userManagerBusPresent))) }}
 
-user_manager_deadline_secs=${CAPABILITY_PROBE_DEADLINE_SECS:-5}
-user_manager_term_grace_secs=${CAPABILITY_PROBE_TERM_GRACE_SECS:-2}
-# The probe is a liveness question and answers in milliseconds; the reload is real
-# work -- a busy manager reserializing many units legitimately outruns the probe's
-# deadline -- so it gets its own, larger budget rather than borrowing that one.
-user_manager_reload_deadline_secs=${USER_MANAGER_RELOAD_DEADLINE_SECS:-30}
-[[ "$user_manager_deadline_secs" =~ ^[1-9][0-9]*$ &&
-  "$user_manager_term_grace_secs" =~ ^[1-9][0-9]*$ &&
-  "$user_manager_reload_deadline_secs" =~ ^[1-9][0-9]*$ ]] ||
-  { echo "reload-user-systemd: user-manager deadlines must be positive integer seconds" >&2; exit 1; }
+{{ includeTemplate "user-manager-deadline-guard.sh.tmpl" (dict "ctx" . "name" "reload-user-systemd" "includeReload" true) }}
 
 if timeout -k "$user_manager_term_grace_secs" "$user_manager_deadline_secs" \
   systemctl --user show-environment >/dev/null 2>&1; then
