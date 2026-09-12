@@ -201,3 +201,10 @@ src/garden.yaml
 .local/share/dotfiles-claude-plugin/payloads/coordinator.md
 .local/share/dotfiles-codex-plugin/hooks/orchestration.sh
 .local/share/dotfiles-codex-plugin/payloads/everyone.md
+
+# Retired tokscale codex wrapper: ~/.local/bin/codex now directly links the real
+# binary from command-reconcile without headless metering. Prune the stale public
+# codex-bin symlink and command-reconcile store artifacts on provisioned hosts.
+.local/bin/codex-bin
+.local/lib/commands/current/codex-wrapper
+.local/lib/commands/store/codex-wrapper
