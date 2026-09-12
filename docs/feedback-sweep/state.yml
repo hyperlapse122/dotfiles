@@ -1043,13 +1043,16 @@ items:
     updated_at: "2026-09-11T06:26:04Z"
   "gh-issues:hyperlapse122/dotfiles#469":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(release-lock): fail the refresh when a pinned skill subtree disappears — Validate that each pinned skill path exists at its resolved revision so missing upstream content fails the refresh instead of silently deleting the skill."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/495"
+    verified_merge_sha: "a5e9cb16fddea8e03b0a94024ca27b3136b47e32"
+    verified_at: "2026-09-12T07:21:04Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#469"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/469"
@@ -1184,39 +1187,48 @@ items:
     updated_at: "2026-09-11T10:02:11Z"
   "gh-issues:hyperlapse122/dotfiles#486":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "fix(ci): decide whether the frozen skip matrix admits post-freeze sites — Decide whether to add an owner row to .ci/skip-declaration-site-matrix.yaml for reload-user-systemd/no-user-manager-bus or exclude run_after_ scripts from the frozen boundary."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/493"
+    verified_merge_sha: "8eaa696aa00dad5b4cc8e89af00e201191c56071"
+    verified_at: "2026-09-12T07:21:04Z"
     author_class: "teammate"
     category: "bug"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#486"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/486"
     updated_at: "2026-09-11T11:21:36Z"
   "gh-issues:hyperlapse122/dotfiles#487":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "refactor(scripts): share the user-manager deadline guard between 30-linux scripts — Extract the duplicated deadline read-and-validate block from reload-user-systemd and setup-podman-cluster into a shared partial."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/496"
+    verified_merge_sha: "fe53873a03f1aef3d92d94913728a6fdff00dd26"
+    verified_at: "2026-09-12T07:21:04Z"
     author_class: "teammate"
     category: "refactor"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#487"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/487"
     updated_at: "2026-09-11T11:22:00Z"
   "gh-issues:hyperlapse122/dotfiles#488":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "chore(ci): move the user-systemd reload gate to fatal-boundary-gates — Move test-user-systemd-reload.sh from agent-reconciliation to fatal-boundary-gates so failures report under the matching CI job."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/494"
+    verified_merge_sha: "4c92e63f4b9f3fdb594360a357927a68ec56399c"
+    verified_at: "2026-09-12T07:21:04Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#488"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/488"
@@ -1235,14 +1247,14 @@ items:
     origin: "https://github.com/hyperlapse122/dotfiles/issues/489"
     updated_at: "2026-09-12T04:57:12Z"
 last_run:
-  timestamp: "2026-09-12T05:52:35Z"
+  timestamp: "2026-09-12T07:22:40Z"
   outcome: "completed"
-  writer: "sweep-ThinkPad-P14s-Gen-1-08e28c79-2026-09-12"
+  writer: "sweep-ThinkPad-P14s-Gen-1-a9d41974-2026-09-12"
   counts:
     gh-issues:
       ack_deferred: 0
       acked: 0
-      already_acked: 5
-      closed: 1
-      fetched: 5
+      already_acked: 0
+      closed: 4
+      fetched: 0
       media_analyzed: 0

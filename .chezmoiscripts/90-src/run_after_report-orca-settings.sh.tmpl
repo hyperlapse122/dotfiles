@@ -96,4 +96,16 @@ if [ "$started_unit" = false ]; then
   "$reconcile" --mode assert || true
 fi
 
-"$reconcile" --mode report || true
+report_out="$("$reconcile" --mode report 2>&1 || true)"
+if [ -n "$report_out" ]; then
+  printf '%s\n' "$report_out" >&2
+  if command -v systemctl >/dev/null 2>&1 &&
+    timeout -k "$user_manager_term_grace_secs" "$user_manager_deadline_secs" \
+      systemctl --user show-environment >/dev/null 2>&1; then
+    exec_start="$(timeout -k "$user_manager_term_grace_secs" "$user_manager_deadline_secs" \
+      systemctl --user show -p ExecMainStartTimestamp --value "$unit" 2>/dev/null || true)"
+    if [ -z "$exec_start" ]; then
+      echo "report-orca-settings: $unit has never run in this user-manager lifetime; to converge now, reboot or stop Orca and run: systemctl --user start $unit" >&2
+    fi
+  fi
+fi
