@@ -419,6 +419,11 @@ Before a mandatory step sends work outside the current session, the agent MUST s
 When the step dispatches workers, the disclosure MUST name the resolved dispatch count, so the user can interrupt a fan-out they did not expect without being asked to approve it
 This rule authorizes no dispatch the invoked skill does not itself define, and the authority follows the skill chain inside one session rather than travelling to a dispatched worker
 MUST NOT send outside the current session a document, message, or artifact carrying a credential, a secret, or material the user has marked confidential. That is a stop-and-ask, never a disclosure
+Before dispatching a Codex worker, the session MUST run `orca-ide agent hooks prepare-codex` once to repair Orca-managed Codex hook trust.
+The repair command is idempotent and silent on success, so a pre-dispatch run costs effectively nothing.
+agentWait.reason: codex-hooks-review-prompt
+run `orca-ide agent hooks prepare-codex` and retry the dispatch rather than editing `~/.codex/config.toml` by hand
+MUST NOT edit `~/.codex/config.toml` trust records by hand, because `chezmoi apply` owns the dotfiles-side hook records and manual edits would contend with them.
 NEEDLES
 
 # The garden registry mechanics the core used to carry now live in this
