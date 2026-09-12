@@ -88,7 +88,6 @@ jobs:
           .ci/test-orca-settings-reconcile.sh "$RUNNER_TEMP/orca-settings-reconcile.sh"
           .ci/test-user-systemd-reload.sh "$RUNNER_TEMP/user-systemd-reload.sh"
           .ci/test-orchestration-hook.sh
-          .ci/test-codex-tokscale-wrapper.sh
           .ci/test-codex-skills-guard.sh
           .ci/test-android-skill-ownership.sh
           .ci/test-agent-instructions.sh
