@@ -28,7 +28,7 @@ Before launching ANY subagent, worker, or peer reviewer, MUST open and read the 
 
 A session outside Orca receives no injection, and its absence never waives the contract: perform non-dispatch work only, and never reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
 
-Antigravity does not lead an Orca workflow, dispatch Orca workers, or serve as an Orca worker. No orchestration guarantee applies there. Neither this pointer nor the autonomy paragraphs below are a dispatch licence for it.
+Antigravity leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex. Its orchestration rules reach it through a plugin hook rather than a session-start one, so they arrive before the first model call instead of once, and a session that has not received them holds only the pointer above and performs non-dispatch work. `omp` remains outside orchestration: it receives the rules that bind every agent and performs non-dispatch work only, never leading or dispatching.
 
 {{ if eq .ctx.chezmoi.os "linux" -}}
 MUST use `orca-ide` for Orca commands, never bare `orca`, because bare `orca` resolves by PATH order and reaches `/usr/bin/orca`, the GNOME screen reader, on any host where no wrapper precedes `/usr/bin`. This executable rule takes precedence over skill defaults for executable selection. It stays in this file rather than the injected contract because it binds any session that types an Orca command, including one outside Orca that never receives an injection, and because starting a screen reader on the user's machine is destructive.

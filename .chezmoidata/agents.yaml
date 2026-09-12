@@ -195,6 +195,24 @@ agents:
       path: .local/share/dotfiles-codex-plugin
       os: [linux, darwin]
       container: keep
+    # This checkout's own Antigravity plugin. Same shape and same reason again:
+    # ~/.gemini/config/hooks.json is Orca's, so dotfiles composes beside it
+    # through a plugin instead of rewriting that file. Antigravity merges named
+    # hook groups from every source and runs them in sequence, so the two
+    # coexist without either vetoing the other.
+    #
+    # Unlike the Claude and Codex rows, this manifest carries no version: the
+    # agy bundle manifest takes a name and nothing else. Install copies the
+    # bundle into ~/.gemini/config/plugins/<name>, so the served copy goes stale
+    # unless the reconciler re-runs — which makes its fingerprint the only thing
+    # standing between an edited declaration and a host still serving the old
+    # one. The reconciler names this tree and the rendered declaration for
+    # exactly that reason.
+    dotfiles-agy-plugin:
+      kind: localDir
+      path: .local/share/dotfiles-agy-plugin
+      os: [linux, darwin]
+      container: keep
   claude:
     # Claude Code setting VALUES asserted into the live ~/.claude/settings.json by
     # .chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl, validated at
@@ -291,6 +309,7 @@ agents:
     settings: {}
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
+    - { name: dotfiles-agy, marketplace: dotfiles-agy-plugin }
     pluginsRemoved: []
   omp:
     # The omp-only archive copy, never the shared one: installing the copy that

@@ -185,10 +185,37 @@ out=$(run_hook claude "ORCA_TERMINAL_HANDLE=term_ci")
   && fail 'a worker must not receive the coordinator payload'
 pass 'an Orca-managed worker receives the everyone payload alone'
 
-out=$(run_hook codex "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1")
+# Lead eligibility follows the role, not the harness. Give each non-Claude
+# harness a real guide so the envelope can actually be composed — without one
+# the lead path ends in a no-op and an assertion here would pass vacuously,
+# which is how the superseded Codex-never-leads case survived this gate.
+lead_env="ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1 ORCA_CLI_COMMAND=$remap_bin/orca-dev"
+out=$(run_hook codex "$lead_env" "$remap_bin")
 [[ $out == *'orchestration-coordinator:begin'* ]] \
-  && fail 'Codex must never receive the coordinator payload, whatever its role'
-pass 'Codex receives the everyone payload even when it resolves as lead'
+  || fail 'a Codex lead must receive the coordinator payload'
+[[ $out == *'orchestration-everyone:begin'* ]] \
+  || fail 'a Codex lead must receive the everyone payload'
+pass 'a Codex lead receives the whole envelope, like any other served harness'
+
+# Antigravity injects before every model call instead of at session start, so
+# its delivery document is a different shape. A regression there would leave the
+# source tests green while the deployed binary delivered nothing that harness
+# could read.
+out=$(run_hook agy "$lead_env" "$remap_bin")
+printf '%s' "$out" | jq -er '.injectSteps[0].ephemeralMessage' >/dev/null \
+  || fail "an Antigravity lead must receive one injected step (got: $out)"
+step=$(printf '%s' "$out" | jq -r '.injectSteps[0].ephemeralMessage')
+[[ $step == *'orchestration-coordinator:begin'* && $step == *'orchestration-everyone:begin'* ]] \
+  || fail 'an Antigravity lead step must carry the whole envelope'
+out=$(run_hook agy "ORCA_TERMINAL_HANDLE=term_ci")
+step=$(printf '%s' "$out" | jq -r '.injectSteps[0].ephemeralMessage')
+[[ $step == *'orchestration-everyone:begin'* ]] \
+  || fail 'an Antigravity worker must receive the everyone payload'
+[[ $step == *'orchestration-coordinator:begin'* ]] \
+  && fail 'an Antigravity worker must not receive the coordinator payload'
+out=$(run_hook agy "")
+[[ $out == '{}' ]] || fail "Antigravity outside Orca must print exactly {} (got: $out)"
+pass 'Antigravity delivery carries the right payload per role, in its own document shape'
 
 for bad in "--harness nonesuch" "--harness" ""; do
   # shellcheck disable=SC2086
@@ -242,6 +269,11 @@ diff -q "$scratch/everyone.rendered" "$scratch/everyone.binary" >/dev/null \
   || fail 'the binary emits a different everyone payload than the source body renders'
 diff -q "$scratch/coordinator.rendered" "$scratch/coordinator.binary" >/dev/null \
   || fail 'the binary emits a different coordinator payload than the source body renders'
+for payload_render in "$scratch/coordinator.rendered" "$scratch/coordinator.binary"; do
+  if grep -F '{{' "$payload_render" >/dev/null || grep -F '}}' "$payload_render" >/dev/null; then
+    fail "$(basename "$payload_render") contains template action delimiters"
+  fi
+done
 
 # The third reader: omp has no session-start injection point, so its payload
 # rides in a rendered instruction file instead of this binary. All three must
@@ -250,6 +282,9 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_omp/private_agent/private_readonly_AGENTS.md.tmpl" "$scratch/omp.rendered"
 awk '/<!-- omp-orchestration-payload:begin -->/{flag=1; next} /<!-- omp-orchestration-payload:end -->/{flag=0} flag' \
   "$scratch/omp.rendered" >"$scratch/omp.block"
+if grep -F 'orchestration-coordinator:begin' "$scratch/omp.rendered" >/dev/null; then
+  fail "omp's instruction file carries the coordinator payload"
+fi
 grep -q 'orchestration-everyone:begin' "$scratch/omp.block" \
   || fail "omp's instruction file carries no everyone payload block"
 grep -Fxq "$(head -1 "$scratch/everyone.binary")" "$scratch/omp.block" \
@@ -261,6 +296,8 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_local/share/dotfiles-claude-plugin/hooks/hooks.json.tmpl" "$scratch/claude-hooks.json"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_local/share/dotfiles-codex-plugin/hooks/hooks.json.tmpl" "$scratch/codex-hooks.json"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux \
+  "$repo_root/dot_local/share/dotfiles-agy-plugin/hooks.json.tmpl" "$scratch/agy-hooks.json"
 
 expected_binary="$scratch/home/.local/libexec/orchestration-hook"
 claude_command=$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/claude-hooks.json")
@@ -301,7 +338,29 @@ for harness in claude codex; do
   reason=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecisionReason')
   [[ $reason == *Orca* ]] || fail "$harness: the deny must name the Orca dispatch path"
 done
-pass 'a shell launch of an agent CLI is denied in a team session, on both harnesses'
+
+# Antigravity nests the command under a tool call and reads a different decision
+# document. A response in the other shape is IGNORED rather than rejected, so a
+# gate that emitted one would deny nothing while every unit test stayed green.
+agy_event=$(jq -nc '{toolCall:{name:"run_command",args:{CommandLine:"codex exec x"}}}')
+# shellcheck disable=SC2086
+out=$(printf '%s' "$agy_event" \
+  | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness agy)
+decision=$(printf '%s' "$out" | jq -er '.decision') \
+  || fail "agy: a launch in a team session must return a decision document (got: $out)"
+[[ $decision == deny ]] || fail "agy: a launch must be denied (got: $decision)"
+reason=$(printf '%s' "$out" | jq -er '.reason')
+[[ $reason == *Orca* ]] || fail 'agy: the deny must name the Orca dispatch path'
+pass 'a shell launch of an agent CLI is denied in a team session, on all three harnesses'
+
+# An explicit allow would override Antigravity's own permission prompt, turning
+# the gate into a blanket auto-approval for everything it did not deny.
+agy_plain=$(jq -nc '{toolCall:{name:"run_command",args:{CommandLine:"echo hi"}}}')
+# shellcheck disable=SC2086
+out=$(printf '%s' "$agy_plain" \
+  | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness agy)
+[[ $out == '{}' ]] || fail "agy: a command the gate does not deny must decide nothing (got: $out)"
+pass 'the gate declines to decide rather than auto-approving what it does not deny'
 
 out=$(run_guard claude "$WORKER_ENV" 'codex exec x')
 [[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') == deny ]] \
@@ -399,6 +458,27 @@ jq -e '.hooks.PreToolUse[0].hooks[0] | has("args") | not' "$scratch/codex-hooks.
 jq -e '.hooks.PreToolUse[0] | has("matcher") | not' "$scratch/codex-hooks.json" >/dev/null \
   || fail 'the Codex guard must carry no matcher while the shell tool name is unpinned'
 pass 'Codex declares the launch gate without an args key or an unpinnable matcher'
+
+# Antigravity has no session-start event, so the payload rides its pre-model
+# hook. Both handlers run through `sh -c`, so the absolute path is shell-quoted
+# — a home directory with a space would otherwise break the command before the
+# binary could fail open.
+agy_inject=$(jq -r '.["dotfiles-orchestration"].PreInvocation[0].command' "$scratch/agy-hooks.json")
+[[ $agy_inject == "'$expected_binary' hook --harness agy" ]] \
+  || fail "Antigravity must declare the staged binary, shell-quoted (got: $agy_inject)"
+agy_guard=$(jq -r '.["dotfiles-orchestration"].PreToolUse[0].hooks[0].command' "$scratch/agy-hooks.json")
+[[ $agy_guard == "'$expected_binary' guard --harness agy" ]] \
+  || fail "Antigravity must declare the guard, shell-quoted (got: $agy_guard)"
+# The matcher stays open for the reason Codex carries none: this CLI derives a
+# tool name from its step type, and the matcher is evaluated before the handler,
+# so a renamed tool would retire the gate with every gate here still green.
+jq -e '.["dotfiles-orchestration"].PreToolUse[0].matcher == "*"' "$scratch/agy-hooks.json" >/dev/null \
+  || fail 'the Antigravity guard must not pin a shell tool name'
+# The injection side must outlast the binary's own guide fetch, or a lead would
+# lose its envelope to the harness clock rather than to a missing guide.
+jq -e '.["dotfiles-orchestration"].PreInvocation[0].timeout >= 15' "$scratch/agy-hooks.json" >/dev/null \
+  || fail 'the Antigravity injection timeout must exceed the guide-fetch budget'
+pass 'Antigravity declares both hooks by quoted absolute path, without pinning a tool name'
 
 # The trust record is the silent-failure surface: a Codex hook whose recorded
 # hash disagrees with the deployed declaration simply never runs. Adding an

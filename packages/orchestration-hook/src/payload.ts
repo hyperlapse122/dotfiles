@@ -11,8 +11,8 @@
  * raw bytes instead of rendering. `.ci/test-agent-instructions.sh` asserts the
  * everyone body's sentinels and compares omp's delimited block against a
  * standalone render of it; do not reword those sentinels without updating that
- * gate. The coordinator body reaches Claude Code alone — it is the only harness
- * that leads.
+ * gate. The coordinator body reaches whichever session resolves as the team
+ * lead, on any served harness; the everyone body reaches every managed session.
  */
 
 import coordinatorText from "../../../.chezmoitemplates/orchestration-coordinator.tmpl" with { type: "text" };

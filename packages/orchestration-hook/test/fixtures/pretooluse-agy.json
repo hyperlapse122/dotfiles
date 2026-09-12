@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "/REDACTED/brain/00000000-0000-0000-0000-000000000000",
+  "conversationId": "00000000-0000-0000-0000-000000000000",
+  "modelName": "REDACTED-model",
+  "stepIdx": 4,
+  "toolCall": {
+    "args": {
+      "CommandLine": "echo capture-probe",
+      "Cwd": "/REDACTED/scratch",
+      "RequestedTerminalID": "",
+      "RunPersistent": false,
+      "WaitMsBeforeAsync": 5000,
+      "toolAction": "Capture probe",
+      "toolSummary": "Capture probe"
+    },
+    "name": "run_command"
+  },
+  "transcriptPath": "/REDACTED/transcript_full.jsonl",
+  "workspacePaths": []
+}

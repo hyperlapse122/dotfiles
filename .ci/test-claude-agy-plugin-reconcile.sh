@@ -126,6 +126,21 @@ for body in orchestration-everyone.tmpl orchestration-coordinator.tmpl; do
     fail "rendered Claude updater does not fingerprint payload body $body"
 done
 
+# The same story for Antigravity, and it carries more weight there. Its bundle
+# manifest has no version field, so unlike the two harnesses above there is no
+# second mechanism to resolve a fresh copy: this fingerprint is the whole of
+# what keeps an edited declaration from deploying to a host that goes on
+# serving the previous one.
+agy_fingerprints=$(grep '^#   ' "$agy_script" || true)
+for input in \
+  'dot_local/share/dotfiles-agy-plugin/' \
+  '.chezmoitemplates/agy-hook-declaration.tmpl  ' \
+  '.chezmoitemplates/orchestration-everyone.tmpl  ' \
+  '.chezmoitemplates/orchestration-coordinator.tmpl  '; do
+  printf '%s\n' "$agy_fingerprints" | grep -F "#   $input" >/dev/null ||
+    fail "rendered Antigravity updater does not fingerprint $input"
+done
+
 # Neither script may reach a conditional `exit 0`: chezmoi records that as a
 # successful run, and an empty declared set is decided at render time instead.
 for script in "$claude_script" "$agy_script" "$codex_script"; do
@@ -197,6 +212,22 @@ cat >"$codex_dir_market/.codex-plugin/plugin.json" <<'EOF'
 EOF
 ln -s "$codex_dir_market" "$home/.agents/plugins/dotfiles-codex-plugin"
 
+# The Antigravity half. Its reconciler preflights the source directory and a
+# bundle manifest at the tree ROOT — not under a dot-prefixed subdirectory like
+# the two above — and requires that manifest to declare the plugin by name.
+agy_dir_market="$home/.local/share/dotfiles-agy-plugin"
+mkdir -p "$agy_dir_market"
+cat >"$agy_dir_market/plugin.json" <<'EOF'
+{"name":"dotfiles-agy"}
+EOF
+cat >"$agy_dir_market/hooks.json" <<'EOF'
+{"dotfiles-orchestration":{"PreInvocation":[{"type":"command","command":"true"}]}}
+EOF
+# The stub CLI walks a bundle's skills tree, so an empty one fails the install
+# even though the real plugin ships hooks alone.
+mkdir -p "$agy_dir_market/skills/demo"
+printf -- '---\nname: demo\n---\n' >"$agy_dir_market/skills/demo/SKILL.md"
+
 rewrite() {
   local rendered=$1 target=$2
   local row path local_row local_path
@@ -205,9 +236,9 @@ rewrite() {
   path=${row#*localArchive\\t}
   path=${path%%\"*}
   # Each harness carries at most one localDir row: dotfiles-claude in the Claude
-  # script, dotfiles-codex in the Codex one. Each substitution is a no-op where
-  # its row is absent.
-  local codex_row codex_path
+  # script, dotfiles-codex in the Codex one, dotfiles-agy in the Antigravity one.
+  # Each substitution is a no-op where its row is absent.
+  local codex_row codex_path agy_row agy_path
   local -a subs=("-e" "s|$path|$market|g")
   if local_row=$(grep -m1 'dotfiles-claude\\tdotfiles-claude-plugin\\tlocalDir\\t' "$rendered"); then
     local_path=${local_row#*localDir\\t}
@@ -218,6 +249,11 @@ rewrite() {
     codex_path=${codex_row#*localDir\\t}
     codex_path=${codex_path%%\"*}
     subs+=("-e" "s|$codex_path|$codex_dir_market|g")
+  fi
+  if agy_row=$(grep -m1 'dotfiles-agy\\tdotfiles-agy-plugin\\tlocalDir\\t' "$rendered"); then
+    agy_path=${agy_row#*localDir\\t}
+    agy_path=${agy_path%%\"*}
+    subs+=("-e" "s|$agy_path|$agy_dir_market|g")
   fi
   sed "${subs[@]}" "$rendered" >"$target"
   chmod 0700 "$target"
@@ -233,6 +269,8 @@ grep -F "$market" "$claude_test" >/dev/null || fail 'claude fixture path rewrite
 grep -F "$local_dir_market" "$claude_test" >/dev/null ||
   fail 'claude localDir fixture path rewrite did not take'
 grep -F "$market" "$agy_test" >/dev/null || fail 'agy fixture path rewrite did not take'
+grep -F "$agy_dir_market" "$agy_test" >/dev/null ||
+  fail 'agy localDir fixture path rewrite did not take'
 grep -F "$market" "$codex_test" >/dev/null || fail 'codex fixture path rewrite did not take'
 
 # --- harness stubs --------------------------------------------------------- #

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { main, type Io } from "../src/cli.js";
 import { payload } from "../src/payload.js";
+import { PREAMBLE } from "../src/envelope.js";
 
 function capture(env: NodeJS.ProcessEnv = {}): { io: Io; out: string[]; err: string[] } {
   const out: string[] = [];
@@ -145,6 +146,145 @@ describe("hook fail-open contract", () => {
     expect(parsed.hookSpecificOutput.hookEventName).toBe("SessionStart");
     expect(parsed.hookSpecificOutput.additionalContext).toContain(payload("everyone"));
     expect(parsed.hookSpecificOutput.additionalContext).not.toContain(payload("coordinator"));
+  });
+});
+
+/** The context Antigravity's pre-model hook injected, from one captured stdout. */
+function injectedContext(stdout: string): string {
+  const parsed = JSON.parse(stdout) as { injectSteps: { ephemeralMessage?: string }[] };
+  expect(parsed.injectSteps).toHaveLength(1);
+  return parsed.injectSteps[0]?.ephemeralMessage ?? "";
+}
+
+describe("agy hook delivery", () => {
+  it("delivers the complete lead envelope in order", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-lead-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      writeFileSync(cli, '#!/usr/bin/env bash\nprintf "GUIDE BODY\\n"\n');
+      chmodSync(cli, 0o755);
+
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+      const context = injectedContext(out.join(""));
+      const order = [
+        context.indexOf(PREAMBLE),
+        context.indexOf("SKILL BODY"),
+        context.indexOf("GUIDE BODY"),
+        context.indexOf(payload("everyone")),
+        context.indexOf(payload("coordinator")),
+      ];
+      expect(order.every((i) => i >= 0)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("delivers the everyone envelope to a worker", async () => {
+    const { io, out } = capture(ORCA_WORKER);
+    expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+    const context = injectedContext(out.join(""));
+    expect(context).toContain(PREAMBLE);
+    expect(context).toContain(payload("everyone"));
+    expect(context).not.toContain(payload("coordinator"));
+  });
+
+  it("returns a parseable no-op outside Orca", async () => {
+    const { io, out } = capture();
+    expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+    expect(JSON.parse(out.join(""))).toEqual({});
+  });
+
+  it("returns a no-op when the skill is empty", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-empty-skill-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "");
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+      expect(JSON.parse(out.join(""))).toEqual({});
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("returns a no-op when the guide fetch fails", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-guide-fail-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      writeFileSync(cli, "#!/usr/bin/env bash\nexit 3\n");
+      chmodSync(cli, 0o755);
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+      expect(JSON.parse(out.join(""))).toEqual({});
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("delivers a complete envelope on a later invocation once the guide arrives", async () => {
+    // The pre-model hook fires before every invocation, so an envelope that
+    // could not be composed at the first opportunity is not lost — it lands
+    // whole at the first opportunity that can compose it.
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-late-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      const marker = join(home, "seen-once");
+      writeFileSync(
+        cli,
+        `#!/usr/bin/env bash\nif [ -e ${JSON.stringify(marker)} ]; then printf "GUIDE BODY\\n"; else : > ${JSON.stringify(marker)}; exit 3; fi\n`,
+      );
+      chmodSync(cli, 0o755);
+      const env = {
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      };
+
+      const first = capture(env);
+      expect(await main(["hook", "--harness", "agy"], first.io)).toBe(0);
+      expect(JSON.parse(first.out.join(""))).toEqual({});
+
+      const second = capture(env);
+      expect(await main(["hook", "--harness", "agy"], second.io)).toBe(0);
+      const context = injectedContext(second.out.join(""));
+      expect(context).toContain("GUIDE BODY");
+      expect(context).toContain(payload("coordinator"));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("lists agy among the accepted harness values", async () => {
+    const { io, err } = capture();
+    expect(await main(["nonesuch"], io)).toBe(2);
+    expect(err.join(" ")).toContain("agy");
   });
 });
 
@@ -292,6 +432,30 @@ describe("guard decisions", () => {
     const { io, out } = guardIo({}, event("codex exec x"));
     expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
     expect(out.join("")).toBe("{}");
+  });
+
+  it("denies in the document shape Antigravity reads", async () => {
+    // A response in the other harness's shape is ignored rather than rejected,
+    // so the gate would deny nothing at all and no diff would show it.
+    const body = JSON.stringify({
+      toolCall: { name: "run_command", args: { CommandLine: "claude -p x" } },
+    });
+    const { io, out } = guardIo(LEAD_ENV, body);
+    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
+    const parsed = JSON.parse(out.join("")) as { decision: string; reason: string };
+    expect(parsed.decision).toBe("deny");
+    expect(parsed.reason).toContain("Orca");
+  });
+
+  it("decides nothing when it does not deny on Antigravity", async () => {
+    // An explicit allow there overrides the harness's own permission prompt,
+    // which would turn this gate into a blanket auto-approval.
+    const body = JSON.stringify({
+      toolCall: { name: "run_command", args: { CommandLine: "echo hi" } },
+    });
+    const { io, out } = guardIo(LEAD_ENV, body);
+    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
+    expect(JSON.parse(out.join(""))).toEqual({});
   });
 
   it("parses a pretty-printed body rather than stopping at the first newline", async () => {
