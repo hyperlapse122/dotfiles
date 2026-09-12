@@ -475,6 +475,11 @@ turn 2:  <the same command, acknowledging the delivery just read>  -> worker B a
 # Never. Each of these builds the wait out of shell control flow:
 until [ "$(ls out/*.json | wc -l)" -ge 7 ]; do sleep 20; done
 for w in $workers; do <the guide's blocking wait command>; done
+Before dispatching a Codex worker, the session MUST run `orca-ide agent hooks prepare-codex` once to repair Orca-managed Codex hook trust.
+The repair command is idempotent and silent on success, so a pre-dispatch run costs effectively nothing.
+agentWait.reason: codex-hooks-review-prompt
+run `orca-ide agent hooks prepare-codex` and retry the dispatch rather than editing `~/.codex/config.toml` by hand
+MUST NOT edit `~/.codex/config.toml` trust records by hand, because `chezmoi apply` owns the dotfiles-side hook records and manual edits would contend with them.
 NEEDLES
 
 # The garden registry mechanics the core used to carry now live in this
