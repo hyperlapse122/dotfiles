@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { ResolutionError } from "./github.js";
+import { authHeaders, ResolutionError } from "./github.js";
+import { fetchWithRetry } from "./http.js";
 import type { LockedTool, ToolSpec } from "./types.js";
 
-export { ResolutionError };
+export { defaultExec, ResolutionError };
 
 /**
  * Git ref resolution — a branch head (or HEAD) resolved to its commit sha,
@@ -36,6 +37,7 @@ export async function resolveGitRef(
   name: string,
   spec: ToolSpec,
   exec: GitExec = defaultExec,
+  token?: string,
 ): Promise<LockedTool> {
   if (!spec.ref) {
     throw new ResolutionError(spec.source, `${name}: gitRef requires a ref`);
@@ -48,5 +50,33 @@ export async function resolveGitRef(
     const detail = error instanceof Error ? error.message : String(error);
     throw new ResolutionError(spec.source, `${name}: git ls-remote failed: ${detail}`);
   }
-  return { kind: spec.kind, source: spec.source, version: parseLsRemoteSha(spec.source, output) };
+  const sha = parseLsRemoteSha(spec.source, output);
+
+  const skillPath = spec.skillPath ?? `skills/${name}`;
+  const url = `https://api.github.com/repos/${spec.source}/contents/${skillPath}?ref=${sha}`;
+  let response: Response;
+  try {
+    response = await fetchWithRetry(url, { headers: authHeaders(token) });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new ResolutionError(
+      spec.source,
+      `${name}: verifying skillPath "${skillPath}" failed: ${detail}`,
+    );
+  }
+
+  if (response.status === 404) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: skillPath "${skillPath}" does not exist at ${sha}`,
+    );
+  }
+  if (!response.ok) {
+    throw new ResolutionError(
+      spec.source,
+      `${name}: verifying skillPath "${skillPath}" returned HTTP ${response.status}`,
+    );
+  }
+
+  return { kind: spec.kind, source: spec.source, version: sha };
 }

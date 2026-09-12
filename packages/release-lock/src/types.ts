@@ -100,6 +100,8 @@ export interface ToolSpec {
   readonly vendor?: VendorName;
   /** gitRef only: the ref to resolve, e.g. `refs/heads/main` or `HEAD`. */
   readonly ref?: string;
+  /** gitRef only: repository subtree to verify at the resolved sha (default: skills/<name>). */
+  readonly skillPath?: string;
   /**
    * KTD10 tag-shape transform applied to the resolved tag before it is
    * recorded (e.g. stripping the leading `v` for an npm-pinned plugin), so
