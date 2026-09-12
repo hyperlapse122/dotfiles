@@ -471,7 +471,7 @@
       "improve": {
         "kind": "gitRef",
         "source": "shadcn/improve",
-        "version": "03369ee6d7cafbfcecc4346539b05b3dc0a603bb"
+        "version": "cac56e1ebd3c279aa9153616cfeac7b174ab90f9"
       },
       "kubectl": {
         "kind": "githubRelease",
