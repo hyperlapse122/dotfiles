@@ -214,6 +214,7 @@ jobs:
           .ci/test-build-orchestration-hook.sh "$RUNNER_TEMP/build-orchestration-hook.sh"
           .ci/test-podman-cluster-convergence.sh "$RUNNER_TEMP/setup-podman-cluster.sh"
           .ci/test-user-systemd-reload.sh "$RUNNER_TEMP/user-systemd-reload.sh"
+          .ci/test-user-manager-deadline-guard.sh
 
   command-reconcile:
     name: command reconcile
