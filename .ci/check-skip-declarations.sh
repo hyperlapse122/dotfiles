@@ -23,10 +23,12 @@ set -uo pipefail
 # `onchange` scripts are the surface whose recorded success can strand work, so
 # they are scanned. A plain `run_` script (including U4's `run_after_` extension
 # retry jobs) runs on every apply, records nothing, and is therefore out of
-# scope — excluded by its lifecycle, never by a filename exception. The matrix
-# still accounts for the shared-guard instances inside those always-run scripts:
-# they are reported as lifecycle-excluded, so all 206 declared instances reconcile as
-# rendered + excluded, never as a silently smaller number.
+# scope — excluded by its lifecycle, never by a filename exception. Sites
+# declared in run_after_* scripts after the R5 freeze (such as reload-user-systemd)
+# need no matrix row (#486). The matrix still accounts for the shared-guard
+# instances inside those always-run scripts: they are reported as lifecycle-excluded,
+# so all 206 declared instances reconcile as rendered + excluded, never as a
+# silently smaller number.
 #
 # RENDER VARIANTS. One render cannot reach every declared instance: some sites
 # sit behind render-time branches (`.chezmoi.os`, a stored LUKS secret). The

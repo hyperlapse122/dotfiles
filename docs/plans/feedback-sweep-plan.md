@@ -1,15 +1,26 @@
 ---
 title: Feedback Sweep - Plan
 date: 2026-09-12
+type: fix
 topic: feedback-sweep
 artifact_contract: ce-unified-plan/v1
-artifact_readiness: requirements-only
+artifact_readiness: implementation-ready
 product_contract_source: ce-sweep
+execution: code
+origin: https://github.com/hyperlapse122/dotfiles/issues/486
 ---
+
+# Feedback Sweep - Plan
 
 ## Goal Capsule
 
-Triage and drive to resolution the open feedback items captured below: acknowledge each at its source, land fixes, and verify they merged.
+**Objective.** Formally settle and document the contract boundary for `.ci/skip-declaration-site-matrix.yaml` so post-freeze `run_after_` skip sites are explicitly documented as excluded from the matrix by lifecycle, preserving the frozen R5 audit totals and preventing code-review re-litigation.
+
+**Means:** Document in `.ci/skip-declaration-site-matrix.yaml`, `AGENTS.md`, `.chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl`, and `.ci/check-skip-declarations.sh` that the matrix is an audit oracle freezing the historical R5 boundary for `run_onchange_`/`run_once_` scripts and that `run_after_` scripts are lifecycle-excluded and need no matrix row.
+
+**Authority hierarchy.** This plan's Product Contract (R22-R52) is the ce-sweep ledger and outranks the Planning Contract. Only R49 leaves the ledger as the active implementation unit this run; every other requirement stays in the ledger untouched, with the evidence that deferred it recorded under Scope Boundaries. A KTD may not outrank a preserved requirement.
+
+**Stop conditions.** Stop and report if `.ci/check-skip-declarations.sh` fails or if `.ci/test-agent-instructions.sh` fails.
 
 ## Human Notes
 
@@ -19,9 +30,25 @@ Triage and drive to resolution the open feedback items captured below: acknowled
 
 ## Product Contract
 
+**Product Contract preservation:** unchanged. R22-R52 keep the meaning and IDs the ce-sweep ledger assigned. No requirement was rewritten, split, or reclassified by this enrichment.
+
 ### Summary
 
-Thirteen items are open. One closed this run with verified merge: R45 (#478, PR #492). R49 was decided in this run's decision round (explicitly exclude `run_after_` sites from the frozen R5 matrix and document that the matrix audits only the historical frozen boundary). Five items remain in Outstanding Questions (R22, R32, R33, R34, R41).
+Thirteen items are open. One closed this run with verified merge: R45 (#478, PR #492). R49 was decided in this run's decision round (explicitly exclude `run_after_` sites from the frozen R5 matrix and document that the matrix audits only the historical frozen boundary) and is the active implementation unit for this run. Five items remain in Outstanding Questions (R22, R32, R33, R34, R41).
+
+### Problem Frame
+
+Issue #486 raised whether `.ci/skip-declaration-site-matrix.yaml` should admit sites created after the R5 freeze, specifically `reload-user-systemd/no-user-manager-bus` declared in `.chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl:19`. Adding the row failed the checker against the three frozen constants (136 owners, 206 instances, 131 phase-local instances).
+
+In the 2026-09-12 sweep decision round, the user explicitly decided:
+"Explicitly exclude `run_after_` sites from the frozen R5 matrix and document that the matrix audits only the historical frozen boundary."
+
+Because `run_after_` scripts run on every apply and cannot strand work, they are excluded by lifecycle. While the checker `.ci/check-skip-declarations.sh` already scans only `run_onchange_`/`run_once_` scripts and passes cleanly, the documentation in the matrix header, `AGENTS.md`, and the calling scripts needs to state this boundary unambiguously to prevent future reviewers from attempting to add `run_after_` rows to the matrix.
+
+### Key Decisions
+
+- **Keep boundary constants frozen.** Do not raise or dynamically derive the totals in `.ci/skip-declaration-site-matrix.yaml`. Keep 136 owners, 206 instances, and 131 phase-local instances strictly pinned. Governs R49.
+- **Explicitly document the `run_after_` exclusion.** Update the matrix header, `AGENTS.md`, `.ci/check-skip-declarations.sh`, and `run_after_reload-user-systemd.sh.tmpl` to state that the matrix audits the historical R5 boundary and excludes post-freeze `run_after_` sites by lifecycle. Governs R49.
 
 ### Requirements
 
@@ -67,6 +94,20 @@ Thirteen items are open. One closed this run with verified merge: R45 (#478, PR 
   > "Severity: **P2** — a declared surface stayed unconverged for nine hours with no failure anywhere, discovered while debugging why `--dangerously-bypass-hook-trust` never reached Codex." "`.chezmoiscripts/90-src/run_after_report-orca-settings.sh.tmpl` is report-only by design, and the write belongs to `orca-settings-reconcile.service` at graphical-session start. That split leaves one uncovered window: **the apply that first installs the unit**."
 <!-- sweep-items:end -->
 
+### Scope Boundaries
+
+#### Active in this plan
+- **R49 — Explicitly exclude `run_after_` sites from the frozen R5 matrix and document that the matrix audits only the historical frozen boundary.** Governs U1, U2.
+
+#### Deferred for later
+- **R22, R32, R33, R34, R41 — questions pending decision.** Each recorded in Outstanding Questions with the specific call it waits on.
+- **R24 — separate change.** Replacing skills symlinks touches a wide multi-harness surface.
+- **R38 — omp settings reconciler.** Separate harness, separate script.
+- **R43 — release-lock refresh.** Severity P1, lives in `packages/release-lock`.
+- **R44 — launch gate core.** Shipped in PR #479.
+- **R50, R51 — PR #485 follow-ups.** Kept distinct per cohesion rule.
+- **R52 — apply-time Orca assertion.** P2 feature in 90-src.
+
 ### Outstanding Questions
 
 - **R22 — mechanism.** Earlier research found the proposed KDE desktop-action mechanism absent from the shipped Ghostty. The requirement stands; its proposed means does not.
@@ -79,4 +120,78 @@ Thirteen items are open. One closed this run with verified merge: R45 (#478, PR 
 
 - State file: `docs/feedback-sweep/state.yml` — the authoritative record of every item's lifecycle.
 - Last run: the `last_run` block in the state file (outcome + per-source counts).
+- Issue #486: `fix(ci): decide whether the frozen skip matrix admits post-freeze sites`.
 - Previous plan, archived unmodified: `docs/plans/feedback-sweep-plan-2026-09-12-r45.md`.
+
+---
+
+## Planning Contract
+
+### Key Technical Decisions
+
+- **KTD1 — Frozen totals remain strictly pinned in `.ci/skip-declaration-site-matrix.yaml`.** The matrix is an audit oracle for the historical R5 boundary; do not add post-freeze `run_after_` owner rows or increase the 136/206/131 constants. In the matrix header, document explicitly that `run_after_` sites declared after the freeze are excluded by lifecycle. Governs U1.
+- **KTD2 — Document the boundary across repository instruction, test, and script headers.** In `AGENTS.md`, `.ci/check-skip-declarations.sh`, and `.chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl`, document that `.ci/skip-declaration-site-matrix.yaml` freezes the historical R5 boundary for `run_onchange_`/`run_once_` lifecycles, and that `run_after_` skip declarations (such as `reload-user-systemd/no-user-manager-bus`) participate in runtime state reporting via `dotfiles-skips` without demanding matrix owner rows. Governs U2.
+
+### Assumptions
+
+- The existing checker `.ci/check-skip-declarations.sh` already excludes `run_after_` scripts from scanning and already passes with code 0.
+- No code changes are required to the checker logic itself.
+
+### Sequencing
+
+- U1 (matrix header clarification)
+- U2 (documentation updates across AGENTS.md, script header, and checker header)
+
+---
+
+## Implementation Units
+
+### U1. Clarify audit scope in `.ci/skip-declaration-site-matrix.yaml`
+
+**Goal.** `.ci/skip-declaration-site-matrix.yaml` explicitly documents that it audits only the historical frozen R5 boundary (`run_onchange_`/`run_once_` lifecycles), that post-freeze `run_after_` sites are lifecycle-excluded, and that the frozen totals remain fixed.
+
+**Requirements.** R49.
+
+**Files.**
+- `.ci/skip-declaration-site-matrix.yaml` (modify)
+
+**Approach.**
+In `.ci/skip-declaration-site-matrix.yaml`, expand the `AUDIT BOUNDARY` explanation in lines 15-20 to state explicitly:
+1. The matrix is a frozen audit oracle for the R5 boundary, not an open registry.
+2. `run_after_*` lifecycles run on every apply and cannot strand unconverged state; sites declared in `run_after_` scripts after the freeze (e.g. `reload-user-systemd/no-user-manager-bus`) are excluded by lifecycle and MUST NOT be added as owner rows.
+3. The 136 classified owners / 206 instances / 131 phase-local totals remain pinned.
+
+**Verification.** `.ci/check-skip-declarations.sh` passes cleanly (exit 0).
+
+### U2. Update repository documentation in AGENTS.md, script header, and checker header
+
+**Goal.** Reviewers and contributors find clear, consistent guidance that `run_after_` skip sites are excluded from `.ci/skip-declaration-site-matrix.yaml`.
+
+**Requirements.** R49.
+
+**Files.**
+- `AGENTS.md` (modify)
+- `.chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl` (modify)
+- `.ci/check-skip-declarations.sh` (modify)
+
+**Approach.**
+In `AGENTS.md`, under "Apply lifecycle and script tree", note that the CI audit matrix `.ci/skip-declaration-site-matrix.yaml` freezes the historical R5 boundary for `run_onchange_`/`run_once_` lifecycles, and post-freeze `run_after_` scripts are excluded from the matrix by lifecycle.
+In `.chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl`, update the `WHY A BARE run_after_` comment to reference issue #486 and state that the `skip_here` declaration provides runtime reporting for `dotfiles-skips` while being lifecycle-excluded from `.ci/skip-declaration-site-matrix.yaml`.
+In `.ci/check-skip-declarations.sh`, ensure the header comment under `WHAT IS IN SCOPE, BY LIFECYCLE` explicitly records that post-freeze `run_after_` scripts need no matrix entry.
+
+**Verification.** `.ci/test-agent-instructions.sh` and `.ci/check-skip-declarations.sh` pass.
+
+---
+
+## Verification Contract
+
+Gates that must pass before this change ships:
+- `.ci/check-skip-declarations.sh` — verifies that declaration sentinels, predicates, and matrix totals match.
+- `.ci/test-agent-instructions.sh` — verifies that agent instruction formatting and rules are valid.
+- `git diff` — confirms only clean documentation and comment updates.
+
+## Definition of Done
+
+- `.ci/skip-declaration-site-matrix.yaml` documents the lifecycle exclusion of post-freeze `run_after_` sites and preserves frozen totals.
+- `AGENTS.md`, `.chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl`, and `.ci/check-skip-declarations.sh` document the contract boundary.
+- All verification gates pass.
