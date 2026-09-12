@@ -43,8 +43,7 @@ fi
 
 tmproot="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
 tmp_out="$(mktemp "$tmproot/orca-wt-create.XXXXXX")"
-cleanup() { rm -f -- "$tmp_out"; }
-trap cleanup EXIT
+trap 'rm -f -- "$tmp_out"' EXIT
 
 set +e
 "$real_orca" "$@" > "$tmp_out"
