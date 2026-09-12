@@ -181,11 +181,46 @@ function isShellFlagWithC(flag: string): boolean {
   return flag.startsWith("-") && !flag.startsWith("--") && flag.slice(1).includes("c");
 }
 
-/** The delimiter a `<<`/`<<-` redirection opens, or null when this is not one. */
+/**
+ * The delimiter of the last `<<`/`<<-` redirection on this line, or null.
+ *
+ * The redirection is found anywhere on the line, not only at its end: a
+ * heredoc can be followed by a pipeline, a comment, or another redirection,
+ * and anchoring at the end would miss the opener and then scan the body.
+ * A delimiter is a shell word, so it may carry punctuation such as `PATCH-1`;
+ * `<<<` is a here-string, which takes no body.
+ */
 function heredocDelimiter(current: string): string | null {
-  const match = /<<-?\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))\s*$/.exec(current);
-  if (match === null) return null;
-  return match[1] ?? match[2] ?? match[3] ?? null;
+  const opener = /(?<!<)<<(?!<)(-?)\s*(?:'([^']*)'|"([^"]*)"|([^\s;|&()<>'"]+))/g;
+  let delimiter: string | null = null;
+  for (let m = opener.exec(current); m !== null; m = opener.exec(current)) {
+    delimiter = m[2] ?? m[3] ?? m[4] ?? null;
+  }
+  return delimiter;
+}
+
+/**
+ * Index of the character before the newline that closes the heredoc body.
+ *
+ * Every line is tested, starting with the first: a body can be empty, and
+ * leaving its terminator untested would keep the scan inside the heredoc and
+ * swallow whatever follows — a launch included.
+ *
+ * Index arithmetic rather than slicing the remainder: a patch body is as long
+ * as the file it edits, and re-copying the tail at each of its newlines would
+ * make this per-tool-call scan quadratic.
+ */
+function heredocBodyEnd(input: string, from: number, delimiter: string): number {
+  let lineStart = from;
+  for (;;) {
+    const newline = input.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? input.length : newline;
+    if (input.slice(lineStart, lineEnd).trim() === delimiter) return lineEnd - 1;
+    // Unterminated: the shell would reject this too, and there is nothing after
+    // the body to hide.
+    if (newline === -1) return input.length;
+    lineStart = newline + 1;
+  }
 }
 
 /**
@@ -207,22 +242,21 @@ function splitSegments(input: string): string[] | null {
   let inSingle = false;
   let inDouble = false;
   let escaped = false;
-  let heredoc: string | null = null;
+  // A heredoc belongs to its LINE, not to the segment that opened it: the body
+  // starts after the newline even when a pipeline, a subshell, or another
+  // command follows the redirection. Remember an opener seen in any segment of
+  // the current line and spend it at that line's end.
+  let lineHeredoc: string | null = null;
+
+  /** Close off the current segment, keeping any heredoc it opened. */
+  const flush = (): void => {
+    lineHeredoc = heredocDelimiter(current) ?? lineHeredoc;
+    if (current.trim().length > 0) segments.push(current);
+    current = "";
+  };
 
   for (let i = 0; i < input.length; i++) {
     const char = input[i]!;
-
-    if (heredoc !== null) {
-      if (char !== "\n") continue;
-      const rest = input.slice(i + 1);
-      const lineEnd = rest.indexOf("\n");
-      const line = lineEnd === -1 ? rest : rest.slice(0, lineEnd);
-      if (line.trim() === heredoc) {
-        heredoc = null;
-        i += lineEnd === -1 ? rest.length : lineEnd;
-      }
-      continue;
-    }
 
     if (escaped) {
       current += char;
@@ -250,12 +284,11 @@ function splitSegments(input: string): string[] | null {
 
     if (!inSingle && !inDouble) {
       if (char === "\n" || char === ";") {
-        const opened = char === "\n" ? heredocDelimiter(current) : null;
-        if (current.trim().length > 0) {
-          segments.push(current);
+        flush();
+        if (char === "\n" && lineHeredoc !== null) {
+          i = heredocBodyEnd(input, i + 1, lineHeredoc);
         }
-        current = "";
-        if (opened !== null) heredoc = opened;
+        if (char === "\n") lineHeredoc = null;
         continue;
       }
 
@@ -267,10 +300,7 @@ function splitSegments(input: string): string[] | null {
           current += char;
           continue;
         }
-        if (current.trim().length > 0) {
-          segments.push(current);
-        }
-        current = "";
+        flush();
         continue;
       }
 
@@ -281,33 +311,21 @@ function splitSegments(input: string): string[] | null {
           continue;
         }
         if (input[i + 1] === "&") {
-          if (current.trim().length > 0) {
-            segments.push(current);
-          }
-          current = "";
+          flush();
           i++;
           continue;
         }
-        if (current.trim().length > 0) {
-          segments.push(current);
-        }
-        current = "";
+        flush();
         continue;
       }
 
       if (char === "|") {
         if (input[i + 1] === "|") {
-          if (current.trim().length > 0) {
-            segments.push(current);
-          }
-          current = "";
+          flush();
           i++;
           continue;
         }
-        if (current.trim().length > 0) {
-          segments.push(current);
-        }
-        current = "";
+        flush();
         continue;
       }
     }

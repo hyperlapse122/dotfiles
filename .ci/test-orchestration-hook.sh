@@ -185,10 +185,37 @@ out=$(run_hook claude "ORCA_TERMINAL_HANDLE=term_ci")
   && fail 'a worker must not receive the coordinator payload'
 pass 'an Orca-managed worker receives the everyone payload alone'
 
-out=$(run_hook codex "ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1")
+# Lead eligibility follows the role, not the harness. Give each non-Claude
+# harness a real guide so the envelope can actually be composed — without one
+# the lead path ends in a no-op and an assertion here would pass vacuously,
+# which is how the superseded Codex-never-leads case survived this gate.
+lead_env="ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1 ORCA_CLI_COMMAND=$remap_bin/orca-dev"
+out=$(run_hook codex "$lead_env" "$remap_bin")
 [[ $out == *'orchestration-coordinator:begin'* ]] \
-  && fail 'Codex must never receive the coordinator payload, whatever its role'
-pass 'Codex receives the everyone payload even when it resolves as lead'
+  || fail 'a Codex lead must receive the coordinator payload'
+[[ $out == *'orchestration-everyone:begin'* ]] \
+  || fail 'a Codex lead must receive the everyone payload'
+pass 'a Codex lead receives the whole envelope, like any other served harness'
+
+# Antigravity injects before every model call instead of at session start, so
+# its delivery document is a different shape. A regression there would leave the
+# source tests green while the deployed binary delivered nothing that harness
+# could read.
+out=$(run_hook agy "$lead_env" "$remap_bin")
+printf '%s' "$out" | jq -er '.injectSteps[0].ephemeralMessage' >/dev/null \
+  || fail "an Antigravity lead must receive one injected step (got: $out)"
+step=$(printf '%s' "$out" | jq -r '.injectSteps[0].ephemeralMessage')
+[[ $step == *'orchestration-coordinator:begin'* && $step == *'orchestration-everyone:begin'* ]] \
+  || fail 'an Antigravity lead step must carry the whole envelope'
+out=$(run_hook agy "ORCA_TERMINAL_HANDLE=term_ci")
+step=$(printf '%s' "$out" | jq -r '.injectSteps[0].ephemeralMessage')
+[[ $step == *'orchestration-everyone:begin'* ]] \
+  || fail 'an Antigravity worker must receive the everyone payload'
+[[ $step == *'orchestration-coordinator:begin'* ]] \
+  && fail 'an Antigravity worker must not receive the coordinator payload'
+out=$(run_hook agy "")
+[[ $out == '{}' ]] || fail "Antigravity outside Orca must print exactly {} (got: $out)"
+pass 'Antigravity delivery carries the right payload per role, in its own document shape'
 
 for bad in "--harness nonesuch" "--harness" ""; do
   # shellcheck disable=SC2086

@@ -265,11 +265,44 @@ describe("a heredoc body is data, not commands", () => {
     expect(decide(bash(`${patchBody}\ncodex exec x`), LEAD).deny).toBe(true);
   });
 
+  it("closes an empty body at its terminator rather than swallowing what follows", () => {
+    // The terminator is the body's first line here. Leaving that line untested
+    // kept the scan inside the heredoc and hid every command after it.
+    expect(decide(bash("cat <<PATCH\nPATCH\ncodex exec x"), LEAD).deny).toBe(true);
+  });
+
+  it("keeps denying after a body whose terminator is the last line", () => {
+    expect(decide(bash("cat <<PATCH\nbody\nPATCH\nclaude -p x"), LEAD).deny).toBe(true);
+  });
+
   it("reads an unquoted and a dash-suppressed delimiter the same way", () => {
     for (const opener of ["cat <<EOF", "cat <<-EOF", 'cat <<"EOF"']) {
       const command = [opener, "codex", "EOF"].join("\n");
       expect(decide(bash(command), LEAD).deny, opener).toBe(false);
     }
+  });
+
+  it("finds the opener when other syntax follows it on the line", () => {
+    // A heredoc can be piped, commented, or redirected further. Requiring the
+    // delimiter to end the line missed those openers and scanned the body.
+    for (const opener of [
+      "cat <<EOF | sed 's/x/y/'",
+      "apply_patch <<'PATCH' # note",
+      "cat <<EOF >out.txt",
+    ]) {
+      const terminator = opener.includes("PATCH") ? "PATCH" : "EOF";
+      const command = [opener, 'export type H = "claude" | "codex";', terminator].join("\n");
+      expect(decide(bash(command), LEAD).deny, opener).toBe(false);
+    }
+  });
+
+  it("accepts a delimiter carrying shell-word punctuation", () => {
+    expect(decide(bash("cat <<PATCH-1\ncodex\nPATCH-1"), LEAD).deny).toBe(false);
+  });
+
+  it("treats a here-string as carrying no body", () => {
+    // `<<<` takes a word, not a body, so what follows is still commands.
+    expect(decide(bash("cat <<<word\ncodex exec x"), LEAD).deny).toBe(true);
   });
 });
 
