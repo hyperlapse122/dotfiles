@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { main, type Io } from "../src/cli.js";
 import { payload } from "../src/payload.js";
+import { PREAMBLE } from "../src/envelope.js";
 
 function capture(env: NodeJS.ProcessEnv = {}): { io: Io; out: string[]; err: string[] } {
   const out: string[] = [];
@@ -145,6 +146,106 @@ describe("hook fail-open contract", () => {
     expect(parsed.hookSpecificOutput.hookEventName).toBe("SessionStart");
     expect(parsed.hookSpecificOutput.additionalContext).toContain(payload("everyone"));
     expect(parsed.hookSpecificOutput.additionalContext).not.toContain(payload("coordinator"));
+  });
+});
+
+describe("agy hook delivery", () => {
+  it("delivers the complete lead envelope in order", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-lead-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      writeFileSync(cli, '#!/usr/bin/env bash\nprintf "GUIDE BODY\\n"\n');
+      chmodSync(cli, 0o755);
+
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+      const parsed = JSON.parse(out.join("")) as {
+        hookSpecificOutput: { additionalContext: string };
+      };
+      const context = parsed.hookSpecificOutput.additionalContext;
+      const order = [
+        context.indexOf(PREAMBLE),
+        context.indexOf("SKILL BODY"),
+        context.indexOf("GUIDE BODY"),
+        context.indexOf(payload("everyone")),
+        context.indexOf(payload("coordinator")),
+      ];
+      expect(order.every((i) => i >= 0)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("delivers the everyone envelope to a worker", async () => {
+    const { io, out } = capture(ORCA_WORKER);
+    expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+    const parsed = JSON.parse(out.join("")) as {
+      hookSpecificOutput: { additionalContext: string };
+    };
+    expect(parsed.hookSpecificOutput.additionalContext).toContain(PREAMBLE);
+    expect(parsed.hookSpecificOutput.additionalContext).toContain(payload("everyone"));
+    expect(parsed.hookSpecificOutput.additionalContext).not.toContain(payload("coordinator"));
+  });
+
+  it("returns a parseable no-op outside Orca", async () => {
+    const { io, out } = capture();
+    expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+    expect(JSON.parse(out.join(""))).toEqual({});
+  });
+
+  it("returns a no-op when the skill is empty", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-empty-skill-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "");
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+      expect(JSON.parse(out.join(""))).toEqual({});
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("returns a no-op when the guide fetch fails", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-guide-fail-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      writeFileSync(cli, "#!/usr/bin/env bash\nexit 3\n");
+      chmodSync(cli, 0o755);
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_abc",
+        ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+        TMUX_PANE: "%7",
+      });
+      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
+      expect(JSON.parse(out.join(""))).toEqual({});
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("lists agy among the accepted harness values", async () => {
+    const { io, err } = capture();
+    expect(await main(["nonesuch"], io)).toBe(2);
+    expect(err.join(" ")).toContain("agy");
   });
 });
 

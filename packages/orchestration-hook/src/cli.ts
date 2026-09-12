@@ -188,7 +188,7 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
   const role = resolveRole(io.env as RoleEnv);
 
   let leadParts: { skill: string; guide: string } | null = null;
-  if (harness === "claude" && role === "lead") {
+  if (role === "lead") {
     const skill = readOrchestrationSkill(io.env);
     if (skill !== "") {
       const command = resolveOrcaCommand({
@@ -370,8 +370,8 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     default:
       io.stderr(
         `orchestration-hook: unknown command ${JSON.stringify(command)}\n` +
-          "usage: orchestration-hook <hook --harness <claude|codex> | " +
-          "guard --harness <claude|codex> [--explain <command>] | " +
+          "usage: orchestration-hook <hook --harness <claude|codex|agy> | " +
+          "guard --harness <claude|codex|agy> [--explain <command>] | " +
           "print-payload [--body <everyone|coordinator>] | role | --version>\n",
       );
       return 2;

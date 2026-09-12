@@ -6,6 +6,7 @@ import {
   PREAMBLE,
   sessionStartEnvelope,
   workerContext,
+  isHarness,
 } from "../src/envelope.js";
 import { payload } from "../src/payload.js";
 
@@ -64,8 +65,8 @@ describe("composeContext", () => {
     expect(text).toContain(payload("everyone"));
   });
 
-  it("gives a Codex session the everyone envelope even when it resolves as lead", () => {
-    const text = composeContext("codex", "lead", () => parts);
+  it("gives a Codex worker the everyone envelope only", () => {
+    const text = composeContext("codex", "worker", () => parts);
     expect(text).not.toContain(payload("coordinator"));
     expect(text).toContain(payload("everyone"));
   });
@@ -81,6 +82,49 @@ describe("composeContext", () => {
 
   it("delivers nothing when a Claude Code lead cannot get its guide", () => {
     expect(composeContext("claude", "lead", () => null)).toBeNull();
+  });
+});
+
+describe("additional harness roles", () => {
+  it("gives agy a complete lead envelope in order", () => {
+    const text = composeContext("agy", "lead", () => parts);
+    if (text === null) throw new Error("expected a lead envelope");
+    const order = [
+      text.indexOf(PREAMBLE),
+      text.indexOf(parts.skill),
+      text.indexOf(parts.guide),
+      text.indexOf(payload("everyone")),
+      text.indexOf(payload("coordinator")),
+    ];
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("gives agy workers the everyone envelope only", () => {
+    const text = composeContext("agy", "worker", () => parts);
+    expect(text).toContain(PREAMBLE);
+    expect(text).toContain(payload("everyone"));
+    expect(text).not.toContain(payload("coordinator"));
+  });
+
+  it("gives agy none roles a parseable no-op", () => {
+    expect(composeContext("agy", "none", () => parts)).toBeNull();
+    expect(() => JSON.parse(emptyOutput("agy"))).not.toThrow();
+  });
+
+  it("does not deliver a half envelope to an agy lead", () => {
+    expect(composeContext("agy", "lead", () => ({ skill: "", guide: parts.guide }))).toBeNull();
+    expect(composeContext("agy", "lead", () => ({ skill: parts.skill, guide: "" }))).toBeNull();
+  });
+
+  it("gives a codex lead the lead envelope", () => {
+    const text = composeContext("codex", "lead", () => parts);
+    expect(text).toContain(payload("coordinator"));
+  });
+
+  it("accepts agy and rejects the unmanaged harness", () => {
+    expect(isHarness("agy")).toBe(true);
+    expect(isHarness("omp")).toBe(false);
   });
 });
 

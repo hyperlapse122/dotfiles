@@ -74,6 +74,7 @@ const NON_LAUNCH_FLAGS: ReadonlySet<string> = new Set(["--version", "-V", "--hel
 export const SHELL_TOOL_NAMES: Record<Harness, readonly string[]> = {
   claude: ["Bash"],
   codex: ["exec_command", "unified_exec", "shell", "local_shell"],
+  agy: ["run_command"],
 };
 
 export interface ToolEvent {
