@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-09-12T04:57:12Z"
+    cursor: "2026-09-12T05:42:20Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#168":
     source: "gh-issues"
@@ -1120,13 +1120,16 @@ items:
     updated_at: "2026-09-11T07:30:52Z"
   "gh-issues:hyperlapse122/dotfiles#478":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "chore(commands): retire the tokscale codex wrapper — Decide whether headless Codex metering still has a consumer, then remove or retain the wrapper and clean up stale published artifacts accordingly."
+    fix_ref: "https://github.com/hyperlapse122/dotfiles/pull/492"
+    verified_merge_sha: "0dc441f8e2c349ff62d12da296852a09dd4048bb"
+    verified_at: "2026-09-12T05:42:20Z"
     author_class: "teammate"
     category: "chore"
     existing_ack: true
-    existing_closeout: false
+    existing_closeout: true
     id: "hyperlapse122/dotfiles#478"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/478"
@@ -1232,14 +1235,14 @@ items:
     origin: "https://github.com/hyperlapse122/dotfiles/issues/489"
     updated_at: "2026-09-12T04:57:12Z"
 last_run:
-  timestamp: "2026-09-12T05:32:11Z"
+  timestamp: "2026-09-12T05:52:35Z"
   outcome: "completed"
-  writer: "sweep-agy-7a76c7dc-2026-09-12"
+  writer: "sweep-ThinkPad-P14s-Gen-1-08e28c79-2026-09-12"
   counts:
     gh-issues:
       ack_deferred: 0
-      acked: 4
-      already_acked: 4
-      closed: 4
-      fetched: 8
+      acked: 0
+      already_acked: 5
+      closed: 1
+      fetched: 5
       media_analyzed: 0
