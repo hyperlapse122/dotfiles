@@ -16,9 +16,8 @@ set -euo pipefail
 # The two acceptance cases pin the shape of the exemption. `kubectl`,
 # `kubectl-convert`, `helm`, `glab` and the `winbox` pair compose their URL from
 # a version-only lock entry, so no recorded digest exists to assert and the gate
-# must stay silent about them. `agy` is the opposite corner: its lock artifact
-# records a null sha256 and a populated sha512, so a sha256-only rule would
-# demand a digest that does not exist.
+# must stay silent about them. The pinned `agy` artifact uses SHA-256. A separate
+# fixture preserves coverage for the retained SHA-512 vendor resolver.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 gate="$repo_root/.ci/check-external-checksum-coverage.sh"
@@ -36,6 +35,9 @@ fail() {
 pass() { printf '  ok  %s\n' "$*"; }
 
 command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is not on PATH'
+chezmoi_bin=$(command -v chezmoi)
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 # A source tree the gate can render: everything symlinked back to the repo, with
 # the two directories the cases mutate copied so the originals stay untouched.
@@ -126,7 +128,7 @@ pass 'the drift rejection names the list a legitimate removal is edited out of'
 # 4/5. The acceptance corners, asserted against the same renders the gate reads
 #      rather than against the templates.
 render_dir="$scratch/rendered"
-mkdir -p -- "$render_dir" "$scratch/bin" "$scratch/target"
+mkdir -p -- "$render_dir" "$scratch/bin" "$scratch/home" "$scratch/target"
 printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
 printf '[data]\n' >"$scratch/empty.toml"
@@ -135,10 +137,9 @@ render_leg() {
   local os=$1 arch=$2 ext name
   for ext in "$repo_root/.chezmoiexternals"/*.toml; do
     name=$(basename -- "$ext" .toml)
-    env PATH="$scratch/bin:$PATH" chezmoi \
-      --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
-      --override-data "{\"chezmoi\":{\"os\":\"$os\",\"arch\":\"$arch\"}}" \
-      execute-template <"$ext" >"$render_dir/$os-$arch--$name.toml" ||
+    printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/external.tmpl"
+    cat "$ext" >>"$scratch/external.tmpl"
+    render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$scratch/external.tmpl" "$render_dir/$os-$arch--$name.toml" ||
       fail "render failed: .chezmoiexternals/$name.toml on $os-$arch"
   done
 }
@@ -199,16 +200,14 @@ for leg, expected in version_only.items():
                 "version-only exemption and this case must be updated"
             )
 
-# agy: null sha256, populated sha512, verified through its sha512 table.
+# The pinned artifact and its checksum consumer must agree.
 agy_artifact = tools["agy"]["artifacts"]["linux-amd64"]
-if agy_artifact.get("sha256") is not None:
-    problems.append("agy now records a sha256; the sha512-only case must be updated")
 agy = stanzas["linux-amd64"]["agy"]
 checksum = agy.get("checksum") or {}
-if sorted(checksum) != ["sha512"]:
-    problems.append(f"agy should declare sha512 alone, got {sorted(checksum)}")
-elif checksum["sha512"] != agy_artifact["sha512"]:
-    problems.append("agy declares a sha512 the lock does not record")
+if sorted(checksum) != ["sha256"]:
+    problems.append(f"agy should declare sha256 alone, got {sorted(checksum)}")
+elif checksum["sha256"] != agy_artifact["sha256"]:
+    problems.append("agy declares a sha256 the lock does not record")
 
 for problem in problems:
     print(problem)
@@ -216,6 +215,28 @@ sys.exit(1 if problems else 0)
 ' "$render_dir" "$repo_root/.chezmoidata/releases.json" ||
   fail 'the exemption corners no longer hold (listed above)'
 pass 'the version-only externals pass with no checksum table'
-pass 'agy passes on its sha512 alone'
+pass 'the pinned agy checksum matches its SHA-256 artifact'
+
+sha512_only=$(fixture sha512-only)
+python3 -c '
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    lock = json.load(handle)
+for artifact in lock["releases"]["tools"]["agy"]["artifacts"].values():
+    artifact["sha256"] = None
+    artifact["sha512"] = "b" * 128
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(lock, handle)
+' "$sha512_only/.chezmoidata/releases.json"
+edit_external "$sha512_only" ai-agents.toml \
+  'mergeOverwrite $agyLockArtifact (dict "field" "sha256")' \
+  'mergeOverwrite $agyLockArtifact (dict "field" "sha512")'
+edit_external "$sha512_only" ai-agents.toml \
+  '[agy.checksum]
+sha256 =' '[agy.checksum]
+sha512 ='
+bash "$gate" "$sha512_only" >/dev/null || fail 'the SHA-512-only fixture must pass'
+pass 'the retained SHA-512-only consumer is covered'
 
 printf 'test-check-external-checksum-coverage: ok\n'

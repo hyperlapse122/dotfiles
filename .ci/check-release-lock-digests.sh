@@ -25,11 +25,10 @@ set -euo pipefail
 # version in the filename, so they address fixed bytes.
 #
 # DIGESTS. Upstreams do not agree on one hash. The GitHub release API supplies a
-# sha256 per asset, and that is what most tools carry. The `antigravity` vendor
-# manifest publishes only a sha512, so `agy` records a sha512 with a null
-# sha256; chezmoi verifies it natively through `[agy.checksum] sha512` in
-# `.chezmoiexternals/ai-agents.toml`. Either digest therefore satisfies this
-# gate, and an artifact carrying neither still fails.
+# sha256 per asset, including the pinned `agy` release. The retained
+# `antigravity` vendor resolver publishes only sha512. Either digest satisfies
+# this gate; the external must consume the selected digest. An artifact with
+# neither digest fails.
 #
 # THE ONE EXEMPTION. 1Password's linux-arm64 tarball is the only artifact source
 # that publishes no digest at all. Its integrity is established out of band: the

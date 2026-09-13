@@ -46,10 +46,8 @@ set -euo pipefail
 # machine that installs it. The checker therefore compares each declared digest
 # against the value the lock recorded for that exact artifact.
 #
-# EITHER DIGEST SATISFIES IT. `.ci/check-release-lock-digests.sh` already states
-# that rule, because upstreams do not agree on one hash: `agy` records a sha512
-# with a null sha256 and is verified through `[agy.checksum] sha512`. A
-# sha256-only rule would demand of that unit a digest that does not exist.
+# Either recorded digest can satisfy coverage. GitHub assets use SHA-256;
+# the retained Antigravity vendor resolver uses SHA-512.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tree=${1:-$repo_root}
@@ -63,6 +61,7 @@ fail() {
 }
 
 command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is not on PATH'
+chezmoi_bin=$(command -v chezmoi)
 [ -f "$lock" ] || fail "lock not found: $lock"
 
 # The repo's other Python-using gates probe /usr/bin/python3 first because a mise
@@ -81,7 +80,9 @@ done
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
 setup_render_scratch external-checksum-coverage
-mkdir -p -- "$scratch/rendered"
+mkdir -p -- "$scratch/rendered" "$scratch/home"
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 # The four platforms every lock-URL-backed external is expected to resolve on.
 platforms=(
@@ -97,10 +98,9 @@ for plat in "${platforms[@]}"; do
   for ext in "$tree/.chezmoiexternals"/*.toml; do
     name=$(basename -- "$ext" .toml)
     out="$scratch/rendered/$os-$arch--$name.toml"
-    env PATH="$scratch/bin:$PATH" chezmoi \
-      --config "$scratch/empty.toml" --source "$tree" --destination "$scratch/target" \
-      --override-data "{\"chezmoi\":{\"os\":\"$os\",\"arch\":\"$arch\"}}" \
-      execute-template <"$ext" >"$out" ||
+    printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/external.tmpl"
+    cat "$ext" >>"$scratch/external.tmpl"
+    render "$tree" "$scratch" "$chezmoi_bin" "$os" "$scratch/external.tmpl" "$out" ||
       fail "render failed: .chezmoiexternals/$name.toml on $os-$arch"
     rendered_args+=("$os-$arch|.chezmoiexternals/$name.toml|$out")
   done
