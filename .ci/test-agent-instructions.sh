@@ -458,6 +458,9 @@ is a working note, never a delivery
 or resolved into a filed tracker issue whose link replaces the entry, or resolved into the committed record file whose path replaces the entry
 the section itself MUST then be deleted from the MR/PR description and from the run's final report
 An entry that survives as a bare checkbox, with no fix and no link, is an incomplete run.
+when review runs report-only (such as `mode:agent` in an `lfg` pipeline run), apply the findings caller-side before proceeding
+including a single-reviewer anchor-75 finding; a skill's narrower confidence bar or cross-persona requirement does not authorize deferral
+A finding whose fix touches only files the branch already changes is in scope by default
 A step that a skill, command, or workflow the user invoked by name declares mandatory MUST be carried out without a confirming question
 This authority is transitive: it reaches the mandatory steps of every skill the invoked skill itself invokes as part of its own mandatory flow
 It covers the step's dispatch scale — the worker count, the reviewer set, and the cross-model fan-out that the workflow's own rules produce
