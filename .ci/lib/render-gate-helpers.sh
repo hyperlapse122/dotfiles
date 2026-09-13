@@ -18,9 +18,11 @@ require_file() {
 
 render() {
   local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 input=$5 output=$6
+  local override_data=${7:-}
+  [[ -n "$override_data" ]] || override_data="{\"chezmoi\":{\"os\":\"$os\"}}"
   env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
-      --destination "$scratch/target" --override-data "{\"chezmoi\":{\"os\":\"$os\"}}" \
+      --destination "$scratch/target" --override-data "$override_data" \
       execute-template <"$input" >"$output"
 }
 

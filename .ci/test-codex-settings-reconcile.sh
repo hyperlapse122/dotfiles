@@ -25,20 +25,21 @@ cleanup() { rm -rf -- "$scratch"; }
 trap cleanup EXIT
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
+chezmoi_bin=$(command -v chezmoi) || fail 'chezmoi is required on PATH'
 
-# Renders resolve secrets live, so isolate them from host state: a scratch HOME
-# plus a stub op answering newline-free.
-render_config="$scratch/render.toml"
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
+render_config="$scratch/empty.toml"
 printf '[data]\n' >"$render_config"
-neg_home="$scratch/neg-home"
-neg_bin="$scratch/neg-bin"
-mkdir -p "$neg_home" "$neg_bin"
+neg_home="$scratch/home"
+neg_bin="$scratch/bin"
+mkdir -p "$neg_home" "$neg_bin" "$scratch/target"
 printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$neg_bin/op"
 chmod 0700 "$neg_bin/op"
 
-render() {
-  env HOME="$neg_home" PATH="$neg_bin:$PATH" \
-    chezmoi --config "$render_config" --source "$repo_root" execute-template
+render_settings() {
+  local data=${1:-'{}'}
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux /dev/stdin /dev/stdout "$data"
 }
 
 # The reconciler under test. RECONCILER wins when set; a provisioned host has the
@@ -93,10 +94,12 @@ jq -e 'type == "object"' <<<"$declared" >/dev/null \
 
 # The settings half must be exactly the dotted declaration expanded into nested
 # tables, read back from agents.yaml the same way the script does.
-raw_codex_settings=$(render <<<'{{ .agents.codex.settings | toJson }}')
+raw_codex_settings=$(render_settings <<<'{{ .agents.codex.settings | toJson }}')
 expected_settings=$(jq -c 'reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))' <<<"$raw_codex_settings")
 [[ $(jq -Sc 'del(.mcp_servers) | del(.hooks)' <<<"$declared") == "$(jq -Sc . <<<"$expected_settings")" ]] \
   || fail 'the declared settings leaves do not expand to the rendered agents.codex.settings'
+jq -e '.model == "gpt-6-astra" and .model_reasoning_effort == "medium"' <<<"$raw_codex_settings" >/dev/null \
+  || fail 'agents.yaml must declare the Codex default pair gpt-6-astra with medium reasoning effort'
 
 # features.memories MUST be a JSON boolean false. Codex features list reports
 # memories as stable and defaulting to false; declaring it pins against an
@@ -160,12 +163,12 @@ for expected_trust_key in "${expected_trust_keys[@]}"; do
 done
 jq -e '.approval_policy == "never" and .sandbox_mode == "workspace-write"
   and .sandbox_workspace_write.network_access == true
-  and .model_reasoning_effort == "max" and .model == "gpt-5.6-luna"
+  and .model_reasoning_effort == "medium" and .model == "gpt-6-astra"
   and .features.memories == false' <<<"$declared" >/dev/null \
-  || fail 'the declared headless posture is not the one agents.yaml declares'
+  || fail 'the declared headless posture does not carry the Codex default pair'
 
 # The MCP half must carry exactly the codex-eligible inventory, in Codex's shape.
-eligible=$(render <<<'{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "codex") }}')
+eligible=$(render_settings <<<'{{ includeTemplate "agent-mcp-servers-json.tmpl" (dict "ctx" . "harness" "codex") }}')
 [[ $(jq -Sc '.mcp_servers | keys' <<<"$declared") == "$(jq -Sc '[.[].name] | sort' <<<"$eligible")" ]] \
   || fail 'the declared mcp_servers names differ from the codex-eligible inventory'
 jq -e '.mcp_servers.codegraph == {"command":"codegraph","args":["serve","--mcp"]}' <<<"$declared" >/dev/null \
@@ -321,9 +324,7 @@ bare_err=$(run "$bare_home" 2>&1 >/dev/null) || fail 'a CODEX_HOME without skill
 # present and wrong.
 assert_render_fails() {
   local label=$1 data=$2 want=$3
-  if env HOME="$neg_home" PATH="$neg_bin:$PATH" \
-    chezmoi --config "$render_config" --source "$repo_root" --override-data "$data" \
-    execute-template <"$repo_root/$settings_sh" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
+  if render_settings "$data" <"$repo_root/$settings_sh" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
     fail "render-negative $label: expected a failed render, got exit 0"
   fi
   grep -qF -e "$want" -- "$scratch/neg.err" || {
@@ -336,7 +337,7 @@ assert_render_fails() {
 assert_partial_ok() {
   local label=$1 body=$2
   printf '%s\n' "$body" >"$scratch/partial.tmpl"
-  render <"$scratch/partial.tmpl" >"$scratch/pos.out" 2>"$scratch/pos.err" || {
+  render_settings <"$scratch/partial.tmpl" >"$scratch/pos.out" 2>"$scratch/pos.err" || {
     printf 'render-partial %s: expected a successful render, got a failure\n' "$label" >&2
     sed 's/^/  /' "$scratch/pos.err" >&2
     exit 1
