@@ -276,6 +276,8 @@ jobs:
       # probe.
       - name: Install PyYAML
         run: .ci/lib/apt-install.sh - python3-yaml
+      - name: Install zsh for updater-control verification
+        run: .ci/lib/apt-install.sh zsh zsh
       - name: Install locked chezmoi
         run: |
           set -euo pipefail

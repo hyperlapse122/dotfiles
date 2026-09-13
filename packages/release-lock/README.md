@@ -148,6 +148,13 @@ All four Linux and macOS archives use the official release asset SHA-256
 values. The external consumes `checksum.sha256`. The vendor resolver remains
 available but does not select the pinned release.
 
+The [native updater control](https://antigravity.google/docs/cli/troubleshooting/)
+is `AGY_CLI_DISABLE_AUTO_UPDATE=true`. The Linux desktop declaration is in
+`dot_config/environment.d/60-development.conf`. The common shell declaration
+is in `dot_config/zsh/dot_zshenv`, covering new zsh sessions on Linux and macOS.
+Keep both declarations. Existing processes need a fresh inherited environment
+after deployment. This switch does not authorize changing permission policy.
+
 Advance or remove the pin only through a reviewed source change after a newer
 official release executes hooks, delivers the injected model context in a fresh
 isolated session, and passes a supported supervised worker lifecycle check.

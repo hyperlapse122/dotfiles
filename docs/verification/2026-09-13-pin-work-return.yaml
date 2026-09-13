@@ -1,0 +1,82 @@
+status: blocked
+plan_path: docs/plans/2026-09-13-1533-fix-antigravity-hook-version-pin-plan.md
+source_kind: plan
+source_digest: sha256:61039553ac2f1585f66993ac09b8c90fe1213a9253896e3aec10dd92c09a3c7b
+changed_files:
+  - .chezmoidata/releases.json
+  - .chezmoiexternals/ai-agents.toml
+  - .ci/test-release-lock-digest-gate.sh
+  - .github/workflows/ci.yml
+  - AGENTS.md
+  - packages/release-lock/README.md
+  - packages/release-lock/src/cli.ts
+  - packages/release-lock/src/github.ts
+  - packages/release-lock/src/registry.ts
+  - packages/release-lock/src/types.ts
+  - packages/release-lock/test/cli.test.ts
+  - packages/release-lock/test/github.test.ts
+  - packages/release-lock/test/registry.test.ts
+  - dot_config/environment.d/60-development.conf
+  - dot_config/zsh/dot_zshenv
+  - docs/verification/2026-09-13-coordinator-wait-preflight.md
+u_ids_attempted: [U1, U2]
+u_ids_completed: [U1]
+verification_results:
+  - Parent package tests passed, 507 tests across five packages.
+  - Parent vp check and recursive type checks passed.
+  - Four official archive renders and the digest gate passed.
+  - Selected generation changed only agy in the lock.
+  - Updater-control, ShellCheck, CI wiring, and diff checks passed.
+  - Matched startup checks passed for 1.1.28 and reproduced missing hooks on 1.2.2.
+  - Supervised lifecycle failed on 1.1.28 with both marker and original hooks.
+verification_evidence:
+  - unit: U1
+    behavior_changed: true
+    existing_tests_inspected: release-lock resolver, CLI, registry, vendor, and digest fixtures
+    tests_added_or_changed: exact-tag, selected CLI refresh, registry matrix, and four external renders
+    tests_used_unchanged: vendor resolver, retry, lock, and existing digest fixtures
+    red_observation: Worker reported 20 exact-pin failures, then four selector failures before implementation. The stale 1.2.2 lock failed the new pin assertion.
+    commands: [vp test, vp check, vp run typecheck, bash .ci/test-release-lock-digest-gate.sh]
+    result: Worker passed 295 package tests; parent passed the full package and render gates.
+    exception_reason: null
+  - unit: U2
+    behavior_changed: true
+    existing_tests_inspected: digest regression and isolated render helper
+    tests_added_or_changed: desktop updater declaration and exported zsh value
+    tests_used_unchanged: CI wiring and digest validation
+    red_observation: The new updater assertion failed before the source declaration existed.
+    commands: [bash .ci/test-release-lock-digest-gate.sh, shellcheck -x .ci/test-release-lock-digest-gate.sh, bash .ci/test-ci-wiring.sh]
+    result: Source checks passed; native lifecycle failed with tool call denied by pre-tool hook.
+    exception_reason: No runtime waiver. Only Linux x64 received local runtime checks.
+implementation_engine_binding: null
+requested_route: native execution with Orca workers
+actual_route: Codex coordinator, Orca Codex implementation worker, isolated Orca Antigravity runtime probes
+requested_model: null
+actual_model: unverified
+fallback_reason: null
+run_id: run_9c695a1bce17
+unit_receipts:
+  - unit: U1
+    route: Orca Codex dispatch ctx_d3c7020b4007
+    model: unverified
+    detached_process: false
+    integration: parent-generated selected lock and CI dependency wiring
+    verification: passed
+    canonical_commit: edeb1a0
+    cleanup: worker_done accepted; terminal released before acknowledgement
+  - unit: U2
+    route: coordinator-local source edits and isolated Orca Antigravity probes
+    model: unverified
+    detached_process: false
+    integration: source-only; no deployment
+    verification: blocked at supervised lifecycle
+    canonical_commit: null
+    cleanup: failed dispatches abandoned; externally owned diagnostic terminals closed after identity checks
+plan_checkpoint: null
+blockers:
+  - The unchanged 1.1.28 pre-tool integration denies coordinator inbox commands, so worker_done cannot be delivered.
+  - The coordinator plan's U0 remains incomplete; its U1 and U2 cannot start.
+recovery_path: /home/h82/.local/share/worktrees/dotfiles/gardeneel
+settled_decision_conflicts: []
+behavior_change: true
+standalone_shipping_skipped: true

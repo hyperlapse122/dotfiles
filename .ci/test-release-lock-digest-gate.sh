@@ -210,4 +210,17 @@ for os in linux darwin; do
   done
 done
 
+case_name=agy-native-updater-control
+[[ $(grep -cx 'AGY_CLI_DISABLE_AUTO_UPDATE=true' "$repo_root/dot_config/environment.d/60-development.conf") == 1 ]] || fail 'Linux desktop environment must disable the native updater'
+for inherited in unset false; do
+  env -u AGY_CLI_DISABLE_AUTO_UPDATE ZDOTDIR="$scratch/home" zsh -dfc '
+    mise() { printf ":"; }
+    if [[ "$2" != unset ]]; then export AGY_CLI_DISABLE_AUTO_UPDATE="$2"; fi
+    source "$1"
+    [[ "$AGY_CLI_DISABLE_AUTO_UPDATE" == true ]]
+    [[ "${(t)AGY_CLI_DISABLE_AUTO_UPDATE}" == *export* ]]
+  ' -- "$repo_root/dot_config/zsh/dot_zshenv" "$inherited" || fail "shell updater control failed with inherited $inherited"
+done
+pass 'desktop and shell environments disable the native updater'
+
 printf 'release-lock digest gate: all cases passed\n'
