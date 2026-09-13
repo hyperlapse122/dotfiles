@@ -180,3 +180,120 @@ The follow-up query confirmed `completed` and `settled` with no residual resourc
 The diagnostic owner closed the exact terminal, and Orca confirmed `ptyKilled:
 true`. Delivery `delivery_a8db962a0483` was then acknowledged. No dispatch remained
 reclaimable. The live plugin declaration retained its original hash.
+
+## Managed command selection
+
+The source command manifest was rendered with the shared isolated helper and
+filtered to the `agy` unit. Its identity was `1.1.28-074ff4f732a7`. The real
+command reconciler activated the verified candidate in a throwaway destination
+through `activate-unit --manifest <rendered manifest> --unit agy --home <scratch>`.
+Both public names, `agy` and `antigravity`, resolved to the same immutable store
+file. Both printed `1.1.28`; both retained executable SHA-256
+`a8793092fbe6eea0b8228fc20582ec306f7f7698d1151be526902b1556a76f3a`.
+The live command links were not changed.
+
+The existing command-manifest gate failed because it still required a null
+Antigravity SHA-256 and a SHA-512 store identity. Its updated assertions check
+the pinned SHA-256 identity and both aliases. A separate render-time fixture
+keeps the SHA-512 fallback covered. The gate now uses the shared render helper,
+an empty config, an isolated destination, and a restricted PATH with a stub
+`op`. The updated gate and ShellCheck passed.
+
+The package-root `vp test` invocation failed before executing tests because its
+runner did not share the package-local Vitest suite context. The repository's
+`vp run test` script uses the package-local commands and passed 509 tests across
+five packages, with valid cached results for four unchanged packages. `vp check`
+and `vp run typecheck` passed. No test or configuration was weakened to resolve
+the invocation mismatch.
+
+## Coordinator mechanism checks
+
+These checks use ordinary Orca-owned coordinator terminals, not dispatched
+workers asked to lead. Each coordinator creates its own Run without another
+terminal's identity. Dispatch count is zero. Synthetic `question` messages test
+native execution and continuation only; they do not establish the U2 worker
+lifecycle criteria or verify the proposed instruction changes.
+
+### Isolation and context
+
+A full temporary overlay of `/home/h82` preserved instruction loading but hid
+Orca's runtime bootstrap and IPC. The first coordinator attempts therefore
+failed with `runtime_open_timeout`; namespace preflight also reported
+`stale_bootstrap`. They created no Run. Their diagnostic terminals were closed.
+
+The corrected Bubblewrap recipe keeps the home overlay, rebinds the native
+`~/.config/orca` and `~/.orca` directories for runtime communication, then applies
+another temporary overlay to the Codex account home below `~/.config/orca`.
+Each harness instruction file is a read-only bind of its isolated render.
+Antigravity also binds the verified 1.1.28 executable and the fixed temporary
+hook declaration. Its native updater stays disabled. This preserves native
+authentication without copying credentials, and keeps harness configuration
+writes inside the overlay. A pre-launch `orca-ide status --json` reported the
+same reachable Orca 1.4.200 runtime inside and outside the namespace.
+
+Tool-free reports returned the exact `coordinator-u0-<harness>-F74lvU` markers
+from user-scoped context for Claude, Codex, and Antigravity. All three reported
+the normative everyone block. Codex and Antigravity reported repository
+`AGENTS.md` in their initial context. Claude did not; it read that file before
+the experiment. These are model-context reports, separate from filesystem
+replacement evidence.
+
+Codex was requested as `gpt-5.6-luna` with `max` effort and displayed that pair
+in its TUI. This custom coordinator launch supplied no `launch.requested` and
+`launch.effective` pair, so its model receipt remains unverified. It is not a
+Luna/max review pass.
+
+### Claude Code 2.1.270
+
+Run `run_75a127ed83da` was created at 08:08:37 UTC. One `Bash` invocation with
+`run_in_background: true` started the canonical wait and returned task handle
+`bsgcxqkoj`. The coordinator ended its turn with `ARMED`. The parent sent
+synthetic question `msg_0c58ec30b1ba` at 08:09:21 UTC, about 43 seconds after
+the wait started. No model-driven status or filler call occurred in that gap.
+The CLI emitted its own heartbeat lines; those were not extra model calls.
+
+The terminal then displayed a background-command completion notification with
+exit code 0. The model resumed without another terminal prompt and read the
+completed task output. It replied at 08:09:29.57 and acknowledged
+`delivery_e64470b10e2d` at 08:09:33.77. There was one background wait, one output
+read after notification, one reply, and one acknowledgement. No duplicate wait,
+timer, or status polling occurred. The observed wake was a native
+`task-notification` for that handle, not a desktop notification. This proves
+after-turn resumption for normal command completion in this active session.
+It does not cover a killed or interrupted session.
+
+The active Bash schema reports a 600,000 ms timeout maximum, distinct from the
+Orca wait's 900,000 ms flag. A native command timeout must therefore be handled
+as an execution result, not mistaken for an Orca delivery. This experiment did
+not wait for either timeout.
+
+### Codex CLI 0.154.0
+
+Run `run_0224f3b16d9d` used one `exec_command` wait with a 1,000 ms initial yield
+and returned session `32266`. One empty-input `write_stdin` call continued that
+same session with a requested 60,000 ms blocking interval. The coordinator
+reported 48.910 seconds for the continuation before the question arrived.
+The parent sent `msg_c203f42874d6` at 08:10:24 UTC. The coordinator handled
+`delivery_6c81b0280fde`, replied, and acknowledged it without another wait.
+
+No worker, duplicate wait, or status poll was involved. The agent kept its turn
+open until result handling finished. This demonstrates same-handle blocking
+continuation, not automatic wake after a final response. The schema inspection
+does not grant that latter guarantee. Yielding execution therefore has a
+nonzero continuation-call cost that depends on wait length and active limits.
+
+Both completed coordinator terminals were closed after their final reports
+and identity checks. Orca returned `ptyKilled: true` for each. Their Runs remain
+as durable evidence; neither has a dispatched worker to release.
+
+### Antigravity 1.1.28 checkpoint
+
+The fresh `Antigravity coordinator U0 IPC` terminal loaded the isolated marker
+and reported native `run_command` and `manage_task` tools. It reported reactive
+completion wake in its instructions, but that report is not runtime proof.
+It is waiting for native approval of `orca-ide skills get orchestration`.
+No Run or background wait has started in this coordinator. Its exact retained
+handle is `term_c0c89593-f800-4aab-83f3-00cea02e594f`, incarnation
+`6848c806-e7b6-4b9f-a5a0-3f966db7b050`. The operator has been asked to approve
+this one command, without persistent permission changes. U0 remains incomplete;
+the source wait-policy changes have not begun.
