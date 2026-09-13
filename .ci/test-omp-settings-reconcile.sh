@@ -13,7 +13,7 @@ set -euo pipefail
 #   - convergence is read-then-compare, so a converged host writes nothing
 #   - a declared path omp does not report is a typo, not a silent skip
 #   - a wedged omp read is bounded without GNU timeout
-#   - a host without omp or jq fails the apply
+#   - a host without omp or jq records a declared skip and lets the apply continue
 
 usage='usage: test-omp-settings-reconcile.sh OMP_SETTINGS_SCRIPT'
 script=${1:?$usage}
@@ -331,8 +331,16 @@ grep -Fq 'config set modelRoles' "$state" ||
 # --- happy path: a drifted host converges --------------------------------- #
 
 reset
+mkdir -p "$home/.local/state/chezmoi/skips"
+touch "$home/.local/state/chezmoi/skips/config-omp-settings__omp-unavailable" \
+      "$home/.local/state/chezmoi/skips/config-omp-settings__jq-unavailable"
 run "$full_catalog" "$live_drifted" >"$scratch/ok.out" 2>"$scratch/ok.err" ||
   fail 'the happy path failed'
+[[ ! -e "$home/.local/state/chezmoi/skips/config-omp-settings__omp-unavailable" ]] ||
+  fail 'the converged run did not clear the omp skip record'
+[[ ! -e "$home/.local/state/chezmoi/skips/config-omp-settings__jq-unavailable" ]] ||
+  fail 'the converged run did not clear the jq skip record'
+
 grep -Fq 'config set startup.setupWizard' "$state" ||
   fail 'the wizard key was not asserted'
 grep -Fq 'config set enabledModels' "$state" ||
@@ -464,31 +472,39 @@ grep -q 'could not read the live config' "$scratch/badlive.err" ||
 grep -Fq 'config set modelRoles' "$state" ||
   fail 'the fail-open run did not fall through to asserting every declared path'
 
-# --- a host without jq fails the apply ------------------------------------- #
+# --- a host without jq records a declared skip ----------------------------- #
 
-# A PATH holding omp and nothing else: the jq check is a shell builtin lookup
-# that runs before the script's first external command, so it is reached even
-# without coreutils on PATH.
+# A PATH holding omp and minimal shell utilities (mkdir, rm) but no jq:
+# the jq check fails open, records a declared transient-blocking skip so
+# dotfiles-skips reports it, and lets the apply continue.
 reset
 no_jq="$scratch/no-jq-bin"
 mkdir -p "$no_jq"
 cp "$bin/omp" "$no_jq/omp"
+for tool in mkdir rm; do
+  tool_bin=$(command -v "$tool") || fail "missing $tool"
+  ln -sf "$tool_bin" "$no_jq/$tool"
+done
 bash_bin=$(command -v bash) || fail 'bash is not on PATH'
 env HOME="$home" PATH="$no_jq" \
   OMP_CALLS="$calls" OMP_STATE="$state" \
   OMP_CATALOG="$full_catalog" OMP_LIVE="$live_converged" "$bash_bin" "$script" \
   >"$scratch/nojq.out" 2>"$scratch/nojq.err" ||
   fail 'a host without jq aborted the apply instead of reporting a skip'
-grep -q 'declared settings were NOT asserted' "$scratch/nojq.err" ||
-  fail 'the jq-absent skip did not say the settings were not asserted'
+grep -qF 'config-omp-settings: jq is unavailable; settings assertion is deferred. Recorded as done; it re-runs automatically once jq-present changes.' \
+  "$scratch/nojq.out" || fail 'the jq-absent skip did not emit the declared skip message'
+jq_skip_file="$home/.local/state/chezmoi/skips/config-omp-settings__jq-unavailable"
+[[ -f "$jq_skip_file" ]] || fail 'the jq-absent run did not write a declared skip file'
+grep -qF $'v1\tconfig-omp-settings\tjq-unavailable\ttransient-blocking:jq-present\tjq is unavailable; settings assertion is deferred' \
+  "$jq_skip_file" || fail 'the jq-absent skip file contents were unexpected'
 [[ ! -s $state ]] || fail 'the jq-absent run still wrote settings'
 
-# --- a host without omp skips loudly and lets the apply continue ----------- #
+# --- a host without omp records a declared skip and lets the apply continue - #
 
 # 65-commands fails open by design, so omp can be legitimately absent here, and
 # this run_after_ script runs on every apply. Aborting would permanently strand
-# 80-keys and 90-src, which have nothing to do with omp. What the skip must not
-# do is read as a converged host, so the message has to disclaim the assertion.
+# 80-keys and 90-src, which have nothing to do with omp. Declaring the skip
+# makes it visible to dotfiles-skips without claiming false convergence.
 
 reset
 no_omp="$scratch/no-omp-bin"
@@ -497,8 +513,13 @@ env HOME="$home" PATH="$no_omp:/usr/bin:/bin" OMP_CALLS="$calls" OMP_STATE="$sta
   OMP_CATALOG="$full_catalog" OMP_LIVE="$live_converged" bash "$script" \
   >"$scratch/skip.out" 2>"$scratch/skip.err" ||
   fail 'a host without omp aborted the apply instead of reporting a skip'
-grep -q 'declared settings were NOT asserted' "$scratch/skip.err" ||
-  fail 'the omp-absent skip did not say the settings were not asserted'
+grep -qF 'config-omp-settings: omp is unavailable; settings assertion is deferred. Recorded as done; it re-runs automatically once omp-present changes.' \
+  "$scratch/skip.out" || fail 'the omp-absent skip did not emit the declared skip message'
+omp_skip_file="$home/.local/state/chezmoi/skips/config-omp-settings__omp-unavailable"
+[[ -f "$omp_skip_file" ]] || fail 'the omp-absent run did not write a declared skip file'
+grep -qF $'v1\tconfig-omp-settings\tomp-unavailable\ttransient-blocking:omp-present\tomp is unavailable; settings assertion is deferred' \
+  "$omp_skip_file" || fail 'the omp-absent skip file contents were unexpected'
 [[ ! -s $state ]] || fail 'the omp-absent run still wrote settings'
+
 
 printf 'omp settings reconcile: ok\n'
