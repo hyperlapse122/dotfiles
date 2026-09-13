@@ -76,9 +76,7 @@ accepts accept-sha256.json 'a valid sha256 alone is accepted'
 accepts accept-sha512-with-malformed-sha256.json 'a valid sha512 carries an artifact whose sha256 is malformed'
 accepts accept-sha256-with-malformed-sha512.json 'a valid sha256 carries an artifact whose sha512 is malformed'
 
-# The regression this suite exists for: the antigravity vendor manifest
-# publishes no sha256, so `agy` carries a null sha256 beside a real sha512 and
-# chezmoi verifies it through `[agy.checksum] sha512`.
+# The retained antigravity vendor resolver publishes only SHA-512.
 accepts accept-sha512-only.json 'a valid sha512 with a null sha256 is accepted'
 
 # 1Password's arm64 tarball genuinely publishes no digest; its integrity comes
@@ -168,5 +166,48 @@ case_name=committed-lock
 out=
 run_gate "$lock" || fail 'the committed release lock does not pass the gate'
 pass 'the committed .chezmoidata/releases.json passes'
+
+case_name=agy-exact-pin
+jq -e '
+  .releases.tools.agy
+  | .kind == "githubRelease"
+    and .source == "google-antigravity/antigravity-cli"
+    and .version == "1.1.28"
+    and (.artifacts | keys == ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"])
+' "$lock" >/dev/null || fail 'the committed lock does not contain the reviewed official 1.1.28 pin'
+
+scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
+mkdir -p "$scratch_parent"
+scratch=$(mktemp -d "$scratch_parent/release-lock-render.XXXXXX")
+trap 'rm -rf -- "$scratch"' EXIT
+mkdir -p "$scratch/home" "$scratch/bin" "$scratch/target"
+printf '[data]\n' >"$scratch/empty.toml"
+printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
+chmod 0700 "$scratch/bin/op"
+chezmoi_bin=$(command -v chezmoi)
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
+
+for os in linux darwin; do
+  for arch in amd64 arm64; do
+    case_name="agy-render-$os-$arch"
+    printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/external.tmpl"
+    cat "$repo_root/.chezmoiexternals/ai-agents.toml" >>"$scratch/external.tmpl"
+    render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$scratch/external.tmpl" "$scratch/external.toml"
+    rendered=$(sed -n '/^\[agy\]$/,/^\[agent-browser\]$/p' "$scratch/external.toml")
+    url=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].url' "$lock")
+    digest=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].sha256' "$lock")
+    asset_os=$os
+    [ "$os" != darwin ] || asset_os=mac
+    asset_arch=$arch
+    [ "$arch" != amd64 ] || asset_arch=x64
+    [ "$url" = "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/agy_cli_${asset_os}_${asset_arch}.tar.gz" ] || fail 'unexpected official archive URL'
+    [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || fail 'missing or invalid SHA-256'
+    [[ "$rendered" == *"url = '$url'"* ]] || fail 'external URL differs from lock'
+    [[ "$rendered" == *"sha256 = '$digest'"* ]] || fail 'external does not consume the locked SHA-256'
+    [[ "$rendered" != *sha512* ]] || fail 'external still consumes SHA-512'
+    pass "$case_name consumes the official archive and SHA-256"
+  done
+done
 
 printf 'release-lock digest gate: all cases passed\n'

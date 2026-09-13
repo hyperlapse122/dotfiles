@@ -274,18 +274,23 @@ export const REGISTRY: Registry = {
       os === "linux" ? `orca-ide-${versionFromTag(tag)}.${rustArch(arch)}.rpm` : null,
   },
 
+  // Hook regression: https://github.com/google-antigravity/antigravity-cli/issues/1008.
+  // Advance or remove only after isolated hook/context and supervised lifecycle checks.
+  // Returning to the antigravity vendor resolver also requires checksum.sha512.
+  agy: {
+    kind: "githubRelease",
+    source: "google-antigravity/antigravity-cli",
+    exactTag: "1.1.28",
+    asset: ({ os, arch }) =>
+      `agy_cli_${os === "darwin" ? "mac" : os}_${arch === "amd64" ? "x64" : arch}.tar.gz`,
+  },
+
   /* ---------- gitlabRelease ---------- */
 
   // One key serves the vcs.toml binary and both bundled skills (AE5).
   glab: { kind: "gitlabRelease", source: "https://gitlab.com/api/v4/projects/34675721" },
 
   /* ---------- vendorManifest ---------- */
-
-  agy: {
-    kind: "vendorManifest",
-    vendor: "antigravity",
-    source: "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
-  },
 
   // Rolling unversioned URL; the resolver follows its 302 to read the version
   // and records nothing else. `.chezmoiscripts/30-components/` composes the

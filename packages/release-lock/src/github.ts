@@ -10,15 +10,6 @@ import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
 
 export { ResolutionError };
 
-/**
- * GitHub release resolution.
- *
- * One `releases/latest` call yields the tag and, for every asset, its name,
- * download URL, and sha256 digest. That digest is why the refresh never has to
- * download an artifact to checksum it — a linux runner can lock darwin entries
- * from the same response.
- */
-
 interface GitHubAsset {
   readonly name: string;
   readonly browser_download_url: string;
@@ -29,7 +20,7 @@ interface GitHubAsset {
 interface GitHubRelease {
   readonly tag_name: string;
   readonly assets: readonly GitHubAsset[];
-  /** Set on the release-list entries; `releases/latest` never returns one flagged. */
+  /** Tag and list endpoints can return unstable releases. */
   readonly prerelease?: boolean;
   readonly draft?: boolean;
 }
@@ -83,6 +74,22 @@ export async function fetchLatestRelease(
   return release;
 }
 
+async function fetchExactRelease(
+  source: string,
+  exactTag: string,
+  token: string | undefined,
+): Promise<GitHubRelease> {
+  const path = `releases/tags/${encodeURIComponent(exactTag)}`;
+  const release = (await fetchReleaseJson(source, path, path, token)) as GitHubRelease | null;
+  if (!release || release.tag_name !== exactTag || !Array.isArray(release.assets)) {
+    throw new ResolutionError(source, `${path} response must contain tag ${exactTag} and assets`);
+  }
+  if (release.draft === true || release.prerelease === true) {
+    throw new ResolutionError(source, `${path} is not a stable published release`);
+  }
+  return release;
+}
+
 /**
  * The newest stable release whose tag carries `tagPrefix`, from one
  * release-list call. KTD10: a repo that interleaves several tag trains
@@ -132,9 +139,20 @@ export async function resolveGitHubRelease(
   spec: ToolSpec,
   token: string | undefined,
 ): Promise<LockedTool> {
-  const release = spec.tagPrefix
-    ? await fetchLatestReleaseByPrefix(spec.source, spec.tagPrefix, token)
-    : await fetchLatestRelease(spec.source, token);
+  if (spec.exactTag !== undefined) {
+    if (spec.tagPrefix !== undefined) {
+      throw new ResolutionError(spec.source, "exactTag and tagPrefix cannot be combined");
+    }
+    if (spec.exactTag.trim().length === 0) {
+      throw new ResolutionError(spec.source, "exactTag must not be empty");
+    }
+  }
+  const release =
+    spec.exactTag !== undefined
+      ? await fetchExactRelease(spec.source, spec.exactTag, token)
+      : spec.tagPrefix
+        ? await fetchLatestReleaseByPrefix(spec.source, spec.tagPrefix, token)
+        : await fetchLatestRelease(spec.source, token);
   const tag = release.tag_name;
 
   if (!spec.asset) {

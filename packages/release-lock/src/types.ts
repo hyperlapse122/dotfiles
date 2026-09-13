@@ -91,6 +91,8 @@ export interface ToolSpec {
    * interleaves marketplace-*, cli-* tag trains).
    */
   readonly tagPrefix?: string;
+  /** githubRelease only: require this stable tag; cannot be combined with tagPrefix. */
+  readonly exactTag?: string;
   /**
    * githubRelease only: the tool publishes distinct static-musl linux builds;
    * resolve them into the `-musl` lock keys next to the glibc ones (KTD11).

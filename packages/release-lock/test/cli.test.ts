@@ -1,6 +1,8 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { DEFAULT_LOCK_PATH, runCli } from "../src/cli.js";
 import { resolveGitHubRelease } from "../src/github.js";
@@ -196,6 +198,211 @@ describe("resolveAll", () => {
 });
 
 describe("runCli", () => {
+  test.each(["file", "stdout", "out", "failure"])(
+    "--only resolves one registered tool and preserves unselected entries: %s",
+    async (mode) => {
+      const path = join(await scratch(), "releases.json");
+      const prior = {
+        releases: {
+          tools: {
+            agy: { kind: "vendorManifest", source: "https://vendor.invalid", version: "1.2.2" },
+            retired: {
+              kind: "githubRelease",
+              source: "owner/retired",
+              version: "v1",
+              artifacts: {
+                "freebsd-amd64": { url: "https://example.invalid/retired", sha256: "b".repeat(64) },
+              },
+            },
+          },
+        },
+      };
+      const before = JSON.stringify(prior);
+      await writeFile(path, before);
+      const urls: string[] = [];
+      globalThis.fetch = (async (input) => {
+        urls.push(input instanceof Request ? input.url : String(input));
+        if (mode === "failure") return new Response("absent", { status: 404 });
+        return Response.json({
+          tag_name: "1.1.28",
+          assets: [
+            "agy_cli_linux_x64.tar.gz",
+            "agy_cli_linux_arm64.tar.gz",
+            "agy_cli_mac_x64.tar.gz",
+            "agy_cli_mac_arm64.tar.gz",
+          ].map((name) => ({
+            name,
+            browser_download_url: `https://example.invalid/1.1.28/${name}`,
+            digest: `sha256:${"a".repeat(64)}`,
+          })),
+        });
+      }) as typeof fetch;
+      const stdout = capture();
+      const args =
+        mode === "stdout"
+          ? ["--stdout", "--only", "agy"]
+          : mode === "out"
+            ? ["--only", "agy", "--out", path]
+            : ["--only", "agy"];
+      const exit = await runCli(args, { defaultPath: path, stdout, stderr: capture() });
+      expect(exit).toBe(mode === "failure" ? 1 : 0);
+      expect(urls).toEqual([
+        "https://api.github.com/repos/google-antigravity/antigravity-cli/releases/tags/1.1.28",
+      ]);
+      const written = JSON.parse(
+        mode === "stdout" ? stdout.values.join("") : await readFile(path, "utf8"),
+      );
+      expect(written.releases.tools.retired).toEqual(prior.releases.tools.retired);
+      expect(written.releases.tools.agy.version).toBe(mode === "failure" ? "1.2.2" : "1.1.28");
+      if (mode === "failure") expect(written.releases.tools.agy).toEqual(prior.releases.tools.agy);
+      if (mode === "stdout") expect(await readFile(path, "utf8")).toBe(before);
+    },
+  );
+
+  test.each([
+    ["--only", "unknown-tool"],
+    ["--only"],
+    ["--only", ""],
+    ["--only", "agy", "--only", "agy"],
+    ["--only", "agy", "--stdout", "--out", "lock.json"],
+    ["--stdout", "--stdout"],
+    ["--out", "first", "--out", "second"],
+    ["--only", "toString"],
+  ])("invalid selection %j performs no reads, writes, or resolution", async (...args) => {
+    const path = join(await scratch(), "releases.json");
+    const before = "malformed lock must not be read";
+    await writeFile(path, before);
+    let resolved = false;
+    expect(
+      await runCli(args, {
+        defaultPath: path,
+        stderr: capture(),
+        resolve: async () => {
+          resolved = true;
+          return resolution();
+        },
+      }),
+    ).toBe(2);
+    expect(resolved).toBe(false);
+    expect(await readFile(path, "utf8")).toBe(before);
+  });
+
+  test.each([null, "sha256:nothex"])(
+    "the digest gate rejects an exact release with digest %j after CLI resolution",
+    async (digest) => {
+      const path = join(await scratch(), "releases.json");
+      globalThis.fetch = (async () =>
+        Response.json({
+          tag_name: "1.1.28",
+          assets: [
+            { name: "tool", browser_download_url: "https://example.invalid/1.1.28/tool", digest },
+          ],
+        })) as typeof fetch;
+      const registry: Registry = {
+        pinned: {
+          kind: "githubRelease",
+          source: "owner/pinned",
+          exactTag: "1.1.28",
+          asset: ({ os, arch }) => (os === "linux" && arch === "amd64" ? "tool" : null),
+        },
+      };
+      expect(
+        await runCli([], {
+          defaultPath: path,
+          stderr: capture(),
+          resolve: () => resolveAll(undefined, registry),
+        }),
+      ).toBe(0);
+      const gate = fileURLToPath(
+        new URL("../../../.ci/check-release-lock-digests.sh", import.meta.url),
+      );
+      const result = spawnSync("bash", [gate, path], { encoding: "utf8" });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("pinned linux-amd64: no valid sha256 or sha512");
+    },
+  );
+
+  test.each(["ok", "missing release", "wrong tag", "missing asset"])(
+    "exact pin through resolver and CLI: %s",
+    async (scenario) => {
+      const path = join(await scratch(), "releases.json");
+      const prior = {
+        kind: "vendorManifest",
+        source: "https://vendor.invalid/manifests",
+        version: "1.2.2",
+        artifacts: {
+          "linux-amd64": {
+            url: "https://vendor.invalid/1.2.2/tool",
+            sha256: null,
+            sha512: "b".repeat(128),
+          },
+        },
+      };
+      await writeFile(path, JSON.stringify({ releases: { tools: { pinned: prior } } }));
+      const registry: Registry = {
+        pinned: {
+          kind: "githubRelease",
+          source: "owner/pinned",
+          exactTag: "1.1.28",
+          asset: ({ os, arch }) => (os === "linux" && arch === "amd64" ? "tool" : null),
+        },
+        good: { kind: "githubRelease", source: "owner/good" },
+      };
+      const urls: string[] = [];
+      globalThis.fetch = (async (input) => {
+        const url = input instanceof Request ? input.url : String(input);
+        urls.push(url);
+        if (url.endsWith("/owner/pinned/releases/tags/1.1.28")) {
+          if (scenario === "missing release") return new Response("absent", { status: 404 });
+          return Response.json({
+            tag_name: scenario === "wrong tag" ? "1.2.2" : "1.1.28",
+            assets:
+              scenario === "missing asset"
+                ? []
+                : [
+                    {
+                      name: "tool",
+                      browser_download_url: "https://example.invalid/1.1.28/tool",
+                      digest: `sha256:${"a".repeat(64)}`,
+                    },
+                  ],
+          });
+        }
+        return Response.json({
+          tag_name: "1.2.2",
+          assets: [
+            {
+              name: "tool",
+              browser_download_url: "https://example.invalid/1.2.2/tool",
+              digest: `sha256:${"a".repeat(64)}`,
+            },
+          ],
+        });
+      }) as typeof fetch;
+      const stderr = capture();
+      const exit = await runCli([], {
+        defaultPath: path,
+        stderr,
+        resolve: () => resolveAll(undefined, registry),
+      });
+      const written = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
+      expect(written.releases.tools.good?.version).toBe("1.2.2");
+      expect(urls.sort()).toEqual([
+        "https://api.github.com/repos/owner/good/releases/latest",
+        "https://api.github.com/repos/owner/pinned/releases/tags/1.1.28",
+      ]);
+      if (scenario === "ok") {
+        expect(exit).toBe(0);
+        expect(written.releases.tools.pinned?.version).toBe("1.1.28");
+        expect(stderr.values).toEqual([]);
+      } else {
+        expect(exit).toBe(1);
+        expect(written.releases.tools.pinned).toEqual(prior);
+        expect(stderr.values.join("")).toContain("owner/pinned");
+      }
+    },
+  );
+
   test("the default path points at the repository lock", async () => {
     expect(DEFAULT_LOCK_PATH.endsWith("/.chezmoidata/releases.json")).toBe(true);
     expect(JSON.parse(await readFile(DEFAULT_LOCK_PATH, "utf8"))).toHaveProperty("releases.tools");

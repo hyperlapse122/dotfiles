@@ -42,7 +42,7 @@ comparing it to the recorded digest.
 Not every source publishes a sha256. A vendor manifest that publishes only a
 sha512 is recorded in the artifact's `sha512` field with a null `sha256`, and
 its consuming external verifies it through chezmoi's `checksum.sha512`. The
-`antigravity` vendor is the one such source today. `.ci/check-release-lock-digests.sh`
+retained `antigravity` vendor resolver supports this shape. `.ci/check-release-lock-digests.sh`
 accepts either digest and rejects an artifact carrying neither.
 
 ## Usage
@@ -51,6 +51,7 @@ accepts either digest and rejects an artifact carrying neither.
 bun run packages/release-lock/src/cli.ts                          # refresh the repo lock in place
 bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
 bun run packages/release-lock/src/cli.ts --stdout                 # inspect merged JSON
+bun run packages/release-lock/src/cli.ts --only agy               # refresh only the pin
 ```
 
 A source that fails to resolve is reported on stderr and omitted from the
@@ -58,7 +59,7 @@ fresh resolution, and the process exits non-zero. Plain invocation and `--out`
 overlay a partial resolution onto the file already at the destination, so an
 omitted entry keeps its last good value rather than being blanked. A clean run
 replaces the tool set, which prunes entries removed from the registry. Every
-run, clean or partial, also drops any `artifacts` key outside today's
+full refresh, clean or partial, also drops any `artifacts` key outside today's
 `PlatformKey` vocabulary from each surviving tool -- a retired platform never
 lingers in a kept entry. Writes replace the destination atomically.
 
@@ -68,6 +69,14 @@ over the lock it reads (for example, `--stdout > .chezmoidata/releases.json`).
 The shell truncates a redirection target before the CLI starts, so the process
 cannot recover that prior content. Use plain invocation or `--out` to refresh a
 lock safely.
+
+`--only <registered-tool>` resolves one tool and overlays that entry onto the
+destination lock. It preserves all unselected entries, including retired tools
+and their platform keys. It works with `--out <path>` or `--stdout` in either
+argument order. A failed selected resolution preserves the previous entry and
+returns a failure. Unknown tools, repeated flags, and conflicting output flags
+fail before reading or writing the lock. Use this form to generate a reviewed
+pin without updating unrelated tools.
 
 The hourly refresh uses this same CLI and updates a changed generated lock
 without a separate approval step. The lock diff remains review-visible for
@@ -111,6 +120,10 @@ returning the upstream filename for a platform. Conventions that matter:
 - `tagPrefix` (githubRelease) resolves the newest release whose tag carries
   the prefix instead of `releases/latest`, for repos that interleave several
   tag trains (compound-engineering next to marketplace-*/cli-*).
+- `exactTag` (githubRelease) selects one stable published tag through
+  `releases/tags/<encoded-tag>`. It rejects an empty tag, a simultaneous
+  `tagPrefix`, a mismatched response tag, drafts, and prereleases. It never
+  falls back to latest or a release list.
 - `linuxMusl` (githubRelease) locks the distinct static-musl linux builds
   under `-musl` platform keys next to the glibc ones (agent-browser).
 - `versionTransform` (githubTag) applies a required tag-shape transform in the
@@ -121,6 +134,32 @@ returning the upstream filename for a platform. Conventions that matter:
 - npm entries record `dist.integrity` as published. It is informational only:
   chezmoi externals verify sha256, so npm entries stay version-only for
   consumers.
+
+## Antigravity hook pin
+
+`agy` uses the official `google-antigravity/antigravity-cli` release `1.1.28`
+because newer releases regressed hook execution. The authenticated user
+subscribed to [upstream issue #1008](https://github.com/google-antigravity/antigravity-cli/issues/1008)
+on 2026-09-13. The hourly refresh obeys `exactTag` without changing its schedule
+or failure criteria. A failed resolution preserves the previous whole entry
+and exits non-zero. A preserved newer entry does not satisfy the pin check.
+
+All four Linux and macOS archives use the official release asset SHA-256
+values. The external consumes `checksum.sha256`. The vendor resolver remains
+available but does not select the pinned release.
+
+Advance or remove the pin only through a reviewed source change after a newer
+official release executes hooks, delivers the injected model context in a fresh
+isolated session, and passes a supported supervised worker lifecycle check.
+Issue closure and release announcements do not authorize an upgrade. Record
+runtime coverage per available target and mark other targets as artifact-verified
+only. Keep live credentials, instructions, and permission settings unchanged.
+
+Advancing an exact GitHub tag retains SHA-256. Returning to the `antigravity`
+vendor resolver must restore the manifest source and `checksum.sha512` together
+with the generated lock entry. Verify all four external renders after either
+change with `.ci/test-release-lock-digest-gate.sh`, updating its reviewed pin
+expectations in the same change.
 
 ## Verification
 

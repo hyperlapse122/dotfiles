@@ -195,6 +195,86 @@ describe("resolveGitHubRelease", () => {
   });
 });
 
+describe("resolveGitHubRelease exactTag", () => {
+  const spec: ToolSpec = { kind: "githubRelease", source: "owner/repo", exactTag: "1.1.28" };
+
+  test("uses the encoded exact tag endpoint without consulting newer releases", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      urls.push(url);
+      const tag = url.endsWith("/releases/tags/train%2F1.1.28") ? "train/1.1.28" : "1.2.2";
+      return Response.json({ tag_name: tag, assets: [], draft: false, prerelease: false });
+    }) as typeof fetch;
+    const locked = await resolveGitHubRelease(
+      "tool",
+      { ...spec, exactTag: "train/1.1.28" },
+      undefined,
+    );
+    expect(locked.version).toBe("train/1.1.28");
+    expect(urls).toEqual(["https://api.github.com/repos/owner/repo/releases/tags/train%2F1.1.28"]);
+  });
+
+  test.each(["", " "])("rejects an empty exact tag %j before fetching", async (exactTag) => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return Response.json({ tag_name: "1.1.28", assets: [] });
+    }) as typeof fetch;
+    await expect(resolveGitHubRelease("tool", { ...spec, exactTag }, undefined)).rejects.toThrow(
+      ResolutionError,
+    );
+    expect(calls).toBe(0);
+  });
+
+  test.each(["v", ""])("rejects a simultaneous tagPrefix %j before fetching", async (tagPrefix) => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return Response.json({ tag_name: "1.1.28", assets: [] });
+    }) as typeof fetch;
+    await expect(resolveGitHubRelease("tool", { ...spec, tagPrefix }, undefined)).rejects.toThrow(
+      /exactTag.*tagPrefix/,
+    );
+    expect(calls).toBe(0);
+  });
+
+  test.each([
+    { tag_name: "1.2.2", assets: [] },
+    { tag_name: "1.1.28", assets: [], draft: true },
+    { tag_name: "1.1.28", assets: [], prerelease: true },
+    { tag_name: "1.1.28" },
+    null,
+  ])("rejects an invalid exact release response %j", async (body) => {
+    globalThis.fetch = (async () => Response.json(body)) as typeof fetch;
+    await expect(resolveGitHubRelease("tool", spec, undefined)).rejects.toThrow(ResolutionError);
+  });
+
+  test("does not fall back when the exact tag is absent", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      urls.push(input instanceof Request ? input.url : String(input));
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    await expect(resolveGitHubRelease("tool", spec, undefined)).rejects.toThrow(
+      /releases\/tags\/1.1.28 returned HTTP 404/,
+    );
+    expect(urls).toHaveLength(1);
+  });
+
+  test("retries transient errors on the exact endpoint", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return calls === 1
+        ? new Response("retry", { status: 503, headers: { "retry-after": "0" } })
+        : Response.json({ tag_name: "1.1.28", assets: [] });
+    }) as typeof fetch;
+    expect((await resolveGitHubRelease("tool", spec, undefined)).version).toBe("1.1.28");
+    expect(calls).toBe(2);
+  });
+});
+
 describe("resolveGitHubRelease tagPrefix", () => {
   interface StubListedRelease {
     tag_name: string;
