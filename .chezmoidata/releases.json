@@ -317,7 +317,7 @@
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
-        "version": "compound-engineering-v3.24.0"
+        "version": "compound-engineering-v3.25.0"
       },
       "computer-use": {
         "kind": "githubRelease",
@@ -327,7 +327,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "9d3fc719acd04947fcebef97e53e4feac0afe355"
+        "version": "5bf2b1544db739998121a306340631963c2ff3de"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -700,7 +700,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "9d3fc719acd04947fcebef97e53e4feac0afe355"
+        "version": "5bf2b1544db739998121a306340631963c2ff3de"
       },
       "uv": {
         "kind": "githubRelease",
