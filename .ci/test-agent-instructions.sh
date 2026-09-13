@@ -135,10 +135,12 @@ omp_payload_end='<!-- omp-orchestration-payload:end -->'
 # is verified against the binary's own output by the hook gates.
 everyone_payload_wrapper="$scratch/claude-everyone.md.tmpl"
 codex_everyone_payload_wrapper="$scratch/codex-everyone.md.tmpl"
+agy_everyone_payload_wrapper="$scratch/agy-everyone.md.tmpl"
 coordinator_payload_wrapper="$scratch/claude-coordinator.md.tmpl"
 omp_everyone_wrapper="$scratch/omp-everyone.md.tmpl"
 printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$everyone_payload_wrapper"
 printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "codex") -}}' >"$codex_everyone_payload_wrapper"
+printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "agy") -}}' >"$agy_everyone_payload_wrapper"
 printf '%s\n' '{{- includeTemplate "orchestration-coordinator.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$coordinator_payload_wrapper"
 printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "omp") -}}' >"$omp_everyone_wrapper"
 
@@ -146,6 +148,8 @@ everyone_claude_linux="$scratch/everyone-claude-linux.md"
 everyone_claude_darwin="$scratch/everyone-claude-darwin.md"
 everyone_codex_linux="$scratch/everyone-codex-linux.md"
 everyone_codex_darwin="$scratch/everyone-codex-darwin.md"
+everyone_agy_linux="$scratch/everyone-agy-linux.md"
+everyone_agy_darwin="$scratch/everyone-agy-darwin.md"
 everyone_omp_linux="$scratch/everyone-omp-linux.md"
 everyone_omp_darwin="$scratch/everyone-omp-darwin.md"
 coordinator_claude_linux="$scratch/coordinator-claude-linux.md"
@@ -155,6 +159,8 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_payload_wrapper" 
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$everyone_payload_wrapper" "$everyone_claude_darwin"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$codex_everyone_payload_wrapper" "$everyone_codex_linux"
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$codex_everyone_payload_wrapper" "$everyone_codex_darwin"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$agy_everyone_payload_wrapper" "$everyone_agy_linux"
+render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$agy_everyone_payload_wrapper" "$everyone_agy_darwin"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$omp_everyone_wrapper" "$everyone_omp_linux"
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$omp_everyone_wrapper" "$everyone_omp_darwin"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_payload_wrapper" "$coordinator_claude_linux"
@@ -163,6 +169,7 @@ render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$coordinator_payload_wrapp
 for payload_render in \
   "$everyone_claude_linux" "$everyone_claude_darwin" \
   "$everyone_codex_linux" "$everyone_codex_darwin" \
+  "$everyone_agy_linux" "$everyone_agy_darwin" \
   "$everyone_omp_linux" "$everyone_omp_darwin"; do
   [[ -s $payload_render ]] || fail "$(basename "$payload_render") rendered empty"
 done
@@ -180,6 +187,10 @@ diff -q "$everyone_claude_linux" "$everyone_omp_linux" >/dev/null \
   || fail "Claude and omp everyone payloads differ on Linux"
 diff -q "$everyone_claude_darwin" "$everyone_omp_darwin" >/dev/null \
   || fail "Claude and omp everyone payloads differ on Darwin"
+diff -q "$everyone_claude_linux" "$everyone_agy_linux" >/dev/null \
+  || fail "Claude and Antigravity everyone payloads differ on Linux"
+diff -q "$everyone_claude_darwin" "$everyone_agy_darwin" >/dev/null \
+  || fail "Claude and Antigravity everyone payloads differ on Darwin"
 diff -q "$coordinator_claude_linux" "$coordinator_claude_darwin" >/dev/null \
   || fail "Claude coordinator payload differs across OSes"
 
@@ -512,13 +523,16 @@ Membership is declared, never derived from the path
 It reports garden drift only; it does not audit Orca registration.
 SUPPLEMENT_NEEDLES
 
-# Asserted against every rendered everyone-payload delivery. The Claude and
-# Codex wrappers and the extracted omp block must all retain the same rules.
+# Asserted against every rendered everyone-payload delivery. The Claude, Codex
+# and Antigravity wrappers and the extracted omp block must all retain the same
+# rules.
 everyone_payloads=(
   "$everyone_claude_linux"
   "$everyone_claude_darwin"
   "$everyone_codex_linux"
   "$everyone_codex_darwin"
+  "$everyone_agy_linux"
+  "$everyone_agy_darwin"
   "$omp_linux_body"
   "$omp_darwin_body"
 )
@@ -548,6 +562,12 @@ Absence of this text never waives the contract.
 A session that holds only the pointer in the user-scoped instruction file performs non-dispatch work only, and still MUST NOT reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
 Claude Code, Codex, and Antigravity lead, dispatch, and serve as workers on the same terms.
 `omp` is in that set, so it never leads an Orca workflow, dispatches Orca workers, or serves as one
+When another agent launches Codex through Orca for cross-model or cross-harness work, the launch MUST explicitly select `gpt-5.6-luna` with `max` reasoning effort.
+The coordinator MUST compare `launch.requested` with `launch.effective` and claim Luna/max only when the effective fields report that pair.
+If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the Luna/max requirement.
+Recovery and release remain governed by the installed Orca lifecycle rules.
+Being inside Orca alone MUST NOT trigger this override.
+A launch that does not meet both the delegation and work-purpose conditions keeps its existing explicit model-selection rules.
 A brief defect is required context the brief does not carry.
 A URL kept beside a usable extraction is provenance, not a defect.
 <!-- orchestration-everyone:end -->
@@ -639,6 +659,9 @@ This paragraph narrows the dispatch-target rule above for Implementation Units o
 It leaves scout reads, lookups, and mechanical steps on the Gemini Flash serving family, and it leaves adjudication on a frontier serving family; authoring the prose of a plan or requirements document follows the dispatch-target rule above.
 It also tightens the cross-model review: that review MUST run `codex`, `claude`, and `agy` over the same brief file, except that an agent excluded as the document's own author is dropped rather than replaced, and MUST weigh each reviewer's findings on their own evidence.
 Model and effort apply to a fresh agent terminal only; the version-matched Orca guide owns their spelling and reports which values took effect.
+Name the agent and nothing else for recipient selection.
+The Everyone payload above owns model and effort selection for qualifying Codex launches; check its effective receipt before claiming that selection took effect.
+Non-qualifying launches keep their existing explicit model-selection rules.
 CLAUDE_COORDINATOR_NEEDLES
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
