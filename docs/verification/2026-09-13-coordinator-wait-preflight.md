@@ -291,9 +291,21 @@ as durable evidence; neither has a dispatched worker to release.
 The fresh `Antigravity coordinator U0 IPC` terminal loaded the isolated marker
 and reported native `run_command` and `manage_task` tools. It reported reactive
 completion wake in its instructions, but that report is not runtime proof.
-It is waiting for native approval of `orca-ide skills get orchestration`.
-No Run or background wait has started in this coordinator. Its exact retained
-handle is `term_c0c89593-f800-4aab-83f3-00cea02e594f`, incarnation
-`6848c806-e7b6-4b9f-a5a0-3f966db7b050`. The operator has been asked to approve
-this one command, without persistent permission changes. U0 remains incomplete;
+After native approvals, it created Run `run_5a8bdc789cb5` at 08:14:40 UTC.
+One native background wait started at 08:14:45 and returned task handle
+`b727d68e-2ced-4437-ab23-2eab8b53f328/task-12`. The model ended with `ARMED`.
+The parent sent synthetic question `msg_57dc55e0b392` at 08:15:36, after about
+51 seconds. No further terminal prompt was sent to the model. It resumed,
+identified completed-task output, and requested its reply command. No timer or
+status call appeared during the silent interval. This is observed native
+completion-triggered continuation after a final response, not only the earlier
+schema claim.
+
+The reply `orca-ide orchestration reply --id msg_57dc55e0b392 --body
+"U0_RECEIVED" --json` is now at a native permission prompt. Its delivery still
+needs processing and acknowledgement before cleanup. The operator has been
+asked to approve that command and the following acknowledgement separately,
+without persistent permission changes. The retained terminal handle is
+`term_c0c89593-f800-4aab-83f3-00cea02e594f`, incarnation
+`6848c806-e7b6-4b9f-a5a0-3f966db7b050`. U0 result handling remains incomplete;
 the source wait-policy changes have not begun.
