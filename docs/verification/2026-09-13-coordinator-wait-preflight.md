@@ -456,3 +456,52 @@ pending before Run creation or dispatch. The parent requested approval for
 that file only and did not select either the one-time or permanent permission.
 This is an operator approval checkpoint, not a failed native wake test or a
 completed U2 result.
+
+### Antigravity U2 completion
+
+The operator approved the remaining native commands. Run `run_118b865f9c89`
+was created at 08:41:17 UTC with these read-only Claude workers:
+
+| Worker | Task | Dispatch | Release completed, UTC |
+| --- | --- | --- | --- |
+| A | `task_b9f2dfa108fb` | `ctx_d40c2ea7f331` | 08:43:46 |
+| B | `task_c68bf8249b02` | `ctx_3764669eb387` | 08:44:36 |
+
+Both starts preceded the first wait. The three `run_command` waits used
+`WaitMsBeforeAsync: 500` and native task prefix
+`45356559-c768-4168-94dd-2db8ca864519/`. Their suffixes were `task-48`,
+`task-57`, and `task-66`. Reported quiet intervals were 87, 13, and 38 seconds.
+Each wait ended the model turn and resumed through a native completed-task
+notification. No parent prompt intervened during those waits. No status poll,
+duplicate watcher, or `manage_task` continuation was used.
+
+The first wait delivered question `msg_a2d6c701d44e` in
+`delivery_804fcdf79a3c`. Reply `msg_0d7b60da40ae` carried `U2_PROCEED`.
+The second delivered A's successful `msg_8ea2f99513a2` in
+`delivery_01e92d8785da`. The third delivered B's successful
+`msg_e66907fec7bf` in `delivery_6623dfb4bdb7`. Both release receipts reported
+`closed_agent_terminal` and captured transcripts before their Delivery was
+acknowledged. The final acknowledgement returned zero messages and no Delivery.
+
+The 1,000 ms zero-worker diagnostic returned `timedOut: true`, zero messages,
+and no Delivery. After a separate one-time approval, `sh -c 'exit 7'` returned
+status 7. The coordinator treated it as an ordinary command failure. Neither
+diagnostic received a fabricated acknowledgement. The parent's scoped query
+confirmed no reclaimable worker and two released resources.
+
+The initial report understated total native commands as 14. A tool-free audit
+corrected this to 20: six discovery calls, four runtime/Run/start calls, three
+worker waits, four reply/release/final-ack calls, and three diagnostics. The
+three waits and zero polling calls are distinct from this total. These traces
+complete U2 for the tested versions; they do not establish wake behavior for
+other versions or interrupted sessions.
+
+Final source verification passed the instruction, command-manifest, digest,
+and real-binary hook gates. `vp check` passed formatting, lint, and types.
+`vp run test` reported 509 passing tests through unchanged task-cache entries;
+`vp run typecheck` also used valid cache entries. GitHub still reported issue
+#1008 as open and `viewerSubscription: SUBSCRIBED`. No deployment occurred.
+
+The parent verified the coordinator incarnation and closed its ordinary
+terminal after the final report. Orca returned `ptyKilled: true`. All six U2
+workers and all three U2 coordinator terminals are now released or closed.
