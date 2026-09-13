@@ -332,3 +332,127 @@ the turn. After the source and fixture changes, the Linux and macOS render gate,
 ShellCheck, and `git diff --check` passed. The gate checks the shared clauses,
 native adapter isolation, whole-section fixtures, and retired turn-ending text.
 Static checks do not complete U2's runtime scenarios.
+
+## Candidate-policy evaluation: Claude and Codex
+
+Both coordinators loaded the U1 candidate at user scope through the U0 overlay
+recipe. Their markers were `coordinator-u2-claude-oCVAEB` and
+`coordinator-u2-codex-oCVAEB`. Both reported the common policy and normative
+injection before execution. Claude read the repository supplement before work.
+The fixtures required two read-only workers, a delayed question from A, and a
+delayed completion from B. Worker sleeps were test stimuli, not coordinator
+polling. Each worker had a ten-minute deadline; each Run had a fifteen-minute
+bound.
+
+Claude initially requested broad access for a `/tmp` brief. The parent canceled
+that prompt without granting access or using a shell bypass. The replacement
+briefs live in `docs/verification/coordinator-wait-u2/`. Claude used two Claude
+workers. Codex had already read its original temporary brief and used two Codex
+workers. Its one `prepare-codex` attempt returned `EROFS` while writing temporary
+hook state. It made no manual trust edit and did not repeat that command. Both
+subsequent starts succeeded. This is a preparation limitation of the isolated
+coordinator, not evidence that Codex dispatch failed.
+
+### Claude Code 2.1.270
+
+Run `run_78242612ec75` used these worker attempts:
+
+| Worker | Task | Dispatch | Release completed, UTC |
+| --- | --- | --- | --- |
+| A | `task_481e365861d3` | `ctx_bfaf1fa318f9` | 08:34:36 |
+| B | `task_e1ad7b180b6c` | `ctx_67ffcc2c0c5a` | 08:35:24 |
+
+Three background Bash waits returned handles `bqnhbh07w`, `bmleujtuf`, and
+`b4xs4a37b`. Each completed through one native notification and an output read
+after that notification. There were no status polls, duplicate watchers, or
+blocking continuation calls. The first quiet interval was about 90–105 seconds;
+the last CLI keepalive reported 90,023 ms. Keepalives are CLI output, not model
+tool calls.
+
+The first wait delivered question `msg_9092d93e749f` in
+`delivery_849cb9ce2a41`, created at 08:34:08 UTC. The coordinator replied
+`U2_PROCEED` in `msg_d7f4af0ae1a4`, then acknowledged on the next wait.
+The second wait delivered A's `msg_c53fd451ce95` in
+`delivery_af8a32e2058e`; the third delivered B's `msg_fb73cbcde051` in
+`delivery_4f85346caf56`. Both releases preceded their Delivery acknowledgements.
+The final acknowledgement started no further worker wait.
+
+After settlement, the 1,000 ms diagnostic returned `timedOut: true`, no Delivery,
+and zero messages. The ordinary command returned exit code 7. Neither result
+received a fabricated acknowledgement. Claude ran those two independent
+diagnostics and the final reclaimable query in parallel, although the fixture
+specified sequential diagnostics. This deviation did not change worker waiting
+or lifecycle ordering. The parent verified both attempts succeeded and both
+resources were released with captured transcripts.
+
+### Codex CLI 0.154.0
+
+Run `run_c070fc6adc2f` used these worker attempts:
+
+| Worker | Task | Dispatch | Release completed, UTC |
+| --- | --- | --- | --- |
+| A | `task_b3004ae6097c` | `ctx_20612b4b104a` | 08:33:13 |
+| B | `task_cd767b449b2e` | `ctx_8949071290ba` | 08:32:29 |
+
+The parent inspected both `worker-show` receipts. Each recorded requested and
+effective model `gpt-5.6-luna` with effort `max`. This establishes the worker
+pair only; the custom coordinator launch still has no equivalent model receipt.
+
+The coordinator reported these native waits and same-handle continuations:
+
+| Native session | Result | Reported elapsed time | Continuation calls |
+| --- | --- | --- | --- |
+| `71388` | A's question | 105,027 ms | 4 |
+| `25243` | B's completion | 45,018 ms | 2 |
+| `54264` | A's completion | 30,010 ms | 1 |
+
+Question `msg_67efa4d9e4e2` arrived in `delivery_d56525927d1a`. Reply
+`msg_0cc853426e11` carried `U2_PROCEED`. B's completion arrived in
+`delivery_a9acdb66f228`; A's completion arrived in `delivery_bb8f7ae267de`.
+The visible trace showed release before acknowledgement for each completion.
+It showed blocking continuation of the same native handles, with no duplicate
+Orca wait or timer-driven status calls. The coordinator kept its turn open
+until both workers settled and the diagnostics finished.
+
+Diagnostic session `26160` timed out after 1,000 ms with zero messages. The
+ordinary command returned exit code 7. Neither supplied a Delivery to acknowledge.
+The final reclaimable query returned no workers. The parent's scoped query
+confirmed both attempts succeeded, resources were released, and transcripts
+were captured. These results establish bounded continuation, not automatic
+Codex wake after a final response.
+
+### Additional pin regression check
+
+The external-checksum regression still assumed Antigravity had only SHA-512.
+It failed with `agy now records a sha256; the sha512-only case must be updated`.
+Commit `7dbc15a` updates the pinned-artifact assertion, preserves a separate
+SHA-512-only fixture, and uses the existing isolated render helper. The full
+checksum regression, `shellcheck -x`, and `git diff --check` passed. Plain
+ShellCheck without `-x` did not follow the sourced helpers; its missing-source
+and unset-scratch reports were invocation errors, not test passes.
+
+Antigravity U2 remains in progress. Neither these two coordinator results nor
+the pin regression completes the three-harness verification requirement.
+
+After the final reports, the parent verified each coordinator incarnation and
+closed its ordinary terminal. Orca returned `ptyKilled: true` for Claude
+`term_22522ec5-b625-49e6-ac80-838f2f8a0127` and Codex
+`term_6fd62148-7ee9-4463-bd33-6214413729f6`. No worker required a further
+ownership decision.
+
+### Antigravity U2 approval checkpoint
+
+The parent created terminal `term_540a0632-f4af-442d-9d12-74430261e7bf`,
+incarnation `f53675aa-aac9-497e-b596-a3fda5866d3c`, through the same isolated
+1.1.28 and fixed-hook recipe. Its TUI reported Antigravity 1.1.28. A tool-free
+preflight reported marker `coordinator-u2-agy-oCVAEB`, the candidate coordinator
+policy, normative everyone injection, and repository supplement in loaded
+context.
+
+The accepted evaluation prompt authorized exactly two read-only Claude workers.
+The coordinator read the repository-local brief and requested access to
+`/home/h82/.agents/skills/orchestration/SKILL.md`. Native file approval remains
+pending before Run creation or dispatch. The parent requested approval for
+that file only and did not select either the one-time or permanent permission.
+This is an operator approval checkpoint, not a failed native wake test or a
+completed U2 result.

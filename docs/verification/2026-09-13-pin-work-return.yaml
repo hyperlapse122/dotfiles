@@ -7,6 +7,9 @@ changed_files:
   - .chezmoiexternals/ai-agents.toml
   - .ci/test-release-lock-digest-gate.sh
   - .ci/test-command-manifest.sh
+  - .ci/check-external-checksum-coverage.sh
+  - .ci/test-check-external-checksum-coverage.sh
+  - .ci/check-release-lock-digests.sh
   - .ci/test-orchestration-hook.sh
   - .github/workflows/ci.yml
   - AGENTS.md
@@ -37,6 +40,7 @@ verification_results:
   - Fixed-binary runtime tracing confirmed ask decisions, native approvals, accepted completion, release, terminal cleanup, and acknowledgement on 1.1.28.
   - Isolated command activation made both agy and antigravity resolve to the verified 1.1.28 artifact.
   - The command-manifest gate passed after updating the stale SHA-512 assumption; an explicit fixture preserves SHA-512 fallback coverage.
+  - The external-checksum regression passed after updating its stale SHA-512 assumption and adding a SHA-512-only fixture; ShellCheck with sourced helpers and diff checks passed.
   - Linux amd64 is runtime-verified. Linux arm64 and both macOS targets are artifact-verified only.
 verification_evidence:
   - unit: U1
