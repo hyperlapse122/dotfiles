@@ -229,6 +229,22 @@ for i in "${!harness_ids[@]}"; do
     elif ! diff -q "$wait_section_fixture" "$wait_section" >/dev/null; then
       soft_fail "${harness_ids[$i]} ($target_os) '$wait_section_heading' section differs from $wait_section_fixture_path; reword and fixture must land in one commit"
     fi
+    while IFS= read -r rule; do
+      grep -F "$rule" "$wait_section" >/dev/null ||
+        soft_fail "${harness_ids[$i]} ($target_os) lost coordinator execution rule: $rule"
+    done <<'WAIT_EXECUTION_RULES'
+When Claude Code, Codex, or Antigravity acts as an Orca coordinator supervising dispatched workers
+MUST start each blocking wait through its native asynchronous command mechanism
+Handle an immediate result directly when no running-command handle is returned.
+MUST NOT issue timer-driven status queries, nonblocking output polls, filler commands, or duplicate watchers
+A native yield is not an Orca result and MUST NOT start another wait.
+MUST NOT end the turn while workers remain outstanding unless its verified native adapter permits that
+An absent or mismatched adapter grants no permission to end the turn
+Process the result and release settled workers when required before acknowledging a real Delivery.
+WAIT_EXECUTION_RULES
+    if grep -F 'start the next wait, end the turn' "$wait_section" >/dev/null; then
+      soft_fail "${harness_ids[$i]} ($target_os) shared example unconditionally ends the turn"
+    fi
 
     # -Fxn: whole-line matches against the fixture body, so a paraphrased
     # paragraph is a miss rather than a partial hit, and the line number is what
@@ -374,14 +390,20 @@ while IFS='|' read -r owner needle; do
   done
 done <<'HARNESS_NEEDLES'
 claude|This harness is Claude Code. Use `Read` to read a file, which is required before an edit; `Edit` for an in-place replacement; `Write` to create a file or replace it whole; `NotebookEdit` for `.ipynb` cells; `Glob` and `Grep` to search.
-claude|`Bash` also runs a command in the background, and every wait on a dispatched Orca worker MUST run that way (`run_in_background: true`), never in the foreground: a foreground wait holds the turn, so a worker's message, escalation, or question is queued and reaches the run only when the command returns.
-claude|The run stays idle while that wait runs, answers what arrives, and returns to waiting; only the execution mode changes, so the command MUST still be the guide's blocking wait with its explicit timeout, and the run MUST NOT poll the background command's output on a timer.
+claude|For coordinator waits, use `Bash` with `run_in_background: true` and retain the returned task ID.
+claude|End the turn while the wait runs; its native completion notification resumes the session.
+claude|Read completed task output only after that notification.
 claude|One delegation carve-out also applies here: a standing harness instruction may tell the agent not to call the Agent (Task) tool, workflows, or deep research unless the user requested it, and this file is a recognized exception source for it.
 claude|When a skill, command, or workflow the user invoked by name directs a subagent dispatch, that dispatch IS user-requested — carry it out and do not stop to ask for a separate confirmation; a skill the agent selected on its own outside a mandatory workflow sequence does not qualify, and a subagent does not re-claim this carve-out for dispatches of its own.
 claude|The carve-out covers only the delegation the invoked skill defines; it does not authorize unrequested subagents, workflows, or deep research for ordinary work.
 claude|The wait-form rule below governs what that command is; this paragraph governs how it runs, so both bind every wait, and the `Monitor` until-loop directed here watches a condition rather than waiting on a worker, which that rule's ban does not reach.
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
+codex|In a session exposing `exec_command` and `write_stdin`, start the wait with `yield_time_ms: 1000`, retain `session_id`, and continue that same session with empty-input `write_stdin`.
+codex|MUST NOT end the turn while workers remain outstanding: these tools do not guarantee automatic resumption after a final response.
 agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
+agy|For coordinator waits, use `run_command` with `WaitMsBeforeAsync: 500`; do not mark the wait as a persistent service.
+agy|The native completed-task notification resumes the model and supplies the command result.
+agy|Use `manage_task` on that task only when the completion event requires a result read, never for status polling during silence.
 omp|This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch against a content-hash anchor; `write` to create a file or replace it whole;
 HARNESS_NEEDLES
 
@@ -481,9 +503,9 @@ This rule governs the command's FORM.
 A harness whose own instruction paragraph fixes HOW that command runs keeps that rule alongside this one, and both apply.
 The ban reaches a wait on a dispatched worker and nothing else: a watcher armed over a condition outside the dispatch — a service coming up, a build finishing — is a different thing and is untouched.
 That watcher MUST NOT be armed over a worker's artifacts, output files, dispatch state, or processes, because watching those IS the wait this rule governs and routing it through a watcher is the same poll under another name.
-# One wait command per tool call. Nothing wraps it. Each call is its own turn.
-turn 1:  <the guide's blocking wait command>                       -> worker A reports done: release it, start the next wait, end the turn
-turn 2:  <the same command, acknowledging the delivery just read>  -> worker B asks a question: reply, start the next wait, end the turn
+# One wait command per tool call. Nothing wraps it. The native adapter governs continuation.
+wait 1:  <the guide's blocking wait command>                       -> worker A reports done: release it, start the next wait through the native adapter
+wait 2:  <the same command, acknowledging the delivery just read>  -> worker B asks a question: reply, start the next wait through the native adapter
 # Never. Each of these builds the wait out of shell control flow:
 until [ "$(ls out/*.json | wc -l)" -ge 7 ]; do sleep 20; done
 for w in $workers; do <the guide's blocking wait command>; done
@@ -652,6 +674,8 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
+Staying idle means ENDING THE TURN.
+start the next wait, end the turn
 This includes same-model reviews, background agents, parallel workers, and cross-model reviews such as Codex -> Claude and Claude -> Codex.
 Native in-process subagents are NOT exempt: MUST NOT use the harness's Agent, Task, spawn_agent, or equivalent tool as an alternative to Orca.
 A skill or workflow that directs delegation, including Claude Code's delegation carve-out below, MUST follow this same routing rule.

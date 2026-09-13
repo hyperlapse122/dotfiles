@@ -301,11 +301,34 @@ status call appeared during the silent interval. This is observed native
 completion-triggered continuation after a final response, not only the earlier
 schema claim.
 
-The reply `orca-ide orchestration reply --id msg_57dc55e0b392 --body
-"U0_RECEIVED" --json` is now at a native permission prompt. Its delivery still
-needs processing and acknowledgement before cleanup. The operator has been
-asked to approve that command and the following acknowledgement separately,
-without persistent permission changes. The retained terminal handle is
-`term_c0c89593-f800-4aab-83f3-00cea02e594f`, incarnation
-`6848c806-e7b6-4b9f-a5a0-3f966db7b050`. U0 result handling remains incomplete;
-the source wait-policy changes have not begun.
+The operator approved the reply and acknowledgement separately. The final
+report names reply `msg_6722e15f4124` at 08:17:27 UTC and acknowledged delivery
+`delivery_d5c91a12a342` at 08:17:30. It identifies the resume event as a native
+high-priority completed-task message carrying exit code 0 and stdout JSON.
+The run used no `manage_task status` calls or timers during silence. The
+diagnostic owner verified incarnation `6848c806-e7b6-4b9f-a5a0-3f966db7b050`
+and closed terminal `term_c0c89593-f800-4aab-83f3-00cea02e594f`; Orca returned
+`ptyKilled: true`.
+
+U0 now establishes the isolated coordinator path and native continuation for
+all three harnesses. Claude and Antigravity can end a turn with a live native
+completion wake; Codex must keep its turn open through blocking continuation.
+The foreground setup and acknowledgement commands also exercised immediate
+results without running-command handles. Timeout and error handling under the
+candidate policy remain U2 checks, not conclusions of these success traces.
+
+## Shared policy implementation
+
+U1 moves the coordinator execution policy to the shared wait section and keeps
+native tool arguments on each harness's existing instruction line. The shared
+examples no longer require an unconditional turn end. The omp adapter is
+unchanged. This unit was integrated inline because it depends on the live U0
+observations and operator-mediated verification; no independent write wave
+exists in the U0, U1, U2 dependency chain.
+
+The strengthened gate first failed on all eight harness/OS renders because the
+shared execution clauses were missing and the examples unconditionally ended
+the turn. After the source and fixture changes, the Linux and macOS render gate,
+ShellCheck, and `git diff --check` passed. The gate checks the shared clauses,
+native adapter isolation, whole-section fixtures, and retired turn-ending text.
+Static checks do not complete U2's runtime scenarios.
