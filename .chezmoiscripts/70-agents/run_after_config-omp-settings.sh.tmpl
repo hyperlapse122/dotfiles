@@ -27,25 +27,27 @@ export PATH
 
 die() { printf 'config-omp-settings: %s\n' "$*" >&2; exit 1; }
 
-# Both preconditions fail OPEN, and the message says so. A missing binary here
+# Both preconditions fail OPEN via declared skips (skip.sh.tmpl). A missing binary here
 # is not proof of a broken host: 65-commands exits 0 without a reconciler binary
 # and swallows every reconcile failure, so omp can be legitimately absent at
 # this phase. This script is run_after_, so it runs on EVERY apply, and chezmoi
 # stops at the first script error -- dying would permanently strand 80-keys and
-# 90-src, which have nothing to do with omp. The sibling
-# run_after_config-claude-settings fails open on the same class of precondition.
+# 90-src, which have nothing to do with omp.
 #
-# What changed is the CLAIM, not the exit: the message now states that the
-# declared settings were NOT asserted, so a skipped host reads as skipped in the
-# apply output instead of as a converged one.
+# Declaring the skips as transient-blocking records them in
+# ${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips so dotfiles-skips reports
+# them, while exiting 0 lets later phases continue (#449). When present, stale
+# skip records are pruned so a converged host reads clean.
 if ! command -v omp >/dev/null 2>&1; then
-  printf '%s\n' 'config-omp-settings: omp is unavailable; declared settings were NOT asserted.' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-omp-settings" "site" "omp-unavailable" "direction" "transient-blocking" "probe" "omp-present" "reason" "omp is unavailable; settings assertion is deferred") | trim | indent 2 }}
 fi
+rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/config-omp-settings__omp-unavailable" 2>/dev/null || true
+
 if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' 'config-omp-settings: jq is unavailable; declared settings were NOT asserted.' >&2
-  exit 0
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "config-omp-settings" "site" "jq-unavailable" "direction" "transient-blocking" "probe" "jq-present" "reason" "jq is unavailable; settings assertion is deferred") | trim | indent 2 }}
 fi
+rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/config-omp-settings__jq-unavailable" 2>/dev/null || true
+
 
 scratch="${XDG_RUNTIME_DIR:-$HOME/.cache}/chezmoi-omp-settings"
 mkdir -p "$scratch"
