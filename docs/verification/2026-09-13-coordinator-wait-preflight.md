@@ -5,7 +5,11 @@ Plan: [Coordinator background waits](../plans/2026-09-13-1424-refactor-coordinat
 ## Current gate
 
 U0 is incomplete. Do not start U1 or claim cross-harness behavior from these checks.
-No candidate instructions have been deployed. The coordinator plan's U1 and U2 have not run. The separate pin plan's U1 is committed locally, but its U2 runtime gate failed. Review, PR creation, and shipping have not run.
+No candidate instructions have been deployed. The coordinator plan's U1 and U2 have not run. The separate pin plan's U1 is committed locally. Its candidate hook and supervised lifecycle checks now pass after the compatibility repair below. Review, PR creation, and shipping have not run.
+
+The user authorized the compatibility repair. The missing Antigravity guard decision
+is now fixed in source, with passing regression tests and a successful isolated
+supervised lifecycle. Native permission checks remain in force.
 
 ## Confirmed observations
 
@@ -102,3 +106,77 @@ The retry was abandoned after its explicit final failure report. Release perform
 Commit `edeb1a0` implements pin-plan U1. The selected generator changed only `agy` in the lock; a full scratch refresh also advanced three unrelated tools and was not installed. All four official archive URL and SHA-256 renders passed. Parent-run package verification passed 507 tests across five packages, `vp check`, and recursive type checks after `vp install --frozen-lockfile`. The CI wiring regression passed.
 
 For U2, the updater declaration test first failed because the Linux environment setting was absent. After adding source declarations for Linux desktop processes and common zsh startup, the test passed for both unset and inherited-false shell values and confirmed export to child processes. ShellCheck and the CI wiring regression passed. These are source checks, not live deployment or macOS runtime proof.
+
+## Pre-tool decision compatibility
+
+The user authorized resolving the remaining blocker. A fresh isolated 1.1.28
+terminal traced only handler arguments and response keys. PreInvocation called
+`hook --harness agy` and received `injectSteps`. PreToolUse called
+`guard --harness agy` and received `{}`. This rules out the proposed handler mix-up
+for this reproduction. A denial message containing injected instructions was not
+reliable evidence of the handler that ran.
+
+The [official hook contract](https://antigravity.google/docs/hooks) requires a
+PreToolUse `decision`. `ask` respects existing permission grants; `allow` overrides
+native approval. Orca's installed Antigravity status hook also returns `ask` for
+PreToolUse. The dotfiles guard incorrectly assumed `{}` was neutral on every
+harness.
+
+The first `printf ORCA_BOUNDARY_OK` attempt received a hard pre-tool denial. Changing
+only the isolated adapter's `{}` response to `{"decision":"ask"}` made the same
+command reach Antigravity's native approval screen. The run did not approve the
+command or change permission settings. This demonstrates the decision-parser
+boundary, not successful execution or a completed worker lifecycle.
+
+The source fix returns `ask` on Antigravity's non-denial paths, including malformed
+input, outside-Orca operation, and internal errors. Claude and Codex retain `{}`;
+forbidden launches retain `deny`. Three regression tests failed against the old
+implementation, then all 159 hook tests passed. The compiled-binary gate,
+formatting, lint, and type checks passed. The initial root-directory test command
+failed to load template imports; the package-local Vite configuration was required.
+
+The previous test suite checked the binary response against an incorrect expected
+shape. It did not test Antigravity's interpretation of that shape. The native
+counterfactual supplies that missing evidence. A fresh compiled source binary is
+ready in the diagnostic directory, with the response-rewriting adapter removed.
+No live files were deployed by this run.
+
+The operator approved `printf ORCA_BOUNDARY_OK`; it printed the expected marker
+and exited 0. The subsequent lifecycle probe reached native permission checks,
+but its source-binary provenance failed. The host hook changed from build
+`44795880346123b9` to `7ed84a2f5e2c8283`, with modification time 16:40:08 local.
+The child mount table no longer contained the trace-hook bind, and its hook path
+resolved to the host binary. The trace log had no entries for the lifecycle
+probe. The cause of the host replacement is not established. Neither approval
+nor a worker success report can prove the candidate ran in this state.
+
+Dispatch `ctx_661fb842864e` also copied bare `orca` from the injected preamble.
+The coordinator canceled that pending command before execution, sent a durable
+executable correction, and resumed the same dispatch with `orca-ide`. The inbox
+command then completed after operator approval. Its `worker_done` was accepted
+as `msg_c0a683dc2df0`. Release returned `external_terminal`, so the diagnostic
+owner verified the terminal identity and closed it. Orca confirmed `ptyKilled:
+true`; delivery `delivery_77745ce73ab9` was then acknowledged. No worker remained
+reclaimable. This settles the dispatch but does not prove candidate execution.
+
+A fresh isolated terminal instead binds a test declaration at the installed
+plugin's hooks path inside the temporary Gemini overlay. Both events call the
+fixed wrapper by its absolute temporary path, not through the mutable host hook
+path. The wrapper executes the compiled source binary without rewriting its
+response. A tool-free request produced a new `hook --harness agy` trace with
+`injectSteps`; the model reported a separate normative block. The candidate
+binary SHA-256 is `9c6d131ba85d05da18d7bf84ee2ce461d42812f8dc04e3920d39ad66f031d0f2`.
+
+Dispatch `ctx_592693e0f561` completed its inbox check and sent `worker_done`
+`msg_030d169844a3` after the operator approved both commands. Each command produced
+a new `guard --harness agy` trace with `decision: ask`; model invocations produced
+`injectSteps`. The compiled binary retained the SHA-256 above. This verifies the
+source fix through Antigravity's native `run_command`, not only through direct
+binary tests. The unchanged deny path remains covered by the real-binary gate;
+the runtime probe never launched a forbidden peer.
+
+Release returned `retained`, `external_terminal`, and `processAction: none`.
+The follow-up query confirmed `completed` and `settled` with no residual resources.
+The diagnostic owner closed the exact terminal, and Orca confirmed `ptyKilled:
+true`. Delivery `delivery_a8db962a0483` was then acknowledged. No dispatch remained
+reclaimable. The live plugin declaration retained its original hash.

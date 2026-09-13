@@ -31,9 +31,11 @@ of steps to inject, so the whole envelope rides in one ephemeral step and is re-
 each time. That repetition is the cost of never leaving a lead holding half a rule set —
 an envelope that could not be composed at one opportunity lands whole at the next.
 
-The gate answers in each harness's own decision document. It denies in that shape and
-otherwise says nothing at all: on Antigravity an explicit allow would override that
-harness's own permission prompt, turning a launch gate into blanket auto-approval.
+The gate denies launches in each harness's decision format. Other paths return `{}`
+for Claude Code and Codex. Antigravity requires a `decision`, so these paths return
+`{"decision":"ask"}`. This preserves native permission checks and existing grants.
+An explicit `allow` would bypass those checks. Antigravity 1.1.28 rejects `{}` instead
+of treating it as a neutral response. See the [hook contract](https://antigravity.google/docs/hooks).
 
 ## Payload bodies
 

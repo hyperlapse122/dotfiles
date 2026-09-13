@@ -207,22 +207,11 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
   return 0;
 }
 
-/**
- * What a harness receives from `guard` when nothing is denied.
- *
- * `{}` on every harness, not `emptyOutput`'s empty string for Codex.
- * SessionStart treats bare Codex stdout as model context, which is why that
- * path emits nothing; a tool-use response is parsed as a decision document
- * instead, and an empty body risks a deserialization error on a path that must
- * never fail loudly. `{}` is "no decision" everywhere.
- *
- * Antigravity would also accept an explicit allow here, and it must not get
- * one: an allow from a hook overrides that harness's own permission prompt, so
- * this gate would quietly auto-approve every tool call it did not deny. Saying
- * nothing leaves the user's permission rules to decide.
- */
-function guardAllowOutput(): string {
-  return "{}";
+// Antigravity requires a decision. `ask` respects existing permission grants;
+// `allow` overrides them, and 1.1.28 rejects an empty decision document.
+// https://antigravity.google/docs/hooks
+function guardAllowOutput(harness: Harness | null): string {
+  return harness === "agy" ? JSON.stringify({ decision: "ask" }) : "{}";
 }
 
 /**
@@ -299,12 +288,12 @@ async function runGuard(argv: readonly string[], io: Io): Promise<number> {
 
   // An unnamed harness still drained stdin first, for the same reason.
   if (harness === null || !gated || typeof parsed !== "object" || parsed === null) {
-    io.stdout(guardAllowOutput());
+    io.stdout(guardAllowOutput(harness));
     return 0;
   }
 
   const decision = decide(parsed as ToolEvent, io.env);
-  io.stdout(decision.deny ? guardDenyOutput(harness, decision.reason) : guardAllowOutput());
+  io.stdout(decision.deny ? guardDenyOutput(harness, decision.reason) : guardAllowOutput(harness));
   return 0;
 }
 
@@ -356,7 +345,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     } catch {
       // Fail open: this path runs on every tool call, so an internal fault must
       // never turn into a denied or broken tool call.
-      io.stdout(guardAllowOutput());
+      io.stdout(guardAllowOutput(requestedHarness(rest)));
       return 0;
     }
   }
