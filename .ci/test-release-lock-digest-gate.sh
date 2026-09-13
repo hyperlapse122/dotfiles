@@ -176,14 +176,21 @@ jq -e '
     and (.artifacts | keys == ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"])
 ' "$lock" >/dev/null || fail 'the committed lock does not contain the reviewed official 1.1.28 pin'
 
-scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
-mkdir -p "$scratch_parent"
-scratch=$(mktemp -d "$scratch_parent/release-lock-render.XXXXXX")
-trap 'rm -rf -- "$scratch"' EXIT
-mkdir -p "$scratch/home" "$scratch/bin" "$scratch/target"
-printf '[data]\n' >"$scratch/empty.toml"
-printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
-chmod 0700 "$scratch/bin/op"
+# shellcheck source=.ci/lib/render-scratch.sh
+source "$repo_root/.ci/lib/render-scratch.sh"
+setup_render_scratch release-lock-render
+mkdir -p "$scratch/home"
+case_name=exact-pin-generated-digests
+[ -n "$BUN_BIN" ] || fail 'bun is required to verify generated exact-pin digests'
+"$BUN_BIN" "$fixtures/resolve-exact-pin.ts" "$scratch" || fail 'exact-pin fixture generation failed'
+for digest_case in absent malformed; do
+  case_name="exact-pin-$digest_case-digest"
+  rc=0
+  run_gate "$scratch/$digest_case.json" || rc=$?
+  [ "$rc" -eq 1 ] || fail "expected exit 1, got exit $rc"
+  [[ "$out" == *'pinned linux-amd64: no valid sha256 or sha512'* ]] || fail 'missing generated digest diagnostic'
+  pass "$case_name is rejected after resolver and CLI generation"
+done
 chezmoi_bin=$(command -v chezmoi)
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"

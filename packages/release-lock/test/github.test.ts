@@ -323,6 +323,22 @@ describe("resolveGitHubRelease tagPrefix", () => {
     expect(locked.version).toBe("rust-v0.153.4");
   });
 
+  test("skips malformed release shapes before selecting a stable prefixed release", async () => {
+    globalThis.fetch = async () =>
+      Response.json([
+        null,
+        { tag_name: 42, assets: [] },
+        { tag_name: "v2" },
+        { tag_name: "v1", assets: [] },
+      ]);
+    const locked = await resolveGitHubRelease(
+      "tool",
+      { kind: "githubRelease", source: "owner/repo", tagPrefix: "v" },
+      undefined,
+    );
+    expect(locked.version).toBe("v1");
+  });
+
   test("no release matching the prefix fails with the source named", async () => {
     stubReleaseList(["marketplace-v1.0.3", "cli-v3.13.1"]);
 

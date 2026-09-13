@@ -25,6 +25,21 @@ interface GitHubRelease {
   readonly draft?: boolean;
 }
 
+function isRelease(value: unknown): value is GitHubRelease {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "tag_name" in value &&
+    typeof value.tag_name === "string" &&
+    "assets" in value &&
+    Array.isArray(value.assets)
+  );
+}
+
+function isStableRelease(value: unknown): value is GitHubRelease {
+  return isRelease(value) && value.draft !== true && value.prerelease !== true;
+}
+
 export function authHeaders(token: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     accept: "application/vnd.github+json",
@@ -80,11 +95,11 @@ async function fetchExactRelease(
   token: string | undefined,
 ): Promise<GitHubRelease> {
   const path = `releases/tags/${encodeURIComponent(exactTag)}`;
-  const release = (await fetchReleaseJson(source, path, path, token)) as GitHubRelease | null;
-  if (!release || release.tag_name !== exactTag || !Array.isArray(release.assets)) {
+  const release = await fetchReleaseJson(source, path, path, token);
+  if (!isRelease(release) || release.tag_name !== exactTag) {
     throw new ResolutionError(source, `${path} response must contain tag ${exactTag} and assets`);
   }
-  if (release.draft === true || release.prerelease === true) {
+  if (!isStableRelease(release)) {
     throw new ResolutionError(source, `${path} is not a stable published release`);
   }
   return release;
@@ -114,12 +129,7 @@ export async function fetchLatestReleaseByPrefix(
     throw new ResolutionError(source, "releases response is not a list");
   }
   const release = releases.find(
-    (candidate) =>
-      typeof candidate.tag_name === "string" &&
-      candidate.tag_name.startsWith(tagPrefix) &&
-      candidate.prerelease !== true &&
-      candidate.draft !== true &&
-      Array.isArray(candidate.assets),
+    (candidate) => isStableRelease(candidate) && candidate.tag_name.startsWith(tagPrefix),
   );
   if (!release) {
     throw new ResolutionError(source, `no stable release tag carries the prefix "${tagPrefix}"`);

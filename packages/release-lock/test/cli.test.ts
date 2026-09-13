@@ -1,8 +1,6 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { DEFAULT_LOCK_PATH, runCli } from "../src/cli.js";
 import { resolveGitHubRelease } from "../src/github.js";
@@ -288,7 +286,7 @@ describe("runCli", () => {
   });
 
   test.each([null, "sha256:nothex"])(
-    "the digest gate rejects an exact release with digest %j after CLI resolution",
+    "CLI resolution records a null checksum for exact release digest %j",
     async (digest) => {
       const path = join(await scratch(), "releases.json");
       globalThis.fetch = (async () =>
@@ -313,12 +311,8 @@ describe("runCli", () => {
           resolve: () => resolveAll(undefined, registry),
         }),
       ).toBe(0);
-      const gate = fileURLToPath(
-        new URL("../../../.ci/check-release-lock-digests.sh", import.meta.url),
-      );
-      const result = spawnSync("bash", [gate, path], { encoding: "utf8" });
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain("pinned linux-amd64: no valid sha256 or sha512");
+      const lock = JSON.parse(await readFile(path, "utf8")) as ReleaseLock;
+      expect(lock.releases.tools["pinned"]?.artifacts?.["linux-amd64"]?.sha256).toBeNull();
     },
   );
 
