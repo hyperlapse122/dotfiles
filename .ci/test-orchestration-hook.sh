@@ -359,8 +359,17 @@ agy_plain=$(jq -nc '{toolCall:{name:"run_command",args:{CommandLine:"echo hi"}}}
 # shellcheck disable=SC2086
 out=$(printf '%s' "$agy_plain" \
   | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness agy)
-[[ $out == '{}' ]] || fail "agy: a command the gate does not deny must decide nothing (got: $out)"
-pass 'the gate declines to decide rather than auto-approving what it does not deny'
+[[ $out == '{"decision":"ask"}' ]] || fail "agy: a benign command must preserve native permission checks (got: $out)"
+pass 'the gate preserves native permission checks without auto-approval'
+
+out=$(run_guard agy "" 'codex exec x')
+[[ $out == '{"decision":"ask"}' ]] || fail "agy: outside Orca the gate must preserve native permission checks (got: $out)"
+for body in '' 'not json' 'null' '[1,2,3]'; do
+  # shellcheck disable=SC2086
+  out=$(printf '%s' "$body" | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness agy)
+  [[ $out == '{"decision":"ask"}' ]] || fail "agy: malformed input must preserve native permission checks (got: $out)"
+done
+pass 'Antigravity receives its required decision on fail-open paths'
 
 out=$(run_guard claude "$WORKER_ENV" 'codex exec x')
 [[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') == deny ]] \

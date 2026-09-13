@@ -1,17 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { resolveAll } from "./resolve-all.js";
+import { REGISTRY } from "./registry.js";
 import { mergeLocks, pruneRetiredPlatforms, readLock, serializeLock, writeLock } from "./lock.js";
-import type { ReleaseLock } from "./types.js";
-
-/**
- * CLI entry — resolves every registered tool into the release lock.
- *
- * Plain invocation atomically refreshes the repository lock. `--out <path>`
- * refreshes another destination, while `--stdout` prints a merged inspection
- * result without writing. A partial resolution overlays the prior lock; a clean
- * resolution is authoritative and prunes retired tools. Every run also drops
- * retired platform keys from each surviving tool's `artifacts` map.
- */
 
 export const DEFAULT_LOCK_PATH = fileURLToPath(
   new URL("../../../.chezmoidata/releases.json", import.meta.url),
@@ -30,36 +20,56 @@ interface CliOptions {
   defaultPath?: string;
   stdout?: Writable;
   stderr?: Writable;
-  resolve?: (token: string | undefined) => Promise<{ lock: ReleaseLock; failures: string[] }>;
+  resolve?: typeof resolveAll;
 }
 
 type Output = { kind: "file"; path: string } | { kind: "stdout"; path: string };
 
-function outputFor(argv: readonly string[], defaultPath: string): Output | null {
-  if (argv.length === 0) return { kind: "file", path: defaultPath };
-  if (argv.length === 1 && argv[0] === "--stdout") {
-    return { kind: "stdout", path: defaultPath };
+function argumentsFor(
+  argv: readonly string[],
+  defaultPath: string,
+): { output: Output; only: string | undefined } | null {
+  let output: Output | undefined;
+  let only: string | undefined;
+  for (let index = 0; index < argv.length; index++) {
+    const flag = argv[index];
+    if (flag === "--stdout") {
+      if (output) return null;
+      output = { kind: "stdout", path: defaultPath };
+    } else if (flag === "--out" || flag === "--only") {
+      const value = argv[++index];
+      if (!value || value.startsWith("--")) return null;
+      if (flag === "--out") {
+        if (output) return null;
+        output = { kind: "file", path: value };
+      } else {
+        if (only !== undefined || !Object.hasOwn(REGISTRY, value)) return null;
+        only = value;
+      }
+    } else {
+      return null;
+    }
   }
-  const destination = argv[1];
-  if (argv.length === 2 && argv[0] === "--out" && destination && !destination.startsWith("--")) {
-    return { kind: "file", path: destination };
-  }
-  return null;
+  return { output: output ?? { kind: "file", path: defaultPath }, only };
 }
 
 export async function runCli(argv: readonly string[], options: CliOptions = {}): Promise<number> {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
-  const output = outputFor(argv, options.defaultPath ?? DEFAULT_LOCK_PATH);
-  if (!output) {
-    stderr.write("Usage: release-lock [--out <path> | --stdout]\n");
+  const args = argumentsFor(argv, options.defaultPath ?? DEFAULT_LOCK_PATH);
+  if (!args) {
+    stderr.write("Usage: release-lock [--only <registered-tool>] [--out <path> | --stdout]\n");
     return 2;
   }
 
+  const { output, only } = args;
+  const registry = only === undefined ? REGISTRY : { [only]: REGISTRY[only]! };
   const existing = await readLock(output.path);
-  const { lock, failures } = await (options.resolve ?? resolveAll)(githubToken());
-  const merged = failures.length === 0 ? lock : mergeLocks(existing, lock);
-  const complete = pruneRetiredPlatforms(merged);
+  const { lock, failures } = await (options.resolve ?? resolveAll)(githubToken(), registry);
+  const complete =
+    only === undefined
+      ? pruneRetiredPlatforms(failures.length === 0 ? lock : mergeLocks(existing, lock))
+      : mergeLocks(existing, pruneRetiredPlatforms(lock));
 
   for (const failure of failures) stderr.write(`release-lock: ${failure}\n`);
 

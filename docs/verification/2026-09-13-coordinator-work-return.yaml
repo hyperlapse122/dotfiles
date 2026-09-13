@@ -1,0 +1,90 @@
+status: complete
+plan_path: docs/plans/2026-09-13-1424-refactor-coordinator-background-waits-plan.md
+source_kind: plan
+source_digest: sha256:e7e30ebfd9261156d81bcc40aba1dd7e9cba482c0d0983ebcf1dd03505c5ea0b
+changed_files:
+  - .chezmoitemplates/agents-instructions.tmpl
+  - .ci/test-agent-instructions.sh
+  - .ci/fixtures/agent-instructions/waiting-on-dispatched-workers.txt
+  - .ci/fixtures/agent-instructions/harness-is-claude.txt
+  - .ci/fixtures/agent-instructions/harness-is-codex.txt
+  - .ci/fixtures/agent-instructions/harness-is-agy.txt
+  - docs/verification/2026-09-13-coordinator-wait-preflight.md
+  - docs/verification/coordinator-wait-u2/coordinator.md
+  - docs/verification/coordinator-wait-u2/worker-a.md
+  - docs/verification/coordinator-wait-u2/worker-b.md
+u_ids_attempted: [U0, U1, U2]
+u_ids_completed: [U0, U1, U2]
+verification_results:
+  - U0 verified same-precedence isolated instructions and native continuation on all three tested harness versions.
+  - U1 passed all four harness renders on Linux and macOS. The omp fixture remained unchanged.
+  - U2 completed two workers per coordinator, including question/reply, release before acknowledgement, and post-settlement timeout/error handling.
+  - All six U2 workers were released and all three ordinary coordinator terminals were closed with positive PTY-exit receipts.
+  - Claude and Antigravity resumed through native completion notifications. Codex kept its turn open with same-handle blocking continuation.
+  - No live deployment occurred. These observations do not establish behavior for other versions or interrupted sessions.
+verification_evidence:
+  - unit: U0
+    behavior_changed: false
+    existing_tests_inspected: isolated instruction render helper and installed native command schemas
+    tests_added_or_changed: none
+    tests_used_unchanged: isolated render helper
+    red_observation: Initial whole-home isolation hid Orca IPC. Preserving native IPC paths enabled coordinator Run creation without host deployment.
+    commands: isolated Orca terminal launches, context-marker reports, canonical waits, synthetic question delivery, reply and acknowledgement
+    result: Three native continuation mechanisms verified and recorded in the preflight artifact.
+    exception_reason: Native model wake requires runtime observation. Unit tests cannot establish it.
+  - unit: U1
+    behavior_changed: true
+    existing_tests_inspected: .ci/test-agent-instructions.sh and whole-section/harness fixtures
+    tests_added_or_changed: shared-policy assertions, native-adapter isolation, unconditional-turn-ending rejection, and four fixtures
+    tests_used_unchanged: omp fixture and common lifecycle assertions
+    red_observation: Strengthened assertions failed on all eight renders before the shared policy was implemented.
+    commands: [bash .ci/test-agent-instructions.sh, shellcheck, git diff --check]
+    result: All eight renders passed. The omp instructions have no coordinator adapter.
+    exception_reason: null
+  - unit: U2
+    behavior_changed: false
+    existing_tests_inspected: U2 scenarios and U0 native continuation traces
+    tests_added_or_changed: read-only coordinator and worker fixture briefs
+    tests_used_unchanged: instruction gate and candidate U1 user-scope renders
+    red_observation: Runtime characterization with no production change in this unit.
+    commands: isolated coordinator Runs run_78242612ec75, run_c070fc6adc2f, and run_118b865f9c89, followed by parent worker-list checks
+    result: Three waits per coordinator handled question and completions, then both workers were released. Timeout and exit-7 diagnostics produced no fake acknowledgements.
+    exception_reason: Manual runtime evidence replaces unit coverage for native wake. Claude parallelized independent post-settlement diagnostics. Codex preparation returned EROFS but both worker starts succeeded.
+implementation_engine_binding: null
+requested_route: native goal execution with Orca-managed runtime evaluations
+actual_route: parent source integration and isolated Claude, Codex, and Antigravity coordinators
+requested_model: null
+actual_model: unverified
+fallback_reason: null
+run_id: run_9c695a1bce17
+unit_receipts:
+  - unit: U0
+    route: isolated Orca coordinator terminals
+    model: unverified
+    detached_process: false
+    integration: parent-recorded native mechanism evidence
+    verification: passed
+    canonical_commit: 70048bc
+    cleanup: all U0 diagnostic coordinator terminals closed
+  - unit: U1
+    route: parent inline integration
+    model: unverified
+    detached_process: false
+    integration: source template, assertions, and fixtures
+    verification: passed
+    canonical_commit: f94900c
+    cleanup: no worker owned by this source-edit unit
+  - unit: U2
+    route: three isolated Orca coordinators and six read-only Orca workers
+    model: coordinator identities unverified. Both Codex worker receipts verified Luna/max.
+    detached_process: false
+    integration: sanitized runtime evidence and fixture briefs
+    verification: passed on Claude 2.1.270, Codex 0.154.0, and Antigravity 1.1.28
+    canonical_commit: 2a49aaa
+    cleanup: six workers released and three coordinator terminals closed
+plan_checkpoint: null
+blockers: []
+recovery_path: null
+settled_decision_conflicts: []
+behavior_change: true
+standalone_shipping_skipped: true

@@ -76,9 +76,7 @@ accepts accept-sha256.json 'a valid sha256 alone is accepted'
 accepts accept-sha512-with-malformed-sha256.json 'a valid sha512 carries an artifact whose sha256 is malformed'
 accepts accept-sha256-with-malformed-sha512.json 'a valid sha256 carries an artifact whose sha512 is malformed'
 
-# The regression this suite exists for: the antigravity vendor manifest
-# publishes no sha256, so `agy` carries a null sha256 beside a real sha512 and
-# chezmoi verifies it through `[agy.checksum] sha512`.
+# The retained antigravity vendor resolver publishes only SHA-512.
 accepts accept-sha512-only.json 'a valid sha512 with a null sha256 is accepted'
 
 # 1Password's arm64 tarball genuinely publishes no digest; its integrity comes
@@ -168,5 +166,68 @@ case_name=committed-lock
 out=
 run_gate "$lock" || fail 'the committed release lock does not pass the gate'
 pass 'the committed .chezmoidata/releases.json passes'
+
+case_name=agy-exact-pin
+jq -e '
+  .releases.tools.agy
+  | .kind == "githubRelease"
+    and .source == "google-antigravity/antigravity-cli"
+    and .version == "1.1.28"
+    and (.artifacts | keys == ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"])
+' "$lock" >/dev/null || fail 'the committed lock does not contain the reviewed official 1.1.28 pin'
+
+# shellcheck source=.ci/lib/render-scratch.sh
+source "$repo_root/.ci/lib/render-scratch.sh"
+setup_render_scratch release-lock-render
+mkdir -p "$scratch/home"
+case_name=exact-pin-generated-digests
+[ -n "$BUN_BIN" ] || fail 'bun is required to verify generated exact-pin digests'
+"$BUN_BIN" "$fixtures/resolve-exact-pin.ts" "$scratch" || fail 'exact-pin fixture generation failed'
+for digest_case in absent malformed; do
+  case_name="exact-pin-$digest_case-digest"
+  rc=0
+  run_gate "$scratch/$digest_case.json" || rc=$?
+  [ "$rc" -eq 1 ] || fail "expected exit 1, got exit $rc"
+  [[ "$out" == *'pinned linux-amd64: no valid sha256 or sha512'* ]] || fail 'missing generated digest diagnostic'
+  pass "$case_name is rejected after resolver and CLI generation"
+done
+chezmoi_bin=$(command -v chezmoi)
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
+
+for os in linux darwin; do
+  for arch in amd64 arm64; do
+    case_name="agy-render-$os-$arch"
+    printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/external.tmpl"
+    cat "$repo_root/.chezmoiexternals/ai-agents.toml" >>"$scratch/external.tmpl"
+    render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$scratch/external.tmpl" "$scratch/external.toml"
+    rendered=$(sed -n '/^\[agy\]$/,/^\[agent-browser\]$/p' "$scratch/external.toml")
+    url=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].url' "$lock")
+    digest=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].sha256' "$lock")
+    asset_os=$os
+    [ "$os" != darwin ] || asset_os=mac
+    asset_arch=$arch
+    [ "$arch" != amd64 ] || asset_arch=x64
+    [ "$url" = "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/agy_cli_${asset_os}_${asset_arch}.tar.gz" ] || fail 'unexpected official archive URL'
+    [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || fail 'missing or invalid SHA-256'
+    [[ "$rendered" == *"url = '$url'"* ]] || fail 'external URL differs from lock'
+    [[ "$rendered" == *"sha256 = '$digest'"* ]] || fail 'external does not consume the locked SHA-256'
+    [[ "$rendered" != *sha512* ]] || fail 'external still consumes SHA-512'
+    pass "$case_name consumes the official archive and SHA-256"
+  done
+done
+
+case_name=agy-native-updater-control
+[[ $(grep -cx 'AGY_CLI_DISABLE_AUTO_UPDATE=true' "$repo_root/dot_config/environment.d/60-development.conf") == 1 ]] || fail 'Linux desktop environment must disable the native updater'
+for inherited in unset false; do
+  env -u AGY_CLI_DISABLE_AUTO_UPDATE ZDOTDIR="$scratch/home" zsh -dfc '
+    mise() { printf ":"; }
+    if [[ "$2" != unset ]]; then export AGY_CLI_DISABLE_AUTO_UPDATE="$2"; fi
+    source "$1"
+    [[ "$AGY_CLI_DISABLE_AUTO_UPDATE" == true ]]
+    [[ "${(t)AGY_CLI_DISABLE_AUTO_UPDATE}" == *export* ]]
+  ' -- "$repo_root/dot_config/zsh/dot_zshenv" "$inherited" || fail "shell updater control failed with inherited $inherited"
+done
+pass 'desktop and shell environments disable the native updater'
 
 printf 'release-lock digest gate: all cases passed\n'

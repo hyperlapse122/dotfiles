@@ -10,15 +10,6 @@ import type { LockedArtifact, LockedTool, ToolSpec } from "./types.js";
 
 export { ResolutionError };
 
-/**
- * GitHub release resolution.
- *
- * One `releases/latest` call yields the tag and, for every asset, its name,
- * download URL, and sha256 digest. That digest is why the refresh never has to
- * download an artifact to checksum it — a linux runner can lock darwin entries
- * from the same response.
- */
-
 interface GitHubAsset {
   readonly name: string;
   readonly browser_download_url: string;
@@ -29,9 +20,24 @@ interface GitHubAsset {
 interface GitHubRelease {
   readonly tag_name: string;
   readonly assets: readonly GitHubAsset[];
-  /** Set on the release-list entries; `releases/latest` never returns one flagged. */
+  /** Tag and list endpoints can return unstable releases. */
   readonly prerelease?: boolean;
   readonly draft?: boolean;
+}
+
+function isRelease(value: unknown): value is GitHubRelease {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "tag_name" in value &&
+    typeof value.tag_name === "string" &&
+    "assets" in value &&
+    Array.isArray(value.assets)
+  );
+}
+
+function isStableRelease(value: unknown): value is GitHubRelease {
+  return isRelease(value) && value.draft !== true && value.prerelease !== true;
 }
 
 export function authHeaders(token: string | undefined): Record<string, string> {
@@ -83,6 +89,22 @@ export async function fetchLatestRelease(
   return release;
 }
 
+async function fetchExactRelease(
+  source: string,
+  exactTag: string,
+  token: string | undefined,
+): Promise<GitHubRelease> {
+  const path = `releases/tags/${encodeURIComponent(exactTag)}`;
+  const release = await fetchReleaseJson(source, path, path, token);
+  if (!isRelease(release) || release.tag_name !== exactTag) {
+    throw new ResolutionError(source, `${path} response must contain tag ${exactTag} and assets`);
+  }
+  if (!isStableRelease(release)) {
+    throw new ResolutionError(source, `${path} is not a stable published release`);
+  }
+  return release;
+}
+
 /**
  * The newest stable release whose tag carries `tagPrefix`, from one
  * release-list call. KTD10: a repo that interleaves several tag trains
@@ -107,12 +129,7 @@ export async function fetchLatestReleaseByPrefix(
     throw new ResolutionError(source, "releases response is not a list");
   }
   const release = releases.find(
-    (candidate) =>
-      typeof candidate.tag_name === "string" &&
-      candidate.tag_name.startsWith(tagPrefix) &&
-      candidate.prerelease !== true &&
-      candidate.draft !== true &&
-      Array.isArray(candidate.assets),
+    (candidate) => isStableRelease(candidate) && candidate.tag_name.startsWith(tagPrefix),
   );
   if (!release) {
     throw new ResolutionError(source, `no stable release tag carries the prefix "${tagPrefix}"`);
@@ -132,9 +149,20 @@ export async function resolveGitHubRelease(
   spec: ToolSpec,
   token: string | undefined,
 ): Promise<LockedTool> {
-  const release = spec.tagPrefix
-    ? await fetchLatestReleaseByPrefix(spec.source, spec.tagPrefix, token)
-    : await fetchLatestRelease(spec.source, token);
+  if (spec.exactTag !== undefined) {
+    if (spec.tagPrefix !== undefined) {
+      throw new ResolutionError(spec.source, "exactTag and tagPrefix cannot be combined");
+    }
+    if (spec.exactTag.trim().length === 0) {
+      throw new ResolutionError(spec.source, "exactTag must not be empty");
+    }
+  }
+  const release =
+    spec.exactTag !== undefined
+      ? await fetchExactRelease(spec.source, spec.exactTag, token)
+      : spec.tagPrefix
+        ? await fetchLatestReleaseByPrefix(spec.source, spec.tagPrefix, token)
+        : await fetchLatestRelease(spec.source, token);
   const tag = release.tag_name;
 
   if (!spec.asset) {

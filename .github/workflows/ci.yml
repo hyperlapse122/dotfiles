@@ -274,8 +274,20 @@ jobs:
       # test-ci-wiring.sh parses the workflows as YAML; the runner image is not
       # assumed to ship PyYAML. `-` because a library package has no binary to
       # probe.
-      - name: Install PyYAML
-        run: .ci/lib/apt-install.sh - python3-yaml
+      - name: Install PyYAML and zsh for repository gates
+        run: |
+          .ci/lib/apt-install.sh - python3-yaml zsh
+          command -v zsh >/dev/null
+      - name: Install locked chezmoi
+        run: |
+          set -euo pipefail
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' .chezmoidata/releases.json)
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' .chezmoidata/releases.json)
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Run repository meta gates
         run: |
           set -euo pipefail

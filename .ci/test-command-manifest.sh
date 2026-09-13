@@ -6,23 +6,35 @@ scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/command-manifest.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
-mkdir -p "$scratch/bin" "$scratch/target"
+mkdir -p "$scratch/bin" "$scratch/home" "$scratch/target"
+printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
+chezmoi_bin=$(command -v chezmoi)
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 fail() { printf 'command manifest: %s\n' "$*" >&2; exit 1; }
 
-render() {
+render_source() {
+  local src="$1" os="$2" arch="$3" tmpl="$4" musl="${5:-false}"
+  printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/input.tmpl"
+  if [[ "$musl" == true ]]; then
+    printf '{{- $_ := set . "renderOverrides" (dict "muslLinux" true) -}}\n' >>"$scratch/input.tmpl"
+  fi
+  printf '%s' "$tmpl" >>"$scratch/input.tmpl"
+  render "$src" "$scratch" "$chezmoi_bin" "$os" "$scratch/input.tmpl" "$scratch/output.txt" || return
+  cat "$scratch/output.txt"
+}
+
+render_platform() {
   local os="${1:-linux}"
   local arch="amd64"
   if [[ "$os" == "macos" ]]; then
     os="darwin"
     arch="arm64"
   fi
-  printf '%s' '{{ includeTemplate "command-manifest.tmpl" . }}' | \
-    env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
-      --override-data "{\"chezmoi\":{\"os\":\"$os\",\"arch\":\"$arch\"}}" \
-      execute-template
+  render_source "$repo_root" "$os" "$arch" '{{ includeTemplate "command-manifest.tmpl" . }}'
 }
 
 make_fixture() {
@@ -57,7 +69,7 @@ rejects() {
   fix=$(make_fixture "$name")
   mutate "$fix" "$pattern" "$replacement"
   local output=""
-  if output=$(printf '%s' '{{ includeTemplate "command-manifest.tmpl" . }}' | env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$fix" --destination "$scratch/target" --override-data '{"chezmoi":{"os":"linux","arch":"amd64"}}' execute-template 2>&1); then
+  if output=$(render_source "$fix" linux amd64 '{{ includeTemplate "command-manifest.tmpl" . }}' 2>&1); then
     fail "expected rejection for $name, but render succeeded: $output"
   fi
   if [[ "$output" != *"$expected"* ]]; then
@@ -65,8 +77,8 @@ rejects() {
   fi
 }
 
-linux_json=$(render linux)
-macos_json=$(render macos)
+linux_json=$(render_platform linux)
+macos_json=$(render_platform macos)
 
 python3 -c '
 import json, sys
@@ -92,15 +104,7 @@ for u in linux_data["units"] + macos_data["units"]:
     assert str(u["mode"]) in ["0755", "0700", "493", "448"]
 ' "$linux_json" "$macos_json"
 
-render_source() {
-  local src="$1" os="$2" arch="$3" tmpl="$4" extra="${5:-}"
-  printf '%s' "$tmpl" | \
-    env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$src" --destination "$scratch/target" \
-      --override-data "{\"chezmoi\":{\"os\":\"$os\",\"arch\":\"$arch\"}$extra}" \
-      execute-template
-}
-
-musl_override=',"renderOverrides":{"muslLinux":true}'
+musl_override=true
 
 # A full source tree, so producer: build units still resolve their fingerprint
 # globs, with .chezmoidata copied so the lock can be mutated in place.
@@ -186,14 +190,18 @@ bun_sha256 = tools["bun"]["artifacts"]["linux-amd64"]["sha256"]
 bun_version = tools["bun"]["version"]
 assert linux_ext["bun"]["identity"] == f"{bun_version}-{bun_sha256[:12]}", linux_ext["bun"]["identity"]
 
-# agy records a null sha256 and a populated sha512; the sha512 leg must supply the suffix.
+# The pinned GitHub artifact uses SHA-256 for the store identity and both aliases.
 agy_artifact = tools["agy"]["artifacts"]["linux-amd64"]
-assert agy_artifact["sha256"] is None
 agy_version = tools["agy"]["version"]
-agy_sha512 = agy_artifact["sha512"]
-expected_agy = f"{agy_version}-{agy_sha512[:12]}"
+agy_sha256 = agy_artifact["sha256"]
+assert agy_version == "1.1.28"
+assert isinstance(agy_sha256, str) and len(agy_sha256) == 64
+expected_agy = f"{agy_version}-{agy_sha256[:12]}"
 assert linux_ext["agy"]["identity"] == expected_agy, linux_ext["agy"]["identity"]
 assert linux_ext["agy"]["identity"] != agy_version
+for scope in (linux_ext, macos_ext):
+    aliases = {command["name"]: command.get("relPath", command["name"]) for command in scope["agy"]["commands"]}
+    assert aliases == {"agy": "agy", "antigravity": "agy"}, aliases
 
 # The version-only units keep the bare version and do not fail the render.
 for unit_id, tool in (("kubectl", "kubectl"), ("kubectl-convert", "kubectl"), ("helm", "helm"), ("glab", "glab")):
@@ -217,6 +225,10 @@ for unit_id, unit in externals(bumped_units).items():
     if unit_id not in ("bun", "bunx"):
         assert unit["identity"] == linux_ext[unit_id]["identity"], unit_id
 ' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$macos_json" "$bumped_json"
+
+sha512_json=$(render_source "$repo_root" linux amd64 '{{- $artifact := index .releases.tools.agy.artifacts "linux-amd64" -}}{{- $_ := set $artifact "sha256" "" -}}{{- $_ := set $artifact "sha512" (repeat 128 "b") -}}{{ includeTemplate "command-manifest.tmpl" . }}')
+jq -e '.units[] | select(.id == "agy") | .identity == "1.1.28-bbbbbbbbbbbb"' <<<"$sha512_json" >/dev/null ||
+  fail 'the retained SHA-512 resolver must supply the store identity when SHA-256 is absent'
 
 # The external identity names the artifact the host downloads, so a musl host
 # keys it on the -musl digest while every tool without a -musl lock key keeps

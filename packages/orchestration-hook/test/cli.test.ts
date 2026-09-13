@@ -380,6 +380,29 @@ function event(command: string): string {
 }
 
 describe("guard fail-open contract", () => {
+  it("preserves Antigravity permission checks outside Orca and on malformed input", async () => {
+    for (const env of [{}, LEAD_ENV]) {
+      for (const body of ["", "not json", "null", "[1,2,3]"]) {
+        const { io, out, err } = guardIo(env, body);
+        expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
+        expect(JSON.parse(out.join(""))).toEqual({ decision: "ask" });
+        expect(err.join("")).toBe("");
+      }
+    }
+  });
+
+  it("preserves Antigravity permission checks after an internal error", async () => {
+    const env = {
+      get ORCA_TERMINAL_HANDLE(): string {
+        throw new Error("unavailable environment");
+      },
+    };
+    const { io, out, err } = guardIo(env, event("echo hi"));
+    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
+    expect(JSON.parse(out.join(""))).toEqual({ decision: "ask" });
+    expect(err.join("")).toBe("");
+  });
+
   it("allows with a JSON no-op body on both harnesses", async () => {
     for (const harness of ["claude", "codex"]) {
       const { io, out, err } = guardIo({}, event("codex exec x"));
@@ -447,15 +470,13 @@ describe("guard decisions", () => {
     expect(parsed.reason).toContain("Orca");
   });
 
-  it("decides nothing when it does not deny on Antigravity", async () => {
-    // An explicit allow there overrides the harness's own permission prompt,
-    // which would turn this gate into a blanket auto-approval.
+  it("preserves native permission checks when it does not deny on Antigravity", async () => {
     const body = JSON.stringify({
       toolCall: { name: "run_command", args: { CommandLine: "echo hi" } },
     });
     const { io, out } = guardIo(LEAD_ENV, body);
     expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
-    expect(JSON.parse(out.join(""))).toEqual({});
+    expect(JSON.parse(out.join(""))).toEqual({ decision: "ask" });
   });
 
   it("parses a pretty-printed body rather than stopping at the first newline", async () => {
