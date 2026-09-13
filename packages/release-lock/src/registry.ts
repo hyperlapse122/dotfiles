@@ -281,8 +281,7 @@ export const REGISTRY: Registry = {
     kind: "githubRelease",
     source: "google-antigravity/antigravity-cli",
     exactTag: "1.1.28",
-    asset: ({ os, arch }) =>
-      `agy_cli_${os === "darwin" ? "mac" : os}_${arch === "amd64" ? "x64" : arch}.tar.gz`,
+    asset: ({ os, arch }) => `agy_cli_${os === "darwin" ? "mac" : os}_${x64Arch(arch)}.tar.gz`,
   },
 
   /* ---------- gitlabRelease ---------- */

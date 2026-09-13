@@ -34,8 +34,7 @@ fail() {
 
 pass() { printf '  ok  %s\n' "$*"; }
 
-command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is not on PATH'
-chezmoi_bin=$(command -v chezmoi)
+chezmoi_bin=$(command -v chezmoi) || fail 'chezmoi is not on PATH'
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
 

@@ -66,10 +66,9 @@ export async function runCli(argv: readonly string[], options: CliOptions = {}):
   const registry = only === undefined ? REGISTRY : { [only]: REGISTRY[only]! };
   const existing = await readLock(output.path);
   const { lock, failures } = await (options.resolve ?? resolveAll)(githubToken(), registry);
-  const merged = failures.length === 0 ? lock : mergeLocks(existing, lock);
   const complete =
     only === undefined
-      ? pruneRetiredPlatforms(merged)
+      ? pruneRetiredPlatforms(failures.length === 0 ? lock : mergeLocks(existing, lock))
       : mergeLocks(existing, pruneRetiredPlatforms(lock));
 
   for (const failure of failures) stderr.write(`release-lock: ${failure}\n`);

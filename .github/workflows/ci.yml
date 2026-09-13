@@ -274,10 +274,10 @@ jobs:
       # test-ci-wiring.sh parses the workflows as YAML; the runner image is not
       # assumed to ship PyYAML. `-` because a library package has no binary to
       # probe.
-      - name: Install PyYAML
-        run: .ci/lib/apt-install.sh - python3-yaml
-      - name: Install zsh for updater-control verification
-        run: .ci/lib/apt-install.sh zsh zsh
+      - name: Install PyYAML and zsh for repository gates
+        run: |
+          .ci/lib/apt-install.sh - python3-yaml zsh
+          command -v zsh >/dev/null
       - name: Install locked chezmoi
         run: |
           set -euo pipefail

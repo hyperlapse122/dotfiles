@@ -60,8 +60,7 @@ fail() {
   exit 1
 }
 
-command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is not on PATH'
-chezmoi_bin=$(command -v chezmoi)
+chezmoi_bin=$(command -v chezmoi) || fail 'chezmoi is not on PATH'
 [ -f "$lock" ] || fail "lock not found: $lock"
 
 # The repo's other Python-using gates probe /usr/bin/python3 first because a mise

@@ -211,7 +211,7 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
 // `allow` overrides them, and 1.1.28 rejects an empty decision document.
 // https://antigravity.google/docs/hooks
 function guardAllowOutput(harness: Harness | null): string {
-  return harness === "agy" ? JSON.stringify({ decision: "ask" }) : "{}";
+  return harness === "agy" ? '{"decision":"ask"}' : "{}";
 }
 
 /**
