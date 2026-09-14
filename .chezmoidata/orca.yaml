@@ -38,26 +38,20 @@ orca:
     # twenty-five agents keep whatever the application defaults them to.
     settings.agentDefaultArgs.codex: --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust
 
-    # Empty because antigravity now leads and serves as a worker like any other
-    # managed harness; leaving it here would keep Orca from launching the agent
-    # whose hooks this checkout ships.
-    #
-    # An array leaf is compared and replaced whole -- this grammar has no path
-    # syntax for list membership. An agent disabled by hand in the UI is
-    # therefore restored on the next convergence, and with the list empty that
-    # restoration re-enables every agent an operator turned off.
-    settings.disabledTuiAgents: []
+    # omp does not lead or dispatch in Orca and is disabled from TUI agents.
+    settings.disabledTuiAgents:
+      - omp
 
     settings.voice.enabled: true
     settings.voice.sttModel: zipformer-streaming-korean
 
     settings.refreshLocalBaseRefOnWorktreeCreate: true
 
-    settings.sourceControlAi.actions.commitMessage.agentId: claude
-    settings.sourceControlAi.actions.pullRequest.agentId: claude
-    settings.sourceControlAi.actions.branchName.agentId: claude
-    settings.sourceControlAi.actions.fixCommitFailure.agentId: claude
-    settings.sourceControlAi.actions.fixPushFailure.agentId: claude
-    settings.sourceControlAi.actions.fixChecks.agentId: claude
-    settings.sourceControlAi.actions.resolveConflicts.agentId: claude
-    settings.sourceControlAi.actions.resolveComments.agentId: claude
+    settings.sourceControlAi.actions.commitMessage.agentId: antigravity
+    settings.sourceControlAi.actions.pullRequest.agentId: antigravity
+    settings.sourceControlAi.actions.branchName.agentId: antigravity
+    settings.sourceControlAi.actions.fixCommitFailure.agentId: antigravity
+    settings.sourceControlAi.actions.fixPushFailure.agentId: antigravity
+    settings.sourceControlAi.actions.fixChecks.agentId: antigravity
+    settings.sourceControlAi.actions.resolveConflicts.agentId: antigravity
+    settings.sourceControlAi.actions.resolveComments.agentId: antigravity
