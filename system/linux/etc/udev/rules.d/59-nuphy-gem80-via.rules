@@ -1,2 +1,2 @@
-# NuPhy Gem80 VIA/WebHID hidraw access.
-KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="19f5", ATTRS{idProduct}=="3275", TAG+="uaccess"
+# NuPhy Gem80 VIA/WebHID and host lighting daemon hidraw access.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="19f5", ATTRS{idProduct}=="3275", TAG+="uaccess", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}+="gem80-rgb.service"

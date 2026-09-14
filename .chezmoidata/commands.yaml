@@ -624,6 +624,23 @@ commands:
       legacy:
         path: .local/bin/settings-reconcile
 
+    gem80-rgb:
+      producer: build
+      safetyProfile: native-multi-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux]
+      gate: "!container"
+      fingerprintGlobs:
+        - crates/gem80-rgb/Cargo.toml
+        - crates/gem80-rgb/Cargo.lock
+        - crates/gem80-rgb/build.rs
+        - crates/gem80-rgb/proto/**
+        - crates/gem80-rgb/src/**
+      commands:
+        - name: gem80-rgbd
+        - name: gem80-rgbctl
+
     codegraph:
       producer: existingTree
       safetyProfile: multi-file
