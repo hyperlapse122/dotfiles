@@ -528,62 +528,62 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.9.7",
+        "version": "v2026.9.8",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-x64",
-            "sha256": "d479d7c0df37652ddfd6d1887ef92a67a17effc7ec4ac612f46845099f814c6f"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.8/mise-v2026.9.8-linux-x64",
+            "sha256": "ff182b17e78d2ae09b5ae3ff3c032eed061e6c2a6b2d4a03ce959d4d74c4b7dd"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-arm64",
-            "sha256": "1227565aeff505b0b0735d91b63109e1e1e44a237c06dc9aa274f2f3bf732af7"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.8/mise-v2026.9.8-linux-arm64",
+            "sha256": "8da9635aab9998df8b1c98d21898f38c8cf2b6dfdd0b6caade1a4c51e2057e1f"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-macos-x64",
-            "sha256": "06f763e37615966f0d660f0fd7d4d23568d1b63d5bdb65e2f7a98af2fdc36075"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.8/mise-v2026.9.8-macos-x64",
+            "sha256": "7b0f853b033feccb5fae3ff0a96e7ea6c5c1bf52b4fcc6d9c1101036ab6a7c7f"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-macos-arm64",
-            "sha256": "3c3f377e7123a466274a20f01502ddd8c58f76028907f471c9bc42fbf83846e1"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.8/mise-v2026.9.8-macos-arm64",
+            "sha256": "02f8d2b54e7228e79217e5c14d76c09ba69212e07a934e80310e702134961c1d"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-x64-musl",
-            "sha256": "67265e2efa2874bb956e3348b8c2b3eabf9654d80770f92b9b334d059f583962"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.8/mise-v2026.9.8-linux-x64-musl",
+            "sha256": "9c8160f3dd24351717c3bfe3f2686062e6b7463279265d1d92ed9998fcd05975"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-arm64-musl",
-            "sha256": "0e99838cae628b428f84236db29dc6a80edfd90e2dedf81a84d367214300f885"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.8/mise-v2026.9.8-linux-arm64-musl",
+            "sha256": "d1920e8f826a3e58e70af9cd055fd4150a50a3d12e4170acb40be8469d751674"
           }
         }
       },
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.1.21",
+        "version": "v18.1.22",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.21/omp-linux-x64",
-            "sha256": "0d9dfcc4561b5877f571cac81226fe8a1466d951cb840e091f3f82a684b3fde4"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.22/omp-linux-x64",
+            "sha256": "9ccddf1091e01e08fea1f8e1208f8901cc90d5d098b16581672eeab03f118b81"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.21/omp-linux-arm64",
-            "sha256": "63086a9f6307a49595dc39b0ddcf9e97e1e63abb32b972595651202c58bb833a"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.22/omp-linux-arm64",
+            "sha256": "62433d49063eed2e90d3cb14729b3a608d6665348f9fdddb8757680b026059ec"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.21/omp-darwin-x64",
-            "sha256": "cc7ac4b99c9b8302212a9a8794ef003dfdf789b024bdc19d85cd87ccf0678150"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.22/omp-darwin-x64",
+            "sha256": "fd378c9115d3a0bdcd52ab48935fbf438d92a6b173900a3e5a682c6b650ac1c3"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.21/omp-darwin-arm64",
-            "sha256": "e99a06d5741f13a5e161c88617cde2f5a65d422b2eec0cf1a69aecd093b2462f"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.22/omp-darwin-arm64",
+            "sha256": "e75ea51aa20fa67564150d616afd69062f39e0e5ddb3b765741a0c045062c8eb"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.21/omp-linux-musl-x64",
-            "sha256": "8031bde5911042b3c2906f3a9175424de233f1fea26ad4e99d67e4908ea954c7"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.22/omp-linux-musl-x64",
+            "sha256": "3be4aec06870e39e7766fdcc3f1d1bab71d79cf941f0e8bffa316baf2d2d3c0c"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.21/omp-linux-musl-arm64",
-            "sha256": "a355056131b857e45af5fa922620cd2f43d6861cca2be50e4694ad04d8388d91"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.1.22/omp-linux-musl-arm64",
+            "sha256": "9c4a6982c12fb5a3db1f8c0620ab4a837c8ede8a450eb4fd697a06b41725c2b5"
           }
         }
       },
