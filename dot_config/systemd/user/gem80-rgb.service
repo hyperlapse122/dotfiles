@@ -1,0 +1,11 @@
+[Unit]
+Description=NuPhy Gem80 RGB Host Lighting Daemon
+Documentation=https://github.com/hyperlapse122/dotfiles
+After=graphical-session-pre.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/gem80-rgbd
+Restart=on-failure
+RestartSec=2s
+Environment="RUST_LOG=info"

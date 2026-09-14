@@ -1,0 +1,11 @@
+[base]
+# Keys remain unlit by default
+keys_color = "#000000"
+
+# Subtle warm glow on upper strip and logo LEDs (indices 89..101)
+side_color = "#201810"
+
+# Soft neutral white on F and J shine-through homing keycaps (indices 68 and 71)
+[base.leds]
+"68" = "#b4b4b4"
+"71" = "#b4b4b4"

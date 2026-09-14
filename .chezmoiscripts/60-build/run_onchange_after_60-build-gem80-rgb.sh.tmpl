@@ -1,0 +1,73 @@
+{{- if and (eq .chezmoi.os "linux") (not (includeTemplate "facts.tmpl" . | fromYaml).container) -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+      "globs" (list "crates/gem80-rgb/Cargo.toml" "crates/gem80-rgb/Cargo.lock" "crates/gem80-rgb/build.rs" "crates/gem80-rgb/proto/**" "crates/gem80-rgb/src/**")) }}
+
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$HOME/.cargo/bin:"*) ;;
+  *) PATH="$HOME/.cargo/bin:$PATH" ;;
+esac
+export PATH
+
+SRC="{{ $sourceDir }}"
+STAGING_DIR="$HOME/.local/share/chezmoi-commands/incomplete/gem80-rgb"
+BIN_DIR="$SRC/crates/gem80-rgb/target/release"
+
+if ! command -v cargo >/dev/null 2>&1; then
+  if [[ -x "$HOME/.cargo/bin/cargo" ]]; then
+    PATH="$HOME/.cargo/bin:$PATH"
+    export PATH
+  fi
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  if command -v mise >/dev/null 2>&1; then
+    eval "$(mise activate bash --shims)" || true
+  fi
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  printf '%s\n' 'build-gem80-rgb: cargo is not installed; gem80-rgb cannot be built' >&2
+  exit 1
+fi
+
+if ! cargo build --release --manifest-path "$SRC/crates/gem80-rgb/Cargo.toml" --features daemon --bin gem80-rgbd; then
+  printf '%s\n' 'build-gem80-rgb: cargo build of gem80-rgbd failed; inspect build errors, then re-apply.' >&2
+  exit 1
+fi
+
+if ! cargo build --release --manifest-path "$SRC/crates/gem80-rgb/Cargo.toml" --bin gem80-rgbctl; then
+  printf '%s\n' 'build-gem80-rgb: cargo build of gem80-rgbctl failed; inspect build errors, then re-apply.' >&2
+  exit 1
+fi
+
+mkdir -p "$STAGING_DIR"
+
+temporary=''
+trap 'if [[ -n "$temporary" && -f "$temporary" ]]; then rm -f -- "$temporary"; fi' EXIT
+
+for bin in gem80-rgbd gem80-rgbctl; do
+  dist="$BIN_DIR/$bin"
+  target="$STAGING_DIR/$bin"
+
+  if [[ ! -f "$dist" || ! -x "$dist" ]]; then
+    printf '%s\n' "build-gem80-rgb: build completed without executable $bin artifact; inspect build output, then re-apply." >&2
+    exit 1
+  fi
+
+  temporary="$(mktemp "$STAGING_DIR/.$bin.XXXXXX")"
+  chmod 0600 "$temporary"
+  cp -- "$dist" "$temporary"
+  chmod 0755 "$temporary"
+  mv -f -- "$temporary" "$target"
+done
+
+printf '%s\n' 'build-gem80-rgb: staged gem80-rgbd and gem80-rgbctl'
+{{ end -}}
