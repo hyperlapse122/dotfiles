@@ -55,7 +55,7 @@ viteplus = "latest"
 "npm:wrangler" = "latest"
 "npm:yaml-language-server" = "latest"
 "npm:cypress" = { version = "latest", allow_builds = ["cypress"] }
-"pipx:mmdc" = "latest"
+"pipx:mmdc" = { version = "latest", uvx = false }
 
 gcloud = "latest"
 
@@ -85,3 +85,6 @@ compile = false
 
 [settings.npm]
 package_manager = "aube"
+
+[settings.pypi]
+uvx = false

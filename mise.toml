@@ -3,6 +3,7 @@ aube = "latest"
 bun = "latest"
 "npm:@colbymchenry/codegraph" = "latest"
 "npm:@sentry/dotagents" = "latest"
+python = "3.14"
 rust = { version = "latest", components = "rust-analyzer,rust-src" }
 
 [hooks]
@@ -16,3 +17,6 @@ postinstall = [
 
 [settings]
 lockfile = true
+
+[settings.pypi]
+uvx = false
