@@ -242,6 +242,7 @@ agents:
       model: opus[1m]
       modelSettings.claude-fable-5-1.effortLevel: medium
       modelSettings.claude-opus-5.effortLevel: medium
+      modelSettings.claude-sonnet-5.effortLevel: high
       inputNeededNotifEnabled: true
       agentPushNotifEnabled: true
       remoteControlAtStartup: false
@@ -295,6 +296,8 @@ agents:
       # JSON number and is ignored. .ci/test-claude-settings-reconcile.sh asserts the
       # type, because the leaf-equality assertion alone cannot see it.
       env.DISABLE_AUTOUPDATER: "1"
+      env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: "1"
+      env.CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: "2"
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     - { name: dotfiles-claude, marketplace: dotfiles-claude-plugin }
