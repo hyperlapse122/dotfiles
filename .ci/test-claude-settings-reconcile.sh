@@ -395,7 +395,7 @@ run "$blocked_only" >/dev/null 2>&1 || fail 'a blocked-only run should not fail 
 # using open(O_TRUNC) would. Deleting the guard from the reconciler must fail here.
 race_bin=$scratch/race
 mkdir -p "$race_bin"
-real_jq=$(command -v jq)
+real_jq=$(type -a -p jq 2>/dev/null | grep -v 'mise/shims' | head -n 1 || command -v jq)
 cat >"$race_bin/jq" <<RACE
 #!/usr/bin/env bash
 "$real_jq" "\$@"; rc=\$?
