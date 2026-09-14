@@ -645,23 +645,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-09-07",
+        "version": "2026-09-14",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "a3500183aa08bf740c0da6e030ad262d4cfa1c19e7ce195ab5f772bdf9ddfb12"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "7609ba53f85cd80a3bde77a4b2e94e304d0f94650e4f4cffc061b9bca454ba75"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "484de96ea9e5daf9e6361b6fa91be9521a7e6c652111af54a7ead80f900b1e55"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "3d32c50aebf9288c2fd11b559813441bdff2aa57fbbb7177ad0ffe5ac4e9ad3d"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "41161c05bd7e2396a5cea86a691d37919ec0af331a06bbdc0f323979034f9dad"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "58d827adc7bde3b8986ff52795484f462564a2beed3ba4f4b2cbc3cfd58ae05e"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-07/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "16e9b2af9db7c0ce015ffe88f85db27669b05c84887a59c737d697d2c5f8d349"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "0c579403271f4021eb1efdfaa9bedb43e099595d02a02ee9b1f34c6c51a3ac26"
           }
         }
       },
@@ -724,23 +724,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.26.0",
+        "version": "v2.26.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.0/wakatime-cli-linux-amd64.zip",
-            "sha256": "e695367a6b604a816ca2e9fb43254821d56a6994d4fc8785350fd4cc7cc0c97b"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.2/wakatime-cli-linux-amd64.zip",
+            "sha256": "e7765e362146e560aa09f2810808faabcfc8b9de12bd95fb66680d8e49d14dfa"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.0/wakatime-cli-linux-arm64.zip",
-            "sha256": "68a90f4ff34e30baf41905676ba26984e41ed94dfa52ed510a72bf4dc74c3d46"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.2/wakatime-cli-linux-arm64.zip",
+            "sha256": "1a8eb5c4918c0eaf3aa847b83d4068ac0e966d7d9c43a700e47b0e9dce7c541b"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.0/wakatime-cli-darwin-amd64.zip",
-            "sha256": "827add2bf9d0362645694a3d7bdc7f35039930379c236482bef2354813ea7987"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.2/wakatime-cli-darwin-amd64.zip",
+            "sha256": "e553115e4e3cef8a52c3a30164187552f45a5017f7e9d11646ee42853dea7c65"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.0/wakatime-cli-darwin-arm64.zip",
-            "sha256": "7ce19c59fa16b8bb442e98a1e908fcd05bed03c1039536f9c31801df282b17fb"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.2/wakatime-cli-darwin-arm64.zip",
+            "sha256": "fabbc3d015661b4e9e8f2565d3b696ef526af738753f445039c87402a68ac2e9"
           }
         }
       },
@@ -775,7 +775,7 @@
       "winbox": {
         "kind": "vendorManifest",
         "source": "https://download.mikrotik.com/routeros/winbox/LATEST.4",
-        "version": "4.3"
+        "version": "4.4"
       },
       "writing-guidelines": {
         "kind": "gitRef",
