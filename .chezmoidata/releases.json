@@ -318,7 +318,7 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "deslop": {
         "kind": "gitRef",
@@ -462,7 +462,7 @@
       "i-have-adhd": {
         "kind": "gitRef",
         "source": "ayghri/i-have-adhd",
-        "version": "6f1f982d0a47c65899af3c5a7450b7098bc65325"
+        "version": "4092de07ce3ed88389d77c0d623b7af89b40ac0e"
       },
       "improve": {
         "kind": "gitRef",
@@ -477,7 +477,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "marksman": {
         "kind": "githubRelease",
@@ -528,31 +528,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.9.6",
+        "version": "v2026.9.7",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.6/mise-v2026.9.6-linux-x64",
-            "sha256": "04260a49d2cb7f46c91d3f90547f8486ba6c6c9e545b98e69b685cdcf0db8576"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-x64",
+            "sha256": "d479d7c0df37652ddfd6d1887ef92a67a17effc7ec4ac612f46845099f814c6f"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.6/mise-v2026.9.6-linux-arm64",
-            "sha256": "7892401c3a3b8166e8be3a3bbd564f48b36946e580e031f2df94a4935edfd907"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-arm64",
+            "sha256": "1227565aeff505b0b0735d91b63109e1e1e44a237c06dc9aa274f2f3bf732af7"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.6/mise-v2026.9.6-macos-x64",
-            "sha256": "7be52c287cbdf4e2b62c19ca9dfe6990eb663e78c1f48ca11446bd126de67f30"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-macos-x64",
+            "sha256": "06f763e37615966f0d660f0fd7d4d23568d1b63d5bdb65e2f7a98af2fdc36075"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.6/mise-v2026.9.6-macos-arm64",
-            "sha256": "6ea391f2994d614d794fd751738ec3c375bf1638fd77116a16914038f065fdde"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-macos-arm64",
+            "sha256": "3c3f377e7123a466274a20f01502ddd8c58f76028907f471c9bc42fbf83846e1"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.6/mise-v2026.9.6-linux-x64-musl",
-            "sha256": "173617916b3ef7b3a5b255c582be0e87b334d0c1f51109babf9660d5f2419435"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-x64-musl",
+            "sha256": "67265e2efa2874bb956e3348b8c2b3eabf9654d80770f92b9b334d059f583962"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.6/mise-v2026.9.6-linux-arm64-musl",
-            "sha256": "cd7511c3f98f315a7f91b77fc0b529cc4d44cbdd0c58510b08244e20ea790141"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.7/mise-v2026.9.7-linux-arm64-musl",
+            "sha256": "0e99838cae628b428f84236db29dc6a80edfd90e2dedf81a84d367214300f885"
           }
         }
       },
@@ -590,47 +590,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201",
+        "version": "v1.4.202",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.201/orca-ide-1.4.201.x86_64.rpm",
-            "sha256": "744242051db6a9837ab95e29fa001737f3fcf9e61e3f5c7255df92ff71265c57"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.202/orca-ide-1.4.202.x86_64.rpm",
+            "sha256": "560ea12e75d78507f33f056d77dcbb921815475a2e60265d1fbcabc6b9344c31"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.201/orca-ide-1.4.201.aarch64.rpm",
-            "sha256": "3ec55bceb96fab5f58279dfcd043a590b9ee09f5aad0601c1ec99a4bd8087b50"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.202/orca-ide-1.4.202.aarch64.rpm",
+            "sha256": "0834e5b783a23efe036208de54946f250da36bbfc8bc1718bd87dce0bff2682d"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.201"
+        "version": "v1.4.202"
       },
       "react-best-practices": {
         "kind": "gitRef",
