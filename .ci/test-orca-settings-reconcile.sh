@@ -158,7 +158,7 @@ reset_fixture() {
     | .worktreeMeta = {"w1": {"keep": true}}
     | .settings.voice.language = "en"
     | .settings.agentDefaultArgs.claude = "--keep-me"
-    | .settings.sourceControlAi.actions.commitMessage.commandInputTemplate = "{basePrompt}"
+    | .settings.sourceControlAi.actions.commitMessage.agentArgs = "--keep-me"
   ' >"$data"
 }
 
@@ -240,7 +240,7 @@ assert_json 'assert did not converge the drifted leaf' \
 assert_json 'assert destroyed a non-declared top-level key' \
   '.worktreeMeta.w1.keep == true and .schemaVersion == 9'
 assert_json 'assert destroyed a non-declared sibling inside a touched record' \
-  '.settings.voice.language == "en" and .settings.agentDefaultArgs.claude == "--keep-me" and .settings.sourceControlAi.actions.commitMessage.commandInputTemplate == "{basePrompt}"'
+  '.settings.voice.language == "en" and .settings.agentDefaultArgs.claude == "--keep-me" and .settings.sourceControlAi.actions.commitMessage.agentArgs == "--keep-me"'
 ok 'assert converges the declared leaf and preserves every sibling'
 
 # Declared JSON types survive the round trip. A boolean written as a string is
