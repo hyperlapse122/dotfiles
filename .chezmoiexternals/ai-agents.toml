@@ -33,7 +33,7 @@ path = 'antigravity'
 executable = true
 
 [agy.checksum]
-sha256 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "sha256")) }}'
+sha512 = '{{ includeTemplate "release-lock-ref.tmpl" (mergeOverwrite $agyLockArtifact (dict "field" "sha512")) }}'
 {{- /* ---------- agent-browser (vercel-labs) — a single self-contained Rust binary
        ("Browser automation CLI for AI agents"), tracked at the newest release.
        The release ships bare per-platform binaries (agent-browser-<os>-<arch>,

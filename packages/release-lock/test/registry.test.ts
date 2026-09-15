@@ -24,12 +24,6 @@ const TAG = "v0.0.0";
  * a missing row and a wrongly-null selector would be indistinguishable.
  */
 const EXPECTED: Record<string, Record<string, string | null>> = {
-  agy: {
-    "linux-amd64": "agy_cli_linux_x64.tar.gz",
-    "linux-arm64": "agy_cli_linux_arm64.tar.gz",
-    "darwin-amd64": "agy_cli_mac_x64.tar.gz",
-    "darwin-arm64": "agy_cli_mac_arm64.tar.gz",
-  },
   "ast-grep": {
     "linux-amd64": "app-x86_64-unknown-linux-gnu.zip",
     "linux-arm64": "app-aarch64-unknown-linux-gnu.zip",
@@ -349,32 +343,17 @@ describe("bun tag pinning", () => {
   });
 });
 
-describe("agy release pin", () => {
-  test("uses only the official exact release and resolves all four assets", async () => {
+describe("agy vendorManifest", () => {
+  test("declares antigravity vendorManifest source", () => {
     const spec = REGISTRY.agy as ToolSpec;
-    expect(spec.kind).toBe("githubRelease");
-    expect(spec.source).toBe("google-antigravity/antigravity-cli");
-    expect(spec.exactTag).toBe("1.1.28");
-    expect(spec.tagPrefix).toBeUndefined();
-    expect(spec.vendor).toBeUndefined();
-    const names = EXPECTED.agy as Record<string, string>;
-    globalThis.fetch = (async () =>
-      Response.json({
-        tag_name: "1.1.28",
-        assets: Object.values(names).map((name) => ({
-          name,
-          browser_download_url: `https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/${name}`,
-          digest: `sha256:${"a".repeat(64)}`,
-        })),
-      })) as typeof fetch;
-    const locked = await resolveGitHubRelease("agy", spec, undefined);
-    expect(Object.keys(locked.artifacts ?? {}).sort()).toEqual(Object.keys(names).sort());
-    for (const platform of ALL_PLATFORMS) {
-      expect(locked.artifacts?.[platformKey(platform)]).toEqual({
-        url: `https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/${names[platformKey(platform)]}`,
-        sha256: "a".repeat(64),
-      });
-    }
+    expect(spec.kind).toBe("vendorManifest");
+    expect(spec.vendor).toBe("antigravity");
+    expect(spec.source).toBe(
+      "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
+    );
+    expect((spec as { exactTag?: unknown }).exactTag).toBeUndefined();
+    expect((spec as { tagPrefix?: unknown }).tagPrefix).toBeUndefined();
+    expect((spec as { asset?: unknown }).asset).toBeUndefined();
   });
 });
 

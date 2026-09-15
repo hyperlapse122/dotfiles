@@ -51,7 +51,7 @@ accepts either digest and rejects an artifact carrying neither.
 bun run packages/release-lock/src/cli.ts                          # refresh the repo lock in place
 bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
 bun run packages/release-lock/src/cli.ts --stdout                 # inspect merged JSON
-bun run packages/release-lock/src/cli.ts --only agy               # refresh only the pin
+bun run packages/release-lock/src/cli.ts --only agy               # refresh only agy
 ```
 
 A source that fails to resolve is reported on stderr and omitted from the
@@ -135,38 +135,20 @@ returning the upstream filename for a platform. Conventions that matter:
   chezmoi externals verify sha256, so npm entries stay version-only for
   consumers.
 
-## Antigravity hook pin
+## Antigravity vendor manifest
 
-`agy` uses the official `google-antigravity/antigravity-cli` release `1.1.28`
-because newer releases regressed hook execution. The authenticated user
-subscribed to [upstream issue #1008](https://github.com/google-antigravity/antigravity-cli/issues/1008)
-on 2026-09-13. The hourly refresh obeys `exactTag` without changing its schedule
-or failure criteria. A failed resolution preserves the previous whole entry
-and exits non-zero. A preserved newer entry does not satisfy the pin check.
-
-All four Linux and macOS archives use the official release asset SHA-256
-values. The external consumes `checksum.sha256`. The vendor resolver remains
-available but does not select the pinned release.
+`agy` resolves via `vendorManifest` from the official `antigravity` vendor
+manifest endpoint (`https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests`),
+publishing per-platform artifacts verified by SHA-512. The external consumes
+`checksum.sha512`.
 
 The [native updater control](https://antigravity.google/docs/cli/troubleshooting/)
 is `AGY_CLI_DISABLE_AUTO_UPDATE=true`. The Linux desktop declaration is in
 `dot_config/environment.d/60-development.conf`. The common shell declaration
 is in `dot_config/zsh/dot_zshenv`, covering new zsh sessions on Linux and macOS.
-Keep both declarations. Existing processes need a fresh inherited environment
-after deployment. This switch does not authorize changing permission policy.
-
-Advance or remove the pin only through a reviewed source change after a newer
-official release executes hooks, delivers the injected model context in a fresh
-isolated session, and passes a supported supervised worker lifecycle check.
-Issue closure and release announcements do not authorize an upgrade. Record
-runtime coverage per available target and mark other targets as artifact-verified
-only. Keep live credentials, instructions, and permission settings unchanged.
-
-Advancing an exact GitHub tag retains SHA-256. Returning to the `antigravity`
-vendor resolver must restore the manifest source and `checksum.sha512` together
-with the generated lock entry. Verify all four external renders after either
-change with `.ci/test-release-lock-digest-gate.sh`, updating its reviewed pin
-expectations in the same change.
+Keep both declarations so chezmoi manages the binary version. Existing
+processes need a fresh inherited environment after deployment. This switch does
+not authorize changing permission policy.
 
 ## Verification
 
