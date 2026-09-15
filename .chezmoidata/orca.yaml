@@ -39,8 +39,8 @@ orca:
     settings.agentDefaultArgs.codex: --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust
 
     settings.disabledTuiAgents:
+      - claude-agent-teams
       - antigravity
-
     settings.voice.enabled: true
     settings.voice.sttModel: zipformer-streaming-korean
 

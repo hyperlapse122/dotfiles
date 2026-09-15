@@ -92,7 +92,7 @@ expect_reject 'a path that is an ancestor of another' \
   '(dict "settings.voice" "x" "settings.voice.enabled" true)' 'is an ancestor of'
 expect_reject 'an empty path segment' \
   '(dict "settings..x" "y")' 'not a valid settings path'
-expect_accept 'an array leaf' '(dict "settings.disabledTuiAgents" (list "antigravity"))'
+expect_accept 'an array leaf' '(dict "settings.disabledTuiAgents" (list "claude-agent-teams" "antigravity"))'
 expect_accept 'an empty declaration' '(dict)'
 
 # ---------------------------------------------------------------------------
@@ -271,10 +271,10 @@ ok 'every asserted leaf keeps its declared JSON type'
 # An array leaf is replaced whole; this grammar has no list-membership syntax.
 reset_fixture
 tmp="$scratch/arr.json"
-jq '.settings.disabledTuiAgents = ["antigravity", "addedByHand"]' "$data" >"$tmp" && mv -- "$tmp" "$data"
+jq '.settings.disabledTuiAgents = ["claude-agent-teams", "antigravity", "addedByHand"]' "$data" >"$tmp" && mv -- "$tmp" "$data"
 run --mode assert >/dev/null 2>&1
 assert_json 'an array leaf was merged instead of replaced whole' \
-  '.settings.disabledTuiAgents == ["antigravity"]'
+  '.settings.disabledTuiAgents == ["claude-agent-teams", "antigravity"]'
 ok 'an array leaf is replaced whole'
 
 # A real orca-data.json is a quarter of a megabyte, and Linux caps a single argv
