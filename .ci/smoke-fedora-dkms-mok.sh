@@ -517,7 +517,7 @@ marker_cert() {
 }
 [[ "$(marker_cert akmod-nvidia-580xx)" == "${mokdir}/akmods/certs/public_key.der" ]] ||
   fail 'the akmod branch marker does not resolve to the akmods certificate'
-[[ "$(marker_cert kmod-nvidia-latest-dkms)" == "${mokdir}/mok.pub" ]] ||
+[[ "$(marker_cert kmod-nvidia-open-dkms)" == "${mokdir}/mok.pub" ]] ||
   fail 'the DKMS branch marker does not resolve to the DKMS certificate'
 [[ "$(marker_cert some-unrelated-package)" == unmapped ]] ||
   fail 'an unknown marker must not resolve to a certificate'

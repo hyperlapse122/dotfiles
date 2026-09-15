@@ -71,7 +71,7 @@ nvidia:
     ampere:
       name: "latest"
       buildSystem: dkms
-      marker: kmod-nvidia-latest-dkms
+      marker: kmod-nvidia-open-dkms
       source: cuda
     pascal:
       name: "580xx"
@@ -114,18 +114,18 @@ nvidia:
   currentBranch:
     name: "latest"
     buildSystem: dkms
-    marker: kmod-nvidia-latest-dkms
+    marker: kmod-nvidia-open-dkms
     source: cuda
     packages:
-      - cuda-drivers
       - cuda-toolkit-13-3
       - dkms
-      - kmod-nvidia-latest-dkms
+      - kmod-nvidia-open-dkms
       - libnvidia-container1
       - libnvidia-container-tools
       - nvidia-container-toolkit
       - nvidia-container-toolkit-base
       - nvidia-driver
+      - nvidia-open
     cudaToolkit: true
 
   # Packages the LEGACY-branch repository policy excludes from the vendor CUDA
@@ -155,6 +155,7 @@ nvidia:
     - 'kmod-nvidia*'
     - nvidia-driver
     - nvidia-modprobe
+    - nvidia-open
     - nvidia-persistenced
     - nvidia-settings
     - nvidia-xconfig
