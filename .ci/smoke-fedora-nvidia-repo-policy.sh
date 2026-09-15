@@ -152,8 +152,10 @@ grep -q 'source=cuda' <<<"${current_out}" ||
   fail 'the current branch does not resolve to the cuda package source'
 grep -q 'build=dkms' <<<"${current_out}" ||
   fail 'the current branch does not resolve to the dkms build system'
-grep -q 'packages=.*kmod-nvidia-latest-dkms' <<<"${current_out}" ||
+grep -q 'packages=.*kmod-nvidia-open-dkms' <<<"${current_out}" ||
   fail 'the current branch does not select the DKMS package set'
+grep -q 'packages=.*nvidia-open' <<<"${current_out}" ||
+  fail 'the current branch does not select the nvidia-open package'
 if grep -q 'packages=.*akmod-nvidia-580xx' <<<"${current_out}"; then
   fail 'the current branch must not include the legacy-branch package set'
 fi
@@ -181,7 +183,7 @@ grep -q 'build=akmod' <<<"${legacy_out}" ||
   fail 'the legacy architecture does not resolve to the akmod build system'
 grep -q 'packages=.*akmod-nvidia-580xx' <<<"${legacy_out}" ||
   fail 'the legacy branch does not select the akmod package set'
-if grep -q 'packages=.*kmod-nvidia-latest-dkms' <<<"${legacy_out}"; then
+if grep -q 'packages=.*kmod-nvidia-open-dkms' <<<"${legacy_out}"; then
   fail 'the legacy branch must not keep the current-branch package set'
 fi
 grep -qx 'rpmfusion=\[\]' <<<"${legacy_out}" ||
@@ -190,6 +192,8 @@ logged 'config-manager setopt rpmfusion-nonfree*.excludepkgs=' ||
   { printf 'the legacy branch did not clear the RPM Fusion exclusion value. log:\n'; cat "${scratch}/dnf.log"; exit 1; }
 grep -q 'cuda-fedora\*.excludepkgs=cuda-drivers,' "${scratch}/dnf.log" ||
   { printf 'the legacy branch did not exclude the current-branch drivers from the CUDA repository. log:\n'; cat "${scratch}/dnf.log"; exit 1; }
+grep -q 'nvidia-open' "${scratch}/dnf.log" ||
+  { printf 'the legacy branch did not exclude nvidia-open from the CUDA repository. log:\n'; cat "${scratch}/dnf.log"; exit 1; }
 
 # The CUDA repofile is added only for a branch the vendor repository serves.
 # Asserted as rendered text, because setup_nvidia_repos also reaches the network.
@@ -231,12 +235,12 @@ fi
 # The stop path nothing asserted before: a marker for a branch this host does not
 # resolve to means both branches' modules would be installed, and the installer
 # reports rather than removing anything.
-conflict_out=$(RPM_INSTALLED='kmod-nvidia-latest-dkms' run_policy pascal '
+conflict_out=$(RPM_INSTALLED='kmod-nvidia-open-dkms' run_policy pascal '
   resolve_nvidia_branch
   printf "conflicting=%s\n" "${nvidia_conflicting_packages[*]}"
   if found=$(conflicting_nvidia_branch); then printf "conflict=%s\n" "$found"; else printf "conflict=none\n"; fi
 ')
-grep -qx 'conflict=kmod-nvidia-latest-dkms' <<<"${conflict_out}" ||
+grep -qx 'conflict=kmod-nvidia-open-dkms' <<<"${conflict_out}" ||
   { printf 'a foreign branch marker was not reported as a conflict. got:\n%s\n' "${conflict_out}"; exit 1; }
 if grep -q 'conflicting=.*akmod-nvidia-580xx' <<<"${conflict_out}"; then
   fail 'the resolved branch marker must not be listed as its own conflict'
@@ -256,7 +260,7 @@ ampere_conflict_out=$(RPM_INSTALLED='akmod-nvidia-580xx' run_policy ampere '
 grep -qx 'conflict=akmod-nvidia-580xx' <<<"${ampere_conflict_out}" ||
   { printf 'a foreign branch marker was not reported as a conflict on ampere. got:\n%s\n' "${ampere_conflict_out}"; exit 1; }
 
-ampere_clean_out=$(RPM_INSTALLED='kmod-nvidia-latest-dkms' run_policy ampere '
+ampere_clean_out=$(RPM_INSTALLED='kmod-nvidia-open-dkms' run_policy ampere '
   resolve_nvidia_branch
   if found=$(conflicting_nvidia_branch); then printf "conflict=%s\n" "$found"; else printf "conflict=none\n"; fi
 ')
