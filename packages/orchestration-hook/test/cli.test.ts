@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
 import { main, type Io } from "../src/cli.js";
 import { payload } from "../src/payload.js";
@@ -23,9 +24,11 @@ function capture(env: NodeJS.ProcessEnv = {}): { io: Io; out: string[]; err: str
     err,
   };
 }
-
-const ORCA_WORKER = { ORCA_TERMINAL_HANDLE: "term_abc" };
-
+const ORCA_WORKER = {
+  ORCA_TERMINAL_HANDLE: "term_abc",
+  ORCA_AGENT_TEAMS_LEADER_PANE: "%1",
+  TMUX_PANE: "%9",
+};
 describe("hook fail-open contract", () => {
   it("gives Claude Code an empty JSON object outside Orca, on stdout only", async () => {
     const { io, out, err } = capture({});
@@ -177,6 +180,58 @@ describe("omp hook delivery", () => {
       ];
       expect(order.every((i) => i >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+  it("delivers the complete lead envelope to an interactive Orca terminal without pane variables", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-omp-interactive-"));
+    try {
+      mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+      writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+      const cli = join(home, "orca-stub");
+      writeFileSync(cli, '#!/usr/bin/env bash\nprintf "GUIDE BODY\\n"\n');
+      chmodSync(cli, 0o755);
+
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_CLI_COMMAND: cli,
+        ORCA_TERMINAL_HANDLE: "term_interactive",
+      });
+      expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+      const context = out.join("");
+      expect(context).toContain("SKILL BODY");
+      expect(context).toContain("GUIDE BODY");
+      expect(context).toContain(payload("coordinator"));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("identifies a worker by active database record when pane variables are absent", async () => {
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-omp-db-worker-"));
+    try {
+      const orcaDir = join(home, ".config", "orca");
+      mkdirSync(orcaDir, { recursive: true });
+      const db = new DatabaseSync(join(orcaDir, "orchestration.db"));
+      db.exec(
+        "CREATE TABLE worker_dispatches (dispatch_id TEXT PRIMARY KEY, agent_terminal_handle TEXT, state TEXT);",
+      );
+      db.exec(
+        "CREATE TABLE dispatch_contexts (id TEXT PRIMARY KEY, assignee_handle TEXT, status TEXT);",
+      );
+      db.exec("INSERT INTO worker_dispatches VALUES ('d1', 'term_db_worker', 'ready');");
+      db.close();
+
+      const { io, out } = capture({
+        HOME: home,
+        ORCA_TERMINAL_HANDLE: "term_db_worker",
+      });
+      expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+      const context = out.join("");
+      expect(context).toContain(PREAMBLE);
+      expect(context).toContain(payload("everyone"));
+      expect(context).not.toContain(payload("coordinator"));
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
