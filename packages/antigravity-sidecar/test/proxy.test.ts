@@ -193,12 +193,16 @@ describe("proxy request handling", () => {
 
   it("runs through a real local HTTP server and streams SSE chunks", async () => {
     const firstChunk = new TextEncoder().encode("data: one\n\n");
+    let releaseSecond!: () => void;
+    const secondReady = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
     const upstreamFetch: FetchLike = async () =>
       new Response(
         new ReadableStream<Uint8Array>({
           async start(controller) {
             controller.enqueue(firstChunk);
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            await secondReady;
             controller.enqueue(new TextEncoder().encode("data: two\n\n"));
             controller.close();
           },
@@ -217,14 +221,26 @@ describe("proxy request handling", () => {
       });
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toContain("text/event-stream");
-      const reader = response.body?.getReader();
-      expect(reader).toBeDefined();
-      const first = await reader?.read();
-      expect(new TextDecoder().decode(first?.value)).toContain("data: one");
-      const second = await reader?.read();
-      expect(new TextDecoder().decode(second?.value)).toContain("data: two");
-      expect((await reader?.read())?.done).toBe(true);
+      if (!response.body) throw new Error("SSE response has no body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let received = "";
+      while (!received.endsWith("\n\n")) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        received += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(received).toBe("data: one\n\n");
+      releaseSecond();
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        received += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(received + decoder.decode()).toBe("data: one\n\ndata: two\n\n");
     } finally {
+      releaseSecond();
+      sidecar.server.closeAllConnections();
       await sidecar.close();
     }
   });

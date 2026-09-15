@@ -77,11 +77,11 @@ jobs:
         run: |
           set -euxo pipefail
           if command -v dnf >/dev/null 2>&1; then
-            dnf install -y --setopt=install_weak_deps=False git jq tar gzip >/dev/null
+            dnf install -y --setopt=install_weak_deps=False git jq tar gzip diffutils >/dev/null
           else
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y --no-install-recommends ca-certificates curl git jq tar gzip >/dev/null
+            apt-get install -y --no-install-recommends ca-certificates curl git jq tar gzip diffutils >/dev/null
           fi
 
       - uses: actions/checkout@v7
