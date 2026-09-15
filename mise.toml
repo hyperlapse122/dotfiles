@@ -20,3 +20,6 @@ lockfile = true
 
 [settings.pypi]
 uvx = false
+
+[settings.npm]
+package_manager = "aube"
