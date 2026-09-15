@@ -9,7 +9,6 @@ set -euo pipefail
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-thermald") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-thermald") }}
-{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-thermald.sh") -}}
 
 if [[ "${FACT_VIRT:-0}" -eq 1 ]]; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-thermald" "site" "thermald-virt-host" "reason" "virtual machine or container; thermald is a bare-metal concern") | trim | indent 2 }}
@@ -22,6 +21,11 @@ fi
 if ! grep -q "GenuineIntel" /proc/cpuinfo 2>/dev/null; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-thermald" "site" "thermald-non-intel-cpu" "reason" "not an Intel CPU; thermald is an Intel DPTF daemon") | trim | indent 2 }}
 fi
+if [[ "${FACT_THINKPAD:-0}" -eq 1 || -e /sys/devices/platform/thinkpad_acpi/dytc_lapmode ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-thermald" "site" "thermald-dytc-platform" "reason" "thinkpad_acpi dytc_lapmode present; thermald is disabled by upstream on DYTC platforms") | trim | indent 2 }}
+fi
+
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-thermald") -}}
 
 DNF=("${SUDO[@]}" dnf)
 

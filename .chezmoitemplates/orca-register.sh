@@ -282,46 +282,58 @@ orca_register_tree() {
 # <install>/resources/bin, then read the install root above it. Sets
 # orca_install_node and orca_install_module, or returns non-zero.
 orca_register_resolve_install() {
-  orca_ri_src=$1
-
   orca_install_node=${ORCA_REGISTER_NODE:-}
   orca_install_module=${ORCA_REGISTER_RPC_MODULE:-}
   if [ -n "$orca_install_node" ] && [ -n "$orca_install_module" ]; then
     return 0
   fi
 
-  # `readlink` without -f: the flag is a GNU extension, and this file runs
-  # wherever the apply script does.
-  orca_ri_guard=0
-  while [ -h "$orca_ri_src" ] && [ "$orca_ri_guard" -lt 16 ]; do
-    orca_ri_dir=$(cd -P "$(dirname "$orca_ri_src")" 2>/dev/null && pwd) || return 1
-    orca_ri_src=$(readlink "$orca_ri_src") || return 1
-    case $orca_ri_src in
-      /*) ;;
-      *) orca_ri_src="$orca_ri_dir/$orca_ri_src" ;;
-    esac
-    orca_ri_guard=$((orca_ri_guard + 1))
+  for orca_ri_target in \
+    "$1" \
+    "${ORCA_REGISTER_RPM_CLI:-/opt/Orca/resources/bin/orca-ide}" \
+    "/Applications/Orca.app/Contents/Resources/bin/orca-ide"
+  do
+    [ -n "$orca_ri_target" ] || continue
+    [ -e "$orca_ri_target" ] || continue
+
+    orca_ri_src=$orca_ri_target
+    # `readlink` without -f: the flag is a GNU extension, and this file runs
+    # wherever the apply script does.
+    orca_ri_guard=0
+    while [ -h "$orca_ri_src" ] && [ "$orca_ri_guard" -lt 16 ]; do
+      orca_ri_dir=$(cd -P "$(dirname "$orca_ri_src")" 2>/dev/null && pwd) || break
+      orca_ri_src=$(readlink "$orca_ri_src") || break
+      case $orca_ri_src in
+        /*) ;;
+        *) orca_ri_src="$orca_ri_dir/$orca_ri_src" ;;
+      esac
+      orca_ri_guard=$((orca_ri_guard + 1))
+    done
+
+    orca_ri_bin=$(cd -P "$(dirname "$orca_ri_src")" 2>/dev/null && pwd) || continue
+    orca_ri_resources=$(cd -P "$orca_ri_bin/.." 2>/dev/null && pwd) || continue
+    orca_ri_root=$(cd -P "$orca_ri_resources/.." 2>/dev/null && pwd) || continue
+
+    orca_cand_module="$orca_ri_resources/app.asar.unpacked/out/cli/runtime-client.js"
+    if [ -f "$orca_cand_module" ]; then
+      [ -n "$orca_install_module" ] || orca_install_module="$orca_cand_module"
+      if [ -z "$orca_install_node" ]; then
+        # The same candidate list the vendor wrapper carries: the Linux executable
+        # is `orca-ide` because Ubuntu GNOME already ships an `orca`.
+        for orca_ri_candidate in orca-ide orca Orca; do
+          if [ -f "$orca_ri_root/$orca_ri_candidate" ] && [ -x "$orca_ri_root/$orca_ri_candidate" ]; then
+            orca_install_node="$orca_ri_root/$orca_ri_candidate"
+            break
+          fi
+        done
+      fi
+      if [ -n "$orca_install_module" ] && [ -n "$orca_install_node" ]; then
+        return 0
+      fi
+    fi
   done
 
-  orca_ri_bin=$(cd -P "$(dirname "$orca_ri_src")" 2>/dev/null && pwd) || return 1
-  orca_ri_resources=$(cd -P "$orca_ri_bin/.." 2>/dev/null && pwd) || return 1
-  orca_ri_root=$(cd -P "$orca_ri_resources/.." 2>/dev/null && pwd) || return 1
-
-  [ -n "$orca_install_module" ] ||
-    orca_install_module="$orca_ri_resources/app.asar.unpacked/out/cli/runtime-client.js"
-  [ -f "$orca_install_module" ] || return 1
-
-  if [ -z "$orca_install_node" ]; then
-    # The same candidate list the vendor wrapper carries: the Linux executable
-    # is `orca-ide` because Ubuntu GNOME already ships an `orca`.
-    for orca_ri_candidate in orca-ide orca Orca; do
-      if [ -f "$orca_ri_root/$orca_ri_candidate" ] && [ -x "$orca_ri_root/$orca_ri_candidate" ]; then
-        orca_install_node="$orca_ri_root/$orca_ri_candidate"
-        break
-      fi
-    done
-  fi
-  [ -n "$orca_install_node" ] || return 1
+  return 1
 }
 
 # The reconciler itself, in JavaScript because it must read Orca's own JSON.
