@@ -408,7 +408,8 @@ describe("proxy request handling", () => {
           role: i % 2 === 0 ? "user" : "model",
           parts: [
             {
-              text: `Message ${i}: This mentions "systemInstruction" and Oh My Pi in user text and code: ` +
+              text:
+                `Message ${i}: This mentions "systemInstruction" and Oh My Pi in user text and code: ` +
                 "x".repeat(1000),
             },
           ],
