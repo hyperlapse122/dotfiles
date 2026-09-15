@@ -122,7 +122,7 @@ system:
     sleep:
       overrides:
         - path: "etc/systemd/sleep.conf.d/*"
-          gate: battery
+          gate: deepSleep
         - path: "etc/systemd/logind.conf.d/*"
           gate: battery
 

@@ -8,3 +8,4 @@ features:
   desktopIme: true
   apps: true
   devtools: true
+  intelIpu6: false

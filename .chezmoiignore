@@ -72,6 +72,9 @@
 .chezmoiscripts/30-components/70-apps.sh
 .chezmoiscripts/30-components/75-direct-rpms.sh
 {{- end }}
+{{- if not (default dict $features).intelIpu6 }}
+.chezmoiscripts/30-components/72-camera-ipu6.sh
+{{- end }}
 {{- if not (default dict $features).devtools }}
 .chezmoiscripts/30-components/80-devtools.sh
 {{- end }}

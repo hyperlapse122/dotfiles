@@ -1,0 +1,42 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+#!/usr/bin/env bash
+#
+# Manages the Intel Thermal Daemon (thermald) on bare-metal Fedora laptops.
+# thermald listens to Intel DPTF (Dynamic Platform and Thermal Framework)
+# ACPI events to prevent thermal throttling and control fan curves under load.
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-thermald") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-thermald") }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-thermald.sh") -}}
+
+if [[ "${FACT_VIRT:-0}" -eq 1 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-thermald" "site" "thermald-virt-host" "reason" "virtual machine or container; thermald is a bare-metal concern") | trim | indent 2 }}
+fi
+
+if [[ "${FACT_BATTERY:-0}" -eq 0 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-thermald" "site" "thermald-no-battery" "reason" "no chassis battery; thermald is a laptop concern") | trim | indent 2 }}
+fi
+
+if ! grep -q "GenuineIntel" /proc/cpuinfo 2>/dev/null; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "not_applicable" "script" "install-system-thermald" "site" "thermald-non-intel-cpu" "reason" "not an Intel CPU; thermald is an Intel DPTF daemon") | trim | indent 2 }}
+fi
+
+DNF=("${SUDO[@]}" dnf)
+
+if ! rpm -q thermald >/dev/null 2>&1; then
+  printf '  -> installing thermald\n'
+  "${DNF[@]}" install -y thermald
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  if ! systemctl is-enabled thermald.service >/dev/null 2>&1; then
+    printf '  -> systemctl enable --now thermald\n'
+    "${SUDO[@]}" systemctl enable --now thermald.service || true
+  elif ! systemctl is-active --quiet thermald.service; then
+    printf '  -> systemctl start thermald\n'
+    "${SUDO[@]}" systemctl start thermald.service || true
+  fi
+fi
+{{ end -}}

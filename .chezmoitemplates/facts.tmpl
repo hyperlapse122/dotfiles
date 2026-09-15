@@ -204,6 +204,18 @@ Three rules hold this file together:
 
 {{- /* ---- Layer 2b: in-process file probes ---------------------------------- */ -}}
 
+{{- /* deepSleep — traditional S3 sleep supported in /sys/power/mem_sleep.
+   Modern laptops (e.g. ThinkPad X1 Carbon Gen 11) only support s2idle.
+   Gating MemorySleepMode=deep on deepSleep lets S3-capable laptops force deep
+   sleep while s2idle-only laptops avoid invalid argument warnings. */ -}}
+{{- $deepSleep := false -}}
+{{- if stat "/sys/power/mem_sleep" -}}
+{{-   if contains "deep" (include "/sys/power/mem_sleep") -}}
+{{-     $deepSleep = true -}}
+{{-   end -}}
+{{- end -}}
+{{- $_ := set $facts "deepSleep" $deepSleep -}}
+
 {{- /* thinkpad — the MODEL fields, not the vendor field. sys_vendor holds the
    manufacturer (LENOVO on every Lenovo consumer laptop, "Micro-Star
    International Co., Ltd." here) and never the string ThinkPad. product_version

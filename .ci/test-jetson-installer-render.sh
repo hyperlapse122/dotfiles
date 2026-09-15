@@ -43,6 +43,7 @@ battery: false
 fingerprintReader: false
 displayManager: ""
 displayManagerSddm: false
+deepSleep: false
 thinkpad: false
 jetson: ${jetson}
 vm: false
