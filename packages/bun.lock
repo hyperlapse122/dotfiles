@@ -18,6 +18,15 @@
         "vite-plus": "catalog:",
       },
     },
+    "figma-proxy": {
+      "name": "@h82/figma-proxy",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "24.13.2",
+        "typescript": "7.0.2",
+        "vite-plus": "catalog:",
+      },
+    },
     "mxm4-haptic": {
       "name": "@h82/mxm4-haptic",
       "version": "0.0.0",
@@ -81,6 +90,8 @@
     "@blazediff/core": ["@blazediff/core@1.9.1", "", {}, "sha512-ehg3jIkYKulZh+8om/O25vkvSsXXwC+skXmyA87FFx6A/45eqOkZsBltMw/TVteb0mloiGT8oGRTcjRAz66zaA=="],
 
     "@h82/command-reconcile": ["@h82/command-reconcile@workspace:command-reconcile"],
+
+    "@h82/figma-proxy": ["@h82/figma-proxy@workspace:figma-proxy"],
 
     "@h82/mxm4-haptic": ["@h82/mxm4-haptic@workspace:mxm4-haptic"],
 

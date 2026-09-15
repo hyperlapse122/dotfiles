@@ -624,6 +624,28 @@ commands:
       legacy:
         path: .local/bin/settings-reconcile
 
+    figma-proxy:
+      producer: build
+      safetyProfile: native-single-file
+      proofEligible: true
+      mode: "0755"
+      platforms: [linux, macos]
+      gate: "!container"
+      fingerprintGlobs:
+        - mise.toml
+        - packages/package.json
+        - packages/bun.lock
+        - packages/bunfig.toml
+        - packages/vite.config.ts
+        - packages/figma-proxy/package.json
+        - packages/figma-proxy/tsconfig.json
+        - packages/figma-proxy/vite.config.ts
+        - packages/figma-proxy/src/**
+      commands:
+        - name: figma-proxy
+      legacy:
+        path: .local/bin/figma-proxy
+
     gem80-rgb:
       producer: build
       safetyProfile: native-multi-file

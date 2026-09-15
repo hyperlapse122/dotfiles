@@ -47,6 +47,9 @@ agents:
       url: https://mcp.exa.ai/mcp
       headers:
         x-api-key: op://tum6wsa7azjvbkgwnp6fgamcvm/Exa/API Key
+    - name: figma
+      transport: http
+      url: https://mcp.figma.com/mcp
   skills:
     external:
     - name: agent-browser

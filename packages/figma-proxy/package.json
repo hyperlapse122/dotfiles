@@ -1,0 +1,16 @@
+{
+  "name": "@h82/figma-proxy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Figma MCP MITM forward proxy service and CLI.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "typescript": "7.0.2",
+    "vite-plus": "catalog:"
+  }
+}

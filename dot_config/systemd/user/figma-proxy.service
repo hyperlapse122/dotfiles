@@ -1,0 +1,14 @@
+[Unit]
+Description=Figma MCP Forward Proxy Service
+Documentation=https://github.com/hyperlapse122/dotfiles
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/figma-proxy start
+Restart=always
+RestartSec=3s
+Environment="NO_PROXY=localhost,127.0.0.1"
+
+[Install]
+WantedBy=default.target
