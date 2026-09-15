@@ -227,7 +227,7 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
-          test ! -e "${home}/.omp/agent/models.yml"
+          cmp "${home}/.omp/agent/models.yml" dot_omp/private_agent/private_readonly_models.yml
           # AGENTS.md and mcp.json are managed targets again, so the fixture
           # seeds them empty above and apply must have written real content
           # rather than pruned them. Non-empty is the falsifiable signal: a
@@ -479,7 +479,7 @@ jobs:
           .ci/test-fedora-fact-block-baseline.sh
           .ci/test-shared-host-authd-flow.sh
           .ci/test-jetson-installer-render.sh
-      - name: Assert retired Figma lifecycle is absent
+      - name: Assert Figma OAuth and retired skill lifecycle
         run: |
           set -euo pipefail
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
@@ -495,8 +495,8 @@ jobs:
             --source "$PWD" \
             --destination "${RUNNER_TEMP}/scratch/target" \
             execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
-          ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
-          echo "- retired global Figma lifecycle remains absent (${{ matrix.os }})" \
+          jq -e '.mcpServers.figma == {"type":"http","url":"https://mcp.figma.com/mcp"}' "${mcp}"
+          echo "- Figma OAuth is headerless and retired skill lifecycle remains absent (${{ matrix.os }})" \
             >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Assert fact-registry failure contracts
@@ -729,7 +729,7 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
-          test ! -e "${home}/.omp/agent/models.yml"
+          cmp "${home}/.omp/agent/models.yml" dot_omp/private_agent/private_readonly_models.yml
           # AGENTS.md and mcp.json are managed targets again, so the fixture
           # seeds them empty above and apply must have written real content
           # rather than pruned them. Non-empty is the falsifiable signal: a
@@ -855,7 +855,7 @@ jobs:
             echo "- rendered ${total} template(s), ${failed} error(s)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Assert retired Figma lifecycle is absent
+      - name: Assert Figma OAuth and retired skill lifecycle
         run: |
           set -euo pipefail
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
@@ -871,8 +871,8 @@ jobs:
             --source "${RUNNER_TEMP}/scratch/source" \
             --destination "${RUNNER_TEMP}/scratch/target" \
             execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
-          ! grep -Fqi -e "mcp.figma.com" -e '"figma"' "${mcp}"
-          echo "- retired global Figma lifecycle remains absent (macos)" \
+          jq -e '.mcpServers.figma == {"type":"http","url":"https://mcp.figma.com/mcp"}' "${mcp}"
+          echo "- Figma OAuth is headerless and retired skill lifecycle remains absent (macos)" \
             >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload rendered internals

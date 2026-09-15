@@ -180,8 +180,13 @@ jq -e '[.. | objects | has("type")] | any | not' <<<"$declared" >/dev/null \
   || fail 'a mcp_servers table carries a type key, which is a ~/.mcp.json shape Codex does not use'
 jq -e '[.. | objects | has("headers")] | any | not' <<<"$declared" >/dev/null \
   || fail 'a mcp_servers table carries headers instead of http_headers'
-jq -e '[.mcp_servers[] | select(has("url")) | has("http_headers")] | all' <<<"$declared" >/dev/null \
-  || fail 'an HTTP server rendered without its http_headers table'
+jq -e --argjson eligible "$eligible" '.mcp_servers as $servers
+  | [$eligible[] | select(.transport == "http")
+    | . as $entry | ($servers[$entry.name] | has("http_headers")) == ($entry | has("headers"))]
+  | all' <<<"$declared" >/dev/null \
+  || fail 'HTTP header presence differs from the eligible inventory'
+jq -e '.mcp_servers.figma == {"url":"https://mcp.figma.com/mcp"}' <<<"$declared" >/dev/null \
+  || fail 'Figma OAuth must use its native credential store without static headers'
 jq -e '[.mcp_servers[] | select(has("command")) | has("url") or has("http_headers")] | any | not' <<<"$declared" >/dev/null \
   || fail 'a stdio server rendered with HTTP fields'
 
