@@ -54,6 +54,7 @@ async function writeResponse(
     output.end();
     return;
   }
+  output.flushHeaders();
 
   const body = Readable.fromWeb(
     response.body as unknown as import("node:stream/web").ReadableStream<
@@ -93,6 +94,8 @@ async function writeResponse(
 export function createNodeServer(options: ProxyOptions = {}): Server {
   const handler = createProxyHandler(options);
   return createServer((request, response) => {
+    request.socket?.setNoDelay(true);
+    response.socket?.setNoDelay(true);
     void (async () => {
       const controller = new AbortController();
       const abort = () => controller.abort();

@@ -388,4 +388,118 @@ describe("proxy request handling", () => {
     expect(upstreamSignal?.aborted).toBe(true);
     expect(cancelled).toBe(true);
   });
+
+  it("transforms large payloads efficiently without mutating contents strings", async () => {
+    let forwardedText = "";
+    const handler = createProxyHandler({
+      upstreamFetch: async (input, init) => {
+        forwardedText = await new Request(input, init).text();
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    const largePayload = {
+      request: {
+        systemInstruction: {
+          role: "user",
+          parts: [{ text: "Oh My Pi coding harness with <critical> instructions" }],
+        },
+        contents: Array.from({ length: 1000 }, (_, i) => ({
+          role: i % 2 === 0 ? "user" : "model",
+          parts: [
+            {
+              text:
+                `Message ${i}: This mentions "systemInstruction" and Oh My Pi in user text and code: ` +
+                "x".repeat(1000),
+            },
+          ],
+        })),
+      },
+    };
+
+    const raw = JSON.stringify(largePayload);
+    const startTime = performance.now();
+    const response = await handler(
+      new Request(`http://127.0.0.1${STREAM_PATH}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: raw,
+      }),
+    );
+    const duration = performance.now() - startTime;
+
+    expect(response.status).toBe(204);
+    expect(duration).toBeLessThan(100);
+    const parsedForwarded = JSON.parse(forwardedText);
+    expect(parsedForwarded.request.systemInstruction.parts[0].text).toBe(
+      "AI coding assistant with <important> instructions",
+    );
+    expect(parsedForwarded.request.contents[0].parts[0].text).toContain("Oh My Pi in user text");
+  });
+
+  it("only rewrites request.systemInstruction and preserves nested systemInstruction keys in contents", async () => {
+    let forwardedText = "";
+    const handler = createProxyHandler({
+      upstreamFetch: async (input, init) => {
+        forwardedText = await new Request(input, init).text();
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    const payload = {
+      request: {
+        contents: [
+          {
+            systemInstruction: {
+              parts: [{ text: "Oh My Pi in contents must not be rewritten" }],
+            },
+          },
+        ],
+        systemInstruction: {
+          parts: [{ text: "Oh My Pi in request must be rewritten" }],
+        },
+      },
+    };
+
+    const response = await handler(
+      new Request(`http://127.0.0.1${STREAM_PATH}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    const parsed = JSON.parse(forwardedText);
+    expect(parsed.request.systemInstruction.parts[0].text).toBe(
+      "coding assistant in request must be rewritten",
+    );
+    expect(parsed.request.contents[0].systemInstruction.parts[0].text).toBe(
+      "Oh My Pi in contents must not be rewritten",
+    );
+  });
+
+  it("handles escaped unicode keys in systemInstruction", async () => {
+    let forwardedText = "";
+    const handler = createProxyHandler({
+      upstreamFetch: async (input, init) => {
+        forwardedText = await new Request(input, init).text();
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    const raw =
+      '{"request":{"systemInstruct\\u0069on":{"parts":[{"text":"Oh My Pi"}]},"contents":[]}}';
+    const response = await handler(
+      new Request(`http://127.0.0.1${STREAM_PATH}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: raw,
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    const parsed = JSON.parse(forwardedText);
+    expect(parsed.request.systemInstruction.parts[0].text).toBe("coding assistant");
+  });
 });
