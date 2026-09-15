@@ -1,0 +1,194 @@
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vite-plus/test";
+import extension, {
+  MANAGED_BLOCK_END,
+  MANAGED_BLOCK_START,
+  invokeHook,
+  type BeforeAgentStartEvent,
+  type BeforeAgentStartHandler,
+  type BeforeAgentStartResult,
+  type ExtensionAPI,
+} from "../src/index.js";
+
+function fakeApi(): {
+  api: ExtensionAPI;
+  handler: (event: BeforeAgentStartEvent) => Promise<BeforeAgentStartResult>;
+} {
+  let handler: BeforeAgentStartHandler | undefined;
+  const api: ExtensionAPI = {
+    on(event, next) {
+      expect(event).toBe("before_agent_start");
+      handler = next;
+    },
+  };
+  return {
+    api,
+    handler: async (event) =>
+      handler ? await handler(event) : Promise.reject(new Error("handler missing")),
+  };
+}
+
+function hookScript(dir: string, body: string): string {
+  const path = join(dir, "hook");
+  writeFileSync(path, `#!/usr/bin/env bash\n${body}\n`);
+  chmodSync(path, 0o755);
+  return path;
+}
+
+describe("extension adapter", () => {
+  it("runs the staged hook with the current role environment", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-extension-"));
+    const marker = join(dir, "env");
+    const binary = hookScript(
+      dir,
+      `printf '%s|%s|%s' "$ORCA_TERMINAL_HANDLE" "$ORCA_AGENT_TEAMS_LEADER_PANE" "$TMUX_PANE" > ${JSON.stringify(marker)}\nprintf 'CONTEXT'`,
+    );
+    const previous = {
+      binary: process.env.DOTFILES_ORCHESTRATION_HOOK,
+      terminal: process.env.ORCA_TERMINAL_HANDLE,
+      leader: process.env.ORCA_AGENT_TEAMS_LEADER_PANE,
+      pane: process.env.TMUX_PANE,
+    };
+    process.env.DOTFILES_ORCHESTRATION_HOOK = binary;
+    process.env.ORCA_TERMINAL_HANDLE = "term_test";
+    process.env.ORCA_AGENT_TEAMS_LEADER_PANE = "%7";
+    process.env.TMUX_PANE = "%9";
+    try {
+      const { api, handler } = fakeApi();
+      await extension(api);
+      const result = await handler({ prompt: "x", systemPrompt: ["BASE"] });
+      expect(readFileSync(marker, "utf8")).toBe("term_test|%7|%9");
+      expect(result.systemPrompt).toEqual([
+        "BASE",
+        `${MANAGED_BLOCK_START}\nCONTEXT\n${MANAGED_BLOCK_END}`,
+      ]);
+    } finally {
+      if (previous.binary === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previous.binary;
+      if (previous.terminal === undefined) delete process.env.ORCA_TERMINAL_HANDLE;
+      else process.env.ORCA_TERMINAL_HANDLE = previous.terminal;
+      if (previous.leader === undefined) delete process.env.ORCA_AGENT_TEAMS_LEADER_PANE;
+      else process.env.ORCA_AGENT_TEAMS_LEADER_PANE = previous.leader;
+      if (previous.pane === undefined) delete process.env.TMUX_PANE;
+      else process.env.TMUX_PANE = previous.pane;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces one prior managed block without touching other prompt text", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-extension-replace-"));
+    const binary = hookScript(dir, "printf 'NEW'");
+    const previous = process.env.DOTFILES_ORCHESTRATION_HOOK;
+    process.env.DOTFILES_ORCHESTRATION_HOOK = binary;
+    try {
+      const { api, handler } = fakeApi();
+      await extension(api);
+      const old = `${MANAGED_BLOCK_START}\nOLD\n${MANAGED_BLOCK_END}`;
+      const result = await handler({ prompt: "x", systemPrompt: ["BASE", old, "TAIL", old] });
+      expect(result.systemPrompt).toEqual([
+        "BASE",
+        "TAIL",
+        `${MANAGED_BLOCK_START}\nNEW\n${MANAGED_BLOCK_END}`,
+      ]);
+      expect(
+        result.systemPrompt.join("\n").match(new RegExp(MANAGED_BLOCK_START, "g")),
+      ).toHaveLength(1);
+    } finally {
+      if (previous === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("bounded hook process", () => {
+  it("terminates a child that ignores SIGTERM", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-extension-stubborn-"));
+    const marker = join(dir, "pid");
+    try {
+      const binary = hookScript(
+        dir,
+        `trap '' TERM\nprintf '%s' "$$" > '${marker}'\nwhile :; do sleep 1; done`,
+      );
+      const result = await invokeHook(binary, { ...process.env }, 100);
+      expect(result.diagnostic).toContain("timed out");
+      const pid = Number(readFileSync(marker, "utf8"));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      try {
+        expect(() => process.kill(pid, 0)).toThrow();
+      } finally {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          /* Already exited. */
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the original system prompt when the hook fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-extension-diagnostic-"));
+    const previous = process.env.DOTFILES_ORCHESTRATION_HOOK;
+    process.env.DOTFILES_ORCHESTRATION_HOOK = hookScript(dir, "printf 'partial'; exit 3");
+    try {
+      const { api, handler } = fakeApi();
+      await extension(api);
+      const result = await handler({
+        prompt: "x",
+        systemPrompt: ["BASE", `${MANAGED_BLOCK_START}\nSTALE LEAD\n${MANAGED_BLOCK_END}`],
+      });
+      expect(result.systemPrompt).toEqual(["BASE"]);
+    } finally {
+      if (previous === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns a diagnostic for a failed child", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-extension-fail-"));
+    try {
+      const binary = hookScript(dir, "printf 'partial'; exit 3");
+      const result = await invokeHook(binary, { ...process.env }, 500);
+      expect(result.context).toBeNull();
+      expect(result.diagnostic).toContain("exit 3");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports an empty managed response without claiming partial context", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-empty-"));
+    try {
+      const binary = hookScript(dir, "exit 0");
+      const managed = await invokeHook(binary, {
+        ...process.env,
+        ORCA_TERMINAL_HANDLE: "term_test",
+      });
+      expect(managed.context).toBeNull();
+      expect(managed.diagnostic).toContain("no orchestration context");
+      const outside = await invokeHook(binary, { ...process.env, ORCA_TERMINAL_HANDLE: "" });
+      expect(outside).toEqual({ context: null });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns a diagnostic when the child exceeds its bound", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-extension-timeout-"));
+    try {
+      const binary = hookScript(dir, "sleep 30");
+      const started = Date.now();
+      const result = await invokeHook(binary, { ...process.env }, 50);
+      expect(result.context).toBeNull();
+      expect(result.diagnostic).toContain("timed out");
+      expect(Date.now() - started).toBeLessThan(1_000);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

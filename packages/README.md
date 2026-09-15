@@ -26,6 +26,10 @@ the repo's TypeScript/JavaScript library packages.
 | [`command-reconcile/`](command-reconcile/) | `@h82/command-reconcile` | Serialized versioned command reconciler and safe pruner. |
 | [`settings-reconcile/`](settings-reconcile/) | `@h82/settings-reconcile` | Apply helper that overlays declared TOML settings leaves. It has no plugin contract. |
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
+| [`orchestration-hook/`](orchestration-hook/) | `@h82/orchestration-hook` | Orca role context and direct-launch guard. |
+| [`omp-orca/`](omp-orca/) | `@h82/omp-orca` | Native omp orchestration extension. |
+| [`antigravity-sidecar/`](antigravity-sidecar/) | `@h82/antigravity-sidecar` | Local proxy that transforms system-prompt text. |
+| [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | On-demand Figma OAuth for omp. |
 | [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
 
 ## Toolchain: Vite+
@@ -108,11 +112,7 @@ out to an external binary (e.g. `bun build --compile`, as in `settings-reconcile
 must declare explicit `input`/`output` on the task or source
 edits replay a stale cached build.
 
-This repository declares no Figma MCP server. Projects own their Figma MCP
-configuration, and each harness runs its own OAuth flow for it. A soft-skipped
-build preserves the executable and, under `run_onchange` semantics, retries only
-after an input change or `chezmoi apply --force`. The manual compile command
-above is the non-deploying alternative.
+The shared MCP inventory declares Figma. Run `figma-auth` to authorize omp; other harnesses use their native OAuth flow. The helper writes only the Figma credential in omp's SQLite store and preserves unrelated credentials and data.
 
 ## Lint + format + test
 

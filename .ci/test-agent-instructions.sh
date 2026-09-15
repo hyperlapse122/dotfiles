@@ -81,11 +81,10 @@ source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 wrapper=dot_claude/readonly_CLAUDE.md.tmpl
 peer_wrappers=(
-  dot_gemini/readonly_AGENTS.md.tmpl
   dot_codex/readonly_AGENTS.md.tmpl
   dot_omp/private_agent/private_readonly_AGENTS.md.tmpl
 )
-harness_ids=(claude agy codex omp)
+harness_ids=(claude codex omp)
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$wrapper"
 for peer in "${peer_wrappers[@]}"; do
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$peer"
@@ -125,8 +124,6 @@ linux_rule='MUST use `orca-ide` for Orca commands, never bare `orca`, because ba
 linux_only_sentinel='`/usr/bin/orca`'
 other_os_rule='Resolve the Orca executable as the `orchestration` skill directs.'
 
-omp_payload_begin='<!-- omp-orchestration-payload:begin -->'
-omp_payload_end='<!-- omp-orchestration-payload:end -->'
 
 # Render the payload bodies separately from the four user-scoped instruction
 # cores. Every wrapper is built here rather than read from a plugin tree: the
@@ -135,12 +132,10 @@ omp_payload_end='<!-- omp-orchestration-payload:end -->'
 # is verified against the binary's own output by the hook gates.
 everyone_payload_wrapper="$scratch/claude-everyone.md.tmpl"
 codex_everyone_payload_wrapper="$scratch/codex-everyone.md.tmpl"
-agy_everyone_payload_wrapper="$scratch/agy-everyone.md.tmpl"
 coordinator_payload_wrapper="$scratch/claude-coordinator.md.tmpl"
 omp_everyone_wrapper="$scratch/omp-everyone.md.tmpl"
 printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$everyone_payload_wrapper"
 printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "codex") -}}' >"$codex_everyone_payload_wrapper"
-printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "agy") -}}' >"$agy_everyone_payload_wrapper"
 printf '%s\n' '{{- includeTemplate "orchestration-coordinator.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$coordinator_payload_wrapper"
 printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "omp") -}}' >"$omp_everyone_wrapper"
 
@@ -148,8 +143,6 @@ everyone_claude_linux="$scratch/everyone-claude-linux.md"
 everyone_claude_darwin="$scratch/everyone-claude-darwin.md"
 everyone_codex_linux="$scratch/everyone-codex-linux.md"
 everyone_codex_darwin="$scratch/everyone-codex-darwin.md"
-everyone_agy_linux="$scratch/everyone-agy-linux.md"
-everyone_agy_darwin="$scratch/everyone-agy-darwin.md"
 everyone_omp_linux="$scratch/everyone-omp-linux.md"
 everyone_omp_darwin="$scratch/everyone-omp-darwin.md"
 coordinator_claude_linux="$scratch/coordinator-claude-linux.md"
@@ -159,8 +152,6 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_payload_wrapper" 
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$everyone_payload_wrapper" "$everyone_claude_darwin"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$codex_everyone_payload_wrapper" "$everyone_codex_linux"
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$codex_everyone_payload_wrapper" "$everyone_codex_darwin"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$agy_everyone_payload_wrapper" "$everyone_agy_linux"
-render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$agy_everyone_payload_wrapper" "$everyone_agy_darwin"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$omp_everyone_wrapper" "$everyone_omp_linux"
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$omp_everyone_wrapper" "$everyone_omp_darwin"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_payload_wrapper" "$coordinator_claude_linux"
@@ -169,7 +160,6 @@ render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$coordinator_payload_wrapp
 for payload_render in \
   "$everyone_claude_linux" "$everyone_claude_darwin" \
   "$everyone_codex_linux" "$everyone_codex_darwin" \
-  "$everyone_agy_linux" "$everyone_agy_darwin" \
   "$everyone_omp_linux" "$everyone_omp_darwin"; do
   [[ -s $payload_render ]] || fail "$(basename "$payload_render") rendered empty"
 done
@@ -187,10 +177,6 @@ diff -q "$everyone_claude_linux" "$everyone_omp_linux" >/dev/null \
   || fail "Claude and omp everyone payloads differ on Linux"
 diff -q "$everyone_claude_darwin" "$everyone_omp_darwin" >/dev/null \
   || fail "Claude and omp everyone payloads differ on Darwin"
-diff -q "$everyone_claude_linux" "$everyone_agy_linux" >/dev/null \
-  || fail "Claude and Antigravity everyone payloads differ on Linux"
-diff -q "$everyone_claude_darwin" "$everyone_agy_darwin" >/dev/null \
-  || fail "Claude and Antigravity everyone payloads differ on Darwin"
 diff -q "$coordinator_claude_linux" "$coordinator_claude_darwin" >/dev/null \
   || fail "Claude coordinator payload differs across OSes"
 
@@ -244,7 +230,7 @@ for i in "${!harness_ids[@]}"; do
       grep -F "$rule" "$wait_section" >/dev/null ||
         soft_fail "${harness_ids[$i]} ($target_os) lost coordinator execution rule: $rule"
     done <<'WAIT_EXECUTION_RULES'
-When Claude Code, Codex, or Antigravity acts as an Orca coordinator supervising dispatched workers
+When Claude Code, Codex, or omp acts as an Orca coordinator supervising dispatched workers
 MUST start each blocking wait through its native asynchronous command mechanism
 Handle an immediate result directly when no running-command handle is returned.
 MUST NOT issue timer-driven status queries, nonblocking output polls, filler commands, or duplicate watchers
@@ -279,57 +265,12 @@ WAIT_EXECUTION_RULES
   renders+=("$harness_render")
 done
 
-extract_omp_payload() {
-  local input=$1 body_output=$2 core_output=$3 begin_count end_count begin_line end_line
-  local first_line last_line total_lines adjacent_line
-  begin_count=$(grep -Fxc "$omp_payload_begin" "$input" || true)
-  end_count=$(grep -Fxc "$omp_payload_end" "$input" || true)
-  [[ $begin_count -eq 1 ]] || fail "$(basename "$input") must contain exactly one $omp_payload_begin delimiter (found $begin_count)"
-  [[ $end_count -eq 1 ]] || fail "$(basename "$input") must contain exactly one $omp_payload_end delimiter (found $end_count)"
-  begin_line=$(grep -Fnx "$omp_payload_begin" "$input" | cut -d: -f1 || true)
-  end_line=$(grep -Fnx "$omp_payload_end" "$input" | cut -d: -f1 || true)
-  if (( begin_line >= end_line )); then
-    fail "$(basename "$input") places its omp payload delimiters in the wrong order"
-  fi
-  sed -n "$((begin_line + 1)),$((end_line - 1))p" "$input" | sed '${/^$/d;}' >"$body_output"
-  [[ -s $body_output ]] || fail "$(basename "$input") has an empty omp payload block"
-  first_line=$begin_line
-  while (( first_line > 1 )); do
-    adjacent_line=$(sed -n "$((first_line - 1))p" "$input")
-    [[ -n $adjacent_line ]] && break
-    first_line=$((first_line - 1))
-  done
-  last_line=$end_line
-  total_lines=$(wc -l <"$input")
-  while (( last_line < total_lines )); do
-    adjacent_line=$(sed -n "$((last_line + 1))p" "$input")
-    [[ -n $adjacent_line ]] && break
-    last_line=$((last_line + 1))
-  done
-  sed -e "${first_line},${last_line}d" "$input" >"$core_output"
-}
-
-omp_linux_render=${renders[3]}
-omp_darwin_render="$scratch/omp-darwin.md"
-render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/${peer_wrappers[2]}" "$omp_darwin_render"
-omp_linux_body="$scratch/omp-linux-payload.md"
-omp_darwin_body="$scratch/omp-darwin-payload.md"
-omp_linux_core="$scratch/omp-linux-core.md"
-omp_darwin_core="$scratch/omp-darwin-core.md"
-extract_omp_payload "$omp_linux_render" "$omp_linux_body" "$omp_linux_core"
-extract_omp_payload "$omp_darwin_render" "$omp_darwin_body" "$omp_darwin_core"
-for omp_render in "$omp_linux_render" "$omp_darwin_render"; do
-  if grep -F '<!-- orchestration-coordinator:begin -->' "$omp_render" >/dev/null; then
-    fail "$(basename "$omp_render") carries the coordinator payload"
+core_renders=("${renders[@]}")
+for core in "${core_renders[@]}"; do
+  if grep -F '<!-- omp-orchestration-payload:begin -->' "$core" >/dev/null; then
+    fail "static omp orchestration payload survives"
   fi
 done
-diff -q "$omp_linux_body" "$everyone_omp_linux" >/dev/null \
-  || fail "the extracted Linux omp payload differs from its standalone everyone render"
-diff -q "$omp_darwin_body" "$everyone_omp_darwin" >/dev/null \
-  || fail "the extracted Darwin omp payload differs from its standalone everyone render"
-
-core_renders=("${renders[@]}")
-core_renders[3]=$omp_linux_core
 rendered=${core_renders[0]}
 
 # The executable-selection rule stays in the shared core, not the injected
@@ -340,9 +281,8 @@ rendered=${core_renders[0]}
 # branches, and assert the payload does NOT repeat it: one rule, one owner.
 darwin_core_renders=(
   "$scratch/claude-darwin.md"
-  "$scratch/agy-darwin.md"
   "$scratch/codex-darwin.md"
-  "$omp_darwin_core"
+  "$scratch/omp-darwin.md"
 )
 for i in "${!core_renders[@]}"; do
   linux_core=${core_renders[$i]}
@@ -381,7 +321,7 @@ for i in "${!everyone_linux_renders[@]}"; do
 done
 
 strip_harness_paragraph() { grep -vE '^This harness (is|runs) ' "$1"; }
-for i in 1 2 3; do
+for i in 1 2; do
   diff -q <(strip_harness_paragraph "$rendered") <(strip_harness_paragraph "${core_renders[$i]}") >/dev/null \
     || fail "$(basename "${core_renders[$i]}") diverges from $(basename "$rendered") outside its harness paragraph"
 done
@@ -411,10 +351,6 @@ claude|The wait-form rule below governs what that command is; this paragraph gov
 codex|This harness is Codex. Use `apply_patch` to create, update, or delete a file. Codex exposes no dedicated read tool, so read and search through `shell`
 codex|In a session exposing `exec_command` and `write_stdin`, start the wait with `yield_time_ms: 1000`, retain `session_id`, and continue that same session with empty-input `write_stdin`.
 codex|MUST NOT end the turn while workers remain outstanding: these tools do not guarantee automatic resumption after a final response.
-agy|This harness is Antigravity. Use `view_file` to read; `replace_file_content` to edit a contiguous block; `write_to_file` to create a file or replace it whole;
-agy|For coordinator waits, use `run_command` with `WaitMsBeforeAsync: 500`; do not mark the wait as a persistent service.
-agy|The native completed-task notification resumes the model and supplies the command result.
-agy|Use `manage_task` on that task only when the completion event requires a result read, never for status polling during silence.
 omp|This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch against a content-hash anchor; `write` to create a file or replace it whole;
 HARNESS_NEEDLES
 
@@ -484,8 +420,8 @@ Before launching ANY subagent, worker, or peer reviewer, MUST open and read the 
 Orca owns dispatch.
 The detailed contract does not live in this file: an Orca-managed session receives it by injection at session start, as a normative extension of this file carrying the same precedence as this file's own text.
 A session outside Orca receives no injection, and its absence never waives the contract: perform non-dispatch work only, and never reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
-Antigravity leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
-`omp` remains outside orchestration: it receives the rules that bind every agent and performs non-dispatch work only, never leading or dispatching.
+omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
+A session that has not received these instructions performs non-dispatch work only.
 A run MUST NOT end with an actionable finding that is only listed
 is a working note, never a delivery
 or resolved into a filed tracker issue whose link replaces the entry, or resolved into the committed record file whose path replaces the entry
@@ -553,10 +489,8 @@ everyone_payloads=(
   "$everyone_claude_darwin"
   "$everyone_codex_linux"
   "$everyone_codex_darwin"
-  "$everyone_agy_linux"
-  "$everyone_agy_darwin"
-  "$omp_linux_body"
-  "$omp_darwin_body"
+  "$everyone_omp_linux"
+  "$everyone_omp_darwin"
 )
 while IFS= read -r needle; do
   [[ -z $needle ]] && continue
@@ -582,8 +516,8 @@ MUST NOT declare orchestration unavailable without an observed failure; if the a
 If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
 Absence of this text never waives the contract.
 A session that holds only the pointer in the user-scoped instruction file performs non-dispatch work only, and still MUST NOT reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
-Claude Code, Codex, and Antigravity lead, dispatch, and serve as workers on the same terms.
-`omp` is in that set, so it never leads an Orca workflow, dispatches Orca workers, or serves as one
+Claude Code, Codex, and omp lead, dispatch, and serve as workers on the same terms.
+omp receives this text through its before_agent_start extension before each model call.
 When another agent launches Codex through Orca for cross-model or cross-harness work, the launch MUST explicitly select `gpt-5.6-luna` with `max` reasoning effort.
 The coordinator MUST compare `launch.requested` with `launch.effective` and claim Luna/max only when the effective fields report that pair.
 If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the Luna/max requirement.
@@ -609,7 +543,7 @@ the coordinator MUST fetch that content itself when it holds that MCP and materi
 When neither the coordinator nor any available agent holds it, the run MUST record that gap and say in the brief that the source was unreachable, rather than stall or let a worker guess.
 For a design source that means frame or node identity, layout and spacing measurements, color and type tokens, component and variant names, copy strings, and repo-relative paths for exported assets and reference screenshots.
 A dispatch prompt or brief MUST NOT hand a worker an MCP-only URL as the sole path to required context.
-Dispatch targets are the `claude`, `codex`, and `agy` agents.
+Dispatch targets are the `claude`, `codex`, and `omp` agents.
 SHOULD go to the Gemini Flash serving family, because a worker from that family settles it for a fraction of the cost
 Frontend design work — component markup and styling, layout, design-system application, visual polish, screen mockups — and document authoring — prose documents, README and docs pages, plan and requirements text, merge-request bodies, explainers — SHOULD go to the Gemini Flash serving family
 Adjudication, a verdict, and a document whose deliverable is the judgment itself rather than the prose carrying it — such as a `ce-pov` output or a review verdict — SHOULD stay on a frontier serving family
@@ -664,8 +598,8 @@ done <<'CLAUDE_COORDINATOR_NEEDLES'
 The lead agent also picks the Orca recipient for the Implementation Units that the `compound-engineering` skills produce.
 Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker according to the work-shape and serving-family preferences above.
 A Unit that needs live MCP access its intended recipient does not hold MUST NOT be dispatched to that recipient
-Whether `agy` honours a launch-time model or reasoning effort through Orca is unverified, so do not request either for it until a dispatch receipt reports those values took effect; its own configuration pins a Gemini Flash model meanwhile.
-When `agy` is unavailable, or its worker fails substantively, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`; this step is subordinate to the failure classification below and MUST NOT fire on a mechanical fault.
+For omp, use its declared model policy unless the task explicitly selects another model.
+When `omp` is unavailable, or its worker fails substantively, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`; this step is subordinate to the failure classification below and MUST NOT fire on a mechanical fault.
 A Unit that defeats that tier moves to `claude`, and the run picks its rung by sizing the Unit, never by a fixed retry ladder.
 Size the Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
 `sonnet` takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
@@ -679,7 +613,7 @@ MUST NOT open at `fable` on a guess the sizing does not support, and MUST NOT re
 The three-consecutive-failure rule stops the dispatch and consults on the third substantive failure; it does not buy another rung.
 This paragraph narrows the dispatch-target rule above for Implementation Units only.
 It leaves scout reads, lookups, and mechanical steps on the Gemini Flash serving family, and it leaves adjudication on a frontier serving family; authoring the prose of a plan or requirements document follows the dispatch-target rule above.
-It also tightens the cross-model review: that review MUST run `codex`, `claude`, and `agy` over the same brief file, except that an agent excluded as the document's own author is dropped rather than replaced, and MUST weigh each reviewer's findings on their own evidence.
+It also tightens the cross-model review: that review MUST run `codex`, `claude`, and `omp` over the same brief file, except that an agent excluded as the document's own author is dropped rather than replaced, and MUST weigh each reviewer's findings on their own evidence.
 Model and effort apply to a fresh agent terminal only; the version-matched Orca guide owns their spelling and reports which values took effect.
 Name the agent and nothing else for recipient selection.
 The Everyone payload above owns model and effort selection for qualifying Codex launches; check its effective receipt before claiming that selection took effect.

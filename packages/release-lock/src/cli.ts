@@ -28,12 +28,16 @@ type Output = { kind: "file"; path: string } | { kind: "stdout"; path: string };
 function argumentsFor(
   argv: readonly string[],
   defaultPath: string,
-): { output: Output; only: string | undefined } | null {
+): { output: Output; only: string | undefined; pruneRetired: boolean } | null {
   let output: Output | undefined;
   let only: string | undefined;
+  let pruneRetired = false;
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index];
-    if (flag === "--stdout") {
+    if (flag === "--prune-retired") {
+      if (pruneRetired) return null;
+      pruneRetired = true;
+    } else if (flag === "--stdout") {
       if (output) return null;
       output = { kind: "stdout", path: defaultPath };
     } else if (flag === "--out" || flag === "--only") {
@@ -50,7 +54,8 @@ function argumentsFor(
       return null;
     }
   }
-  return { output: output ?? { kind: "file", path: defaultPath }, only };
+  if (pruneRetired && only !== undefined) return null;
+  return { output: output ?? { kind: "file", path: defaultPath }, only, pruneRetired };
 }
 
 export async function runCli(argv: readonly string[], options: CliOptions = {}): Promise<number> {
@@ -58,13 +63,31 @@ export async function runCli(argv: readonly string[], options: CliOptions = {}):
   const stderr = options.stderr ?? process.stderr;
   const args = argumentsFor(argv, options.defaultPath ?? DEFAULT_LOCK_PATH);
   if (!args) {
-    stderr.write("Usage: release-lock [--only <registered-tool>] [--out <path> | --stdout]\n");
+    stderr.write(
+      "Usage: release-lock [--only <registered-tool> | --prune-retired] [--out <path> | --stdout]\n",
+    );
     return 2;
   }
 
-  const { output, only } = args;
+  const { output, only, pruneRetired } = args;
   const registry = only === undefined ? REGISTRY : { [only]: REGISTRY[only]! };
   const existing = await readLock(output.path);
+  if (pruneRetired) {
+    if (existing === null) {
+      stderr.write("release-lock: pruning requires an existing lock\n");
+      return 1;
+    }
+    const complete = {
+      releases: {
+        tools: Object.fromEntries(
+          Object.entries(existing.releases.tools).filter(([name]) => Object.hasOwn(REGISTRY, name)),
+        ),
+      },
+    };
+    if (output.kind === "stdout") stdout.write(serializeLock(complete));
+    else await writeLock(output.path, complete);
+    return 0;
+  }
   const { lock, failures } = await (options.resolve ?? resolveAll)(githubToken(), registry);
   const complete =
     only === undefined

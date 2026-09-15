@@ -1,6 +1,6 @@
 ## Waiting on dispatched workers
 
-When Claude Code, Codex, or Antigravity acts as an Orca coordinator supervising dispatched workers, it MUST start each blocking wait through its native asynchronous command mechanism. Keep the explicit Orca timeout and retain the returned command handle. Handle an immediate result directly when no running-command handle is returned. This execution policy does not apply to ordinary commands or a worker's own task, and does not authorize omp to orchestrate.
+When Claude Code, Codex, or omp acts as an Orca coordinator supervising dispatched workers, it MUST start each blocking wait through its native asynchronous command mechanism. Keep the explicit Orca timeout and retain the returned command handle. Handle an immediate result directly when no running-command handle is returned. This execution policy does not apply to ordinary commands or a worker's own task, and does not change the dispatch authorization rules.
 
 While that wait runs, the coordinator MUST NOT issue timer-driven status queries, nonblocking output polls, filler commands, or duplicate watchers. Useful independent work remains allowed. A required blocking continuation on the same command is not a status poll; use the longest permitted interval to minimize avoidable model requests. A native yield is not an Orca result and MUST NOT start another wait. Check worker deadlines and the run bound at each native yield; an expired bound invokes the installed stop, release, and record-the-gap path instead of another continuation.
 

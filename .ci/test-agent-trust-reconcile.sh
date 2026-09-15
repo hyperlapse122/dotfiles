@@ -83,14 +83,12 @@ env \
   "$reconcile_bin"
 
 [[ -f "$claude_json" ]] || fail "claude_json was not created"
-[[ -f "$agy_settings" ]] || fail "agy_settings was not created"
+[[ ! -e "$agy_settings" ]] || fail "retired agy settings were created"
 [[ -f "$codex_config" ]] || fail "codex_config was not created"
 
 # Verify permissions (0600)
 mode_claude=$(stat -c '%a' "$claude_json" 2>/dev/null || stat -f '%Lp' "$claude_json")
 [[ "$mode_claude" == "600" ]] || fail "claude_json mode is $mode_claude, expected 600"
-mode_agy=$(stat -c '%a' "$agy_settings" 2>/dev/null || stat -f '%Lp' "$agy_settings")
-[[ "$mode_agy" == "600" ]] || fail "agy_settings mode is $mode_agy, expected 600"
 mode_codex=$(stat -c '%a' "$codex_config" 2>/dev/null || stat -f '%Lp' "$codex_config")
 [[ "$mode_codex" == "600" ]] || fail "codex_config mode is $mode_codex, expected 600"
 
@@ -102,12 +100,6 @@ jq -e --arg p "$repo1_resolved" '.projects[$p].hasTrustDialogAccepted == true' "
   || fail "claude_json missing trust for repo1"
 jq -e --arg p "$wt1_resolved" '.projects[$p].hasTrustDialogAccepted == true' "$claude_json" >/dev/null \
   || fail "claude_json missing trust for wt1"
-
-# Verify antigravity trust
-jq -e --arg p "$repo1_resolved" '.trustedWorkspaces | index($p) != null' "$agy_settings" >/dev/null \
-  || fail "agy_settings missing trust for repo1"
-jq -e --arg p "$wt1_resolved" '.trustedWorkspaces | index($p) != null' "$agy_settings" >/dev/null \
-  || fail "agy_settings missing trust for wt1"
 
 # Verify codex trust
 grep -F "[projects.\"$repo1_resolved\"]" "$codex_config" >/dev/null \
@@ -121,6 +113,8 @@ pass "fresh state reconciliation creates trust entries with 0600 mode"
 # Test 2: Idempotency (subsequent run produces byte-identical files)
 # ---------------------------------------------------------------------------
 claude_snapshot=$(cat "$claude_json")
+mkdir -p "${agy_settings%/*}"
+printf '%s\n' '{"telemetryEnabled":false,"trustedWorkspaces":["/prior/trusted"]}' >"$agy_settings"
 agy_snapshot=$(cat "$agy_settings")
 codex_snapshot=$(cat "$codex_config")
 
@@ -149,9 +143,6 @@ tmp_claude=$(mktemp "$scratch/claude.XXXXXX")
 jq '.numStartups = 42 | .projects["/other/proj"] = {"allowedTools":["bash"]}' "$claude_json" > "$tmp_claude"
 mv "$tmp_claude" "$claude_json"
 
-tmp_agy=$(mktemp "$scratch/agy.XXXXXX")
-jq '.telemetryEnabled = false | .trustedWorkspaces += ["/prior/trusted"]' "$agy_settings" > "$tmp_agy"
-mv "$tmp_agy" "$agy_settings"
 
 printf '\n[features]\nmemories = false\n\n[projects."/prior/codex"]\ntrust_level = "trusted"\n' >> "$codex_config"
 
@@ -179,7 +170,7 @@ jq -e --arg p "$repo3_resolved" '.projects[$p].hasTrustDialogAccepted == true' "
 # Assert preserved keys in agy
 jq -e '.telemetryEnabled == false' "$agy_settings" >/dev/null || fail "agy telemetryEnabled was clobbered"
 jq -e '.trustedWorkspaces | index("/prior/trusted") != null' "$agy_settings" >/dev/null || fail "agy /prior/trusted was dropped"
-jq -e --arg p "$repo3_resolved" '.trustedWorkspaces | index($p) != null' "$agy_settings" >/dev/null || fail "agy missing repo3"
+[[ "$(cat "$agy_settings")" == "$agy_snapshot" ]] || fail "retired agy settings were modified"
 
 # Assert preserved keys in codex
 grep -F 'memories = false' "$codex_config" >/dev/null || fail "codex memories feature was clobbered"
@@ -206,8 +197,7 @@ env \
 
 jq -e --arg p "$explicit_resolved" '.projects[$p].hasTrustDialogAccepted == true' "$claude_json" >/dev/null \
   || fail "claude_json missing explicit path trust"
-jq -e --arg p "$explicit_resolved" '.trustedWorkspaces | index($p) != null' "$agy_settings" >/dev/null \
-  || fail "agy_settings missing explicit path trust"
+[[ "$(cat "$agy_settings")" == "$agy_snapshot" ]] || fail "explicit path changed retired agy settings"
 grep -F "[projects.\"$explicit_resolved\"]" "$codex_config" >/dev/null \
   || fail "codex_config missing explicit path trust"
 

@@ -22,7 +22,6 @@ platform_composed_units=(
 
 # Every other stanza that declares `path` is an explicit exemption: its `path`
 # carries no platform token at all, so the agreement rule does not apply.
-#   agy                       archive member 'antigravity'
 #   ast-grep, sg              flat archive, bare binary names
 #   buf, protoc-gen-buf-*     'buf/bin/<name>', version- and platform-free
 #   buf-zsh-completion        'buf/share/zsh/site-functions/_buf'
@@ -30,7 +29,7 @@ platform_composed_units=(
 #   the shellcheck unit       'shellcheck-<version>/shellcheck', version token only
 #   winbox, winbox-icon       'WinBox', 'assets/img/winbox.png' (linux-only asset)
 path_exempt_units=(
-  agy ast-grep buf buf-zsh-completion gh glab
+  ast-grep buf buf-zsh-completion gh glab
   protoc-gen-buf-breaking protoc-gen-buf-lint sg shellcheck winbox winbox-icon
 )
 

@@ -1,4 +1,26 @@
 {{- $f := includeTemplate "facts.tmpl" . | fromYaml }}
+# Remove only public links that still point to the retired managed command.
+{{ range $name := list "agy" "antigravity" -}}
+{{ $path := joinPath $.chezmoi.homeDir ".local/bin" $name -}}
+{{ $entry := lstat $path -}}
+{{ if and $entry (eq $entry.type "symlink") -}}
+{{ $target := output "readlink" $path | trim -}}
+{{ if or (eq $target "../lib/commands/current/agy/agy") (eq $target (joinPath $.chezmoi.homeDir ".local/lib/commands/current/agy/agy")) -}}
+.local/bin/{{ $name }}
+{{ end -}}
+{{ end -}}
+{{ end -}}
+.local/lib/commands/current/agy
+.local/lib/commands/store/agy
+.local/share/chezmoi-commands/incomplete/agy
+.local/share/dotfiles-agy-plugin
+.local/share/agy-plugin-bundles
+.gemini/AGENTS.md
+.gemini/skills
+.gemini/config/mcp_config.json
+.gemini/config/plugins/dotfiles-agy
+.gemini/config/plugins/compound-engineering
+
 # The i-have-adhd plugin was retired to a skill-only delivery. Deleting the
 # managed source stopped chezmoi managing the extracted archive, but an
 # already-deployed copy survives until pruned here. Its ~/.omp/agent flag is
@@ -57,16 +79,11 @@
 # managed targets again, and pruning a path chezmoi writes in the same apply
 # would delete the file it just produced.
 #
-# models.yml stays pruned. The restored model policy lives in config.yml, which
-# omp writes itself and the reconciler asserts leaf by leaf; models.yml was the
-# custom-provider baseline, and nothing declares one now.
-#
 # .env is included: run_after_config-omp-auth.sh.tmpl resolved EXA_API_KEY from
 # 1Password and wrote it there in plaintext, so leaving it behind strands a live
 # credential in a directory nothing manages any more. The restored MCP target
 # resolves that key at render time instead.
 .omp/agent/CLAUDE.md
-.omp/agent/models.yml
 .omp/agent/APPEND_SYSTEM.md
 .omp/agent/TITLE_SYSTEM.md
 .omp/agent/.i-have-adhd-always

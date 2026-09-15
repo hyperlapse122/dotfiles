@@ -87,8 +87,8 @@ describe("composeContext", () => {
 });
 
 describe("additional harness roles", () => {
-  it("gives agy a complete lead envelope in order", () => {
-    const text = composeContext("agy", "lead", () => parts);
+  it("gives omp a complete lead envelope in order", () => {
+    const text = composeContext("omp", "lead", () => parts);
     if (text === null) throw new Error("expected a lead envelope");
     const order = [
       text.indexOf(PREAMBLE),
@@ -101,21 +101,21 @@ describe("additional harness roles", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it("gives agy workers the everyone envelope only", () => {
-    const text = composeContext("agy", "worker", () => parts);
+  it("gives omp workers the everyone envelope only", () => {
+    const text = composeContext("omp", "worker", () => parts);
     expect(text).toContain(PREAMBLE);
     expect(text).toContain(payload("everyone"));
     expect(text).not.toContain(payload("coordinator"));
   });
 
-  it("gives agy none roles a parseable no-op", () => {
-    expect(composeContext("agy", "none", () => parts)).toBeNull();
-    expect(() => JSON.parse(emptyOutput("agy"))).not.toThrow();
+  it("gives omp none roles no output", () => {
+    expect(composeContext("omp", "none", () => parts)).toBeNull();
+    expect(emptyOutput("omp")).toBe("");
   });
 
-  it("does not deliver a half envelope to an agy lead", () => {
-    expect(composeContext("agy", "lead", () => ({ skill: "", guide: parts.guide }))).toBeNull();
-    expect(composeContext("agy", "lead", () => ({ skill: parts.skill, guide: "" }))).toBeNull();
+  it("does not deliver a half envelope to an omp lead", () => {
+    expect(composeContext("omp", "lead", () => ({ skill: "", guide: parts.guide }))).toBeNull();
+    expect(composeContext("omp", "lead", () => ({ skill: parts.skill, guide: "" }))).toBeNull();
   });
 
   it("gives a codex lead the lead envelope", () => {
@@ -123,9 +123,9 @@ describe("additional harness roles", () => {
     expect(text).toContain(payload("coordinator"));
   });
 
-  it("accepts agy and rejects the unmanaged harness", () => {
-    expect(isHarness("agy")).toBe(true);
-    expect(isHarness("omp")).toBe(false);
+  it("accepts omp and rejects the retired harness", () => {
+    expect(isHarness("omp")).toBe(true);
+    expect(isHarness("agy")).toBe(false);
   });
 });
 
@@ -140,7 +140,7 @@ describe("output shape", () => {
 
   it("gives a document to the harnesses that parse one, and Codex nothing at all", () => {
     expect(emptyOutput("claude")).toBe("{}");
-    expect(emptyOutput("agy")).toBe("{}");
+    expect(emptyOutput("omp")).toBe("");
     expect(emptyOutput("codex")).toBe("");
   });
 
@@ -150,11 +150,7 @@ describe("output shape", () => {
     }
   });
 
-  it("delivers the whole envelope to Antigravity as one ephemeral step", () => {
-    const parsed = JSON.parse(deliveryEnvelope("agy", "BODY")) as {
-      injectSteps: { ephemeralMessage?: string }[];
-    };
-    expect(parsed.injectSteps).toHaveLength(1);
-    expect(parsed.injectSteps[0]?.ephemeralMessage).toBe("BODY");
+  it("delivers plain context to omp", () => {
+    expect(deliveryEnvelope("omp", "BODY")).toBe("BODY");
   });
 });

@@ -28,14 +28,7 @@ import { resolveRole, type RoleEnv } from "./role.js";
  * It exists on every provisioned host today, so omitting it would leave a
  * one-word bypass of this whole gate.
  */
-export const BLOCKED_PROGRAMS: readonly string[] = [
-  "codex",
-  "codex-bin",
-  "claude",
-  "omp",
-  "agy",
-  "antigravity",
-];
+export const BLOCKED_PROGRAMS: readonly string[] = ["codex", "codex-bin", "claude"];
 
 /**
  * Subcommands that manage a CLI rather than start an agent with it.
@@ -81,13 +74,15 @@ const NON_LAUNCH_FLAGS: ReadonlySet<string> = new Set(["--version", "-V", "--hel
 export const SHELL_TOOL_NAMES: Record<Harness, readonly string[]> = {
   claude: ["Bash"],
   codex: ["exec_command", "unified_exec", "shell", "local_shell"],
-  agy: ["run_command"],
+  omp: [],
 };
+
+/** Tool payloads whose command-like field is document data, not shell input. */
+const NON_SHELL_EDIT_TOOLS: ReadonlySet<string> = new Set(["apply_patch", "doc-edit", "doc_edit"]);
 
 export interface ToolEvent {
   tool_name?: unknown;
   tool_input?: unknown;
-  toolCall?: unknown;
 }
 
 export type Decision = { deny: true; reason: string } | { deny: false };
@@ -107,18 +102,17 @@ function commandField(input: unknown): string | readonly string[] | null {
 /**
  * The command this event would run, or null when it carries none.
  *
- * Accepts a string and an argv array because the harnesses differ, and reads
- * two event shapes: a flat `tool_input` and Antigravity's nested `toolCall`
- * with its args. Carrying a command is still the whole test — a tool that
- * carries none, whatever it is called, is not a launch.
+ * Accepts a string and an argv array because the harnesses differ. Carrying a
+ * command is still the whole test. A tool that carries none is not a launch.
  */
 export function extractCommand(event: ToolEvent): string | readonly string[] | null {
+  if (typeof event.tool_name === "string" && NON_SHELL_EDIT_TOOLS.has(event.tool_name)) {
+    return null;
+  }
+
   const flat = commandField(event.tool_input);
   if (flat !== null) return flat;
-
-  const call = event.toolCall;
-  if (typeof call !== "object" || call === null) return null;
-  return commandField((call as { args?: unknown }).args);
+  return null;
 }
 
 /**

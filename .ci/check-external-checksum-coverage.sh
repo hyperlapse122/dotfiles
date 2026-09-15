@@ -133,7 +133,6 @@ HEX = {"sha256": re.compile(r"\A[0-9a-f]{64}\Z"), "sha512": re.compile(r"\A[0-9a
 EXPECTED_LOCK_BACKED = frozenset(
     {
         "agent-browser",
-        "agy",
         "android",
         "ast-grep",
         "buf",

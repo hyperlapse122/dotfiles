@@ -3,6 +3,10 @@ agents:
   validOS: [linux, darwin]
   mcp:
     servers:
+    - name: figma
+      transport: http
+      url: https://mcp.figma.com/mcp
+      auth: oauth
     - name: codegraph
       transport: stdio
       command: codegraph
@@ -143,9 +147,8 @@ agents:
     # omp's own copy of the same archive, differing in one file: the ROOT
     # plugin.json is excluded. That file is what makes omp classify the tree as
     # an agent-plugins package and reject every SKILL.md carrying Claude Code or
-    # Codex frontmatter keys, dropping 30 of 33 skills (cb30ed4). agy needs the
-    # same file present as its bundle manifest, and .ci/test-compound-engineering-overlays.sh
-    # asserts it survives, so the two requirements cannot share one copy. The
+    # Codex frontmatter keys, dropping 30 of 33 skills (cb30ed4). The shared
+    # Claude/Codex archive retains its upstream manifest. The
     # `*/` prefix matches only the archive's own top directory, so nested
     # plugin.json files inside skills are untouched. versionSource is shared, so
     # both copies always resolve the same version segment.
@@ -193,24 +196,6 @@ agents:
     dotfiles-codex-plugin:
       kind: localDir
       path: .local/share/dotfiles-codex-plugin
-      os: [linux, darwin]
-      container: keep
-    # This checkout's own Antigravity plugin. Same shape and same reason again:
-    # ~/.gemini/config/hooks.json is Orca's, so dotfiles composes beside it
-    # through a plugin instead of rewriting that file. Antigravity merges named
-    # hook groups from every source and runs them in sequence, so the two
-    # coexist without either vetoing the other.
-    #
-    # Unlike the Claude and Codex rows, this manifest carries no version: the
-    # agy bundle manifest takes a name and nothing else. Install copies the
-    # bundle into ~/.gemini/config/plugins/<name>, so the served copy goes stale
-    # unless the reconciler re-runs — which makes its fingerprint the only thing
-    # standing between an edited declaration and a host still serving the old
-    # one. The reconciler names this tree and the rendered declaration for
-    # exactly that reason.
-    dotfiles-agy-plugin:
-      kind: localDir
-      path: .local/share/dotfiles-agy-plugin
       os: [linux, darwin]
       container: keep
   claude:
@@ -302,18 +287,6 @@ agents:
     - { name: compound-engineering, marketplace: compound-engineering-plugin }
     - { name: dotfiles-claude, marketplace: dotfiles-claude-plugin }
     pluginsRemoved: []
-  agy:
-    # agy supports automated memories, but its off-switch is a server-side
-    # account setting (disable_auto_generate_memories / force_disable); local
-    # ~/.gemini/config/config.json userSettings has no memory fields and no
-    # reconciler reads agents.agy.settings, so declaring leaves here would not
-    # assert them. The substitute is the instruction prohibition in
-    # .chezmoitemplates/agents-instructions.tmpl.
-    settings: {}
-    plugins:
-    - { name: compound-engineering, marketplace: compound-engineering-plugin }
-    - { name: dotfiles-agy, marketplace: dotfiles-agy-plugin }
-    pluginsRemoved: []
   omp:
     # The omp-only archive copy, never the shared one: installing the copy that
     # still carries a root plugin.json makes omp drop 30 of 33 skills.
@@ -322,6 +295,7 @@ agents:
     pluginsRemoved: []
     settings:
       startup.setupWizard: false
+      providers.antigravityEndpoint: auto
       setupVersion: 1
       symbolPreset: nerd
       tui.resizeScrollback: rebuild

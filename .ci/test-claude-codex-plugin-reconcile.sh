@@ -1,31 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Proves the three harness plugin reconcilers that share
-# .chezmoitemplates/agent-plugin-rows.tmpl: the rendered
-# scripts carry the declared rows and the fail-closed lifecycle calls, they
-# converge on a re-run instead of re-mutating, and each one rejects a marketplace
-# source that cannot serve its harness. The Codex personal-marketplace templates
-# under dot_agents/plugins/ are rendered here as well, because the codex script
-# only works when they agree with its rows.
-#
-# The rendered scripts hold ABSOLUTE paths resolved against the renderer's home,
-# so every fixture rewrites that path into its own scratch HOME rather than
-# letting a run consult the live one.
-#
-# CLAUDE_SCRIPT, AGY_SCRIPT and CODEX_SCRIPT are the three reconcilers as
-# rendered by `chezmoi execute-template` against this source tree. The template
-# checks in the last section render dot_agents/plugins/*.tmpl themselves and
-# need `chezmoi` on PATH (or CHEZMOI=/path/to/chezmoi), with the source tree
-# resolved from this script's own location.
-
-usage='usage: test-claude-agy-plugin-reconcile.sh CLAUDE_SCRIPT AGY_SCRIPT CODEX_SCRIPT'
+usage='usage: test-claude-codex-plugin-reconcile.sh CLAUDE_SCRIPT CODEX_SCRIPT'
 claude_script=${1:?$usage}
-agy_script=${2:?$usage}
-codex_script=${3:?$usage}
+codex_script=${2:?$usage}
 source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 
-scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/claude-agy-plugin-fixtures
+scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/claude-codex-plugin-fixtures
 mkdir -p -- "$scratch_root"
 chmod 0700 -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/run.XXXXXX")
@@ -42,7 +23,7 @@ cleanup() {
 trap cleanup EXIT
 
 fail() {
-  printf 'test-claude-agy-plugin-reconcile: %s\n' "$*" >&2
+  printf 'test-claude-codex-plugin-reconcile: %s\n' "$*" >&2
   exit 1
 }
 
@@ -65,15 +46,6 @@ done
 grep -F 'claude plugin update --scope user' "$claude_script" >/dev/null ||
   fail 'rendered Claude Code updater no longer re-resolves the pinned version'
 
-for needle in \
-  'compound-engineering\tcompound-engineering-plugin\tlocalArchive\t' \
-  'agy plugin install' \
-  'agy plugin enable' \
-  'has no bundle root plugin.json'; do
-  grep -F "$needle" "$agy_script" >/dev/null ||
-    fail "rendered Antigravity updater is missing: $needle"
-done
-
 # The Codex updater installs from the chezmoi-owned personal marketplace, so the
 # row it carries is the registry key the marketplace.json entry and the archive
 # symlink are both named after.
@@ -87,7 +59,7 @@ for needle in \
     fail "rendered Codex updater is missing: $needle"
 done
 
-for script in "$claude_script" "$agy_script" "$codex_script"; do
+for script in "$claude_script" "$codex_script"; do
   fingerprints=$(grep '^#   ' "$script" || true)
   [[ -n $fingerprints ]] || fail "rendered $script carries no dependency fingerprint"
   for raw_input in '.chezmoidata/agents.yaml' '.chezmoidata/releases.json'; do
@@ -126,24 +98,9 @@ for body in orchestration-everyone.tmpl orchestration-coordinator.tmpl; do
     fail "rendered Claude updater does not fingerprint payload body $body"
 done
 
-# The same story for Antigravity, and it carries more weight there. Its bundle
-# manifest has no version field, so unlike the two harnesses above there is no
-# second mechanism to resolve a fresh copy: this fingerprint is the whole of
-# what keeps an edited declaration from deploying to a host that goes on
-# serving the previous one.
-agy_fingerprints=$(grep '^#   ' "$agy_script" || true)
-for input in \
-  'dot_local/share/dotfiles-agy-plugin/' \
-  '.chezmoitemplates/agy-hook-declaration.tmpl  ' \
-  '.chezmoitemplates/orchestration-everyone.tmpl  ' \
-  '.chezmoitemplates/orchestration-coordinator.tmpl  '; do
-  printf '%s\n' "$agy_fingerprints" | grep -F "#   $input" >/dev/null ||
-    fail "rendered Antigravity updater does not fingerprint $input"
-done
-
 # Neither script may reach a conditional `exit 0`: chezmoi records that as a
 # successful run, and an empty declared set is decided at render time instead.
-for script in "$claude_script" "$agy_script" "$codex_script"; do
+for script in "$claude_script" "$codex_script"; do
   if grep -nE '^\s+exit 0\s*$' "$script" >/dev/null; then
     fail "rendered $script carries an indented exit 0"
   fi
@@ -155,7 +112,7 @@ home="$scratch/home"
 bin="$scratch/bin"
 mkdir -p "$home" "$bin"
 market="$home/.local/share/compound-engineering/v-test"
-mkdir -p "$market/.claude-plugin" "$market/.agy" "$market/.codex-plugin" "$market/skills/demo"
+mkdir -p "$market/.claude-plugin" "$market/.codex-plugin" "$market/skills/demo"
 
 cat >"$market/.claude-plugin/marketplace.json" <<'EOF'
 {"name":"compound-engineering-plugin","plugins":[{"name":"compound-engineering","source":"./"}]}
@@ -169,7 +126,6 @@ EOF
 cat >"$market/plugin.json" <<'EOF'
 {"name":"compound-engineering","version":"0.0.0-test"}
 EOF
-ln -s '../plugin.json' "$market/.agy/plugin.json"
 cat >"$market/.codex-plugin/plugin.json" <<'EOF'
 {"name":"compound-engineering","version":"0.0.0-test"}
 EOF
@@ -212,22 +168,6 @@ cat >"$codex_dir_market/.codex-plugin/plugin.json" <<'EOF'
 EOF
 ln -s "$codex_dir_market" "$home/.agents/plugins/dotfiles-codex-plugin"
 
-# The Antigravity half. Its reconciler preflights the source directory and a
-# bundle manifest at the tree ROOT — not under a dot-prefixed subdirectory like
-# the two above — and requires that manifest to declare the plugin by name.
-agy_dir_market="$home/.local/share/dotfiles-agy-plugin"
-mkdir -p "$agy_dir_market"
-cat >"$agy_dir_market/plugin.json" <<'EOF'
-{"name":"dotfiles-agy"}
-EOF
-cat >"$agy_dir_market/hooks.json" <<'EOF'
-{"dotfiles-orchestration":{"PreInvocation":[{"type":"command","command":"true"}]}}
-EOF
-# The stub CLI walks a bundle's skills tree, so an empty one fails the install
-# even though the real plugin ships hooks alone.
-mkdir -p "$agy_dir_market/skills/demo"
-printf -- '---\nname: demo\n---\n' >"$agy_dir_market/skills/demo/SKILL.md"
-
 rewrite() {
   local rendered=$1 target=$2
   local row path local_row local_path
@@ -235,10 +175,7 @@ rewrite() {
     fail "no compound-engineering row in $rendered"
   path=${row#*localArchive\\t}
   path=${path%%\"*}
-  # Each harness carries at most one localDir row: dotfiles-claude in the Claude
-  # script, dotfiles-codex in the Codex one, dotfiles-agy in the Antigravity one.
-  # Each substitution is a no-op where its row is absent.
-  local codex_row codex_path agy_row agy_path
+  local codex_row codex_path
   local -a subs=("-e" "s|$path|$market|g")
   if local_row=$(grep -m1 'dotfiles-claude\\tdotfiles-claude-plugin\\tlocalDir\\t' "$rendered"); then
     local_path=${local_row#*localDir\\t}
@@ -250,27 +187,17 @@ rewrite() {
     codex_path=${codex_path%%\"*}
     subs+=("-e" "s|$codex_path|$codex_dir_market|g")
   fi
-  if agy_row=$(grep -m1 'dotfiles-agy\\tdotfiles-agy-plugin\\tlocalDir\\t' "$rendered"); then
-    agy_path=${agy_row#*localDir\\t}
-    agy_path=${agy_path%%\"*}
-    subs+=("-e" "s|$agy_path|$agy_dir_market|g")
-  fi
   sed "${subs[@]}" "$rendered" >"$target"
   chmod 0700 "$target"
 }
 
 claude_test="$scratch/claude-plugins.sh"
-agy_test="$scratch/agy-plugins.sh"
 codex_test="$scratch/codex-plugins.sh"
 rewrite "$claude_script" "$claude_test"
-rewrite "$agy_script" "$agy_test"
 rewrite "$codex_script" "$codex_test"
 grep -F "$market" "$claude_test" >/dev/null || fail 'claude fixture path rewrite did not take'
 grep -F "$local_dir_market" "$claude_test" >/dev/null ||
   fail 'claude localDir fixture path rewrite did not take'
-grep -F "$market" "$agy_test" >/dev/null || fail 'agy fixture path rewrite did not take'
-grep -F "$agy_dir_market" "$agy_test" >/dev/null ||
-  fail 'agy localDir fixture path rewrite did not take'
 grep -F "$market" "$codex_test" >/dev/null || fail 'codex fixture path rewrite did not take'
 
 # --- harness stubs --------------------------------------------------------- #
@@ -308,25 +235,6 @@ esac
 EOF
 chmod 0700 "$bin/claude"
 
-# The Antigravity stub asserts what agy itself requires of a bundle: a root
-# plugin.json and a component tree it can read.
-cat >"$bin/agy" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\n' "$*" >>"$AGY_CALLS"
-case "${1-} ${2-}" in
-  "plugin install")
-    bundle=$3
-    [[ -z ${AGY_INSTALL_FAILS:-} ]] || { printf 'simulated install failure: %s\n' "$bundle" >&2; exit 1; }
-    [[ -f $bundle/plugin.json ]] || { printf 'no bundle manifest: %s\n' "$bundle" >&2; exit 1; }
-    [[ -f $bundle/skills/demo/SKILL.md ]] || { printf 'bundle skills unreadable: %s\n' "$bundle" >&2; exit 1; }
-    ;;
-  "plugin enable" | "plugin uninstall") ;;
-  *) printf 'unexpected agy call: %s\n' "$*" >&2; exit 64 ;;
-esac
-EOF
-chmod 0700 "$bin/agy"
-
 # The Codex stub reproduces the two lifecycle facts the script is written against,
 # both verified against codex-cli 0.153.4: `plugin add` on an already-installed
 # plugin re-asserts the install and exits 0, and every install rewrites
@@ -354,14 +262,11 @@ EOF
 chmod 0700 "$bin/codex"
 
 claude_calls="$scratch/claude-calls"
-agy_calls="$scratch/agy-calls"
 codex_calls="$scratch/codex-calls"
 : >"$claude_calls"
-: >"$agy_calls"
 : >"$codex_calls"
 
 run_claude() { env HOME="$home" PATH="$bin:$PATH" CLAUDE_CALLS="$claude_calls" bash "${1:-$claude_test}"; }
-run_agy() { env HOME="$home" PATH="$bin:$PATH" AGY_CALLS="$agy_calls" bash "$agy_test"; }
 run_codex() {
   env HOME="$home" PATH="$bin:$PATH" CODEX_CALLS="$codex_calls" CODEX_STATE="$scratch/codex-state" \
     bash "$codex_test"
@@ -459,92 +364,6 @@ if env HOME="$home" PATH="$bin:$PATH" CLAUDE_CALLS="$claude_calls" \
 fi
 grep -F 'no Claude Code manifest' "$scratch/claude-bad.out" >/dev/null ||
   fail 'Claude Code reconcile rejected the bad marketplace without naming the cause'
-
-# --- Antigravity: direct install, then a converged re-run ------------------ #
-
-run_agy >"$scratch/agy.out" 2>&1 || {
-  cat "$scratch/agy.out" >&2
-  fail 'first Antigravity reconcile failed'
-}
-grep -Fx "plugin install $market" "$agy_calls" >/dev/null ||
-  fail 'Antigravity reconcile did not install the marketplace source directly'
-grep -Fx 'plugin enable compound-engineering' "$agy_calls" >/dev/null ||
-  fail 'Antigravity reconcile did not enable the declared plugin'
-[[ ! -e $home/.local/share/agy-plugin-bundles ]] ||
-  fail 'Antigravity reconcile staged a bundle the source already provides'
-
-: >"$agy_calls"
-run_agy >"$scratch/agy-2.out" 2>&1 || {
-  cat "$scratch/agy-2.out" >&2
-  fail 'converged Antigravity re-run failed'
-}
-grep -Fx "plugin uninstall compound-engineering" "$agy_calls" >/dev/null &&
-  fail 'converged Antigravity re-run re-mutated an already-installed plugin'
-
-# --- Antigravity: a host still serving the superseded staged bundle -------- #
-
-stale="$home/.local/share/agy-plugin-bundles/compound-engineering-plugin/compound-engineering"
-mkdir -p "$stale"
-cp "$market/plugin.json" "$stale/plugin.json"
-ln -s "$market/skills" "$stale/skills"
-: >"$agy_calls"
-run_agy >"$scratch/agy-3.out" 2>&1 || {
-  cat "$scratch/agy-3.out" >&2
-  fail 'Antigravity migration off the staged bundle failed'
-}
-grep -Fx 'plugin uninstall compound-engineering' "$agy_calls" >/dev/null ||
-  fail 'Antigravity reconcile did not release the superseded staged bundle'
-grep -Fx "plugin install $market" "$agy_calls" >/dev/null ||
-  fail 'Antigravity reconcile did not re-point the plugin at the marketplace source'
-[[ ! -e $stale ]] || fail 'Antigravity reconcile left the superseded staged bundle behind'
-
-: >"$agy_calls"
-run_agy >"$scratch/agy-4.out" 2>&1 || {
-  cat "$scratch/agy-4.out" >&2
-  fail 'Antigravity re-run after migration failed'
-}
-grep -Fx 'plugin uninstall compound-engineering' "$agy_calls" >/dev/null &&
-  fail 'Antigravity migration re-ran after the staged bundle was gone'
-
-# --- Antigravity: a failed install must not consume the migration signal --- #
-
-mkdir -p "$stale"
-cp "$market/plugin.json" "$stale/plugin.json"
-ln -s "$market/skills" "$stale/skills"
-: >"$agy_calls"
-if AGY_INSTALL_FAILS=1 run_agy >"$scratch/agy-7.out" 2>&1; then
-  fail 'Antigravity reconcile reported success on a failing install'
-fi
-[[ -d $stale ]] ||
-  fail 'a failed install removed the staged bundle, so the next apply cannot retry the migration'
-
-: >"$agy_calls"
-run_agy >"$scratch/agy-8.out" 2>&1 || {
-  cat "$scratch/agy-8.out" >&2
-  fail 'the retry after a failed install did not converge'
-}
-grep -Fx "plugin install $market" "$agy_calls" >/dev/null ||
-  fail 'the retry did not re-point the plugin at the marketplace source'
-[[ ! -e $stale ]] || fail 'the successful retry left the staged bundle behind'
-
-# --- Antigravity: a source whose root manifest is absent or misdeclared ---- #
-
-mv "$market/plugin.json" "$scratch/plugin.json.bak"
-if run_agy >"$scratch/agy-5.out" 2>&1; then
-  fail 'Antigravity reconcile installed a source with no bundle root manifest'
-fi
-grep -F 'has no bundle root plugin.json' "$scratch/agy-5.out" >/dev/null ||
-  fail 'Antigravity reconcile rejected the manifest-less source without naming the cause'
-
-cat >"$market/plugin.json" <<'EOF'
-{"name":"someone-elses-plugin","version":"0.0.0-test"}
-EOF
-if run_agy >"$scratch/agy-6.out" 2>&1; then
-  fail 'Antigravity reconcile installed a bundle declaring a different plugin'
-fi
-grep -F 'does not declare plugin compound-engineering' "$scratch/agy-6.out" >/dev/null ||
-  fail 'Antigravity reconcile rejected the misdeclared bundle without naming the cause'
-mv "$scratch/plugin.json.bak" "$market/plugin.json"
 
 # --- Codex: relabel, install, then a converged re-run ---------------------- #
 
@@ -757,4 +576,4 @@ grep -Fx 'plugin remove retired@dotfiles' "$codex_calls" >/dev/null ||
 [[ $(grep -n 'plugin remove' "$codex_calls" | head -1 | cut -d: -f1) -lt \
   $(grep -n 'plugin add' "$codex_calls" | head -1 | cut -d: -f1) ]] ||
   fail 'Codex reconcile installed before removing the declared plugin'
-printf 'test-claude-agy-plugin-reconcile: ok\n'
+printf 'test-claude-codex-plugin-reconcile: ok\n'
