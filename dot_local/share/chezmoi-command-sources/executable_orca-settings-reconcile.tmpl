@@ -172,26 +172,18 @@ trap 'cleanup; exit 1' HUP INT TERM
 # check compares, so the two cannot normalize differently.
 printf '%s' "$live" >"$live_file"
 
-# One classification pass per declared leaf, reading the PARENT rather than the
-# leaf: `getpath` cannot tell a missing key from one holding null, and those are
-# different states here. A key Orca does not carry is `unknown` -- writing it
-# would produce a key the application silently ignores, which is exactly the
-# quiet no-op a renamed setting must not become. getpath raises on an ancestor
-# holding a scalar, so the probe is wrapped and `blocked` travels as a state on
-# the stream rather than aborting it.
+# One classification pass per declared leaf. getpath raises on an ancestor
+# holding a scalar or an array, so the probe is wrapped and `blocked` travels as
+# a state on the stream rather than aborting it. A missing key or differing value
+# is `drift` -- the reconciler adds or updates it.
 jq -rn --slurpfile live "$live_file" --argjson declared "$DECLARED" '
   $declared
   | to_entries[]
   | . as $e
   | ($e.key | split(".")) as $p
-  | ($p[:-1]) as $parent_path
-  | ($p[-1]) as $leaf
-  | (try {parent: ($live[0] | getpath($parent_path))} catch {blocked: true}) as $probe
+  | (try {found: ($live[0] | getpath($p))} catch {blocked: true}) as $probe
   | (if ($probe | has("blocked")) then "blocked"
-     elif ($probe.parent == null) then "unknown"
-     elif (($probe.parent | type) != "object") then "blocked"
-     elif ($probe.parent | has($leaf) | not) then "unknown"
-     elif ($probe.parent[$leaf] == $e.value) then "converged"
+     elif $probe.found == $e.value then "converged"
      else "drift" end) as $state
   | "\($state)\t\($e.key)"
 ' >"$scratch"
@@ -201,7 +193,6 @@ drifted=0
 # Strings rather than arrays: drifted_paths goes straight into jq's split("\n"),
 # and every path passed the render-time grammar, so none can carry a newline.
 drifted_paths=''
-unknown_paths=''
 blocked_paths=''
 while IFS=$'\t' read -r state path; do
   [ -n "$path" ] || continue
@@ -211,7 +202,6 @@ while IFS=$'\t' read -r state path; do
       drifted=$((drifted + 1))
       drifted_paths="${drifted_paths}${path}"$'\n'
       ;;
-    unknown) unknown_paths="${unknown_paths:+$unknown_paths }$path" ;;
     blocked) blocked_paths="${blocked_paths:+$blocked_paths }$path" ;;
   esac
 done <"$scratch"
@@ -224,9 +214,6 @@ if [ "$examined" -ne {{ len $settings }} ]; then
   exit 1
 fi
 
-if [ -n "$unknown_paths" ]; then
-  printf '%s: Orca does not carry %s. A renamed or removed setting key cannot be asserted -- writing it would add a key Orca ignores. Update .chezmoidata/orca.yaml.\n' "$self" "$unknown_paths" >&2
-fi
 if [ -n "$blocked_paths" ]; then
   printf '%s: an ancestor of %s holds a scalar or an array, so that leaf cannot be written and it was left alone. Repair that key in %s.\n' "$self" "$blocked_paths" "$data" >&2
 fi
@@ -287,9 +274,9 @@ esac
 # Staged in the target's own directory so the replacement is a same-filesystem
 # rename; staging under TMPDIR would cross filesystems.
 staged="$(mktemp "$(dirname "$data")/.orca-data.XXXXXX")"
-# `drifted_paths` is the classifier's verdict, not the declaration: an unknown or
-# blocked path never reaches setpath, which would otherwise abort under `set -e`
-# with a bare jq error naming nothing.
+# `drifted_paths` is the classifier's verdict, not the declaration: a blocked
+# path never reaches setpath, which would otherwise abort under `set -e` with a
+# bare jq error naming nothing.
 jq -n --slurpfile live "$live_file" --argjson declared "$DECLARED" --arg write_paths "$drifted_paths" '
   ($write_paths | split("\n") | map(select(length > 0))) as $keys
   | reduce $keys[] as $k ($live[0]; setpath($k | split("."); $declared[$k]))

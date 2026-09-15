@@ -381,23 +381,32 @@ ok 'assert prints skip notice once without writing while Orca is running'
 
 
 # ---------------------------------------------------------------------------
-# States that are not drift: a key Orca no longer carries, an unwritable
-# ancestor, and a host with no Orca profile.
+# Non-drift states: an unwritable ancestor, and a host with no Orca profile.
 # ---------------------------------------------------------------------------
 printf 'non-drift states\n'
 
-# A renamed or removed key must be named and left alone. Writing it would add a
-# key Orca silently ignores, which is a convergence that never happens.
+# Missing keys must be created: if Orca has not written a key yet, assert adds
+# it with the declared value, and intermediate objects are created automatically.
 reset_fixture
-tmp="$scratch/unknown.json"
-jq 'del(.settings.appFontFamily) | .settings.editorFontFamily = "DriftedFont"' "$data" >"$tmp" && mv -- "$tmp" "$data"
-out=$(run --mode assert 2>&1) || fail "assert failed on an unknown declared path: $out"
-grep -q 'settings.appFontFamily' <<<"$out" || fail "assert did not name the unknown path: $out"
-assert_json 'assert created a key Orca does not carry' \
-  '.settings | has("appFontFamily") | not'
-assert_json 'an unknown path stopped the other declared paths from converging' \
+tmp="$scratch/missing.json"
+jq 'del(.settings.appFontFamily) | del(.settings.sourceControlAi.actions.branchName.agentId) | .settings.editorFontFamily = "DriftedFont"' "$data" >"$tmp" && mv -- "$tmp" "$data"
+run --mode assert >/dev/null 2>&1 || fail 'assert failed on missing declared paths'
+assert_json 'assert did not create missing settings.appFontFamily' \
+  '.settings.appFontFamily == "Pretendard"'
+assert_json 'assert did not create missing nested key settings.sourceControlAi.actions.branchName.agentId' \
+  '.settings.sourceControlAi.actions.branchName.agentId == "custom"'
+assert_json 'missing keys stopped the other declared paths from converging' \
   '.settings.editorFontFamily == "JetBrainsMono NF"'
-ok 'an unknown path is named, not written, and does not block its siblings'
+ok 'missing keys are added and siblings converge'
+
+# In report mode, missing keys report as live null.
+reset_fixture
+tmp="$scratch/missing-report.json"
+jq 'del(.settings.appFontFamily)' "$data" >"$tmp" && mv -- "$tmp" "$data"
+report_missing=$(run --mode report 2>&1) || fail 'report failed on missing declared path'
+grep -q 'settings\.appFontFamily: declared "Pretendard", live null' <<<"$report_missing" \
+  || fail "report did not report missing key as live null: $report_missing"
+ok 'report names missing keys as live null'
 
 # An ancestor holding a scalar cannot be written through. Reporting it by name
 # and continuing is what keeps one damaged key from stranding the whole
