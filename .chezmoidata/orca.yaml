@@ -46,11 +46,16 @@ orca:
 
     settings.refreshLocalBaseRefOnWorktreeCreate: true
 
-    settings.sourceControlAi.actions.commitMessage.agentId: omp
-    settings.sourceControlAi.actions.pullRequest.agentId: omp
-    settings.sourceControlAi.actions.branchName.agentId: omp
+    settings.sourceControlAi.actions.commitMessage.agentId: custom
+    settings.sourceControlAi.actions.commitMessage.commandInputTemplate: "{basePrompt}\n\nUse conventional commit message"
+    settings.sourceControlAi.actions.pullRequest.agentId: custom
+    settings.sourceControlAi.actions.branchName.agentId: custom
     settings.sourceControlAi.actions.fixCommitFailure.agentId: omp
     settings.sourceControlAi.actions.fixPushFailure.agentId: omp
     settings.sourceControlAi.actions.fixChecks.agentId: omp
     settings.sourceControlAi.actions.resolveConflicts.agentId: omp
     settings.sourceControlAi.actions.resolveComments.agentId: omp
+    settings.sourceControlAi.customAgentCommand: "omp --hide-thinking --no-extensions --no-skills -p {prompt}"
+
+    settings.notifications.enabled: false
+    settings.keepComputerAwakeWhileAgentsRun: true
