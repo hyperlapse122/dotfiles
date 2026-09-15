@@ -191,6 +191,129 @@ function decodeJson(bytes: Uint8Array): string {
   }
 }
 
+function findSystemInstructionValueSpan(raw: string): { start: number; end: number } | null {
+  let inString = false;
+  let escaped = false;
+  const objectKeyStack: string[] = [];
+  let currentKey = "";
+  let expectingKey = false;
+  let colonAfterKey = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i);
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (code === 92) {
+        escaped = true;
+      } else if (code === 34) {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (code === 34) {
+      if (expectingKey) {
+        const keyStart = i + 1;
+        let keyEnd = -1;
+        for (let j = keyStart; j < raw.length; j++) {
+          const c = raw.charCodeAt(j);
+          if (c === 92) {
+            j++;
+          } else if (c === 34) {
+            keyEnd = j;
+            break;
+          }
+        }
+        if (keyEnd !== -1) {
+          try {
+            currentKey = JSON.parse(raw.slice(i, keyEnd + 1)) as string;
+          } catch {
+            currentKey = raw.slice(keyStart, keyEnd);
+          }
+          i = keyEnd;
+          expectingKey = false;
+          colonAfterKey = true;
+          continue;
+        }
+      }
+      inString = true;
+      continue;
+    }
+
+    if (colonAfterKey) {
+      if (code === 32 || code === 9 || code === 10 || code === 13) continue;
+      if (code === 58) {
+        colonAfterKey = false;
+        const parentKey = objectKeyStack[objectKeyStack.length - 1] ?? "";
+        if (
+          currentKey === "systemInstruction" &&
+          (parentKey === "request" || objectKeyStack.length === 0)
+        ) {
+          let braceIdx = i + 1;
+          while (
+            braceIdx < raw.length &&
+            (raw.charCodeAt(braceIdx) === 32 ||
+              raw.charCodeAt(braceIdx) === 9 ||
+              raw.charCodeAt(braceIdx) === 10 ||
+              raw.charCodeAt(braceIdx) === 13)
+          ) {
+            braceIdx++;
+          }
+          if (raw.charCodeAt(braceIdx) === 123) {
+            let objDepth = 0;
+            let str = false;
+            let esc = false;
+            for (let k = braceIdx; k < raw.length; k++) {
+              const c = raw.charCodeAt(k);
+              if (str) {
+                if (esc) esc = false;
+                else if (c === 92) esc = true;
+                else if (c === 34) str = false;
+              } else if (c === 34) {
+                str = true;
+              } else if (c === 123) {
+                objDepth++;
+              } else if (c === 125) {
+                objDepth--;
+                if (objDepth === 0) {
+                  return { start: braceIdx, end: k + 1 };
+                }
+              }
+            }
+          }
+        }
+        continue;
+      }
+      colonAfterKey = false;
+    }
+
+    if (code === 123) {
+      objectKeyStack.push(currentKey);
+      expectingKey = true;
+      currentKey = "";
+    } else if (code === 125) {
+      objectKeyStack.pop();
+      expectingKey = false;
+      currentKey = "";
+    } else if (code === 91) {
+      objectKeyStack.push("");
+      expectingKey = false;
+      currentKey = "";
+    } else if (code === 93) {
+      objectKeyStack.pop();
+      expectingKey = false;
+      currentKey = "";
+    } else if (code === 44) {
+      if (objectKeyStack.length > 0) {
+        expectingKey = true;
+        currentKey = "";
+      }
+    }
+  }
+  return null;
+}
+
 function transformJsonBody(bytes: ByteArray): ByteArray {
   const raw = decodeJson(bytes);
   let value: unknown;
@@ -202,50 +325,58 @@ function transformJsonBody(bytes: ByteArray): ByteArray {
 
   const rewritten = rewriteSystemInstructionParts(value);
   if (rewritten === value) return bytes;
-  // Preserve raw numbers, duplicate keys, and whitespace outside the system strings.
-  const frames: {
-    path: (string | number)[];
-    array: boolean;
-    key: string | number;
-    keyNext: boolean;
-  }[] = [];
-  const result = raw.replace(/"(?:\\.|[^"\\])*"|[{}[\]:,]|[^\s{}[\]:,]+/g, (token) => {
-    const parent = frames.at(-1);
-    if (token === "}" || token === "]") {
-      frames.pop();
-    } else if (token === ",") {
-      if (parent?.array) parent.key = Number(parent.key) + 1;
-      else if (parent) parent.keyNext = true;
-    } else if (token === ":") {
-      if (parent) parent.keyNext = false;
-    } else if (parent?.keyNext && token.startsWith('"')) {
-      parent.key = JSON.parse(token) as string;
-    } else {
-      const path = parent ? [...parent.path, parent.key] : [];
-      if (token === "{" || token === "[") {
-        frames.push({
-          path: path.slice(0, 6),
-          array: token === "[",
-          key: token === "[" ? 0 : "",
-          keyNext: token === "{",
-        });
-      } else if (
-        token.startsWith('"') &&
-        path.length === 5 &&
-        path[0] === "request" &&
-        path[1] === "systemInstruction" &&
-        path[2] === "parts" &&
-        typeof path[3] === "number" &&
-        path[4] === "text"
-      ) {
-        const text = JSON.parse(token) as string;
-        const replacement = rewriteText(text);
-        return replacement === text ? token : JSON.stringify(replacement);
-      }
-    }
-    return token;
-  });
-  return new TextEncoder().encode(result);
+
+  const span = findSystemInstructionValueSpan(raw);
+  if (span !== null) {
+    const sysSegment = raw.slice(span.start, span.end);
+    const frames: {
+      path: (string | number)[];
+      array: boolean;
+      key: string | number;
+      keyNext: boolean;
+    }[] = [];
+    const rewrittenSegment = sysSegment.replace(
+      /"(?:\\.|[^"\\])*"|[{}[\]:,]|[^\s{}[\]:,]+/g,
+      (token) => {
+        const parent = frames.at(-1);
+        if (token === "}" || token === "]") {
+          frames.pop();
+        } else if (token === ",") {
+          if (parent?.array) parent.key = Number(parent.key) + 1;
+          else if (parent) parent.keyNext = true;
+        } else if (token === ":") {
+          if (parent) parent.keyNext = false;
+        } else if (parent?.keyNext && token.startsWith('"')) {
+          parent.key = JSON.parse(token) as string;
+        } else {
+          const path = parent ? [...parent.path, parent.key] : [];
+          if (token === "{" || token === "[") {
+            frames.push({
+              path: path.slice(0, 4),
+              array: token === "[",
+              key: token === "[" ? 0 : "",
+              keyNext: token === "{",
+            });
+          } else if (
+            token.startsWith('"') &&
+            path.length === 3 &&
+            path[0] === "parts" &&
+            typeof path[1] === "number" &&
+            path[2] === "text"
+          ) {
+            const text = JSON.parse(token) as string;
+            const replacement = rewriteText(text);
+            return replacement === text ? token : JSON.stringify(replacement);
+          }
+        }
+        return token;
+      },
+    );
+    const result = raw.slice(0, span.start) + rewrittenSegment + raw.slice(span.end);
+    return new TextEncoder().encode(result);
+  }
+
+  return new TextEncoder().encode(JSON.stringify(rewritten));
 }
 
 function isJsonContentType(value: string | null): boolean {
@@ -293,48 +424,47 @@ function relayBody(
   signal: AbortSignal,
 ): ReadableStream<ByteArray> {
   const reader = source.getReader();
-  let controller: ReadableStreamDefaultController<ByteArray> | undefined;
   let closed = false;
   const cleanup = () => signal.removeEventListener("abort", abort);
   const close = () => {
     if (closed) return;
     closed = true;
     cleanup();
-    controller?.close();
   };
   const abort = () => {
+    if (closed) return;
+    closed = true;
+    cleanup();
     void reader.cancel(signal.reason).catch(() => undefined);
-    close();
   };
   signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) abort();
 
   return new ReadableStream<ByteArray>({
-    start(value) {
-      controller = value;
-      if (signal.aborted) abort();
-    },
-    async pull(value) {
-      if (closed) return;
+    async pull(controller) {
+      if (closed) {
+        controller.close();
+        return;
+      }
       try {
         const result = await reader.read();
         if (result.done) {
           close();
+          controller.close();
           return;
         }
-        value.enqueue(result.value);
+        controller.enqueue(result.value);
       } catch (error) {
         if (signal.aborted) {
           close();
         } else {
-          closed = true;
-          cleanup();
-          value.error(error);
+          close();
+          controller.error(error);
         }
       }
     },
     async cancel(reason) {
-      closed = true;
-      cleanup();
+      close();
       await reader.cancel(reason);
     },
   });
