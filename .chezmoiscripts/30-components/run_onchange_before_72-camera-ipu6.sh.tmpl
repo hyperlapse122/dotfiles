@@ -1,0 +1,37 @@
+{{- $isFedora := and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{- if $isFedora -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Intel IPU6 MIPI camera stack provisioning on Fedora.
+# Gated in .chezmoiignore on features.intelIpu6.
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-camera-ipu6") }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-camera-ipu6.sh") -}}
+
+DNF=("${SUDO[@]}" dnf)
+
+ipu6_packages=(
+  akmod-intel-ipu6
+  ipu6-camera-bins-firmware
+)
+
+install_ipu6() {
+  local -a missing=()
+  local pkg
+  for pkg in "${ipu6_packages[@]}"; do
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+  done
+
+  if [[ "${#missing[@]}" -eq 0 ]]; then
+    printf 'install-camera-ipu6: all IPU6 packages already installed\n'
+    return 0
+  fi
+
+  printf 'install-camera-ipu6: installing missing IPU6 packages: %s\n' "${missing[*]}"
+  "${DNF[@]}" install -y "${missing[@]}"
+}
+
+install_ipu6
+{{ end -}}
