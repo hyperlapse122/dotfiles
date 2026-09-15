@@ -155,13 +155,21 @@ out=$(run_hook claude \
   || fail 'an explicitly configured non-screen-reader command was not honoured'
 pass 'an unrelated configured Orca command is used as given'
 
-out=$(run_hook claude "ORCA_TERMINAL_HANDLE=term_ci")
+interactive_env="ORCA_TERMINAL_HANDLE=term_ci ORCA_CLI_COMMAND=$remap_bin/orca-dev"
+out=$(run_hook claude "$interactive_env" "$remap_bin")
+context=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.additionalContext')
+for half in 'CI ORCHESTRATION SKILL BODY' 'CUSTOM GUIDE' 'orchestration-everyone:begin' 'orchestration-coordinator:begin'; do
+  [[ $context == *"$half"* ]] || fail "interactive Claude lead envelope is missing: $half"
+done
+pass 'an interactive Orca terminal without pane variables receives lead context'
+
+worker_env="ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%9"
+out=$(run_hook claude "$worker_env")
 [[ $out == *'orchestration-everyone:begin'* ]] \
   || fail 'an Orca-managed worker must receive the everyone payload'
 [[ $out == *'orchestration-coordinator:begin'* ]] \
   && fail 'a worker must not receive the coordinator payload'
 pass 'an Orca-managed worker receives the everyone payload alone'
-
 # Lead eligibility follows the role, not the harness. Give each non-Claude
 # harness a real guide so the envelope can actually be composed — without one
 # the lead path ends in a no-op and an assertion here would pass vacuously,
@@ -177,9 +185,25 @@ pass 'a Codex lead receives the whole envelope, like any other served harness'
 out=$(run_hook omp "$lead_env" "$remap_bin")
 [[ $out == *'orchestration-coordinator:begin'* && $out == *'orchestration-everyone:begin'* ]] \
   || fail 'omp lead context is incomplete'
-out=$(run_hook omp "ORCA_TERMINAL_HANDLE=term_ci")
+out=$(run_hook omp "$interactive_env" "$remap_bin")
+[[ $out == *'orchestration-coordinator:begin'* && $out == *'orchestration-everyone:begin'* && $out == *'CI ORCHESTRATION SKILL BODY'* ]] \
+  || fail 'omp interactive session must receive lead context'
+pass 'an interactive omp session receives the full lead context'
+
+out=$(run_hook omp "$worker_env")
 [[ $out == *'orchestration-everyone:begin'* && $out != *'orchestration-coordinator:begin'* ]] \
   || fail 'omp worker context has the wrong role'
+pass 'an omp worker receives only worker context'
+
+mkdir -p "$scratch/home/.config/orca"
+sqlite3 "$scratch/home/.config/orca/orchestration.db" <<'SQL'
+CREATE TABLE worker_dispatches (dispatch_id TEXT PRIMARY KEY, agent_terminal_handle TEXT, state TEXT);
+INSERT INTO worker_dispatches VALUES ('d1', 'term_db_worker', 'ready');
+SQL
+out=$(run_hook omp "ORCA_TERMINAL_HANDLE=term_db_worker")
+[[ $out == *'orchestration-everyone:begin'* && $out != *'orchestration-coordinator:begin'* ]] \
+  || fail 'omp active dispatch worker must receive only worker context'
+pass 'an omp active dispatch worker receives only worker context'
 out=$(run_hook omp "")
 [[ -z $out ]] || fail 'omp outside Orca must receive no context'
 

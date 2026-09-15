@@ -101,6 +101,37 @@ describe("extension adapter", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+  it("injects coordinator lead context including skill and guide into system prompt", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-extension-lead-"));
+    const leadContext = [
+      "--- orchestration SKILL.md ---",
+      "SKILL CONTENT",
+      "--- version-matched Orca orchestration guide ---",
+      "GUIDE CONTENT",
+      "<!-- orchestration-coordinator:begin -->",
+      "COORDINATOR RULES",
+      "<!-- orchestration-coordinator:end -->",
+    ].join("\n");
+    const binary = hookScript(dir, `cat <<'EOF'\n${leadContext}\nEOF`);
+    const previous = process.env.DOTFILES_ORCHESTRATION_HOOK;
+    process.env.DOTFILES_ORCHESTRATION_HOOK = binary;
+    try {
+      const { api, handler } = fakeApi();
+      await extension(api);
+      const result = await handler({ prompt: "start goal", systemPrompt: ["USER_INSTRUCTIONS"] });
+      expect(result.systemPrompt).toHaveLength(2);
+      expect(result.systemPrompt[0]).toBe("USER_INSTRUCTIONS");
+      const injected = result.systemPrompt[1];
+      expect(injected).toContain(MANAGED_BLOCK_START);
+      expect(injected).toContain("--- orchestration SKILL.md ---");
+      expect(injected).toContain("orchestration-coordinator:begin");
+      expect(injected).toContain(MANAGED_BLOCK_END);
+    } finally {
+      if (previous === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("bounded hook process", () => {
