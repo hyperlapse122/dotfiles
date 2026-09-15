@@ -199,14 +199,16 @@ for leg, expected in version_only.items():
                 "version-only exemption and this case must be updated"
             )
 
-# The pinned artifact and its checksum consumer must agree.
+# agy: null sha256, populated sha512, verified through its sha512 table.
 agy_artifact = tools["agy"]["artifacts"]["linux-amd64"]
+if agy_artifact.get("sha256") is not None:
+    problems.append("agy now records a sha256; the sha512-only case must be updated")
 agy = stanzas["linux-amd64"]["agy"]
 checksum = agy.get("checksum") or {}
-if sorted(checksum) != ["sha256"]:
-    problems.append(f"agy should declare sha256 alone, got {sorted(checksum)}")
-elif checksum["sha256"] != agy_artifact["sha256"]:
-    problems.append("agy declares a sha256 the lock does not record")
+if sorted(checksum) != ["sha512"]:
+    problems.append(f"agy should declare sha512 alone, got {sorted(checksum)}")
+elif checksum["sha512"] != agy_artifact["sha512"]:
+    problems.append("agy declares a sha512 the lock does not record")
 
 for problem in problems:
     print(problem)
@@ -214,28 +216,6 @@ sys.exit(1 if problems else 0)
 ' "$render_dir" "$repo_root/.chezmoidata/releases.json" ||
   fail 'the exemption corners no longer hold (listed above)'
 pass 'the version-only externals pass with no checksum table'
-pass 'the pinned agy checksum matches its SHA-256 artifact'
-
-sha512_only=$(fixture sha512-only)
-python3 -c '
-import json, sys
-path = sys.argv[1]
-with open(path, encoding="utf-8") as handle:
-    lock = json.load(handle)
-for artifact in lock["releases"]["tools"]["agy"]["artifacts"].values():
-    artifact["sha256"] = None
-    artifact["sha512"] = "b" * 128
-with open(path, "w", encoding="utf-8") as handle:
-    json.dump(lock, handle)
-' "$sha512_only/.chezmoidata/releases.json"
-edit_external "$sha512_only" ai-agents.toml \
-  'mergeOverwrite $agyLockArtifact (dict "field" "sha256")' \
-  'mergeOverwrite $agyLockArtifact (dict "field" "sha512")'
-edit_external "$sha512_only" ai-agents.toml \
-  '[agy.checksum]
-sha256 =' '[agy.checksum]
-sha512 ='
-bash "$gate" "$sha512_only" >/dev/null || fail 'the SHA-512-only fixture must pass'
-pass 'the retained SHA-512-only consumer is covered'
+pass 'agy passes on its sha512 alone'
 
 printf 'test-check-external-checksum-coverage: ok\n'

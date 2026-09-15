@@ -190,13 +190,12 @@ bun_sha256 = tools["bun"]["artifacts"]["linux-amd64"]["sha256"]
 bun_version = tools["bun"]["version"]
 assert linux_ext["bun"]["identity"] == f"{bun_version}-{bun_sha256[:12]}", linux_ext["bun"]["identity"]
 
-# The pinned GitHub artifact uses SHA-256 for the store identity and both aliases.
+# agy records a null sha256 and a populated sha512; the sha512 leg must supply the suffix.
 agy_artifact = tools["agy"]["artifacts"]["linux-amd64"]
+assert agy_artifact["sha256"] is None
 agy_version = tools["agy"]["version"]
-agy_sha256 = agy_artifact["sha256"]
-assert agy_version == "1.1.28"
-assert isinstance(agy_sha256, str) and len(agy_sha256) == 64
-expected_agy = f"{agy_version}-{agy_sha256[:12]}"
+agy_sha512 = agy_artifact["sha512"]
+expected_agy = f"{agy_version}-{agy_sha512[:12]}"
 assert linux_ext["agy"]["identity"] == expected_agy, linux_ext["agy"]["identity"]
 assert linux_ext["agy"]["identity"] != agy_version
 for scope in (linux_ext, macos_ext):
@@ -226,9 +225,6 @@ for unit_id, unit in externals(bumped_units).items():
         assert unit["identity"] == linux_ext[unit_id]["identity"], unit_id
 ' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$macos_json" "$bumped_json"
 
-sha512_json=$(render_source "$repo_root" linux amd64 '{{- $artifact := index .releases.tools.agy.artifacts "linux-amd64" -}}{{- $_ := set $artifact "sha256" "" -}}{{- $_ := set $artifact "sha512" (repeat 128 "b") -}}{{ includeTemplate "command-manifest.tmpl" . }}')
-jq -e '.units[] | select(.id == "agy") | .identity == "1.1.28-bbbbbbbbbbbb"' <<<"$sha512_json" >/dev/null ||
-  fail 'the retained SHA-512 resolver must supply the store identity when SHA-256 is absent'
 
 # The external identity names the artifact the host downloads, so a musl host
 # keys it on the -musl digest while every tool without a -musl lock key keeps
