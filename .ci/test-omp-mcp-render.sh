@@ -38,18 +38,17 @@ printf '#!/usr/bin/env bash\nprintf %%s DUMMY-OP-VALUE\n' > "$scratch/bin/op"
 chmod 0700 "$scratch/bin/op"
 printf '[data]\n' > "$scratch/empty.toml"
 
-render() {
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
+
+render_mcp() {
   local override=$1 out=$2 err=$3
-  env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
-    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
-      --destination "$scratch/target" --override-data "$override" \
-      execute-template <"$repo_root/$target" >"$out" 2>"$err"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$target" "$out" "$override" 2>"$err"
 }
 
 # --- the declared inventory renders omp's native shapes -------------------- #
 
 out="$scratch/mcp.json"
-render '{"chezmoi":{"os":"linux"}}' "$out" "$scratch/err" ||
+render_mcp '{"chezmoi":{"os":"linux"}}' "$out" "$scratch/err" ||
   { cat "$scratch/err" >&2; fail 'the declared inventory failed to render'; }
 
 jq -e 'type == "object" and (.mcpServers | type) == "object"' "$out" >/dev/null ||
@@ -60,6 +59,8 @@ jq -e '[.mcpServers[] | select(has("command"))] | all(has("type") | not)' "$out"
   fail 'a stdio server carries a type key; omp omits it'
 jq -e '[.mcpServers[] | select(has("url"))] | all(.type == "http")' "$out" >/dev/null ||
   fail 'an HTTP server is not typed http'
+jq -e '.mcpServers.figma | .url == "https://mcp.figma.com/mcp" and .auth.type == "oauth" and (has("headers") | not)' "$out" >/dev/null ||
+  fail 'Figma must use native OAuth without a static authorization header'
 
 # Secrets resolve through the stub and never appear as unresolved references.
 grep -Fq 'op://' "$out" && fail 'an unresolved op:// reference reached the render'
@@ -69,7 +70,7 @@ grep -Fq 'DUMMY-OP-VALUE' "$out" || fail 'the stub op value did not reach the re
 
 oauth='{"chezmoi":{"os":"linux"},"agents":{"mcp":{"servers":[
   {"name":"oauthy","transport":"http","url":"https://example.invalid/mcp","auth":"oauth"}]}}}'
-render "$oauth" "$scratch/oauth.json" "$scratch/oauth.err" ||
+render_mcp "$oauth" "$scratch/oauth.json" "$scratch/oauth.err" ||
   { cat "$scratch/oauth.err" >&2; fail 'an oauth server failed to render'; }
 jq -e '.mcpServers.oauthy.auth.type == "oauth"' "$scratch/oauth.json" >/dev/null ||
   fail 'oauth metadata did not render as an auth record'
@@ -81,7 +82,7 @@ env_override='{"chezmoi":{"os":"linux"},"agents":{"mcp":{"servers":[
   {"name":"bare_stdio","transport":"stdio","command":"bare-cmd","args":[]},
   {"name":"http_with_env","transport":"http","url":"https://example.invalid/mcp","env":{"IGNORED":"true"}}
 ]}}}'
-render "$env_override" "$scratch/env.json" "$scratch/env.err" ||
+render_mcp "$env_override" "$scratch/env.json" "$scratch/env.err" ||
   { cat "$scratch/env.err" >&2; fail 'env override failed to render'; }
 
 jq -e '.mcpServers.custom_stdio.env == {"FOO":"bar","NUM_VAR":"123"}' "$scratch/env.json" >/dev/null ||
@@ -95,7 +96,7 @@ jq -e '.mcpServers.http_with_env | has("env") | not' "$scratch/env.json" >/dev/n
 
 stdio_auth='{"chezmoi":{"os":"linux"},"agents":{"mcp":{"servers":[
   {"name":"bad","transport":"stdio","command":"x","args":[],"auth":"oauth"}]}}}'
-if render "$stdio_auth" /dev/null "$scratch/stdio.err"; then
+if render_mcp "$stdio_auth" /dev/null "$scratch/stdio.err"; then
   fail 'a stdio server declaring auth was accepted'
 fi
 grep -q 'cannot declare auth' "$scratch/stdio.err" ||
@@ -103,7 +104,7 @@ grep -q 'cannot declare auth' "$scratch/stdio.err" ||
 
 bad_auth='{"chezmoi":{"os":"linux"},"agents":{"mcp":{"servers":[
   {"name":"bad2","transport":"http","url":"https://example.invalid","auth":"basic"}]}}}'
-if render "$bad_auth" /dev/null "$scratch/auth.err"; then
+if render_mcp "$bad_auth" /dev/null "$scratch/auth.err"; then
   fail 'an unknown auth value was accepted'
 fi
 grep -q 'unknown auth' "$scratch/auth.err" ||

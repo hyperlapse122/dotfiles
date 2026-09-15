@@ -258,6 +258,7 @@ EOF
 live_drifted="$scratch/live-drifted.json"
 cat >"$live_drifted" <<'EOF'
 {"startup.setupWizard": {"value": true},
+ "providers.antigravityEndpoint": {"value": "production"},
  "setupVersion": {"value": 0},
  "symbolPreset": {"value": "unicode"},
  "tui.resizeScrollback": {"value": "none"},

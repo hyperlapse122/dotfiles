@@ -3,6 +3,35 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { DEFAULT_LOCK_PATH, runCli } from "../src/cli.js";
+
+test("prunes retired tools without resolving or changing retained releases", async () => {
+  const dir = await scratch();
+  const path = join(dir, "prune.json");
+  const retained = {
+    kind: "githubRelease",
+    source: "openai/codex",
+    version: "unchanged",
+    artifacts: {},
+  };
+  await writeFile(
+    path,
+    JSON.stringify({ releases: { tools: { codex: retained, retired: retained } } }),
+  );
+  let resolved = false;
+  expect(
+    await runCli(["--prune-retired", "--out", path], {
+      resolve: async () => {
+        resolved = true;
+        throw new Error("must not fetch");
+      },
+    }),
+  ).toBe(0);
+  expect(resolved).toBe(false);
+  expect(JSON.parse(await readFile(path, "utf8"))).toEqual({
+    releases: { tools: { codex: retained } },
+  });
+  expect(await runCli(["--prune-retired", "--only", "codex"], { stderr: capture() })).toBe(2);
+});
 import { resolveGitHubRelease } from "../src/github.js";
 import { resolveGitHubTag } from "../src/github-tag.js";
 import { resolveGitLabRelease } from "../src/gitlab.js";
@@ -203,7 +232,7 @@ describe("runCli", () => {
       const prior = {
         releases: {
           tools: {
-            agy: { kind: "vendorManifest", source: "https://vendor.invalid", version: "1.2.0" },
+            codex: { kind: "vendorManifest", source: "https://vendor.invalid", version: "1.2.0" },
             retired: {
               kind: "githubRelease",
               source: "owner/retired",
@@ -217,38 +246,38 @@ describe("runCli", () => {
       };
       const before = JSON.stringify(prior);
       await writeFile(path, before);
-      const urls: string[] = [];
-      globalThis.fetch = (async (input) => {
-        const url = input instanceof Request ? input.url : String(input);
-        urls.push(url);
-        if (mode === "failure") return new Response("absent", { status: 404 });
-        return Response.json({
-          version: "1.2.2",
-          url: "https://example.invalid/1.2.2/tool",
-          sha512: "b".repeat(128),
-        });
-      }) as typeof fetch;
+      const resolve: typeof resolveAll = async (_token, registry) => {
+        expect(Object.keys(registry ?? {})).toEqual(["codex"]);
+        return {
+          lock: {
+            releases: {
+              tools:
+                mode === "failure"
+                  ? {}
+                  : {
+                      codex: { kind: "githubRelease", source: "openai/codex", version: "1.2.2" },
+                    },
+            },
+          },
+          failures: mode === "failure" ? ["unavailable"] : [],
+        };
+      };
       const stdout = capture();
       const args =
         mode === "stdout"
-          ? ["--stdout", "--only", "agy"]
+          ? ["--stdout", "--only", "codex"]
           : mode === "out"
-            ? ["--only", "agy", "--out", path]
-            : ["--only", "agy"];
-      const exit = await runCli(args, { defaultPath: path, stdout, stderr: capture() });
+            ? ["--only", "codex", "--out", path]
+            : ["--only", "codex"];
+      const exit = await runCli(args, { defaultPath: path, stdout, stderr: capture(), resolve });
       expect(exit).toBe(mode === "failure" ? 1 : 0);
-      expect(urls.sort()).toEqual([
-        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/darwin_amd64.json",
-        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/darwin_arm64.json",
-        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json",
-        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_arm64.json",
-      ]);
       const written = JSON.parse(
         mode === "stdout" ? stdout.values.join("") : await readFile(path, "utf8"),
       );
       expect(written.releases.tools.retired).toEqual(prior.releases.tools.retired);
-      expect(written.releases.tools.agy.version).toBe(mode === "failure" ? "1.2.0" : "1.2.2");
-      if (mode === "failure") expect(written.releases.tools.agy).toEqual(prior.releases.tools.agy);
+      expect(written.releases.tools.codex.version).toBe(mode === "failure" ? "1.2.0" : "1.2.2");
+      if (mode === "failure")
+        expect(written.releases.tools.codex).toEqual(prior.releases.tools.codex);
       if (mode === "stdout") expect(await readFile(path, "utf8")).toBe(before);
     },
   );
@@ -257,8 +286,8 @@ describe("runCli", () => {
     ["--only", "unknown-tool"],
     ["--only"],
     ["--only", ""],
-    ["--only", "agy", "--only", "agy"],
-    ["--only", "agy", "--stdout", "--out", "lock.json"],
+    ["--only", "codex", "--only", "codex"],
+    ["--only", "codex", "--stdout", "--out", "lock.json"],
     ["--stdout", "--stdout"],
     ["--out", "first", "--out", "second"],
     ["--only", "toString"],

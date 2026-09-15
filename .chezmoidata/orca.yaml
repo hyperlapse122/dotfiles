@@ -38,20 +38,19 @@ orca:
     # twenty-five agents keep whatever the application defaults them to.
     settings.agentDefaultArgs.codex: --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust
 
-    # omp does not lead or dispatch in Orca and is disabled from TUI agents.
     settings.disabledTuiAgents:
-      - omp
+      - antigravity
 
     settings.voice.enabled: true
     settings.voice.sttModel: zipformer-streaming-korean
 
     settings.refreshLocalBaseRefOnWorktreeCreate: true
 
-    settings.sourceControlAi.actions.commitMessage.agentId: antigravity
-    settings.sourceControlAi.actions.pullRequest.agentId: antigravity
-    settings.sourceControlAi.actions.branchName.agentId: antigravity
-    settings.sourceControlAi.actions.fixCommitFailure.agentId: antigravity
-    settings.sourceControlAi.actions.fixPushFailure.agentId: antigravity
-    settings.sourceControlAi.actions.fixChecks.agentId: antigravity
-    settings.sourceControlAi.actions.resolveConflicts.agentId: antigravity
-    settings.sourceControlAi.actions.resolveComments.agentId: antigravity
+    settings.sourceControlAi.actions.commitMessage.agentId: omp
+    settings.sourceControlAi.actions.pullRequest.agentId: omp
+    settings.sourceControlAi.actions.branchName.agentId: omp
+    settings.sourceControlAi.actions.fixCommitFailure.agentId: omp
+    settings.sourceControlAi.actions.fixPushFailure.agentId: omp
+    settings.sourceControlAi.actions.fixChecks.agentId: omp
+    settings.sourceControlAi.actions.resolveConflicts.agentId: omp
+    settings.sourceControlAi.actions.resolveComments.agentId: omp

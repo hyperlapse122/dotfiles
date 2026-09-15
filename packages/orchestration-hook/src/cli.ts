@@ -207,11 +207,8 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
   return 0;
 }
 
-// Antigravity requires a decision. `ask` respects existing permission grants;
-// `allow` overrides them, and 1.1.28 rejects an empty decision document.
-// https://antigravity.google/docs/hooks
-function guardAllowOutput(harness: Harness | null): string {
-  return harness === "agy" ? '{"decision":"ask"}' : "{}";
+function guardAllowOutput(_harness: Harness | null): string {
+  return "{}";
 }
 
 /**
@@ -221,8 +218,7 @@ function guardAllowOutput(harness: Harness | null): string {
  * denies nothing at all — the failure the whole real-binary gate exists to
  * catch, and one no diff shows.
  */
-function guardDenyOutput(harness: Harness, reason: string): string {
-  if (harness === "agy") return JSON.stringify({ decision: "deny", reason });
+function guardDenyOutput(_harness: Harness, reason: string): string {
   return JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -372,8 +368,8 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     default:
       io.stderr(
         `orchestration-hook: unknown command ${JSON.stringify(command)}\n` +
-          "usage: orchestration-hook <hook --harness <claude|codex|agy> | " +
-          "guard --harness <claude|codex|agy> [--explain <command>] | " +
+          "usage: orchestration-hook <hook --harness <claude|codex|omp> | " +
+          "guard --harness <claude|codex|omp> [--explain <command>] | " +
           "print-payload [--body <everyone|coordinator>] | role | --version>\n",
       );
       return 2;

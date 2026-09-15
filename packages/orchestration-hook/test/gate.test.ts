@@ -36,10 +36,10 @@ describe("decide", () => {
   });
 
   it("names the program, Orca, and the unreachable-Orca fallback in the reason", () => {
-    const decision = decide(bash("omp"), LEAD);
+    const decision = decide(bash("codex"), LEAD);
     expect(decision.deny).toBe(true);
     if (!decision.deny) return;
-    expect(decision.reason).toContain("omp");
+    expect(decision.reason).toContain("codex");
     expect(decision.reason).toContain("Orca");
     expect(decision.reason).toContain("do not route around this gate");
   });
@@ -51,7 +51,7 @@ describe("decide", () => {
   it("scans an unrecognized tool that still carries a command", () => {
     // Codex renames its shell handler between versions; a name list alone
     // would stop denying with every test still green.
-    const event = { tool_name: "some_future_exec", tool_input: { command: "omp" } };
+    const event = { tool_name: "some_future_exec", tool_input: { command: "codex" } };
     expect(decide(event, LEAD).deny).toBe(true);
   });
 
@@ -66,7 +66,7 @@ describe("decide", () => {
 
   it("denies a launch hidden behind a shell wrapper", () => {
     expect(decide(bash("bash -c 'codex exec x'"), LEAD).deny).toBe(true);
-    expect(decide(bash("git status && omp"), LEAD).deny).toBe(true);
+    expect(decide(bash("git status && codex"), LEAD).deny).toBe(true);
   });
 
   it("allows the CLI-management surface", () => {
@@ -83,7 +83,7 @@ describe("decide", () => {
   });
 
   it("denies a bare invocation and an exec", () => {
-    for (const command of ["codex", "claude", "omp", "codex exec", 'claude -p "hi"']) {
+    for (const command of ["codex", "claude", "codex exec", 'claude -p "hi"']) {
       expect(decide(bash(command), LEAD).deny, command).toBe(true);
     }
   });
@@ -306,44 +306,16 @@ describe("a heredoc body is data, not commands", () => {
   });
 });
 
-describe("the Antigravity event shape", () => {
-  function agy(name: string, args: Record<string, unknown>): ToolEvent {
-    return { toolCall: { name, args } };
-  }
-
-  it("reads the command out of a nested tool call", () => {
-    expect(extractCommand(agy("run_command", { CommandLine: "codex exec x" }))).toBe(
-      "codex exec x",
-    );
+describe("native document edits and retired launch guards", () => {
+  it("allows native patch content without parsing it as shell", () => {
+    const event = { tool_name: "apply_patch", tool_input: { command: "codex" } };
+    expect(extractCommand(event)).toBeNull();
+    expect(decide(event, LEAD).deny).toBe(false);
   });
 
-  it("denies a launch carried in that shape", () => {
-    expect(decide(agy("run_command", { CommandLine: "claude -p hi" }), LEAD).deny).toBe(true);
-  });
-
-  it("allows a tool whose args carry no command at all", () => {
-    expect(decide(agy("list_dir", { DirectoryPath: "/tmp" }), LEAD).deny).toBe(false);
-  });
-
-  it("denies the Antigravity CLI under both published names", () => {
-    for (const program of ["agy", "antigravity"]) {
-      expect(decide(bash(`${program} -p hi`), LEAD).deny, program).toBe(true);
+  it("allows omp and retired CLI launches", () => {
+    for (const command of ["omp", "agy", "antigravity"]) {
+      expect(decide(bash(command), LEAD).deny).toBe(false);
     }
-  });
-
-  it("leaves the CLI's own management commands alone", () => {
-    for (const command of ["agy plugin list", "agy --version", "antigravity mcp"]) {
-      expect(decide(bash(command), LEAD).deny, command).toBe(false);
-    }
-  });
-
-  it("matches the captured fixtures", () => {
-    const read = (name: string) =>
-      JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", name), "utf8")) as ToolEvent;
-    expect(extractCommand(read("pretooluse-agy.json"))).toBe("echo capture-probe");
-    expect(extractCommand(read("pretooluse-agy-nonshell.json"))).toBeNull();
-    expect(SHELL_TOOL_NAMES.agy).toContain(
-      (read("pretooluse-agy.json").toolCall as { name: string }).name,
-    );
   });
 });

@@ -167,13 +167,8 @@ out=
 run_gate "$lock" || fail 'the committed release lock does not pass the gate'
 pass 'the committed .chezmoidata/releases.json passes'
 
-case_name=agy-vendor-manifest
-jq -e '
-  .releases.tools.agy
-  | .kind == "vendorManifest"
-    and .source == "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests"
-    and (.artifacts | keys == ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"])
-' "$lock" >/dev/null || fail 'the committed lock does not contain the antigravity vendorManifest entry'
+case_name=retired-agy
+jq -e '.releases.tools | has("agy") | not' "$lock" >/dev/null || fail 'retired agy remains in the release lock'
 
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
@@ -193,35 +188,5 @@ done
 chezmoi_bin=$(command -v chezmoi)
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
-
-for os in linux darwin; do
-  for arch in amd64 arm64; do
-    case_name="agy-render-$os-$arch"
-    printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/external.tmpl"
-    cat "$repo_root/.chezmoiexternals/ai-agents.toml" >>"$scratch/external.tmpl"
-    render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$scratch/external.tmpl" "$scratch/external.toml"
-    rendered=$(sed -n '/^\[agy\]$/,/^\[agent-browser\]$/p' "$scratch/external.toml")
-    url=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].url' "$lock")
-    digest=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].sha512' "$lock")
-    [[ "$digest" =~ ^[0-9a-f]{128}$ ]] || fail 'missing or invalid SHA-512'
-    [[ "$rendered" == *"url = '$url'"* ]] || fail 'external URL differs from lock'
-    [[ "$rendered" == *"sha512 = '$digest'"* ]] || fail 'external does not consume the locked SHA-512'
-    [[ "$rendered" != *sha256* ]] || fail 'external still consumes SHA-256'
-    pass "$case_name consumes the vendor archive and SHA-512"
-  done
-done
-
-case_name=agy-native-updater-control
-[[ $(grep -cx 'AGY_CLI_DISABLE_AUTO_UPDATE=true' "$repo_root/dot_config/environment.d/60-development.conf") == 1 ]] || fail 'Linux desktop environment must disable the native updater'
-for inherited in unset false; do
-  env -u AGY_CLI_DISABLE_AUTO_UPDATE ZDOTDIR="$scratch/home" zsh -dfc '
-    mise() { printf ":"; }
-    if [[ "$2" != unset ]]; then export AGY_CLI_DISABLE_AUTO_UPDATE="$2"; fi
-    source "$1"
-    [[ "$AGY_CLI_DISABLE_AUTO_UPDATE" == true ]]
-    [[ "${(t)AGY_CLI_DISABLE_AUTO_UPDATE}" == *export* ]]
-  ' -- "$repo_root/dot_config/zsh/dot_zshenv" "$inherited" || fail "shell updater control failed with inherited $inherited"
-done
-pass 'desktop and shell environments disable the native updater'
 
 printf 'release-lock digest gate: all cases passed\n'

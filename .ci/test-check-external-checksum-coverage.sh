@@ -199,16 +199,8 @@ for leg, expected in version_only.items():
                 "version-only exemption and this case must be updated"
             )
 
-# agy: null sha256, populated sha512, verified through its sha512 table.
-agy_artifact = tools["agy"]["artifacts"]["linux-amd64"]
-if agy_artifact.get("sha256") is not None:
-    problems.append("agy now records a sha256; the sha512-only case must be updated")
-agy = stanzas["linux-amd64"]["agy"]
-checksum = agy.get("checksum") or {}
-if sorted(checksum) != ["sha512"]:
-    problems.append(f"agy should declare sha512 alone, got {sorted(checksum)}")
-elif checksum["sha512"] != agy_artifact["sha512"]:
-    problems.append("agy declares a sha512 the lock does not record")
+if "agy" in tools or "agy" in stanzas["linux-amd64"]:
+    problems.append("retired agy remains managed")
 
 for problem in problems:
     print(problem)
@@ -216,6 +208,6 @@ sys.exit(1 if problems else 0)
 ' "$render_dir" "$repo_root/.chezmoidata/releases.json" ||
   fail 'the exemption corners no longer hold (listed above)'
 pass 'the version-only externals pass with no checksum table'
-pass 'agy passes on its sha512 alone'
+pass 'retired agy is absent from lock and externals'
 
 printf 'test-check-external-checksum-coverage: ok\n'

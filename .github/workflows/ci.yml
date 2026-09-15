@@ -54,7 +54,6 @@ jobs:
           chezmoi_bin=$(command -v chezmoi)
           for item in \
             ".chezmoiscripts/70-agents/run_onchange_after_update-claude-plugins.sh.tmpl:claude-plugins.sh" \
-            ".chezmoiscripts/70-agents/run_onchange_after_update-agy-plugins.sh.tmpl:agy-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-codex-plugins.sh.tmpl:codex-plugins.sh" \
             ".chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:omp-plugins.sh" \
             ".chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl:omp-settings.sh" \
@@ -69,16 +68,15 @@ jobs:
               --destination "$RUNNER_TEMP/render-target" \
               execute-template < "$source_path" > "$RUNNER_TEMP/$output_name"
           done
-          chmod 700 "$RUNNER_TEMP/claude-plugins.sh" "$RUNNER_TEMP/agy-plugins.sh" \
+          chmod 700 "$RUNNER_TEMP/claude-plugins.sh" \
             "$RUNNER_TEMP/codex-plugins.sh" "$RUNNER_TEMP/omp-plugins.sh" \
             "$RUNNER_TEMP/omp-settings.sh" "$RUNNER_TEMP/claude-settings.sh" \
             "$RUNNER_TEMP/orca-settings-reconcile.sh"
       - name: Test agent reconciliation
         run: |
           set -euo pipefail
-          .ci/test-claude-agy-plugin-reconcile.sh \
+          .ci/test-claude-codex-plugin-reconcile.sh \
             "$RUNNER_TEMP/claude-plugins.sh" \
-            "$RUNNER_TEMP/agy-plugins.sh" \
             "$RUNNER_TEMP/codex-plugins.sh"
           .ci/test-omp-plugin-reconcile.sh "$RUNNER_TEMP/omp-plugins.sh"
           .ci/test-omp-settings-reconcile.sh "$RUNNER_TEMP/omp-settings.sh"
@@ -90,6 +88,7 @@ jobs:
           .ci/test-android-skill-ownership.sh
           .ci/test-agent-instructions.sh
           .ci/test-agent-trust-reconcile.sh
+          bash .ci/test-omp-transition.sh
 
   render-gates:
     name: render gates
@@ -178,6 +177,8 @@ jobs:
             ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-theme-dark.sh.tmpl:kde-theme-dark.sh" \
             ".chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-touchpad.sh.tmpl:kde-touchpad.sh" \
             ".chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl:build-settings-reconcile.sh" \
+            ".chezmoiscripts/60-build/run_onchange_after_build-figma-auth.sh.tmpl:build-figma-auth.sh" \
+            ".chezmoiscripts/60-build/run_onchange_after_30-build-omp-integration.sh.tmpl:build-omp-integration.sh" \
             ".chezmoiscripts/00-tools/run_onchange_after_10-build-command-reconcile.sh.tmpl:build-command-reconcile.sh" \
             ".chezmoiscripts/60-build/run_onchange_after_20-build-orchestration-hook.sh.tmpl:build-orchestration-hook.sh" \
             ".chezmoiscripts/30-linux/run_after_reload-user-systemd.sh.tmpl:user-systemd-reload.sh"
@@ -211,6 +212,8 @@ jobs:
           .ci/test-kde-theme-dark-apply.sh "$RUNNER_TEMP/kde-theme-dark.sh"
           .ci/test-kde-touchpad-devices.sh "$RUNNER_TEMP/kde-touchpad.sh"
           .ci/test-build-settings-reconcile.sh "$RUNNER_TEMP/build-settings-reconcile.sh"
+          .ci/test-build-figma-auth.sh "$RUNNER_TEMP/build-figma-auth.sh"
+          bash .ci/test-build-omp-integration.sh "$RUNNER_TEMP/build-omp-integration.sh"
           .ci/test-build-command-reconcile.sh "$RUNNER_TEMP/build-command-reconcile.sh"
           .ci/test-build-orchestration-hook.sh "$RUNNER_TEMP/build-orchestration-hook.sh"
           .ci/test-podman-cluster-convergence.sh "$RUNNER_TEMP/setup-podman-cluster.sh"

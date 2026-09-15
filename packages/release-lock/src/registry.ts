@@ -281,12 +281,6 @@ export const REGISTRY: Registry = {
 
   /* ---------- vendorManifest ---------- */
 
-  agy: {
-    kind: "vendorManifest",
-    vendor: "antigravity",
-    source: "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
-  },
-
   // Rolling unversioned URL; the resolver follows its 302 to read the version
   // and records nothing else. `.chezmoiscripts/30-components/` composes the
   // versioned artifact URL from that value.

@@ -1,29 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Guards the SessionStart orchestration hook this checkout ships to Claude Code
-# and Codex, now one compiled binary rather than two bash scripts.
-#
-# This gate replaces .ci/test-claude-team-hook.sh and
-# .ci/test-codex-orchestration-hook.sh. It covers both harnesses in one script
-# because the binary is ~81 MB and building it twice would blow the job's
-# ~90-second budget; the contracts each old gate held are all asserted below.
-#
-# It is also a NEW gate shape for this repository: every other build gate
-# fabricates a fake dist artifact and asserts staging behavior only. Nothing
-# else here compiles and executes a real binary. That is deliberate — the
-# contracts that matter are not visible in a diff and not reachable from the
-# package's own unit tests:
-#
-#   - The hook must fail open on every path. A SessionStart hook that errors
-#     delays or blocks session start, and the binary's own code never runs when
-#     the binary itself is the thing that is missing or wrong.
-#   - The payload text an agent receives must be the text in the source body.
-#     Package tests compare a module against a module; only the built artifact
-#     proves what a deployed host would actually emit.
-#   - The declared command must name the path staging actually produces, in the
-#     form each harness needs.
-
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 fail() { printf 'orchestration hook: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'orchestration hook: %s\n' "$*"; }
@@ -93,10 +70,10 @@ run_hook() {
 
 
 run_guard() {
-  local harness=$1 role_env=$2 command=$3
+  local harness=$1 role_env=$2 command=$3 tool_name=${4:-Bash}
   local event
-  event=$(jq -nc --arg c "$command" \
-    '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$c}}')
+  event=$(jq -nc --arg c "$command" --arg n "$tool_name" \
+    '{hook_event_name:"PreToolUse",tool_name:$n,tool_input:{command:$c}}')
   # shellcheck disable=SC2086
   printf '%s' "$event" \
     | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness"
@@ -197,25 +174,14 @@ out=$(run_hook codex "$lead_env" "$remap_bin")
   || fail 'a Codex lead must receive the everyone payload'
 pass 'a Codex lead receives the whole envelope, like any other served harness'
 
-# Antigravity injects before every model call instead of at session start, so
-# its delivery document is a different shape. A regression there would leave the
-# source tests green while the deployed binary delivered nothing that harness
-# could read.
-out=$(run_hook agy "$lead_env" "$remap_bin")
-printf '%s' "$out" | jq -er '.injectSteps[0].ephemeralMessage' >/dev/null \
-  || fail "an Antigravity lead must receive one injected step (got: $out)"
-step=$(printf '%s' "$out" | jq -r '.injectSteps[0].ephemeralMessage')
-[[ $step == *'orchestration-coordinator:begin'* && $step == *'orchestration-everyone:begin'* ]] \
-  || fail 'an Antigravity lead step must carry the whole envelope'
-out=$(run_hook agy "ORCA_TERMINAL_HANDLE=term_ci")
-step=$(printf '%s' "$out" | jq -r '.injectSteps[0].ephemeralMessage')
-[[ $step == *'orchestration-everyone:begin'* ]] \
-  || fail 'an Antigravity worker must receive the everyone payload'
-[[ $step == *'orchestration-coordinator:begin'* ]] \
-  && fail 'an Antigravity worker must not receive the coordinator payload'
-out=$(run_hook agy "")
-[[ $out == '{}' ]] || fail "Antigravity outside Orca must print exactly {} (got: $out)"
-pass 'Antigravity delivery carries the right payload per role, in its own document shape'
+out=$(run_hook omp "$lead_env" "$remap_bin")
+[[ $out == *'orchestration-coordinator:begin'* && $out == *'orchestration-everyone:begin'* ]] \
+  || fail 'omp lead context is incomplete'
+out=$(run_hook omp "ORCA_TERMINAL_HANDLE=term_ci")
+[[ $out == *'orchestration-everyone:begin'* && $out != *'orchestration-coordinator:begin'* ]] \
+  || fail 'omp worker context has the wrong role'
+out=$(run_hook omp "")
+[[ -z $out ]] || fail 'omp outside Orca must receive no context'
 
 for bad in "--harness nonesuch" "--harness" ""; do
   # shellcheck disable=SC2086
@@ -275,29 +241,18 @@ for payload_render in "$scratch/coordinator.rendered" "$scratch/coordinator.bina
   fi
 done
 
-# The third reader: omp has no session-start injection point, so its payload
-# rides in a rendered instruction file instead of this binary. All three must
-# agree or one harness silently holds rules the others do not.
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_omp/private_agent/private_readonly_AGENTS.md.tmpl" "$scratch/omp.rendered"
-awk '/<!-- omp-orchestration-payload:begin -->/{flag=1; next} /<!-- omp-orchestration-payload:end -->/{flag=0} flag' \
-  "$scratch/omp.rendered" >"$scratch/omp.block"
-if grep -F 'orchestration-coordinator:begin' "$scratch/omp.rendered" >/dev/null; then
-  fail "omp's instruction file carries the coordinator payload"
+if grep -F 'orchestration-everyone:begin' "$scratch/omp.rendered" >/dev/null; then
+  fail 'omp instructions must not carry a stale static payload'
 fi
-grep -q 'orchestration-everyone:begin' "$scratch/omp.block" \
-  || fail "omp's instruction file carries no everyone payload block"
-grep -Fxq "$(head -1 "$scratch/everyone.binary")" "$scratch/omp.block" \
-  || fail "omp's payload block and the binary's everyone payload disagree"
-pass 'the everyone payload is identical across its three readers'
+pass 'payloads match source and omp receives context dynamically'
 
 # --------------------------------------------------------- declared commands
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_local/share/dotfiles-claude-plugin/hooks/hooks.json.tmpl" "$scratch/claude-hooks.json"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_local/share/dotfiles-codex-plugin/hooks/hooks.json.tmpl" "$scratch/codex-hooks.json"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-  "$repo_root/dot_local/share/dotfiles-agy-plugin/hooks.json.tmpl" "$scratch/agy-hooks.json"
 
 expected_binary="$scratch/home/.local/libexec/orchestration-hook"
 claude_command=$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/claude-hooks.json")
@@ -339,38 +294,6 @@ for harness in claude codex; do
   [[ $reason == *Orca* ]] || fail "$harness: the deny must name the Orca dispatch path"
 done
 
-# Antigravity nests the command under a tool call and reads a different decision
-# document. A response in the other shape is IGNORED rather than rejected, so a
-# gate that emitted one would deny nothing while every unit test stayed green.
-agy_event=$(jq -nc '{toolCall:{name:"run_command",args:{CommandLine:"codex exec x"}}}')
-# shellcheck disable=SC2086
-out=$(printf '%s' "$agy_event" \
-  | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness agy)
-decision=$(printf '%s' "$out" | jq -er '.decision') \
-  || fail "agy: a launch in a team session must return a decision document (got: $out)"
-[[ $decision == deny ]] || fail "agy: a launch must be denied (got: $decision)"
-reason=$(printf '%s' "$out" | jq -er '.reason')
-[[ $reason == *Orca* ]] || fail 'agy: the deny must name the Orca dispatch path'
-pass 'a shell launch of an agent CLI is denied in a team session, on all three harnesses'
-
-# An explicit allow would override Antigravity's own permission prompt, turning
-# the gate into a blanket auto-approval for everything it did not deny.
-agy_plain=$(jq -nc '{toolCall:{name:"run_command",args:{CommandLine:"echo hi"}}}')
-# shellcheck disable=SC2086
-out=$(printf '%s' "$agy_plain" \
-  | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness agy)
-[[ $out == '{"decision":"ask"}' ]] || fail "agy: a benign command must preserve native permission checks (got: $out)"
-pass 'the gate preserves native permission checks without auto-approval'
-
-out=$(run_guard agy "" 'codex exec x')
-[[ $out == '{"decision":"ask"}' ]] || fail "agy: outside Orca the gate must preserve native permission checks (got: $out)"
-for body in '' 'not json' 'null' '[1,2,3]'; do
-  # shellcheck disable=SC2086
-  out=$(printf '%s' "$body" | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness agy)
-  [[ $out == '{"decision":"ask"}' ]] || fail "agy: malformed input must preserve native permission checks (got: $out)"
-done
-pass 'Antigravity receives its required decision on fail-open paths'
-
 out=$(run_guard claude "$WORKER_ENV" 'codex exec x')
 [[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') == deny ]] \
   || fail 'a worker starting its own peer is the same bypass and must be denied'
@@ -397,6 +320,9 @@ codex mcp list
 claude update
 claude --version
 command -v codex
+omp
+agy
+antigravity
 ALLOWED
 pass 'CLI management and unrelated commands are untouched'
 
@@ -410,7 +336,7 @@ done <<'DENIED'
 codex
 bash -c 'codex exec x'
 sh -c "bash -c 'codex exec x'"
-git status && omp
+git status && codex
 FOO=bar env claude -p hi
 timeout 5 codex exec
 /usr/bin/codex exec
@@ -468,27 +394,6 @@ jq -e '.hooks.PreToolUse[0] | has("matcher") | not' "$scratch/codex-hooks.json" 
   || fail 'the Codex guard must carry no matcher while the shell tool name is unpinned'
 pass 'Codex declares the launch gate without an args key or an unpinnable matcher'
 
-# Antigravity has no session-start event, so the payload rides its pre-model
-# hook. Both handlers run through `sh -c`, so the absolute path is shell-quoted
-# — a home directory with a space would otherwise break the command before the
-# binary could fail open.
-agy_inject=$(jq -r '.["dotfiles-orchestration"].PreInvocation[0].command' "$scratch/agy-hooks.json")
-[[ $agy_inject == "'$expected_binary' hook --harness agy" ]] \
-  || fail "Antigravity must declare the staged binary, shell-quoted (got: $agy_inject)"
-agy_guard=$(jq -r '.["dotfiles-orchestration"].PreToolUse[0].hooks[0].command' "$scratch/agy-hooks.json")
-[[ $agy_guard == "'$expected_binary' guard --harness agy" ]] \
-  || fail "Antigravity must declare the guard, shell-quoted (got: $agy_guard)"
-# The matcher stays open for the reason Codex carries none: this CLI derives a
-# tool name from its step type, and the matcher is evaluated before the handler,
-# so a renamed tool would retire the gate with every gate here still green.
-jq -e '.["dotfiles-orchestration"].PreToolUse[0].matcher == "*"' "$scratch/agy-hooks.json" >/dev/null \
-  || fail 'the Antigravity guard must not pin a shell tool name'
-# The injection side must outlast the binary's own guide fetch, or a lead would
-# lose its envelope to the harness clock rather than to a missing guide.
-jq -e '.["dotfiles-orchestration"].PreInvocation[0].timeout >= 15' "$scratch/agy-hooks.json" >/dev/null \
-  || fail 'the Antigravity injection timeout must exceed the guide-fetch budget'
-pass 'Antigravity declares both hooks by quoted absolute path, without pinning a tool name'
-
 # The trust record is the silent-failure surface: a Codex hook whose recorded
 # hash disagrees with the deployed declaration simply never runs. Adding an
 # event must not disturb the SessionStart record, whose key is positional
@@ -542,5 +447,41 @@ for target in \
     || fail "retired target is not declared for removal: $target"
 done
 pass 'the retired hook scripts and payload wrappers are gone and declared for removal'
+
+for tool_name in apply_patch doc-edit; do
+  out=$(run_guard claude "$TEAM" $'remove entries\nagy\ncodex' "$tool_name")
+  [[ $out == '{}' ]] || fail "$tool_name data was treated as a shell launch"
+done
+pass 'native edit payloads preserve CLI text'
+
+bundle="$scratch/dotfiles-orca.js"
+(
+  cd "$repo_root/packages/omp-orca"
+  "$BUN_BIN" build ./src/index.ts --target=bun --format=esm --outfile "$bundle" >/dev/null
+) || fail 'the extension bundle did not compile'
+[[ -s $bundle ]] || fail 'the extension bundle is empty'
+
+extension_hook="$scratch/extension-hook"
+extension_env="$scratch/extension-env"
+printf '#!/usr/bin/env bash\nprintf "%%s|%%s|%%s" "$ORCA_TERMINAL_HANDLE" "$ORCA_AGENT_TEAMS_LEADER_PANE" "$TMUX_PANE" >%q\nexec %q hook --harness %q\n' "$extension_env" "$binary" "omp" >"$extension_hook"
+chmod 0755 "$extension_hook"
+runner="$scratch/extension-runner.mjs"
+cat >"$runner" <<'RUNNER'
+const { default: load } = await import(process.argv[2]);
+let handler;
+await load({ on(event, next) { if (event !== "before_agent_start") throw new Error("wrong event"); handler = next; } });
+const result = await handler({ prompt: "test", systemPrompt: ["BASE"] });
+process.stdout.write(JSON.stringify(result));
+RUNNER
+result=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  ORCA_TERMINAL_HANDLE=term_ext ORCA_AGENT_TEAMS_LEADER_PANE=%7 TMUX_PANE=%9 \
+  "$BUN_BIN" "$runner" "$bundle") || fail 'the extension integration runner failed'
+jq -e '.systemPrompt | length == 2' <<<"$result" >/dev/null \
+  || fail 'the extension did not return the original prompt plus one managed block'
+jq -e '.systemPrompt[1] | contains("dotfiles-orca:begin") and contains("orchestration-everyone:begin") and contains("dotfiles-orca:end")' <<<"$result" >/dev/null \
+  || fail 'the extension block does not contain hook context'
+[[ $(cat "$extension_env") == 'term_ext|%7|%9' ]] \
+  || fail 'the extension did not pass the current role environment to the child'
+pass 'the built extension calls the real hook binary path contract without credentials'
 
 printf 'orchestration hook: all gates passed\n'

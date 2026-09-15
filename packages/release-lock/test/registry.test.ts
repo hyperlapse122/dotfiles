@@ -343,17 +343,9 @@ describe("bun tag pinning", () => {
   });
 });
 
-describe("agy vendorManifest", () => {
-  test("declares antigravity vendorManifest source", () => {
-    const spec = REGISTRY.agy as ToolSpec;
-    expect(spec.kind).toBe("vendorManifest");
-    expect(spec.vendor).toBe("antigravity");
-    expect(spec.source).toBe(
-      "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
-    );
-    expect((spec as { exactTag?: unknown }).exactTag).toBeUndefined();
-    expect((spec as { tagPrefix?: unknown }).tagPrefix).toBeUndefined();
-    expect((spec as { asset?: unknown }).asset).toBeUndefined();
+describe("retired harnesses", () => {
+  test("does not resolve agy releases", () => {
+    expect(REGISTRY).not.toHaveProperty("agy");
   });
 });
 

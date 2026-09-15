@@ -149,16 +149,9 @@ describe("hook fail-open contract", () => {
   });
 });
 
-/** The context Antigravity's pre-model hook injected, from one captured stdout. */
-function injectedContext(stdout: string): string {
-  const parsed = JSON.parse(stdout) as { injectSteps: { ephemeralMessage?: string }[] };
-  expect(parsed.injectSteps).toHaveLength(1);
-  return parsed.injectSteps[0]?.ephemeralMessage ?? "";
-}
-
-describe("agy hook delivery", () => {
+describe("omp hook delivery", () => {
   it("delivers the complete lead envelope in order", async () => {
-    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-lead-"));
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-omp-lead-"));
     try {
       mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
       writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
@@ -173,8 +166,8 @@ describe("agy hook delivery", () => {
         ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
         TMUX_PANE: "%7",
       });
-      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
-      const context = injectedContext(out.join(""));
+      expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+      const context = out.join("");
       const order = [
         context.indexOf(PREAMBLE),
         context.indexOf("SKILL BODY"),
@@ -191,21 +184,21 @@ describe("agy hook delivery", () => {
 
   it("delivers the everyone envelope to a worker", async () => {
     const { io, out } = capture(ORCA_WORKER);
-    expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
-    const context = injectedContext(out.join(""));
+    expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+    const context = out.join("");
     expect(context).toContain(PREAMBLE);
     expect(context).toContain(payload("everyone"));
     expect(context).not.toContain(payload("coordinator"));
   });
 
-  it("returns a parseable no-op outside Orca", async () => {
+  it("returns no output outside Orca", async () => {
     const { io, out } = capture();
-    expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
-    expect(JSON.parse(out.join(""))).toEqual({});
+    expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+    expect(out.join("")).toBe("");
   });
 
   it("returns a no-op when the skill is empty", async () => {
-    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-empty-skill-"));
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-omp-empty-skill-"));
     try {
       mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
       writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "");
@@ -215,15 +208,15 @@ describe("agy hook delivery", () => {
         ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
         TMUX_PANE: "%7",
       });
-      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
-      expect(JSON.parse(out.join(""))).toEqual({});
+      expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+      expect(out.join("")).toBe("");
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
   });
 
   it("returns a no-op when the guide fetch fails", async () => {
-    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-guide-fail-"));
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-omp-guide-fail-"));
     try {
       mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
       writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
@@ -237,8 +230,8 @@ describe("agy hook delivery", () => {
         ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
         TMUX_PANE: "%7",
       });
-      expect(await main(["hook", "--harness", "agy"], io)).toBe(0);
-      expect(JSON.parse(out.join(""))).toEqual({});
+      expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+      expect(out.join("")).toBe("");
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -248,7 +241,7 @@ describe("agy hook delivery", () => {
     // The pre-model hook fires before every invocation, so an envelope that
     // could not be composed at the first opportunity is not lost — it lands
     // whole at the first opportunity that can compose it.
-    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-agy-late-"));
+    const home = mkdtempSync(join(tmpdir(), "orchestration-hook-omp-late-"));
     try {
       mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
       writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
@@ -268,12 +261,12 @@ describe("agy hook delivery", () => {
       };
 
       const first = capture(env);
-      expect(await main(["hook", "--harness", "agy"], first.io)).toBe(0);
-      expect(JSON.parse(first.out.join(""))).toEqual({});
+      expect(await main(["hook", "--harness", "omp"], first.io)).toBe(0);
+      expect(first.out.join("")).toBe("");
 
       const second = capture(env);
-      expect(await main(["hook", "--harness", "agy"], second.io)).toBe(0);
-      const context = injectedContext(second.out.join(""));
+      expect(await main(["hook", "--harness", "omp"], second.io)).toBe(0);
+      const context = second.out.join("");
       expect(context).toContain("GUIDE BODY");
       expect(context).toContain(payload("coordinator"));
     } finally {
@@ -281,10 +274,10 @@ describe("agy hook delivery", () => {
     }
   });
 
-  it("lists agy among the accepted harness values", async () => {
+  it("lists omp among the accepted harness values", async () => {
     const { io, err } = capture();
     expect(await main(["nonesuch"], io)).toBe(2);
-    expect(err.join(" ")).toContain("agy");
+    expect(err.join(" ")).toContain("omp");
   });
 });
 
@@ -380,29 +373,6 @@ function event(command: string): string {
 }
 
 describe("guard fail-open contract", () => {
-  it("preserves Antigravity permission checks outside Orca and on malformed input", async () => {
-    for (const env of [{}, LEAD_ENV]) {
-      for (const body of ["", "not json", "null", "[1,2,3]"]) {
-        const { io, out, err } = guardIo(env, body);
-        expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
-        expect(JSON.parse(out.join(""))).toEqual({ decision: "ask" });
-        expect(err.join("")).toBe("");
-      }
-    }
-  });
-
-  it("preserves Antigravity permission checks after an internal error", async () => {
-    const env = {
-      get ORCA_TERMINAL_HANDLE(): string {
-        throw new Error("unavailable environment");
-      },
-    };
-    const { io, out, err } = guardIo(env, event("echo hi"));
-    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
-    expect(JSON.parse(out.join(""))).toEqual({ decision: "ask" });
-    expect(err.join("")).toBe("");
-  });
-
   it("allows with a JSON no-op body on both harnesses", async () => {
     for (const harness of ["claude", "codex"]) {
       const { io, out, err } = guardIo({}, event("codex exec x"));
@@ -455,28 +425,6 @@ describe("guard decisions", () => {
     const { io, out } = guardIo({}, event("codex exec x"));
     expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
     expect(out.join("")).toBe("{}");
-  });
-
-  it("denies in the document shape Antigravity reads", async () => {
-    // A response in the other harness's shape is ignored rather than rejected,
-    // so the gate would deny nothing at all and no diff would show it.
-    const body = JSON.stringify({
-      toolCall: { name: "run_command", args: { CommandLine: "claude -p x" } },
-    });
-    const { io, out } = guardIo(LEAD_ENV, body);
-    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
-    const parsed = JSON.parse(out.join("")) as { decision: string; reason: string };
-    expect(parsed.decision).toBe("deny");
-    expect(parsed.reason).toContain("Orca");
-  });
-
-  it("preserves native permission checks when it does not deny on Antigravity", async () => {
-    const body = JSON.stringify({
-      toolCall: { name: "run_command", args: { CommandLine: "echo hi" } },
-    });
-    const { io, out } = guardIo(LEAD_ENV, body);
-    expect(await main(["guard", "--harness", "agy"], io)).toBe(0);
-    expect(JSON.parse(out.join(""))).toEqual({ decision: "ask" });
   });
 
   it("parses a pretty-printed body rather than stopping at the first newline", async () => {

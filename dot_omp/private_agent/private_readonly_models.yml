@@ -1,0 +1,3 @@
+providers:
+  google-antigravity:
+    baseUrl: http://127.0.0.1:45123

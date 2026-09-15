@@ -5,7 +5,6 @@ agent-trust-reconcile - Assert project trust across managed agent harnesses.
 Enforces trust for git checkouts and worktrees in:
   - claude: ~/.claude.json (projects.<path>.hasTrustDialogAccepted = true)
   - codex: ~/.codex/config.toml ([projects."<path>"] trust_level = "trusted")
-  - agy: ~/.gemini/antigravity-cli/settings.json (trustedWorkspaces: [ ... ])
 
 Supports explicit directory paths or scans ~/src and ~/.local/share/worktrees.
 All writes are strictly additive and atomic (0600 mode).
@@ -90,43 +89,6 @@ def reconcile_claude(claude_json_path, paths, verbose=False):
         atomic_write_json(target, data)
         if verbose:
             print(f"agent-trust-reconcile: updated claude trust in {target}")
-    return True
-
-
-def reconcile_antigravity(agy_settings_path, paths, verbose=False):
-    target = Path(agy_settings_path).expanduser().resolve()
-    data = {}
-    if target.is_file():
-        try:
-            with open(target, "r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if content:
-                    data = json.loads(content)
-        except Exception as e:
-            sys.stderr.write(f"agent-trust-reconcile: warning: failed reading {target}: {e}\n")
-            return False
-
-    if not isinstance(data, dict):
-        sys.stderr.write(f"agent-trust-reconcile: warning: {target} root is not an object\n")
-        return False
-
-    trusted = data.setdefault("trustedWorkspaces", [])
-    if not isinstance(trusted, list):
-        sys.stderr.write(f"agent-trust-reconcile: warning: {target} 'trustedWorkspaces' is not a list\n")
-        return False
-
-    existing = set(trusted)
-    changed = False
-    for path in paths:
-        if path not in existing:
-            trusted.append(path)
-            existing.add(path)
-            changed = True
-
-    if changed:
-        atomic_write_json(target, data)
-        if verbose:
-            print(f"agent-trust-reconcile: updated antigravity trust in {target}")
     return True
 
 
@@ -228,7 +190,7 @@ def reconcile_codex(codex_home_path, codex_config_path, paths, verbose=False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Assert project trust across claude, codex, and antigravity harnesses."
+        description="Assert project trust across claude and codex harnesses."
     )
     parser.add_argument(
         "paths",
@@ -269,13 +231,6 @@ def main():
     claude_json = os.environ.get(
         "CLAUDE_CONFIG_FILE", str(Path.home() / ".claude.json")
     )
-    agy_settings = os.environ.get(
-        "ANTIGRAVITY_SETTINGS_FILE",
-        str(
-            Path(os.environ.get("ANTIGRAVITY_DATA_DIR", str(Path.home() / ".gemini" / "antigravity-cli")))
-            / "settings.json"
-        ),
-    )
     codex_home = os.environ.get(
         "CODEX_HOME", str(Path.home() / ".codex")
     )
@@ -285,7 +240,6 @@ def main():
 
     ok = True
     ok &= reconcile_claude(claude_json, target_paths, verbose=args.verbose)
-    ok &= reconcile_antigravity(agy_settings, target_paths, verbose=args.verbose)
     ok &= reconcile_codex(codex_home, codex_config, target_paths, verbose=args.verbose)
 
     if args.verbose:

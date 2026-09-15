@@ -12,7 +12,7 @@
 #
 # Prunes older extracted localArchive versions only after the patch and updaters
 # have succeeded. The phase-70 location is load-bearing: patch- runs first,
-# update-claude-plugins and update-agy-plugins perform the failure-prone
+# the plugin updaters perform the failure-prone
 # reconciles, and this zz-prune script runs last. A pin-bump failure therefore
 # leaves each harness pointed at its known-good registered source.
 #

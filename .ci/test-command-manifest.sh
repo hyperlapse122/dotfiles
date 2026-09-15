@@ -180,7 +180,7 @@ macos_ext = externals(macos_units)
 
 # Every declared external unit renders without a template error and carries an identity.
 all_ext = set(linux_ext) | set(macos_ext)
-assert len(all_ext) == 31, f"expected 31 external units across both platforms, got {len(all_ext)}"
+assert len(all_ext) == 30, f"expected 30 external units across both platforms, got {len(all_ext)}"
 for scope in (linux_ext, macos_ext):
     for unit_id, unit in scope.items():
         assert unit["identity"], f"external unit {unit_id} rendered an empty identity"
@@ -190,17 +190,9 @@ bun_sha256 = tools["bun"]["artifacts"]["linux-amd64"]["sha256"]
 bun_version = tools["bun"]["version"]
 assert linux_ext["bun"]["identity"] == f"{bun_version}-{bun_sha256[:12]}", linux_ext["bun"]["identity"]
 
-# agy records a null sha256 and a populated sha512; the sha512 leg must supply the suffix.
-agy_artifact = tools["agy"]["artifacts"]["linux-amd64"]
-assert agy_artifact["sha256"] is None
-agy_version = tools["agy"]["version"]
-agy_sha512 = agy_artifact["sha512"]
-expected_agy = f"{agy_version}-{agy_sha512[:12]}"
-assert linux_ext["agy"]["identity"] == expected_agy, linux_ext["agy"]["identity"]
-assert linux_ext["agy"]["identity"] != agy_version
 for scope in (linux_ext, macos_ext):
-    aliases = {command["name"]: command.get("relPath", command["name"]) for command in scope["agy"]["commands"]}
-    assert aliases == {"agy": "agy", "antigravity": "agy"}, aliases
+    assert "agy" not in scope
+    assert all(command["name"] != "antigravity" for unit in scope.values() for command in unit["commands"])
 
 # The version-only units keep the bare version and do not fail the render.
 for unit_id, tool in (("kubectl", "kubectl"), ("kubectl-convert", "kubectl"), ("helm", "helm"), ("glab", "glab")):

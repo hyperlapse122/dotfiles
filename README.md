@@ -275,10 +275,10 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
 - [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust haptic client sources and utilities.
 - [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`).
-  This repository declares no Figma MCP server. Projects that need Figma own
-  their MCP configuration, and each harness runs its own OAuth flow. Build
-  failures preserve the last executable and retry after an input change or
-  `chezmoi apply --force`.
+  `omp-orca/` supplies Orca instructions to omp, `antigravity-sidecar/` proxies
+  its model requests, and `figma-auth/` authorizes the shared Figma MCP server
+  for omp. Build failures preserve the last executable and retry after an
+  input change or `chezmoi apply --force`.
   `release-lock/` generates the static external-tool lock consumed by templates
   and externals. See [`packages/README.md`](packages/README.md).
 - [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
@@ -292,35 +292,20 @@ The source-only trees are also excluded from taplo formatting via
 
 ## Managed agent harnesses
 
-This repository manages **Claude Code** (`claude`), **Google Antigravity CLI** (`agy`), **OpenAI Codex CLI** (`codex`), and **oh-my-pi** (`omp`).
+This repository manages **Claude Code** (`claude`), **OpenAI Codex CLI** (`codex`), and **oh-my-pi** (`omp`).
 
 - **Single source of truth:** `.chezmoidata/agents.yaml` defines MCP servers (`agents.mcp.servers` including Exa web search and Context7), external skills (`agents.skills.external`), and harness settings.
 - **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time, renders the same servers into `~/.omp/agent/mcp.json`, and asserts them into `~/.codex/config.toml`.
 - **One model for omp:** every omp role runs `google-antigravity/gemini-3.8-flash:high`, with `tiny` the single exception on `gemini-3.1-flash-lite:minimal`. The allowlist and provider denylist keep the selectable set closed to those two.
-- **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills`, `~/.gemini/skills`, and `~/.codex/skills` pointing to `~/.agents/skills`.
+- **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills` and `~/.codex/skills` pointing to `~/.agents/skills`.
 
-The following cleanup is optional. Remove only the listed Figma data if the
-retired harnesses are no longer in use:
+omp replaces Antigravity CLI in Orca. All eight Git actions use omp; the ordinary TUI default remains Claude. The native omp extension injects the current orchestration role before each model call.
 
-- Pi: delete
-  `~/.pi/agent/mcp-auth/5b79d0d574eedd09.json`.
-- Kimi Code: under `~/.kimi-code/credentials/mcp/`, delete the
-  `figma-16c8c86ce11b09357be35b5b-{client,tokens,discovery}.json` files and
-  `.figma-16c8c86ce11b09357be35b5b-transaction.json` when present.
-- AGY: remove only the top-level `https://mcp.figma.com/mcp` property from
-  `~/.gemini/antigravity-cli/mcp_oauth_tokens.json`. Keep the file and all
-  other properties.
+The local sidecar listens on `127.0.0.1:45123` and changes only system-prompt text before forwarding requests to the Google Antigravity provider. It starts after the binary is installed. Antigravity CLI's managed files are removed; its authentication and conversation history remain.
 
-Local deletion does not revoke provider access. To revoke it, open Figma
-**Settings → Security → Connected apps** and revoke only the obsolete `Codex`
-registrations that correspond to these stores. Every retired flow used that
-client name. If the entries cannot be distinguished, skip provider revocation
-rather than invalidate a surviving harness's authorization — AGY's own grant
-lives under that same client name.
+Run `figma-auth` without arguments to authorize Figma for omp. It opens the browser and stores the result in omp's existing SQLite database. Other harnesses use their native Figma OAuth flow.
 
-omp's Figma credential store is retired too; its revocation is ordered
-separately in [`docs/decommission/omp.md`](docs/decommission/omp.md), which reads
-the client id out of the database before deleting it.
+See [the transition guide](docs/operations/omp-transition.md) for deployment checks.
 
 ## Host steps for the Codex harness (one-time)
 

@@ -12,7 +12,7 @@
 import { payload } from "./payload.js";
 import type { Role } from "./role.js";
 
-export type Harness = "claude" | "codex" | "agy";
+export type Harness = "claude" | "codex" | "omp";
 
 export const PREAMBLE =
   "The orchestration rules below are a normative extension of your user-scoped " +
@@ -32,7 +32,7 @@ export interface LeadParts {
 }
 
 export function isHarness(value: string): value is Harness {
-  return value === "claude" || value === "codex" || value === "agy";
+  return value === "claude" || value === "codex" || value === "omp";
 }
 
 /** The everyone envelope: preamble plus the rules that bind every agent. */
@@ -75,24 +75,20 @@ export function sessionStartEnvelope(additionalContext: string): string {
 /**
  * The delivery document for one harness, carrying the composed context.
  *
- * Antigravity has no session-start event: its pre-model hook injects steps
- * before every invocation, so the whole envelope rides in one ephemeral step
- * and is re-injected each time rather than delivered once. That repetition is
- * the accepted cost of never leaving a lead with half a rule set.
+ * omp's extension consumes plain context. Claude Code and Codex consume a
+ * SessionStart envelope.
  */
 export function deliveryEnvelope(harness: Harness, context: string): string {
-  if (harness !== "agy") return sessionStartEnvelope(context);
-  return JSON.stringify({ injectSteps: [{ ephemeralMessage: context }] });
+  if (harness === "omp") return context;
+  return sessionStartEnvelope(context);
 }
 
 /**
- * What a harness receives when nothing is delivered. Claude Code and Antigravity
- * both parse stdout as a response document, so each needs an empty JSON object;
- * Codex treats plain stdout as model context verbatim, so a stray byte there
- * would silently become injected text.
+ * What a harness receives when nothing is delivered. Claude Code parses stdout
+ * as a response document. Codex and omp treat plain stdout as model context.
  */
 export function emptyOutput(harness: Harness): string {
-  return harness === "codex" ? "" : "{}";
+  return harness === "claude" ? "{}" : "";
 }
 
 /** Decide what this session receives, given its harness and resolved role. */
