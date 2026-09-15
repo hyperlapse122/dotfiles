@@ -36,6 +36,7 @@ sleep_gates+=({{ get . "gate" | default "" | quote }})
 gate_reason() {
   case "$1" in
     battery) printf 'no system battery; sleep policy is a laptop concern' ;;
+    deepSleep) printf 'no S3 deep sleep support; native s2idle used' ;;
     *) printf 'gate %s failed' "$1" ;;
   esac
 }

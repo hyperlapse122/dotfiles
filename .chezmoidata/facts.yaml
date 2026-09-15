@@ -332,6 +332,17 @@ factRegistry:
       resolves the same false. That ambiguity is exactly why no manifest entry may gate on
       the inverse of this fact: !displayManagerSddm would turn an unreadable probe into an
       active removal. sddmBreezeRetirable exists to separate the two.
+  deepSleep:
+    type: bool
+    probe: template
+    source: >-
+      /sys/power/mem_sleep contains the token "deep", read with a stat-guarded `include`.
+      Traditional S3 (suspend-to-RAM) sleep supported by firmware. Modern Intel/AMD
+      laptops (like ThinkPad X1 Carbon Gen 11) only support s2idle (S0ix modern standby).
+    gates: etc/systemd/sleep.conf.d/*
+    whenFalse: >-
+      Host firmware does not support S3 deep sleep; MemorySleepMode=deep is not deployed
+      and systemd uses native s2idle without invalid-argument warnings.
   thinkpad:
     type: bool
     probe: template
