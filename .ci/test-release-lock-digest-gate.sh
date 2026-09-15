@@ -167,14 +167,13 @@ out=
 run_gate "$lock" || fail 'the committed release lock does not pass the gate'
 pass 'the committed .chezmoidata/releases.json passes'
 
-case_name=agy-exact-pin
+case_name=agy-vendor-manifest
 jq -e '
   .releases.tools.agy
-  | .kind == "githubRelease"
-    and .source == "google-antigravity/antigravity-cli"
-    and .version == "1.1.28"
+  | .kind == "vendorManifest"
+    and .source == "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests"
     and (.artifacts | keys == ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"])
-' "$lock" >/dev/null || fail 'the committed lock does not contain the reviewed official 1.1.28 pin'
+' "$lock" >/dev/null || fail 'the committed lock does not contain the antigravity vendorManifest entry'
 
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
@@ -203,17 +202,12 @@ for os in linux darwin; do
     render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$scratch/external.tmpl" "$scratch/external.toml"
     rendered=$(sed -n '/^\[agy\]$/,/^\[agent-browser\]$/p' "$scratch/external.toml")
     url=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].url' "$lock")
-    digest=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].sha256' "$lock")
-    asset_os=$os
-    [ "$os" != darwin ] || asset_os=mac
-    asset_arch=$arch
-    [ "$arch" != amd64 ] || asset_arch=x64
-    [ "$url" = "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/agy_cli_${asset_os}_${asset_arch}.tar.gz" ] || fail 'unexpected official archive URL'
-    [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || fail 'missing or invalid SHA-256'
+    digest=$(jq -r --arg key "$os-$arch" '.releases.tools.agy.artifacts[$key].sha512' "$lock")
+    [[ "$digest" =~ ^[0-9a-f]{128}$ ]] || fail 'missing or invalid SHA-512'
     [[ "$rendered" == *"url = '$url'"* ]] || fail 'external URL differs from lock'
-    [[ "$rendered" == *"sha256 = '$digest'"* ]] || fail 'external does not consume the locked SHA-256'
-    [[ "$rendered" != *sha512* ]] || fail 'external still consumes SHA-512'
-    pass "$case_name consumes the official archive and SHA-256"
+    [[ "$rendered" == *"sha512 = '$digest'"* ]] || fail 'external does not consume the locked SHA-512'
+    [[ "$rendered" != *sha256* ]] || fail 'external still consumes SHA-256'
+    pass "$case_name consumes the vendor archive and SHA-512"
   done
 done
 

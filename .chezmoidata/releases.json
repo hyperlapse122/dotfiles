@@ -44,25 +44,29 @@
         }
       },
       "agy": {
-        "kind": "githubRelease",
-        "source": "google-antigravity/antigravity-cli",
-        "version": "1.1.28",
+        "kind": "vendorManifest",
+        "source": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests",
+        "version": "1.2.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/agy_cli_linux_x64.tar.gz",
-            "sha256": "074ff4f732a750ad727aeed5fc82ed34b1fb72fda2a6ceba6c8e652ffd0a94b0"
+            "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.2-6061403484848128/linux-x64/cli_linux_x64.tar.gz",
+            "sha256": null,
+            "sha512": "74342cf2a78b344392e573b638a648a6ad1f8e877f494b96e20f9c2b79158d5c423c40b2dcf788703362bb0a9150f09c707fde599d7557ce01c12208802a63cb"
           },
           "linux-arm64": {
-            "url": "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/agy_cli_linux_arm64.tar.gz",
-            "sha256": "789420d2937393498eb158c4af8321d78c387e31c861db0c79627879509aa8a8"
+            "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.2-6061403484848128/linux-arm/cli_linux_arm64.tar.gz",
+            "sha256": null,
+            "sha512": "a1645a30f36b767c7534c2f6a53e99a9bfade993267efcca715f7a45d797d47d6561df787e9d4a51a3bdfc9be855d49d23fa3f4b91b2c661fd17314050836048"
           },
           "darwin-amd64": {
-            "url": "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/agy_cli_mac_x64.tar.gz",
-            "sha256": "629887c5baf30c9c1c130a5d3d9fdfebdf0b67ffd45f822d771c0abfb69e405b"
+            "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.2-6061403484848128/darwin-x64/cli_mac_x64.tar.gz",
+            "sha256": null,
+            "sha512": "b3a61aa3f07bffcdc23b2816573e9d299d38fc028900f4b50525713da732933a7c666baa662e6c8e7ce64c39ddfe6c4ea3b5475de63e8ac144cd21e2787d9f0d"
           },
           "darwin-arm64": {
-            "url": "https://github.com/google-antigravity/antigravity-cli/releases/download/1.1.28/agy_cli_mac_arm64.tar.gz",
-            "sha256": "8f642cffce8bc14aa3e49d1a75780bb2bd99fe7a3016389627476d9e3ec911eb"
+            "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.2.2-6061403484848128/darwin-arm/cli_mac_arm64.tar.gz",
+            "sha256": null,
+            "sha512": "8a3b5edea51e107a74413cea5eed1c5b02dede945ba21c7625b7c86f477c2c8ac423581de0ed84ff2f97c3bf6818c1fc24ca84cf9a76c2fb02a50e89d8a0d29a"
           }
         }
       },
@@ -202,37 +206,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.271",
+        "version": "2.1.272",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.271/linux-x64/claude",
-            "sha256": "5e7b6fc24d0e124f68e99a0641c47b662945c6d197d768d7ad7a72cbf1897f58",
-            "size": 226509112
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.272/linux-x64/claude",
+            "sha256": "d81396a668eb76fbddb49a2a5841f1b5d7af96b4c1f6500ced92f2c988f5bcd4",
+            "size": 227115320
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.271/linux-arm64/claude",
-            "sha256": "daecf0a2fdae57c1603a937b60ea3e69b97750be6bce93cca5664d05a5ef50f5",
-            "size": 226418928
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.272/linux-arm64/claude",
+            "sha256": "214a90efdd16ee0ea81132ffecced588dba394d178cc494f285ba04b5288c8de",
+            "size": 227074288
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.271/linux-x64-musl/claude",
-            "sha256": "7788f912491192b57a12bc8ba2845379e264b95f9928dfdf50953617a2ae88da",
-            "size": 220430296
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.272/linux-x64-musl/claude",
+            "sha256": "e30bb3ac07c4f1c3f63b47312e9a73ba6875256b7768c4cdb784d2b179417489",
+            "size": 221036504
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.271/linux-arm64-musl/claude",
-            "sha256": "22a65f5aeca45316dc3fdb9f7b331fe19324dd2000bd3116f92481edef0062ac",
-            "size": 219035296
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.272/linux-arm64-musl/claude",
+            "sha256": "226928f89d344b80f5f32aa13b79cba8816c0a7fb0b43c8b3b47c8840f11d580",
+            "size": 219625120
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.271/darwin-x64/claude",
-            "sha256": "98e796c311fd8c1d3ed40b408aff2aa48f8d2e19761fa98d3777187ad32fa9e5",
-            "size": 218876896
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.272/darwin-x64/claude",
+            "sha256": "6377b8e95ecbf90fd6b91e543b3c23e1b23c9c968b2acb7ad460ce5573d3e41c",
+            "size": 219487840
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.271/darwin-arm64/claude",
-            "sha256": "87d119eb46782a1369d79d6e8cc00557f1b51bc9db7a51bd01fa2f909d8fe3dc",
-            "size": 210094800
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.272/darwin-arm64/claude",
+            "sha256": "195e24e8e1f9bf46f1eaee72d434a33e18f9f5796f29a6348a00d16c5f8aee75",
+            "size": 210702192
           }
         }
       },

@@ -203,7 +203,7 @@ describe("runCli", () => {
       const prior = {
         releases: {
           tools: {
-            agy: { kind: "vendorManifest", source: "https://vendor.invalid", version: "1.2.2" },
+            agy: { kind: "vendorManifest", source: "https://vendor.invalid", version: "1.2.0" },
             retired: {
               kind: "githubRelease",
               source: "owner/retired",
@@ -219,20 +219,13 @@ describe("runCli", () => {
       await writeFile(path, before);
       const urls: string[] = [];
       globalThis.fetch = (async (input) => {
-        urls.push(input instanceof Request ? input.url : String(input));
+        const url = input instanceof Request ? input.url : String(input);
+        urls.push(url);
         if (mode === "failure") return new Response("absent", { status: 404 });
         return Response.json({
-          tag_name: "1.1.28",
-          assets: [
-            "agy_cli_linux_x64.tar.gz",
-            "agy_cli_linux_arm64.tar.gz",
-            "agy_cli_mac_x64.tar.gz",
-            "agy_cli_mac_arm64.tar.gz",
-          ].map((name) => ({
-            name,
-            browser_download_url: `https://example.invalid/1.1.28/${name}`,
-            digest: `sha256:${"a".repeat(64)}`,
-          })),
+          version: "1.2.2",
+          url: "https://example.invalid/1.2.2/tool",
+          sha512: "b".repeat(128),
         });
       }) as typeof fetch;
       const stdout = capture();
@@ -244,14 +237,17 @@ describe("runCli", () => {
             : ["--only", "agy"];
       const exit = await runCli(args, { defaultPath: path, stdout, stderr: capture() });
       expect(exit).toBe(mode === "failure" ? 1 : 0);
-      expect(urls).toEqual([
-        "https://api.github.com/repos/google-antigravity/antigravity-cli/releases/tags/1.1.28",
+      expect(urls.sort()).toEqual([
+        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/darwin_amd64.json",
+        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/darwin_arm64.json",
+        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json",
+        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_arm64.json",
       ]);
       const written = JSON.parse(
         mode === "stdout" ? stdout.values.join("") : await readFile(path, "utf8"),
       );
       expect(written.releases.tools.retired).toEqual(prior.releases.tools.retired);
-      expect(written.releases.tools.agy.version).toBe(mode === "failure" ? "1.2.2" : "1.1.28");
+      expect(written.releases.tools.agy.version).toBe(mode === "failure" ? "1.2.0" : "1.2.2");
       if (mode === "failure") expect(written.releases.tools.agy).toEqual(prior.releases.tools.agy);
       if (mode === "stdout") expect(await readFile(path, "utf8")).toBe(before);
     },
