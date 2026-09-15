@@ -169,11 +169,13 @@ listed_product=$(awk -F'\t' 'NR>1 {print $2; exit}' "$repo_root/.chezmoidata/.fi
 [[ -n "$listed_vendor" && -n "$listed_product" ]] \
   || fail 'the fingerprint-reader table has no data row to test against'
 
-fp_yes="$scratch/fp-yes"
-make_usb "$fp_yes" 1-1 "$listed_vendor" "$listed_product"
-make_usb "$fp_yes" 1-2 1d6b 0002
-CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$fp_yes" fact_fingerprint_reader \
-  || fail 'a USB device listed in the reader table must resolve fingerprintReader=true'
+while IFS=$'\t' read -r v p; do
+  [[ -n "$v" && "$v" != "fingerprint-readers-v1" ]] || continue
+  fp_entry="$scratch/fp-$v-$p"
+  make_usb "$fp_entry" 1-1 "$v" "$p"
+  CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$fp_entry" fact_fingerprint_reader \
+    || fail "listed fingerprint reader $v:$p did not resolve fingerprintReader=true"
+done < "$repo_root/.chezmoidata/.fingerprint-readers.tsv"
 
 fp_no="$scratch/fp-no"
 make_usb "$fp_no" 1-1 1d6b 0002
