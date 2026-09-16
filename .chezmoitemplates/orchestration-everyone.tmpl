@@ -1,3 +1,36 @@
+{{- /* orchestration-everyone.tmpl — the half of the payload every managed
+     session receives.
+
+     Same signature as the coordinator body, `dict "ctx" . "harness" <harness>`.
+     The Codex launch rule below renders its model ids and efforts from
+     agents.roster: the judgment entry for a review or cross-model launch, the
+     fallback entry for an implementation-fallback launch. The prose is
+     hand-written. */ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "orchestration-everyone.tmpl: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- if not (has .harness (list "claude" "codex" "omp")) -}}
+{{-   fail (printf "orchestration-everyone.tmpl: unknown harness %q; valid values: claude, codex, omp" .harness) -}}
+{{- end -}}
+{{- if not (hasKey . "ctx") -}}
+{{-   fail "orchestration-everyone.tmpl: missing required argument ctx" -}}
+{{- end -}}
+{{- $roster := .ctx.agents.roster -}}
+{{- $_ := includeTemplate "agent-roster-validate.tmpl" (dict "roster" $roster) -}}
+{{- $judgeCodex := dict -}}
+{{- $fallbackCodex := dict -}}
+{{- range $w := $roster.workers -}}
+{{-   if eq $w.agent "codex" -}}
+{{-     if has "judgment" $w.shapes -}}{{- $judgeCodex = $w -}}{{- end -}}
+{{-     if has "fallback" $w.shapes -}}{{- $fallbackCodex = $w -}}{{- end -}}
+{{-   end -}}
+{{- end -}}
+{{- if not (hasKey $judgeCodex "model") -}}
+{{-   fail "orchestration-everyone.tmpl: agents.roster declares no codex judgment entry" -}}
+{{- end -}}
+{{- if not (hasKey $fallbackCodex "model") -}}
+{{-   fail "orchestration-everyone.tmpl: agents.roster declares no codex fallback entry" -}}
+{{- end -}}
 <!-- orchestration-everyone:begin -->
 
 ## Orchestration rules for every agent
@@ -16,7 +49,7 @@ Absence of this text never waives the contract. A session that holds only the po
 
 Claude Code, Codex, and omp lead, dispatch, and serve as workers on the same terms. omp receives this text through its before_agent_start extension before each model call. Other harnesses and sessions holding only the pointer in the user-scoped instruction file perform non-dispatch work only.
 
-When another agent launches Codex through Orca for cross-model or cross-harness work, the launch MUST explicitly select `gpt-5.6-luna` with `max` reasoning effort. The coordinator MUST compare `launch.requested` with `launch.effective` and claim Luna/max only when the effective fields report that pair. If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the Luna/max requirement. Recovery and release remain governed by the installed Orca lifecycle rules. Being inside Orca alone MUST NOT trigger this override. A launch that does not meet both the delegation and work-purpose conditions keeps its existing explicit model-selection rules.
+When another agent launches Codex through Orca, the launch MUST explicitly select the model and reasoning effort its purpose names. A review, a judgment pass, or any other cross-model or cross-harness opinion launches `{{ $judgeCodex.model }}` with `{{ $judgeCodex.effort }}` reasoning effort. An implementation-fallback launch — the recipient the coordinator's routing table reaches after the Gemini row — launches `{{ $fallbackCodex.model }}` with `{{ $fallbackCodex.effort }}` reasoning effort, because that model's cost belongs to recovery and not to every review. The coordinator MUST compare `launch.requested` with `launch.effective` and claim the requested pair only when the effective fields report it. If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the requirement. Recovery and release remain governed by the installed Orca lifecycle rules. Being inside Orca alone MUST NOT trigger this override. A launch that does not meet both the delegation and work-purpose conditions keeps its existing explicit model-selection rules.
 
 A brief defect is required context the brief does not carry. A dispatched worker MUST report one rather than guess at the missing content, both when its brief names a source only an MCP can read that the worker cannot reach and carries no extraction of it, and when the extraction it does carry does not answer the question the work turns on. A URL kept beside a usable extraction is provenance, not a defect. A worker holds only the tools and authorization of its own harness, so guessing at unextracted context produces ungrounded work that defeats verification.
 

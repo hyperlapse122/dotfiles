@@ -6,7 +6,10 @@
  * the role rule already requires.
  *
  * Delivery is atomic for the lead: an envelope missing any half is not emitted
- * at all. A partial rule set is worse than none.
+ * at all. A partial rule set is worse than none. The payload bodies are managed
+ * files read at run time, so an unwritten one is a missing half exactly like an
+ * unreachable Orca guide, and the worker context needs the everyone file for
+ * the same reason.
  */
 
 import { payload } from "./payload.js";
@@ -36,16 +39,21 @@ export function isHarness(value: string): value is Harness {
 }
 
 /** The everyone envelope: preamble plus the rules that bind every agent. */
-export function workerContext(): string {
-  return `${PREAMBLE}\n\n${payload("everyone")}`;
+export function workerContext(env: NodeJS.ProcessEnv): string | null {
+  const everyone = payload("everyone", env);
+  if (everyone === null) return null;
+  return `${PREAMBLE}\n\n${everyone}`;
 }
 
 /**
- * The lead envelope. Returns null when either half is missing, which the caller
+ * The lead envelope. Returns null when any half is missing, which the caller
  * turns into the harness's empty output rather than a partial delivery.
  */
-export function leadContext(parts: LeadParts): string | null {
+export function leadContext(parts: LeadParts, env: NodeJS.ProcessEnv): string | null {
   if (parts.skill === "" || parts.guide === "") return null;
+  const everyone = payload("everyone", env);
+  const coordinator = payload("coordinator", env);
+  if (everyone === null || coordinator === null) return null;
   return [
     PREAMBLE,
     "",
@@ -59,9 +67,9 @@ export function leadContext(parts: LeadParts): string | null {
     "",
     parts.guide,
     "",
-    payload("everyone"),
+    everyone,
     "",
-    payload("coordinator"),
+    coordinator,
   ].join("\n");
 }
 
@@ -96,9 +104,10 @@ export function composeContext(
   harness: Harness,
   role: Role,
   leadParts: () => LeadParts | null,
+  env: NodeJS.ProcessEnv,
 ): string | null {
   if (role === "none") return null;
-  if (role === "worker") return workerContext();
+  if (role === "worker") return workerContext(env);
   const parts = leadParts();
-  return parts === null ? null : leadContext(parts);
+  return parts === null ? null : leadContext(parts, env);
 }

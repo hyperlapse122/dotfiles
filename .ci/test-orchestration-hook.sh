@@ -26,6 +26,8 @@ for surface in \
   packages/orchestration-hook/src/payload.ts \
   .chezmoitemplates/orchestration-everyone.tmpl \
   .chezmoitemplates/orchestration-coordinator.tmpl \
+  dot_local/share/orchestration-hook/everyone.md.tmpl \
+  dot_local/share/orchestration-hook/coordinator.md.tmpl \
   .chezmoitemplates/claude-hook-declaration.tmpl \
   .chezmoitemplates/codex-hook-declaration.tmpl \
   dot_local/share/dotfiles-claude-plugin/hooks/hooks.json.tmpl \
@@ -38,6 +40,18 @@ done
 # ---------------------------------------------------------------- build once
 resolve_bun
 [[ -n ${BUN_BIN:-} ]] || fail 'bun is not installed; this gate compiles the hook binary'
+
+# The binary reads its two bodies from managed files under $HOME at run time, so
+# every hook case below needs them staged the way an apply would leave them.
+# Rendered through the same wrappers chezmoi deploys, not copied from the source
+# templates: the source is a template now and its raw bytes are not the payload.
+payload_dir="$scratch/home/.local/share/orchestration-hook"
+mkdir -p "$payload_dir"
+for body in everyone coordinator; do
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux \
+    "$repo_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$payload_dir/$body.md"
+  [[ -s "$payload_dir/$body.md" ]] || fail "the rendered $body payload is empty"
+done
 
 binary="$scratch/orchestration-hook"
 ( cd "$repo_root/packages/orchestration-hook" \
@@ -246,24 +260,42 @@ fi
 pass 'non-hook subcommands fail loudly, so an operator typo is not a silent no-op'
 
 # ------------------------------------------------------------ payload parity
-everyone_wrapper="$scratch/everyone.tmpl"
-coordinator_wrapper="$scratch/coordinator.tmpl"
-printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$everyone_wrapper"
-printf '%s\n' '{{- includeTemplate "orchestration-coordinator.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$coordinator_wrapper"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_wrapper" "$scratch/everyone.rendered"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$scratch/coordinator.rendered"
-
-env -i "$binary" print-payload --body everyone </dev/null >"$scratch/everyone.binary"
-env -i "$binary" print-payload --body coordinator </dev/null >"$scratch/coordinator.binary"
-diff -q "$scratch/everyone.rendered" "$scratch/everyone.binary" >/dev/null \
-  || fail 'the binary emits a different everyone payload than the source body renders'
-diff -q "$scratch/coordinator.rendered" "$scratch/coordinator.binary" >/dev/null \
-  || fail 'the binary emits a different coordinator payload than the source body renders'
-for payload_render in "$scratch/coordinator.rendered" "$scratch/coordinator.binary"; do
-  if grep -F '{{' "$payload_render" >/dev/null || grep -F '}}' "$payload_render" >/dev/null; then
-    fail "$(basename "$payload_render") contains template action delimiters"
+# The binary must print byte-for-byte what chezmoi writes to the managed target,
+# or the rules a session receives are not the rules this repository reviewed.
+# Each body is rendered fresh here, placed at the env-overridden payload path,
+# and diffed against `print-payload` reading that same path.
+parity_dir="$scratch/parity-payloads"
+mkdir -p "$parity_dir"
+for body in everyone coordinator; do
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux \
+    "$repo_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$parity_dir/$body.md"
+  env -i DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$parity_dir" \
+    "$binary" print-payload --body "$body" </dev/null >"$scratch/$body.binary"
+  diff -q "$parity_dir/$body.md" "$scratch/$body.binary" >/dev/null \
+    || fail "the binary emits a different $body payload than the managed target holds"
+  # A rendered body that still carried a template action would mean the roster
+  # never reached it and a session would read `{{ ... }}` as a rule.
+  if grep -F '{{' "$parity_dir/$body.md" >/dev/null || grep -F '}}' "$parity_dir/$body.md" >/dev/null; then
+    fail "the rendered $body payload contains template action delimiters"
   fi
 done
+
+# A managed file that is not there is not an operator's typo to swallow: every
+# other subcommand is loud, and this one names the path it could not read.
+if env -i DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$scratch/absent-payloads" \
+    "$binary" print-payload --body everyone </dev/null >/dev/null 2>"$scratch/print-payload.err"; then
+  fail 'print-payload must fail loudly when the managed payload file is absent'
+fi
+grep -qF "$scratch/absent-payloads/everyone.md" "$scratch/print-payload.err" \
+  || fail 'print-payload must name the payload path it could not read'
+
+# The hook path, by contrast, stays fail-open: a session that starts before the
+# first apply gets no rules and no error.
+out=$(env -i PATH="$closed_path" HOME="$scratch/empty-home" \
+  ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%9 \
+  "$binary" hook --harness claude </dev/null)
+[[ $out == "{}" ]] || fail "a worker with no staged payload file must print exactly {} (got: $out)"
+pass 'an unwritten payload file delivers nothing and never fails session start'
 
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_omp/private_agent/private_readonly_AGENTS.md.tmpl" "$scratch/omp.rendered"
@@ -498,6 +530,7 @@ const result = await handler({ prompt: "test", systemPrompt: ["BASE"] });
 process.stdout.write(JSON.stringify(result));
 RUNNER
 result=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
   ORCA_TERMINAL_HANDLE=term_ext ORCA_AGENT_TEAMS_LEADER_PANE=%7 TMUX_PANE=%9 \
   "$BUN_BIN" "$runner" "$bundle") || fail 'the extension integration runner failed'
 jq -e '.systemPrompt | length == 2' <<<"$result" >/dev/null \

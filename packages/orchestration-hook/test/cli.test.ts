@@ -1,15 +1,22 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
 import { main, type Io } from "../src/cli.js";
-import { payload } from "../src/payload.js";
 import { PREAMBLE } from "../src/envelope.js";
+
+// The binary reads its two bodies from managed files, so every case here points
+// the resolver at a fixture pair rather than at whatever this host applied.
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "payload");
+const EVERYONE = readFileSync(join(FIXTURES, "everyone.md"), "utf8");
+const COORDINATOR = readFileSync(join(FIXTURES, "coordinator.md"), "utf8");
 
 function capture(env: NodeJS.ProcessEnv = {}): { io: Io; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
+  env = { DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: FIXTURES, ...env };
   return {
     // Vitest leaves stdin non-TTY with no writer, so the drain would sit on its
     // full production backstop in every hook case. The bound itself is covered
@@ -107,8 +114,8 @@ describe("hook fail-open contract", () => {
       for (const half of [
         "SKILL BODY",
         "GUIDE BODY",
-        payload("everyone"),
-        payload("coordinator"),
+        EVERYONE,
+        COORDINATOR,
       ]) {
         expect(context).toContain(half);
       }
@@ -147,8 +154,8 @@ describe("hook fail-open contract", () => {
       hookSpecificOutput: { hookEventName: string; additionalContext: string };
     };
     expect(parsed.hookSpecificOutput.hookEventName).toBe("SessionStart");
-    expect(parsed.hookSpecificOutput.additionalContext).toContain(payload("everyone"));
-    expect(parsed.hookSpecificOutput.additionalContext).not.toContain(payload("coordinator"));
+    expect(parsed.hookSpecificOutput.additionalContext).toContain(EVERYONE);
+    expect(parsed.hookSpecificOutput.additionalContext).not.toContain(COORDINATOR);
   });
 });
 
@@ -175,8 +182,8 @@ describe("omp hook delivery", () => {
         context.indexOf(PREAMBLE),
         context.indexOf("SKILL BODY"),
         context.indexOf("GUIDE BODY"),
-        context.indexOf(payload("everyone")),
-        context.indexOf(payload("coordinator")),
+        context.indexOf(EVERYONE),
+        context.indexOf(COORDINATOR),
       ];
       expect(order.every((i) => i >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -202,7 +209,7 @@ describe("omp hook delivery", () => {
       const context = out.join("");
       expect(context).toContain("SKILL BODY");
       expect(context).toContain("GUIDE BODY");
-      expect(context).toContain(payload("coordinator"));
+      expect(context).toContain(COORDINATOR);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -230,8 +237,8 @@ describe("omp hook delivery", () => {
       expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
       const context = out.join("");
       expect(context).toContain(PREAMBLE);
-      expect(context).toContain(payload("everyone"));
-      expect(context).not.toContain(payload("coordinator"));
+      expect(context).toContain(EVERYONE);
+      expect(context).not.toContain(COORDINATOR);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -242,8 +249,8 @@ describe("omp hook delivery", () => {
     expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
     const context = out.join("");
     expect(context).toContain(PREAMBLE);
-    expect(context).toContain(payload("everyone"));
-    expect(context).not.toContain(payload("coordinator"));
+    expect(context).toContain(EVERYONE);
+    expect(context).not.toContain(COORDINATOR);
   });
 
   it("returns no output outside Orca", async () => {
@@ -323,7 +330,7 @@ describe("omp hook delivery", () => {
       expect(await main(["hook", "--harness", "omp"], second.io)).toBe(0);
       const context = second.out.join("");
       expect(context).toContain("GUIDE BODY");
-      expect(context).toContain(payload("coordinator"));
+      expect(context).toContain(COORDINATOR);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -336,17 +343,125 @@ describe("omp hook delivery", () => {
   });
 });
 
+describe("managed payload files", () => {
+  // Every case in this block builds a HOME with a real payload directory, so
+  // the default resolution is exercised, not just the test override.
+  function seedHome(label: string, bodies: Partial<Record<"everyone" | "coordinator", string>>) {
+    const home = mkdtempSync(join(tmpdir(), `orchestration-hook-${label}-`));
+    mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+    writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+    const cli = join(home, "orca-stub");
+    writeFileSync(cli, '#!/usr/bin/env bash\nprintf "GUIDE BODY\\n"\n');
+    chmodSync(cli, 0o755);
+    const dir = join(home, ".local", "share", "orchestration-hook");
+    mkdirSync(dir, { recursive: true });
+    for (const [body, text] of Object.entries(bodies)) {
+      writeFileSync(join(dir, `${body}.md`), text as string);
+    }
+    // An explicit empty override falls back to HOME, which is the whole point.
+    const env = {
+      HOME: home,
+      DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: "",
+      ORCA_CLI_COMMAND: cli,
+      ORCA_TERMINAL_HANDLE: "term_abc",
+      ORCA_AGENT_TEAMS_LEADER_PANE: "%7",
+      TMUX_PANE: "%7",
+    };
+    return { home, dir, env };
+  }
+
+  it("emits the lead envelope with both bodies when both files are present", async () => {
+    const { home, env } = seedHome("both", { everyone: EVERYONE, coordinator: COORDINATOR });
+    try {
+      const { io, out } = capture(env);
+      expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+      const parsed = JSON.parse(out.join("")) as {
+        hookSpecificOutput: { additionalContext: string };
+      };
+      expect(parsed.hookSpecificOutput.additionalContext).toContain(EVERYONE);
+      expect(parsed.hookSpecificOutput.additionalContext).toContain(COORDINATOR);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("emits no context and exits 0 when the coordinator file is missing", async () => {
+    const { home, env } = seedHome("no-coordinator", { everyone: EVERYONE });
+    try {
+      const { io, out, err } = capture(env);
+      expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("reads the same files for --harness omp", async () => {
+    const { home, env } = seedHome("omp-files", { everyone: EVERYONE, coordinator: COORDINATOR });
+    try {
+      const { io, out } = capture(env);
+      expect(await main(["hook", "--harness", "omp"], io)).toBe(0);
+      const context = out.join("");
+      expect(context).toContain(EVERYONE);
+      expect(context).toContain(COORDINATOR);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("treats an empty payload file as missing", async () => {
+    const { home, env } = seedHome("empty-file", { everyone: EVERYONE, coordinator: "" });
+    try {
+      const { io, out } = capture(env);
+      expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("treats an unreadable payload file as missing, not as an error", async () => {
+    const { home, dir, env } = seedHome("unreadable", {
+      everyone: EVERYONE,
+      coordinator: COORDINATOR,
+    });
+    try {
+      chmodSync(join(dir, "coordinator.md"), 0o000);
+      // Root ignores the mode bits, so the case would assert nothing there.
+      if (process.getuid?.() === 0) return;
+      const { io, out, err } = capture(env);
+      expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("delivers nothing to a worker whose everyone file is missing", async () => {
+    const { home, env } = seedHome("no-everyone", { coordinator: COORDINATOR });
+    try {
+      const { io, out } = capture({ ...env, TMUX_PANE: "%9" });
+      expect(await main(["hook", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("print-payload", () => {
   it("prints the everyone body by default", async () => {
     const { io, out } = capture();
     expect(await main(["print-payload"], io)).toBe(0);
-    expect(out.join("")).toBe(payload("everyone"));
+    expect(out.join("")).toBe(EVERYONE);
   });
 
   it("prints the coordinator body on request", async () => {
     const { io, out } = capture();
     expect(await main(["print-payload", "--body", "coordinator"], io)).toBe(0);
-    expect(out.join("")).toBe(payload("coordinator"));
+    expect(out.join("")).toBe(COORDINATOR);
   });
 
   it("fails loudly on an unknown body", async () => {
@@ -354,6 +469,15 @@ describe("print-payload", () => {
     expect(await main(["print-payload", "--body", "nonesuch"], io)).toBe(2);
     expect(out.join("")).toBe("");
     expect(err.join("")).toContain("nonesuch");
+  });
+
+  it("fails loudly and names the path when the managed file is absent", async () => {
+    const { io, out, err } = capture({
+      DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: join(FIXTURES, "absent"),
+    });
+    expect(await main(["print-payload"], io)).toBe(1);
+    expect(out.join("")).toBe("");
+    expect(err.join("")).toContain(join(FIXTURES, "absent", "everyone.md"));
   });
 });
 

@@ -24,6 +24,53 @@ trap 'rm -rf -- "$scratch"' EXIT
 fail() { printf 'build-orchestration-hook gate: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'build-orchestration-hook gate: %s\n' "$*"; }
 
+# ----------------------------------------------------- fingerprint contract
+# The payload digest is gone: the bodies are managed files the binary reads at
+# run time, and the plugin digests own tracking them. What must survive is
+# `hook-build-id`, because the fingerprint globs deliberately omit the src glob
+# — that value is the ONLY thing that re-triggers this script on a code edit.
+grep -q 'value:payload-digest' "$rendered" \
+  && fail 'the retired payload-digest fingerprint value is still rendered'
+grep -q 'DOTFILES_PAYLOAD_DIGEST' "$rendered" \
+  && fail 'the retired payload digest is still exported to the build task'
+grep -q 'value:hook-build-id' "$rendered" \
+  || fail 'the hook-build-id fingerprint value is missing, so a src edit would not re-trigger the build'
+grep -q 'value:bun-version' "$rendered" \
+  || fail 'the bun-version fingerprint value is missing'
+grep -q 'packages/orchestration-hook/src/' "$rendered" \
+  && fail 'the src glob is in the fingerprint block, which re-reads what the build id already hashed'
+pass 'the fingerprint block carries hook-build-id and no payload digest'
+
+# A src-only edit must still move that value. The id is a sha256 over the
+# concatenated per-file sha256s of packages/orchestration-hook/src/**, so
+# recomputing it here pins the coupling in both directions: it must equal what
+# the script exports today, and it must differ once any src byte changes.
+repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+src_dir="$repo_root/packages/orchestration-hook/src"
+build_id_over() {
+  local mutated=${1:-}
+  local parts='' file digest
+  while IFS= read -r file; do
+    if [[ -n $mutated && $file == "$mutated" ]]; then
+      digest=$( { cat -- "$file"; printf 'EDIT\n'; } | sha256sum | cut -d' ' -f1)
+    else
+      digest=$(sha256sum -- "$file" | cut -d' ' -f1)
+    fi
+    parts+="$digest"
+  done < <(find "$src_dir" -type f | sort)
+  printf '%s' "$parts" | sha256sum | cut -d' ' -f1 | cut -c1-16
+}
+declared_build_id=$(grep -o 'DOTFILES_HOOK_BUILD_ID="[0-9a-f]*"' "$rendered" | head -1 | cut -d'"' -f2)
+[[ -n $declared_build_id ]] || fail 'the rendered script exports no hook build id'
+computed_build_id=$(build_id_over)
+[[ $declared_build_id == "$computed_build_id" ]] \
+  || fail "the exported build id ($declared_build_id) is not a digest of src/** ($computed_build_id)"
+first_src=$(find "$src_dir" -type f | sort | head -1)
+edited_build_id=$(build_id_over "$first_src")
+[[ $edited_build_id != "$computed_build_id" ]] \
+  || fail 'a src-only edit leaves the hook build id unchanged, so the build would not re-trigger'
+pass 'the hook build id digests src/** and moves on a src-only edit'
+
 prepare_case() {
   local name=$1
   case_dir="$scratch/$name"

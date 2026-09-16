@@ -27,7 +27,7 @@ import {
 } from "./envelope.js";
 import { decide, type ToolEvent } from "./gate.js";
 import { scanInvocations } from "./command-scan.js";
-import { isPayloadBody, payload } from "./payload.js";
+import { isPayloadBody, payload, payloadPath } from "./payload.js";
 import { resolveRole, type RoleEnv } from "./role.js";
 import { fetchGuide, resolveOrcaCommand } from "./orca.js";
 
@@ -202,7 +202,7 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
     }
   }
 
-  const context = composeContext(harness, role, () => leadParts);
+  const context = composeContext(harness, role, () => leadParts, io.env);
   io.stdout(context === null ? emptyOutput(harness) : deliveryEnvelope(harness, context));
   return 0;
 }
@@ -299,7 +299,15 @@ function runPrintPayload(argv: readonly string[], io: Io): number {
     io.stderr(`orchestration-hook: unknown payload body ${JSON.stringify(body)}\n`);
     return 2;
   }
-  io.stdout(payload(body));
+  // The SAME managed file the hook path reads, printed verbatim. That is what
+  // makes the parity gate meaningful: it diffs this output against a fresh
+  // render of the source body.
+  const text = payload(body, io.env);
+  if (text === null) {
+    io.stderr(`orchestration-hook: cannot read ${payloadPath(body, io.env)}\n`);
+    return 1;
+  }
+  io.stdout(text);
   return 0;
 }
 
