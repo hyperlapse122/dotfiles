@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.38.0",
+        "version": "v0.38.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-x64",
-            "sha256": "f23cc0e01b86f83d5bbe0f25e2dd6461b640071b0e24a1f3bf55d7867dbb7330"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.1/agent-browser-linux-x64",
+            "sha256": "5100149a1903211c889de4e545bf36d90803740cea4f99aa22651649f9205ea1"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-arm64",
-            "sha256": "dff6b7fb7dccb2440329e0a3fc108940985dedb3a3012eb0da8296347f50a26a"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.1/agent-browser-linux-arm64",
+            "sha256": "937b315ee0761e8a62f7950ddcfef9b3d3d8e8d5eb9c9d2bf9e23e5725664511"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-darwin-x64",
-            "sha256": "ab6cfcfb65472efdac335c058cffe31a658b200dfa14871826456538c684761c"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.1/agent-browser-darwin-x64",
+            "sha256": "9187f885f7da0a6d880ff6d2e7dea58e17bea490a1fec85bbb6a36067272ea8e"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-darwin-arm64",
-            "sha256": "e6fbd02e209122d1f3ca4b60d4c29a2ac2492d2c30c195611236ff9d59ed69a1"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.1/agent-browser-darwin-arm64",
+            "sha256": "2e61287259053ea964d39e77002c6a34af0e589e55ccff25e659efae7e892e0d"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-musl-x64",
-            "sha256": "8631915ce7147ffd355b769151fa66dd6b5e03c6baf2628076074133d5a0024d"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.1/agent-browser-linux-musl-x64",
+            "sha256": "e4b4555c450d6903567f18ae572c26a6f86dcad31c401f9b56d5bc00334afc91"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-musl-arm64",
-            "sha256": "df334b30844dc775dc3b7007f2add333db7533940a6a9456e55aee29c652c357"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.1/agent-browser-linux-musl-arm64",
+            "sha256": "60dc1f49b3656898a88e3ca983415e1f4ecd103433c924f1ff4ec11837ccda07"
           }
         }
       },
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "c1c0a32802223f4be824112dd83d33ad29a8b26c"
+        "version": "e31650eea443aaea1e84cc15d88c13f40080b275"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "c1c0a32802223f4be824112dd83d33ad29a8b26c"
+        "version": "e31650eea443aaea1e84cc15d88c13f40080b275"
       },
       "uv": {
         "kind": "githubRelease",
