@@ -68,7 +68,7 @@ function contained(home: string, suffix: string): string {
   return path;
 }
 
-async function readSafe(path: string): Promise<string | undefined> {
+export async function readSafe(path: string): Promise<string | undefined> {
   let handle;
   try {
     handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -85,7 +85,7 @@ async function readSafe(path: string): Promise<string | undefined> {
   }
 }
 
-async function atomicWrite(
+export async function atomicWrite(
   path: string,
   contents: string,
   expected: string | undefined,
@@ -127,7 +127,7 @@ async function assertExistingParentsNoSymlink(path: string): Promise<void> {
   }
 }
 
-function isObject(value: unknown): value is JsonObject {
+export function isObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
