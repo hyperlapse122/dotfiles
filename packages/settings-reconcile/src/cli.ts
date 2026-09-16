@@ -2,6 +2,13 @@
 import { readFile } from "node:fs/promises";
 import { reconcileSettings, SETTINGS_CONTRACT } from "./reconcile.js";
 import { reconcileTrust } from "./trust.js";
+import {
+  extractServers,
+  parseInventoryContent,
+  synthesizeMcpManifest,
+  validateInventory,
+  type HarnessKind,
+} from "./mcp.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -37,6 +44,55 @@ try {
     if (!result.claudeOk || !result.codexOk) {
       process.exit(1);
     }
+  } else if (command === "mcp") {
+    let harness: HarnessKind | undefined;
+    let inventoryPath: string | undefined;
+    let validate = false;
+    let os: string | undefined;
+    let container: boolean | undefined;
+
+    for (const arg of args) {
+      if (arg === "--validate") {
+        validate = true;
+      } else if (arg.startsWith("--harness=")) {
+        harness = arg.slice("--harness=".length) as HarnessKind;
+      } else if (arg.startsWith("--inventory=")) {
+        inventoryPath = arg.slice("--inventory=".length);
+      } else if (arg.startsWith("--os=")) {
+        os = arg.slice("--os=".length);
+      } else if (arg.startsWith("--container=")) {
+        container = arg.slice("--container=".length) === "true";
+      }
+    }
+
+    let rawContent: string;
+    if (inventoryPath) {
+      rawContent = await readFile(inventoryPath, "utf8");
+    } else {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
+      }
+      rawContent = Buffer.concat(chunks).toString("utf8");
+    }
+
+    const parsed = parseInventoryContent(rawContent);
+    const servers = extractServers(parsed);
+
+    if (validate) {
+      validateInventory(servers);
+      process.exit(0);
+    }
+
+    if (!harness) {
+      process.stderr.write(
+        "settings-reconcile: error: missing required --harness=<claude|codex|omp>\n",
+      );
+      usage();
+    }
+
+    const manifest = synthesizeMcpManifest(harness, servers, { os, container, harness });
+    process.stdout.write(manifest);
   } else {
     usage();
   }
@@ -51,6 +107,6 @@ try {
 }
 
 function usage(): never {
-  process.stderr.write("Usage: settings-reconcile <contracts|settings|trust> ...\n");
+  process.stderr.write("Usage: settings-reconcile <contracts|settings|trust|mcp> ...\n");
   process.exit(2);
 }

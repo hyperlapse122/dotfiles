@@ -114,6 +114,11 @@
       color: var(--purple);
       border: 1px solid var(--purple-border);
     }
+    .badge-implemented {
+      background: var(--success-soft);
+      color: var(--success);
+      border: 1px solid rgba(63, 185, 80, 0.4);
+    }
 
     h2 {
       font-size: 1.35rem;
@@ -447,9 +452,14 @@
 
     <section id="topic-axes">
       <h2>Topic Axes</h2>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem;">
-        <code>Decomposition skipped — surprise-me mode</code> (explores orthogonal opportunities across the repository without pre-constrained thematic boundaries).
-      </p>
+      <div class="grounding-box" style="margin-bottom: 2rem;">
+        <ul style="list-style-type: disc; padding-left: 1.25rem;">
+          <li style="margin-bottom: 0.5rem;"><strong style="color: var(--accent);">1. CI &amp; Verification Ergonomics:</strong> Local hermetic test harness execution, reducing remote CI turnaround, and eliminating duplicated test runner and stubbing boilerplate.</li>
+          <li style="margin-bottom: 0.5rem;"><strong style="color: var(--accent);">2. Release &amp; Dependency Automation:</strong> Precision subtree content-addressed hashing (Git tree-hashing), rate-limiting resilience, and zero-churn lockfile management.</li>
+          <li style="margin-bottom: 0.5rem;"><strong style="color: var(--accent);">3. Multi-Agent Runtime &amp; Lifecycle Governance:</strong> Cross-harness settings assertion, launch gate perimeter expansion, orphaned worktree lifecycle management, and unified MCP synthesis.</li>
+          <li style="margin-bottom: 0.5rem;"><strong style="color: var(--accent);">4. Host System &amp; Workspace State Convergence:</strong> Surgical targeted applies, fast fact caching, daemon process eviction/handoff, and desktop window/keybinding parity.</li>
+        </ul>
+      </div>
     </section>
 
     <section id="ranked-ideas">
@@ -458,18 +468,24 @@
       <div class="jump-nav">
         <div class="jump-nav-title">Candidate Directory</div>
         <ul class="jump-list">
-          <li><a href="#idea-1">1. Position-Independent Script Rendering (PISR) [Planned]</a></li>
+          <li><a href="#idea-1">1. Position-Independent Script Rendering (PISR) [Implemented]</a></li>
           <li><a href="#idea-2">2. Content-Addressed Subtree Tree-Hashing</a></li>
           <li><a href="#idea-3">3. Surgical Manifest-Aware System Dispatcher</a></li>
           <li><a href="#idea-4">4. Unified Multi-Harness Settings Engine</a></li>
-          <li><a href="#idea-5">5. Active Agent Schema Drift & Deprecation Guard</a></li>
+          <li><a href="#idea-5">5. Active Agent Schema Drift &amp; Deprecation Guard</a></li>
           <li><a href="#idea-6">6. Build-Time Skill Manifest Polyfill Pipeline</a></li>
-          <li><a href="#idea-7">7. Deterministic Garden Worktree Trust Seeding</a></li>
+          <li><a href="#idea-7">7. Deterministic Garden Worktree Trust Seeding [Implemented]</a></li>
           <li><a href="#idea-8">8. Cross-Harness Pre-Apply Skill Linter</a></li>
           <li><a href="#idea-9">9. Generation-Bounded Command Store Eviction</a></li>
-          <li><a href="#idea-10">10. Structural Instructions Compiler & Fixture Sync</a></li>
+          <li><a href="#idea-10">10. Structural Instructions Compiler &amp; Fixture Sync</a></li>
           <li><a href="#idea-11">11. Inode-Fingerprinted Fast System Fact Cache</a></li>
-          <li><a href="#idea-12">12. Declarative Desktop Window Rule & Hotkey Parity</a></li>
+          <li><a href="#idea-12">12. Declarative Desktop Window Rule &amp; Hotkey Parity</a></li>
+          <li><a href="#idea-13">13. Local Hermetic CI Gate Runner (dotfiles-test)</a></li>
+          <li><a href="#idea-14">14. Canonical Chezmoi Render Composite Action</a></li>
+          <li><a href="#idea-15">15. Orphaned Git Worktree &amp; Session Garbage Collector</a></li>
+          <li><a href="#idea-16">16. Universal MCP Manifest Synthesizer</a></li>
+          <li><a href="#idea-17">17. Multi-Harness Launch Gate Perimeter Expansion</a></li>
+          <li><a href="#idea-18">18. Peripheral Firmware Pin &amp; Udev Parity Lock</a></li>
         </ul>
       </div>
 
@@ -478,14 +494,14 @@
         <div class="idea-header">
           <h3 class="idea-title">1. Position-Independent Script Rendering (PISR): Runtime <code>$sourceDir</code> Decoupling</h3>
           <div class="idea-badges">
-            <span class="badge badge-planned">Planned</span>
+            <span class="badge badge-implemented">Implemented</span>
             <span class="badge badge-conf-high">Confidence 96%</span>
             <span class="badge badge-cx-s">Complexity S</span>
           </div>
         </div>
         <p class="idea-desc">
           Replace compile-time interpolation of <code>{{ .chezmoi.sourceDir }}</code> across <code>.chezmoiscripts/30-linux/</code> and build templates with runtime environment resolution: <code>SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}/system/linux"</code>. Because <code>fingerprint.tmpl</code> already verifies dependencies using relative paths and content digests, decoupling script bodies from the absolute source path ensures that running checks or applies inside Orca feature worktrees (<code>~/.local/share/worktrees/*</code>) produces bit-identical script text, completely eliminating the false-positive invalidation of ~20 root-privileged sudo scripts.
-          <em>(Graduated to formal plan: <code>docs/plans/2026-09-16-1136-refactor-position-independent-script-rendering-plan.md</code>).</em>
+          <em>(Implemented and merged to main in PR #520 via plan <code>docs/plans/2026-09-16-1136-refactor-position-independent-script-rendering-plan.md</code>).</em>
         </p>
 
         <div class="visual-container">
@@ -726,12 +742,14 @@
         <div class="idea-header">
           <h3 class="idea-title">7. Deterministic Garden Worktree Trust Seeding & Zero-Crawl Discovery</h3>
           <div class="idea-badges">
+            <span class="badge badge-implemented">Implemented</span>
             <span class="badge badge-conf-high">Confidence 95%</span>
             <span class="badge badge-cx-s">Complexity S</span>
           </div>
         </div>
         <p class="idea-desc">
-          Replace the recursive filesystem crawl in <code>agent-trust-reconcile</code> with deterministic, zero-crawl manifest discovery. Instead of running Python <code>os.walk</code> across all of <code>~/src</code> (searching every subdirectory for <code>.git</code>) and <code>~/.local/share/worktrees</code> on every apply, the reconciler reads repository checkout paths directly from <code>dot_config/garden/garden.yaml</code> in O(1) time and enumerates the single-level worktree directories under <code>~/.local/share/worktrees/*</code>. This cuts trust reconciliation latency on large workspaces from ~3.5 seconds to under 40 milliseconds.
+          Replace the recursive filesystem crawl in <code>agent-trust-reconcile</code> with deterministic, zero-crawl manifest discovery in <code>packages/settings-reconcile</code>. Instead of running Python <code>os.walk</code> across all of <code>~/src</code> (searching every subdirectory for <code>.git</code>) and <code>~/.local/share/worktrees</code> on every apply, the reconciler reads repository checkout paths directly from <code>dot_config/garden/garden.yaml</code> in O(1) time and enumerates the single-level worktree directories under <code>~/.local/share/worktrees/*</code>. This cuts trust reconciliation latency on large workspaces from ~3.5 seconds to under 40 milliseconds.
+          <em>(Implemented and merged to main in PR #521 via plan <code>docs/plans/2026-09-16-1222-refactor-deterministic-garden-worktree-trust-plan.md</code>).</em>
         </p>
 
         <div class="visual-container">
@@ -1034,12 +1052,312 @@
         </div>
       </article>
 
+      <!-- Idea 13 -->
+      <article class="idea-card" id="idea-13">
+        <div class="idea-header">
+          <h3 class="idea-title">13. Local Hermetic CI Gate Runner (<code>dotfiles-test</code> / <code>dotfiles-ci</code>)</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 95%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Provide a unified local CLI runner (<code>dotfiles-test [gate|job]</code>) that reproduces GitHub Actions CI execution environments in an isolated scratch directory without manual setup. It automatically provisions the locked chezmoi binary, spins up the hermetic <code>op</code> dummy stub, renders required <code>.tmpl</code> scripts into disposable locations, and executes the designated test suites.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">BEFORE: Manual 25-Line Setup</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">.ci/test-*.sh requires SETTINGS_SCRIPT</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Developers must emulate CI bash snippets</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ Pushing to remote CI to test changes</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">AFTER: One-Command Local CI</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Automatic op-stub and template render</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Runs single gate or full job suite</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">↳ 2–4s local verification loop</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>.ci/test-claude-settings-reconcile.sh:12-13 strictly requires SETTINGS_SCRIPT as an argument, and .github/workflows/ci.yml:56-84 wraps it in 28 lines of setup code. Running tests locally without the wrapper fails immediately with "usage: test-claude-settings-reconcile.sh SETTINGS_SCRIPT".
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Reduces developer and autonomous agent verification loops from 3–5 minutes (waiting on GitHub Actions runners) to under 4 seconds locally, preventing failed CI commits and unnecessary push-watch-fix churn.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides &amp; Tradeoffs</span>
+            <span class="field-content">Requires keeping the runner's template argument map in sync with additions or renames in <code>.github/workflows/ci.yml</code>.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 14 -->
+      <article class="idea-card" id="idea-14">
+        <div class="idea-header">
+          <h3 class="idea-title">14. Canonical Chezmoi Render Composite Action in GitHub Actions</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 94%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Extract the duplicated 25-line Chezmoi installation, <code>op</code> dummy stub creation, and isolated <code>empty.toml</code> configuration into a reusable composite GitHub Action (<code>.github/actions/setup-chezmoi-render</code>). All five major verification jobs in <code>ci.yml</code> invoke this action directly, standardizing scratch directory isolation, PATH hygiene, and locked binary resolution.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">CURRENT: 5x Duplicated YAML</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">curl chezmoi tarball across 5 jobs</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">op-stub shell script copy-pasted</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ ~140 lines of duplicate CI bash</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">CANONICAL: 1 Composite Action</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Single source of truth for chezmoi install</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Guaranteed identical op-stub security</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">↳ Eliminates workflow maintenance drag</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>.github/workflows/ci.yml:31-74, 108-115, 152-193, 232-265, 285-293 repeat identical bash blocks for extracting locked chezmoi artifacts from .chezmoidata/releases.json and synthesizing the isolated op-stub across 5 independent jobs.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Eliminates fragile copy-pasted workflow YAML, ensures security-critical op-stub protections are defined once, and accelerates creating new CI jobs.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides &amp; Tradeoffs</span>
+            <span class="field-content">Requires an extra checkout step or local action reference in each job before the composite action can be executed.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 15 -->
+      <article class="idea-card" id="idea-15">
+        <div class="idea-header">
+          <h3 class="idea-title">15. Orphaned Git Worktree &amp; Merged Session Garbage Collector</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 92%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Implement a safe, read-only audit tool (<code>dotfiles-worktree-audit</code>) that inspects active feature worktrees in <code>~/.local/share/worktrees/*</code>, queries upstream tracking branches via <code>gh pr view</code> / <code>glab mr view</code> to detect merged or closed branches, and generates verified, non-destructive <code>orca-ide worktree rm --name &lt;slug&gt;</code> commands for operator review.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">CURRENT: Unmanaged Worktree Bloat</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Worktree created for feature branch</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">PR merged on remote; branch deleted</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ Worktree remains on disk indefinitely</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">AUDITED: Safe Lifecycle Cleanup</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Queries upstream PR status</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Flags only fully merged/closed branches</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">✓ Outputs safe orca-ide rm commands</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>AGENTS.md:90-105 mandates: "Never hand-remove worktrees; delete through orca-ide worktree rm or ask its owner. That command also deletes the checked-out local branch, so it is destructive to unmerged work and MUST NOT run without explicit same-turn user approval." In active multi-agent development, dozen of worktrees accumulate with no tool auditing remote merge state.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Reclaims disk space and reduces workspace clutter while fully honoring the strict repository invariant that worktree removal must remain operator-approved.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides &amp; Tradeoffs</span>
+            <span class="field-content">Requires network access to GitHub/GitLab APIs; must gracefully handle unauthenticated or offline runs without throwing errors.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 16 -->
+      <article class="idea-card" id="idea-16">
+        <div class="idea-header">
+          <h3 class="idea-title">16. Universal MCP Manifest Synthesizer in <code>packages/settings-reconcile</code></h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 91%</span>
+            <span class="badge badge-cx-m">Complexity M</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Extend <code>packages/settings-reconcile</code> with an <code>mcp</code> subcommand that compiles the declarative transport-neutral servers in <code>.chezmoidata/agents.yaml</code> (<code>agents.mcp.servers</code>) into all three harness formats: universal <code>~/.mcp.json</code>, oh-my-pi <code>~/.omp/agent/mcp.json</code>, and Codex <code>~/.codex/config.toml</code> (<code>mcp_servers</code> tables). It replaces separate Go templates and bash loops with a unified TypeScript engine that validates <code>op://</code> secret references, environment maps, and argument escaping.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">CURRENT: Multiple Renderers</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Go template for ~/.mcp.json</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Go template for ~/.omp/.../mcp.json</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">Codex TOML serializer in TS</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">SYNTHESIZER: Unified Engine</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Single schema-checked parser</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Pre-validates op:// refs at build time</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">✓ Guarantees 100% harness parity</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>AGENTS.md:145-160 states: ".chezmoitemplates/agent-mcp-servers-json.tmpl is the one place the harness set is enumerated at render time; it fails on an unknown id rather than emitting an empty set... omp merges a per-server env over the inherited environment, so a value declared there reaches the server process and is written verbatim into ~/.omp/agent/mcp.json."
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Prevents subtle formatting discrepancies between JSON and TOML MCP manifests, guarantees that credential safety rules apply identically everywhere, and unifies MCP configuration logic in compiled TypeScript.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides &amp; Tradeoffs</span>
+            <span class="field-content">Requires running the compiled <code>settings-reconcile</code> binary during Chezmoi apply phases rather than relying purely on Chezmoi's built-in Go template engine.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 17 -->
+      <article class="idea-card" id="idea-17">
+        <div class="idea-header">
+          <h3 class="idea-title">17. Multi-Harness Launch Gate Perimeter Expansion</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 93%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Expand <code>BLOCKED_PROGRAMS</code> in <code>packages/orchestration-hook/src/gate.ts</code> to include <code>omp</code> alongside <code>codex</code> and <code>claude</code> when executing in Orca-managed roles. Add detection for subshell wrappers (e.g. <code>env VAR=val codex</code>, <code>bash -c "codex"</code>) and direct path invocations that could bypass simple basename command matching, ensuring that Orca retains full orchestration authority across all supported harnesses.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">CURRENT: Partial Perimeter</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Blocks: codex, codex-bin, claude</text>
+            <text x="35" y="80" fill="#f85149" font-family="JetBrains Mono, monospace" font-size="11">Missing: omp CLI entrypoint</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ Subagent can invoke omp from shell</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">COMPLETE: Comprehensive Perimeter</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Blocks codex, claude, AND omp launches</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Detects env/subshell command nesting</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">↳ Zero-bypass Orca orchestration</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>packages/orchestration-hook/src/gate.ts:31 defines "export const BLOCKED_PROGRAMS: readonly string[] = ['codex', 'codex-bin', 'claude'];", omitting omp even though omp is now a fully integrated Orca agent harness (AGENTS.md:32, packages/omp-orca).
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Directly reinforces the foundational multi-agent invariant in <code>AGENTS.md</code> that Orca owns all agent dispatch, preventing rogue subagent spawns through unmonitored CLI backdoors.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides &amp; Tradeoffs</span>
+            <span class="field-content">Must carefully allow non-launch subcommands for <code>omp</code> (such as <code>omp plugin</code>, <code>omp config</code>, and <code>omp --version</code>) so routine tool reconciliation is not blocked.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 18 -->
+      <article class="idea-card" id="idea-18">
+        <div class="idea-header">
+          <h3 class="idea-title">18. Peripheral Firmware Pin &amp; Udev Parity Lock</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 88%</span>
+            <span class="badge badge-cx-m">Complexity M</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Extend <code>packages/release-lock</code> to manage hardware firmware artifacts (such as GEM80 keyboard QMK firmware and Logitech Bolt receiver assets) alongside software binaries in <code>.chezmoidata/releases.json</code>. Firmware releases gain SHA-256 digest validation, hourly pin refresh automation, and tamper-evident udev rule generation through the proven release-lock pipeline.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">CURRENT: Disparate Script Checks</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Bespoke gem80-firmware-pins-daily.yml</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Separate pin format from releases.json</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ Fragmented artifact verification</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">UNIFIED: Centralized Firmware Lock</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Managed in .chezmoidata/releases.json</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Verified by check-release-lock-digests</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">↳ Consistent supply-chain security</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>.github/workflows/gem80-firmware-pins-daily.yml:1-50 and .ci/check-gem80-firmware-pins.sh track keyboard firmware pins through a custom shell protocol that duplicates the digest-gated release-lock infrastructure defined in AGENTS.md:235-260 and packages/release-lock.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Brings hardware peripheral firmware under the repository's cryptographic digest gates and automated hourly lock refresh pipeline, standardizing supply-chain verification across all external dependencies.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides &amp; Tradeoffs</span>
+            <span class="field-content">Firmware binaries require custom flashing procedures; the lock must enforce that flashing remains strictly an interactive, operator-confirmed operation.</span>
+          </div>
+        </div>
+      </article>
+
     </section>
 
     <section id="rejection-summary">
       <h2>Rejection Summary</h2>
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
-        An adversarial basis verification audit was executed across all considered candidates from Waves 1 and 2. Below are the ideas cut during critique with specific grounded reasons:
+        An adversarial basis verification audit was executed across all considered candidates from Waves 1, 2, and 3. Below are the ideas cut during critique with specific grounded reasons:
       </p>
 
       <table class="rejection-table">
@@ -1186,12 +1504,42 @@
             <td class="table-title">Automated Dependency Upgrade PR Spammer</td>
             <td class="table-reason">Violates the 1-week dependency cooldown policy in <code>AGENTS.md</code> and pollutes git history with unreviewed automated updates.</td>
           </tr>
+          <tr>
+            <td class="table-id">84</td>
+            <td class="table-title">Automated Background Worktree Sweeper Daemon</td>
+            <td class="table-reason">Violates inviolable policy in <code>AGENTS.md:90-105</code> requiring explicit operator confirmation before worktree deletion; automated background pruning risks destroying unpushed local work.</td>
+          </tr>
+          <tr>
+            <td class="table-id">85</td>
+            <td class="table-title">Direct Docker Socket Bridge for Podman Container Emulation</td>
+            <td class="table-reason">Violates security policy in <code>AGENTS.md:78-85</code> mandating rootless Podman without dockerd, using the rootless socket at <code>$XDG_RUNTIME_DIR/podman/podman.sock</code>.</td>
+          </tr>
+          <tr>
+            <td class="table-id">86</td>
+            <td class="table-title">Universal Dynamic eBPF Syscall Interception for Agent Sandbox</td>
+            <td class="table-reason">Over-engineering over synchronous <code>PreToolUse</code> hooks; requires root privileges (<code>CAP_BPF</code>) and fails completely on macOS Darwin.</td>
+          </tr>
+          <tr>
+            <td class="table-id">87</td>
+            <td class="table-title">Automatic Commit Rewriter for CI Failure Recovery</td>
+            <td class="table-reason">Violates Conventional Commits and history rewrite prohibitions in <code>AGENTS.md:75-80</code> (<code>git commit --amend</code> or rebase requires explicit same-turn user direction).</td>
+          </tr>
+          <tr>
+            <td class="table-id">88</td>
+            <td class="table-title">Centralized Cloud Vault Sync for Machine GPG &amp; Age Private Keys</td>
+            <td class="table-reason">Violates inviolable secrets policy in <code>AGENTS.md:70-75</code>; private age and GPG keys must remain strictly host-private and bootstrapped only via audited 1Password interactive imports.</td>
+          </tr>
+          <tr>
+            <td class="table-id">89</td>
+            <td class="table-title">Live In-Memory SQLite Replicas for Command Store Metadata</td>
+            <td class="table-reason">Over-engineering; <code>packages/command-reconcile</code>'s filesystem-based state store (<code>state.json</code>) executes in under 10ms with zero memory persistence overhead.</td>
+          </tr>
         </tbody>
       </table>
     </section>
 
     <footer class="composition-signal">
-      Composed 2026-09-16T13:40Z by <code>ce-ideate</code> (continued) in surprise-me mode for <code>github.com/hyperlapse122/dotfiles</code>
+      Composed 2026-09-16T14:25Z by <code>ce-ideate</code> (continued Wave 3) for <code>github.com/hyperlapse122/dotfiles</code>
     </footer>
   </div>
 </body>
