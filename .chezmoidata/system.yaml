@@ -133,4 +133,19 @@ system:
       authselectFeatures:
         - with-fingerprint
 
+    # Face authentication on Fedora through Howdy. Which hosts get it is the
+    # irCamera fact plus the same greeter check the fingerprint installer makes.
+    # The COPR is the one that carries a Fedora 44 python3-dlib next to Howdy;
+    # Fedora itself ships no dlib, and the upstream-documented principis
+    # repository does not either. The feature is declared in a custom authselect
+    # profile derived from the stock local one (see the installer), so the name
+    # here is the profile id under /etc/authselect/custom/.
+    faceAuth:
+      copr: starfish/howdy-beta
+      packages:
+        - howdy
+        - v4l-utils
+      authselectProfile: face-auth
+      authselectFeature: with-howdy
+
     bluetooth: {}

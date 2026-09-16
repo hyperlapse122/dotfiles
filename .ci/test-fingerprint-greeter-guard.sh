@@ -41,10 +41,10 @@ bash -n "$rendered" || fail 'the rendered fingerprint installer is not valid bas
 # Extract only the predicate and its helpers. Anchored ranges fail silently when
 # a name changes, so every one is asserted present.
 helpers="$scratch/helpers.sh"
-sed -n '/^pam_service_file()/,/^}/p;/^pam_chain_has_fprintd()/,/^}/p;/^pam_auth_includes()/,/^}/p;/^greeter_service()/,/^}/p;/^greeter_would_gain_fingerprint()/,/^}/p' \
+sed -n '/^pam_service_file()/,/^}/p;/^pam_chain_has_module()/,/^}/p;/^pam_auth_includes()/,/^}/p;/^greeter_service()/,/^}/p;/^greeter_would_gain_module()/,/^}/p;/^greeter_would_gain_fingerprint()/,/^}/p' \
   "$rendered" >"$helpers"
-for fn in pam_service_file pam_chain_has_fprintd pam_auth_includes \
-  greeter_service greeter_would_gain_fingerprint; do
+for fn in pam_service_file pam_chain_has_module pam_auth_includes \
+  greeter_service greeter_would_gain_module greeter_would_gain_fingerprint; do
   grep -q "^${fn}()" "$helpers" || fail "${fn} was not extracted from the rendered installer"
 done
 
@@ -82,7 +82,7 @@ STUB
     sed -e "s#\"/etc/pam.d/#\"${root}/etc/pam.d/#g" \
         -e "s#\"/usr/lib/pam.d/#\"${root}/usr/lib/pam.d/#g" \
         -e 's#File /etc/pam.d/#File /etc/pam.d/#g' "$helpers"
-    printf 'if greeter_would_gain_fingerprint; then printf withhold; else printf enable; fi\n'
+    printf 'if %s; then printf withhold; else printf enable; fi\n' "${5:-greeter_would_gain_fingerprint}"
   } >"$driver"
   bash "$driver" 2>/dev/null
 }
@@ -173,5 +173,33 @@ auth       sufficient   pam_fprintd.so
 PAM
 expect withhold "$(verdict_under "$unmanaged" 'local with-fingerprint' "$scratch/clean.authselect" plasmalogin)" \
   'a greeter reaching an authselect-unmanaged stack that carries pam_fprintd must WITHHOLD'
+
+# --- case 7: the shared predicate is bound per module and per profile --------
+# The face installer asks the same question about pam_howdy against the custom
+# profile it is about to select. A rendering that carries the face module only in
+# system-auth must ENABLE, and one that puts it in password-auth must WITHHOLD;
+# the fingerprint module's presence in the same rendering is not its business.
+cat >"$scratch/face-clean.authselect" <<'OUT'
+File /etc/pam.d/system-auth:
+auth        sufficient                                   pam_howdy.so
+auth        sufficient                                   pam_fprintd.so
+auth        sufficient                                   pam_unix.so nullok
+File /etc/pam.d/password-auth:
+auth        required                                     pam_env.so
+auth        sufficient                                   pam_unix.so nullok
+OUT
+expect enable "$(verdict_under "$clean" 'custom/face with-fingerprint with-howdy' "$scratch/face-clean.authselect" plasmalogin \
+  "greeter_would_gain_module 'pam_howdy\\.so' custom/face with-fingerprint with-howdy")" \
+  'a rendering that keeps pam_howdy out of the greeter stack must ENABLE'
+cat >"$scratch/face-dirty.authselect" <<'OUT'
+File /etc/pam.d/system-auth:
+auth        sufficient                                   pam_howdy.so
+File /etc/pam.d/password-auth:
+auth        required                                     pam_env.so
+auth        sufficient                                   pam_howdy.so
+OUT
+expect withhold "$(verdict_under "$clean" 'custom/face with-fingerprint with-howdy' "$scratch/face-dirty.authselect" plasmalogin \
+  "greeter_would_gain_module 'pam_howdy\\.so' custom/face with-fingerprint with-howdy")" \
+  'a rendering that puts pam_howdy in the greeter stack must WITHHOLD'
 
 printf 'fingerprint-greeter-guard: OK\n'

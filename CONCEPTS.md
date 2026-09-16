@@ -24,6 +24,18 @@ A comment block that lists each of a script's declared dependencies with a hash 
 ### Host gate
 An expression over host facts that scopes a manifest entry to the machines it applies to. The same grammar, negation included, scopes an install override and a retirement — which is what keeps a path from being installed under one gate and deleted under its negation on the same run.
 
+### Declared hardware fact
+A host fact whose truth comes from a committed table of verified device identities rather than from probing what the hardware can do. It exists for hardware the system exposes no generic signal for, such as a fingerprint reader or an infrared camera, and it fails safe: a device nobody has listed enables nothing.
+
+### Declared skip
+The contract by which an onchange script leaves early: it names the site and the direction of the skip, so a machine that did not converge is never recorded as one that did. Directions distinguish a condition the host will never satisfy, a precondition a later run will supply, a precondition that only an operator can clear, and a step that is already done; a completed interactive step the script cannot perform, such as enrolling a face, is reported through the same surface.
+
+### Derived authselect profile
+A Fedora authentication profile this repository builds from the stock one to carry a factor the stock profiles have no feature for. Every file tracks the base except the stack that gains the factor, and the profile is selected with the machine's existing features plus the new one, so the distribution's tool still writes every PAM file and no script writes one directly.
+
+### Greeter guard
+The predicate that keeps the login greeter password-only whenever a factor is added: it resolves the greeter's authentication stack against the profile as it would be rendered and withholds the factor when the module would reach it. It fails closed on an unrecognized display manager or an unresolvable stack. Factors are placed in the shared privilege stack, which the greeter and the desktop lock screen do not include, because a face factor in a stack the lock screen starts on lock would unlock the screen for whoever locked it.
+
 ### Retired path
 An absolute system path declared for removal so that every machine deletes the orphan on its next run, including one that only pulls the commit that removed the source file. Retirement is declared in the same commit that deletes the file; a retirement may carry a Host gate or a distro scope so it never deletes a native or user-owned file elsewhere.
 

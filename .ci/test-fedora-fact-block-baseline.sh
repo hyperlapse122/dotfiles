@@ -41,6 +41,7 @@ integratedOnly: false
 nvidiaHybridDriver: false
 battery: false
 fingerprintReader: false
+irCamera: false
 displayManager: ""
 displayManagerSddm: false
 deepSleep: false
