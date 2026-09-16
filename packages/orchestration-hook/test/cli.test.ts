@@ -527,107 +527,38 @@ describe("version and unknown commands", () => {
   });
 });
 
-function guardIo(env: NodeJS.ProcessEnv, stdin?: string) {
-  const out: string[] = [];
-  const err: string[] = [];
-  return {
-    io: { stdout: (t: string) => out.push(t), stderr: (t: string) => err.push(t), env, stdin },
-    out,
-    err,
-  };
-}
-
 const LEAD_ENV = {
   ORCA_TERMINAL_HANDLE: "term_abc",
   ORCA_AGENT_TEAMS_LEADER_PANE: "%3",
   TMUX_PANE: "%3",
 };
 
-function event(command: string): string {
-  return JSON.stringify({
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command },
-  });
-}
-
-describe("guard fail-open contract", () => {
-  it("allows with a JSON no-op body on both harnesses", async () => {
-    for (const harness of ["claude", "codex"]) {
-      const { io, out, err } = guardIo({}, event("codex exec x"));
-      expect(await main(["guard", "--harness", harness], io)).toBe(0);
-      expect(out.join(""), harness).toBe("{}");
-      expect(err.join(""), harness).toBe("");
-    }
-  });
-
-  it("allows on a body that is not JSON", async () => {
-    const { io, out } = guardIo(LEAD_ENV, "not json");
+describe("guard compatibility shim", () => {
+  // A stale cached hook declaration may still invoke `guard` until the session
+  // that cached it restarts. The shim answers it without reading stdin at all,
+  // so a PreToolUse event that would once have been denied, malformed bytes,
+  // and no input whatsoever are all the same case: only --harness selects the
+  // output.
+  it("prints {} for claude and exits 0 with empty stderr, ignoring a launch on stdin", async () => {
+    const { io, out, err } = capture(LEAD_ENV);
     expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
     expect(out.join("")).toBe("{}");
+    expect(err.join("")).toBe("");
   });
 
-  it("allows on a JSON body that is not an object", async () => {
-    const { io, out } = guardIo(LEAD_ENV, "[1,2,3]");
-    expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
-    expect(out.join("")).toBe("{}");
+  it("prints nothing for codex and exits 0", async () => {
+    const { io, out, err } = capture(LEAD_ENV);
+    expect(await main(["guard", "--harness", "codex"], io)).toBe(0);
+    expect(out.join("")).toBe("");
+    expect(err.join("")).toBe("");
   });
 
-  it("allows on an empty body", async () => {
-    const { io, out } = guardIo(LEAD_ENV, "");
-    expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
-    expect(out.join("")).toBe("{}");
-  });
-
-  it("allows when --harness is missing or unknown", async () => {
+  it("prints nothing when --harness is missing or unknown", async () => {
     for (const argv of [["guard"], ["guard", "--harness", "nonesuch"]]) {
-      const { io, out, err } = guardIo(LEAD_ENV, event("codex exec x"));
+      const { io, out, err } = capture(LEAD_ENV);
       expect(await main(argv, io)).toBe(0);
-      expect(out.join("")).toBe("{}");
+      expect(out.join("")).toBe("");
       expect(err.join("")).toBe("");
     }
-  });
-});
-
-describe("guard decisions", () => {
-  it("denies a launch in an Orca-managed session", async () => {
-    const { io, out } = guardIo(LEAD_ENV, event("codex exec x"));
-    expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
-    const parsed = JSON.parse(out.join("")) as {
-      hookSpecificOutput: { hookEventName: string; permissionDecision: string };
-    };
-    expect(parsed.hookSpecificOutput.hookEventName).toBe("PreToolUse");
-    expect(parsed.hookSpecificOutput.permissionDecision).toBe("deny");
-  });
-
-  it("allows the same launch outside Orca", async () => {
-    const { io, out } = guardIo({}, event("codex exec x"));
-    expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
-    expect(out.join("")).toBe("{}");
-  });
-
-  it("parses a pretty-printed body rather than stopping at the first newline", async () => {
-    const pretty = JSON.stringify(
-      { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "codex exec x" } },
-      null,
-      2,
-    );
-    expect(pretty).toContain("\n");
-    const { io, out } = guardIo(LEAD_ENV, pretty);
-    expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
-    expect(out.join("")).toContain("deny");
-  });
-
-  it("explains a verdict without reading stdin", async () => {
-    const { io, out } = guardIo(LEAD_ENV);
-    expect(await main(["guard", "--harness", "claude", "--explain", "codex exec x"], io)).toBe(0);
-    expect(out.join("")).toContain("verdict=deny");
-    expect(out.join("")).toContain("role=lead");
-  });
-
-  it("explains an allow verdict", async () => {
-    const { io, out } = guardIo(LEAD_ENV);
-    expect(await main(["guard", "--harness", "claude", "--explain", "git status"], io)).toBe(0);
-    expect(out.join("")).toContain("verdict=allow");
   });
 });

@@ -82,15 +82,28 @@ run_hook() {
   env -i PATH="$path" HOME="$scratch/home" $role_env "$binary" hook --harness "$harness" </dev/null
 }
 
-
-run_guard() {
-  local harness=$1 role_env=$2 command=$3 tool_name=${4:-Bash}
-  local event
-  event=$(jq -nc --arg c "$command" --arg n "$tool_name" \
-    '{hook_event_name:"PreToolUse",tool_name:$n,tool_input:{command:$c}}')
-  # shellcheck disable=SC2086
-  printf '%s' "$event" \
-    | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness"
+# `guard` is now a compatibility no-op for a stale cached hook declaration: it
+# never reads stdin, so this feeds real bytes on the real fd to prove the
+# input is ignored rather than merely untested.
+run_guard_shim() {
+  local harness=$1 role_env=$2 stdin_mode=${3:-none}
+  local out
+  case $stdin_mode in
+    none)
+      # shellcheck disable=SC2086
+      out=$(env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness" </dev/null)
+      ;;
+    malformed)
+      # shellcheck disable=SC2086
+      out=$(printf 'not json' | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness")
+      ;;
+    launch)
+      # shellcheck disable=SC2086
+      out=$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"codex exec x"}}' \
+        | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness")
+      ;;
+  esac
+  printf '%s' "$out"
 }
 
 # ------------------------------------------------------- fail-open contracts
@@ -331,98 +344,29 @@ jq -e '.hooks.SessionStart[0].hooks[0] | has("args") | not' "$scratch/codex-hook
 pass 'Codex declares the staged binary without an args key the trust record would miss'
 
 
-# ------------------------------------------------------------- the launch gate
-# The gate's whole value is that it denies in a real session and stays out of
-# the way otherwise. Both halves are invisible in a diff: a wrong tool-name
-# assumption, or a fail-open path that swallowed the decision, leaves the unit
-# tests green while the deployed hook denies nothing at all.
+# --------------------------------------------------------- the guard shim
+# `guard` no longer gates anything: it is a compatibility no-op for a stale
+# cached hook declaration, kept only so that declaration does not hit the
+# unknown-command exit code 2 until its session restarts.
 TEAM='ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1'
-WORKER_ENV='ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%9'
 
-for harness in claude codex; do
-  out=$(run_guard "$harness" "$TEAM" 'codex exec "do the thing"')
-  decision=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') \
-    || fail "$harness: a launch in a team session must return a decision document (got: $out)"
-  [[ $decision == deny ]] || fail "$harness: a launch must be denied (got: $decision)"
-  event_name=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.hookEventName')
-  [[ $event_name == PreToolUse ]] || fail "$harness: the deny must name PreToolUse (got: $event_name)"
-  reason=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecisionReason')
-  [[ $reason == *Orca* ]] || fail "$harness: the deny must name the Orca dispatch path"
-done
+out=$(run_guard_shim claude "$TEAM" launch)
+[[ $out == '{}' ]] || fail "guard --harness claude must print {} and ignore a launch on stdin (got: $out)"
+pass 'guard --harness claude allows unconditionally, ignoring a launch on stdin'
 
-out=$(run_guard claude "$WORKER_ENV" 'codex exec x')
-[[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') == deny ]] \
-  || fail 'a worker starting its own peer is the same bypass and must be denied'
-pass 'the gate binds every Orca role, not the lead alone'
+out=$(run_guard_shim codex "$TEAM" launch)
+[[ -z $out ]] || fail "guard --harness codex must print nothing (got: $out)"
+pass 'guard --harness codex prints nothing'
 
-# Outside Orca the same command must run untouched. This is the case that keeps
-# the gate from becoming a machine-wide block on the user's own shell.
-for harness in claude codex; do
-  out=$(run_guard "$harness" "" 'codex exec x')
-  [[ $out == '{}' ]] || fail "$harness: outside Orca the gate must allow (got: $out)"
-done
-pass 'a session outside Orca runs the same command unchanged'
+out=$(run_guard_shim claude "$TEAM" none)
+[[ $out == '{}' ]] || fail "guard --harness claude with no stdin must still print {} (got: $out)"
+out=$(run_guard_shim claude "$TEAM" malformed)
+[[ $out == '{}' ]] || fail "guard --harness claude with malformed stdin must still print {} (got: $out)"
+pass 'guard never blocks on stdin: no input and malformed input both exit 0 immediately'
 
-# Allowed surface. `codex plugin add` runs during chezmoi apply, so a gate that
-# blocked it would break provisioning on this very repository.
-while IFS= read -r command; do
-  out=$(run_guard claude "$TEAM" "$command")
-  [[ $out == '{}' ]] || fail "the gate must allow: $command (got: $out)"
-done <<'ALLOWED'
-git status
-echo "ask claude about it"
-codex plugin add foo
-codex mcp list
-claude update
-claude --version
-command -v codex
-omp
-agy
-antigravity
-ALLOWED
-pass 'CLI management and unrelated commands are untouched'
-
-# Evasion. Each of these reached the real binary in a shell string; a scanner
-# that split naively, or that only looked at the first word, would miss them.
-while IFS= read -r command; do
-  out=$(run_guard claude "$TEAM" "$command")
-  [[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision' 2>/dev/null) == deny ]] \
-    || fail "the gate must deny: $command (got: $out)"
-done <<'DENIED'
-codex
-bash -c 'codex exec x'
-sh -c "bash -c 'codex exec x'"
-git status && codex
-FOO=bar env claude -p hi
-timeout 5 codex exec
-/usr/bin/codex exec
-DENIED
-pass 'wrapped, chained and assigned-prefix launches are all denied'
-
-# Fail open. A guard that errored would break every tool call in the session,
-# which is strictly worse than a launch it failed to catch.
-# shellcheck disable=SC2086
-out=$(printf 'not json' | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
-[[ $out == '{}' ]] || fail "a body that is not JSON must allow (got: $out)"
-# shellcheck disable=SC2086
-out=$(printf '' | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
-[[ $out == '{}' ]] || fail "an empty body must allow (got: $out)"
-# shellcheck disable=SC2086
-out=$(printf '%s' '{"tool_input":{"command":"codex exec x"}}' \
-  | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard)
-[[ $out == '{}' ]] || fail "a missing --harness must allow (got: $out)"
-pass 'every malformed guard input allows rather than failing the tool call'
-
-# A pretty-printed body is the shape that breaks a newline-terminated read: it
-# would truncate to invalid JSON, parse as nothing, and silently allow.
-pretty=$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"codex exec x"}}')
-[[ $pretty == *$'\n'* ]] || fail 'the pretty-printed fixture must actually contain newlines'
-# shellcheck disable=SC2086
-out=$(printf '%s' "$pretty" | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
-[[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision' 2>/dev/null) == deny ]] \
-  || fail 'a multi-line event body must still be read whole and denied'
-pass 'a pretty-printed event body is read to completion, not truncated at a newline'
-
+out=$(run_guard_shim nonesuch "$TEAM" launch)
+[[ -z $out ]] || fail "guard with an unknown --harness must print nothing (got: $out)"
+pass 'guard with a missing or unknown --harness prints nothing'
 
 # The PreToolUse declarations. A gate that is not declared never runs, and the
 # unit tests cannot see that.
@@ -503,12 +447,6 @@ for target in \
     || fail "retired target is not declared for removal: $target"
 done
 pass 'the retired hook scripts and payload wrappers are gone and declared for removal'
-
-for tool_name in apply_patch doc-edit; do
-  out=$(run_guard claude "$TEAM" $'remove entries\nagy\ncodex' "$tool_name")
-  [[ $out == '{}' ]] || fail "$tool_name data was treated as a shell launch"
-done
-pass 'native edit payloads preserve CLI text'
 
 bundle="$scratch/dotfiles-orca.js"
 (

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Orchestration payload delivery and agent-CLI launch gate for Claude Code, Codex, and omp.",
+  "description": "Orchestration payload delivery for Claude Code, Codex, and omp.",
   "license": "UNLICENSED",
   "engines": {
     "node": ">=24"
