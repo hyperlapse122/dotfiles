@@ -456,6 +456,17 @@
         "source": "stablyai/orca",
         "version": "v1.4.204"
       },
+      "linux-enable-ir-emitter": {
+        "kind": "githubRelease",
+        "source": "EmixamPP/linux-enable-ir-emitter",
+        "version": "6.1.2",
+        "artifacts": {
+          "linux-amd64": {
+            "url": "https://github.com/EmixamPP/linux-enable-ir-emitter/releases/download/6.1.2/linux-enable-ir-emitter-6.1.2-release.systemd.x86-64.tar.gz",
+            "sha256": "f37e8a472df28a13d785373021dd92a51b48c014e528398631bc161e6282dc60"
+          }
+        }
+      },
       "marksman": {
         "kind": "githubRelease",
         "source": "artempyanykh/marksman",

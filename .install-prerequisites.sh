@@ -330,9 +330,13 @@ fact_battery() {
 # Seeded, not exhaustive. An unlisted reader resolves false and the fingerprint
 # path skips, which is the fail-safe direction: no authentication factor is
 # enabled for hardware nobody verified.
-fact_fingerprint_reader() {
-  local table dev vendor product known=''
-  table="${CHEZMOI_SOURCE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}/.chezmoidata/.fingerprint-readers.tsv"
+#
+# The IR camera table (.chezmoidata/.ir-cameras.tsv) is declared the same way and
+# for the same reason: a UVC camera's sysfs entry names neither its greyscale
+# stream nor its emitter, so the identity is a vendor/product pair somebody
+# verified, and an unlisted camera enables no face-authentication factor.
+usb_device_listed() {
+  local table="$1" dev vendor product known=''
   [[ -r "$table" ]] || return 1
   # Read the table ONCE. A host has tens of USB entries -- hubs, interfaces and
   # endpoints included -- and this runs in the pre-hook on every chezmoi command,
@@ -347,6 +351,14 @@ fact_fingerprint_reader() {
     esac
   done
   return 1
+}
+
+fact_fingerprint_reader() {
+  usb_device_listed "${CHEZMOI_SOURCE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}/.chezmoidata/.fingerprint-readers.tsv"
+}
+
+fact_ir_camera() {
+  usb_device_listed "${CHEZMOI_SOURCE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}/.chezmoidata/.ir-cameras.tsv"
 }
 
 # Which display manager the host runs, as the bare unit name (`plasmalogin`,
@@ -441,6 +453,7 @@ write_facts_cache() {
     printf 'hybridGraphics: %s\n' "$(fact_bool fact_hybrid_graphics)"
     printf 'battery: %s\n'      "$(fact_bool fact_battery)"
     printf 'fingerprintReader: %s\n' "$(fact_bool fact_fingerprint_reader)"
+    printf 'irCamera: %s\n' "$(fact_bool fact_ir_camera)"
     printf 'displayManager: %s\n' "$(fact_string fact_display_manager)"
     printf 'virt: %s\n'         "$(fact_bool systemd-detect-virt --quiet)"
     printf 'vm: %s\n'           "$(fact_bool systemd-detect-virt --vm --quiet)"

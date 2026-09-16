@@ -1,0 +1,280 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $authselectPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "authselect-present") -}}
+{{- /* The emitter tool ships one linux x86-64 build. Every other platform
+   resolves to an empty URL through optional:true and takes the declared skip
+   below at run time, so the script renders (and the skip audit sees the same
+   text) on every Fedora target rather than failing the render on arm64. */ -}}
+{{ $irVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "linux-enable-ir-emitter") -}}
+{{ $irUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "linux-enable-ir-emitter" "field" "url" "platform" "auto" "optional" true) -}}
+{{ $irSha := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "linux-enable-ir-emitter" "field" "sha256" "platform" "auto" "optional" true) -}}
+{{ $face := .system.linux.faceAuth -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+{{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-face-auth") }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-face-auth") }}
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-face-auth") }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list
+      (dict "name" "authselect-present" "value" $authselectPresent))) }}
+{{ includeTemplate "facts-gate.sh.tmpl" . }}
+
+# Face authentication on Fedora: Howdy, its IR emitter enabler, and the PAM
+# factor through authselect and nothing else.
+#
+# THE MECHANISM IS A CUSTOM AUTHSELECT PROFILE. Writing PAM files directly stays
+# forbidden (AGENTS.md), and stock authselect has no face feature, so this script
+# derives a profile from the stock `local` one: every file is a symlink back to
+# the base except system-auth, which gains one templated line --
+#   auth sufficient pam_howdy.so {include if "with-howdy"}
+# -- and README, which documents the feature. The profile is regenerated from
+# the base on every run and rewritten only when it differs, then selected with
+# the feature set the host already carries plus with-howdy. authselect renders
+# and owns the live /etc/pam.d files exactly as it does for the stock profile.
+#
+# WHAT THE FEATURE REACHES is the system-auth set AGENTS.md enumerates for the
+# fingerprint factor: sudo, polkit-1, su, login, vlock, chsh, chfn, config-util,
+# crond, kcheckpass and kscreensaver. Two of those cannot actually use it.
+# pam_howdy spawns the recogniser as the CALLING process's user, so under
+# polkitd (user polkitd, SELinux policykit_t) it cannot open the camera and
+# falls through to the next module at once; the Plasma lock screen and the
+# greeter authenticate through password-auth, which the profile never touches,
+# so the lock screen keeps fingerprint and password. That is deliberate: the
+# lock screen starts its PAM conversation the moment the screen locks, and a
+# face factor there would unlock the screen for whoever just locked it.
+#
+# WHAT IT MUST NOT REACH is the login greeter, checked the same way the
+# fingerprint installer checks it: the greeter's stack is resolved against the
+# custom profile as authselect WOULD render it, and the factor is withheld if
+# pam_howdy would reach it. Unknown display manager or unresolvable stack both
+# withhold.
+#
+# THE EMITTER. The camera's greyscale stream is dark until a vendor UVC control
+# turns the IR emitters on, and only linux-enable-ir-emitter knows which one.
+# Its systemd tarball is installed from the release lock (sha256-verified) under
+# / exactly as upstream documents; its per-camera configuration is interactive
+# (the operator answers whether the emitters lit) and stays a manual step,
+# reported through the declared-skip surface alongside Howdy's own enrollment.
+
+FACE_COPR={{ $face.copr | quote }}
+FACE_PROFILE={{ $face.authselectProfile | quote }}
+FACE_FEATURE={{ $face.authselectFeature | quote }}
+FACE_PACKAGES=(
+{{ range $face.packages }}  {{ . | quote }}
+{{ end -}}
+)
+IR_VERSION={{ $irVersion | quote }}
+IR_URL={{ $irUrl | quote }}
+IR_SHA256={{ $irSha | quote }}
+AUTHSELECT_BASE=/usr/share/authselect/default/local
+AUTHSELECT_CUSTOM="/etc/authselect/custom/${FACE_PROFILE}"
+
+if ! fact_gate 'irCamera'; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "no-ir-camera" "direction" "harmless" "reason" "this host has no infrared camera this repository knows how to manage") | trim | indent 2 }}
+fi
+
+if ! command -v authselect >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "authselect-absent" "direction" "transient-blocking" "probe" "authselect-present" "reason" "authselect is not installed; the face feature cannot be declared") | trim | indent 2 }}
+fi
+
+DNF=("${SUDO[@]}" dnf)
+
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/face-auth.XXXXXX")"
+cleanup() { rm -rf "${scratch}"; }
+trap cleanup EXIT INT TERM
+
+# --- packages ---------------------------------------------------------------
+# `dnf copr list` prints one `copr.fedorainfracloud.org/<owner>/<project>` line
+# per enabled repository and needs no elevation to read them.
+if ! dnf copr list 2>/dev/null | grep -qx -- "copr.fedorainfracloud.org/${FACE_COPR}"; then
+  printf '  -> enabling %s COPR\n' "$FACE_COPR"
+  "${DNF[@]}" -y copr enable "$FACE_COPR"
+fi
+
+missing=()
+for pkg in "${FACE_PACKAGES[@]}"; do
+  rpm -q "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+done
+if [[ ${#missing[@]} -gt 0 ]]; then
+  printf '  -> installing %s\n' "${missing[*]}"
+  "${DNF[@]}" -y --refresh install "${missing[@]}"
+fi
+
+# --- IR emitter enabler -----------------------------------------------------
+if [[ -z "$IR_URL" ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "no-ir-emitter-build" "direction" "harmless" "reason" "linux-enable-ir-emitter publishes no build for this platform; face authentication needs the emitter and stops here") | trim | indent 2 }}
+fi
+
+# True when installed version $1 is at or above locked version $2, the same
+# at-or-above guard the direct-RPM reconciler uses: a host upgraded by hand is
+# left alone and re-converges when the lock catches up.
+version_ge() {
+  [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
+}
+
+ir_installed=''
+if [[ -x /usr/local/bin/linux-enable-ir-emitter ]]; then
+  ir_installed="$(/usr/local/bin/linux-enable-ir-emitter --version 2>/dev/null | awk 'NR==1 {print $2}')" || ir_installed=''
+fi
+if [[ -n "$ir_installed" ]] && version_ge "$ir_installed" "$IR_VERSION"; then
+  printf 'install-system-face-auth: linux-enable-ir-emitter %s installed, lock is %s\n' "$ir_installed" "$IR_VERSION"
+else
+  archive="${scratch}/${IR_URL##*/}"
+  printf '  -> downloading linux-enable-ir-emitter %s\n' "$IR_VERSION"
+  curl -fsSL "$IR_URL" -o "$archive"
+  actual="$(sha256sum "$archive" | cut -d' ' -f1)"
+  if [[ "$actual" != "$IR_SHA256" ]]; then
+    printf 'install-system-face-auth: checksum mismatch for %s (expected %s, got %s)\n' "$IR_URL" "$IR_SHA256" "$actual" >&2
+    exit 1
+  fi
+  # Upstream's own install command: the archive is rooted at / and carries the
+  # binary, its completions, the systemd unit and the empty configuration and
+  # log directories.
+  printf '  -> extracting linux-enable-ir-emitter under /\n'
+  "${SUDO[@]}" tar -C / --no-same-owner -m -h -xzf "$archive"
+  "${SUDO[@]}" systemctl daemon-reload
+fi
+
+if ! systemctl is-enabled --quiet linux-enable-ir-emitter.service 2>/dev/null; then
+  printf '  -> enabling linux-enable-ir-emitter.service\n'
+  "${SUDO[@]}" systemctl enable linux-enable-ir-emitter.service
+fi
+
+# --- Howdy camera -------------------------------------------------------------
+# The IR sensor is the video node whose only pixel format is 8-bit greyscale;
+# the RGB sensor on the same module advertises MJPG/YUYV. The by-path symlink is
+# what goes into the config, because /dev/videoN numbering is enumeration order.
+grey_node=''
+for node in /dev/video*; do
+  [[ -c "$node" ]] || continue
+  if "${SUDO[@]}" v4l2-ctl -d "$node" --list-formats 2>/dev/null | grep -q "'GREY'"; then
+    grey_node="$node"
+    break
+  fi
+done
+if [[ -z "$grey_node" ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "no-grey-video-node" "direction" "harmless" "reason" "the listed camera exposes no greyscale video node, so there is no infrared stream for Howdy to read") | trim | indent 2 }}
+fi
+
+device_path="$grey_node"
+for link in /dev/v4l/by-path/pci-*-usb-*-video-index*; do
+  [[ -L "$link" ]] || continue
+  if [[ "$(readlink -f "$link")" == "$grey_node" ]]; then
+    device_path="$link"
+    break
+  fi
+done
+
+current_device="$(sed -n 's/^device_path = //p' /etc/howdy/config.ini 2>/dev/null | head -n1)" || current_device=''
+if [[ "$current_device" != "$device_path" ]]; then
+  printf '  -> howdy set device_path %s\n' "$device_path"
+  "${SUDO[@]}" howdy set device_path "$device_path"
+fi
+
+# --- authselect profile -------------------------------------------------------
+{{ includeTemplate "pam-greeter-guard.sh.tmpl" . }}
+
+# Build the derived profile in scratch, then install only what differs.
+profile_build="${scratch}/profile"
+mkdir -p "$profile_build"
+howdy_line='auth        sufficient                                   pam_howdy.so                                           {include if "with-howdy"}'
+profile_changed=0
+
+# One new templated line, placed ahead of the fingerprint one so a face is tried
+# before a finger is asked for. The base template MUST carry that anchor: a base
+# that lost it would otherwise yield a profile with no face line at all, and
+# a silently featureless profile is worse than a loud failure.
+if ! awk -v line="$howdy_line" '
+    /^auth[[:space:]].*pam_fprintd\.so/ && !done { print line; done = 1 }
+    { print }
+    END { if (!done) exit 3 }
+  ' "${AUTHSELECT_BASE}/system-auth" >"${profile_build}/system-auth"; then
+  printf 'install-system-face-auth: %s/system-auth carries no pam_fprintd line to anchor the face line on; refusing to build a profile without it\n' "$AUTHSELECT_BASE" >&2
+  exit 1
+fi
+{
+  cat "${AUTHSELECT_BASE}/README"
+  printf '\n%s::\n    Enable face authentication through *pam_howdy* (Howdy) in system-auth.\n' "$FACE_FEATURE"
+} >"${profile_build}/README"
+
+"${SUDO[@]}" install -d -m 755 "$AUTHSELECT_CUSTOM"
+for src in "${AUTHSELECT_BASE}"/*; do
+  name="${src##*/}"
+  dst="${AUTHSELECT_CUSTOM}/${name}"
+  case "$name" in
+    system-auth|README)
+      if ! cmp -s "${profile_build}/${name}" "$dst" 2>/dev/null; then
+        printf '  -> %s\n' "$dst"
+        "${SUDO[@]}" install -m 644 "${profile_build}/${name}" "$dst"
+        profile_changed=1
+      fi
+      ;;
+    *)
+      # Everything else tracks the base through a symlink, the shape
+      # `authselect create-profile --symlink-*` produces, so a base update
+      # reaches the derived profile without a rebuild.
+      if [[ "$(readlink "$dst" 2>/dev/null)" != "$src" ]]; then
+        printf '  -> %s -> %s\n' "$dst" "$src"
+        "${SUDO[@]}" ln -sfn "$src" "$dst"
+        profile_changed=1
+      fi
+      ;;
+  esac
+done
+
+# The feature set to select with: whatever the host already carries, plus ours.
+current_raw="$("${SUDO[@]}" authselect current --raw 2>/dev/null)" || current_raw=''
+current_profile="${current_raw%% *}"
+features=()
+feature_present=0
+for token in $current_raw; do
+  [[ "$token" == "$current_profile" ]] && continue
+  features+=("$token")
+  [[ "$token" == "$FACE_FEATURE" ]] && feature_present=1
+done
+[[ "$feature_present" -eq 1 ]] || features+=("$FACE_FEATURE")
+
+# authselect refuses to select over PAM files somebody edited by hand, and this
+# script must not force its way past that: the operator decides.
+if ! "${SUDO[@]}" authselect check >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "pam-modified-outside-authselect" "direction" "operator-blocking" "reason" "authselect check fails: the live PAM configuration was changed outside authselect, so the face profile is not selected. Restore it with authselect select (or apply-changes) and re-run") | trim | indent 2 }}
+fi
+
+if greeter_would_gain_module 'pam_howdy\.so' "custom/${FACE_PROFILE}" "${features[@]}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "greeter-would-gain-face" "direction" "harmless" "reason" "the login greeter authentication stack would reach the face module; the profile is built but not selected so the greeter stays password-only") | trim | indent 2 }}
+fi
+
+if [[ "$current_profile" != "custom/${FACE_PROFILE}" || "$feature_present" -eq 0 ]]; then
+  printf '  -> authselect select custom/%s %s\n' "$FACE_PROFILE" "${features[*]}"
+  "${SUDO[@]}" authselect select "custom/${FACE_PROFILE}" "${features[@]}"
+elif [[ "$profile_changed" -eq 1 ]]; then
+  printf '  -> authselect apply-changes\n'
+  "${SUDO[@]}" authselect apply-changes
+else
+  printf 'install-system-face-auth: custom/%s already selected with %s\n' "$FACE_PROFILE" "$FACE_FEATURE"
+fi
+
+# --- the two interactive steps -----------------------------------------------
+# Emitter configuration asks the operator whether the emitters lit, and Howdy's
+# enrollment needs a face in front of the camera, so both stay manual -- but
+# whether they happened must not be invisible. They are reported through the
+# same declared-skip surface `dotfiles-skips` reads, distinguishable from a
+# convergence failure by their reason.
+pending=()
+if [[ -z "$("${SUDO[@]}" find /etc/linux-enable-ir-emitter -mindepth 1 -maxdepth 1 -type f 2>/dev/null | head -n1)" ]]; then
+  pending+=('sudo linux-enable-ir-emitter configure')
+  printf 'install-system-face-auth: manual step: sudo linux-enable-ir-emitter configure   (answer whether the IR emitters light; do this first)\n'
+else
+  # Re-assert the emitter control now; the unit also does so at boot and on
+  # every resume, because the UVC control resets with the camera's power.
+  "${SUDO[@]}" systemctl start linux-enable-ir-emitter.service || true
+fi
+if ! "${SUDO[@]}" test -s "/etc/howdy/models/${USER:-$(id -un)}.dat"; then
+  pending+=('sudo howdy add')
+  printf 'install-system-face-auth: manual step: sudo howdy add   (enroll your face; needs the emitters working)\n'
+fi
+if [[ ${#pending[@]} -gt 0 ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-system-face-auth" "site" "manual-steps-pending" "reason" "the face feature is enabled but the emitter configuration or the face enrollment listed above is still to do") | trim | indent 2 }}
+fi
+
+{{ end -}}

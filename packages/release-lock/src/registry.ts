@@ -274,6 +274,19 @@ export const REGISTRY: Registry = {
       os === "linux" ? `orca-ide-${versionFromTag(tag)}.${rustArch(arch)}.rpm` : null,
   },
 
+  // The IR emitter enabler ships one linux x86-64 tarball per stable release
+  // (the 7.x line is prerelease-only and never `latest`); it is installed by
+  // .chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl,
+  // which verifies the recorded sha256 before extracting it under /.
+  "linux-enable-ir-emitter": {
+    kind: "githubRelease",
+    source: "EmixamPP/linux-enable-ir-emitter",
+    asset: ({ os, arch }, tag) =>
+      os === "linux" && arch === "amd64"
+        ? `linux-enable-ir-emitter-${tag}-release.systemd.x86-64.tar.gz`
+        : null,
+  },
+
   /* ---------- gitlabRelease ---------- */
 
   // One key serves the vcs.toml binary and both bundled skills (AE5).

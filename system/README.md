@@ -109,6 +109,7 @@ scripts under `.chezmoiscripts/30-linux/`, split by subsystem concern:
 | `run_onchange_after_install-system-28-sleep.sh.tmpl` | laptop lid and sleep drop-ins (`battery` gate) + `systemctl restart systemd-logind` | `etc/systemd/logind.conf.d/*` or `etc/systemd/sleep.conf.d/*` files change |
 | `run_onchange_after_install-system-30-network.sh.tmpl` | firewalld, resolv.conf → systemd-resolved, NM hygiene | its own content changes |
 | `run_onchange_after_install-system-32-fingerprint.sh.tmpl` | Fedora fingerprint authentication through `authselect`, withheld when the greeter's stack would gain the factor | fingerprint data or its own content changes |
+| `run_onchange_after_install-system-34-face-auth.sh.tmpl` | Fedora face authentication (`irCamera` gate): Howdy from its COPR, the IR emitter enabler from the release lock, the camera path in Howdy's config, and a derived `custom/face-auth` authselect profile carrying `with-howdy` in system-auth, withheld when the greeter's stack would gain the module; reports the two interactive steps (emitter configuration, face enrollment) | face-auth data, the emitter lock entry, or its own content changes |
 The `10-`/`20-`/`30-` filename prefixes order execution (chezmoi runs scripts
 alphabetically), so files land before anything that might depend on them.
 
