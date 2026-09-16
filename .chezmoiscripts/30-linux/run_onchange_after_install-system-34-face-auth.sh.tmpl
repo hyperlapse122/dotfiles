@@ -263,7 +263,9 @@ fi
 # same declared-skip surface `dotfiles-skips` reads, distinguishable from a
 # convergence failure by their reason.
 pending=()
-if [[ -z "$("${SUDO[@]}" find /etc/linux-enable-ir-emitter -mindepth 1 -maxdepth 1 -type f 2>/dev/null | head -n1)" ]]; then
+# Exit status only, never captured output: a fingerprint-carrying sudo stack
+# prints its PAM prompt on the captured stream and would read as a config file.
+if ! "${SUDO[@]}" sh -c 'find /etc/linux-enable-ir-emitter -mindepth 1 -maxdepth 1 -type f -print -quit 2>/dev/null | grep -q .'; then
   pending+=('sudo linux-enable-ir-emitter configure')
   printf 'install-system-face-auth: manual step: sudo linux-enable-ir-emitter configure   (answer whether the IR emitters light; do this first)\n'
 else

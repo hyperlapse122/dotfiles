@@ -2062,7 +2062,7 @@ owners:
   - owner: 'install-system-face-auth/manual-steps-pending'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 278
+    anchor_line: 280
     anchor: 'if [[ ${#pending[@]} -gt 0 ]]; then'
     predicate: '[[ ${#pending[@]} -gt 0 ]]'
     predicate_digest: 'sha256:08f6d79ce987635b11d6de7564dca815008caffe0f9b7e5950b20cd2345ce1c1'
