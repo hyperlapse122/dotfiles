@@ -29,8 +29,6 @@ pass() { printf 'test-agent-trust-reconcile: ok - %s\n' "$*"; }
 resolve_reconciler() {
   if [[ -n ${RECONCILER:-} ]]; then
     printf '%s' "$RECONCILER"
-  elif [[ -x "$HOME/.local/bin/settings-reconcile" ]]; then
-    printf '%s' "$HOME/.local/bin/settings-reconcile"
   else
     # shellcheck source=.ci/lib/bun.sh
     source "$repo_root/.ci/lib/bun.sh"
@@ -43,6 +41,8 @@ exec "$BUN_BIN" run "$repo_root/packages/settings-reconcile/src/cli.ts" "\$@"
 EOF
       chmod 0700 "$bun_launcher"
       printf '%s' "$bun_launcher"
+    elif [[ -x "$HOME/.local/bin/settings-reconcile" ]]; then
+      printf '%s' "$HOME/.local/bin/settings-reconcile"
     fi
   fi
 }

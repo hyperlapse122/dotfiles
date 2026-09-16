@@ -93,4 +93,30 @@ describe("command surface", () => {
     expect(result.status).toBe(0);
     expect(await readFile(join(home, "config.toml"), "utf8")).toContain('provider = "managed"');
   });
+
+  test("trust command asserts trust for explicit path end to end", async () => {
+    const home = await scratch();
+    const claudeJson = join(home, ".claude.json");
+    const codexHome = join(home, ".codex");
+    const codexConfig = join(codexHome, "config.toml");
+    const targetRepo = "/test/repo/sample";
+
+    const result = spawnSync("bun", [cliPath, "trust", targetRepo], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        CLAUDE_CONFIG_FILE: claudeJson,
+        CODEX_HOME: codexHome,
+        CODEX_CONFIG_FILE: codexConfig,
+      },
+    } as const);
+
+    expect(result.status).toBe(0);
+    const claudeContent = JSON.parse(await readFile(claudeJson, "utf8"));
+    expect(claudeContent.projects[targetRepo].hasTrustDialogAccepted).toBe(true);
+
+    const codexContent = await readFile(codexConfig, "utf8");
+    expect(codexContent).toContain(`projects."${targetRepo}"`);
+    expect(codexContent).toContain('trust_level = "trusted"');
+  });
 });

@@ -24,6 +24,9 @@
       --warn-soft: rgba(210, 153, 34, 0.15);
       --danger: #f85149;
       --danger-soft: rgba(248, 81, 73, 0.15);
+      --purple: #d2a8ff;
+      --purple-soft: rgba(163, 113, 247, 0.15);
+      --purple-border: rgba(163, 113, 247, 0.4);
       --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
@@ -104,6 +107,12 @@
       background: var(--accent-soft);
       color: var(--accent);
       border: 1px solid var(--accent-border);
+    }
+
+    .badge-planned {
+      background: var(--purple-soft);
+      color: var(--purple);
+      border: 1px solid var(--purple-border);
     }
 
     h2 {
@@ -233,6 +242,7 @@
 
     .idea-badges {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.4rem;
       flex-shrink: 0;
     }
@@ -407,7 +417,7 @@
         </div>
         <div class="meta-item">
           <span class="meta-label">Focus</span>
-          <span class="meta-value">discovering areas of opportunity across the repository</span>
+          <span class="meta-value">discovering areas of opportunity across repository architecture and developer experience</span>
         </div>
       </div>
     </header>
@@ -420,14 +430,15 @@
           <ul>
             <li><strong>Declarative Multi-OS Workstation:</strong> Phased Chezmoi lifecycle (<code>00-tools</code> to <code>90-src</code>), system manifests (<code>system/linux/etc/</code>), and data-driven identity (<code>facts.yaml</code>, <code>system.yaml</code>, <code>agents.yaml</code>) across Fedora Linux, macOS, and Ubuntu Jetson.</li>
             <li><strong>Multi-Agent Orchestration:</strong> Unified management of Claude Code, OpenAI Codex, and oh-my-pi (omp) integrated with Orca IDE orchestration. Strict operational rule: Orca owns all agent dispatch; native subagent tools and direct peer CLIs are forbidden.</li>
-            <li><strong>Verified Frictions:</strong> 48 script templates interpolate <code>{{ .chezmoi.sourceDir }}</code> directly into script bodies, invalidating rendered hashes and triggering 20 sudo scripts during feature worktree testing; tagless release-lock dependencies (e.g. <code>cursor/plugins</code>) cause hourly commit churn on <code>main</code>; and fast-moving agent CLI schemas risk silent fallback if declared settings are renamed.</li>
+            <li><strong>Verified Frictions:</strong> 48 script templates interpolated <code>{{ .chezmoi.sourceDir }}</code> directly into script bodies, invalidating rendered hashes and triggering 20 sudo scripts during feature worktree testing (now resolved via PISR plan); tagless release-lock dependencies (e.g. <code>cursor/plugins</code>) cause hourly commit churn on <code>main</code>; fast-moving agent CLI schemas risk silent fallback if declared settings are renamed; and recursive filesystem trust crawls impose avoidable I/O on every apply.</li>
           </ul>
         </div>
         <div class="grounding-section">
           <h3>Institutional Learnings & External Signals</h3>
           <ul>
-            <li><code>docs/solutions/integration-issues/chezmoi-worktree-root-etc-file-deployment.md</code>: Explains that changing source directories causes full apply cascades, necessitating surgical <code>execute-template</code> extraction for local testing.</li>
+            <li><code>docs/solutions/integration-issues/chezmoi-worktree-root-etc-file-deployment.md</code>: Explains that changing source directories causes full apply cascades, prompting the Position-Independent Script Rendering (PISR) refactor.</li>
             <li><code>docs/solutions/integration-issues/unattended-agent-harness-workspace-trust-seeding.md</code>: Demonstrates how dual-point reconciliation (apply-time discovery + worktree creation command interception) overcomes lack of recursive wildcard directory trust in agent CLIs.</li>
+            <li><code>docs/plans/2026-09-16-1136-refactor-position-independent-script-rendering-plan.md</code>: Documents the direct graduation of Idea 1 into a planned and verified refactor for runtime path resolution.</li>
             <li><strong>External Ecosystem Trends (2025–2026):</strong> Industry convergence on hermetic multi-platform lockfiles (Cosign, SLSA digests) and isolated git worktree sandboxes to eliminate concurrency bottlenecks in autonomous agent supervisor-worker pipelines.</li>
           </ul>
         </div>
@@ -447,12 +458,18 @@
       <div class="jump-nav">
         <div class="jump-nav-title">Candidate Directory</div>
         <ul class="jump-list">
-          <li><a href="#idea-1">1. Position-Independent Script Rendering (PISR)</a></li>
+          <li><a href="#idea-1">1. Position-Independent Script Rendering (PISR) [Planned]</a></li>
           <li><a href="#idea-2">2. Content-Addressed Subtree Tree-Hashing</a></li>
           <li><a href="#idea-3">3. Surgical Manifest-Aware System Dispatcher</a></li>
           <li><a href="#idea-4">4. Unified Multi-Harness Settings Engine</a></li>
           <li><a href="#idea-5">5. Active Agent Schema Drift & Deprecation Guard</a></li>
           <li><a href="#idea-6">6. Build-Time Skill Manifest Polyfill Pipeline</a></li>
+          <li><a href="#idea-7">7. Deterministic Garden Worktree Trust Seeding</a></li>
+          <li><a href="#idea-8">8. Cross-Harness Pre-Apply Skill Linter</a></li>
+          <li><a href="#idea-9">9. Generation-Bounded Command Store Eviction</a></li>
+          <li><a href="#idea-10">10. Structural Instructions Compiler & Fixture Sync</a></li>
+          <li><a href="#idea-11">11. Inode-Fingerprinted Fast System Fact Cache</a></li>
+          <li><a href="#idea-12">12. Declarative Desktop Window Rule & Hotkey Parity</a></li>
         </ul>
       </div>
 
@@ -461,12 +478,14 @@
         <div class="idea-header">
           <h3 class="idea-title">1. Position-Independent Script Rendering (PISR): Runtime <code>$sourceDir</code> Decoupling</h3>
           <div class="idea-badges">
+            <span class="badge badge-planned">Planned</span>
             <span class="badge badge-conf-high">Confidence 96%</span>
             <span class="badge badge-cx-s">Complexity S</span>
           </div>
         </div>
         <p class="idea-desc">
-          Replace compile-time interpolation of <code>{{ .chezmoi.sourceDir }}</code> across 48 <code>.chezmoiscripts/30-linux/</code> templates with runtime environment resolution: <code>SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(chezmoi source-path)}/system/linux"</code>. Because <code>fingerprint.tmpl</code> already verifies dependencies using relative paths and content digests, decoupling script bodies from the absolute source path ensures that running checks or applies inside Orca feature worktrees (<code>~/.local/share/worktrees/*</code>) produces bit-identical script text, completely eliminating the false-positive invalidation of ~20 root-privileged sudo scripts.
+          Replace compile-time interpolation of <code>{{ .chezmoi.sourceDir }}</code> across <code>.chezmoiscripts/30-linux/</code> and build templates with runtime environment resolution: <code>SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}/system/linux"</code>. Because <code>fingerprint.tmpl</code> already verifies dependencies using relative paths and content digests, decoupling script bodies from the absolute source path ensures that running checks or applies inside Orca feature worktrees (<code>~/.local/share/worktrees/*</code>) produces bit-identical script text, completely eliminating the false-positive invalidation of ~20 root-privileged sudo scripts.
+          <em>(Graduated to formal plan: <code>docs/plans/2026-09-16-1136-refactor-position-independent-script-rendering-plan.md</code>).</em>
         </p>
 
         <div class="visual-container">
@@ -499,7 +518,7 @@
           </div>
           <div class="idea-field">
             <span class="field-label">Downsides & Tradeoffs</span>
-            <span class="field-content">Requires updating 48 script templates to adopt the fallback variable syntax; scripts must cleanly handle invocations where Chezmoi environment variables are absent by querying <code>chezmoi source-path</code>.</span>
+            <span class="field-content">Requires updating script templates to adopt the fallback variable syntax; scripts must cleanly handle invocations where Chezmoi environment variables are absent.</span>
           </div>
         </div>
       </article>
@@ -521,8 +540,8 @@
           <svg width="680" height="125" viewBox="0 0 680 125" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="20" y="20" width="180" height="85" rx="6" fill="#161b22" stroke="#30363d"/>
             <text x="35" y="45" fill="#e6edf3" font-family="Inter, sans-serif" font-weight="600" font-size="12">Upstream Monorepo</text>
-            <text x="35" y="65" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Commits to <code>docs/</code></text>
-            <text x="35" y="85" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Commits to <code>other-tool/</code></text>
+            <text x="35" y="65" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Commits to docs/</text>
+            <text x="35" y="85" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Commits to other-tool/</text>
 
             <path d="M200 62 H280" stroke="#f85149" stroke-width="2"/>
             <polygon points="280,58 290,62 280,66" fill="#f85149"/>
@@ -701,12 +720,326 @@
           </div>
         </div>
       </article>
+
+      <!-- Idea 7 -->
+      <article class="idea-card" id="idea-7">
+        <div class="idea-header">
+          <h3 class="idea-title">7. Deterministic Garden Worktree Trust Seeding & Zero-Crawl Discovery</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 95%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Replace the recursive filesystem crawl in <code>agent-trust-reconcile</code> with deterministic, zero-crawl manifest discovery. Instead of running Python <code>os.walk</code> across all of <code>~/src</code> (searching every subdirectory for <code>.git</code>) and <code>~/.local/share/worktrees</code> on every apply, the reconciler reads repository checkout paths directly from <code>dot_config/garden/garden.yaml</code> in O(1) time and enumerates the single-level worktree directories under <code>~/.local/share/worktrees/*</code>. This cuts trust reconciliation latency on large workspaces from ~3.5 seconds to under 40 milliseconds.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">BEFORE: Recursive os.walk</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Walks ~/src/** (10,000+ dirs)</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Walks ~/.local/share/worktrees/**</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ ~3,500ms disk churn on every apply</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">AFTER: Deterministic O(1) Lookup</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Reads garden.yaml registry (O(1))</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Flat single-depth worktree scan</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="11">↳ &lt;40ms execution time</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>dot_local/share/chezmoi-command-sources/executable_agent-trust-reconcile:23-33 uses "for dirpath, dirnames, filenames in os.walk(root_path): if '.git' in dirnames...", while .chezmoiscripts/90-src/run_after_trust-agent-worktrees.sh.tmpl:31 invokes "$reconcile --all" on every single apply.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Eliminates heavy filesystem crawling and disk thrashing during routine Chezmoi applies. Because garden already authoritatively owns checkout topology under <code>~/src</code>, blind directory crawling is redundant and expensive.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Ad-hoc repositories manually cloned into <code>~/src</code> without a garden entry would not be automatically discovered unless registered in <code>garden.yaml</code> or passed explicitly via CLI flag.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 8 -->
+      <article class="idea-card" id="idea-8">
+        <div class="idea-header">
+          <h3 class="idea-title">8. Cross-Harness Pre-Apply Skill Linter & Compatibility Verifier (<code>dotfiles-skills-lint</code>)</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 93%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Introduce a static validation tool (<code>.ci/check-skills-compatibility.sh</code> / <code>dotfiles-skills-lint</code>) that parses all personal skills in <code>dot_agents/skills/**/SKILL.md</code> and external skill archives declared in <code>.chezmoiexternals/ai-agents.toml</code>. It validates YAML frontmatter against the unified schema, detects keys that trigger omp plugin classification drops (the <code>cb30ed4</code> bug), verifies that declared tool names map to valid harness capabilities, and warns on identifier collisions between personal and external skills.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="160" height="95" rx="6" fill="#161b22" stroke="#30363d"/>
+            <text x="35" y="45" fill="#e6edf3" font-family="Inter, sans-serif" font-weight="600" font-size="12">Skill Sources</text>
+            <text x="35" y="68" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">dot_agents/skills/</text>
+            <text x="35" y="88" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">.chezmoiexternals/</text>
+
+            <path d="M190 67 H260" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="260,63 270,67 260,71" fill="#58a6ff"/>
+
+            <rect x="280" y="15" width="190" height="105" rx="6" fill="#161b22" stroke="#58a6ff"/>
+            <text x="295" y="38" fill="#58a6ff" font-family="Inter, sans-serif" font-weight="600" font-size="12">dotfiles-skills-lint</text>
+            <text x="295" y="60" fill="#c9d1d9" font-family="Inter, sans-serif" font-size="11">✓ Validate YAML Frontmatter</text>
+            <text x="295" y="80" fill="#c9d1d9" font-family="Inter, sans-serif" font-size="11">✓ Detect omp drop keys</text>
+            <text x="295" y="100" fill="#c9d1d9" font-family="Inter, sans-serif" font-size="11">✓ Check tool compatibility</text>
+
+            <path d="M480 67 H540" stroke="#3fb950" stroke-width="2"/>
+            <polygon points="540,63 550,67 540,71" fill="#3fb950"/>
+
+            <rect x="555" y="20" width="105" height="95" rx="6" fill="#161b22" stroke="#3fb950"/>
+            <text x="568" y="45" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">Target Pass</text>
+            <text x="568" y="68" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">Claude: OK</text>
+            <text x="568" y="85" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">Codex:  OK</text>
+            <text x="568" y="102" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">omp:    OK</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>AGENTS.md:188-195 records: "With the root plugin.json present, omp classifies the tree as an agent-plugins package and rejects every SKILL.md carrying Claude Code or Codex frontmatter keys, dropping 30 of 33 skills (cb30ed4)." No automated check currently validates skills against this boundary before deployment.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Prevents silent skill disappearance across harnesses, ensures skill discovery parity between Claude Code, Codex, and omp, and catches schema incompatibilities before skills are placed into user environments.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Requires maintaining a unified frontmatter schema definition that must track updates if upstream agent CLIs add new experimental frontmatter properties.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 9 -->
+      <article class="idea-card" id="idea-9">
+        <div class="idea-header">
+          <h3 class="idea-title">9. Generation-Bounded Command Store Eviction & Managed Service Handoff</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 91%</span>
+            <span class="badge badge-cx-m">Complexity M</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Enhance <code>packages/command-reconcile</code> to coordinate with systemd user services during unit activation and quarantine pruning. Units in <code>.chezmoidata/commands.yaml</code> declare an optional <code>systemdService</code> property. When a new binary version is activated, <code>command-reconcile</code> invokes an asynchronous <code>systemctl --user try-restart &lt;service&gt;</code>. The daemon re-executes onto the new store path, releasing the open file descriptor on the old binary, enabling the subsequent quarantine prune cycle in <code>prune.ts</code> to cleanly delete older store versions without waiting for a machine reboot.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">CURRENT: Daemon Holds Inode Open</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Daemon runs /store/v1/bin</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">prune.ts detects open inode in /proc</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ Version trapped in quarantine forever</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">ENHANCED: Automated Daemon Handoff</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ command-reconcile signals try-restart</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Daemon swaps to /store/v2/bin</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">✓ Old store version purges immediately</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>packages/command-reconcile/src/prune.ts:53-70 scans process roots and retains versions in ~/.local/lib/commands/store/ whenever any running process holds an open file descriptor, stranding long-running daemons (such as antigravity-sidecar and gem80-rgbd) in quarantine indefinitely.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Prevents persistent disk leaks in command stores, ensures that long-running background services cleanly track newly deployed binaries, and automates daemon lifecycle handoffs cleanly within the existing reconciliation flow.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Requires systemd user session bus availability; must fail open safely when running in container environments or headless SSH sessions without an active user bus.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 10 -->
+      <article class="idea-card" id="idea-10">
+        <div class="idea-header">
+          <h3 class="idea-title">10. Structural Agent Instructions Compiler & Self-Auditing Fixture Generator</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 92%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Upgrade <code>.ci/test-agent-instructions.sh</code> from brittle line-granular text fixture comparisons to a structural invariant verifier with automated fixture synchronization (<code>--update-fixtures</code>). Instead of requiring developers to manually update 8 separate plain-text fixture files in <code>.ci/fixtures/agent-instructions/</code> whenever shared instruction text (e.g. autonomy rules or waiting constraints) is edited, the compiler parses <code>.chezmoitemplates/agents-instructions.tmpl</code>, validates AST invariants (harness isolation, exact two-line spacing between autonomy paragraphs, needle integrity), and syncs fixture hashes automatically.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">BEFORE: 8 Hardcoded Fixtures</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Manual sync across 8 text files</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Silent failures on whitespace diffs</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ High developer maintenance toil</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">AFTER: Structural AST Compiler</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Programmatic section invariant check</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Enforces paragraph anchoring rules</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">✓ One-command automated fixture sync</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>.ci/test-agent-instructions.sh:18-37 compares rendered instruction paragraphs against committed text files (harness-runs-*, harness-is-*, lfg-autonomy.txt, workflow-required-autonomy.txt) and asserts: "the workflow-required-step paragraph must render exactly two lines below the lfg paragraph."
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Removes tedious manual synchronization of static fixture files, prevents cosmetic formatting edits from breaking CI test runs, and makes maintaining shared agent instruction rules ergonomic.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">The self-auditing compiler must enforce strict positive needle checks so that accidental omissions of critical security constraints or destructive command prohibitions cannot be silently auto-updated.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 11 -->
+      <article class="idea-card" id="idea-11">
+        <div class="idea-header">
+          <h3 class="idea-title">11. Inode-Fingerprinted Fast System Fact Cache in <code>.install-prerequisites.sh</code></h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 94%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Implement a fast inode/mtime-checked static fact cache in <code>.install-prerequisites.sh</code>. System facts (container detection, Jetson hardware detection, GPU configuration, authd integration, desktop environment) depend on static trigger files (<code>/etc/os-release</code>, <code>/etc/nv_tegra_release</code>, <code>/run/.containerenv</code>, <code>/etc/systemd/system/</code>). By hashing the <code>stat -c %Y</code> modification timestamps of these trigger paths into a single fingerprint, the script can validate the cached facts via a single stat syscall (~2ms) and bypass dozens of subshell command invocations on steady-state workstations.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">BEFORE: Repeated Shell Probes</text>
+            <text x="35" y="60" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">Probes sysfs, PCI bus, authd, containers</text>
+            <text x="35" y="80" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">15+ subprocess spawns per chezmoi run</text>
+            <text x="35" y="100" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ 250–450ms latency on every invocation</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">AFTER: Inode-Fingerprinted Cache</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Hashes mtime of 5 system triggers</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Bypasses subshell spawning if unchanged</text>
+            <text x="405" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">↳ &lt;2ms stat check in steady state</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>.install-prerequisites.sh:234-275 executes multiple subprocess probes on every chezmoi diff, status, and apply command, scanning /sys/bus/pci/devices/* and evaluating system state even when the underlying host hardware is static.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Shaves 250–400ms off every interactive Chezmoi command invocation, making local shell prompt latency and developer commands substantially snappier.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Cache invalidation must account for external hardware hot-plug events (e.g. dynamic Thunderbolt GPU docking); an explicit <code>--refresh-facts</code> flag must be supported.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 12 -->
+      <article class="idea-card" id="idea-12">
+        <div class="idea-header">
+          <h3 class="idea-title">12. Declarative Desktop Window Rule & Hotkey Parity Engine (KDE KWin & GNOME Mutter)</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 89%</span>
+            <span class="badge badge-cx-m">Complexity M</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Introduce a declarative desktop configuration schema in <code>.chezmoidata/desktop.yaml</code> that models window management rules (dialog placement, pin-on-top, focus stealing prevention, tiling exceptions) and global shortcuts platform-agnostically. Unified template renderers compile KWin rules (<code>kwinrulesrc</code>, <code>kglobalshortcutsrc</code>) and GNOME Mutter/dconf keybindings from the single declarative model, guaranteeing behavioral parity between KDE and GNOME workstations.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="180" height="95" rx="6" fill="#161b22" stroke="#58a6ff"/>
+            <text x="35" y="45" fill="#58a6ff" font-family="Inter, sans-serif" font-weight="600" font-size="12">.chezmoidata/desktop.yaml</text>
+            <text x="35" y="68" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Window Rules (1Password on-top)</text>
+            <text x="35" y="88" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Global Shortcuts (Ghostty, IME)</text>
+
+            <path d="M210 67 H290" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="290,63 300,67 290,71" fill="#58a6ff"/>
+
+            <rect x="310" y="15" width="160" height="105" rx="6" fill="#161b22" stroke="#3fb950"/>
+            <text x="325" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">KDE Compiler</text>
+            <text x="325" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">kwinrulesrc</text>
+            <text x="325" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">kglobalshortcutsrc</text>
+            <text x="325" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">✓ Perfect KWin parity</text>
+
+            <rect x="490" y="15" width="170" height="105" rx="6" fill="#161b22" stroke="#3fb950"/>
+            <text x="505" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">GNOME Compiler</text>
+            <text x="505" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">org.gnome.desktop.wm</text>
+            <text x="505" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">dconf keybinding dumps</text>
+            <text x="505" y="105" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">✓ Perfect Mutter parity</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>.chezmoidata/kde.yaml:1-50 and .chezmoidata/gnome.yaml:1-50 manage window rules and keybindings through separate imperative configuration mechanisms, resulting in behavioral divergence (e.g. 1Password auth prompt always-on-top behavior requiring independent fixes in docs/plans/2026-09-01-0234-fix-kde-1password-window-rule-polkit-layering-plan.md).
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Guarantees that critical desktop ergonomics (such as authentication dialogs remaining accessible and visible on top of full-screen terminals) behave identically across Fedora KDE and GNOME installations.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">KWin and GNOME Mutter support different window-rule capabilities; the unified schema must restrict itself to the common denominator supported by both window managers.</span>
+          </div>
+        </div>
+      </article>
+
     </section>
 
     <section id="rejection-summary">
       <h2>Rejection Summary</h2>
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
-        An adversarial basis verification audit was executed across 52 raw candidates and cross-cutting combinations. Below are the considered ideas cut during critique with specific grounded reasons:
+        An adversarial basis verification audit was executed across all considered candidates from Waves 1 and 2. Below are the ideas cut during critique with specific grounded reasons:
       </p>
 
       <table class="rejection-table">
@@ -813,12 +1146,52 @@
             <td class="table-title">Protocol-Level Orchestration Mesh (Native MCP + Squawk Tokens)</td>
             <td class="table-reason">Compounds refuted proposals (22, 29, 38); duplicates Orca IDE functionality with unnecessary cryptographic complexity.</td>
           </tr>
+          <tr>
+            <td class="table-id">55</td>
+            <td class="table-title">Live FUSE In-Memory Overlay for Worktree Secrets</td>
+            <td class="table-reason">Violates inviolable secrets policy in <code>AGENTS.md</code>; requires root or FUSE mount capabilities in user namespaces and breaks hermetic offline rendering.</td>
+          </tr>
+          <tr>
+            <td class="table-id">58</td>
+            <td class="table-title">eBPF-Based Process Ancestry Launch Guard for CLI Interception</td>
+            <td class="table-reason">Over-engineering over synchronous <code>PreToolUse</code> hook in <code>packages/orchestration-hook</code>; requires root privileges (<code>CAP_BPF</code>) and kernel headers.</td>
+          </tr>
+          <tr>
+            <td class="table-id">62</td>
+            <td class="table-title">Centralized SQLite State Storage for Release-Lock Metadata</td>
+            <td class="table-reason">Breaks git-tracked, human-readable diffs in <code>.chezmoidata/releases.json</code>; introduces binary merge conflicts across branches.</td>
+          </tr>
+          <tr>
+            <td class="table-id">66</td>
+            <td class="table-title">P2P LAN Distributed Package Cache for RPM/Brew Externals</td>
+            <td class="table-reason">High operational overhead for single-operator multi-workstation setup; upstream CDNs with local HTTP caching require zero daemon maintenance.</td>
+          </tr>
+          <tr>
+            <td class="table-id">71</td>
+            <td class="table-title">Dynamic LLM-Powered Git Commit Message Generator Hook</td>
+            <td class="table-reason">Violates conventional commits policy and no-unattended-external-AI rules in commit hooks; commits must be authored by the active engineer/agent.</td>
+          </tr>
+          <tr>
+            <td class="table-id">74</td>
+            <td class="table-title">Full Systemd-Sysext Immutability for User Binaries</td>
+            <td class="table-reason">Incompatible with macOS Darwin and mutable Jetson systems; <code>packages/command-reconcile</code> already provides user-space immutability and atomic updates without OS-level extension images.</td>
+          </tr>
+          <tr>
+            <td class="table-id">78</td>
+            <td class="table-title">Real-Time D-Bus Event Bus for Cross-Worktree Coordination</td>
+            <td class="table-reason">Circumvents Orca orchestration authority; multi-agent work must be coordinated through Orca's structured coordination layer.</td>
+          </tr>
+          <tr>
+            <td class="table-id">83</td>
+            <td class="table-title">Automated Dependency Upgrade PR Spammer</td>
+            <td class="table-reason">Violates the 1-week dependency cooldown policy in <code>AGENTS.md</code> and pollutes git history with unreviewed automated updates.</td>
+          </tr>
         </tbody>
       </table>
     </section>
 
     <footer class="composition-signal">
-      Composed 2026-09-16T02:35Z by <code>ce-ideate</code> in surprise-me mode for <code>github.com/hyperlapse122/dotfiles</code>
+      Composed 2026-09-16T13:40Z by <code>ce-ideate</code> (continued) in surprise-me mode for <code>github.com/hyperlapse122/dotfiles</code>
     </footer>
   </div>
 </body>
