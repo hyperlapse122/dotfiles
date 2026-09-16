@@ -139,8 +139,12 @@ describe("additional harness roles", () => {
   });
 
   it("does not deliver a half envelope to an omp lead", () => {
-    expect(composeContext("omp", "lead", () => ({ skill: "", guide: parts.guide }), env)).toBeNull();
-    expect(composeContext("omp", "lead", () => ({ skill: parts.skill, guide: "" }), env)).toBeNull();
+    expect(
+      composeContext("omp", "lead", () => ({ skill: "", guide: parts.guide }), env),
+    ).toBeNull();
+    expect(
+      composeContext("omp", "lead", () => ({ skill: parts.skill, guide: "" }), env),
+    ).toBeNull();
   });
 
   it("gives a codex lead the lead envelope", () => {

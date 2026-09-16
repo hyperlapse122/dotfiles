@@ -29,12 +29,15 @@ describe("payload", () => {
 
   it("reads the managed file verbatim", () => {
     expect(payload("everyone", env)).toBe(readFileSync(join(FIXTURES, "everyone.md"), "utf8"));
-    expect(payload("coordinator", env)).toBe(readFileSync(join(FIXTURES, "coordinator.md"), "utf8"));
+    expect(payload("coordinator", env)).toBe(
+      readFileSync(join(FIXTURES, "coordinator.md"), "utf8"),
+    );
   });
 
   it("treats a missing file as not delivered", () => {
-    expect(payload("everyone", { DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: join(FIXTURES, "nope") }))
-      .toBeNull();
+    expect(
+      payload("everyone", { DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: join(FIXTURES, "nope") }),
+    ).toBeNull();
   });
 
   it("treats an empty file as not delivered", () => {

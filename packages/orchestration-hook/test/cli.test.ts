@@ -111,12 +111,7 @@ describe("hook fail-open contract", () => {
         hookSpecificOutput: { additionalContext: string };
       };
       const context = parsed.hookSpecificOutput.additionalContext;
-      for (const half of [
-        "SKILL BODY",
-        "GUIDE BODY",
-        EVERYONE,
-        COORDINATOR,
-      ]) {
+      for (const half of ["SKILL BODY", "GUIDE BODY", EVERYONE, COORDINATOR]) {
         expect(context).toContain(half);
       }
     } finally {

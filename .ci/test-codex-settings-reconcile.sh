@@ -151,12 +151,12 @@ codex_mem_offender=$(codex_memory_offenders "$raw_codex_settings")
 # directory and a pinned constant would fail everywhere except the machine that
 # wrote it. The structure is asserted instead, which still catches a second
 # leaf, a re-keyed record, a table Codex owns leaking in, and a malformed hash.
-# Both declared events, each keyed positionally WITHIN its own event. The count
-# is asserted so a dropped record — which disables that hook silently — fails
-# here rather than in a session nobody is watching.
+# The one declared event, keyed positionally WITHIN its own event. The count
+# is asserted so a dropped record — which disables that hook silently — or a
+# resurrected PreToolUse record fails here rather than in a session nobody is
+# watching.
 expected_trust_keys=(
   'dotfiles-codex@dotfiles:hooks/hooks.json:session_start:0:0'
-  'dotfiles-codex@dotfiles:hooks/hooks.json:pre_tool_use:0:0'
 )
 [[ $(jq -Sc '.hooks | keys' <<<"$declared") == '["state"]' ]] \
   || fail 'the declared hooks table must carry exactly the trust state, nothing Codex owns'
