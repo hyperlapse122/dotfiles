@@ -223,7 +223,9 @@ for src in "${AUTHSELECT_BASE}"/*; do
 done
 
 # The feature set to select with: whatever the host already carries, plus ours.
-current_raw="$("${SUDO[@]}" authselect current --raw 2>/dev/null)" || current_raw=''
+# Read unprivileged (authselect.conf is world-readable): through sudo, a
+# fingerprint-carrying sudo stack prints its PAM prompt into the captured output.
+current_raw="$(authselect current --raw 2>/dev/null)" || current_raw=''
 current_profile="${current_raw%% *}"
 features=()
 feature_present=0
@@ -236,7 +238,7 @@ done
 
 # authselect refuses to select over PAM files somebody edited by hand, and this
 # script must not force its way past that: the operator decides.
-if ! "${SUDO[@]}" authselect check >/dev/null 2>&1; then
+if ! authselect check >/dev/null 2>&1; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "pam-modified-outside-authselect" "direction" "operator-blocking" "reason" "authselect check fails: the live PAM configuration was changed outside authselect, so the face profile is not selected. Restore it with authselect select (or apply-changes) and re-run") | trim | indent 2 }}
 fi
 

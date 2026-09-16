@@ -2034,10 +2034,10 @@ owners:
   - owner: 'install-system-face-auth/pam-modified-outside-authselect'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 239
-    anchor: 'if ! "${SUDO[@]}" authselect check >/dev/null 2>&1; then'
-    predicate: '! "${SUDO[@]}" authselect check >/dev/null 2>&1'
-    predicate_digest: 'sha256:de8ac7d8e720263e147b1fae8293c1b8322b67e60e864fc8e78ee18ff4da3573'
+    anchor_line: 241
+    anchor: 'if ! authselect check >/dev/null 2>&1; then'
+    predicate: '! authselect check >/dev/null 2>&1'
+    predicate_digest: 'sha256:835448c3be1ee22ec9493b5490d5bac233432c577e5be0b49ae488bacd4f2fbb'
     continuation: 'terminate-script-exit-0'
     continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
     render_profile: 'linux-fedora'
@@ -2048,7 +2048,7 @@ owners:
   - owner: 'install-system-face-auth/greeter-would-gain-face'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 243
+    anchor_line: 245
     anchor: 'if greeter_would_gain_module ''pam_howdy\.so'' "custom/${FACE_PROFILE}" "${features[@]}"; then'
     predicate: 'greeter_would_gain_module ''pam_howdy\.so'' "custom/${FACE_PROFILE}" "${features[@]}"'
     predicate_digest: 'sha256:9c3cda03f32c0de1e7c27059862794295ec1c822ed09493e8431213fd63b1865'
@@ -2062,7 +2062,7 @@ owners:
   - owner: 'install-system-face-auth/manual-steps-pending'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 274
+    anchor_line: 278
     anchor: 'if [[ ${#pending[@]} -gt 0 ]]; then'
     predicate: '[[ ${#pending[@]} -gt 0 ]]'
     predicate_digest: 'sha256:08f6d79ce987635b11d6de7564dca815008caffe0f9b7e5950b20cd2345ce1c1'

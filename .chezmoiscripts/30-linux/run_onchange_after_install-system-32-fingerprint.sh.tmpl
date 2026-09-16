@@ -62,7 +62,7 @@ if greeter_would_gain_fingerprint; then
 fi
 
 for feature in "${AUTHSELECT_FEATURES[@]}"; do
-  if "${SUDO[@]}" authselect current 2>/dev/null | grep -qx -- "- ${feature}"; then
+  if authselect current 2>/dev/null | grep -qx -- "- ${feature}"; then
     printf 'install-system-fingerprint.sh: %s already enabled\n' "$feature"
     continue
   fi

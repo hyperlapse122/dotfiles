@@ -117,11 +117,16 @@ greeter_would_gain_module() {
     return 0
   fi
 
+  # Both reads run UNPRIVILEGED. authselect.conf and the profile trees are
+  # world-readable, and a `sudo` here is worse than unnecessary: on a host whose
+  # sudo stack already carries pam_fprintd, sudo prints the fingerprint prompt
+  # and its timeout notice on the same stream, so the captured "profile" was the
+  # first word of a localized PAM message and the select failed on it.
   if [[ -z "$profile" ]]; then
-    profile="$("${SUDO[@]}" authselect current --raw 2>/dev/null | awk 'NR==1 {print $1}')" || profile=''
+    profile="$(authselect current --raw 2>/dev/null | awk 'NR==1 {print $1}')" || profile=''
   fi
   if [[ -n "$profile" ]]; then
-    rendered="$(LC_ALL=C "${SUDO[@]}" env LC_ALL=C authselect test "$profile" "$@" 2>/dev/null)" || rendered=''
+    rendered="$(LC_ALL=C authselect test "$profile" "$@" 2>/dev/null)" || rendered=''
   fi
 
   # The greeter's own file is package-shipped and authselect never renders it, so
@@ -142,10 +147,13 @@ greeter_would_gain_module() {
     while read -r stack; do
       [[ -n "$stack" ]] || continue
       rc=0
-      printf '%s\n' "$rendered" | awk -v svc="$stack" -v module="$module" '
+      # The module regex reaches awk through the environment, not -v: gawk
+      # processes escape sequences in a -v value and warns on the `\.` every
+      # module name carries.
+      printf '%s\n' "$rendered" | PAM_MODULE_RE="$module" awk -v svc="$stack" '
           $0 == "File /etc/pam.d/" svc ":" { inblk = 1; found_block = 1; next }
           /^File / { inblk = 0 }
-          inblk && /^auth/ && $0 ~ module { found = 1 }
+          inblk && /^auth/ && $0 ~ ENVIRON["PAM_MODULE_RE"] { found = 1 }
           END { if (!found_block) exit 2; exit found ? 0 : 1 }
         ' || rc=$?
       if [[ "$rc" -eq 0 ]]; then
