@@ -7,7 +7,7 @@ set -euo pipefail
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-bluetooth") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-bluetooth") }}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/bluetooth/**" "system/linux/etc/modprobe.d/bluetooth-no-autosuspend.conf")) }}
-SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}/system/linux"
+SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
 
 shopt -s globstar nullglob
 

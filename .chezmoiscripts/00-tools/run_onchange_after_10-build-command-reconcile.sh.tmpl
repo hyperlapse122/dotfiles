@@ -23,7 +23,7 @@ case ":$PATH:" in
 esac
 export PATH
 
-SRC="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}"
+SRC="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
 # `vp run build` caches on its declared inputs, all of which live under the
 # packages/ workspace root; .chezmoidata/releases.json sits outside it and no
 # `input` base reaches there. The vite task therefore fingerprints this

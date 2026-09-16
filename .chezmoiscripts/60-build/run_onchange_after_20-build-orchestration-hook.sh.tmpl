@@ -54,7 +54,7 @@ case ":$PATH:" in
 esac
 export PATH
 
-SRC="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}"
+SRC="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
 export DOTFILES_BUN_VERSION="{{ $bunVersion }}"
 export DOTFILES_PAYLOAD_DIGEST="{{ $payloadDigest }}"
 export DOTFILES_HOOK_BUILD_ID="{{ $buildId }}"

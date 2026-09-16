@@ -5,7 +5,7 @@
 set -euo pipefail
 {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/omp-orca/src/**" "packages/omp-orca/package.json" "packages/omp-orca/tsconfig.json" "packages/omp-orca/vite.config.ts" "packages/antigravity-sidecar/src/**" "packages/antigravity-sidecar/package.json" "packages/antigravity-sidecar/tsconfig.json" "packages/antigravity-sidecar/vite.config.ts") "values" (list (dict "name" "bun-version" "value" $bunVersion))) }}
 
-SRC="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}"
+SRC="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
 export DOTFILES_BUN_VERSION={{ $bunVersion | quote }}
 export PATH="$HOME/.local/bin:$HOME/.local/sbin:$PATH"
 {{ includeTemplate "bun-resolve.sh.tmpl" | trim }}

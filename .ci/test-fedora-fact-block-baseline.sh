@@ -158,15 +158,15 @@ NODE
 # three renderings.
 declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=c06f3a89c7d36a69df539a3a8caa8682a79372a4512ba94165a1814759e3a415
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=15ffd239a227089de7eecab9fed07823ee989292c8e88dbebc652e98d9b08cdb
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=9fde43a708a622139af484898ea894672e5452ab9c8722b49cf1e286e785d222
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=e1a13cecbe05783c9b57c226a53d8eabce8bc69ed3b10a99999c8cf729da59b6
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=10429159964b01632c57da1650ca5f37df532142afeaaa762a7079b93924a70b
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1268aa3f143e1fdf1e903d08e2995b08937fc15c8ff4d1dd364eb0937b846231
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=68f3e13aab373fe9f5e45bc2b123a941ef7189421c2f16688a4790b8311fd825
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=3881be450d9a15ba86727e36ab90b4ce70f825bfa87ded61d81e4dcfc653b120
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=271eeddc315098df82669acba26ce853caae4c798145227f2c2d08e9fab6880d
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=1ce5afd3cb6e807f16ac5384c303554982983687e20756c06b724180a0f6672d
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=f077503984d034c21fb61fc6c275898b4d1a3679750f1d8be72c2f3d1f7a6326
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=5548d795181a0e8475ec31448dae0f53e2cd42b8d8c99296b46afe08a4691d40
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=2320b9b4f09666f8f7ff39c855f94bfff1ce5d2d977d2ed5110b771b32b4925a
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=2c5a774474b2c795c7145a73cbb05dab2484aa4a5236c35a6fd4e98e64b9a0a2
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=dc0b94a8166d05d1fddd55ae9c0e8a929ea8a417651073afe8e7d6e508d308d3
 )
 
