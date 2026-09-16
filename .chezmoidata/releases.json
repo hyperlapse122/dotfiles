@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.37.1",
+        "version": "v0.38.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-x64",
-            "sha256": "f8e5f9294bd0da70dda61854f12004fd61c668cd682bfb600cdf6d0df73dea69"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-x64",
+            "sha256": "f23cc0e01b86f83d5bbe0f25e2dd6461b640071b0e24a1f3bf55d7867dbb7330"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-arm64",
-            "sha256": "d54d3e1262dc1aa0906e0677adc6d0cbb40d1274631f4cf77136bf23a0bc20e9"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-arm64",
+            "sha256": "dff6b7fb7dccb2440329e0a3fc108940985dedb3a3012eb0da8296347f50a26a"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-darwin-x64",
-            "sha256": "c79d1e0525c0bf79df9eec355269ae40bcda9c4a3fce3f242c24faecaaaeef84"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-darwin-x64",
+            "sha256": "ab6cfcfb65472efdac335c058cffe31a658b200dfa14871826456538c684761c"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-darwin-arm64",
-            "sha256": "e52f06476ea0f1d14357c1924ce1d7f1bf08279f2642d74ccfa7ee935c46aea1"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-darwin-arm64",
+            "sha256": "e6fbd02e209122d1f3ca4b60d4c29a2ac2492d2c30c195611236ff9d59ed69a1"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-musl-x64",
-            "sha256": "5318f2ed03a9fae04a9e1f8d274d1a0fd6bf7fd427f32a44224be11f2dc3a37d"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-musl-x64",
+            "sha256": "8631915ce7147ffd355b769151fa66dd6b5e03c6baf2628076074133d5a0024d"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.37.1/agent-browser-linux-musl-arm64",
-            "sha256": "ab7afc4e74d1218d32bd12519474dbd6ed9bf32b3a905d7648e9d9400f50083d"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.38.0/agent-browser-linux-musl-arm64",
+            "sha256": "df334b30844dc775dc3b7007f2add333db7533940a6a9456e55aee29c652c357"
           }
         }
       },
@@ -439,7 +439,7 @@
       "i-have-adhd": {
         "kind": "gitRef",
         "source": "ayghri/i-have-adhd",
-        "version": "0a84de401019a3a822248df586d88a2b56f8c6af"
+        "version": "b15d0be58f55b33972ba3e39709e0e5208ef30cb"
       },
       "improve": {
         "kind": "gitRef",
@@ -516,62 +516,62 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.9.9",
+        "version": "v2026.9.10",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.9/mise-v2026.9.9-linux-x64",
-            "sha256": "bd481434a65ede6b2ec6162b88f129e5c6b94cf9de808b8ee7c6f027b13b4589"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.10/mise-v2026.9.10-linux-x64",
+            "sha256": "f917e52216924ef0a8b4eca3f7004dfcff3b94665716ac5685fd53006a491eee"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.9/mise-v2026.9.9-linux-arm64",
-            "sha256": "e98b7644f8fe908c7b6b9086de215eaa422736d44f8a72d8bb39cb73f7477720"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.10/mise-v2026.9.10-linux-arm64",
+            "sha256": "1b46a14314c18f9bbce4bf6f88cc1fb3b31be8dd2b23327a851555f4e144fc61"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.9/mise-v2026.9.9-macos-x64",
-            "sha256": "104138d7eeffad3983b83b3a0aa1cd2d7ae271672a5214bc955641601183b414"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.10/mise-v2026.9.10-macos-x64",
+            "sha256": "9a566ce20e984abaf8b02ecca56458f864919fbc979720839956465a5cd28900"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.9/mise-v2026.9.9-macos-arm64",
-            "sha256": "1998d23853aac289cef2a7858cab86b082f603c98b0bc792245f01301312f4cb"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.10/mise-v2026.9.10-macos-arm64",
+            "sha256": "2d1b5a2a210c172af7d58b017478e0b5d5cdea541916e80a495cd078a92d8706"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.9/mise-v2026.9.9-linux-x64-musl",
-            "sha256": "abcaac83eb2d6b40d6fdfecfe4570eb6c2a6bef075694821ded906228716d0ab"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.10/mise-v2026.9.10-linux-x64-musl",
+            "sha256": "cf2f561e9195f035367c75cfce794a75ce6f8595cf4b4d7d398b891aafac0b8d"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.9/mise-v2026.9.9-linux-arm64-musl",
-            "sha256": "26d1dd797de444fb5c5e671b88b9241abfffeeddb24379a985130b13e6615718"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.10/mise-v2026.9.10-linux-arm64-musl",
+            "sha256": "c78bfdebe1e3523eebd386f6dd07af5a1e8a9e39582b05f4a6cd8d1afcd0c82f"
           }
         }
       },
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.2.1",
+        "version": "v18.2.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.1/omp-linux-x64",
-            "sha256": "9c76485c4e65875678b88c7926c7e6891d488796676f359de9c4df584c886fc9"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.2/omp-linux-x64",
+            "sha256": "77c3520ab8ef8318dda02a0715e3b6e69589c427dc23f90a4bb97650caa72f72"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.1/omp-linux-arm64",
-            "sha256": "01ca88eddc6fba11367259dcffc4293fd9458c918f6e5012af35d73338ee1bdd"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.2/omp-linux-arm64",
+            "sha256": "27e8def02230dc8334172c4a0e850c5bfab194558817d454aa6edcc942ce1100"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.1/omp-darwin-x64",
-            "sha256": "6a5e678b95fdceec03eb1bdcd5046ff76e25eb092acab5d52a785e7582b4467e"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.2/omp-darwin-x64",
+            "sha256": "4a8ec4d255165b63874c0620ff845502aca0839b06a4c62e036b231a6da5db56"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.1/omp-darwin-arm64",
-            "sha256": "ac673868a1598b4beda98dc6ce2148f24afabc42816c702b2dac5f79f0d861de"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.2/omp-darwin-arm64",
+            "sha256": "e0302a99643efefb62bf3d0601d5d84ebab6ed1f3ad105cc2874c8274af448a9"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.1/omp-linux-musl-x64",
-            "sha256": "a027ce78b9ae6f2ccbf947798f31e6812b07cfd71bcbd89e64d98c751de698ee"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.2/omp-linux-musl-x64",
+            "sha256": "e904fd8c0184204a1ba34cf7dfa0593bca775fb43bf9b12039de1c13b87dc271"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.1/omp-linux-musl-arm64",
-            "sha256": "479cb5bb5c92831eeb60492d11281789b4bca1d939fceb31a47e546535f537f7"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.2/omp-linux-musl-arm64",
+            "sha256": "79e8fbb652da4942b9e4b71604908c931aa6a28c713dea36c9b2d2ca91783458"
           }
         }
       },
