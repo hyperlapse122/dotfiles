@@ -296,7 +296,7 @@ This repository manages **Claude Code** (`claude`), **OpenAI Codex CLI** (`codex
 
 - **Single source of truth:** `.chezmoidata/agents.yaml` defines MCP servers (`agents.mcp.servers` including Exa web search and Context7), external skills (`agents.skills.external`), and harness settings.
 - **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time, renders the same servers into `~/.omp/agent/mcp.json`, and asserts them into `~/.codex/config.toml`.
-- **One model for omp:** every omp role runs `google-antigravity/gemini-3.8-flash:high`, with `tiny` the single exception on `gemini-3.5-flash-lite:high`. The allowlist and provider denylist keep the selectable set closed to those two.
+- **Model roster:** `.chezmoidata/agents.yaml` defines the lead pin and seven worker models by agent and role: Claude lead on `fable[1m]`, Claude judgment on `fable`, Claude implementation on `opus` and `sonnet`, Codex judgment on `gpt-6-astra`, Codex fallback on `gpt-5.6-luna`, omp implementation on `google-antigravity/gemini-3.8-flash`, and omp mechanical work on `google-antigravity/gemini-3.5-flash-lite`. Roster changes propagate to settings pins, rendered payloads, and target configs at apply time.
 - **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills` and `~/.codex/skills` pointing to `~/.agents/skills`.
 
 omp replaces Antigravity CLI in Orca. All eight Git actions use omp; the ordinary TUI default remains Claude. The native omp extension injects the current orchestration role before each model call.
