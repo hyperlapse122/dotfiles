@@ -90,9 +90,9 @@ This feature enhances the declarative agent configuration infrastructure centere
 ### Acceptance Examples
 
 - AE1. Generating Codex TOML Table
-  - **Given:** A declared server `context7` with `url: "https://mcp.context7.com/mcp"` and `headers: { CONTEXT7_API_KEY: "op://vault/Context7/API Key" }`.
+  - **Given:** A declared server `context7` with `url: "https://mcp.context7.com/mcp"` and `headers: { CONTEXT7_API_KEY: "op://tum6wsa7azjvbkgwnp6fgamcvm/Context7/API Key" }`.
   - **When:** Running `settings-reconcile mcp --harness=codex --inventory .chezmoidata/agents.yaml`.
-  - **Then:** Standard output contains `[mcp_servers.context7]` with `url = "https://mcp.context7.com/mcp"` and `http_headers = { CONTEXT7_API_KEY = "op://vault/Context7/API Key" }`, with no `type` field.
+  - **Then:** Standard output contains `[mcp_servers.context7]` with `url = "https://mcp.context7.com/mcp"` and `http_headers = { CONTEXT7_API_KEY = "op://tum6wsa7azjvbkgwnp6fgamcvm/Context7/API Key" }`, with no `type` field.
   - **Covers:** R1, R3, R4, R6.
 
 - AE2. Rejecting Malformed Secret Reference

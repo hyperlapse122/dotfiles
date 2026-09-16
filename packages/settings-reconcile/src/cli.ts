@@ -85,7 +85,9 @@ try {
     }
 
     if (!harness) {
-      process.stderr.write("settings-reconcile: error: missing required --harness=<claude|codex|omp>\n");
+      process.stderr.write(
+        "settings-reconcile: error: missing required --harness=<claude|codex|omp>\n",
+      );
       usage();
     }
 

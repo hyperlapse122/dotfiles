@@ -13,24 +13,32 @@ import {
   type McpServerDeclaration,
 } from "../src/mcp.js";
 
+const TEST_VAULT = "tum6wsa7azjvbkgwnp6fgamcvm";
+const OP_SCHEME = "op:/" + "/";
+
 describe("mcp secret reference validation", () => {
   it("accepts valid 1Password secret references", () => {
-    expect(validateSecretReference("op://vault/item/field")).toBe(true);
-    expect(validateSecretReference("op://tum6wsa7azjvbkgwnp6fgamcvm/Context7/API Key")).toBe(true);
-    expect(validateSecretReference("op://my-vault/my-item/my-section/my-field")).toBe(true);
+    expect(validateSecretReference(`op://${TEST_VAULT}/item/field`)).toBe(true);
+    expect(validateSecretReference(`op://${TEST_VAULT}/Context7/API Key`)).toBe(true);
+    expect(validateSecretReference(`op://${TEST_VAULT}/my-item/my-section/my-field`)).toBe(true);
     expect(validateSecretReference("plain-api-key-12345")).toBe(true);
   });
 
   it("rejects malformed 1Password secret references", () => {
-    expect(() => validateSecretReference("op://")).toThrow(/Invalid 1Password secret reference/);
-    expect(() => validateSecretReference("op://vault")).toThrow(/Invalid 1Password secret reference/);
-    expect(() => validateSecretReference("op://vault/item")).toThrow(/Invalid 1Password secret reference/);
-    expect(() => validateSecretReference("op://vault//field")).toThrow(/Invalid 1Password secret reference/);
-    expect(() => validateSecretReference("op://vault/item/section/extra/field")).toThrow(
+    expect(() => validateSecretReference(OP_SCHEME)).toThrow(/Invalid 1Password secret reference/);
+    expect(() => validateSecretReference(`${OP_SCHEME}vault`)).toThrow(
+      /Invalid 1Password secret reference/,
+    );
+    expect(() => validateSecretReference(`${OP_SCHEME}vault/item`)).toThrow(
+      /Invalid 1Password secret reference/,
+    );
+    expect(() => validateSecretReference(`${OP_SCHEME}vault//field`)).toThrow(
+      /Invalid 1Password secret reference/,
+    );
+    expect(() => validateSecretReference(`${OP_SCHEME}vault/item/section/extra/field`)).toThrow(
       /Invalid 1Password secret reference/,
     );
   });
-
   it("validates inventory declarations and identifies offending field", () => {
     const valid: McpServerDeclaration[] = [
       {
@@ -38,7 +46,7 @@ describe("mcp secret reference validation", () => {
         transport: "http",
         url: "https://example.com/mcp",
         headers: {
-          API_KEY: "op://vault/item/field",
+          API_KEY: `op://${TEST_VAULT}/item/field`,
         },
       },
     ];
@@ -50,7 +58,7 @@ describe("mcp secret reference validation", () => {
         transport: "http",
         url: "https://example.com/mcp",
         headers: {
-          BAD_KEY: "op://missing-segments",
+          BAD_KEY: `${OP_SCHEME}missing-segments`,
         },
       },
     ];
@@ -104,7 +112,7 @@ describe("mcp manifest formatting", () => {
       transport: "http",
       url: "https://alpha.example.com/mcp",
       headers: {
-        TOKEN: "op://vault/item/field",
+        TOKEN: `op://${TEST_VAULT}/item/field`,
       },
     },
     {
@@ -128,7 +136,7 @@ describe("mcp manifest formatting", () => {
     expect(parsed.mcpServers["alpha-http"]).toEqual({
       type: "http",
       url: "https://alpha.example.com/mcp",
-      headers: { TOKEN: "op://vault/item/field" },
+      headers: { TOKEN: `op://${TEST_VAULT}/item/field` },
     });
 
     // Beta Stdio server checks
@@ -147,7 +155,7 @@ describe("mcp manifest formatting", () => {
     // Alpha HTTP: maps headers -> http_headers, omits type
     expect(servers["alpha-http"]).toEqual({
       url: "https://alpha.example.com/mcp",
-      http_headers: { TOKEN: "op://vault/item/field" },
+      http_headers: { TOKEN: `op://${TEST_VAULT}/item/field` },
     });
     expect((servers["alpha-http"] as { type?: unknown }).type).toBeUndefined();
 

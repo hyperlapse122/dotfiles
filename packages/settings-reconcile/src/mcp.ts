@@ -57,10 +57,21 @@ export function extractServers(parsed: unknown): McpServerDeclaration[] {
     if ("servers" in parsed && Array.isArray(parsed.servers)) {
       return parsed.servers as McpServerDeclaration[];
     }
-    if ("mcp" in parsed && parsed.mcp && typeof parsed.mcp === "object" && "servers" in parsed.mcp && Array.isArray(parsed.mcp.servers)) {
+    if (
+      "mcp" in parsed &&
+      parsed.mcp &&
+      typeof parsed.mcp === "object" &&
+      "servers" in parsed.mcp &&
+      Array.isArray(parsed.mcp.servers)
+    ) {
       return parsed.mcp.servers as McpServerDeclaration[];
     }
-    if ("agents" in parsed && parsed.agents && typeof parsed.agents === "object" && "mcp" in parsed.agents) {
+    if (
+      "agents" in parsed &&
+      parsed.agents &&
+      typeof parsed.agents === "object" &&
+      "mcp" in parsed.agents
+    ) {
       const mcp = parsed.agents.mcp;
       if (mcp && typeof mcp === "object" && "servers" in mcp && Array.isArray(mcp.servers)) {
         return mcp.servers as McpServerDeclaration[];
@@ -86,7 +97,8 @@ export function validateSecretReference(
   const path = ref.slice("op://".length);
   const segments = path.split("/");
   if (segments.length < 3 || segments.length > 4 || segments.some((s) => s.trim().length === 0)) {
-    const context = serverName && fieldName ? ` in server '${serverName}' field '${fieldName}'` : "";
+    const context =
+      serverName && fieldName ? ` in server '${serverName}' field '${fieldName}'` : "";
     throw new Error(
       `Invalid 1Password secret reference '${ref}'${context}: expected op://<vault>/<item>[/<section>]/<field>`,
     );
@@ -122,10 +134,7 @@ export function validateInventory(servers: readonly McpServerDeclaration[]): voi
 /**
  * Checks if a server declaration is eligible under the given OS, container, and harness context.
  */
-export function isServerEligible(
-  server: McpServerDeclaration,
-  ctx: McpFilterContext,
-): boolean {
+export function isServerEligible(server: McpServerDeclaration, ctx: McpFilterContext): boolean {
   if (server.os && server.os.length > 0 && ctx.os) {
     if (!server.os.includes(ctx.os as "linux" | "darwin")) {
       return false;
@@ -202,7 +211,9 @@ export function formatOmpMcp(
     const entry: Record<string, unknown> = {};
     if (s.auth) {
       if (s.auth !== "oauth") {
-        throw new Error(`omp mcp: server '${s.name}' has unknown auth '${s.auth}'; valid values: oauth`);
+        throw new Error(
+          `omp mcp: server '${s.name}' has unknown auth '${s.auth}'; valid values: oauth`,
+        );
       }
       if (s.transport === "stdio" || (!s.transport && s.command)) {
         throw new Error(`omp mcp: stdio server '${s.name}' cannot declare auth '${s.auth}'`);
@@ -287,7 +298,11 @@ export function synthesizeMcpManifest(
       return formatOmpMcp(servers, ctx);
     case "codex":
       return formatCodexMcp(servers, ctx);
-    default:
-      throw new Error(`Unsupported harness '${harness}'; expected claude, codex, or omp`);
+    default: {
+      const unexpected: unknown = harness;
+      throw new Error(
+        `Unsupported harness '${String(unexpected)}'; expected claude, codex, or omp`,
+      );
+    }
   }
 }
