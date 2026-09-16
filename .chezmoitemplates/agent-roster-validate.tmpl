@@ -1,0 +1,94 @@
+{{- /* agent-roster-validate.tmpl — render-time validation of agents.roster.
+
+     The roster (KTD2) is the single declaration every payload, settings map,
+     and CI parity check renders from. This partial is the render-time gate:
+     a duplicate id, an unknown agent, an empty brief, or a rung collision
+     fails the render rather than reaching a consumer that assumes a clean
+     roster.
+
+     Usage:
+       includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster)
+
+     On success, prints the newline-separated list of worker model ids.
+*/ -}}
+{{- if not (kindIs "map" .) -}}
+{{-   fail (printf "agent-roster-validate: expected a dict, got %s" (kindOf .)) -}}
+{{- end -}}
+{{- if not (hasKey . "roster") -}}
+{{-   fail "agent-roster-validate: missing required argument roster" -}}
+{{- end -}}
+{{- $roster := .roster -}}
+{{- if not (kindIs "map" $roster) -}}
+{{-   fail (printf "agent-roster-validate: agents.roster must be a map, got %s" (kindOf $roster)) -}}
+{{- end -}}
+{{- if not (hasKey $roster "workers") -}}
+{{-   fail "agent-roster-validate: agents.roster is missing workers" -}}
+{{- end -}}
+{{- $workers := $roster.workers -}}
+{{- if not (kindIs "slice" $workers) -}}
+{{-   fail (printf "agent-roster-validate: agents.roster.workers must be a list, got %s" (kindOf $workers)) -}}
+{{- end -}}
+{{- $validAgents := list "claude" "codex" "omp" -}}
+{{- $validShapes := list "mechanical" "implementation" "judgment" "fallback" -}}
+{{- $seenIds := list -}}
+{{- $seenRungs := list -}}
+{{- $codexJudgment := false -}}
+{{- range $workers -}}
+{{-   $id := .id -}}
+{{-   if not $id -}}
+{{-     fail "agent-roster-validate: a worker entry is missing id" -}}
+{{-   end -}}
+{{-   if has $id $seenIds -}}
+{{-     fail (printf "agent-roster-validate: duplicate worker id %q" $id) -}}
+{{-   end -}}
+{{-   $seenIds = append $seenIds $id -}}
+{{-   $agent := .agent -}}
+{{-   if not (has $agent $validAgents) -}}
+{{-     fail (printf "agent-roster-validate: %s declares unknown agent %q" $id $agent) -}}
+{{-   end -}}
+{{-   if not .effort -}}
+{{-     fail (printf "agent-roster-validate: %s is missing effort" $id) -}}
+{{-   end -}}
+{{-   if or (not (hasKey . "brief")) (eq .brief "") -}}
+{{-     fail (printf "agent-roster-validate: %s has an empty brief" $id) -}}
+{{-   end -}}
+{{-   $shapes := .shapes -}}
+{{-   if not (kindIs "slice" $shapes) -}}
+{{-     fail (printf "agent-roster-validate: %s.shapes must be a list, got %s" $id (kindOf $shapes)) -}}
+{{-   end -}}
+{{-   range $shapes -}}
+{{-     if not (has . $validShapes) -}}
+{{-       fail (printf "agent-roster-validate: %s declares unknown shape %q" $id .) -}}
+{{-     end -}}
+{{-     if and (eq $agent "codex") (eq . "judgment") -}}
+{{-       $codexJudgment = true -}}
+{{-     end -}}
+{{-   end -}}
+{{-   $rung := "" -}}
+{{-   if hasKey . "rung" -}}
+{{-     $rung = .rung -}}
+{{-   end -}}
+{{-   if and (eq $agent "claude") (has "implementation" $shapes) (eq $rung "") -}}
+{{-     fail (printf "agent-roster-validate: %s is a claude implementation entry without rung" $id) -}}
+{{-   end -}}
+{{-   if ne $rung "" -}}
+{{-     $rungKey := printf "%s/%s" $agent $rung -}}
+{{-     if has $rungKey $seenRungs -}}
+{{-       fail (printf "agent-roster-validate: duplicate rung %q for agent %s" $rung $agent) -}}
+{{-     end -}}
+{{-     $seenRungs = append $seenRungs $rungKey -}}
+{{-   end -}}
+{{-   if eq $agent "omp" -}}
+{{-     if not (hasPrefix "google-antigravity/" .model) -}}
+{{-       fail (printf "agent-roster-validate: %s omp model %q does not start with google-antigravity/" $id .model) -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if not $codexJudgment -}}
+{{-   fail "agent-roster-validate: no codex entry declares the judgment shape" -}}
+{{- end -}}
+{{- $models := list -}}
+{{- range $workers -}}
+{{-   $models = append $models .model -}}
+{{- end -}}
+{{- join "\n" $models -}}
