@@ -7,7 +7,7 @@ set -euo pipefail
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-hardware") }}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/modprobe.d/thinkpad_acpi.conf" "system/linux/etc/modules-load.d/thinkpad_acpi.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-power.conf" "system/linux/etc/modprobe.d/nvidia-hybrid-modeset.conf" "system/linux/etc/modprobe.d/nvidia-integrated-only.conf")) }}
-SRC_ROOT="{{ $sourceDir }}/system/linux"
+SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}/system/linux"
 
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""
 

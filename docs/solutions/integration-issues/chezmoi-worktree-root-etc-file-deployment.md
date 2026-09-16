@@ -87,6 +87,16 @@ the worktree, so `install -D -m 644 "$src" "$dst"` reads the new file from there
 declares. That is root-privileged deletion driven by a manifest, so confirming
 what it will touch is part of the practice, not an optional aside.
 
+### Permanent Architectural Fix: Position-Independent Script Rendering (PISR)
+
+Rather than requiring manual single-script extraction for every worktree test, the root cause is eliminated by decoupling the rendered script body from compile-time `$sourceDir` interpolation. In every `install-system-*.sh.tmpl` (and build script), `SRC_ROOT="{{ $sourceDir }}/system/linux"` is replaced with:
+
+```bash
+SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}/system/linux"
+```
+
+Because `fingerprint.tmpl` already trims the source directory and emits relative paths in its dependency comments, the rendered script text becomes 100% bit-identical across any checkout or worktree. During standard `chezmoi apply`, `CHEZMOI_SOURCE_DIR` is set by Chezmoi and evaluated as an instant parameter expansion without subshell overhead. As a result, switching to a feature worktree no longer triggers false-positive hash mismatches or cascades of unrelated `sudo` scripts.
+
 ## Why This Works
 
 `run_onchange_after_install-system-16-udev.sh.tmpl:2` captures the render-time

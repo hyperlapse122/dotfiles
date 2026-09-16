@@ -15,6 +15,9 @@ An onchange script that installs one subsystem's slice of the System tree to its
 
 A script that reads the System tree carries the tree's location as a literal baked in at render time. Rendering that script against a different source location therefore changes its content, and content is what decides a re-run — so redirecting the whole apply at a different checkout re-runs every source-reading script, not only the one whose files changed. A script in this family that configures fixed state and reads nothing from the source tree is exempt: it renders identically from any checkout.
 
+### Position-independent script rendering
+The technique of decoupling an onchange script's rendered body from the invoking checkout's absolute path. Instead of interpolating the dotfiles source directory at render time, the script resolves its source root at runtime from the manager's exported environment variable with an active source-path fallback. This ensures the rendered script text is bit-identical across worktrees, preventing false-positive execution cascades when applying from feature branches.
+
 ### Dependency fingerprint
 A comment block that lists each of a script's declared dependencies with a hash of its content, so that changing a dependency changes the script's rendered text and re-triggers it. It exists because the dotfiles manager re-runs an onchange script on rendered-content change alone and has no other notion of a dependency. Hashing covers file content and declared capability probe tokens; template dependencies are hashed as raw text, so no secret enters a fingerprint.
 

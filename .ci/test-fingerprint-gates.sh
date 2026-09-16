@@ -87,4 +87,30 @@ require_file "$repo_root" "$scratch" "$chezmoi_bin" "$production_consumer"
 assert_render_ok production-globs-consumer "$repo_root" "$repo_root/$production_consumer" \
   '#   system/linux/etc/locale.conf'
 
+# Position-independent script rendering (PISR):
+# Rendered scripts must not leak the absolute source directory path into executable bodies.
+if grep -qF -e "$repo_root" "$scratch/production-globs-consumer.out"; then
+  fail "rendered script leaked source root literal $repo_root"
+fi
+
+for template in "$repo_root"/.chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl; do
+  [[ -f "$template" ]] || continue
+  if grep -q 'SRC_ROOT=' "$template"; then
+    grep -q 'SRC_ROOT="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
+      fail "template $(basename "$template") does not use position-independent SRC_ROOT resolution"
+  fi
+done
+
+for template in "$repo_root"/.chezmoiscripts/60-build/run_onchange_after_*.sh.tmpl \
+                "$repo_root"/.chezmoiscripts/00-tools/run_onchange_after_*.sh.tmpl; do
+  [[ -f "$template" ]] || continue
+  if grep -q '^[[:space:]]*SRC=' "$template"; then
+    grep -q 'SRC="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
+      fail "template $(basename "$template") does not use position-independent SRC resolution"
+  fi
+done
+
+grep -q 'config="\${CHEZMOI_SOURCE_DIR:-' "$repo_root/.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl" || \
+  fail "run_once_before_mise-trust.sh.tmpl does not use position-independent config resolution"
+
 printf '%s\n' 'fingerprint render gates passed'

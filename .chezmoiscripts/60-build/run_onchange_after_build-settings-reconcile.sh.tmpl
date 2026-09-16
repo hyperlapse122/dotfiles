@@ -25,7 +25,7 @@ set -euo pipefail
       "values" (list (dict "name" "mise-present" "value" $misePresent)
                      (dict "name" "bun-version" "value" $bunVersion))) }}
 
-SRC="{{ $sourceDir }}"
+SRC="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}"
 # `vp run build` caches on its declared inputs, all of which live under the
 # packages/ workspace root; .chezmoidata/releases.json sits outside it and no
 # `input` base reaches there. The vite task therefore fingerprints this
