@@ -93,13 +93,24 @@ jq -e 'type == "object"' <<<"$declared" >/dev/null \
   || fail 'could not extract the declared JSON object from the rendered script'
 
 # The settings half must be exactly the dotted declaration expanded into nested
-# tables, read back from agents.yaml the same way the script does.
+# tables, read back from agents.yaml the same way the script does — plus the two
+# leaves the script derives from agents.roster rather than from agents.yaml.
 raw_codex_settings=$(render_settings <<<'{{ .agents.codex.settings | toJson }}')
-expected_settings=$(jq -c 'reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))' <<<"$raw_codex_settings")
+roster_pair=$(render_settings <<<'{{ range .agents.roster.workers }}{{ if and (eq .agent "codex") (has "judgment" .shapes) }}{{ dict "model" .model "model_reasoning_effort" .effort | toJson }}{{ end }}{{ end }}')
+jq -e '.model == "gpt-6-astra" and .model_reasoning_effort == "medium"' <<<"$roster_pair" >/dev/null \
+  || fail "the codex judgment roster entry is not gpt-6-astra at medium: $roster_pair"
+expected_settings=$(jq -c --argjson pair "$roster_pair" \
+  '($pair + .) | reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))' <<<"$raw_codex_settings")
 [[ $(jq -Sc 'del(.mcp_servers) | del(.hooks)' <<<"$declared") == "$(jq -Sc . <<<"$expected_settings")" ]] \
-  || fail 'the declared settings leaves do not expand to the rendered agents.codex.settings'
-jq -e '.model == "gpt-6-astra" and .model_reasoning_effort == "medium"' <<<"$raw_codex_settings" >/dev/null \
-  || fail 'agents.yaml must declare the Codex default pair gpt-6-astra with medium reasoning effort'
+  || fail 'the declared settings leaves do not expand to agents.codex.settings plus the roster-derived pair'
+
+# The direct-session default pair is derived, not hand-written (R5, R8): a
+# literal in agents.yaml would satisfy the assertion above and drift from the
+# roster the moment the roster changed.
+for derived in model model_reasoning_effort; do
+  jq -e --arg k "$derived" 'has($k) | not' <<<"$raw_codex_settings" >/dev/null \
+    || fail "agents.codex.settings still declares $derived by hand; it is derived from agents.roster"
+done
 
 # features.memories MUST be a JSON boolean false. Codex features list reports
 # memories as stable and defaulting to false; declaring it pins against an
@@ -140,12 +151,12 @@ codex_mem_offender=$(codex_memory_offenders "$raw_codex_settings")
 # directory and a pinned constant would fail everywhere except the machine that
 # wrote it. The structure is asserted instead, which still catches a second
 # leaf, a re-keyed record, a table Codex owns leaking in, and a malformed hash.
-# Both declared events, each keyed positionally WITHIN its own event. The count
-# is asserted so a dropped record — which disables that hook silently — fails
-# here rather than in a session nobody is watching.
+# The one declared event, keyed positionally WITHIN its own event. The count
+# is asserted so a dropped record — which disables that hook silently — or a
+# resurrected PreToolUse record fails here rather than in a session nobody is
+# watching.
 expected_trust_keys=(
   'dotfiles-codex@dotfiles:hooks/hooks.json:session_start:0:0'
-  'dotfiles-codex@dotfiles:hooks/hooks.json:pre_tool_use:0:0'
 )
 [[ $(jq -Sc '.hooks | keys' <<<"$declared") == '["state"]' ]] \
   || fail 'the declared hooks table must carry exactly the trust state, nothing Codex owns'

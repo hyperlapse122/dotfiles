@@ -1,4 +1,36 @@
-{{- $settings := .agents.omp.settings -}}
+{{- /* enabledModels and modelRoles come from agents.roster, not from
+   agents.omp.settings, so no settings map names a model id. The two omp roster
+   entries are selected by SHAPE: the mechanical entry takes the background and
+   skim roles, the implementation entry takes every other model-valued role. The
+   merge happens HERE rather than in the data file so the derived leaves still
+   pass through the validator below, which is what proves every role selector
+   names a provider the allowlist admits. A fresh dict is the merge destination
+   because sprig's merge mutates its first argument. */ -}}
+{{- $ompModels := list -}}
+{{- range .agents.roster.workers -}}
+{{-   if eq .agent "omp" -}}
+{{-     $ompModels = append $ompModels .model -}}
+{{-   end -}}
+{{- end -}}
+{{- $ompMechanical := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "mechanical" "rung" "" "name" "an omp mechanical entry") | fromJson -}}
+{{- $ompImplementation := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "implementation" "rung" "" "name" "an omp implementation entry") | fromJson -}}
+{{- $mechanicalSelector := printf "%s:%s" $ompMechanical.model $ompMechanical.effort -}}
+{{- $implementationSelector := printf "%s:%s" $ompImplementation.model $ompImplementation.effort -}}
+{{- $modelRoles := dict
+      "advisor" "@worker"
+      "commit" "@worker"
+      "plan" "@fable"
+      "tiny" $mechanicalSelector
+      "skim" $mechanicalSelector
+      "smol" $mechanicalSelector
+      "claude" $implementationSelector
+      "default" $implementationSelector
+      "fable" $implementationSelector
+      "gemini" $implementationSelector
+      "reviewer" $implementationSelector
+      "slow" $implementationSelector
+      "worker" $implementationSelector -}}
+{{- $settings := merge (dict "enabledModels" $ompModels "modelRoles" $modelRoles) .agents.omp.settings -}}
 {{- includeTemplate "omp-settings-validate.tmpl" (dict "settings" $settings) -}}
 #!/usr/bin/env bash
 # Asserts the declared omp settings paths (agents.omp.settings in
@@ -120,8 +152,9 @@ if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >
     case "$known" in
       *" $selector "*) ;;
       *)
+        # A warning, not a refusal: an apply on a host whose catalog lags the
+        # roster must still converge every other declared path.
         printf 'config-omp-settings: %s names %s, which provider %s does not serve.\n' "$where" "$selector" "$provider" >&2
-        exit 1
         ;;
     esac
   done < <(jq -r '
@@ -134,6 +167,33 @@ if jq -e '(.models | type) == "array" and ((.models | length) > 0)' "$catalog" >
     | map(select(.sel | contains("/")))
     | .[] | [.where, .sel] | @tsv
   ' "$declared")
+
+  # The roster is wider than the settings map: an entry the lead dispatches to
+  # need not appear in any omp role. Every Antigravity roster model is therefore
+  # resolved against this same catalog, id and declared thinking level both.
+  # Warnings only, for the reason above.
+  while IFS=$'\t' read -r entry_id entry_model entry_effort; do
+    [[ -n $entry_model ]] || continue
+    case "$known" in
+      *" $entry_model "*) ;;
+      *)
+        printf 'config-omp-settings: roster entry %s names %s, which the catalog does not list.\n' \
+          "$entry_id" "$entry_model" >&2
+        continue
+        ;;
+    esac
+    jq -e --arg sel "$entry_model" --arg effort "$entry_effort" \
+      '[.models[] | select(.selector == $sel) | (.thinking // [])[]] | index($effort) != null' \
+      "$catalog" >/dev/null 2>&1 ||
+      printf 'config-omp-settings: roster entry %s declares effort %s, which %s does not offer.\n' \
+        "$entry_id" "$entry_effort" "$entry_model" >&2
+  done <<'ROSTER'
+{{ range .agents.roster.workers }}{{ if hasPrefix "google-antigravity/" .model }}{{ .id }}	{{ .model }}	{{ .effort }}
+{{ end }}{{ end }}ROSTER
+  # Codex and Claude publish no catalog command, so their roster entries cannot
+  # be resolved the way the Antigravity ones above are. Said once per probe, so a
+  # clean probe is not read as having covered the whole roster.
+  printf '%s\n' 'config-omp-settings: codex and claude expose no catalog command; their roster entries are not probed.' >&2
 else
   printf '%s\n' 'config-omp-settings: model catalog unavailable; skipping selector validation.' >&2
 fi

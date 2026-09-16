@@ -1,0 +1,31 @@
+{{- /* agent-roster-lookup.tmpl — the "find the roster worker by agent + shape
+   or rung" lookup every payload template and settings script hand-rolled
+   separately.
+
+   Takes (dict "roster" <roster> "agent" <agent or ""> "shape" <shape or "">
+   "rung" <rung or ""> "name" <human slot name>). An empty criterion matches
+   every worker on that axis; a missing `rung` on a worker counts as "" so a
+   rung filter never matches a worker that declares none. The last matching
+   worker wins, same as the hand-rolled loops this replaces. Returns the
+   matching worker as JSON via `toJson`, the same partial-returns-JSON pattern
+   codex-hook-trust.tmpl uses with codex-hook-declaration.tmpl — the call site
+   pipes the result through `fromJson`. */ -}}
+{{- $agent := .agent -}}
+{{- $shape := .shape -}}
+{{- $rung := .rung -}}
+{{- $found := dict -}}
+{{- range $w := .roster.workers -}}
+{{-   $workerRung := "" -}}
+{{-   if hasKey $w "rung" -}}{{- $workerRung = $w.rung -}}{{- end -}}
+{{-   if and
+        (or (eq $agent "") (eq $w.agent $agent))
+        (or (eq $shape "") (has $shape $w.shapes))
+        (or (eq $rung "") (eq $workerRung $rung))
+      -}}
+{{-     $found = $w -}}
+{{-   end -}}
+{{- end -}}
+{{- if not (hasKey $found "model") -}}
+{{-   fail (printf "agent-roster-lookup.tmpl: agents.roster declares no %s, so the routing table cannot render" .name) -}}
+{{- end -}}
+{{- $found | toJson -}}

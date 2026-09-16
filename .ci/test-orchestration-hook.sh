@@ -26,6 +26,8 @@ for surface in \
   packages/orchestration-hook/src/payload.ts \
   .chezmoitemplates/orchestration-everyone.tmpl \
   .chezmoitemplates/orchestration-coordinator.tmpl \
+  dot_local/share/orchestration-hook/everyone.md.tmpl \
+  dot_local/share/orchestration-hook/coordinator.md.tmpl \
   .chezmoitemplates/claude-hook-declaration.tmpl \
   .chezmoitemplates/codex-hook-declaration.tmpl \
   dot_local/share/dotfiles-claude-plugin/hooks/hooks.json.tmpl \
@@ -38,6 +40,18 @@ done
 # ---------------------------------------------------------------- build once
 resolve_bun
 [[ -n ${BUN_BIN:-} ]] || fail 'bun is not installed; this gate compiles the hook binary'
+
+# The binary reads its two bodies from managed files under $HOME at run time, so
+# every hook case below needs them staged the way an apply would leave them.
+# Rendered through the same wrappers chezmoi deploys, not copied from the source
+# templates: the source is a template now and its raw bytes are not the payload.
+payload_dir="$scratch/home/.local/share/orchestration-hook"
+mkdir -p "$payload_dir"
+for body in everyone coordinator; do
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux \
+    "$repo_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$payload_dir/$body.md"
+  [[ -s "$payload_dir/$body.md" ]] || fail "the rendered $body payload is empty"
+done
 
 binary="$scratch/orchestration-hook"
 ( cd "$repo_root/packages/orchestration-hook" \
@@ -68,15 +82,28 @@ run_hook() {
   env -i PATH="$path" HOME="$scratch/home" $role_env "$binary" hook --harness "$harness" </dev/null
 }
 
-
-run_guard() {
-  local harness=$1 role_env=$2 command=$3 tool_name=${4:-Bash}
-  local event
-  event=$(jq -nc --arg c "$command" --arg n "$tool_name" \
-    '{hook_event_name:"PreToolUse",tool_name:$n,tool_input:{command:$c}}')
-  # shellcheck disable=SC2086
-  printf '%s' "$event" \
-    | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness"
+# `guard` is now a compatibility no-op for a stale cached hook declaration: it
+# never reads stdin, so this feeds real bytes on the real fd to prove the
+# input is ignored rather than merely untested.
+run_guard_shim() {
+  local harness=$1 role_env=$2 stdin_mode=${3:-none}
+  local out
+  case $stdin_mode in
+    none)
+      # shellcheck disable=SC2086
+      out=$(env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness" </dev/null)
+      ;;
+    malformed)
+      # shellcheck disable=SC2086
+      out=$(printf 'not json' | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness")
+      ;;
+    launch)
+      # shellcheck disable=SC2086
+      out=$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"codex exec x"}}' \
+        | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness")
+      ;;
+  esac
+  printf '%s' "$out"
 }
 
 # ------------------------------------------------------- fail-open contracts
@@ -246,24 +273,42 @@ fi
 pass 'non-hook subcommands fail loudly, so an operator typo is not a silent no-op'
 
 # ------------------------------------------------------------ payload parity
-everyone_wrapper="$scratch/everyone.tmpl"
-coordinator_wrapper="$scratch/coordinator.tmpl"
-printf '%s\n' '{{- includeTemplate "orchestration-everyone.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$everyone_wrapper"
-printf '%s\n' '{{- includeTemplate "orchestration-coordinator.tmpl" (dict "ctx" . "harness" "claude") -}}' >"$coordinator_wrapper"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_wrapper" "$scratch/everyone.rendered"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$scratch/coordinator.rendered"
-
-env -i "$binary" print-payload --body everyone </dev/null >"$scratch/everyone.binary"
-env -i "$binary" print-payload --body coordinator </dev/null >"$scratch/coordinator.binary"
-diff -q "$scratch/everyone.rendered" "$scratch/everyone.binary" >/dev/null \
-  || fail 'the binary emits a different everyone payload than the source body renders'
-diff -q "$scratch/coordinator.rendered" "$scratch/coordinator.binary" >/dev/null \
-  || fail 'the binary emits a different coordinator payload than the source body renders'
-for payload_render in "$scratch/coordinator.rendered" "$scratch/coordinator.binary"; do
-  if grep -F '{{' "$payload_render" >/dev/null || grep -F '}}' "$payload_render" >/dev/null; then
-    fail "$(basename "$payload_render") contains template action delimiters"
+# The binary must print byte-for-byte what chezmoi writes to the managed target,
+# or the rules a session receives are not the rules this repository reviewed.
+# Each body is rendered fresh here, placed at the env-overridden payload path,
+# and diffed against `print-payload` reading that same path.
+parity_dir="$scratch/parity-payloads"
+mkdir -p "$parity_dir"
+for body in everyone coordinator; do
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux \
+    "$repo_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$parity_dir/$body.md"
+  env -i DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$parity_dir" \
+    "$binary" print-payload --body "$body" </dev/null >"$scratch/$body.binary"
+  diff -q "$parity_dir/$body.md" "$scratch/$body.binary" >/dev/null \
+    || fail "the binary emits a different $body payload than the managed target holds"
+  # A rendered body that still carried a template action would mean the roster
+  # never reached it and a session would read `{{ ... }}` as a rule.
+  if grep -F '{{' "$parity_dir/$body.md" >/dev/null || grep -F '}}' "$parity_dir/$body.md" >/dev/null; then
+    fail "the rendered $body payload contains template action delimiters"
   fi
 done
+
+# A managed file that is not there is not an operator's typo to swallow: every
+# other subcommand is loud, and this one names the path it could not read.
+if env -i DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$scratch/absent-payloads" \
+    "$binary" print-payload --body everyone </dev/null >/dev/null 2>"$scratch/print-payload.err"; then
+  fail 'print-payload must fail loudly when the managed payload file is absent'
+fi
+grep -qF "$scratch/absent-payloads/everyone.md" "$scratch/print-payload.err" \
+  || fail 'print-payload must name the payload path it could not read'
+
+# The hook path, by contrast, stays fail-open: a session that starts before the
+# first apply gets no rules and no error.
+out=$(env -i PATH="$closed_path" HOME="$scratch/empty-home" \
+  ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%9 \
+  "$binary" hook --harness claude </dev/null)
+[[ $out == "{}" ]] || fail "a worker with no staged payload file must print exactly {} (got: $out)"
+pass 'an unwritten payload file delivers nothing and never fails session start'
 
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$repo_root/dot_omp/private_agent/private_readonly_AGENTS.md.tmpl" "$scratch/omp.rendered"
@@ -299,139 +344,60 @@ jq -e '.hooks.SessionStart[0].hooks[0] | has("args") | not' "$scratch/codex-hook
 pass 'Codex declares the staged binary without an args key the trust record would miss'
 
 
-# ------------------------------------------------------------- the launch gate
-# The gate's whole value is that it denies in a real session and stays out of
-# the way otherwise. Both halves are invisible in a diff: a wrong tool-name
-# assumption, or a fail-open path that swallowed the decision, leaves the unit
-# tests green while the deployed hook denies nothing at all.
+# --------------------------------------------------------- the guard shim
+# `guard` no longer gates anything: it is a compatibility no-op for a stale
+# cached hook declaration, kept only so that declaration does not hit the
+# unknown-command exit code 2 until its session restarts.
 TEAM='ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1'
-WORKER_ENV='ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%9'
 
-for harness in claude codex; do
-  out=$(run_guard "$harness" "$TEAM" 'codex exec "do the thing"')
-  decision=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') \
-    || fail "$harness: a launch in a team session must return a decision document (got: $out)"
-  [[ $decision == deny ]] || fail "$harness: a launch must be denied (got: $decision)"
-  event_name=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.hookEventName')
-  [[ $event_name == PreToolUse ]] || fail "$harness: the deny must name PreToolUse (got: $event_name)"
-  reason=$(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecisionReason')
-  [[ $reason == *Orca* ]] || fail "$harness: the deny must name the Orca dispatch path"
-done
+out=$(run_guard_shim claude "$TEAM" launch)
+[[ $out == '{}' ]] || fail "guard --harness claude must print {} and ignore a launch on stdin (got: $out)"
+pass 'guard --harness claude allows unconditionally, ignoring a launch on stdin'
 
-out=$(run_guard claude "$WORKER_ENV" 'codex exec x')
-[[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision') == deny ]] \
-  || fail 'a worker starting its own peer is the same bypass and must be denied'
-pass 'the gate binds every Orca role, not the lead alone'
+out=$(run_guard_shim codex "$TEAM" launch)
+[[ -z $out ]] || fail "guard --harness codex must print nothing (got: $out)"
+pass 'guard --harness codex prints nothing'
 
-# Outside Orca the same command must run untouched. This is the case that keeps
-# the gate from becoming a machine-wide block on the user's own shell.
-for harness in claude codex; do
-  out=$(run_guard "$harness" "" 'codex exec x')
-  [[ $out == '{}' ]] || fail "$harness: outside Orca the gate must allow (got: $out)"
-done
-pass 'a session outside Orca runs the same command unchanged'
+out=$(run_guard_shim claude "$TEAM" none)
+[[ $out == '{}' ]] || fail "guard --harness claude with no stdin must still print {} (got: $out)"
+out=$(run_guard_shim claude "$TEAM" malformed)
+[[ $out == '{}' ]] || fail "guard --harness claude with malformed stdin must still print {} (got: $out)"
+pass 'guard never blocks on stdin: no input and malformed input both exit 0 immediately'
 
-# Allowed surface. `codex plugin add` runs during chezmoi apply, so a gate that
-# blocked it would break provisioning on this very repository.
-while IFS= read -r command; do
-  out=$(run_guard claude "$TEAM" "$command")
-  [[ $out == '{}' ]] || fail "the gate must allow: $command (got: $out)"
-done <<'ALLOWED'
-git status
-echo "ask claude about it"
-codex plugin add foo
-codex mcp list
-claude update
-claude --version
-command -v codex
-omp
-agy
-antigravity
-ALLOWED
-pass 'CLI management and unrelated commands are untouched'
+out=$(run_guard_shim nonesuch "$TEAM" launch)
+[[ -z $out ]] || fail "guard with an unknown --harness must print nothing (got: $out)"
+pass 'guard with a missing or unknown --harness prints nothing'
 
-# Evasion. Each of these reached the real binary in a shell string; a scanner
-# that split naively, or that only looked at the first word, would miss them.
-while IFS= read -r command; do
-  out=$(run_guard claude "$TEAM" "$command")
-  [[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision' 2>/dev/null) == deny ]] \
-    || fail "the gate must deny: $command (got: $out)"
-done <<'DENIED'
-codex
-bash -c 'codex exec x'
-sh -c "bash -c 'codex exec x'"
-git status && codex
-FOO=bar env claude -p hi
-timeout 5 codex exec
-/usr/bin/codex exec
-DENIED
-pass 'wrapped, chained and assigned-prefix launches are all denied'
+# The PreToolUse declarations are gone: the launch gate was removed end to
+# end, so neither plugin may declare that event, and SessionStart must still
+# name the staged binary.
+jq -e '.hooks | has("PreToolUse") | not' "$scratch/claude-hooks.json" >/dev/null \
+  || fail 'Claude Code must not declare a PreToolUse hook'
+[[ $(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/claude-hooks.json") == "$expected_binary" ]] \
+  || fail 'Claude Code SessionStart must still name the staged binary'
+pass 'Claude Code declares no PreToolUse hook, and SessionStart still names the binary'
 
-# Fail open. A guard that errored would break every tool call in the session,
-# which is strictly worse than a launch it failed to catch.
-# shellcheck disable=SC2086
-out=$(printf 'not json' | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
-[[ $out == '{}' ]] || fail "a body that is not JSON must allow (got: $out)"
-# shellcheck disable=SC2086
-out=$(printf '' | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
-[[ $out == '{}' ]] || fail "an empty body must allow (got: $out)"
-# shellcheck disable=SC2086
-out=$(printf '%s' '{"tool_input":{"command":"codex exec x"}}' \
-  | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard)
-[[ $out == '{}' ]] || fail "a missing --harness must allow (got: $out)"
-pass 'every malformed guard input allows rather than failing the tool call'
-
-# A pretty-printed body is the shape that breaks a newline-terminated read: it
-# would truncate to invalid JSON, parse as nothing, and silently allow.
-pretty=$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"codex exec x"}}')
-[[ $pretty == *$'\n'* ]] || fail 'the pretty-printed fixture must actually contain newlines'
-# shellcheck disable=SC2086
-out=$(printf '%s' "$pretty" | env -i PATH="$closed_path" HOME="$scratch/home" $TEAM "$binary" guard --harness claude)
-[[ $(printf '%s' "$out" | jq -er '.hookSpecificOutput.permissionDecision' 2>/dev/null) == deny ]] \
-  || fail 'a multi-line event body must still be read whole and denied'
-pass 'a pretty-printed event body is read to completion, not truncated at a newline'
-
-
-# The PreToolUse declarations. A gate that is not declared never runs, and the
-# unit tests cannot see that.
-claude_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/claude-hooks.json")
-[[ $claude_guard == "$expected_binary" ]] \
-  || fail "Claude Code must declare the guard by absolute path (got: $claude_guard)"
-jq -e '.hooks.PreToolUse[0].hooks[0].args == ["guard","--harness","claude"]' \
-  "$scratch/claude-hooks.json" >/dev/null \
-  || fail 'the Claude guard must be declared in exec form'
-# Bash is the tool name the captured fixture carries, and Claude Code's only
-# shell tool; a matcher that missed it would make the gate inert.
-jq -e '.hooks.PreToolUse[0].matcher == "Bash"' "$scratch/claude-hooks.json" >/dev/null \
-  || fail 'the Claude guard must match the Bash tool'
-pass 'Claude Code declares the launch gate in exec form, matching its shell tool'
-
-codex_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/codex-hooks.json")
-[[ $codex_guard == "$expected_binary guard --harness codex" ]] \
-  || fail "Codex must declare the guard by absolute path (got: $codex_guard)"
-jq -e '.hooks.PreToolUse[0].hooks[0] | has("args") | not' "$scratch/codex-hooks.json" >/dev/null \
-  || fail 'the Codex guard must carry no args key the trust record cannot hash'
-# No matcher, deliberately: Codex renames its shell handler between versions, so
-# a matcher written against today's name would silently stop matching and the
-# gate would go inert with every gate here still green.
-jq -e '.hooks.PreToolUse[0] | has("matcher") | not' "$scratch/codex-hooks.json" >/dev/null \
-  || fail 'the Codex guard must carry no matcher while the shell tool name is unpinned'
-pass 'Codex declares the launch gate without an args key or an unpinnable matcher'
+jq -e '.hooks | has("PreToolUse") | not' "$scratch/codex-hooks.json" >/dev/null \
+  || fail 'Codex must not declare a PreToolUse hook'
+[[ $(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/codex-hooks.json") == "$expected_binary hook --harness codex" ]] \
+  || fail 'Codex SessionStart must still name the staged binary'
+pass 'Codex declares no PreToolUse hook, and SessionStart still names the binary'
 
 # The trust record is the silent-failure surface: a Codex hook whose recorded
-# hash disagrees with the deployed declaration simply never runs. Adding an
-# event must not disturb the SessionStart record, whose key is positional
-# WITHIN its own event.
+# hash disagrees with the deployed declaration simply never runs. Removing the
+# PreToolUse event must not disturb the SessionStart record, whose key is
+# positional WITHIN its own event, and the record must now hash that one event
+# alone.
 trust_wrapper="$scratch/trust-wrapper.tmpl"
 printf '{{ includeTemplate "codex-hook-trust.tmpl" (dict "ctx" .) }}\n' >"$trust_wrapper"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$trust_wrapper" "$scratch/trust.json"
 session_keys=$(jq -r '.state | keys[] | select(endswith(":session_start:0:0"))' "$scratch/trust.json")
 [[ -n $session_keys ]] || fail 'the SessionStart trust record disappeared'
-pretool_keys=$(jq -r '.state | keys[] | select(endswith(":pre_tool_use:0:0"))' "$scratch/trust.json")
-[[ -n $pretool_keys ]] || fail 'the PreToolUse hook has no trust record, so Codex would never run it'
+[[ $(jq -r '.state | keys | length' "$scratch/trust.json") == 1 ]] \
+  || fail 'the Codex trust record must hash exactly one event now that PreToolUse is removed'
 [[ $(jq -r ".state[\"$session_keys\"].trusted_hash" "$scratch/trust.json") == sha256:* ]] \
   || fail 'the SessionStart trust hash is not a sha256 record'
-pass 'both Codex hooks carry their own trust record, keyed per event'
+pass 'the Codex trust record hashes exactly one event, SessionStart, keyed as before'
 
 # --------------------------------------------------- every-apply path assertion
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
@@ -472,12 +438,6 @@ for target in \
 done
 pass 'the retired hook scripts and payload wrappers are gone and declared for removal'
 
-for tool_name in apply_patch doc-edit; do
-  out=$(run_guard claude "$TEAM" $'remove entries\nagy\ncodex' "$tool_name")
-  [[ $out == '{}' ]] || fail "$tool_name data was treated as a shell launch"
-done
-pass 'native edit payloads preserve CLI text'
-
 bundle="$scratch/dotfiles-orca.js"
 (
   cd "$repo_root/packages/omp-orca"
@@ -498,6 +458,7 @@ const result = await handler({ prompt: "test", systemPrompt: ["BASE"] });
 process.stdout.write(JSON.stringify(result));
 RUNNER
 result=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
   ORCA_TERMINAL_HANDLE=term_ext ORCA_AGENT_TEAMS_LEADER_PANE=%7 TMUX_PANE=%9 \
   "$BUN_BIN" "$runner" "$bundle") || fail 'the extension integration runner failed'
 jq -e '.systemPrompt | length == 2' <<<"$result" >/dev/null \

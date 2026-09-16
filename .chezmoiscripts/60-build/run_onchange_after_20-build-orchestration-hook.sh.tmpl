@@ -1,47 +1,31 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
 {{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
-{{- /* The two payload bodies are build inputs — src/payload.ts embeds their
-   bytes — but they sit outside the packages/ workspace root, where no vite
-   `input` base reaches. Hash them here and hand the digest to the build task's
-   cache key, the same way `bun-version` carries the locked bun. Without it a
-   reworded rule re-triggers this script, vp replays a cached dist, and the
-   stale binary installs while the run reports success. */ -}}
-{{- $payloadBodies := list "orchestration-everyone.tmpl" "orchestration-coordinator.tmpl" -}}
-{{- $payloadParts := "" -}}
-{{- range $body := $payloadBodies -}}
-{{-   $bodyPath := joinPath $sourceDir ".chezmoitemplates" $body -}}
-{{-   if not (stat $bodyPath) -}}
-{{-     fail (printf "build-orchestration-hook: payload body %q is missing, so the binary would embed nothing" $body) -}}
-{{-   end -}}
-{{-   $payloadParts = printf "%s%s" $payloadParts (include $bodyPath | sha256sum) -}}
-{{- end -}}
-{{- $payloadDigest := substr 0 16 (sha256sum $payloadParts) -}}
-{{- /* The build id answers "did my edit reach this host" in one command. It
-   covers both halves the binary's behavior depends on: the payload text and
-   the package sources. */ -}}
-{{- $srcParts := $payloadParts -}}
+{{- /* The payload bodies are NOT build inputs any more: the binary reads them
+   as chezmoi-managed files at run time, so a reworded rule needs no rebuild and
+   the plugin digests own payload tracking. What is left is the build id, which
+   answers "did my edit reach this host" in one command over the only half the
+   compiled binary's behavior still depends on — the package sources. */ -}}
+{{- $srcParts := "" -}}
 {{- range $f := (glob (joinPath $sourceDir "packages/orchestration-hook/src/**")) -}}
 {{-   if not (stat $f).isDir -}}
 {{-     $srcParts = printf "%s%s" $srcParts (include $f | sha256sum) -}}
 {{-   end -}}
 {{- end -}}
-{{- if eq $srcParts $payloadParts -}}
+{{- if eq $srcParts "" -}}
 {{-   fail "build-orchestration-hook: the package source glob matched no files, so the build id would not track the code" -}}
 {{- end -}}
 {{- $buildId := substr 0 16 (sha256sum $srcParts) -}}
 #!/usr/bin/env bash
 set -euo pipefail
 {{- /* The src glob is deliberately absent from this list: $buildId above already
-   digests every file under it, plus both payload bodies, so passing the glob
-   here would read and hash the same files a second time on every render. The
-   re-trigger condition is identical either way, and the zero-match guards stay
-   — the build-id loop fails on an empty src glob and fingerprint.tmpl fails on
-   an empty value. */ -}}
+   digests every file under it, so passing the glob here would read and hash the
+   same files a second time on every render. The re-trigger condition is
+   identical either way, and the zero-match guards stay — the build-id loop
+   fails on an empty src glob and fingerprint.tmpl fails on an empty value. */ -}}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
       "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/orchestration-hook/package.json" "packages/orchestration-hook/tsconfig.json" "packages/orchestration-hook/vite.config.ts")
       "values" (list (dict "name" "bun-version" "value" $bunVersion)
-                     (dict "name" "payload-digest" "value" $payloadDigest)
                      (dict "name" "hook-build-id" "value" $buildId))) }}
 
 case ":$PATH:" in
@@ -56,7 +40,6 @@ export PATH
 
 SRC="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
 export DOTFILES_BUN_VERSION="{{ $bunVersion }}"
-export DOTFILES_PAYLOAD_DIGEST="{{ $payloadDigest }}"
 export DOTFILES_HOOK_BUILD_ID="{{ $buildId }}"
 DIST="$SRC/packages/orchestration-hook/dist/orchestration-hook"
 LIBEXEC_DIR="$HOME/.local/libexec"

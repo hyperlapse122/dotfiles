@@ -11,11 +11,15 @@
   The same tree is a fingerprint input of that reconciler, so an edit also
   re-triggers the script that performs the install. Both halves are required. */ -}}
 {{- /* The payload bodies live in .chezmoitemplates and no longer reach this tree
-       at all — the compiled hook binary embeds them, and the binary is staged
-       outside the tree. They are hashed anyway because the version must move
+       at all — they render to managed files under ~/.local/share and the hook
+       binary reads them there, so this version is a rules-version signal, never
+       the delivery path. They are hashed anyway because the version must move
        when the rules an agent receives change, and the tree walk below cannot
-       see them. The reconciler fingerprints the same paths; the two must
-       agree. */ -}}
+       see them. The RENDERED body is what is hashed, not the raw template: a
+       roster edit changes no template byte, so hashing the source would leave
+       the version fixed while the rules an agent receives moved. The
+       reconciler fingerprints .chezmoidata/agents.yaml and the same bodies;
+       the two must agree. */ -}}
 {{- $root := joinPath .chezmoi.sourceDir "dot_local/share/dotfiles-claude-plugin" -}}
 {{- /* hooks/hooks.json.tmpl is a one-line includeTemplate wrapper, so the tree
        walk below never sees a change to the declaration it renders. Hash the
@@ -30,7 +34,7 @@
 {{-   if not (stat $bodyPath) -}}
 {{-     fail (printf "plugin.json.tmpl: payload body %q is missing, so the version would not track it" $body) -}}
 {{-   end -}}
-{{-   $parts = printf "%s%s" $parts (include $bodyPath | sha256sum) -}}
+{{-   $parts = printf "%s%s" $parts (includeTemplate $body (dict "ctx" $ "harness" "claude") | sha256sum) -}}
 {{- end -}}
 {{- /* The WHOLE tree, not just hooks/: this plugin is the standing home for this
        checkout's Claude Code extensions, so a commands/ or agents/ file added

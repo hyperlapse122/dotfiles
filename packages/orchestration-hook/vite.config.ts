@@ -1,23 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { defineConfig } from "vite-plus";
 
-// src/payload.ts imports the two payload bodies as text. `bun build --compile`
-// inlines a `with { type: "text" }` import on its own; Vite, which backs the
-// test runner, has no loader for the .tmpl extension and would hand the body to
-// its JS parser. This plugin gives the test toolchain the same text, so one
-// import form serves both and the tests read the real source bytes rather than
-// a fixture copy.
-const tmplText = {
-  name: "orchestration-payload-text",
-  enforce: "pre" as const,
-  async load(id: string) {
-    if (!id.endsWith(".tmpl")) return null;
-    return `export default ${JSON.stringify(await readFile(id, "utf8"))};`;
-  },
-};
-
 export default defineConfig({
-  plugins: [tmplText],
   test: {
     include: ["test/**/*.test.ts"],
     server: { deps: { inline: ["vite-plus"] } },
@@ -32,15 +15,14 @@ export default defineConfig({
         // is what makes `--version` answer "did my edit reach this host".
         command:
           "bun build --compile --define process.env.DOTFILES_HOOK_BUILD_ID=\"'$DOTFILES_HOOK_BUILD_ID'\" ./src/cli.ts --outfile ./dist/orchestration-hook",
-        // Two build inputs live outside this workspace root and out of reach of
-        // any `input` base: the locked bun version in .chezmoidata/releases.json
-        // (the compiled binary embeds a bun runtime) and the two payload bodies
-        // in .chezmoitemplates/, which src/payload.ts embeds as text. The build
-        // script exports a digest of each so both enter the cache key here.
-        // Without this, `bun build --compile` runs as an external process whose
-        // reads automatic tracking cannot see, and a payload edit would replay a
-        // cached dist while reporting success.
-        env: ["DOTFILES_BUN_VERSION", "DOTFILES_PAYLOAD_DIGEST", "DOTFILES_HOOK_BUILD_ID"],
+        // One build input lives outside this workspace root and out of reach of
+        // any `input` base: the locked bun version in .chezmoidata/releases.json,
+        // because the compiled binary embeds a bun runtime. The build script
+        // exports a digest of it so it enters the cache key here. Without this,
+        // `bun build --compile` runs as an external process whose reads
+        // automatic tracking cannot see. The payload bodies are no longer build
+        // inputs at all — the binary reads them as managed files at run time.
+        env: ["DOTFILES_BUN_VERSION", "DOTFILES_HOOK_BUILD_ID"],
         input: [
           "src/**",
           "package.json",

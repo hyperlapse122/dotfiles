@@ -7,11 +7,15 @@
   later edit would land in the source tree and never run.
 
   The payload body lives in .chezmoitemplates and no longer reaches this tree at
-  all — the compiled hook binary embeds it, and the binary is staged outside the
-  tree. It is hashed anyway because the version must move when the rules an
-  agent receives change, and the tree walk cannot see it. The codex plugin
-  reconciler fingerprints the same paths; both halves are required for an edit
-  to land.
+  all — it renders to a managed file under ~/.local/share and the hook binary
+  reads it there, so this version is a rules-version signal, never the delivery
+  path. It is hashed anyway because the version must move when the rules an
+  agent receives change, and the tree walk cannot see it. The RENDERED body is
+  what is hashed, not the raw template: a roster edit changes no template byte,
+  so hashing the source would leave the version fixed while the rules an agent
+  receives moved. The codex plugin reconciler fingerprints
+  .chezmoidata/agents.yaml and the same body; both halves are required for an
+  edit to land.
 
   Note the trust interaction: the hook's trust key and hash carry no version
   segment, so a version bump here does NOT invalidate the pre-seeded trust
@@ -28,7 +32,7 @@
 {{-   if not (stat $bodyPath) -}}
 {{-     fail (printf "plugin.json.tmpl: payload body %q is missing, so the version would not track it" $body) -}}
 {{-   end -}}
-{{-   $parts = printf "%s%s" $parts (include $bodyPath | sha256sum) -}}
+{{-   $parts = printf "%s%s" $parts (includeTemplate $body (dict "ctx" $ "harness" "codex") | sha256sum) -}}
 {{- end -}}
 {{- range $f := (glob (joinPath $root "**")) -}}
 {{-   if not (stat $f).isDir -}}

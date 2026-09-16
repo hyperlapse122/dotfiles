@@ -1,4 +1,10 @@
-{{- $settings := .agents.claude.settings -}}
+{{- /* The lead pin comes from agents.roster, not from agents.claude.settings, so
+   no settings map names a model id. The merge happens HERE rather than in the
+   data file so the derived leaf still passes through the validator below with
+   every hand-declared leaf. A fresh dict is the merge destination: sprig's merge
+   mutates its first argument, and the roster dict has priority over a settings
+   map that should not be declaring `model` at all. */ -}}
+{{- $settings := merge (dict "model" .agents.roster.lead.claude.model) .agents.claude.settings -}}
 {{- includeTemplate "claude-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- if ne .chezmoi.os "windows" -}}
 #!/usr/bin/env bash

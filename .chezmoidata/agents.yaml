@@ -1,6 +1,89 @@
 
 agents:
   validOS: [linux, darwin]
+  # The roster is the single declaration of every worker Orca dispatches and
+  # the lead pin: one row per agent/model pair, carrying the effort, the work
+  # shapes it takes, and the brief guidance a dispatch applies. No rendered
+  # payload, settings map, or test names a worker model id by hand — every
+  # consumer renders from this map, and
+  # .chezmoitemplates/agent-roster-validate.tmpl fails the render before a
+  # duplicate id, an unknown agent, or a missing rung reaches one.
+  roster:
+    lead:
+      claude:
+        model: fable[1m]
+    workers:
+    - id: claude-fable
+      agent: claude
+      model: fable
+      effort: high
+      shapes: [judgment]
+      brief: >-
+        Give one clear deliverable, the effort, action boundaries, and a
+        definition of done. Tell it to finish the whole task and never end a
+        turn on a plan or a question about authorized work. Ask for a
+        one-line preamble and a standalone closing recap. Add no re-check or
+        verification instructions.
+    - id: claude-opus
+      agent: claude
+      model: opus
+      effort: medium
+      shapes: [implementation]
+      rung: opus
+      brief: >-
+        Supply the complete specification up front with no stubs or deferred
+        discovery. State the intended scope and tell it not to fix or extend
+        nearby code. Remove verification and double-check instructions. Cap
+        subagent spawning.
+    - id: claude-sonnet
+      agent: claude
+      model: sonnet
+      effort: high
+      shapes: [implementation]
+      rung: sonnet
+      brief: >-
+        State scope literally and per item, because it does not generalize
+        an instruction from one item to another. Fix the approach in the
+        brief. For review briefs, ask for every finding with confidence and
+        severity instead of filtering.
+    - id: codex-astra
+      agent: codex
+      model: gpt-6-astra
+      effort: medium
+      shapes: [judgment]
+      brief: >-
+        Define the outcome, the constraints, the evidence, and the
+        completion bar. Reserve ALWAYS and NEVER for true invariants. Tell
+        it to bias toward action and to complete authorized work before
+        asking. Keep the brief lean and free of repeated rules.
+    - id: codex-luna
+      agent: codex
+      model: gpt-5.6-luna
+      effort: max
+      shapes: [fallback]
+      brief: >-
+        Keep the brief lean and state approval boundaries once. Name the
+        validation to run (targeted tests, type or lint, build) and what to
+        do when it cannot run. Use this entry only as the fallback R7 names.
+    - id: omp-flash
+      agent: omp
+      model: google-antigravity/gemini-3.8-flash
+      effort: high
+      shapes: [implementation]
+      brief: >-
+        Order the brief as rules, context, definitions, task, tool policy,
+        output, verification, stop condition. Define ambiguous terms and
+        thresholds. Place long context before the task. Name what must
+        never be invented.
+    - id: omp-flash-lite
+      agent: omp
+      model: google-antigravity/gemini-3.5-flash-lite
+      effort: high
+      shapes: [mechanical]
+      brief: >-
+        Give short direct instructions for one bounded task. State an
+        explicit tool-call budget, the output shape, and the stop
+        condition.
   mcp:
     servers:
     - name: figma
@@ -213,8 +296,11 @@ agents:
     # and verbose are deliberately absent for that reason. hooks, enabledPlugins and
     # extraKnownMarketplaces belong to other writers and are rejected at render time.
     #
-    # model is declared on purpose. The claude-opus-5 effort stays declared because
-    # fast mode runs on Opus.
+    # model is NOT declared here. run_after_config-claude-settings.sh.tmpl merges it
+    # in from agents.roster.lead.claude.model before the validator sees this map, so
+    # the lead pin moves with the roster and no settings map names a model id. The
+    # three modelSettings.*.effortLevel leaves stay declared because they are not
+    # roster entries: the claude-opus-5 effort is what fast mode runs on.
     #
     # env.DISABLE_AUTOUPDATER is what pins the updater off on macOS, where
     # dot_config/environment.d/ is not deployed; that file carries the same value for
@@ -224,7 +310,6 @@ agents:
     settings:
       language: Korean
       skipDangerousModePermissionPrompt: true
-      model: opus[1m]
       modelSettings.claude-fable-5-1.effortLevel: medium
       modelSettings.claude-opus-5.effortLevel: medium
       modelSettings.claude-sonnet-5.effortLevel: high
@@ -293,6 +378,13 @@ agents:
     plugins:
     - { name: compound-engineering, marketplace: compound-engineering-omp }
     pluginsRemoved: []
+    # enabledModels and modelRoles are NOT declared here.
+    # run_after_config-omp-settings.sh.tmpl derives both from agents.roster before
+    # the validator sees this map: enabledModels is the models of the omp roster
+    # entries in roster order, the background and skim roles (tiny, skim, smol) take
+    # the mechanical entry's `<model>:<effort>`, every other model-valued role takes
+    # the implementation entry's, and the @role aliases stay literals. Changing an
+    # omp roster entry therefore re-renders both without an edit here.
     settings:
       startup.setupWizard: false
       providers.antigravityEndpoint: auto
@@ -320,9 +412,6 @@ agents:
       skills.enabled: true
       skills.enableAgentsUser: true
       skills.enablePiUser: true
-      enabledModels:
-      - google-antigravity/gemini-3.8-flash
-      - google-antigravity/gemini-3.1-flash-lite
       disabledProviders:
       - anthropic
       - github-copilot
@@ -330,20 +419,6 @@ agents:
       - openai-codex
       - openrouter
       - zai
-      modelRoles:
-        advisor: "@worker"
-        claude: google-antigravity/gemini-3.8-flash:high
-        commit: "@worker"
-        default: google-antigravity/gemini-3.8-flash:high
-        fable: google-antigravity/gemini-3.8-flash:high
-        gemini: google-antigravity/gemini-3.8-flash:high
-        plan: "@fable"
-        reviewer: google-antigravity/gemini-3.8-flash:high
-        skim: google-antigravity/gemini-3.8-flash:high
-        slow: google-antigravity/gemini-3.8-flash:high
-        smol: google-antigravity/gemini-3.8-flash:high
-        tiny: google-antigravity/gemini-3.1-flash-lite:minimal
-        worker: google-antigravity/gemini-3.8-flash:high
       model.loopGuard.enabled: false
   codex:
     # Codex CLI config.toml VALUES asserted into the live ~/.codex/config.toml by
@@ -369,17 +444,15 @@ agents:
     #
     # The headless posture below runs `codex exec` unattended inside the
     # workspace sandbox with network access. model and model_reasoning_effort are
-    # the direct-session default pair and are asserted on every apply, so a model
-    # or effort switched inside Codex is reverted until this declaration is
-    # updated. They are pinned literals with no upstream tracking: a retired
-    # model id is cleared by editing this value and the guard-test literal in
-    # .ci/test-codex-settings-reconcile.sh together.
+    # NOT declared here: run_after_config-codex-settings.sh.tmpl derives the
+    # direct-session default pair from the agents.roster entry whose shapes carry
+    # `judgment`, before the validator sees this map. They are still asserted on
+    # every apply, so a model or effort switched inside Codex is reverted; a
+    # retired model id is cleared by editing that roster entry alone.
     settings:
       approval_policy: never
       sandbox_mode: workspace-write
       sandbox_workspace_write.network_access: true
-      model: gpt-6-astra
-      model_reasoning_effort: medium
       # Codex memories feature is pinned off. This repository declares standing
       # instructions rather than accumulating them.
       #

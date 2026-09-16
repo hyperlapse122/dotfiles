@@ -1,4 +1,11 @@
-{{- $settings := .agents.codex.settings -}}
+{{- /* The direct-session default pair comes from agents.roster, not from
+   agents.codex.settings, so no settings map names a model id. The judgment entry
+   is the one Codex seat a direct session should land on. The merge happens HERE
+   rather than in the data file so the derived leaves still pass through the
+   validator below; a fresh dict is the destination because sprig's merge mutates
+   its first argument. */ -}}
+{{- $codexJudgment := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "codex" "shape" "judgment" "rung" "" "name" "a codex judgment entry") | fromJson -}}
+{{- $settings := merge (dict "model" $codexJudgment.model "model_reasoning_effort" $codexJudgment.effort) .agents.codex.settings -}}
 {{- includeTemplate "codex-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- /* One declared object from two owners. agents.codex.settings owns scalar
    leaves: each dotted path is expanded into nested tables here, because the

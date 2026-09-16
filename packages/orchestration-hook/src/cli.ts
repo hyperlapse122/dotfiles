@@ -16,7 +16,6 @@
 import { execFileSync } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   composeContext,
@@ -25,9 +24,8 @@ import {
   type Harness,
   isHarness,
 } from "./envelope.js";
-import { decide, type ToolEvent } from "./gate.js";
-import { scanInvocations } from "./command-scan.js";
-import { isPayloadBody, payload } from "./payload.js";
+import { resolveHome } from "./home.js";
+import { isPayloadBody, payload, payloadPath } from "./payload.js";
 import { resolveRole, type RoleEnv } from "./role.js";
 import { fetchGuide, resolveOrcaCommand } from "./orca.js";
 
@@ -35,12 +33,6 @@ import { fetchGuide, resolveOrcaCommand } from "./orca.js";
 const HOOK_DEADLINE_MS = 8_000;
 /** Stops at the event's own newline; this is the backstop for a producer that sends none. */
 const STDIN_DEADLINE_MS = 3_000;
-/**
- * The guard's own stdin bound, deliberately much smaller than the SessionStart
- * one: this path runs on EVERY tool call, so the budget is a latency cost the
- * user pays all day rather than once at session start.
- */
-const GUARD_STDIN_DEADLINE_MS = 500;
 
 // Dot notation, not a bracket read: `bun build --define` substitutes this exact
 // expression at compile time, which is what puts the id inside the binary. The
@@ -53,13 +45,7 @@ export interface Io {
   stderr: (text: string) => void;
   env: NodeJS.ProcessEnv;
   /** Overrides the production bounds. Tests set these; the hook path does not. */
-  deadlines?: { hookMs?: number; stdinMs?: number; guardStdinMs?: number } | undefined;
-  /**
-   * Supplies the event body instead of reading the real stdin. Tests set it;
-   * the deployed hook never does, so the production path stays the one the
-   * built-binary gate exercises.
-   */
-  stdin?: string | undefined;
+  deadlines?: { hookMs?: number; stdinMs?: number } | undefined;
 }
 
 function flagValue(argv: readonly string[], name: string): string | undefined {
@@ -87,12 +73,6 @@ async function drainStdin(deadlineMs: number): Promise<void> {
 
 /**
  * Read stdin until `isComplete` accepts what has arrived, EOF, or the deadline.
- *
- * `hook` stops at the first newline and throws the bytes away. `guard` needs
- * the bytes and cannot stop at a newline: a pretty-printed event body has one
- * after every field, and stopping there would truncate the JSON into garbage
- * that parses as nothing — which fails open, so the gate would silently stop
- * denying.
  */
 async function readStdin(
   deadlineMs: number,
@@ -129,25 +109,6 @@ async function readStdin(
   });
 }
 
-/**
- * The parsed document, or null while it is still incomplete or malformed.
- *
- * Returning the value rather than a boolean is what keeps the guard to ONE
- * parse: the completion check already built the object graph, and discarding it
- * to rebuild it a line later doubles the cost on a per-tool-call path. The
- * cheap suffix test in front skips the throw-and-catch entirely for the common
- * partial chunk.
- */
-function parseWhenComplete(text: string): unknown {
-  const trimmed = text.trimEnd();
-  if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) return null;
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return null;
-  }
-}
-
 function unameS(): string | undefined {
   try {
     return execFileSync("uname", ["-s"], { encoding: "utf8" }).trim();
@@ -157,7 +118,7 @@ function unameS(): string | undefined {
 }
 
 function readOrchestrationSkill(env: NodeJS.ProcessEnv): string {
-  const home = env["HOME"] ?? homedir();
+  const home = resolveHome(env);
   try {
     return readFileSync(join(home, ".agents", "skills", "orchestration", "SKILL.md"), "utf8");
   } catch {
@@ -202,94 +163,22 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
     }
   }
 
-  const context = composeContext(harness, role, () => leadParts);
+  const context = composeContext(harness, role, () => leadParts, io.env);
   io.stdout(context === null ? emptyOutput(harness) : deliveryEnvelope(harness, context));
   return 0;
 }
 
-function guardAllowOutput(_harness: Harness | null): string {
-  return "{}";
-}
-
 /**
- * The denial, in the document shape the harness actually reads.
+ * Compatibility no-op for a stale cached hook declaration.
  *
- * A response in the wrong shape is silently ignored, which reads as a gate that
- * denies nothing at all — the failure the whole real-binary gate exists to
- * catch, and one no diff shows.
+ * A live session whose declaration still calls `guard` would otherwise hit the
+ * unknown-command exit code 2, which Claude Code treats as a blocking
+ * PreToolUse error on every Bash call until the session restarts. This shim
+ * answers with the harness's empty allow output and exits 0, without reading
+ * stdin, until that restart picks up the declaration that no longer calls it.
  */
-function guardDenyOutput(_harness: Harness, reason: string): string {
-  return JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: reason,
-    },
-  });
-}
-
-/**
- * The PreToolUse launch gate.
- *
- * Fails open on every path. A hook that errors on a per-tool-call surface would
- * break every tool call in the session, which is a far worse outcome than a
- * launch this gate misses — the standing rule still covers that case in text.
- */
-async function runGuard(argv: readonly string[], io: Io): Promise<number> {
-  const harness = requestedHarness(argv);
-
-  const explained = flagValue(argv, "--explain");
-  if (explained !== undefined) {
-    const role = resolveRole(io.env as RoleEnv);
-    const decision = decide({ tool_input: { command: explained } }, io.env);
-    const invocations = scanInvocations(explained)
-      .map((i) => `${i.program}${i.next === undefined ? "" : ` ${i.next}`}`)
-      .join(", ");
-    io.stdout(
-      `role=${role}\nverdict=${decision.deny ? "deny" : "allow"}\n` +
-        `invocations=${invocations === "" ? "(none)" : invocations}\n` +
-        (decision.deny ? `reason=${decision.reason}\n` : ""),
-    );
-    return 0;
-  }
-
-  // Outside Orca the verdict is already known, so the body is drained but never
-  // parsed. That is the common case on this per-tool-call path: an ordinary
-  // session pays a drain, not a JSON decode, on every command it runs.
-  const gated = resolveRole(io.env as RoleEnv) !== "none";
-
-  let parsed: unknown = null;
-  if (io.stdin !== undefined) {
-    parsed = gated ? parseWhenComplete(io.stdin) : null;
-  } else {
-    const deadline = io.deadlines?.guardStdinMs ?? GUARD_STDIN_DEADLINE_MS;
-    if (gated) {
-      // The completion check hands back the document it already built, so the
-      // event is parsed exactly once.
-      await readStdin(deadline, (_chunk, text) => {
-        parsed = parseWhenComplete(text);
-        return parsed !== null;
-      });
-    } else {
-      // Drain without decoding: outside Orca the verdict is already known. Stop
-      // at a newline OR at a closing brace, because a producer that sends one
-      // JSON line with no trailing newline would otherwise sit on the full
-      // deadline on every single tool call.
-      await readStdin(
-        deadline,
-        (chunk, text) => chunk.includes(0x0a) || text.trimEnd().endsWith("}"),
-      );
-    }
-  }
-
-  // An unnamed harness still drained stdin first, for the same reason.
-  if (harness === null || !gated || typeof parsed !== "object" || parsed === null) {
-    io.stdout(guardAllowOutput(harness));
-    return 0;
-  }
-
-  const decision = decide(parsed as ToolEvent, io.env);
-  io.stdout(decision.deny ? guardDenyOutput(harness, decision.reason) : guardAllowOutput(harness));
+function runGuard(argv: readonly string[], io: Io): number {
+  io.stdout(emptyOutput(requestedHarness(argv) ?? "codex"));
   return 0;
 }
 
@@ -299,7 +188,15 @@ function runPrintPayload(argv: readonly string[], io: Io): number {
     io.stderr(`orchestration-hook: unknown payload body ${JSON.stringify(body)}\n`);
     return 2;
   }
-  io.stdout(payload(body));
+  // The SAME managed file the hook path reads, printed verbatim. That is what
+  // makes the parity check meaningful: it diffs this output against a fresh
+  // render of the source body.
+  const text = payload(body, io.env);
+  if (text === null) {
+    io.stderr(`orchestration-hook: cannot read ${payloadPath(body, io.env)}\n`);
+    return 1;
+  }
+  io.stdout(text);
   return 0;
 }
 
@@ -336,14 +233,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   }
 
   if (command === "guard") {
-    try {
-      return await runGuard(rest, io);
-    } catch {
-      // Fail open: this path runs on every tool call, so an internal fault must
-      // never turn into a denied or broken tool call.
-      io.stdout(guardAllowOutput(requestedHarness(rest)));
-      return 0;
-    }
+    return runGuard(rest, io);
   }
 
   if (command === "hook") {
@@ -369,7 +259,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       io.stderr(
         `orchestration-hook: unknown command ${JSON.stringify(command)}\n` +
           "usage: orchestration-hook <hook --harness <claude|codex|omp> | " +
-          "guard --harness <claude|codex|omp> [--explain <command>] | " +
+          "guard --harness <claude|codex|omp> (compatibility no-op for a stale cached hook declaration) | " +
           "print-payload [--body <everyone|coordinator>] | role | --version>\n",
       );
       return 2;

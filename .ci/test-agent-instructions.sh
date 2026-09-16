@@ -518,9 +518,9 @@ Absence of this text never waives the contract.
 A session that holds only the pointer in the user-scoped instruction file performs non-dispatch work only, and still MUST NOT reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
 Claude Code, Codex, and omp lead, dispatch, and serve as workers on the same terms.
 omp receives this text through its before_agent_start extension before each model call.
-When another agent launches Codex through Orca for cross-model or cross-harness work, the launch MUST explicitly select `gpt-5.6-luna` with `max` reasoning effort.
-The coordinator MUST compare `launch.requested` with `launch.effective` and claim Luna/max only when the effective fields report that pair.
-If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the Luna/max requirement.
+When another agent launches Codex through Orca, the launch MUST explicitly select the model and reasoning effort its purpose names.
+The coordinator MUST compare `launch.requested` with `launch.effective` and claim the requested pair only when the effective fields report it.
+If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the requirement.
 Recovery and release remain governed by the installed Orca lifecycle rules.
 Being inside Orca alone MUST NOT trigger this override.
 A launch that does not meet both the delegation and work-purpose conditions keeps its existing explicit model-selection rules.
@@ -543,13 +543,19 @@ the coordinator MUST fetch that content itself when it holds that MCP and materi
 When neither the coordinator nor any available agent holds it, the run MUST record that gap and say in the brief that the source was unreachable, rather than stall or let a worker guess.
 For a design source that means frame or node identity, layout and spacing measurements, color and type tokens, component and variant names, copy strings, and repo-relative paths for exported assets and reference screenshots.
 A dispatch prompt or brief MUST NOT hand a worker an MCP-only URL as the sole path to required context.
-Dispatch targets are the `claude`, `codex`, and `omp` agents.
-SHOULD go to the Gemini Flash serving family, because a worker from that family settles it for a fraction of the cost
-Frontend design work — component markup and styling, layout, design-system application, visual polish, screen mockups — and document authoring — prose documents, README and docs pages, plan and requirements text, merge-request bodies, explainers — SHOULD go to the Gemini Flash serving family
-Adjudication, a verdict, and a document whose deliverable is the judgment itself rather than the prose carrying it — such as a `ce-pov` output or a review verdict — SHOULD stay on a frontier serving family
-The preference leaves the Implementation Unit sizing ladder intact: a frontend or authoring unit the four signals place at `opus` or above keeps that rung
-When a review already runs across two frontier serving families, the run SHOULD add a Gemini Flash reviewer over the same brief file, because a third serving family catches what two frontier families agree to miss.
-An agent that authored the document under review MUST NOT serve as a reviewer of it; that review runs with the reviewers that remain, rather than substituting another agent.
+In an Orca-managed lead session the lead itself performs dialogue, dispatch brief authoring, Markdown document authoring
+It MUST dispatch every code edit and every non-Markdown deliverable to an Orca worker and MUST NOT make that edit itself.
+The exemption is the file type and never a path: every Markdown file is the lead's to write, wherever it lives, because document paths differ from repository to repository.
+This boundary binds any Orca lead, whatever harness or model answers as it.
+A session that received no orchestration injection is not a lead: it keeps its existing behavior and edits and authors directly.
+No PreToolUse hook enforces any of this.
+The shell-launch guard is removed, no edit notice is built, and this paragraph together with the no-direct-CLI rule in the Everyone payload is the whole enforcement.
+Dispatch targets are the `claude`, `codex`, and `omp` agents, and this table decides which one receives a unit of work.
+| Work shape | First recipient | On substantive failure | On agent unavailable |
+re-dispatches at the same row with a sharpened brief and never advances a row.
+An unavailable agent hands its work to the next agent named in its row; only when every agent in that row is unavailable does the lead escalate to the user
+The lead never takes the row's work back and does it in place, judgment work included.
+The author of a document is NOT excluded from reviewing it, so a review keeps two opinions rather than dropping to one; weigh each reviewer's findings on their own evidence, exactly like any other reviewer's.
 Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
 MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
 The compound-engineering harness vocabulary — the `codex`, `claude`, `grok`, `cursor`, and `opencode` values a stage-routing carrier or a `work_engine_preferences` entry accepts — is the argument grammar of the banned bundled scripts, so it constrains nothing once the dispatch moves to Orca.
@@ -595,30 +601,46 @@ while IFS= read -r needle; do
   grep -F "$needle" "$coordinator_claude_linux" >/dev/null \
     || fail "Claude coordinator payload lost Claude-only rule: $needle"
 done <<'CLAUDE_COORDINATOR_NEEDLES'
-The lead agent also picks the Orca recipient for the Implementation Units that the `compound-engineering` skills produce.
-Under `lfg`, `ce-work`, or any skill that dispatches a plan's Implementation Units, dispatch each Unit worker according to the work-shape and serving-family preferences above.
 A Unit that needs live MCP access its intended recipient does not hold MUST NOT be dispatched to that recipient
-For omp, use its declared model policy unless the task explicitly selects another model.
-When `omp` is unavailable, or its worker fails substantively, dispatch the same Unit to `codex` with model `gpt-5.6-luna` at effort `max`; this step is subordinate to the failure classification below and MUST NOT fire on a mechanical fault.
-A Unit that defeats that tier moves to `claude`, and the run picks its rung by sizing the Unit, never by a fixed retry ladder.
-Size the Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
-`sonnet` takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
-`opus` takes a Unit that keeps real design judgment inside its own bounds — the plan names the outcome and not the approach, the change crosses a module, process, or service boundary, or the surface is correctness-critical, such as authentication, a schema or data migration, concurrency, money, or anything that can lose data.
-`fable` takes a Unit whose context no lower rung can hold at once and that the plan cannot split.
-Prefer splitting a Unit over raising its rung, and MUST try the split before `fable`: a Unit too wide for `opus` is usually two Units.
-A Unit the sizing places at `opus` or above MAY open directly on a frontier serving family at that rung, skipping the cheaper serving family, and the run MUST record the signals that justified the skip; a Unit whose approach the plan fixes MUST NOT take that bypass.
-A failure re-opens that sizing and never replaces it, so classify a failure only after the Unit is sized: a mechanical failure — a dispatch error, a missing tool, an unavailable agent, an environment or permission fault, or a worker terminal closed from outside the run, which Orca reports as `termination_reason: operator_close` over `stage: process_exited` — carries no information about the Unit, so re-dispatch at the rung the sizing already gives and do not raise it for that; a substantive failure — a wrong approach, an escalation that asks a design question, verification that fails on approach grounds and not on a typo — is new evidence about depth or blast radius, so feed it back into the four signals and re-size before dispatching again.
-is classified as a brief defect: it does not raise the model rung, so the coordinator extracts what was missing into the brief and re-dispatches at the same rung.
-MUST NOT open at `fable` on a guess the sizing does not support, and MUST NOT re-dispatch the same Unit at the same rung with the same brief — sharpen the brief, split the Unit, or re-size on evidence.
+Orca's `worker-start --model` and `--effort` forward to Claude, Codex, and Cursor launches only, so an `omp` row is not selected that way
+confirms the model from the terminal, and dispatches with `worker-start --terminal <handle>`.
+omp's own `modelRoles` then never decides which Gemini seat a dispatch uses.
+The version-matched Orca guide owns the exact terminal-launch spelling.
+Size an Implementation Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
+takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
+takes a Unit that keeps real design judgment inside its own bounds — the plan names the outcome and not the approach, the change crosses a module, process, or service boundary, or the surface is correctness-critical, such as authentication, a schema or data migration, concurrency, money, or anything that can lose data.
+is the top rung: there is no higher one to escalate to, so a Unit too wide for it is two Units and MUST be split rather than raised.
+MAY open directly on that rung, skipping the cheaper row above, and the run MUST record the signals that justified the skip; a Unit whose approach the plan fixes MUST NOT take that bypass.
+A failure re-opens that sizing and never replaces it, so classify a failure only after the Unit is sized: a mechanical failure carries no information about the Unit, while a substantive failure — a wrong approach, an escalation that asks a design question, verification that fails on approach grounds and not on a typo — is new evidence about depth or blast radius, so feed it back into the four signals and re-size before dispatching again.
+is classified as a brief defect: it does not raise the rung, so the coordinator extracts what was missing into the brief and re-dispatches at the same rung.
+MUST NOT re-dispatch the same Unit at the same rung with the same brief — sharpen the brief, split the Unit, or re-size on evidence.
 The three-consecutive-failure rule stops the dispatch and consults on the third substantive failure; it does not buy another rung.
-This paragraph narrows the dispatch-target rule above for Implementation Units only.
-It leaves scout reads, lookups, and mechanical steps on the Gemini Flash serving family, and it leaves adjudication on a frontier serving family; authoring the prose of a plan or requirements document follows the dispatch-target rule above.
-It also tightens the cross-model review: that review MUST run `codex`, `claude`, and `omp` over the same brief file, except that an agent excluded as the document's own author is dropped rather than replaced, and MUST weigh each reviewer's findings on their own evidence.
 Model and effort apply to a fresh agent terminal only; the version-matched Orca guide owns their spelling and reports which values took effect.
-Name the agent and nothing else for recipient selection.
-The Everyone payload above owns model and effort selection for qualifying Codex launches; check its effective receipt before claiming that selection took effect.
-Non-qualifying launches keep their existing explicit model-selection rules.
+Each recipient takes a different brief.
+| Model | Brief guidance |
 CLAUDE_COORDINATOR_NEEDLES
+
+# Every model id and effort in the coordinator body comes from agents.roster, so
+# the needles for them are BUILT from a roster render rather than written here.
+# A hard-coded id would be the drift KTD6 exists to remove: it would keep
+# matching a payload the roster no longer describes.
+roster_ids_wrapper="$scratch/roster-ids.tmpl"
+roster_ids="$scratch/roster-ids.txt"
+printf '%s\n' '{{- includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}' >"$roster_ids_wrapper"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$roster_ids_wrapper" "$roster_ids"
+[[ -s $roster_ids ]] || fail 'the roster render produced no model ids to build needles from'
+while IFS= read -r roster_model; do
+  [[ -z $roster_model ]] && continue
+  grep -F "$roster_model" "$coordinator_claude_linux" >/dev/null \
+    || fail "Claude coordinator payload does not name roster model: $roster_model"
+done <"$roster_ids"
+
+# R4: the ladder's top rung is `opus`, and `fable` survives only as the judgment
+# model. A sentence that named it as a rung would re-open the escalation AE8
+# closes.
+if grep -F 'rung' "$coordinator_claude_linux" | grep -F '`fable`' >/dev/null; then
+  fail 'the coordinator payload names `fable` as a sizing rung again'
+fi
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
 # stripped before the peer diff, so a retired mandate re-entering through a peer

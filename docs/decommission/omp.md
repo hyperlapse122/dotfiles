@@ -110,15 +110,23 @@ becomes agent instructions — a trust boundary worth closing when omp runs as a
 Orca worker across arbitrary checkouts. Declaring those keys in
 `agents.omp.settings` is the fix.
 
-**Model availability.** The model policy asserts
-`google-antigravity/gemini-3.8-flash` and `google-antigravity/gemini-3.1-flash-lite`.
-The reconciler validates a selector only when the catalog speaks for its
-provider, so on a host where `google-antigravity` is not authenticated it prints
-a skip and asserts anyway. Confirm the models actually resolve:
+**Model availability.** The model policy asserts the omp models of
+`agents.roster` — today `google-antigravity/gemini-3.8-flash` and
+`google-antigravity/gemini-3.5-flash-lite`. The reconciler validates a selector
+only when the catalog speaks for its provider, so on a host where
+`google-antigravity` is not authenticated it prints a skip and asserts anyway.
+Confirm the models actually resolve:
 
 ```sh
 omp models --json | jq -r '.models[] | select(.provider == "google-antigravity") | .selector'
 ```
 
-An apply that fails with `which provider google-antigravity does not serve` means
-the declared id is wrong or retired; correct it in `.chezmoidata/agents.yaml`.
+The probe never fails the apply. An unresolved id prints
+`which provider google-antigravity does not serve` or
+`roster entry <id> names <model>, which the catalog does not list`, and a
+thinking level the catalog does not offer prints
+`roster entry <id> declares effort <effort>, which <model> does not offer`; the
+apply continues and exits 0. Either warning means the roster entry is wrong or
+retired; correct it in `agents.roster` in `.chezmoidata/agents.yaml`. Codex and
+Claude publish no catalog command, so their roster entries are not probed and
+the run says so once.

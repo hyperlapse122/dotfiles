@@ -50,7 +50,6 @@
        hook stops running with no session-visible symptom. */ -}}
 {{- $doc := includeTemplate "codex-hook-declaration.tmpl" $ctx | fromJson -}}
 {{- $eventLabels := dict
-      "PreToolUse" "pre_tool_use"
       "PermissionRequest" "permission_request"
       "PostToolUse" "post_tool_use"
       "PreCompact" "pre_compact"

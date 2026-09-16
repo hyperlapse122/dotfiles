@@ -1,8 +1,8 @@
 # @h82/orchestration-hook
 
-This package delivers the Orca instruction payload and enforces the launch gate
-for the two JSON hook clients. The plain-output extension client receives the
-same role-aware context through `packages/omp-orca`.
+This package delivers the Orca instruction payload to the two JSON hook
+clients. The plain-output extension client receives the same role-aware
+context through `packages/omp-orca`.
 
 The compiled binary is staged at `~/.local/libexec/orchestration-hook`. It has
 no runtime package dependencies and does not need a shell, `jq`, or Bun on the
@@ -13,8 +13,8 @@ managed host.
 | Command | Purpose |
 | --- | --- |
 | `orchestration-hook hook --harness <id>` | Deliver role-aware context and exit 0 on every path. |
-| `orchestration-hook guard --harness <id>` | Return a launch decision and exit 0 on every path. |
-| `orchestration-hook print-payload --body <everyone\|coordinator>` | Print an embedded payload body. |
+| `orchestration-hook guard --harness <id>` | Compatibility no-op for a stale cached hook declaration: answers the harness's empty allow output and exits 0 without reading stdin. |
+| `orchestration-hook print-payload --body <everyone\|coordinator>` | Print the managed payload body read from `~/.local/share/orchestration-hook`. |
 | `orchestration-hook role` | Print the resolved role and its environment inputs. |
 | `orchestration-hook --version` | Print the build identifier. |
 

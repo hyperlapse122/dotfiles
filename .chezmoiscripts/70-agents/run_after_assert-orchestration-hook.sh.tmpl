@@ -17,10 +17,16 @@
    package exists to remove. The cost — chezmoi stopping before 80-keys and
    90-src — is the cost the build script already accepts for a failed compile. */ -}}
 {{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
+{{- $payloadDir := joinPath .chezmoi.homeDir ".local/share/orchestration-hook" -}}
 #!/usr/bin/env bash
 set -euo pipefail
 
 BINARY={{ $binary | quote }}
+# The binary reads its rules from these two files at run time, so an absent or
+# truncated one is the same silent-delivery failure a missing binary is: the
+# hook starts, composes nothing, and the session begins with no rules while the
+# apply converges green.
+PAYLOADS=({{ joinPath $payloadDir "everyone.md" | quote }} {{ joinPath $payloadDir "coordinator.md" | quote }})
 
 # The recovery this names has to be the one that actually works. A plain
 # re-apply does NOT rebuild: the 60-build script is run_onchange_ and its
@@ -38,6 +44,17 @@ if [[ ! -x "$BINARY" ]]; then
   printf '%s\n' "assert-orchestration-hook: $BINARY is not executable; the orchestration hook each plugin declares cannot run. To recover, $RECOVERY." >&2
   exit 1
 fi
+
+for payload in "${PAYLOADS[@]}"; do
+  if [[ ! -f "$payload" ]]; then
+    printf '%s\n' "assert-orchestration-hook: $payload is missing; the orchestration hook would deliver no rules. To recover, re-apply so chezmoi writes the rendered payload." >&2
+    exit 1
+  fi
+  if [[ ! -s "$payload" ]]; then
+    printf '%s\n' "assert-orchestration-hook: $payload is empty; the orchestration hook would deliver no rules. To recover, re-apply so chezmoi writes the rendered payload." >&2
+    exit 1
+  fi
+done
 
 # Silent on a converged host: a run_after_ script that printed on every apply
 # would bury the output that matters.
