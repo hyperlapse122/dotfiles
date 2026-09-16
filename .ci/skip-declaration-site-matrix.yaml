@@ -1976,7 +1976,7 @@ owners:
   - owner: 'install-system-face-auth/no-ir-camera'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 72
+    anchor_line: 85
     anchor: 'if ! fact_gate ''irCamera''; then'
     predicate: '! fact_gate ''irCamera'''
     predicate_digest: 'sha256:0356553f89108720a5e8ba415b598ac4956f46dbe0cfbd4e44d6ab80b10d4b54'
@@ -1990,7 +1990,7 @@ owners:
   - owner: 'install-system-face-auth/authselect-absent'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 76
+    anchor_line: 89
     anchor: 'if ! command -v authselect >/dev/null 2>&1; then'
     predicate: '! command -v authselect >/dev/null 2>&1'
     predicate_digest: 'sha256:75cac686776dbba19dc469ea6e0d5c2b3cc8ed527a5e2ce2d2da6b8d6aa6d00e'
@@ -2006,7 +2006,7 @@ owners:
   - owner: 'install-system-face-auth/no-ir-emitter-build'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 104
+    anchor_line: 117
     anchor: 'if [[ -z "$IR_URL" ]]; then'
     predicate: '[[ -z "$IR_URL" ]]'
     predicate_digest: 'sha256:76d0a662770cdf73f6d39428c94e6f715d0c975c68378d98c2fd3ca0f5302d5c'
@@ -2020,7 +2020,7 @@ owners:
   - owner: 'install-system-face-auth/no-grey-video-node'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 155
+    anchor_line: 168
     anchor: 'if [[ -z "$grey_node" ]]; then'
     predicate: '[[ -z "$grey_node" ]]'
     predicate_digest: 'sha256:6437726a1c803ce04457a0a44e195bc3a449a91c333a8144d95f869cddc6e92b'
@@ -2034,7 +2034,7 @@ owners:
   - owner: 'install-system-face-auth/pam-modified-outside-authselect'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 241
+    anchor_line: 254
     anchor: 'if ! authselect check >/dev/null 2>&1; then'
     predicate: '! authselect check >/dev/null 2>&1'
     predicate_digest: 'sha256:835448c3be1ee22ec9493b5490d5bac233432c577e5be0b49ae488bacd4f2fbb'
@@ -2048,7 +2048,7 @@ owners:
   - owner: 'install-system-face-auth/greeter-would-gain-face'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 245
+    anchor_line: 258
     anchor: 'if greeter_would_gain_module ''pam_howdy\.so'' "custom/${FACE_PROFILE}" "${features[@]}"; then'
     predicate: 'greeter_would_gain_module ''pam_howdy\.so'' "custom/${FACE_PROFILE}" "${features[@]}"'
     predicate_digest: 'sha256:9c3cda03f32c0de1e7c27059862794295ec1c822ed09493e8431213fd63b1865'
@@ -2062,7 +2062,7 @@ owners:
   - owner: 'install-system-face-auth/manual-steps-pending'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 280
+    anchor_line: 307
     anchor: 'if [[ ${#pending[@]} -gt 0 ]]; then'
     predicate: '[[ ${#pending[@]} -gt 0 ]]'
     predicate_digest: 'sha256:08f6d79ce987635b11d6de7564dca815008caffe0f9b7e5950b20cd2345ce1c1'

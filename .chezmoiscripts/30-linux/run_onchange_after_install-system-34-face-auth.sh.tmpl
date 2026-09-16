@@ -17,7 +17,14 @@ set -euo pipefail
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-face-auth") }}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list
       (dict "name" "authselect-present" "value" $authselectPresent))) }}
+{{- /* A captured emitter configuration is data this script installs, so it is a
+   fingerprint input -- but only when one exists: fingerprint.tmpl fails on a
+   glob that matches nothing, and a fleet with no captured camera yet is valid. */ -}}
+{{- if glob (joinPath $sourceDir "system/linux/etc/linux-enable-ir-emitter/*") }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/linux-enable-ir-emitter/*")) }}
+{{- end }}
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
+SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
 
 # Face authentication on Fedora: Howdy, its IR emitter enabler, and the PAM
 # factor through authselect and nothing else.
@@ -52,9 +59,15 @@ set -euo pipefail
 # THE EMITTER. The camera's greyscale stream is dark until a vendor UVC control
 # turns the IR emitters on, and only linux-enable-ir-emitter knows which one.
 # Its systemd tarball is installed from the release lock (sha256-verified) under
-# / exactly as upstream documents; its per-camera configuration is interactive
-# (the operator answers whether the emitters lit) and stays a manual step,
-# reported through the declared-skip surface alongside Howdy's own enrollment.
+# / exactly as upstream documents. Finding the control is interactive (the
+# operator answers whether the emitters lit), but the RESULT is a fact about the
+# camera model: upstream documents that a file under /etc/linux-enable-ir-emitter/
+# can be saved and restored on any later installation. A captured file therefore
+# lives under system/linux/etc/linux-enable-ir-emitter/, named for the v4l
+# by-path device exactly as the tool wrote it, and is installed here before the
+# emitter unit starts. Only a file carrying a `status: start` instruction counts
+# as a configuration: a failed `configure` run leaves a file of idle and disable
+# entries behind, and that must keep reporting the manual step.
 
 FACE_COPR={{ $face.copr | quote }}
 FACE_PROFILE={{ $face.authselectProfile | quote }}
@@ -262,10 +275,24 @@ fi
 # whether they happened must not be invisible. They are reported through the
 # same declared-skip surface `dotfiles-skips` reads, distinguishable from a
 # convergence failure by their reason.
+# A captured emitter configuration from the source tree lands before the unit
+# starts. The file name is the device path the tool matches on, so a capture
+# from another camera model is simply never matched on this host.
+for src in "$SRC_ROOT"/etc/linux-enable-ir-emitter/*; do
+  [[ -f "$src" ]] || continue
+  dst="/etc/linux-enable-ir-emitter/${src##*/}"
+  if ! cmp -s "$src" "$dst" 2>/dev/null; then
+    printf '  -> %s\n' "$dst"
+    "${SUDO[@]}" install -D -m 644 "$src" "$dst"
+  fi
+done
+
 pending=()
 # Exit status only, never captured output: a fingerprint-carrying sudo stack
 # prints its PAM prompt on the captured stream and would read as a config file.
-if ! "${SUDO[@]}" sh -c 'find /etc/linux-enable-ir-emitter -mindepth 1 -maxdepth 1 -type f -print -quit 2>/dev/null | grep -q .'; then
+# `status: start` is the tool's marker for an instruction it applies; a file of
+# idle/disable entries is the residue of a failed configure run.
+if ! "${SUDO[@]}" sh -c 'grep -lq "status: start" /etc/linux-enable-ir-emitter/* 2>/dev/null'; then
   pending+=('sudo linux-enable-ir-emitter configure')
   printf 'install-system-face-auth: manual step: sudo linux-enable-ir-emitter configure   (answer whether the IR emitters light; do this first)\n'
 else
