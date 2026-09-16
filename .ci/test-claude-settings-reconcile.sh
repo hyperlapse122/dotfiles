@@ -39,11 +39,37 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 
 run() { CLAUDE_SETTINGS="$1" bash "$settings_script"; }
 
-# The declaration the rendered script carries, read back the same way the script
-# does, so these assertions cannot drift from agents.yaml.
-declared=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+# The declaration the rendered script carries, read out of the rendered script
+# itself. agents.claude.settings is no longer the whole of it: the reconciler
+# merges the roster-derived `model` pin in before the validator sees the dict,
+# so re-rendering agents.claude.settings here would assert a declaration the
+# script does not carry.
+declared=$(sed -n "s/^DECLARED=\"\$(decode_b64 '\(.*\)')\"\$/\1/p" "$settings_script" | base64 --decode)
+jq -e 'type == "object"' <<<"$declared" >/dev/null \
+  || fail 'could not read the declared settings object back out of the rendered script'
+
+# The roster is the one declaration of the lead pin (R5, R10). A hand-written
+# `model` in agents.claude.settings would satisfy every other check here.
+roster_lead=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
   chezmoi --config "$render_config" --source "$repo_root" \
-  execute-template <<<'{{ .agents.claude.settings | toJson }}')
+  execute-template <<<'{{ .agents.roster.lead.claude.model }}')
+[[ $roster_lead == 'fable[1m]' ]] \
+  || fail "agents.roster.lead.claude.model is $roster_lead, want fable[1m]"
+jq -e --arg m "$roster_lead" '.model == $m' <<<"$declared" >/dev/null \
+  || fail "the rendered declaration does not pin model to the roster lead ($roster_lead)"
+hand_written_model=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+  chezmoi --config "$render_config" --source "$repo_root" \
+  execute-template <<<'{{ if hasKey .agents.claude.settings "model" }}DECLARED{{ end }}')
+[[ -z $hand_written_model ]] \
+  || fail 'agents.claude.settings still declares model by hand; it is derived from agents.roster'
+
+# The three effort leaves are NOT roster entries — fast mode runs on Opus — so
+# they stay declared in agents.yaml and must survive the merge.
+jq -e '
+  .["modelSettings.claude-fable-5-1.effortLevel"] == "medium"
+  and .["modelSettings.claude-opus-5.effortLevel"] == "medium"
+  and .["modelSettings.claude-sonnet-5.effortLevel"] == "high"' <<<"$declared" >/dev/null \
+  || fail 'the three declared effortLevel leaves did not survive the roster merge'
 
 # Assert the DECLARATION itself, not just the live file. cleanupPeriodDays is parsed
 # with z.int(), and there are two ways to break it -- only one of them obvious.

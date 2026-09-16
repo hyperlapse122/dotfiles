@@ -9,11 +9,15 @@ set -euo pipefail
 #   - the catalog probe FAILS OPEN, because an unauthenticated provider returns
 #     a partial catalog with exit 0; only a provider the catalog speaks for can
 #     prove a selector absent
-#   - a selector the catalog covers but does not serve fails the apply loudly
+#   - a selector the catalog covers but does not serve WARNS and the apply continues
 #   - convergence is read-then-compare, so a converged host writes nothing
 #   - a declared path omp does not report is a typo, not a silent skip
 #   - a wedged omp read is bounded without GNU timeout
 #   - a host without omp or jq records a declared skip and lets the apply continue
+#
+# The model leaves are no longer declared: enabledModels and modelRoles are
+# derived from agents.roster at render time, so the assertions below read the
+# derived values out of the rendered declaration rather than out of agents.yaml.
 
 usage='usage: test-omp-settings-reconcile.sh OMP_SETTINGS_SCRIPT'
 script=${1:?$usage}
@@ -37,7 +41,7 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required to run this test'
 
 for needle in \
   'google-antigravity/gemini-3.8-flash:high' \
-  'google-antigravity/gemini-3.1-flash-lite:minimal' \
+  'google-antigravity/gemini-3.5-flash-lite:high' \
   '"startup.setupWizard"' \
   '"enabledModels"' \
   '"disabledProviders"' \
@@ -69,8 +73,10 @@ do
   grep -F "$needle" "$script" >/dev/null || fail "rendered script lost: $needle"
 done
 
-grep -F 'gemini-3.7-flash' "$script" >/dev/null &&
-  fail 'rendered script still declares the retired 3.7 model'
+for retired in 'gemini-3.7-flash' 'gemini-3.1-flash-lite'; do
+  grep -F "$retired" "$script" >/dev/null &&
+    fail "rendered script still declares the retired model $retired"
+done
 
 # run_after_ is load-bearing: omp edits config.yml without changing any chezmoi
 # source fingerprint, so an onchange script would record a clean skip and never
@@ -115,6 +121,42 @@ notify_offenders() {
 
 declared_json="$scratch/declared.json"
 declared_of "$script" > "$declared_json"
+
+# --- the roster-derived model leaves --------------------------------------- #
+
+# enabledModels and modelRoles are not declared in agents.omp.settings at all:
+# the reconciler template derives them from agents.roster, so changing a roster
+# entry re-renders these values with no edit here or in the settings map.
+jq -e '.enabledModels == ["google-antigravity/gemini-3.8-flash","google-antigravity/gemini-3.5-flash-lite"]' \
+  "$declared_json" >/dev/null ||
+  fail "enabledModels is not the roster's omp models in roster order: $(jq -c '.enabledModels' "$declared_json")"
+
+role_offenders() {
+  jq -r --argjson want '{
+    "advisor": "@worker",
+    "claude": "google-antigravity/gemini-3.8-flash:high",
+    "commit": "@worker",
+    "default": "google-antigravity/gemini-3.8-flash:high",
+    "fable": "google-antigravity/gemini-3.8-flash:high",
+    "gemini": "google-antigravity/gemini-3.8-flash:high",
+    "plan": "@fable",
+    "reviewer": "google-antigravity/gemini-3.8-flash:high",
+    "skim": "google-antigravity/gemini-3.5-flash-lite:high",
+    "slow": "google-antigravity/gemini-3.8-flash:high",
+    "smol": "google-antigravity/gemini-3.5-flash-lite:high",
+    "tiny": "google-antigravity/gemini-3.5-flash-lite:high",
+    "worker": "google-antigravity/gemini-3.8-flash:high"
+  }' '
+    (.modelRoles // {}) as $have
+    | ($want | keys_unsorted[] | select($have[.] != $want[.])
+       | "\(.) is \($have[.] | tojson), want \($want[.] | tojson)"),
+      ($have | keys_unsorted[] | select($want[.] == null) | "\(.) is not a declared role")
+  ' "$declared_json"
+}
+
+role_problems=$(role_offenders)
+[[ -z $role_problems ]] ||
+  fail "the derived modelRoles do not match the roster: $(tr '\n' ' ' <<<"$role_problems")"
 
 offenders=$(notify_offenders "$declared_json")
 [[ -z $offenders ]] || fail "notification leaves must be the string \"off\": $offenders"
@@ -230,12 +272,13 @@ chmod 0700 "$bin/omp"
 
 reset() { : > "$calls"; : > "$state"; }
 
-# A catalog that serves both declared selectors.
+# A catalog that serves both roster selectors at the thinking level each roster
+# entry declares. `thinking` is what the roster effort probe reads.
 full_catalog="$scratch/catalog-full.json"
 cat >"$full_catalog" <<'EOF'
 {"models":[
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash"},
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.1-flash-lite"}
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low","medium","high"]},
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.5-flash-lite","thinking":["off","low","medium","high"]}
 ]}
 EOF
 
@@ -243,11 +286,21 @@ EOF
 empty_catalog="$scratch/catalog-empty.json"
 printf '{"models":[]}\n' > "$empty_catalog"
 
-# A catalog that speaks for the provider but is missing one declared selector.
+# A catalog that speaks for the provider but is missing one roster selector.
 partial_catalog="$scratch/catalog-partial.json"
 cat >"$partial_catalog" <<'EOF'
 {"models":[
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.1-flash-lite"}
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low","medium","high"]}
+]}
+EOF
+
+# A catalog that serves both selectors but does not offer `high` on the
+# mechanical one, so the roster's declared effort is unsupported.
+thinking_gap_catalog="$scratch/catalog-thinking-gap.json"
+cat >"$thinking_gap_catalog" <<'EOF'
+{"models":[
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low","medium","high"]},
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.5-flash-lite","thinking":["off","low"]}
 ]}
 EOF
 
@@ -309,15 +362,36 @@ run() {
     bash "$script"
 }
 
-# --- a covered provider missing a declared selector fails the apply -------- #
+# --- a covered provider missing a roster selector warns and continues ------ #
+
+# AE7. An unresolved id is a warning, never a failed apply: a host whose catalog
+# lags the roster must still converge every other declared path.
+reset
+run "$partial_catalog" "$live_drifted" >"$scratch/partial.out" 2>"$scratch/partial.err" ||
+  fail 'an unserved selector failed the apply instead of warning'
+grep -q 'which provider google-antigravity does not serve' "$scratch/partial.err" ||
+  fail 'the missing-selector warning did not name the provider'
+grep -q 'gemini-3.5-flash-lite' "$scratch/partial.err" ||
+  fail 'the roster probe did not name the absent model id'
+grep -Fq 'config set modelRoles' "$state" ||
+  fail 'the warning run did not go on to assert the declared roles'
+
+# --- a roster effort the catalog does not offer warns and continues -------- #
 
 reset
-if run "$partial_catalog" "$live_drifted" >"$scratch/partial.out" 2>"$scratch/partial.err"; then
-  fail 'a selector the catalog does not serve was accepted'
-fi
-grep -q 'which provider google-antigravity does not serve' "$scratch/partial.err" ||
-  fail 'the missing-selector refusal did not name the provider'
-[[ ! -s $state ]] || fail 'the refused run still wrote settings'
+run "$thinking_gap_catalog" "$live_drifted" >"$scratch/gap.out" 2>"$scratch/gap.err" ||
+  fail 'an unsupported thinking level failed the apply instead of warning'
+grep -q 'gemini-3.5-flash-lite' "$scratch/gap.err" ||
+  fail 'the thinking-level warning did not name the model'
+grep -q 'high' "$scratch/gap.err" ||
+  fail 'the thinking-level warning did not name the declared effort'
+grep -Fq 'config set modelRoles' "$state" ||
+  fail 'the thinking-level warning run did not go on to assert the declared roles'
+
+# --- Codex and Claude have no catalog command, and the run says so once ---- #
+
+[[ $(grep -c 'no catalog command' "$scratch/gap.err") == 1 ]] ||
+  fail 'the run did not print exactly one line about the unprobed Codex and Claude entries'
 
 # --- an uncovered provider skips validation and still asserts -------------- #
 
@@ -521,6 +595,47 @@ omp_skip_file="$home/.local/state/chezmoi/skips/config-omp-settings__omp-unavail
 grep -qF $'v1\tconfig-omp-settings\tomp-unavailable\ttransient-blocking:omp-present\tomp is unavailable; settings assertion is deferred' \
   "$omp_skip_file" || fail 'the omp-absent skip file contents were unexpected'
 [[ ! -s $state ]] || fail 'the omp-absent run still wrote settings'
+# AE11. One line, not a probe report: the run never reached the catalog, so it
+# has nothing to say about a roster model or about Codex and Claude.
+[[ $(wc -l <"$scratch/skip.out") -eq 1 && ! -s "$scratch/skip.err" ]] ||
+  fail 'the omp-absent run printed more than the one skip line'
 
+
+# --- a roster edit re-renders the roles with no other edit ----------------- #
+
+# R17. The point of deriving these leaves: a changed roster model reaches the
+# rendered declaration with no edit to this test, the settings map, or the
+# template. --override-data REPLACES a list-typed field wholesale, so the two
+# entries below are the whole roster for this render.
+chezmoi_bin=$(command -v "${CHEZMOI:-chezmoi}") ||
+  fail 'chezmoi is required to render the roster-change case'
+mkdir -p "$scratch/home" "$scratch/bin" "$scratch/target"
+printf '[data]\n' >"$scratch/empty.toml"
+printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
+chmod 0700 "$scratch/bin/op"
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$source_root/.ci/lib/render-gate-helpers.sh"
+
+swapped_workers='[
+ {"id":"omp-next","agent":"omp","model":"google-antigravity/gemini-4.0-flash","effort":"high",
+  "shapes":["implementation"],"brief":"placeholder"},
+ {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-3.5-flash-lite","effort":"high",
+  "shapes":["mechanical"],"brief":"placeholder"}
+]'
+swapped_script="$scratch/omp-settings-swapped.sh"
+render "$source_root" "$scratch" "$chezmoi_bin" linux \
+  "$source_root/.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl" \
+  "$swapped_script" \
+  "$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$swapped_workers")" ||
+  fail 'a roster with a different omp implementation model failed to render'
+
+swapped_declared="$scratch/declared-swapped.json"
+declared_of "$swapped_script" > "$swapped_declared"
+jq -e '
+  .modelRoles.default == "google-antigravity/gemini-4.0-flash:high"
+  and .modelRoles.tiny == "google-antigravity/gemini-3.5-flash-lite:high"
+  and (.enabledModels | index("google-antigravity/gemini-4.0-flash")) != null' \
+  "$swapped_declared" >/dev/null ||
+  fail "a changed roster model did not reach the derived roles: $(jq -c '{enabledModels, roles: .modelRoles}' "$swapped_declared")"
 
 printf 'omp settings reconcile: ok\n'
