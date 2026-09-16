@@ -14,8 +14,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveHome } from "./home.js";
 
 export type PayloadBody = "everyone" | "coordinator";
 
@@ -25,7 +25,7 @@ const PAYLOAD_DIR_ENV = "DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR";
 function payloadDir(env: NodeJS.ProcessEnv): string {
   const configured = env[PAYLOAD_DIR_ENV];
   if (configured !== undefined && configured !== "") return configured;
-  return join(env["HOME"] ?? homedir(), ".local", "share", "orchestration-hook");
+  return join(resolveHome(env), ".local", "share", "orchestration-hook");
 }
 
 export function payloadPath(body: PayloadBody, env: NodeJS.ProcessEnv): string {

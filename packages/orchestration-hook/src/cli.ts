@@ -16,7 +16,6 @@
 import { execFileSync } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   composeContext,
@@ -25,6 +24,7 @@ import {
   type Harness,
   isHarness,
 } from "./envelope.js";
+import { resolveHome } from "./home.js";
 import { isPayloadBody, payload, payloadPath } from "./payload.js";
 import { resolveRole, type RoleEnv } from "./role.js";
 import { fetchGuide, resolveOrcaCommand } from "./orca.js";
@@ -118,7 +118,7 @@ function unameS(): string | undefined {
 }
 
 function readOrchestrationSkill(env: NodeJS.ProcessEnv): string {
-  const home = env["HOME"] ?? homedir();
+  const home = resolveHome(env);
   try {
     return readFileSync(join(home, ".agents", "skills", "orchestration", "SKILL.md"), "utf8");
   } catch {

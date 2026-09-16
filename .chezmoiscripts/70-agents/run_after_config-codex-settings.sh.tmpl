@@ -4,15 +4,7 @@
    rather than in the data file so the derived leaves still pass through the
    validator below; a fresh dict is the destination because sprig's merge mutates
    its first argument. */ -}}
-{{- $codexJudgment := dict -}}
-{{- range .agents.roster.workers -}}
-{{-   if and (eq .agent "codex") (has "judgment" .shapes) -}}
-{{-     $codexJudgment = . -}}
-{{-   end -}}
-{{- end -}}
-{{- if not $codexJudgment -}}
-{{-   fail "config-codex-settings: agents.roster declares no codex worker with the judgment shape, so the direct-session default pair cannot be derived" -}}
-{{- end -}}
+{{- $codexJudgment := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "codex" "shape" "judgment" "rung" "" "name" "a codex judgment entry") | fromJson -}}
 {{- $settings := merge (dict "model" $codexJudgment.model "model_reasoning_effort" $codexJudgment.effort) .agents.codex.settings -}}
 {{- includeTemplate "codex-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- /* One declared object from two owners. agents.codex.settings owns scalar

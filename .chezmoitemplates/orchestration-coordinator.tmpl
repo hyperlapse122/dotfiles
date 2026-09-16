@@ -18,37 +18,13 @@
 {{- end -}}
 {{- $roster := .ctx.agents.roster -}}
 {{- $_ := includeTemplate "agent-roster-validate.tmpl" (dict "roster" $roster) -}}
-{{- $mechanical := dict -}}
-{{- $ompImpl := dict -}}
-{{- $judgeClaude := dict -}}
-{{- $judgeCodex := dict -}}
-{{- $fallback := dict -}}
-{{- $sonnet := dict -}}
-{{- $opus := dict -}}
-{{- range $w := $roster.workers -}}
-{{-   $shapes := $w.shapes -}}
-{{-   $rung := "" -}}
-{{-   if hasKey $w "rung" -}}{{- $rung = $w.rung -}}{{- end -}}
-{{-   if and (eq $w.agent "omp") (has "mechanical" $shapes) -}}{{- $mechanical = $w -}}{{- end -}}
-{{-   if and (eq $w.agent "omp") (has "implementation" $shapes) -}}{{- $ompImpl = $w -}}{{- end -}}
-{{-   if and (eq $w.agent "claude") (has "judgment" $shapes) -}}{{- $judgeClaude = $w -}}{{- end -}}
-{{-   if and (eq $w.agent "codex") (has "judgment" $shapes) -}}{{- $judgeCodex = $w -}}{{- end -}}
-{{-   if has "fallback" $shapes -}}{{- $fallback = $w -}}{{- end -}}
-{{-   if and (eq $w.agent "claude") (eq $rung "sonnet") -}}{{- $sonnet = $w -}}{{- end -}}
-{{-   if and (eq $w.agent "claude") (eq $rung "opus") -}}{{- $opus = $w -}}{{- end -}}
-{{- end -}}
-{{- range $slot := list
-      (dict "name" "an omp mechanical entry" "entry" $mechanical)
-      (dict "name" "an omp implementation entry" "entry" $ompImpl)
-      (dict "name" "a claude judgment entry" "entry" $judgeClaude)
-      (dict "name" "a codex judgment entry" "entry" $judgeCodex)
-      (dict "name" "a fallback entry" "entry" $fallback)
-      (dict "name" "a claude sonnet rung" "entry" $sonnet)
-      (dict "name" "a claude opus rung" "entry" $opus) -}}
-{{-   if not (hasKey $slot.entry "model") -}}
-{{-     fail (printf "orchestration-coordinator.tmpl: agents.roster declares no %s, so the routing table cannot render" $slot.name) -}}
-{{-   end -}}
-{{- end -}}
+{{- $mechanical := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "omp" "shape" "mechanical" "rung" "" "name" "an omp mechanical entry") | fromJson -}}
+{{- $ompImpl := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "omp" "shape" "implementation" "rung" "" "name" "an omp implementation entry") | fromJson -}}
+{{- $judgeClaude := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson -}}
+{{- $judgeCodex := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "codex" "shape" "judgment" "rung" "" "name" "a codex judgment entry") | fromJson -}}
+{{- $fallback := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "" "shape" "fallback" "rung" "" "name" "a fallback entry") | fromJson -}}
+{{- $sonnet := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "claude" "shape" "" "rung" "sonnet" "name" "a claude sonnet rung") | fromJson -}}
+{{- $opus := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "claude" "shape" "" "rung" "opus" "name" "a claude opus rung") | fromJson -}}
 <!-- orchestration-coordinator:begin -->
 
 ## Orchestration rules for a coordinator

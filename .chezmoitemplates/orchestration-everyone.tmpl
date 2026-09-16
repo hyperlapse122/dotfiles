@@ -17,20 +17,8 @@
 {{- end -}}
 {{- $roster := .ctx.agents.roster -}}
 {{- $_ := includeTemplate "agent-roster-validate.tmpl" (dict "roster" $roster) -}}
-{{- $judgeCodex := dict -}}
-{{- $fallbackCodex := dict -}}
-{{- range $w := $roster.workers -}}
-{{-   if eq $w.agent "codex" -}}
-{{-     if has "judgment" $w.shapes -}}{{- $judgeCodex = $w -}}{{- end -}}
-{{-     if has "fallback" $w.shapes -}}{{- $fallbackCodex = $w -}}{{- end -}}
-{{-   end -}}
-{{- end -}}
-{{- if not (hasKey $judgeCodex "model") -}}
-{{-   fail "orchestration-everyone.tmpl: agents.roster declares no codex judgment entry" -}}
-{{- end -}}
-{{- if not (hasKey $fallbackCodex "model") -}}
-{{-   fail "orchestration-everyone.tmpl: agents.roster declares no codex fallback entry" -}}
-{{- end -}}
+{{- $judgeCodex := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "codex" "shape" "judgment" "rung" "" "name" "a codex judgment entry") | fromJson -}}
+{{- $fallbackCodex := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "codex" "shape" "fallback" "rung" "" "name" "a codex fallback entry") | fromJson -}}
 <!-- orchestration-everyone:begin -->
 
 ## Orchestration rules for every agent
