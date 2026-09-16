@@ -17,6 +17,11 @@ describe("payloadPath", () => {
     );
   });
 
+  it("falls back to the process home when HOME is empty", () => {
+    expect(payloadPath("everyone", { HOME: "" })).toBe(payloadPath("everyone", {}));
+    expect(payloadPath("everyone", { HOME: "" })).not.toMatch(/^\/?\.local/);
+  });
+
   it("takes the override the tests and the CI gate set", () => {
     expect(payloadPath("everyone", { DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: "/elsewhere" })).toBe(
       "/elsewhere/everyone.md",

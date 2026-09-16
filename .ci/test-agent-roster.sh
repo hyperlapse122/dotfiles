@@ -103,6 +103,11 @@ assert_render_ok claude-two-rungs \
     {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"}]'
 
 # Two claude implementation entries sharing a rung fail the render naming it.
+assert_render_fails claude-missing-rung \
+  '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"brief":"x"},
+    {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"}]' \
+  'is a claude implementation entry without rung'
+
 assert_render_fails claude-duplicate-rung \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"sonnet","brief":"x"},

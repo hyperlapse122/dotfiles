@@ -14,7 +14,7 @@ managed host.
 | --- | --- |
 | `orchestration-hook hook --harness <id>` | Deliver role-aware context and exit 0 on every path. |
 | `orchestration-hook guard --harness <id>` | Compatibility no-op for a stale cached hook declaration: answers the harness's empty allow output and exits 0 without reading stdin. |
-| `orchestration-hook print-payload --body <everyone\|coordinator>` | Print an embedded payload body. |
+| `orchestration-hook print-payload --body <everyone\|coordinator>` | Print the managed payload body read from `~/.local/share/orchestration-hook`. |
 | `orchestration-hook role` | Print the resolved role and its environment inputs. |
 | `orchestration-hook --version` | Print the build identifier. |
 

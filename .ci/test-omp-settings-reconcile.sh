@@ -400,6 +400,8 @@ run "$empty_catalog" "$live_drifted" >"$scratch/empty.out" 2>"$scratch/empty.err
   fail 'an unauthenticated provider was treated as a failure'
 grep -q 'model catalog unavailable' "$scratch/empty.err" ||
   fail 'the fail-open skip did not state its reason'
+[[ $(grep -c 'config-omp-settings:' "$scratch/empty.err") == 1 ]] ||
+  fail 'an unavailable catalog must print exactly one skip line, not a second no-catalog-command line'
 grep -Fq 'config set modelRoles' "$state" ||
   fail 'the fail-open run did not assert the declared roles'
 
