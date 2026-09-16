@@ -1,12 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import {
-  reconcileClaudeTrust,
-  reconcileCodexTrust,
-  reconcileTrust,
-} from "../src/trust.js";
+import { reconcileClaudeTrust, reconcileCodexTrust, reconcileTrust } from "../src/trust.js";
 
 async function makeScratch(): Promise<string> {
   const dir = join(tmpdir(), `test-trust-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -50,7 +46,10 @@ describe("trust reconciliation", () => {
     const codexHome = join(scratch, ".codex");
     const codexConfig = join(codexHome, "config.toml");
     await mkdir(codexHome, { recursive: true, mode: 0o700 });
-    await writeFile(codexConfig, 'model = "gpt-5"\n\n[projects."/existing/repo"]\ntrust_level = "trusted"\n');
+    await writeFile(
+      codexConfig,
+      'model = "gpt-5"\n\n[projects."/existing/repo"]\ntrust_level = "trusted"\n',
+    );
 
     const ok = await reconcileCodexTrust(codexHome, codexConfig, ["/new/repo/b"]);
     expect(ok).toBe(true);
@@ -69,8 +68,10 @@ describe("trust reconciliation", () => {
     const codexConfig = join(codexHome, "config.toml");
     const wtDir = join(scratch, "worktrees");
     const wtPath = join(wtDir, "branch-1");
+    const srcDir = join(scratch, "src");
 
     await mkdir(join(wtPath, ".git"), { recursive: true });
+    await mkdir(srcDir, { recursive: true });
 
     const result = await reconcileTrust({
       explicitPaths: ["/explicit/path"],
@@ -80,6 +81,7 @@ describe("trust reconciliation", () => {
       codexConfigFile: codexConfig,
       worktreesDir: wtDir,
       gardenFile: join(scratch, "nonexistent-garden.yaml"),
+      srcDir,
     });
 
     expect(result.claudeOk).toBe(true);

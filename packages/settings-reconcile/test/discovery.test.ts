@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -55,7 +55,10 @@ trees:
   });
 
   it("discovers worktrees at flat and nested depth", async () => {
-    const base = join(tmpdir(), `test-worktrees-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const base = join(
+      tmpdir(),
+      `test-worktrees-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     const wtFlat = join(base, "flat-branch");
     const wtNested = join(base, "dotfiles", "skimmer");
     const notWt = join(base, "ignored-dir");

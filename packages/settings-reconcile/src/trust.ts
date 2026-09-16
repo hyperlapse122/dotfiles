@@ -27,7 +27,9 @@ export async function reconcileClaudeTrust(
   try {
     original = await readSafe(target);
   } catch (error) {
-    process.stderr.write(`settings-reconcile: warning: failed reading ${target}: ${error}\n`);
+    process.stderr.write(
+      `settings-reconcile: warning: failed reading ${target}: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     return false;
   }
 
@@ -41,7 +43,9 @@ export async function reconcileClaudeTrust(
       }
       data = parsed;
     } catch (error) {
-      process.stderr.write(`settings-reconcile: warning: failed parsing ${target}: ${error}\n`);
+      process.stderr.write(
+        `settings-reconcile: warning: failed parsing ${target}: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
       return false;
     }
   }
@@ -115,16 +119,20 @@ export async function reconcileCodexTrust(
     }
     return true;
   } catch (error) {
-    process.stderr.write(`settings-reconcile: failed reconciling codex trust: ${error}\n`);
+    process.stderr.write(
+      `settings-reconcile: failed reconciling codex trust: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     return false;
   }
 }
 
 export async function reconcileTrust(options: TrustOptions = {}): Promise<TrustResult> {
   const home = homedir();
-  const claudeConfig = options.claudeConfigFile || process.env.CLAUDE_CONFIG_FILE || join(home, ".claude.json");
+  const claudeConfig =
+    options.claudeConfigFile || process.env.CLAUDE_CONFIG_FILE || join(home, ".claude.json");
   const codexHome = options.codexHome || process.env.CODEX_HOME || join(home, ".codex");
-  const codexConfig = options.codexConfigFile || process.env.CODEX_CONFIG_FILE || join(codexHome, "config.toml");
+  const codexConfig =
+    options.codexConfigFile || process.env.CODEX_CONFIG_FILE || join(codexHome, "config.toml");
 
   const paths = await discoverCheckouts(options);
   if (paths.length === 0) {

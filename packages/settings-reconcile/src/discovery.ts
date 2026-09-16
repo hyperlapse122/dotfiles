@@ -154,12 +154,20 @@ export async function discoverGardenCheckouts(
   srcDirOverride?: string,
 ): Promise<string[]> {
   const home = homedir();
-  const filePath = gardenConfigFile || process.env.GARDEN_CONFIG_FILE || join(home, ".config", "garden", "garden.yaml");
+  const filePath =
+    gardenConfigFile ||
+    process.env.GARDEN_CONFIG_FILE ||
+    join(home, ".config", "garden", "garden.yaml");
   try {
     const content = await readFile(filePath, "utf8");
     const srcDir = srcDirOverride || process.env.SRC_DIR;
     return parseGardenYamlContent(content, srcDir);
   } catch {
+    const isExplicitGardenFile = Boolean(gardenConfigFile || process.env.GARDEN_CONFIG_FILE);
+    const hasExplicitSrcDir = Boolean(srcDirOverride || process.env.SRC_DIR);
+    if (isExplicitGardenFile && !hasExplicitSrcDir) {
+      return [];
+    }
     const srcDir = srcDirOverride || process.env.SRC_DIR || join(home, "src");
     return scanSrcDirFallback(srcDir);
   }
@@ -167,7 +175,8 @@ export async function discoverGardenCheckouts(
 
 export async function discoverWorktrees(worktreesBaseDir?: string): Promise<string[]> {
   const home = homedir();
-  const baseDir = worktreesBaseDir || process.env.WORKTREES_DIR || join(home, ".local", "share", "worktrees");
+  const baseDir =
+    worktreesBaseDir || process.env.WORKTREES_DIR || join(home, ".local", "share", "worktrees");
   const discovered: string[] = [];
 
   try {
@@ -221,7 +230,8 @@ export async function discoverCheckouts(options: DiscoveryOptions = {}): Promise
     }
   }
 
-  const shouldDiscover = options.all || !options.explicitPaths || options.explicitPaths.length === 0;
+  const shouldDiscover =
+    options.all || !options.explicitPaths || options.explicitPaths.length === 0;
 
   if (shouldDiscover) {
     const [gardenPaths, worktreePaths] = await Promise.all([
