@@ -60,6 +60,13 @@ const EXPECTED: Record<string, Record<string, string | null>> = {
     "darwin-amd64": null,
     "darwin-arm64": null,
   },
+  "linux-enable-ir-emitter": {
+    // One systemd-flavoured x86-64 tarball per release; the tag carries no `v`.
+    "linux-amd64": "linux-enable-ir-emitter-v0.0.0-release.systemd.x86-64.tar.gz",
+    "linux-arm64": null,
+    "darwin-amd64": null,
+    "darwin-arm64": null,
+  },
   marksman: {
     "linux-amd64": "marksman-linux-x64",
     "linux-arm64": "marksman-linux-arm64",

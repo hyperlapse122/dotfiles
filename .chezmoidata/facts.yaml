@@ -300,6 +300,24 @@ factRegistry:
     whenFalse: >-
       The feature is not applied. An unlisted reader therefore enables no authentication
       factor, which is the only safe direction for hardware nobody verified.
+  irCamera:
+    type: bool
+    probe: hook
+    absentDefault: false
+    source: >-
+      A USB device whose vendor/product pair appears in .chezmoidata/.ir-cameras.tsv:
+      a UVC camera module verified to expose an infrared greyscale stream next to
+      its RGB one (the Luxvisions 30c9:0052 module of the ThinkPad X1 Carbon Gen 11
+      is the seeded row). Declared, not detected, for the same reason the fingerprint
+      table is: sysfs names neither the greyscale format nor the emitter, and the
+      hook has no v4l2 tooling to enumerate formats. Deliberately NOT a probe of the
+      howdy package or its PAM module, which describe what is installed right now.
+    gates: >-
+      Whether install-system-34-face-auth provisions Howdy, the IR emitter tool, and
+      the authselect face-authentication feature at all.
+    whenFalse: >-
+      Nothing is provisioned. An unlisted camera therefore enables no authentication
+      factor, which is the only safe direction for hardware nobody verified.
   displayManager:
     type: string
     probe: hook
