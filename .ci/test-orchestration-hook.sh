@@ -368,46 +368,36 @@ out=$(run_guard_shim nonesuch "$TEAM" launch)
 [[ -z $out ]] || fail "guard with an unknown --harness must print nothing (got: $out)"
 pass 'guard with a missing or unknown --harness prints nothing'
 
-# The PreToolUse declarations. A gate that is not declared never runs, and the
-# unit tests cannot see that.
-claude_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/claude-hooks.json")
-[[ $claude_guard == "$expected_binary" ]] \
-  || fail "Claude Code must declare the guard by absolute path (got: $claude_guard)"
-jq -e '.hooks.PreToolUse[0].hooks[0].args == ["guard","--harness","claude"]' \
-  "$scratch/claude-hooks.json" >/dev/null \
-  || fail 'the Claude guard must be declared in exec form'
-# Bash is the tool name the captured fixture carries, and Claude Code's only
-# shell tool; a matcher that missed it would make the gate inert.
-jq -e '.hooks.PreToolUse[0].matcher == "Bash"' "$scratch/claude-hooks.json" >/dev/null \
-  || fail 'the Claude guard must match the Bash tool'
-pass 'Claude Code declares the launch gate in exec form, matching its shell tool'
+# The PreToolUse declarations are gone: the launch gate was removed end to
+# end, so neither plugin may declare that event, and SessionStart must still
+# name the staged binary.
+jq -e '.hooks | has("PreToolUse") | not' "$scratch/claude-hooks.json" >/dev/null \
+  || fail 'Claude Code must not declare a PreToolUse hook'
+[[ $(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/claude-hooks.json") == "$expected_binary" ]] \
+  || fail 'Claude Code SessionStart must still name the staged binary'
+pass 'Claude Code declares no PreToolUse hook, and SessionStart still names the binary'
 
-codex_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/codex-hooks.json")
-[[ $codex_guard == "$expected_binary guard --harness codex" ]] \
-  || fail "Codex must declare the guard by absolute path (got: $codex_guard)"
-jq -e '.hooks.PreToolUse[0].hooks[0] | has("args") | not' "$scratch/codex-hooks.json" >/dev/null \
-  || fail 'the Codex guard must carry no args key the trust record cannot hash'
-# No matcher, deliberately: Codex renames its shell handler between versions, so
-# a matcher written against today's name would silently stop matching and the
-# gate would go inert with every gate here still green.
-jq -e '.hooks.PreToolUse[0] | has("matcher") | not' "$scratch/codex-hooks.json" >/dev/null \
-  || fail 'the Codex guard must carry no matcher while the shell tool name is unpinned'
-pass 'Codex declares the launch gate without an args key or an unpinnable matcher'
+jq -e '.hooks | has("PreToolUse") | not' "$scratch/codex-hooks.json" >/dev/null \
+  || fail 'Codex must not declare a PreToolUse hook'
+[[ $(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/codex-hooks.json") == "$expected_binary hook --harness codex" ]] \
+  || fail 'Codex SessionStart must still name the staged binary'
+pass 'Codex declares no PreToolUse hook, and SessionStart still names the binary'
 
 # The trust record is the silent-failure surface: a Codex hook whose recorded
-# hash disagrees with the deployed declaration simply never runs. Adding an
-# event must not disturb the SessionStart record, whose key is positional
-# WITHIN its own event.
+# hash disagrees with the deployed declaration simply never runs. Removing the
+# PreToolUse event must not disturb the SessionStart record, whose key is
+# positional WITHIN its own event, and the record must now hash that one event
+# alone.
 trust_wrapper="$scratch/trust-wrapper.tmpl"
 printf '{{ includeTemplate "codex-hook-trust.tmpl" (dict "ctx" .) }}\n' >"$trust_wrapper"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$trust_wrapper" "$scratch/trust.json"
 session_keys=$(jq -r '.state | keys[] | select(endswith(":session_start:0:0"))' "$scratch/trust.json")
 [[ -n $session_keys ]] || fail 'the SessionStart trust record disappeared'
-pretool_keys=$(jq -r '.state | keys[] | select(endswith(":pre_tool_use:0:0"))' "$scratch/trust.json")
-[[ -n $pretool_keys ]] || fail 'the PreToolUse hook has no trust record, so Codex would never run it'
+[[ $(jq -r '.state | keys | length' "$scratch/trust.json") == 1 ]] \
+  || fail 'the Codex trust record must hash exactly one event now that PreToolUse is removed'
 [[ $(jq -r ".state[\"$session_keys\"].trusted_hash" "$scratch/trust.json") == sha256:* ]] \
   || fail 'the SessionStart trust hash is not a sha256 record'
-pass 'both Codex hooks carry their own trust record, keyed per event'
+pass 'the Codex trust record hashes exactly one event, SessionStart, keyed as before'
 
 # --------------------------------------------------- every-apply path assertion
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
