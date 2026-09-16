@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ideation: Repository Exploration & Architecture Improvements</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --card-border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-bright: #ffffff;
+      --accent: #58a6ff;
+      --accent-soft: rgba(56, 139, 253, 0.15);
+      --accent-border: rgba(56, 139, 253, 0.4);
+      --success: #3fb950;
+      --success-soft: rgba(63, 185, 80, 0.15);
+      --warn: #d29922;
+      --warn-soft: rgba(210, 153, 34, 0.15);
+      --danger: #f85149;
+      --danger-soft: rgba(248, 81, 73, 0.15);
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.6;
+      padding: 2.5rem 1rem 5rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.75rem;
+    }
+
+    .metadata-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    .meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .meta-label {
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .meta-value {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-repo {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+    }
+
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin: 2.5rem 0 1rem;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    p, li {
+      color: var(--text);
+    }
+
+    .grounding-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .grounding-section {
+      margin-bottom: 1.25rem;
+    }
+
+    .grounding-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .grounding-section h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .grounding-section ul {
+      list-style-type: disc;
+      padding-left: 1.25rem;
+    }
+
+    .grounding-section li {
+      margin-bottom: 0.35rem;
+      font-size: 0.92rem;
+      color: #c9d1d9;
+    }
+
+    .jump-nav {
+      background: rgba(22, 27, 34, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .jump-nav-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .jump-list {
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.4rem;
+    }
+
+    @media (min-width: 640px) {
+      .jump-list {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .jump-list a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: color 0.15s ease;
+    }
+
+    .jump-list a:hover {
+      text-decoration: underline;
+      color: #79c0ff;
+    }
+
+    .idea-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      position: relative;
+      transition: border-color 0.2s ease;
+    }
+
+    .idea-card:hover {
+      border-color: #58a6ff66;
+    }
+
+    .idea-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.85rem;
+      gap: 1rem;
+    }
+
+    .idea-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      line-height: 1.35;
+    }
+
+    .idea-badges {
+      display: flex;
+      gap: 0.4rem;
+      flex-shrink: 0;
+    }
+
+    .badge-conf-high {
+      background: var(--success-soft);
+      color: var(--success);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    .badge-cx-s {
+      background: rgba(56, 139, 253, 0.1);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+    }
+
+    .badge-cx-m {
+      background: var(--warn-soft);
+      color: var(--warn);
+      border: 1px solid rgba(210, 153, 34, 0.3);
+    }
+
+    .idea-desc {
+      font-size: 0.95rem;
+      color: var(--text);
+      margin-bottom: 1.1rem;
+      line-height: 1.6;
+    }
+
+    .idea-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.85rem;
+      font-size: 0.88rem;
+    }
+
+    .idea-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .field-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .field-content {
+      color: #c9d1d9;
+    }
+
+    .basis-box {
+      background: rgba(13, 17, 23, 0.7);
+      border: 1px solid rgba(48, 54, 61, 0.7);
+      border-radius: 6px;
+      padding: 0.6rem 0.85rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: #a5d6ff;
+      word-break: break-word;
+      margin-top: 0.2rem;
+    }
+
+    .basis-tag {
+      font-weight: 700;
+      color: var(--accent);
+      margin-right: 0.4rem;
+    }
+
+    .visual-container {
+      margin: 1.25rem 0 0.5rem;
+      padding: 1rem;
+      background: #090d13;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow-x: auto;
+    }
+
+    .visual-container svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    table.rejection-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 1rem;
+    }
+
+    table.rejection-table th {
+      background: #161b22;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid var(--card-border);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    table.rejection-table td {
+      padding: 0.65rem 0.85rem;
+      border: 1px solid var(--card-border);
+      color: #c9d1d9;
+      vertical-align: top;
+    }
+
+    table.rejection-table tr:nth-child(even) {
+      background: rgba(22, 27, 34, 0.4);
+    }
+
+    .table-id {
+      font-family: var(--mono);
+      font-weight: 600;
+      color: var(--text-muted);
+      width: 2.5rem;
+    }
+
+    .table-title {
+      font-weight: 600;
+      color: var(--text-bright);
+      width: 32%;
+    }
+
+    .table-reason {
+      color: var(--text-muted);
+    }
+
+    footer.composition-signal {
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--card-border);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(110, 118, 129, 0.2);
+      padding: 0.15em 0.35em;
+      border-radius: 4px;
+      color: #e6edf3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Ideation: Repository Architecture & Operational Improvements</h1>
+      <div class="metadata-bar">
+        <div class="meta-item">
+          <span class="meta-label">Date</span>
+          <time class="meta-value" datetime="2026-09-16">2026-09-16</time>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Topic</span>
+          <span class="meta-value">repo-exploration</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Mode</span>
+          <span class="badge badge-repo">repo-grounded</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Focus</span>
+          <span class="meta-value">discovering areas of opportunity across the repository</span>
+        </div>
+      </div>
+    </header>
+
+    <section id="grounding-context">
+      <h2>Grounding Context</h2>
+      <div class="grounding-box">
+        <div class="grounding-section">
+          <h3>Codebase Architecture & Invariants</h3>
+          <ul>
+            <li><strong>Declarative Multi-OS Workstation:</strong> Phased Chezmoi lifecycle (<code>00-tools</code> to <code>90-src</code>), system manifests (<code>system/linux/etc/</code>), and data-driven identity (<code>facts.yaml</code>, <code>system.yaml</code>, <code>agents.yaml</code>) across Fedora Linux, macOS, and Ubuntu Jetson.</li>
+            <li><strong>Multi-Agent Orchestration:</strong> Unified management of Claude Code, OpenAI Codex, and oh-my-pi (omp) integrated with Orca IDE orchestration. Strict operational rule: Orca owns all agent dispatch; native subagent tools and direct peer CLIs are forbidden.</li>
+            <li><strong>Verified Frictions:</strong> 48 script templates interpolate <code>{{ .chezmoi.sourceDir }}</code> directly into script bodies, invalidating rendered hashes and triggering 20 sudo scripts during feature worktree testing; tagless release-lock dependencies (e.g. <code>cursor/plugins</code>) cause hourly commit churn on <code>main</code>; and fast-moving agent CLI schemas risk silent fallback if declared settings are renamed.</li>
+          </ul>
+        </div>
+        <div class="grounding-section">
+          <h3>Institutional Learnings & External Signals</h3>
+          <ul>
+            <li><code>docs/solutions/integration-issues/chezmoi-worktree-root-etc-file-deployment.md</code>: Explains that changing source directories causes full apply cascades, necessitating surgical <code>execute-template</code> extraction for local testing.</li>
+            <li><code>docs/solutions/integration-issues/unattended-agent-harness-workspace-trust-seeding.md</code>: Demonstrates how dual-point reconciliation (apply-time discovery + worktree creation command interception) overcomes lack of recursive wildcard directory trust in agent CLIs.</li>
+            <li><strong>External Ecosystem Trends (2025–2026):</strong> Industry convergence on hermetic multi-platform lockfiles (Cosign, SLSA digests) and isolated git worktree sandboxes to eliminate concurrency bottlenecks in autonomous agent supervisor-worker pipelines.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="topic-axes">
+      <h2>Topic Axes</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem;">
+        <code>Decomposition skipped — surprise-me mode</code> (explores orthogonal opportunities across the repository without pre-constrained thematic boundaries).
+      </p>
+    </section>
+
+    <section id="ranked-ideas">
+      <h2>Ranked Ideas</h2>
+
+      <div class="jump-nav">
+        <div class="jump-nav-title">Candidate Directory</div>
+        <ul class="jump-list">
+          <li><a href="#idea-1">1. Position-Independent Script Rendering (PISR)</a></li>
+          <li><a href="#idea-2">2. Content-Addressed Subtree Tree-Hashing</a></li>
+          <li><a href="#idea-3">3. Surgical Manifest-Aware System Dispatcher</a></li>
+          <li><a href="#idea-4">4. Unified Multi-Harness Settings Engine</a></li>
+          <li><a href="#idea-5">5. Active Agent Schema Drift & Deprecation Guard</a></li>
+          <li><a href="#idea-6">6. Build-Time Skill Manifest Polyfill Pipeline</a></li>
+        </ul>
+      </div>
+
+      <!-- Idea 1 -->
+      <article class="idea-card" id="idea-1">
+        <div class="idea-header">
+          <h3 class="idea-title">1. Position-Independent Script Rendering (PISR): Runtime <code>$sourceDir</code> Decoupling</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 96%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Replace compile-time interpolation of <code>{{ .chezmoi.sourceDir }}</code> across 48 <code>.chezmoiscripts/30-linux/</code> templates with runtime environment resolution: <code>SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(chezmoi source-path)}/system/linux"</code>. Because <code>fingerprint.tmpl</code> already verifies dependencies using relative paths and content digests, decoupling script bodies from the absolute source path ensures that running checks or applies inside Orca feature worktrees (<code>~/.local/share/worktrees/*</code>) produces bit-identical script text, completely eliminating the false-positive invalidation of ~20 root-privileged sudo scripts.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="140" viewBox="0 0 680 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="20" width="280" height="100" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="25" y="45" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="13">BEFORE: Render-Time Baking</text>
+            <text x="25" y="70" fill="#8b949e" font-family="JetBrains Mono, monospace" font-size="11">SRC_ROOT="/home/.../worktree-a/..."</text>
+            <text x="25" y="95" fill="#f85149" font-family="Inter, sans-serif" font-size="11">↳ Hash mismatch! Triggers 20 sudo scripts</text>
+
+            <path d="M310 70 H360" stroke="#58a6ff" stroke-width="2" stroke-dasharray="4 4"/>
+            <polygon points="360,66 370,70 360,74" fill="#58a6ff"/>
+
+            <rect x="385" y="20" width="285" height="100" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="400" y="45" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="13">AFTER: Runtime Path Resolution (PISR)</text>
+            <text x="400" y="70" fill="#a5d6ff" font-family="JetBrains Mono, monospace" font-size="11">SRC_ROOT="${CHEZMOI_SOURCE_DIR:-...}"</text>
+            <text x="400" y="95" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">↳ Invariant hash: zero cascading sudo runs</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>docs/solutions/integration-issues/chezmoi-worktree-root-etc-file-deployment.md:92-116 notes: "48 script templates match grep -rl 'chezmoi.sourceDir' .chezmoiscripts/... The re-run set is therefore a property of the source-path switch, not of anything the change itself touched."
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Solves the primary developer-experience friction and safety hazard in the repository. Once script bodies are position-independent, agents and operators can execute template checks and test applies inside feature worktrees with zero risk of accidentally triggering host-wide system reconfigurations.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Requires updating 48 script templates to adopt the fallback variable syntax; scripts must cleanly handle invocations where Chezmoi environment variables are absent by querying <code>chezmoi source-path</code>.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 2 -->
+      <article class="idea-card" id="idea-2">
+        <div class="idea-header">
+          <h3 class="idea-title">2. Content-Addressed Subtree Tree-Hashing in <code>packages/release-lock</code></h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 94%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Upgrade <code>packages/release-lock</code>'s <code>gitRef</code> resolver to track Git tree object IDs for declared <code>skillPath</code> subdirectories rather than raw branch HEAD commit SHAs. For tagless monorepos (such as <code>cursor/plugins</code>, <code>vercel-labs/agent-skills</code>, and <code>shadcn/improve</code>), the resolver queries the GitHub Git Data API for the target directory's tree SHA and only updates <code>.chezmoidata/releases.json</code> when files inside that directory actually change.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="125" viewBox="0 0 680 125" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="180" height="85" rx="6" fill="#161b22" stroke="#30363d"/>
+            <text x="35" y="45" fill="#e6edf3" font-family="Inter, sans-serif" font-weight="600" font-size="12">Upstream Monorepo</text>
+            <text x="35" y="65" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Commits to <code>docs/</code></text>
+            <text x="35" y="85" fill="#8b949e" font-family="Inter, sans-serif" font-size="11">Commits to <code>other-tool/</code></text>
+
+            <path d="M200 62 H280" stroke="#f85149" stroke-width="2"/>
+            <polygon points="280,58 290,62 280,66" fill="#f85149"/>
+            <text x="220" y="52" fill="#f85149" font-family="Inter, sans-serif" font-size="10">HEAD changes</text>
+
+            <rect x="295" y="20" width="160" height="85" rx="6" fill="#161b22" stroke="#f85149"/>
+            <text x="310" y="45" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">Current: SHA Poll</text>
+            <text x="310" y="68" fill="#f85149" font-family="Inter, sans-serif" font-size="11">Hourly noise commit</text>
+            <text x="310" y="85" fill="#8b949e" font-family="Inter, sans-serif" font-size="10">Re-fetches 8.7MB tarball</text>
+
+            <path d="M455 62 H520" stroke="#3fb950" stroke-width="2"/>
+            <polygon points="520,58 530,62 520,66" fill="#3fb950"/>
+            <text x="465" y="52" fill="#3fb950" font-family="Inter, sans-serif" font-size="10">Tree Hash</text>
+
+            <rect x="535" y="20" width="130" height="85" rx="6" fill="#161b22" stroke="#3fb950"/>
+            <text x="548" y="45" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">Subtree Hash</text>
+            <text x="548" y="68" fill="#3fb950" font-family="Inter, sans-serif" font-size="11">Zero churn</text>
+            <text x="548" y="85" fill="#8b949e" font-family="Inter, sans-serif" font-size="10">Updates on real edits</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>packages/release-lock/src/registry.ts:365-376 tracks cursor/plugins via refs/heads/main, while .github/workflows/refresh-release-lock.yml:49-61 commits unconditionally on any JSON diff, polluting git log history with ~20 commits weekly.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Eliminates automated commit noise and recurring rebase conflicts on active feature branches while preserving cryptographic pin guarantees and hermetic offline rendering.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Requires an extra GitHub API call (Git Trees API) during resolution for <code>gitRef</code> entries declaring a <code>skillPath</code>. Fallback handling needed if an API rate limit occurs.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 3 -->
+      <article class="idea-card" id="idea-3">
+        <div class="idea-header">
+          <h3 class="idea-title">3. Surgical Manifest-Aware System Dispatcher (<code>dotfiles-apply-targeted</code>)</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 92%</span>
+            <span class="badge badge-cx-m">Complexity M</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Introduce a dedicated developer CLI command (<code>dotfiles-apply-targeted &lt;path&gt;</code>) that maps modified files under <code>system/linux/etc/**</code> to their owning <code>install-system-*.sh.tmpl</code> script using <code>.chezmoidata/system.yaml</code> globs. It dry-run renders only that specific template against the active worktree, presents an interactive diff preview with deletion safety checks, and executes only that script under sudo without invalidating Chezmoi's machine-wide state bucket.
+        </p>
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>docs/solutions/integration-issues/chezmoi-worktree-root-etc-file-deployment.md:58-88 documents the dangerous 4-step manual workaround (manual execute-template to /tmp, deletion inspection, isolated sudo execution) required to test single udev drop-ins without triggering 20 scripts.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Transforms an error-prone, hazardous manual shell ritual into a single verified command, reducing feedback latency for hardware driver, udev, and PAM development from 15 minutes to under 5 seconds.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Must maintain strict synchronization with <code>.chezmoidata/system.yaml</code> glob mappings and root deletion arrays to prevent accidental drift between targeted and full applies.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 4 -->
+      <article class="idea-card" id="idea-4">
+        <div class="idea-header">
+          <h3 class="idea-title">4. Unified Multi-Harness Declarative Settings Engine (<code>packages/settings-reconcile</code>)</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 91%</span>
+            <span class="badge badge-cx-m">Complexity M</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Expand <code>packages/settings-reconcile</code> from a Codex-only TOML reconciler into a universal, multi-format declarative assertion engine handling TOML (Codex <code>config.toml</code>), JSON (Claude Code <code>settings.json</code>), and YAML (oh-my-pi <code>config.yml</code>). It absorbs the ad-hoc bash/jq loops in <code>run_after_config-claude-settings.sh.tmpl</code> and custom yq scripts in <code>run_after_config-omp-settings.sh.tmpl</code>, providing unified path-leaf assertion, symlink defenses, owner verification, and atomic writes across all agent harnesses.
+        </p>
+
+        <div class="visual-container">
+          <svg width="680" height="135" viewBox="0 0 680 135" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="15" width="280" height="105" rx="6" fill="#161b22" stroke="#f85149" stroke-width="1.5"/>
+            <text x="35" y="38" fill="#f85149" font-family="Inter, sans-serif" font-weight="600" font-size="12">CURRENT: 3 Disparate Implementations</text>
+            <text x="35" y="60" fill="#c9d1d9" font-family="JetBrains Mono, monospace" font-size="11">Codex:  TS binary (settings-reconcile)</text>
+            <text x="35" y="80" fill="#c9d1d9" font-family="JetBrains Mono, monospace" font-size="11">Claude: Raw jq + bash string loops</text>
+            <text x="35" y="100" fill="#c9d1d9" font-family="JetBrains Mono, monospace" font-size="11">omp:    Shell yq wrapper script</text>
+
+            <path d="M310 67 H370" stroke="#58a6ff" stroke-width="2"/>
+            <polygon points="370,63 380,67 370,71" fill="#58a6ff"/>
+
+            <rect x="390" y="15" width="270" height="105" rx="6" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+            <text x="405" y="38" fill="#3fb950" font-family="Inter, sans-serif" font-weight="600" font-size="12">UNIFIED: Single TypeScript Engine</text>
+            <text x="405" y="65" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Unified path-leaf assertion algorithm</text>
+            <text x="405" y="85" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Consistent symlink & atomic write guards</text>
+            <text x="405" y="105" fill="#a5d6ff" font-family="Inter, sans-serif" font-size="11">✓ Multi-format: TOML, JSON, YAML</text>
+          </svg>
+        </div>
+
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>packages/settings-reconcile/src/reconcile.ts:11-30 only parses TOML, while AGENTS.md:120-135 documents that Claude Code and omp settings are asserted via separate shell scripts with independent error modes and duplicated fail-open logic.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Eliminates fragile shell scripts, unifies allowlist validation, and guarantees identical atomicity, symlink defense, and non-destructive convergence semantics across all three agent harnesses.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Expands the bundle size of <code>settings-reconcile</code> by pulling in robust YAML and JSON parser dependencies into the package.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 5 -->
+      <article class="idea-card" id="idea-5">
+        <div class="idea-header">
+          <h3 class="idea-title">5. Active Agent Schema Drift & Deprecation Guard (<code>dotfiles-agent-doctor</code>)</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 89%</span>
+            <span class="badge badge-cx-m">Complexity M</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Implement an automated pre-apply and CI validation tool that introspects active agent CLI binaries (<code>claude --help</code>, <code>codex features list</code>, <code>omp config show</code>) to verify that all asserted leaves in <code>.chezmoidata/agents.yaml</code> remain valid and recognized. If an upstream vendor silently renames or deprecates a key (such as memory suppression flags, telemetry toggles, or sandbox switches), the doctor fails loudly with an actionable migration diff rather than allowing the assertion to succeed against an ignored key.
+        </p>
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>AGENTS.md:131-137 warns: "Nothing validates that a declared path names a real Claude Code setting; no machine-readable settings schema is published, so a typo is asserted and reported as success while the product ignores it."
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Directly protects the repository's core security invariants (disabling agent auto-memory, enforcing sandbox boundaries) against silent vendor degradation during CLI version updates.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Agent CLIs do not all provide clean machine-readable schemas, requiring robust regex/help-text parsing heuristics that must be defended against CLI formatting changes.</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Idea 6 -->
+      <article class="idea-card" id="idea-6">
+        <div class="idea-header">
+          <h3 class="idea-title">6. Build-Time Skill Manifest Polyfill Pipeline for oh-my-pi Harmonization</h3>
+          <div class="idea-badges">
+            <span class="badge badge-conf-high">Confidence 93%</span>
+            <span class="badge badge-cx-s">Complexity S</span>
+          </div>
+        </div>
+        <p class="idea-desc">
+          Build a pre-packaging transformation step into <code>00-tools</code> or <code>packages/release-lock</code> that normalizes external skill archives for universal consumption across all harnesses. It automatically strips the root <code>plugin.json</code> for oh-my-pi while standardizing plugin manifest identifiers to prevent removal mismatches, completely eliminating the need for a secondary duplicate download archive (<code>compound-engineering-omp</code>) in <code>agents.marketplaces</code>.
+        </p>
+        <div class="idea-grid">
+          <div class="idea-field">
+            <span class="field-label">Basis (Direct Repository Evidence)</span>
+            <div class="basis-box">
+              <span class="basis-tag">direct:</span>AGENTS.md:188-204 and .chezmoidata/agents.yaml:147-164 document that compound-engineering-omp is a duplicate archive kept solely to exclude */plugin.json (cb30ed4), and .chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl:136-143 notes removal loops fail due to registry vs manifest ID disparities.
+            </div>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Rationale</span>
+            <span class="field-content">Halves external skill download bandwidth, eliminates redundant marketplace keys in <code>agents.yaml</code>, and permanently fixes the broken plugin removal loop in oh-my-pi.</span>
+          </div>
+          <div class="idea-field">
+            <span class="field-label">Downsides & Tradeoffs</span>
+            <span class="field-content">Adds a small local extraction/re-packaging step during initial tool bootstrap or apply, slightly extending the phase-00 execution window on fresh machines.</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section id="rejection-summary">
+      <h2>Rejection Summary</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+        An adversarial basis verification audit was executed across 52 raw candidates and cross-cutting combinations. Below are the considered ideas cut during critique with specific grounded reasons:
+      </p>
+
+      <table class="rejection-table">
+        <thead>
+          <tr>
+            <th class="table-id">#</th>
+            <th class="table-title">Idea</th>
+            <th class="table-reason">Reason Rejected</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="table-id">5</td>
+            <td class="table-title">Autonomous Worktree Trust Seeding via Orca Hooks</td>
+            <td class="table-reason">Already implemented; <code>docs/solutions/integration-issues/unattended-agent-harness-workspace-trust-seeding.md</code> details that <code>agent-trust-reconcile</code> already seeds trust on apply and via <code>orca-ide worktree create</code>.</td>
+          </tr>
+          <tr>
+            <td class="table-id">7</td>
+            <td class="table-title">Self-Healing Capability Probe Expiration for dotfiles-skips</td>
+            <td class="table-reason">Already fully implemented in <code>.install-prerequisites.sh:998-1056</code> via <code>prune_stale_skip_records()</code> which prunes stale skip records on every script-running command.</td>
+          </tr>
+          <tr>
+            <td class="table-id">16</td>
+            <td class="table-title">Atomic /etc Confext Overlays (systemd-confext)</td>
+            <td class="table-reason">Breaks macOS Darwin support, breaks mutable root package manager updates on Fedora/Jetson, and cannot run post-install hooks (e.g. <code>authselect</code>, <code>udevadm</code>).</td>
+          </tr>
+          <tr>
+            <td class="table-id">17</td>
+            <td class="table-title">The Fixed Canonical Workspace Mount (/workspace)</td>
+            <td class="table-reason">Breaks concurrent Orca worktree execution at distinct paths; trust is already resolved by <code>agent-trust-reconcile</code> without filesystem indirection.</td>
+          </tr>
+          <tr>
+            <td class="table-id">18</td>
+            <td class="table-title">Decoupled Lock Artifact Feeds</td>
+            <td class="table-reason">Violates the core rule that <code>releases.json</code> must resolve offline from git state without external network queries; subtree hashing solves churn locally.</td>
+          </tr>
+          <tr>
+            <td class="table-id">19</td>
+            <td class="table-title">Virtualized Skill Protocol Proxy</td>
+            <td class="table-reason">Over-engineering; filesystem skills are natively discovered via existing symlinks (<code>~/.agents/skills</code>); an MCP proxy adds unnecessary latency and runtime failure modes.</td>
+          </tr>
+          <tr>
+            <td class="table-id">21</td>
+            <td class="table-title">Bootable Container (bootc) Base Inversion</td>
+            <td class="table-reason">Out of scope for a dotfiles repository; does not support macOS Darwin or Jetson Tegra and converts a configuration manager into an OS image compiler.</td>
+          </tr>
+          <tr>
+            <td class="table-id">22</td>
+            <td class="table-title">Native MCP Agent Coordination (Replacing PTY Guards)</td>
+            <td class="table-reason">Misinterprets <code>packages/orchestration-hook/src/gate.ts</code>, which is an in-process tool callback preventing unmanaged CLI launches, not a PTY hack.</td>
+          </tr>
+          <tr>
+            <td class="table-id">29</td>
+            <td class="table-title">Universal Brief Verification in orchestration-hook</td>
+            <td class="table-reason">Usurps Orca IDE's centralized role; Orca owns task briefs, task state, and coordinator loops, while the hook is strictly an entrypoint gate.</td>
+          </tr>
+          <tr>
+            <td class="table-id">32</td>
+            <td class="table-title">Deadband Hysteresis Buffering for Lockfiles</td>
+            <td class="table-reason">Inferior to exact Git subtree tree-hashing (Idea 2); arbitrary time-window buffering delays real releases while still churning when the timer expires.</td>
+          </tr>
+          <tr>
+            <td class="table-id">38</td>
+            <td class="table-title">Cryptographic Transponder Squawk Tokens for Launch Gates</td>
+            <td class="table-reason">Security theater; <code>gate.ts</code> runs as a local, synchronous <code>PreToolUse</code> hook callback where transponder tokens add zero defense over inspecting event args.</td>
+          </tr>
+          <tr>
+            <td class="table-id">39</td>
+            <td class="table-title">Sub-100ms Dotfile Virtualization via User-Namespace OverlayFS</td>
+            <td class="table-reason">Breaks package manager hardlinks (Bun/Cargo caches), violates POSIX atomic rename semantics in <code>$HOME</code>, and introduces fragile virtual filesystem overhead.</td>
+          </tr>
+          <tr>
+            <td class="table-id">41</td>
+            <td class="table-title">TPM2-Sealed Keyring Session Injection for Zero-Interactive Secrets</td>
+            <td class="table-reason">Violates inviolable security policy in <code>AGENTS.md</code>; agent render and test runs are strictly forbidden from accessing real secrets or live 1Password credentials.</td>
+          </tr>
+          <tr>
+            <td class="table-id">42</td>
+            <td class="table-title">Landlock Micro-Sandboxed Autonomous Agent Execution</td>
+            <td class="table-reason">Documented in <code>selinux-user-scope-agent-config-protection.md</code> as breaking build toolchains, compilers, and caches; additionally has zero macOS support.</td>
+          </tr>
+          <tr>
+            <td class="table-id">43</td>
+            <td class="table-title">P2P Workstation Mesh for Agent Dispatch</td>
+            <td class="table-reason">Circumvents Orca orchestration authority; dispatches must be supervised locally through Orca rather than routed across an ad-hoc WireGuard network.</td>
+          </tr>
+          <tr>
+            <td class="table-id">46</td>
+            <td class="table-title">Continuous Background State Reconciliation Daemon (dotfilesd)</td>
+            <td class="table-reason">Running continuous automated applies risks overwriting in-progress developer edits and violates the core rule that apply runs must be operator-driven.</td>
+          </tr>
+          <tr>
+            <td class="table-id">48</td>
+            <td class="table-title">Hermetic Agent Sandbox (Landlock + Canonical Mount + Ticket Broker)</td>
+            <td class="table-reason">Compounds refuted proposals (17, 36, 42); breaks concurrent worktree paths and reinvents trust mechanisms already operational in <code>agent-trust-reconcile</code>.</td>
+          </tr>
+          <tr>
+            <td class="table-id">51</td>
+            <td class="table-title">Composable Hardware OS (Hardware ECS + systemd-confext Overlays)</td>
+            <td class="table-reason">Compounds refuted proposals (16, 34, 40); breaks macOS Darwin and introduces excessive game-engine abstraction over simple boolean fact gates.</td>
+          </tr>
+          <tr>
+            <td class="table-id">52</td>
+            <td class="table-title">Protocol-Level Orchestration Mesh (Native MCP + Squawk Tokens)</td>
+            <td class="table-reason">Compounds refuted proposals (22, 29, 38); duplicates Orca IDE functionality with unnecessary cryptographic complexity.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="composition-signal">
+      Composed 2026-09-16T02:35Z by <code>ce-ideate</code> in surprise-me mode for <code>github.com/hyperlapse122/dotfiles</code>
+    </footer>
+  </div>
+</body>
+</html>

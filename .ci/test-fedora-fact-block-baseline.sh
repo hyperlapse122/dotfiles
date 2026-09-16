@@ -147,11 +147,10 @@ NODE
 # manifest override gate lookup, and the hardware installer gained the
 # integrated-only blacklist in its file array plus a gated retirement loop.
 #
-# REBASELINED again for install-system-16-udev when the STM32 ROM DFU rule was
-# added. The installer's fingerprint block emits one hashed line per file its
-# globs match, and that block is deliberately not normalized away above, so a
-# new managed /etc file moves this digest exactly once -- the same reason the
-# hardware installer moved when the hybrid-graphics drop-ins landed.
+# REBASELINED again for install-system-* when Position-Independent Script
+# Rendering (PISR) replaced render-time {{ $sourceDir }} interpolation with
+# runtime ${CHEZMOI_SOURCE_DIR:-...} parameter expansion, deliberately
+# decoupling rendered script bodies from worktree checkout paths.
 #
 # SCOPE, precisely: the fixture pins `desktop: none`, so these digests watch the
 # ladder's THREE-rung shape only. The askpass rung the kde and gnome shapes add
@@ -159,15 +158,15 @@ NODE
 # three renderings.
 declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=ef94d0c1c3c5168850c475e4e459af4966c17a698a43a5f604f0d8c8ff09ba64
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=5e054c7bb0099089a34704bdd6e0959145b8e974d35e5aec7be6b538ae486b05
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=09824a9c7f412bacb92cd298fd1984267dffaa0c92987837776bbcf1d7521b8c
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=4c922e1d4afb4495962f9bd494537d89340f95afe4ccd8a4691e93b7f75623d6
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=67684abe76778a327bd4df7f937639309978681908cf0635f862ee7dea74fc10
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=1f1c7e23cf4d19f8ed64165563a27f53530ad6bfbe498023bc3119fbe6acf38b
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=68f3e13aab373fe9f5e45bc2b123a941ef7189421c2f16688a4790b8311fd825
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=3881be450d9a15ba86727e36ab90b4ce70f825bfa87ded61d81e4dcfc653b120
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=271eeddc315098df82669acba26ce853caae4c798145227f2c2d08e9fab6880d
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=1ce5afd3cb6e807f16ac5384c303554982983687e20756c06b724180a0f6672d
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=f077503984d034c21fb61fc6c275898b4d1a3679750f1d8be72c2f3d1f7a6326
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=5548d795181a0e8475ec31448dae0f53e2cd42b8d8c99296b46afe08a4691d40
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=65f019e900b7c452c9b09c23b1f657fe7758cf9e33746d47d81bd855c6576fdd
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=2c5a774474b2c795c7145a73cbb05dab2484aa4a5236c35a6fd4e98e64b9a0a2
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=dc0b94a8166d05d1fddd55ae9c0e8a929ea8a417651073afe8e7d6e508d308d3
 )
 
