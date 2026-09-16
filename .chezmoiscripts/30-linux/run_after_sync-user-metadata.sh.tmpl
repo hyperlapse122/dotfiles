@@ -1,0 +1,61 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+#
+# Reconciles local workstation user metadata (RealName, Email, IconFile) with
+# AccountsService (org.freedesktop.Accounts.User) over D-Bus via busctl.
+#
+# Metadata sources:
+#   - RealName: .user.fullname from .chezmoidata/user.yaml
+#   - Email:    .user.email from .chezmoidata/user.yaml
+#   - IconFile: $HOME/.face (deployed from dot_face via Git LFS)
+#
+# Surfaces updated:
+#   - AccountsService daemon (/var/lib/AccountsService/)
+#   - KDE Plasma System Settings (kcm_users)
+#   - SDDM greeter & Plasma lock screen
+#
+# Idempotent: probes current D-Bus properties first and only invokes Set*
+# methods when differences exist. Zero writes when converged.
+#
+# Lifecycle: run_after_ script running on every apply. Excluded by lifecycle
+# from the frozen R5 skip matrix.
+set -euo pipefail
+
+if ! command -v busctl >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "sync-user-metadata" "site" "busctl-absent" "direction" "harmless" "reason" "busctl is not installed on this host") | trim | indent 2 }}
+fi
+
+user_path="/org/freedesktop/Accounts/User$(id -u)"
+if ! busctl introspect org.freedesktop.Accounts "$user_path" >/dev/null 2>&1; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "sync-user-metadata" "site" "accountsservice-user-absent" "direction" "harmless" "reason" "AccountsService user object is not reachable over D-Bus") | trim | indent 2 }}
+fi
+
+target_name={{ .user.fullname | quote }}
+target_email={{ .user.email | quote }}
+target_icon="$HOME/.face"
+
+# 1. Reconcile RealName
+current_name="$(busctl get-property org.freedesktop.Accounts "$user_path" org.freedesktop.Accounts.User RealName 2>/dev/null | sed -E 's/^s "([^"]*)"$/\1/' || true)"
+if [[ -n "$target_name" && "$current_name" != "$target_name" ]]; then
+  busctl call org.freedesktop.Accounts "$user_path" org.freedesktop.Accounts.User SetRealName s "$target_name"
+  printf 'sync-user-metadata: SetRealName = %s (was %s)\n' "$target_name" "${current_name:-unset}"
+fi
+
+# 2. Reconcile Email
+current_email="$(busctl get-property org.freedesktop.Accounts "$user_path" org.freedesktop.Accounts.User Email 2>/dev/null | sed -E 's/^s "([^"]*)"$/\1/' || true)"
+if [[ -n "$target_email" && "$current_email" != "$target_email" ]]; then
+  busctl call org.freedesktop.Accounts "$user_path" org.freedesktop.Accounts.User SetEmail s "$target_email"
+  printf 'sync-user-metadata: SetEmail = %s (was %s)\n' "$target_email" "${current_email:-unset}"
+fi
+
+# 3. Reconcile IconFile
+if [[ -f "$target_icon" ]]; then
+  current_icon="$(busctl get-property org.freedesktop.Accounts "$user_path" org.freedesktop.Accounts.User IconFile 2>/dev/null | sed -E 's/^s "([^"]*)"$/\1/' || true)"
+  if [[ ! -f "$current_icon" ]] || ! cmp -s "$target_icon" "$current_icon"; then
+    busctl call org.freedesktop.Accounts "$user_path" org.freedesktop.Accounts.User SetIconFile s "$target_icon"
+    printf 'sync-user-metadata: SetIconFile = %s (updated)\n' "$target_icon"
+  fi
+fi
+
+exit 0
+{{ end -}}
