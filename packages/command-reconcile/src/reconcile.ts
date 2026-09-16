@@ -1,6 +1,6 @@
 import { lstat, readlink, realpath, stat } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import type { CommandManifest, UnitManifest } from "./manifest.js";
+import type { CommandManifest, ProducerClass, UnitManifest } from "./manifest.js";
 import {
   atomicSymlink,
   contained,
@@ -8,7 +8,7 @@ import {
   resolveCommandPaths,
   type CommandPaths,
 } from "./paths.js";
-import { ensureCompletedUnit } from "./producer.js";
+import { ensureCompletedUnit, isUnitCompleted } from "./producer.js";
 import { pruneEligibleUnits } from "./prune.js";
 import { readState, writeState, type CommandState } from "./state.js";
 
@@ -28,6 +28,35 @@ export interface ReconcileReport {
   conflicts: Array<{ id: string; path: string; reason: string }>;
   retained: string[];
   pruned: string[];
+  deferred: string[];
+}
+
+export interface ReconcileOptions {
+  /**
+   * Producer classes that may not MINT a store generation in this pass.
+   *
+   * A generation is named by the unit's identity, and the reconciler cannot see
+   * whether the bytes sitting in the staging path were produced from the
+   * sources that identity hashes. In a pass that runs BEFORE the producer, they
+   * were not: the early activation pass in `00-tools` would copy the previous
+   * build's binary into the new identity's directory and mark it complete, and
+   * the post-build pass in `65-commands` then reads that completion marker and
+   * copies nothing. The host keeps running the stale binary under the current
+   * identity, and no later apply ever repairs it because the identity no longer
+   * moves.
+   *
+   * Deferring a producer class is what keeps the early pass to its documented
+   * job — activating commands that already exist so later phases can run them.
+   * A deferred unit whose identity ALREADY has a completed generation is
+   * activated normally: linking an existing generation mints nothing.
+   */
+  deferProducers?: ProducerClass[];
+}
+
+/** True when this unit's current identity already has a completed generation. */
+async function hasCompletedGeneration(paths: CommandPaths, unit: UnitManifest): Promise<boolean> {
+  if (!unit.identity) return false;
+  return isUnitCompleted(join(paths.storeDir, unit.id, unit.identity));
 }
 
 async function findUnresolvableCommand(
@@ -191,9 +220,11 @@ export async function reconcileAll(
         state: CommandState,
       ) => Promise<{ retained: string[]; pruned: string[] }>)
     | boolean = true,
+  options: ReconcileOptions = {},
 ): Promise<ReconcileReport> {
   const paths = resolveCommandPaths(targetHome);
   const state = await readState(targetHome);
+  const deferProducers = new Set<ProducerClass>(options.deferProducers ?? []);
 
   const report: ReconcileReport = {
     activated: [],
@@ -202,10 +233,15 @@ export async function reconcileAll(
     conflicts: [],
     retained: [],
     pruned: [],
+    deferred: [],
   };
 
   for (const unit of manifest.units) {
     try {
+      if (deferProducers.has(unit.producer) && !(await hasCompletedGeneration(paths, unit))) {
+        report.deferred.push(unit.id);
+        continue;
+      }
       const result = await activateUnitInternal(paths, unit, state);
       if (result.status === "activated") {
         report.activated.push(unit.id);

@@ -1,4 +1,14 @@
-import { lstat, mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  readlink,
+  rm,
+  symlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -441,6 +451,52 @@ describe("reconcile", () => {
       await rm(testHome, { recursive: true, force: true }).catch(() => {});
     }
   });
+
+  it("defers a build unit whose identity has no completed generation yet", async () => {
+    const testHome = join(tmpdir(), `test-rec-defer-${Date.now()}-${Math.random()}`);
+    const stagingDir = join(testHome, ".local/share/chezmoi-commands/incomplete/built-tool");
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "built-tool"), "#!/bin/sh\necho stale\n", "utf-8");
+
+    const buildUnit: UnitManifest = {
+      id: "built-tool",
+      producer: "build",
+      safetyProfile: "native-single-file",
+      proofEligible: true,
+      mutableTree: false,
+      privacy: "public",
+      mode: "0755",
+      commands: [{ name: "built-tool" }],
+      identity: "sources-v2",
+      stagingPath: ".local/share/chezmoi-commands/incomplete/built-tool",
+    };
+    const manifest: CommandManifest = { schemaVersion: "command-manifest/v1", units: [buildUnit] };
+
+    try {
+      const deferredReport = await reconcileAll(testHome, manifest, false, {
+        deferProducers: ["build"],
+      });
+      expect(deferredReport.deferred).toContain("built-tool");
+      expect(deferredReport.activated).toEqual([]);
+
+      // Nothing was minted, so the post-build pass still copies the real
+      // artifact rather than reading a completion marker over stale bytes.
+      await writeFile(join(stagingDir, "built-tool"), "#!/bin/sh\necho fresh\n", "utf-8");
+      const buildReport = await reconcileAll(testHome, manifest);
+      expect(buildReport.activated).toContain("built-tool");
+      expect(await readFile(join(testHome, ".local/bin/built-tool"), "utf-8")).toContain("fresh");
+
+      // A deferred unit whose generation already exists is still activated:
+      // linking an existing generation mints nothing.
+      const relinkReport = await reconcileAll(testHome, manifest, false, {
+        deferProducers: ["build"],
+      });
+      expect(relinkReport.deferred).toEqual([]);
+      expect(relinkReport.unchanged).toContain("built-tool");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
 });
 
 describe("ensureCompletedUnit repair", () => {
@@ -574,6 +630,44 @@ describe("ensureCompletedUnit repair", () => {
       );
       expect(result.changed).toBe(false);
       expect(result.identity).toBe("rust-v1.2.3");
+    } finally {
+      await rm(testHome, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("re-mints a completed generation that was minted before its staging was written", async () => {
+    const testHome = join(tmpdir(), `test-repair-stale-${Date.now()}-${Math.random()}`);
+    const paths = resolveCommandPaths(testHome);
+    const stagingRel = ".local/share/chezmoi-commands/incomplete/codex";
+    const stagingDir = join(testHome, stagingRel);
+    const storeDir = join(paths.storeDir, "codex", "rust-v1.2.3");
+
+    await mkdir(stagingDir, { recursive: true });
+    await writeFile(join(stagingDir, "codex"), "rebuilt-codex", { encoding: "utf-8", mode: 0o755 });
+
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "codex"), "previous-build", { encoding: "utf-8", mode: 0o755 });
+    await writeCompletionMarker(storeDir, 0o755);
+
+    // The generation was minted a minute before the artifact it claims to hold
+    // was staged -- the shape an activation pass that ran ahead of the build
+    // phase leaves behind.
+    const mintedAt = new Date(Date.now() - 60_000);
+    await utimes(join(storeDir, ".complete"), mintedAt, mintedAt);
+    await utimes(join(storeDir, "codex"), mintedAt, mintedAt);
+
+    try {
+      const result = await ensureCompletedUnit(paths, externalUnit(stagingRel), emptyState);
+      expect(result.changed).toBe(true);
+      expect(result.identity).toBe("rust-v1.2.3");
+      expect(await readFile(join(storeDir, "codex"), "utf-8")).toBe("rebuilt-codex");
+      expect(await isUnitCompleted(storeDir)).toBe(true);
+
+      // The swap leaves no scratch directory behind for the pruner to find.
+      const leftovers = (await readdir(join(paths.storeDir, "codex"))).filter((entry) =>
+        entry.startsWith("."),
+      );
+      expect(leftovers).toEqual([]);
     } finally {
       await rm(testHome, { recursive: true, force: true }).catch(() => {});
     }

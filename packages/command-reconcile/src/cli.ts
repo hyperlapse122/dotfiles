@@ -1,12 +1,15 @@
 import { withLease } from "./lease.js";
-import { loadManifest } from "./manifest.js";
+import { loadManifest, type ProducerClass } from "./manifest.js";
 import { activateUnit, reconcileAll } from "./reconcile.js";
+
+const PRODUCER_CLASSES: readonly ProducerClass[] = ["external", "source", "build", "existingTree"];
 
 function printUsage(): void {
   process.stderr.write(
     `Usage:
   command-reconcile activate-unit --manifest <path|json> --unit <id> [--home <path>] [--json]
   command-reconcile reconcile-all --manifest <path|json> [--home <path>] [--prune] [--json]
+                    [--defer-producer <${PRODUCER_CLASSES.join("|")}>]...
 `,
   );
 }
@@ -25,10 +28,19 @@ export async function main(argv: string[]): Promise<number> {
   let homeArg: string | undefined = undefined;
   let pruneArg = false;
   let jsonArg = false;
+  const deferProducers: ProducerClass[] = [];
 
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
-    if (arg === "--manifest" && i + 1 < args.length) {
+    if (arg === "--defer-producer" && i + 1 < args.length) {
+      const producer = args[++i] ?? "";
+      if (!PRODUCER_CLASSES.includes(producer as ProducerClass)) {
+        process.stderr.write(`Error: unknown producer class for --defer-producer: ${producer}\n`);
+        printUsage();
+        return 1;
+      }
+      deferProducers.push(producer as ProducerClass);
+    } else if (arg === "--manifest" && i + 1 < args.length) {
       manifestArg = args[++i] ?? "";
     } else if (arg === "--unit" && i + 1 < args.length) {
       unitArg = args[++i] ?? "";
@@ -66,7 +78,9 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "reconcile-all") {
-    const report = await withLease(homeArg, () => reconcileAll(homeArg, manifest, pruneArg));
+    const report = await withLease(homeArg, () =>
+      reconcileAll(homeArg, manifest, pruneArg, { deferProducers }),
+    );
     if (jsonArg) {
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     } else {

@@ -73,6 +73,122 @@ async function missingStagedEntries(stagingPath: string, storeUnitDir: string): 
   return staged.filter((entry) => !present.has(entry));
 }
 
+/** Newest modification time under `stagingPath`, or undefined when it is absent. */
+async function newestStagedMtimeMs(stagingPath: string): Promise<number | undefined> {
+  let st;
+  try {
+    st = await lstat(stagingPath);
+  } catch {
+    return undefined;
+  }
+  if (!st.isDirectory()) return st.mtimeMs;
+
+  let newest = st.mtimeMs;
+  let entries: string[];
+  try {
+    entries = await readdir(stagingPath, { recursive: true });
+  } catch {
+    return undefined;
+  }
+  for (const entry of entries) {
+    try {
+      const entrySt = await lstat(join(stagingPath, entry));
+      if (entrySt.mtimeMs > newest) newest = entrySt.mtimeMs;
+    } catch {}
+  }
+  return newest;
+}
+
+/**
+ * Whether a completed generation was minted BEFORE its staging path was last
+ * written -- which means it does not hold the bytes its identity names.
+ *
+ * A generation is named by an identity hashed from SOURCES, and nothing in the
+ * store records which bytes it was minted from, so a mint that ran before the
+ * producer did is indistinguishable from a converged one by name alone. It has
+ * happened twice on this fleet: an activation pass that ran ahead of the build
+ * phase, and a build script that skipped on a host missing its toolchain. Both
+ * leave a complete generation carrying the PREVIOUS build's binary, and because
+ * the identity never moves again, no later apply repairs it.
+ *
+ * The completion marker is written last, so its own mtime is the mint time, and
+ * staging newer than that is the one observable the store keeps. It is a
+ * best-effort signal in one direction only: a false positive costs one
+ * redundant copy, and a staging path restored with an archive's own old
+ * timestamps is missed -- that case belongs to the external producers, whose
+ * identity moves whenever their bytes do.
+ */
+async function generationPredatesStaging(
+  stagingPath: string,
+  storeUnitDir: string,
+): Promise<boolean> {
+  const stagedMtime = await newestStagedMtimeMs(stagingPath);
+  if (stagedMtime === undefined) return false;
+  try {
+    const marker = await lstat(join(storeUnitDir, ".complete"));
+    return stagedMtime > marker.mtimeMs;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Re-mints a completed generation from its current staging path.
+ *
+ * Copying over the generation in place is not available: a running process
+ * holds its binary and the rewrite fails ETXTBSY. So the replacement is built
+ * beside it and swapped in with two renames, which leaves the identity path
+ * resolvable except for the instant between them, and running processes keep
+ * the inode they already opened.
+ */
+async function remintGeneration(
+  targetStoreDir: string,
+  stagingPath: string,
+  unit: UnitManifest,
+  unitMode: number,
+): Promise<void> {
+  const unitStoreDir = dirname(targetStoreDir);
+  const token = randomUUID();
+  const replacementDir = join(unitStoreDir, `.remint-${token}`);
+  const retiredDir = join(unitStoreDir, `.retired-${token}`);
+
+  try {
+    await prepareDir(replacementDir, unitMode);
+    await copyStagingInto(replacementDir, stagingPath, unit, unitMode);
+    await writeCompletionMarker(replacementDir, unitMode);
+    await rename(targetStoreDir, retiredDir);
+    try {
+      await rename(replacementDir, targetStoreDir);
+    } catch (err) {
+      await rename(retiredDir, targetStoreDir).catch(() => {});
+      throw err;
+    }
+  } finally {
+    await rm(replacementDir, { recursive: true, force: true }).catch(() => {});
+    await rm(retiredDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Copies a directory staging path wholesale, a file staging path per command. */
+async function copyStagingInto(
+  destinationDir: string,
+  stagingPath: string,
+  unit: UnitManifest,
+  unitMode: number,
+): Promise<void> {
+  const st = await lstat(stagingPath);
+  if (st.isDirectory()) {
+    await cp(stagingPath, destinationDir, { recursive: true });
+    return;
+  }
+  for (const cmd of unit.commands) {
+    const destFile = join(destinationDir, cmd.relPath ?? cmd.name);
+    await prepareDir(dirname(destFile), unitMode);
+    await copyFile(stagingPath, destFile);
+    await chmod(destFile, unitMode);
+  }
+}
+
 export async function ensureCompletedUnit(
   paths: CommandPaths,
   unit: UnitManifest,
@@ -157,6 +273,10 @@ export async function ensureCompletedUnit(
     : join(paths.home, unit.stagingPath);
 
   if (await isUnitCompleted(targetStoreDir)) {
+    if (await generationPredatesStaging(stagingPath, targetStoreDir)) {
+      await remintGeneration(targetStoreDir, stagingPath, unit, unitMode);
+      return { backingPath: targetStoreDir, identity, changed: true };
+    }
     // A unit can gain a file without changing identity -- a second external
     // staged into the same directory. Copy only what the generation lacks:
     // rewriting an entry already there would fail ETXTBSY against a running
@@ -175,26 +295,14 @@ export async function ensureCompletedUnit(
     return { backingPath: targetStoreDir, identity, changed: true };
   }
 
-  let st;
   try {
-    st = await lstat(stagingPath);
+    await lstat(stagingPath);
   } catch (err) {
     throw new Error(`Staging path missing for unit ${unit.id}: ${stagingPath} (${String(err)})`);
   }
 
   await prepareDir(targetStoreDir, unitMode);
-
-  if (st.isDirectory()) {
-    await cp(stagingPath, targetStoreDir, { recursive: true });
-  } else {
-    for (const cmd of unit.commands) {
-      const destFile = join(targetStoreDir, cmd.relPath ?? cmd.name);
-      await prepareDir(dirname(destFile), unitMode);
-      await copyFile(stagingPath, destFile);
-      await chmod(destFile, unitMode);
-    }
-  }
-
+  await copyStagingInto(targetStoreDir, stagingPath, unit, unitMode);
   await writeCompletionMarker(targetStoreDir, unitMode);
   return {
     backingPath: targetStoreDir,

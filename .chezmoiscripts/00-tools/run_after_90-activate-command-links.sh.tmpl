@@ -1,5 +1,26 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 #!/usr/bin/env bash
+#
+# Activates the commands that already exist, so the phases between here and
+# 65-commands can run them. It is not the full reconciliation: that is
+# 65-commands, which runs after 60-build and owns pruning.
+#
+# `--defer-producer build` is what keeps this pass to that job. A store
+# generation is named by an identity hashed from SOURCES, and this pass runs
+# BEFORE 60-build writes the artifact those sources describe. Without the flag
+# it copies the PREVIOUS build's binary into the new identity's directory and
+# marks it complete; 65-commands then reads that completion marker, copies
+# nothing, and the host runs a stale binary under the current identity forever,
+# because the identity never moves again. Observed on this host: the staged
+# settings-reconcile carried `trust` and `mcp`, the activated one did not, and
+# `agent-trust-reconcile --all` had been failing with a usage error on every
+# apply behind a `|| true`.
+#
+# A deferred unit whose identity already has a completed generation is still
+# activated here -- linking an existing generation mints nothing. Nothing
+# between this phase and 65-commands consumes a build-produced command:
+# settings-reconcile and antigravity-sidecar are first read in 70-agents, and
+# figma-auth and gem80-rgb are on-demand operator commands.
 set -euo pipefail
 
 RECONCILE_BIN="$HOME/.local/libexec/command-reconcile"
@@ -8,5 +29,5 @@ if [[ ! -x "$RECONCILE_BIN" ]]; then
 fi
 
 MANIFEST_JSON={{ includeTemplate "command-manifest.tmpl" . | trim | quote }}
-"$RECONCILE_BIN" reconcile-all --manifest "$MANIFEST_JSON" || true
+"$RECONCILE_BIN" reconcile-all --manifest "$MANIFEST_JSON" --defer-producer build || true
 {{ end -}}
