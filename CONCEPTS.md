@@ -50,6 +50,15 @@ The file a dispatch names by path to carry context the dispatch spec itself cann
 ### Brief defect
 A worker escalation or failure caused by context missing from its brief rather than by the difficulty of the work. It carries no information about the unit's blast radius or judgment depth, so it never raises the model rung; the coordinator repairs the brief and re-dispatches at the same rung.
 
+### Model roster
+The single declaration in `.chezmoidata/agents.yaml` of the lead's model pin and every worker entry a lead may dispatch to: agent, model id, effort or thinking level, the work shapes it takes, and the brief guidance for that model. The rendered payloads, instruction files, prose, and tests derive their model ids from it, so no other file names a worker model by hand.
+
+### Judgment work
+Work whose deliverable is the judgment itself: a code review, a document review, a `ce-pov` verdict, or brainstorm approach generation. It is dispatched to the roster's frontier judgment entries and never performed by the lead in place.
+
+### Mechanical work
+A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster's cheapest entry.
+
 ## Repository layout
 
 ### Primary checkout
