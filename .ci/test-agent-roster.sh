@@ -488,8 +488,8 @@ grep -qF 'seven worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
   fail 'committed prose still describes seven workers'
 grep -qF 'omp-flash-lite' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
   fail 'committed prose still names the retired omp-flash-lite worker id'
-grep -qF 'six worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
-  fail 'committed prose still describes six workers'
+grep -qF 'five worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still describes five workers'
 
 # --- plugin manifests track the roster (R17) ------------------------------- #
 
