@@ -73,20 +73,74 @@ setup_dev_repos() {
   fi
 }
 
-install_devtools() {
-  local -a missing=()
+missing_dev_packages=()
+compute_missing_dev_packages() {
+  missing_dev_packages=()
   local pkg
   for pkg in "${dev_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing_dev_packages+=("${pkg}")
   done
+}
 
-  # Install group packages
-  "${DNF[@]}" group install -y "${dev_groups[@]}" 2>/dev/null || true
-
-  if [[ "${#missing[@]}" -gt 0 ]]; then
-    setup_dev_repos
-    "${DNF[@]}" install -y "${missing[@]}" || true
+# The installed-group listing is read from the local cache, so a converged host
+# answers this without contacting a repository. When the listing command itself
+# fails, every declared group is treated as missing for the attempt, and the
+# post-attempt listing decides the verdict.
+missing_dev_groups=()
+compute_missing_dev_groups() {
+  missing_dev_groups=()
+  local group listing
+  if listing="$(dnf -C -q group list --installed 2>/dev/null)"; then
+    for group in "${dev_groups[@]}"; do
+      printf '%s\n' "$listing" | awk '{print $1}' | grep -ixqF "$group" || missing_dev_groups+=("$group")
+    done
+  else
+    missing_dev_groups=("${dev_groups[@]}")
   fi
+}
+
+report_devtools_missing() {
+  if [[ "${#missing_dev_packages[@]}" -gt 0 ]]; then
+    printf 'install-devtools-fedora.sh: dnf left these declared packages uninstalled: %s\n' "${missing_dev_packages[*]}" >&2
+    printf '  sudo dnf install -y %s\n' "${missing_dev_packages[*]}" >&2
+  fi
+  if [[ "${#missing_dev_groups[@]}" -gt 0 ]]; then
+    printf 'install-devtools-fedora.sh: dnf left these declared groups uninstalled: %s\n' "${missing_dev_groups[*]}" >&2
+    printf '  sudo dnf group install -y %s\n' "${missing_dev_groups[*]}" >&2
+  fi
+  return 0
+}
+
+clear_devtools_skip_record() {
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-devtools-fedora__dev-packages-not-installed" 2>/dev/null || true
+}
+
+install_devtools() {
+  compute_missing_dev_packages
+  compute_missing_dev_groups
+
+  if [[ "${#missing_dev_packages[@]}" -gt 0 || "${#missing_dev_groups[@]}" -gt 0 ]]; then
+    if [[ "${#missing_dev_packages[@]}" -gt 0 ]]; then
+      setup_dev_repos
+    fi
+
+    if [[ "${#missing_dev_groups[@]}" -gt 0 ]]; then
+      if ! "${DNF[@]}" group install -y "${missing_dev_groups[@]}"; then :; fi
+    fi
+
+    if [[ "${#missing_dev_packages[@]}" -gt 0 ]]; then
+      if ! "${DNF[@]}" install -y "${missing_dev_packages[@]}"; then :; fi
+    fi
+
+    compute_missing_dev_packages
+    compute_missing_dev_groups
+  fi
+
+  if [[ "${#missing_dev_packages[@]}" -gt 0 || "${#missing_dev_groups[@]}" -gt 0 ]] && report_devtools_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-devtools-fedora" "site" "dev-packages-not-installed" "direction" "operator-blocking" "reason" "dnf left declared devtools packages or groups uninstalled; the missing set and the by-hand install commands were printed above") | trim | indent 4 }}
+  fi
+
+  clear_devtools_skip_record
 }
 
 install_devtools
@@ -94,11 +148,18 @@ install_devtools
 {{ else if $isUbuntu -}}
 install_apt() {
   local pkg=$1
-  local status=''
-  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
-  if [[ "$status" != installed ]]; then
-    "${SUDO[@]}" apt-get install -y "$pkg"
+  if ! apt_installed "$pkg"; then
+    devtools_attempted=1
+    if ! "${SUDO[@]}" apt-get install -y "$pkg"; then
+      printf 'install-devtools-ubuntu.sh: apt-get install failed for %s\n' "$pkg" >&2
+    fi
   fi
+}
+
+apt_installed() {
+  local status
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$1" 2>/dev/null)" || return 1
+  [[ "$status" == installed ]]
 }
 
 dev_packages=(
@@ -110,10 +171,45 @@ dev_packages=(
   pcscd
 )
 
-"${SUDO[@]}" apt-get update -qq || true
-for pkg in "${dev_packages[@]}"; do
-  install_apt "$pkg"
-done
+missing_dev_packages=()
+devtools_attempted=0
+compute_missing_dev_packages() {
+  missing_dev_packages=()
+  local pkg
+  for pkg in "${dev_packages[@]}"; do
+    apt_installed "$pkg" || missing_dev_packages+=("$pkg")
+  done
+}
+
+report_devtools_missing() {
+  printf 'install-devtools-ubuntu.sh: apt-get left these declared packages uninstalled: %s\n' "${missing_dev_packages[*]}" >&2
+  printf '  sudo apt-get install -y %s\n' "${missing_dev_packages[*]}" >&2
+  return 0
+}
+
+clear_devtools_skip_record() {
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-devtools-ubuntu__dev-packages-not-installed" 2>/dev/null || true
+}
+
+install_devtools() {
+  "${SUDO[@]}" apt-get update -qq || true
+  local pkg
+  for pkg in "${dev_packages[@]}"; do
+    install_apt "$pkg"
+  done
+
+  if [[ "$devtools_attempted" -eq 1 ]]; then
+    compute_missing_dev_packages
+  fi
+
+  if [[ "${#missing_dev_packages[@]}" -gt 0 ]] && report_devtools_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-devtools-ubuntu" "site" "dev-packages-not-installed" "direction" "operator-blocking" "reason" "apt-get left declared devtools packages uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}
+  fi
+
+  clear_devtools_skip_record
+}
+
+install_devtools
 {{ end -}}
 
 {{ end -}}

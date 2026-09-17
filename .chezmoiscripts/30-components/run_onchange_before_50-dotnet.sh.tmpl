@@ -3,12 +3,12 @@
 {{- $isDarwin := eq .chezmoi.os "darwin" -}}
 {{- if or $isFedora $isUbuntu $isDarwin -}}
 {{- $dotnetPresent := "" -}}
-{{- if $isFedora -}}
+{{- if or $isFedora $isUbuntu -}}
 {{-   $dotnetPresent = includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "dotnet-present") -}}
 {{- end -}}
 #!/usr/bin/env bash
 
-{{ if $isFedora -}}
+{{ if or $isFedora $isUbuntu -}}
 # fingerprint: {{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" .chezmoi.sourceDir "values" (list (dict "name" "dotnet-present" "value" $dotnetPresent))) }}
 {{ end -}}
 set -euo pipefail
@@ -27,67 +27,168 @@ dotnet_tools=(
 {{ if $isFedora -}}
 DNF=("${SUDO[@]}" dnf)
 
+report_dotnet_sdk_missing() {
+  printf 'install-dotnet-fedora.sh: dotnet is not installed; installing dotnet-sdk-8.0 and dotnet-sdk-10.0 failed.\n' >&2
+  printf 'install-dotnet-fedora.sh: install the SDK by hand: sudo dnf install -y dotnet-sdk-10.0\n' >&2
+  return 0
+}
+
 install_dotnet_sdk() {
   if ! rpm -q dotnet-sdk-8.0 >/dev/null 2>&1 && ! rpm -q dotnet-sdk-10.0 >/dev/null 2>&1; then
-    "${DNF[@]}" install -y dotnet-sdk-8.0 dotnet-sdk-10.0 2>/dev/null || "${DNF[@]}" install -y dotnet-sdk-8.0 || true
+    if ! "${DNF[@]}" install -y dotnet-sdk-8.0 dotnet-sdk-10.0 && ! "${DNF[@]}" install -y dotnet-sdk-8.0; then :; fi
   fi
+  command -v dotnet >/dev/null 2>&1 || report_dotnet_sdk_missing
+}
+
+report_dotnet_tools_missing() {
+  printf 'install-dotnet-fedora.sh: dotnet tool install left tools missing: %s\n' "$*" >&2
+  local tool
+  for tool in "$@"; do
+    printf 'install-dotnet-fedora.sh: install it by hand: dotnet tool install -g %s\n' "$tool" >&2
+  done
+  return 0
+}
+
+clear_dotnet_tools_skip_record() {
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-dotnet-fedora__dotnet-tools-not-installed" 2>/dev/null || true
+}
+
+missing_dotnet_tools=()
+compute_missing_dotnet_tools() {
+  missing_dotnet_tools=()
+  local installed tool
+  installed="$(dotnet tool list -g 2>/dev/null || true)"
+  for tool in "${dotnet_tools[@]}"; do
+    printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}" || missing_dotnet_tools+=("${tool}")
+  done
 }
 
 install_dotnet_tools() {
   if ! command -v dotnet >/dev/null 2>&1; then
     (
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-dotnet-fedora" "site" "dotnet-absent" "direction" "transient-blocking" "probe" "dotnet-present" "reason" "dotnet is not installed; tools cannot be installed") | trim | indent 6 }}
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-dotnet-fedora" "site" "dotnet-absent" "direction" "transient-blocking" "probe" "dotnet-present" "reason" "dotnet is not installed after the SDK install attempt; install the SDK by hand with sudo dnf install dotnet-sdk-10.0") | trim | indent 6 }}
     )
     return 0
   fi
-  local installed tool
-  installed="$(dotnet tool list -g 2>/dev/null || true)"
-  for tool in "${dotnet_tools[@]}"; do
-    if printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}"; then
-      continue
-    fi
-    dotnet tool install -g "${tool}" || true
-  done
+  compute_missing_dotnet_tools
+  if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]]; then
+    local tool
+    for tool in "${missing_dotnet_tools[@]}"; do
+      if ! dotnet tool install -g "${tool}"; then :; fi
+    done
+    compute_missing_dotnet_tools
+  fi
+  if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-dotnet-fedora" "site" "dotnet-tools-not-installed" "direction" "operator-blocking" "reason" "dotnet tool install left declared tools missing; the missing tools and the by-hand command were printed") | trim | indent 4 }}
+  fi
+  clear_dotnet_tools_skip_record
 }
 
 install_dotnet_sdk
 install_dotnet_tools
 
 {{ else if $isUbuntu -}}
+report_dotnet_sdk_missing() {
+  printf 'install-dotnet-ubuntu.sh: dotnet is not installed; installing dotnet-sdk-8.0 failed.\n' >&2
+  printf 'install-dotnet-ubuntu.sh: install the SDK by hand: sudo apt-get install -y dotnet-sdk-8.0\n' >&2
+  return 0
+}
+
 install_dotnet_sdk() {
   if ! command -v dotnet >/dev/null 2>&1; then
     "${SUDO[@]}" apt-get update -qq || true
-    "${SUDO[@]}" apt-get install -y dotnet-sdk-8.0 2>/dev/null || true
+    if ! "${SUDO[@]}" apt-get install -y dotnet-sdk-8.0; then :; fi
   fi
+  command -v dotnet >/dev/null 2>&1 || report_dotnet_sdk_missing
+}
+
+report_dotnet_tools_missing() {
+  printf 'install-dotnet-ubuntu.sh: dotnet tool install left tools missing: %s\n' "$*" >&2
+  local tool
+  for tool in "$@"; do
+    printf 'install-dotnet-ubuntu.sh: install it by hand: dotnet tool install -g %s\n' "$tool" >&2
+  done
+  return 0
+}
+
+clear_dotnet_tools_skip_record() {
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-dotnet-ubuntu__dotnet-tools-not-installed" 2>/dev/null || true
+}
+
+missing_dotnet_tools=()
+compute_missing_dotnet_tools() {
+  missing_dotnet_tools=()
+  local installed tool
+  installed="$(dotnet tool list -g 2>/dev/null || true)"
+  for tool in "${dotnet_tools[@]}"; do
+    printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}" || missing_dotnet_tools+=("${tool}")
+  done
 }
 
 install_dotnet_tools() {
-  if command -v dotnet >/dev/null 2>&1; then
-    local installed tool
-    installed="$(dotnet tool list -g 2>/dev/null || true)"
-    for tool in "${dotnet_tools[@]}"; do
-      if printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}"; then
-        continue
-      fi
-      dotnet tool install -g "${tool}" || true
-    done
+  if ! command -v dotnet >/dev/null 2>&1; then
+    (
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-dotnet-ubuntu" "site" "dotnet-absent" "direction" "transient-blocking" "probe" "dotnet-present" "reason" "dotnet is not installed after the SDK install attempt; install the SDK by hand with sudo apt-get install -y dotnet-sdk-8.0") | trim | indent 6 }}
+    )
+    return 0
   fi
+  compute_missing_dotnet_tools
+  if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]]; then
+    local tool
+    for tool in "${missing_dotnet_tools[@]}"; do
+      if ! dotnet tool install -g "${tool}"; then :; fi
+    done
+    compute_missing_dotnet_tools
+  fi
+  if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-dotnet-ubuntu" "site" "dotnet-tools-not-installed" "direction" "operator-blocking" "reason" "dotnet tool install left declared tools missing; the missing tools and the by-hand command were printed") | trim | indent 4 }}
+  fi
+  clear_dotnet_tools_skip_record
 }
 
 install_dotnet_sdk
 install_dotnet_tools
 
 {{ else if $isDarwin -}}
+report_dotnet_tools_missing() {
+  printf 'install-dotnet-darwin.sh: dotnet tool install left tools missing: %s\n' "$*" >&2
+  local tool
+  for tool in "$@"; do
+    printf 'install-dotnet-darwin.sh: install it by hand: dotnet tool install -g %s\n' "$tool" >&2
+  done
+  return 0
+}
+
+clear_dotnet_tools_skip_record() {
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-dotnet-darwin__dotnet-tools-not-installed" 2>/dev/null || true
+}
+
+# bash 3.2 under set -u rejects "${arr[@]}" on an empty array; every
+# expansion of missing_dotnet_tools sits behind a count test.
+missing_dotnet_tools=()
+compute_missing_dotnet_tools() {
+  missing_dotnet_tools=()
+  local installed tool
+  installed="$(dotnet tool list -g 2>/dev/null || true)"
+  for tool in "${dotnet_tools[@]}"; do
+    printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}" || missing_dotnet_tools+=("${tool}")
+  done
+}
+
 install_dotnet_tools() {
   if command -v dotnet >/dev/null 2>&1; then
-    local installed tool
-    installed="$(dotnet tool list -g 2>/dev/null || true)"
-    for tool in "${dotnet_tools[@]}"; do
-      if printf '%s\n' "${installed}" | awk '{print $1}' | grep -ixqF "${tool}"; then
-        continue
-      fi
-      dotnet tool install -g "${tool}" || true
-    done
+    compute_missing_dotnet_tools
+    if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]]; then
+      local tool
+      for tool in "${missing_dotnet_tools[@]}"; do
+        if ! dotnet tool install -g "${tool}"; then :; fi
+      done
+      compute_missing_dotnet_tools
+    fi
+    if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-dotnet-darwin" "site" "dotnet-tools-not-installed" "direction" "operator-blocking" "reason" "dotnet tool install left declared tools missing; the missing tools and the by-hand command were printed") | trim | indent 6 }}
+    fi
+    clear_dotnet_tools_skip_record
   fi
 }
 

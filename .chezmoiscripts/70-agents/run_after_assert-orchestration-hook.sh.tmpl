@@ -33,7 +33,7 @@ PAYLOADS=({{ joinPath $payloadDir "everyone.md" | quote }} {{ joinPath $payloadD
 # fingerprint covers source content, which a deleted binary does not change. So
 # the build stays skipped, this assertion fails again, and every apply is wedged
 # until the recorded script hash is dropped.
-RECOVERY='run `chezmoi state delete-bucket --bucket=scriptState` and re-apply to force the build, or investigate what removed it'
+RECOVERY='run `chezmoi state delete-bucket --bucket=entryState` and re-apply to force the build, or investigate what removed it'
 
 if [[ ! -f "$BINARY" ]]; then
   printf '%s\n' "assert-orchestration-hook: $BINARY is missing; the orchestration hook each plugin declares cannot run. To recover, $RECOVERY." >&2
