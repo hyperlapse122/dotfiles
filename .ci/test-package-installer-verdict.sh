@@ -143,7 +143,7 @@ extract() {
   sed -n "${first},${end}p" "$file" >"$out"
 }
 extract devtools-fedora.sh '^DNF=\(' install_devtools devtools-fedora.region
-extract devtools-ubuntu.sh '^install_apt\(\) \{$' install_devtools devtools-ubuntu.region
+extract devtools-ubuntu.sh '^apt_installed\(\) \{$' install_devtools devtools-ubuntu.region
 extract apps-fedora.sh '^DNF=\(' install_app_packages apps-fedora.region
 extract dotnet-fedora.sh '^dotnet_tools=\($' install_dotnet_tools dotnet-fedora.region
 extract dotnet-ubuntu.sh '^dotnet_tools=\($' install_dotnet_tools dotnet-ubuntu.region
@@ -221,7 +221,12 @@ for p in "$@"; do
   [[ "$p" == -* ]] && continue
   case " ${APT_FAIL:-} " in
     *" $p "*) printf 'E: Unable to locate package %s\n' "$p" >&2; rc=100 ;;
-    *) printf '%s\n' "$p" >>"$STUB_STATE/debs" ;;
+    *)
+      printf '%s\n' "$p" >>"$STUB_STATE/debs"
+      for rule in ${APT_PULLS:-}; do
+        [[ "$rule" == "$p:"* ]] && printf '%s\n' "${rule#*:}" >>"$STUB_STATE/debs"
+      done
+      ;;
   esac
 done
 exit "$rc"
@@ -463,6 +468,16 @@ if grep -F 'sudo apt-get install -y' "$err" | grep -qwE "$ud1|$ud3"; then
 fi
 pass "$label: one failed package does not stop the rest and is the one recorded"
 
+label=devtools-ubuntu-recommends-dependency-skipped
+run_case "$label" devtools-ubuntu.region install_devtools \
+  DEBS="$ud_rest" APT_PULLS="$ud1:$ud2" SEED="$DUBU"
+check returned_zero
+check no_record "$DUBU"
+check called "^apt-get install -y $ud1\$"
+check not_called "^apt-get install -y $ud2\$"
+check called "^apt-get install -y $ud3\$"
+pass "$label: a package pulled in by an earlier install is not requested"
+
 label=devtools-ubuntu-converged
 run_case "$label" devtools-ubuntu.region install_devtools DEBS="$ud_pkgs" SEED="$DUBU"
 check returned_zero
@@ -476,6 +491,24 @@ check returned_zero
 check no_record "$DUBU"
 check called "^apt-get install -y $ud2\$"
 pass "$label: an install that provides the package clears the record"
+
+label=devtools-ubuntu-all-fail
+run_case "$label" devtools-ubuntu.region install_devtools \
+  DEBS="" APT_FAIL="$ud_pkgs"
+check returned_zero
+check record_is "$DUBU" operator-blocking
+check stderr_has "sudo apt-get install -y $ud_pkgs"
+check names_entry_state
+pass "$label: every package failing is recorded and reported"
+
+label=devtools-ubuntu-update-fails
+run_case "$label" devtools-ubuntu.region install_devtools \
+  DEBS="$(without "$ud1" $ud_pkgs)" APT_UPDATE_EXIT=1 SEED="$DUBU"
+check returned_zero
+check called '^apt-get update'
+check called "^apt-get install -y $ud1\$"
+check no_record "$DUBU"
+pass "$label: a failed apt-get update still reaches the install"
 
 # --- Apps, Fedora --------------------------------------------------------------
 
