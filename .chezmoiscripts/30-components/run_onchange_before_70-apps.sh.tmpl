@@ -92,7 +92,20 @@ gpgcheck=1
 gpgkey=https://packages.microsoft.com/keys/microsoft-2025.asc
 EOF
 
-  "${DNF[@]}" makecache -y
+  if ! "${DNF[@]}" makecache -y; then
+    printf 'install-apps-fedora: dnf makecache failed; continuing to the install attempt\n' >&2
+  fi
+}
+
+clear_apps_skip_record() {
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-apps-fedora__app-packages-not-installed" 2>/dev/null || true
+}
+
+report_apps_missing() {
+  printf 'install-apps-fedora: the following app packages are still not installed: %s\n' "$*" >&2
+  printf 'install-apps-fedora: install them by hand:\n' >&2
+  printf '  sudo dnf install -y %s\n' "$*" >&2
+  return 0
 }
 
 install_app_packages() {
@@ -101,10 +114,21 @@ install_app_packages() {
   for pkg in "${app_packages[@]}"; do
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
+
   if [[ "${#missing[@]}" -gt 0 ]]; then
     setup_app_repos
-    "${DNF[@]}" install -y "${missing[@]}" || true
+    if ! "${DNF[@]}" install -y "${missing[@]}"; then :; fi
+
+    missing=()
+    for pkg in "${app_packages[@]}"; do
+      rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+    done
   fi
+
+  if [[ "${#missing[@]}" -gt 0 ]] && report_apps_missing "${missing[@]}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-apps-fedora" "site" "app-packages-not-installed" "direction" "operator-blocking" "reason" "dnf left declared app packages uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}
+  fi
+  clear_apps_skip_record
 }
 
 install_app_packages
