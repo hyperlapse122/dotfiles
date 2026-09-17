@@ -30,6 +30,9 @@ A host fact whose truth comes from a committed table of verified device identiti
 ### Declared skip
 The contract by which an onchange script leaves early: it names the site and the direction of the skip, so a machine that did not converge is never recorded as one that did. Directions distinguish a condition the host will never satisfy, a precondition a later run will supply, a precondition that only an operator can clear, and a step that is already done; a completed interactive step the script cannot perform, such as enrolling a face, is reported through the same surface.
 
+### Install verdict
+The answer to whether a package installer converged, taken by re-inspecting the set of packages it declared after its install attempt rather than by reading the package manager's exit status. A verdict that still finds something missing prints it with the command that installs it by hand and leaves through a declared skip, so the host is reported as unconverged while every later phase of the run still happens.
+
 ### Derived authselect profile
 A Fedora authentication profile this repository builds from the stock one to carry a factor the stock profiles have no feature for. Every file tracks the base except the stack that gains the factor, and the profile is selected with the machine's existing features plus the new one, so the distribution's tool still writes every PAM file and no script writes one directly.
 
