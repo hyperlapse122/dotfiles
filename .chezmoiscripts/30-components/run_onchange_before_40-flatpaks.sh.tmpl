@@ -13,6 +13,9 @@ flatpaks=(
   com.discordapp.Discord
   io.github.nroduit.Weasis
   org.telegram.desktop
+{{- if $isFedora }}
+  com.yubico.yubioath
+{{- end }}
 )
 
 install_flatpak_runtime() {
