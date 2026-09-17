@@ -5,13 +5,13 @@
       "input_cost_per_million_tokens": 4,
       "output_cost_per_million_tokens": 18,
       "cache_read_input_token_cost_per_million_tokens": 0.4,
-      "cache_read_write_token_cost_per_million_tokens": 0.375
+      "cache_creation_input_token_cost_per_million_tokens": 0.375
     },
     "claude-fable-5-1": {
       "input_cost_per_million_tokens": 10,
       "output_cost_per_million_tokens": 50,
       "cache_read_input_token_cost_per_million_tokens": 0.25,
-      "cache_read_write_token_cost_per_million_tokens": 12.5
+      "cache_creation_input_token_cost_per_million_tokens": 12.5
     }
   }
 }
