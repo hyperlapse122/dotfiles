@@ -561,7 +561,8 @@ re-dispatches at the same row with a sharpened brief and never advances a row.
 An unavailable agent hands its work to the next agent named in its row; only when every agent in that row is unavailable does the lead escalate to the user
 The lead never takes the row's work back and does it in place, judgment work included.
 The author of a document is NOT excluded from reviewing it, so a review keeps two opinions rather than dropping to one; weigh each reviewer's findings on their own evidence, exactly like any other reviewer's.
-and the model-elevation step of `ce-plan` plan authoring and `ce-brainstorm` approach generation
+(the model-elevation step of `ce-plan` and `ce-brainstorm` is the single-worker exception below)
+for `ce-brainstorm` it returns the generated approaches in its report and writes nothing
 The model-elevation step is the one exception to the sentence above that the lead never takes a row's work back
 A failed or unavailable elevation dispatch degrades the same way, inline on the lead's model with that transparency line, and never takes this row's replacement or re-dispatch columns
 The one Markdown file the lead does not write is the plan file a dispatched model-elevation worker authors
@@ -651,6 +652,15 @@ if grep -F 'rung' "$coordinator_claude_linux" | grep -F '`fable`' >/dev/null; th
   fail 'the coordinator payload names `fable` as a sizing rung again'
 fi
 
+# The judgment row must not re-fold the model-elevation step back into its
+# two-reviewer brief: that would send `ce-plan` and `ce-brainstorm` elevation
+# to both `claude` and `codex` over one brief instead of the single-worker path.
+# The row's own pointer to that single-worker exception legitimately names
+# both phrases at once, so only a line missing that pointer is a regression.
+if grep -F 'over the same brief' "$coordinator_claude_linux" | grep -v 'single-worker exception below' | grep -F 'ce-plan' >/dev/null; then
+  fail 'the coordinator payload folds the model-elevation step back into the two-reviewer judgment row'
+fi
+
 # U2 AE4/AE5: the elevation-default paragraph's alias is rendered from the
 # roster, not hand-written, so a roster change to the claude judgment model
 # reaches the paragraph with no edit to the template.
@@ -679,7 +689,7 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
-perform non-dispatch work only
+non-dispatch work only
 never reach for a native subagent tool
 Staying idle means ENDING THE TURN.
 start the next wait, end the turn

@@ -66,7 +66,7 @@ A worker escalation or failure caused by context missing from its brief rather t
 The single declaration in `.chezmoidata/agents.yaml` of the lead's model pin and every worker entry a lead may dispatch to: agent, model id, effort or thinking level, the work shapes it takes, brief guidance for that model, and a `rung` (`sonnet` or `opus`) for the two Claude implementation entries. The rendered payloads, instruction files, prose, and tests derive their model ids from it, so no other file names a worker model by hand.
 
 ### Judgment work
-Work whose deliverable is the judgment itself: a code review, a document review, a `ce-pov` verdict, brainstorm approach generation, or the model-elevation step of plan authoring. It is dispatched to the roster's frontier judgment entries and never performed by the lead in place; the elevation step goes to the single judgment entry whose model matches the resolved elevation alias.
+Work whose deliverable is the judgment itself: a code review, a document review, a `ce-pov` verdict, brainstorm approach generation, or the model-elevation step of plan authoring. It is dispatched to the roster's frontier judgment entries and never performed by the lead in place; the elevation step goes to the single judgment entry whose model matches the resolved elevation alias; when no entry matches the alias or that single dispatch fails, the lead runs the step inline on its own model and prints the transparency line.
 
 ### Mechanical work
 A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster's cheapest entry.
