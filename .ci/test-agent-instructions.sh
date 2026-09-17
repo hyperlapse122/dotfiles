@@ -561,6 +561,10 @@ re-dispatches at the same row with a sharpened brief and never advances a row.
 An unavailable agent hands its work to the next agent named in its row; only when every agent in that row is unavailable does the lead escalate to the user
 The lead never takes the row's work back and does it in place, judgment work included.
 The author of a document is NOT excluded from reviewing it, so a review keeps two opinions rather than dropping to one; weigh each reviewer's findings on their own evidence, exactly like any other reviewer's.
+and the model-elevation step of `ce-plan` plan authoring and `ce-brainstorm` approach generation
+The model-elevation step is the one exception to the sentence above that the lead never takes a row's work back
+A failed or unavailable elevation dispatch degrades the same way, inline on the lead's model with that transparency line, and never takes this row's replacement or re-dispatch columns
+The one Markdown file the lead does not write is the plan file a dispatched model-elevation worker authors
 Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
 MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
 The compound-engineering harness vocabulary — the `codex`, `claude`, `grok`, `cursor`, and `opencode` values a stage-routing carrier or a `work_engine_preferences` entry accepts — is the argument grammar of the banned bundled scripts, so it constrains nothing once the dispatch moves to Orca.
