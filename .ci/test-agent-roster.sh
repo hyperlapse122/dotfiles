@@ -118,6 +118,14 @@ assert_render_fails empty-brief \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":""}]' \
   'has an empty brief'
 
+# A null brief fails too. The learning at
+# docs/solutions/integration-issues/chezmoi-template-required-field-guard-accepts-null.md
+# proved that hasKey plus an empty-string test passes a key declared null, so the
+# guard carries a kindIs arm and this fixture is what holds it there.
+assert_render_fails null-brief \
+  '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":null}]' \
+  'has an empty brief'
+
 # A roster missing a judgment shape for codex fails.
 assert_render_fails codex-missing-judgment \
   '[{"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["fallback"],"brief":"x"}]' \
@@ -340,6 +348,13 @@ routing_rows=$(count_table_rows "$coordinator_body" '| Work shape |')
 [[ $routing_rows -eq 4 ]] || fail "the routing table rendered $routing_rows row(s), want 4"
 brief_rows=$(count_table_rows "$coordinator_body" '| Model |')
 [[ $brief_rows -eq 6 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 6"
+
+# R30/KTD13: the real-`op` prohibition is brief guidance that exists because a
+# Gemini seat ignored the rule in AGENTS.md. Counting rows does not prove the
+# text reached the payload, so assert it on both omp rows by name.
+op_rows=$(grep -c 'the real `op`: never invoke it' "$coordinator_body")
+[[ $op_rows -eq 2 ]] \
+  || fail "the rendered brief table carries the real-op prohibition on $op_rows row(s), want 2"
 
 read -r judge_model judge_effort <<<"$(agent_seat_pair codex judgment '')"
 read -r fallback_model fallback_effort <<<"$(agent_seat_pair codex fallback '')"

@@ -606,6 +606,7 @@ only after the query itself failed, and then MUST also record the command it ran
 This clause never blocks a run.
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
+A substantive failure on the omp mechanical seat is retried once on the omp implementation seat before the mechanical row leaves the agent
 COORDINATOR_NEEDLES
 
 # These rules used to be fenced off by a harness conditional inside the

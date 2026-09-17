@@ -80,7 +80,7 @@
 {{-   if not .effort -}}
 {{-     fail (printf "agent-roster-validate: %s is missing effort" $id) -}}
 {{-   end -}}
-{{-   if or (not (hasKey . "brief")) (eq .brief "") -}}
+{{-   if or (not (hasKey . "brief")) (not (kindIs "string" .brief)) (eq .brief "") -}}
 {{-     fail (printf "agent-roster-validate: %s has an empty brief" $id) -}}
 {{-   end -}}
 {{-   $shapes := .shapes -}}

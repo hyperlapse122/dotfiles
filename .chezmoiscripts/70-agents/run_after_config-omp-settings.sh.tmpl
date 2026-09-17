@@ -1,8 +1,8 @@
 {{- /* enabledModels and modelRoles come from agents.roster, not from
-   agents.omp.settings, so no settings map names a model id. The append into
-   $ompModels is guarded by membership, so two roster entries naming the
-   same model at two thinking levels still render one enabledModels
-   element, with the first occurrence keeping roster order; the two role
+   agents.omp.settings, so no settings map names a model id. $ompModels is
+   deduped with sprig's uniq, so two roster entries naming the same model
+   at two thinking levels still render one enabledModels element, with the
+   first occurrence keeping roster order; the two role
    selectors below still differ, because the mechanical and implementation
    entries carry different efforts. Omp roster entries are selected by
    SHAPE: the mechanical entry takes the background and skim roles, the
@@ -15,10 +15,11 @@
    argument. */ -}}
 {{- $ompModels := list -}}
 {{- range .agents.roster.workers -}}
-{{-   if and (eq .agent "omp") (not (has .model $ompModels)) -}}
+{{-   if eq .agent "omp" -}}
 {{-     $ompModels = append $ompModels .model -}}
 {{-   end -}}
 {{- end -}}
+{{- $ompModels = uniq $ompModels -}}
 {{- $ompMechanical := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "mechanical" "rung" "" "name" "an omp mechanical entry") | fromJson -}}
 {{- $ompImplementation := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "implementation" "rung" "" "name" "an omp implementation entry") | fromJson -}}
 {{- $mechanicalSelector := printf "%s:%s" $ompMechanical.model $ompMechanical.effort -}}
