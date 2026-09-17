@@ -112,7 +112,7 @@ report_devtools_missing() {
 }
 
 clear_devtools_skip_record() {
-  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-devtools-fedora__dev-packages-not-installed" 2>/dev/null || true
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-devtools-fedora" "site" "dev-packages-not-installed") | trim | indent 2 }}
 }
 
 install_devtools() {
@@ -177,7 +177,7 @@ report_devtools_missing() {
 }
 
 clear_devtools_skip_record() {
-  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-devtools-ubuntu__dev-packages-not-installed" 2>/dev/null || true
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-devtools-ubuntu" "site" "dev-packages-not-installed") | trim | indent 2 }}
 }
 
 install_devtools() {

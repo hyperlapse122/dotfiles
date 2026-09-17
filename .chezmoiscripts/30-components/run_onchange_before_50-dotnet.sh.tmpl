@@ -50,7 +50,7 @@ report_dotnet_tools_missing() {
 }
 
 clear_dotnet_tools_skip_record() {
-  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-dotnet-fedora__dotnet-tools-not-installed" 2>/dev/null || true
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-dotnet-fedora" "site" "dotnet-tools-not-installed") | trim | indent 2 }}
 }
 
 missing_dotnet_tools=()
@@ -112,7 +112,7 @@ report_dotnet_tools_missing() {
 }
 
 clear_dotnet_tools_skip_record() {
-  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-dotnet-ubuntu__dotnet-tools-not-installed" 2>/dev/null || true
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-dotnet-ubuntu" "site" "dotnet-tools-not-installed") | trim | indent 2 }}
 }
 
 missing_dotnet_tools=()
@@ -160,7 +160,7 @@ report_dotnet_tools_missing() {
 }
 
 clear_dotnet_tools_skip_record() {
-  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-dotnet-darwin__dotnet-tools-not-installed" 2>/dev/null || true
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-dotnet-darwin" "site" "dotnet-tools-not-installed") | trim | indent 2 }}
 }
 
 # bash 3.2 under set -u rejects "${arr[@]}" on an empty array; every

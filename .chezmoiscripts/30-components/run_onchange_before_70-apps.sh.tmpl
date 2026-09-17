@@ -98,7 +98,7 @@ EOF
 }
 
 clear_apps_skip_record() {
-  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-apps-fedora__app-packages-not-installed" 2>/dev/null || true
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-apps-fedora" "site" "app-packages-not-installed") | trim | indent 2 }}
 }
 
 report_apps_missing() {
