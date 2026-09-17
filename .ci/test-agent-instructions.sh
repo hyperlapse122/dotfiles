@@ -515,8 +515,6 @@ The ban on bundled dispatchers and direct peer CLIs is NOT a reason to skip a re
 MUST first load the `orchestration` skill and attempt its supported Orca workflow.
 MUST NOT declare orchestration unavailable without an observed failure; if the app is stopped, follow the skill's startup procedure before declaring it blocked.
 If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
-Absence of this text never waives the contract.
-A session that holds only the pointer in the user-scoped instruction file performs non-dispatch work only, and still MUST NOT reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
 Claude Code, Codex, and omp lead, dispatch, and serve as workers on the same terms.
 omp receives this text through its before_agent_start extension before each model call.
 When another agent launches Codex through Orca, the launch MUST explicitly select the model and reasoning effort its purpose names.
@@ -529,6 +527,12 @@ A brief defect is required context the brief does not carry.
 A URL kept beside a usable extraction is provenance, not a defect.
 <!-- orchestration-everyone:end -->
 EVERYONE_NEEDLES
+for payload in "${everyone_payloads[@]}"; do
+  if grep -F 'non-dispatch work only' "$payload" >/dev/null \
+    || grep -F 'Absence of this text never waives the contract' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired outside-Orca restriction"
+  fi
+done
 
 # The coordinator payload is lead-only. Its generic contract remains observable
 # in the Claude render, while the alternate harness render proves the
