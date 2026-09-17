@@ -1554,12 +1554,43 @@ key_check_decode_status_token() {
   printf '%s' "$out"
 }
 
+# scdaemon reports a PC/SC context invalidated by another client sharing the
+# card (ykman, Yubico Authenticator; pcsc-shared per KTD8) as this exact text
+# on the first scd command of a stale session; only this specific error is
+# worth the one retry below (KTD2 real-hardware smoke: serial 14963605,
+# "Card removed <SCD>" on the first scd command after another PC/SC client
+# touched the card, gone once the session re-reads the serial first).
+key_check_is_card_removed_err() {
+  case "$1" in
+    *'Card removed'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Runs one gpg-connect-agent session, leading with `scd serialno` so a stale
+# PC/SC context re-selects the card before the real command runs -- KTD2:
+# "the verification runs in one gpg-connect-agent session ... with the
+# serial re-read". If a "Card removed" error still surfaces, retries the
+# whole session exactly once before the caller treats it as a real failure;
+# any other error is left for the caller unchanged. Leaves the transcript in
+# KEY_CHECK_LAST_SESSION_OUT and returns the last gpg-connect-agent exit code.
+key_check_scd_removed_retry() {
+  local rc=0
+  KEY_CHECK_LAST_SESSION_OUT=$(gpg-connect-agent "$@" 2>/dev/null) || rc=$?
+  if { [[ $rc -ne 0 ]] || ! key_check_last_ok "$KEY_CHECK_LAST_SESSION_OUT"; } \
+      && key_check_is_card_removed_err "$KEY_CHECK_LAST_SESSION_OUT"; then
+    rc=0
+    KEY_CHECK_LAST_SESSION_OUT=$(gpg-connect-agent "$@" 2>/dev/null) || rc=$?
+  fi
+  return "$rc"
+}
+
 key_check_read_chv_status() {
-  local out rc=0 token decoded
-  out=$(gpg-connect-agent 'scd getattr CHV-STATUS' /bye 2>/dev/null) || rc=$?
+  local rc=0 token decoded
+  key_check_scd_removed_retry 'scd serialno' 'scd getattr CHV-STATUS' /bye || rc=$?
   [[ $rc -eq 0 ]] || return 1
-  key_check_last_ok "$out" || return 1
-  token=$(printf '%s\n' "$out" | awk '/^S CHV-STATUS/{print $3; exit}')
+  key_check_last_ok "$KEY_CHECK_LAST_SESSION_OUT" || return 1
+  token=$(printf '%s\n' "$KEY_CHECK_LAST_SESSION_OUT" | awk '/^S CHV-STATUS/{print $3; exit}')
   [[ -n "$token" ]] || return 1
   decoded=$(key_check_decode_status_token "$token")
   # shellcheck disable=SC2206 # counters is a space-collapsed digit list.
@@ -1572,10 +1603,10 @@ key_check_read_chv_status() {
 # The cancel-mode probe: OK means scdaemon already holds a verification for
 # this card session. Consumes no retry (KTD2 step 1).
 key_check_cancel_probe() {
-  local aid="$1" out rc=0
-  out=$(gpg-connect-agent 'OPTION pinentry-mode=cancel' "scd checkpin $aid" /bye 2>/dev/null) || rc=$?
+  local aid="$1" rc=0
+  key_check_scd_removed_retry 'scd serialno' 'OPTION pinentry-mode=cancel' "scd checkpin $aid" /bye || rc=$?
   [[ $rc -eq 0 ]] || return 1
-  key_check_last_ok "$out"
+  key_check_last_ok "$KEY_CHECK_LAST_SESSION_OUT"
 }
 
 # One gpg-connect-agent session, fed on stdin so the PIN never appears in

@@ -687,53 +687,95 @@ if [[ $# -eq 0 ]]; then
   exit 0
 fi
 
-case "$1" in
-  'GETINFO version')
-    rc=$(read_fixture agent_probe_rc 0)
-    if [[ "$rc" == "0" ]]; then printf 'D 2.4.9\nOK\n'; else printf 'ERR 1 no agent\n'; fi
-    ;;
-  'scd serialno')
-    count_file="$FIXTURE_DIR/serialno_call_count"
-    count=$(( $(cat "$count_file" 2>/dev/null || echo 0) + 1 ))
-    printf '%s' "$count" > "$count_file"
-    rc_file="$FIXTURE_DIR/serialno_rc_$count"
-    aid_file="$FIXTURE_DIR/serialno_aid_$count"
-    [[ -f "$rc_file" ]] || rc_file="$FIXTURE_DIR/serialno_rc"
-    [[ -f "$aid_file" ]] || aid_file="$FIXTURE_DIR/serialno_aid"
-    rc=$(cat "$rc_file" 2>/dev/null || echo 0)
-    if [[ "$rc" == "0" ]]; then
-      aid=$(cat "$aid_file" 2>/dev/null || echo '')
-      printf 'S SERIALNO %s 0\nOK\n' "$aid"
-    else
-      printf 'ERR 100663404 No such device <SCD>\n'
-    fi
-    ;;
-  'OPTION pinentry-mode=cancel')
-    rc=$(read_fixture cancel_probe_rc 1)
-    if [[ "$rc" == "0" ]]; then printf 'OK\nOK\n'; else printf 'OK\nERR 100663404 Card not verified <SCD>\n'; fi
-    ;;
-  'scd getattr CHV-STATUS')
-    rc=$(read_fixture chv_status_rc 0)
-    if [[ "$rc" == "0" ]]; then
-      # Real scdaemon output (app-openpgp.c/command.c): the seven counters
-      # are ONE token with a leading space per value, spaces encoded as
-      # '+' (e.g. `S CHV-STATUS +1+127+127+127+3+3+3`), never space-joined
-      # fields. Fixtures below follow the same "+N+N+N+N+N+N+N" shape.
-      line=$(read_fixture chv_status_line '+1+3+3+3+3+3+3')
-      printf 'S CHV-STATUS %s\nOK\n' "$line"
-    else
-      printf 'ERR 1 bad\n'
-    fi
-    ;;
-  'LEARN' | 'LEARN --force')
-    printf '%s\n' "$1" >> "$LOG_DIR/learn.log"
-    rc=$(read_fixture learn_rc 0)
-    if [[ "$rc" == "0" ]]; then printf 'OK\n'; else printf 'ERR 1 learn failed\n'; fi
-    ;;
-  *)
-    printf 'ERR 1 unknown command\n'
-    ;;
-esac
+# Real hardware (serial 14963605): once another PC/SC client (ykman, Yubico
+# Authenticator; sharing is pcsc-shared per KTD8) has touched the card, the
+# first scd command of the NEXT gpg-connect-agent session fails this way
+# unless that session leads with `scd serialno` to re-select the card first
+# (KTD2). This fixture simulates that staleness for every session in the
+# scenario: a session whose first command is not the re-select (or an
+# scd-independent command) fails outright, so a regression that drops the
+# leading `scd serialno` (KTD2's one-session-with-serial-re-read design)
+# fails the gate instead of passing silently.
+card_removed_active=$(read_fixture card_removed_unless_reselected '')
+if [[ "$card_removed_active" == "1" ]]; then
+  case "$1" in
+    'scd serialno' | 'GETINFO version' | 'LEARN' | 'LEARN --force') ;;
+    *)
+      for a in "$@"; do
+        [[ "$a" == /bye ]] && continue
+        printf 'ERR 100663406 Card removed <SCD>\n'
+      done
+      exit 0
+      ;;
+  esac
+fi
+
+# The standalone probe (`gpg-connect-agent 'scd serialno' /bye`, used to read
+# the inserted card's AID) keeps the sequenced serialno_rc_N/serialno_aid_N
+# fixtures below. A leading `scd serialno` ahead of a real command in the
+# same session (key_check_read_chv_status, key_check_cancel_probe) is a
+# different, simpler re-select probe: it shares no fixture with the
+# standalone call and, matching real hardware, always succeeds.
+is_standalone_serialno=0
+[[ $# -eq 2 && "$1" == 'scd serialno' && "$2" == /bye ]] && is_standalone_serialno=1
+
+for cmd in "$@"; do
+  case "$cmd" in
+    /bye) continue ;;
+    'GETINFO version')
+      rc=$(read_fixture agent_probe_rc 0)
+      if [[ "$rc" == "0" ]]; then printf 'D 2.4.9\nOK\n'; else printf 'ERR 1 no agent\n'; fi
+      ;;
+    'scd serialno')
+      if [[ "$is_standalone_serialno" == "1" ]]; then
+        count_file="$FIXTURE_DIR/serialno_call_count"
+        count=$(( $(cat "$count_file" 2>/dev/null || echo 0) + 1 ))
+        printf '%s' "$count" > "$count_file"
+        rc_file="$FIXTURE_DIR/serialno_rc_$count"
+        aid_file="$FIXTURE_DIR/serialno_aid_$count"
+        [[ -f "$rc_file" ]] || rc_file="$FIXTURE_DIR/serialno_rc"
+        [[ -f "$aid_file" ]] || aid_file="$FIXTURE_DIR/serialno_aid"
+        rc=$(cat "$rc_file" 2>/dev/null || echo 0)
+        if [[ "$rc" == "0" ]]; then
+          aid=$(cat "$aid_file" 2>/dev/null || echo '')
+          printf 'S SERIALNO %s 0\nOK\n' "$aid"
+        else
+          printf 'ERR 100663404 No such device <SCD>\n'
+        fi
+      else
+        printf 'OK\n'
+      fi
+      ;;
+    'OPTION pinentry-mode=cancel')
+      printf 'OK\n'
+      ;;
+    'scd checkpin '*)
+      rc=$(read_fixture cancel_probe_rc 1)
+      if [[ "$rc" == "0" ]]; then printf 'OK\n'; else printf 'ERR 100663404 Card not verified <SCD>\n'; fi
+      ;;
+    'scd getattr CHV-STATUS')
+      rc=$(read_fixture chv_status_rc 0)
+      if [[ "$rc" == "0" ]]; then
+        # Real scdaemon output (app-openpgp.c/command.c): the seven counters
+        # are ONE token with a leading space per value, spaces encoded as
+        # '+' (e.g. `S CHV-STATUS +1+127+127+127+3+3+3`), never space-joined
+        # fields. Fixtures below follow the same "+N+N+N+N+N+N+N" shape.
+        line=$(read_fixture chv_status_line '+1+3+3+3+3+3+3')
+        printf 'S CHV-STATUS %s\nOK\n' "$line"
+      else
+        printf 'ERR 1 bad\n'
+      fi
+      ;;
+    'LEARN' | 'LEARN --force')
+      printf '%s\n' "$cmd" >> "$LOG_DIR/learn.log"
+      rc=$(read_fixture learn_rc 0)
+      if [[ "$rc" == "0" ]]; then printf 'OK\n'; else printf 'ERR 1 learn failed\n'; fi
+      ;;
+    *)
+      printf 'ERR 1 unknown command\n'
+      ;;
+  esac
+done
 STUB
   chmod 0755 "$path"
 }
@@ -1443,6 +1485,29 @@ pass 'T28: a malformed CHV-STATUS line fails with a message, sends no PIN'
   [[ "$(cat "$KC_LOG/import-ownertrust-stdin.log")" == "$KC_FPR:6:" ]] || exit 96
 ) || fail 'T29: ownertrust must be imported only when not already 6, receiving exactly <FPR>:6:'
 pass 'T29: ownertrust import runs only when exported ownertrust != 6, receiving <FPR>:6:'
+
+# ============================== T30 ==========================================
+# Real-hardware smoke (serial 14963605, scratch GNUPGHOME, pcsc-shared): once
+# another PC/SC client (ykman, Yubico Authenticator) has touched the shared
+# card, the first scd command of the next gpg-connect-agent session fails
+# with "Card removed" unless that session re-reads the serial first (KTD2:
+# "the verification runs in one gpg-connect-agent session ... with the
+# serial re-read"). card_removed_unless_reselected makes the stub fail every
+# session whose first command is not `scd serialno` this way, so this catches
+# a regression that opens key_check_read_chv_status or key_check_cancel_probe
+# in a session of their own without leading with the re-select.
+(
+  kc_new
+  printf '1' > "$KC_FIXTURE/card_removed_unless_reselected"
+  kc_ok "$KC_FIXTURE/cancel_probe_rc"
+  printf '+3+3+3+3+3+3+3' > "$KC_FIXTURE/chv_status_line"
+
+  out=$(key_check_read_chv_status) || exit 201
+  [[ "$out" == "3" ]] || exit 202
+  key_check_cancel_probe "$KC_AID" || exit 203
+  true
+) || fail 'T30: a shared card touched by another PC/SC client must not fail CHV-STATUS or the cancel probe'
+pass 'T30: shared-card CHV-STATUS/cancel-probe sessions re-select the card first and survive "Card removed" (KTD2)'
 
 # ============================== T31 ==========================================
 (
