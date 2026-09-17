@@ -36,27 +36,32 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
    source state:
    - **1Password** + **1Password CLI (`op`)** — secret templates resolve through
      `op` via `onepasswordRead`.
+   - **OpenPGP card stack** — GnuPG, scdaemon, pcscd (or macOS PC/SC framework),
+     the desktop pinentry, and the OS keyring CLI for hardware key operations.
    - **mise** — the runtime / CLI version manager the rest of this config relies on.
-   - **Fedora** installs 1Password / `op` via `dnf` (the 1Password
-     RPM repo).
+   - **Fedora** installs 1Password / `op` and the card stack via `dnf`.
    - **Ubuntu arm64 on an NVIDIA Jetson AGX Thor** installs the required
      bootstrap tools through `apt`. The hook accepts `ubuntu` for this path.
    - **macOS** uses Homebrew (bootstrapping Homebrew first if needed). The
      remaining formulas/casks are installed later by their own package-authority
      reconciler, not by this hook.
 
-   The same hook then refuses to continue until `op` is authenticated, so a
-   fresh apply stops with clear guidance here rather than stalling on a
-   1Password prompt deep in the source-state read (see the two sections below).
-   A missing **GitHub API token** only prints an advisory — renders no longer
-   call the GitHub API.
+   The same hook then runs the **Key presence check** before reading source state
+   (skipped in real containers and CI): it imports the committed public key,
+   verifies that the host holds a local private key or an inserted YubiKey carrying
+   the configured key, creates or refreshes GnuPG card stubs, and verifies the
+   stored card PIN once under loopback mode. The hook also refuses to continue
+   until `op` is authenticated, so a fresh apply stops with clear guidance here
+   rather than stalling on a 1Password prompt or missing key deep in the
+   source-state read (see the sections below). A missing **GitHub API token** only
+   prints an advisory — renders no longer call the GitHub API.
 
 4. Renders every template, applies it to `$HOME`, and runs the provisioning
    scripts under [`.chezmoiscripts/`](.chezmoiscripts). What lands is OS-gated
    in [`.chezmoiignore`](.chezmoiignore), so the scope depends on the host:
 
    - **Fedora** (full): base and component packages via dnf/flatpak/dotnet, fonts,
-     GPG key import, GitHub / GitLab / Tailscale / Docker auth, the zsh login
+     public key import and card stubs, GitHub / GitLab / Tailscale / Docker auth, the zsh login
      shell, and desktop config (KDE or GNOME, detected at apply time via
      `plasmashell` vs `gnome-shell`). KDE hosts additionally get the Breeze
      de-branding scripts; GNOME hosts otherwise keep GNOME defaults. fcitx5
@@ -136,6 +141,109 @@ a non-blank answer, so:
   from `~/.config/chezmoi/chezmoi.toml` and re-running `chezmoi init`
   (or `chezmoi init --data=false`).
 
+### OpenPGP card prompt (keyring — User PIN)
+
+During an interactive `chezmoi init`, the config template checks each declared
+card serial (`yubikeySerials` in [`.chezmoidata/user.yaml`](.chezmoidata/user.yaml))
+that has not been prompted yet. It prompts on `/dev/tty` for the card's OpenPGP
+User PIN (`YubiKey OpenPGP User PIN for serial <serial>...`). Non-blank answers
+are stored directly in the OS keyring under service `gnupg-card-pin` with the
+decimal serial as the account. A blank answer (or non-interactive init) stores
+nothing and defers capture to the Key presence check on apply.
+
+The PIN rests in your user keyring (Secret Service on Linux, Keychain on macOS)
+and is retrieved by the Card PIN wrapper when GnuPG prompts for that card serial.
+Every managed host, including the Jetson shared host, keeps the PIN in its user
+keyring. The PIN exists in three places: the OS keyring, gpg-agent's in-memory
+cache, and 1Password.
+
+This follows the same-user trust boundary: the wrapper releases the stored PIN
+to any process that can drive gpg-agent in that desktop session, matching the
+Secret Service and Keychain security boundary (which do not isolate callers
+running as the same user). A host with console auto-login must keep its wallet
+locked at login or accept console-wide card use while the card is inserted.
+
+#### Key presence check
+
+Before any command that reads source state (`apply`, `init --apply`, `update`,
+`diff`, `status`, etc.) renders templates, the prerequisite hook runs the Key
+presence check (skipped in real containers and CI):
+
+1. It imports the committed public key ([`.keys/gpg-A7F1956CD1A035A139BC7ABFCC740A29852C0E95.asc`](.keys/gpg-A7F1956CD1A035A139BC7ABFCC740A29852C0E95.asc))
+   and sets ultimate ownertrust if not already set.
+2. It checks for a usable private key. If the host has a local private key for
+   fingerprint `A7F1956CD1A035A139BC7ABFCC740A29852C0E95` (existing hosts), the
+   check passes immediately without touching the card.
+3. On a host without a local private key, it requires an inserted YubiKey carrying
+   that key and matching a declared serial. It creates or updates the card stubs
+   in GnuPG and verifies the stored PIN once under loopback mode.
+
+If neither a local private key nor an inserted YubiKey with the expected key is
+found, the command stops immediately before any source state is read or
+decrypted. The failure message reports:
+
+```text
+GPG key presence check failed: no local private key or inserted YubiKey for A7F1956CD1A035A139BC7ABFCC740A29852C0E95
+```
+
+This enforces the design rule that "no YubiKey means I am not present" — chezmoi
+halts cleanly rather than failing deep in template evaluation or repository
+decryption. Insert the YubiKey carrying the key to continue.
+
+#### Adding a backup card
+
+To authorize a backup YubiKey:
+
+1. Append the new card's decimal serial to `yubikeySerials` in
+   [`.chezmoidata/user.yaml`](.chezmoidata/user.yaml) and the literal list in
+   [`.chezmoi.toml.tmpl`](.chezmoi.toml.tmpl).
+2. Run `chezmoi init` (or `chezmoi init --apply`). The template prompts for the
+   new serial's User PIN and records it in the keyring.
+3. Insert the backup card and run any chezmoi command. The Key presence check
+   detects the new serial and points the card stubs to it with
+   `gpg-connect-agent 'scd learn --force' /bye`.
+
+#### Card-side configuration (R17)
+
+Card-side settings are not automated and must be set manually on each YubiKey:
+
+- **User PIN retry maximum at three**: Keep the User PIN retry counter at three.
+  The Key presence check and wrapper require this maximum so a stale stored PIN
+  is tested at most once before prompting the operator, avoiding automated
+  lockouts. Set with `ykman`:
+
+  ```sh
+  ykman openpgp access set-retries 3 3 3
+  ```
+
+  A card configured with a counter above three is rejected by the check.
+- **Touch policy on signature and decryption slots**: Require physical touch for
+  signing and decryption operations. This touch gate is what makes PIN-at-rest
+  acceptable (especially on shared hosts). Set with `ykman`:
+
+  ```sh
+  ykman openpgp keys set-touch sig on      # or cached
+  ykman openpgp keys set-touch dec on      # or cached
+  ```
+
+  Or in `gpg --card-edit`: enter `admin`, then `UIF 1 on` (signature) and
+  `UIF 2 on` (decryption).
+- **Keep signature PIN forcing off**: Ensure signature operations do not force
+  PIN entry on every signature, allowing touch to authorize signatures within
+  the agent session. Set with `ykman`:
+
+  ```sh
+  ykman openpgp access set-signature-policy once
+  ```
+
+  Or in `gpg --card-edit`: enter `admin`, then run `forcesig` until
+  `Signature PIN ....: not forced`.
+- **PIN change outside GnuPG**: After changing the User PIN outside GnuPG (e.g.
+  via `ykman` or Yubico Authenticator), the stored keyring PIN becomes stale.
+  Run any chezmoi command with the card inserted before performing signing
+  operations (such as `git commit`). The Key presence check spends at most one
+  attempt, prompts for the new PIN on `/dev/tty`, and updates the keyring record.
+
 ## Prerequisites
 
 - **Fedora 44 Workstation** or **Fedora 44 KDE Spin**
@@ -149,6 +257,9 @@ a non-blank answer, so:
   GUI session. Keyring- and pinentry-backed steps need an unlocked session.
 - **macOS** (Homebrew) gets the cross-platform dotfiles plus its
   OS-native provision set (see above).
+- **A YubiKey carrying the configured OpenPGP key** for a new host (existing
+  hosts keep their local private key). The Key presence check requires one before
+  any source state is read.
 - **`sudo` access on Linux** — installing Linux packages and writing `/etc`
   config needs root. macOS uses Homebrew (no `sudo`).
 - **A 1Password account.** Secrets are never stored in this repo; they are pulled

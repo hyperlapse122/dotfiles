@@ -25,6 +25,23 @@ case ":$PATH:" in
 esac
 export PATH
 
+# Homebrew's shell environment: the same eval both the top-level early
+# activation (below, so brew-installed binaries such as gpg resolve on PATH)
+# and bootstrap_homebrew need after a fresh install.
+activate_homebrew() {
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+}
+
+# On macOS, evaluate Homebrew's shell environment early so brew-installed
+# binaries (such as gpg) resolve on PATH.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  activate_homebrew
+fi
+
 # Container / CI detection: Podman creates /run/.containerenv, Docker creates
 # /.dockerenv. Neither exists on a bare-metal host or VM.
 #
@@ -1034,6 +1051,841 @@ prune_stale_skip_records() {
   return 0
 }
 
+
+# --- Card-stack preflight — GnuPG, scdaemon, PC/SC, pinentry, keyring CLI ----
+#
+# Before the source state is read, ensure the card access tooling and desktop
+# pinentry are present on supported hosts (Fedora, Ubuntu, macOS). Real containers
+# and CI runners skip this step.
+
+hook_distro_id() {
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    (. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")
+  fi
+}
+
+hook_desktop() {
+  if command -v plasmashell >/dev/null 2>&1; then
+    printf 'kde'
+  elif command -v gnome-shell >/dev/null 2>&1; then
+    printf 'gnome'
+  else
+    printf 'none'
+  fi
+}
+
+resolve_sudo() {
+  # shellcheck disable=SC2034
+  if [[ "${EUID}" -eq 0 ]]; then
+    SUDO=()
+  elif command -v sudo >/dev/null 2>&1; then
+    SUDO=(sudo)
+  else
+    printf 'install-prerequisites.sh: requires root or sudo for package installation.\n' >&2
+    return 1
+  fi
+}
+
+# `dpkg-query -W` also succeeds for a purged package still in `deinstall ok
+# config-files`, so it would report removed packages as present and never
+# restore them. Require the installed status field instead.
+apt_installed() {
+  local status
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$1" 2>/dev/null)" || return 1
+  [[ "$status" == installed ]]
+}
+
+bootstrap_homebrew() {
+  if ! command -v brew >/dev/null 2>&1; then
+    local scratch_root scratch installer
+    scratch_root=${TMPDIR:-"$HOME/Library/Caches"}
+    scratch=$(mktemp -d "${scratch_root%/}/chezmoi-bootstrap.XXXXXX")
+    # shellcheck disable=SC2064
+    trap "rm -rf -- '$scratch'" RETURN EXIT HUP INT TERM
+    # Keep this URL and digest in sync with
+    # .chezmoiscripts/20-darwin/run_onchange_before_homebrew.sh.tmpl.
+    installer="$scratch/homebrew-install.sh"
+    curl -fsSL 'https://raw.githubusercontent.com/Homebrew/install/39a0c068274254a7658fd9761d59bce9d0e2151f/install.sh' -o "$installer"
+    printf '%s  %s\n' '8ff338091a5e10bb5fc040b38316648110f42feff057ecf9feaab51fd0a13ef9' "$installer" |
+      shasum -a 256 -c - >/dev/null
+    NONINTERACTIVE=1 /bin/bash "$installer"
+    rm -rf -- "$scratch"
+    trap - RETURN EXIT HUP INT TERM
+  fi
+  activate_homebrew
+}
+
+seed_scdaemon_conf() {
+  local gnupg_dir="${GNUPGHOME:-$HOME/.gnupg}"
+  local scd_conf="${gnupg_dir}/scdaemon.conf"
+  if [[ ! -e "$scd_conf" ]]; then
+    mkdir -p "$gnupg_dir"
+    chmod 0700 "$gnupg_dir" 2>/dev/null || true
+    printf 'disable-ccid\npcsc-shared\n' > "$scd_conf"
+    chmod 0600 "$scd_conf" 2>/dev/null || true
+  fi
+}
+
+# Shared by preflight_fedora and preflight_ubuntu: true when pcscd.socket
+# needs to be enabled/started (or systemctl is unavailable to tell).
+pcscd_socket_needs_enable() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  ! systemctl is-enabled --quiet pcscd.socket 2>/dev/null || ! systemctl is-active --quiet pcscd.socket 2>/dev/null
+}
+
+preflight_fedora() {
+  local -a pkgs=(gnupg2 gnupg2-scdaemon pcsc-lite pcsc-lite-ccid pinentry libsecret)
+  case "$(hook_desktop)" in
+    kde) pkgs+=(pinentry-qt) ;;
+    gnome) pkgs+=(pinentry-gnome3) ;;
+    *) ;;
+  esac
+
+  local -a missing=()
+  local pkg
+  if ! rpm -q "${pkgs[@]}" >/dev/null 2>&1; then
+    for pkg in "${pkgs[@]}"; do
+      rpm -q "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+    done
+  fi
+
+  local need_pcscd=0
+  pcscd_socket_needs_enable && need_pcscd=1
+
+  if [[ ${#missing[@]} -eq 0 && $need_pcscd -eq 0 ]]; then
+    return 0
+  fi
+
+  local -a SUDO=()
+  resolve_sudo || return 1
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    "${SUDO[@]}" dnf install -y "${missing[@]}"
+  fi
+
+  if [[ $need_pcscd -eq 1 ]]; then
+    "${SUDO[@]}" systemctl enable --now pcscd.socket
+  fi
+}
+
+preflight_ubuntu() {
+  local -a pkgs=(gnupg scdaemon pcscd pinentry-curses libsecret-tools)
+  case "$(hook_desktop)" in
+    kde) pkgs+=(pinentry-qt) ;;
+    gnome) pkgs+=(pinentry-gnome3) ;;
+    *) ;;
+  esac
+
+  local -a missing=()
+  local pkg
+  for pkg in "${pkgs[@]}"; do
+    apt_installed "$pkg" || missing+=("$pkg")
+  done
+
+  local need_pcscd=0
+  pcscd_socket_needs_enable && need_pcscd=1
+
+  if [[ ${#missing[@]} -eq 0 && $need_pcscd -eq 0 ]]; then
+    return 0
+  fi
+
+  local -a SUDO=()
+  resolve_sudo || return 1
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    "${SUDO[@]}" apt-get install -y "${missing[@]}"
+  fi
+
+  if [[ $need_pcscd -eq 1 ]]; then
+    "${SUDO[@]}" systemctl enable --now pcscd.socket
+  fi
+}
+
+preflight_macos() {
+  if ! xcode-select -p >/dev/null 2>&1; then
+    printf 'install-prerequisites.sh: macOS Command Line Tools required; run `xcode-select --install`.\n' >&2
+    return 1
+  fi
+
+  if ! command -v brew >/dev/null 2>&1; then
+    bootstrap_homebrew
+  fi
+
+  local -a missing=()
+  if ! brew list --formula gnupg pinentry-mac >/dev/null 2>&1; then
+    brew list --formula gnupg >/dev/null 2>&1 || missing+=("gnupg")
+    brew list --formula pinentry-mac >/dev/null 2>&1 || missing+=("pinentry-mac")
+  fi
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    brew install "${missing[@]}"
+  fi
+}
+
+preflight_card_stack() {
+  if is_container || [[ "${CI:-}" == "true" ]]; then
+    return 0
+  fi
+
+  seed_scdaemon_conf
+
+  case "$(uname -s)" in
+    Darwin) preflight_macos ;;
+    Linux)
+      case "$(hook_distro_id)" in
+        fedora) preflight_fedora ;;
+        ubuntu) preflight_ubuntu ;;
+        *) ;;
+      esac
+      ;;
+    *) ;;
+  esac
+}
+
+# --- Key presence check (KTD1, KTD2, KTD3, KTD4, KTD9) -----------------------
+#
+# Replaces the old 80-keys private-key import: apply never imports or reads
+# private key material (R4). It imports the committed PUBLIC key only, then
+# decides whether the host already has a usable secret key -- local or on the
+# declared YubiKey -- and only then verifies the card's User PIN once so the
+# later garden decrypt needs no prompt (R9). A host with neither fails loudly
+# before the source state is read (R7, R8).
+
+# .chezmoidata/user.yaml reader (KTD4): fixed-shape sed/grep scan, no YAML
+# parser. Sets the KEY_CHECK_FPR / KEY_CHECK_SERIALS globals this whole check
+# shares. Loud failure on an empty or missing value, never a silent default
+# (see chezmoi-template-required-field-guard-accepts-null.md).
+read_user_data() {
+  local source_root=${1:-${CHEZMOI_SOURCE_DIR:-}} data_file pubkey serials_raw
+  if [[ -z "$source_root" ]]; then
+    source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || return 1
+  fi
+  data_file="$source_root/.chezmoidata/user.yaml"
+  if [[ ! -f "$data_file" ]]; then
+    printf 'install-prerequisites.sh: missing %s\n' "$data_file" >&2
+    return 1
+  fi
+
+  pubkey=$(sed -nE 's/^[[:space:]]*gpgPubKey:[[:space:]]*"?([A-Fa-f0-9]+)"?.*/\1/p' "$data_file")
+  if [[ -z "$pubkey" ]]; then
+    printf 'install-prerequisites.sh: gpgPubKey is missing or empty in %s\n' "$data_file" >&2
+    return 1
+  fi
+
+  serials_raw=$(sed -nE 's/^[[:space:]]*yubikeySerials:[[:space:]]*\[([0-9, ]*)\].*/\1/p' "$data_file")
+  if [[ -z "$serials_raw" ]]; then
+    printf 'install-prerequisites.sh: yubikeySerials is missing or empty in %s\n' "$data_file" >&2
+    return 1
+  fi
+
+  KEY_CHECK_FPR="$pubkey"
+  # shellcheck disable=SC2206 # serials_raw is a comma/space-separated digit list.
+  KEY_CHECK_SERIALS=(${serials_raw//,/ })
+  return 0
+}
+
+key_check_join_serials() {
+  local IFS=,
+  printf '%s' "${KEY_CHECK_SERIALS[*]}"
+}
+
+key_check_serial_declared() {
+  local serial="$1" s
+  for s in "${KEY_CHECK_SERIALS[@]}"; do
+    [[ "$s" == "$serial" ]] && return 0
+  done
+  return 1
+}
+
+# On R7 failure with a class-none host, clear any stored PIN for the declared
+# serials so a rejected host keeps no credential (KTD1).
+key_check_clear_serials() {
+  local chezmoi_bin="${CHEZMOI_EXECUTABLE:-chezmoi}" serial
+  for serial in "${KEY_CHECK_SERIALS[@]}"; do
+    key_check_bounded_run 10 "$chezmoi_bin" --no-tty secret keyring delete --service=gnupg-card-pin --user="$serial" >/dev/null 2>&1 || true
+  done
+}
+
+key_check_fail() {
+  printf 'install-prerequisites.sh: %s\n' "$*" >&2
+  if [[ "${KEY_CHECK_INITIAL_CLASS:-}" == none ]]; then
+    key_check_clear_serials
+  fi
+  return 1
+}
+
+# Import the committed public key (KTD11) and set its ownertrust to ultimate,
+# each only when missing, so a provisioned host never rewrites the keybox or
+# trustdb on every command (R4, R5).
+key_check_import_public_key() {
+  local fpr="$1" source_root="$2" key_file current_trust=''
+  key_file="$source_root/.keys/gpg-${fpr}.asc"
+  if [[ ! -f "$key_file" ]]; then
+    printf 'install-prerequisites.sh: committed public key file missing: %s\n' "$key_file" >&2
+    return 1
+  fi
+
+  if ! gpg --batch --no-tty --list-keys "$fpr" >/dev/null 2>&1; then
+    if ! gpg --batch --no-tty --import "$key_file" >/dev/null 2>&1; then
+      printf 'install-prerequisites.sh: failed to import the public key from %s\n' "$key_file" >&2
+      return 1
+    fi
+  fi
+
+  current_trust=$(gpg --batch --no-tty --export-ownertrust 2>/dev/null | awk -F: -v fpr="$fpr" '$1==fpr{print $2}')
+  if [[ "$current_trust" != "6" ]]; then
+    if ! printf '%s:6:\n' "$fpr" | gpg --batch --no-tty --import-ownertrust >/dev/null 2>&1; then
+      printf 'install-prerequisites.sh: failed to set ultimate ownertrust for %s\n' "$fpr" >&2
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# A stale/unreachable agent makes `gpg -K` exit 2 exactly like a genuine
+# absence, so this probe runs first and is a hard failure on its own (KTD1).
+key_check_agent_probe() {
+  local out rc=0
+  out=$(gpg-connect-agent 'GETINFO version' /bye 2>/dev/null) || rc=$?
+  [[ $rc -eq 0 ]] || return 1
+  key_check_last_ok "$out"
+}
+
+# The last OK/ERR line in a gpg-connect-agent transcript is the result of the
+# last command sent (earlier commands in the same script may also reply).
+key_check_last_ok() {
+  local out="$1" line result=1
+  while IFS= read -r line; do
+    case "$line" in
+      OK | OK\ *) result=0 ;;
+      ERR\ *) result=1 ;;
+    esac
+  done <<<"$out"
+  return "$result"
+}
+
+# Classifies the configured fingerprint's secret-key records from
+# `gpg -K --with-colons --with-secret --with-keygrip <FPR>`. Sets
+# KEY_CHECK_CLASS to local|card|none. Return 2 means a hard failure the
+# caller must report (an unavailable '#' stub, or '+' mixed with a card
+# serial); KEY_CHECK_OFFENDING_FILES then names the key files. Return 1 means
+# the listing itself failed unexpectedly. Only records belonging to the
+# configured fingerprint's own sec/fpr block are considered, never a
+# record belonging to a different primary key that happens to share the
+# listing (defence in depth; real `gpg -K <FPR>` already filters this).
+key_check_classify() {
+  local fpr="$1" output rc=0
+  KEY_CHECK_CLASS=none
+  KEY_CHECK_STUB_SERIAL=''
+  KEY_CHECK_OFFENDING_FILES=()
+  output=$(gpg --batch --no-tty -K --with-colons --with-secret --with-keygrip -- "$fpr" 2>/dev/null) || rc=$?
+  if [[ $rc -eq 2 ]]; then
+    KEY_CHECK_CLASS=none
+    return 0
+  elif [[ $rc -ne 0 ]]; then
+    return 1
+  fi
+
+  local line type in_match=0 pending_type='' pending_field15=''
+  local -a f=() values=() grips=()
+  while IFS= read -r line; do
+    IFS=: read -ra f <<<"$line"
+    type=${f[0]:-}
+    case "$type" in
+      sec)
+        pending_type=sec
+        pending_field15=${f[14]:-}
+        in_match=0
+        ;;
+      ssb)
+        pending_type=ssb
+        pending_field15=${f[14]:-}
+        ;;
+      fpr)
+        if [[ "$pending_type" == sec && "${f[9]:-}" == "$fpr" ]]; then
+          in_match=1
+        fi
+        ;;
+      grp)
+        if [[ $in_match -eq 1 && -n "$pending_type" ]]; then
+          values+=("$pending_field15")
+          grips+=("${f[9]:-}")
+        fi
+        pending_type=''
+        ;;
+      *) ;;
+    esac
+  done <<<"$output"
+
+  if [[ ${#values[@]} -eq 0 ]]; then
+    KEY_CHECK_CLASS=none
+    return 0
+  fi
+
+  # Field 15 of `gpg -K --with-colons --with-secret` is '+' for a local
+  # secret, '#' for an unavailable stub, or -- for a key on a card -- the
+  # token's S/N as gpg-agent's KEYINFO reports it: the AID hex string (e.g.
+  # D2760001240100000006149636050000), never a decimal serial (doc/DETAILS
+  # field 15; g10/keylist.c). Any value that is neither '+' nor '#' is
+  # therefore a card token.
+  local v has_local=0 has_card=0 has_unavailable=0 card_serial=''
+  for v in "${values[@]}"; do
+    case "$v" in
+      '+') has_local=1 ;;
+      '#') has_unavailable=1 ;;
+      *) has_card=1; card_serial=$v ;;
+    esac
+  done
+
+  if [[ $has_unavailable -eq 1 ]] || { [[ $has_local -eq 1 ]] && [[ $has_card -eq 1 ]]; }; then
+    local gnupg_dir="${GNUPGHOME:-$HOME/.gnupg}" i
+    KEY_CHECK_OFFENDING_FILES=()
+    for i in "${!grips[@]}"; do
+      KEY_CHECK_OFFENDING_FILES+=("$gnupg_dir/private-keys-v1.d/${grips[i]}.key")
+    done
+    return 2
+  fi
+
+  if [[ $has_local -eq 1 ]]; then
+    KEY_CHECK_CLASS=local
+  elif [[ $has_card -eq 1 ]]; then
+    KEY_CHECK_CLASS=card
+    KEY_CHECK_STUB_SERIAL=$card_serial
+  else
+    KEY_CHECK_CLASS=none
+  fi
+  return 0
+}
+
+# Agent-independent (no LEARN, no gpg -K) safety gate for `learn --force`
+# (R6): every keygrip of the committed key under private-keys-v1.d/ must be
+# absent or already a card shadow stub, never real local key material.
+key_check_verify_stub_safety() {
+  local fpr="$1" gnupg_dir="${GNUPGHOME:-$HOME/.gnupg}" output rc=0 grip file
+  KEY_CHECK_UNSAFE_FILE=''
+  output=$(gpg --batch --no-tty --with-colons --with-keygrip -k -- "$fpr" 2>/dev/null) || rc=$?
+  [[ $rc -eq 0 ]] || return 1
+  while IFS= read -r grip; do
+    [[ -n "$grip" ]] || continue
+    file="$gnupg_dir/private-keys-v1.d/$grip.key"
+    if [[ -e "$file" ]]; then
+      # gpg-agent writes a card shadow stub as the S-expression
+      # `(20:shadowed-private-key ...` (agent/protect.c); real local key
+      # material is `(private-key` or `(protected-private-key`. Reject the
+      # latter even if a crafted file also carries the shadow marker, and
+      # require the shadow marker for everything else.
+      if grep -qE '\(protected-private-key|\(private-key' "$file" 2>/dev/null; then
+        KEY_CHECK_UNSAFE_FILE="$file"
+        return 1
+      fi
+      if ! grep -q 'shadowed-private-key' "$file" 2>/dev/null; then
+        KEY_CHECK_UNSAFE_FILE="$file"
+        return 1
+      fi
+    fi
+  done < <(printf '%s\n' "$output" | awk -F: '$1=="grp"{print $10}')
+  return 0
+}
+
+# gpg-agent's Assuan LEARN command (plain never overwrites an existing key
+# file; --force is only reached after key_check_verify_stub_safety passes).
+key_check_run_learn() {
+  local mode="$1" cmd out rc=0
+  if [[ "$mode" == force ]]; then
+    cmd='LEARN --force'
+  else
+    cmd='LEARN'
+  fi
+  out=$(gpg-connect-agent "$cmd" /bye 2>/dev/null) || rc=$?
+  [[ $rc -eq 0 ]] || return 1
+  key_check_last_ok "$out"
+}
+
+key_check_scd_serialno() {
+  local out rc=0 serial
+  out=$(gpg-connect-agent 'scd serialno' /bye 2>/dev/null) || rc=$?
+  [[ $rc -eq 0 ]] || return 1
+  key_check_last_ok "$out" || return 1
+  serial=$(printf '%s\n' "$out" | awk '/^S SERIALNO/{print $3; exit}')
+  [[ -n "$serial" ]] || return 1
+  printf '%s' "$serial"
+}
+
+# The AID's hex offsets 20-27 (zero-based characters) hold the card serial as
+# packed BCD -- an 8-digit decimal run -- so normalizing per KTD3 is just
+# stripping any leading zeros (base-10 forced to avoid octal misreads).
+normalize_aid_serial() {
+  local aid="$1" raw serial
+  [[ ${#aid} -ge 28 ]] || return 1
+  raw="${aid:20:8}"
+  [[ "$raw" =~ ^[0-9]{8}$ ]] || return 1
+  serial=$((10#$raw))
+  (( serial > 0 )) || return 1
+  printf '%s' "$serial"
+}
+
+# scdaemon's send_status_info() encodes the CHV-STATUS payload as a single
+# Assuan token: a literal space is written as `+` and any other reserved byte
+# as `%XX` (scd/command.c, scd/app-openpgp.c ` %d` formatting). The real line
+# is therefore e.g. `S CHV-STATUS +1+127+127+127+3+3+3`, one field ($3), not
+# seven space-separated fields.
+key_check_decode_status_token() {
+  local token="$1" out='' i=0 ch hex
+  while [[ $i -lt ${#token} ]]; do
+    ch="${token:i:1}"
+    if [[ "$ch" == '+' ]]; then
+      out+=' '
+      i=$((i + 1))
+    elif [[ "$ch" == '%' && $((i + 3)) -le ${#token} ]]; then
+      hex="${token:i+1:2}"
+      if [[ "$hex" =~ ^[0-9A-Fa-f]{2}$ ]]; then
+        out+=$(printf '%b' "\\x$hex")
+        i=$((i + 3))
+      else
+        out+="$ch"
+        i=$((i + 1))
+      fi
+    else
+      out+="$ch"
+      i=$((i + 1))
+    fi
+  done
+  printf '%s' "$out"
+}
+
+# scdaemon reports a PC/SC context invalidated by another client sharing the
+# card (ykman, Yubico Authenticator; pcsc-shared per KTD8) as this exact text
+# on the first scd command of a stale session; only this specific error is
+# worth the one retry below (KTD2 real-hardware smoke: serial 14963605,
+# "Card removed <SCD>" on the first scd command after another PC/SC client
+# touched the card, gone once the session re-reads the serial first).
+key_check_is_card_removed_err() {
+  case "$1" in
+    *'Card removed'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Runs one gpg-connect-agent session, leading with `scd serialno` so a stale
+# PC/SC context re-selects the card before the real command runs -- KTD2:
+# "the verification runs in one gpg-connect-agent session ... with the
+# serial re-read". If a "Card removed" error still surfaces, retries the
+# whole session exactly once before the caller treats it as a real failure;
+# any other error is left for the caller unchanged. Leaves the transcript in
+# KEY_CHECK_LAST_SESSION_OUT and returns the last gpg-connect-agent exit code.
+key_check_scd_removed_retry() {
+  local rc=0
+  KEY_CHECK_LAST_SESSION_OUT=$(gpg-connect-agent "$@" 2>/dev/null) || rc=$?
+  if { [[ $rc -ne 0 ]] || ! key_check_last_ok "$KEY_CHECK_LAST_SESSION_OUT"; } \
+      && key_check_is_card_removed_err "$KEY_CHECK_LAST_SESSION_OUT"; then
+    rc=0
+    KEY_CHECK_LAST_SESSION_OUT=$(gpg-connect-agent "$@" 2>/dev/null) || rc=$?
+  fi
+  return "$rc"
+}
+
+key_check_read_chv_status() {
+  local rc=0 token decoded
+  key_check_scd_removed_retry 'scd serialno' 'scd getattr CHV-STATUS' /bye || rc=$?
+  [[ $rc -eq 0 ]] || return 1
+  key_check_last_ok "$KEY_CHECK_LAST_SESSION_OUT" || return 1
+  token=$(printf '%s\n' "$KEY_CHECK_LAST_SESSION_OUT" | awk '/^S CHV-STATUS/{print $3; exit}')
+  [[ -n "$token" ]] || return 1
+  decoded=$(key_check_decode_status_token "$token")
+  # shellcheck disable=SC2206 # counters is a space-collapsed digit list.
+  local -a counters=($decoded)
+  [[ ${#counters[@]} -ge 5 ]] || return 1
+  [[ "${counters[4]}" =~ ^[0-9]+$ ]] || return 1
+  printf '%s' "${counters[4]}"
+}
+
+# The cancel-mode probe: OK means scdaemon already holds a verification for
+# this card session. Consumes no retry (KTD2 step 1).
+key_check_cancel_probe() {
+  local aid="$1" rc=0
+  key_check_scd_removed_retry 'scd serialno' 'OPTION pinentry-mode=cancel' "scd checkpin $aid" /bye || rc=$?
+  [[ $rc -eq 0 ]] || return 1
+  key_check_last_ok "$KEY_CHECK_LAST_SESSION_OUT"
+}
+
+# One gpg-connect-agent session, fed on stdin so the PIN never appears in
+# argv: loopback mode, /definq answers the PASSPHRASE inquiry if GnuPG asks
+# for one (a cache hit needs no inquiry at all -- same pass/fail contract
+# either way, see KTD2 steps 2-3). The PIN is passed to /let VERBATIM: this
+# script never sends /subst, so gpg-connect-agent's assign_variable() never
+# substitutes it and stores the value literally (tools/gpg-connect-agent.c);
+# escaping `$` here would corrupt a PIN that actually contains one. The
+# re-check that the card has not changed since the last `scd serialno` runs
+# as ITS OWN short call immediately before this one (key_check_pin_verify_impl)
+# rather than inside this same script: driving gpg-connect-agent's own
+# conditional scripting to skip sending the inquiry reply on a mismatch is
+# fragile, and a separate immediately-preceding call gets the same "nothing
+# sent on a changed card" outcome (KTD2 step 2).
+key_check_loopback_checkpin() {
+  local aid="$1" pin="$2" script out rc=0
+  script=$(printf 'OPTION pinentry-mode=loopback\n/let pin %s\n/definq PASSPHRASE pin\nscd checkpin %s\n/bye\n' "$pin" "$aid")
+  unset pin
+  out=$(printf '%s' "$script" | gpg-connect-agent 2>/dev/null) || rc=$?
+  unset script
+  [[ $rc -eq 0 ]] || return 1
+  key_check_last_ok "$out"
+}
+
+# Bounded external-command runner: `timeout` on Linux, a background-plus-kill
+# fallback on macOS (same shape as bounded_read in
+# run_after_config-omp-settings.sh.tmpl). Used for every keyring read/write so
+# an unreachable Secret Service/Keychain degrades instead of hanging the hook.
+key_check_bounded_run() {
+  local deadline=$1 rc=0
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$deadline" "$@" || rc=$?
+    return "$rc"
+  fi
+  local pid waited=0
+  "$@" &
+  pid=$!
+  while [[ $waited -lt $deadline ]] && kill -0 "$pid" 2>/dev/null; do
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    return 1
+  fi
+  wait "$pid" || rc=$?
+  return "$rc"
+}
+
+# A bound-exceeded or unreachable keyring reads as "no stored PIN" (fail-soft,
+# matching ensure_config_secrets_key), never as a hook error.
+key_check_keyring_get() {
+  local serial="$1" chezmoi_bin="${CHEZMOI_EXECUTABLE:-chezmoi}" val=''
+  val=$(key_check_bounded_run 10 "$chezmoi_bin" secret keyring get --service=gnupg-card-pin --user="$serial" 2>/dev/null) || val=''
+  printf '%s' "$val"
+}
+
+# The PIN travels on stdin, never `--value` (KTD3): argv is visible in `ps`.
+key_check_keyring_set() {
+  local serial="$1" pin="$2" chezmoi_bin="${CHEZMOI_EXECUTABLE:-chezmoi}" rc=0
+  printf '%s\n' "$pin" | key_check_bounded_run 10 "$chezmoi_bin" --no-tty secret keyring set --service=gnupg-card-pin --user="$serial" >/dev/null 2>&1 || rc=$?
+  unset pin
+  return "$rc"
+}
+
+key_check_lock_dir() {
+  printf '%s/chezmoi' "${XDG_RUNTIME_DIR:-$HOME/.cache}"
+}
+
+# Per-user mkdir lock with a stale-age check (macOS has neither flock(1) nor
+# XDG_RUNTIME_DIR), serializing the PIN verification block (KTD2).
+key_check_acquire_lock() {
+  local base lock age now mtime
+  base=$(key_check_lock_dir)
+  mkdir -p "$base" 2>/dev/null || return 1
+  lock="$base/key-check.lock"
+  if mkdir "$lock" 2>/dev/null; then
+    printf '%s' "$lock"
+    return 0
+  fi
+  [[ -d "$lock" ]] || return 1
+
+  now=$(date +%s)
+  mtime=$(stat -c %Y "$lock" 2>/dev/null || stat -f %m "$lock" 2>/dev/null || printf '%s' "$now")
+  age=$((now - mtime))
+  (( age > 300 )) || return 1
+
+  rmdir "$lock" 2>/dev/null || true
+  if mkdir "$lock" 2>/dev/null; then
+    printf '%s' "$lock"
+    return 0
+  fi
+  return 1
+}
+
+# The operator ask (KTD2 step 4-5): no /dev/tty is a hard failure with no
+# pinentry ever spawned. Loops while retries stay above 1, asking again after
+# a rejected interactive PIN; a blank answer passes with nothing stored (R15).
+key_check_ask_operator() {
+  local aid="$1" serial="$2" counter pin
+  # `/dev/tty` the device node is present on nearly every host regardless of
+  # whether THIS process has a controlling terminal, so an existence check
+  # (`-e`) would pass even under a non-interactive/CI invocation. Actually
+  # opening it is the real test; close the probe descriptor immediately.
+  if { exec 3<>/dev/tty; } 2>/dev/null; then
+    exec 3>&-
+  else
+    key_check_fail "a User PIN is required but no /dev/tty is available; run this command from an interactive terminal"
+    return 1
+  fi
+  while true; do
+    counter=$(key_check_read_chv_status) || { key_check_fail "could not read the card's CHV-STATUS; cannot ask for a PIN safely"; return 1; }
+    if (( counter <= 1 )); then
+      key_check_fail "the User PIN has $counter attempt(s) left; unblock the card with its Reset Code or Admin PIN before continuing"
+      return 1
+    fi
+    printf 'YubiKey OpenPGP User PIN for serial %s (%s attempts left): ' "$serial" "$counter" > /dev/tty
+    if ! IFS= read -rs pin < /dev/tty; then
+      printf '\n' > /dev/tty 2>/dev/null || true
+      key_check_fail "could not read a PIN from /dev/tty"
+      return 1
+    fi
+    printf '\n' > /dev/tty
+    if [[ -z "$pin" ]]; then
+      unset pin
+      return 0
+    fi
+    if key_check_loopback_checkpin "$aid" "$pin"; then
+      key_check_keyring_set "$serial" "$pin"
+      unset pin
+      return 0
+    fi
+    unset pin
+  done
+}
+
+# KTD2's five-step verification order: cancel probe, CHV-STATUS, an
+# automated one-shot try of a stored PIN only at the max retry count, then the
+# operator ask. Never sends a stored PIN below the max (R14) and never asks
+# with one or zero attempts left (R13).
+key_check_pin_verify_impl() {
+  local aid="$1" serial="$2" counter stored_pin current_aid
+
+  if key_check_cancel_probe "$aid"; then
+    return 0
+  fi
+
+  counter=$(key_check_read_chv_status) || { key_check_fail "the card's CHV-STATUS could not be parsed"; return 1; }
+  if (( counter > 3 )); then
+    key_check_fail "the card's User PIN retry maximum is above 3; see R17"
+    return 1
+  fi
+  if (( counter <= 1 )); then
+    key_check_fail "the User PIN has $counter attempt(s) left; unblock the card with its Reset Code or Admin PIN before continuing"
+    return 1
+  fi
+
+  if (( counter == 3 )); then
+    stored_pin=$(key_check_keyring_get "$serial")
+  fi
+
+  if [[ -n "${stored_pin:-}" ]]; then
+    if ! current_aid=$(key_check_scd_serialno) || [[ "$current_aid" != "$aid" ]]; then
+      unset stored_pin
+      key_check_fail "the card changed while verifying the stored PIN; nothing was sent"
+      return 1
+    fi
+    if key_check_loopback_checkpin "$aid" "$stored_pin"; then
+      unset stored_pin
+      return 0
+    fi
+    unset stored_pin
+  fi
+
+  key_check_ask_operator "$aid" "$serial" || return 1
+  return 0
+}
+
+key_check_pin_verify() {
+  local aid="$1" serial="$2" lock rc=0
+  lock=$(key_check_acquire_lock) || { key_check_fail "could not acquire the per-user PIN check lock"; return 1; }
+  trap 'rmdir "$lock" 2>/dev/null || true' EXIT HUP INT TERM
+  key_check_pin_verify_impl "$aid" "$serial" || rc=$?
+  rmdir "$lock" 2>/dev/null || true
+  trap - EXIT HUP INT TERM
+  return "$rc"
+}
+
+# The Key presence check (KTD1's decision flow), skipping real containers and
+# CI runners (KTD9, R8) the same way preflight_card_stack does.
+run_key_presence_check() {
+  if is_container || [[ "${CI:-}" == "true" ]]; then
+    return 0
+  fi
+
+  local source_root=${1:-${CHEZMOI_SOURCE_DIR:-}}
+  unset KEY_CHECK_INITIAL_CLASS
+  read_user_data "$source_root" || return 1
+  local fpr="$KEY_CHECK_FPR"
+
+  key_check_import_public_key "$fpr" "$source_root" || return 1
+
+  if ! key_check_agent_probe; then
+    printf 'install-prerequisites.sh: gpg-agent is unreachable (GETINFO version failed); cannot verify key custody for %s.\n' "$fpr" >&2
+    return 1
+  fi
+
+  local rc=0
+  key_check_classify "$fpr" || rc=$?
+  case $rc in
+    0) ;;
+    2)
+      printf 'install-prerequisites.sh: unexpected local key material for %s:\n' "$fpr" >&2
+      printf '  %s\n' "${KEY_CHECK_OFFENDING_FILES[@]}" >&2
+      return 1
+      ;;
+    *)
+      printf 'install-prerequisites.sh: gpg -K --with-secret failed unexpectedly (exit %s) for %s.\n' "$rc" "$fpr" >&2
+      return 1
+      ;;
+  esac
+
+  if [[ "$KEY_CHECK_CLASS" == local ]]; then
+    return 0
+  fi
+
+  KEY_CHECK_INITIAL_CLASS="$KEY_CHECK_CLASS"
+
+  local aid serial
+  if ! aid=$(key_check_scd_serialno); then
+    key_check_fail "no local private key and no YubiKey detected for $fpr; insert the declared card (serial $(key_check_join_serials))"
+    return 1
+  fi
+
+  serial=$(normalize_aid_serial "$aid") || { key_check_fail "could not read the card serial from the inserted card"; return 1; }
+
+  if ! key_check_serial_declared "$serial"; then
+    key_check_fail "inserted card serial $serial is not declared in yubikeySerials; add it to .chezmoidata/user.yaml or insert a declared card"
+    return 1
+  fi
+
+  local learned=0
+  if [[ "$KEY_CHECK_INITIAL_CLASS" == none ]]; then
+    key_check_run_learn plain || { key_check_fail "learn failed for $fpr"; return 1; }
+    learned=1
+  else
+    # KEY_CHECK_STUB_SERIAL holds the raw AID from field 15; normalize it the
+    # same way as the inserted card's serial (KTD3) before comparing, or a
+    # provisioned host's stub AID (never equal to a decimal serial) would run
+    # learn --force on every command.
+    local stub_serial=''
+    stub_serial=$(normalize_aid_serial "$KEY_CHECK_STUB_SERIAL") || stub_serial=''
+    if [[ "$stub_serial" != "$serial" ]]; then
+      if ! key_check_verify_stub_safety "$fpr"; then
+        key_check_fail "refusing to overwrite unexpected local key material at ${KEY_CHECK_UNSAFE_FILE:-<unknown>}; no learn performed"
+        return 1
+      fi
+      key_check_run_learn force || { key_check_fail "learn --force failed for $fpr"; return 1; }
+      learned=1
+    fi
+  fi
+
+  if [[ $learned -eq 1 ]]; then
+    rc=0
+    key_check_classify "$fpr" || rc=$?
+    if [[ $rc -ne 0 || "$KEY_CHECK_CLASS" != card ]]; then
+      key_check_fail "card $serial does not carry usable signing/encryption keys for $fpr after learn; see R7"
+      return 1
+    fi
+  fi
+
+  key_check_pin_verify "$aid" "$serial" || return 1
+  return 0
+}
+
 # Unit-test seam: let the harness `source` this file for its functions without
 # running the installer below. No-op in normal execution (variable unset).
 if [[ -n "${_INSTALL_PREREQUISITES_TEST_SOURCE:-}" ]]; then
@@ -1068,6 +1920,16 @@ write_capability_cache "${CHEZMOI_SOURCE_DIR:-}"
 # prunes nothing unless this is a command that actually runs scripts.
 prune_stale_skip_records
 
+# Card-stack preflight and key presence check: ensure GnuPG, scdaemon, PC/SC,
+# pinentry, and the keyring CLI are installed with one owner per package, then
+# import the committed public key, classify the local vs. card secret key, and
+# verify the card PIN once so the garden decrypt needs no prompt (R7, R9).
+# Skipped inside real containers and CI runners (R8, KTD9).
+if ! is_container && [[ "${CI:-}" != "true" ]]; then
+  preflight_card_stack || exit 1
+  run_key_presence_check "${CHEZMOI_SOURCE_DIR:-}" || exit 1
+fi
+
 # Fast path: nothing to do once mise is present and `op` can resolve secrets.
 # Keeps re-runs cheap — chezmoi invokes this hook on every `init`/`apply`.
 if command -v mise >/dev/null 2>&1 && op_ready; then
@@ -1099,15 +1961,8 @@ fi
 install_fedora() {
   # Use sudo only when not already root (matches the package-install script).
   # Throw early if neither root nor sudo is available — dnf needs it.
-  local -a SUDO
-  if [[ "${EUID}" -eq 0 ]]; then
-    SUDO=()
-  elif command -v sudo >/dev/null 2>&1; then
-    SUDO=(sudo)
-  else
-    printf 'install-prerequisites.sh: requires root or sudo for package installation.\n' >&2
-    exit 1
-  fi
+  local -a SUDO=()
+  resolve_sudo || exit 1
 
   if ! rpm -q 1password 1password-cli >/dev/null 2>&1; then
     "${SUDO[@]}" tee /etc/yum.repos.d/1password.repo >/dev/null <<'EOF'
@@ -1165,24 +2020,9 @@ EOF
 # secret-tool, the GPG import needs gpg + expect, and the authd login-shell
 # fallback needs sqlite3. Dropping one turns a soft skip into an abort.
 install_ubuntu() {
-  local -a SUDO
-  if [[ "${EUID}" -eq 0 ]]; then
-    SUDO=()
-  elif command -v sudo >/dev/null 2>&1; then
-    SUDO=(sudo)
-  else
-    printf 'install-prerequisites.sh: requires root or sudo for package installation.\n' >&2
-    exit 1
-  fi
+  local -a SUDO=()
+  resolve_sudo || exit 1
 
-  # `dpkg-query -W` also succeeds for a purged package still in `deinstall ok
-  # config-files`, so it would report removed packages as present and never
-  # restore them. Require the installed status field instead.
-  apt_installed() {
-    local status
-    status="$(dpkg-query -f '${db:Status-Status}' -W "$1" 2>/dev/null)" || return 1
-    [[ "$status" == installed ]]
-  }
 
   local arch
   arch="$(dpkg --print-architecture)"
@@ -1203,7 +2043,7 @@ install_ubuntu() {
     "${SUDO[@]}" apt-get install -y 1password-cli
   fi
 
-  local -a base=(zsh curl tar xz-utils coreutils libsecret-tools gnupg expect sqlite3 gh git-lfs)
+  local -a base=(zsh curl tar xz-utils coreutils sqlite3 gh git-lfs)
   local -a missing_pkgs=()
   local pkg
   for pkg in "${base[@]}"; do
@@ -1226,21 +2066,7 @@ install_ubuntu() {
 # authority reconciler owns every other formula and cask.
 install_macos() (
   set -euo pipefail
-  scratch_root=${TMPDIR:-"$HOME/Library/Caches"}
-  scratch=$(mktemp -d "${scratch_root%/}/chezmoi-bootstrap.XXXXXX")
-  trap 'rm -rf -- "$scratch"' EXIT HUP INT TERM
-  if ! command -v brew >/dev/null 2>&1; then
-    # Keep this URL and digest in sync with
-    # .chezmoiscripts/20-darwin/run_onchange_before_homebrew.sh.tmpl.
-    installer="$scratch/homebrew-install.sh"
-    curl -fsSL 'https://raw.githubusercontent.com/Homebrew/install/39a0c068274254a7658fd9761d59bce9d0e2151f/install.sh' -o "$installer"
-    printf '%s  %s\n' '8ff338091a5e10bb5fc040b38316648110f42feff057ecf9feaab51fd0a13ef9' "$installer" |
-      shasum -a 256 -c - >/dev/null
-    NONINTERACTIVE=1 /bin/bash "$installer"
-  fi
-  if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  fi
+  bootstrap_homebrew
   brew list --cask 1password >/dev/null 2>&1 || brew install --cask 1password
   brew list --cask 1password-cli >/dev/null 2>&1 || brew install --cask 1password-cli
 )
@@ -1248,12 +2074,7 @@ install_macos() (
 case "$(uname -s)" in
   Darwin) install_macos ;;
   Linux)
-    # Detect distro from /etc/os-release (available on all modern Linux distros).
-    distro_id=""
-    if [[ -r /etc/os-release ]]; then
-      # shellcheck source=/dev/null
-      distro_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")"
-    fi
+    distro_id="$(hook_distro_id)"
     case "$distro_id" in
       fedora) install_fedora ;;
       ubuntu) install_ubuntu ;;

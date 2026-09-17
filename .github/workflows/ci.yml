@@ -135,6 +135,8 @@ jobs:
           .ci/test-direct-rpms-render.sh
           .ci/test-android-sdk-provision.sh
           .ci/test-sudo-elevation-guard.sh
+          .ci/test-pinentry-card-wrapper.sh
+          .ci/test-gnupg-config-render.sh
           .ci/test-dotfiles-skips.sh
           .ci/test-skip-record-pruning.sh
           .ci/test-chezmoiignore-script-paths.sh
@@ -142,6 +144,7 @@ jobs:
           .ci/test-check-external-checksum-coverage.sh
           .ci/test-fff-mcp-runtime.sh
           .ci/test-orca-cli-shadow.sh
+          .ci/test-key-custody-hook.sh
 
   fatal-boundary-gates:
     name: fatal boundary gates
@@ -306,6 +309,7 @@ jobs:
           .ci/check-release-lock-digests.sh
           .ci/test-release-lock-digest-gate.sh
           .ci/test-gem80-firmware-pin-gates.sh
+          .ci/test-gpg-key-data.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)

@@ -162,11 +162,14 @@
 .config/fontconfig
 {{/* containers skip non-container desktop targets */}}
 .local/share/applications/wezterm.desktop
-# The ~/src garden is a host concept: the 80-keys GPG key import is skipped
-# above so the encrypted project registry cannot be decrypted here, and the
-# 90-src scripts (grow/bootstrap, Orca registration, the Orca settings drift
-# report) would hard-fail on the then-absent registry or have no Orca profile
-# to report against — skip the scripts and the registry.
+# The ~/src garden is a host concept: the .chezmoiscripts/80-keys/*.sh skip
+# above, together with the Key presence check's own container skip in
+# .install-prerequisites.sh (KTD9), means a container never holds a local GPG
+# private key or a card, so the encrypted project registry cannot be
+# decrypted here, and the 90-src scripts (grow/bootstrap, Orca registration,
+# the Orca settings drift report) would hard-fail on the then-absent registry
+# or have no Orca profile to report against — skip the scripts and the
+# registry.
 .chezmoiscripts/90-src/*.sh
 .config/garden/garden.yaml
 # Both of these resolve host-only vault references at RENDER time -- the

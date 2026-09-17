@@ -1,0 +1,288 @@
+{{- $f := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $delegatePath := "/usr/bin/pinentry-curses" -}}
+{{- if eq .chezmoi.os "darwin" -}}
+{{-   if eq .chezmoi.arch "arm64" -}}
+{{-     $delegatePath = "/opt/homebrew/bin/pinentry-mac" -}}
+{{-   else -}}
+{{-     $delegatePath = "/usr/local/bin/pinentry-mac" -}}
+{{-   end -}}
+{{- else if eq $f.desktop "kde" -}}
+{{-   $delegatePath = "/usr/bin/pinentry-qt" -}}
+{{- else if eq $f.desktop "gnome" -}}
+{{-   $delegatePath = "/usr/bin/pinentry-gnome3" -}}
+{{- end -}}
+#!/usr/bin/python3
+"""Card PIN wrapper (KTD6): an Assuan proxy between gpg-agent and the real
+desktop pinentry. Answers only the OpenPGP card User PIN prompt for a serial
+the OS keyring holds; every other prompt -- including a rejected or
+low-remaining-attempts PIN -- passes through untouched to the delegate.
+Rendered by chezmoi from private_dot_gnupg/executable_pinentry-card.tmpl;
+edit the template, never a deployed copy."""
+
+import base64
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+
+# Rendered from the OS, `arch`, and `desktop` facts
+# (.chezmoitemplates/facts.tmpl): gnome -> pinentry-gnome3, kde ->
+# pinentry-qt, none -> pinentry-curses, darwin -> pinentry-mac (Homebrew
+# prefix selected by arch: /opt/homebrew on arm64, /usr/local on amd64).
+DELEGATE_PATH = {{ $delegatePath | quote }}
+# Linux-only fallback when neither DISPLAY nor WAYLAND_DISPLAY is set: the
+# terminal pinentry the preflight always installs (KTD7).
+LINUX_FALLBACK_PATH = "/usr/bin/pinentry-curses"
+IS_LINUX = {{ if eq .chezmoi.os "linux" }}True{{ else }}False{{ end }}
+# secret-tool (Linux, Secret Service) or security (macOS, login Keychain);
+# KTD3.
+KEYRING_BACKEND = {{ if eq .chezmoi.os "darwin" }}"security"{{ else }}"secret-tool"{{ end }}
+
+# Bounds the percent-decoded copy used only for classification (KTD6); the
+# raw line is always forwarded unchanged regardless of this bound.
+MAX_DECODE_LEN = 4096
+KEYRING_LOOKUP_TIMEOUT = 5
+
+# Alignment control bytes (\x1e/\x1f) can surround the "Number:" label on a
+# card prompt; the label must start a line so a holder name that happens to
+# contain the substring "Number" is never mistaken for the field.
+NUMBER_LINE_RE = re.compile(r"(?:^|\n)[\x1e\x1f]*Number:[\x1e\x1f]*[ \t]*([^\n]*)")
+# KTD3's three documented serial forms, matched structurally rather than by
+# deleting characters until something matches.
+SERIAL_FORM_RE = re.compile(r"\d+(?: \d+)*")
+
+
+def percent_decode(data):
+    """Percent-decode Assuan data, or return None on a malformed escape, an
+    embedded raw CR, or a length over the bound -- each of which means the
+    caller must refuse to auto-answer rather than guess at the value."""
+    if len(data) > MAX_DECODE_LEN:
+        return None
+    out = bytearray()
+    i = 0
+    n = len(data)
+    while i < n:
+        byte = data[i]
+        if byte == 0x0D:
+            return None
+        if byte == 0x25:  # '%'
+            if i + 3 > n:
+                return None
+            try:
+                out.append(int(data[i + 1 : i + 3], 16))
+            except ValueError:
+                return None
+            i += 3
+        else:
+            out.append(byte)
+            i += 1
+    return bytes(out)
+
+
+def percent_encode(data):
+    out = bytearray()
+    for byte in data:
+        if byte == 0x25 or byte < 0x20 or byte == 0x7F:
+            out.extend(("%%%02X" % byte).encode("ascii"))
+        else:
+            out.append(byte)
+    return bytes(out)
+
+
+def normalize_serial(raw):
+    """KTD3 serial normalization, shared by the wrapper and the key
+    presence check: accept only the three documented forms."""
+    text = raw.strip(" \t\x1e\x1f")
+    if not SERIAL_FORM_RE.fullmatch(text):
+        return None
+    compact = text.replace(" ", "")
+    if len(compact) == 12 and compact.startswith("0006"):
+        compact = compact[4:]
+    compact = compact.lstrip("0")
+    return compact or None
+
+
+def lookup_pin(serial):
+    if KEYRING_BACKEND == "secret-tool":
+        argv = ["secret-tool", "lookup", "service", "gnupg-card-pin", "username", serial]
+    else:
+        argv = ["security", "find-generic-password", "-s", "gnupg-card-pin", "-a", serial, "-w"]
+    try:
+        result = subprocess.run(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=KEYRING_LOOKUP_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    value = result.stdout
+    if value.endswith(b"\n"):
+        value = value[:-1]
+    if not value:
+        return None
+    if KEYRING_BACKEND == "security":
+        text = value.decode("utf-8", "replace")
+        if text.startswith("go-keyring-base64:"):
+            try:
+                return base64.b64decode(text[len("go-keyring-base64:") :], validate=True)
+            except (ValueError, base64.binascii.Error):
+                return None
+        if text.startswith("go-keyring-encoded:"):
+            try:
+                return bytes.fromhex(text[len("go-keyring-encoded:") :])
+            except ValueError:
+                return None
+    return value
+
+
+class Prompt:
+    """Remembers the last SETPROMPT/SETDESC/SETERROR seen, for classifying
+    the GETPIN and CONFIRM that follow (second HTD diagram in the plan)."""
+
+    def __init__(self):
+        self.prompt = None
+        self.desc = None
+        self.seen_error = False
+
+    def remember(self, cmd, arg):
+        if cmd == b"SETERROR":
+            self.seen_error = True
+            return
+        decoded = percent_decode(arg)
+        text = decoded.decode("utf-8", "replace") if decoded is not None else None
+        if cmd == b"SETPROMPT":
+            self.prompt = text
+        elif cmd == b"SETDESC":
+            self.desc = text
+
+    def matched_pin(self):
+        if self.prompt != "PIN":
+            return None
+        if not self.desc or not self.desc.startswith("Please unlock the card"):
+            return None
+        if "Remaining attempts" in self.desc:
+            return None
+        if self.seen_error:
+            return None
+        numbers = NUMBER_LINE_RE.findall(self.desc)
+        if len(numbers) != 1:
+            return None
+        serial = normalize_serial(numbers[0])
+        if serial is None:
+            return None
+        return lookup_pin(serial)
+
+    def wants_cancel(self):
+        return bool(self.desc and self.desc.startswith("Please insert the card"))
+
+
+def choose_delegate_path():
+    if IS_LINUX and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return LINUX_FALLBACK_PATH
+    return DELEGATE_PATH
+
+
+def spawn_delegate(path):
+    env = dict(os.environ)
+    env["PATH"] = "/usr/bin:/bin"
+    return subprocess.Popen(
+        [path] + sys.argv[1:],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        env=env,
+        close_fds=True,
+    )
+
+
+def pump(delegate_stdout, client_out, lock):
+    while True:
+        chunk = delegate_stdout.readline()
+        if not chunk:
+            return
+        with lock:
+            client_out.write(chunk)
+            client_out.flush()
+
+
+def main():
+    client_in = sys.stdin.buffer
+    client_out = sys.stdout.buffer
+    delegate = spawn_delegate(choose_delegate_path())
+    out_lock = threading.Lock()
+    relay = threading.Thread(target=pump, args=(delegate.stdout, client_out, out_lock), daemon=True)
+    relay.start()
+
+    state = Prompt()
+    done = threading.Event()
+
+    def shutdown():
+        if done.is_set():
+            return delegate.returncode if delegate.returncode is not None else 0
+        done.set()
+        try:
+            delegate.stdin.close()
+        except OSError:
+            pass
+        try:
+            delegate.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            delegate.terminate()
+            try:
+                delegate.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                delegate.kill()
+                delegate.wait()
+        relay.join(timeout=2)
+        return delegate.returncode if delegate.returncode is not None else 0
+
+    def on_signal(signum, frame):
+        sys.exit(shutdown())
+
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
+
+    def forward(line):
+        try:
+            delegate.stdin.write(line)
+            delegate.stdin.flush()
+        except (BrokenPipeError, OSError):
+            sys.exit(shutdown())
+
+    while True:
+        line = client_in.readline()
+        if not line or not line.endswith(b"\n"):
+            sys.exit(shutdown())
+        cmd, _, arg = line[:-1].partition(b" ")
+        if cmd == b"GETPIN":
+            pin = state.matched_pin()
+            state.seen_error = False
+            if pin is not None:
+                with out_lock:
+                    client_out.write(b"D " + percent_encode(pin) + b"\n")
+                    client_out.write(b"OK\n")
+                    client_out.flush()
+                continue
+            forward(line)
+            continue
+        if cmd == b"CONFIRM":
+            if state.wants_cancel():
+                with out_lock:
+                    client_out.write(b"ERR 83886179 Operation cancelled <Pinentry>\n")
+                    client_out.flush()
+                continue
+            forward(line)
+            continue
+        if cmd in (b"SETPROMPT", b"SETDESC", b"SETERROR"):
+            state.remember(cmd, arg)
+        forward(line)
+        if cmd == b"BYE":
+            sys.exit(shutdown())
+
+
+if __name__ == "__main__":
+    main()

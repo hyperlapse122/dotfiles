@@ -91,7 +91,6 @@ declare -A target_of=(
   ['.chezmoiscripts/10-auth/run_once_after_auth-tailscale.sh.tmpl']='.chezmoiscripts/10-auth/*.sh'
   ['.chezmoiscripts/10-auth/run_onchange_after_auth-tokscale.sh.tmpl']='.chezmoiscripts/10-auth/*.sh'
   ['.chezmoiscripts/30-linux/run_onchange_after_config-wakatime-keyring.sh.tmpl']='.chezmoiscripts/30-linux/*.sh'
-  ['.chezmoiscripts/80-keys/run_once_before_import-gpg-key.sh.tmpl']='.chezmoiscripts/80-keys/*.sh'
 )
 
 unguarded=()

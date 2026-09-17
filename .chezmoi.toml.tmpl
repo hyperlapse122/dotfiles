@@ -18,10 +18,11 @@ sourceDir = "{{ .chezmoi.homeDir }}/src/github.com/hyperlapse122/dotfiles"
 # never decrypt: .config/garden/garden.yaml is chezmoiignored there.
 encryption = "gpg"
 [gpg]
-    # Same key as .chezmoidata/user.yaml gpgPubKey (used by the
-    # 80-keys import). Kept as a literal because this config template renders BEFORE
-    # .chezmoidata loads; on key rotation, update both.
+    # Same key and card serials as .chezmoidata/user.yaml gpgPubKey and
+    # yubikeySerials. Kept as literals because this config template renders BEFORE
+    # .chezmoidata loads; on key rotation or card change, update both.
     recipient = "A7F1956CD1A035A139BC7ABFCC740A29852C0E95"
+    {{ $yubikeySerials := list 14963605 -}}
     # Suppress gpg's stderr status line ("gpg: encrypted with …") during chezmoi's
     # native decrypt of `encrypted_` files and the `decrypt` template function. The
     # documented "Mute GPG output" knob (chezmoi user-guide/encryption/gpg); errors
@@ -64,6 +65,94 @@ encryption = "gpg"
 {{-   end -}}
     luksPassphraseCipher = {{ $luksPassphraseCipher | quote }}
 {{ end -}}
+{{- /* YubiKey OpenPGP User PIN init prompt (KTD5).
+   Interactive `chezmoi init` prompts once per declared card serial that has not
+   been prompted yet, stores a non-blank answer in the OS keyring under service
+   gnupg-card-pin (account = serial), and records the serial in yubikeyPinPrompted.
+   A blank answer defers capture to apply without storing a secret.
+   Without a TTY (headless/CI), nothing is prompted and the list carries forward. */}}
+{{- $yubikeyPinPrompted := list -}}
+{{- if hasKey . "yubikeyPinPrompted" -}}
+{{-   $yubikeyPinPrompted = .yubikeyPinPrompted -}}
+{{- end -}}
+{{- if stdinIsATTY -}}
+{{-   range $serial := $yubikeySerials -}}
+{{-     $serialStr := print $serial -}}
+{{-     $alreadyPrompted := false -}}
+{{-     range $p := $yubikeyPinPrompted -}}
+{{-       if eq (print $p) $serialStr -}}
+{{-         $alreadyPrompted = true -}}
+{{-       end -}}
+{{-     end -}}
+{{-     if not $alreadyPrompted -}}
+{{- /* chezmoi's output function runs this snippet with the child's stdin on
+   /dev/null regardless of the operator's terminal (Go's exec.Cmd sets a nil
+   Stdin), so a plain terminal-is-a-tty test on stdin is always false here
+   and stderr is captured rather than shown. Open /dev/tty directly instead
+   of gating on the child's own stdin; the outer stdinIsATTY gate above
+   already limits this branch to an interactive init run. */ -}}
+{{-       $snippet := `
+s="$1"
+e="$2"
+have_tty=0
+if [ -c /dev/tty ] && { exec 3<>/dev/tty; } 2>/dev/null; then
+  have_tty=1
+  printf 'YubiKey OpenPGP User PIN for serial %s (leave blank on a host that keeps its local key or will not use the card): ' "$s" >&3
+  trap 'stty echo <&3 2>/dev/null || true' EXIT INT TERM
+  stty -echo <&3 2>/dev/null || true
+  IFS= read -r pin <&3 2>/dev/null || true
+  stty echo <&3 2>/dev/null || true
+  trap - EXIT INT TERM
+  printf '\n' >&3
+else
+  pin=""
+fi
+
+if [ "$have_tty" -ne 1 ]; then
+  printf 'notty'
+elif [ -z "$pin" ]; then
+  printf 'blank'
+else
+  run_set() {
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 10 "$e" --no-tty secret keyring set --service=gnupg-card-pin --user="$s" >/dev/null 2>&1
+    else
+      "$e" --no-tty secret keyring set --service=gnupg-card-pin --user="$s" >/dev/null 2>&1 &
+      pid=$!
+      waited=0
+      while [ "$waited" -lt 10 ] && kill -0 "$pid" 2>/dev/null; do
+        sleep 1
+        waited=$((waited + 1))
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -TERM "$pid" 2>/dev/null || true
+        kill -KILL "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        return 1
+      fi
+      wait "$pid"
+    fi
+  }
+  if printf '%s\n' "$pin" | run_set; then
+    printf 'stored'
+  else
+    printf 'failed to store PIN in keyring for serial %s\n' "$s" >&3
+    printf 'failed'
+  fi
+fi
+unset pin 2>/dev/null || pin=""
+if [ "$have_tty" -eq 1 ]; then
+  exec 3>&-
+fi
+` -}}
+{{-       $result := output "sh" "-c" $snippet "sh" $serialStr $.chezmoi.executable | trim -}}
+{{-       if or (eq $result "stored") (eq $result "blank") -}}
+{{-         $yubikeyPinPrompted = append $yubikeyPinPrompted $serialStr -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+    yubikeyPinPrompted = {{ $yubikeyPinPrompted | toJson }}
 
 [hooks.read-source-state.pre]
     # `script` (not `command`): on Linux/macOS the `.sh` has no chezmoi interpreter,
