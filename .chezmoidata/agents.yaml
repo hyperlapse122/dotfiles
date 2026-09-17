@@ -81,8 +81,9 @@ agents:
         output, verification, stop condition. Define ambiguous terms and
         thresholds. Place long context before the task. Name what must
         never be invented. In the tool policy, forbid the real `op`: never
-        invoke it and never let a render reach it, because a live secret in
-        rendered output is the harm.
+        invoke it, never let a render reach it, and use only the stub `op`
+        on a PATH naming the stub directory and the system directories,
+        because a live secret in rendered output is the harm.
   mcp:
     servers:
     - name: figma

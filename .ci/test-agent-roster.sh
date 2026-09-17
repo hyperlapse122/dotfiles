@@ -433,10 +433,13 @@ grep -F 'google-antigravity/gemini-9.9-stub' "$stub_body" >/dev/null ||
   fail 'AE9: a changed mechanical model did not reach the rendered coordinator'
 grep -F 'google-antigravity/gemini-3.8-flash' "$stub_body" >/dev/null &&
   fail 'AE9: the superseded mechanical model survived the roster change'
-grep -F -- '--effort low' "$stub_body" >/dev/null ||
-  fail 'AE9: a changed claude authoring effort did not reach the elevation launch line'
-grep -F -- '--effort high' "$stub_body" >/dev/null ||
-  fail 'AE9: a changed claude judgment effort did not reach the launch anchor'
+# Anchored on the surrounding sentence, not on the bare token: searching the
+# whole body for each effort separately passes even when the two template
+# references are swapped, because both tokens are still present somewhere.
+grep -F -- 'launched with `--model fable --effort low`' "$stub_body" >/dev/null ||
+  fail 'AE9: the elevation line does not carry the authoring pair'
+grep -F -- 'selects `--model fable --effort high`' "$stub_body" >/dev/null ||
+  fail 'AE9: the judgment launch line does not carry the judgment pair'
 grep -F -- '--effort max' "$stub_body" >/dev/null &&
   fail 'AE9: the coordinator body still names an effort the stub roster does not declare'
 
