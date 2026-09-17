@@ -61,17 +61,35 @@ model_count=$(grep -c . "$positive_out")
 
 # --- negative and alternate-valid cases ------------------------------------ #
 
-assert_render_fails() {
-  local label=$1 workers_json=$2 want=$3
-  local override out err
-  override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$workers_json")
+# Shared render-and-expect-failure tail for assert_render_fails and
+# lead_wrapper below. `override` is optional: when a caller omits it, render
+# is called with the same argument count it gets without one, not with an
+# empty string appended (the trailing-arg form still ends up equivalent inside
+# render() itself, but the call-site shape stays exactly as before).
+expect_render_failure() {
+  local label=$1 template=$2 want=$3
+  local override=${4:-}
+  local out err
   out="$scratch/$label.out"
   err="$scratch/$label.err"
-  if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$out" "$override" 2>"$err"; then
-    fail "$label: expected a failed render, got exit 0"
+  if [[ -n "$override" ]]; then
+    if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$template" "$out" "$override" 2>"$err"; then
+      fail "$label: expected a failed render, got exit 0"
+    fi
+  else
+    if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$template" "$out" 2>"$err"; then
+      fail "$label: expected a failed render, got exit 0"
+    fi
   fi
   grep -qF -- "$want" "$err" ||
     fail "$label: render failed without the expected diagnostic ($want): $(cat "$err")"
+}
+
+assert_render_fails() {
+  local label=$1 workers_json=$2 want=$3
+  local override
+  override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$workers_json")
+  expect_render_failure "$label" "$wrapper" "$want" "$override"
 }
 
 assert_render_ok() {
@@ -133,16 +151,10 @@ assert_render_fails claude-duplicate-rung \
 
 lead_wrapper() {
   local label=$1 lead_expr=$2 want=$3
-  local wrapper out err
+  local wrapper
   wrapper="$scratch/$label-wrapper.tmpl"
   printf '%s\n' "{{- includeTemplate \"agent-roster-validate.tmpl\" (dict \"roster\" (dict \"lead\" $lead_expr \"workers\" .agents.roster.workers)) -}}" >"$wrapper"
-  out="$scratch/$label.out"
-  err="$scratch/$label.err"
-  if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$out" 2>"$err"; then
-    fail "$label: expected a failed render, got exit 0"
-  fi
-  grep -qF -- "$want" "$err" ||
-    fail "$label: render failed without the expected diagnostic ($want): $(cat "$err")"
+  expect_render_failure "$label" "$wrapper" "$want"
 }
 
 # A codex lead entry without effort fails.
@@ -159,6 +171,28 @@ lead_wrapper lead-codex-missing-model \
 lead_wrapper lead-claude-missing-model \
   '(dict "claude" (dict) "codex" (dict "model" "gpt-6-astra" "effort" "medium"))' \
   'lead.claude is missing model'
+
+# A null codex model has the key but no usable value, and must fail the same
+# way an absent key does (a YAML `effort: null` has the key, so a bare
+# hasKey/eq-empty check lets it through).
+lead_wrapper lead-codex-null-model \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" (fromJson "null") "effort" "medium"))' \
+  'lead.codex is missing model'
+
+# A null codex effort must fail the same way.
+lead_wrapper lead-codex-null-effort \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" "gpt-6-astra" "effort" (fromJson "null")))' \
+  'lead.codex is missing effort'
+
+# A null claude model must fail the same way.
+lead_wrapper lead-claude-null-model \
+  '(dict "claude" (dict "model" (fromJson "null")) "codex" (dict "model" "gpt-6-astra" "effort" "medium"))' \
+  'lead.claude is missing model'
+
+# A wrong-typed field (a number where a string is required) must fail too.
+lead_wrapper lead-codex-model-wrong-type \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" 42 "effort" "medium"))' \
+  'lead.codex is missing model'
 
 # A lead map with no codex key fails.
 lead_wrapper lead-no-codex-entry \

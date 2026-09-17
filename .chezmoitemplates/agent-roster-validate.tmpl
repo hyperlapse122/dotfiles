@@ -39,31 +39,26 @@
 {{- if not (kindIs "map" $lead) -}}
 {{-   fail (printf "agent-roster-validate: agents.roster.lead must be a map, got %s" (kindOf $lead)) -}}
 {{- end -}}
-{{- $leadHasClaude := false -}}
-{{- $leadHasCodex := false -}}
 {{- range $leadAgent, $leadEntry := $lead -}}
 {{-   if not (has $leadAgent $validAgents) -}}
 {{-     fail (printf "agent-roster-validate: agents.roster.lead declares unknown agent %q" $leadAgent) -}}
 {{-   end -}}
-{{-   if eq $leadAgent "claude" -}}
-{{-     $leadHasClaude = true -}}
+{{-   if not (kindIs "map" $leadEntry) -}}
+{{-     fail (printf "agent-roster-validate: lead.%s is missing model" $leadAgent) -}}
 {{-   end -}}
-{{-   if eq $leadAgent "codex" -}}
-{{-     $leadHasCodex = true -}}
-{{-   end -}}
-{{-   if or (not (hasKey $leadEntry "model")) (eq $leadEntry.model "") -}}
+{{-   if or (not (hasKey $leadEntry "model")) (not (kindIs "string" $leadEntry.model)) (eq $leadEntry.model "") -}}
 {{-     fail (printf "agent-roster-validate: lead.%s is missing model" $leadAgent) -}}
 {{-   end -}}
 {{-   if eq $leadAgent "codex" -}}
-{{-     if or (not (hasKey $leadEntry "effort")) (eq $leadEntry.effort "") -}}
+{{-     if or (not (hasKey $leadEntry "effort")) (not (kindIs "string" $leadEntry.effort)) (eq $leadEntry.effort "") -}}
 {{-       fail "agent-roster-validate: lead.codex is missing effort" -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}
-{{- if not $leadHasClaude -}}
+{{- if not (hasKey $lead "claude") -}}
 {{-   fail "agent-roster-validate: agents.roster.lead declares no claude entry" -}}
 {{- end -}}
-{{- if not $leadHasCodex -}}
+{{- if not (hasKey $lead "codex") -}}
 {{-   fail "agent-roster-validate: agents.roster.lead declares no codex entry" -}}
 {{- end -}}
 {{- $seenIds := list -}}

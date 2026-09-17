@@ -4,6 +4,7 @@
    rather than in the data file so the derived leaves still pass through the
    validator below; a fresh dict is the destination because sprig's merge mutates
    its first argument. */ -}}
+{{- $_ := includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}
 {{- $settings := merge (dict "model" .agents.roster.lead.codex.model "model_reasoning_effort" .agents.roster.lead.codex.effort) .agents.codex.settings -}}
 {{- includeTemplate "codex-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- /* One declared object from two owners. agents.codex.settings owns scalar

@@ -388,6 +388,18 @@ assert_render_fails sandbox-writable-roots \
 assert_render_fails sandbox-bare \
   '{"agents":{"codex":{"settings":{"sandbox_workspace_write":"x"}}}}' "$posture_reject"
 
+# The lead pair this script reads is gated by agent-roster-validate.tmpl before
+# the merge line, not merely by codex-settings-validate.tmpl (which only checks
+# generic leaf structure). An empty, null, or wrong-typed lead field must fail
+# here with the roster diagnostic, not render "model": "" or "model": 42.
+roster_lead_reject='agent-roster-validate: lead.codex is missing model'
+assert_render_fails lead-codex-model-empty \
+  '{"agents":{"roster":{"lead":{"codex":{"model":""}}}}}' "$roster_lead_reject"
+assert_render_fails lead-codex-model-null \
+  '{"agents":{"roster":{"lead":{"codex":{"model":null}}}}}' "$roster_lead_reject"
+assert_render_fails lead-codex-model-wrong-type \
+  '{"agents":{"roster":{"lead":{"codex":{"model":42}}}}}' "$roster_lead_reject"
+
 assert_render_fails doubled-dot \
   '{"agents":{"codex":{"settings":{"sandbox_workspace_write..network_access":true}}}}' "$bad_path"
 assert_render_fails trailing-dot \
