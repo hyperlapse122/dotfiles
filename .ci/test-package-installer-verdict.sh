@@ -77,13 +77,62 @@ rendered=("$scratch"/rendered/*.sh)
 
 # Only the tolerant Terra bootstrap (repository setup, KTD4) may keep `|| true`
 # on an install call; every declared-set install is judged by the re-inspection.
-offenders=$(grep -inE '(dnf|apt-get|dotnet tool)[^#]*[[:space:]]install[[:space:]].*\|\|[[:space:]]*true' "${rendered[@]}" |
-  grep -vE 'install -y --nogpgcheck --repofrompath [^ ]+ terra-release terra-gpg-keys \|\| true$' || true)
-[[ -z "$offenders" ]] || fail "an install call still discards its failure with || true:
+install_discard_re='(dnf|apt-get|dotnet tool)[^#]*[[:space:]]install[[:space:]].*\|\|[[:space:]]*(true|:($|[[:space:]#;]))'
+terra_allowance_re='install -y --nogpgcheck --repofrompath [^ ]+ terra-release terra-gpg-keys \|\| (true|:)$'
+offenders=$(grep -inE "$install_discard_re" "${rendered[@]}" |
+  grep -vE "$terra_allowance_re" || true)
+[[ -z "$offenders" ]] || fail "an install call still discards its failure with || true or || ::
 $offenders"
 grep -qE -- '--repofrompath .*terra-release.*\|\| true$' "$scratch/rendered/devtools-fedora.sh" ||
   fail 'the Terra bootstrap is no longer the tolerant repository setup step the allowance names'
-pass 'no declared-set install call keeps || true; the Terra bootstrap is the one allowance'
+pass 'no declared-set install call keeps || true or || :; the Terra bootstrap is the one allowance'
+
+# Scenarios 1-3: verify the widened gate expression rejects || : on dnf, apt-get and dotnet tool
+for sample in \
+  'dnf install -y foo || :' \
+  'apt-get install -y foo || :' \
+  'dotnet tool install -g foo || :'; do
+  sample_offenders=$(printf '%s\n' "$sample" | grep -inE "$install_discard_re" |
+    grep -vE "$terra_allowance_re" || true)
+  [[ -n "$sample_offenders" ]] || fail "the gate expression did not reject || : sample: $sample"
+done
+pass 'the gate expression rejects || : on dnf, apt-get and dotnet tool install calls'
+
+# Scenario 4: verify the widened gate expression still rejects || true forms
+for sample in \
+  'dnf install -y foo || true' \
+  'apt-get install -y foo || true' \
+  'dotnet tool install -g foo || true'; do
+  sample_offenders=$(printf '%s\n' "$sample" | grep -inE "$install_discard_re" |
+    grep -vE "$terra_allowance_re" || true)
+  [[ -n "$sample_offenders" ]] || fail "the gate expression did not reject || true sample: $sample"
+done
+pass 'the gate expression still rejects || true on install calls'
+
+# Scenario 5: verify the Terra bootstrap line is still allowed by the widened expression
+for terra_sample in \
+  'dnf install -y --nogpgcheck --repofrompath "terra,https://repos.fyralabs.com/terra$releasever" terra-release terra-gpg-keys || true' \
+  '"${DNF[@]}" install -y --nogpgcheck --repofrompath '\''terra,https://repos.fyralabs.com/terra$releasever'\'' terra-release terra-gpg-keys || true' \
+  'dnf install -y --nogpgcheck --repofrompath "terra,https://repos.fyralabs.com/terra$releasever" terra-release terra-gpg-keys || :' \
+  '"${DNF[@]}" install -y --nogpgcheck --repofrompath '\''terra,https://repos.fyralabs.com/terra$releasever'\'' terra-release terra-gpg-keys || :'; do
+  sample_offenders=$(printf '%s\n' "$terra_sample" | grep -inE "$install_discard_re" |
+    grep -vE "$terra_allowance_re" || true)
+  [[ -z "$sample_offenders" ]] || fail "the gate expression falsely rejected the Terra bootstrap line: $terra_sample"
+done
+pass 'the Terra bootstrap line is still allowed by the widened expression'
+
+# Scenario 6: verify the widened expression adds no false positive on legitimate colons
+for sample in \
+  "dnf install -y --repofrompath 'terra,https://repos.fyralabs.com/terra' foo" \
+  'dnf install -y "${PKG:-default-pkg}"' \
+  'apt-get install -y "${PKG:-default-pkg}"' \
+  'dotnet tool install -g "${TOOL:-default-tool}"' \
+  'dnf install -y "${PKG:-default}" || exit 1'; do
+  sample_offenders=$(printf '%s\n' "$sample" | grep -inE "$install_discard_re" |
+    grep -vE "$terra_allowance_re" || true)
+  [[ -z "$sample_offenders" ]] || fail "the gate expression falsely matched legitimate colon: $sample"
+done
+pass 'the widened expression adds no false positive on legitimate colons'
 
 sdk_redirect=$(grep -nE 'dnf[^#]*install[^#]*dotnet-sdk.*2>/dev/null' "$scratch/rendered/dotnet-fedora.sh" || true)
 [[ -z "$sdk_redirect" ]] || fail "an SDK dnf install hides dnf's stderr: $sdk_redirect"
@@ -143,7 +192,7 @@ extract() {
   sed -n "${first},${end}p" "$file" >"$out"
 }
 extract devtools-fedora.sh '^DNF=\(' install_devtools devtools-fedora.region
-extract devtools-ubuntu.sh '^install_apt\(\) \{$' install_devtools devtools-ubuntu.region
+extract devtools-ubuntu.sh '^apt_installed\(\) \{$' install_devtools devtools-ubuntu.region
 extract apps-fedora.sh '^DNF=\(' install_app_packages apps-fedora.region
 extract dotnet-fedora.sh '^dotnet_tools=\($' install_dotnet_tools dotnet-fedora.region
 extract dotnet-ubuntu.sh '^dotnet_tools=\($' install_dotnet_tools dotnet-ubuntu.region
@@ -221,7 +270,12 @@ for p in "$@"; do
   [[ "$p" == -* ]] && continue
   case " ${APT_FAIL:-} " in
     *" $p "*) printf 'E: Unable to locate package %s\n' "$p" >&2; rc=100 ;;
-    *) printf '%s\n' "$p" >>"$STUB_STATE/debs" ;;
+    *)
+      printf '%s\n' "$p" >>"$STUB_STATE/debs"
+      for rule in ${APT_PULLS:-}; do
+        [[ "$rule" == "$p:"* ]] && printf '%s\n' "${rule#*:}" >>"$STUB_STATE/debs"
+      done
+      ;;
   esac
 done
 exit "$rc"
@@ -463,6 +517,16 @@ if grep -F 'sudo apt-get install -y' "$err" | grep -qwE "$ud1|$ud3"; then
 fi
 pass "$label: one failed package does not stop the rest and is the one recorded"
 
+label=devtools-ubuntu-recommends-dependency-skipped
+run_case "$label" devtools-ubuntu.region install_devtools \
+  DEBS="$ud_rest" APT_PULLS="$ud1:$ud2" SEED="$DUBU"
+check returned_zero
+check no_record "$DUBU"
+check called "^apt-get install -y $ud1\$"
+check not_called "^apt-get install -y $ud2\$"
+check called "^apt-get install -y $ud3\$"
+pass "$label: a package pulled in by an earlier install is not requested"
+
 label=devtools-ubuntu-converged
 run_case "$label" devtools-ubuntu.region install_devtools DEBS="$ud_pkgs" SEED="$DUBU"
 check returned_zero
@@ -476,6 +540,24 @@ check returned_zero
 check no_record "$DUBU"
 check called "^apt-get install -y $ud2\$"
 pass "$label: an install that provides the package clears the record"
+
+label=devtools-ubuntu-all-fail
+run_case "$label" devtools-ubuntu.region install_devtools \
+  DEBS="" APT_FAIL="$ud_pkgs"
+check returned_zero
+check record_is "$DUBU" operator-blocking
+check stderr_has "sudo apt-get install -y $ud_pkgs"
+check names_entry_state
+pass "$label: every package failing is recorded and reported"
+
+label=devtools-ubuntu-update-fails
+run_case "$label" devtools-ubuntu.region install_devtools \
+  DEBS="$(without "$ud1" $ud_pkgs)" APT_UPDATE_EXIT=1 SEED="$DUBU"
+check returned_zero
+check called '^apt-get update'
+check called "^apt-get install -y $ud1\$"
+check no_record "$DUBU"
+pass "$label: a failed apt-get update still reaches the install"
 
 # --- Apps, Fedora --------------------------------------------------------------
 
@@ -589,6 +671,14 @@ check record_is "$NUBU_TOOLS" operator-blocking
 check stderr_has "dotnet tool install -g $tool1"
 check names_entry_state
 pass "$label: a failed tool install is recorded and reported"
+
+label='dotnet-ubuntu-tools-converged'
+run_case "$label" dotnet-ubuntu.region install_dotnet_tools DOTNET=1 TOOLS="$all_tools" SEED="$NUBU_TOOLS"
+check returned_zero
+check no_record "$NUBU_TOOLS"
+check not_called '^dotnet tool install'
+[[ ! -s "$err" ]] || { show >&2; fail "$label: the passing path wrote to stderr"; }
+pass "$label: a converged host installs no tool and clears the record"
 
 label='dotnet-ubuntu-tools-converge-now'
 run_case "$label" dotnet-ubuntu.region install_dotnet_tools DOTNET=1 SEED="$NUBU_TOOLS"

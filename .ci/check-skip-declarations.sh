@@ -350,6 +350,7 @@ ARRAY = re.compile(r'^(?:(?:local|declare|readonly|export|typeset)\s+(?:-[a-zA-Z
                    r'[A-Za-z_][A-Za-z0-9_]*\+?=\(')
 CASE_ARM = re.compile(r'^[^()=]*\)')
 CONDITIONAL_KINDS = ('if', 'case-arm')
+RM_SKIPS = re.compile(r'^rm -f "\$\{XDG_STATE_HOME:-\$HOME/\.local/state\}/chezmoi/skips/([^"]+)" 2>/dev/null \|\| true$')
 
 
 def status_kind(word):
@@ -889,6 +890,7 @@ def check(root, plan_path, renders_path, fixture):
         subshell_ends = {e['opener']['line']: e for e in events if e['kind'] == 'subshell-end'}
         verdicts = verdict_functions(events)
         declared_terms = set()
+        declared_bodies = set()
         here = {}
 
         for event in [e for e in events if e['kind'] == 'sentinel']:
@@ -951,6 +953,7 @@ def check(root, plan_path, renders_path, fixture):
                 problems.append(f'{site}: no adjacent {values["exit"]} terminator for this declaration')
                 continue
             declared_terms.add(terminator['line'])
+            declared_bodies.update(range(event['line'], terminator['line'] + 1))
             why = declaration_body(raws, event['line'], terminator['line'], values)
             if why:
                 problems.append(f'{site}: {why}')
@@ -1063,6 +1066,29 @@ def check(root, plan_path, renders_path, fixture):
             if not term['pure'] or conditional_frames(term['stack']):
                 problems.append(f'{label}:{term["line"]}: undeclared conditional success exit '
                                 f'({claim}) — declare it through skip.sh.tmpl')
+
+        # Static reconciliation of clear_record removal lines: ensure every
+        # removal of a skip record outside a declared branch names a declaration
+        # the matrix knows.
+        for idx, raw in enumerate(raws, 1):
+            if idx in declared_bodies:
+                continue
+            m = RM_SKIPS.match(raw.strip())
+            if not m:
+                continue
+            target = m.group(1)
+            # Pre-existing removal lines building paths from shell variables
+            # (e.g. install-nvidia-fedora__${site}) cannot be reconciled statically.
+            if '$' in target:
+                continue
+            script, sep, site = target.partition('__')
+            if not sep or not ID_RE.match(script) or not ID_RE.match(site):
+                problems.append(f'{label}:{idx}: clear_record target {target!r} is not a valid <script>__<site> record path')
+                continue
+            owner = f'{script}/{site}'
+            instance = f'{rel}#{owner}'
+            if owner not in by_owner or instance not in instances:
+                problems.append(f'{label}:{idx}: clear_record for {script}/{site} does not match any declaration in the site matrix')
 
         # Matrix-named hard errors: the only conditional paths allowed to abandon
         # work without a declaration, because a nonzero exit claims no

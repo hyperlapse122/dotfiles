@@ -98,7 +98,7 @@ EOF
 }
 
 clear_apps_skip_record() {
-  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/install-apps-fedora__app-packages-not-installed" 2>/dev/null || true
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-apps-fedora" "site" "app-packages-not-installed") | trim | indent 2 }}
 }
 
 report_apps_missing() {
@@ -122,6 +122,9 @@ install_app_packages() {
 
   if [[ "${#missing_app_packages[@]}" -gt 0 ]]; then
     setup_app_repos
+    # Exit status is discarded because the post-attempt package re-inspection is the verdict.
+    # The gate in .ci/test-package-installer-verdict.sh rejects || true on declared-set installs;
+    # if ! cmd; then :; fi is the sanctioned form under set -e, not a way around the gate.
     if ! "${DNF[@]}" install -y "${missing_app_packages[@]}"; then :; fi
     compute_missing_app_packages
   fi
