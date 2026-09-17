@@ -418,7 +418,8 @@ exit 0
 EOF
   export PATH="$m_bin_nobrew:$clean_bin"
   bootstrap_called=0
-  # shellcheck disable=SC2329
+  # Stub invoked indirectly by preflight_macos
+  # shellcheck disable=SC2317,SC2329
   bootstrap_homebrew() {
     bootstrap_called=1
     make_stub "$m_bin_nobrew" "brew" <<'BO_EOF'
@@ -448,13 +449,15 @@ EOF
   export PATH="$c_bin:$clean_bin"
 
   # Container marker simulation
-  # shellcheck disable=SC2329
+  # Stub invoked indirectly by preflight_card_stack
+  # shellcheck disable=SC2317,SC2329
   is_container() { return 0; }
   CI=false preflight_card_stack || exit 91
   [[ ! -f "$c_log/calls.log" ]] || exit 92
 
   # CI=true simulation
-  # shellcheck disable=SC2329
+  # Stub invoked indirectly by preflight_card_stack
+  # shellcheck disable=SC2317,SC2329
   is_container() { return 1; }
   CI=true preflight_card_stack || exit 93
   [[ ! -f "$c_log/calls.log" ]] || exit 94
@@ -794,7 +797,8 @@ kc_new() {
   export LOG_DIR="$KC_LOG"
   export HOME="$KC_HOME"
   unset XDG_RUNTIME_DIR CI
-  # shellcheck disable=SC2329
+  # Stub invoked indirectly by run_key_presence_check
+  # shellcheck disable=SC2317,SC2329
   is_container() { return 1; }
 }
 
@@ -914,7 +918,7 @@ kc_chezmoi_call() { grep -qF $'\x1f'"secret"$'\x1f'"keyring"$'\x1f'"$1"$'\x1f' "
 # ============================== T1 (AE3) =====================================
 (
   kc_new
-  kc_classify_local
+  kc_classify_local 1
   kc_run || exit 1
   [[ ! -f "$KC_LOG/learn.log" ]] || exit 11
   kc_agent_arg 'scd serialno' && exit 12
@@ -1053,7 +1057,7 @@ pass 'T10: a PIN containing $ reaches the inquiry unexpanded'
 # ============================== T11 ==========================================
 (
   kc_new
-  kc_classify_local
+  kc_classify_local 1
   printf '%s:6:\n' "$KC_FPR" > "$KC_FIXTURE/ownertrust"
   kc_ok "$KC_FIXTURE/list_keys_rc"
   kc_run || exit 1
@@ -1306,11 +1310,13 @@ pass 'T25: declared backup serial inserted, only shadowed files present -> learn
 # ============================== T26 (AE7) ====================================
 (
   kc_new
-  # shellcheck disable=SC2329
+  # Stub invoked indirectly by run_key_presence_check
+  # shellcheck disable=SC2317,SC2329
   is_container() { return 0; }
   CI=false run_key_presence_check "$KC_SOURCE" >"$KC_LOG/stdout.log" 2>"$KC_LOG/stderr.log"
   [[ ! -f "$KC_LOG/gpg.log" ]] || exit 61
-  # shellcheck disable=SC2329
+  # Stub invoked indirectly by run_key_presence_check
+  # shellcheck disable=SC2317,SC2329
   is_container() { return 1; }
   CI=true run_key_presence_check "$KC_SOURCE" >>"$KC_LOG/stdout.log" 2>>"$KC_LOG/stderr.log"
   [[ ! -f "$KC_LOG/gpg.log" ]] || exit 62
@@ -1359,7 +1365,7 @@ pass 'T28: a malformed CHV-STATUS line fails with a message, sends no PIN'
 # ============================== T29 ==========================================
 (
   kc_new
-  kc_classify_local
+  kc_classify_local 1
   printf '%s:3:\n' "$KC_FPR" > "$KC_FIXTURE/ownertrust"
   kc_run || exit 1
   [[ -f "$KC_LOG/import-ownertrust-stdin.log" ]] || exit 95
