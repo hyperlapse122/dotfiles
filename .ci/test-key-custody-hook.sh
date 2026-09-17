@@ -19,7 +19,7 @@ pass() { printf 'test-key-custody-hook: ok - %s\n' "$*"; }
 # shellcheck source=/dev/null
 _INSTALL_PREREQUISITES_TEST_SOURCE=1 source "$hook"
 # The interactive key-presence-check scenarios below spawn a fresh bash under
-# expect, which must re-source the hook in seam-only mode too.
+# a python3 pty driver, which must re-source the hook in seam-only mode too.
 export _INSTALL_PREREQUISITES_TEST_SOURCE=1
 
 for fn in hook_distro_id hook_desktop resolve_sudo apt_installed bootstrap_homebrew seed_scdaemon_conf preflight_fedora preflight_ubuntu preflight_macos preflight_card_stack read_user_data key_check_import_public_key key_check_agent_probe key_check_classify key_check_verify_stub_safety key_check_run_learn normalize_aid_serial key_check_scd_serialno key_check_read_chv_status key_check_cancel_probe key_check_loopback_checkpin key_check_bounded_run key_check_keyring_get key_check_keyring_set key_check_clear_serials key_check_acquire_lock key_check_ask_operator key_check_pin_verify_impl key_check_pin_verify run_key_presence_check; do
@@ -31,7 +31,7 @@ pass 'the hook exposes all required preflight functions above the seam'
 # do not leak into tests that simulate specific environments.
 clean_bin="$scratch/clean-bin"
 mkdir -p "$clean_bin"
-for tool in bash sh cat grep sed awk rm cp mv mkdir rmdir chmod wc printf echo test [ tr cut head tail date mktemp sort uniq env xargs timeout stat kill sleep expect; do
+for tool in bash sh cat grep sed awk rm cp mv mkdir rmdir chmod wc printf echo test [ tr cut head tail date mktemp sort uniq env xargs timeout stat kill sleep python3; do
   tool_path=$(type -P "$tool" || true)
   [[ -n "$tool_path" ]] && ln -s "$tool_path" "$clean_bin/$tool"
 done
@@ -867,6 +867,7 @@ kc_write_runner() {
 #!/usr/bin/env bash
 set -euo pipefail
 _INSTALL_PREREQUISITES_TEST_SOURCE=1 source '$hook'
+is_container() { return 1; }
 run_key_presence_check '$KC_SOURCE' 1>'$KC_LOG/stdout.log' 2>'$KC_LOG/stderr.log'
 EOF
   chmod +x "$KC_DIR/run.sh"
@@ -880,33 +881,103 @@ kc_run() {
   return "$rc"
 }
 
-# Drives an interactive ask-operator scenario through a real pty (expect),
-# sending each element of $2... as a PIN whenever the operator prompt appears,
+# Drives an interactive ask-operator scenario through a real pty (python3),
+# sending each element of $1... as a PIN whenever the operator prompt appears,
 # in order. Returns the spawned run.sh's own exit code.
 kc_run_interactive() {
   kc_write_runner
-  local tcl="$KC_DIR/drive.tcl" pin
-  {
-    printf 'log_user 0\n'
-    printf 'set timeout 20\n'
-    printf 'spawn %s\n' "$KC_DIR/run.sh"
-  } > "$tcl"
-  for pin in "$@"; do
-    {
-      printf 'expect {\n'
-      printf '  -re {PIN for serial[^\\r\\n]*} { send -- "%s\\r" }\n' "$pin"
-      printf '  timeout { exit 90 }\n'
-      printf '  eof { exit 91 }\n'
-      printf '}\n'
-    } >> "$tcl"
-  done
-  {
-    printf 'expect eof\n'
-    printf 'catch wait result\n'
-    printf 'exit [lindex $result 3]\n'
-  } >> "$tcl"
+  local driver="$KC_DIR/drive.py"
+  cat << 'PYEOF' > "$driver"
+import os
+import pty
+import re
+import select
+import sys
+import time
+
+runner = sys.argv[1]
+pins = sys.argv[2:]
+
+pid, master_fd = pty.fork()
+if pid == 0:
+    os.execl(runner, runner)
+    os._exit(127)
+
+prompt_re = re.compile(rb"PIN for serial[^\r\n]*")
+pin_idx = 0
+buf = b""
+start_time = time.time()
+timeout = 20.0
+child_status = None
+
+while True:
+    now = time.time()
+    remaining = timeout - (now - start_time)
+    if remaining <= 0:
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
+        sys.exit(90)
+
+    if child_status is None:
+        try:
+            wpid, status = os.waitpid(pid, os.WNOHANG)
+            if wpid == pid:
+                child_status = status
+        except ChildProcessError:
+            child_status = 0
+
+    r, _, _ = select.select([master_fd], [], [], min(max(remaining, 0.01), 0.1))
+    if master_fd in r:
+        try:
+            chunk = os.read(master_fd, 4096)
+        except OSError:
+            chunk = b""
+        if chunk:
+            buf += chunk
+        else:
+            break
+    elif child_status is not None:
+        break
+
+    if pin_idx < len(pins):
+        m = prompt_re.search(buf)
+        if m:
+            buf = buf[m.end():]
+            time.sleep(0.05)
+            os.write(master_fd, pins[pin_idx].encode() + b"\n")
+            pin_idx += 1
+            start_time = time.time()
+
+if pin_idx < len(pins):
+    m = prompt_re.search(buf)
+    if m:
+        time.sleep(0.05)
+        try:
+            os.write(master_fd, pins[pin_idx].encode() + b"\n")
+            pin_idx += 1
+        except OSError:
+            pass
+
+if pin_idx < len(pins):
+    sys.exit(91)
+
+if child_status is None:
+    try:
+        _, child_status = os.waitpid(pid, 0)
+    except ChildProcessError:
+        child_status = 0
+
+if os.WIFEXITED(child_status):
+    sys.exit(os.WEXITSTATUS(child_status))
+elif os.WIFSIGNALED(child_status):
+    sys.exit(128 + os.WTERMSIG(child_status))
+else:
+    sys.exit(1)
+PYEOF
   local rc=0
-  expect -f "$tcl" >/dev/null 2>&1 || rc=$?
+  python3 "$driver" "$KC_DIR/run.sh" "$@" >/dev/null 2>&1 || rc=$?
   return "$rc"
 }
 
