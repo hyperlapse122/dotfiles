@@ -12,6 +12,15 @@ set -euo pipefail
 # technique test-omp-plugin-reconcile.sh uses to exercise
 # agents.omp.pluginsRemoved, so a fixture never touches the committed yaml.
 #
+# The sibling agents.roster.lead map SURVIVES a workers-only override
+# (confirmed empirically: the duplicate-id fixture below, which overrides
+# only .agents.roster.workers, still fails with "duplicate worker id
+# \"claude-fable\"" rather than a lead diagnostic — chezmoi's override merge
+# is recursive on the map, replacing only the workers leaf it names and
+# leaving the committed lead map in place). Lead fixtures therefore cannot
+# use --override-data anyway (see lead_wrapper below), but if they could,
+# this is why a workers-only override would not need to also restate lead.
+#
 # Payload/roster parity (KTD6) is U3's job and is not added here — the spot
 # below is left for it.
 
@@ -42,27 +51,45 @@ chmod 0700 "$scratch/bin/op"
 wrapper="$scratch/roster-wrapper.tmpl"
 printf '%s\n' '{{- includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}' >"$wrapper"
 
-# --- positive: the committed roster renders and prints seven ids ----------- #
+# --- positive: the committed roster renders and prints six ids ------------ #
 
 positive_out="$scratch/positive.out"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$positive_out" ||
   fail 'the committed roster failed to render'
 model_count=$(grep -c . "$positive_out")
-[[ $model_count -eq 7 ]] || fail "the committed roster printed $model_count model id(s), want 7"
+[[ $model_count -eq 6 ]] || fail "the committed roster printed $model_count model id(s), want 6"
 
 # --- negative and alternate-valid cases ------------------------------------ #
 
-assert_render_fails() {
-  local label=$1 workers_json=$2 want=$3
-  local override out err
-  override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$workers_json")
+# Shared render-and-expect-failure tail for assert_render_fails and
+# lead_wrapper below. `override` is optional: when a caller omits it, render
+# is called with the same argument count it gets without one, not with an
+# empty string appended (the trailing-arg form still ends up equivalent inside
+# render() itself, but the call-site shape stays exactly as before).
+expect_render_failure() {
+  local label=$1 template=$2 want=$3
+  local override=${4:-}
+  local out err
   out="$scratch/$label.out"
   err="$scratch/$label.err"
-  if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$out" "$override" 2>"$err"; then
-    fail "$label: expected a failed render, got exit 0"
+  if [[ -n "$override" ]]; then
+    if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$template" "$out" "$override" 2>"$err"; then
+      fail "$label: expected a failed render, got exit 0"
+    fi
+  else
+    if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$template" "$out" 2>"$err"; then
+      fail "$label: expected a failed render, got exit 0"
+    fi
   fi
   grep -qF -- "$want" "$err" ||
     fail "$label: render failed without the expected diagnostic ($want): $(cat "$err")"
+}
+
+assert_render_fails() {
+  local label=$1 workers_json=$2 want=$3
+  local override
+  override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$workers_json")
+  expect_render_failure "$label" "$wrapper" "$want" "$override"
 }
 
 assert_render_ok() {
@@ -100,19 +127,82 @@ assert_render_fails codex-missing-judgment \
 assert_render_ok claude-two-rungs \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
-    {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"}]'
+    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]'
 
 # Two claude implementation entries sharing a rung fail the render naming it.
 assert_render_fails claude-missing-rung \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"brief":"x"},
-    {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"}]' \
+    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]' \
   'is a claude implementation entry without rung'
 
 assert_render_fails claude-duplicate-rung \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-    {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"}]' \
+    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]' \
   'duplicate rung "sonnet" for agent claude'
+
+# --- lead map validation ---------------------------------------------------- #
+#
+# A recursive map merge cannot delete a key, so --override-data on
+# agents.roster.lead can never produce an entry that OMITS a field (only add
+# or replace one). Each fixture instead composes a wrapper template that
+# builds the roster from a literal Go-template lead map and the committed
+# .agents.roster.workers, with no override at all.
+
+lead_wrapper() {
+  local label=$1 lead_expr=$2 want=$3
+  local wrapper
+  wrapper="$scratch/$label-wrapper.tmpl"
+  printf '%s\n' "{{- includeTemplate \"agent-roster-validate.tmpl\" (dict \"roster\" (dict \"lead\" $lead_expr \"workers\" .agents.roster.workers)) -}}" >"$wrapper"
+  expect_render_failure "$label" "$wrapper" "$want"
+}
+
+# A codex lead entry without effort fails.
+lead_wrapper lead-codex-missing-effort \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" "gpt-6-astra"))' \
+  'lead.codex is missing effort'
+
+# A codex lead entry without model fails.
+lead_wrapper lead-codex-missing-model \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "effort" "medium"))' \
+  'lead.codex is missing model'
+
+# A claude lead entry without model fails.
+lead_wrapper lead-claude-missing-model \
+  '(dict "claude" (dict) "codex" (dict "model" "gpt-6-astra" "effort" "medium"))' \
+  'lead.claude is missing model'
+
+# A null codex model has the key but no usable value, and must fail the same
+# way an absent key does (a YAML `effort: null` has the key, so a bare
+# hasKey/eq-empty check lets it through).
+lead_wrapper lead-codex-null-model \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" (fromJson "null") "effort" "medium"))' \
+  'lead.codex is missing model'
+
+# A null codex effort must fail the same way.
+lead_wrapper lead-codex-null-effort \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" "gpt-6-astra" "effort" (fromJson "null")))' \
+  'lead.codex is missing effort'
+
+# A null claude model must fail the same way.
+lead_wrapper lead-claude-null-model \
+  '(dict "claude" (dict "model" (fromJson "null")) "codex" (dict "model" "gpt-6-astra" "effort" "medium"))' \
+  'lead.claude is missing model'
+
+# A wrong-typed field (a number where a string is required) must fail too.
+lead_wrapper lead-codex-model-wrong-type \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" 42 "effort" "medium"))' \
+  'lead.codex is missing model'
+
+# A lead map with no codex key fails.
+lead_wrapper lead-no-codex-entry \
+  '(dict "claude" (dict "model" "opus[1m]"))' \
+  'agents.roster.lead declares no codex entry'
+
+# A lead map carrying an unknown agent fails.
+lead_wrapper lead-unknown-agent \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" "gpt-6-astra" "effort" "medium") "gemini" (dict "model" "x"))' \
+  'agents.roster.lead declares unknown agent "gemini"'
 
 # --- payload/roster parity (KTD6) ------------------------------------------ #
 #
@@ -188,7 +278,7 @@ grep -F 'worker-start --terminal' "$coordinator_body" >/dev/null ||
 grep -F 'google-antigravity/gemini-3.5-flash-lite' "$coordinator_body" >/dev/null ||
   fail 'the omp seat-selection line does not name the mechanical entry model'
 
-# R7 has four rows; R12 has seven.
+# R7 has four rows; R12 has six.
 count_table_rows() {
   awk -v header="$2" '
     index($0, header) == 1 { inside = 1; next }
@@ -201,15 +291,67 @@ count_table_rows() {
 routing_rows=$(count_table_rows "$coordinator_body" '| Work shape |')
 [[ $routing_rows -eq 4 ]] || fail "the routing table rendered $routing_rows row(s), want 4"
 brief_rows=$(count_table_rows "$coordinator_body" '| Model |')
-[[ $brief_rows -eq 7 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 7"
+[[ $brief_rows -eq 6 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 6"
 
-# The Codex launch rule splits by purpose: astra judges, luna is the fallback.
-grep -F 'gpt-6-astra' "$everyone_body" | grep -F 'medium' >/dev/null ||
-  fail 'the everyone body does not name the judgment Codex model with its effort'
-grep -F 'gpt-5.6-luna' "$everyone_body" | grep -F 'max' >/dev/null ||
-  fail 'the everyone body does not name the fallback Codex model with its effort'
+# KTD4: each Codex seat is asserted by its own rendered pair, read from the
+# roster through agent-roster-lookup.tmpl, so a line-level grep for a model
+# near an effort cannot tell the seats apart once both resolve to the same
+# model.
+codex_seat_pair_wrapper="$scratch/codex-seat-pair-wrapper.tmpl"
+codex_seat_pair() {
+  local shape=$1 override=$2 out
+  out="$scratch/codex-seat-pair-$shape.out"
+  printf '%s\n' "{{- \$w := includeTemplate \"agent-roster-lookup.tmpl\" (dict \"roster\" .agents.roster \"agent\" \"codex\" \"shape\" \"$shape\" \"rung\" \"\" \"name\" \"a codex $shape entry\") | fromJson -}}{{ \$w.model }} {{ \$w.effort }}" >"$codex_seat_pair_wrapper"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$codex_seat_pair_wrapper" "$out" "$override" ||
+    fail "seat pair render failed for shape $shape"
+  cat "$out"
+}
+
+read -r judge_model judge_effort <<<"$(codex_seat_pair judgment '')"
+read -r fallback_model fallback_effort <<<"$(codex_seat_pair fallback '')"
+
+judgment_anchor="opinion launches \`$judge_model\` with \`$judge_effort\` reasoning effort"
+fallback_anchor="after the Gemini row — launches \`$fallback_model\` with \`$fallback_effort\` reasoning effort"
+
+grep -F -- "$judgment_anchor" "$everyone_body" >/dev/null ||
+  fail 'the everyone body does not carry the judgment seat anchor with its rendered pair'
+grep -F -- "$fallback_anchor" "$everyone_body" >/dev/null ||
+  fail 'the everyone body does not carry the fallback seat anchor with its rendered pair'
 grep -F 'launch.requested' "$everyone_body" >/dev/null ||
   fail 'the everyone body lost the launch-receipt comparison rule'
+
+# R8: the fallback seat is no longer justified by a cost comparison with the
+# judgment seat.
+grep -F 'belongs to recovery' "$everyone_body" >/dev/null &&
+  fail 'the everyone body still justifies the fallback seat by a cost comparison'
+
+# A two-entry Codex stub with each seat on a distinct model proves the anchors
+# resolve independently: one rendered match cannot satisfy both assertions.
+two_seat_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
+  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+  {"id":"codex-judge","agent":"codex","model":"gpt-9.8-judge","effort":"medium","shapes":["judgment"],"brief":"x"},
+  {"id":"codex-fallback","agent":"codex","model":"gpt-9.9-fallback","effort":"high","shapes":["fallback"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"},
+  {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-3.5-flash-lite","effort":"high","shapes":["mechanical"],"brief":"x"}]'
+two_seat_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$two_seat_workers")
+two_seat_everyone="$scratch/everyone-two-seat.md"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_wrapper" "$two_seat_everyone" "$two_seat_override" ||
+  fail 'the everyone body failed to render against the two-entry Codex stub'
+
+two_seat_judge_anchor='opinion launches `gpt-9.8-judge` with `medium` reasoning effort'
+two_seat_judge_leak='opinion launches `gpt-9.9-fallback` with `high` reasoning effort'
+two_seat_fallback_anchor='after the Gemini row — launches `gpt-9.9-fallback` with `high` reasoning effort'
+two_seat_fallback_leak='after the Gemini row — launches `gpt-9.8-judge` with `medium` reasoning effort'
+
+grep -F -- "$two_seat_judge_anchor" "$two_seat_everyone" >/dev/null ||
+  fail 'two-entry Codex stub: the judgment anchor does not carry the judgment seat model'
+grep -F -- "$two_seat_judge_leak" "$two_seat_everyone" >/dev/null &&
+  fail 'two-entry Codex stub: the judgment anchor leaked the fallback seat model'
+grep -F -- "$two_seat_fallback_anchor" "$two_seat_everyone" >/dev/null ||
+  fail 'two-entry Codex stub: the fallback anchor does not carry the fallback seat model'
+grep -F -- "$two_seat_fallback_leak" "$two_seat_everyone" >/dev/null &&
+  fail 'two-entry Codex stub: the fallback anchor leaked the judgment seat model'
 
 # --- AE9: a roster edit re-renders the payload, with no hand edit ----------- #
 
@@ -219,8 +361,7 @@ grep -F 'launch.requested' "$everyone_body" >/dev/null ||
 stub_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
   {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"codex-astra","agent":"codex","model":"gpt-9.9-stub","effort":"medium","shapes":["judgment"],"brief":"x"},
-  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["fallback"],"brief":"x"},
+  {"id":"codex-luna","agent":"codex","model":"gpt-9.9-stub","effort":"medium","shapes":["judgment","fallback"],"brief":"x"},
   {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"},
   {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["mechanical"],"brief":"x"}]'
 stub_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_workers")
@@ -233,24 +374,48 @@ grep -F 'google-antigravity/gemini-3.5-flash-lite' "$stub_body" >/dev/null &&
   fail 'AE9: the superseded mechanical model survived the roster change'
 
 # --- committed prose (R6): README.md and AGENTS.md are never rendered ------- #
+#
+# KTD5: the prose allowlist is wider than the payload-parity set above. Prose
+# legitimately names a lead model too -- gpt-6-astra is the Codex lead, not a
+# worker -- but no rendered payload body names a lead seat, so the parity
+# loops above (lines ~221-231) keep reading roster_aliases, unchanged. Lead
+# ids are read through execute-template rather than hardcoded, so this scan
+# follows agents.roster.lead rather than pinning today's committed values.
+lead_wrapper_tmpl="$scratch/prose-lead-wrapper.tmpl"
+printf '%s\n' '{{- range $agent, $entry := .agents.roster.lead -}}{{ $entry.model }}
+{{ end -}}' >"$lead_wrapper_tmpl"
+lead_models="$scratch/lead-models.txt"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$lead_wrapper_tmpl" "$lead_models" ||
+  fail 'the committed agents.roster.lead map failed to render'
+
+prose_allowlist="$scratch/prose-allowlist.txt"
+sort -u "$roster_aliases" "$lead_models" >"$prose_allowlist"
 
 prose_models="$scratch/prose-models.txt"
 extract_model_ids "$repo_root/README.md" "$repo_root/AGENTS.md" >"$prose_models"
 while IFS= read -r model; do
   [[ -z $model ]] && continue
-  grep -Fxq -- "$model" "$roster_aliases" ||
+  grep -Fxq -- "$model" "$prose_allowlist" ||
     fail "committed prose names worker model $model, which the roster does not declare"
 done <"$prose_models"
 
 # The scan has to be able to fail, or it asserts nothing about prose at all.
+# The fixture id must stay outside both the worker and the lead sets, or this
+# self-check stops proving anything about the wider prose allowlist above.
 stub_prose="$scratch/stub-README.md"
 printf 'The mechanical seat runs `google-antigravity/gemini-0.0-unknown`.\n' >"$stub_prose"
 if extract_model_ids "$stub_prose" | grep -Fxq -- 'google-antigravity/gemini-0.0-unknown'; then
-  grep -Fxq -- 'google-antigravity/gemini-0.0-unknown' "$roster_aliases" &&
+  grep -Fxq -- 'google-antigravity/gemini-0.0-unknown' "$prose_allowlist" &&
     fail 'the prose scan fixture id is somehow in the roster'
 else
   fail 'the prose scan does not see a model id a stub README names'
 fi
+
+# R2: the retired worker id and the stale worker count must not resurface.
+grep -qF 'codex-astra' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still names the retired codex-astra worker id'
+grep -qF 'seven worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still describes seven workers'
 
 # --- plugin manifests track the roster (R17) ------------------------------- #
 

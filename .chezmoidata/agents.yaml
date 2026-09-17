@@ -2,7 +2,7 @@
 agents:
   validOS: [linux, darwin]
   # The roster is the single declaration of every worker Orca dispatches and
-  # the lead pin: one row per agent/model pair, carrying the effort, the work
+  # the lead pins: one row per agent/model pair, carrying the effort, the work
   # shapes it takes, and the brief guidance a dispatch applies. No rendered
   # payload, settings map, or test names a worker model id by hand — every
   # consumer renders from this map, and
@@ -12,6 +12,9 @@ agents:
     lead:
       claude:
         model: opus[1m]
+      codex:
+        model: gpt-6-astra
+        effort: medium
     workers:
     - id: claude-fable
       agent: claude
@@ -46,25 +49,15 @@ agents:
         an instruction from one item to another. Fix the approach in the
         brief. For review briefs, ask for every finding with confidence and
         severity instead of filtering.
-    - id: codex-astra
-      agent: codex
-      model: gpt-6-astra
-      effort: medium
-      shapes: [judgment]
-      brief: >-
-        Define the outcome, the constraints, the evidence, and the
-        completion bar. Reserve ALWAYS and NEVER for true invariants. Tell
-        it to bias toward action and to complete authorized work before
-        asking. Keep the brief lean and free of repeated rules.
     - id: codex-luna
       agent: codex
       model: gpt-5.6-luna
       effort: max
-      shapes: [fallback]
+      shapes: [judgment, fallback]
       brief: >-
         Keep the brief lean and state approval boundaries once. Name the
         validation to run (targeted tests, type or lint, build) and what to
-        do when it cannot run. Use this entry only as the fallback R7 names.
+        do when it cannot run.
     - id: omp-flash
       agent: omp
       model: google-antigravity/gemini-3.8-flash
@@ -445,8 +438,8 @@ agents:
     # The headless posture below runs `codex exec` unattended inside the
     # workspace sandbox with network access. model and model_reasoning_effort are
     # NOT declared here: run_after_config-codex-settings.sh.tmpl derives the
-    # direct-session default pair from the agents.roster entry whose shapes carry
-    # `judgment`, before the validator sees this map. They are still asserted on
+    # direct-session default pair from agents.roster.lead.codex, before the
+    # validator sees this map. They are still asserted on
     # every apply, so a model or effort switched inside Codex is reverted; a
     # retired model id is cleared by editing that roster entry alone.
     settings:

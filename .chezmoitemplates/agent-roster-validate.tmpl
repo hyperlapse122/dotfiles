@@ -4,7 +4,9 @@
      and CI parity check renders from. This partial is the render-time gate:
      a duplicate id, an unknown agent, an empty brief, or a rung collision
      fails the render rather than reaching a consumer that assumes a clean
-     roster.
+     roster. It also validates the lead map: an unknown lead agent, a lead
+     entry missing model, or a codex lead entry missing effort fails the
+     render naming the entry.
 
      Usage:
        includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster)
@@ -30,6 +32,35 @@
 {{- end -}}
 {{- $validAgents := list "claude" "codex" "omp" -}}
 {{- $validShapes := list "mechanical" "implementation" "judgment" "fallback" -}}
+{{- if not (hasKey $roster "lead") -}}
+{{-   fail "agent-roster-validate: agents.roster is missing lead" -}}
+{{- end -}}
+{{- $lead := $roster.lead -}}
+{{- if not (kindIs "map" $lead) -}}
+{{-   fail (printf "agent-roster-validate: agents.roster.lead must be a map, got %s" (kindOf $lead)) -}}
+{{- end -}}
+{{- range $leadAgent, $leadEntry := $lead -}}
+{{-   if not (has $leadAgent $validAgents) -}}
+{{-     fail (printf "agent-roster-validate: agents.roster.lead declares unknown agent %q" $leadAgent) -}}
+{{-   end -}}
+{{-   if not (kindIs "map" $leadEntry) -}}
+{{-     fail (printf "agent-roster-validate: lead.%s is missing model" $leadAgent) -}}
+{{-   end -}}
+{{-   if or (not (hasKey $leadEntry "model")) (not (kindIs "string" $leadEntry.model)) (eq $leadEntry.model "") -}}
+{{-     fail (printf "agent-roster-validate: lead.%s is missing model" $leadAgent) -}}
+{{-   end -}}
+{{-   if eq $leadAgent "codex" -}}
+{{-     if or (not (hasKey $leadEntry "effort")) (not (kindIs "string" $leadEntry.effort)) (eq $leadEntry.effort "") -}}
+{{-       fail "agent-roster-validate: lead.codex is missing effort" -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if not (hasKey $lead "claude") -}}
+{{-   fail "agent-roster-validate: agents.roster.lead declares no claude entry" -}}
+{{- end -}}
+{{- if not (hasKey $lead "codex") -}}
+{{-   fail "agent-roster-validate: agents.roster.lead declares no codex entry" -}}
+{{- end -}}
 {{- $seenIds := list -}}
 {{- $seenRungs := list -}}
 {{- $codexJudgment := false -}}

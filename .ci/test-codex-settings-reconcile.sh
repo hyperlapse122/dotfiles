@@ -96,9 +96,9 @@ jq -e 'type == "object"' <<<"$declared" >/dev/null \
 # tables, read back from agents.yaml the same way the script does — plus the two
 # leaves the script derives from agents.roster rather than from agents.yaml.
 raw_codex_settings=$(render_settings <<<'{{ .agents.codex.settings | toJson }}')
-roster_pair=$(render_settings <<<'{{ range .agents.roster.workers }}{{ if and (eq .agent "codex") (has "judgment" .shapes) }}{{ dict "model" .model "model_reasoning_effort" .effort | toJson }}{{ end }}{{ end }}')
+roster_pair=$(render_settings <<<'{{ dict "model" .agents.roster.lead.codex.model "model_reasoning_effort" .agents.roster.lead.codex.effort | toJson }}')
 jq -e '.model == "gpt-6-astra" and .model_reasoning_effort == "medium"' <<<"$roster_pair" >/dev/null \
-  || fail "the codex judgment roster entry is not gpt-6-astra at medium: $roster_pair"
+  || fail "the codex lead roster entry is not gpt-6-astra at medium: $roster_pair"
 expected_settings=$(jq -c --argjson pair "$roster_pair" \
   '($pair + .) | reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))' <<<"$raw_codex_settings")
 [[ $(jq -Sc 'del(.mcp_servers) | del(.hooks)' <<<"$declared") == "$(jq -Sc . <<<"$expected_settings")" ]] \
@@ -106,7 +106,7 @@ expected_settings=$(jq -c --argjson pair "$roster_pair" \
 
 # The direct-session default pair is derived, not hand-written (R5, R8): a
 # literal in agents.yaml would satisfy the assertion above and drift from the
-# roster the moment the roster changed.
+# roster's lead entry the moment that entry changed.
 for derived in model model_reasoning_effort; do
   jq -e --arg k "$derived" 'has($k) | not' <<<"$raw_codex_settings" >/dev/null \
     || fail "agents.codex.settings still declares $derived by hand; it is derived from agents.roster"
@@ -387,6 +387,18 @@ assert_render_fails sandbox-writable-roots \
   '{"agents":{"codex":{"settings":{"sandbox_workspace_write.writable_roots":"x"}}}}' "$posture_reject"
 assert_render_fails sandbox-bare \
   '{"agents":{"codex":{"settings":{"sandbox_workspace_write":"x"}}}}' "$posture_reject"
+
+# The lead pair this script reads is gated by agent-roster-validate.tmpl before
+# the merge line, not merely by codex-settings-validate.tmpl (which only checks
+# generic leaf structure). An empty, null, or wrong-typed lead field must fail
+# here with the roster diagnostic, not render "model": "" or "model": 42.
+roster_lead_reject='agent-roster-validate: lead.codex is missing model'
+assert_render_fails lead-codex-model-empty \
+  '{"agents":{"roster":{"lead":{"codex":{"model":""}}}}}' "$roster_lead_reject"
+assert_render_fails lead-codex-model-null \
+  '{"agents":{"roster":{"lead":{"codex":{"model":null}}}}}' "$roster_lead_reject"
+assert_render_fails lead-codex-model-wrong-type \
+  '{"agents":{"roster":{"lead":{"codex":{"model":42}}}}}' "$roster_lead_reject"
 
 assert_render_fails doubled-dot \
   '{"agents":{"codex":{"settings":{"sandbox_workspace_write..network_access":true}}}}' "$bad_path"
