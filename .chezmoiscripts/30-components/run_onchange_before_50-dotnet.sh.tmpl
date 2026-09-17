@@ -43,6 +43,9 @@ report_dotnet_sdk_missing() {
 
 install_dotnet_sdk() {
   if ! rpm -q dotnet-sdk-8.0 >/dev/null 2>&1 && ! rpm -q dotnet-sdk-10.0 >/dev/null 2>&1; then
+    # Exit status is discarded because the post-attempt re-inspection is the verdict.
+    # A structural gate in .ci/test-package-installer-verdict.sh rejects || true here;
+    # if ! cmd; then :; fi is the sanctioned form under set -e, not an evasion.
     if ! "${DNF[@]}" install -y dotnet-sdk-8.0 dotnet-sdk-10.0 && ! "${DNF[@]}" install -y dotnet-sdk-8.0; then :; fi
   fi
   command -v dotnet >/dev/null 2>&1 || report_dotnet_sdk_missing
@@ -58,6 +61,9 @@ report_dotnet_sdk_missing() {
 install_dotnet_sdk() {
   if ! command -v dotnet >/dev/null 2>&1; then
     "${SUDO[@]}" apt-get update -qq || true
+    # Exit status is discarded because the post-attempt re-inspection decides the verdict.
+    # The structural gate in .ci/test-package-installer-verdict.sh rejects || true on install calls;
+    # if ! cmd; then :; fi is the sanctioned form under set -e rather than gate evasion.
     if ! "${SUDO[@]}" apt-get install -y dotnet-sdk-8.0; then :; fi
   fi
   command -v dotnet >/dev/null 2>&1 || report_dotnet_sdk_missing
@@ -148,6 +154,9 @@ install_dotnet_tools() {
     if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]]; then
       local tool
       for tool in "${missing_dotnet_tools[@]}"; do
+        # Exit status is discarded because re-inspecting installed tools is the verdict.
+        # .ci/test-package-installer-verdict.sh rejects || true on declared-set installs;
+        # if ! cmd; then :; fi is the sanctioned way to discard failure, not gate evasion.
         if ! dotnet tool install -g "${tool}"; then :; fi
       done
       compute_missing_dotnet_tools

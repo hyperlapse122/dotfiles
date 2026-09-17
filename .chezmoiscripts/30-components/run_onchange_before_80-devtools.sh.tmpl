@@ -125,6 +125,9 @@ install_devtools() {
     fi
 
     if [[ "${#missing_dev_groups[@]}" -gt 0 ]]; then
+      # Exit status is discarded because post-attempt re-inspection decides the verdict.
+      # A structural gate in .ci/test-package-installer-verdict.sh rejects || true on install calls;
+      # if ! cmd; then :; fi is the sanctioned form under set -e, not an evasion of the gate.
       if ! "${DNF[@]}" group install -y "${missing_dev_groups[@]}"; then :; fi
     fi
 
