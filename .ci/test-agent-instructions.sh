@@ -416,12 +416,13 @@ Garden entries MUST be declared in the encrypted registry source and MUST NOT de
 see its `AGENTS.md`, section "Garden registry and `~/src` provisioning"
 MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
 Orca has NO command that adopts an already-checked-out worktree
-Before launching ANY subagent, worker, or peer reviewer, MUST open and read the `orchestration` skill, load its version-matched guide, and use its Orca dispatch workflow.
+In an Orca-managed session, before launching ANY subagent, worker, or peer reviewer, MUST open and read the `orchestration` skill, load its version-matched guide, and use its Orca dispatch workflow.
 Orca owns dispatch.
+In that session the harness's own in-process subagent tool is never a substitute for it.
 The detailed contract does not live in this file: an Orca-managed session receives it by injection at session start, as a normative extension of this file carrying the same precedence as this file's own text.
-A session outside Orca receives no injection, and its absence never waives the contract: perform non-dispatch work only, and never reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
 omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
-A session that has not received these instructions performs non-dispatch work only.
+Compound Engineering model elevation has a default: for each of `plan_model` and `brainstorm_model` separately
+A value the repository sets, a caller carrier, or live user intent wins over this default, in Compound Engineering's own order.
 A run MUST NOT end with an actionable finding that is only listed
 is a working note, never a delivery
 or resolved into a filed tracker issue whose link replaces the entry, or resolved into the committed record file whose path replaces the entry
@@ -514,8 +515,6 @@ The ban on bundled dispatchers and direct peer CLIs is NOT a reason to skip a re
 MUST first load the `orchestration` skill and attempt its supported Orca workflow.
 MUST NOT declare orchestration unavailable without an observed failure; if the app is stopped, follow the skill's startup procedure before declaring it blocked.
 If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
-Absence of this text never waives the contract.
-A session that holds only the pointer in the user-scoped instruction file performs non-dispatch work only, and still MUST NOT reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
 Claude Code, Codex, and omp lead, dispatch, and serve as workers on the same terms.
 omp receives this text through its before_agent_start extension before each model call.
 When another agent launches Codex through Orca, the launch MUST explicitly select the model and reasoning effort its purpose names.
@@ -528,6 +527,12 @@ A brief defect is required context the brief does not carry.
 A URL kept beside a usable extraction is provenance, not a defect.
 <!-- orchestration-everyone:end -->
 EVERYONE_NEEDLES
+for payload in "${everyone_payloads[@]}"; do
+  if grep -F 'non-dispatch work only' "$payload" >/dev/null \
+    || grep -F 'Absence of this text never waives the contract' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired outside-Orca restriction"
+  fi
+done
 
 # The coordinator payload is lead-only. Its generic contract remains observable
 # in the Claude render, while the alternate harness render proves the
@@ -556,6 +561,11 @@ re-dispatches at the same row with a sharpened brief and never advances a row.
 An unavailable agent hands its work to the next agent named in its row; only when every agent in that row is unavailable does the lead escalate to the user
 The lead never takes the row's work back and does it in place, judgment work included.
 The author of a document is NOT excluded from reviewing it, so a review keeps two opinions rather than dropping to one; weigh each reviewer's findings on their own evidence, exactly like any other reviewer's.
+(the model-elevation step of `ce-plan` and `ce-brainstorm` is the single-worker exception below)
+for `ce-brainstorm` it returns the generated approaches in its report and writes nothing
+The model-elevation step is the one exception to the sentence above that the lead never takes a row's work back
+A failed or unavailable elevation dispatch degrades the same way, inline on the lead's model with that transparency line, and never takes this row's replacement or re-dispatch columns
+The one Markdown file the lead does not write is the plan file a dispatched model-elevation worker authors
 Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
 MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
 The compound-engineering harness vocabulary — the `codex`, `claude`, `grok`, `cursor`, and `opencode` values a stage-routing carrier or a `work_engine_preferences` entry accepts — is the argument grammar of the banned bundled scripts, so it constrains nothing once the dispatch moves to Orca.
@@ -642,6 +652,32 @@ if grep -F 'rung' "$coordinator_claude_linux" | grep -F '`fable`' >/dev/null; th
   fail 'the coordinator payload names `fable` as a sizing rung again'
 fi
 
+# The judgment row must not re-fold the model-elevation step back into its
+# two-reviewer brief: that would send `ce-plan` and `ce-brainstorm` elevation
+# to both `claude` and `codex` over one brief instead of the single-worker path.
+# The row's own pointer to that single-worker exception legitimately names
+# both phrases at once, so only a line missing that pointer is a regression.
+if grep -F 'over the same brief' "$coordinator_claude_linux" | grep -v 'single-worker exception below' | grep -F 'ce-plan' >/dev/null; then
+  fail 'the coordinator payload folds the model-elevation step back into the two-reviewer judgment row'
+fi
+
+# U2 AE4/AE5: the elevation-default paragraph's alias is rendered from the
+# roster, not hand-written, so a roster change to the claude judgment model
+# reaches the paragraph with no edit to the template.
+stub_roster_workers='[{"id":"claude-fable","agent":"claude","model":"stub-judge","effort":"high","shapes":["judgment"],"brief":"x"},
+  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+  {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"},
+  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["fallback"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"},
+  {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-3.5-flash-lite","effort":"high","shapes":["mechanical"],"brief":"x"}]'
+stub_roster_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_roster_workers")
+stub_roster_render="$scratch/claude-stub-roster.md"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$stub_roster_render" "$stub_roster_override" ||
+  fail 'a stub roster failed to render the instruction core'
+grep -F 'the session resolves it as `stub-judge`' "$stub_roster_render" >/dev/null ||
+  fail 'the elevation-default paragraph did not pick up a roster change to the claude judgment model'
+
 # Scanned against EVERY render, not just the Claude one: the harness lines are
 # stripped before the peer diff, so a retired mandate re-entering through a peer
 # harness paragraph would otherwise pass both halves of this gate unseen.
@@ -653,6 +689,8 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
+non-dispatch work only
+never reach for a native subagent tool
 Staying idle means ENDING THE TURN.
 start the next wait, end the turn
 This includes same-model reviews, background agents, parallel workers, and cross-model reviews such as Codex -> Claude and Claude -> Codex.
