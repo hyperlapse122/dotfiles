@@ -1,16 +1,21 @@
 {{- /* enabledModels and modelRoles come from agents.roster, not from
-   agents.omp.settings, so no settings map names a model id. Omp roster
-   entries are selected by SHAPE: the mechanical entry takes the background
-   and skim roles, the implementation entry takes every other model-valued
-   role; an entry may carry both shapes, in which case the two selectors
-   name the same one seat. The merge happens HERE rather than in the data
-   file so the derived leaves still pass through the validator below, which
-   is what proves every role selector names a provider the allowlist admits.
-   A fresh dict is the merge destination because sprig's merge mutates its
-   first argument. */ -}}
+   agents.omp.settings, so no settings map names a model id. The append into
+   $ompModels is guarded by membership, so two roster entries naming the
+   same model at two thinking levels still render one enabledModels
+   element, with the first occurrence keeping roster order; the two role
+   selectors below still differ, because the mechanical and implementation
+   entries carry different efforts. Omp roster entries are selected by
+   SHAPE: the mechanical entry takes the background and skim roles, the
+   implementation entry takes every other model-valued role; an entry may
+   carry both shapes, in which case the two selectors name the same one
+   seat. The merge happens HERE rather than in the data file so the derived
+   leaves still pass through the validator below, which is what proves
+   every role selector names a provider the allowlist admits. A fresh dict
+   is the merge destination because sprig's merge mutates its first
+   argument. */ -}}
 {{- $ompModels := list -}}
 {{- range .agents.roster.workers -}}
-{{-   if eq .agent "omp" -}}
+{{-   if and (eq .agent "omp") (not (has .model $ompModels)) -}}
 {{-     $ompModels = append $ompModels .model -}}
 {{-   end -}}
 {{- end -}}
