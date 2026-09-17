@@ -275,7 +275,7 @@ printf 'v1\t%s\t%s\t%s\t%s\n' '{{ $script }}' '{{ $site }}' 'transient-tolerable
 exit 1
 {{- else if eq $direction "operator-blocking" }}
 {{ $sentinel }}
-printf '%s: %s. NOT converged: an operator has to clear this and the script does not re-run by itself -- after clearing it, run chezmoi state delete-bucket --bucket=scriptState and apply again.\n' '{{ $script }}' '{{ $reason }}' >&2
+printf '%s: %s. NOT converged: an operator has to clear this and the script does not re-run by itself -- after clearing it, run chezmoi state delete-bucket --bucket=entryState and apply again.\n' '{{ $script }}' '{{ $reason }}' >&2
 mkdir -p {{ $dir }} 2>/dev/null || true
 printf 'v1\t%s\t%s\t%s\t%s\n' '{{ $script }}' '{{ $site }}' 'operator-blocking' '{{ $reason }}' \
   > {{ $file }} 2>/dev/null || true
