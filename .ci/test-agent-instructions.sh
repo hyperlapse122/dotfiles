@@ -427,6 +427,9 @@ The detailed contract does not live in this file: an Orca-managed session receiv
 omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
 Compound Engineering model elevation has a default: for each of `plan_model` and `brainstorm_model` separately
 A value the repository sets, a caller carrier, or live user intent wins over this default, in Compound Engineering's own order.
+launches the elevation entry at its roster effort `max`
+outside Orca the native subagent adapter runs at the Claude Code `modelSettings` effort for that model and the CLI adapter at the effort this repository's overlay sets, both held at the same value.
+A session outside Orca then runs Compound Engineering's elevation adapters as shipped, apart from that overlay.
 A run MUST NOT end with an actionable finding that is only listed
 is a working note, never a delivery
 or resolved into a filed tracker issue whose link replaces the entry, or resolved into the committed record file whose path replaces the entry
@@ -632,6 +635,8 @@ The three-consecutive-failure rule stops the dispatch and consults on the third 
 Model and effort apply to a fresh agent terminal only; the version-matched Orca guide owns their spelling and reports which values took effect.
 Each recipient takes a different brief.
 | Model | Brief guidance |
+goes to that entry, launched with `--model
+selects that pair; the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
 CLAUDE_COORDINATOR_NEEDLES
 
 # Every model id and effort in the coordinator body comes from agents.roster, so
@@ -672,14 +677,15 @@ stub_roster_workers='[{"id":"claude-fable","agent":"claude","model":"stub-judge"
   {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
   {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"},
-  {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-3.5-flash-lite","effort":"high","shapes":["mechanical"],"brief":"x"}]'
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","mechanical"],"brief":"x"}]'
 stub_roster_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_roster_workers")
 stub_roster_render="$scratch/claude-stub-roster.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$stub_roster_render" "$stub_roster_override" ||
   fail 'a stub roster failed to render the instruction core'
 grep -F 'the session resolves it as `stub-judge`' "$stub_roster_render" >/dev/null ||
   fail 'the elevation-default paragraph did not pick up a roster change to the claude judgment model'
+grep -F 'launches the elevation entry at its roster effort `high`' "$stub_roster_render" >/dev/null ||
+  fail 'the elevation paragraph did not pick up a roster change to the claude judgment effort'
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
 # stripped before the peer diff, so a retired mandate re-entering through a peer

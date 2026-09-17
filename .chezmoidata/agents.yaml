@@ -19,7 +19,7 @@ agents:
     - id: claude-fable
       agent: claude
       model: fable
-      effort: high
+      effort: max
       shapes: [judgment]
       brief: >-
         Give one clear deliverable, the effort, action boundaries, and a
@@ -62,21 +62,12 @@ agents:
       agent: omp
       model: google-antigravity/gemini-3.8-flash
       effort: high
-      shapes: [implementation]
+      shapes: [implementation, mechanical]
       brief: >-
         Order the brief as rules, context, definitions, task, tool policy,
         output, verification, stop condition. Define ambiguous terms and
         thresholds. Place long context before the task. Name what must
         never be invented.
-    - id: omp-flash-lite
-      agent: omp
-      model: google-antigravity/gemini-3.5-flash-lite
-      effort: high
-      shapes: [mechanical]
-      brief: >-
-        Give short direct instructions for one bounded task. State an
-        explicit tool-call budget, the output shape, and the stop
-        condition.
   mcp:
     servers:
     - name: figma
@@ -218,6 +209,8 @@ agents:
       versionSource: compoundEngineeringRelease
       exclude:
       - "*/skills/ce-sweep/references/interview.md"
+      - "*/skills/ce-plan/scripts/elevation-dispatch.sh"
+      - "*/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
       os: [linux, darwin]
       container: keep
     # omp's own copy of the same archive, differing in one file: the ROOT
@@ -236,6 +229,8 @@ agents:
       exclude:
       - "*/skills/ce-sweep/references/interview.md"
       - "*/plugin.json"
+      - "*/skills/ce-plan/scripts/elevation-dispatch.sh"
+      - "*/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
       os: [linux, darwin]
       container: keep
     # This checkout's own Claude Code plugin. It and dotfiles-codex-plugin below
@@ -293,7 +288,10 @@ agents:
     # in from agents.roster.lead.claude.model before the validator sees this map, so
     # the lead pin moves with the roster and no settings map names a model id. The
     # three modelSettings.*.effortLevel leaves stay declared because they are not
-    # roster entries: the claude-opus-5 effort is what fast mode runs on.
+    # roster entries: the claude-opus-5 effort is what fast mode runs on. The
+    # claude-fable-5-1 leaf mirrors the roster `claude` judgment entry's effort,
+    # because Compound Engineering's native elevation subagent outside Orca reads
+    # this leaf, and .ci/test-claude-settings-reconcile.sh holds the two equal.
     #
     # env.DISABLE_AUTOUPDATER is what pins the updater off on macOS, where
     # dot_config/environment.d/ is not deployed; that file carries the same value for
@@ -303,7 +301,7 @@ agents:
     settings:
       language: Korean
       skipDangerousModePermissionPrompt: true
-      modelSettings.claude-fable-5-1.effortLevel: medium
+      modelSettings.claude-fable-5-1.effortLevel: max
       modelSettings.claude-opus-5.effortLevel: medium
       modelSettings.claude-sonnet-5.effortLevel: high
       inputNeededNotifEnabled: true

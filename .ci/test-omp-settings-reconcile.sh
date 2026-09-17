@@ -41,7 +41,6 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required to run this test'
 
 for needle in \
   'google-antigravity/gemini-3.8-flash:high' \
-  'google-antigravity/gemini-3.5-flash-lite:high' \
   '"startup.setupWizard"' \
   '"enabledModels"' \
   '"disabledProviders"' \
@@ -73,7 +72,7 @@ do
   grep -F "$needle" "$script" >/dev/null || fail "rendered script lost: $needle"
 done
 
-for retired in 'gemini-3.7-flash' 'gemini-3.1-flash-lite'; do
+for retired in 'gemini-3.7-flash' 'gemini-3.1-flash-lite' 'gemini-3.5-flash-lite'; do
   grep -F "$retired" "$script" >/dev/null &&
     fail "rendered script still declares the retired model $retired"
 done
@@ -127,7 +126,7 @@ declared_of "$script" > "$declared_json"
 # enabledModels and modelRoles are not declared in agents.omp.settings at all:
 # the reconciler template derives them from agents.roster, so changing a roster
 # entry re-renders these values with no edit here or in the settings map.
-jq -e '.enabledModels == ["google-antigravity/gemini-3.8-flash","google-antigravity/gemini-3.5-flash-lite"]' \
+jq -e '.enabledModels == ["google-antigravity/gemini-3.8-flash"]' \
   "$declared_json" >/dev/null ||
   fail "enabledModels is not the roster's omp models in roster order: $(jq -c '.enabledModels' "$declared_json")"
 
@@ -141,10 +140,10 @@ role_offenders() {
     "gemini": "google-antigravity/gemini-3.8-flash:high",
     "plan": "@fable",
     "reviewer": "google-antigravity/gemini-3.8-flash:high",
-    "skim": "google-antigravity/gemini-3.5-flash-lite:high",
+    "skim": "google-antigravity/gemini-3.8-flash:high",
     "slow": "google-antigravity/gemini-3.8-flash:high",
-    "smol": "google-antigravity/gemini-3.5-flash-lite:high",
-    "tiny": "google-antigravity/gemini-3.5-flash-lite:high",
+    "smol": "google-antigravity/gemini-3.8-flash:high",
+    "tiny": "google-antigravity/gemini-3.8-flash:high",
     "worker": "google-antigravity/gemini-3.8-flash:high"
   }' '
     (.modelRoles // {}) as $have
@@ -272,13 +271,12 @@ chmod 0700 "$bin/omp"
 
 reset() { : > "$calls"; : > "$state"; }
 
-# A catalog that serves both roster selectors at the thinking level each roster
+# A catalog that serves the roster selector at the thinking level the roster
 # entry declares. `thinking` is what the roster effort probe reads.
 full_catalog="$scratch/catalog-full.json"
 cat >"$full_catalog" <<'EOF'
 {"models":[
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low","medium","high"]},
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.5-flash-lite","thinking":["off","low","medium","high"]}
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low","medium","high"]}
 ]}
 EOF
 
@@ -286,21 +284,22 @@ EOF
 empty_catalog="$scratch/catalog-empty.json"
 printf '{"models":[]}\n' > "$empty_catalog"
 
-# A catalog that speaks for the provider but is missing one roster selector.
+# A catalog that speaks for the provider but is missing the roster selector:
+# it lists a fake selector so the provider is covered while the roster model
+# is absent.
 partial_catalog="$scratch/catalog-partial.json"
 cat >"$partial_catalog" <<'EOF'
 {"models":[
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low","medium","high"]}
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-9.8-other-stub","thinking":["off","low","medium","high"]}
 ]}
 EOF
 
-# A catalog that serves both selectors but does not offer `high` on the
-# mechanical one, so the roster's declared effort is unsupported.
+# A catalog that serves the roster selector but does not offer `high`, so the
+# roster's declared effort is unsupported.
 thinking_gap_catalog="$scratch/catalog-thinking-gap.json"
 cat >"$thinking_gap_catalog" <<'EOF'
 {"models":[
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low","medium","high"]},
- {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.5-flash-lite","thinking":["off","low"]}
+ {"provider":"google-antigravity","selector":"google-antigravity/gemini-3.8-flash","thinking":["off","low"]}
 ]}
 EOF
 
@@ -371,7 +370,7 @@ run "$partial_catalog" "$live_drifted" >"$scratch/partial.out" 2>"$scratch/parti
   fail 'an unserved selector failed the apply instead of warning'
 grep -q 'which provider google-antigravity does not serve' "$scratch/partial.err" ||
   fail 'the missing-selector warning did not name the provider'
-grep -q 'gemini-3.5-flash-lite' "$scratch/partial.err" ||
+grep -q 'gemini-3.8-flash' "$scratch/partial.err" ||
   fail 'the roster probe did not name the absent model id'
 grep -Fq 'config set modelRoles' "$state" ||
   fail 'the warning run did not go on to assert the declared roles'
@@ -381,7 +380,7 @@ grep -Fq 'config set modelRoles' "$state" ||
 reset
 run "$thinking_gap_catalog" "$live_drifted" >"$scratch/gap.out" 2>"$scratch/gap.err" ||
   fail 'an unsupported thinking level failed the apply instead of warning'
-grep -q 'gemini-3.5-flash-lite' "$scratch/gap.err" ||
+grep -q 'gemini-3.8-flash' "$scratch/gap.err" ||
   fail 'the thinking-level warning did not name the model'
 grep -q 'high' "$scratch/gap.err" ||
   fail 'the thinking-level warning did not name the declared effort'
@@ -621,7 +620,7 @@ source "$source_root/.ci/lib/render-gate-helpers.sh"
 swapped_workers='[
  {"id":"omp-next","agent":"omp","model":"google-antigravity/gemini-4.0-flash","effort":"high",
   "shapes":["implementation"],"brief":"placeholder"},
- {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-3.5-flash-lite","effort":"high",
+ {"id":"omp-lite-stub","agent":"omp","model":"google-antigravity/gemini-9.8-lite-stub","effort":"high",
   "shapes":["mechanical"],"brief":"placeholder"}
 ]'
 swapped_script="$scratch/omp-settings-swapped.sh"
@@ -635,7 +634,7 @@ swapped_declared="$scratch/declared-swapped.json"
 declared_of "$swapped_script" > "$swapped_declared"
 jq -e '
   .modelRoles.default == "google-antigravity/gemini-4.0-flash:high"
-  and .modelRoles.tiny == "google-antigravity/gemini-3.5-flash-lite:high"
+  and .modelRoles.tiny == "google-antigravity/gemini-9.8-lite-stub:high"
   and (.enabledModels | index("google-antigravity/gemini-4.0-flash")) != null' \
   "$swapped_declared" >/dev/null ||
   fail "a changed roster model did not reach the derived roles: $(jq -c '{enabledModels, roles: .modelRoles}' "$swapped_declared")"

@@ -63,13 +63,13 @@ The file a dispatch names by path to carry context the dispatch spec itself cann
 A worker escalation or failure caused by context missing from its brief rather than by the difficulty of the work. It carries no information about the unit's blast radius or judgment depth, so it never raises the model rung; the coordinator repairs the brief and re-dispatches at the same rung.
 
 ### Model roster
-The single declaration in `.chezmoidata/agents.yaml` of two things: one lead pin per agent that can run as the orchestrator, and every worker entry a lead may dispatch to. A worker entry carries agent, model id, effort or thinking level, the work shapes it takes, brief guidance for that model, and a `rung` (`sonnet` or `opus`) for the two Claude implementation entries; a lead pin carries only the model and, where the harness takes one, its effort. The two halves are independent — a model that a lead session opens on need not be a dispatch target, and removing it from the worker list does not change what a direct session runs. The rendered payloads, instruction files, prose, and tests derive their model ids from it, so no other file names a model by hand.
+The single declaration in the agent data file of two things: one lead pin per agent that can run as the orchestrator, and every worker entry a lead may dispatch to. A worker entry carries agent, model id, effort or thinking level, the work shapes it takes, brief guidance for that model, and a `rung` (`sonnet` or `opus`) for the two Claude implementation entries; a lead pin carries only the model and, where the harness takes one, its effort. The two halves are independent — a model that a lead session opens on need not be a dispatch target, and removing it from the worker list does not change what a direct session runs. The rendered payloads, instruction files, prose, and tests derive their model ids from it, so no other file names a model by hand.
 
 ### Judgment work
 Work whose deliverable is the judgment itself: a code review, a document review, a `ce-pov` verdict, brainstorm approach generation, or the model-elevation step of plan authoring. It is dispatched to the roster's frontier judgment entries and never performed by the lead in place; the elevation step goes to the single judgment entry whose model matches the resolved elevation alias; when no entry matches the alias or that single dispatch fails, the lead runs the step inline on its own model and prints the transparency line.
 
 ### Mechanical work
-A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster's cheapest entry.
+A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster entry that takes the mechanical shape, which can be the same seat that takes cheap implementation work.
 
 ## Repository layout
 
