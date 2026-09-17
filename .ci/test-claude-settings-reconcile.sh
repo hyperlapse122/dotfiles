@@ -87,15 +87,14 @@ judgment_effort_parity_offender() {
 
 render_roster_judgment_effort() {
   local override=${1:-}
+  local override_args=()
   if [[ -n "$override" ]]; then
-    env HOME="$neg_home" PATH="$neg_bin:$PATH" \
-      chezmoi --config "$render_config" --source "$repo_root" --override-data "$override" \
-      execute-template <<<'{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}'
-  else
-    env HOME="$neg_home" PATH="$neg_bin:$PATH" \
-      chezmoi --config "$render_config" --source "$repo_root" \
-      execute-template <<<'{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}'
+    override_args=(--override-data "$override")
   fi
+  env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+    chezmoi --config "$render_config" --source "$repo_root" \
+    "${override_args[@]+"${override_args[@]}"}" \
+    execute-template <<<'{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}'
 }
 
 fable_leaf=$(jq -r '.["modelSettings.claude-fable-5-1.effortLevel"]' <<<"$declared")

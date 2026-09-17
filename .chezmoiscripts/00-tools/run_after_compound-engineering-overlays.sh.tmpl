@@ -67,20 +67,54 @@ GUARDED_FILES=(
 GUARDED_UPSTREAM_SHA256="ba8219c15db2909fb1c272d2137b124a78a06329af2cca0e80276f6e8918ef3d"
 
 # Portable SHA-256 (roster validOS includes darwin, which ships no sha256sum):
-# prefer sha256sum, fall back to shasum -a 256. Availability is checked once so
-# a missing tool degrades every guarded entry the same way instead of retrying
-# per file; a read failure on an existing file still reaches here as an empty,
-# non-matching digest rather than aborting under `set -euo pipefail`.
+# prefer sha256sum, fall back to shasum -a 256. The digest command is resolved
+# once so a missing tool degrades every guarded entry the same way instead of
+# retrying per file; a read failure on an existing file still reaches here as
+# an empty, non-matching digest rather than aborting under `set -euo pipefail`.
 SHA256_TOOL_AVAILABLE=1
-if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+if command -v sha256sum >/dev/null 2>&1; then
+  SHA256_CMD=(sha256sum --)
+elif command -v shasum >/dev/null 2>&1; then
+  SHA256_CMD=(shasum -a 256 --)
+else
   SHA256_TOOL_AVAILABLE=0
+  SHA256_CMD=()
 fi
 sha256_of() {   # <path> -> prints hex digest on stdout; empty output, nonzero status if unreadable
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -- "$1" 2>/dev/null | cut -d' ' -f1
-  else
-    shasum -a 256 -- "$1" 2>/dev/null | cut -d' ' -f1
+  "${SHA256_CMD[@]}" "$1" 2>/dev/null | cut -d' ' -f1
+}
+
+ensure_directory_chain() {   # <base-dir> <relative-file-path> -> mkdir the archive-owned chain under base, or exit 1 on a foreign non-directory
+  local base="$1" relative="$2" node component
+  IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$relative")"
+  node="$base"
+  for component in "${COMPONENTS[@]}"; do
+    node="$node/$component"
+    if [ -L "$node" ] || { [ -e "$node" ] && [ ! -d "$node" ]; }; then
+      printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$node" >&2
+      exit 1
+    fi
+    [ -d "$node" ] || mkdir -- "$node"
+  done
+}
+
+reclaim_destination() {   # <path> -> remove a foreign symlink or non-file entry at path, warning to stderr
+  local destination="$1"
+  if [ -L "$destination" ]; then
+    printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
+      "$destination" "$(readlink -- "$destination")" >&2
+    rm -f -- "$destination"
+  elif [ -e "$destination" ] && [ ! -f "$destination" ]; then
+    printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$destination" >&2
+    rm -rf -- "$destination"
   fi
+}
+
+install_via_temp() {   # <source> <destination> -> cp -p to a same-directory temp file then mv -f into place
+  local source="$1" destination="$2" temp
+  temp="$destination.chezmoi-$$.tmp"
+  cp -p -- "$source" "$temp"
+  mv -f -- "$temp" "$destination"
 }
 
 for CURRENT in "${TARGET_DIRS[@]}"; do
@@ -92,33 +126,15 @@ for CURRENT in "${TARGET_DIRS[@]}"; do
 
     [ -f "$SOURCE" ] || continue
 
-    IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$RELATIVE")"
-    NODE="$CURRENT"
-    for component in "${COMPONENTS[@]}"; do
-      NODE="$NODE/$component"
-      if [ -L "$NODE" ] || { [ -e "$NODE" ] && [ ! -d "$NODE" ]; }; then
-        printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$NODE" >&2
-        exit 1
-      fi
-      [ -d "$NODE" ] || mkdir -- "$NODE"
-    done
+    ensure_directory_chain "$CURRENT" "$RELATIVE"
 
-    if [ -L "$DESTINATION" ]; then
-      printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
-        "$DESTINATION" "$(readlink -- "$DESTINATION")" >&2
-      rm -f -- "$DESTINATION"
-    elif [ -e "$DESTINATION" ] && [ ! -f "$DESTINATION" ]; then
-      printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$DESTINATION" >&2
-      rm -rf -- "$DESTINATION"
-    fi
+    reclaim_destination "$DESTINATION"
 
     if cmp -s -- "$SOURCE" "$DESTINATION"; then
       continue
     fi
 
-    TEMP="$DESTINATION.chezmoi-$$.tmp"
-    cp -p -- "$SOURCE" "$TEMP"
-    mv -f -- "$TEMP" "$DESTINATION"
+    install_via_temp "$SOURCE" "$DESTINATION"
   done
 
   # Guarded whole-file replacements: unlike OVERLAY_FILES above, these targets are
@@ -139,16 +155,7 @@ for CURRENT in "${TARGET_DIRS[@]}"; do
       continue
     fi
 
-    IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$RELATIVE")"
-    NODE="$CURRENT"
-    for component in "${COMPONENTS[@]}"; do
-      NODE="$NODE/$component"
-      if [ -L "$NODE" ] || { [ -e "$NODE" ] && [ ! -d "$NODE" ]; }; then
-        printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$NODE" >&2
-        exit 1
-      fi
-      [ -d "$NODE" ] || mkdir -- "$NODE"
-    done
+    ensure_directory_chain "$CURRENT" "$RELATIVE"
 
     OVERLAY_DIGEST="$(sha256_of "$SOURCE")"
     OBSERVED="$(sha256_of "$DESTINATION" 2>/dev/null || true)"
@@ -158,18 +165,8 @@ for CURRENT in "${TARGET_DIRS[@]}"; do
     fi
 
     if [ "$OBSERVED" = "$GUARDED_UPSTREAM_SHA256" ]; then
-      if [ -L "$DESTINATION" ]; then
-        printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
-          "$DESTINATION" "$(readlink -- "$DESTINATION")" >&2
-        rm -f -- "$DESTINATION"
-      elif [ -e "$DESTINATION" ] && [ ! -f "$DESTINATION" ]; then
-        printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$DESTINATION" >&2
-        rm -rf -- "$DESTINATION"
-      fi
-
-      TEMP="$DESTINATION.chezmoi-$$.tmp"
-      cp -p -- "$SOURCE" "$TEMP"
-      mv -f -- "$TEMP" "$DESTINATION"
+      reclaim_destination "$DESTINATION"
+      install_via_temp "$SOURCE" "$DESTINATION"
     else
       printf 'compound-engineering-overlays: %s does not match the pinned upstream digest (%s); leaving it unchanged\n' \
         "$DESTINATION" "$OBSERVED" >&2

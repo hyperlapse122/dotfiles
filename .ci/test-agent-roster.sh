@@ -305,18 +305,18 @@ brief_rows=$(count_table_rows "$coordinator_body" '| Model |')
 # roster through agent-roster-lookup.tmpl, so a line-level grep for a model
 # near an effort cannot tell the seats apart once both resolve to the same
 # model.
-codex_seat_pair_wrapper="$scratch/codex-seat-pair-wrapper.tmpl"
-codex_seat_pair() {
-  local shape=$1 override=$2 out
-  out="$scratch/codex-seat-pair-$shape.out"
-  printf '%s\n' "{{- \$w := includeTemplate \"agent-roster-lookup.tmpl\" (dict \"roster\" .agents.roster \"agent\" \"codex\" \"shape\" \"$shape\" \"rung\" \"\" \"name\" \"a codex $shape entry\") | fromJson -}}{{ \$w.model }} {{ \$w.effort }}" >"$codex_seat_pair_wrapper"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$codex_seat_pair_wrapper" "$out" "$override" ||
-    fail "seat pair render failed for shape $shape"
+agent_seat_pair_wrapper="$scratch/agent-seat-pair-wrapper.tmpl"
+agent_seat_pair() {
+  local agent=$1 shape=$2 override=$3 out
+  out="$scratch/$agent-seat-pair-$shape.out"
+  printf '%s\n' "{{- \$w := includeTemplate \"agent-roster-lookup.tmpl\" (dict \"roster\" .agents.roster \"agent\" \"$agent\" \"shape\" \"$shape\" \"rung\" \"\" \"name\" \"a $agent $shape entry\") | fromJson -}}{{ \$w.model }} {{ \$w.effort }}" >"$agent_seat_pair_wrapper"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$agent_seat_pair_wrapper" "$out" "$override" ||
+    fail "seat pair render failed for agent $agent shape $shape"
   cat "$out"
 }
 
-read -r judge_model judge_effort <<<"$(codex_seat_pair judgment '')"
-read -r fallback_model fallback_effort <<<"$(codex_seat_pair fallback '')"
+read -r judge_model judge_effort <<<"$(agent_seat_pair codex judgment '')"
+read -r fallback_model fallback_effort <<<"$(agent_seat_pair codex fallback '')"
 
 judgment_anchor="opinion launches \`$judge_model\` with \`$judge_effort\` reasoning effort"
 fallback_anchor="after the Gemini row — launches \`$fallback_model\` with \`$fallback_effort\` reasoning effort"
@@ -330,17 +330,7 @@ grep -F 'launch.requested' "$everyone_body" >/dev/null ||
 
 # KTD4: the Claude judgment pair is asserted the same way, from its own
 # rendered seat rather than a literal.
-claude_seat_pair_wrapper="$scratch/claude-seat-pair-wrapper.tmpl"
-claude_seat_pair() {
-  local shape=$1 override=$2 out
-  out="$scratch/claude-seat-pair-$shape.out"
-  printf '%s\n' "{{- \$w := includeTemplate \"agent-roster-lookup.tmpl\" (dict \"roster\" .agents.roster \"agent\" \"claude\" \"shape\" \"$shape\" \"rung\" \"\" \"name\" \"a claude $shape entry\") | fromJson -}}{{ \$w.model }} {{ \$w.effort }}" >"$claude_seat_pair_wrapper"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$claude_seat_pair_wrapper" "$out" "$override" ||
-    fail "claude seat pair render failed for shape $shape"
-  cat "$out"
-}
-
-read -r claude_judge_model claude_judge_effort <<<"$(claude_seat_pair judgment '')"
+read -r claude_judge_model claude_judge_effort <<<"$(agent_seat_pair claude judgment '')"
 claude_launch_anchor="--model $claude_judge_model --effort $claude_judge_effort"
 grep -F -- "$claude_launch_anchor" "$coordinator_body" >/dev/null ||
   fail 'the coordinator body does not carry the claude judgment launch anchor'

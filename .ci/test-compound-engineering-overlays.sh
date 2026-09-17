@@ -240,13 +240,17 @@ diff_line_count=$(diff "$reconstructed_upstream" "$ce_plan_overlay" | grep -c '^
   || { echo "overlay differs from reconstructed upstream on more than the effort line" >&2; exit 1; }
 
 # Fixture archive script equals the pinned upstream digest: apply installs the overlay.
+install_upstream_elevation_adapters() {
+  mkdir -p "$current/skills/ce-plan/scripts" "$current/skills/ce-brainstorm/scripts" \
+    "$omp_current/skills/ce-plan/scripts" "$omp_current/skills/ce-brainstorm/scripts"
+  install -m 755 "$reconstructed_upstream" "$current/skills/ce-plan/scripts/elevation-dispatch.sh"
+  install -m 755 "$reconstructed_upstream" "$current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+  install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-plan/scripts/elevation-dispatch.sh"
+  install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+}
+
 build_fake_ce
-mkdir -p "$current/skills/ce-plan/scripts" "$current/skills/ce-brainstorm/scripts" \
-  "$omp_current/skills/ce-plan/scripts" "$omp_current/skills/ce-brainstorm/scripts"
-install -m 755 "$reconstructed_upstream" "$current/skills/ce-plan/scripts/elevation-dispatch.sh"
-install -m 755 "$reconstructed_upstream" "$current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
-install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-plan/scripts/elevation-dispatch.sh"
-install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+install_upstream_elevation_adapters
 env HOME="$home" bash "$prov"
 
 for dir in "$current" "$omp_current"; do
@@ -307,12 +311,16 @@ grep -qF 'does not match the pinned upstream digest' "$scratch/guarded.err" \
 bash_bin="$(command -v bash)"
 real_sha256sum="$(command -v sha256sum)"
 core_tools=(mkdir cp mv rm cmp dirname readlink cut)
+symlink_core_tools() {   # <bin-dir> -> symlink each core tool into bin-dir
+  local dir=$1 tool
+  for tool in "${core_tools[@]}"; do
+    ln -sf "$(command -v "$tool")" "$dir/$tool"
+  done
+}
 
 bin_no_sha256sum="$scratch/bin-shasum-only"
 mkdir -p "$bin_no_sha256sum"
-for tool in "${core_tools[@]}"; do
-  ln -sf "$(command -v "$tool")" "$bin_no_sha256sum/$tool"
-done
+symlink_core_tools "$bin_no_sha256sum"
 # Emulates macOS `shasum -a 256 -- <path>` by delegating to the real sha256sum,
 # which does not understand the `-a 256` algorithm selector. An absolute-path
 # shebang, not `#!/usr/bin/env bash`, because this PATH deliberately carries no
@@ -326,18 +334,11 @@ chmod 755 "$bin_no_sha256sum/shasum"
 
 bin_no_digest_tool="$scratch/bin-no-digest-tool"
 mkdir -p "$bin_no_digest_tool"
-for tool in "${core_tools[@]}"; do
-  ln -sf "$(command -v "$tool")" "$bin_no_digest_tool/$tool"
-done
+symlink_core_tools "$bin_no_digest_tool"
 
 # Rung: sha256sum absent, shasum present -> the overlay still installs.
 build_fake_ce
-mkdir -p "$current/skills/ce-plan/scripts" "$current/skills/ce-brainstorm/scripts" \
-  "$omp_current/skills/ce-plan/scripts" "$omp_current/skills/ce-brainstorm/scripts"
-install -m 755 "$reconstructed_upstream" "$current/skills/ce-plan/scripts/elevation-dispatch.sh"
-install -m 755 "$reconstructed_upstream" "$current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
-install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-plan/scripts/elevation-dispatch.sh"
-install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+install_upstream_elevation_adapters
 env HOME="$home" PATH="$bin_no_sha256sum" "$bash_bin" "$prov"
 cmp -s "$ce_plan_overlay" "$current/skills/ce-plan/scripts/elevation-dispatch.sh" \
   || { echo "elevation adapter did not install with sha256sum absent and shasum present" >&2; exit 1; }
