@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+# Reload gpg-agent and scdaemon when GnuPG configuration changes (KTD10).
+# Verified prior to reloading: the card PIN wrapper interpreter and the rendered
+# delegate pinentry exist and are executable.
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "private_dot_gnupg/**")) }}
+{{- $f := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{- $delegatePath := "/usr/bin/pinentry-curses" -}}
+{{- if eq .chezmoi.os "darwin" -}}
+{{-   if eq .chezmoi.arch "arm64" -}}
+{{-     $delegatePath = "/opt/homebrew/bin/pinentry-mac" -}}
+{{-   else -}}
+{{-     $delegatePath = "/usr/local/bin/pinentry-mac" -}}
+{{-   end -}}
+{{- else if eq $f.desktop "kde" -}}
+{{-   $delegatePath = "/usr/bin/pinentry-qt" -}}
+{{- else if eq $f.desktop "gnome" -}}
+{{-   $delegatePath = "/usr/bin/pinentry-gnome3" -}}
+{{- end }}
+set -euo pipefail
+
+INTERPRETER="/usr/bin/python3"
+DELEGATE_PATH={{ $delegatePath | quote }}
+
+{{ if eq .chezmoi.os "darwin" -}}
+if ! xcode-select -p >/dev/null 2>&1; then
+  printf 'reload-gpg-agent: macOS Command Line Tools required for %s; run xcode-select --install\n' "$INTERPRETER" >&2
+  exit 1
+fi
+{{ end -}}
+
+if [[ ! -x "$INTERPRETER" ]]; then
+  printf 'reload-gpg-agent: wrapper interpreter %s does not exist or is not executable\n' "$INTERPRETER" >&2
+  exit 1
+fi
+
+if [[ ! -x "$DELEGATE_PATH" ]]; then
+  printf 'reload-gpg-agent: pinentry delegate %s does not exist or is not executable\n' "$DELEGATE_PATH" >&2
+  exit 1
+fi
+
+command -v gpgconf >/dev/null 2>&1 || {
+  printf 'reload-gpg-agent: gpgconf is required on PATH\n' >&2
+  exit 1
+}
+
+gpgconf --reload gpg-agent
+gpgconf --reload scdaemon

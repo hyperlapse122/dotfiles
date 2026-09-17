@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-
-set -euo pipefail
-
-gpg --batch --import <<EOF
-{{ onepasswordRead "op://njbkpy6emfxkbl7n6zmwmz7jfu/OpenPGP-Key/gpg_private.asc" }}
-EOF
-
-expect -c 'spawn gpg --edit-key {{ .user.gpgPubKey | quote }} trust quit; send "5\ry\r"; expect eof'

@@ -19,16 +19,14 @@ desktop_ime_packages=(
   xdg-terminal-exec
 )
 
-# The askpass helper rides alongside pinentry: both are the desktop's own bridge
-# from a program that needs a secret to the session credential store. sudo reads
-# the password through it when an apply has no terminal — see
-# .chezmoitemplates/sudo-elevation-guard.sh.tmpl. On Fedora the GNOME binary
+# The askpass helper bridges a program needing credentials (such as git or sudo)
+# to the desktop session when no terminal is attached. On Fedora the GNOME binary
 # /usr/libexec/openssh/gnome-ssh-askpass is owned by `openssh-askpass`, NOT by
 # `openssh-askpass-gnome`, and gnome-keyring ships no askpass at all.
 if [[ "${FACT_DESKTOP:-none}" == "kde" ]]; then
-  desktop_ime_packages+=(pinentry-qt ksshaskpass)
+  desktop_ime_packages+=(ksshaskpass)
 elif [[ "${FACT_DESKTOP:-none}" == "gnome" ]]; then
-  desktop_ime_packages+=(pinentry-gnome3 openssh-askpass)
+  desktop_ime_packages+=(openssh-askpass)
 fi
 
 install_desktop_ime_packages() {
@@ -59,10 +57,6 @@ desktop_ime_packages=(
   fcitx5-hangul
   wl-clipboard
 )
-
-if [[ "${FACT_DESKTOP:-none}" != "none" ]]; then
-  desktop_ime_packages+=(pinentry-qt)
-fi
 
 "${SUDO[@]}" apt-get update -qq || true
 for pkg in "${desktop_ime_packages[@]}"; do

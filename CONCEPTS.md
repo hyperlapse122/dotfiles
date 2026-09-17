@@ -42,6 +42,14 @@ An absolute system path declared for removal so that every machine deletes the o
 ### Elevation ladder
 The ordered resolution of how a privileged script obtains root: already root, a non-prompting sudo, a sudo that can prompt on a terminal, or a sudo that prompts through a desktop askpass helper. The ladder fails loudly when no rung succeeds, rather than handing a script a privilege it cannot honour. The askpass rung is distro-shaped and is inert where its helper is not installed.
 
+## Key custody
+
+### Key presence check
+The check that runs before chezmoi reads the source state, verifying that the host holds a usable GPG private key, either as a local secret key or on an inserted YubiKey that carries the configured fingerprint. When the check fails, the host is treated as if its user is absent, and the command stops before any file renders. Real containers and CI do not run it.
+
+### Card PIN wrapper
+The pinentry stand-in that answers only the OpenPGP User PIN prompt for a known card serial, using the PIN kept in the OS keyring, and hands every other prompt to the desktop pinentry. It exists because GnuPG's own password cache does not apply to card PINs. It never re-sends a stored PIN after the card has rejected one.
+
 ## Agent orchestration
 
 ### Session role
