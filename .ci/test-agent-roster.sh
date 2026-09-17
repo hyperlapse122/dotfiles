@@ -340,24 +340,48 @@ grep -F 'google-antigravity/gemini-3.5-flash-lite' "$stub_body" >/dev/null &&
   fail 'AE9: the superseded mechanical model survived the roster change'
 
 # --- committed prose (R6): README.md and AGENTS.md are never rendered ------- #
+#
+# KTD5: the prose allowlist is wider than the payload-parity set above. Prose
+# legitimately names a lead model too -- gpt-6-astra is the Codex lead, not a
+# worker -- but no rendered payload body names a lead seat, so the parity
+# loops above (lines ~221-231) keep reading roster_aliases, unchanged. Lead
+# ids are read through execute-template rather than hardcoded, so this scan
+# follows agents.roster.lead rather than pinning today's committed values.
+lead_wrapper_tmpl="$scratch/prose-lead-wrapper.tmpl"
+printf '%s\n' '{{- range $agent, $entry := .agents.roster.lead -}}{{ $entry.model }}
+{{ end -}}' >"$lead_wrapper_tmpl"
+lead_models="$scratch/lead-models.txt"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$lead_wrapper_tmpl" "$lead_models" ||
+  fail 'the committed agents.roster.lead map failed to render'
+
+prose_allowlist="$scratch/prose-allowlist.txt"
+sort -u "$roster_aliases" "$lead_models" >"$prose_allowlist"
 
 prose_models="$scratch/prose-models.txt"
 extract_model_ids "$repo_root/README.md" "$repo_root/AGENTS.md" >"$prose_models"
 while IFS= read -r model; do
   [[ -z $model ]] && continue
-  grep -Fxq -- "$model" "$roster_aliases" ||
+  grep -Fxq -- "$model" "$prose_allowlist" ||
     fail "committed prose names worker model $model, which the roster does not declare"
 done <"$prose_models"
 
 # The scan has to be able to fail, or it asserts nothing about prose at all.
+# The fixture id must stay outside both the worker and the lead sets, or this
+# self-check stops proving anything about the wider prose allowlist above.
 stub_prose="$scratch/stub-README.md"
 printf 'The mechanical seat runs `google-antigravity/gemini-0.0-unknown`.\n' >"$stub_prose"
 if extract_model_ids "$stub_prose" | grep -Fxq -- 'google-antigravity/gemini-0.0-unknown'; then
-  grep -Fxq -- 'google-antigravity/gemini-0.0-unknown' "$roster_aliases" &&
+  grep -Fxq -- 'google-antigravity/gemini-0.0-unknown' "$prose_allowlist" &&
     fail 'the prose scan fixture id is somehow in the roster'
 else
   fail 'the prose scan does not see a model id a stub README names'
 fi
+
+# R2: the retired worker id and the stale worker count must not resurface.
+grep -qF 'codex-astra' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still names the retired codex-astra worker id'
+grep -qF 'seven worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still describes seven workers'
 
 # --- plugin manifests track the roster (R17) ------------------------------- #
 
