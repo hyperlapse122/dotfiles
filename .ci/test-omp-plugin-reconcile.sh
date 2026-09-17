@@ -141,12 +141,27 @@ mkdir -p "$state/marketplaces"
 
 case "$*" in
   "plugin marketplace list"*)
-    printf 'Configured Marketplaces:\n\n'
+    # Real omp colors this listing under FORCE_COLOR even into a pipe, and
+    # FORCE_COLOR beats NO_COLOR. The stub colors regardless of the environment
+    # so the reconciler must strip SGR sequences rather than rely on a switch.
+    if [[ -e $state/color-listing ]]; then
+      printf '\e[1mConfigured Marketplaces:\e[22m\n\e[1m\e[22m\n'
+    else
+      printf 'Configured Marketplaces:\n\n'
+    fi
+    if [[ -e $state/hide-listing-once ]]; then
+      rm -f "$state/hide-listing-once"
+      exit 0
+    fi
     for f in "$state/marketplaces"/*; do
       [[ -f $f ]] || continue
       mid=$(basename "$f")
       msrc=$(cat "$f")
-      printf '  %s  %s\n' "$mid" "$msrc"
+      if [[ -e $state/color-listing ]]; then
+        printf '  \e[36m%s\e[39m  \e[2m%s\e[22m\n' "$mid" "$msrc"
+      else
+        printf '  %s  %s\n' "$mid" "$msrc"
+      fi
     done
     ;;
   "plugin marketplace add "*)
@@ -238,6 +253,32 @@ grep -Fq "plugin enable --scope user compound-engineering@compound-engineering-p
 [[ -e $home/.omp/plugins/enabled ]] || fail 'plugin lost its enabled state on re-run'
 [[ $(get_registered_marketplace compound-engineering-plugin) == "$market" ]] ||
   fail 'second run changed the registered marketplace source'
+
+# --- colored listing on a converged host still converges (#533) ------------ #
+
+: > "$home/.omp/plugins/color-listing"
+: > "$omp_calls"
+run_omp 2>"$scratch/color.err" || fail "colored listing aborted a converged host: $(cat "$scratch/color.err")"
+grep -Fq 'plugin marketplace remove' "$omp_calls" &&
+  fail 'colored listing re-pointed a converged marketplace'
+grep -Fq 'plugin marketplace add' "$omp_calls" &&
+  fail 'colored listing hid the registration and triggered an add'
+[[ $(get_registered_marketplace compound-engineering-plugin) == "$market" ]] ||
+  fail 'colored listing changed the registered marketplace source'
+rm -f "$home/.omp/plugins/color-listing"
+
+# --- add refused for an already-present desired registration converges ----- #
+
+: > "$home/.omp/plugins/hide-listing-once"
+: > "$omp_calls"
+run_omp 2>"$scratch/exists.err" ||
+  fail "add against the desired registration aborted the run: $(cat "$scratch/exists.err")"
+grep -Fq "plugin marketplace add $market" "$omp_calls" ||
+  fail 'hidden listing did not exercise the add path'
+grep -Fq "plugin enable --scope user compound-engineering@compound-engineering-plugin" \
+  "$omp_calls" || fail 'converged add did not continue to enable'
+[[ $(get_registered_marketplace compound-engineering-plugin) == "$market" ]] ||
+  fail 'converged add changed the registered marketplace source'
 
 # --- stale source re-pointed ----------------------------------------------- #
 
