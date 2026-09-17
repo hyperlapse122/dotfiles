@@ -1,6 +1,7 @@
 # system/
 
-Root-owned config that ships to absolute system paths (`/etc/...`).
+Root-owned config that ships to absolute system paths (`/etc/...`), plus the
+host's SELinux modules under [`linux/selinux/`](linux/selinux/).
 
 chezmoi manages files under `$HOME` and has no root-aware mode, so these files
 are **not** chezmoi-managed targets. The whole `system/` tree is listed in the
@@ -61,6 +62,23 @@ embeds a `sha256` fingerprint of its managed files under `system/linux/etc/`
 subsystem only re-runs that specific subsystem installer.
 
 Force a re-run without changing any file with `chezmoi apply --force`.
+
+## SELinux modules: `linux/selinux/`
+
+Not part of the `/etc` mirror, and deliberately outside it: the `install-system-*`
+scripts fingerprint `system/linux/etc/**`, so a policy edit here re-runs the policy
+installer alone. That installer is
+[`.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl`](../.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl),
+which loads every `*.cil` in this directory with `sudo semodule -X 400 -i`. Phase
+`00` and `before` put the modules in the kernel ahead of every other apply phase.
+
+| Module | Suppresses |
+|---|---|
+| `dotfiles_pasta_inherited_fds.cil` | the AVC records `pasta` writes for descriptors it inherits from the process that started the apply — the caller's `~/.config` Chromium state and its DRI render node |
+
+These modules are `dontaudit` only. See the *Host facts, gates, and system
+configuration* section of [`AGENTS.md`](../AGENTS.md) for why an `allow` rule or a
+type declaration does not belong here.
 
 ## Layout
 

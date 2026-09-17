@@ -1,0 +1,49 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ if not $facts.container -}}
+#!/usr/bin/env bash
+#
+# Installs every declarative SELinux module under system/linux/selinux/ with
+# `sudo semodule -X 400 -i`.
+#
+# PHASE 00, AND `before`. The modules here describe what other apply phases do,
+# so the kernel must hold them before those phases run. The current module
+# suppresses denials that `chezmoi apply` itself provokes in phase 30-linux
+# (run_after_setup-podman-cluster starts rootless Podman, which starts pasta);
+# installed any later, the apply that carries a module change still logs the
+# records the change exists to stop. Issue #374 settled this ordering.
+#
+# THE MODULE SET IS SUPPRESSION ONLY. Nothing here labels a file, declares a
+# type, or grants an access. So this script needs no restorecon pass and strands
+# no running process in a stale domain — installing a dontaudit module changes
+# what the kernel AUDITS, never what it permits. A module that does grant or
+# label would need both of those concerns back; see the removal plan
+# docs/plans/2026-09-07-1203-chore-remove-custom-selinux-policy-plan.md for what
+# that cost the last time.
+#
+# GATED: Linux + Fedora, non-container, and an SELinux-enabled host with
+# semodule present. Every other host skips at render time or leaves the `if`
+# untaken, which is correct and final on a host with no SELinux.
+
+set -euo pipefail
+
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "selinux-policies") }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/selinux/**")) }}
+
+if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v semodule >/dev/null 2>&1; then
+  SRC_DIR="{{ $sourceDir }}/system/linux/selinux"
+  if [[ -d "$SRC_DIR" ]]; then
+    shopt -s nullglob
+    cil_files=("$SRC_DIR"/*.cil)
+    shopt -u nullglob
+
+    for cil in "${cil_files[@]}"; do
+      module_name="$(basename "$cil" .cil)"
+      printf 'selinux-policies: installing module %s...\n' "$module_name"
+      "${SUDO[@]}" semodule -X 400 -i "$cil"
+    done
+  fi
+fi
+{{ end -}}
+{{ end -}}

@@ -22,7 +22,7 @@
 #     via dotfiles-skips, but are permanently excluded from this matrix and MUST NOT
 #     be added as owner rows. The two renamed GNOME extension jobs appear only as
 #     gnome-guard CONSUMER instances, which is what keeps that guard's fan-out at eight.
-#     The frozen totals (143 classified owners / 216 instances / 138 phase-local
+#     The frozen totals (143 classified owners / 217 instances / 138 phase-local
 #     instances) remain strictly pinned.
 #   * One owner per skip decision that abandons a declared step or the whole script.
 #     Per-item notices inside an iteration over discovered items (per touchpad
@@ -87,8 +87,9 @@
 # WakaTime keyring site after that inventory, and config-kde-theme-dark adds four
 # more, while retiring the omp harness and the figma-auth build removed nine
 # owners (six classified, three hard errors), and splitting the NVIDIA MOK
-# enrollment keypair guard by build system added one, while retiring the SELinux
-# policy script removed one sudo-elevation-guard consumer. The frozen totals —
+# enrollment keypair guard by build system added one. Retiring the SELinux policy
+# script removed one sudo-elevation-guard consumer, and the pasta dontaudit module
+# brought that consumer back, so the guard's fan-out is 25 again. The frozen totals —
 # 137 owners, 8 hard errors, 205 instances, 132 + 73 — are CI-enforced and must be
 # re-frozen in .ci/check-skip-declarations.sh and .ci/test-capability-cache.sh
 # together with this file.
@@ -101,9 +102,9 @@ runtime_input: false
 totals:
   classified_owners: 143
   hard_error_owners: 8
-  rendered_instances: 216
+  rendered_instances: 217
   phase_local_instances: 138
-  shared_guard_instances: 78
+  shared_guard_instances: 79
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
   harmless: 41
@@ -150,7 +151,7 @@ shared_guard_fanout:
   headless-guard: 13
   kde-guard: 10
   shared-host-guard: 24
-  sudo-elevation-guard: 24
+  sudo-elevation-guard: 25
 divergence:
   - bucket: 'harmless'
     plan: 41
@@ -325,6 +326,7 @@ owners:
     form: 'skip_here'
     direction: 'transient-tolerable'
     instances:
+      - '.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl#sudo-elevation-guard/no-elevation-path'
       - '.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl#sudo-elevation-guard/no-elevation-path'

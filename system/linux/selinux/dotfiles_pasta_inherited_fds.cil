@@ -1,0 +1,40 @@
+; ==============================================================================
+; dotfiles_pasta_inherited_fds.cil
+; Stop the audit records pasta writes for descriptors it only inherits.
+;
+; WHERE THE DENIALS COME FROM. pasta supplies the network for rootless Podman.
+; `chezmoi apply` starts it through
+; .chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl, which calls
+; `podman info` and `minikube start --driver=podman` on every apply. The process
+; that runs the apply is therefore pasta's ancestor. pasta execs into pasta_t and
+; keeps every descriptor that ancestor left open.
+;
+; When the apply is started from an Electron agent host (Orca IDE), those
+; descriptors are the host application's own state: its Chromium caches, leveldb
+; stores and dictionaries under ~/.config (config_home_t), and its DRI render
+; node /dev/dri/renderD128 (dri_device_t). pasta_t holds no access to either, so
+; the kernel writes one AVC record per inherited descriptor. Two pasta processes
+; start per apply, which is about 54 records each time.
+;
+; WHY dontaudit AND NOT allow. pasta never reads or writes these descriptors. It
+; has no use for the caller's browser state or GPU node. A dontaudit rule stops
+; the audit record and grants nothing, so an access pasta genuinely needs still
+; fails and is still logged. An allow rule would hand the container network
+; helper the caller's private configuration tree, which is a real widening of the
+; sandbox for no gain.
+;
+; WHY THE PERMISSION SETS CARRY NO `open`. Every denial here is against an
+; already-open descriptor. pasta never opens these paths itself, so an `open`
+; permission would describe an access that does not occur.
+;
+; SCOPE. This module suppresses noise only. It is not a protection boundary, and
+; it declares no type of its own, so nothing here labels a file or changes what
+; any domain may do.
+; ==============================================================================
+
+; Chromium state the Electron caller left open: GPUCache, DawnWebGPUCache,
+; DawnGraphiteCache, Local Storage leveldb, and the spellcheck dictionaries.
+(dontaudit pasta_t config_home_t (file (read write append)))
+
+; The caller's DRI render node, inherited the same way.
+(dontaudit pasta_t dri_device_t (chr_file (read write)))

@@ -27,7 +27,7 @@ set -uo pipefail
 # declared in run_after_* scripts after the R5 freeze (such as reload-user-systemd)
 # need no matrix row (#486). The matrix still accounts for the shared-guard
 # instances inside those always-run scripts: they are reported as lifecycle-excluded,
-# so all 216 declared instances reconcile as rendered + excluded, never as a
+# so all 217 declared instances reconcile as rendered + excluded, never as a
 # silently smaller number.
 #
 # RENDER VARIANTS. One render cannot reach every declared instance: some sites
@@ -42,7 +42,7 @@ set -uo pipefail
 #
 # Usage: .ci/check-skip-declarations.sh [--fixture] [root]
 #   --fixture  the tree is a synthetic fixture, so the frozen production totals
-#              (143 owners / 216 instances / 138 + 78) are not asserted; every
+#              (143 owners / 217 instances / 138 + 79) are not asserted; every
 #              other check, including matrix self-consistency, still runs.
 #   root       source tree to scan; defaults to the current directory.
 
@@ -196,8 +196,8 @@ CONTINUATIONS = ('terminate-script-exit-0', 'terminate-script-exit-1',
 PLACEMENTS = ('new-header-block', 'existing-header-block')
 # The R5 boundary U5 froze and U6/U7 executed against. Asserted literally so a
 # rendered surface cannot be reconciled against a quietly shrunken oracle.
-FROZEN = {'classified_owners': 143, 'rendered_instances': 216,
-          'phase_local_instances': 138, 'shared_guard_instances': 78}
+FROZEN = {'classified_owners': 143, 'rendered_instances': 217,
+          'phase_local_instances': 138, 'shared_guard_instances': 79}
 
 RUN_NAME = re.compile(r'^run_(?:(once|onchange)_)?(?:(?:before|after)_)?.+')
 SKIP_DIRS = {'.git'}
