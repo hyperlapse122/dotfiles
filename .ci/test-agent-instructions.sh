@@ -416,12 +416,13 @@ Garden entries MUST be declared in the encrypted registry source and MUST NOT de
 see its `AGENTS.md`, section "Garden registry and `~/src` provisioning"
 MUST NOT run without explicit same-turn user approval, exactly like the destructive git operations listed below
 Orca has NO command that adopts an already-checked-out worktree
-Before launching ANY subagent, worker, or peer reviewer, MUST open and read the `orchestration` skill, load its version-matched guide, and use its Orca dispatch workflow.
+In an Orca-managed session, before launching ANY subagent, worker, or peer reviewer, MUST open and read the `orchestration` skill, load its version-matched guide, and use its Orca dispatch workflow.
 Orca owns dispatch.
+In that session the harness's own in-process subagent tool is never a substitute for it.
 The detailed contract does not live in this file: an Orca-managed session receives it by injection at session start, as a normative extension of this file carrying the same precedence as this file's own text.
-A session outside Orca receives no injection, and its absence never waives the contract: perform non-dispatch work only, and never reach for a native subagent tool, a bundled runner, a direct peer CLI, or a hand-recreated guide.
 omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
-A session that has not received these instructions performs non-dispatch work only.
+Compound Engineering model elevation has a default: for each of `plan_model` and `brainstorm_model` separately
+A value the repository sets, a caller carrier, or live user intent wins over this default, in Compound Engineering's own order.
 A run MUST NOT end with an actionable finding that is only listed
 is a working note, never a delivery
 or resolved into a filed tracker issue whose link replaces the entry, or resolved into the committed record file whose path replaces the entry
@@ -642,6 +643,23 @@ if grep -F 'rung' "$coordinator_claude_linux" | grep -F '`fable`' >/dev/null; th
   fail 'the coordinator payload names `fable` as a sizing rung again'
 fi
 
+# U2 AE4/AE5: the elevation-default paragraph's alias is rendered from the
+# roster, not hand-written, so a roster change to the claude judgment model
+# reaches the paragraph with no edit to the template.
+stub_roster_workers='[{"id":"claude-fable","agent":"claude","model":"stub-judge","effort":"high","shapes":["judgment"],"brief":"x"},
+  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+  {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"},
+  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["fallback"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"},
+  {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-3.5-flash-lite","effort":"high","shapes":["mechanical"],"brief":"x"}]'
+stub_roster_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_roster_workers")
+stub_roster_render="$scratch/claude-stub-roster.md"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$stub_roster_render" "$stub_roster_override" ||
+  fail 'a stub roster failed to render the instruction core'
+grep -F 'the session resolves it as `stub-judge`' "$stub_roster_render" >/dev/null ||
+  fail 'the elevation-default paragraph did not pick up a roster change to the claude judgment model'
+
 # Scanned against EVERY render, not just the Claude one: the harness lines are
 # stripped before the peer diff, so a retired mandate re-entering through a peer
 # harness paragraph would otherwise pass both halves of this gate unseen.
@@ -653,6 +671,8 @@ while IFS= read -r banned; do
     fi
   done
 done <<'BANNED'
+perform non-dispatch work only
+never reach for a native subagent tool
 Staying idle means ENDING THE TURN.
 start the next wait, end the turn
 This includes same-model reviews, background agents, parallel workers, and cross-model reviews such as Codex -> Claude and Claude -> Codex.
