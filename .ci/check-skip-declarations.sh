@@ -42,7 +42,7 @@ set -uo pipefail
 #
 # Usage: .ci/check-skip-declarations.sh [--fixture] [root]
 #   --fixture  the tree is a synthetic fixture, so the frozen production totals
-#              (143 owners / 217 instances / 138 + 79) are not asserted; every
+#              (150 owners / 225 instances / 145 + 80) are not asserted; every
 #              other check, including matrix self-consistency, still runs.
 #   root       source tree to scan; defaults to the current directory.
 
@@ -196,8 +196,8 @@ CONTINUATIONS = ('terminate-script-exit-0', 'terminate-script-exit-1',
 PLACEMENTS = ('new-header-block', 'existing-header-block')
 # The R5 boundary U5 froze and U6/U7 executed against. Asserted literally so a
 # rendered surface cannot be reconciled against a quietly shrunken oracle.
-FROZEN = {'classified_owners': 143, 'rendered_instances': 218,
-          'phase_local_instances': 138, 'shared_guard_instances': 80}
+FROZEN = {'classified_owners': 150, 'rendered_instances': 225,
+          'phase_local_instances': 145, 'shared_guard_instances': 80}
 
 RUN_NAME = re.compile(r'^run_(?:(once|onchange)_)?(?:(?:before|after)_)?.+')
 SKIP_DIRS = {'.git'}
