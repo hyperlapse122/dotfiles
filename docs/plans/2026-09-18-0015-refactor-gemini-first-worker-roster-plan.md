@@ -103,6 +103,9 @@ Separately, this brainstorm produced three questions an agent would ordinarily p
 **Instruction core**
 
 - R29. The shared instruction core states that an agent must not end a run leaving an item it deferred, and that a question, gap, or choice an agent raises during planning is resolved before that plan is executed. A blocker the user must decide remains the one acceptable incomplete state, unchanged from the existing rule.
+- R30. Both omp roster briefs carry the prohibition on invoking the real `op` and on letting a render reach it, so every omp dispatch brief states it in the brief itself rather than relying on the worker reading the repository supplement.
+
+- KTD13. **The real-`op` prohibition moves into the two omp briefs, because the repository supplement alone has not held.** `AGENTS.md` already states that an agent must not invoke the real `op` and must not let a render reach it, and omp reads that file; the observed failure is that the Gemini seat proceeds anyway. The roster `brief` field is the per-model guidance the coordinator renders into every dispatch brief, so stating it there puts the rule in the brief the worker is given rather than in a file it must choose to honor. Both omp entries carry it, because a mechanical read can trigger a render as easily as an implementation edit can. The wording names the stub and the scratch-PATH requirement as the only sanctioned route, and names a live secret in rendered output as the harm, since the brief guidance for this seat already asks for named thresholds and for what must never be invented. (session-settled: user-directed — chosen over relying on the existing `AGENTS.md` rule: Gemini models have ignored it) Governs R30.
 
 ### Key Flows
 
@@ -363,6 +366,21 @@ U1 lands first: it is render-safe on the single-entry roster and keeps the omp r
   - Test expectation: none beyond the roster test — prose only; its prose scan and stale-count guard cover it.
 - **Verification:** `.ci/test-agent-roster.sh` passes, so every backticked model id the two scanned files name is a roster alias or a lead model and neither says "five worker" or "seven worker".
 
+### U6. State the real-`op` prohibition in both omp briefs
+
+- **Goal:** every omp dispatch brief the coordinator renders tells the seat not to invoke the real `op` and not to let a render reach it, with the stub-and-scratch-PATH route named as the only sanctioned one.
+- **Requirements:** R30 (KTD13).
+- **Dependencies:** U2, which declares the two omp entries. Order-independent against U4 and U5, because the roster test counts brief rows and does not read their text.
+- **Files:** `.chezmoidata/agents.yaml` (the `brief` blocks of `omp-flash-mechanical` and `omp-flash`).
+- **Approach:**
+  1. Add the prohibition to the `omp-flash-mechanical` brief, beside its existing forbid-edits clause: never run the real `op`, never let a render reach it, and use the stub `op` on a PATH naming only the stub and the system directories.
+  2. Add the same prohibition to the `omp-flash` brief under its tool-policy clause, naming a live secret in rendered output as the harm.
+  3. Keep both briefs in the imperative, brief-guidance voice the other entries use, and keep each one a short block rather than a paragraph.
+- **Patterns to follow:** the existing brief wording of the two omp entries; the rule's own statement at `AGENTS.md` line 83 for the facts, quoted as guidance rather than copied whole.
+- **Test scenarios:**
+  - Test expectation: none beyond the roster test — the brief text is data the coordinator renders, and `.ci/test-agent-roster.sh` already asserts six brief rows and that the payload carries every roster entry.
+- **Verification:** the coordinator payload renders six brief rows and both omp rows carry the prohibition; `.ci/test-agent-roster.sh` passes.
+
 ---
 
 ## Verification Contract
@@ -386,7 +404,7 @@ Every check renders with the pinned chezmoi binary against a scratch config and 
 
 ## Definition of Done
 
-- R1 through R29 are implemented, and each test scenario above is exercised by the named script.
+- R1 through R30 are implemented, and each test scenario above is exercised by the named script.
 - `chezmoi apply` renders at every unit boundary in the order U1 to U5, and every listed test passes on the pull request head.
 - The rendered coordinator names no `opus`, carries four routing rows and six brief rows, and every `claude` launch line carries its own roster pair.
 - The rendered instruction core carries the R29 sentence on all three harnesses, and no fixture under `.ci/fixtures/agent-instructions/` changed.

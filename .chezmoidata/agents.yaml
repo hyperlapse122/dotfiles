@@ -68,7 +68,9 @@ agents:
         Ask for one read or lookup per dispatch, never a batch. Require
         verbatim excerpts with repo-relative paths and line numbers instead
         of a summary. Forbid edits. Name the returned excerpt as the stop
-        condition.
+        condition. Forbid the real `op`: never invoke it, never let a render
+        reach it, and use only the stub `op` on a PATH naming the stub
+        directory and the system directories.
     - id: omp-flash
       agent: omp
       model: google-antigravity/gemini-3.8-flash
@@ -78,7 +80,9 @@ agents:
         Order the brief as rules, context, definitions, task, tool policy,
         output, verification, stop condition. Define ambiguous terms and
         thresholds. Place long context before the task. Name what must
-        never be invented.
+        never be invented. In the tool policy, forbid the real `op`: never
+        invoke it and never let a render reach it, because a live secret in
+        rendered output is the harm.
   mcp:
     servers:
     - name: figma
