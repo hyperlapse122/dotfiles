@@ -64,12 +64,54 @@ hand_written_model=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
   || fail 'agents.claude.settings still declares model by hand; it is derived from agents.roster'
 
 # The three effort leaves are NOT roster entries — fast mode runs on Opus — so
-# they stay declared in agents.yaml and must survive the merge.
+# they stay declared in agents.yaml and must survive the merge. The fable leaf
+# mirrors the roster `claude` judgment entry's effort instead of a value fixed
+# here (checked below), because the non-Orca elevation path reads this leaf.
 jq -e '
-  .["modelSettings.claude-fable-5-1.effortLevel"] == "medium"
+  .["modelSettings.claude-fable-5-1.effortLevel"] == "max"
   and .["modelSettings.claude-opus-5.effortLevel"] == "medium"
   and .["modelSettings.claude-sonnet-5.effortLevel"] == "high"' <<<"$declared" >/dev/null \
   || fail 'the three declared effortLevel leaves did not survive the roster merge'
+
+# KTD1: the fable leaf is not just a fixed literal — it must equal whatever the
+# roster's `claude` judgment entry declares, because that entry is what an Orca
+# launch forwards and this leaf is what the non-Orca elevation path runs at.
+# Render the roster entry's effort through the same lookup every payload
+# template uses, so a roster edit alone can flip this check.
+judgment_effort_parity_offender() {
+  local rendered=$1 declared_leaf=$2
+  if [[ "$rendered" != "$declared_leaf" ]]; then
+    printf 'roster judgment effort %s vs declared leaf %s' "$rendered" "$declared_leaf"
+  fi
+}
+
+render_roster_judgment_effort() {
+  local override=${1:-}
+  if [[ -n "$override" ]]; then
+    env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+      chezmoi --config "$render_config" --source "$repo_root" --override-data "$override" \
+      execute-template <<<'{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}'
+  else
+    env HOME="$neg_home" PATH="$neg_bin:$PATH" \
+      chezmoi --config "$render_config" --source "$repo_root" \
+      execute-template <<<'{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}'
+  fi
+}
+
+fable_leaf=$(jq -r '.["modelSettings.claude-fable-5-1.effortLevel"]' <<<"$declared")
+committed_judgment_effort=$(render_roster_judgment_effort)
+parity_offender=$(judgment_effort_parity_offender "$committed_judgment_effort" "$fable_leaf")
+[[ -z $parity_offender ]] \
+  || fail "the declared fable leaf does not match the roster judgment entry's effort ($parity_offender)"
+
+# Force the failure branch: prove the guard can fail. Override the roster so the
+# `claude` judgment entry's effort is `high` while the declared leaf stays `max`.
+judgment_high_override='{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":[{"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"}]}}}'
+high_judgment_effort=$(render_roster_judgment_effort "$judgment_high_override")
+[[ $high_judgment_effort == 'high' ]] \
+  || fail "the judgment-effort override did not render high, got $high_judgment_effort"
+[[ -n $(judgment_effort_parity_offender "$high_judgment_effort" "$fable_leaf") ]] \
+  || fail 'the judgment-effort parity guard did not flag a roster override that diverges from the declared leaf'
 
 # Assert the DECLARATION itself, not just the live file. cleanupPeriodDays is parsed
 # with z.int(), and there are two ways to break it -- only one of them obvious.
