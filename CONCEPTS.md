@@ -71,6 +71,9 @@ Work whose deliverable is the judgment itself: a code review, a document review,
 ### Mechanical work
 A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster entry that takes the mechanical shape, which can be the same seat that takes cheap implementation work.
 
+### Launch ceremony
+The number of lead tool calls a dispatch costs before the recipient can be given work. It is not uniform across the roster: `worker-start` carries model and effort for Claude, Codex, and Cursor launches, so those cost one call, while an omp row needs a terminal launch, a handle read, and a model confirmation first. Ceremony decides which row a lead actually picks when two rows are equally eligible, so a routing rule that leaves it uneven is re-decided on every dispatch regardless of what the table declares.
+
 ## Repository layout
 
 ### Primary checkout
