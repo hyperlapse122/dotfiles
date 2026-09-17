@@ -51,13 +51,13 @@ chmod 0700 "$scratch/bin/op"
 wrapper="$scratch/roster-wrapper.tmpl"
 printf '%s\n' '{{- includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}' >"$wrapper"
 
-# --- positive: the committed roster renders and prints six ids ------------ #
+# --- positive: the committed roster renders and prints five ids ----------- #
 
 positive_out="$scratch/positive.out"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$positive_out" ||
   fail 'the committed roster failed to render'
 model_count=$(grep -c . "$positive_out")
-[[ $model_count -eq 6 ]] || fail "the committed roster printed $model_count model id(s), want 6"
+[[ $model_count -eq 5 ]] || fail "the committed roster printed $model_count model id(s), want 5"
 
 # --- negative and alternate-valid cases ------------------------------------ #
 
@@ -271,14 +271,22 @@ grep -F 'rung' "$coordinator_body" | grep -F '`fable`' >/dev/null &&
 grep -F 'authored the document under review MUST NOT serve as a reviewer' "$coordinator_body" >/dev/null &&
   fail 'the rendered coordinator still carries the author-exclusion rule'
 
-# KTD9: the omp seat is chosen by launching the terminal with that entry's
-# model, so the line has to name the cheap seat explicitly.
+# KTD6/KTD9: the omp seat is chosen by launching the terminal with that
+# entry's model; render the mechanical seat through agent-roster-lookup.tmpl
+# instead of grepping a hand-written id, so a roster edit to the mechanical
+# entry reaches this assertion with no edit here.
 grep -F 'worker-start --terminal' "$coordinator_body" >/dev/null ||
   fail 'the rendered coordinator does not carry the omp seat-selection line'
-grep -F 'google-antigravity/gemini-3.5-flash-lite' "$coordinator_body" >/dev/null ||
+mechanical_seat_wrapper="$scratch/mechanical-seat-wrapper.tmpl"
+printf '%s\n' '{{- $w := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "mechanical" "rung" "" "name" "an omp mechanical entry") | fromJson -}}{{ $w.model }}' >"$mechanical_seat_wrapper"
+mechanical_seat_out="$scratch/mechanical-seat.out"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$mechanical_seat_wrapper" "$mechanical_seat_out" ||
+  fail 'the omp mechanical seat failed to render'
+mechanical_model=$(cat "$mechanical_seat_out")
+grep -F -- "$mechanical_model" "$coordinator_body" >/dev/null ||
   fail 'the omp seat-selection line does not name the mechanical entry model'
 
-# R7 has four rows; R12 has six.
+# R13: the routing table has four rows; the brief-guidance table has five.
 count_table_rows() {
   awk -v header="$2" '
     index($0, header) == 1 { inside = 1; next }
@@ -291,7 +299,7 @@ count_table_rows() {
 routing_rows=$(count_table_rows "$coordinator_body" '| Work shape |')
 [[ $routing_rows -eq 4 ]] || fail "the routing table rendered $routing_rows row(s), want 4"
 brief_rows=$(count_table_rows "$coordinator_body" '| Model |')
-[[ $brief_rows -eq 6 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 6"
+[[ $brief_rows -eq 5 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 5"
 
 # KTD4: each Codex seat is asserted by its own rendered pair, read from the
 # roster through agent-roster-lookup.tmpl, so a line-level grep for a model
@@ -320,6 +328,27 @@ grep -F -- "$fallback_anchor" "$everyone_body" >/dev/null ||
 grep -F 'launch.requested' "$everyone_body" >/dev/null ||
   fail 'the everyone body lost the launch-receipt comparison rule'
 
+# KTD4: the Claude judgment pair is asserted the same way, from its own
+# rendered seat rather than a literal.
+claude_seat_pair_wrapper="$scratch/claude-seat-pair-wrapper.tmpl"
+claude_seat_pair() {
+  local shape=$1 override=$2 out
+  out="$scratch/claude-seat-pair-$shape.out"
+  printf '%s\n' "{{- \$w := includeTemplate \"agent-roster-lookup.tmpl\" (dict \"roster\" .agents.roster \"agent\" \"claude\" \"shape\" \"$shape\" \"rung\" \"\" \"name\" \"a claude $shape entry\") | fromJson -}}{{ \$w.model }} {{ \$w.effort }}" >"$claude_seat_pair_wrapper"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$claude_seat_pair_wrapper" "$out" "$override" ||
+    fail "claude seat pair render failed for shape $shape"
+  cat "$out"
+}
+
+read -r claude_judge_model claude_judge_effort <<<"$(claude_seat_pair judgment '')"
+claude_launch_anchor="--model $claude_judge_model --effort $claude_judge_effort"
+grep -F -- "$claude_launch_anchor" "$coordinator_body" >/dev/null ||
+  fail 'the coordinator body does not carry the claude judgment launch anchor'
+grep -F 'launch.requested' "$coordinator_body" >/dev/null ||
+  fail 'the coordinator body lost the claude launch-receipt comparison rule'
+grep -F 'records the pass as degraded' "$coordinator_body" >/dev/null ||
+  fail 'the coordinator body lost the degraded-pass recording rule'
+
 # R8: the fallback seat is no longer justified by a cost comparison with the
 # judgment seat.
 grep -F 'belongs to recovery' "$everyone_body" >/dev/null &&
@@ -332,8 +361,7 @@ two_seat_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
   {"id":"codex-judge","agent":"codex","model":"gpt-9.8-judge","effort":"medium","shapes":["judgment"],"brief":"x"},
   {"id":"codex-fallback","agent":"codex","model":"gpt-9.9-fallback","effort":"high","shapes":["fallback"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"},
-  {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-3.5-flash-lite","effort":"high","shapes":["mechanical"],"brief":"x"}]'
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","mechanical"],"brief":"x"}]'
 two_seat_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$two_seat_workers")
 two_seat_everyone="$scratch/everyone-two-seat.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_wrapper" "$two_seat_everyone" "$two_seat_override" ||
@@ -355,23 +383,42 @@ grep -F -- "$two_seat_fallback_leak" "$two_seat_everyone" >/dev/null &&
 
 # --- AE9: a roster edit re-renders the payload, with no hand edit ----------- #
 
-# The stub moves two entries, not one: the mechanical model exercises the
-# coordinator body (AE9) and the codex judgment model exercises the everyone
-# body, which is the only payload the Codex plugin manifest hashes.
-stub_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
+# The stub moves two entries, not one: the single omp seat's model exercises
+# the coordinator body (AE9) and the claude judgment effort exercises the
+# claude launch anchor built above.
+stub_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"low","shapes":["judgment"],"brief":"x"},
   {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
   {"id":"codex-luna","agent":"codex","model":"gpt-9.9-stub","effort":"medium","shapes":["judgment","fallback"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"},
-  {"id":"omp-flash-lite","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["mechanical"],"brief":"x"}]'
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["implementation","mechanical"],"brief":"x"}]'
 stub_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_workers")
 stub_body="$scratch/coordinator-stub.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$stub_body" "$stub_override" ||
   fail 'AE9: the coordinator body failed to render against a changed roster'
 grep -F 'google-antigravity/gemini-9.9-stub' "$stub_body" >/dev/null ||
   fail 'AE9: a changed mechanical model did not reach the rendered coordinator'
-grep -F 'google-antigravity/gemini-3.5-flash-lite' "$stub_body" >/dev/null &&
+grep -F 'google-antigravity/gemini-3.8-flash' "$stub_body" >/dev/null &&
   fail 'AE9: the superseded mechanical model survived the roster change'
+grep -F -- '--effort low' "$stub_body" >/dev/null ||
+  fail 'AE9: a changed claude judgment effort did not reach the launch anchor'
+
+# A two-entry omp roster proves a future distinct mechanical entry still
+# drives its consumers with no template change: the mechanical row's first
+# recipient and the two-seat branch of the seat-selection line both name it.
+two_entry_omp_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
+  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
+  {"id":"omp-lite-stub","agent":"omp","model":"google-antigravity/gemini-9.8-lite-stub","effort":"high","shapes":["mechanical"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"}]'
+two_entry_omp_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$two_entry_omp_workers")
+two_entry_omp_body="$scratch/coordinator-two-entry-omp.md"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$two_entry_omp_body" "$two_entry_omp_override" ||
+  fail 'the coordinator body failed to render against a two-entry omp stub'
+grep -F -- '`omp` `google-antigravity/gemini-9.8-lite-stub` high' "$two_entry_omp_body" >/dev/null ||
+  fail 'the two-entry omp stub: the mechanical row does not name the fake mechanical model as first recipient'
+grep -F -- '`google-antigravity/gemini-9.8-lite-stub` at `high` for mechanical work, `google-antigravity/gemini-3.8-flash` at `high` otherwise' "$two_entry_omp_body" >/dev/null ||
+  fail 'the two-entry omp stub: the seat-selection line does not render the two-seat branch'
 
 # --- committed prose (R6): README.md and AGENTS.md are never rendered ------- #
 #
@@ -416,6 +463,10 @@ grep -qF 'codex-astra' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
   fail 'committed prose still names the retired codex-astra worker id'
 grep -qF 'seven worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
   fail 'committed prose still describes seven workers'
+grep -qF 'omp-flash-lite' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still names the retired omp-flash-lite worker id'
+grep -qF 'six worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still describes six workers'
 
 # --- plugin manifests track the roster (R17) ------------------------------- #
 
