@@ -271,20 +271,40 @@ grep -F 'rung' "$coordinator_body" | grep -F '`fable`' >/dev/null &&
 grep -F 'authored the document under review MUST NOT serve as a reviewer' "$coordinator_body" >/dev/null &&
   fail 'the rendered coordinator still carries the author-exclusion rule'
 
+# KTD4: each Codex seat is asserted by its own rendered pair, read from the
+# roster through agent-roster-lookup.tmpl, so a line-level grep for a model
+# near an effort cannot tell the seats apart once both resolve to the same
+# model.
+agent_seat_pair_wrapper="$scratch/agent-seat-pair-wrapper.tmpl"
+agent_seat_pair() {
+  local agent=$1 shape=$2 override=$3 out
+  out="$scratch/$agent-seat-pair-$shape.out"
+  printf '%s\n' "{{- \$w := includeTemplate \"agent-roster-lookup.tmpl\" (dict \"roster\" .agents.roster \"agent\" \"$agent\" \"shape\" \"$shape\" \"rung\" \"\" \"name\" \"a $agent $shape entry\") | fromJson -}}{{ \$w.model }} {{ \$w.effort }}" >"$agent_seat_pair_wrapper"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$agent_seat_pair_wrapper" "$out" "$override" ||
+    fail "seat pair render failed for agent $agent shape $shape"
+  cat "$out"
+}
+
 # KTD6/KTD9: the omp seat is chosen by launching the terminal with that
 # entry's model; render the mechanical seat through agent-roster-lookup.tmpl
 # instead of grepping a hand-written id, so a roster edit to the mechanical
 # entry reaches this assertion with no edit here.
 grep -F 'worker-start --terminal' "$coordinator_body" >/dev/null ||
   fail 'the rendered coordinator does not carry the omp seat-selection line'
-mechanical_seat_wrapper="$scratch/mechanical-seat-wrapper.tmpl"
-printf '%s\n' '{{- $w := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "mechanical" "rung" "" "name" "an omp mechanical entry") | fromJson -}}{{ $w.model }}' >"$mechanical_seat_wrapper"
-mechanical_seat_out="$scratch/mechanical-seat.out"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$mechanical_seat_wrapper" "$mechanical_seat_out" ||
-  fail 'the omp mechanical seat failed to render'
-mechanical_model=$(cat "$mechanical_seat_out")
+read -r mechanical_model _ <<<"$(agent_seat_pair omp mechanical '')"
 grep -F -- "$mechanical_model" "$coordinator_body" >/dev/null ||
   fail 'the omp seat-selection line does not name the mechanical entry model'
+
+# The one-seat branch (`{{ if and (eq $mechanical.model $ompImpl.model) (eq
+# $mechanical.effort $ompImpl.effort) }}`) collapses mechanical and
+# implementation into a single seat when both resolve to the same pair; the
+# committed roster takes this arm, so assert its rendered phrase directly
+# rather than relying on a model id that other rows already satisfy.
+read -r omp_impl_model omp_impl_effort <<<"$(agent_seat_pair omp implementation '')"
+grep -F -- "one seat (\`$omp_impl_model\` at \`$omp_impl_effort\`) for mechanical and implementation work alike" "$coordinator_body" >/dev/null ||
+  fail 'the omp seat-selection line does not render the one-seat branch for the committed roster'
+grep -F 'for mechanical work, ' "$coordinator_body" >/dev/null &&
+  fail 'the committed single-seat roster rendered the two-seat branch'
 
 # R13: the routing table has four rows; the brief-guidance table has five.
 count_table_rows() {
@@ -300,20 +320,6 @@ routing_rows=$(count_table_rows "$coordinator_body" '| Work shape |')
 [[ $routing_rows -eq 4 ]] || fail "the routing table rendered $routing_rows row(s), want 4"
 brief_rows=$(count_table_rows "$coordinator_body" '| Model |')
 [[ $brief_rows -eq 5 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 5"
-
-# KTD4: each Codex seat is asserted by its own rendered pair, read from the
-# roster through agent-roster-lookup.tmpl, so a line-level grep for a model
-# near an effort cannot tell the seats apart once both resolve to the same
-# model.
-agent_seat_pair_wrapper="$scratch/agent-seat-pair-wrapper.tmpl"
-agent_seat_pair() {
-  local agent=$1 shape=$2 override=$3 out
-  out="$scratch/$agent-seat-pair-$shape.out"
-  printf '%s\n' "{{- \$w := includeTemplate \"agent-roster-lookup.tmpl\" (dict \"roster\" .agents.roster \"agent\" \"$agent\" \"shape\" \"$shape\" \"rung\" \"\" \"name\" \"a $agent $shape entry\") | fromJson -}}{{ \$w.model }} {{ \$w.effort }}" >"$agent_seat_pair_wrapper"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$agent_seat_pair_wrapper" "$out" "$override" ||
-    fail "seat pair render failed for agent $agent shape $shape"
-  cat "$out"
-}
 
 read -r judge_model judge_effort <<<"$(agent_seat_pair codex judgment '')"
 read -r fallback_model fallback_effort <<<"$(agent_seat_pair codex fallback '')"

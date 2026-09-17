@@ -427,7 +427,7 @@ The detailed contract does not live in this file: an Orca-managed session receiv
 omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
 Compound Engineering model elevation has a default: for each of `plan_model` and `brainstorm_model` separately
 A value the repository sets, a caller carrier, or live user intent wins over this default, in Compound Engineering's own order.
-launches the elevation entry at its roster effort
+launches the elevation entry at its roster effort `max`
 outside Orca the native subagent adapter runs at the Claude Code `modelSettings` effort for that model and the CLI adapter at the effort this repository's overlay sets, both held at the same value.
 A session outside Orca then runs Compound Engineering's elevation adapters as shipped, apart from that overlay.
 A run MUST NOT end with an actionable finding that is only listed
@@ -684,6 +684,8 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$stub
   fail 'a stub roster failed to render the instruction core'
 grep -F 'the session resolves it as `stub-judge`' "$stub_roster_render" >/dev/null ||
   fail 'the elevation-default paragraph did not pick up a roster change to the claude judgment model'
+grep -F 'launches the elevation entry at its roster effort `high`' "$stub_roster_render" >/dev/null ||
+  fail 'the elevation paragraph did not pick up a roster change to the claude judgment effort'
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
 # stripped before the peer diff, so a retired mandate re-entering through a peer

@@ -13,8 +13,9 @@
 #
 # This script copies the managed overlay files. For most of them it never changes
 # the archive-owned file, such as skills/ce-sweep/SKILL.md. The two CLI elevation
-# adapters are the guarded exception: their archive copy is replaced with the
-# overlay only while it still matches the recorded upstream digest (see below).
+# adapters are the guarded exception: on the pinned version, an absent copy is
+# installed outright and an existing copy is replaced only while it still
+# matches the recorded upstream digest (see below).
 #
 # OWNERSHIP: the overlay paths are ours, while the directory chain above them is
 # archive-owned. Because the tree is additive, another process can replace a
@@ -57,14 +58,16 @@ OVERLAY_FILES=(
   "skills/ce-sweep/references/interview.md"
 )
 
-# CLI elevation adapters (KTD7): the ce-plan and ce-brainstorm copies of the pinned
-# v3.26.3 elevation-dispatch.sh are byte-identical upstream, so one recorded digest
-# guards both entries.
+# CLI elevation adapters (KTD7): the ce-plan and ce-brainstorm archive copies of
+# the pinned v3.26.3 elevation-dispatch.sh are byte-identical upstream, so one
+# overlay source and one recorded digest guard both destinations.
 GUARDED_FILES=(
   "skills/ce-plan/scripts/elevation-dispatch.sh"
   "skills/ce-brainstorm/scripts/elevation-dispatch.sh"
 )
+GUARDED_SOURCE="skills/ce-plan/scripts/elevation-dispatch.sh"
 GUARDED_UPSTREAM_SHA256="ba8219c15db2909fb1c272d2137b124a78a06329af2cca0e80276f6e8918ef3d"
+GUARDED_UPSTREAM_VERSION="v3.26.3"
 
 # Portable SHA-256 (roster validOS includes darwin, which ships no sha256sum):
 # prefer sha256sum, fall back to shasum -a 256. The digest command is resolved
@@ -139,37 +142,60 @@ for CURRENT in "${TARGET_DIRS[@]}"; do
 
   # Guarded whole-file replacements: unlike OVERLAY_FILES above, these targets are
   # archive-owned scripts, not overlay-only leaves, so an unconditional copy would
-  # clobber a version bump's own rewrite. Replace only while the archive copy still
-  # equals the recorded upstream v3.26.3 digest; leave any other digest untouched
-  # and warn, so a plugin bump degrades to the upstream default instead of silently
-  # keeping a stale fork or overwriting new upstream content.
-  for RELATIVE in "${GUARDED_FILES[@]}"; do
-    SOURCE="$OVERLAYS/$RELATIVE"
-    DESTINATION="$CURRENT/$RELATIVE"
-
-    [ -f "$SOURCE" ] || continue
-    [ -e "$DESTINATION" ] || continue
-
-    if [ "$SHA256_TOOL_AVAILABLE" != 1 ]; then
-      printf 'compound-engineering-overlays: no sha256 tool; leaving %s unchanged\n' "$DESTINATION" >&2
-      continue
-    fi
-
-    ensure_directory_chain "$CURRENT" "$RELATIVE"
-
-    OVERLAY_DIGEST="$(sha256_of "$SOURCE")"
-    OBSERVED="$(sha256_of "$DESTINATION" 2>/dev/null || true)"
-
-    if [ "$OBSERVED" = "$OVERLAY_DIGEST" ]; then
-      continue
-    fi
-
-    if [ "$OBSERVED" = "$GUARDED_UPSTREAM_SHA256" ]; then
-      reclaim_destination "$DESTINATION"
-      install_via_temp "$SOURCE" "$DESTINATION"
+  # clobber a version bump's own rewrite. A fresh host, where the archive never
+  # extracted the file, gets the overlay installed outright. An existing archive
+  # copy is replaced only while it still equals the recorded upstream digest for
+  # the pinned version; any other digest is left untouched with a warning, so a
+  # plugin bump degrades to the upstream default instead of silently keeping a
+  # stale fork or overwriting new upstream content. A symlink at the destination
+  # is always reclaimed and replaced rather than trusted on a digest match, so a
+  # same-content foreign link cannot be waved through. Both destinations share
+  # one overlay source (GUARDED_SOURCE), hoisted out of this loop since it never
+  # varies per entry.
+  GUARDED_SOURCE_PATH="$OVERLAYS/$GUARDED_SOURCE"
+  if [ -f "$GUARDED_SOURCE_PATH" ]; then
+    VERSION_SEGMENT="${CURRENT##*/}"
+    if [ "$VERSION_SEGMENT" != "$GUARDED_UPSTREAM_VERSION" ]; then
+      printf 'compound-engineering-overlays: %s is %s, the elevation overlay targets %s; leaving the adapters untouched\n' \
+        "$CURRENT" "$VERSION_SEGMENT" "$GUARDED_UPSTREAM_VERSION" >&2
     else
-      printf 'compound-engineering-overlays: %s does not match the pinned upstream digest (%s); leaving it unchanged\n' \
-        "$DESTINATION" "$OBSERVED" >&2
+      for RELATIVE in "${GUARDED_FILES[@]}"; do
+        DESTINATION="$CURRENT/$RELATIVE"
+
+        if [ ! -e "$DESTINATION" ]; then
+          ensure_directory_chain "$CURRENT" "$RELATIVE"
+          install_via_temp "$GUARDED_SOURCE_PATH" "$DESTINATION"
+          continue
+        fi
+
+        if [ "$SHA256_TOOL_AVAILABLE" != 1 ]; then
+          printf 'compound-engineering-overlays: no sha256 tool; leaving %s unchanged\n' "$DESTINATION" >&2
+          continue
+        fi
+
+        ensure_directory_chain "$CURRENT" "$RELATIVE"
+
+        if [ -L "$DESTINATION" ]; then
+          reclaim_destination "$DESTINATION"
+          install_via_temp "$GUARDED_SOURCE_PATH" "$DESTINATION"
+          continue
+        fi
+
+        OVERLAY_DIGEST="$(sha256_of "$GUARDED_SOURCE_PATH")"
+        OBSERVED="$(sha256_of "$DESTINATION" 2>/dev/null || true)"
+
+        if [ "$OBSERVED" = "$OVERLAY_DIGEST" ]; then
+          continue
+        fi
+
+        if [ "$OBSERVED" = "$GUARDED_UPSTREAM_SHA256" ]; then
+          reclaim_destination "$DESTINATION"
+          install_via_temp "$GUARDED_SOURCE_PATH" "$DESTINATION"
+        else
+          printf 'compound-engineering-overlays: %s does not match the pinned upstream digest (%s); leaving it unchanged\n' \
+            "$DESTINATION" "$OBSERVED" >&2
+        fi
+      done
     fi
-  done
+  fi
 done

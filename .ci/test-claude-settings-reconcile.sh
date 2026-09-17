@@ -14,6 +14,11 @@ settings_script=${1:?$usage}
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 settings_sh='.chezmoiscripts/70-agents/run_after_config-claude-settings.sh.tmpl'
 
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
+chezmoi_bin=$(command -v "${CHEZMOI:-chezmoi}") ||
+  { echo "test-claude-settings-reconcile: chezmoi is not on PATH" >&2; exit 1; }
+
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/claude-settings-reconcile-fixtures
 mkdir -p -- "$scratch_root"
 chmod 0700 -- "$scratch_root"
@@ -30,6 +35,15 @@ neg_bin="$scratch/neg-bin"
 mkdir -p "$neg_home" "$neg_bin"
 printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invalid;; *) printf dummy-secret;; esac\n' >"$neg_bin/op"
 chmod 0700 "$neg_bin/op"
+
+# Fixture root for renders that go through the shared render() helper, which
+# MUST see only the stub directory and system directories on PATH -- never
+# the inherited PATH -- so no code path can fall through to the real op or a
+# different chezmoi.
+mkdir -p "$scratch/home" "$scratch/bin" "$scratch/target"
+printf '[data]\n' >"$scratch/empty.toml"
+cp "$neg_bin/op" "$scratch/bin/op"
+chmod 0700 "$scratch/bin/op"
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 
@@ -85,16 +99,14 @@ judgment_effort_parity_offender() {
   fi
 }
 
+judgment_effort_wrapper="$scratch/judgment-effort-wrapper.tmpl"
+printf '%s\n' '{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}' >"$judgment_effort_wrapper"
+
 render_roster_judgment_effort() {
-  local override=${1:-}
-  local override_args=()
-  if [[ -n "$override" ]]; then
-    override_args=(--override-data "$override")
-  fi
-  env HOME="$neg_home" PATH="$neg_bin:$PATH" \
-    chezmoi --config "$render_config" --source "$repo_root" \
-    "${override_args[@]+"${override_args[@]}"}" \
-    execute-template <<<'{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}'
+  local override=${1:-} out="$scratch/judgment-effort.out"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$judgment_effort_wrapper" "$out" "$override" ||
+    fail 'the claude judgment entry failed to render'
+  cat "$out"
 }
 
 fable_leaf=$(jq -r '.["modelSettings.claude-fable-5-1.effortLevel"]' <<<"$declared")
