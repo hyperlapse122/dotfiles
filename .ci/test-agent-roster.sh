@@ -12,6 +12,15 @@ set -euo pipefail
 # technique test-omp-plugin-reconcile.sh uses to exercise
 # agents.omp.pluginsRemoved, so a fixture never touches the committed yaml.
 #
+# The sibling agents.roster.lead map SURVIVES a workers-only override
+# (confirmed empirically: the duplicate-id fixture below, which overrides
+# only .agents.roster.workers, still fails with "duplicate worker id
+# \"claude-fable\"" rather than a lead diagnostic — chezmoi's override merge
+# is recursive on the map, replacing only the workers leaf it names and
+# leaving the committed lead map in place). Lead fixtures therefore cannot
+# use --override-data anyway (see lead_wrapper below), but if they could,
+# this is why a workers-only override would not need to also restate lead.
+#
 # Payload/roster parity (KTD6) is U3's job and is not added here — the spot
 # below is left for it.
 
@@ -42,13 +51,13 @@ chmod 0700 "$scratch/bin/op"
 wrapper="$scratch/roster-wrapper.tmpl"
 printf '%s\n' '{{- includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}' >"$wrapper"
 
-# --- positive: the committed roster renders and prints seven ids ----------- #
+# --- positive: the committed roster renders and prints six ids ------------ #
 
 positive_out="$scratch/positive.out"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$positive_out" ||
   fail 'the committed roster failed to render'
 model_count=$(grep -c . "$positive_out")
-[[ $model_count -eq 7 ]] || fail "the committed roster printed $model_count model id(s), want 7"
+[[ $model_count -eq 6 ]] || fail "the committed roster printed $model_count model id(s), want 6"
 
 # --- negative and alternate-valid cases ------------------------------------ #
 
@@ -113,6 +122,53 @@ assert_render_fails claude-duplicate-rung \
     {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"codex-astra","agent":"codex","model":"gpt-6-astra","effort":"medium","shapes":["judgment"],"brief":"x"}]' \
   'duplicate rung "sonnet" for agent claude'
+
+# --- lead map validation ---------------------------------------------------- #
+#
+# A recursive map merge cannot delete a key, so --override-data on
+# agents.roster.lead can never produce an entry that OMITS a field (only add
+# or replace one). Each fixture instead composes a wrapper template that
+# builds the roster from a literal Go-template lead map and the committed
+# .agents.roster.workers, with no override at all.
+
+lead_wrapper() {
+  local label=$1 lead_expr=$2 want=$3
+  local wrapper out err
+  wrapper="$scratch/$label-wrapper.tmpl"
+  printf '%s\n' "{{- includeTemplate \"agent-roster-validate.tmpl\" (dict \"roster\" (dict \"lead\" $lead_expr \"workers\" .agents.roster.workers)) -}}" >"$wrapper"
+  out="$scratch/$label.out"
+  err="$scratch/$label.err"
+  if render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$out" 2>"$err"; then
+    fail "$label: expected a failed render, got exit 0"
+  fi
+  grep -qF -- "$want" "$err" ||
+    fail "$label: render failed without the expected diagnostic ($want): $(cat "$err")"
+}
+
+# A codex lead entry without effort fails.
+lead_wrapper lead-codex-missing-effort \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" "gpt-6-astra"))' \
+  'lead.codex is missing effort'
+
+# A codex lead entry without model fails.
+lead_wrapper lead-codex-missing-model \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "effort" "medium"))' \
+  'lead.codex is missing model'
+
+# A claude lead entry without model fails.
+lead_wrapper lead-claude-missing-model \
+  '(dict "claude" (dict) "codex" (dict "model" "gpt-6-astra" "effort" "medium"))' \
+  'lead.claude is missing model'
+
+# A lead map with no codex key fails.
+lead_wrapper lead-no-codex-entry \
+  '(dict "claude" (dict "model" "opus[1m]"))' \
+  'agents.roster.lead declares no codex entry'
+
+# A lead map carrying an unknown agent fails.
+lead_wrapper lead-unknown-agent \
+  '(dict "claude" (dict "model" "opus[1m]") "codex" (dict "model" "gpt-6-astra" "effort" "medium") "gemini" (dict "model" "x"))' \
+  'agents.roster.lead declares unknown agent "gemini"'
 
 # --- payload/roster parity (KTD6) ------------------------------------------ #
 #
