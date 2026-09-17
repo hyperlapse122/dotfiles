@@ -51,13 +51,13 @@ chmod 0700 "$scratch/bin/op"
 wrapper="$scratch/roster-wrapper.tmpl"
 printf '%s\n' '{{- includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}' >"$wrapper"
 
-# --- positive: the committed roster renders and prints five ids ----------- #
+# --- positive: the committed roster renders and prints six ids ------------ #
 
 positive_out="$scratch/positive.out"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$positive_out" ||
   fail 'the committed roster failed to render'
 model_count=$(grep -c . "$positive_out")
-[[ $model_count -eq 5 ]] || fail "the committed roster printed $model_count model id(s), want 5"
+[[ $model_count -eq 6 ]] || fail "the committed roster printed $model_count model id(s), want 6"
 
 # --- negative and alternate-valid cases ------------------------------------ #
 
@@ -123,10 +123,12 @@ assert_render_fails codex-missing-judgment \
   '[{"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["fallback"],"brief":"x"}]' \
   'no codex entry declares the judgment shape'
 
-# Two claude implementation entries distinguished by rung (sonnet, opus) pass.
+# Two claude implementation entries distinguished by rung (sonnet, a fake
+# second rung) pass. The second rung is a visibly fake id rather than `opus`,
+# which the roster no longer declares.
 assert_render_ok claude-two-rungs \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-    {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+    {"id":"claude-stub-rung","agent":"claude","model":"claude-9.9-stub","effort":"medium","shapes":["implementation"],"rung":"stub-rung","brief":"x"},
     {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]'
 
 # Two claude implementation entries sharing a rung fail the render naming it.
@@ -137,7 +139,7 @@ assert_render_fails claude-missing-rung \
 
 assert_render_fails claude-duplicate-rung \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-    {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+    {"id":"claude-stub-rung","agent":"claude","model":"claude-9.9-stub","effort":"medium","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]' \
   'duplicate rung "sonnet" for agent claude'
 
@@ -291,20 +293,38 @@ agent_seat_pair() {
 # entry reaches this assertion with no edit here.
 grep -F 'worker-start --terminal' "$coordinator_body" >/dev/null ||
   fail 'the rendered coordinator does not carry the omp seat-selection line'
-read -r mechanical_model _ <<<"$(agent_seat_pair omp mechanical '')"
+read -r mechanical_model mechanical_effort <<<"$(agent_seat_pair omp mechanical '')"
 grep -F -- "$mechanical_model" "$coordinator_body" >/dev/null ||
   fail 'the omp seat-selection line does not name the mechanical entry model'
 
 # The one-seat branch (`{{ if and (eq $mechanical.model $ompImpl.model) (eq
 # $mechanical.effort $ompImpl.effort) }}`) collapses mechanical and
-# implementation into a single seat when both resolve to the same pair; the
-# committed roster takes this arm, so assert its rendered phrase directly
-# rather than relying on a model id that other rows already satisfy.
+# implementation into a single seat when both resolve to the same pair. The
+# committed roster's mechanical and implementation entries share a model but
+# not an effort (low vs high), so it takes the TWO-seat branch instead; assert
+# that rendered phrase directly rather than relying on a model id that other
+# rows already satisfy.
 read -r omp_impl_model omp_impl_effort <<<"$(agent_seat_pair omp implementation '')"
-grep -F -- "one seat (\`$omp_impl_model\` at \`$omp_impl_effort\`) for mechanical and implementation work alike" "$coordinator_body" >/dev/null ||
-  fail 'the omp seat-selection line does not render the one-seat branch for the committed roster'
-grep -F 'for mechanical work, ' "$coordinator_body" >/dev/null &&
-  fail 'the committed single-seat roster rendered the two-seat branch'
+grep -F -- "\`$mechanical_model\` at \`$mechanical_effort\` for mechanical work, \`$omp_impl_model\` at \`$omp_impl_effort\` otherwise" "$coordinator_body" >/dev/null ||
+  fail 'the omp seat-selection line does not render the two-seat branch for the committed roster'
+grep -F "one seat (\`$omp_impl_model\` at \`$omp_impl_effort\`) for mechanical and implementation work alike" "$coordinator_body" >/dev/null &&
+  fail 'the committed two-seat roster rendered the one-seat branch'
+
+# A single omp entry carrying both shapes, at one pair, proves the one-seat
+# branch still renders when a future roster collapses back to it.
+one_seat_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
+  {"id":"claude-fable","agent":"claude","model":"fable","effort":"medium","shapes":["judgment"],"brief":"x"},
+  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["mechanical","implementation"],"brief":"x"}]'
+one_seat_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$one_seat_workers")
+one_seat_body="$scratch/coordinator-one-seat.md"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$one_seat_body" "$one_seat_override" ||
+  fail 'the coordinator body failed to render against a single-omp-entry stub'
+grep -F 'one seat (`google-antigravity/gemini-3.8-flash` at `high`) for mechanical and implementation work alike' "$one_seat_body" >/dev/null ||
+  fail 'the single-omp-entry stub does not render the one-seat branch'
+grep -F 'for mechanical work, ' "$one_seat_body" >/dev/null &&
+  fail 'the single-omp-entry stub rendered the two-seat branch'
 
 # R13: the routing table has four rows; the brief-guidance table has five.
 count_table_rows() {
@@ -319,7 +339,7 @@ count_table_rows() {
 routing_rows=$(count_table_rows "$coordinator_body" '| Work shape |')
 [[ $routing_rows -eq 4 ]] || fail "the routing table rendered $routing_rows row(s), want 4"
 brief_rows=$(count_table_rows "$coordinator_body" '| Model |')
-[[ $brief_rows -eq 5 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 5"
+[[ $brief_rows -eq 6 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 6"
 
 read -r judge_model judge_effort <<<"$(agent_seat_pair codex judgment '')"
 read -r fallback_model fallback_effort <<<"$(agent_seat_pair codex fallback '')"
@@ -352,12 +372,13 @@ grep -F 'belongs to recovery' "$everyone_body" >/dev/null &&
 
 # A two-entry Codex stub with each seat on a distinct model proves the anchors
 # resolve independently: one rendered match cannot satisfy both assertions.
-two_seat_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
-  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+two_seat_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
+  {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
   {"id":"codex-judge","agent":"codex","model":"gpt-9.8-judge","effort":"medium","shapes":["judgment"],"brief":"x"},
   {"id":"codex-fallback","agent":"codex","model":"gpt-9.9-fallback","effort":"high","shapes":["fallback"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","mechanical"],"brief":"x"}]'
+  {"id":"omp-flash-mechanical","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["mechanical"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"}]'
 two_seat_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$two_seat_workers")
 two_seat_everyone="$scratch/everyone-two-seat.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_wrapper" "$two_seat_everyone" "$two_seat_override" ||
@@ -379,14 +400,16 @@ grep -F -- "$two_seat_fallback_leak" "$two_seat_everyone" >/dev/null &&
 
 # --- AE9: a roster edit re-renders the payload, with no hand edit ----------- #
 
-# The stub moves two entries, not one: the single omp seat's model exercises
-# the coordinator body (AE9) and the claude judgment effort exercises the
-# claude launch anchor built above.
-stub_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"low","shapes":["judgment"],"brief":"x"},
-  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+# The stub moves three entries, not one: the single omp seat's model exercises
+# the coordinator body (AE9), and the authoring and judgment efforts are set
+# to distinct, non-`max` values so the elevation line and the launch line are
+# each proven to read their own roster entry rather than a stale literal.
+stub_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"low","shapes":["authoring"],"brief":"x"},
+  {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
   {"id":"codex-luna","agent":"codex","model":"gpt-9.9-stub","effort":"medium","shapes":["judgment","fallback"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["implementation","mechanical"],"brief":"x"}]'
+  {"id":"omp-flash-mechanical","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"low","shapes":["mechanical"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["implementation"],"brief":"x"}]'
 stub_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_workers")
 stub_body="$scratch/coordinator-stub.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$stub_body" "$stub_override" ||
@@ -396,13 +419,17 @@ grep -F 'google-antigravity/gemini-9.9-stub' "$stub_body" >/dev/null ||
 grep -F 'google-antigravity/gemini-3.8-flash' "$stub_body" >/dev/null &&
   fail 'AE9: the superseded mechanical model survived the roster change'
 grep -F -- '--effort low' "$stub_body" >/dev/null ||
+  fail 'AE9: a changed claude authoring effort did not reach the elevation launch line'
+grep -F -- '--effort high' "$stub_body" >/dev/null ||
   fail 'AE9: a changed claude judgment effort did not reach the launch anchor'
+grep -F -- '--effort max' "$stub_body" >/dev/null &&
+  fail 'AE9: the coordinator body still names an effort the stub roster does not declare'
 
 # A two-entry omp roster proves a future distinct mechanical entry still
 # drives its consumers with no template change: the mechanical row's first
 # recipient and the two-seat branch of the seat-selection line both name it.
-two_entry_omp_workers='[{"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
-  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+two_entry_omp_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
+  {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
   {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
   {"id":"omp-lite-stub","agent":"omp","model":"google-antigravity/gemini-9.8-lite-stub","effort":"high","shapes":["mechanical"],"brief":"x"},

@@ -438,6 +438,7 @@ An entry that survives as a bare checkbox, with no fix and no link, is an incomp
 when review runs report-only (such as `mode:agent` in an `lfg` pipeline run), apply the findings caller-side before proceeding
 including a single-reviewer anchor-75 finding; a skill's narrower confidence bar or cross-persona requirement does not authorize deferral
 A finding whose fix touches only files the branch already changes is in scope by default
+Only a fix that requires touching files outside the branch's changes qualifies for the out-of-scope deferral.
 A step that a skill, command, or workflow the user invoked by name declares mandatory MUST be carried out without a confirming question
 This authority is transitive: it reaches the mandatory steps of every skill the invoked skill itself invokes as part of its own mandatory flow
 It covers the step's dispatch scale — the worker count, the reviewer set, and the cross-model fan-out that the workflow's own rules produce
@@ -555,9 +556,10 @@ the coordinator MUST fetch that content itself when it holds that MCP and materi
 When neither the coordinator nor any available agent holds it, the run MUST record that gap and say in the brief that the source was unreachable, rather than stall or let a worker guess.
 For a design source that means frame or node identity, layout and spacing measurements, color and type tokens, component and variant names, copy strings, and repo-relative paths for exported assets and reference screenshots.
 A dispatch prompt or brief MUST NOT hand a worker an MCP-only URL as the sole path to required context.
-In an Orca-managed lead session the lead itself performs dialogue, dispatch brief authoring, Markdown document authoring
-It MUST dispatch every code edit and every non-Markdown deliverable to an Orca worker and MUST NOT make that edit itself.
-The exemption is the file type and never a path: every Markdown file is the lead's to write, wherever it lives, because document paths differ from repository to repository.
+In an Orca-managed lead session the lead itself performs dialogue, dispatch brief authoring, verification commands such as tests, builds, CI status, and git reads, and its own coordination record.
+It authors no repository deliverable and MUST dispatch every repository deliverable to an Orca worker and MUST NOT make that edit itself.
+A deliverable's file format does not decide its recipient: README, AGENTS, documentation prose, learnings, and glossary are deliverables exactly like a code file, sized by the four signals and dispatched under the implementation row.
+A read whose content the lead needs to answer the user in conversation stays with the lead; every other repository read goes to the mechanical row rather than into the lead's context.
 This boundary binds any Orca lead, whatever harness or model answers as it.
 A session that received no orchestration injection is not a lead: it keeps its existing behavior and edits and authors directly.
 No PreToolUse hook enforces any of this.
@@ -572,7 +574,7 @@ The author of a document is NOT excluded from reviewing it, so a review keeps tw
 for `ce-brainstorm` it returns the generated approaches in its report and writes nothing
 The model-elevation step is the one exception to the sentence above that the lead never takes a row's work back
 A failed or unavailable elevation dispatch degrades the same way, inline on the lead's model with that transparency line, and never takes this row's replacement or re-dispatch columns
-The one Markdown file the lead does not write is the plan file a dispatched model-elevation worker authors
+The plan file a dispatched model-elevation worker authors is that worker's single permitted write, which the lead reads and validates instead of writing.
 Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
 MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
 The compound-engineering harness vocabulary — the `codex`, `claude`, `grok`, `cursor`, and `opencode` values a stage-routing carrier or a `work_engine_preferences` entry accepts — is the argument grammar of the banned bundled scripts, so it constrains nothing once the dispatch moves to Orca.
@@ -627,7 +629,9 @@ Size an Implementation Unit FIRST, before any dispatch and before any failure ex
 takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
 takes a Unit that keeps real design judgment inside its own bounds — the plan names the outcome and not the approach, the change crosses a module, process, or service boundary, or the surface is correctness-critical, such as authentication, a schema or data migration, concurrency, money, or anything that can lose data.
 is the top rung: there is no higher one to escalate to, so a Unit too wide for it is two Units and MUST be split rather than raised.
-MAY open directly on that rung, skipping the cheaper row above, and the run MUST record the signals that justified the skip; a Unit whose approach the plan fixes MUST NOT take that bypass.
+MAY open directly on that rung, skipping the cheaper row above, and the run MUST record the signals that justified the skip; a Unit that trips none of the
+signals MUST NOT take that bypass.
+An unrecorded `claude` implementation dispatch is a rule violation.
 A failure re-opens that sizing and never replaces it, so classify a failure only after the Unit is sized: a mechanical failure carries no information about the Unit, while a substantive failure — a wrong approach, an escalation that asks a design question, verification that fails on approach grounds and not on a typo — is new evidence about depth or blast radius, so feed it back into the four signals and re-size before dispatching again.
 is classified as a brief defect: it does not raise the rung, so the coordinator extracts what was missing into the brief and re-dispatches at the same rung.
 MUST NOT re-dispatch the same Unit at the same rung with the same brief — sharpen the brief, split the Unit, or re-size on evidence.
@@ -636,7 +640,10 @@ Model and effort apply to a fresh agent terminal only; the version-matched Orca 
 Each recipient takes a different brief.
 | Model | Brief guidance |
 goes to that entry, launched with `--model
-selects that pair; the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
+Every `claude` launch from the judgment row selects `--model
+and the elevation worker selects the authoring pair
+the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
+The `claude` reviewer's judgment effort holds while the `codex` reviewer stands beside it; when that reviewer is removed or a run records it as degraded, the `claude` reviewer runs at `
 CLAUDE_COORDINATOR_NEEDLES
 
 # Every model id and effort in the coordinator body comes from agents.roster, so
@@ -671,21 +678,27 @@ if grep -F 'over the same brief' "$coordinator_claude_linux" | grep -v 'single-w
 fi
 
 # U2 AE4/AE5: the elevation-default paragraph's alias is rendered from the
-# roster, not hand-written, so a roster change to the claude judgment model
-# reaches the paragraph with no edit to the template.
-stub_roster_workers='[{"id":"claude-fable","agent":"claude","model":"stub-judge","effort":"high","shapes":["judgment"],"brief":"x"},
-  {"id":"claude-opus","agent":"claude","model":"opus","effort":"medium","shapes":["implementation"],"rung":"opus","brief":"x"},
+# roster, not hand-written, so a roster change to the claude authoring model
+# reaches the paragraph with no edit to the template. The authoring and
+# judgment entries carry distinct fake models and efforts, so the paragraph
+# is proven to resolve the authoring entry alone, never the judgment one it
+# no longer looks up.
+stub_roster_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"stub-author","effort":"low","shapes":["authoring"],"brief":"x"},
+  {"id":"claude-fable","agent":"claude","model":"stub-judge","effort":"high","shapes":["judgment"],"brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
   {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","mechanical"],"brief":"x"}]'
+  {"id":"omp-flash-mechanical","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["mechanical"],"brief":"x"},
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"}]'
 stub_roster_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_roster_workers")
 stub_roster_render="$scratch/claude-stub-roster.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$stub_roster_render" "$stub_roster_override" ||
   fail 'a stub roster failed to render the instruction core'
-grep -F 'the session resolves it as `stub-judge`' "$stub_roster_render" >/dev/null ||
-  fail 'the elevation-default paragraph did not pick up a roster change to the claude judgment model'
-grep -F 'launches the elevation entry at its roster effort `high`' "$stub_roster_render" >/dev/null ||
-  fail 'the elevation paragraph did not pick up a roster change to the claude judgment effort'
+grep -F 'the session resolves it as `stub-author`' "$stub_roster_render" >/dev/null ||
+  fail 'the elevation-default paragraph did not pick up a roster change to the claude authoring model'
+grep -F 'launches the elevation entry at its roster effort `low`' "$stub_roster_render" >/dev/null ||
+  fail 'the elevation paragraph did not pick up a roster change to the claude authoring effort'
+grep -F 'stub-judge' "$stub_roster_render" >/dev/null &&
+  fail 'the elevation-default paragraph resolved the judgment entry instead of the authoring entry'
 
 # Scanned against EVERY render, not just the Claude one: the harness lines are
 # stripped before the peer diff, so a retired mandate re-entering through a peer

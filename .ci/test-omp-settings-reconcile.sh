@@ -140,10 +140,10 @@ role_offenders() {
     "gemini": "google-antigravity/gemini-3.8-flash:high",
     "plan": "@fable",
     "reviewer": "google-antigravity/gemini-3.8-flash:high",
-    "skim": "google-antigravity/gemini-3.8-flash:high",
+    "skim": "google-antigravity/gemini-3.8-flash:low",
     "slow": "google-antigravity/gemini-3.8-flash:high",
-    "smol": "google-antigravity/gemini-3.8-flash:high",
-    "tiny": "google-antigravity/gemini-3.8-flash:high",
+    "smol": "google-antigravity/gemini-3.8-flash:low",
+    "tiny": "google-antigravity/gemini-3.8-flash:low",
     "worker": "google-antigravity/gemini-3.8-flash:high"
   }' '
     (.modelRoles // {}) as $have
@@ -384,6 +384,11 @@ grep -q 'gemini-3.8-flash' "$scratch/gap.err" ||
   fail 'the thinking-level warning did not name the model'
 grep -q 'high' "$scratch/gap.err" ||
   fail 'the thinking-level warning did not name the declared effort'
+# The catalog offers `low`, which the mechanical entry declares, so only the
+# implementation entry's `high` is unsupported; the probe reads each roster
+# entry's own effort rather than conflating the two entries on one model.
+grep -q 'declares effort low' "$scratch/gap.err" &&
+  fail 'the thinking-level warning named the mechanical entry effort low, not just the implementation entry effort high'
 grep -Fq 'config set modelRoles' "$state" ||
   fail 'the thinking-level warning run did not go on to assert the declared roles'
 
