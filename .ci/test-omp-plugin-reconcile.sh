@@ -265,6 +265,7 @@ grep -Fq 'plugin marketplace add' "$omp_calls" &&
   fail 'colored listing hid the registration and triggered an add'
 [[ $(get_registered_marketplace compound-engineering-plugin) == "$market" ]] ||
   fail 'colored listing changed the registered marketplace source'
+rm -f "$home/.omp/plugins/color-listing"
 
 # --- add refused for an already-present desired registration converges ----- #
 
@@ -278,7 +279,6 @@ grep -Fq "plugin enable --scope user compound-engineering@compound-engineering-p
   "$omp_calls" || fail 'converged add did not continue to enable'
 [[ $(get_registered_marketplace compound-engineering-plugin) == "$market" ]] ||
   fail 'converged add changed the registered marketplace source'
-rm -f "$home/.omp/plugins/color-listing"
 
 # --- stale source re-pointed ----------------------------------------------- #
 

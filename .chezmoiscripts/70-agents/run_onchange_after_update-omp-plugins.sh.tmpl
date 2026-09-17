@@ -84,7 +84,7 @@ marketplace_id() {
 registered_marketplace_source() {
   local target_id=$1 listing line id rest found=
   listing=$(FORCE_COLOR=0 NO_COLOR=1 omp plugin marketplace list 2>/dev/null |
-    sed 's/\x1b\[[0-9;]*m//g') ||
+    sed $'s/\e\\[[0-9;]*m//g') ||
     die "cannot read the omp marketplace registry while resolving $target_id"
   while IFS= read -r line; do
     [[ $line =~ ^[[:space:]]+([^[:space:]]+)[[:space:]]+(.*)$ ]] || continue
@@ -182,10 +182,12 @@ for row in "${PLUGINS[@]}"; do
     fi
     # An add refused because the desired registration is already present is a
     # converged host, as the claude and codex reconcilers treat it.
-    if ! omp plugin marketplace add "$source" &&
-      [[ $(registered_marketplace_source "$market_id") != "$source" ]]; then
-      restore_marketplace "$market_id" "$prev_source" "$source" \
-        "marketplace add failed for $market ($market_id)"
+    if ! omp plugin marketplace add "$source"; then
+      current_source=$(registered_marketplace_source "$market_id")
+      if [[ $current_source != "$source" ]]; then
+        restore_marketplace "$market_id" "$prev_source" "$source" \
+          "marketplace add failed for $market ($market_id)"
+      fi
     fi
   fi
 
