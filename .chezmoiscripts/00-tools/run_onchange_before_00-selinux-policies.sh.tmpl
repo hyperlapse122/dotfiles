@@ -1,0 +1,64 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
+{{ if not $facts.container -}}
+#!/usr/bin/env bash
+#
+# Installs every declarative SELinux module under system/linux/selinux/ with
+# `sudo semodule -X 400 -i`.
+#
+# PHASE 00, AND `before`. The modules here describe what other apply phases do,
+# so the kernel must hold them before those phases run. The current module
+# suppresses denials that `chezmoi apply` itself provokes in phase 30-linux
+# (run_after_setup-podman-cluster starts rootless Podman, which starts pasta);
+# installed any later, the apply that carries a module change still logs the
+# records the change exists to stop. Issue #374 settled this ordering.
+#
+# THE MODULE SET IS SUPPRESSION ONLY. Nothing here labels a file, declares a
+# type, or grants an access. So this script needs no restorecon pass and strands
+# no running process in a stale domain — installing a dontaudit module changes
+# what the kernel AUDITS, never what it permits. A module that does grant or
+# label would need both of those concerns back; see the removal plan
+# docs/plans/2026-09-07-1203-chore-remove-custom-selinux-policy-plan.md for what
+# that cost the last time.
+#
+# ELEVATION IS ACQUIRED INSIDE THE APPLICABILITY TEST, NOT ABOVE IT. The sudo
+# guard is not a function call: it renders a top-level ladder that raises an
+# askpass dialog, and exits 1 when no rung succeeds. At phase 00 that exit
+# aborts the whole apply at its first script. A Fedora host with SELinux
+# disabled or no semodule has nothing here to do, so asking it for root — and
+# failing the apply when it cannot give it — would be a precondition for work
+# that never runs.
+#
+# GATED: Linux + Fedora, non-container, single-owner host, and an
+# SELinux-enabled host with semodule present.
+
+set -euo pipefail
+
+{{ includeTemplate "facts-sh.tmpl" . }}
+{{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "selinux-policies") }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/selinux/**")) }}
+
+if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v semodule >/dev/null 2>&1; then
+{{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "selinux-policies") | trim | indent 2 }}
+
+  # Resolved at run time, never baked in at render time: an absolute source path
+  # in the body changes the rendered text when the worktree or --source changes,
+  # which re-triggers this onchange script — a `sudo semodule` call and possibly
+  # a prompt — although nothing it installs changed. See
+  # docs/solutions/integration-issues/chezmoi-worktree-root-etc-file-deployment.md.
+  SRC_DIR="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux/selinux"
+  if [[ -d "$SRC_DIR" ]]; then
+    shopt -s nullglob
+    cil_files=("$SRC_DIR"/*.cil)
+    shopt -u nullglob
+
+    for cil in "${cil_files[@]}"; do
+      module_name="$(basename "$cil" .cil)"
+      printf 'selinux-policies: installing module %s...\n' "$module_name"
+      "${SUDO[@]}" semodule -X 400 -i "$cil"
+    done
+  fi
+fi
+{{ end -}}
+{{ end -}}
