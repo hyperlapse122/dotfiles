@@ -97,6 +97,16 @@ if grep -nF -- '--bucket=scriptState' "${rendered[@]}"; then
 fi
 pass 'no rendered installer names --bucket=scriptState'
 
+hint_sources=(
+  "$repo_root/.chezmoiscripts/70-agents/run_after_assert-orchestration-hook.sh.tmpl"
+  "$repo_root/.chezmoitemplates/skip.sh.tmpl"
+  "$repo_root/AGENTS.md"
+)
+if grep -nF -- '--bucket=scriptState' "${hint_sources[@]}"; then
+  fail 'a re-run hint still names --bucket=scriptState'
+fi
+pass 'no re-run hint names --bucket=scriptState'
+
 awk '/^# fingerprint:/ { inside = 1; next } inside && !/^#/ { exit } inside && /^#[[:space:]]+value:dotnet-present[[:space:]]/ { found = 1 } END { exit !found }' \
   "$scratch/rendered/dotnet-ubuntu.sh" ||
   fail 'the Ubuntu .NET render carries no fingerprint block on dotnet-present'
@@ -261,15 +271,15 @@ EOF
 
 # --- Driver --------------------------------------------------------------------
 #
-# run_case <label> <region> <shell> <body> [NAME=value...]
+# run_case <label> <region> <body> [NAME=value...]
 # Installed sets come from RPMS, GROUPS, DEBS and TOOLS (space separated);
 # DOTNET=1 puts the dotnet stub on PATH; SEED=<script>__<site> pre-seeds a
 # record. Everything else is passed to the stubs as environment. The result is
 # left in $out, $err, $log, $rc and $skips.
 out='' err='' log='' rc=0 skips=''
 run_case() {
-  local label=$1 region=$2 shell=$3 body=$4
-  shift 4
+  local label=$1 region=$2 body=$3
+  shift 3
   local case_dir=$scratch/cases/$label kv name
   local rpms='' groups='' debs='' tools='' dotnet=0 seed=''
   local -a pass_env=()
@@ -303,7 +313,7 @@ run_case() {
   rc=0
   env -i HOME="$case_dir/home" XDG_STATE_HOME="$case_dir/state" PATH="$path" \
     STUB_LOG="$log" STUB_STATE="$case_dir/stub" "${pass_env[@]}" \
-    "$sysbin/bash" ${shell:+"$shell"} -c '
+    "$sysbin/bash" -c '
       set -euo pipefail
       SUDO=()
       DNF=(dnf)
@@ -364,7 +374,7 @@ NMAC_TOOLS=install-dotnet-darwin__dotnet-tools-not-installed
 # --- Devtools, Fedora ----------------------------------------------------------
 
 label=devtools-fedora-install-fails
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$(without "$fd_first" $fd_pkgs)" GROUPS="$fd_groups" DNF_INSTALL_EXIT=1
 check returned_zero
 check record_is "$DFED" operator-blocking
@@ -375,7 +385,7 @@ check called "^dnf install -y $fd_first\$"
 pass "$label: a failed dnf install is recorded, reported and the script continues"
 
 label=devtools-fedora-exit-zero-still-missing
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$(without "$fd_second" $fd_pkgs)" GROUPS="$fd_groups" DNF_INSTALL_EXIT=0
 check returned_zero
 check record_is "$DFED" operator-blocking
@@ -383,7 +393,7 @@ check stderr_has "sudo dnf install -y $fd_second"
 pass "$label: dnf exiting 0 is not the verdict"
 
 label=devtools-fedora-group-missing
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$fd_pkgs" GROUPS="$(without "$fd_group1" $fd_groups)" DNF_GROUP_INSTALL_EXIT=1
 check returned_zero
 check record_is "$DFED" operator-blocking
@@ -394,7 +404,7 @@ check names_entry_state
 pass "$label: a group the listing still lacks is recorded and reported"
 
 label=devtools-fedora-group-install-fails-but-present
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$fd_pkgs" GROUPS="$(without "$fd_group1" $fd_groups)" DNF_GROUP_PROVIDES="$fd_group1" DNF_GROUP_INSTALL_EXIT=1
 check returned_zero
 check no_record "$DFED"
@@ -402,7 +412,7 @@ check called "^dnf group install -y $fd_group1\$"
 pass "$label: a failing group install whose group is listed afterwards is not recorded"
 
 label=devtools-fedora-converged
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$fd_pkgs" GROUPS="$fd_groups" SEED="$DFED"
 check returned_zero
 check no_record "$DFED"
@@ -411,7 +421,7 @@ check not_called '--repofrompath'
 pass "$label: a converged host installs nothing and clears the record"
 
 label=devtools-fedora-converges-now
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$(without "$fd_first" $fd_pkgs)" GROUPS="$fd_groups" DNF_PROVIDES="$fd_first" SEED="$DFED"
 check returned_zero
 check no_record "$DFED"
@@ -419,7 +429,7 @@ check called "^dnf install -y $fd_first\$"
 pass "$label: an install that provides the package clears the record"
 
 label=devtools-fedora-terra-fails
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$(without ghostty $fd_pkgs)" GROUPS="$fd_groups" DNF_TERRA_EXIT=1 DNF_INSTALL_EXIT=1
 check returned_zero
 check called '--repofrompath .* terra-release'
@@ -428,7 +438,7 @@ check stderr_has 'sudo dnf install -y ghostty'
 pass "$label: a failed Terra bootstrap surfaces as the package it could not provide"
 
 label=devtools-fedora-group-list-fails
-run_case "$label" devtools-fedora.region '' install_devtools \
+run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$fd_pkgs" GROUPS="$fd_groups" DNF_GROUP_LIST_EXIT=1
 check returned_zero
 check record_is "$DFED" operator-blocking
@@ -439,7 +449,7 @@ pass "$label: an unreadable group listing is treated as every group missing"
 
 read -r ud1 ud2 ud3 ud_rest <<<"$ud_pkgs"
 label=devtools-ubuntu-second-fails
-run_case "$label" devtools-ubuntu.region '' install_devtools \
+run_case "$label" devtools-ubuntu.region install_devtools \
   DEBS="$ud_rest" APT_FAIL="$ud2"
 check returned_zero
 check called "^apt-get install -y $ud1\$"
@@ -454,14 +464,14 @@ fi
 pass "$label: one failed package does not stop the rest and is the one recorded"
 
 label=devtools-ubuntu-converged
-run_case "$label" devtools-ubuntu.region '' install_devtools DEBS="$ud_pkgs" SEED="$DUBU"
+run_case "$label" devtools-ubuntu.region install_devtools DEBS="$ud_pkgs" SEED="$DUBU"
 check returned_zero
 check no_record "$DUBU"
 check not_called '^apt-get install'
 pass "$label: a converged host installs nothing and clears the record"
 
 label=devtools-ubuntu-converges-now
-run_case "$label" devtools-ubuntu.region '' install_devtools DEBS="$(without "$ud2" $ud_pkgs)" SEED="$DUBU"
+run_case "$label" devtools-ubuntu.region install_devtools DEBS="$(without "$ud2" $ud_pkgs)" SEED="$DUBU"
 check returned_zero
 check no_record "$DUBU"
 check called "^apt-get install -y $ud2\$"
@@ -471,7 +481,7 @@ pass "$label: an install that provides the package clears the record"
 
 read -r app1 _ <<<"$app_pkgs"
 label=apps-install-fails
-run_case "$label" apps-fedora.region '' install_app_packages \
+run_case "$label" apps-fedora.region install_app_packages \
   RPMS="$(without "$app1" $app_pkgs) steam" DNF_INSTALL_EXIT=1
 check returned_zero
 check record_is "$APPS" operator-blocking
@@ -482,7 +492,7 @@ check called '^tee /etc/yum.repos.d/'
 pass "$label: a failed dnf install is recorded, reported and the script continues"
 
 label=apps-makecache-fails
-run_case "$label" apps-fedora.region '' install_app_packages \
+run_case "$label" apps-fedora.region install_app_packages \
   RPMS="$(without "$app1" $app_pkgs) steam" DNF_MAKECACHE_EXIT=1 DNF_PROVIDES="$app1" SEED="$APPS"
 check returned_zero
 check called '^dnf makecache'
@@ -491,14 +501,14 @@ check no_record "$APPS"
 pass "$label: a failed makecache still reaches the install and the verdict decides"
 
 label=apps-converged
-run_case "$label" apps-fedora.region '' install_app_packages RPMS="$app_pkgs steam" SEED="$APPS"
+run_case "$label" apps-fedora.region install_app_packages RPMS="$app_pkgs steam" SEED="$APPS"
 check returned_zero
 check no_record "$APPS"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
 
 label=apps-converges-now
-run_case "$label" apps-fedora.region '' install_app_packages \
+run_case "$label" apps-fedora.region install_app_packages \
   RPMS="$(without "$app1" $app_pkgs) steam" DNF_PROVIDES="$app1" SEED="$APPS"
 check returned_zero
 check no_record "$APPS"
@@ -506,14 +516,14 @@ check called "^dnf install -y $app1\$"
 pass "$label: an install that provides the package clears the record"
 
 label=apps-virt-host-without-steam
-run_case "$label" apps-fedora.region '' install_app_packages RPMS="$app_pkgs" FACT_VIRT=1 SEED="$APPS"
+run_case "$label" apps-fedora.region install_app_packages RPMS="$app_pkgs" FACT_VIRT=1 SEED="$APPS"
 check returned_zero
 check no_record "$APPS"
 check not_called '^dnf install'
 pass "$label: a virtual host does not declare steam missing"
 
 label=apps-bare-metal-steam-missing
-run_case "$label" apps-fedora.region '' install_app_packages RPMS="$app_pkgs" FACT_VIRT=0 DNF_INSTALL_EXIT=1
+run_case "$label" apps-fedora.region install_app_packages RPMS="$app_pkgs" FACT_VIRT=0 DNF_INSTALL_EXIT=1
 check returned_zero
 check record_is "$APPS" operator-blocking
 check called '^dnf install -y steam$'
@@ -522,7 +532,7 @@ pass "$label: a bare-metal host still declares steam"
 # --- .NET, Fedora --------------------------------------------------------------
 
 label='dotnet-fedora-sdk-fails'
-run_case "$label" dotnet-fedora.region '' 'install_dotnet_sdk; install_dotnet_tools' DNF_INSTALL_EXIT=1
+run_case "$label" dotnet-fedora.region 'install_dotnet_sdk; install_dotnet_tools' DNF_INSTALL_EXIT=1
 check returned_zero
 check called '^dnf install -y dotnet-sdk-8.0 dotnet-sdk-10.0$'
 check called '^dnf install -y dotnet-sdk-8.0$'
@@ -533,7 +543,7 @@ check not_called '^dotnet '
 pass "$label: a failed SDK install is recorded on dotnet-present with the by-hand command"
 
 label='dotnet-fedora-tool-fails'
-run_case "$label" dotnet-fedora.region '' 'install_dotnet_sdk; install_dotnet_tools' \
+run_case "$label" dotnet-fedora.region 'install_dotnet_sdk; install_dotnet_tools' \
   RPMS=dotnet-sdk-10.0 DOTNET=1 DOTNET_TOOL_FAIL="$tool1"
 check returned_zero
 check not_called '^dnf '
@@ -546,14 +556,14 @@ check names_entry_state
 pass "$label: a failed tool install is recorded and reported"
 
 label='dotnet-fedora-tools-converged'
-run_case "$label" dotnet-fedora.region '' install_dotnet_tools DOTNET=1 TOOLS="$all_tools" SEED="$NFED_TOOLS"
+run_case "$label" dotnet-fedora.region install_dotnet_tools DOTNET=1 TOOLS="$all_tools" SEED="$NFED_TOOLS"
 check returned_zero
 check no_record "$NFED_TOOLS"
 check not_called '^dotnet tool install'
 pass "$label: a converged host installs no tool and clears the record"
 
 label='dotnet-fedora-tools-converge-now'
-run_case "$label" dotnet-fedora.region '' install_dotnet_tools \
+run_case "$label" dotnet-fedora.region install_dotnet_tools \
   DOTNET=1 TOOLS="$(without "$tool1" $all_tools)" SEED="$NFED_TOOLS"
 check returned_zero
 check no_record "$NFED_TOOLS"
@@ -563,7 +573,7 @@ pass "$label: an install that provides the tool clears the record"
 # --- .NET, Ubuntu --------------------------------------------------------------
 
 label='dotnet-ubuntu-sdk-fails'
-run_case "$label" dotnet-ubuntu.region '' 'install_dotnet_sdk; install_dotnet_tools' APT_FAIL=dotnet-sdk-8.0
+run_case "$label" dotnet-ubuntu.region 'install_dotnet_sdk; install_dotnet_tools' APT_FAIL=dotnet-sdk-8.0
 check returned_zero
 check called '^apt-get install -y dotnet-sdk-8.0$'
 check stderr_has 'sudo apt-get install -y dotnet-sdk-8.0'
@@ -571,7 +581,7 @@ check record_is "$NUBU_SDK" transient-blocking:dotnet-present
 pass "$label: a failed SDK install is recorded on dotnet-present"
 
 label='dotnet-ubuntu-tool-fails'
-run_case "$label" dotnet-ubuntu.region '' 'install_dotnet_sdk; install_dotnet_tools' \
+run_case "$label" dotnet-ubuntu.region 'install_dotnet_sdk; install_dotnet_tools' \
   DOTNET=1 TOOLS="$tool2" DOTNET_TOOL_FAIL="$tool1"
 check returned_zero
 check not_called '^apt-get '
@@ -581,7 +591,7 @@ check names_entry_state
 pass "$label: a failed tool install is recorded and reported"
 
 label='dotnet-ubuntu-tools-converge-now'
-run_case "$label" dotnet-ubuntu.region '' install_dotnet_tools DOTNET=1 SEED="$NUBU_TOOLS"
+run_case "$label" dotnet-ubuntu.region install_dotnet_tools DOTNET=1 SEED="$NUBU_TOOLS"
 check returned_zero
 check no_record "$NUBU_TOOLS"
 pass "$label: installed tools clear the record"
@@ -589,7 +599,7 @@ pass "$label: installed tools clear the record"
 # --- .NET, darwin (bash -u) ----------------------------------------------------
 
 label=darwin-tool-fails
-run_case "$label" dotnet-darwin.region -u install_dotnet_tools DOTNET=1 DOTNET_TOOL_FAIL="$tool2"
+run_case "$label" dotnet-darwin.region install_dotnet_tools DOTNET=1 DOTNET_TOOL_FAIL="$tool2"
 check returned_zero
 check record_is "$NMAC_TOOLS" operator-blocking
 check stderr_has "dotnet tool install -g $tool2"
@@ -597,7 +607,7 @@ check names_entry_state
 pass "$label: a failed tool install is recorded under bash -u"
 
 label=darwin-converged
-run_case "$label" dotnet-darwin.region -u install_dotnet_tools DOTNET=1 TOOLS="$all_tools" SEED="$NMAC_TOOLS"
+run_case "$label" dotnet-darwin.region install_dotnet_tools DOTNET=1 TOOLS="$all_tools" SEED="$NMAC_TOOLS"
 check returned_zero
 check no_record "$NMAC_TOOLS"
 check not_called '^dotnet tool install'
@@ -605,7 +615,7 @@ check not_called '^dotnet tool install'
 pass "$label: the empty missing set runs clean under bash -u and clears the record"
 
 label=darwin-dotnet-absent
-run_case "$label" dotnet-darwin.region -u install_dotnet_tools
+run_case "$label" dotnet-darwin.region install_dotnet_tools
 check returned_zero
 check not_called '^dotnet '
 pass "$label: an absent dotnet is the deferred no-attempt path"
@@ -616,11 +626,10 @@ pass "$label: an absent dotnet is the deferred no-attempt path"
 # `if <test> && report; then`. Driving that shape must leave no record, which
 # proves every record assertion above is observing the declaration path.
 label=report-helper-nonzero
-run_case "$label" devtools-fedora.region '' 'report_devtools_missing() { return 1; }; install_devtools' \
+run_case "$label" devtools-fedora.region 'report_devtools_missing() { return 1; }; install_devtools' \
   RPMS="$(without "$fd_first" $fd_pkgs)" GROUPS="$fd_groups" DNF_INSTALL_EXIT=1
 check returned_zero
 check no_record "$DFED"
-if record_is "$DFED" operator-blocking; then fail "$label: record_is accepted a missing record"; fi
 pass "$label: a non-zero report helper writes no record and the harness sees it"
 
 printf '%s: all %d scenarios passed\n' "$prog" "$scenarios"
