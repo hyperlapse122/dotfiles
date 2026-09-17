@@ -82,10 +82,10 @@ compute_missing_dev_packages() {
   done
 }
 
-# The installed-group listing is read from the local cache (A1): a converged
-# host answers this without contacting a repository. When the listing command
-# itself fails, every declared group is treated as missing for the attempt, and
-# the post-attempt listing decides the verdict.
+# The installed-group listing is read from the local cache, so a converged host
+# answers this without contacting a repository. When the listing command itself
+# fails, every declared group is treated as missing for the attempt, and the
+# post-attempt listing decides the verdict.
 missing_dev_groups=()
 compute_missing_dev_groups() {
   missing_dev_groups=()
@@ -119,20 +119,22 @@ install_devtools() {
   compute_missing_dev_packages
   compute_missing_dev_groups
 
-  if [[ "${#missing_dev_packages[@]}" -gt 0 ]]; then
-    setup_dev_repos
-  fi
+  if [[ "${#missing_dev_packages[@]}" -gt 0 || "${#missing_dev_groups[@]}" -gt 0 ]]; then
+    if [[ "${#missing_dev_packages[@]}" -gt 0 ]]; then
+      setup_dev_repos
+    fi
 
-  if [[ "${#missing_dev_groups[@]}" -gt 0 ]]; then
-    if ! "${DNF[@]}" group install -y "${missing_dev_groups[@]}"; then :; fi
-  fi
+    if [[ "${#missing_dev_groups[@]}" -gt 0 ]]; then
+      if ! "${DNF[@]}" group install -y "${missing_dev_groups[@]}"; then :; fi
+    fi
 
-  if [[ "${#missing_dev_packages[@]}" -gt 0 ]]; then
-    if ! "${DNF[@]}" install -y "${missing_dev_packages[@]}"; then :; fi
-  fi
+    if [[ "${#missing_dev_packages[@]}" -gt 0 ]]; then
+      if ! "${DNF[@]}" install -y "${missing_dev_packages[@]}"; then :; fi
+    fi
 
-  compute_missing_dev_packages
-  compute_missing_dev_groups
+    compute_missing_dev_packages
+    compute_missing_dev_groups
+  fi
 
   if [[ "${#missing_dev_packages[@]}" -gt 0 || "${#missing_dev_groups[@]}" -gt 0 ]] && report_devtools_missing; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-devtools-fedora" "site" "dev-packages-not-installed" "direction" "operator-blocking" "reason" "dnf left declared devtools packages or groups uninstalled; the missing set and the by-hand install commands were printed above") | trim | indent 4 }}
@@ -146,13 +148,18 @@ install_devtools
 {{ else if $isUbuntu -}}
 install_apt() {
   local pkg=$1
-  local status=''
-  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
-  if [[ "$status" != installed ]]; then
+  if ! apt_installed "$pkg"; then
+    devtools_attempted=1
     if ! "${SUDO[@]}" apt-get install -y "$pkg"; then
       printf 'install-devtools-ubuntu.sh: apt-get install failed for %s\n' "$pkg" >&2
     fi
   fi
+}
+
+apt_installed() {
+  local status
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$1" 2>/dev/null)" || return 1
+  [[ "$status" == installed ]]
 }
 
 dev_packages=(
@@ -165,12 +172,12 @@ dev_packages=(
 )
 
 missing_dev_packages=()
+devtools_attempted=0
 compute_missing_dev_packages() {
   missing_dev_packages=()
-  local pkg status
+  local pkg
   for pkg in "${dev_packages[@]}"; do
-    status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
-    [[ "$status" == installed ]] || missing_dev_packages+=("$pkg")
+    apt_installed "$pkg" || missing_dev_packages+=("$pkg")
   done
 }
 
@@ -191,7 +198,9 @@ install_devtools() {
     install_apt "$pkg"
   done
 
-  compute_missing_dev_packages
+  if [[ "$devtools_attempted" -eq 1 ]]; then
+    compute_missing_dev_packages
+  fi
 
   if [[ "${#missing_dev_packages[@]}" -gt 0 ]] && report_devtools_missing; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-devtools-ubuntu" "site" "dev-packages-not-installed" "direction" "operator-blocking" "reason" "apt-get left declared devtools packages uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}

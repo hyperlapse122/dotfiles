@@ -2356,7 +2356,7 @@ owners:
   - owner: 'install-dotnet-fedora/dotnet-absent'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl'
-    anchor_line: 140
+    anchor_line: 148
     anchor: '  if ! command -v dotnet >/dev/null 2>&1; then'
     predicate: '! command -v dotnet >/dev/null 2>&1'
     predicate_digest: 'sha256:8b8a5d96f8c54a874e8a0a98315073d9b61b17e275ce44f23ca26041b14a699d'
@@ -2372,7 +2372,7 @@ owners:
   - owner: 'install-devtools-fedora/dev-packages-not-installed'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl'
-    anchor_line: 225
+    anchor_line: 227
     anchor: '  if [[ "${#missing_dev_packages[@]}" -gt 0 || "${#missing_dev_groups[@]}" -gt 0 ]] && report_devtools_missing; then'
     predicate: '[[ "${#missing_dev_packages[@]}" -gt 0 || "${#missing_dev_groups[@]}" -gt 0 ]] && report_devtools_missing'
     predicate_digest: 'sha256:df59b0f629e38457bb76927a293757a3030c41a3b1ecd90b3c5e18b130a16186'
@@ -2386,7 +2386,7 @@ owners:
   - owner: 'install-devtools-ubuntu/dev-packages-not-installed'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl'
-    anchor_line: 150
+    anchor_line: 157
     anchor: '  if [[ "${#missing_dev_packages[@]}" -gt 0 ]] && report_devtools_missing; then'
     predicate: '[[ "${#missing_dev_packages[@]}" -gt 0 ]] && report_devtools_missing'
     predicate_digest: 'sha256:6c809904bc908f89d74a4d21955cdee0bef9474de9ed10de53ca1ded9d0fb33d'
@@ -2400,10 +2400,10 @@ owners:
   - owner: 'install-apps-fedora/app-packages-not-installed'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_70-apps.sh.tmpl'
-    anchor_line: 218
-    anchor: '  if [[ "${#missing[@]}" -gt 0 ]] && report_apps_missing "${missing[@]}"; then'
-    predicate: '[[ "${#missing[@]}" -gt 0 ]] && report_apps_missing "${missing[@]}"'
-    predicate_digest: 'sha256:1ecd0d0942477c22344f5c4d887cba2e6fd7a2b36bb04dff8a6f838bef94ad32'
+    anchor_line: 219
+    anchor: '  if [[ "${#missing_app_packages[@]}" -gt 0 ]] && report_apps_missing "${missing_app_packages[@]}"; then'
+    predicate: '[[ "${#missing_app_packages[@]}" -gt 0 ]] && report_apps_missing "${missing_app_packages[@]}"'
+    predicate_digest: 'sha256:ed0c8966eedf990663e2362918078bc48a0852514f799f1e173bb29da3eaf97c'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'
@@ -2415,9 +2415,9 @@ owners:
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl'
     anchor_line: 167
-    anchor: '  if [[ "${#still_missing[@]}" -gt 0 ]] && report_dotnet_tools_missing "${still_missing[@]}"; then'
-    predicate: '[[ "${#still_missing[@]}" -gt 0 ]] && report_dotnet_tools_missing "${still_missing[@]}"'
-    predicate_digest: 'sha256:011241a405ccf4d68f464feb090cd438fceae882dee76d07e9d9a613c93f8732'
+    anchor: '  if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"; then'
+    predicate: '[[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"'
+    predicate_digest: 'sha256:9bf50ffdf7e9635a4892e871fe697054d62f00b9e91d060c3852f194c04250ff'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'
@@ -2428,7 +2428,7 @@ owners:
   - owner: 'install-dotnet-ubuntu/dotnet-absent'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl'
-    anchor_line: 137
+    anchor_line: 147
     anchor: '  if ! command -v dotnet >/dev/null 2>&1; then'
     predicate: '! command -v dotnet >/dev/null 2>&1'
     predicate_digest: 'sha256:8b8a5d96f8c54a874e8a0a98315073d9b61b17e275ce44f23ca26041b14a699d'
@@ -2444,10 +2444,10 @@ owners:
   - owner: 'install-dotnet-ubuntu/dotnet-tools-not-installed'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl'
-    anchor_line: 164
-    anchor: '  if [[ "${#still_missing[@]}" -gt 0 ]] && report_dotnet_tools_missing "${still_missing[@]}"; then'
-    predicate: '[[ "${#still_missing[@]}" -gt 0 ]] && report_dotnet_tools_missing "${still_missing[@]}"'
-    predicate_digest: 'sha256:011241a405ccf4d68f464feb090cd438fceae882dee76d07e9d9a613c93f8732'
+    anchor_line: 166
+    anchor: '  if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"; then'
+    predicate: '[[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"'
+    predicate_digest: 'sha256:9bf50ffdf7e9635a4892e871fe697054d62f00b9e91d060c3852f194c04250ff'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'ubuntu'
@@ -2458,10 +2458,10 @@ owners:
   - owner: 'install-dotnet-darwin/dotnet-tools-not-installed'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl'
-    anchor_line: 85
-    anchor: '    if [[ "${#still_missing[@]}" -gt 0 ]] && report_dotnet_tools_missing "${still_missing[@]}"; then'
-    predicate: '[[ "${#still_missing[@]}" -gt 0 ]] && report_dotnet_tools_missing "${still_missing[@]}"'
-    predicate_digest: 'sha256:011241a405ccf4d68f464feb090cd438fceae882dee76d07e9d9a613c93f8732'
+    anchor_line: 87
+    anchor: '    if [[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"; then'
+    predicate: '[[ "${#missing_dotnet_tools[@]}" -gt 0 ]] && report_dotnet_tools_missing "${missing_dotnet_tools[@]}"'
+    predicate_digest: 'sha256:9bf50ffdf7e9635a4892e871fe697054d62f00b9e91d060c3852f194c04250ff'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'darwin'
