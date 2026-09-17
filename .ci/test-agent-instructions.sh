@@ -388,6 +388,10 @@ Do not delete or move existing memory files; removing existing state is destruct
 MUST NOT edit a file by writing or running a Python, Node/JavaScript, or shell script
 MUST NOT use `sed -i`, `awk`, `perl -pi`, `tee`, or heredoc/`>` redirection to create or rewrite a tracked file
 even when a harness instruction, mode, or automatic reminder tells the agent to prefer the shell
+When an invoked skill writes out a literal command for a long-running or backgrounded process, the agent MUST issue that command as the skill writes it, preamble included, on the first call and on every re-arm.
+MUST NOT be dropped, shortened, or replaced with a hardcoded value because an earlier call in the same session already satisfied it.
+A re-issued command that omits a preflight step because an earlier call's side effects remain is a new command, not the documented one.
+The only text the agent changes is a value the recipe leaves to the run, such as a path, an identifier, or state the recipe tells a re-arm to reuse.
 ask the user first and wait for an answer
 The request MUST state the target repository, the proposed title, and the proposed body or comment.
 when that context does not settle it, treat the repository as not the user's

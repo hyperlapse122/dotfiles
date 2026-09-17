@@ -60,6 +60,8 @@ This harness is oh-my-pi. Use `read` to read a file; `edit` for a hashline patch
 
 A script MAY perform a purely mechanical change across many files when a per-file tool call is not practical. Say so, keep the script out of the commit unless the project wants it, and review the result with `git diff` before staging.
 
+When an invoked skill writes out a literal command for a long-running or backgrounded process, the agent MUST issue that command as the skill writes it, preamble included, on the first call and on every re-arm. A preflight step in that recipe — a scratch-root ownership or symlink test, a mode fix, an interpreter probe — MUST NOT be dropped, shortened, or replaced with a hardcoded value because an earlier call in the same session already satisfied it. A re-issued command that omits a preflight step because an earlier call's side effects remain is a new command, not the documented one. The only text the agent changes is a value the recipe leaves to the run, such as a path, an identifier, or state the recipe tells a re-arm to reuse. A prohibition elsewhere in this file on a token in that command, such as the executable-selection rule for bare `orca`, still governs that token and never licenses dropping a preflight step.
+
 ## Waiting on dispatched workers
 
 When Claude Code, Codex, or omp acts as an Orca coordinator supervising dispatched workers, it MUST start each blocking wait through its native asynchronous command mechanism. Keep the explicit Orca timeout and retain the returned command handle. Handle an immediate result directly when no running-command handle is returned. This execution policy does not apply to ordinary commands or a worker's own task, and does not change the dispatch authorization rules.
