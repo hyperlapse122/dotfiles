@@ -53,8 +53,8 @@ jq -e 'type == "object"' <<<"$declared" >/dev/null \
 roster_lead=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
   chezmoi --config "$render_config" --source "$repo_root" \
   execute-template <<<'{{ .agents.roster.lead.claude.model }}')
-[[ $roster_lead == 'fable[1m]' ]] \
-  || fail "agents.roster.lead.claude.model is $roster_lead, want fable[1m]"
+[[ $roster_lead == 'opus[1m]' ]] \
+  || fail "agents.roster.lead.claude.model is $roster_lead, want opus[1m]"
 jq -e --arg m "$roster_lead" '.model == $m' <<<"$declared" >/dev/null \
   || fail "the rendered declaration does not pin model to the roster lead ($roster_lead)"
 hand_written_model=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
