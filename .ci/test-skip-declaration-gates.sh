@@ -701,6 +701,117 @@ PY
 expect_enforcement_error "$dir" 'unparsable rendered shell stops the check' \
   'unparsable rendered shell'
 
+
+# --- 16b. clear_record form ----------------------------------------------- #
+chezmoi_bin=$(command -v "${CHEZMOI:-chezmoi}")
+: > "$scratch/empty.toml"
+mkdir -p "$scratch/target"
+render_snippet() { # root template_string
+  local root=$1 tmpl=$2
+  env -i HOME="$scratch" PATH="/usr/bin:/bin" LC_ALL=C \
+    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$root" \
+    --destination "$scratch/target" execute-template <<<"$tmpl"
+}
+
+# 1 & 2. Happy path: renders single rm -f line, no sentinel, no exit/return, no reason required.
+out_clear=""
+rc=0
+out_clear=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-pkg" "site" "pkg-installed") }}' 2>&1) || rc=$?
+if ((rc != 0)); then
+  printf '%s\n' "$out_clear" >&2
+  fail "clear_record failed to render (exit $rc)"
+fi
+want='rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi/skips/fx-pkg__pkg-installed" 2>/dev/null || true'
+if [[ $out_clear != "$want" ]]; then
+  printf 'clear_record render: expected exactly %q, got %q\n' "$want" "$out_clear" >&2
+  fail 'clear_record does not render the expected single rm -f line'
+fi
+if grep -qF '# skip-declaration-v1' <<<"$out_clear"; then
+  fail 'clear_record must emit no sentinel line'
+fi
+if grep -qE '\b(exit|return)\b' <<<"$out_clear"; then
+  fail 'clear_record must emit no terminator'
+fi
+# Optional reason also renders identical rm -f line
+out_with_reason=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-pkg" "site" "pkg-installed" "reason" "optional description") }}')
+if [[ $out_with_reason != "$want" ]]; then
+  fail 'clear_record with reason does not render the expected single rm -f line'
+fi
+cases=$((cases + 1))
+ok 'clear_record renders single rm -f line without sentinel or terminator'
+
+# 3. clear_record with direction fails the render naming the form.
+err_out=""
+rc=0
+err_out=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-pkg" "site" "pkg-installed" "direction" "harmless") }}' 2>&1) || rc=$?
+if ((rc == 0)); then
+  fail 'clear_record with direction expected to fail render, but succeeded'
+fi
+if ! grep -qF 'uses form "clear_record", which takes no direction' <<<"$err_out"; then
+  printf '%s\n' "$err_out" >&2
+  fail 'clear_record with direction did not fail with expected message naming the form'
+fi
+cases=$((cases + 1))
+ok 'clear_record with direction fails render naming the form'
+
+# 4. clear_record with probe fails the render naming the form.
+err_out=""
+rc=0
+err_out=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-pkg" "site" "pkg-installed" "probe" "mise-present") }}' 2>&1) || rc=$?
+if ((rc == 0)); then
+  fail 'clear_record with probe expected to fail render, but succeeded'
+fi
+if ! grep -qF 'uses form "clear_record", which takes no probe' <<<"$err_out"; then
+  printf '%s\n' "$err_out" >&2
+  fail 'clear_record with probe did not fail with expected message naming the form'
+fi
+cases=$((cases + 1))
+ok 'clear_record with probe fails render naming the form'
+
+# 5. clear_record with site containing slash fails on identity charset gate.
+err_out=""
+rc=0
+err_out=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-pkg" "site" "bad/site") }}' 2>&1) || rc=$?
+if ((rc == 0)); then
+  fail 'clear_record with invalid site expected to fail render, but succeeded'
+fi
+if ! grep -qF 'site "bad/site" is not a safe filename component' <<<"$err_out"; then
+  printf '%s\n' "$err_out" >&2
+  fail 'clear_record with invalid site did not fail on identity charset gate'
+fi
+cases=$((cases + 1))
+ok 'clear_record with slash in site fails identity charset gate'
+
+# 6. A script containing clear_record and normal flow passes check-skip-declarations.
+dir=$(variant clear-record-clean-script)
+python3 - "$dir/$main" <<'PY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+call = '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-main" "site" "step-reconciled") }}\n'
+anchor = "printf 'fx-main: step complete\\n'\n"
+assert text.count(anchor) == 1, 'step complete anchor changed'
+open(path, 'w').write(text.replace(anchor, call + anchor))
+PY
+expect_pass "$dir" 'a script containing clear_record passes check-skip-declarations with no findings'
+
+# 7. Existing forms render as before and skip_here without reason fails.
+out_done=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "done_here" "script" "fx-main" "site" "step-already-done" "reason" "done") }}')
+if ! grep -qF '# skip-declaration-v1' <<<"$out_done" || ! grep -qF 'exit 0' <<<"$out_done"; then
+  fail 'existing done_here form did not render expected sentinel and exit'
+fi
+err_out=""
+rc=0
+err_out=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "skip_here" "script" "fx-pkg" "site" "pkg-installed" "direction" "harmless") }}' 2>&1) || rc=$?
+if ((rc == 0)); then
+  fail 'skip_here without reason expected to fail render, but succeeded'
+fi
+if ! grep -qF 'is missing "reason"' <<<"$err_out"; then
+  printf '%s\n' "$err_out" >&2
+  fail 'skip_here without reason did not fail on missing reason'
+fi
+cases=$((cases + 1))
+ok 'existing forms render as before and skip_here without reason fails'
 # --- 17. The production tree ---------------------------------------------- #
 printf '%s: running the production check (%s)\n' "$prog" "$checker"
 production_rc=0

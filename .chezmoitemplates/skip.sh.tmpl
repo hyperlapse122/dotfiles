@@ -9,7 +9,7 @@ apply" from exactly such a path. This partial makes the claim explicit, derives
 the behaviour and the message from it, and lets CI reject a site that declares
 nothing.
 
-FOUR CALL FORMS. Every conditional early exit in a run_onchange_/run_once_
+FIVE CALL FORMS. Every conditional early exit in a run_onchange_/run_once_
 script goes through one of these — including the ones that are NOT skips. That
 total coverage is what makes the guard decidable: after conversion, a bare
 `exit 0` or `return 0` on a conditional path is by definition undeclared.
@@ -21,7 +21,10 @@ total coverage is what makes the guard decidable: after conversion, a bare
   done_here       the work is already done (a completion stamp). Not deferred.
   not_applicable  deliberately opted out in data, or an all-work-done fast
                   path. Not deferred.
-
+  clear_record    retires an existing skip record on a success path. Not an
+                  early exit, declares nothing, and emits no sentinel (the
+                  checker observes sentinels and terminators, and this line is
+                  neither).
 FOUR DIRECTIONS, for the two skip forms only:
 
   harmless             this host will never satisfy the condition, so not
@@ -157,9 +160,9 @@ charset gates below.
 {{- $direction := "" -}}{{- if hasKey . "direction" -}}{{- $direction = .direction -}}{{- end -}}
 {{- $probe := "" -}}{{- if hasKey . "probe" -}}{{- $probe = .probe -}}{{- end -}}
 {{- $owner := "" -}}{{- if hasKey . "owner" -}}{{- $owner = .owner -}}{{- end -}}
-{{- $forms := list "skip_here" "skip_step" "done_here" "not_applicable" -}}
+{{- $forms := list "skip_here" "skip_step" "done_here" "not_applicable" "clear_record" -}}
 {{- if not (has $form $forms) -}}
-{{-   fail (printf "skip.sh.tmpl: unknown form %q for %s/%s. Valid forms: skip_here, skip_step, done_here, not_applicable." $form $script $site) -}}
+{{-   fail (printf "skip.sh.tmpl: unknown form %q for %s/%s. Valid forms: skip_here, skip_step, done_here, not_applicable, clear_record." $form $script $site) -}}
 {{- end -}}
 {{- if eq $script "" -}}
 {{-   fail (printf "skip.sh.tmpl: %q call is missing \"script\". It is half of the stable identity dotfiles-skips reports on." $form) -}}
@@ -167,7 +170,7 @@ charset gates below.
 {{- if eq $site "" -}}
 {{-   fail (printf "skip.sh.tmpl: %q call in %s is missing \"site\". It must be unique within the script so a later run can clear exactly this entry." $form $script) -}}
 {{- end -}}
-{{- if eq $reason "" -}}
+{{- if and (ne $form "clear_record") (eq $reason "") -}}
 {{-   fail (printf "skip.sh.tmpl: %q call %s/%s is missing \"reason\". The operator-facing message is derived from it." $form $script $site) -}}
 {{- end -}}
 {{- $isSkip := or (eq $form "skip_here") (eq $form "skip_step") -}}
@@ -185,6 +188,9 @@ charset gates below.
 {{- else -}}
 {{-   if ne $direction "" -}}
 {{-     fail (printf "skip.sh.tmpl: %s/%s uses form %q, which takes no direction (it is not deferred work). Drop \"direction\", or use skip_here / skip_step." $script $site $form) -}}
+{{-   end -}}
+{{-   if ne $probe "" -}}
+{{-     fail (printf "skip.sh.tmpl: %s/%s uses form %q, which takes no probe. Only transient-blocking consumes a probe." $script $site $form) -}}
 {{-   end -}}
 {{- end -}}
 {{- /* SHELL SAFETY. Every value below is interpolated into generated shell, and
@@ -204,7 +210,7 @@ charset gates below.
 {{- if not (regexMatch $idRe $site) -}}
 {{-   fail (printf "skip.sh.tmpl: site %q is not a safe filename component (%s/%s). It is interpolated into a state-file path, so it must match %s — no slashes, no spaces, no shell metacharacters." $site $script $site $idRe) -}}
 {{- end -}}
-{{- if not (regexMatch $textRe $reason) -}}
+{{- if and (ne $reason "") (not (regexMatch $textRe $reason)) -}}
 {{-   fail (printf "skip.sh.tmpl: reason for %s/%s contains a character that is unsafe to emit into shell. Allowed: letters, digits, space, and . _ , ; : ( ) / = + -  — no quotes, $, backticks, backslashes or newlines." $script $site) -}}
 {{- end -}}
 {{- if and (ne $probe "") (not (regexMatch $idRe $probe)) -}}
@@ -248,7 +254,9 @@ charset gates below.
 {{- $fingerprint := "none" -}}
 {{- if and $isSkip (eq $direction "transient-blocking") -}}{{- $fingerprint = "required" -}}{{- end -}}
 {{- $sentinel := printf "# skip-declaration-v1 owner=%s instance=%s#%s script=%s site=%s form=%s direction=%s probe=%s fingerprint=%s exit=%s" $owner $script $owner $script $site $form (or $direction "none") (or $probe "none") $fingerprint $exitToken -}}
-{{- if eq $form "done_here" }}
+{{- if eq $form "clear_record" -}}
+rm -f {{ $file }} 2>/dev/null || true
+{{- else if eq $form "done_here" }}
 {{ $sentinel }}
 printf '%s: %s\n' '{{ $script }}' '{{ $reason }}; nothing to do'
 rm -f {{ $file }} 2>/dev/null || true
