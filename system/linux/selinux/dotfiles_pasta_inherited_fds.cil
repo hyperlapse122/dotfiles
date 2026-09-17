@@ -30,11 +30,23 @@
 ; SCOPE. This module suppresses noise only. It is not a protection boundary, and
 ; it declares no type of its own, so nothing here labels a file or changes what
 ; any domain may do.
+;
+; WHY THE RULES SIT IN AN `optional` BLOCK. pasta_t is not part of the base
+; Fedora policy. It arrives with passt-selinux, which this repository installs in
+; phase 30-components, while this module installs in phase 00. On a host that
+; does not have that package yet, an unwrapped reference would fail to resolve at
+; `semodule -i` time, and the installer runs under `set -euo pipefail` at the
+; first script of the apply — so the apply would abort before the phase that
+; supplies the type could ever run, on every subsequent attempt. An `optional`
+; block is dropped when a symbol in it does not resolve, so the module installs
+; cleanly and starts suppressing once passt-selinux is present.
 ; ==============================================================================
 
-; Chromium state the Electron caller left open: GPUCache, DawnWebGPUCache,
-; DawnGraphiteCache, Local Storage leveldb, and the spellcheck dictionaries.
-(dontaudit pasta_t config_home_t (file (read write append)))
+(optional dotfiles_pasta_inherited_fds_opt
+  ; Chromium state the Electron caller left open: GPUCache, DawnWebGPUCache,
+  ; DawnGraphiteCache, Local Storage leveldb, and the spellcheck dictionaries.
+  (dontaudit pasta_t config_home_t (file (read write append)))
 
-; The caller's DRI render node, inherited the same way.
-(dontaudit pasta_t dri_device_t (chr_file (read write)))
+  ; The caller's DRI render node, inherited the same way.
+  (dontaudit pasta_t dri_device_t (chr_file (read write)))
+)

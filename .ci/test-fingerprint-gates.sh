@@ -113,4 +113,15 @@ done
 grep -q 'config="\${CHEZMOI_SOURCE_DIR:-' "$repo_root/.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl" || \
   fail "run_once_before_mise-trust.sh.tmpl does not use position-independent config resolution"
 
+# The two loops above glob the phases that held a source-path assignment when the
+# PISR fix landed, so a new script in any other phase escaped the gate. This one
+# is keyed by lifecycle instead: every rerun class chezmoi decides from rendered
+# text is scanned, whatever phase it sits in.
+while IFS= read -r template; do
+  grep -q '^[[:space:]]*SRC_DIR=' "$template" || continue
+  grep -q 'SRC_DIR="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
+    fail "template $(basename "$template") does not use position-independent SRC_DIR resolution"
+done < <(find "$repo_root/.chezmoiscripts" -type f \
+  \( -name 'run_onchange_*.sh.tmpl' -o -name 'run_once_*.sh.tmpl' \))
+
 printf '%s\n' 'fingerprint render gates passed'
