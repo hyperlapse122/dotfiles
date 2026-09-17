@@ -788,14 +788,28 @@ python3 - "$dir/$main" <<'PY'
 import sys
 path = sys.argv[1]
 text = open(path).read()
-call = '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-main" "site" "step-reconciled") }}\n'
+call = '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-main" "site" "step-input-absent") }}\n'
 anchor = "printf 'fx-main: step complete\\n'\n"
 assert text.count(anchor) == 1, 'step complete anchor changed'
 open(path, 'w').write(text.replace(anchor, call + anchor))
 PY
 expect_pass "$dir" 'a script containing clear_record passes check-skip-declarations with no findings'
 
-# 7. Existing forms render as before and skip_here without reason fails.
+# 7. clear_record naming an unknown site fails check-skip-declarations.
+dir=$(variant clear-record-unknown-site)
+python3 - "$dir/$main" <<'PY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+call = '{{ includeTemplate "skip.sh.tmpl" (dict "form" "clear_record" "script" "fx-main" "site" "unknown-site") }}\n'
+anchor = "printf 'fx-main: step complete\\n'\n"
+assert text.count(anchor) == 1, 'step complete anchor changed'
+open(path, 'w').write(text.replace(anchor, call + anchor))
+PY
+expect_finding "$dir" 'clear_record naming an unknown site fails check-skip-declarations' \
+  'clear_record for fx-main/unknown-site does not match any declaration in the site matrix'
+
+# 8. Existing forms render as before and skip_here without reason fails.
 out_done=$(render_snippet "$clean" '{{ includeTemplate "skip.sh.tmpl" (dict "form" "done_here" "script" "fx-main" "site" "step-already-done" "reason" "done") }}')
 if ! grep -qF '# skip-declaration-v1' <<<"$out_done" || ! grep -qF 'exit 0' <<<"$out_done"; then
   fail 'existing done_here form did not render expected sentinel and exit'

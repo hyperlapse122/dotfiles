@@ -112,7 +112,9 @@ pass 'the gate expression still rejects || true on install calls'
 # Scenario 5: verify the Terra bootstrap line is still allowed by the widened expression
 for terra_sample in \
   'dnf install -y --nogpgcheck --repofrompath "terra,https://repos.fyralabs.com/terra$releasever" terra-release terra-gpg-keys || true' \
-  '"${DNF[@]}" install -y --nogpgcheck --repofrompath '\''terra,https://repos.fyralabs.com/terra$releasever'\'' terra-release terra-gpg-keys || true'; do
+  '"${DNF[@]}" install -y --nogpgcheck --repofrompath '\''terra,https://repos.fyralabs.com/terra$releasever'\'' terra-release terra-gpg-keys || true' \
+  'dnf install -y --nogpgcheck --repofrompath "terra,https://repos.fyralabs.com/terra$releasever" terra-release terra-gpg-keys || :' \
+  '"${DNF[@]}" install -y --nogpgcheck --repofrompath '\''terra,https://repos.fyralabs.com/terra$releasever'\'' terra-release terra-gpg-keys || :'; do
   sample_offenders=$(printf '%s\n' "$terra_sample" | grep -inE "$install_discard_re" |
     grep -vE "$terra_allowance_re" || true)
   [[ -z "$sample_offenders" ]] || fail "the gate expression falsely rejected the Terra bootstrap line: $terra_sample"
@@ -669,6 +671,14 @@ check record_is "$NUBU_TOOLS" operator-blocking
 check stderr_has "dotnet tool install -g $tool1"
 check names_entry_state
 pass "$label: a failed tool install is recorded and reported"
+
+label='dotnet-ubuntu-tools-converged'
+run_case "$label" dotnet-ubuntu.region install_dotnet_tools DOTNET=1 TOOLS="$all_tools" SEED="$NUBU_TOOLS"
+check returned_zero
+check no_record "$NUBU_TOOLS"
+check not_called '^dotnet tool install'
+[[ ! -s "$err" ]] || { show >&2; fail "$label: the passing path wrote to stderr"; }
+pass "$label: a converged host installs no tool and clears the record"
 
 label='dotnet-ubuntu-tools-converge-now'
 run_case "$label" dotnet-ubuntu.region install_dotnet_tools DOTNET=1 SEED="$NUBU_TOOLS"
