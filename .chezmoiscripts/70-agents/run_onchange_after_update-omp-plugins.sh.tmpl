@@ -78,9 +78,13 @@ marketplace_id() {
 # exit status would report every id as unregistered, which skips the remove and
 # then hard-fails the add against a registration omp still holds — turning a
 # converged host into a failing one on every apply.
+# A COLORED listing hides every registration the same way. omp colors it under
+# FORCE_COLOR even into a pipe, and FORCE_COLOR beats NO_COLOR, so the read
+# forces color off and still strips SGR sequences from whatever comes back.
 registered_marketplace_source() {
   local target_id=$1 listing line id rest found=
-  listing=$(omp plugin marketplace list 2>/dev/null) ||
+  listing=$(FORCE_COLOR=0 NO_COLOR=1 omp plugin marketplace list 2>/dev/null |
+    sed 's/\x1b\[[0-9;]*m//g') ||
     die "cannot read the omp marketplace registry while resolving $target_id"
   while IFS= read -r line; do
     [[ $line =~ ^[[:space:]]+([^[:space:]]+)[[:space:]]+(.*)$ ]] || continue
@@ -176,9 +180,13 @@ for row in "${PLUGINS[@]}"; do
     if [[ -n $prev_source ]]; then
       omp plugin marketplace remove "$market_id" >/dev/null 2>&1 || true
     fi
-    omp plugin marketplace add "$source" ||
+    # An add refused because the desired registration is already present is a
+    # converged host, as the claude and codex reconcilers treat it.
+    if ! omp plugin marketplace add "$source" &&
+      [[ $(registered_marketplace_source "$market_id") != "$source" ]]; then
       restore_marketplace "$market_id" "$prev_source" "$source" \
         "marketplace add failed for $market ($market_id)"
+    fi
   fi
 
   omp plugin install --scope user --force "$id" ||
