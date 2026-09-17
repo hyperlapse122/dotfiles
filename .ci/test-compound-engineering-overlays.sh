@@ -17,6 +17,15 @@
 #   - the agent skill externals are exact (no overlay to preserve)
 #   - the persona content contract holds (glab, item-schema, confidential->sensitive,
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
+#   - the CLI elevation adapter overlay (ce-plan and ce-brainstorm) differs from the
+#     recorded upstream digest on only the effort line, and the two overlay copies
+#     are byte-identical
+#   - a guarded elevation adapter is replaced only while the archive copy still
+#     matches the recorded upstream digest; a mismatching copy is left unchanged
+#     with a warning naming the file, and a second apply after install writes nothing
+#   - the digest check is portable: it installs through a macOS-style `shasum -a 256`
+#     when `sha256sum` is absent, and with neither tool on PATH it warns, leaves the
+#     guarded entries unchanged, and still exits 0 rather than aborting the apply
 #
 set -euo pipefail
 
@@ -95,6 +104,12 @@ build_fake_ce() {
   cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$omp_current/skills/ce-sweep/SKILL.md"
   mkdir -p "$overlays"
   cp -Rp "$root/dot_local/share/compound-engineering-overlays/." "$overlays/"
+  # Mirror chezmoi's own source-name convention: an `executable_` prefix marks
+  # the target executable and is stripped from the deployed name. The raw `cp`
+  # above does not know that convention, so replicate it here.
+  while IFS= read -r -d '' source_file; do
+    mv -- "$source_file" "$(dirname -- "$source_file")/${source_file##*/executable_}"
+  done < <(find "$overlays" -name 'executable_*' -print0)
 }
 
 # --- happy path: inject + merge + byte-identical ---
@@ -198,6 +213,149 @@ grep -q 'is not a plain directory' "$scratch/chain.err" \
   || { echo "provisioner wrote through the symlinked directory" >&2; exit 1; }
 cmp -s "$foreign_dir/keep.md" <(printf 'outside\n') \
   || { echo "provisioner disturbed the symlinked directory contents" >&2; exit 1; }
+
+# --- CLI elevation adapter overlay: checksum-guarded whole-file replacement (KTD7) ---
+ce_plan_overlay="$root/dot_local/share/compound-engineering-overlays/skills/ce-plan/scripts/executable_elevation-dispatch.sh"
+ce_brainstorm_overlay="$root/dot_local/share/compound-engineering-overlays/skills/ce-brainstorm/scripts/executable_elevation-dispatch.sh"
+[ -f "$ce_plan_overlay" ] || { echo "ce-plan elevation overlay missing: $ce_plan_overlay" >&2; exit 1; }
+[ -f "$ce_brainstorm_overlay" ] || { echo "ce-brainstorm elevation overlay missing: $ce_brainstorm_overlay" >&2; exit 1; }
+[ -x "$ce_plan_overlay" ] || { echo "ce-plan elevation overlay is not executable" >&2; exit 1; }
+[ -x "$ce_brainstorm_overlay" ] || { echo "ce-brainstorm elevation overlay is not executable" >&2; exit 1; }
+cmp -s "$ce_plan_overlay" "$ce_brainstorm_overlay" \
+  || { echo "the two elevation overlay files are not byte-identical" >&2; exit 1; }
+
+guarded_sha=$(grep -oE 'GUARDED_UPSTREAM_SHA256="[0-9a-f]{64}"' "$prov" | grep -oE '[0-9a-f]{64}')
+[ -n "$guarded_sha" ] || { echo "could not resolve GUARDED_UPSTREAM_SHA256 from rendered script" >&2; exit 1; }
+
+# Reconstruct the pinned upstream script from the overlay alone (no archive needed)
+# and prove the recorded digest still matches it.
+reconstructed_upstream="$scratch/elevation-dispatch.upstream.sh"
+sed 's/^EFFORT="max".*/EFFORT="high"   # settled: elevation runs at high effort/' \
+  "$ce_plan_overlay" > "$reconstructed_upstream"
+reconstructed_sha=$(sha256sum "$reconstructed_upstream" | cut -d' ' -f1)
+[ "$reconstructed_sha" = "$guarded_sha" ] \
+  || { echo "recorded upstream digest $guarded_sha does not match the reconstructed upstream $reconstructed_sha" >&2; exit 1; }
+diff_line_count=$(diff "$reconstructed_upstream" "$ce_plan_overlay" | grep -c '^[<>]' || true)
+[ "$diff_line_count" = "2" ] \
+  || { echo "overlay differs from reconstructed upstream on more than the effort line" >&2; exit 1; }
+
+# Fixture archive script equals the pinned upstream digest: apply installs the overlay.
+build_fake_ce
+mkdir -p "$current/skills/ce-plan/scripts" "$current/skills/ce-brainstorm/scripts" \
+  "$omp_current/skills/ce-plan/scripts" "$omp_current/skills/ce-brainstorm/scripts"
+install -m 755 "$reconstructed_upstream" "$current/skills/ce-plan/scripts/elevation-dispatch.sh"
+install -m 755 "$reconstructed_upstream" "$current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-plan/scripts/elevation-dispatch.sh"
+install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+env HOME="$home" bash "$prov"
+
+for dir in "$current" "$omp_current"; do
+  for skill in ce-plan ce-brainstorm; do
+    installed="$dir/skills/$skill/scripts/elevation-dispatch.sh"
+    [ -f "$installed" ] || { echo "elevation adapter not installed: $installed" >&2; exit 1; }
+    cmp -s "$ce_plan_overlay" "$installed" \
+      || { echo "installed elevation adapter differs from the overlay: $installed" >&2; exit 1; }
+    grep -qx 'EFFORT="max"   # this repository raises elevation to max effort' "$installed" \
+      || { echo "installed elevation adapter does not assign EFFORT=max: $installed" >&2; exit 1; }
+    [ -x "$installed" ] || { echo "installed elevation adapter lost its executable bit: $installed" >&2; exit 1; }
+  done
+done
+
+# A second apply after a successful install makes no write.
+inode_before=$(stat -c %i "$current/skills/ce-plan/scripts/elevation-dispatch.sh")
+env HOME="$home" bash "$prov"
+inode_after=$(stat -c %i "$current/skills/ce-plan/scripts/elevation-dispatch.sh")
+[ "$inode_before" = "$inode_after" ] \
+  || { echo "second apply rewrote an already-installed elevation adapter" >&2; exit 1; }
+
+# Offline argv check: the installed adapter's own --emit-adapter test hook prints
+# its argv without calling a real CLI.
+mapfile -d '' installed_argv < <("$current/skills/ce-plan/scripts/elevation-dispatch.sh" --emit-adapter fable)
+argv_carries_effort_max=0
+for i in "${!installed_argv[@]}"; do
+  if [ "${installed_argv[$i]}" = "--effort" ] && [ "${installed_argv[$((i + 1))]}" = "max" ]; then
+    argv_carries_effort_max=1
+    break
+  fi
+done
+[ "$argv_carries_effort_max" = 1 ] \
+  || { echo "installed elevation adapter argv does not carry --effort max" >&2; exit 1; }
+
+# Fixture archive script has a different digest (neither upstream nor overlay):
+# apply leaves it byte-identical and warns, without failing the run.
+build_fake_ce
+mkdir -p "$current/skills/ce-plan/scripts"
+mismatched="$current/skills/ce-plan/scripts/elevation-dispatch.sh"
+printf '#!/usr/bin/env bash\necho locally modified\n' > "$mismatched"
+chmod 755 "$mismatched"
+cp "$mismatched" "$scratch/expected-mismatched.sh"
+if ! env HOME="$home" bash "$prov" 2>"$scratch/guarded.err"; then
+  echo "provisioner exited nonzero on a mismatched elevation adapter" >&2; exit 1
+fi
+cmp -s "$scratch/expected-mismatched.sh" "$mismatched" \
+  || { echo "mismatched elevation adapter was changed" >&2; exit 1; }
+grep -qF "$mismatched" "$scratch/guarded.err" \
+  || { echo "mismatched elevation adapter warning does not name the file" >&2; exit 1; }
+grep -qF 'does not match the pinned upstream digest' "$scratch/guarded.err" \
+  || { echo "mismatched elevation adapter warning text missing" >&2; exit 1; }
+
+# --- CLI elevation adapter overlay: portable digest tool selection ---
+# macOS ships no sha256sum, only `shasum -a 256`; a PATH built from symlinks to
+# only the tools the provisioner needs, following resolve_in()'s style in
+# .ci/test-bun-resolve.sh, proves the digest check does not depend on which one
+# is present, and never aborts the apply when neither is.
+bash_bin="$(command -v bash)"
+real_sha256sum="$(command -v sha256sum)"
+core_tools=(mkdir cp mv rm cmp dirname readlink cut)
+
+bin_no_sha256sum="$scratch/bin-shasum-only"
+mkdir -p "$bin_no_sha256sum"
+for tool in "${core_tools[@]}"; do
+  ln -sf "$(command -v "$tool")" "$bin_no_sha256sum/$tool"
+done
+# Emulates macOS `shasum -a 256 -- <path>` by delegating to the real sha256sum,
+# which does not understand the `-a 256` algorithm selector. An absolute-path
+# shebang, not `#!/usr/bin/env bash`, because this PATH deliberately carries no
+# `bash` or `env` entry for env to resolve against.
+cat > "$bin_no_sha256sum/shasum" <<EOF
+#!$bash_bin
+shift 2
+exec "$real_sha256sum" "\$@"
+EOF
+chmod 755 "$bin_no_sha256sum/shasum"
+
+bin_no_digest_tool="$scratch/bin-no-digest-tool"
+mkdir -p "$bin_no_digest_tool"
+for tool in "${core_tools[@]}"; do
+  ln -sf "$(command -v "$tool")" "$bin_no_digest_tool/$tool"
+done
+
+# Rung: sha256sum absent, shasum present -> the overlay still installs.
+build_fake_ce
+mkdir -p "$current/skills/ce-plan/scripts" "$current/skills/ce-brainstorm/scripts" \
+  "$omp_current/skills/ce-plan/scripts" "$omp_current/skills/ce-brainstorm/scripts"
+install -m 755 "$reconstructed_upstream" "$current/skills/ce-plan/scripts/elevation-dispatch.sh"
+install -m 755 "$reconstructed_upstream" "$current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-plan/scripts/elevation-dispatch.sh"
+install -m 755 "$reconstructed_upstream" "$omp_current/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+env HOME="$home" PATH="$bin_no_sha256sum" "$bash_bin" "$prov"
+cmp -s "$ce_plan_overlay" "$current/skills/ce-plan/scripts/elevation-dispatch.sh" \
+  || { echo "elevation adapter did not install with sha256sum absent and shasum present" >&2; exit 1; }
+
+# Rung: neither tool on PATH -> warn, skip the guarded entries, still exit 0.
+build_fake_ce
+mkdir -p "$current/skills/ce-plan/scripts"
+install -m 755 "$reconstructed_upstream" "$current/skills/ce-plan/scripts/elevation-dispatch.sh"
+cp "$current/skills/ce-plan/scripts/elevation-dispatch.sh" "$scratch/expected-no-digest-tool.sh"
+if ! env HOME="$home" PATH="$bin_no_digest_tool" "$bash_bin" "$prov" 2>"$scratch/no-digest-tool.err"; then
+  echo "provisioner exited nonzero with no sha256 tool on PATH" >&2; exit 1
+fi
+cmp -s "$scratch/expected-no-digest-tool.sh" "$current/skills/ce-plan/scripts/elevation-dispatch.sh" \
+  || { echo "elevation adapter changed with no sha256 tool on PATH" >&2; exit 1; }
+grep -qF 'no sha256 tool' "$scratch/no-digest-tool.err" \
+  || { echo "missing sha256-tool warning" >&2; exit 1; }
+grep -qF "$current/skills/ce-plan/scripts/elevation-dispatch.sh" "$scratch/no-digest-tool.err" \
+  || { echo "sha256-tool warning does not name the file" >&2; exit 1; }
 
 # --- CE external is additive: inspect its rendered table, not template source ---
 ce_block=$(awk '

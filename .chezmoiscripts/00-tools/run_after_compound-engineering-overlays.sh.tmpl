@@ -11,8 +11,10 @@
 # localArchive block intentionally omits `exact`, so chezmoi adds/updates archive
 # files but does not remove archive-absent references.
 #
-# This script copies only the managed overlay files. It never changes archive-owned
-# files such as skills/ce-sweep/SKILL.md.
+# This script copies the managed overlay files. For most of them it never changes
+# the archive-owned file, such as skills/ce-sweep/SKILL.md. The two CLI elevation
+# adapters are the guarded exception: their archive copy is replaced with the
+# overlay only while it still matches the recorded upstream digest (see below).
 #
 # OWNERSHIP: the overlay paths are ours, while the directory chain above them is
 # archive-owned. Because the tree is additive, another process can replace a
@@ -55,6 +57,32 @@ OVERLAY_FILES=(
   "skills/ce-sweep/references/interview.md"
 )
 
+# CLI elevation adapters (KTD7): the ce-plan and ce-brainstorm copies of the pinned
+# v3.26.3 elevation-dispatch.sh are byte-identical upstream, so one recorded digest
+# guards both entries.
+GUARDED_FILES=(
+  "skills/ce-plan/scripts/elevation-dispatch.sh"
+  "skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+)
+GUARDED_UPSTREAM_SHA256="ba8219c15db2909fb1c272d2137b124a78a06329af2cca0e80276f6e8918ef3d"
+
+# Portable SHA-256 (roster validOS includes darwin, which ships no sha256sum):
+# prefer sha256sum, fall back to shasum -a 256. Availability is checked once so
+# a missing tool degrades every guarded entry the same way instead of retrying
+# per file; a read failure on an existing file still reaches here as an empty,
+# non-matching digest rather than aborting under `set -euo pipefail`.
+SHA256_TOOL_AVAILABLE=1
+if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+  SHA256_TOOL_AVAILABLE=0
+fi
+sha256_of() {   # <path> -> prints hex digest on stdout; empty output, nonzero status if unreadable
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum -- "$1" 2>/dev/null | cut -d' ' -f1
+  else
+    shasum -a 256 -- "$1" 2>/dev/null | cut -d' ' -f1
+  fi
+}
+
 for CURRENT in "${TARGET_DIRS[@]}"; do
   [ -d "$CURRENT" ] || continue
 
@@ -91,5 +119,60 @@ for CURRENT in "${TARGET_DIRS[@]}"; do
     TEMP="$DESTINATION.chezmoi-$$.tmp"
     cp -p -- "$SOURCE" "$TEMP"
     mv -f -- "$TEMP" "$DESTINATION"
+  done
+
+  # Guarded whole-file replacements: unlike OVERLAY_FILES above, these targets are
+  # archive-owned scripts, not overlay-only leaves, so an unconditional copy would
+  # clobber a version bump's own rewrite. Replace only while the archive copy still
+  # equals the recorded upstream v3.26.3 digest; leave any other digest untouched
+  # and warn, so a plugin bump degrades to the upstream default instead of silently
+  # keeping a stale fork or overwriting new upstream content.
+  for RELATIVE in "${GUARDED_FILES[@]}"; do
+    SOURCE="$OVERLAYS/$RELATIVE"
+    DESTINATION="$CURRENT/$RELATIVE"
+
+    [ -f "$SOURCE" ] || continue
+    [ -e "$DESTINATION" ] || continue
+
+    if [ "$SHA256_TOOL_AVAILABLE" != 1 ]; then
+      printf 'compound-engineering-overlays: no sha256 tool; leaving %s unchanged\n' "$DESTINATION" >&2
+      continue
+    fi
+
+    IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$RELATIVE")"
+    NODE="$CURRENT"
+    for component in "${COMPONENTS[@]}"; do
+      NODE="$NODE/$component"
+      if [ -L "$NODE" ] || { [ -e "$NODE" ] && [ ! -d "$NODE" ]; }; then
+        printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$NODE" >&2
+        exit 1
+      fi
+      [ -d "$NODE" ] || mkdir -- "$NODE"
+    done
+
+    OVERLAY_DIGEST="$(sha256_of "$SOURCE")"
+    OBSERVED="$(sha256_of "$DESTINATION" 2>/dev/null || true)"
+
+    if [ "$OBSERVED" = "$OVERLAY_DIGEST" ]; then
+      continue
+    fi
+
+    if [ "$OBSERVED" = "$GUARDED_UPSTREAM_SHA256" ]; then
+      if [ -L "$DESTINATION" ]; then
+        printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
+          "$DESTINATION" "$(readlink -- "$DESTINATION")" >&2
+        rm -f -- "$DESTINATION"
+      elif [ -e "$DESTINATION" ] && [ ! -f "$DESTINATION" ]; then
+        printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$DESTINATION" >&2
+        rm -rf -- "$DESTINATION"
+      fi
+
+      TEMP="$DESTINATION.chezmoi-$$.tmp"
+      cp -p -- "$SOURCE" "$TEMP"
+      mv -f -- "$TEMP" "$DESTINATION"
+    else
+      printf 'compound-engineering-overlays: %s does not match the pinned upstream digest (%s); leaving it unchanged\n' \
+        "$DESTINATION" "$OBSERVED" >&2
+    fi
   done
 done
