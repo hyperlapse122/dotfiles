@@ -31,7 +31,7 @@
 {{-   fail (printf "agent-roster-validate: agents.roster.workers must be a list, got %s" (kindOf $workers)) -}}
 {{- end -}}
 {{- $validAgents := list "claude" "codex" "omp" -}}
-{{- $validShapes := list "mechanical" "implementation" "judgment" "fallback" -}}
+{{- $validShapes := list "mechanical" "implementation" "judgment" "fallback" "authoring" -}}
 {{- if not (hasKey $roster "lead") -}}
 {{-   fail "agent-roster-validate: agents.roster is missing lead" -}}
 {{- end -}}
@@ -80,7 +80,7 @@
 {{-   if not .effort -}}
 {{-     fail (printf "agent-roster-validate: %s is missing effort" $id) -}}
 {{-   end -}}
-{{-   if or (not (hasKey . "brief")) (eq .brief "") -}}
+{{-   if or (not (hasKey . "brief")) (not (kindIs "string" .brief)) (eq .brief "") -}}
 {{-     fail (printf "agent-roster-validate: %s has an empty brief" $id) -}}
 {{-   end -}}
 {{-   $shapes := .shapes -}}

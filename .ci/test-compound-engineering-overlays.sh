@@ -21,7 +21,7 @@
 #     degrade sentences, single-label tool guidance; no gh / MR listing)
 #   - the CLI elevation adapter overlay (ce-plan, shared by ce-brainstorm) differs
 #     from the recorded upstream digest on only the effort line, and the effort it
-#     assigns matches the roster's claude judgment entry
+#     assigns matches the roster's claude authoring entry
 #   - a guarded elevation adapter is installed outright when absent on the pinned
 #     version, replaced only while an existing archive copy still matches the
 #     recorded upstream digest, and left unchanged with a warning naming the file
@@ -235,32 +235,32 @@ guarded_version=$(grep -oE 'GUARDED_UPSTREAM_VERSION="v[0-9][0-9.]*"' "$prov" | 
 [ "$guarded_version" = "$version" ] \
   || { echo "compound-engineering bumped to $version; refresh the elevation-dispatch overlay and GUARDED_UPSTREAM_SHA256/VERSION" >&2; exit 1; }
 
-# The overlay's EFFORT must track the roster's claude judgment entry, not a
-# literal, so a roster edit alone can flip this check (KTD7 parity with the
+# The overlay's EFFORT must track the roster's claude authoring entry, not a
+# literal, so a roster edit alone can flip this check (KTD2 parity with the
 # claude-fable-5-1 settings leaf, which .ci/test-claude-settings-reconcile.sh
 # holds to the same roster entry).
-judgment_effort_tmpl="$scratch/judgment-effort.tmpl"
-printf '%s' '{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "judgment" "rung" "" "name" "a claude judgment entry") | fromJson).effort }}' \
-  > "$judgment_effort_tmpl"
-judgment_home="$scratch/judgment-home"
-judgment_dest="$scratch/judgment-dest"
-mkdir -p "$judgment_home" "$judgment_dest"
-judgment_effort=$(env HOME="$judgment_home" PATH="$bin:/usr/bin:/bin" "$(command -v chezmoi)" \
+authoring_effort_tmpl="$scratch/authoring-effort.tmpl"
+printf '%s' '{{ (includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "claude" "shape" "authoring" "rung" "" "name" "a claude authoring entry") | fromJson).effort }}' \
+  > "$authoring_effort_tmpl"
+authoring_home="$scratch/authoring-home"
+authoring_dest="$scratch/authoring-dest"
+mkdir -p "$authoring_home" "$authoring_dest"
+authoring_effort=$(env HOME="$authoring_home" PATH="$bin:/usr/bin:/bin" "$(command -v chezmoi)" \
   --config "$scratch/empty.toml" \
   --source "$root" \
-  --destination "$judgment_dest" \
+  --destination "$authoring_dest" \
   execute-template \
-  < "$judgment_effort_tmpl")
-[ -n "$judgment_effort" ] || { echo "could not resolve the roster claude judgment effort" >&2; exit 1; }
+  < "$authoring_effort_tmpl")
+[ -n "$authoring_effort" ] || { echo "could not resolve the roster claude authoring effort" >&2; exit 1; }
 
 committed_effort=$(grep -oE '^EFFORT="[^"]*"' "$ce_plan_overlay" | sed -E 's/^EFFORT="(.*)"$/\1/')
-[ "$committed_effort" = "$judgment_effort" ] \
-  || { echo "the committed elevation overlay's EFFORT ($committed_effort) does not match the roster judgment effort ($judgment_effort)" >&2; exit 1; }
+[ "$committed_effort" = "$authoring_effort" ] \
+  || { echo "the committed elevation overlay's EFFORT ($committed_effort) does not match the roster authoring effort ($authoring_effort)" >&2; exit 1; }
 
 # Reconstruct the pinned upstream script from the overlay alone (no archive needed)
 # and prove the recorded digest still matches it.
 reconstructed_upstream="$scratch/elevation-dispatch.upstream.sh"
-sed "s/^EFFORT=\"$judgment_effort\".*/EFFORT=\"high\"   # settled: elevation runs at high effort/" \
+sed "s/^EFFORT=\"$authoring_effort\".*/EFFORT=\"high\"   # settled: elevation runs at high effort/" \
   "$ce_plan_overlay" > "$reconstructed_upstream"
 reconstructed_sha=$(sha256sum "$reconstructed_upstream" | cut -d' ' -f1)
 [ "$reconstructed_sha" = "$guarded_sha" ] \
@@ -289,8 +289,8 @@ for dir in "$current" "$omp_current"; do
     [ -f "$installed" ] || { echo "elevation adapter not installed: $installed" >&2; exit 1; }
     cmp -s "$ce_plan_overlay" "$installed" \
       || { echo "installed elevation adapter differs from the overlay: $installed" >&2; exit 1; }
-    grep -qE "^EFFORT=\"$judgment_effort\"([[:space:]]|\$)" "$installed" \
-      || { echo "installed elevation adapter does not assign EFFORT=$judgment_effort: $installed" >&2; exit 1; }
+    grep -qE "^EFFORT=\"$authoring_effort\"([[:space:]]|\$)" "$installed" \
+      || { echo "installed elevation adapter does not assign EFFORT=$authoring_effort: $installed" >&2; exit 1; }
     [ -x "$installed" ] || { echo "installed elevation adapter lost its executable bit: $installed" >&2; exit 1; }
   done
 done
@@ -307,13 +307,13 @@ inode_after=$(stat -c %i "$current/skills/ce-plan/scripts/elevation-dispatch.sh"
 mapfile -d '' installed_argv < <("$current/skills/ce-plan/scripts/elevation-dispatch.sh" --emit-adapter fable)
 argv_carries_effort=0
 for i in "${!installed_argv[@]}"; do
-  if [ "${installed_argv[$i]}" = "--effort" ] && [ "${installed_argv[$((i + 1))]}" = "$judgment_effort" ]; then
+  if [ "${installed_argv[$i]}" = "--effort" ] && [ "${installed_argv[$((i + 1))]}" = "$authoring_effort" ]; then
     argv_carries_effort=1
     break
   fi
 done
 [ "$argv_carries_effort" = 1 ] \
-  || { echo "installed elevation adapter argv does not carry --effort $judgment_effort" >&2; exit 1; }
+  || { echo "installed elevation adapter argv does not carry --effort $authoring_effort" >&2; exit 1; }
 
 # Fixture archive script has a different digest (neither upstream nor overlay):
 # apply leaves it byte-identical and warns, without failing the run.

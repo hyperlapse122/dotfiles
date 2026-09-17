@@ -140,10 +140,10 @@ role_offenders() {
     "gemini": "google-antigravity/gemini-3.8-flash:high",
     "plan": "@fable",
     "reviewer": "google-antigravity/gemini-3.8-flash:high",
-    "skim": "google-antigravity/gemini-3.8-flash:high",
+    "skim": "google-antigravity/gemini-3.8-flash:low",
     "slow": "google-antigravity/gemini-3.8-flash:high",
-    "smol": "google-antigravity/gemini-3.8-flash:high",
-    "tiny": "google-antigravity/gemini-3.8-flash:high",
+    "smol": "google-antigravity/gemini-3.8-flash:low",
+    "tiny": "google-antigravity/gemini-3.8-flash:low",
     "worker": "google-antigravity/gemini-3.8-flash:high"
   }' '
     (.modelRoles // {}) as $have
@@ -384,6 +384,11 @@ grep -q 'gemini-3.8-flash' "$scratch/gap.err" ||
   fail 'the thinking-level warning did not name the model'
 grep -q 'high' "$scratch/gap.err" ||
   fail 'the thinking-level warning did not name the declared effort'
+# The catalog offers `low`, which the mechanical entry declares, so only the
+# implementation entry's `high` is unsupported; the probe reads each roster
+# entry's own effort rather than conflating the two entries on one model.
+grep -q 'declares effort low' "$scratch/gap.err" &&
+  fail 'the thinking-level warning named the mechanical entry effort low, not just the implementation entry effort high'
 grep -Fq 'config set modelRoles' "$state" ||
   fail 'the thinking-level warning run did not go on to assert the declared roles'
 
@@ -635,8 +640,37 @@ declared_of "$swapped_script" > "$swapped_declared"
 jq -e '
   .modelRoles.default == "google-antigravity/gemini-4.0-flash:high"
   and .modelRoles.tiny == "google-antigravity/gemini-9.8-lite-stub:high"
-  and (.enabledModels | index("google-antigravity/gemini-4.0-flash")) != null' \
+  and .enabledModels == ["google-antigravity/gemini-4.0-flash", "google-antigravity/gemini-9.8-lite-stub"]' \
   "$swapped_declared" >/dev/null ||
   fail "a changed roster model did not reach the derived roles: $(jq -c '{enabledModels, roles: .modelRoles}' "$swapped_declared")"
+
+# --- two entries on one model dedupe enabledModels but keep two selectors -- #
+
+# KTD8. A mechanical entry and an implementation entry can name the same
+# model at two different thinking levels: an operator adding a rung does not
+# always reach for a second model. enabledModels must still list that model
+# once, while modelRoles.tiny and modelRoles.default keep diverging, because
+# the selector carries the effort alongside the model id.
+dedup_workers='[
+ {"id":"omp-dedup-mechanical","agent":"omp","model":"google-antigravity/gemini-9.9-dedup-stub","effort":"low",
+  "shapes":["mechanical"],"brief":"placeholder"},
+ {"id":"omp-dedup-implementation","agent":"omp","model":"google-antigravity/gemini-9.9-dedup-stub","effort":"high",
+  "shapes":["implementation"],"brief":"placeholder"}
+]'
+dedup_script="$scratch/omp-settings-dedup.sh"
+render "$source_root" "$scratch" "$chezmoi_bin" linux \
+  "$source_root/.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl" \
+  "$dedup_script" \
+  "$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$dedup_workers")" ||
+  fail 'a roster with two entries on one omp model failed to render'
+
+dedup_declared="$scratch/declared-dedup.json"
+declared_of "$dedup_script" > "$dedup_declared"
+jq -e '
+  .enabledModels == ["google-antigravity/gemini-9.9-dedup-stub"]
+  and .modelRoles.tiny == "google-antigravity/gemini-9.9-dedup-stub:low"
+  and .modelRoles.default == "google-antigravity/gemini-9.9-dedup-stub:high"' \
+  "$dedup_declared" >/dev/null ||
+  fail "two entries on one model did not dedupe enabledModels or keep both selectors: $(jq -c '{enabledModels, roles: .modelRoles}' "$dedup_declared")"
 
 printf 'omp settings reconcile: ok\n'
