@@ -165,6 +165,4 @@ Remain on the current branch; the common branch/commit/CI rules apply and this s
 
 `packages/omp-orca` builds the native `before_agent_start` extension. It resolves the current Orca role on every call and replaces its own system-prompt block. `packages/orchestration-hook` supplies the shared payload and the complete lead context. Native patch contents are data.
 
-`packages/antigravity-sidecar` binds to `127.0.0.1:45123`. `models.yml` routes omp's Google Antigravity provider through it with `providers.antigravityEndpoint: auto`. Only `request.systemInstruction.parts[].text` is transformed. User messages and tool data remain unchanged. The phase-70 activation script starts the service after builds and command reconciliation, and restarts it when its binary or unit changes.
-
 `packages/figma-auth` builds the on-demand Figma OAuth command. Authentication tests use isolated stores and never read live credentials. The ordinary Orca TUI default remains Claude; all eight Git actions use omp with its declared model policy.
