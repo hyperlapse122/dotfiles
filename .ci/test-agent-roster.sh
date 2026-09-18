@@ -54,13 +54,13 @@ chmod 0700 "$scratch/bin/op"
 wrapper="$scratch/roster-wrapper.tmpl"
 printf '%s\n' '{{- includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}' >"$wrapper"
 
-# --- positive: the committed roster renders and prints six ids ------------ #
+# --- positive: the committed roster renders and prints seven ids ---------- #
 
 positive_out="$scratch/positive.out"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$positive_out" ||
   fail 'the committed roster failed to render'
 model_count=$(grep -c . "$positive_out")
-[[ $model_count -eq 6 ]] || fail "the committed roster printed $model_count model id(s), want 6"
+[[ $model_count -eq 7 ]] || fail "the committed roster printed $model_count model id(s), want 7"
 
 # --- negative and alternate-valid cases ------------------------------------ #
 
@@ -134,13 +134,21 @@ assert_render_fails codex-missing-judgment \
   '[{"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["fallback"],"brief":"x"}]' \
   'no codex entry declares the judgment shape'
 
+# A roster missing a judgment shape for omp fails, mirroring the codex guard.
+assert_render_fails omp-missing-judgment \
+  '[{"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
+    {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"}]' \
+  'no omp entry declares the judgment shape'
+
 # Two claude implementation entries distinguished by rung (sonnet, a fake
 # second rung) pass. The second rung is a visibly fake id rather than `opus`,
-# which the roster no longer declares.
+# which the roster no longer declares. An omp judgment entry is present so
+# this positive fixture also covers the omp-judgment-minimum guard above.
 assert_render_ok claude-two-rungs \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"claude-stub-rung","agent":"claude","model":"claude-9.9-stub","effort":"medium","shapes":["implementation"],"rung":"stub-rung","brief":"x"},
-    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]'
+    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
+    {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["judgment"],"brief":"x"}]'
 
 # Two claude implementation entries sharing a rung fail the render naming it.
 assert_render_fails claude-missing-rung \
