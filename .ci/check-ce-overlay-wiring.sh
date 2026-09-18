@@ -55,6 +55,10 @@ set -euo pipefail
 #   - a job that calls the hold script, the upstream gate, or an offline overlay
 #     test installs chezmoi in an earlier step, because the gate renders the
 #     roster's authoring effort
+# DOCUMENTATION (AGENTS.md)
+#   - names CE_REBASE_TOKEN, base.json, home/.chezmoidata/ce-overlay-rebase.json,
+#     Final delivery, and the auto-merge setting
+#   - does not name GUARDED_UPSTREAM_VERSION
 # NEGATIVE FIXTURES. When run against this repository, the check also applies
 # each mutation in .ci/fixtures/ce-overlay-wiring/mutations.json to a scratch copy
 # and requires the named assertion to fail, so no assertion is vacuous.
@@ -773,6 +777,7 @@ def run_checks(root, aux_root, dynamic=True):
     check_rebase_workflow(workflow_dir, aux_root, dynamic)
     check_review_workflow(workflow_dir, aux_root)
     check_chezmoi_before_gates(workflow_dir)
+    check_documentation(root, aux_root)
     return list(failures)
 
 
@@ -824,6 +829,26 @@ def check_chezmoi_before_gates(workflow_dir):
                         "chezmoi in an earlier step"
                     )
 
+
+def check_documentation(root, aux_root):
+    agents_md = root / "AGENTS.md"
+    if not agents_md.exists():
+        agents_md = aux_root / "AGENTS.md"
+    if not agents_md.exists():
+        return
+    text = agents_md.read_text(encoding="utf-8")
+    for needle in (
+        "CE_REBASE_TOKEN",
+        "base.json",
+        "home/.chezmoidata/ce-overlay-rebase.json",
+        "Final delivery",
+    ):
+        if needle not in text:
+            fail(f"AGENTS.md: missing documentation for {needle!r}")
+    if "auto-merge" not in text:
+        fail("AGENTS.md: missing documentation for the auto-merge setting")
+    if "GUARDED_UPSTREAM_VERSION" in text:
+        fail("AGENTS.md: still names retired GUARDED_UPSTREAM_VERSION")
 
 def main():
     root = pathlib.Path(sys.argv[1]).resolve()

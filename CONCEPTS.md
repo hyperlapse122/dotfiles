@@ -130,3 +130,11 @@ The bottom Layer, rendered from configuration rather than by any client. It exis
 
 ### Heartbeat deadline
 The time a host declares, with each heartbeat, before which it will be heard from again. It is carried per heartbeat rather than fixed in firmware, so a status indicator that is silent for hours and an animation pushing frames choose different values without either one reflashing the keyboard.
+
+## External tool releases and overlays
+
+### Held-back pin
+The state where the lock job kept the committed compound-engineering entry because the overlay patches do not survive the newly resolved release. The candidate release stays held back until the patches are rebased. The rest of the release lock updates and commits normally.
+
+### Pristine pre-image
+The unmodified upstream file extracted by the include-only pristine external. It provides the reference base for verifying pre-images and calculating patch application without modifying tracked archive files.
