@@ -125,6 +125,10 @@ jobs:
           # path (src/github.com/hyperlapse122/dotfiles/.install-prerequisites.sh) resolves exactly
           # as it does on a real host.
           export HOME="${RUNNER_TEMP}/fakehome"
+          # chezmoi resolves its config and state from XDG_*_HOME before HOME. A
+          # local replay on a host that sets them would overwrite the real
+          # ~/.config/chezmoi/chezmoi.toml with a fakehome sourceDir.
+          unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
           SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
           mkdir -p "${SRC}"
           cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
@@ -400,6 +404,7 @@ jobs:
         run: |
           set -euxo pipefail
           export HOME="${RUNNER_TEMP}/fakehome"
+          unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
           SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
           mkdir -p "${SRC}"
 
@@ -790,6 +795,7 @@ jobs:
         run: |
           set -euxo pipefail
           export HOME="${RUNNER_TEMP}/fakehome"
+          unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
           SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
           mkdir -p "${SRC}"
           cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"

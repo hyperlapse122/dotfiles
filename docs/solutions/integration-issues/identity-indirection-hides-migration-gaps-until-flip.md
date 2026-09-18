@@ -46,6 +46,8 @@ Build a rehearsal of the post-switch state and run the real gates there:
 3. Give the copy a git index (`git init` then `git add -A`) so gates that call `git rev-parse` or `git ls-files` still run.
 4. Run every gate in the checkout **and** in the copy. Diff the pass sets.
 
+When a replayed step points `HOME` at a throwaway directory, also unset `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME`. chezmoi reads those before `HOME`. On a host that sets them, `chezmoi init` in a fakehome writes the fakehome `sourceDir` into the real `~/.config/chezmoi/chezmoi.toml`, and it records script state in the real `chezmoistate.boltdb`. After the scratch directory is removed, every later `chezmoi` command fails with `stat <fakehome>/src/...: no such file or directory`. To recover, run `chezmoi init --source="$HOME/src/github.com/hyperlapse122/dotfiles"`.
+
 A gate that passes in the checkout and fails in the rehearsal is a latent post-switch break. The run that found these 19 used exactly this diff:
 
 ```text
