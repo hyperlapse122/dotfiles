@@ -238,6 +238,7 @@ A native yield is not an Orca result and MUST NOT start another wait.
 MUST NOT end the turn while workers remain outstanding unless its verified native adapter permits that
 An absent or mismatched adapter grants no permission to end the turn
 Process the result and release settled workers when required before acknowledging a real Delivery.
+Pass the explicit Orca timeout as `--timeout-ms 240000`, a four-minute checkpoint, and retain the returned command handle.
 WAIT_EXECUTION_RULES
     if grep -F 'start the next wait, end the turn' "$wait_section" >/dev/null; then
       soft_fail "${harness_ids[$i]} ($target_os) shared example unconditionally ends the turn"
@@ -470,6 +471,8 @@ The repair command is idempotent and silent on success, so a pre-dispatch run co
 agentWait.reason: codex-hooks-review-prompt
 run `orca-ide agent hooks prepare-codex` and retry the dispatch rather than editing `~/.codex/config.toml` by hand
 MUST NOT edit `~/.codex/config.toml` trust records by hand, because `chezmoi apply` owns the dotfiles-side hook records and manual edits would contend with them.
+the run writes the four-minute checkpoint fixed above into `--timeout-ms` in place of the figure the guide prints
+the blocking interval a harness paragraph tells a coordinator to maximize is this inner layer, never the checkpoint
 NEEDLES
 
 # The garden registry mechanics the core used to carry now live in this
@@ -607,6 +610,7 @@ This clause never blocks a run.
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
 A substantive failure on the omp mechanical seat is retried once on the omp implementation seat before the mechanical row leaves the agent
+the one value written over the guide's own figure is the four-minute `--timeout-ms` checkpoint
 COORDINATOR_NEEDLES
 
 # These rules used to be fenced off by a harness conditional inside the
@@ -764,6 +768,7 @@ garden cmd <name> setup-upstream aoe-session
 aoe add <project> -t <title>
 the aoe worktree name
 Never put project identity in an aoe title
+Keep the explicit Orca timeout and retain the returned command handle.
 BANNED
 
 [[ $soft_failed -eq 0 ]] || exit 1
