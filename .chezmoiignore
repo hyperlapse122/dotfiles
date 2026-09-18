@@ -2,14 +2,16 @@
 ./AGENTS.md
 ./CONCEPTS.md
 ./STRATEGY.md
-./agents
-./agents.lock
 ./mise.toml
 ./mise.lock
 ./README.md
 ./LICENSE
 ./package.json
 ./docs
+# Created in the workspace by .github/workflows/render-dotfiles.yml. .gitignore
+# hides it from git, which chezmoi does not consult -- a local checkout that has
+# it would otherwise deploy it. .ci/top-level-boundary-inventory.yaml lists it
+# under generated_in_source, which requires both this line and the .gitignore one.
 ./_artifacts
 # Root-owned system config installed to /etc by
 # .chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl
@@ -128,12 +130,6 @@
 .chezmoiscripts/50-linux-kde/*.sh
 {{- end }}
 
-
-# Advisor improvement plans (repo-meta docs); never linked into $HOME.
-./plans
-
-# internal documentations
-./docs
 
 # Containerized / CI environments: Podman creates /run/.containerenv, Docker
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a

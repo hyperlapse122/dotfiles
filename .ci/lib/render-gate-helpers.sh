@@ -49,9 +49,9 @@ write_fact_stub() {
 }
 
 render_ignore() {
-  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 jetson=${7:-false} variant
-  variant="$scratch/ignore-$os-$container-$jetson.tmpl"
-  write_fact_stub "$repo_root/.chezmoiignore" "$variant" "$container" "$jetson"
+  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 jetson=${7:-false} desktop=${8:-gnome} variant
+  variant="$scratch/ignore-$os-$desktop-$container-$jetson.tmpl"
+  write_fact_stub "$repo_root/.chezmoiignore" "$variant" "$container" "$jetson" "$desktop"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }
 
