@@ -11,11 +11,15 @@
 #     byte-identical to the fixture post-images, executable only for the adapters
 #   - a converged tree changes no inode; a stale post-image, a foreign or same-content
 #     symlink, and a directory at a target are replaced; a wrong mode is fixed in place
-#   - a non-plain directory in the archive-owned chain fails the run
+#   - a non-plain directory in the archive-owned chain fails the run with exit 1
+#     before any file is installed, in either copy and on either install path
 #   - a missing git, a base.json tag that differs from the directory, a pristine file
 #     that differs from its pre-image, a pristine file at the absent path, a patch that
 #     does not apply, and a post-image mismatch each degrade every path in every copy
-#     together, and the run still exits 0
+#     together, and the run still exits 0; a destination at the absent path survives
+#   - the install is a transaction: a cp or mv that fails part-way undoes every earlier
+#     install, degrades every path, and leaves no temp file; when the degrade install
+#     fails too, the whole tree is unchanged and the run still exits 0
 #   - a symlinked version directory is skipped; a missing overlay or version directory
 #     changes nothing; a shasum-only PATH installs; no sha256 tool changes nothing
 #   - the scratch directory is gone after every run
@@ -230,6 +234,17 @@ snapshot() { # <dir>
   find "$1" -exec stat -c '%n %F %i %a %s %Y' {} + | LC_ALL=C sort
 }
 
+tree_state() { # <dir> -> every entry with its type, permission bits and link target, plus file digests; no inode or directory time
+  find "$1" -exec stat -c '%N %F %a' {} + | LC_ALL=C sort
+  find "$1" -type f -exec sha256sum -- {} + | LC_ALL=C sort
+}
+
+assert_no_transaction_debris() { # <label>
+  local debris
+  debris=$(find "$home" -name '*.chezmoi-*' -print)
+  [ -z "$debris" ] || fail "$1: temp or backup files remain: $debris"
+}
+
 inodes() {
   local dir key
   for dir in "${copies[@]}"; do
@@ -307,9 +322,11 @@ mkdir -p "$foreign_dir"
 printf 'outside\n' > "$foreign_dir/keep.md"
 rm -rf "$current/skills/ce-sweep/references/sources"
 ln -sfn "$foreign_dir" "$current/skills/ce-sweep/references/sources"
+state_before=$(snapshot "$home")
 run_prov "$prov" "$scratch/chain.err"
-[ "$prov_status" != 0 ] || fail "provisioner accepted a symlinked directory component"
+[ "$prov_status" = 1 ] || fail "provisioner did not exit 1 for a symlinked directory component (exit $prov_status)"
 grep -q 'is not a plain directory' "$scratch/chain.err" || fail "directory-chain conflict not reported"
+[ "$(snapshot "$home")" = "$state_before" ] || fail "the refused run changed the tree"
 [ -L "$current/skills/ce-sweep/references/sources" ] || fail "provisioner deleted an archive-owned directory component"
 [ ! -e "$foreign_dir/gitlab-issues.md" ] || fail "provisioner wrote through the symlinked directory"
 [ "$(cat "$foreign_dir/keep.md")" = outside ] || fail "provisioner disturbed the symlinked directory contents"
@@ -317,7 +334,7 @@ grep -q 'is not a plain directory' "$scratch/chain.err" || fail "directory-chain
 # --- restricted PATH directories: only the tools the provisioner needs ---
 # The digest and git tools vary per rung, which shows the install does not depend
 # on which digest tool is present and never aborts the apply when none is.
-core_tools=(mkdir cp mv rm cmp dirname readlink cut chmod mktemp stat env)
+core_tools=(mkdir rmdir cp mv rm cmp dirname readlink cut chmod mktemp stat env)
 make_bin_dir() { # <name> <extra tool>... -> prints the PATH directory
   local dir="$scratch/bin-$1" tool
   shift
@@ -340,6 +357,34 @@ shift 2
 exec "$(command -v sha256sum)" "\$@"
 EOF
 chmod 755 "$bin_shasum/shasum"
+# A PATH directory whose <tool> fails when "<previous argument>@<last argument>"
+# matches <pattern>, and otherwise runs the real tool. It injects one failing cp
+# or mv into an otherwise working provisioner.
+make_failing_dir() { # <name> <tool> <pattern> -> prints the PATH directory
+  local dir="$scratch/bin-$1" tool
+  mkdir -p "$dir"
+  for tool in "${core_tools[@]}" git sha256sum; do
+    [ "$tool" = "$2" ] || ln -sf "$(command -v "$tool")" "$dir/$tool"
+  done
+  cat > "$dir/$2" <<EOF
+#!$bash_bin
+prev=''
+last=''
+for arg in "\$@"; do
+  prev=\$last
+  last=\$arg
+done
+case "\$prev@\$last" in
+  $3)
+    echo "$2: injected failure" >&2
+    exit 1
+    ;;
+esac
+exec "$(command -v "$2")" "\$@"
+EOF
+  chmod 755 "$dir/$2"
+  printf '%s' "$dir"
+}
 
 # --- AE5: no git degrades every path together, then the next apply patches ---
 build_fake_ce
@@ -360,6 +405,79 @@ state_before=$(snapshot "$home")
 run_ok "converged, no git" "$prov" "$scratch/converged-no-git.err" "$bin_no_git"
 [ "$(snapshot "$home")" = "$state_before" ] || fail "a converged tree changed without git"
 [ ! -s "$scratch/converged-no-git.err" ] || fail "a converged tree warned without git: $(cat "$scratch/converged-no-git.err")"
+
+# --- a foreign directory component in the second copy is refused before the first copy is touched ---
+# The refusal has to precede every install, or the first copy would be patched while
+# the second keeps a customized interview without its added source.
+for chain_label in patched degraded; do
+  if [ "$chain_label" = degraded ]; then
+    chain_path=$bin_no_git
+    chain_component=skills/ce-plan/scripts
+  else
+    chain_path=''
+    chain_component=skills/ce-sweep/references/sources
+  fi
+  build_fake_ce
+  rm -rf "${omp_current:?}/$chain_component"
+  mkdir -p "$(dirname "$omp_current/$chain_component")"
+  ln -sfn "$foreign_dir" "$omp_current/$chain_component"
+  state_before=$(snapshot "$home")
+  run_prov "$prov" "$scratch/chain-omp.err" "$chain_path"
+  [ "$prov_status" = 1 ] || fail "$chain_label chain refusal in the second copy exited $prov_status, want 1"
+  grep -q 'is not a plain directory' "$scratch/chain-omp.err" || fail "$chain_label chain refusal in the second copy was not reported"
+  [ "$(snapshot "$home")" = "$state_before" ] || fail "$chain_label chain refusal in the second copy changed the tree"
+done
+
+# --- a failing mv on the last install undoes every earlier install, then degrades every path ---
+# Seven of eight paths are installed when the last mv fails. The two foreign
+# entries at the added path have to come back exactly as they were.
+build_fake_ce
+foreign_file="$scratch/foreign-persona.md"
+printf 'foreign persona\n' > "$foreign_file"
+ln -s "$foreign_file" "$current/$k_persona"
+mkdir -p "$omp_current/$k_persona"
+printf 'inside\n' > "$omp_current/$k_persona/inside.md"
+bin_fail_last=$(make_failing_dir fail-last mv "*.chezmoi-*.tmp@$omp_current/$k_persona")
+run_ok "failing last install" "$prov" "$scratch/fail-last.err" "$bin_fail_last"
+grep -qF 'injected failure' "$scratch/fail-last.err" || fail "failing last install: the injected failure did not run"
+for dir in "${copies[@]}"; do
+  for key in "$k_plan" "$k_brain" "$k_int"; do
+    assert_pristine "failing last install" "$dir/$key" "$key"
+  done
+done
+[ -L "$current/$k_persona" ] && [ "$(readlink "$current/$k_persona")" = "$foreign_file" ] || fail "failing last install: the foreign symlink was not restored"
+[ "$(cat "$foreign_file")" = 'foreign persona' ] || fail "failing last install: the foreign file changed"
+[ "$(cat "$omp_current/$k_persona/inside.md")" = inside ] || fail "failing last install: the directory at the added path was not restored"
+assert_warns_each_path "failing last install" "$scratch/fail-last.err"
+assert_no_transaction_debris "failing last install"
+assert_archive_owned_untouched "failing last install"
+
+# --- when the degrade install fails as well, the whole tree is unchanged ---
+build_fake_ce
+for dir in "${copies[@]}"; do
+  mkdir -p "$dir/skills/ce-plan/scripts" "$dir/skills/ce-brainstorm/scripts"
+  for key in "$k_plan" "$k_brain" "$k_int"; do
+    printf 'customized %s\n' "$key" > "$dir/$key"
+  done
+done
+chmod 0600 "$omp_current/$k_int"
+ln -s "$foreign_file" "$current/$k_persona"
+state_before=$(tree_state "$home")
+bin_fail_int=$(make_failing_dir fail-int mv "*.chezmoi-*.tmp@$omp_current/$k_int")
+run_ok "failing degrade install" "$prov" "$scratch/fail-degrade.err" "$bin_fail_int"
+[ "$(tree_state "$home")" = "$state_before" ] || fail "failing degrade install: the tree changed"
+assert_warns_each_path "failing degrade install" "$scratch/fail-degrade.err"
+assert_no_transaction_debris "failing degrade install"
+
+# --- a failing cp while staging leaves no temp file and no new directory ---
+build_fake_ce
+state_before=$(tree_state "$home")
+bin_fail_stage=$(make_failing_dir fail-stage cp "*@$omp_current/$k_plan.chezmoi-*.tmp")
+run_ok "failing staging" "$prov" "$scratch/fail-stage.err" "$bin_fail_stage"
+grep -qF 'injected failure' "$scratch/fail-stage.err" || fail "failing staging: the injected failure did not run"
+[ "$(tree_state "$home")" = "$state_before" ] || fail "failing staging: the tree changed"
+assert_warns_each_path "failing staging" "$scratch/fail-stage.err"
+assert_no_transaction_debris "failing staging"
 
 # --- portable digest tool selection ---
 build_fake_ce
@@ -416,18 +534,25 @@ for dir in "${copies[@]}"; do
 done
 assert_warns_each_path "pristine mode mismatch" "$scratch/pre-mode.err"
 
-# --- a pristine file at the added path: upstream ships it, so it is installed ---
+# --- a pristine file at the added path: no verified pre-image, so the target stays as it is ---
 build_fake_ce
 mkdir -p "$pristine/skills/ce-sweep/references/sources"
 printf 'upstream persona\n' > "$pristine/$k_persona"
+printf 'customized persona\n' > "$current/$k_persona"
+chmod 0600 "$current/$k_persona"
+state_before=$(tree_state "$current/skills/ce-sweep/references/sources")
 run_ok "collision" "$prov" "$scratch/collision.err"
 for dir in "${copies[@]}"; do
   for key in "$k_plan" "$k_brain" "$k_int"; do
     assert_pristine "collision" "$dir/$key" "$key"
   done
-  [ "$(cat "$dir/$k_persona")" = 'upstream persona' ] || fail "collision: the upstream file was not installed in $dir"
 done
+[ "$(tree_state "$current/skills/ce-sweep/references/sources")" = "$state_before" ] || fail "collision: the existing target at the added path changed"
+[ "$(cat "$current/$k_persona")" = 'customized persona' ] || fail "collision: the existing target lost its content"
+[ "$(stat -c '%a' "$current/$k_persona")" = 600 ] || fail "collision: the existing target lost its mode"
+[ ! -e "$omp_current/$k_persona" ] || fail "collision: a file appeared at the absent path in $omp_current"
 assert_warns_each_path "collision" "$scratch/collision.err"
+assert_no_transaction_debris "collision"
 
 # --- a patch that does not apply degrades every path ---
 build_fake_ce

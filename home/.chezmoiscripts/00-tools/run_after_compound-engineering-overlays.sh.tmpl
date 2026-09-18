@@ -50,13 +50,21 @@
 #     pre-image is copied into a private scratch git repository, patched, given
 #     the recorded mode, and checked against the recorded sha256. The script never
 #     patches a destination in place. It installs each result into every copy.
+#   - Installing is one transaction. First a read-only pass refuses, with exit 1,
+#     any directory component that is not a plain directory, before anything
+#     changes. Then the script stages every new file beside its destination, sets
+#     each old entry aside, and moves the new files into place. When a step fails,
+#     it puts every path back as it was, removes its temp files, and degrades as
+#     below. When it cannot put a path back, it warns and exits 2.
 #   - Any failure (a tag that differs from the directory, a pre-image that
 #     differs from its record, no git, a patch that does not apply, a post-image
-#     that differs from its record) degrades every path in every copy together.
-#     Each pristine file that matches its recorded pre-image is installed
-#     unmodified. Every other target stays unchanged. Each path gets a warning,
-#     and the script exits 0. It never installs unverified patched content and
-#     never mixes patched and unpatched results.
+#     that differs from its record, an install step) degrades every path in every
+#     copy together. Each pristine file that matches its recorded pre-image is
+#     installed unmodified, as one transaction of its own. Every other target
+#     stays unchanged, including a path whose pre-image is absent but that
+#     upstream now ships. Each path gets a warning, and the script exits 0. It
+#     never installs unverified patched content and never mixes patched and
+#     unpatched results.
 #   - Without a sha256 tool nothing can be verified: one warning, no change, exit 0.
 #
 # The script does no network I/O. The ce-sweep persona and its added source
@@ -125,7 +133,11 @@ BASE_SEGMENT="v${BASE_TAG#compound-engineering-v}"
 KEY_COUNT="${#PATCH_KEYS[@]}"
 
 SCRATCH=''
+TX_OPEN=0
 cleanup() {
+  if [ "$TX_OPEN" -eq 1 ]; then
+    rollback_jobs || warn "could not undo every change; the tree may hold a mix of patched and unpatched files"
+  fi
   if [ -n "$SCRATCH" ]; then
     rm -rf -- "$SCRATCH"
   fi
@@ -170,12 +182,16 @@ sha256_of() {   # <path> -> prints hex digest on stdout; empty output, nonzero s
   "${SHA256_CMD[@]}" "$1" 2>/dev/null | cut -d' ' -f1
 }
 
+perm_of() {   # <path> -> prints the permission bits in octal
+  stat -c '%a' -- "$1" 2>/dev/null || stat -f '%Lp' -- "$1" 2>/dev/null
+}
+
 # Owner-execute bit through stat: access(2) reports EACCES for X_OK on a noexec
 # mount, which would misread every file as 0644. The bit is what the recorded
 # 0644 and 0755 mean, so a umask that narrowed the group bits changes nothing.
 mode_of() {   # <path> -> prints 0755 when the owner execute bit is set, else 0644
   local perm
-  perm="$(stat -c '%a' -- "$1" 2>/dev/null || stat -f '%Lp' -- "$1" 2>/dev/null)" || return 1
+  perm="$(perm_of "$1")" || return 1
   if [ $((8#$perm & 8#100)) -ne 0 ]; then
     printf '0755'
   else
@@ -187,7 +203,7 @@ is_plain_file() {   # <path> -> true for a regular file that is not a symlink
   [ -f "$1" ] && [ ! -L "$1" ]
 }
 
-ensure_directory_chain() {   # <base-dir> <relative-file-path> -> mkdir the archive-owned chain under base, or exit 1 on a foreign non-directory
+check_directory_chain() {   # <base-dir> <relative-file-path> -> read-only; warns and returns 1 for a component that is a symlink or not a directory
   local base="$1" relative="$2" node component
   IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$relative")"
   node="$base"
@@ -195,33 +211,210 @@ ensure_directory_chain() {   # <base-dir> <relative-file-path> -> mkdir the arch
     node="$node/$component"
     if [ -L "$node" ] || { [ -e "$node" ] && [ ! -d "$node" ]; }; then
       warn "$node is not a plain directory; remove it and re-apply"
-      exit 1
+      return 1
     fi
-    [ -d "$node" ] || mkdir -- "$node"
   done
 }
 
-reclaim_destination() {   # <path> -> remove a foreign symlink or non-file entry at path, warning to stderr
-  local destination="$1"
-  if [ -L "$destination" ]; then
-    warn "replaced foreign symlink $destination -> $(readlink -- "$destination")"
-    rm -f -- "$destination"
-  elif [ -e "$destination" ] && [ ! -f "$destination" ]; then
-    warn "replaced non-file entry $destination"
-    rm -rf -- "$destination"
+make_directory_chain() {   # <base-dir> <relative-file-path> -> mkdir the missing components, recording each one in CREATED_DIRS
+  local base="$1" relative="$2" node component
+  IFS=/ read -r -a COMPONENTS <<<"$(dirname -- "$relative")"
+  node="$base"
+  for component in "${COMPONENTS[@]}"; do
+    node="$node/$component"
+    if [ ! -d "$node" ]; then
+      mkdir -- "$node" || return 1
+      CREATED_DIRS+=("$node")
+    fi
+  done
+}
+
+# One job per destination change: install (a new file at base/relative) or chmod
+# (only the mode differs). Every job records what it changed, so a failure can
+# put the tree back as it was. An old entry is kept beside its destination as
+# <destination>.chezmoi-<pid>.bak, and a new file is staged as
+# <destination>.chezmoi-<pid>.tmp on the same filesystem. Bash 3.2 has no empty
+# "${array[@]}" under set -u, so every loop runs over an index.
+JOB_KIND=()
+JOB_BASE=()
+JOB_REL=()
+JOB_ARG=()
+JOB_DONE=()
+JOB_ASIDE=()
+JOB_COMMITTED=()
+JOB_OLDPERM=()
+JOB_NOTE=()
+CREATED_DIRS=()
+
+reset_jobs() {   # -> empties the job list
+  JOB_KIND=()
+  JOB_BASE=()
+  JOB_REL=()
+  JOB_ARG=()
+  JOB_DONE=()
+  JOB_ASIDE=()
+  JOB_COMMITTED=()
+  JOB_OLDPERM=()
+  JOB_NOTE=()
+  CREATED_DIRS=()
+}
+
+add_job() {   # <install|chmod> <base-dir> <relative-path> <file to install, or mode> <warning after the commit>
+  local j="${#JOB_KIND[@]}"
+  JOB_KIND[j]="$1"
+  JOB_BASE[j]="$2"
+  JOB_REL[j]="$3"
+  JOB_ARG[j]="$4"
+  JOB_DONE[j]="$5"
+  JOB_ASIDE[j]=none
+  JOB_COMMITTED[j]=0
+  JOB_OLDPERM[j]=''
+  JOB_NOTE[j]=''
+}
+
+stage_job() {   # <index> -> makes the missing directories and copies the new file beside its destination
+  local j="$1" dest
+  dest="${JOB_BASE[j]}/${JOB_REL[j]}"
+  make_directory_chain "${JOB_BASE[j]}" "${JOB_REL[j]}" || {
+    warn "could not create the directories for $dest"
+    return 1
+  }
+  rm -rf -- "$dest.chezmoi-$$.tmp" "$dest.chezmoi-$$.bak" || return 1
+  cp -p -- "${JOB_ARG[j]}" "$dest.chezmoi-$$.tmp" || {
+    warn "could not stage $dest"
+    return 1
+  }
+}
+
+commit_job() {   # <index> -> keeps the old entry, then moves the staged file into place (or sets the mode)
+  local j="$1" dest temp backup
+  dest="${JOB_BASE[j]}/${JOB_REL[j]}"
+  temp="$dest.chezmoi-$$.tmp"
+  backup="$dest.chezmoi-$$.bak"
+  if [ "${JOB_KIND[j]}" = chmod ]; then
+    JOB_OLDPERM[j]="$(perm_of "$dest")" || return 1
+    chmod "${JOB_ARG[j]}" "$dest" || return 1
+    JOB_COMMITTED[j]=1
+    return 0
   fi
+  if [ -L "$dest" ]; then
+    JOB_NOTE[j]="replaced foreign symlink $dest -> $(readlink -- "$dest")"
+    mv -- "$dest" "$backup" || return 1
+    JOB_ASIDE[j]=move
+  elif [ -e "$dest" ] && [ ! -f "$dest" ]; then
+    JOB_NOTE[j]="replaced non-file entry $dest"
+    mv -- "$dest" "$backup" || return 1
+    JOB_ASIDE[j]=move
+  elif [ -f "$dest" ]; then
+    JOB_ASIDE[j]=copy
+    cp -p -- "$dest" "$backup" || return 1
+  fi
+  mv -f -- "$temp" "$dest" || {
+    warn "could not install $dest"
+    return 1
+  }
+  JOB_COMMITTED[j]=1
 }
 
-install_via_temp() {   # <source> <destination> -> cp -p to a same-directory temp file then mv -f into place
-  local source="$1" destination="$2" temp
-  temp="$destination.chezmoi-$$.tmp"
-  cp -p -- "$source" "$temp"
-  mv -f -- "$temp" "$destination"
+rollback_job() {   # <index> -> puts one destination back as it was; returns 1 when a step fails
+  local j="$1" dest rc=0
+  dest="${JOB_BASE[j]}/${JOB_REL[j]}"
+  if [ "${JOB_KIND[j]}" = chmod ]; then
+    if [ "${JOB_COMMITTED[j]}" -eq 1 ]; then
+      chmod "${JOB_OLDPERM[j]}" "$dest" || rc=1
+    fi
+  else
+    rm -f -- "$dest.chezmoi-$$.tmp" || rc=1
+    case "${JOB_ASIDE[j]}" in
+      copy)
+        if [ "${JOB_COMMITTED[j]}" -eq 1 ]; then
+          mv -f -- "$dest.chezmoi-$$.bak" "$dest" || rc=1
+        else
+          rm -f -- "$dest.chezmoi-$$.bak" || rc=1
+        fi
+        ;;
+      move)
+        if [ "${JOB_COMMITTED[j]}" -eq 1 ]; then
+          rm -f -- "$dest" || rc=1
+        fi
+        mv -- "$dest.chezmoi-$$.bak" "$dest" || rc=1
+        ;;
+      *)
+        if [ "${JOB_COMMITTED[j]}" -eq 1 ]; then
+          rm -f -- "$dest" || rc=1
+        fi
+        ;;
+    esac
+  fi
+  if [ "$rc" -ne 0 ]; then
+    warn "could not restore $dest"
+  fi
+  return "$rc"
 }
 
-# Same scratch-git environment as .ci/lib/ce-overlay.sh (ceo_git), so the CI gate
-# and this apply cannot disagree: no user or system configuration, no enclosing
-# repository, and no whitespace or line-ending rewrite.
+rollback_jobs() {   # -> undoes every job in reverse order, then removes the directories the jobs made
+  local j rc=0
+  for ((j = ${#JOB_KIND[@]} - 1; j >= 0; j--)); do
+    rollback_job "$j" || rc=1
+  done
+  for ((j = ${#CREATED_DIRS[@]} - 1; j >= 0; j--)); do
+    rmdir -- "${CREATED_DIRS[j]}" 2>/dev/null || true
+  done
+  return "$rc"
+}
+
+perform_jobs() {   # -> stages every new file, then commits every job in order; returns 1 at the first failing step
+  local j count="${#JOB_KIND[@]}"
+  for ((j = 0; j < count; j++)); do
+    if [ "${JOB_KIND[j]}" = install ]; then
+      stage_job "$j" || return 1
+    fi
+  done
+  for ((j = 0; j < count; j++)); do
+    commit_job "$j" || return 1
+  done
+}
+
+finish_jobs() {   # -> drops the kept old entries and prints each job's warnings
+  local j dest
+  for ((j = 0; j < ${#JOB_KIND[@]}; j++)); do
+    dest="${JOB_BASE[j]}/${JOB_REL[j]}"
+    if [ "${JOB_ASIDE[j]}" != none ]; then
+      rm -rf -- "$dest.chezmoi-$$.bak" || warn "could not remove $dest.chezmoi-$$.bak"
+    fi
+    if [ -n "${JOB_NOTE[j]}" ]; then
+      warn "${JOB_NOTE[j]}"
+    fi
+    if [ -n "${JOB_DONE[j]}" ]; then
+      warn "${JOB_DONE[j]}"
+    fi
+  done
+}
+
+run_jobs() {   # -> 0 when every job committed; 1 after every change was undone; exits 1 for a foreign directory component and 2 when a change cannot be undone
+  local j
+  for ((j = 0; j < ${#JOB_KIND[@]}; j++)); do
+    if [ "${JOB_KIND[j]}" = install ] && ! check_directory_chain "${JOB_BASE[j]}" "${JOB_REL[j]}"; then
+      exit 1
+    fi
+  done
+  TX_OPEN=1
+  if ! perform_jobs; then
+    if ! rollback_jobs; then
+      TX_OPEN=0
+      warn "could not undo every change; the tree may hold a mix of patched and unpatched files"
+      exit 2
+    fi
+    TX_OPEN=0
+    return 1
+  fi
+  TX_OPEN=0
+  finish_jobs
+}
+
+# The `git apply` settings match ceo_git in .ci/lib/ce-overlay.sh: no user or
+# system configuration, no enclosing repository, and no whitespace or line-ending
+# rewrite. ceo_git adds diff and commit settings that this script does not use.
 git_isolated() {   # <git arguments> -> runs git inside the scratch boundary
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY \
     -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_COMMON_DIR -u GIT_NAMESPACE \
@@ -241,8 +434,9 @@ note_failure() {   # <reason> -> keeps the first reason
 }
 
 # Per path: verified (a pristine file matches its recorded pre-image), upstream
-# (the pre-image is absent but upstream now ships the file), none (absent, and
-# absent upstream), or unusable.
+# (the pre-image is absent but upstream now ships the file, so no pre-image
+# verifies it and its target stays unchanged), none (absent, and absent
+# upstream), or unusable.
 PRISTINE_STATE=()
 PRISTINE_CHECKED=0
 verify_pristine() {   # -> fills PRISTINE_STATE; every failing path warns and sets DEGRADE_REASON
@@ -317,41 +511,47 @@ compute_post_images() {   # -> patches every verified pre-image; every failing p
   done
 }
 
-degrade_all() {   # -> installs verified pristine files, leaves every other target unchanged, warns per path
-  local c k key dest staged
+stage_pristine_files() {   # -> copies every verified pristine file, with its mode, into $SCRATCH/pristine; returns 1 when a copy fails
+  local k key staged
   for ((k = 0; k < KEY_COUNT; k++)); do
-    key="${PATCH_KEYS[k]}"
-    case "${PRISTINE_STATE[k]}" in
-      verified | upstream)
-        staged="$SCRATCH/pristine/$key"
-        mkdir -p -- "$SCRATCH/pristine/$(dirname -- "$key")"
-        cp -- "$PRISTINE_DIR/$key" "$staged"
-        chmod "$(mode_of "$PRISTINE_DIR/$key")" "$staged"
-        ;;
-    esac
+    if [ "${PRISTINE_STATE[k]}" = verified ]; then
+      key="${PATCH_KEYS[k]}"
+      staged="$SCRATCH/pristine/$key"
+      mkdir -p -- "$SCRATCH/pristine/$(dirname -- "$key")" || return 1
+      cp -- "$PRISTINE_DIR/$key" "$staged" || return 1
+      chmod "$(mode_of "$PRISTINE_DIR/$key")" "$staged" || return 1
+    fi
   done
+}
+
+degrade_all() {   # -> installs verified pristine files as one transaction, leaves every other target unchanged, warns per path
+  local c k j key dest staged
+  if ! stage_pristine_files; then
+    DEGRADE_REASON="$DEGRADE_REASON; the pristine files could not be staged"
+    for ((k = 0; k < KEY_COUNT; k++)); do
+      PRISTINE_STATE[k]=unusable
+    done
+  fi
+  reset_jobs
   for ((c = 0; c < COPY_COUNT; c++)); do
     for ((k = 0; k < KEY_COUNT; k++)); do
       key="${PATCH_KEYS[k]}"
       dest="${COPIES[c]}/$key"
-      case "${PRISTINE_STATE[k]}" in
-        verified | upstream)
-          staged="$SCRATCH/pristine/$key"
-          if is_plain_file "$dest" && cmp -s -- "$staged" "$dest" && [ "$(mode_of "$dest")" = "$(mode_of "$staged")" ]; then
-            warn "$dest: holds the unmodified upstream file ($DEGRADE_REASON)"
-          else
-            ensure_directory_chain "${COPIES[c]}" "$key"
-            reclaim_destination "$dest"
-            install_via_temp "$staged" "$dest"
-            warn "$dest: installed the unmodified upstream file ($DEGRADE_REASON)"
-          fi
-          ;;
-        *)
-          warn "$dest: left unchanged ($DEGRADE_REASON)"
-          ;;
-      esac
+      staged="$SCRATCH/pristine/$key"
+      if [ "${PRISTINE_STATE[k]}" != verified ]; then
+        warn "$dest: left unchanged ($DEGRADE_REASON)"
+      elif is_plain_file "$dest" && cmp -s -- "$staged" "$dest" && [ "$(mode_of "$dest")" = "$(mode_of "$staged")" ]; then
+        warn "$dest: holds the unmodified upstream file ($DEGRADE_REASON)"
+      else
+        add_job install "${COPIES[c]}" "$key" "$staged" "$dest: installed the unmodified upstream file ($DEGRADE_REASON)"
+      fi
     done
   done
+  if ! run_jobs; then
+    for ((j = 0; j < ${#JOB_KIND[@]}; j++)); do
+      warn "${JOB_BASE[j]}/${JOB_REL[j]}: left unchanged ($DEGRADE_REASON; installing the unmodified files failed)"
+    done
+  fi
 }
 
 # Plan: 0 converged, 1 mode differs, 2 needs its post-image.
@@ -391,6 +591,26 @@ if [ -z "$DEGRADE_REASON" ] && [ "$NEEDS_POST_IMAGE" -eq 1 ]; then
   fi
 fi
 
+if [ -z "$DEGRADE_REASON" ]; then
+  reset_jobs
+  for ((C = 0; C < COPY_COUNT; C++)); do
+    for ((K = 0; K < KEY_COUNT; K++)); do
+      case "${ACTIONS[C * KEY_COUNT + K]}" in
+        1)
+          add_job chmod "${COPIES[C]}" "${PATCH_KEYS[K]}" "${POST_MODE[K]}" ''
+          ;;
+        2)
+          add_job install "${COPIES[C]}" "${PATCH_KEYS[K]}" "$SCRATCH/work/${PATCH_KEYS[K]}" ''
+          ;;
+      esac
+    done
+  done
+  if ! run_jobs; then
+    warn "an install step failed and every change was undone"
+    note_failure "an install step failed"
+  fi
+fi
+
 if [ -n "$DEGRADE_REASON" ]; then
   if [ -z "$SCRATCH" ]; then
     SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/compound-engineering-overlays.XXXXXX")"
@@ -401,20 +621,3 @@ if [ -n "$DEGRADE_REASON" ]; then
   degrade_all
   exit 0
 fi
-
-for ((C = 0; C < COPY_COUNT; C++)); do
-  for ((K = 0; K < KEY_COUNT; K++)); do
-    RELATIVE="${PATCH_KEYS[K]}"
-    DESTINATION="${COPIES[C]}/$RELATIVE"
-    case "${ACTIONS[C * KEY_COUNT + K]}" in
-      1)
-        chmod "${POST_MODE[K]}" "$DESTINATION"
-        ;;
-      2)
-        ensure_directory_chain "${COPIES[C]}" "$RELATIVE"
-        reclaim_destination "$DESTINATION"
-        install_via_temp "$SCRATCH/work/$RELATIVE" "$DESTINATION"
-        ;;
-    esac
-  done
-done
