@@ -9,7 +9,7 @@ source "$repo_root/.ci/lib/render-gate-helpers.sh"
 source "$repo_root/.ci/lib/source-root.sh"
 source_root=$(resolve_source_root "$repo_root")
 setup_render_scratch omp-transition
-mkdir -p "$scratch/home/.local/bin" "$scratch/home/.config/systemd/user" "$scratch/home/Library/LaunchAgents"
+mkdir -p "$scratch/home/.local/bin"
 
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/.chezmoiremove" "$scratch/remove"
 ! grep -Fxq '.local/bin/agy' "$scratch/remove" || fail 'absent public command was selected'
@@ -39,10 +39,13 @@ for preserved in .gemini/antigravity-cli/settings.json .gemini/antigravity-cli/m
 done
 printf 'managed instructions\n' >"$scratch/home/.gemini/AGENTS.md"
 printf 'managed plugin\n' >"$scratch/home/.gemini/config/plugins/dotfiles-agy/plugin.json"
-for pass in first repeat; do
+apply_removal() {
   env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/empty.toml" --source "$scratch/removal-source" \
     --destination "$scratch/home" apply --force
+}
+for pass in first repeat; do
+  apply_removal
   [[ ! -e "$scratch/home/.gemini/AGENTS.md" && ! -e "$scratch/home/.gemini/config/plugins/dotfiles-agy" ]] || fail "$pass apply retained managed Antigravity files"
   [[ ! -L "$scratch/home/.local/bin/agy" && ! -L "$scratch/home/.local/bin/antigravity" ]] || fail "$pass apply retained managed command links"
   for preserved in .gemini/antigravity-cli/settings.json .gemini/antigravity-cli/mcp_oauth_tokens.json .gemini/antigravity-cli/history .omp/agent/agent.db .local/share/compound-engineering/sentinel; do
@@ -50,7 +53,7 @@ for pass in first repeat; do
   done
 done
 
-ktd2_paths=(
+sidecar_paths=(
   .config/systemd/user/antigravity-sidecar.service
   .config/systemd/user/default.target.wants/antigravity-sidecar.service
   Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist
@@ -87,27 +90,28 @@ ln -s ../orca-settings-reconcile.service "$scratch/home/.config/systemd/user/def
 printf 'sibling binary\n' >"$scratch/home/.local/bin/sibling-bin"
 printf 'sqlite db\n' >"$scratch/home/.omp/agent/agent.db"
 
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/.chezmoiremove" "$scratch/remove-linux"
-for entry in "${ktd2_paths[@]}" .omp/agent/models.yml; do
-  grep -Fxq "$entry" "$scratch/remove-linux" || fail "linux render missing prune entry: $entry"
-done
+assert_siblings_preserved() {
+  local pass=$1 context=${2:-}
+  local suffix=${context:+" $context"}
+  [[ -L "$scratch/home/.config/systemd/user/default.target.wants/orca-settings-reconcile.service" ]] || fail "$pass apply removed sibling symlink$suffix"
+  [[ -f "$scratch/home/.local/bin/sibling-bin" && $(cat "$scratch/home/.local/bin/sibling-bin") == 'sibling binary' ]] || fail "$pass apply removed sibling bin$suffix"
+  [[ -f "$scratch/home/.omp/agent/agent.db" && $(cat "$scratch/home/.omp/agent/agent.db") == 'sqlite db' ]] || fail "$pass apply removed sibling agent.db$suffix"
+}
 
-render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$source_root/.chezmoiremove" "$scratch/remove-darwin"
-for entry in "${ktd2_paths[@]}" .omp/agent/models.yml; do
-  grep -Fxq "$entry" "$scratch/remove-darwin" || fail "darwin render missing prune entry: $entry"
+for os in linux darwin; do
+  render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$source_root/.chezmoiremove" "$scratch/remove-$os"
+  for entry in "${sidecar_paths[@]}" .omp/agent/models.yml; do
+    grep -Fxq "$entry" "$scratch/remove-$os" || fail "$os render missing prune entry: $entry"
+  done
 done
 
 cp "$scratch/remove-linux" "$scratch/removal-source/.chezmoiremove"
 for pass in first repeat; do
-  env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
-    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$scratch/removal-source" \
-    --destination "$scratch/home" apply --force
-  for path in "${ktd2_paths[@]}" .omp/agent/models.yml; do
+  apply_removal
+  for path in "${sidecar_paths[@]}" .omp/agent/models.yml; do
     [[ ! -e "$scratch/home/$path" && ! -L "$scratch/home/$path" ]] || fail "$pass apply retained $path"
   done
-  [[ -L "$scratch/home/.config/systemd/user/default.target.wants/orca-settings-reconcile.service" ]] || fail "$pass apply removed sibling symlink"
-  [[ -f "$scratch/home/.local/bin/sibling-bin" && $(cat "$scratch/home/.local/bin/sibling-bin") == 'sibling binary' ]] || fail "$pass apply removed sibling bin"
-  [[ -f "$scratch/home/.omp/agent/agent.db" && $(cat "$scratch/home/.omp/agent/agent.db") == 'sqlite db' ]] || fail "$pass apply removed sibling agent.db"
+  assert_siblings_preserved "$pass"
 done
 
 printf 'providers:\n  custom:\n    baseUrl: https://api.example.com\n' >"$scratch/home/.omp/agent/models.yml"
@@ -117,9 +121,7 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/.chezmoiremove
 
 cp "$scratch/remove-custom-models" "$scratch/removal-source/.chezmoiremove"
 for pass in first repeat; do
-  env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
-    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$scratch/removal-source" \
-    --destination "$scratch/home" apply --force
+  apply_removal
   [[ -f "$scratch/home/.omp/agent/models.yml" ]] || fail "$pass apply removed custom models.yml"
   [[ $(cat "$scratch/home/.omp/agent/models.yml") == "$custom_content" ]] || fail "$pass apply changed custom models.yml"
 done
@@ -130,11 +132,7 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/.chezmoiremove
 
 cp "$scratch/remove-no-models" "$scratch/removal-source/.chezmoiremove"
 for pass in first repeat; do
-  env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
-    "$chezmoi_bin" --config "$scratch/empty.toml" --source "$scratch/removal-source" \
-    --destination "$scratch/home" apply --force || fail "$pass apply failed with no paths present"
-  [[ -L "$scratch/home/.config/systemd/user/default.target.wants/orca-settings-reconcile.service" ]] || fail "$pass apply removed sibling symlink when paths absent"
-  [[ -f "$scratch/home/.local/bin/sibling-bin" && $(cat "$scratch/home/.local/bin/sibling-bin") == 'sibling binary' ]] || fail "$pass apply removed sibling bin when paths absent"
-  [[ -f "$scratch/home/.omp/agent/agent.db" && $(cat "$scratch/home/.omp/agent/agent.db") == 'sqlite db' ]] || fail "$pass apply removed sibling agent.db when paths absent"
+  apply_removal || fail "$pass apply failed with no paths present"
+  assert_siblings_preserved "$pass" "when paths absent"
 done
 printf 'omp transition: all cases passed\n'

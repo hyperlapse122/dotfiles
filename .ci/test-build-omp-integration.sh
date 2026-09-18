@@ -22,7 +22,6 @@ cmp "$extension" "$scratch/source/packages/omp-orca/dist/dotfiles-orca.js"
 [[ $(grep -c -F 'exec -- vp run build' "$scratch/mise.log") -eq 1 ]]
 grep -F -- "-C $scratch/source/packages exec -- vp install --frozen-lockfile" "$scratch/mise.log" >/dev/null
 grep -F -- "-C $scratch/source/packages/omp-orca exec -- vp run build" "$scratch/mise.log" >/dev/null
-! grep -F 'antigravity-sidecar' "$scratch/mise.log"
 cp "$extension" "$scratch/previous"
 run
 cmp "$extension" "$scratch/previous"

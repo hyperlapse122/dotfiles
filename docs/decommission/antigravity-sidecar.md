@@ -31,7 +31,7 @@ Ignore "No such process" if the agent is not loaded.
 
 Run `chezmoi apply` from this repository checkout.
 
-Chezmoi deletes the managed sources and prunes the deployed sidecar paths.
+The apply prunes every deployed sidecar path listed in section 4.
 It also removes `~/.omp/agent/models.yml` if the file names `127.0.0.1:45123`.
 
 ## 3. Clear the omp model cache
@@ -40,8 +40,10 @@ It also removes `~/.omp/agent/models.yml` if the file names `127.0.0.1:45123`.
 2. Back up `~/.omp/agent/models.db`:
 
 ```sh
-cp ~/.omp/agent/models.db ~/.omp/agent/models.db.bak
+sqlite3 ~/.omp/agent/models.db ".backup ~/.omp/agent/models.db.bak"
 ```
+
+`.backup` copies a consistent snapshot, including changes still in the WAL file.
 
 3. Delete cached model entries:
 
@@ -89,8 +91,9 @@ If `chezmoi apply` ran before stopping the service, run the stop commands after 
 Linux:
 
 ```sh
-systemctl --user disable --now antigravity-sidecar.service
+systemctl --user stop antigravity-sidecar.service
 systemctl --user reset-failed antigravity-sidecar.service
+systemctl --user daemon-reload
 ```
 
 macOS:
@@ -99,7 +102,7 @@ macOS:
 launchctl bootout "gui/$(id -u)/app.dotfiles.antigravity-sidecar"
 ```
 
-The stop commands work after the unit files are gone.
+`stop` still works after the apply, because the running unit stays loaded after its file is gone. `disable` would fail there, because the unit file no longer exists.
 
 On a lingering Linux host, this recovery stop is required because the process survives logout.
 On macOS and on Linux hosts without lingering, the process ends at the next logout because nothing starts the sidecar again.
