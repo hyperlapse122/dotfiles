@@ -922,7 +922,7 @@ write_capability_cache() {
 
   # shellcheck disable=SC2034 # read by the sourced helper to suppress its emit.
   CAPABILITY_CACHE_IDENTITY_MAIN=0
-  # shellcheck source=.chezmoitemplates/capability-cache-identity.sh
+  # shellcheck source=home/.chezmoitemplates/capability-cache-identity.sh
   source "$helper"
   unset CAPABILITY_CACHE_IDENTITY_MAIN
 

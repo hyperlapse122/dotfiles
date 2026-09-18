@@ -787,6 +787,27 @@ resolve_root_case 'BASH_SOURCE fallback' "$source_root/$registry" "$repo_root/$h
 resolve_root_case 'flat scratch fallback' "$flat_hook_dir/$registry" "$flat_hook_dir/$hook"
 resolve_root_case 'rooted scratch fallback' "$rooted_hook_dir/home/$registry" "$rooted_hook_dir/$hook"
 
+assert_hook_source_root_refusal() {
+  local label=$1 marker_content=$2 expected_diag=$3 hook_dir marker err
+  hook_dir="$scratch/refusal-hook-$label"
+  mkdir -p -- "$hook_dir"
+  cp "$repo_root/$hook" "$hook_dir/$hook"
+  marker="$hook_dir/.chezmoiroot"
+  printf '%s' "$marker_content" >"$marker"
+  err=$(env -u CHEZMOI_SOURCE_DIR HOME="$fixture_home" bash -c '_INSTALL_PREREQUISITES_TEST_SOURCE=1
+    source "$1"
+    hook_source_root' bash "$hook_dir/$hook" 2>&1 >/dev/null) &&
+    fail "hook_source_root refusal '$label': unexpectedly succeeded"
+  grep -qF -- "$marker" <<<"$err" ||
+    fail "hook_source_root refusal '$label': diagnostic did not name marker $marker: $err"
+  grep -qF -- "$expected_diag" <<<"$err" ||
+    fail "hook_source_root refusal '$label': diagnostic missing '$expected_diag': $err"
+}
+
+assert_hook_source_root_refusal 'empty' '' 'is empty'
+assert_hook_source_root_refusal 'absolute' '/etc' 'names an absolute path'
+assert_hook_source_root_refusal 'parent-escaping' '../home' 'escapes its parent'
+
 assert_registry_rejected() {
   local source=$1 expected=$2
   reset_cache

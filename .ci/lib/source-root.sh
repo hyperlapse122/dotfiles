@@ -104,12 +104,17 @@ join_source_state() {
 # resolved source root populated with symlinks to <source_root>'s entries,
 # ensuring the fixture's source root is an isolated real directory before any
 # test writes private copies into it. When absent, <dest> itself is the source
-# root. Prints the fixture's resolved source root path.
+# root. Prints the fixture's resolved source root path. Returns 1 and prints
+# a diagnostic on stderr naming <dest> when resolve_source_root fails or
+# returns an empty value.
 populate_fixture_source_root() {
   local dest=$1 source_root=$2 entry dest_source_root
   if [[ -f "$dest/.chezmoiroot" ]]; then
     local rel_source
-    rel_source=$(resolve_source_root "$dest")
+    if ! rel_source=$(resolve_source_root "$dest") || [[ -z "$rel_source" ]]; then
+      printf 'populate_fixture_source_root: cannot resolve source root for %s\n' "$dest" >&2
+      return 1
+    fi
     rm -f -- "$rel_source"
     mkdir -p -- "$rel_source"
     for entry in "$source_root"/* "$source_root"/.[!.]*; do

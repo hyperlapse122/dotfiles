@@ -110,6 +110,24 @@ printf 'nonexistent\n' >"$missing_dir_root/.chezmoiroot"
 assert_resolve_fails 'a .chezmoiroot naming a directory that does not exist fails' "$missing_dir_root" 'does not exist'
 
 # ---------------------------------------------------------------------------
+# Part 1b -- is_source_state_segment unit cases
+# ---------------------------------------------------------------------------
+
+for seg in dot_x private_x symlink_x remove_x \
+    .chezmoi.toml.tmpl .chezmoidata .chezmoiexternals .chezmoiignore \
+    .chezmoiremove .chezmoiscripts .chezmoitemplates .keys Library; do
+  is_source_state_segment "$seg" || fail "is_source_state_segment unexpectedly returned 1 for $seg"
+done
+pass 'is_source_state_segment returns 0 for source-state prefix patterns and exact names'
+
+for seg in packages .ci .chezmoiroot mise.toml dotfile; do
+  if is_source_state_segment "$seg"; then
+    fail "is_source_state_segment unexpectedly returned 0 for $seg"
+  fi
+done
+pass 'is_source_state_segment returns 1 for non-source-state names'
+
+# ---------------------------------------------------------------------------
 # Part 2 -- parity with chezmoi's own .chezmoi.sourceDir
 # ---------------------------------------------------------------------------
 
@@ -175,6 +193,59 @@ require_file "$fixtures_root" "$scratch" "$chezmoi_bin" .ci/fixtures/agent-instr
 pass 'require_file accepts a .ci/fixtures/agent-instructions/ path in a rooted scratch tree whose home/ has no .ci'
 
 # ---------------------------------------------------------------------------
+# Part 3b -- populate_fixture_source_root unit cases
+# ---------------------------------------------------------------------------
+
+pop_parent="$scratch/pop-fixture-parent"
+mkdir -p -- "$pop_parent"
+
+pop_source="$scratch/pop-source"
+mkdir -p -- "$pop_source"
+touch "$pop_source/entry_a" "$pop_source/entry_b"
+
+# Flat fixture fallback (Item 5): when .chezmoiroot is absent,
+# populate_fixture_source_root prints the fixture directory itself and creates nothing.
+flat_fixture="$pop_parent/flat-fixture"
+mkdir -p -- "$flat_fixture"
+flat_pop_out=$(populate_fixture_source_root "$flat_fixture" "$pop_source") ||
+  fail 'populate_fixture_source_root unexpectedly failed for a flat fixture'
+[[ "$flat_pop_out" == "$flat_fixture" ]] ||
+  fail "populate_fixture_source_root printed $flat_pop_out, expected $flat_fixture"
+flat_entries=("$flat_fixture"/* "$flat_fixture"/.[!.]*)
+for e in "${flat_entries[@]}"; do
+  [[ -e "$e" ]] && fail "populate_fixture_source_root created $e in flat fixture"
+done
+pass 'populate_fixture_source_root prints the fixture directory itself and creates nothing when .chezmoiroot is absent'
+
+# Resolver failure on absolute .chezmoiroot (Item 3): makes populate_fixture_source_root
+# fail, and nothing is created outside the fixture.
+abs_fixture="$pop_parent/abs-fixture"
+mkdir -p -- "$abs_fixture"
+printf '/etc\n' >"$abs_fixture/.chezmoiroot"
+
+abs_err=$(populate_fixture_source_root "$abs_fixture" "$pop_source" 2>&1) &&
+  fail 'populate_fixture_source_root unexpectedly succeeded for a fixture with absolute .chezmoiroot'
+grep -qF -- "$abs_fixture" <<<"$abs_err" ||
+  fail "populate_fixture_source_root error did not name fixture $abs_fixture: $abs_err"
+
+# Confirm no new entry appeared in the fixture's parent
+parent_entries=("$pop_parent"/*)
+for e in "${parent_entries[@]}"; do
+  [[ "$e" == "$flat_fixture" || "$e" == "$abs_fixture" ]] ||
+    fail "unexpected entry created in fixture parent: $e"
+done
+# Check that scratch area has no leaked symlinks
+for e in "$scratch"/* "$scratch"/.[!.]*; do
+  [[ -e "$e" ]] || continue
+  base=$(basename -- "$e")
+  [[ "$base" != "entry_a" && "$base" != "entry_b" ]] ||
+    fail "populate_fixture_source_root leaked symlink $base into scratch"
+done
+[[ ! -e "/entry_a" && ! -e "/entry_b" ]] ||
+  fail 'populate_fixture_source_root leaked symlinks to the filesystem root'
+pass 'populate_fixture_source_root fails on absolute .chezmoiroot and creates nothing outside the fixture'
+
+# ---------------------------------------------------------------------------
 # Part 4 -- the lint: a $repo_root-style join to a source-state name
 # ---------------------------------------------------------------------------
 
@@ -220,6 +291,17 @@ lint_source_state_joins "$mutant_tree" no-such-file.sh "$mutant_report" &&
 grep -qF '$repo_root/.chezmoidata/facts.yaml' "$mutant_report" ||
   fail "the mutant was rejected for the wrong reason: $(tr '\n' ';' <"$mutant_report")"
 pass 'lint mutant: a fixture script joining $repo_root/.chezmoidata/facts.yaml is rejected, with the offending line named'
+
+for prefix in dot_x private_x symlink_x remove_x; do
+  p_tree=$(lint_fixture "mutant-$prefix")
+  p_report="$scratch/lint-mutant-$prefix.report"
+  printf 'read_%s() {\n  cat "$repo_root/%s"\n}\n' "$prefix" "$prefix" >>"$p_tree/.ci/test-fixture.sh"
+  lint_source_state_joins "$p_tree" no-such-file.sh "$p_report" &&
+    fail "the mutant join \$repo_root/$prefix was accepted; the lint does not detect it"
+  grep -qF "\$repo_root/$prefix" "$p_report" ||
+    fail "the mutant $prefix was rejected for the wrong reason: $(tr '\n' ';' <"$p_report")"
+  pass "lint mutant: a fixture script joining \$repo_root/$prefix is rejected, with the offending line named"
+done
 
 negative_tree=$(lint_fixture negative)
 cat >>"$negative_tree/.ci/test-fixture.sh" <<'EOF'

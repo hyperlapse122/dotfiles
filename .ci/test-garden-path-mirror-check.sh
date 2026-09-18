@@ -34,7 +34,7 @@ pass() { printf '  ok  %s\n' "$*"; }
 # Source the helper so the record producer can be driven directly. The guard
 # stops the sourced copy from consuming stdin on its own.
 GARDEN_PATH_MIRROR_SOURCED=1
-# shellcheck source=.chezmoitemplates/garden-path-mirror-check.sh
+# shellcheck source=home/.chezmoitemplates/garden-path-mirror-check.sh
 . "$checker"
 
 # Run the checker over a stream, capturing status and output together.
