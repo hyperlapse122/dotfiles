@@ -11,9 +11,8 @@ import { decide, denyReason, isInjected, SUBAGENT_TOOLS } from "../src/guard.js"
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "payload");
 const ABSENT = join(FIXTURES, "absent");
 
-// Captured, unedited (redaction only) real PreToolUse events from a live
-// session — see the U2 report for the capture commands. Deny-path tests use
-// these rather than a hand-written event, per plan U2 step 4; a synthetic
+// Real PreToolUse events captured from a live session, redacted only.
+// Deny-path tests use these rather than a hand-written event; a synthetic
 // event is reserved for the parser edge cases below (malformed, missing
 // tool_name, non-string tool_name).
 const EVENTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -52,9 +51,8 @@ const WORKER_ENV: NodeJS.ProcessEnv = {
 describe("SUBAGENT_TOOLS", () => {
   it("names the tool captured from a live session per harness", () => {
     expect(SUBAGENT_TOOLS.claude).toEqual(["Agent", "Task"]);
-    // "collaborationspawn_agent" is the captured value (see the U2 report): the
-    // "collaboration" tool namespace concatenated with no separator onto the
-    // base "spawn_agent" name, not the bare name the plan's KTD7 table assumed.
+    // Codex reports "collaborationspawn_agent", the namespace-qualified name,
+    // rather than the bare "spawn_agent".
     expect(SUBAGENT_TOOLS.codex).toEqual(["collaborationspawn_agent"]);
     expect(SUBAGENT_TOOLS.omp).toEqual(["task"]);
   });
@@ -70,9 +68,9 @@ describe("isInjected", () => {
   });
 
   it("is false for a worker with no everyone.md staged", () => {
-    expect(isInjected("worker", { ...WORKER_ENV, DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: ABSENT })).toBe(
-      false,
-    );
+    expect(
+      isInjected("worker", { ...WORKER_ENV, DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR: ABSENT }),
+    ).toBe(false);
   });
 
   it("is true for a lead with everyone.md, coordinator.md, and a non-empty skill staged", () => {
@@ -107,7 +105,9 @@ describe("isInjected", () => {
     try {
       const env = { ...leadEnv(home), ORCA_AGENT_TEAMS_LEADER_PANE: "%3" };
       expect(isInjected("lead", env)).toBe(false);
-      expect(isInjected("worker", { ...WORKER_ENV, ORCA_AGENT_TEAMS_LEADER_PANE: "%1" })).toBe(false);
+      expect(isInjected("worker", { ...WORKER_ENV, ORCA_AGENT_TEAMS_LEADER_PANE: "%1" })).toBe(
+        false,
+      );
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -166,12 +166,11 @@ describe("decide", () => {
     }
   });
 
-  it("does not deny the bare spawn_agent name the plan's KTD7 table assumed", () => {
+  it("does not deny Codex's bare spawn_agent name", () => {
     const home = stagedLeadHome();
     try {
-      // Real capture evidence (U2 step 0) showed Codex reporting
-      // "collaborationspawn_agent", never the bare "spawn_agent". A guard that
-      // matched the bare name would deny nothing in a real session.
+      // Codex reports "collaborationspawn_agent", never the bare "spawn_agent". A
+      // guard that matched the bare name would deny nothing in a real session.
       expect(decide({ tool_name: "spawn_agent" }, "codex", leadEnv(home)).deny).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });

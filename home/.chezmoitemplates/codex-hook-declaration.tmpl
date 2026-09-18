@@ -29,12 +29,10 @@
        It carries NO matcher, deliberately: the binary decides by exact
        tool_name equality, so no matcher can hide a renamed tool from it.
 
-       Adding this event does not disturb the SessionStart trust record.
-       codex-hook-trust.tmpl indexes group and handler positionally WITHIN one
-       event (`…:<event>:<group>:<handler>`), so a new event key gets its own
-       record and `…:session_start:0:0` keeps both its key and its hash. The
-       trust template already maps PreToolUse to `pre_tool_use` and already
-       lists that event as honouring additionalContextLimit.
+       Each event has its own trust record. codex-hook-trust.tmpl indexes group
+       and handler positionally WITHIN one event (`…:<event>:<group>:<handler>`),
+       so this entry is `…:pre_tool_use:0:0` and `…:session_start:0:0` keeps its
+       key and hash whatever other events are declared.
 
        Takes the chezmoi context as its argument. */ -}}
 {{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}

@@ -6,6 +6,7 @@ import extension, {
   MANAGED_BLOCK_END,
   MANAGED_BLOCK_START,
   invokeHook,
+  invokeGuard,
   type BeforeAgentStartEvent,
   type BeforeAgentStartHandler,
   type BeforeAgentStartResult,
@@ -14,6 +15,7 @@ import extension, {
   type ToolCallHandler,
   type ToolCallResult,
 } from "../src/index.js";
+
 function fakeApi(): {
   api: ExtensionAPI;
   handler: (event: BeforeAgentStartEvent) => Promise<BeforeAgentStartResult>;
@@ -22,10 +24,7 @@ function fakeApi(): {
   let handler: BeforeAgentStartHandler | undefined;
   let toolCall: ToolCallHandler | undefined;
   const api: ExtensionAPI = {
-    on(
-      event: "before_agent_start" | "tool_call",
-      next: BeforeAgentStartHandler | ToolCallHandler,
-    ) {
+    on(event: "before_agent_start" | "tool_call", next: BeforeAgentStartHandler | ToolCallHandler) {
       if (event === "before_agent_start") {
         handler = next as BeforeAgentStartHandler;
       } else if (event === "tool_call") {
@@ -290,23 +289,13 @@ describe("tool_call guard", () => {
 
   it("does not block task when the guard sleeps past the bound", async () => {
     const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-guard-timeout-"));
-    const previousHook = process.env.DOTFILES_ORCHESTRATION_HOOK;
-    const previousTimeout = process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS;
     const binary = hookScript(dir, "sleep 30");
-    process.env.DOTFILES_ORCHESTRATION_HOOK = binary;
-    process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS = "50";
     try {
       const started = Date.now();
-      const { api, toolCallHandler } = fakeApi();
-      await extension(api);
-      const result = await toolCallHandler({ toolName: "task" });
-      expect(result).toBeUndefined();
+      const result = await invokeGuard("task", binary, { ...process.env }, 50);
+      expect(result).toBeNull();
       expect(Date.now() - started).toBeLessThan(1_000);
     } finally {
-      if (previousHook === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
-      else process.env.DOTFILES_ORCHESTRATION_HOOK = previousHook;
-      if (previousTimeout === undefined) delete process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS;
-      else process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS = previousTimeout;
       rmSync(dir, { recursive: true, force: true });
     }
   });

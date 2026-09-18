@@ -22,23 +22,18 @@ import { join } from "node:path";
 import type { Harness } from "./envelope.js";
 import { resolveHome } from "./home.js";
 import { payload } from "./payload.js";
-import { resolveRole, type Role, type RoleEnv } from "./role.js";
+import { present, resolveRole, type Role, type RoleEnv } from "./role.js";
 
-/** Blocked `tool_name` per harness, matched exactly. Captured from a live session per plan U2 step 0. */
+/** Blocked `tool_name` per harness, matched exactly. Each name was captured from a live session. */
 export const SUBAGENT_TOOLS: Record<Harness, readonly string[]> = {
   claude: ["Agent", "Task"],
-  // Codex 0.155.0 reports the multi-agent spawn tool as "collaborationspawn_agent"
-  // (the "collaboration" tool namespace concatenated directly onto the base
-  // "spawn_agent" name, with no separator), not the bare "spawn_agent" the plan's
-  // KTD7 table assumed from static binary-string evidence. This is the captured
-  // value; see the U2 report for the capture that settled it.
+  // Codex 0.155.0 reports the multi-agent spawn tool as "collaborationspawn_agent":
+  // the "collaboration" tool namespace concatenated directly onto the base
+  // "spawn_agent" name, with no separator. The bare "spawn_agent" never appears
+  // in an event.
   codex: ["collaborationspawn_agent"],
   omp: ["task"],
 };
-
-function present(value: string | undefined): value is string {
-  return value !== undefined && value !== "";
-}
 
 export function readOrchestrationSkill(env: NodeJS.ProcessEnv): string {
   const home = resolveHome(env);
@@ -49,7 +44,7 @@ export function readOrchestrationSkill(env: NodeJS.ProcessEnv): string {
   }
 }
 
-/** Whether this session received the orchestration injection, per KTD6. */
+/** Whether the staged local inputs prove that this session received the orchestration injection. */
 export function isInjected(role: Role, env: NodeJS.ProcessEnv): boolean {
   if (present((env as RoleEnv).ORCA_AGENT_TEAMS_LEADER_PANE)) return false;
   if (role === "worker") return payload("everyone", env) !== null;
@@ -80,10 +75,7 @@ export interface GuardEvent {
   tool_name?: unknown;
 }
 
-export interface Decision {
-  deny: boolean;
-  reason?: string;
-}
+export type Decision = { deny: false } | { deny: true; reason: string };
 
 /** Allow unless `event.tool_name` is a string in the harness's blocked set and this session is injected. */
 export function decide(event: GuardEvent, harness: Harness, env: NodeJS.ProcessEnv): Decision {

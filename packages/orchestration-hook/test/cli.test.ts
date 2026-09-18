@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vite-plus/test";
 import { main, type Io } from "../src/cli.js";
 import { PREAMBLE } from "../src/envelope.js";
@@ -530,11 +531,13 @@ const LEAD_ENV = {
 };
 
 // Captured, unedited (redaction only) real PreToolUse events from a live
-// session — see the U2 report for the capture commands. The Bash event stays
-// synthetic: it is the stale-declaration edge case, not a captured subagent
-// launch.
+// session. The Bash event is synthetic: it is the stale-declaration edge case,
+// not a captured subagent launch.
 const EVENT_FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
-const CLAUDE_AGENT_EVENT = readFileSync(join(EVENT_FIXTURES, "pretooluse-claude-agent.json"), "utf8");
+const CLAUDE_AGENT_EVENT = readFileSync(
+  join(EVENT_FIXTURES, "pretooluse-claude-agent.json"),
+  "utf8",
+);
 const CODEX_SPAWN_AGENT_EVENT = readFileSync(
   join(EVENT_FIXTURES, "pretooluse-codex-spawn-agent.json"),
   "utf8",
@@ -549,7 +552,7 @@ function seedGuardLeadHome(label: string): string {
 }
 
 describe("guard", () => {
-  it("denies an injected Claude Code lead's Agent call, naming the orchestration skill and the Orca dispatch path (AE3)", async () => {
+  it("denies an injected Claude Code lead's Agent call, naming the orchestration skill and the Orca dispatch path", async () => {
     const home = seedGuardLeadHome("deny");
     try {
       const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
@@ -571,7 +574,7 @@ describe("guard", () => {
     }
   });
 
-  it("allows the same environment when stdin is not JSON (AE3)", async () => {
+  it("allows the same environment when stdin is not JSON", async () => {
     const home = seedGuardLeadHome("notjson");
     try {
       const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
@@ -584,7 +587,7 @@ describe("guard", () => {
     }
   });
 
-  it("allows outside Orca (AE4)", async () => {
+  it("allows outside Orca", async () => {
     const { io, out, err } = capture({});
     io.stdin = CLAUDE_AGENT_EVENT;
     expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
@@ -592,7 +595,7 @@ describe("guard", () => {
     expect(err.join("")).toBe("");
   });
 
-  it("allows a stale cached declaration's Bash event even in an injected session (AE6)", async () => {
+  it("allows a stale cached declaration's Bash event even in an injected session", async () => {
     const home = seedGuardLeadHome("bash");
     try {
       const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
@@ -659,6 +662,22 @@ describe("guard", () => {
     try {
       const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
       io.stdin = "";
+      expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("allows on timeout when stdin read never ends", async () => {
+    const home = seedGuardLeadHome("timeout");
+    try {
+      const stdin = new PassThrough();
+      stdin.write('{"tool_name":"Agent"');
+      const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = stdin;
+      io.deadlines = { guardMs: 50 };
       expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
       expect(out.join("")).toBe("{}");
       expect(err.join("")).toBe("");

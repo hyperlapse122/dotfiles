@@ -135,44 +135,33 @@ export function invokeHook(
 export const GUARD_TIMEOUT_MS = 2_000;
 
 function parseDenyReason(text: string): string | null {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(text);
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "hookSpecificOutput" in parsed
-    ) {
-      const output = parsed.hookSpecificOutput;
-      if (
-        typeof output === "object" &&
-        output !== null &&
-        "permissionDecision" in output &&
-        "permissionDecisionReason" in output
-      ) {
-        if (
-          output.permissionDecision === "deny" &&
-          typeof output.permissionDecisionReason === "string"
-        ) {
-          return output.permissionDecisionReason;
-        }
-      }
-    }
+    parsed = JSON.parse(text);
   } catch {
     return null;
   }
-  return null;
+  if (typeof parsed !== "object" || parsed === null || !("hookSpecificOutput" in parsed))
+    return null;
+  const output = parsed.hookSpecificOutput;
+  if (
+    typeof output !== "object" ||
+    output === null ||
+    !("permissionDecision" in output) ||
+    !("permissionDecisionReason" in output)
+  ) {
+    return null;
+  }
+  return output.permissionDecision === "deny" && typeof output.permissionDecisionReason === "string"
+    ? output.permissionDecisionReason
+    : null;
 }
 
 export function invokeGuard(
   toolName: string,
   command = hookPath(),
   env: NodeJS.ProcessEnv = process.env,
-  timeoutMs = env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS !== undefined &&
-  env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS !== "" &&
-  !Number.isNaN(Number(env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS)) &&
-  Number(env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS) >= 0
-    ? Number(env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS)
-    : GUARD_TIMEOUT_MS,
+  timeoutMs = GUARD_TIMEOUT_MS,
 ): Promise<string | null> {
   if (timeoutMs <= 0) {
     return Promise.resolve(null);
@@ -203,8 +192,7 @@ export function invokeGuard(
   };
 
   child.stdin?.on("error", () => {});
-  const input =
-    JSON.stringify({ hook_event_name: "PreToolUse", tool_name: toolName }) + "\n";
+  const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: toolName }) + "\n";
   child.stdin?.end(input);
 
   child.stdout?.setEncoding("utf8");
