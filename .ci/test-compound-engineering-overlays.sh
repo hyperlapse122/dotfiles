@@ -190,7 +190,7 @@ assert_post_images() { # <label>
   local dir key
   for dir in "${copies[@]}"; do
     for key in "${keys[@]}"; do
-      [ -f "$dir/$key" ] && [ ! -L "$dir/$key" ] || fail "$1: $dir/$key is not a regular file"
+      if ! { [ -f "$dir/$key" ] && [ ! -L "$dir/$key" ]; }; then fail "$1: $dir/$key is not a regular file"; fi
       assert_same "$1" "$fx_post/$key" "$dir/$key"
       [ "$(stat -c '%a' "$dir/$key")" = "$(want_mode "$key")" ] || fail "$1: $dir/$key has mode $(stat -c '%a' "$dir/$key"), want $(want_mode "$key")"
     done
@@ -445,7 +445,7 @@ for dir in "${copies[@]}"; do
     assert_pristine "failing last install" "$dir/$key" "$key"
   done
 done
-[ -L "$current/$k_persona" ] && [ "$(readlink "$current/$k_persona")" = "$foreign_file" ] || fail "failing last install: the foreign symlink was not restored"
+if ! { [ -L "$current/$k_persona" ] && [ "$(readlink "$current/$k_persona")" = "$foreign_file" ]; }; then fail "failing last install: the foreign symlink was not restored"; fi
 [ "$(cat "$foreign_file")" = 'foreign persona' ] || fail "failing last install: the foreign file changed"
 [ "$(cat "$omp_current/$k_persona/inside.md")" = inside ] || fail "failing last install: the directory at the added path was not restored"
 assert_warns_each_path "failing last install" "$scratch/fail-last.err"
@@ -603,7 +603,7 @@ run_ok "missing overlay directory" "$prov" "$scratch/no-overlay.err"
 build_fake_ce
 rm -rf "$current" "$omp_current"
 run_ok "missing version directories" "$prov" "$scratch/no-version.err"
-[ ! -e "$current" ] && [ ! -e "$omp_current" ] || fail "a CE version directory was recreated when absent"
+if ! { [ ! -e "$current" ] && [ ! -e "$omp_current" ]; }; then fail "a CE version directory was recreated when absent"; fi
 
 # --- the provisioner keeps no guard table and no associative array ---
 if grep -q 'GUARDED_' "$real_prov" "$prov"; then
@@ -694,7 +694,7 @@ base_json="$overlay_src/base.json"
 # The overlay directory holds the patches and base.json, and nothing else.
 stray_files=$(cd "$overlay_src" && find . -mindepth 1 ! -type d ! -path './patches/*' ! -path ./base.json)
 [ -z "$stray_files" ] || fail "the overlay directory holds files other than patches/** and base.json: $stray_files"
-[ -f "$base_json" ] && [ ! -L "$base_json" ] || fail "base.json is not a regular file"
+if ! { [ -f "$base_json" ] && [ ! -L "$base_json" ]; }; then fail "base.json is not a regular file"; fi
 
 jq -e '
   def sha: type == "string" and test("^[0-9a-f]{64}$");
@@ -772,10 +772,9 @@ authoring_effort=$(<"$scratch/authoring-effort.out")
 for adapter_key in "$k_plan" "$k_brain"; do
   adapter_patch="$overlay_src/patches/$adapter_key.patch"
   adapter_body=$(sed '1,/^@@/d' "$adapter_patch")
-  [ "$(grep -c '^@@' "$adapter_patch")" = 1 ] \
+  if ! { [ "$(grep -c '^@@' "$adapter_patch")" = 1 ] \
     && [ "$(grep -c '^-' <<<"$adapter_body")" = 1 ] \
-    && [ "$(grep -c '^+' <<<"$adapter_body")" = 1 ] \
-    || fail "adapter patch for $adapter_key changes more than one line"
+    && [ "$(grep -c '^+' <<<"$adapter_body")" = 1 ]; }; then fail "adapter patch for $adapter_key changes more than one line"; fi
   grep -q '^-EFFORT="' <<<"$adapter_body" \
     || fail "adapter patch for $adapter_key does not remove the upstream effort line"
   grep -qE "^\+EFFORT=\"$authoring_effort\"([[:space:]]|\$)" <<<"$adapter_body" \

@@ -972,7 +972,7 @@ expect_field closed 42
 close_no=$(call_num 'pr close 42')
 delete_no=$(call_num 'api -X DELETE repos/.*/heads/chore/rebase-ce-overlays-v3.26.9')
 dispatch_no=$(call_num 'workflow run')
-[ "$close_no" -lt "$delete_no" ] && [ "$delete_no" -lt "$dispatch_no" ] || fail 'the order was not close, delete the branch, dispatch'
+if ! { [ "$close_no" -lt "$delete_no" ] && [ "$delete_no" -lt "$dispatch_no" ]; }; then fail 'the order was not close, delete the branch, dispatch'; fi
 pass 'decide closes an orphaned pull request, deletes its branch, then dispatches'
 
 begin 'decide-fork-pr-ignored'
