@@ -37,10 +37,8 @@ install_tailscale() {
     if ! "${DNF[@]}" install -y tailscale; then :; fi
   fi
 
-  if ! rpm -q tailscale >/dev/null 2>&1; then
-    if report_tailscale_missing; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-tailscale-fedora" "site" "tailscale-not-installed" "direction" "operator-blocking" "reason" "dnf left tailscale uninstalled; the by-hand install command was printed above") | trim | indent 6 }}
-    fi
+  if ! rpm -q tailscale >/dev/null 2>&1 && report_tailscale_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-tailscale-fedora" "site" "tailscale-not-installed" "direction" "operator-blocking" "reason" "dnf left tailscale uninstalled; the by-hand install command was printed above") | trim | indent 4 }}
   fi
   clear_tailscale_skip_record
 }
@@ -79,10 +77,8 @@ install_tailscale() {
     if ! "${SUDO[@]}" apt-get install -y tailscale; then :; fi
   fi
 
-  if ! command -v tailscale >/dev/null 2>&1; then
-    if report_tailscale_missing; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-tailscale-ubuntu" "site" "tailscale-not-installed" "direction" "operator-blocking" "reason" "apt-get left tailscale uninstalled; the by-hand install command was printed above") | trim | indent 6 }}
-    fi
+  if ! command -v tailscale >/dev/null 2>&1 && report_tailscale_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-tailscale-ubuntu" "site" "tailscale-not-installed" "direction" "operator-blocking" "reason" "apt-get left tailscale uninstalled; the by-hand install command was printed above") | trim | indent 4 }}
   fi
   clear_tailscale_skip_record
 }
