@@ -4,7 +4,7 @@
 {{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
 #!/usr/bin/env bash
 set -euo pipefail
-{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/omp-orca/src/**" "packages/omp-orca/package.json" "packages/omp-orca/tsconfig.json" "packages/omp-orca/vite.config.ts" "packages/antigravity-sidecar/src/**" "packages/antigravity-sidecar/package.json" "packages/antigravity-sidecar/tsconfig.json" "packages/antigravity-sidecar/vite.config.ts") "values" (list (dict "name" "bun-version" "value" $bunVersion))) }}
+{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/omp-orca/src/**" "packages/omp-orca/package.json" "packages/omp-orca/tsconfig.json" "packages/omp-orca/vite.config.ts") "values" (list (dict "name" "bun-version" "value" $bunVersion))) }}
 
 {{ includeTemplate "repo-root.sh.tmpl" | trim }}
 SRC="$repo_root"
@@ -21,7 +21,6 @@ fi
 
 "$MISE_BIN" -C "$SRC/packages" exec -- vp install --frozen-lockfile
 "$MISE_BIN" -C "$SRC/packages/omp-orca" exec -- vp run build
-"$MISE_BIN" -C "$SRC/packages/antigravity-sidecar" exec -- vp run build
 
 stage_file() {
   local source=$1 destination=$2 mode=$3 temporary ancestor
@@ -41,5 +40,4 @@ stage_file() {
 }
 
 stage_file "$SRC/packages/omp-orca/dist/dotfiles-orca.js" "$HOME/.local/share/dotfiles-omp/dotfiles-orca.js" 0644
-stage_file "$SRC/packages/antigravity-sidecar/dist/antigravity-sidecar" "$HOME/.local/share/chezmoi-commands/incomplete/antigravity-sidecar/antigravity-sidecar" 0755
 {{ end -}}

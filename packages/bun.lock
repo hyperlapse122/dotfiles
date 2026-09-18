@@ -9,15 +9,6 @@
         "vite-plus": "catalog:",
       },
     },
-    "antigravity-sidecar": {
-      "name": "@h82/antigravity-sidecar",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@types/node": "24.13.2",
-        "typescript": "7.0.2",
-        "vite-plus": "catalog:",
-      },
-    },
     "command-reconcile": {
       "name": "@h82/command-reconcile",
       "version": "0.0.0",
@@ -111,8 +102,6 @@
     "@babel/runtime": ["@babel/runtime@7.29.7", "", {}, "sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw=="],
 
     "@blazediff/core": ["@blazediff/core@1.9.1", "", {}, "sha512-ehg3jIkYKulZh+8om/O25vkvSsXXwC+skXmyA87FFx6A/45eqOkZsBltMw/TVteb0mloiGT8oGRTcjRAz66zaA=="],
-
-    "@h82/antigravity-sidecar": ["@h82/antigravity-sidecar@workspace:antigravity-sidecar"],
 
     "@h82/command-reconcile": ["@h82/command-reconcile@workspace:command-reconcile"],
 
