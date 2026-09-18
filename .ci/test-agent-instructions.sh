@@ -627,7 +627,9 @@ while IFS= read -r needle; do
 done <<'CLAUDE_COORDINATOR_NEEDLES'
 A Unit that needs live MCP access its intended recipient does not hold MUST NOT be dispatched to that recipient
 Orca's `worker-start --model` and `--effort` forward to Claude, Codex, and Cursor launches only, so an `omp` row is not selected that way
-confirms the model from the terminal, and dispatches with `worker-start --terminal <handle>`.
+confirms the model from the terminal, and dispatches with `worker-start --task <task_id> --terminal <handle>`.
+the lead MUST NOT re-engage an omp terminal a previous Dispatch ran in, settled or not
+When its Dispatch settles, the seat is a release target and never a reuse target
 omp's own `modelRoles` then never decides which Gemini seat a dispatch uses.
 The version-matched Orca guide owns the exact terminal-launch spelling.
 Size an Implementation Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
@@ -650,6 +652,13 @@ and the elevation worker selects the authoring pair
 the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
 The `claude` reviewer's judgment effort holds while the `codex` reviewer stands beside it; when that reviewer is removed or a run records it as degraded, the `claude` reviewer runs at `
 CLAUDE_COORDINATOR_NEEDLES
+for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
+  if grep -F 're-engages that terminal' "$payload" >/dev/null \
+    || grep -F 'standing seat' "$payload" >/dev/null \
+    || grep -F 'standing omp seat' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired omp seat-reuse rule"
+  fi
+done
 
 # Every model id and effort in the coordinator body comes from agents.roster, so
 # the needles for them are BUILT from a roster render rather than written here.
