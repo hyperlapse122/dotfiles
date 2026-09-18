@@ -22,22 +22,73 @@ install_flatpak_runtime() {
 {{ if $isFedora -}}
   DNF=("${SUDO[@]}" dnf)
   if ! rpm -q flatpak >/dev/null 2>&1; then
-    "${DNF[@]}" install flatpak -y
+    # Exit status is discarded: the flatpak-binary-absent guard in
+    # compute_missing_flatpaks and the final app-install verdict report the
+    # effect, whether the runtime install or the app install is what failed.
+    if ! "${DNF[@]}" install flatpak -y; then
+      printf 'install-flatpaks: dnf install flatpak failed; continuing to the app install attempt\n' >&2
+    fi
   fi
 {{ else if $isUbuntu -}}
   if ! command -v flatpak >/dev/null 2>&1; then
     "${SUDO[@]}" apt-get update -qq || true
-    "${SUDO[@]}" apt-get install -y flatpak
+    if ! "${SUDO[@]}" apt-get install -y flatpak; then
+      printf 'install-flatpaks: apt-get install flatpak failed; continuing to the app install attempt\n' >&2
+    fi
   fi
 {{ end -}}
 
-  "${SUDO[@]}" flatpak remote-add --if-not-exists --system flathub \
-    https://dl.flathub.org/repo/flathub.flatpakrepo
+  if command -v flatpak >/dev/null 2>&1; then
+    "${SUDO[@]}" flatpak remote-add --if-not-exists --system flathub \
+      https://dl.flathub.org/repo/flathub.flatpakrepo || true
+  fi
+}
+
+clear_flatpaks_skip_record() {
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-flatpaks" "site" "flatpak-apps-not-installed") | trim | indent 2 }}
+}
+
+report_flatpaks_missing() {
+  printf 'install-flatpaks: the following flatpak apps are still not installed: %s\n' "$*" >&2
+  printf 'install-flatpaks: install them by hand:\n' >&2
+  printf '  flatpak install --system flathub %s\n' "$*" >&2
+  return 0
+}
+
+missing_flatpaks=()
+compute_missing_flatpaks() {
+  missing_flatpaks=()
+  # The flatpak binary can still be absent here when its own install was
+  # tolerated above; `flatpak list` on a missing binary would fail under
+  # `set -euo pipefail`, so every declared app is reported missing instead
+  # of invoking it.
+  if command -v flatpak >/dev/null 2>&1; then
+    local installed app
+    installed="$(flatpak list --system --app --columns=application 2>/dev/null || true)"
+    for app in "${flatpaks[@]}"; do
+      grep -qx -- "$app" <<<"$installed" || missing_flatpaks+=("$app")
+    done
+  else
+    missing_flatpaks=("${flatpaks[@]}")
+  fi
 }
 
 install_flatpak_apps() {
-  install_flatpak_runtime
-  "${SUDO[@]}" flatpak install --system -y --noninteractive flathub "${flatpaks[@]}"
+  compute_missing_flatpaks
+
+  if [[ "${#missing_flatpaks[@]}" -gt 0 ]]; then
+    install_flatpak_runtime
+    if command -v flatpak >/dev/null 2>&1; then
+      # Exit status is discarded because the post-attempt re-inspection is the verdict.
+      if ! "${SUDO[@]}" flatpak install --system -y --noninteractive flathub "${missing_flatpaks[@]}"; then :; fi
+    fi
+    compute_missing_flatpaks
+  fi
+
+  if [[ "${#missing_flatpaks[@]}" -gt 0 ]] && report_flatpaks_missing "${missing_flatpaks[@]}"; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-flatpaks" "site" "flatpak-apps-not-installed" "direction" "operator-blocking" "reason" "flatpak left declared apps uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}
+  fi
+  clear_flatpaks_skip_record
 }
 
 install_flatpak_apps
