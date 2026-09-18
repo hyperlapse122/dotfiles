@@ -29,16 +29,21 @@ source_root=$(resolve_source_root "$repo_root")
 
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/fingerprint.tmpl
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/repo-root.tmpl
+require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/repo-root.sh.tmpl
 # The fixture source tree dereferences the production partial on every render;
 # its inline consumers only supply data and never duplicate fingerprint logic.
 ln -s "$source_root/.chezmoitemplates/fingerprint.tmpl" \
   "$scratch/source/.chezmoitemplates/fingerprint.tmpl"
 ln -s "$source_root/.chezmoitemplates/repo-root.tmpl" \
   "$scratch/source/.chezmoitemplates/repo-root.tmpl"
+ln -s "$source_root/.chezmoitemplates/repo-root.sh.tmpl" \
+  "$scratch/source/.chezmoitemplates/repo-root.sh.tmpl"
 ln -s "$source_root/.chezmoitemplates/fingerprint.tmpl" \
   "$scratch/rooted/home/.chezmoitemplates/fingerprint.tmpl"
 ln -s "$source_root/.chezmoitemplates/repo-root.tmpl" \
   "$scratch/rooted/home/.chezmoitemplates/repo-root.tmpl"
+ln -s "$source_root/.chezmoitemplates/repo-root.sh.tmpl" \
+  "$scratch/rooted/home/.chezmoitemplates/repo-root.sh.tmpl"
 
 assert_render_ok() {
   local label=$1 source_root=$2 input=$3 expected=$4
@@ -186,11 +191,76 @@ require_file "$repo_root" "$scratch" "$chezmoi_bin" "$gem80_firmware_source"
 assert_render_ok gem80-firmware-baked-path "$repo_root" "$repo_root/$gem80_firmware_source" \
   "SOURCE_DIR=\"$repo_root\""
 
+# Scenario 1: The rendered partial contains no absolute path and no checkout-specific literal.
+printf '{{ includeTemplate "repo-root.sh.tmpl" | trim }}\n' >"$scratch/runtime-repo-root-partial.tmpl"
+assert_render_ok runtime-repo-root-partial "$scratch/source" "$scratch/runtime-repo-root-partial.tmpl" \
+  'repo_root='
+if grep -qF -e "$repo_root" "$scratch/runtime-repo-root-partial.out"; then
+  fail "rendered runtime repo-root partial leaked repository root literal $repo_root"
+fi
+
+# Standalone execution tests for scenarios 2–5:
+# Extract the rendered partial into a standalone scratch script and execute only that.
+runtime_snippet_sh="$scratch/runtime-repo-root.sh"
+cp "$scratch/runtime-repo-root-partial.out" "$runtime_snippet_sh"
+printf '\nprintf "%%s" "$repo_root"\n' >>"$runtime_snippet_sh"
+
+# Scenario 2: Executed with CHEZMOI_SOURCE_DIR set to a flat scratch source, yields that directory.
+actual_flat=$(env CHEZMOI_SOURCE_DIR="$scratch/source" bash "$runtime_snippet_sh")
+if [[ "$actual_flat" != "$scratch/source" ]]; then
+  fail "runtime repo-root flat scratch expected $scratch/source, got $actual_flat"
+fi
+
+# Scenario 3: Executed with CHEZMOI_SOURCE_DIR set to a rooted scratch source's home/, yields scratch root.
+actual_rooted=$(env CHEZMOI_SOURCE_DIR="$scratch/rooted/home" bash "$runtime_snippet_sh")
+if [[ "$actual_rooted" != "$scratch/rooted" ]]; then
+  fail "runtime repo-root rooted scratch expected $scratch/rooted, got $actual_rooted"
+fi
+actual_rooted_slash=$(env CHEZMOI_SOURCE_DIR="$scratch/rooted/home/" bash "$runtime_snippet_sh")
+if [[ "$actual_rooted_slash" != "$scratch/rooted" ]]; then
+  fail "runtime repo-root rooted scratch (trailing slash) expected $scratch/rooted, got $actual_rooted_slash"
+fi
+
+# Scenario 4: Executed with CHEZMOI_SOURCE_DIR unset and stub chezmoi on PATH, yields root.
+mkdir -p "$scratch/stub-bin"
+cat >"$scratch/stub-bin/chezmoi" <<EOF
+#!/bin/sh
+if [ "\$1" = "source-path" ]; then
+  printf '%s\n' "$scratch/rooted/home"
+fi
+EOF
+chmod +x "$scratch/stub-bin/chezmoi"
+actual_stub=$(env -u CHEZMOI_SOURCE_DIR PATH="$scratch/stub-bin:/usr/bin:/bin" bash "$runtime_snippet_sh")
+if [[ "$actual_stub" != "$scratch/rooted" ]]; then
+  fail "runtime repo-root stub chezmoi expected $scratch/rooted, got $actual_stub"
+fi
+
+# Scenario 5: Executed with neither (CHEZMOI_SOURCE_DIR unset, no chezmoi on PATH), yields working directory.
+mkdir -p "$scratch/no-chezmoi-bin"
+for tool in bash pwd test [ printf sh; do
+  tool_path=$(type -P "$tool" 2>/dev/null || true)
+  if [[ -n "$tool_path" ]]; then
+    ln -sf "$tool_path" "$scratch/no-chezmoi-bin/$tool"
+  fi
+done
+mkdir -p "$scratch/isolated-workdir"
+actual_neither=$(cd "$scratch/isolated-workdir" && env -u CHEZMOI_SOURCE_DIR PATH="$scratch/no-chezmoi-bin" bash "$runtime_snippet_sh")
+if [[ "$actual_neither" != "$scratch/isolated-workdir" ]]; then
+  fail "runtime repo-root fallback to pwd expected $scratch/isolated-workdir, got $actual_neither"
+fi
+
+# Scenario 6: Every one of the 17 templates includes the partial and assigns its path variable from $repo_root;
+# a fixture template with the old inline spelling is rejected by the rewritten assertion.
+verified_template_count=0
+
 for template in "$source_root"/.chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl; do
   [[ -f "$template" ]] || continue
   if grep -q 'SRC_ROOT=' "$template"; then
-    grep -q 'SRC_ROOT="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
-      fail "template $(basename "$template") does not use position-independent SRC_ROOT resolution"
+    if ! grep -q 'includeTemplate "repo-root.sh.tmpl"' "$template" || \
+       ! grep -q 'SRC_ROOT="\$repo_root' "$template"; then
+      fail "template $(basename "$template") does not use position-independent SRC_ROOT resolution via repo-root.sh.tmpl"
+    fi
+    verified_template_count=$((verified_template_count + 1))
   fi
 done
 
@@ -198,23 +268,51 @@ for template in "$source_root"/.chezmoiscripts/60-build/run_onchange_after_*.sh.
                 "$source_root"/.chezmoiscripts/00-tools/run_onchange_after_*.sh.tmpl; do
   [[ -f "$template" ]] || continue
   if grep -q '^[[:space:]]*SRC=' "$template"; then
-    grep -q 'SRC="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
-      fail "template $(basename "$template") does not use position-independent SRC resolution"
+    if ! grep -q 'includeTemplate "repo-root.sh.tmpl"' "$template" || \
+       ! grep -q 'SRC="\$repo_root' "$template"; then
+      fail "template $(basename "$template") does not use position-independent SRC resolution via repo-root.sh.tmpl"
+    fi
+    verified_template_count=$((verified_template_count + 1))
   fi
 done
 
-grep -q 'config="\${CHEZMOI_SOURCE_DIR:-' "$source_root/.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl" || \
-  fail "run_once_before_mise-trust.sh.tmpl does not use position-independent config resolution"
+mise_trust_template="$source_root/.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl"
+if ! grep -q 'includeTemplate "repo-root.sh.tmpl"' "$mise_trust_template" || \
+   ! grep -q 'config="\$repo_root' "$mise_trust_template"; then
+  fail "run_once_before_mise-trust.sh.tmpl does not use position-independent config resolution via repo-root.sh.tmpl"
+fi
+verified_template_count=$((verified_template_count + 1))
 
-# The two loops above glob the phases that held a source-path assignment when the
-# PISR fix landed, so a new script in any other phase escaped the gate. This one
-# is keyed by lifecycle instead: every rerun class chezmoi decides from rendered
-# text is scanned, whatever phase it sits in.
 while IFS= read -r template; do
   grep -q '^[[:space:]]*SRC_DIR=' "$template" || continue
-  grep -q 'SRC_DIR="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
-    fail "template $(basename "$template") does not use position-independent SRC_DIR resolution"
+  if ! grep -q 'includeTemplate "repo-root.sh.tmpl"' "$template" || \
+     ! grep -q 'SRC_DIR="\$repo_root' "$template"; then
+    fail "template $(basename "$template") does not use position-independent SRC_DIR resolution via repo-root.sh.tmpl"
+  fi
+  verified_template_count=$((verified_template_count + 1))
 done < <(find "$source_root/.chezmoiscripts" -type f \
   \( -name 'run_onchange_*.sh.tmpl' -o -name 'run_once_*.sh.tmpl' \))
 
+if [[ "$verified_template_count" -ne 17 ]]; then
+  fail "expected 17 templates to be verified for runtime repo-root resolution, got $verified_template_count"
+fi
+
+# Mutant detection (scenario 6):
+# A fixture template using the old inline CHEZMOI_SOURCE_DIR resolution must be rejected
+# by the assertion logic.
+mutant_template="$scratch/mutant-old-inline.sh.tmpl"
+cat >"$mutant_template" <<'EOF'
+SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
+EOF
+
+mutant_rejected=0
+if grep -q 'SRC_ROOT=' "$mutant_template"; then
+  if ! grep -q 'includeTemplate "repo-root.sh.tmpl"' "$mutant_template" || \
+     ! grep -q 'SRC_ROOT="\$repo_root' "$mutant_template"; then
+    mutant_rejected=1
+  fi
+fi
+if [[ "$mutant_rejected" -ne 1 ]]; then
+  fail "mutant fixture with old inline spelling was unexpectedly accepted"
+fi
 printf '%s\n' 'fingerprint render gates passed'

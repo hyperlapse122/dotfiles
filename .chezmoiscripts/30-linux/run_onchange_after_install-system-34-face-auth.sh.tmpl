@@ -25,7 +25,8 @@ set -euo pipefail
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/etc/linux-enable-ir-emitter/*")) }}
 {{- end }}
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
-SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
+{{ includeTemplate "repo-root.sh.tmpl" | trim }}
+SRC_ROOT="$repo_root/system/linux"
 
 # Face authentication on Fedora: Howdy, its IR emitter enabler, and the PAM
 # factor through authselect and nothing else.

@@ -18,7 +18,8 @@ export PATH
       "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/figma-auth/package.json" "packages/figma-auth/tsconfig.json" "packages/figma-auth/vite.config.ts" "packages/figma-auth/src/**")
       "values" (list (dict "name" "bun-version" "value" $bunVersion))) }}
 
-SRC="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
+{{ includeTemplate "repo-root.sh.tmpl" | trim }}
+SRC="$repo_root"
 export DOTFILES_BUN_VERSION="{{ $bunVersion }}"
 DIST="$SRC/packages/figma-auth/dist/figma-auth"
 STAGING_DIR="$HOME/.local/share/chezmoi-commands/incomplete/figma-auth"

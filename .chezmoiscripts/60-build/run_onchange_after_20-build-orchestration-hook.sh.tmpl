@@ -39,7 +39,8 @@ case ":$PATH:" in
 esac
 export PATH
 
-SRC="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
+{{ includeTemplate "repo-root.sh.tmpl" | trim }}
+SRC="$repo_root"
 export DOTFILES_BUN_VERSION="{{ $bunVersion }}"
 export DOTFILES_HOOK_BUILD_ID="{{ $buildId }}"
 DIST="$SRC/packages/orchestration-hook/dist/orchestration-hook"

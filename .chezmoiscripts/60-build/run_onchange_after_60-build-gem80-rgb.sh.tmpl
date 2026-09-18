@@ -17,7 +17,8 @@ case ":$PATH:" in
 esac
 export PATH
 
-SRC="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
+{{ includeTemplate "repo-root.sh.tmpl" | trim }}
+SRC="$repo_root"
 STAGING_DIR="$HOME/.local/share/chezmoi-commands/incomplete/gem80-rgb"
 BIN_DIR="$SRC/crates/gem80-rgb/target/release"
 

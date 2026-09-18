@@ -1,0 +1,27 @@
+{{- /*
+repo-root.sh.tmpl — the shared run-time repository root resolver for chezmoi
+scripts that reach a repository-rooted tree at run time. Emits plain shell;
+it takes no data argument.
+
+Included with `| trim` (and `| indent N` when inside an indented block).
+
+Sets:
+  source_dir — the resolved source directory (from CHEZMOI_SOURCE_DIR, else
+               `chezmoi source-path`, else pwd)
+  repo_root  — the repository root: the parent of source_dir if that parent
+               contains a `.chezmoiroot` marker file, else source_dir itself
+
+The rendered snippet contains no path literals and is position-independent,
+ensuring rendered scripts remain bit-identical across checkouts and worktrees.
+*/ -}}
+source_dir="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}"
+case "$source_dir" in
+  /) ;;
+  */) source_dir="${source_dir%/}" ;;
+esac
+if [ -n "$source_dir" ] && [ -f "${source_dir%/*}/.chezmoiroot" ]; then
+  repo_root="${source_dir%/*}"
+  [ -z "$repo_root" ] && repo_root="/"
+else
+  repo_root="$source_dir"
+fi

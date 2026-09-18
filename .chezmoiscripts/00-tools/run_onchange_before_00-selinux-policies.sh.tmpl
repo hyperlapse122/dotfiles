@@ -48,7 +48,8 @@ if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v sem
   # which re-triggers this onchange script — a `sudo semodule` call and possibly
   # a prompt — although nothing it installs changed. See
   # docs/solutions/integration-issues/chezmoi-worktree-root-etc-file-deployment.md.
-  SRC_DIR="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux/selinux"
+{{ includeTemplate "repo-root.sh.tmpl" | trim | indent 2 }}
+  SRC_DIR="$repo_root/system/linux/selinux"
   if [[ -d "$SRC_DIR" ]]; then
     shopt -s nullglob
     cil_files=("$SRC_DIR"/*.cil)

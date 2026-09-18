@@ -8,7 +8,8 @@ set -euo pipefail
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sysctl") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sysctl") }}
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/etc/sysctl.d/**")) }}
-SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
+{{ includeTemplate "repo-root.sh.tmpl" | trim }}
+SRC_ROOT="$repo_root/system/linux"
 
 shopt -s globstar nullglob
 
