@@ -1,0 +1,934 @@
+name: Rebase CE overlays
+
+# Moves the compound-engineering overlay patches onto the newest CE release.
+# refresh-release-lock.yml is the only scheduler: it holds the CE pin back when
+# the patches do not survive a release and dispatches this workflow. There is no
+# cron and no input. The run always targets the resolver's latest release.
+#
+# Jobs split the privileges. `preflight` checks owner prerequisites P1-P4 and
+# reads no upstream data. `prepare` runs the mechanical steps with a read-only
+# token. `claude` edits only the conflicted work files, with a read-only token and
+# no checkout. `publish` verifies the artifact, regenerates and validates the
+# patches, and opens the pull request. `record` runs after every outcome, writes
+# the marker and the tracking issue.
+#
+# The pull request comes from a branch named chore/rebase-ce-overlays-v<semver>.
+# claude-code-review.yml skips that branch prefix.
+#
+# No `run:` block holds a `${{ }}` expression. Values reach scripts through `env:`.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: rebase-ce-overlays
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  WORK_FILE_MAX_BYTES: "262144"
+  TOKEN_SHAPE: 'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{10,}[.][A-Za-z0-9_-]{10,}'
+
+jobs:
+  preflight:
+    name: Check owner prerequisites
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      authorized: ${{ steps.actor.outputs.authorized }}
+      manual: ${{ steps.actor.outputs.manual }}
+      class: ${{ steps.preflight.outputs.class }}
+      missing: ${{ steps.preflight.outputs.missing }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Accept only the owner or the lock job
+        id: actor
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          authorized=false
+          manual=false
+          if [ "$REF" = "refs/heads/$DEFAULT_BRANCH" ]; then
+            if [ "$ACTOR" = "$OWNER" ]; then
+              authorized=true
+              manual=true
+            elif [ "$ACTOR" = 'github-actions[bot]' ]; then
+              authorized=true
+            fi
+          fi
+          printf 'authorized=%s\nmanual=%s\n' "$authorized" "$manual" >> "$GITHUB_OUTPUT"
+          if [ "$authorized" != true ]; then
+            echo "::error::Only the repository owner or the refresh-release-lock workflow may run this workflow on the default branch. Actor: $ACTOR, ref: $REF."
+            exit 1
+          fi
+
+      - name: Check prerequisites P1-P4
+        id: preflight
+        env:
+          CE_REBASE_TOKEN: ${{ secrets.CE_REBASE_TOKEN }}
+          CE_LOCK_APP_ID: ${{ vars.CE_LOCK_APP_ID || secrets.CE_LOCK_APP_ID }}
+          CE_LOCK_APP_PRIVATE_KEY: ${{ secrets.CE_LOCK_APP_PRIVATE_KEY != '' && 'configured' || '' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set +e
+          result=$(.ci/ce-overlay-pr.sh preflight --default-branch "$DEFAULT_BRANCH")
+          status=$?
+          set -e
+          echo "$result"
+          tr ' ' '\n' <<<"$result" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  prepare:
+    name: Resolve the release and rebase mechanically
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      issues: read
+    outputs:
+      state: ${{ steps.stage.outputs.state || steps.driver.outputs.state || steps.guard.outputs.state == 'skip' && 'skip' || steps.resolve.outputs.state }}
+      target: ${{ steps.resolve.outputs.target }}
+      pin: ${{ steps.resolve.outputs.pin }}
+      paths: ${{ steps.driver.outputs.paths }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: Install rebase package dependencies
+        run: (cd packages && bun install --frozen-lockfile)
+
+      - name: Install locked chezmoi
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' "$source_root/.chezmoidata/releases.json")
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' "$source_root/.chezmoidata/releases.json")
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve the latest compound-engineering release
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          tag_pattern='^compound-engineering-v[0-9]+\.[0-9]+\.[0-9]+$'
+          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
+          latest_lock="$RUNNER_TEMP/latest-lock.json"
+          cp -- "$lock" "$latest_lock"
+          pin=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$lock")
+          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$latest_lock"; then
+            echo 'state=unavailable' >> "$GITHUB_OUTPUT"
+            echo '::error::The resolver could not read the latest compound-engineering release.'
+            exit 1
+          fi
+          target=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$latest_lock")
+          if [[ ! $pin =~ $tag_pattern || ! $target =~ $tag_pattern ]]; then
+            echo '::notice::The pin or the latest release is outside the compound-engineering-v<semver> form. Nothing to rebase.'
+            echo 'state=skip' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          state=proceed
+          if [ "$target" = "$pin" ]; then
+            state=current
+          fi
+          printf 'state=%s\ntarget=%s\npin=%s\n' "$state" "$target" "$pin" >> "$GITHUB_OUTPUT"
+
+      - name: Guard against a run that must not proceed
+        id: guard
+        if: steps.resolve.outputs.state == 'proceed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANUAL: ${{ needs.preflight.outputs.manual }}
+          TARGET: ${{ steps.resolve.outputs.target }}
+          PIN: ${{ steps.resolve.outputs.pin }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "$MANUAL" = true ]; then
+            echo 'state=proceed' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          result=$(.ci/ce-overlay-pr.sh decide --no-act --exclude-run "$GITHUB_RUN_ID" \
+            --resolved-tag "$TARGET" --pin "$PIN" --default-branch "$DEFAULT_BRANCH")
+          echo "$result"
+          case $result in
+            'result=skip '*) echo 'state=skip' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'state=proceed' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Rebase each patch mechanically
+        id: driver
+        if: steps.guard.outputs.state == 'proceed'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET: ${{ steps.resolve.outputs.target }}
+          WORK: ${{ runner.temp }}/ce-rebase-work
+        run: |
+          set +e
+          out=$(.ci/ce-overlay-rebase.sh prepare --work-dir "$WORK" --target-tag "$TARGET")
+          status=$?
+          set -e
+          printf '%s\n' "$out"
+          case $status in
+            0) state=resolved ;;
+            3) state=claude ;;
+            4) state=genuine ;;
+            2) state=unavailable ;;
+            *) state=unknown ;;
+          esac
+          paths=$(printf '%s\n' "$out" | sed -n 's/^route=\([a-z0-9-]*\) path=\(.*\)$/\2=\1/p' | paste -sd, -)
+          printf 'state=%s\npaths=%s\n' "$state" "$paths" >> "$GITHUB_OUTPUT"
+
+      - name: Stage the inputs for Claude
+        id: stage
+        if: steps.driver.outputs.state == 'claude'
+        env:
+          WORK: ${{ runner.temp }}/ce-rebase-work
+        run: |
+          set -euo pipefail
+          state=claude
+          : > "$WORK/conflict-summary.txt"
+          while IFS= read -r key; do
+            if [[ ! $key =~ ^[A-Za-z0-9._/-]+$ || $key == *..* || $key == /* ]]; then
+              state=genuine
+              continue
+            fi
+            size=$(stat -c %s -- "$WORK/files/$key")
+            if [ "$size" -gt "$WORK_FILE_MAX_BYTES" ]; then
+              echo "::error::A conflicted file is larger than $WORK_FILE_MAX_BYTES bytes: $key"
+              state=genuine
+              continue
+            fi
+            {
+              printf '### %s\n\n' "$key"
+              awk '/^<<<<<<< /,/^>>>>>>> /' "$WORK/files/$key"
+              printf '\n'
+            } >> "$WORK/conflict-summary.txt"
+          done < <(jq -r '.conflicted[]' "$WORK/manifest.json")
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          if [ "$state" != claude ]; then
+            exit 0
+          fi
+          cp -- .github/prompts/ce-overlay-rebase.md "$WORK/ce-overlay-rebase.md"
+          entry="$RUNNER_TEMP/classify-entry.ts"
+          {
+            printf 'import { readFileSync } from "node:fs";\n'
+            printf 'import { classifyFailure } from "%s/packages/ce-overlay-rebase/src/classify.ts";\n' "$GITHUB_WORKSPACE"
+            printf 'process.stdout.write(classifyFailure(JSON.parse(readFileSync(0, "utf8"))) + "\\n");\n'
+          } > "$entry"
+          bun build "$entry" --target=node --outfile "$WORK/ce-classify.mjs"
+
+      - name: Upload the work directory
+        if: steps.stage.outputs.state != 'genuine' && (steps.driver.outputs.state == 'resolved' || steps.driver.outputs.state == 'claude')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ce-rebase-work
+          path: ${{ runner.temp }}/ce-rebase-work
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Stop on a genuine, unavailable, or unknown result
+        if: steps.driver.outcome == 'success'
+        env:
+          STATE: ${{ steps.stage.outputs.state || steps.driver.outputs.state }}
+        run: |
+          case "$STATE" in
+            resolved | claude) ;;
+            *)
+              echo "::error::The mechanical rebase ended with the state $STATE."
+              exit 1
+              ;;
+          esac
+
+  claude:
+    name: Merge the conflicted files with Claude
+    needs: prepare
+    if: needs.prepare.outputs.state == 'claude'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    outputs:
+      answered: ${{ steps.stage.outputs.answered }}
+      class: ${{ steps.stage.outputs.class || steps.classify.outputs.class }}
+    steps:
+      - name: Download the work directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ce-rebase-work
+          path: ce-rebase-work
+
+      - name: Run Claude on the conflicted files
+        id: claude
+        continue-on-error: true
+        timeout-minutes: 15
+        uses: anthropics/claude-code-action@0a8d3c9443bbff909ab973b6a17a340b913f229f # v1.0.221
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          allowed_bots: github-actions
+          classify_inline_comments: "false"
+          prompt: >-
+            Read the file ${{ github.workspace }}/ce-rebase-work/ce-overlay-rebase.md
+            and follow it exactly. Every path in it is relative to
+            ${{ github.workspace }}/ce-rebase-work.
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 40
+            --permission-mode dontAsk
+            --tools "Read,Edit,Write"
+            --allowedTools "Read(/${{ github.workspace }}/ce-rebase-work/**),Edit(/${{ github.workspace }}/ce-rebase-work/files/**)"
+            --disallowedTools "Bash,WebFetch,WebSearch,mcp__*"
+
+      - name: Classify a failed Claude run
+        id: classify
+        env:
+          OUTCOME: ${{ steps.claude.outcome }}
+          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          class=none
+          if [ "$OUTCOME" != success ] || [ "$CONCLUSION" != success ]; then
+            input=$(jq -n -c --arg o "$OUTCOME" --arg c "$CONCLUSION" --arg f "$EXECUTION_FILE" \
+              '{stepOutcome: $o, actionConclusion: $c} + (if $f == "" then {} else {executionFile: $f} end)')
+            class=$(printf '%s' "$input" | node ce-rebase-work/ce-classify.mjs 2>/dev/null) || class=unknown
+            case $class in
+              outage | quota | genuine | unknown | configuration) ;;
+              *) class=unknown ;;
+            esac
+          fi
+          echo "class=$class" >> "$GITHUB_OUTPUT"
+
+      - name: Scan and stage the edited files
+        id: stage
+        if: steps.classify.outputs.class == 'none'
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/ce-claude-out"
+          mkdir -p "$out/files"
+          class=none
+          answered=true
+          while IFS= read -r key; do
+            file="ce-rebase-work/files/$key"
+            if [[ ! $key =~ ^[A-Za-z0-9._/-]+$ || $key == *..* || $key == /* ]] || [ ! -f "$file" ] || [ -L "$file" ]; then
+              class=genuine
+              continue
+            fi
+            if [ "$(stat -c %s -- "$file")" -gt "$WORK_FILE_MAX_BYTES" ] || LC_ALL=C grep -Eq "$TOKEN_SHAPE" "$file"; then
+              class=genuine
+              continue
+            fi
+            mkdir -p "$out/files/$(dirname -- "$key")"
+            cp -- "$file" "$out/files/$key"
+          done < <(jq -r '.conflicted[]' ce-rebase-work/manifest.json)
+          if [ "$class" != none ]; then
+            answered=false
+            echo '::error::An edited file is unsafe to upload. Nothing was uploaded.'
+          else
+            echo none > "$out/class.txt"
+          fi
+          printf 'answered=%s\nclass=%s\n' "$answered" "$class" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the edited files
+        if: steps.stage.outputs.answered == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ce-rebase-claude
+          path: ${{ runner.temp }}/ce-claude-out
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Fail unless Claude answered
+        if: steps.stage.outputs.answered != 'true'
+        run: |
+          echo '::error::Claude did not produce a usable answer.'
+          exit 1
+
+  publish:
+    name: Verify, validate, and publish the rebase
+    needs: [prepare, claude]
+    if: >-
+      ${{ !cancelled() && needs.prepare.result == 'success'
+      && (needs.prepare.outputs.state == 'resolved'
+      || (needs.prepare.outputs.state == 'claude' && needs.claude.result == 'success' && needs.claude.outputs.answered == 'true')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    outputs:
+      outcome: ${{ steps.outcome.outputs.outcome }}
+      class: ${{ steps.outcome.outputs.class }}
+      missing: ${{ steps.outcome.outputs.missing }}
+    env:
+      CE_LOCK_APP_CONFIGURED: ${{ (vars.CE_LOCK_APP_ID != '' || secrets.CE_LOCK_APP_ID != '') && secrets.CE_LOCK_APP_PRIVATE_KEY != '' }}
+      TARGET: ${{ needs.prepare.outputs.target }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: Install rebase package dependencies
+        run: (cd packages && bun install --frozen-lockfile)
+
+      - name: Install locked chezmoi
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' "$source_root/.chezmoidata/releases.json")
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' "$source_root/.chezmoidata/releases.json")
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Download the work directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ce-rebase-work
+          path: ${{ runner.temp }}/ce-rebase-work
+
+      - name: Download the Claude artifact
+        if: needs.prepare.outputs.state == 'claude'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ce-rebase-claude
+          path: ${{ runner.temp }}/ce-claude-in
+
+      - name: Verify the Claude artifact against the manifest
+        id: verify
+        env:
+          STATE: ${{ needs.prepare.outputs.state }}
+          WORK: ${{ runner.temp }}/ce-rebase-work
+          INCOMING: ${{ runner.temp }}/ce-claude-in
+        run: |
+          set -euo pipefail
+          fail() {
+            echo "::error::$1"
+            echo 'class=genuine' >> "$GITHUB_OUTPUT"
+            exit 1
+          }
+          manifest="$WORK/manifest.json"
+          if [ ! -f "$manifest" ] || [ -L "$manifest" ]; then
+            fail 'The prepare artifact has no usable manifest.'
+          fi
+          conflicted=()
+          while IFS= read -r key; do
+            conflicted+=("$key")
+          done < <(jq -r '.conflicted[]' "$manifest")
+          if [ "$STATE" != claude ]; then
+            if [ "${#conflicted[@]}" -ne 0 ]; then
+              fail 'The manifest lists conflicted paths but Claude did not run.'
+            fi
+            exit 0
+          fi
+          if [ "${#conflicted[@]}" -eq 0 ]; then
+            fail 'Claude ran but the manifest lists no conflicted path.'
+          fi
+          if [ ! -d "$INCOMING" ] || [ -L "$INCOMING" ]; then
+            fail 'The Claude artifact is missing.'
+          fi
+          for key in "${conflicted[@]}"; do
+            if [[ ! $key =~ ^[A-Za-z0-9._/-]+$ || $key == *..* || $key == /* ]]; then
+              fail 'The manifest holds an unsafe path.'
+            fi
+          done
+          while IFS= read -r -d '' entry; do
+            rel=${entry#"$INCOMING"/}
+            if [[ ! $rel =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              fail 'The Claude artifact holds an entry with an unexpected name.'
+            fi
+            case "/$rel/" in
+              */../* | */./*) fail 'The Claude artifact holds a relative path segment.' ;;
+            esac
+            if [ -L "$entry" ]; then
+              fail 'The Claude artifact holds a symbolic link.'
+            fi
+            if [ -d "$entry" ]; then
+              continue
+            fi
+            if [ ! -f "$entry" ]; then
+              fail 'The Claude artifact holds a file that is not a regular file.'
+            fi
+            if [ "$(stat -c %h -- "$entry")" -ne 1 ]; then
+              fail 'The Claude artifact holds a hard link.'
+            fi
+            if [ "$(stat -c %s -- "$entry")" -gt "$WORK_FILE_MAX_BYTES" ]; then
+              fail 'The Claude artifact holds an oversized file.'
+            fi
+            if LC_ALL=C grep -Eq "$TOKEN_SHAPE" "$entry"; then
+              fail 'The Claude artifact holds a string shaped like a token.'
+            fi
+            allowed=false
+            if [ "$rel" = class.txt ]; then
+              allowed=true
+            fi
+            for key in "${conflicted[@]}"; do
+              if [ "$rel" = "files/$key" ]; then
+                allowed=true
+              fi
+            done
+            if [ "$allowed" != true ]; then
+              fail 'The Claude artifact holds a file that the manifest does not list.'
+            fi
+          done < <(find "$INCOMING" -mindepth 1 -print0)
+          if [ ! -f "$INCOMING/class.txt" ] || [ "$(cat -- "$INCOMING/class.txt")" != none ]; then
+            fail 'The Claude artifact does not carry a clean class.'
+          fi
+          for key in "${conflicted[@]}"; do
+            if [ ! -f "$INCOMING/files/$key" ]; then
+              fail 'The Claude artifact lacks a conflicted file.'
+            fi
+          done
+          for key in "${conflicted[@]}"; do
+            mode=$(jq -r --arg k "$key" '.paths[$k].mode // ""' "$manifest")
+            if [[ ! $mode =~ ^0?[0-7]{3}$ ]]; then
+              fail 'The manifest holds no usable mode.'
+            fi
+            if [ -L "$WORK/files/$key" ]; then
+              fail 'The trusted work file is a symbolic link.'
+            fi
+            cp --remove-destination -- "$INCOMING/files/$key" "$WORK/files/$key"
+            chmod "$mode" "$WORK/files/$key"
+          done
+
+      - name: Regenerate the patches and base.json
+        id: finish
+        env:
+          WORK: ${{ runner.temp }}/ce-rebase-work
+        run: |
+          set +e
+          out=$(.ci/ce-overlay-rebase.sh finish --work-dir "$WORK")
+          status=$?
+          set -e
+          printf '%s\n' "$out"
+          if [ "$status" -ne 0 ]; then
+            echo 'class=genuine' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          lines=$(printf '%s\n' "$out" | sed -n 's/^customization=\(unchanged\|changed\)$/\1/p' | tail -n 1)
+          if [ -z "$lines" ]; then
+            echo 'class=genuine' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "customization=$lines" >> "$GITHUB_OUTPUT"
+
+      - name: Update the compound-engineering lock entry
+        id: lock
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
+          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$lock"; then
+            echo 'class=outage' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          resolved=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$lock")
+          superseded=false
+          if [ "$resolved" != "$TARGET" ]; then
+            echo '::notice::A newer compound-engineering release exists. This run stops without publishing.'
+            superseded=true
+          fi
+          echo "superseded=$superseded" >> "$GITHUB_OUTPUT"
+
+      - name: Run the offline test, the upstream gate, the digest check, and the path allowlist
+        id: validate
+        if: steps.lock.outputs.superseded == 'false'
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          fail() {
+            echo "::error::$1"
+            echo "class=${2:-genuine}" >> "$GITHUB_OUTPUT"
+            exit 1
+          }
+          .ci/test-compound-engineering-overlays.sh "$GITHUB_WORKSPACE" || fail 'The offline overlay test failed.'
+          set +e
+          gate_out=$(.ci/check-ce-overlay-patches.sh)
+          gate=$?
+          set -e
+          echo "$gate_out"
+          case $gate in
+            0) ;;
+            2) fail 'Upstream was unavailable for the gate.' outage ;;
+            *) fail 'The upstream gate rejected the result.' ;;
+          esac
+          .ci/check-release-lock-digests.sh || fail 'The lock digest check failed.'
+          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
+          lock=${lock#"$PWD"/}
+          base=$(join_source_state "$PWD" dot_local/share/compound-engineering-overlays/base.json)
+          base=${base#"$PWD"/}
+          patches=$(join_source_state "$PWD" dot_local/share/compound-engineering-overlays/patches)
+          patches=${patches#"$PWD"/}
+          while IFS= read -r -d '' path; do
+            if [ "$path" != "$lock" ] && [ "$path" != "$base" ] && [[ $path != "$patches"/*.patch ]]; then
+              fail "The result changes $path, which is outside the allowlist."
+            fi
+          done < <({ git diff --name-only -z HEAD; git ls-files --others --exclude-standard -z; })
+
+      - name: Confirm the target is still the latest release
+        id: latest
+        if: steps.lock.outputs.superseded == 'false'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
+          latest_lock="$RUNNER_TEMP/latest-lock.json"
+          cp -- "$lock" "$latest_lock"
+          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$latest_lock"; then
+            echo 'class=outage' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          resolved=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$latest_lock")
+          superseded=false
+          if [ "$resolved" != "$TARGET" ]; then
+            echo '::notice::A newer compound-engineering release appeared while this run worked. It stops without publishing.'
+            superseded=true
+          fi
+          echo "superseded=$superseded" >> "$GITHUB_OUTPUT"
+
+      - name: Mint the direct-push App token
+        id: app-token
+        if: steps.latest.outputs.superseded == 'false' && steps.finish.outputs.customization == 'changed' && env.CE_LOCK_APP_CONFIGURED == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CE_LOCK_APP_ID || secrets.CE_LOCK_APP_ID }}
+          private-key: ${{ secrets.CE_LOCK_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Record awaiting-review before the pull request exists
+        id: marker
+        if: steps.latest.outputs.superseded == 'false' && steps.finish.outputs.customization == 'changed'
+        env:
+          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+        run: |
+          set +e
+          result=$(.ci/ce-overlay-pr.sh marker --event awaiting-review --target "$TARGET" \
+            --default-branch "$DEFAULT_BRANCH" --push-token-env CE_PUSH_TOKEN)
+          status=$?
+          set -e
+          echo "$result"
+          tr ' ' '\n' <<<"$result" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Open the rebase pull request
+        id: open
+        if: steps.latest.outputs.superseded == 'false'
+        env:
+          CE_REBASE_TOKEN: ${{ secrets.CE_REBASE_TOKEN }}
+          LINES: ${{ steps.finish.outputs.customization }}
+          BASE: ${{ steps.marker.outputs.sha }}
+        run: |
+          args=(open --target "$TARGET" --customization-lines "$LINES" --work-tree "$PWD" --default-branch "$DEFAULT_BRANCH")
+          if [ -n "$BASE" ]; then
+            args+=(--base "$BASE")
+          fi
+          set +e
+          result=$(.ci/ce-overlay-pr.sh "${args[@]}")
+          status=$?
+          set -e
+          echo "$result"
+          tr ' ' '\n' <<<"$result" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Wait for the pull request
+        id: await
+        if: steps.open.outcome == 'success'
+        env:
+          CE_REBASE_TOKEN: ${{ secrets.CE_REBASE_TOKEN }}
+          LINES: ${{ steps.finish.outputs.customization }}
+          PR: ${{ steps.open.outputs.pr }}
+        run: |
+          set +e
+          result=$(.ci/ce-overlay-pr.sh await --pr "$PR" --customization-lines "$LINES" --default-branch "$DEFAULT_BRANCH")
+          status=$?
+          set -e
+          echo "$result"
+          tr ' ' '\n' <<<"$result" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Summarize the outcome
+        id: outcome
+        if: always()
+        env:
+          SUPERSEDED_LOCK: ${{ steps.lock.outputs.superseded }}
+          SUPERSEDED_LATEST: ${{ steps.latest.outputs.superseded }}
+          AWAIT_RESULT: ${{ steps.await.outputs.result }}
+          VERIFY_CLASS: ${{ steps.verify.outputs.class }}
+          FINISH_CLASS: ${{ steps.finish.outputs.class }}
+          LOCK_CLASS: ${{ steps.lock.outputs.class }}
+          VALIDATE_CLASS: ${{ steps.validate.outputs.class }}
+          LATEST_CLASS: ${{ steps.latest.outputs.class }}
+          MARKER_CLASS: ${{ steps.marker.outputs.class }}
+          MARKER_MISSING: ${{ steps.marker.outputs.missing }}
+          OPEN_CLASS: ${{ steps.open.outputs.class }}
+          OPEN_MISSING: ${{ steps.open.outputs.missing }}
+          AWAIT_CLASS: ${{ steps.await.outputs.class }}
+          AWAIT_MISSING: ${{ steps.await.outputs.missing }}
+        run: |
+          outcome=failed
+          class=unknown
+          missing=''
+          if [ "$SUPERSEDED_LOCK" = true ] || [ "$SUPERSEDED_LATEST" = true ]; then
+            outcome=superseded
+            class=none
+          else
+            case "$AWAIT_RESULT" in
+              merged | awaiting-review | conflict)
+                outcome=$AWAIT_RESULT
+                class=none
+                ;;
+              *)
+                for candidate in "$VERIFY_CLASS" "$FINISH_CLASS" "$LOCK_CLASS" "$VALIDATE_CLASS" "$LATEST_CLASS" "$MARKER_CLASS" "$OPEN_CLASS" "$AWAIT_CLASS"; do
+                  if [ -n "$candidate" ] && [ "$candidate" != none ]; then
+                    class=$candidate
+                    break
+                  fi
+                done
+                for candidate in "$MARKER_MISSING" "$OPEN_MISSING" "$AWAIT_MISSING"; do
+                  if [ -n "$candidate" ]; then
+                    missing=$candidate
+                    break
+                  fi
+                done
+                ;;
+            esac
+          fi
+          printf 'outcome=%s\nclass=%s\nmissing=%s\n' "$outcome" "$class" "$missing" >> "$GITHUB_OUTPUT"
+
+  record:
+    name: Record the outcome
+    needs: [preflight, prepare, claude, publish]
+    if: ${{ always() && needs.preflight.outputs.authorized == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+    env:
+      CE_LOCK_APP_CONFIGURED: ${{ (vars.CE_LOCK_APP_ID != '' || secrets.CE_LOCK_APP_ID != '') && secrets.CE_LOCK_APP_PRIVATE_KEY != '' }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: Install rebase package dependencies
+        run: (cd packages && bun install --frozen-lockfile)
+
+      - name: Classify the run
+        id: decision
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PF_RESULT: ${{ needs.preflight.result }}
+          PF_CLASS: ${{ needs.preflight.outputs.class }}
+          PF_MISSING: ${{ needs.preflight.outputs.missing }}
+          MANUAL: ${{ needs.preflight.outputs.manual }}
+          PREP_RESULT: ${{ needs.prepare.result }}
+          PREP_STATE: ${{ needs.prepare.outputs.state }}
+          TARGET: ${{ needs.prepare.outputs.target }}
+          CLAUDE_RESULT: ${{ needs.claude.result }}
+          CLAUDE_CLASS: ${{ needs.claude.outputs.class }}
+          PUB_RESULT: ${{ needs.publish.result }}
+          PUB_CLASS: ${{ needs.publish.outputs.class }}
+          PUB_MISSING: ${{ needs.publish.outputs.missing }}
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          tag_pattern='^compound-engineering-v[0-9]+\.[0-9]+\.[0-9]+$'
+          valid_class() {
+            case "$1" in
+              outage | quota | genuine | unknown | configuration) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+          action=none
+          class=''
+          missing=''
+          reached=false
+          if [ "$PF_RESULT" = cancelled ] || [ "$PREP_RESULT" = cancelled ] || [ "$CLAUDE_RESULT" = cancelled ] || [ "$PUB_RESULT" = cancelled ]; then
+            echo '::notice::The run was cancelled. Nothing is recorded.'
+          elif [ "$PF_RESULT" != success ]; then
+            action=failure
+            class=unknown
+            if [ "$PF_CLASS" = configuration ]; then
+              class=configuration
+              missing=$PF_MISSING
+            fi
+          elif [ "$PREP_RESULT" != success ]; then
+            action=failure
+            case "$PREP_STATE" in
+              genuine) class=genuine ;;
+              unavailable) class=outage ;;
+              *) class=unknown ;;
+            esac
+          elif [ "$CLAUDE_RESULT" = failure ]; then
+            action=failure
+            class=$CLAUDE_CLASS
+            reached=true
+          elif [ "$PUB_RESULT" = failure ]; then
+            action=failure
+            class=$PUB_CLASS
+            missing=$PUB_MISSING
+            if [ "$CLAUDE_RESULT" = success ]; then
+              reached=true
+            fi
+          fi
+          if [ "$action" = failure ]; then
+            valid_class "$class" || class=unknown
+            if [[ ! $missing =~ ^P[1-4](,P[1-4])*$ ]]; then
+              missing=''
+            fi
+            marker_file=$(join_source_state "$PWD" .chezmoidata/ce-overlay-rebase.json)
+            current=$(jq -c '.ceOverlayRebase' "$marker_file")
+            if [[ ! $TARGET =~ $tag_pattern ]]; then
+              lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
+              latest_lock="$RUNNER_TEMP/latest-lock.json"
+              cp -- "$lock" "$latest_lock"
+              bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$latest_lock" || true
+              TARGET=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$latest_lock")
+              if [[ ! $TARGET =~ $tag_pattern ]]; then
+                TARGET=$(jq -r '.target' <<<"$current")
+              fi
+            fi
+            now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            event=$(jq -n -c --arg t "$TARGET" --arg c "$class" --arg r "$reached" --arg m "$missing" --arg now "$now" --arg manual "$MANUAL" '
+              {type: "failure", target: $t, failureClass: $c, reachedClaude: ($r == "true"), now: $now}
+              + (if $m == "" then {} else {missing: ($m | split(","))} end)
+              + (if $manual == "true" then {manualTrigger: true} else {} end)')
+            status=$(jq -n -c --argjson c "$current" --argjson e "$event" '{currentMarker: $c, event: $e}' |
+              bun packages/ce-overlay-rebase/src/cli.ts transition | jq -r '.status')
+            needs_issue=false
+            case "$status" in
+              escalated | blocked-config) needs_issue=true ;;
+            esac
+            printf 'existing_issue=%s\n' "$(jq -r '.issue // ""' <<<"$current")" >> "$GITHUB_OUTPUT"
+            printf 'target=%s\nnow=%s\nneeds_issue=%s\n' "$TARGET" "$now" "$needs_issue" >> "$GITHUB_OUTPUT"
+          fi
+          printf 'action=%s\nclass=%s\nmissing=%s\nreached=%s\n' "$action" "$class" "$missing" "$reached" >> "$GITHUB_OUTPUT"
+
+      - name: Download the work directory for the conflict output
+        if: steps.decision.outputs.needs_issue == 'true' && needs.prepare.outputs.state == 'claude'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ce-rebase-work
+          path: ${{ runner.temp }}/ce-rebase-work
+
+      - name: Open or update the tracking issue
+        id: issue
+        if: steps.decision.outputs.needs_issue == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ steps.decision.outputs.target }}
+          CLASS: ${{ steps.decision.outputs.class }}
+          MISSING: ${{ steps.decision.outputs.missing }}
+          EXISTING_ISSUE: ${{ steps.decision.outputs.existing_issue }}
+          PATHS: ${{ needs.prepare.outputs.paths }}
+        run: |
+          set -euo pipefail
+          args=(issue --target "$TARGET" --failure-class "$CLASS")
+          if [ -n "$MISSING" ]; then
+            args+=(--missing "$MISSING")
+          fi
+          if [ -n "$PATHS" ]; then
+            args+=(--path-results "$PATHS")
+          fi
+          if [[ $EXISTING_ISSUE =~ ^[0-9]+$ ]]; then
+            args+=(--issue "$EXISTING_ISSUE")
+          fi
+          summary="$RUNNER_TEMP/ce-rebase-work/conflict-summary.txt"
+          if [ -s "$summary" ] && [ ! -L "$summary" ]; then
+            args+=(--conflict-file "$summary")
+          fi
+          result=$(.ci/ce-overlay-pr.sh "${args[@]}")
+          echo "$result"
+          tr ' ' '\n' <<<"$result" | sed -n '/^issue=[0-9][0-9]*$/p' >> "$GITHUB_OUTPUT"
+
+      - name: Mint the direct-push App token
+        id: app-token
+        if: ${{ !cancelled() && steps.decision.outputs.action == 'failure' && env.CE_LOCK_APP_CONFIGURED == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CE_LOCK_APP_ID || secrets.CE_LOCK_APP_ID }}
+          private-key: ${{ secrets.CE_LOCK_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Record the failure in the marker
+        id: marker
+        if: ${{ !cancelled() && steps.decision.outputs.action == 'failure' }}
+        env:
+          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          TARGET: ${{ steps.decision.outputs.target }}
+          CLASS: ${{ steps.decision.outputs.class }}
+          MISSING: ${{ steps.decision.outputs.missing }}
+          REACHED: ${{ steps.decision.outputs.reached }}
+          NOW: ${{ steps.decision.outputs.now }}
+          MANUAL: ${{ needs.preflight.outputs.manual }}
+          ISSUE: ${{ steps.issue.outputs.issue || steps.decision.outputs.existing_issue }}
+        run: |
+          args=(marker --event failure --target "$TARGET" --failure-class "$CLASS" --reached-claude "$REACHED" \
+            --now "$NOW" --default-branch "$DEFAULT_BRANCH" --push-token-env CE_PUSH_TOKEN)
+          if [ -n "$MISSING" ]; then
+            args+=(--missing "$MISSING")
+          fi
+          if [[ $ISSUE =~ ^[0-9]+$ ]]; then
+            args+=(--issue "$ISSUE")
+          fi
+          if [ "$MANUAL" = true ]; then
+            args+=(--manual-trigger)
+          fi
+          set +e
+          result=$(.ci/ce-overlay-pr.sh "${args[@]}")
+          status=$?
+          set -e
+          echo "$result"
+          if [ "$status" -ne 0 ] && [ "$CLASS" = configuration ]; then
+            echo '::warning::The marker write failed. The open tracking issue still stops automatic dispatch.'
+            exit 0
+          fi
+          exit "$status"

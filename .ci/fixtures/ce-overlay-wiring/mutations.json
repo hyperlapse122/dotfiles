@@ -1,0 +1,392 @@
+[
+  {
+    "name": "a cron trigger beside workflow_dispatch",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["on:\n  workflow_dispatch:\n", "on:\n  workflow_dispatch:\n  schedule:\n    - cron: \"0 * * * *\"\n"]],
+    "expect": "workflow_dispatch must be the only trigger"
+  },
+  {
+    "name": "a workflow_dispatch input",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["  workflow_dispatch:\n\npermissions: {}", "  workflow_dispatch:\n    inputs:\n      tag:\n        required: false\n\npermissions: {}"]],
+    "expect": "workflow_dispatch must declare no input"
+  },
+  {
+    "name": "cancel-in-progress on the concurrency group",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["cancel-in-progress: false", "cancel-in-progress: true"]],
+    "expect": "the concurrency group must be rebase-ce-overlays"
+  },
+  {
+    "name": "a renamed concurrency group",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["group: rebase-ce-overlays\n", "group: rebase-ce-overlays-other\n"]],
+    "expect": "the concurrency group must be rebase-ce-overlays"
+  },
+  {
+    "name": "a workflow token that defaults to permissions",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["permissions: {}\n\nconcurrency", "permissions:\n  contents: read\n\nconcurrency"]],
+    "expect": "must default to no permissions"
+  },
+  {
+    "name": "a job without a timeout",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    timeout-minutes: 25\n", ""]],
+    "expect": "job claude has no timeout-minutes"
+  },
+  {
+    "name": "a checkout that persists credentials",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          persist-credentials: false\n", "          persist-credentials: true\n"]],
+    "expect": "checkout without persist-credentials: false"
+  },
+  {
+    "name": "an id-token permission on the claude job",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    timeout-minutes: 25\n    permissions:\n      contents: read\n", "    timeout-minutes: 25\n    permissions:\n      contents: read\n      id-token: write\n"]],
+    "expect": "job claude holds permissions"
+  },
+  {
+    "name": "a checkout in the claude job",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    steps:\n      - name: Download the work directory\n", "    steps:\n      - uses: actions/checkout@v7\n        with:\n          persist-credentials: false\n      - name: Download the work directory\n"]],
+    "expect": "the claude job checks out the repository"
+  },
+  {
+    "name": "a claude job that does not depend on prepare",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    needs: prepare\n    if: needs.prepare.outputs.state == 'claude'\n", "    if: needs.prepare.outputs.state == 'claude'\n"]],
+    "expect": "the claude job does not depend on prepare"
+  },
+  {
+    "name": "a github_token input that is not the job token",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          github_token: ${{ github.token }}\n          allowed_bots", "          github_token: ${{ secrets.OTHER_TOKEN }}\n          allowed_bots"]],
+    "expect": "github_token input must be the job's GITHUB_TOKEN"
+  },
+  {
+    "name": "Bash among the available tools",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--tools \"Read,Edit,Write\"", "--tools \"Read,Edit,Write,Bash\""]],
+    "expect": "--tools must list only"
+  },
+  {
+    "name": "an unscoped Bash allow rule",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--allowedTools \"Read(/${{ github.workspace }}", "--allowedTools \"Bash,Read(/${{ github.workspace }}"]],
+    "expect": "not a path-scoped Read, Edit, or Write rule"
+  },
+  {
+    "name": "an Edit rule scoped to the whole work directory",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["Edit(/${{ github.workspace }}/ce-rebase-work/files/**)", "Edit(/${{ github.workspace }}/ce-rebase-work/**)"]],
+    "expect": "is not scoped to"
+  },
+  {
+    "name": "Bash not denied",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--disallowedTools \"Bash,WebFetch,WebSearch,mcp__*\"", "--disallowedTools \"WebFetch,WebSearch,mcp__*\""]],
+    "expect": "does not deny Bash"
+  },
+  {
+    "name": "WebFetch not denied",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--disallowedTools \"Bash,WebFetch,WebSearch,mcp__*\"", "--disallowedTools \"Bash,WebSearch,mcp__*\""]],
+    "expect": "does not deny WebFetch"
+  },
+  {
+    "name": "WebSearch not denied",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--disallowedTools \"Bash,WebFetch,WebSearch,mcp__*\"", "--disallowedTools \"Bash,WebFetch,mcp__*\""]],
+    "expect": "does not deny WebSearch"
+  },
+  {
+    "name": "MCP tools not denied",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--disallowedTools \"Bash,WebFetch,WebSearch,mcp__*\"", "--disallowedTools \"Bash,WebFetch,WebSearch\""]],
+    "expect": "does not deny mcp__*"
+  },
+  {
+    "name": "another model",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--model claude-sonnet-5", "--model claude-opus-5"]],
+    "expect": "must use the model claude-sonnet-5"
+  },
+  {
+    "name": "a permission mode that accepts edits",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["--permission-mode dontAsk", "--permission-mode acceptEdits"]],
+    "expect": "--permission-mode dontAsk"
+  },
+  {
+    "name": "a longer Claude step timeout",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["        timeout-minutes: 15\n        uses: anthropics", "        timeout-minutes: 45\n        uses: anthropics"]],
+    "expect": "15-minute timeout"
+  },
+  {
+    "name": "the Claude action pinned to a tag",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["anthropics/claude-code-action@0a8d3c9443bbff909ab973b6a17a340b913f229f # v1.0.221", "anthropics/claude-code-action@v1"]],
+    "expect": "is not pinned to a full commit SHA"
+  },
+  {
+    "name": "the upload action pinned to a tag",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", "actions/upload-artifact@v7"]],
+    "expect": "is not pinned to a full commit SHA"
+  },
+  {
+    "name": "a pinned action without its release tag",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1", "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"]],
+    "expect": "has no release tag in a trailing comment"
+  },
+  {
+    "name": "the Claude OAuth token read by another step",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          OUTCOME: ${{ steps.claude.outcome }}\n", "          OUTCOME: ${{ steps.claude.outcome }}\n          EXTRA: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}\n"]],
+    "expect": "reads the Claude OAuth token"
+  },
+  {
+    "name": "an upload of the execution file",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          path: ${{ runner.temp }}/ce-claude-out\n", "          path: ${{ steps.claude.outputs.execution_file }}\n"]],
+    "expect": "uploads the execution file"
+  },
+  {
+    "name": "a token scan that no longer exists before the upload",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["LC_ALL=C grep -Eq \"$TOKEN_SHAPE\" \"$file\"", "false"]],
+    "expect": "must scan the edited files for tokens"
+  },
+  {
+    "name": "the execution file read by a step other than the classifier",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["        id: classify\n", "        id: classify-other\n"]],
+    "expect": "reads the execution file"
+  },
+  {
+    "name": "CE_REBASE_TOKEN in the prepare job",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["        id: resolve\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n", "        id: resolve\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n          CE_REBASE_TOKEN: ${{ secrets.CE_REBASE_TOKEN }}\n"]],
+    "expect": "CE_REBASE_TOKEN appears in prepare"
+  },
+  {
+    "name": "CE_REBASE_TOKEN in the claude job",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          OUTCOME: ${{ steps.claude.outcome }}\n", "          OUTCOME: ${{ steps.claude.outcome }}\n          EXTRA: ${{ secrets.CE_REBASE_TOKEN }}\n"]],
+    "expect": "CE_REBASE_TOKEN appears in claude"
+  },
+  {
+    "name": "an open step without CE_REBASE_TOKEN",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          CE_REBASE_TOKEN: ${{ secrets.CE_REBASE_TOKEN }}\n          LINES: ${{ steps.finish.outputs.customization }}\n          BASE:", "          LINES: ${{ steps.finish.outputs.customization }}\n          BASE:"]],
+    "expect": "the open step of publish does not receive CE_REBASE_TOKEN"
+  },
+  {
+    "name": "the App private key in the marker step",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}\n          TARGET: ${{ steps.decision.outputs.target }}\n", "          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}\n          KEY: ${{ secrets.CE_LOCK_APP_PRIVATE_KEY }}\n          TARGET: ${{ steps.decision.outputs.target }}\n"]],
+    "expect": "the App private key appears in record"
+  },
+  {
+    "name": "an App token with more than contents: write",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          permission-contents: write\n", "          permission-contents: write\n          permission-issues: write\n"]],
+    "expect": "must request permission-contents: write and nothing else"
+  },
+  {
+    "name": "a token from GITHUB_TOKEN in the open step",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          BASE: ${{ steps.marker.outputs.sha }}\n", "          BASE: ${{ steps.marker.outputs.sha }}\n          GH_TOKEN: ${{ github.token }}\n"]],
+    "expect": "takes a token from GITHUB_TOKEN"
+  },
+  {
+    "name": "an expression interpolated in a run block",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["preflight --default-branch \"$DEFAULT_BRANCH\")", "preflight --default-branch \"${{ github.event.repository.default_branch }}\")"]],
+    "expect": "interpolates an expression in a run block"
+  },
+  {
+    "name": "a pull request created outside the script",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          echo \"$result\"\n          case $result in\n", "          gh pr create --fill\n          echo \"$result\"\n          case $result in\n"]],
+    "expect": "creates or merges a pull request outside"
+  },
+  {
+    "name": "a record job that does not use always()",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    if: ${{ always() && needs.preflight.outputs.authorized == 'true' }}\n", "    if: ${{ needs.preflight.outputs.authorized == 'true' }}\n"]],
+    "expect": "the record job must run under if: always()"
+  },
+  {
+    "name": "a record job that skips a dependency",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    needs: [preflight, prepare, claude, publish]\n", "    needs: [preflight, prepare, claude]\n"]],
+    "expect": "the record job must depend on every other job"
+  },
+  {
+    "name": "a record job without issues: write",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["      contents: write\n      issues: write\n", "      contents: write\n"]],
+    "expect": "job record holds permissions"
+  },
+  {
+    "name": "an owner check that lets every actor through",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["if [ \"$ACTOR\" = \"$OWNER\" ]; then", "if true; then"]],
+    "expect": "the owner check must stop an actor that is not the owner"
+  },
+  {
+    "name": "an owner check against something other than the repository owner",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          OWNER: ${{ github.repository_owner }}\n", "          OWNER: someone-else\n"]],
+    "expect": "must compare github.actor with github.repository_owner"
+  },
+  {
+    "name": "a prepare guard that acts",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["ce-overlay-pr.sh decide --no-act --exclude-run", "ce-overlay-pr.sh decide --exclude-run"]],
+    "expect": "the prepare job needs one guard step"
+  },
+  {
+    "name": "publish steps out of order",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["id: finish\n", "id: swap-finish\n"], ["id: lock\n", "id: finish\n"], ["id: swap-finish\n", "id: lock\n"]],
+    "expect": "the publish steps must run in the order"
+  },
+  {
+    "name": "a missing latest-release check",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out \"$latest_lock\"; then\n            echo 'class=outage'", "          if ! true; then\n            echo 'class=outage'"]],
+    "expect": "must re-resolve the latest release"
+  },
+  {
+    "name": "a step other than verify that reads the Claude artifact",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["        id: finish\n        env:\n          WORK: ${{ runner.temp }}/ce-rebase-work\n", "        id: finish\n        env:\n          WORK: ${{ runner.temp }}/ce-rebase-work\n          INCOMING: ${{ runner.temp }}/ce-claude-in\n"]],
+    "expect": "only the verify step may read the Claude artifact"
+  },
+  {
+    "name": "an awaiting-review marker that runs for every result",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["        if: steps.latest.outputs.superseded == 'false' && steps.finish.outputs.customization == 'changed'\n        env:\n          CE_PUSH_TOKEN", "        if: steps.latest.outputs.superseded == 'false'\n        env:\n          CE_PUSH_TOKEN"]],
+    "expect": "the marker step must run only for a changed customization"
+  },
+  {
+    "name": "a publish job without the upstream gate",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["gate_out=$(.ci/check-ce-overlay-patches.sh)", "gate_out=$(true)"]],
+    "expect": "the upstream gate must run once"
+  },
+  {
+    "name": "a publish job without the offline overlay test",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [[".ci/test-compound-engineering-overlays.sh \"$GITHUB_WORKSPACE\" || fail", "true || fail"]],
+    "expect": "test-compound-engineering-overlays.sh must run before"
+  },
+  {
+    "name": "a publish job without the lock digest check",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [[".ci/check-release-lock-digests.sh || fail", "true || fail"]],
+    "expect": "check-release-lock-digests.sh must run before"
+  },
+  {
+    "name": "a rebase branch prefix missing from the workflow",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["chore/rebase-ce-overlays-v<semver>", "chore/rebase-v<semver>"]],
+    "expect": "does not name the rebase branch prefix"
+  },
+  {
+    "name": "@claude in the workflow",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["# No `run:` block holds", "# ping @claude\n# No `run:` block holds"]],
+    "expect": "the workflow contains @claude"
+  },
+  {
+    "name": "@claude in the prompt",
+    "file": ".github/prompts/ce-overlay-rebase.md",
+    "replace": [["# Task: resolve conflicted customizations", "# Task: resolve conflicted customizations @claude"]],
+    "expect": "the rebase prompt contains @claude"
+  },
+  {
+    "name": "a verify step that accepts a symbolic link",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            if [ -L \"$entry\" ]; then", "            if false; then"]],
+    "expect": "accepted a symbolic link"
+  },
+  {
+    "name": "a verify step that accepts a hard link",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            if [ \"$(stat -c %h -- \"$entry\")\" -ne 1 ]; then", "            if false; then"]],
+    "expect": "accepted a hard link"
+  },
+  {
+    "name": "a verify step that accepts an oversized file",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            if [ \"$(stat -c %s -- \"$entry\")\" -gt \"$WORK_FILE_MAX_BYTES\" ]; then", "            if false; then"]],
+    "expect": "accepted an oversized file"
+  },
+  {
+    "name": "a verify step that accepts a token-shaped string",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            if LC_ALL=C grep -Eq \"$TOKEN_SHAPE\" \"$entry\"; then", "            if false; then"]],
+    "expect": "accepted a token-shaped string"
+  },
+  {
+    "name": "a token shape that no longer covers GitHub tokens",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["gh[pousr]_[A-Za-z0-9]{20,}|", ""]],
+    "expect": "accepted a token-shaped string"
+  },
+  {
+    "name": "a verify step that accepts an extra file",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            if [ \"$allowed\" != true ]; then", "            if false; then"]],
+    "expect": "accepted an extra file"
+  },
+  {
+    "name": "a verify step that accepts a missing conflicted file",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            if [ ! -f \"$INCOMING/files/$key\" ]; then", "            if false; then"]],
+    "expect": "accepted a missing conflicted file"
+  },
+  {
+    "name": "a verify step that accepts an unclean class file",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [[" || [ \"$(cat -- \"$INCOMING/class.txt\")\" != none ]", ""]],
+    "expect": "accepted an unclean class file"
+  },
+  {
+    "name": "a verify step that follows a link in the trusted work directory",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            if [ -L \"$WORK/files/$key\" ]; then", "            if false; then"]],
+    "expect": "accepted a symbolic link in the trusted work directory"
+  },
+  {
+    "name": "a verify step that takes the mode from the artifact",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            chmod \"$mode\" \"$WORK/files/$key\"", "            true"]],
+    "expect": "mishandled a clean artifact"
+  },
+  {
+    "name": "a review skip on the branch prefix alone",
+    "file": ".github/workflows/claude-code-review.yml",
+    "replace": [[" && github.event.pull_request.head.repo.full_name == github.repository", ""]],
+    "expect": "must skip only a same-repository head with the rebase branch prefix"
+  },
+  {
+    "name": "a review skip on another prefix",
+    "file": ".github/workflows/claude-code-review.yml",
+    "replace": [["chore/rebase-ce-overlays-", "chore/rebase-other-"]],
+    "expect": "differs from"
+  },
+  {
+    "name": "a review job without a timeout",
+    "file": ".github/workflows/claude-code-review.yml",
+    "replace": [["    timeout-minutes: 30\n", ""]],
+    "expect": "job claude-review has no timeout-minutes"
+  }
+]
