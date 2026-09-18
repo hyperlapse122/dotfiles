@@ -41,6 +41,9 @@ base_packages=(
   zsh
 )
 
+# Named generically, unlike the other converted installers' missing_<set>
+# arrays: the frozen base-packages-already-present matrix row's predicate
+# already reads "${#missing[@]}", so renaming it would move that row too.
 missing=()
 compute_missing() {
   missing=()

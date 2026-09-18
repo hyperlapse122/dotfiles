@@ -1003,6 +1003,15 @@ check no_record "$IMEFED"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
 
+label=desktop-ime-fedora-kde-ksshaskpass-missing
+run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages \
+  RPMS="$ime_fd_pkgs" FACT_DESKTOP=kde DNF_INSTALL_EXIT=1
+check returned_zero
+check record_is "$IMEFED" operator-blocking
+check stderr_has ksshaskpass
+check called '^dnf install -y ksshaskpass$'
+pass "$label: the KDE-conditional ksshaskpass package is covered by the same verdict"
+
 # --- Desktop-IME, Ubuntu --------------------------------------------------------
 
 label=desktop-ime-ubuntu-second-fails
