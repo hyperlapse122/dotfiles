@@ -1,43 +1,89 @@
 
 {{- $ctx := . -}}
 {{- $ceAuthority := index .agents.marketplaces "compound-engineering-plugin" -}}
+{{- if not (hasKey $ceAuthority "pristinePath") -}}
+{{-   fail "compound-engineering-overlays: the compound-engineering-plugin authority declares no pristinePath" -}}
+{{- end -}}
+{{- $pristineSegment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" "compound-engineering-plugin" "field" "segment") -}}
+{{- $base := include "dot_local/share/compound-engineering-overlays/base.json" | fromJson -}}
+{{- if not (regexMatch "^compound-engineering-v[0-9]+\\.[0-9]+\\.[0-9]+$" (printf "%v" $base.version)) -}}
+{{-   fail (printf "compound-engineering-overlays: base.json version %v is not a compound-engineering-v<semver> tag" $base.version) -}}
+{{- end -}}
+{{- $keys := keys $base.paths | sortAlpha -}}
+{{- range $key := $keys -}}
+{{-   $entry := index $base.paths $key -}}
+{{-   if or (not (regexMatch "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$" $key)) (regexMatch "(^|/)(\\.|\\.\\.|\\.git)(/|$)" $key) -}}
+{{-     fail (printf "compound-engineering-overlays: base.json key %q is not a safe relative path" $key) -}}
+{{-   end -}}
+{{-   if not (regexMatch "^0(644|755)$" (printf "%v" $entry.mode)) -}}
+{{-     fail (printf "compound-engineering-overlays: base.json mode for %q must be 0644 or 0755" $key) -}}
+{{-   end -}}
+{{-   if not (regexMatch "^[0-9a-f]{64}$" (printf "%v" $entry.postimage.sha256)) -}}
+{{-     fail (printf "compound-engineering-overlays: base.json post-image sha256 for %q is malformed" $key) -}}
+{{-   end -}}
+{{-   if not (kindIs "string" $entry.preimage) -}}
+{{-     if not (and (regexMatch "^[0-9a-f]{64}$" (printf "%v" $entry.preimage.sha256)) (regexMatch "^0(644|755)$" (printf "%v" $entry.preimage.mode))) -}}
+{{-       fail (printf "compound-engineering-overlays: base.json pre-image for %q is malformed" $key) -}}
+{{-     end -}}
+{{-   else if ne $entry.preimage "absent" -}}
+{{-     fail (printf "compound-engineering-overlays: base.json pre-image for %q must be absent or an object" $key) -}}
+{{-   end -}}
+{{- end -}}
 
 #!/usr/bin/env bash
 #
-# Installs locally managed ce-sweep references and interview overlays into the
-# currently pinned compound-engineering version directory.
+# Installs the locally customized compound-engineering files into every pinned
+# compound-engineering version directory.
 #
-# The compound-engineering external is ADDITIVE: .chezmoiexternals/ai-agents.toml's
-# localArchive block intentionally omits `exact`, so chezmoi adds/updates archive
-# files but does not remove archive-absent references.
+# Each customization is a patch against one upstream file. The overlay directory
+# holds patches/<path>.patch. base.json, embedded below at render time, records
+# the release tag, the upstream pre-image of each path (sha256 and mode, or
+# `absent` for a file the patch creates), and its post-image (sha256 and mode).
+# Both archive externals exclude every patched path, so chezmoi never owns them.
+# A separate include-only external keeps the unpatched upstream files in the
+# pristine directory, which nothing else writes.
 #
-# This script copies the managed overlay files. For most of them it never changes
-# the archive-owned file, such as skills/ce-sweep/SKILL.md. The two CLI elevation
-# adapters are the guarded exception: on the pinned version, an absent copy is
-# installed outright and an existing copy is replaced only while it still
-# matches the recorded upstream digest (see below).
+# Every apply:
+#   - A destination that holds the recorded post-image is skipped. When only its
+#     mode differs, the recorded mode is set in place.
+#   - Every other post-image is computed before any is installed. The verified
+#     pre-image is copied into a private scratch git repository, patched, given
+#     the recorded mode, and checked against the recorded sha256. The script never
+#     patches a destination in place. It installs each result into every copy.
+#   - Any failure (a tag that differs from the directory, a pre-image that
+#     differs from its record, no git, a patch that does not apply, a post-image
+#     that differs from its record) degrades every path in every copy together.
+#     Each pristine file that matches its recorded pre-image is installed
+#     unmodified. Every other target stays unchanged. Each path gets a warning,
+#     and the script exits 0. It never installs unverified patched content and
+#     never mixes patched and unpatched results.
+#   - Without a sha256 tool nothing can be verified: one warning, no change, exit 0.
 #
-# OWNERSHIP: the overlay paths are ours, while the directory chain above them is
+# The script does no network I/O. The ce-sweep persona and its added source
+# depend on each other, so a partial patched set would break ce-sweep.
+#
+# OWNERSHIP: the patched paths are ours, while the directory chain above them is
 # archive-owned. Because the tree is additive, another process can replace a
 # leaf with a symlink into an unrelated checkout. Following it would overwrite
 # a foreign tracked file. Reclaim the leaves we own; refuse, rather than delete,
-# a directory component that is not a plain directory.
+# a directory component that is not a plain directory. A version directory that
+# is itself a symlink gets the same treatment as a foreign leaf and is skipped.
 #
 # run_after_ (not run_onchange_): that drift is LIVE state in a third-party-
 # writable tree, so it must be re-asserted after every file phase — a
-# fingerprinted onchange run records a clean skip and never repairs it. Re-running
-# costs a stat plus a byte compare per file. The copy is idempotent and touches no
-# unmanaged archive-owned file, so no managed target differs from source state
-# after an apply.
+# fingerprinted onchange run records a clean skip and never repairs it. A
+# converged apply costs a stat and a digest per file.
 
 set -euo pipefail
 
 # Every localArchive copy of the compound-engineering archive, not just one:
 # omp gets its own copy with the root plugin.json excluded, and it needs the
-# same overlay files. The overlay source directory is shared — it is keyed off
-# the first authority's externalPath — because the overlay content is identical
-# for every copy.
+# same customizations. The overlay directory and the pristine tree are shared —
+# they are keyed off the first authority's paths — because both copies hold one
+# version of one upstream.
 OVERLAYS="$HOME/{{ $ceAuthority.externalPath }}-overlays"
+PATCH_DIR="$OVERLAYS/patches"
+PRISTINE_DIR="$HOME/{{ $ceAuthority.pristinePath }}/{{ $pristineSegment }}"
 TARGET_DIRS=(
 {{- range $mName, $mAuthority := .agents.marketplaces }}
 {{-   if and (eq (printf "%v" (index $mAuthority "kind")) "localArchive") (eq (printf "%v" (index $mAuthority "source")) "EveryInc/compound-engineering-plugin") }}
@@ -46,45 +92,99 @@ TARGET_DIRS=(
 {{- end }}
 )
 
+# One state table, parallel arrays indexed by patched path, generated from base.json.
+BASE_TAG={{ $base.version | quote }}
+PATCH_KEYS=(
+{{- range $key := $keys }}
+  {{ $key | quote }}
+{{- end }}
+)
+PRE_SHA=(
+{{- range $key := $keys }}
+{{-   $pre := (index $base.paths $key).preimage }}
+  {{ if kindIs "string" $pre }}"absent"{{ else }}{{ $pre.sha256 | quote }}{{ end }}
+{{- end }}
+)
+PRE_MODE=(
+{{- range $key := $keys }}
+{{-   $pre := (index $base.paths $key).preimage }}
+  {{ if kindIs "string" $pre }}"-"{{ else }}{{ $pre.mode | quote }}{{ end }}
+{{- end }}
+)
+POST_SHA=(
+{{- range $key := $keys }}
+  {{ (index $base.paths $key).postimage.sha256 | quote }}
+{{- end }}
+)
+POST_MODE=(
+{{- range $key := $keys }}
+  {{ (index $base.paths $key).mode | quote }}
+{{- end }}
+)
+BASE_SEGMENT="v${BASE_TAG#compound-engineering-v}"
+KEY_COUNT="${#PATCH_KEYS[@]}"
+
+SCRATCH=''
+cleanup() {
+  if [ -n "$SCRATCH" ]; then
+    rm -rf -- "$SCRATCH"
+  fi
+}
+trap cleanup EXIT
+
+warn() {   # <message> -> one prefixed line on stderr
+  printf 'compound-engineering-overlays: %s\n' "$*" >&2
+}
+
 # The overlay source must exist after the file phase. Match the prune script's defensive skip.
 if [ ! -d "$OVERLAYS" ]; then
   exit 0
 fi
-# Archive-owned directory chain: create what is missing, but never traverse a
-# symlink or a non-directory — mkdir and cp would then land outside the version
-# dir. Those components are not ours to replace, so surface the conflict.
-OVERLAY_FILES=(
-  "skills/ce-sweep/references/sources/gitlab-issues.md"
-  "skills/ce-sweep/references/interview.md"
-)
 
-# CLI elevation adapters (KTD7): the ce-plan and ce-brainstorm archive copies of
-# the pinned v3.26.3 elevation-dispatch.sh are byte-identical upstream, so one
-# overlay source and one recorded digest guard both destinations.
-GUARDED_FILES=(
-  "skills/ce-plan/scripts/elevation-dispatch.sh"
-  "skills/ce-brainstorm/scripts/elevation-dispatch.sh"
-)
-GUARDED_SOURCE="skills/ce-plan/scripts/elevation-dispatch.sh"
-GUARDED_UPSTREAM_SHA256="ba8219c15db2909fb1c272d2137b124a78a06329af2cca0e80276f6e8918ef3d"
-GUARDED_UPSTREAM_VERSION="v3.26.3"
+COPIES=()
+for ((T = 0; T < ${#TARGET_DIRS[@]}; T++)); do
+  if [ -L "${TARGET_DIRS[T]}" ]; then
+    warn "${TARGET_DIRS[T]} is a symlink; skipping it"
+  elif [ -d "${TARGET_DIRS[T]}" ]; then
+    COPIES+=("${TARGET_DIRS[T]}")
+  fi
+done
+COPY_COUNT="${#COPIES[@]}"
+if [ "$COPY_COUNT" -eq 0 ]; then
+  exit 0
+fi
 
 # Portable SHA-256 (roster validOS includes darwin, which ships no sha256sum):
-# prefer sha256sum, fall back to shasum -a 256. The digest command is resolved
-# once so a missing tool degrades every guarded entry the same way instead of
-# retrying per file; a read failure on an existing file still reaches here as
-# an empty, non-matching digest rather than aborting under `set -euo pipefail`.
-SHA256_TOOL_AVAILABLE=1
+# prefer sha256sum, fall back to shasum -a 256. A read failure on an existing
+# file reaches the callers as an empty, non-matching digest rather than aborting
+# under `set -euo pipefail`.
 if command -v sha256sum >/dev/null 2>&1; then
   SHA256_CMD=(sha256sum --)
 elif command -v shasum >/dev/null 2>&1; then
   SHA256_CMD=(shasum -a 256 --)
 else
-  SHA256_TOOL_AVAILABLE=0
-  SHA256_CMD=()
+  warn "no sha256 tool; leaving every target unchanged"
+  exit 0
 fi
 sha256_of() {   # <path> -> prints hex digest on stdout; empty output, nonzero status if unreadable
   "${SHA256_CMD[@]}" "$1" 2>/dev/null | cut -d' ' -f1
+}
+
+# Owner-execute bit through stat: access(2) reports EACCES for X_OK on a noexec
+# mount, which would misread every file as 0644. The bit is what the recorded
+# 0644 and 0755 mean, so a umask that narrowed the group bits changes nothing.
+mode_of() {   # <path> -> prints 0755 when the owner execute bit is set, else 0644
+  local perm
+  perm="$(stat -c '%a' -- "$1" 2>/dev/null || stat -f '%Lp' -- "$1" 2>/dev/null)" || return 1
+  if [ $((8#$perm & 8#100)) -ne 0 ]; then
+    printf '0755'
+  else
+    printf '0644'
+  fi
+}
+
+is_plain_file() {   # <path> -> true for a regular file that is not a symlink
+  [ -f "$1" ] && [ ! -L "$1" ]
 }
 
 ensure_directory_chain() {   # <base-dir> <relative-file-path> -> mkdir the archive-owned chain under base, or exit 1 on a foreign non-directory
@@ -120,82 +220,202 @@ install_via_temp() {   # <source> <destination> -> cp -p to a same-directory tem
   mv -f -- "$temp" "$destination"
 }
 
-for CURRENT in "${TARGET_DIRS[@]}"; do
-  [ -d "$CURRENT" ] || continue
+# Same scratch-git environment as .ci/lib/ce-overlay.sh (ceo_git), so the CI gate
+# and this apply cannot disagree: no user or system configuration, no enclosing
+# repository, and no whitespace or line-ending rewrite.
+git_isolated() {   # <git arguments> -> runs git inside the scratch boundary
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY \
+    -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_COMMON_DIR -u GIT_NAMESPACE \
+    HOME="$SCRATCH/git-home" XDG_CONFIG_HOME="$SCRATCH/git-home" \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GIT_ATTR_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 LC_ALL=C \
+    git -c core.autocrlf=false -c core.safecrlf=false -c core.filemode=true \
+    -c core.symlinks=true -c core.hooksPath=/dev/null -c core.quotepath=off \
+    -c init.defaultBranch=main -c apply.whitespace=nowarn "$@" </dev/null
+}
 
-  for RELATIVE in "${OVERLAY_FILES[@]}"; do
-    SOURCE="$OVERLAYS/$RELATIVE"
-    DESTINATION="$CURRENT/$RELATIVE"
-
-    [ -f "$SOURCE" ] || continue
-
-    ensure_directory_chain "$CURRENT" "$RELATIVE"
-
-    reclaim_destination "$DESTINATION"
-
-    if cmp -s -- "$SOURCE" "$DESTINATION"; then
-      continue
-    fi
-
-    install_via_temp "$SOURCE" "$DESTINATION"
-  done
-
-  # Guarded whole-file replacements: unlike OVERLAY_FILES above, these targets are
-  # archive-owned scripts, not overlay-only leaves, so an unconditional copy would
-  # clobber a version bump's own rewrite. A fresh host, where the archive never
-  # extracted the file, gets the overlay installed outright. An existing archive
-  # copy is replaced only while it still equals the recorded upstream digest for
-  # the pinned version; any other digest is left untouched with a warning, so a
-  # plugin bump degrades to the upstream default instead of silently keeping a
-  # stale fork or overwriting new upstream content. A symlink at the destination
-  # is always reclaimed and replaced rather than trusted on a digest match, so a
-  # same-content foreign link cannot be waved through. Both destinations share
-  # one overlay source (GUARDED_SOURCE), hoisted out of this loop since it never
-  # varies per entry.
-  GUARDED_SOURCE_PATH="$OVERLAYS/$GUARDED_SOURCE"
-  if [ -f "$GUARDED_SOURCE_PATH" ]; then
-    VERSION_SEGMENT="${CURRENT##*/}"
-    if [ "$VERSION_SEGMENT" != "$GUARDED_UPSTREAM_VERSION" ]; then
-      printf 'compound-engineering-overlays: %s is %s, the elevation overlay targets %s; leaving the adapters untouched\n' \
-        "$CURRENT" "$VERSION_SEGMENT" "$GUARDED_UPSTREAM_VERSION" >&2
-    else
-      for RELATIVE in "${GUARDED_FILES[@]}"; do
-        DESTINATION="$CURRENT/$RELATIVE"
-
-        if [ ! -e "$DESTINATION" ]; then
-          ensure_directory_chain "$CURRENT" "$RELATIVE"
-          install_via_temp "$GUARDED_SOURCE_PATH" "$DESTINATION"
-          continue
-        fi
-
-        if [ "$SHA256_TOOL_AVAILABLE" != 1 ]; then
-          printf 'compound-engineering-overlays: no sha256 tool; leaving %s unchanged\n' "$DESTINATION" >&2
-          continue
-        fi
-
-        ensure_directory_chain "$CURRENT" "$RELATIVE"
-
-        if [ -L "$DESTINATION" ]; then
-          reclaim_destination "$DESTINATION"
-          install_via_temp "$GUARDED_SOURCE_PATH" "$DESTINATION"
-          continue
-        fi
-
-        OVERLAY_DIGEST="$(sha256_of "$GUARDED_SOURCE_PATH")"
-        OBSERVED="$(sha256_of "$DESTINATION" 2>/dev/null || true)"
-
-        if [ "$OBSERVED" = "$OVERLAY_DIGEST" ]; then
-          continue
-        fi
-
-        if [ "$OBSERVED" = "$GUARDED_UPSTREAM_SHA256" ]; then
-          reclaim_destination "$DESTINATION"
-          install_via_temp "$GUARDED_SOURCE_PATH" "$DESTINATION"
-        else
-          printf 'compound-engineering-overlays: %s does not match the pinned upstream digest (%s); leaving it unchanged\n' \
-            "$DESTINATION" "$OBSERVED" >&2
-        fi
-      done
-    fi
+DEGRADE_REASON=''
+note_failure() {   # <reason> -> keeps the first reason
+  if [ -z "$DEGRADE_REASON" ]; then
+    DEGRADE_REASON="$1"
   fi
+}
+
+# Per path: verified (a pristine file matches its recorded pre-image), upstream
+# (the pre-image is absent but upstream now ships the file), none (absent, and
+# absent upstream), or unusable.
+PRISTINE_STATE=()
+PRISTINE_CHECKED=0
+verify_pristine() {   # -> fills PRISTINE_STATE; every failing path warns and sets DEGRADE_REASON
+  local k key file
+  PRISTINE_CHECKED=1
+  for ((k = 0; k < KEY_COUNT; k++)); do
+    key="${PATCH_KEYS[k]}"
+    file="$PRISTINE_DIR/$key"
+    PRISTINE_STATE[k]=unusable
+    if [ "${PRE_SHA[k]}" = absent ]; then
+      if is_plain_file "$file"; then
+        PRISTINE_STATE[k]=upstream
+        warn "$key: upstream now ships this file, but its pre-image is recorded as absent"
+        note_failure "upstream now ships $key"
+      elif [ -e "$file" ] || [ -L "$file" ]; then
+        warn "$key: $file is not a regular file"
+        note_failure "the pristine entry for $key is not a regular file"
+      else
+        PRISTINE_STATE[k]=none
+      fi
+    elif ! is_plain_file "$file"; then
+      warn "$key: the pristine file $file is missing"
+      note_failure "the pristine file for $key is missing"
+    elif [ "$(sha256_of "$file")" != "${PRE_SHA[k]}" ]; then
+      warn "$key: the pristine file $file differs from the recorded pre-image sha256"
+      note_failure "the pristine file for $key differs from its recorded pre-image"
+    elif [ "$(mode_of "$file")" != "${PRE_MODE[k]}" ]; then
+      warn "$key: the pristine file $file differs from the recorded pre-image mode"
+      note_failure "the pristine file for $key differs from its recorded pre-image"
+    else
+      PRISTINE_STATE[k]=verified
+    fi
+  done
+}
+
+# Post-images land in $SCRATCH/work/<path>.
+compute_post_images() {   # -> patches every verified pre-image; every failing path warns and sets DEGRADE_REASON
+  local k key patch work="$SCRATCH/work"
+  if ! git_isolated --version >/dev/null 2>&1; then
+    warn "git is not available; the patches cannot be applied"
+    note_failure "git is not available"
+    return 0
+  fi
+  git_isolated init -q -- "$work" >/dev/null 2>&1 || {
+    warn "git could not create its scratch repository"
+    note_failure "git could not create its scratch repository"
+    return 0
+  }
+  for ((k = 0; k < KEY_COUNT; k++)); do
+    key="${PATCH_KEYS[k]}"
+    patch="$PATCH_DIR/$key.patch"
+    mkdir -p -- "$work/$(dirname -- "$key")"
+    if [ "${PRE_SHA[k]}" != absent ]; then
+      cp -p -- "$PRISTINE_DIR/$key" "$work/$key"
+    fi
+    if ! is_plain_file "$patch"; then
+      warn "$key: the patch $patch is missing"
+      note_failure "the patch for $key is missing"
+    elif ! git_isolated -C "$work" apply -- "$patch" >/dev/null 2>"$SCRATCH/apply.err"; then
+      warn "$key: the patch does not apply: $(head -c 300 "$SCRATCH/apply.err" | tr '\n' ' ')"
+      note_failure "the patch for $key does not apply"
+    elif ! is_plain_file "$work/$key"; then
+      warn "$key: the patch left no regular file"
+      note_failure "the patch for $key left no regular file"
+    else
+      chmod "${POST_MODE[k]}" "$work/$key"
+      if [ "$(sha256_of "$work/$key")" != "${POST_SHA[k]}" ]; then
+        warn "$key: the patched file differs from the recorded post-image sha256"
+        note_failure "the post-image for $key differs from its record"
+      fi
+    fi
+  done
+}
+
+degrade_all() {   # -> installs verified pristine files, leaves every other target unchanged, warns per path
+  local c k key dest staged
+  for ((k = 0; k < KEY_COUNT; k++)); do
+    key="${PATCH_KEYS[k]}"
+    case "${PRISTINE_STATE[k]}" in
+      verified | upstream)
+        staged="$SCRATCH/pristine/$key"
+        mkdir -p -- "$SCRATCH/pristine/$(dirname -- "$key")"
+        cp -- "$PRISTINE_DIR/$key" "$staged"
+        chmod "$(mode_of "$PRISTINE_DIR/$key")" "$staged"
+        ;;
+    esac
+  done
+  for ((c = 0; c < COPY_COUNT; c++)); do
+    for ((k = 0; k < KEY_COUNT; k++)); do
+      key="${PATCH_KEYS[k]}"
+      dest="${COPIES[c]}/$key"
+      case "${PRISTINE_STATE[k]}" in
+        verified | upstream)
+          staged="$SCRATCH/pristine/$key"
+          if is_plain_file "$dest" && cmp -s -- "$staged" "$dest" && [ "$(mode_of "$dest")" = "$(mode_of "$staged")" ]; then
+            warn "$dest: holds the unmodified upstream file ($DEGRADE_REASON)"
+          else
+            ensure_directory_chain "${COPIES[c]}" "$key"
+            reclaim_destination "$dest"
+            install_via_temp "$staged" "$dest"
+            warn "$dest: installed the unmodified upstream file ($DEGRADE_REASON)"
+          fi
+          ;;
+        *)
+          warn "$dest: left unchanged ($DEGRADE_REASON)"
+          ;;
+      esac
+    done
+  done
+}
+
+# Plan: 0 converged, 1 mode differs, 2 needs its post-image.
+ACTIONS=()
+NEEDS_POST_IMAGE=0
+for ((C = 0; C < COPY_COUNT; C++)); do
+  if [ "${COPIES[C]##*/}" != "$BASE_SEGMENT" ]; then
+    warn "${COPIES[C]} is ${COPIES[C]##*/}, but base.json records $BASE_TAG"
+    note_failure "${COPIES[C]} is ${COPIES[C]##*/}, but base.json records $BASE_TAG"
+  fi
+done
+if [ -z "$DEGRADE_REASON" ]; then
+  for ((C = 0; C < COPY_COUNT; C++)); do
+    for ((K = 0; K < KEY_COUNT; K++)); do
+      DESTINATION="${COPIES[C]}/${PATCH_KEYS[K]}"
+      ACTIONS[C * KEY_COUNT + K]=2
+      if is_plain_file "$DESTINATION" && [ "$(sha256_of "$DESTINATION")" = "${POST_SHA[K]}" ]; then
+        if [ "$(mode_of "$DESTINATION")" = "${POST_MODE[K]}" ]; then
+          ACTIONS[C * KEY_COUNT + K]=0
+        else
+          ACTIONS[C * KEY_COUNT + K]=1
+        fi
+      fi
+      if [ "${ACTIONS[C * KEY_COUNT + K]}" -eq 2 ]; then
+        NEEDS_POST_IMAGE=1
+      fi
+    done
+  done
+fi
+
+if [ -z "$DEGRADE_REASON" ] && [ "$NEEDS_POST_IMAGE" -eq 1 ]; then
+  SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/compound-engineering-overlays.XXXXXX")"
+  mkdir -p -- "$SCRATCH/git-home"
+  verify_pristine
+  if [ -z "$DEGRADE_REASON" ]; then
+    compute_post_images
+  fi
+fi
+
+if [ -n "$DEGRADE_REASON" ]; then
+  if [ -z "$SCRATCH" ]; then
+    SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/compound-engineering-overlays.XXXXXX")"
+  fi
+  if [ "$PRISTINE_CHECKED" -eq 0 ]; then
+    verify_pristine
+  fi
+  degrade_all
+  exit 0
+fi
+
+for ((C = 0; C < COPY_COUNT; C++)); do
+  for ((K = 0; K < KEY_COUNT; K++)); do
+    RELATIVE="${PATCH_KEYS[K]}"
+    DESTINATION="${COPIES[C]}/$RELATIVE"
+    case "${ACTIONS[C * KEY_COUNT + K]}" in
+      1)
+        chmod "${POST_MODE[K]}" "$DESTINATION"
+        ;;
+      2)
+        ensure_directory_chain "${COPIES[C]}" "$RELATIVE"
+        reclaim_destination "$DESTINATION"
+        install_via_temp "$SCRATCH/work/$RELATIVE" "$DESTINATION"
+        ;;
+    esac
+  done
 done

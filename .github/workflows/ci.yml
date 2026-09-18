@@ -435,6 +435,22 @@ jobs:
       - name: Run overlay ownership regression test
         run: .ci/test-ce-overlay-entrystate.sh "$GITHUB_WORKSPACE"
 
+  compound-engineering-overlay-upstream:
+    name: compound-engineering overlay upstream gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Validate the overlay patches against the pinned release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .ci/check-ce-overlay-patches.sh
+
   delivery:
     name: Final delivery
     if: always()
@@ -448,6 +464,7 @@ jobs:
         ts-workspace,
         rust-crate,
         compound-engineering-overlays,
+        compound-engineering-overlay-upstream,
       ]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
