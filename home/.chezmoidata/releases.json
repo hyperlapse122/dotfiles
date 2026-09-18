@@ -239,46 +239,46 @@
       "codex": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.155.0",
+        "version": "rust-v0.155.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "e415cc3adb94ade16e8d44b4dd58a9201cc34b2ee51a5d6eddf2a3a00aecb6c0"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "a0ef8b2debc3bf747e07b1a039354de31300ac0dcc2276498ba281470b5d9115"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "8b4a9c356916c515f7c93f918a01b8fa1371bcc9758addbfa723b85fbec5694b"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "d6c7e62fbd688d52ee04f3929d0613705d32a920a42db7a139e366eaf1f4a2d7"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-x86_64-apple-darwin.tar.gz",
-            "sha256": "cc84081b15284eea10c8b8d428818d1c8debdce5a7f0f4f5c04dfc7c72518174"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-x86_64-apple-darwin.tar.gz",
+            "sha256": "ff22ad0bf28b8568dbfb28ef0ea64451fe5170fa0f9118bf764ca6cb24c27791"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-aarch64-apple-darwin.tar.gz",
-            "sha256": "5a584b7cddc2a97083cada53f10f5bc4231526b7f64105f6a5bb82d01ccdba49"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-aarch64-apple-darwin.tar.gz",
+            "sha256": "5e5a51470dce2423f9d96bd191d0bbc4cc0e2848a6833df5178eaf47a07a3768"
           }
         }
       },
       "codex-code-mode-host": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.155.0",
+        "version": "rust-v0.155.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "328c1bebe09fc727053794576efea353d3b18381ee8883f5283b37ae4a7854d4"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "9fd083743af55be818aceb351d371fb5136f5b6aa3938f167087373d27067b2d"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "0ecd8e263468b520770c6dc6c9ebafeba3052c0c9796eabc5b0c469f77d5489b"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "516f2ed76d4ae96c2074d3c08f4576ed1bdc5c3a97e26734d7319de8b6861683"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
-            "sha256": "285d1c6fdacf9b500fe041c0a98b06cf58eb7ea35549554bcb2a0c04866ef49d"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
+            "sha256": "4d1d2377a39842c13fa07c70e2ddd1592ff4edc4846cf32ce90df07f5568066a"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.0/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
-            "sha256": "3d751deef91b4526f086029c9395feb872abf7a717e45752ad1b33dcb387fa6b"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.155.1/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+            "sha256": "e8957108eebd70963b0906857ceb7f7a2b477d1972a7147041c625d4071b508a"
           }
         }
       },
@@ -359,24 +359,24 @@
       "flutter": {
         "kind": "vendorManifest",
         "source": "https://storage.googleapis.com/flutter_infra_release/releases",
-        "version": "3.47.4",
+        "version": "3.47.5",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.4-stable.tar.xz",
-            "sha256": "5b45f0ceda99b9bebdc873e7e69f6450aeb4c30f454b505e2e62fc9255a907d3"
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.5-stable.tar.xz",
+            "sha256": "2132e990f236f8d22e7c6314b29a191a95b10d7cbcfec9b4e2e303d996652cbb"
           },
           "linux-arm64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.4-stable.tar.xz",
-            "sha256": "5b45f0ceda99b9bebdc873e7e69f6450aeb4c30f454b505e2e62fc9255a907d3",
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.5-stable.tar.xz",
+            "sha256": "2132e990f236f8d22e7c6314b29a191a95b10d7cbcfec9b4e2e303d996652cbb",
             "emulated": true
           },
           "darwin-amd64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.47.4-stable.zip",
-            "sha256": "72ced0f81a5ea48f30d221699fa45378cdd1fa15426512444f32e4e1bee9db8b"
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.47.5-stable.zip",
+            "sha256": "a7893bb0feecd8bd066f4f7e850356f896a6fc3b862e6c506d21c76691a66b72"
           },
           "darwin-arm64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.4-stable.zip",
-            "sha256": "c6af6fa1d64946167b8637ba4c5a7bb3b8574729a1ebe931decd4924dbab7061"
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.5-stable.zip",
+            "sha256": "d4dd908b5f8f65515831b6d68ae33307a813f2b68947dded7a1994ee5ea7cead"
           }
         }
       },
