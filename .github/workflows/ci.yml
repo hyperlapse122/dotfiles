@@ -330,6 +330,7 @@ jobs:
           .ci/test-gpg-key-data.sh
           .ci/test-gpg-packages-parity.sh
           .ci/check-ce-overlay-rebase-marker.sh
+          .ci/test-ce-overlay-pr.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)
