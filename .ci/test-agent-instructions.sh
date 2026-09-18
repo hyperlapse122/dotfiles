@@ -428,6 +428,11 @@ In that session the harness's own in-process subagent tool is never a substitute
 The detailed contract does not live in this file: an Orca-managed session receives it by injection at session start, as a normative extension of this file carrying the same precedence as this file's own text.
 omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
 Compound Engineering model elevation has a default: for each of `plan_model` and `brainstorm_model` separately
+This default is size-gated: it applies only to a Deep run, or to a Standard run whose scope carries a risk surface
+A CI workflow, a build script, or a repository-internal config path is not a risk surface by itself.
+Every other run treats the key as unset, and the session model authors the step inline with no elevation line.
+Compound Engineering's `learnings-researcher` is dispatched only for a Deep run.
+No worker is dispatched for that step, and the inline search satisfies the skill's learnings step.
 A value the repository sets, a caller carrier, or live user intent wins over this default, in Compound Engineering's own order.
 launches the elevation entry at its roster effort `max`
 outside Orca the native subagent adapter runs at the Claude Code `modelSettings` effort for that model and the CLI adapter at the effort this repository's overlay sets, both held at the same value.
