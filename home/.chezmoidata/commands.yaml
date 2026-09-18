@@ -610,25 +610,6 @@ commands:
       commands:
         - name: figma-auth
 
-    antigravity-sidecar:
-      producer: build
-      safetyProfile: native-single-file
-      proofEligible: true
-      mode: "0755"
-      platforms: [linux, macos]
-      fingerprintGlobs:
-        - mise.toml
-        - packages/package.json
-        - packages/bun.lock
-        - packages/bunfig.toml
-        - packages/vite.config.ts
-        - packages/antigravity-sidecar/package.json
-        - packages/antigravity-sidecar/tsconfig.json
-        - packages/antigravity-sidecar/vite.config.ts
-        - packages/antigravity-sidecar/src/**
-      commands:
-        - name: antigravity-sidecar
-
     settings-reconcile:
       producer: build
       safetyProfile: native-single-file

@@ -391,10 +391,9 @@ and source-only trees live at the repository root outside `home/`.
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
 - [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust haptic client sources and utilities.
 - [`packages/`](packages) — Bun workspace built on apply with **Vite+** (`vp`).
-  `omp-orca/` supplies Orca instructions to omp, `antigravity-sidecar/` proxies
-  its model requests, and `figma-auth/` authorizes the shared Figma MCP server
-  for omp. Build failures preserve the last executable and retry after an
-  input change or `chezmoi apply --force`.
+  `omp-orca/` supplies Orca instructions to omp and `figma-auth/` authorizes
+  the shared Figma MCP server for omp. Build failures preserve the last
+  executable and retry after an input change or `chezmoi apply --force`.
   `release-lock/` generates the static external-tool lock consumed by templates
   and externals. See [`packages/README.md`](packages/README.md).
 - [`firmware/`](firmware) — keyboard firmware configurations (e.g. NuPhy Gem80 HostRGB).
@@ -412,7 +411,7 @@ This repository manages **Claude Code** (`claude`), **OpenAI Codex CLI** (`codex
 
 omp replaces Antigravity CLI in Orca. All eight Git actions use omp; the ordinary TUI default remains Claude. The native omp extension injects the current orchestration role before each model call.
 
-The local sidecar listens on `127.0.0.1:45123` and changes only system-prompt text before forwarding requests to the Google Antigravity provider. It starts after the binary is installed. Antigravity CLI's managed files are removed; its authentication and conversation history remain.
+omp sends `google-antigravity/*` requests directly to the provider. Antigravity CLI's managed files are removed; its authentication and conversation history remain.
 
 Run `figma-auth` without arguments to authorize Figma for omp. It opens the browser and stores the result in omp's existing SQLite database. Other harnesses use their native Figma OAuth flow.
 

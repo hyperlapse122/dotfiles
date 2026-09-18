@@ -225,3 +225,37 @@ src/garden.yaml
 .local/bin/codex-bin
 .local/lib/commands/current/codex-wrapper
 .local/lib/commands/store/codex-wrapper
+
+# Retired antigravity-sidecar proxy. Deleting the managed sources stopped
+# chezmoi managing them but left deployed copies behind.
+#
+# The block has no OS or container gate. Containers and macOS hosts received
+# the systemd unit files because container and OS ignore rules never excluded
+# them. Names are specific to this repository, so removal is unconditional.
+# command-reconcile store and quarantine artifacts, staging directories, and
+# state directories are included.
+#
+# docs/decommission/antigravity-sidecar.md owns the service stop. The operator
+# runs the checklist before the first apply.
+#
+# ~/.omp/agent/models.yml is checked before removal. It entered the repository
+# only to route omp through the loopback proxy. It is an unmanaged user config
+# file, so unconditional removal would delete an operator-written configuration.
+# The entry emits only when the deployed file exists and contains
+# 127.0.0.1:45123. This entry must be removed if models.yml becomes a managed
+# target again.
+.config/systemd/user/antigravity-sidecar.service
+.config/systemd/user/default.target.wants/antigravity-sidecar.service
+Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist
+.local/bin/antigravity-sidecar
+.local/lib/commands/current/antigravity-sidecar
+.local/lib/commands/store/antigravity-sidecar
+.local/lib/commands/quarantine/antigravity-sidecar
+.local/share/chezmoi-commands/incomplete/antigravity-sidecar
+.local/state/dotfiles-antigravity-sidecar
+{{ $modelsPath := joinPath .chezmoi.homeDir ".omp/agent/models.yml" -}}
+{{ if stat $modelsPath -}}
+{{ if contains "127.0.0.1:45123" (include $modelsPath) -}}
+.omp/agent/models.yml
+{{ end -}}
+{{ end -}}

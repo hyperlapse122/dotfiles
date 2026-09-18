@@ -28,7 +28,6 @@ the repo's TypeScript/JavaScript library packages.
 | [`mxm4-haptic/`](mxm4-haptic/) | `@h82/mxm4-haptic` | Node/Bun client for the `mxm4-hapticd` daemon — sends MX Master 4 haptic waveforms over the daemon's AF_UNIX socket. Mirrors the portable client surface of [`../crates/mxm4-haptic/src/lib.rs`](../crates/mxm4-haptic/src/lib.rs). |
 | [`orchestration-hook/`](orchestration-hook/) | `@h82/orchestration-hook` | Orca role context and direct-launch guard. |
 | [`omp-orca/`](omp-orca/) | `@h82/omp-orca` | Native omp orchestration extension. |
-| [`antigravity-sidecar/`](antigravity-sidecar/) | `@h82/antigravity-sidecar` | Local proxy that transforms system-prompt text. |
 | [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | On-demand Figma OAuth for omp. |
 | [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `home/.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
 

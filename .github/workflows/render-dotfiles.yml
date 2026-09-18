@@ -168,11 +168,17 @@ jobs:
                    "${HOME}/.local/bin" \
                    "${HOME}/.local/share/i-have-adhd" \
                    "${HOME}/.config/systemd/user" \
+                   "${HOME}/.config/systemd/user/default.target.wants" \
                    "${HOME}/.local/libexec" \
                    "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
                    "${HOME}/.local/state/unmanaged-repo-guard" \
                    "${HOME}/.local/share/omp-plugins/plugins/sample-plugin" \
-                   "${HOME}/.local/share/omp-plugins/.omp-plugin"
+                   "${HOME}/.local/share/omp-plugins/.omp-plugin" \
+                   "${HOME}/.local/lib/commands/current/antigravity-sidecar" \
+                   "${HOME}/.local/lib/commands/store/antigravity-sidecar" \
+                   "${HOME}/.local/lib/commands/quarantine/antigravity-sidecar" \
+                   "${HOME}/.local/share/chezmoi-commands/incomplete/antigravity-sidecar" \
+                   "${HOME}/.local/state/dotfiles-antigravity-sidecar"
           : > "${HOME}/.agents/skills/ce-plan/prune-canary"
           : > "${HOME}/.agents/skills/lfg/prune-canary"
           : > "${HOME}/.agents/skills/playwright-cli/prune-canary"
@@ -184,7 +190,7 @@ jobs:
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
           : > "${HOME}/.omp/agent/mcp.json"
-          : > "${HOME}/.omp/agent/models.yml"
+          printf 'providers:\n  google-antigravity:\n    baseUrl: http://127.0.0.1:45123\n' > "${HOME}/.omp/agent/models.yml"
           : > "${HOME}/.omp/agent/APPEND_SYSTEM.md"
           : > "${HOME}/.omp/agent/TITLE_SYSTEM.md"
           : > "${HOME}/.omp/agent/.env"
@@ -210,6 +216,14 @@ jobs:
           : > "${HOME}/.local/state/unmanaged-repo-guard/blocks.jsonl"
           : > "${HOME}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
+          : > "${HOME}/.config/systemd/user/antigravity-sidecar.service"
+          : > "${HOME}/.config/systemd/user/default.target.wants/antigravity-sidecar.service"
+          : > "${HOME}/.local/bin/antigravity-sidecar"
+          : > "${HOME}/.local/lib/commands/current/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/lib/commands/store/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/lib/commands/quarantine/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/share/chezmoi-commands/incomplete/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/state/dotfiles-antigravity-sidecar/prune-canary"
           set +e
           printf '\n\n\n' | chezmoi apply --init --source "${SRC}" --no-tty --exclude=scripts,encrypted
           rc=$?
@@ -235,7 +249,7 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
-          cmp "${home}/.omp/agent/models.yml" "${source_root}/dot_omp/private_agent/private_readonly_models.yml"
+          test ! -e "${home}/.omp/agent/models.yml"
           # AGENTS.md and mcp.json are managed targets again, so the fixture
           # seeds them empty above and apply must have written real content
           # rather than pruned them. Non-empty is the falsifiable signal: a
@@ -259,6 +273,14 @@ jobs:
           test ! -e "${home}/.local/share/omp-plugins/plugins/unmanaged-repo-guard"
           test ! -e "${home}/.local/state/unmanaged-repo-guard"
           test ! -e "${home}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
+          test ! -e "${home}/.config/systemd/user/antigravity-sidecar.service"
+          test ! -e "${home}/.config/systemd/user/default.target.wants/antigravity-sidecar.service"
+          test ! -e "${home}/.local/bin/antigravity-sidecar"
+          test ! -e "${home}/.local/lib/commands/current/antigravity-sidecar"
+          test ! -e "${home}/.local/lib/commands/store/antigravity-sidecar"
+          test ! -e "${home}/.local/lib/commands/quarantine/antigravity-sidecar"
+          test ! -e "${home}/.local/share/chezmoi-commands/incomplete/antigravity-sidecar"
+          test ! -e "${home}/.local/state/dotfiles-antigravity-sidecar"
 
           # Sibling files must survive.
           test -f "${home}/.agents/skills/daily-report/prune-canary"
@@ -817,11 +839,18 @@ jobs:
                    "${HOME}/.local/bin" \
                    "${HOME}/.local/share/i-have-adhd" \
                    "${HOME}/.config/systemd/user" \
+                   "${HOME}/.config/systemd/user/default.target.wants" \
+                   "${HOME}/Library/LaunchAgents" \
                    "${HOME}/.local/libexec" \
                    "${HOME}/.local/share/omp-plugins/plugins/unmanaged-repo-guard" \
                    "${HOME}/.local/state/unmanaged-repo-guard" \
                    "${HOME}/.local/share/omp-plugins/plugins/sample-plugin" \
-                   "${HOME}/.local/share/omp-plugins/.omp-plugin"
+                   "${HOME}/.local/share/omp-plugins/.omp-plugin" \
+                   "${HOME}/.local/lib/commands/current/antigravity-sidecar" \
+                   "${HOME}/.local/lib/commands/store/antigravity-sidecar" \
+                   "${HOME}/.local/lib/commands/quarantine/antigravity-sidecar" \
+                   "${HOME}/.local/share/chezmoi-commands/incomplete/antigravity-sidecar" \
+                   "${HOME}/.local/state/dotfiles-antigravity-sidecar"
           : > "${HOME}/.agents/skills/ce-plan/prune-canary"
           : > "${HOME}/.agents/skills/lfg/prune-canary"
           : > "${HOME}/.agents/skills/playwright-cli/prune-canary"
@@ -833,7 +862,7 @@ jobs:
           : > "${HOME}/.omp/agent/CLAUDE.md"
           : > "${HOME}/.omp/agent/AGENTS.md"
           : > "${HOME}/.omp/agent/mcp.json"
-          : > "${HOME}/.omp/agent/models.yml"
+          printf 'providers:\n  google-antigravity:\n    baseUrl: http://127.0.0.1:45123\n' > "${HOME}/.omp/agent/models.yml"
           : > "${HOME}/.omp/agent/APPEND_SYSTEM.md"
           : > "${HOME}/.omp/agent/TITLE_SYSTEM.md"
           : > "${HOME}/.omp/agent/.env"
@@ -859,6 +888,15 @@ jobs:
           : > "${HOME}/.local/state/unmanaged-repo-guard/blocks.jsonl"
           : > "${HOME}/.local/share/omp-plugins/plugins/sample-plugin/prune-canary"
           : > "${HOME}/.local/share/omp-plugins/.omp-plugin/marketplace.json"
+          : > "${HOME}/.config/systemd/user/antigravity-sidecar.service"
+          : > "${HOME}/.config/systemd/user/default.target.wants/antigravity-sidecar.service"
+          : > "${HOME}/Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist"
+          : > "${HOME}/.local/bin/antigravity-sidecar"
+          : > "${HOME}/.local/lib/commands/current/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/lib/commands/store/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/lib/commands/quarantine/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/share/chezmoi-commands/incomplete/antigravity-sidecar/prune-canary"
+          : > "${HOME}/.local/state/dotfiles-antigravity-sidecar/prune-canary"
 
           set +e
           chezmoi apply --init --source "${SRC}" --no-tty --exclude=scripts,encrypted
@@ -882,7 +920,7 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
-          cmp "${home}/.omp/agent/models.yml" "${source_root}/dot_omp/private_agent/private_readonly_models.yml"
+          test ! -e "${home}/.omp/agent/models.yml"
           # AGENTS.md and mcp.json are managed targets again, so the fixture
           # seeds them empty above and apply must have written real content
           # rather than pruned them. Non-empty is the falsifiable signal: a
@@ -905,6 +943,15 @@ jobs:
           test ! -e "${home}/.local/share/i-have-adhd"
           test ! -e "${home}/.local/share/omp-plugins/plugins/unmanaged-repo-guard"
           test ! -e "${home}/.local/state/unmanaged-repo-guard"
+          test ! -e "${home}/.config/systemd/user/antigravity-sidecar.service"
+          test ! -e "${home}/.config/systemd/user/default.target.wants/antigravity-sidecar.service"
+          test ! -e "${home}/Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist"
+          test ! -e "${home}/.local/bin/antigravity-sidecar"
+          test ! -e "${home}/.local/lib/commands/current/antigravity-sidecar"
+          test ! -e "${home}/.local/lib/commands/store/antigravity-sidecar"
+          test ! -e "${home}/.local/lib/commands/quarantine/antigravity-sidecar"
+          test ! -e "${home}/.local/share/chezmoi-commands/incomplete/antigravity-sidecar"
+          test ! -e "${home}/.local/state/dotfiles-antigravity-sidecar"
 
           # src/garden.yaml is container-gated (if not $f.container): macOS is not a container, so it MUST be pruned!
           test ! -e "${home}/src/garden.yaml"
