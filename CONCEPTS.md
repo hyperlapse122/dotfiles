@@ -67,6 +67,9 @@ The additional rules only a session that can dispatch is able to act on. It is d
 ### Lead envelope
 The single composed delivery a lead receives through its hook or native extension: the authority preamble, the orchestration skill text, the version-matched guide read from the installed CLI, the Everyone payload, and the Coordinator payload. Delivery is atomic — a lead envelope missing any half is not delivered at all, because a partial rule set is worse than none.
 
+### Subagent guard
+The mechanism that stops an injected session from bypassing Orca dispatch. In an Orca-managed session whose local payload files are staged, the guard intercepts calls to the harness's own subagent tool — `Agent` and `Task` in Claude Code, `collaborationspawn_agent` in Codex, and `task` in omp — and denies them with a message directing the agent to the `orchestration` skill. It permits all calls in an Orca agent-teams session and outside Orca. The guard fails open on any error, missing file, or unexpected format.
+
 ### Brief file
 The file a dispatch names by path to carry context the dispatch spec itself cannot hold. A spec travels as an argv string, so context large enough to exceed the kernel argument limit is written to a brief instead of inlined. It is also where a coordinator materializes content only it can reach, such as facts extracted from an MCP the recipient has no access to.
 
@@ -80,7 +83,7 @@ The single declaration in the agent data file of two things: one lead pin per ag
 Work whose deliverable is the judgment itself: a code review, a document review, or a `ce-pov` verdict. It is dispatched to the roster's frontier judgment entries and never performed by the lead in place.
 
 ### Authoring work
-Plan authoring's model-elevation step and `ce-brainstorm`'s approach generation, dispatched as one worker to the roster's `authoring` entry whose model matches the alias Compound Engineering resolved. When no entry matches the alias, or that single dispatch fails, the lead runs the step inline on its own model and prints the transparency line. A Unit the sizing cannot split returns to this same entry as a recorded plan defect for a re-cut.
+Plan authoring's model-elevation step and `ce-brainstorm`'s approach generation, dispatched as one worker to the roster's `authoring` entry whose model matches the alias Compound Engineering resolved. When no entry matches the alias, or that single dispatch fails, the lead runs the step inline on its own model and prints the transparency line. A Unit the sizing cannot split returns to this same entry as a recorded plan defect for a re-cut. A later revision of that plan, or of the workflow's requirements document, is lead work: the lead edits that one artifact in place.
 
 ### Mechanical work
 A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster entry that takes the mechanical shape, which is its own entry and need not name the implementation model; today it is that model at a lower thinking level.

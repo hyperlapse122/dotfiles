@@ -578,8 +578,9 @@ A deliverable's file format does not decide its recipient: README, AGENTS, docum
 A read whose content the lead needs to answer the user in conversation stays with the lead; every other repository read goes to the mechanical row rather than into the lead's context.
 This boundary binds any Orca lead, whatever harness or model answers as it.
 A session that received no orchestration injection is not a lead: it keeps its existing behavior and edits and authors directly.
-No PreToolUse hook enforces any of this.
-The shell-launch guard is removed, no edit notice is built, and this paragraph together with the no-direct-CLI rule in the Everyone payload is the whole enforcement.
+a tool-call guard denies the harness's own subagent tool — `Agent` and `Task` in Claude Code, `collaborationspawn_agent` in Codex, `task` in omp
+No hook enforces the lead boundary itself.
+The shell-launch guard stays removed, no edit notice is built, and this paragraph together with the no-direct-CLI rule in the Everyone payload is the whole enforcement of that boundary.
 Dispatch targets are the `claude`, `codex`, and `omp` agents, and this table decides which one receives a unit of work.
 | Work shape | First recipient | On substantive failure | On agent unavailable |
 re-dispatches at the same row with a sharpened brief and never advances a row.
@@ -687,6 +688,9 @@ for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
     || grep -F 'omp implementation seat' "$payload" >/dev/null \
     || grep -F 'the seat changes while' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains roster-entry use of seat"
+  fi
+  if grep -F 'No PreToolUse hook enforces any of this.' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired un-enforced sentence"
   fi
 done
 
