@@ -860,7 +860,7 @@ pass "$label: an absent dotnet is the deferred no-attempt path"
 
 # --- Tailscale, Fedora -----------------------------------------------------------
 
-label=tailscale-fedora-install-fails
+label='tailscale-fedora-install-fails'
 run_case "$label" tailscale-fedora.region install_tailscale RPMS="" DNF_INSTALL_EXIT=1
 check returned_zero
 check record_is "$TSFED" operator-blocking
@@ -869,14 +869,14 @@ check names_entry_state
 check called '^dnf install -y tailscale$'
 pass "$label: a failed dnf install is recorded, reported and the script continues"
 
-label=tailscale-fedora-converged
+label='tailscale-fedora-converged'
 run_case "$label" tailscale-fedora.region install_tailscale RPMS=tailscale SEED="$TSFED"
 check returned_zero
 check no_record "$TSFED"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
 
-label=tailscale-fedora-converges-now
+label='tailscale-fedora-converges-now'
 run_case "$label" tailscale-fedora.region install_tailscale RPMS="" DNF_PROVIDES=tailscale SEED="$TSFED"
 check returned_zero
 check no_record "$TSFED"
@@ -885,7 +885,7 @@ pass "$label: an install that provides tailscale clears the record"
 
 # --- Tailscale, Ubuntu -----------------------------------------------------------
 
-label=tailscale-ubuntu-install-fails
+label='tailscale-ubuntu-install-fails'
 run_case "$label" tailscale-ubuntu.region install_tailscale DEBS="" APT_FAIL=tailscale
 check returned_zero
 check record_is "$TSUBU" operator-blocking
@@ -894,14 +894,14 @@ check names_entry_state
 check called '^apt-get install -y tailscale$'
 pass "$label: apt-get install -y tailscale || true no longer masks a failed install"
 
-label=tailscale-ubuntu-converged
+label='tailscale-ubuntu-converged'
 run_case "$label" tailscale-ubuntu.region install_tailscale DEBS=tailscale SEED="$TSUBU"
 check returned_zero
 check no_record "$TSUBU"
 check not_called '^apt-get install'
 pass "$label: a converged host installs nothing and clears the record"
 
-label=tailscale-ubuntu-converges-now
+label='tailscale-ubuntu-converges-now'
 run_case "$label" tailscale-ubuntu.region install_tailscale DEBS="" SEED="$TSUBU"
 check returned_zero
 check no_record "$TSUBU"
@@ -910,7 +910,7 @@ pass "$label: an install that provides tailscale clears the record"
 
 # --- Flatpaks ----------------------------------------------------------------
 
-label=flatpaks-fedora-install-fails
+label='flatpaks-fedora-install-fails'
 run_case "$label" flatpaks-fedora.region install_flatpak_apps RPMS=flatpak \
   FLATPAKS="$(without "$flatpak1" $flatpak_ids)" FLATPAK_FAIL="$flatpak1"
 check returned_zero
@@ -920,7 +920,7 @@ check stderr_has "flatpak install --system flathub"
 check names_entry_state
 pass "$label: a failed flatpak install is recorded and reported"
 
-label=flatpaks-ubuntu-install-fails
+label='flatpaks-ubuntu-install-fails'
 run_case "$label" flatpaks-ubuntu.region install_flatpak_apps DEBS=flatpak \
   FLATPAKS="$(without "$flatpak1" $flatpak_ids)" FLATPAK_FAIL="$flatpak1"
 check returned_zero
@@ -928,7 +928,7 @@ check record_is "$FLATPAKS_REC" operator-blocking
 check stderr_has "$flatpak1"
 pass "$label: the Ubuntu branch reports the same way as Fedora"
 
-label=flatpaks-converged
+label='flatpaks-converged'
 run_case "$label" flatpaks-fedora.region install_flatpak_apps RPMS=flatpak \
   FLATPAKS="$flatpak_ids" SEED="$FLATPAKS_REC"
 check returned_zero
@@ -936,7 +936,7 @@ check no_record "$FLATPAKS_REC"
 check not_called '^flatpak install'
 pass "$label: every declared app already present clears the record"
 
-label=flatpaks-runtime-absent-after-tolerated-failure
+label='flatpaks-runtime-absent-after-tolerated-failure'
 run_case "$label" flatpaks-fedora.region install_flatpak_apps RPMS="" DNF_INSTALL_EXIT=1 NOFLATPAK=1
 check returned_zero
 check record_is "$FLATPAKS_REC" operator-blocking
@@ -946,7 +946,7 @@ pass "$label: a still-absent flatpak binary reports every declared app missing w
 
 # --- Podman, Fedora ------------------------------------------------------------
 
-label=podman-fedora-install-fails
+label='podman-fedora-install-fails'
 run_case "$label" podman-fedora.region install_podman_packages \
   RPMS="$(without "$podman_fd1" $podman_fd_pkgs)" DNF_INSTALL_EXIT=1
 check returned_zero
@@ -956,7 +956,7 @@ check stderr_has "$podman_fd1"
 check names_entry_state
 pass "$label: a failed dnf install is recorded, reported and the script continues"
 
-label=podman-fedora-converged
+label='podman-fedora-converged'
 run_case "$label" podman-fedora.region install_podman_packages RPMS="$podman_fd_pkgs" SEED="$PMFED"
 check returned_zero
 check no_record "$PMFED"
@@ -965,7 +965,7 @@ pass "$label: a converged host installs nothing and clears the record"
 
 # --- Podman, Ubuntu ------------------------------------------------------------
 
-label=podman-ubuntu-second-fails
+label='podman-ubuntu-second-fails'
 run_case "$label" podman-ubuntu.region install_podman_packages \
   DEBS="$podman_ud_rest" APT_FAIL="$podman_ud2"
 check returned_zero
@@ -978,7 +978,7 @@ check stderr_has "$podman_ud2"
 check names_entry_state
 pass "$label: one failed package does not stop the rest and is the one recorded"
 
-label=podman-ubuntu-converged
+label='podman-ubuntu-converged'
 run_case "$label" podman-ubuntu.region install_podman_packages DEBS="$podman_ud_pkgs" SEED="$PMUBU"
 check returned_zero
 check no_record "$PMUBU"
@@ -987,7 +987,7 @@ pass "$label: a converged host installs nothing and clears the record"
 
 # --- Desktop-IME, Fedora --------------------------------------------------------
 
-label=desktop-ime-fedora-install-fails
+label='desktop-ime-fedora-install-fails'
 run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages \
   RPMS="$(without "$ime_fd1" $ime_fd_pkgs)" DNF_INSTALL_EXIT=1
 check returned_zero
@@ -996,14 +996,14 @@ check stderr_has "$ime_fd1"
 check names_entry_state
 pass "$label: a failed dnf install is recorded, reported and the script continues"
 
-label=desktop-ime-fedora-converged
+label='desktop-ime-fedora-converged'
 run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages RPMS="$ime_fd_pkgs" SEED="$IMEFED"
 check returned_zero
 check no_record "$IMEFED"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
 
-label=desktop-ime-fedora-kde-ksshaskpass-missing
+label='desktop-ime-fedora-kde-ksshaskpass-missing'
 run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages \
   RPMS="$ime_fd_pkgs" FACT_DESKTOP=kde DNF_INSTALL_EXIT=1
 check returned_zero
@@ -1014,7 +1014,7 @@ pass "$label: the KDE-conditional ksshaskpass package is covered by the same ver
 
 # --- Desktop-IME, Ubuntu --------------------------------------------------------
 
-label=desktop-ime-ubuntu-second-fails
+label='desktop-ime-ubuntu-second-fails'
 run_case "$label" desktop-ime-ubuntu.region install_desktop_ime_packages \
   DEBS="$ime_ud_rest" APT_FAIL="$ime_ud2"
 check returned_zero
@@ -1025,7 +1025,7 @@ check stderr_has "$ime_ud2"
 check names_entry_state
 pass "$label: one failed package does not stop the rest and is the one recorded"
 
-label=desktop-ime-ubuntu-converged
+label='desktop-ime-ubuntu-converged'
 run_case "$label" desktop-ime-ubuntu.region install_desktop_ime_packages DEBS="$ime_ud_pkgs" SEED="$IMEUBU"
 check returned_zero
 check no_record "$IMEUBU"
@@ -1034,7 +1034,7 @@ pass "$label: a converged host installs nothing and clears the record"
 
 # --- Base, Fedora ----------------------------------------------------------------
 
-label=base-fedora-install-fails
+label='base-fedora-install-fails'
 run_case "$label" base-fedora.region install_base_packages \
   RPMS="$(without "$base_fd1" $base_fd_pkgs)" DNF_INSTALL_EXIT=1
 check returned_zero
@@ -1043,7 +1043,7 @@ check stderr_has "$base_fd1"
 check names_entry_state
 pass "$label: a failed dnf install is recorded, reported and the script continues"
 
-label=base-fedora-makecache-fails
+label='base-fedora-makecache-fails'
 run_case "$label" base-fedora.region install_base_packages \
   RPMS="$(without "$base_fd1" $base_fd_pkgs)" DNF_MAKECACHE_EXIT=1 DNF_PROVIDES="$base_fd1"
 check returned_zero
@@ -1052,7 +1052,7 @@ check called "^dnf install -y"
 check no_record "$BASEFED"
 pass "$label: a failed makecache still reaches the install and the verdict decides"
 
-label=base-fedora-already-present
+label='base-fedora-already-present'
 run_case "$label" base-fedora.region install_base_packages RPMS="$base_fd_pkgs"
 check returned_zero
 check not_called '^dnf install'
@@ -1060,7 +1060,7 @@ pass "$label: the existing done_here early exit is unaffected by the new verdict
 
 # --- Base, Ubuntu ----------------------------------------------------------------
 
-label=base-ubuntu-install-fails
+label='base-ubuntu-install-fails'
 run_case "$label" base-ubuntu.region install_base_packages \
   DEBS="$(without "$base_ud1" $base_ud_pkgs)" APT_FAIL="$base_ud1"
 check returned_zero
@@ -1069,7 +1069,7 @@ check stderr_has "$base_ud1"
 check names_entry_state
 pass "$label: a failed apt-get install is recorded, reported and the script continues"
 
-label=base-ubuntu-already-present
+label='base-ubuntu-already-present'
 run_case "$label" base-ubuntu.region install_base_packages DEBS="$base_ud_pkgs"
 check returned_zero
 check not_called '^apt-get install'
