@@ -69,31 +69,51 @@ configure_kr_mirrorlists() {
 
 setup_base_repos() {
   if ! rpm -q fedora-workstation-repositories >/dev/null 2>&1; then
-    "${DNF[@]}" install fedora-workstation-repositories -y
+    if ! "${DNF[@]}" install fedora-workstation-repositories -y; then
+      printf 'install-base-fedora.sh: dnf install fedora-workstation-repositories failed; continuing\n' >&2
+    fi
   fi
 
   configure_kr_mirrorlists
 
-  "${SUDO[@]}" fedora-third-party enable
-
+  "${SUDO[@]}" fedora-third-party enable || true
 
   # Install RPM Fusion (free + nonfree)
   if ! rpm -q rpmfusion-free-release rpmfusion-nonfree-release >/dev/null 2>&1; then
-    "${DNF[@]}" install -y \
+    if ! "${DNF[@]}" install -y \
       "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
-      "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+      "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"; then
+      printf 'install-base-fedora.sh: dnf install rpmfusion release packages failed; continuing\n' >&2
+    fi
   fi
-  "${DNF[@]}" config-manager setopt fedora-cisco-openh264.enabled=1
+  "${DNF[@]}" config-manager setopt fedora-cisco-openh264.enabled=1 || true
 
-  "${DNF[@]}" makecache -y
+  if ! "${DNF[@]}" makecache -y; then
+    printf 'install-base-fedora.sh: dnf makecache failed; continuing to the install attempt\n' >&2
+  fi
 }
 
-install_base_packages() {
-  local -a missing=()
+missing=()
+compute_missing() {
+  missing=()
   local pkg
   for pkg in "${core_packages[@]}"; do
     rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
   done
+}
+
+report_base_missing() {
+  printf 'install-base-fedora.sh: dnf left these declared base packages uninstalled: %s\n' "${missing[*]}" >&2
+  printf '  sudo dnf install -y %s\n' "${missing[*]}" >&2
+  return 0
+}
+
+clear_base_skip_record() {
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-base-fedora" "site" "base-packages-not-installed") | trim | indent 2 }}
+}
+
+install_base_packages() {
+  compute_missing
   if [[ "${#missing[@]}" -eq 0 ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-base-fedora" "site" "base-packages-already-present" "reason" "all declared base packages are already installed") | trim | indent 6 }}
@@ -104,7 +124,14 @@ install_base_packages() {
     "${#missing[@]}" "${#core_packages[@]}"
 
   setup_base_repos
-  "${DNF[@]}" install -y "${core_packages[@]}"
+  # Exit status is discarded because the post-attempt re-inspection is the verdict.
+  if ! "${DNF[@]}" install -y "${missing[@]}"; then :; fi
+  compute_missing
+
+  if [[ "${#missing[@]}" -gt 0 ]] && report_base_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-base-fedora" "site" "base-packages-not-installed" "direction" "operator-blocking" "reason" "dnf left declared base packages uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}
+  fi
+  clear_base_skip_record
 }
 
 configure_time() {
