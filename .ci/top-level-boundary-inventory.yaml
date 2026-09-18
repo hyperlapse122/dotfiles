@@ -1,0 +1,138 @@
+# top-level-boundary-inventory.yaml — CI-ONLY audit oracle for the repository's
+# top-level deployment boundary. NOT a chezmoi runtime input: it lives under
+# .ci/, no template or script reads it, and chezmoi never parses it. The runtime
+# policy stays where it already is — the root .chezmoiignore.
+#
+# WHAT IT DECLARES. Every git-tracked top-level entry, classified by what chezmoi
+# does with it. .ci/test-top-level-deployment-boundary.sh compares this
+# declaration against what chezmoi actually renders, in both directions: an entry
+# missing here fails, and an entry whose declared class disagrees with the
+# rendered .chezmoiignore fails. The declaration is therefore never a second
+# hand-maintained list that can drift quietly — drift is what the gate reports.
+#
+# CLASSES.
+#   source-internal — the name starts with `.`, so chezmoi ignores it outright
+#                     (`.chezmoi*` excepted, which are chezmoi's own inputs).
+#                     These never need a .chezmoiignore line and never get one.
+#   repo-only       — a non-dot entry chezmoi must be told to ignore. This is the
+#                     class AGENTS.md's "non-dot metadata MUST be listed in the
+#                     root .chezmoiignore" rule governs, and the class whose
+#                     omission deploys repository internals into $HOME.
+#   deployed        — chezmoi manages a target from it. `only_on` narrows that to
+#                     a subset of the profiles below; in every other profile the
+#                     entry must be ignored. Source-name prefixes carry the
+#                     semantics (dot_ -> ., private_ -> 0600, symlink_ -> link,
+#                     remove_ -> delete the target), so `deployed` means chezmoi
+#                     acts on the target, not that a file is copied there.
+#
+# The gate derives each entry's target path from its source name rather than
+# reading it here: the transform is the one AGENTS.md documents, and a second
+# declaration of it would be one more thing to keep in sync.
+#
+# generated_in_source sits outside `entries` on purpose. R5 of the plan scopes
+# the inventory to git-tracked paths, and every name below is untracked. They are
+# listed because they are written INTO the source directory while chezmoi can see
+# them, so each still owes two obligations the gate checks.
+
+# The profile set .ci/test-chezmoiignore-script-paths.sh already renders
+# .chezmoiignore across. Kept identical so the two gates cannot disagree about
+# what "every profile" means.
+profiles:
+  - id: linux-gnome
+    os: linux
+    desktop: gnome
+    container: false
+    jetson: false
+  - id: linux-kde
+    os: linux
+    desktop: kde
+    container: false
+    jetson: false
+  - id: linux-headless
+    os: linux
+    desktop: none
+    container: false
+    jetson: false
+  - id: linux-jetson
+    os: linux
+    desktop: none
+    container: false
+    jetson: true
+  - id: linux-container
+    os: linux
+    desktop: none
+    container: true
+    jetson: false
+  - id: macos
+    os: darwin
+    desktop: none
+    container: false
+    jetson: false
+
+entries:
+  .chezmoi.toml.tmpl: { class: source-internal }
+  .chezmoidata: { class: source-internal }
+  .chezmoiexternals: { class: source-internal }
+  .chezmoiignore: { class: source-internal }
+  .chezmoiremove: { class: source-internal }
+  .chezmoiscripts: { class: source-internal }
+  .chezmoitemplates: { class: source-internal }
+  .ci: { class: source-internal }
+  .compound-engineering: { class: source-internal }
+  .gitattributes: { class: source-internal }
+  .github: { class: source-internal }
+  .gitignore: { class: source-internal }
+  .install-prerequisites.sh: { class: source-internal }
+  .keys: { class: source-internal }
+  .mise: { class: source-internal }
+  .shellcheckrc: { class: source-internal }
+  .taplo.toml: { class: source-internal }
+  .vscode: { class: source-internal }
+
+  AGENTS.md: { class: repo-only }
+  CONCEPTS.md: { class: repo-only }
+  LICENSE: { class: repo-only }
+  README.md: { class: repo-only }
+  STRATEGY.md: { class: repo-only }
+  agents.toml: { class: repo-only }
+  crates: { class: repo-only }
+  docs: { class: repo-only }
+  firmware: { class: repo-only }
+  mise.lock: { class: repo-only }
+  mise.toml: { class: repo-only }
+  orca.schema.json: { class: repo-only }
+  orca.yaml: { class: repo-only }
+  package.json: { class: repo-only }
+  packages: { class: repo-only }
+  system: { class: repo-only }
+
+  # ~/Library/Application Support is the native macOS location for the state
+  # dot_config carries on Linux, so this tree deploys there and nowhere else.
+  Library: { class: deployed, only_on: [macos] }
+
+  dot_agents: { class: deployed }
+  dot_androidrc.tmpl: { class: deployed }
+  dot_bunfig.toml: { class: deployed }
+  dot_claude: { class: deployed }
+  dot_codex: { class: deployed }
+  dot_config: { class: deployed }
+  dot_default-gems.tmpl: { class: deployed }
+  dot_default-python-packages.tmpl: { class: deployed }
+  dot_face: { class: deployed }
+  dot_local: { class: deployed }
+  dot_npmrc: { class: deployed }
+  dot_omp: { class: deployed }
+  dot_ssh: { class: deployed }
+  dot_wakatime.cfg.tmpl: { class: deployed }
+  dot_yarnrc.yml: { class: deployed }
+  dot_zshenv: { class: deployed }
+  private_dot_gnupg: { class: deployed }
+  private_readonly_dot_mcp.json.tmpl: { class: deployed }
+  remove_dot_gitconfig: { class: deployed }
+  symlink_dot_face.icon: { class: deployed }
+
+# Untracked, but written into the source directory where chezmoi can see them.
+# Each owes both obligations; the gate checks both.
+generated_in_source:
+  # dotagents regenerates this at the repository root on every sync.
+  - agents.lock
