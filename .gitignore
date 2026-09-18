@@ -50,6 +50,12 @@ docs/plans/.*.md
 agents.lock
 .agents/.gitignore
 
+### CI render artifacts ###
+# .github/workflows/render-dotfiles.yml stages its rendered trees here. The
+# chezmoi source copy is cut before this directory exists, so it never enters
+# the source state — .gitignore is the only owner it needs.
+_artifacts/
+
 # NuPhy Gem80 Firmware
 # Exclude the directory's contents, not the directory itself: git does not
 # descend into an excluded directory, so the negations below would never apply.

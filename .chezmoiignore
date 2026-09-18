@@ -2,15 +2,12 @@
 ./AGENTS.md
 ./CONCEPTS.md
 ./STRATEGY.md
-./agents
-./agents.lock
 ./mise.toml
 ./mise.lock
 ./README.md
 ./LICENSE
 ./package.json
 ./docs
-./_artifacts
 # Root-owned system config installed to /etc by
 # .chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl
 # (manifest: .chezmoidata/system.yaml), never linked into $HOME.
@@ -128,12 +125,6 @@
 .chezmoiscripts/50-linux-kde/*.sh
 {{- end }}
 
-
-# Advisor improvement plans (repo-meta docs); never linked into $HOME.
-./plans
-
-# internal documentations
-./docs
 
 # Containerized / CI environments: Podman creates /run/.containerenv, Docker
 # creates /.dockerenv (neither exists on a bare-metal host or VM). Inside a
