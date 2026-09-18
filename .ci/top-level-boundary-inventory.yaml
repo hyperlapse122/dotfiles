@@ -10,6 +10,13 @@
 # rendered .chezmoiignore fails. The declaration is therefore never a second
 # hand-maintained list that can drift quietly — drift is what the gate reports.
 #
+# WHAT IT DOES NOT HAVE TO DECLARE. Safety does not depend on this file being
+# complete. The gate also enumerates the source root on disk and requires every
+# non-dot name it finds there to be ignored unless this file declares it
+# deployed. A generated directory nobody thought to list is caught because it is
+# present, not because someone remembered it. That is the one check that needs no
+# list, and it is why forgetting to update this file is loud rather than silent.
+#
 # CLASSES.
 #   source-internal — the name starts with `.`, so chezmoi ignores it outright
 #                     (`.chezmoi*` excepted, which are chezmoi's own inputs).
@@ -29,10 +36,11 @@
 # reading it here: the transform is the one AGENTS.md documents, and a second
 # declaration of it would be one more thing to keep in sync.
 #
-# generated_in_source sits outside `entries` on purpose. R5 of the plan scopes
-# the inventory to git-tracked paths, and every name below is untracked. They are
-# listed because they are written INTO the source directory while chezmoi can see
-# them, so each still owes two obligations the gate checks.
+# preemptive_denials sits outside `entries` and carries no safety duty. A denial
+# for a path that is absent from a clean checkout would otherwise read as stale,
+# so listing it says "this one is deliberate, not left over". Nothing is exempted
+# from checking by being listed: the disk enumeration covers those paths whenever
+# they are actually present.
 
 # The profile set .ci/test-chezmoiignore-script-paths.sh already renders
 # .chezmoiignore across. Kept identical so the two gates cannot disagree about
@@ -131,9 +139,9 @@ entries:
   remove_dot_gitconfig: { class: deployed }
   symlink_dot_face.icon: { class: deployed }
 
-# Untracked, but written into the source directory where chezmoi can see them.
-# Each owes both obligations; the gate checks both.
-generated_in_source:
+# Denials for paths a clean checkout does not have. Listing one says the denial
+# is deliberate, so the stale-entry check leaves it alone. It grants no exemption.
+preemptive_denials:
   # dotagents regenerates this at the repository root on every sync.
   - agents.lock
   # .github/workflows/render-dotfiles.yml stages rendered trees here. CI cuts the

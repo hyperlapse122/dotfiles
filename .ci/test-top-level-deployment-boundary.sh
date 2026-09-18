@@ -9,7 +9,7 @@
 # deny is deployed into $HOME, and the reverse — a denial whose file moved or
 # was renamed — leaves the list quietly disagreeing with the tree.
 #
-# FOUR CHECKS, all bidirectional against the rendered ignore file rather than a
+# FIVE CHECKS, all bidirectional against the rendered ignore file rather than a
 # restatement of it.
 #   1. The inventory's key set equals the git-tracked top-level entry set.
 #   2. A `source-internal` class is declared for exactly the dot-prefixed names.
@@ -18,10 +18,16 @@
 #      `only_on`), and a disagreement in either direction fails.
 #   4. Per profile, every top-level name the rendered .chezmoiignore
 #      carries matches exactly one declared name — no stale entry, no duplicate.
+#   5. Default deny: anything sitting at the source root that is not declared
+#      deployed must be ignored, tracked or not.
 #
-# Plus the two obligations `generated_in_source` owes: those names are untracked,
-# so check 1 cannot see them, yet they are written into the source directory
-# where chezmoi can. Each must be covered by .gitignore AND by .chezmoiignore.
+# Check 5 needs no list, and it closes the hole the others cannot. chezmoi reads
+# the source DIRECTORY, so a generated path is part of the source state whether
+# or not git tracks it; enumerating the disk catches a directory nobody thought
+# to declare because it is there, not because someone remembered to write it
+# down. `preemptive_denials` exists only to stop check 4 calling a denial stale
+# when the path it guards is legitimately absent from a clean checkout, and
+# forgetting to list one fails loudly rather than quietly.
 #
 # What divides this gate from .ci/test-chezmoiignore-script-paths.sh is whether a
 # rendered pattern can match a ROOT-level target. A bare name can, and so do the
@@ -89,12 +95,12 @@ checker="$scratch/check_boundary.py"
 cat <<'PYTHON' >"$checker"
 """Report top-level deployment-boundary drift.
 
-argv: <inventory.yaml> <tracked-list> <verdicts-tsv> <rendered-index-tsv> <gitignored-list>
+argv: <inventory.yaml> <tracked-list> <verdicts-tsv> <rendered-index-tsv> <present-list>
 
 tracked-list      one git-tracked top-level name per line
 verdicts-tsv      <profile>\t<entry>\t<ignored|eligible>, measured per profile
 rendered-index    <profile>\t<path to that profile's rendered .chezmoiignore>
-gitignored-list   one generated_in_source name per line that .gitignore covers
+present-list      one non-dot top-level name per line that exists on disk
 """
 import pathlib
 import sys
@@ -161,11 +167,11 @@ def top_level_patterns(path):
 
 
 def main():
-    inventory_path, tracked_path, verdicts_path, rendered_path, gitignored_path = sys.argv[1:6]
+    inventory_path, tracked_path, verdicts_path, rendered_path, present_path = sys.argv[1:6]
 
     doc = yaml.safe_load(pathlib.Path(inventory_path).read_text(encoding="utf-8")) or {}
     entries = doc.get("entries") or {}
-    generated = doc.get("generated_in_source") or []
+    preemptive = doc.get("preemptive_denials") or []
     profiles = [p["id"] for p in (doc.get("profiles") or [])]
 
     if len(profiles) != len(set(profiles)):
@@ -186,9 +192,9 @@ def main():
     tracked = [
         line for line in pathlib.Path(tracked_path).read_text(encoding="utf-8").splitlines() if line
     ]
-    gitignored = {
-        line for line in pathlib.Path(gitignored_path).read_text(encoding="utf-8").splitlines() if line
-    }
+    present = [
+        line for line in pathlib.Path(present_path).read_text(encoding="utf-8").splitlines() if line
+    ]
 
     verdicts = {}
     for line in pathlib.Path(verdicts_path).read_text(encoding="utf-8").splitlines():
@@ -278,7 +284,7 @@ def main():
                     )
 
     # 4. Every denied top-level name matches exactly one declared entry.
-    declared = set(entries) | set(generated)
+    declared = set(entries) | set(preemptive)
     for profile in profiles:
         path = rendered.get(profile)
         if path is None:
@@ -299,27 +305,43 @@ def main():
                     f"no declared top-level entry; delete the stale line or declare the entry"
                 )
 
-    # generated_in_source owes both obligations.
-    for name in sorted(generated):
+    # 5. Default deny. Anything sitting at the source root that the inventory does
+    #    not declare deployed must be ignored, whether or not git tracks it.
+    #    This is the check that needs no list: a generated directory nobody
+    #    thought to declare is caught because it is there, not because someone
+    #    remembered it.
+    undeclared = [name for name in present if name not in entries]
+    for profile in profiles:
+        path = rendered.get(profile)
+        if path is None:
+            continue
+        denied = set(top_level_patterns(path))
+        for name in sorted(undeclared):
+            if name not in denied:
+                failures.append(
+                    f"{name} sits at the source root, is declared nowhere, and profile "
+                    f"{profile} does not ignore it, so it would deploy into $HOME; deny it "
+                    f"in .chezmoiignore, or declare it in the inventory if it belongs there"
+                )
+
+    # A preemptive denial only suppresses the stale report in check 4, because the
+    # path it names may legitimately be absent from a clean checkout. It carries no
+    # safety obligation: check 5 already covers the path whenever it is present.
+    for name in sorted(preemptive):
         if name in entries:
             failures.append(
-                f"{name} is listed in generated_in_source but also in entries; "
-                f"generated_in_source is for untracked paths only"
+                f"{name} is listed in preemptive_denials but also in entries; a tracked "
+                f"entry is never absent, so its denial can never read as stale"
             )
-        if name not in gitignored:
+        if not any(
+            name in set(top_level_patterns(path))
+            for path in (rendered.get(profile) for profile in profiles)
+            if path is not None
+        ):
             failures.append(
-                f"{name} is listed in generated_in_source but .gitignore does not cover it; "
-                f"add it to .gitignore"
+                f"{name} is listed in preemptive_denials but no profile denies it; drop "
+                f"the listing or add the .chezmoiignore line it exists to explain"
             )
-        for profile in profiles:
-            path = rendered.get(profile)
-            if path is None:
-                continue
-            if name not in top_level_patterns(path):
-                failures.append(
-                    f"{name} is generated inside the source directory but profile {profile} "
-                    f"does not ignore it, so it would deploy into $HOME; add it to .chezmoiignore"
-                )
 
     return report(failures)
 
@@ -350,8 +372,8 @@ out.joinpath("audited.txt").write_text("".join(
     for name, spec in (doc.get("entries") or {}).items()
     if (spec or {}).get("class") != "source-internal"
 ), encoding="utf-8")
-out.joinpath("generated.txt").write_text("".join(
-    name + "\n" for name in (doc.get("generated_in_source") or [])
+out.joinpath("preemptive.txt").write_text("".join(
+    name + "\n" for name in (doc.get("preemptive_denials") or [])
 ), encoding="utf-8")
 ' "$inventory" "$scratch"
 
@@ -383,19 +405,13 @@ while IFS=$'\t' read -r id os desktop container jetson; do
   done <"$audited_targets"
 done <"$scratch/profiles.tsv"
 
-gitignored="$scratch/gitignored"
-: >"$gitignored"
-while IFS= read -r name; do
-  [[ -n $name ]] || continue
-  # Ask about both forms: a directory-only .gitignore pattern (`_artifacts/`)
-  # does not match the bare name when the path is absent from the checkout.
-  if git -C "$repo_root" check-ignore -q -- "$name" ||
-    git -C "$repo_root" check-ignore -q -- "$name/"; then
-    printf '%s\n' "$name" >>"$gitignored"
-  fi
-done <"$scratch/generated.txt"
+# Every non-dot name actually sitting at the source root. chezmoi reads the
+# directory, not the index, so this -- not `git ls-files` -- is what it sees.
+present_list="$scratch/present"
+find "$repo_root" -mindepth 1 -maxdepth 1 -printf '%f\n' |
+  grep -v '^\.' | LC_ALL=C sort >"$present_list"
 
-run_checker "$inventory" "$tracked_list" "$verdicts" "$rendered_index" "$gitignored" ||
+run_checker "$inventory" "$tracked_list" "$verdicts" "$rendered_index" "$present_list" ||
   fail 'this repository has top-level deployment-boundary drift (listed above)'
 pass 'every top-level entry matches its declared verdict across all profiles'
 
@@ -423,11 +439,15 @@ entries:
   README.md: { class: repo-only }
   Library: { class: deployed, only_on: [macos] }
   dot_zshenv: { class: deployed }
-generated_in_source:
+preemptive_denials:
   - lock.generated
 YAML
   } >"$tree/inventory.yaml"
   printf '.ci\nREADME.md\nLibrary\ndot_zshenv\n' >"$tree/tracked"
+  # What check 5 enumerates: the non-dot names sitting at the source root. The
+  # generated one is present here and absent from `tracked`, which is the case
+  # the tracked-only view cannot see.
+  printf 'README.md\nLibrary\ndot_zshenv\nlock.generated\n' >"$tree/present"
   : >"$tree/verdicts"
   : >"$tree/index"
   for id in "${fixture_profiles[@]}"; do
@@ -443,13 +463,12 @@ YAML
     printf '%s\tREADME.md\tignored\n%s\tdot_zshenv\teligible\n' "$id" "$id" >>"$tree/verdicts"
     printf '%s\t%s/rendered-%s\n' "$id" "$tree" "$id" >>"$tree/index"
   done
-  printf 'lock.generated\n' >"$tree/gitignored"
   printf '%s' "$tree"
 }
 
 check_fixture() {
   local tree=$1
-  run_checker "$tree/inventory.yaml" "$tree/tracked" "$tree/verdicts" "$tree/index" "$tree/gitignored"
+  run_checker "$tree/inventory.yaml" "$tree/tracked" "$tree/verdicts" "$tree/index" "$tree/present"
 }
 
 expect_reject() {
@@ -511,15 +530,29 @@ printf './README.md\nREADME.md/\n./Library\n./lock.generated\n' >"$duplicate_mix
 expect_reject "$duplicate_mixed_form" 'the same name denied in two spellings fails' \
   '.chezmoiignore denies README.md more than once in profile linux-gnome'
 
-unignored_generated=$(fixture unignored-generated)
-printf './README.md\n./Library\n' >"$unignored_generated/rendered-linux-gnome"
-expect_reject "$unignored_generated" 'a generated-in-source path the render does not ignore fails' \
-  'lock.generated is generated inside the source directory but profile linux-gnome does not ignore it'
+# Check 5, the one that needs no list: a path sitting at the source root that no
+# profile denies would deploy, whether or not git tracks it and whether or not
+# anyone declared it.
+undenied_present=$(fixture undenied-present)
+printf './README.md\n./Library\n' >"$undenied_present/rendered-linux-gnome"
+expect_reject "$undenied_present" 'an undeclared path at the source root that is not denied fails' \
+  'lock.generated sits at the source root, is declared nowhere, and profile linux-gnome does not ignore it'
 
-uncommitted_generated=$(fixture uncommitted-generated)
-: >"$uncommitted_generated/gitignored"
-expect_reject "$uncommitted_generated" 'a generated-in-source path .gitignore does not cover fails' \
-  'lock.generated is listed in generated_in_source but .gitignore does not cover it'
+# The same check with nothing declared about it at all -- the shape a new tool
+# creates when it starts writing into the source root and nobody notices.
+undeclared_present=$(fixture undeclared-present)
+printf 'README.md\nLibrary\ndot_zshenv\nlock.generated\nbuild-out\n' >"$undeclared_present/present"
+expect_reject "$undeclared_present" 'a brand-new path nobody declared fails without any list' \
+  'build-out sits at the source root, is declared nowhere, and profile linux-gnome does not ignore it'
+
+# A preemptive denial that guards nothing is itself drift.
+orphan_preemptive=$(fixture orphan-preemptive)
+for id in "${fixture_profiles[@]}"; do
+  printf './README.md\n./Library\n' >"$orphan_preemptive/rendered-$id"
+done
+printf 'README.md\nLibrary\ndot_zshenv\n' >"$orphan_preemptive/present"
+expect_reject "$orphan_preemptive" 'a preemptive denial no profile carries fails' \
+  'lock.generated is listed in preemptive_denials but no profile denies it'
 
 # An inventory that thins its own profile list would otherwise switch off every
 # per-profile check while still reporting green.
