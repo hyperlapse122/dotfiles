@@ -536,15 +536,31 @@ bundle="$scratch/dotfiles-orca.js"
 
 extension_hook="$scratch/extension-hook"
 extension_env="$scratch/extension-env"
-printf '#!/usr/bin/env bash\nprintf "%%s|%%s|%%s" "$ORCA_TERMINAL_HANDLE" "$ORCA_AGENT_TEAMS_LEADER_PANE" "$TMUX_PANE" >%q\nexec %q hook --harness %q\n' "$extension_env" "$binary" "omp" >"$extension_hook"
+printf '#!/usr/bin/env bash\nprintf "%%s|%%s|%%s" "$ORCA_TERMINAL_HANDLE" "$ORCA_AGENT_TEAMS_LEADER_PANE" "$TMUX_PANE" >%q\nexec %q "$@"\n' "$extension_env" "$binary" >"$extension_hook"
 chmod 0755 "$extension_hook"
 runner="$scratch/extension-runner.mjs"
 cat >"$runner" <<'RUNNER'
 const { default: load } = await import(process.argv[2]);
-let handler;
-await load({ on(event, next) { if (event !== "before_agent_start") throw new Error("wrong event"); handler = next; } });
-const result = await handler({ prompt: "test", systemPrompt: ["BASE"] });
-process.stdout.write(JSON.stringify(result));
+const mode = process.argv[3] ?? "before_agent_start";
+const toolName = process.argv[4] ?? "task";
+let beforeHandler;
+let toolHandler;
+await load({
+  on(event, next) {
+    if (event === "before_agent_start") beforeHandler = next;
+    else if (event === "tool_call") toolHandler = next;
+    else throw new Error(`wrong event: ${event}`);
+  },
+});
+if (mode === "before_agent_start") {
+  const result = await beforeHandler({ prompt: "test", systemPrompt: ["BASE"] });
+  process.stdout.write(JSON.stringify(result));
+} else if (mode === "tool_call") {
+  const result = await toolHandler({ toolName });
+  process.stdout.write(JSON.stringify(result ?? null));
+} else {
+  throw new Error(`unknown mode: ${mode}`);
+}
 RUNNER
 result=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
   DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
@@ -557,5 +573,28 @@ jq -e '.systemPrompt[1] | contains("dotfiles-orca:begin") and contains("orchestr
 [[ $(cat "$extension_env") == 'term_ext|%7|%9' ]] \
   || fail 'the extension did not pass the current role environment to the child'
 pass 'the built extension calls the real hook binary path contract without credentials'
+
+task_blocked=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
+  ORCA_TERMINAL_HANDLE=term_ci TMUX_PANE=%9 \
+  "$BUN_BIN" "$runner" "$bundle" tool_call task) || fail 'the extension runner failed on task tool_call'
+jq -e '.block == true and (.reason | contains("orchestration"))' <<<"$task_blocked" >/dev/null \
+  || fail "the extension did not block task with orchestration reason in worker (got: $task_blocked)"
+
+bash_allowed=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
+  ORCA_TERMINAL_HANDLE=term_ci TMUX_PANE=%9 \
+  "$BUN_BIN" "$runner" "$bundle" tool_call bash) || fail 'the extension runner failed on bash tool_call'
+jq -e '. == null' <<<"$bash_allowed" >/dev/null \
+  || fail "the extension must not block bash (got: $bash_allowed)"
+
+outside_task_allowed=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
+  ORCA_TERMINAL_HANDLE= \
+  TMUX_PANE=%9 \
+  "$BUN_BIN" "$runner" "$bundle" tool_call task) || fail 'the extension runner failed on outside task tool_call'
+jq -e '. == null' <<<"$outside_task_allowed" >/dev/null \
+  || fail "the extension must not block task without ORCA_TERMINAL_HANDLE (got: $outside_task_allowed)"
+pass 'the built extension blocks task in worker and allows bash and non-managed task'
 
 printf 'orchestration hook: all gates passed\n'

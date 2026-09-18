@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
@@ -10,23 +10,35 @@ import extension, {
   type BeforeAgentStartHandler,
   type BeforeAgentStartResult,
   type ExtensionAPI,
+  type ToolCallEvent,
+  type ToolCallHandler,
+  type ToolCallResult,
 } from "../src/index.js";
-
 function fakeApi(): {
   api: ExtensionAPI;
   handler: (event: BeforeAgentStartEvent) => Promise<BeforeAgentStartResult>;
+  toolCallHandler: (event: ToolCallEvent) => Promise<ToolCallResult | undefined>;
 } {
   let handler: BeforeAgentStartHandler | undefined;
+  let toolCall: ToolCallHandler | undefined;
   const api: ExtensionAPI = {
-    on(event, next) {
-      expect(event).toBe("before_agent_start");
-      handler = next;
+    on(
+      event: "before_agent_start" | "tool_call",
+      next: BeforeAgentStartHandler | ToolCallHandler,
+    ) {
+      if (event === "before_agent_start") {
+        handler = next as BeforeAgentStartHandler;
+      } else if (event === "tool_call") {
+        toolCall = next as ToolCallHandler;
+      }
     },
   };
   return {
     api,
     handler: async (event) =>
       handler ? await handler(event) : Promise.reject(new Error("handler missing")),
+    toolCallHandler: async (event) =>
+      toolCall ? await toolCall(event) : Promise.reject(new Error("toolCallHandler missing")),
   };
 }
 
@@ -219,6 +231,110 @@ describe("bounded hook process", () => {
       expect(result.diagnostic).toContain("timed out");
       expect(Date.now() - started).toBeLessThan(1_000);
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("tool_call guard", () => {
+  it("blocks task when the guard returns a deny document", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-deny-"));
+    const previous = process.env.DOTFILES_ORCHESTRATION_HOOK;
+    const denyDoc = JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: "Orca dispatch required for task",
+      },
+    });
+    process.env.DOTFILES_ORCHESTRATION_HOOK = hookScript(dir, `printf '%s\\n' '${denyDoc}'`);
+    try {
+      const { api, toolCallHandler } = fakeApi();
+      await extension(api);
+      const result = await toolCallHandler({ toolName: "task" });
+      expect(result).toEqual({
+        block: true,
+        reason: "Orca dispatch required for task",
+      });
+    } finally {
+      if (previous === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not block task when the guard prints nothing, not json, or exits non-zero", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-allow-"));
+    const previous = process.env.DOTFILES_ORCHESTRATION_HOOK;
+    try {
+      process.env.DOTFILES_ORCHESTRATION_HOOK = hookScript(dir, "exit 0");
+      const api1 = fakeApi();
+      await extension(api1.api);
+      expect(await api1.toolCallHandler({ toolName: "task" })).toBeUndefined();
+
+      process.env.DOTFILES_ORCHESTRATION_HOOK = hookScript(dir, "printf 'not json\\n'");
+      const api2 = fakeApi();
+      await extension(api2.api);
+      expect(await api2.toolCallHandler({ toolName: "task" })).toBeUndefined();
+
+      process.env.DOTFILES_ORCHESTRATION_HOOK = hookScript(dir, "printf 'error'; exit 3");
+      const api3 = fakeApi();
+      await extension(api3.api);
+      expect(await api3.toolCallHandler({ toolName: "task" })).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not block task when the guard sleeps past the bound", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-guard-timeout-"));
+    const previousHook = process.env.DOTFILES_ORCHESTRATION_HOOK;
+    const previousTimeout = process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS;
+    const binary = hookScript(dir, "sleep 30");
+    process.env.DOTFILES_ORCHESTRATION_HOOK = binary;
+    process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS = "50";
+    try {
+      const started = Date.now();
+      const { api, toolCallHandler } = fakeApi();
+      await extension(api);
+      const result = await toolCallHandler({ toolName: "task" });
+      expect(result).toBeUndefined();
+      expect(Date.now() - started).toBeLessThan(1_000);
+    } finally {
+      if (previousHook === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previousHook;
+      if (previousTimeout === undefined) delete process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS;
+      else process.env.DOTFILES_ORCHESTRATION_GUARD_TIMEOUT_MS = previousTimeout;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("never spawns the guard for non-task tools", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dotfiles-orca-no-spawn-"));
+    const marker = join(dir, "spawned");
+    const previous = process.env.DOTFILES_ORCHESTRATION_HOOK;
+    const denyDoc = JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: "should not be called",
+      },
+    });
+    process.env.DOTFILES_ORCHESTRATION_HOOK = hookScript(
+      dir,
+      `touch ${JSON.stringify(marker)}\nprintf '%s\\n' '${denyDoc}'`,
+    );
+    try {
+      const { api, toolCallHandler } = fakeApi();
+      await extension(api);
+      const result = await toolCallHandler({ toolName: "bash" });
+      expect(result).toBeUndefined();
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.DOTFILES_ORCHESTRATION_HOOK;
+      else process.env.DOTFILES_ORCHESTRATION_HOOK = previous;
       rmSync(dir, { recursive: true, force: true });
     }
   });
