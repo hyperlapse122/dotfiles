@@ -31,7 +31,7 @@ RUN_SUCCEEDED=false
 
 log() { printf '[elevation] %s\n' "$*" >&2; }
 
-EFFORT="max"   # this repository raises elevation to max effort
+EFFORT="medium"   # this repository holds elevation at the roster's authoring effort
 
 # Read-only tool posture (R7): the available built-in set, not a denylist. The
 # elevated step reads the repo (Read/Glob/Grep) and may check current facts on
