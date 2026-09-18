@@ -7,7 +7,8 @@
 # file: `<glob on the joined argv>\t<exit code>\t<response files, comma separated>`.
 # A rule with several response files answers its Nth match with the Nth file and
 # repeats the last one, which is how a pull request "falls behind main" or a
-# check "appears later" here. A local bare repository is the push remote for
+# check "appears later" here. A call matching GH_STUB_HANG never answers, which
+# is how a stalled connection is simulated. A local bare repository is the push remote for
 # `marker` and `open`. Deadlines run in seconds.
 
 set -euo pipefail
@@ -75,6 +76,11 @@ mkdir -p "$dir/calls"
 printf '%s\0' "$@" >"$dir/calls/$n.argv"
 key="$*"
 printf '%s\t%s\t%s\n' "$n" "${GH_TOKEN-}" "${key//$'\n'/ }" >>"$dir/log"
+if [ -n "${GH_STUB_HANG-}" ]; then
+  case $key in
+  $GH_STUB_HANG) exec sleep 30 ;;
+  esac
+fi
 i=0
 while IFS=$'\t' read -r glob code files; do
   i=$((i + 1))
@@ -215,7 +221,16 @@ rules_json() { # <context> <integration id or null> <strict> <ruleset id>
      {type: "deletion", ruleset_id: $id}]'
 }
 
-ruleset_json() { jq -n -c --arg b "$1" '{id: 42, current_user_can_bypass: $b}'; }
+app_bypass='[{"actor_id":123,"actor_type":"Integration","bypass_mode":"always"}]'
+
+ruleset_json() { # <current_user_can_bypass> [bypass_actors JSON, or null to omit the field]
+  jq -n -c --arg b "$1" --argjson actors "${2-$app_bypass}" \
+    '{id: 42, current_user_can_bypass: $b} + (if $actors == null then {} else {bypass_actors: $actors} end)'
+}
+
+env_name=ce-overlay-rebase
+env_ok='{"name":"ce-overlay-rebase","deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}'
+policies_ok='{"total_count":1,"branch_policies":[{"id":1,"name":"main","type":"branch"}]}'
 
 pr_json() { # <state> <merged> <mergeable> <mergeable_state> <head sha>
   jq -n -c --arg s "$1" --argjson m "$2" --argjson mg "$3" --arg ms "$4" --arg sha "$5" --arg ref "$branch" \
@@ -271,10 +286,12 @@ preflight_env() {
   run_env=(CE_REBASE_TOKEN=tok-rebase GITHUB_TOKEN=tok-github CE_LOCK_APP_ID=123 CE_LOCK_APP_PRIVATE_KEY=key)
 }
 
-preflight_rules() { # <auto-merge> <context> <integration id> <strict> <bypass>
+preflight_rules() { # <auto-merge> <context> <integration id> <strict> <bypass> [bypass_actors JSON]
   stub_rule "api repos/$repo" 0 "$(repo_json "$1")"
   stub_rule "api repos/$repo/rules/branches/main" 0 "$(rules_json "$2" "$3" "$4" 42)"
-  stub_rule "api repos/$repo/rulesets/42" 0 "$(ruleset_json "$5")"
+  stub_rule "api repos/$repo/rulesets/42" 0 "$(ruleset_json "$5" "${6-$app_bypass}")"
+  stub_rule "api repos/$repo/environments/$env_name" 0 "$env_ok"
+  stub_rule "api repos/$repo/environments/$env_name/deployment-branch-policies" 0 "$policies_ok"
 }
 
 begin 'preflight-p1'
@@ -385,6 +402,49 @@ expect_field missing P4
 expect_err 'CE_LOCK_APP_PRIVATE_KEY'
 pass 'missing App credentials with a ruleset present fail preflight naming P4'
 
+begin 'preflight-p4-bypass-actors'
+for variant in missing-app other-app extra-actor not-always wrong-type hidden; do
+  begin "preflight-p4-bypass-actors-$variant"
+  preflight_env
+  case $variant in
+  missing-app) actors='[]' ;;
+  other-app) actors='[{"actor_id":999,"actor_type":"Integration","bypass_mode":"always"}]' ;;
+  extra-actor) actors='[{"actor_id":123,"actor_type":"Integration","bypass_mode":"always"},{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}]' ;;
+  not-always) actors='[{"actor_id":123,"actor_type":"Integration","bypass_mode":"pull_request"}]' ;;
+  wrong-type) actors='[{"actor_id":123,"actor_type":"User","bypass_mode":"always"}]' ;;
+  hidden) actors=null ;;
+  esac
+  preflight_rules true 'Final delivery' 15368 true never "$actors"
+  run_pr preflight
+  expect_rc 1
+  expect_field class configuration
+  expect_field missing P3
+  expect_field detail bypass-unauthorized
+  expect_err 'CE_LOCK_APP_ID'
+done
+pass 'a ruleset whose bypass list is not exactly the P4 App in Always mode fails preflight naming P3'
+
+begin 'preflight-p5'
+for variant in missing no-policy protected-only two-policies other-branch tag-policy; do
+  begin "preflight-p5-$variant"
+  preflight_env
+  preflight_rules true 'Final delivery' 15368 true never
+  case $variant in
+  missing) stub_rule "api repos/$repo/environments/$env_name" 1 'gh: Not Found (HTTP 404)' ;;
+  no-policy) stub_rule "api repos/$repo/environments/$env_name" 0 '{"name":"ce-overlay-rebase","deployment_branch_policy":null}' ;;
+  protected-only) stub_rule "api repos/$repo/environments/$env_name" 0 '{"name":"ce-overlay-rebase","deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false}}' ;;
+  two-policies) stub_rule "api repos/$repo/environments/$env_name/deployment-branch-policies" 0 '{"total_count":2,"branch_policies":[{"id":1,"name":"main","type":"branch"},{"id":2,"name":"feature/*","type":"branch"}]}' ;;
+  other-branch) stub_rule "api repos/$repo/environments/$env_name/deployment-branch-policies" 0 '{"total_count":1,"branch_policies":[{"id":1,"name":"release","type":"branch"}]}' ;;
+  tag-policy) stub_rule "api repos/$repo/environments/$env_name/deployment-branch-policies" 0 '{"total_count":1,"branch_policies":[{"id":1,"name":"main","type":"tag"}]}' ;;
+  esac
+  run_pr preflight
+  expect_rc 1
+  expect_field class configuration
+  expect_field missing P5
+  expect_err 'ce-overlay-rebase'
+done
+pass 'a missing environment, or one not limited to the default branch alone, fails preflight naming P5'
+
 begin 'preflight-401'
 preflight_env
 stub_rule "api repos/$repo" 1 'gh: Bad credentials (HTTP 401)'
@@ -403,7 +463,8 @@ expect_field result ok
 expect_field class none
 expect_only_token tok-rebase
 expect_no_call 'pr create'
-pass 'preflight passes when P1-P4 hold, and every call used CE_REBASE_TOKEN'
+expect_call "environments/$env_name/deployment-branch-policies"
+pass 'preflight passes when P1-P5 hold, and every call used CE_REBASE_TOKEN'
 
 # --- marker -------------------------------------------------------------------
 
@@ -531,6 +592,8 @@ begin 'guard-paths'
 seed_remote
 # shellcheck source=.ci/ce-overlay-pr.sh
 source "$script"
+declare -F ceo_tag_valid >/dev/null || fail 'the shared ceo_tag_valid is not available to the script'
+if declare -F tag_valid >/dev/null; then fail 'the script still carries its own tag_valid copy'; fi
 set_paths "$work"
 base_commit=$("$real_git" -C "$work" rev-parse HEAD)
 printf '{}\n' >"$work/$marker_path"
@@ -594,6 +657,59 @@ expect_call 'pr create'
 expect_no_call 'pr merge'
 pass 'open with a changed customization line makes no merge call and reports awaiting-review'
 
+begin 'open-auto-merge-refused'
+seed_remote
+edit_work_tree
+open_env
+stub_rule 'pr create*' 0 "https://github.com/$repo/pull/10"
+stub_rule 'pr merge*' 1 'gh: Auto merge is not allowed (HTTP 422)'
+stub_rule 'pr close 10*' 0 '-'
+stub_rule 'api -X DELETE*' 0 '-'
+run_pr open "${marker_args[@]}" --target "$target" --work-tree "$work" --customization-lines unchanged
+expect_rc 1
+expect_field class configuration
+expect_field missing P2
+expect_field detail auto-merge-failed
+expect_call 'pr close 10'
+expect_call "api -X DELETE repos/$repo/git/refs/heads/$branch"
+pass 'a refused auto-merge closes the pull request, deletes the branch, and reports configuration P2'
+
+begin 'open-pr-number-unreadable'
+seed_remote
+edit_work_tree
+open_env
+stub_rule 'pr create*' 0 'created something, but no pull request link'
+stub_rule 'api -X DELETE*' 0 '-'
+run_pr open "${marker_args[@]}" --target "$target" --work-tree "$work" --customization-lines unchanged
+expect_rc 1
+expect_field class unknown
+expect_field detail pr-number-unreadable
+expect_call "api -X DELETE repos/$repo/git/refs/heads/$branch"
+expect_no_call 'pr merge'
+pass 'a pull request URL that carries no number deletes the pushed branch'
+
+begin 'open-stale-branch'
+seed_remote
+edit_work_tree
+open_env
+"$real_git" init -q -b stale "$scratch/stale"
+printf 'stale\n' >"$scratch/stale/stale.txt"
+tgit -C "$scratch/stale" add -A
+tgit -C "$scratch/stale" commit -q -m stale
+"$real_git" -C "$scratch/stale" push -q "$remote" "stale:refs/heads/$branch"
+stale_sha=$("$real_git" -C "$remote" rev-parse "refs/heads/$branch")
+stub_rule 'pr create*' 0 "https://github.com/$repo/pull/11"
+run_pr open "${marker_args[@]}" --target "$target" --work-tree "$work" --customization-lines changed
+expect_rc 0
+expect_field result awaiting-review
+expect_field pr 11
+new_sha=$("$real_git" -C "$remote" rev-parse "refs/heads/$branch")
+[ "$new_sha" != "$stale_sha" ] || fail 'the stale branch was not replaced'
+[ "$new_sha" = "$(result_field sha)" ] || fail 'the branch does not hold the commit open reported'
+[ "$("$real_git" -C "$remote" rev-parse "$branch^")" = "$("$real_git" -C "$remote" rev-parse main)" ] || fail 'the replaced branch does not start at main'
+rm -rf -- "$scratch/stale"
+pass 'open replaces a stale rebase branch for the same target that has unrelated history'
+
 begin 'open-refuses-other-changes'
 seed_remote
 edit_work_tree
@@ -634,6 +750,20 @@ expect_rc 1
 expect_field class configuration
 expect_call "api -X DELETE repos/$repo/git/refs/heads/$branch"
 pass 'a 401 while creating the pull request reports configuration and deletes the pushed branch'
+
+begin 'tag-refused'
+seed_remote
+open_env
+for bad in compound-engineering-v3.27.0-rc.1 compound-engineering-v3.27.0+build.5 compound-engineering-v3.27; do
+  run_pr open "${marker_args[@]}" --target "$bad" --work-tree "$work" --customization-lines unchanged
+  expect_rc 2
+  run_pr marker "${marker_args[@]}" --event reset --target "$bad"
+  expect_rc 2
+  run_pr issue --target "$bad" --failure-class outage
+  expect_rc 2
+done
+[ "$(call_count '.')" -eq 0 ] || fail 'a refused target still reached gh'
+pass 'open, marker and issue refuse a target that is not a plain compound-engineering-v<major>.<minor>.<patch> tag'
 
 # --- await --------------------------------------------------------------------
 
@@ -682,6 +812,20 @@ expect_field detail deadline
 expect_call 'pr close 7'
 expect_call "api -X DELETE repos/$repo/git/refs/heads/$branch"
 pass 'a pending check ends at the deadline: the pull request is closed, the branch deleted, and the class is unknown'
+
+begin 'await-hanging-gh'
+close_rules
+stub_rule "api repos/$repo/pulls/7" 0 "$(pr_json open false true blocked $sha_a)"
+run_env=(CE_REBASE_TOKEN=tok-rebase GITHUB_TOKEN=tok-github GH_STUB_HANG="api repos/*/pulls/7" CE_GH_TIMEOUT_SECONDS=1)
+start=$SECONDS
+run_pr await "${await_args[@]}"
+expect_rc 1
+expect_field class unknown
+expect_field detail deadline
+[ $((SECONDS - start)) -le 8 ] || fail "a stalled gh call held await for $((SECONDS - start))s past its 2s deadline"
+expect_err 'timed out'
+expect_call 'pr close 7'
+pass 'a gh call that never answers is cut off, so await still reaches its deadline'
 
 begin 'await-red-check'
 open_env
@@ -948,5 +1092,20 @@ run_pr issue --target "$target" --failure-class unknown --issue 12
 expect_field result created
 expect_field issue 40
 pass 'issue comments on an open tracking issue found by number or by title, and opens a new one otherwise'
+
+for cls in outage quota genuine unknown configuration; do
+  begin "issue-class-$cls"
+  stub_rule 'issue list*' 0 '[]'
+  stub_rule 'issue create*' 0 "https://github.com/$repo/issues/50"
+  run_pr issue --target "$target" --failure-class "$cls"
+  expect_rc 0
+  expect_field result created
+done
+begin 'issue-class-refused'
+run_pr issue --target "$target" --failure-class bogus
+expect_rc 2
+expect_err 'known failure class'
+[ "$(call_count '.')" -eq 0 ] || fail 'an unknown failure class still reached gh'
+pass 'issue accepts every failure class the package knows and refuses any other before it calls gh'
 
 printf 'test-ce-overlay-pr: all cases passed\n'

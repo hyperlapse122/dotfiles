@@ -17,20 +17,25 @@
 #
 # The pure decision logic lives in packages/ce-overlay-rebase (KTD10); this
 # script only collects state, calls that CLI and performs git and gh work.
+#
+# Each gh call is cut off after CE_GH_TIMEOUT_SECONDS (default 60), so a stalled
+# connection cannot hold `await` past its deadline.
 
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=.ci/lib/source-root.sh
 source "$repo_root/.ci/lib/source-root.sh"
+# shellcheck source=.ci/lib/ce-overlay.sh
+source "$repo_root/.ci/lib/ce-overlay.sh"
 
 BRANCH_PREFIX='chore/rebase-ce-overlays-'
 ISSUE_TITLE='Compound Engineering overlay rebase needs attention'
 WORKFLOW_FILE='rebase-ce-overlays.yml'
+DEPLOY_ENVIRONMENT='ce-overlay-rebase'
 FINAL_CHECK='Final delivery'
 ACTIONS_APP_ID=15368
 CONFLICT_MAX=4000
-TAG_PATTERN='^compound-engineering-v[0-9]+\.[0-9]+\.[0-9]+$'
 BOT_NAME='github-actions[bot]'
 BOT_EMAIL='41898282+github-actions[bot]@users.noreply.github.com'
 
@@ -94,6 +99,12 @@ parse_opts() {
 }
 
 setup_scratch() {
+  GH_TIMEOUT=${CE_GH_TIMEOUT_SECONDS:-60}
+  [[ $GH_TIMEOUT =~ ^[1-9][0-9]*$ ]] || usage 'CE_GH_TIMEOUT_SECONDS must be a positive whole number'
+  command -v timeout >/dev/null 2>&1 || {
+    err 'timeout (GNU coreutils) is required to bound each gh call'
+    exit 1
+  }
   tmp_dir=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ce-overlay-pr.XXXXXX")
   # shellcheck disable=SC2064  # expand now: the trap must name this run's directory
   trap "rm -rf -- '$tmp_dir'" EXIT
@@ -108,7 +119,16 @@ require_repo() {
   REPO=$GITHUB_REPOSITORY
 }
 
-gh_call() { command gh "$@" 2>"$err_file"; }
+# gh_call <gh args...>: 124 or 137 means the call was cut off; the same
+# retry-or-fail handling as any other gh failure applies, with no HTTP status.
+gh_call() {
+  local rc=0
+  timeout --kill-after=5 "$GH_TIMEOUT" gh "$@" 2>"$err_file" || rc=$?
+  if ((rc == 124 || rc == 137)); then
+    printf 'gh timed out after %ss\n' "$GH_TIMEOUT" >>"$err_file"
+  fi
+  return "$rc"
+}
 
 gh_status() { sed -n 's/.*HTTP \([0-9][0-9][0-9]\).*/\1/p' "$err_file" | head -n 1; }
 
@@ -127,8 +147,6 @@ ensure_bun() {
 }
 
 ce_cli() { "$ceo_bun" "$repo_root/packages/ce-overlay-rebase/src/cli.ts" "$@"; }
-
-tag_valid() { [[ ${1-} =~ $TAG_PATTERN ]]; }
 
 segment_of() { printf 'v%s' "${1#compound-engineering-v}"; }
 
@@ -254,7 +272,8 @@ cmd_preflight() {
   require_repo
   require_rebase_token
 
-  local repo_json db rules ids id ruleset bypass count bound strict
+  local repo_json db rules ids id ruleset bypass count bound strict actors env_json policies
+  local -a rulesets=()
   repo_json=$(gh_call api "repos/$REPO") || api_failure P2 'the repository settings'
   if [[ $(jq -r '.allow_auto_merge // false' <<<"$repo_json") != true ]]; then
     fail_prereq P2 'P2: the repository setting "Allow auto-merge" is off; gh pr merge --auto cannot work' auto-merge-off
@@ -286,13 +305,43 @@ cmd_preflight() {
     if [[ $bypass != never ]]; then
       fail_prereq P3 "P3: the CE_REBASE_TOKEN identity can bypass ruleset $id (current_user_can_bypass=$bypass); a bypassing merge would skip \"$FINAL_CHECK\"" bypass
     fi
+    rulesets+=("$ruleset")
   done
 
   if [[ -z ${CE_LOCK_APP_ID-} || -z ${CE_LOCK_APP_PRIVATE_KEY-} ]]; then
     fail_prereq P4 'P4: the GitHub App credentials CE_LOCK_APP_ID and CE_LOCK_APP_PRIVATE_KEY are missing, and a ruleset exists that rejects direct pushes without the App bypass' app-missing
   fi
 
-  say "preflight: P1-P4 hold for $REPO on $db"
+  for ruleset in "${rulesets[@]}"; do
+    if ! jq -e --arg app "$CE_LOCK_APP_ID" '
+      (.bypass_actors // []) as $b
+      | ($b | length) == 1 and $b[0].actor_type == "Integration"
+        and ($b[0].actor_id | tostring) == $app and $b[0].bypass_mode == "always"' <<<"$ruleset" >/dev/null; then
+      actors=$(jq -r 'if .bypass_actors == null then "not visible to CE_REBASE_TOKEN"
+        else ([.bypass_actors[] | "\(.actor_type):\(.actor_id):\(.bypass_mode)"] | join(", ") | if . == "" then "none" else . end) end' <<<"$ruleset")
+      fail_prereq P3 "P3: ruleset $(jq -r '.id' <<<"$ruleset") must list only the P4 App (CE_LOCK_APP_ID $CE_LOCK_APP_ID) as a bypass actor in Always mode; found: $actors" bypass-unauthorized
+    fi
+  done
+
+  env_json=$(gh_call api "repos/$REPO/environments/$DEPLOY_ENVIRONMENT") || {
+    if [[ $(gh_status) == 404 ]]; then
+      gh_error_text
+      fail_prereq P5 "P5: the deployment environment $DEPLOY_ENVIRONMENT does not exist, or CE_REBASE_TOKEN cannot read it" env-missing
+    fi
+    api_failure P5 "the deployment environment $DEPLOY_ENVIRONMENT"
+  }
+  if [[ $(jq -r '.deployment_branch_policy.custom_branch_policies // false' <<<"$env_json") != true ]]; then
+    fail_prereq P5 "P5: the deployment environment $DEPLOY_ENVIRONMENT has no deployment-branch policy limited to $db; any branch could read the App credentials" env-branch-policy-off
+  fi
+  policies=$(gh_call api "repos/$REPO/environments/$DEPLOY_ENVIRONMENT/deployment-branch-policies") ||
+    api_failure P5 "the deployment-branch policies of $DEPLOY_ENVIRONMENT"
+  if ! jq -e --arg db "$db" '
+    (.branch_policies // []) as $p
+    | ($p | length) == 1 and $p[0].name == $db and ($p[0].type // "branch") == "branch"' <<<"$policies" >/dev/null; then
+    fail_prereq P5 "P5: the deployment environment $DEPLOY_ENVIRONMENT must allow only the branch $db; it allows: $(jq -r '[(.branch_policies // [])[] | "\(.type // "branch"):\(.name)"] | join(", ")' <<<"$policies")" env-branch-policy-wrong
+  fi
+
+  say "preflight: P1-P5 hold for $REPO on $db"
   emit result=ok class=none "default_branch=$db"
 }
 
@@ -330,7 +379,7 @@ cmd_open() {
   require_repo
   ensure_bun
   local target=${opt_target-} lines=${opt_customization_lines-}
-  tag_valid "$target" || usage '--target must be a compound-engineering-v<semver> tag'
+  ceo_tag_valid "$target" || usage '--target must be a compound-engineering-v<semver> tag'
   [[ $lines == unchanged || $lines == changed ]] || usage '--customization-lines must be unchanged or changed'
   require_rebase_token
 
@@ -416,7 +465,7 @@ cmd_open() {
     exit 1
   fi
 
-  if ! git_authed CE_REBASE_TOKEN -C "$work" push -q "$remote" "$commit:refs/heads/$branch" >&2; then
+  if ! git_authed CE_REBASE_TOKEN -C "$work" push -q "$remote" "+$commit:refs/heads/$branch" >&2; then
     err "cannot push $branch"
     emit result=failed class=unknown detail=push-failed
     exit 1
@@ -442,6 +491,7 @@ cmd_open() {
   pr=$(printf '%s\n' "$url" | sed -n 's#.*/pull/\([0-9][0-9]*\)[[:space:]]*$#\1#p' | tail -n 1)
   [[ -n $pr ]] || {
     err "cannot read the pull request number from: $url"
+    gh_call api -X DELETE "repos/$REPO/git/refs/heads/$branch" >/dev/null || true
     emit result=failed class=unknown detail=pr-number-unreadable
     exit 1
   }
@@ -713,7 +763,7 @@ cmd_marker() {
   ensure_bun
   local event=${opt_event-} target=${opt_target-} token_var=${opt_push_token_env:-CE_PUSH_TOKEN}
   case $event in failure | awaiting-review | reset) ;; *) usage '--event must be failure, awaiting-review or reset' ;; esac
-  tag_valid "$target" || usage '--target must be a compound-engineering-v<semver> tag'
+  ceo_tag_valid "$target" || usage '--target must be a compound-engineering-v<semver> tag'
   [[ $token_var =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || usage '--push-token-env must name an environment variable'
   if [[ $event == failure ]]; then
     [[ -n ${opt_failure_class-} ]] || usage '--failure-class is required for a failure event'
@@ -802,9 +852,10 @@ cmd_issue() {
   setup_scratch
   require_repo
   local target=${opt_target-}
-  tag_valid "$target" || usage '--target must be a compound-engineering-v<semver> tag'
+  ceo_tag_valid "$target" || usage '--target must be a compound-engineering-v<semver> tag'
   local class=${opt_failure_class:-unknown} conflict='' body found='' number raw
-  case $class in outage | quota | genuine | unknown | configuration) ;; *) usage '--failure-class must be a known failure class' ;; esac
+  ensure_bun
+  ce_cli validate-class "$class" >/dev/null || usage '--failure-class must be a known failure class'
   if [[ -n ${opt_conflict_file-} ]]; then
     [[ -f $opt_conflict_file ]] || usage "--conflict-file $opt_conflict_file does not exist"
     conflict=$(head -c "$CONFLICT_MAX" "$opt_conflict_file" | tr -d '\000')
