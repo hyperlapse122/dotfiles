@@ -138,10 +138,14 @@ export async function fetchWithRetry(
       return currentResponse;
     }
 
+    // A backoff at least as long as the rest of the budget leaves the next
+    // attempt no time to run, so stop here instead of sleeping the budget away.
     const delayMs = computeDelayMs(attempt, currentResponse, baseDelayMs, maxDelayMs);
-    const sleepMs = Math.min(delayMs, remainingBudget);
-    if (sleepMs > 0) {
-      await sleep(sleepMs);
+    if (delayMs >= remainingBudget) {
+      break;
+    }
+    if (delayMs > 0) {
+      await sleep(delayMs);
     }
   }
 
