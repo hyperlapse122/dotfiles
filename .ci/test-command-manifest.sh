@@ -122,19 +122,7 @@ make_lock_fixture() {
     ln -s "$entry" "$dest/$(basename -- "$entry")"
   done
   local dest_source_root
-  if [[ -f "$dest/.chezmoiroot" ]]; then
-    local rel_source
-    rel_source=$(resolve_source_root "$dest")
-    rm -f -- "$rel_source"
-    mkdir -p -- "$rel_source"
-    for entry in "$source_root"/* "$source_root"/.[!.]*; do
-      [[ -e "$entry" ]] || continue
-      ln -s "$entry" "$rel_source/$(basename -- "$entry")"
-    done
-    dest_source_root="$rel_source"
-  else
-    dest_source_root="$dest"
-  fi
+  dest_source_root=$(populate_fixture_source_root "$dest" "$source_root")
   rm -f "$dest_source_root/.chezmoidata"
   # -L dereferences: when $repo_root is itself a symlink farm (this helper's own
   # output, when a gate runs from a fixture), a plain `cp -a` copies the SYMLINK,
@@ -148,9 +136,8 @@ make_lock_fixture() {
 }
 
 mutate_lock() {
-  local dir="$1" tool="$2" field="$3" value="$4"
-  local target_source
-  target_source=$(resolve_source_root "$dir")
+  local dir="$1" tool="$2" field="$3" value="$4" target_file
+  target_file=$(join_source_state "$dir" .chezmoidata/releases.json)
   python3 -c '
 import json, sys
 path, tool, field, value = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
@@ -161,7 +148,7 @@ for platform in artifacts:
     artifacts[platform][field] = value
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)
-' "$target_source/.chezmoidata/releases.json" "$tool" "$field" "$value"
+' "$target_file" "$tool" "$field" "$value"
 }
 
 rejects unknown-producer 'producer: external' 'producer: madeUpProducer' 'unknown producer'
@@ -250,7 +237,7 @@ with open(path, "r", encoding="utf-8") as f:
 data["releases"]["tools"]["bun"]["artifacts"]["linux-amd64-musl"]["sha256"] = "b" * 64
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)
-' "$(resolve_source_root "$musl_bumped")/.chezmoidata/releases.json"
+' "$(join_source_state "$musl_bumped" .chezmoidata/releases.json)"
 musl_bumped_json=$(render_source "$musl_bumped" linux amd64 '{{ includeTemplate "command-manifest.tmpl" . }}' "$musl_override")
 
 python3 -c '

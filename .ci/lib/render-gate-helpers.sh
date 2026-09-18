@@ -17,8 +17,8 @@
 # source root rather than onto repo_root, resolved through
 # .ci/lib/source-root.sh's join_source_state; render() itself keeps
 # `--source "$repo_root"` because chezmoi descends into the source root on
-# its own. Today no `.chezmoiroot` exists, so the source root is repo_root
-# unchanged and this indirection changes no behaviour.
+# its own. When .chezmoiroot is absent, the source root falls back to
+# repo_root unchanged.
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)/.ci/lib/source-root.sh"
 
 require_file() {

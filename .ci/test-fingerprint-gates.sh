@@ -10,9 +10,8 @@ mkdir -p "$scratch/home" "$scratch/target" "$scratch/bin" \
 printf '[data]\n' >"$scratch/empty.toml"
 printf 'matching fixture\n' >"$scratch/source/fixtures/matching.txt"
 # Rooted fixture (KTD1/AE6): a `.chezmoiroot` at the fixture's repository root
-# naming `home`, mirroring the Phase B layout `rooted-rehearsal.sh` builds --
-# a cross-root glob's base must resolve to the fixture's repository root, not
-# to `home`, once the source state moves under it.
+# naming `home` -- a cross-root glob's base must resolve to the fixture's
+# repository root, not to `home`.
 printf 'home\n' >"$scratch/rooted/.chezmoiroot"
 printf 'sample override\n' >"$scratch/rooted/system/linux/etc/sample.conf"
 chezmoi_bin=$(type -P chezmoi) || {
@@ -98,7 +97,7 @@ assert_render_exact() {
 
 # render() against the rooted fixture's repository root, so chezmoi descends
 # through its `.chezmoiroot` into home/ on its own -- the same auto-descent a
-# real `--source "$repo_root"` gets once Phase B lands `.chezmoiroot`.
+# real `--source "$repo_root"` gets with `.chezmoiroot` present.
 render_rooted() {
   local input=$1 output=$2
   shift 2
@@ -179,8 +178,8 @@ fi
 # KTD1's two deployed command sources: their baked path is a TEMPLATE-TIME
 # expression (the command is staged into ~/.local/bin and cannot discover the
 # source tree at run time), so it goes through $repoRoot like every other
-# cross-root site. Today (no `.chezmoiroot`) $repoRoot == .chezmoi.sourceDir,
-# so the baked absolute path is unchanged from before this unit.
+# cross-root site. With .chezmoiroot at the repository root, $repoRoot resolves
+# to the repository root so the baked absolute path points to $repo_root.
 host_facts_source=dot_local/share/chezmoi-command-sources/executable_host-facts.tmpl
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$host_facts_source"
 assert_render_ok host-facts-baked-path "$repo_root" "$source_root/$host_facts_source" \

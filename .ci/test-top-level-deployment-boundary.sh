@@ -55,32 +55,13 @@ source "$repo_root/.ci/lib/render-gate-helpers.sh"
 source "$repo_root/.ci/lib/source-root.sh"
 source_root=$(resolve_source_root "$repo_root")
 
-SOURCE_ATTRIBUTE_PREFIXES=(
-  dot_
-  private_
-  symlink_
-  remove_
-  executable_
-  readonly_
-  encrypted_
-  create_
-  modify_
-  run_
-  exact_
-  literal_
-  empty_
-  once_
-  onchange_
-  before_
-  after_
-)
-
 check_chezmoiroot() {
   local root=$1 scratch_dir=$2 chezmoi_cmd=$3
   local marker="$root/.chezmoiroot"
   [[ -f "$marker" ]] || { printf '%s\n' ".chezmoiroot is missing in $root" >&2; return 1; }
-  local content
-  content=$(tr -d '[:space:]' <"$marker")
+  local raw content
+  raw=$(<"$marker")
+  content=$(_source_root_trim "$raw")
   [[ "$content" == "home" ]] || {
     printf '%s\n' ".chezmoiroot in $root must contain 'home', got '$content'" >&2
     return 1
@@ -103,18 +84,19 @@ check_chezmoiroot() {
 check_repo_root_entries() {
   local root=$1
   local failures=()
-  local entry prefix
+  local entry
   while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
     if [[ "$entry" == .chezmoi* && "$entry" != ".chezmoiroot" ]]; then
       failures+=("repository root contains stray chezmoi input '$entry'; chezmoi inputs must live under the source root")
     fi
-    for prefix in "${SOURCE_ATTRIBUTE_PREFIXES[@]}"; do
-      if [[ "$entry" == "$prefix"* ]]; then
+    case "$entry" in
+      dot_* | private_* | symlink_* | remove_* | executable_* | readonly_* | \
+      encrypted_* | create_* | modify_* | run_* | exact_* | literal_* | \
+      empty_* | once_* | onchange_* | before_* | after_*)
         failures+=("repository root contains source-attribute-prefixed entry '$entry'; source state must live under the source root")
-        break
-      fi
-    done
+        ;;
+    esac
   done < <(find "$root" -mindepth 1 -maxdepth 1 -printf '%f\n')
 
   if [[ ${#failures[@]} -gt 0 ]]; then

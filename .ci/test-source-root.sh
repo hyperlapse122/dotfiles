@@ -32,12 +32,8 @@
 #      must keep working, before it is run for real against this checkout.
 #
 # ON THAT LAST RUN. It runs for real against this checkout at the very end of
-# this script, not just against a fixture. Today no .ci file yet resolves the
-# source root before joining a source-state name -- repointing them is the
-# next unit's job, not this one's -- so THIS RUN IS EXPECTED TO FAIL until
-# that unit lands. That failure is not a bug in the lint: it is the lint
-# doing exactly what it exists to do, on a tree it has not been allowed to
-# fix yet.
+# this script, not just against a fixture, verifying that zero remaining
+# $repo_root joins to a source-state name exist across .ci/**/*.sh.
 
 set -euo pipefail
 
@@ -191,16 +187,14 @@ pass 'require_file accepts a .ci/fixtures/agent-instructions/ path in a rooted s
 lint_source_state_joins() {
   local root=$1 exclude=$2 report=$3 file rel lineno content trimmed
   : >"$report"
-  while IFS= read -r -d '' file; do
+  while IFS=: read -r file lineno content; do
+    [[ -n "$file" && -n "$lineno" ]] || continue
     rel=${file#"$root/"}
     [[ "$rel" == "$exclude" ]] && continue
-    while IFS=: read -r lineno content; do
-      [[ -n "$lineno" ]] || continue
-      trimmed="${content#"${content%%[![:space:]]*}"}"
-      [[ "$trimmed" == \#* ]] && continue
-      printf '%s:%s:%s\n' "$rel" "$lineno" "$content" >>"$report"
-    done < <(grep -nE "$SOURCE_ROOT_JOIN_PATTERN" -- "$file" || true)
-  done < <(find "$root/.ci" -type f -name '*.sh' -print0)
+    trimmed="${content#"${content%%[![:space:]]*}"}"
+    [[ "$trimmed" == \#* ]] && continue
+    printf '%s:%s:%s\n' "$rel" "$lineno" "$content" >>"$report"
+  done < <(grep -rnE "$SOURCE_ROOT_JOIN_PATTERN" --include='*.sh' "$root/.ci" || true)
   [[ ! -s "$report" ]]
 }
 
@@ -250,10 +244,8 @@ pass 'lint: an excluded file is never scanned, even when it is the only offender
 # ---------------------------------------------------------------------------
 #
 # This is the production check, not a fixture: it runs for real against the
-# repository this script lives in. See the header note above -- until the
-# unit that repoints every .ci file the lint finds here has landed, THIS
-# FAILS, and it is supposed to.
-
+# repository this script lives in, verifying that all .ci files resolve
+# source-state paths via resolve_source_root or join_source_state.
 real_report="$scratch/real-lint.report"
 if lint_source_state_joins "$repo_root" .ci/test-source-root.sh "$real_report"; then
   pass 'lint: this checkout has zero remaining $repo_root joins to a source-state name'
@@ -263,7 +255,7 @@ else
   printf 'test-source-root: the lint found %s $repo_root-style join(s) across %s file(s):\n' \
     "$violating_lines" "$violating_files" >&2
   sed 's/^/  /' "$real_report" >&2
-  fail "$violating_files .ci file(s) still join a source-state name onto \$repo_root; repointing them is the next unit's job (see the header note above), not this one's"
+  fail "$violating_files .ci file(s) still join a source-state name onto \$repo_root; source-state paths must be resolved via resolve_source_root or join_source_state"
 fi
 
 printf 'test-source-root: all scenarios passed\n'

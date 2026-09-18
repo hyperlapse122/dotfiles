@@ -2,13 +2,12 @@
 # .ci/lib/source-root.sh -- shared chezmoi source-root resolution, sourced
 # (never executed directly).
 #
-# Today no `.chezmoiroot` exists anywhere in this checkout, so
-# resolve_source_root is the identity function and every join below stays on
-# the repository root: this file changes no behaviour on its own. Once a
-# later unit adds `.chezmoiroot` at the repository root, chezmoi joins its
-# trimmed content onto the source directory (see chezmoi's own
-# getSourceDirAbsPath); resolve_source_root does the same starting from the
-# repository root, and .ci/test-source-root.sh proves the two agree.
+# resolve_source_root resolves the chezmoi source root from <root>: when
+# <root>/.chezmoiroot is present, chezmoi joins its trimmed content onto
+# the source directory (see chezmoi's own getSourceDirAbsPath);
+# resolve_source_root does the same starting from <root>, and
+# .ci/test-source-root.sh proves the two agree. When .chezmoiroot is absent,
+# <root> is returned unchanged.
 #
 # The join-classification rule (plan Appendix): a path whose first segment is
 # one of the exact source-state names below, or starts with dot_, private_,
@@ -18,17 +17,6 @@
 # .install-prerequisites.sh, and .chezmoiroot itself -- is repository
 # infrastructure and stays on the repository root unchanged.
 
-_SOURCE_ROOT_EXACT_SEGMENTS=(
-  ".chezmoi.toml.tmpl"
-  ".chezmoidata"
-  ".chezmoiexternals"
-  ".chezmoiignore"
-  ".chezmoiremove"
-  ".chezmoiscripts"
-  ".chezmoitemplates"
-  ".keys"
-  "Library"
-)
 
 # is_source_state_segment <segment>
 #
@@ -36,14 +24,16 @@ _SOURCE_ROOT_EXACT_SEGMENTS=(
 # the rule above. Used by join_source_state (and so by require_file) to pick
 # which root a path argument joins onto.
 is_source_state_segment() {
-  local segment=$1 name
-  for name in "${_SOURCE_ROOT_EXACT_SEGMENTS[@]}"; do
-    [[ "$segment" == "$name" ]] && return 0
-  done
-  case "$segment" in
-    dot_* | private_* | symlink_* | remove_*) return 0 ;;
+  case "$1" in
+    .chezmoi.toml.tmpl | .chezmoidata | .chezmoiexternals | .chezmoiignore | \
+    .chezmoiremove | .chezmoiscripts | .chezmoitemplates | .keys | Library | \
+    dot_* | private_* | symlink_* | remove_*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
   esac
-  return 1
 }
 
 # Trim leading and trailing whitespace (spaces, tabs, newlines) from $1.
@@ -106,6 +96,31 @@ join_source_state() {
   else
     printf '%s/%s\n' "$repo_root" "$path"
   fi
+}
+
+# populate_fixture_source_root <dest> <source_root>
+#
+# When <dest>/.chezmoiroot is present, creates a real directory at <dest>'s
+# resolved source root populated with symlinks to <source_root>'s entries,
+# ensuring the fixture's source root is an isolated real directory before any
+# test writes private copies into it. When absent, <dest> itself is the source
+# root. Prints the fixture's resolved source root path.
+populate_fixture_source_root() {
+  local dest=$1 source_root=$2 entry dest_source_root
+  if [[ -f "$dest/.chezmoiroot" ]]; then
+    local rel_source
+    rel_source=$(resolve_source_root "$dest")
+    rm -f -- "$rel_source"
+    mkdir -p -- "$rel_source"
+    for entry in "$source_root"/* "$source_root"/.[!.]*; do
+      [[ -e "$entry" ]] || continue
+      ln -s -- "$entry" "$rel_source/$(basename -- "$entry")"
+    done
+    dest_source_root="$rel_source"
+  else
+    dest_source_root="$dest"
+  fi
+  printf '%s\n' "$dest_source_root"
 }
 
 # SOURCE_ROOT_JOIN_PATTERN -- the name-anchored ERE .ci/test-source-root.sh's

@@ -80,19 +80,7 @@ make_source_fixture() {
     ln -s -- "$entry" "$dest/$(basename -- "$entry")"
   done
   local dest_source_root
-  if [[ -f "$dest/.chezmoiroot" ]]; then
-    local rel_source
-    rel_source=$(resolve_source_root "$dest")
-    rm -f -- "$rel_source"
-    mkdir -p -- "$rel_source"
-    for entry in "$source_root"/* "$source_root"/.[!.]*; do
-      [[ -e "$entry" ]] || continue
-      ln -s -- "$entry" "$rel_source/$(basename -- "$entry")"
-    done
-    dest_source_root="$rel_source"
-  else
-    dest_source_root="$dest"
-  fi
+  dest_source_root=$(populate_fixture_source_root "$dest" "$source_root")
   rm -f -- "$dest_source_root/.chezmoidata"
   # -L, and the regular-file guard below: when $repo_root is itself a symlink
   # farm (the gate's own tamper harness renders one), a plain `cp -a` would copy
@@ -108,8 +96,8 @@ make_source_fixture() {
 set_lock_version() {
   local dir=$1 tool=$2 version=$3
   [[ $dir == "$scratch"/* ]] || fail "refusing to rewrite a lock outside the scratch tree: $dir"
-  local target_source
-  target_source=$(resolve_source_root "$dir")
+  local target_file
+  target_file=$(join_source_state "$dir" .chezmoidata/releases.json)
   "$lock_python" -c '
 import json, sys
 path, tool, version = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -121,13 +109,13 @@ if tool not in tools:
 tools[tool]["version"] = version
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle)
-' "$target_source/.chezmoidata/releases.json" "$tool" "$version"
+' "$target_file" "$tool" "$version"
 }
 
 lock_version() {
-  local dir=$1 tool=$2 version target_source
-  target_source=$(resolve_source_root "$dir")
-  version=$(jq -r --arg tool "$tool" '.releases.tools[$tool].version' "$target_source/.chezmoidata/releases.json")
+  local dir=$1 tool=$2 version target_file
+  target_file=$(join_source_state "$dir" .chezmoidata/releases.json)
+  version=$(jq -r --arg tool "$tool" '.releases.tools[$tool].version' "$target_file")
   [[ -n $version && $version != null ]] || fail "the lock in $dir carries no version for $tool"
   printf '%s\n' "$version"
 }

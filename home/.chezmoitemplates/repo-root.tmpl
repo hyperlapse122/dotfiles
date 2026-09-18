@@ -12,10 +12,9 @@ there is nothing else to configure.
 
 Rule, read from chezmoi's own source-root resolution: the source directory's
 PARENT when that parent holds a `.chezmoiroot` file, else the source
-directory itself. That makes this partial's return value the source directory
-today (no `.chezmoiroot` exists yet) and `dir .chezmoi.sourceDir` once a later
-unit adds one at the repository root -- with no edit to this file in between,
-because the file only ever reads the marker, never assumes its presence.
+directory itself. With `.chezmoiroot` at the repository root, this resolves
+`dir .chezmoi.sourceDir` (the repository root). When `.chezmoiroot` is absent,
+it returns the source directory unchanged.
 
 A source-relative expression (one that stays inside the deployed tree, such as
 a `.chezmoidata/*.yaml` or `dot_local/...` glob) keeps resolving through
