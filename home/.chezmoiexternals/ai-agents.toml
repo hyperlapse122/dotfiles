@@ -239,6 +239,12 @@ include = ["*/{{ $skillPath }}/**"]
        because nothing overlays its tree (its apply-time extension patch is
        re-asserted by the run_after_ script on every apply).
 
+       An authority with pristinePath also gets one include-only, exact external
+       that holds just the upstream files named by the overlay base.json. The
+       overlay patches use them as pre-images. Those paths stay excluded from
+       the archive externals above, so chezmoi owns them only here, and nothing
+       else writes the pristine tree.
+
        stripComponents=1 drops the GitHub archive's `<repo>-<tag>/` prefix.
        local-archive-ref.tmpl resolves each marketplace's ref and version
        segment: compound-engineering keeps its v<semver> suffix, i-have-adhd
@@ -258,6 +264,19 @@ exact = true
 {{-     end }}
 {{-     if hasKey $authority "exclude" }}
 exclude = {{ toJson $authority.exclude }}
+{{-     end }}
+{{-     if hasKey $authority "pristinePath" }}
+{{-       $pristineIncludes := list -}}
+{{-       range $patchedPath := keys (include "dot_local/share/compound-engineering-overlays/base.json" | fromJson).paths | sortAlpha -}}
+{{-         $pristineIncludes = append $pristineIncludes (printf "*/%s" $patchedPath) -}}
+{{-       end }}
+
+[{{ printf "%s/%s" $authority.pristinePath $segment | quote }}]
+type = "archive"
+url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" $authority.source $ref }}'
+stripComponents = 1
+exact = true
+include = {{ toJson $pristineIncludes }}
 {{-     end }}
 {{-   end -}}
 {{- end }}

@@ -329,6 +329,11 @@ jobs:
           .ci/test-gem80-firmware-pin-gates.sh
           .ci/test-gpg-key-data.sh
           .ci/test-gpg-packages-parity.sh
+          .ci/check-ce-overlay-rebase-marker.sh
+          .ci/test-ce-overlay-pr.sh
+          .ci/test-ce-overlay-lock-hold.sh
+          .ci/test-ce-overlay-classify-run.sh
+          .ci/check-ce-overlay-wiring.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)
@@ -428,6 +433,26 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Run overlay injection test
         run: .ci/test-compound-engineering-overlays.sh "$GITHUB_WORKSPACE"
+      - name: Run overlay patch tooling test
+        run: .ci/test-ce-overlay-tooling.sh "$GITHUB_WORKSPACE"
+      - name: Run overlay ownership regression test
+        run: .ci/test-ce-overlay-entrystate.sh "$GITHUB_WORKSPACE"
+
+  compound-engineering-overlay-upstream:
+    name: compound-engineering overlay upstream gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install chezmoi
+        run: |
+          set -euo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Validate the overlay patches against the pinned release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .ci/check-ce-overlay-patches.sh
 
   delivery:
     name: Final delivery
@@ -442,6 +467,7 @@ jobs:
         ts-workspace,
         rust-crate,
         compound-engineering-overlays,
+        compound-engineering-overlay-upstream,
       ]
     runs-on: ubuntu-24.04
     timeout-minutes: 10

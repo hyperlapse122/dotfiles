@@ -395,7 +395,9 @@ and source-only trees live at the repository root outside `home/`.
   the shared Figma MCP server for omp. Build failures preserve the last
   executable and retry after an input change or `chezmoi apply --force`.
   `release-lock/` generates the static external-tool lock consumed by templates
-  and externals. See [`packages/README.md`](packages/README.md).
+  and externals. `ce-overlay-rebase/` holds rebase state transitions, dispatch
+  decision, and failure classification for Compound Engineering overlays. See
+  [`packages/README.md`](packages/README.md).
 - [`firmware/`](firmware) — keyboard firmware configurations (e.g. NuPhy Gem80 HostRGB).
 The source-only trees are also excluded from taplo formatting via
 [`.taplo.toml`](.taplo.toml).

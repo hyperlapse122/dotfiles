@@ -1,0 +1,20 @@
+{
+  "name": "@h82/ce-overlay-rebase",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Rebase state transitions, dispatch decision, and failure classifier for Compound Engineering overlays.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "@types/semver": "7.7.1",
+    "typescript": "7.0.2",
+    "vite-plus": "catalog:"
+  },
+  "dependencies": {
+    "semver": "7.8.5"
+  }
+}

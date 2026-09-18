@@ -52,6 +52,7 @@ bun run packages/release-lock/src/cli.ts                          # refresh the 
 bun run packages/release-lock/src/cli.ts --out home/.chezmoidata/releases.json
 bun run packages/release-lock/src/cli.ts --stdout                 # inspect merged JSON
 bun run packages/release-lock/src/cli.ts --only agy               # refresh only agy
+bun run packages/release-lock/src/cli.ts --restore-tool compound-engineering --from committed.json --out home/.chezmoidata/releases.json
 ```
 
 A source that fails to resolve is reported on stderr and omitted from the
@@ -77,6 +78,18 @@ argument order. A failed selected resolution preserves the previous entry and
 returns a failure. Unknown tools, repeated flags, and conflicting output flags
 fail before reading or writing the lock. Use this form to generate a reviewed
 pin without updating unrelated tools.
+
+`--restore-tool <registered-tool> --from <lock>` resolves nothing. It copies that
+one tool's entry from the second lock over the destination lock and writes the
+result with the same serializer as every other mode. Every other entry in the
+destination stays as it was, so a destination that differed from the second lock
+only in that tool becomes byte-identical to it. `.ci/ce-overlay-lock-hold.sh` uses it to put the committed compound-engineering
+entry back while the rest of the hourly refresh still commits. Restoring the
+whole file would drop the other tools' updates. It works with `--out <path>` or
+`--stdout`. It exits 1, and leaves the destination untouched, when either lock is
+missing or the tool is not in the second lock. Combining it with `--only` or
+`--prune-retired`, giving only one of the two flags, and repeating a flag fail
+before reading or writing anything.
 
 The hourly refresh uses this same CLI and updates a changed generated lock
 without a separate approval step. The lock diff remains review-visible for

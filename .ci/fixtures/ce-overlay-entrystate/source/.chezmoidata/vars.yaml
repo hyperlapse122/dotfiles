@@ -1,0 +1,4 @@
+# Default template variables for ce-overlay-entrystate fixture.
+# Overwritten dynamically by test-ce-overlay-entrystate.sh per scenario.
+archive_url: "file:///dev/null"
+with_exclude: true

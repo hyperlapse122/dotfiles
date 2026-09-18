@@ -1,0 +1,13 @@
+diff --git a/skills/ce-plan/scripts/elevation-dispatch.sh b/skills/ce-plan/scripts/elevation-dispatch.sh
+index e28e1dc6333700c5b387b8339021f67193c47843..a0323eb4dd12ff0fc60441c55686db22e47b9fb4 100755
+--- a/skills/ce-plan/scripts/elevation-dispatch.sh
++++ b/skills/ce-plan/scripts/elevation-dispatch.sh
+@@ -31,7 +31,7 @@ RUN_SUCCEEDED=false
+ 
+ log() { printf '[elevation] %s\n' "$*" >&2; }
+ 
+-EFFORT="high"   # settled: elevation runs at high effort
++EFFORT="medium"   # this repository holds elevation at the roster's authoring effort
+ 
+ # Read-only tool posture (R7): the available built-in set, not a denylist. The
+ # elevated step reads the repo (Read/Glob/Grep) and may check current facts on

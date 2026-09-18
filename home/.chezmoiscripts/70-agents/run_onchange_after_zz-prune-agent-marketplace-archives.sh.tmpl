@@ -6,6 +6,9 @@
 {{-   if ne (printf "%v" (index $authority "kind")) "localArchive" -}}{{ continue }}{{ end -}}
 {{-   $segment := includeTemplate "local-archive-ref.tmpl" (dict "ctx" $ctx "marketplace" $name "field" "segment") -}}
 {{-   $prunes = append $prunes (printf "  %q" (printf "%s\t%s" (index $authority "externalPath") $segment)) -}}
+{{-   if hasKey $authority "pristinePath" -}}
+{{-     $prunes = append $prunes (printf "  %q" (printf "%s\t%s" (index $authority "pristinePath") $segment)) -}}
+{{-   end -}}
 {{- end -}}
 
 #!/usr/bin/env bash

@@ -1,0 +1,7 @@
+{
+  "status": 401,
+  "error": {
+    "type": "authentication_error",
+    "message": "Invalid API key or token unauthorized"
+  }
+}
