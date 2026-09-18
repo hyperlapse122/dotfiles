@@ -207,20 +207,12 @@ esac
 
 run_tool "$gate" "${common[@]}"
 gate_class=$(class_of "$out")
+[[ $rc == 0 ]] || rollback
 case $rc in
   0) ;;
-  1)
-    rollback
-    hold yes "${gate_class:-invalid}" "The stamped patch set failed the pinned-mode gate. A rebase is a candidate."
-    ;;
-  2)
-    rollback
-    hold no unavailable "Upstream could not be fetched for the pinned-mode check. No rebase is dispatched."
-    ;;
-  *)
-    rollback
-    die "the overlay gate failed with status $rc"
-    ;;
+  1) hold yes "${gate_class:-invalid}" "The stamped patch set failed the pinned-mode gate. A rebase is a candidate." ;;
+  2) hold no unavailable "Upstream could not be fetched for the pinned-mode check. No rebase is dispatched." ;;
+  *) die "the overlay gate failed with status $rc" ;;
 esac
 
 printf 'ce-overlay-lock-hold: %s advances from %s to %s and base.json is stamped\n' "$TOOL" "$pin" "$resolved" >&2

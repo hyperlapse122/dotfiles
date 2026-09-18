@@ -7,7 +7,6 @@ import {
   type MarkerEvent,
   transitionMarker,
   validateMarker,
-  validateMarkerDocument,
 } from "./marker.js";
 
 export interface CliIo {
@@ -24,12 +23,17 @@ async function readInput(args: string[], io?: CliIo): Promise<string> {
   if (fileArg && fileArg !== "-") {
     return await readFile(fileArg, "utf-8");
   }
-  // read from process.stdin
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
     chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
   }
   return Buffer.concat(chunks).toString("utf-8");
+}
+
+function unwrapMarker(data: unknown): unknown {
+  return typeof data === "object" && data !== null && "ceOverlayRebase" in data
+    ? (data as MarkerDocument).ceOverlayRebase
+    : data;
 }
 
 export async function runCli(args: string[], io?: CliIo): Promise<number> {
@@ -51,10 +55,7 @@ export async function runCli(args: string[], io?: CliIo): Promise<number> {
     try {
       const raw = await readInput(subArgs, io);
       const data = JSON.parse(raw);
-      const res =
-        typeof data === "object" && data !== null && "ceOverlayRebase" in data
-          ? validateMarkerDocument(data)
-          : validateMarker(data);
+      const res = validateMarker(unwrapMarker(data));
 
       if (!res.valid) {
         writeErr(`Validation failed:\n  ${res.errors.join("\n  ")}\n`);
@@ -83,10 +84,7 @@ export async function runCli(args: string[], io?: CliIo): Promise<number> {
 
       const raw = await readInput(filteredArgs, io);
       const data = JSON.parse(raw);
-      const markerObj: Marker =
-        typeof data === "object" && data !== null && "ceOverlayRebase" in data
-          ? (data as MarkerDocument).ceOverlayRebase
-          : (data as Marker);
+      const markerObj = unwrapMarker(data) as Marker;
 
       const res = validateMarker(markerObj);
       if (!res.valid) {

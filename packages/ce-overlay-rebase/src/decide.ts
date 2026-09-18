@@ -1,5 +1,11 @@
 import semver from "semver";
-import { type Marker, createIdleMarker, extractSemverFromTag, isValidTargetTag } from "./marker.js";
+import {
+  type Marker,
+  createIdleMarker,
+  extractSemverFromTag,
+  isValidTargetTag,
+  resolveNow,
+} from "./marker.js";
 
 export interface RebaseRun {
   status: "queued" | "in_progress" | "completed";
@@ -97,11 +103,7 @@ export function decideDispatch(input: DecideInput): DecisionResult {
     return { action: "skip", reason: `Tracking issue #${trackingIssue.number} is open` };
   }
 
-  const nowDate = input.now
-    ? typeof input.now === "string"
-      ? new Date(input.now)
-      : input.now
-    : new Date();
+  const nowDate = resolveNow(input.now);
 
   // A stored marker whose target is older than the resolved tag counts as idle
   const markerSemver = extractSemverFromTag(marker.target);
@@ -130,33 +132,31 @@ export function decideDispatch(input: DecideInput): DecisionResult {
     }
   }
 
-  if (openPullRequests.length > 0) {
-    const unhealthPrs: number[] = [];
+  const unhealthyPrs: number[] = [];
 
-    for (const pr of openPullRequests) {
-      const targetsResolved = doesPrTargetTag(pr, resolvedTag);
-      const ageMs = nowDate.getTime() - new Date(pr.createdAt).getTime();
-      const isYoungerThan2h = ageMs < 2 * 60 * 60 * 1000;
-      const isAwaitingReview = effectiveMarker.status === "awaiting-review" && targetsResolved;
-      const isHealthyAutoMerge = targetsResolved && isYoungerThan2h && pr.autoMergeEnabled;
+  for (const pr of openPullRequests) {
+    const targetsResolved = doesPrTargetTag(pr, resolvedTag);
+    const ageMs = nowDate.getTime() - new Date(pr.createdAt).getTime();
+    const isYoungerThan2h = ageMs < 2 * 60 * 60 * 1000;
+    const isAwaitingReview = effectiveMarker.status === "awaiting-review" && targetsResolved;
+    const isHealthyAutoMerge = targetsResolved && isYoungerThan2h && pr.autoMergeEnabled;
 
-      if (isAwaitingReview) {
-        return { action: "skip", reason: "Pull request is awaiting review" };
-      }
-      if (isHealthyAutoMerge) {
-        return { action: "skip", reason: "Healthy pull request open" };
-      }
-
-      unhealthPrs.push(pr.number);
+    if (isAwaitingReview) {
+      return { action: "skip", reason: "Pull request is awaiting review" };
+    }
+    if (isHealthyAutoMerge) {
+      return { action: "skip", reason: "Healthy pull request open" };
     }
 
-    if (unhealthPrs.length > 0) {
-      return {
-        action: "close-then-dispatch",
-        closePrNumbers: unhealthPrs,
-        reason: "Superseded or orphaned pull request",
-      };
-    }
+    unhealthyPrs.push(pr.number);
+  }
+
+  if (unhealthyPrs.length > 0) {
+    return {
+      action: "close-then-dispatch",
+      closePrNumbers: unhealthyPrs,
+      reason: "Superseded or orphaned pull request",
+    };
   }
 
   return { action: "dispatch", reason: "Conditions clear for rebase dispatch" };

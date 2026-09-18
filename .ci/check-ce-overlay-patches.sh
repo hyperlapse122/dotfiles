@@ -88,14 +88,7 @@ if [[ -z $pristine_src ]]; then
   [[ -z $missing ]] || usage_error "required tool not found: $missing"
 fi
 
-scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
-mkdir -p -- "$scratch_root"
-CEO_SCRATCH=$(mktemp -d "$scratch_root/ce-overlay-gate.XXXXXX")
-export CEO_SCRATCH
-trap 'rm -rf -- "$CEO_SCRATCH"' EXIT
-CEO_REPORT="$CEO_SCRATCH/report"
-: >"$CEO_REPORT"
-ceo_git_prepare "$CEO_SCRATCH/git-home"
+ceo_scratch_init ce-overlay-gate
 
 conclude() {
   local class=${1:-} status

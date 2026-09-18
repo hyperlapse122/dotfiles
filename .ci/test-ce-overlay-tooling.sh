@@ -32,6 +32,8 @@ trap 'rm -rf -- "$scratch"' EXIT
 
 # shellcheck source=.ci/lib/ce-overlay.sh
 source "$root/.ci/lib/ce-overlay.sh"
+# shellcheck source=.ci/lib/ce-overlay-test.sh
+source "$root/.ci/lib/ce-overlay-test.sh"
 CEO_SCRATCH=$scratch
 CEO_REPORT="$scratch/report"
 : >"$CEO_REPORT"
@@ -62,24 +64,6 @@ effort=$(ceo_authoring_effort "$root") || fail 'could not render the roster auth
 
 # --- fixtures ----------------------------------------------------------------
 
-materialize() { # <fixture subdirectory> <dest>
-  local src=$fx/$1 dest=$2 file rel content
-  while IFS= read -r -d '' file; do
-    rel=${file#"$src"/}
-    mkdir -p -- "$dest/$(dirname -- "$rel")"
-    content=$(
-      cat -- "$file"
-      printf x
-    )
-    content=${content%x}
-    printf '%s' "${content//@AUTHORING_EFFORT@/$effort}" >"$dest/$rel"
-    case $rel in
-      */elevation-dispatch.sh) chmod 0755 "$dest/$rel" ;;
-      *) chmod 0644 "$dest/$rel" ;;
-    esac
-  done < <(find "$src" -type f -print0 | sort -z)
-}
-
 edit_line() { # <file> <line> <text>
   awk -v n="$2" -v text="$3" 'NR == n { print text; next } { print }' "$1" >"$1.tmp"
   mv -- "$1.tmp" "$1"
@@ -88,13 +72,6 @@ edit_line() { # <file> <line> <text>
 insert_after() { # <file> <line> <text>
   awk -v n="$2" -v text="$3" '{ print } NR == n { print text }' "$1" >"$1.tmp"
   mv -- "$1.tmp" "$1"
-}
-
-snapshot() { # <dir>
-  local file
-  while IFS= read -r file; do
-    printf '%s %s\n' "$file" "$(ceo_sha256 "$1/$file")"
-  done < <(cd -- "$1" && find . -type f | sort)
 }
 
 old="$scratch/upstream-old"

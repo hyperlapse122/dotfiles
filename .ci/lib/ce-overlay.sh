@@ -63,8 +63,6 @@ CEO_BASE_SCHEMA='
 
 ceo_tag_valid() { [[ ${1-} =~ $CEO_TAG_PATTERN ]]; }
 
-ceo_segment() { printf 'v%s' "${1#compound-engineering-v}"; }
-
 ceo_key_valid() {
   local key=${1-} segment
   local -a segments
@@ -111,6 +109,19 @@ ceo_report_print() {
 }
 
 ceo_scratch_dir() { mktemp -d "$CEO_SCRATCH/${1:-tmp}.XXXXXX"; }
+
+# ceo_copy_present <src-dir> <dest-dir> <keyfile>
+# Copies src/<key> to dest/<key> for each key in keyfile's first column when it
+# is a regular file, creating parent directories and keeping the mode.
+ceo_copy_present() {
+  local src=$1 dest=$2 key
+  while IFS=$'\t' read -r key _; do
+    if [[ -f $src/$key ]]; then
+      mkdir -p -- "$dest/$(dirname -- "$key")"
+      cp -p -- "$src/$key" "$dest/$key"
+    fi
+  done <"$3"
+}
 
 ceo_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -199,6 +210,20 @@ ceo_base_field() { # <base.json> <key> <jq filter applied to the entry>
 ceo_git_prepare() {
   CEO_GIT_HOME=$1
   mkdir -p -- "$CEO_GIT_HOME"
+}
+
+# ceo_scratch_init <name>
+# Sets the caller-contract globals: a private scratch directory removed by an
+# EXIT trap, an empty report file, and the git home.
+ceo_scratch_init() {
+  local scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
+  mkdir -p -- "$scratch_root"
+  CEO_SCRATCH=$(mktemp -d "$scratch_root/$1.XXXXXX")
+  export CEO_SCRATCH
+  trap 'rm -rf -- "$CEO_SCRATCH"' EXIT
+  CEO_REPORT="$CEO_SCRATCH/report"
+  : >"$CEO_REPORT"
+  ceo_git_prepare "$CEO_SCRATCH/git-home"
 }
 
 # Every scratch repository is its own git boundary and reads no user or system
@@ -314,12 +339,7 @@ ceo_apply_patches() {
   repo=$(ceo_scratch_dir apply)
   err="$repo.err"
   ceo_repo_init "$repo"
-  while IFS=$'\t' read -r key _; do
-    if [[ -f $pristine/$key ]]; then
-      mkdir -p -- "$repo/$(dirname -- "$key")"
-      cp -p -- "$pristine/$key" "$repo/$key"
-    fi
-  done <"$keyfile"
+  ceo_copy_present "$pristine" "$repo" "$keyfile"
   while IFS=$'\t' read -r key _; do
     if ceo_git -C "$repo" apply -- "$patches/$key.patch" 2>"$err" && [[ -f $repo/$key && ! -L $repo/$key ]]; then
       mkdir -p -- "$out/$(dirname -- "$key")"
@@ -342,12 +362,7 @@ ceo_generate() {
   repo=$(ceo_scratch_dir gen)
   tsv="$repo.tsv"
   ceo_repo_init "$repo"
-  while IFS=$'\t' read -r key mode; do
-    if [[ -f $pristine/$key ]]; then
-      mkdir -p -- "$repo/$(dirname -- "$key")"
-      cp -p -- "$pristine/$key" "$repo/$key"
-    fi
-  done <"$spec"
+  ceo_copy_present "$pristine" "$repo" "$spec"
   ceo_repo_commit "$repo" pristine
   : >"$tsv"
   while IFS=$'\t' read -r key mode; do

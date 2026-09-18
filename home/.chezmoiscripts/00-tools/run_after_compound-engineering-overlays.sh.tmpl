@@ -194,7 +194,7 @@ ensure_directory_chain() {   # <base-dir> <relative-file-path> -> mkdir the arch
   for component in "${COMPONENTS[@]}"; do
     node="$node/$component"
     if [ -L "$node" ] || { [ -e "$node" ] && [ ! -d "$node" ]; }; then
-      printf 'compound-engineering-overlays: %s is not a plain directory; remove it and re-apply\n' "$node" >&2
+      warn "$node is not a plain directory; remove it and re-apply"
       exit 1
     fi
     [ -d "$node" ] || mkdir -- "$node"
@@ -204,11 +204,10 @@ ensure_directory_chain() {   # <base-dir> <relative-file-path> -> mkdir the arch
 reclaim_destination() {   # <path> -> remove a foreign symlink or non-file entry at path, warning to stderr
   local destination="$1"
   if [ -L "$destination" ]; then
-    printf 'compound-engineering-overlays: replaced foreign symlink %s -> %s\n' \
-      "$destination" "$(readlink -- "$destination")" >&2
+    warn "replaced foreign symlink $destination -> $(readlink -- "$destination")"
     rm -f -- "$destination"
   elif [ -e "$destination" ] && [ ! -f "$destination" ]; then
-    printf 'compound-engineering-overlays: replaced non-file entry %s\n' "$destination" >&2
+    warn "replaced non-file entry $destination"
     rm -rf -- "$destination"
   fi
 }

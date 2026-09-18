@@ -119,19 +119,6 @@ jobs:
       - name: Install rebase package dependencies
         run: (cd packages && bun install --frozen-lockfile)
 
-      - name: Install locked chezmoi
-        run: |
-          set -euo pipefail
-          . .ci/lib/source-root.sh
-          source_root=$(resolve_source_root "$PWD")
-          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' "$source_root/.chezmoidata/releases.json")
-          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' "$source_root/.chezmoidata/releases.json")
-          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
-          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
-          mkdir -p "$RUNNER_TEMP/bin"
-          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-
       - name: Resolve the latest compound-engineering release
         id: resolve
         env:

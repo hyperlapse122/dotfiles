@@ -33,6 +33,8 @@ trap 'rm -rf -- "$scratch"' EXIT
 
 # shellcheck source=.ci/lib/ce-overlay.sh
 source "$root/.ci/lib/ce-overlay.sh"
+# shellcheck source=.ci/lib/ce-overlay-test.sh
+source "$root/.ci/lib/ce-overlay-test.sh"
 CEO_SCRATCH=$scratch
 CEO_REPORT="$scratch/report"
 : >"$CEO_REPORT"
@@ -88,24 +90,6 @@ run() {
 
 effort=$(ceo_authoring_effort "$root") || fail 'could not render the roster authoring effort'
 
-materialize() { # <fixture subdirectory> <dest>
-  local src=$fx/$1 dest=$2 file rel content
-  while IFS= read -r -d '' file; do
-    rel=${file#"$src"/}
-    mkdir -p -- "$dest/$(dirname -- "$rel")"
-    content=$(
-      cat -- "$file"
-      printf x
-    )
-    content=${content%x}
-    printf '%s' "${content//@AUTHORING_EFFORT@/$effort}" >"$dest/$rel"
-    case $rel in
-      */elevation-dispatch.sh) chmod 0755 "$dest/$rel" ;;
-      *) chmod 0644 "$dest/$rel" ;;
-    esac
-  done < <(find "$src" -type f -print0 | sort -z)
-}
-
 old="$scratch/upstream-old"
 post="$scratch/postimage"
 materialize upstream-old "$old"
@@ -143,12 +127,6 @@ for key in "${keys[@]}"; do posts+=(--post "$key=$post/$key"); done
 run "$driver" seed --overlay-dir "$ov" --lock "$lock_seed" --pristine-dir "$old" --target-tag "$tag_old" "${posts[@]}"
 [[ $rc == 0 ]] || fail "could not seed the fixture overlay ($rc): $err"
 
-snapshot() { # <dir>
-  local file
-  while IFS= read -r file; do
-    printf '%s %s\n' "$file" "$(ceo_sha256 "$1/$file")"
-  done < <(cd -- "$1" && find . -type f | sort)
-}
 
 overlay_before=$(snapshot "$ov")
 

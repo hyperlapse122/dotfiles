@@ -112,14 +112,7 @@ fi
 missing=$(ceo_missing_tool jq git tar awk find stat cmp) || true
 [[ -z $missing ]] || usage_error "required tool not found: $missing"
 
-scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
-mkdir -p -- "$scratch_root"
-CEO_SCRATCH=$(mktemp -d "$scratch_root/ce-overlay-rebase.XXXXXX")
-export CEO_SCRATCH
-trap 'rm -rf -- "$CEO_SCRATCH"' EXIT
-CEO_REPORT="$CEO_SCRATCH/report"
-: >"$CEO_REPORT"
-ceo_git_prepare "$CEO_SCRATCH/git-home"
+ceo_scratch_init ce-overlay-rebase
 
 keyfile="$CEO_SCRATCH/keys"
 base="$overlay_dir/base.json"
@@ -153,7 +146,8 @@ file_size() { wc -c <"$1" | tr -d ' '; }
 
 # --- prepare -----------------------------------------------------------------
 
-route_paths() { # sets $routes_tsv; expects $old $new $repo
+route_paths() { # <new-pristine-dir> <route-repo> <routes-tsv-out>
+  local new=$1 repo=$2 routes_tsv=$3
   local key pre patch dest route theirs merge_status
   local empty_repo
   empty_repo=$(ceo_scratch_dir empty)
@@ -258,31 +252,18 @@ step_prepare() {
 
   repo=$(ceo_scratch_dir route)
   ceo_repo_init "$repo"
-  while IFS= read -r key; do
-    if [[ -f $old/$key ]]; then
-      mkdir -p -- "$repo/$(dirname -- "$key")"
-      cp -p -- "$old/$key" "$repo/$key"
-    fi
-  done <"$keyfile"
+  ceo_copy_present "$old" "$repo" "$keyfile"
   ceo_repo_commit "$repo" old
   while IFS= read -r key; do
     rm -f -- "${repo:?}/$key"
-    if [[ -f $new/$key ]]; then
-      mkdir -p -- "$repo/$(dirname -- "$key")"
-      cp -p -- "$new/$key" "$repo/$key"
-    fi
   done <"$keyfile"
+  ceo_copy_present "$new" "$repo" "$keyfile"
   ceo_repo_commit "$repo" new
 
   routes_tsv="$CEO_SCRATCH/routes.tsv"
-  route_paths
+  route_paths "$new" "$repo" "$routes_tsv"
 
-  while IFS= read -r key; do
-    if [[ -f $new/$key ]]; then
-      mkdir -p -- "$work_dir/pristine/$(dirname -- "$key")"
-      cp -p -- "$new/$key" "$work_dir/pristine/$key"
-    fi
-  done <"$keyfile"
+  ceo_copy_present "$new" "$work_dir/pristine" "$keyfile"
   jq -Rn --arg base "$base_tag" --arg target "$target" '
     [inputs | split("\t") | {key: .[0], value: {
       route: .[1],

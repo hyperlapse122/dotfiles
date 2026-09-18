@@ -329,8 +329,8 @@ describe("marker state transitions", () => {
     expect(idle.issue).toBeNull();
   });
 
-  test("createIdleMarker returns standard default", () => {
-    const idle = createIdleMarker();
+  test("createIdleMarker returns an idle marker for the target", () => {
+    const idle = createIdleMarker("compound-engineering-v3.26.3");
     expect(idle.status).toBe("idle");
     expect(idle.target).toBe("compound-engineering-v3.26.3");
   });

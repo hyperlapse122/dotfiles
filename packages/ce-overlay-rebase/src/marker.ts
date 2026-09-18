@@ -153,7 +153,7 @@ export function validateMarkerDocument(val: unknown): ValidationResult {
   return validateMarker(record["ceOverlayRebase"]);
 }
 
-export function createIdleMarker(target = "compound-engineering-v3.26.3"): Marker {
+export function createIdleMarker(target: string): Marker {
   return {
     target,
     status: "idle",
@@ -196,17 +196,21 @@ export interface ResetEvent {
 
 export type MarkerEvent = FailureEvent | AwaitingReviewEvent | ResetEvent;
 
+export function resolveNow(now?: Date | string): Date {
+  if (!now) {
+    return new Date();
+  }
+  return typeof now === "string" ? new Date(now) : now;
+}
+
 export function transitionMarker(current: Marker, event: MarkerEvent): Marker {
   if (event.type === "reset") {
     return resetMarker(event.target);
   }
 
-  const nowDate = event.now
-    ? typeof event.now === "string"
-      ? new Date(event.now)
-      : event.now
-    : new Date();
+  const nowDate = resolveNow(event.now);
   const nowIso = nowDate.toISOString();
+  const issue = event.issue !== undefined ? event.issue : current.issue;
 
   if (event.type === "awaiting-review") {
     return {
@@ -218,7 +222,7 @@ export function transitionMarker(current: Marker, event: MarkerEvent): Marker {
       notBefore: null,
       failureClass: null,
       missing: [],
-      issue: event.issue !== undefined ? event.issue : current.issue,
+      issue,
     };
   }
 
@@ -243,7 +247,7 @@ export function transitionMarker(current: Marker, event: MarkerEvent): Marker {
       notBefore: null,
       failureClass: "configuration",
       missing: event.missing ?? [],
-      issue: event.issue !== undefined ? event.issue : current.issue,
+      issue,
     };
   }
 
@@ -258,7 +262,12 @@ export function transitionMarker(current: Marker, event: MarkerEvent): Marker {
   const durationSinceFirstAttempt = nowDate.getTime() - firstAttemptDate.getTime();
   const exceededTimeLimit = durationSinceFirstAttempt >= 24 * 60 * 60 * 1000;
 
-  if (failureClass === "genuine" || failureClass === "unknown") {
+  if (
+    failureClass === "genuine" ||
+    failureClass === "unknown" ||
+    attempts >= 3 ||
+    exceededTimeLimit
+  ) {
     return {
       target: event.target,
       status: "escalated",
@@ -268,25 +277,11 @@ export function transitionMarker(current: Marker, event: MarkerEvent): Marker {
       notBefore: null,
       failureClass,
       missing: [],
-      issue: event.issue !== undefined ? event.issue : current.issue,
+      issue,
     };
   }
 
   // outage or quota
-  if (attempts >= 3 || exceededTimeLimit) {
-    return {
-      target: event.target,
-      status: "escalated",
-      attempts,
-      firstAttempt,
-      lastAttempt: nowIso,
-      notBefore: null,
-      failureClass,
-      missing: [],
-      issue: event.issue !== undefined ? event.issue : current.issue,
-    };
-  }
-
   const floorHours = failureClass === "outage" ? 2 : 6;
   const notBeforeDate = new Date(nowDate.getTime() + floorHours * 60 * 60 * 1000);
 
@@ -299,6 +294,6 @@ export function transitionMarker(current: Marker, event: MarkerEvent): Marker {
     notBefore: notBeforeDate.toISOString(),
     failureClass,
     missing: [],
-    issue: event.issue !== undefined ? event.issue : current.issue,
+    issue,
   };
 }

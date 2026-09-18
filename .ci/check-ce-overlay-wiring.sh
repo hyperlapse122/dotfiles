@@ -203,20 +203,7 @@ def check_lock_workflow(workflow_dir):
             if re.search(r"gh\s+pr\s+(create|merge)", run_of(step)):
                 fail(f"{LOCK_WORKFLOW}: job {name} creates or merges a pull request")
 
-    for name, job in jobs.items():
-        for step in steps_of(job):
-            uses = str(step.get("uses") or "")
-            if not uses:
-                continue
-            action, _, ref = uses.partition("@")
-            if action in TAG_PINNED_BEFORE_THIS_FLOW:
-                continue
-            if not re.fullmatch(r"[0-9a-f]{40}", ref):
-                fail(f"{LOCK_WORKFLOW}: {uses} is not pinned to a full commit SHA")
-                continue
-            line = re.search(rf"^.*uses:\s*{re.escape(uses)}(.*)$", raw, re.MULTILINE)
-            if not line or not re.match(r"\s+#\s*v?\d", line.group(1)):
-                fail(f"{LOCK_WORKFLOW}: {uses} has no release tag in a trailing comment")
+    action_pin_failures(LOCK_WORKFLOW, jobs, raw)
 
     if len(jobs) != 1:
         fail(f"{LOCK_WORKFLOW}: expected one job, found {len(jobs)}; update this check for the new shape")
