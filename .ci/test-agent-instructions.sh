@@ -630,6 +630,7 @@ Orca's `worker-start --model` and `--effort` forward to Claude, Codex, and Curso
 confirms the model from the terminal, and dispatches with `worker-start --task <task_id> --terminal <handle>`.
 the lead MUST NOT re-engage an omp terminal a previous Dispatch ran in, settled or not
 When its Dispatch settles, the seat is a release target and never a reuse target
+the lead therefore closes the terminal it opened in that same turn
 omp's own `modelRoles` then never decides which Gemini seat a dispatch uses.
 The version-matched Orca guide owns the exact terminal-launch spelling.
 Size an Implementation Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
