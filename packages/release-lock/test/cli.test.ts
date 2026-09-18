@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { afterEach, describe, expect, test } from "vite-plus/test";
@@ -423,7 +423,8 @@ describe("runCli", () => {
   );
 
   test("the default path points at the repository lock", async () => {
-    expect(DEFAULT_LOCK_PATH.endsWith("/.chezmoidata/releases.json")).toBe(true);
+    expect(DEFAULT_LOCK_PATH.endsWith("/home/.chezmoidata/releases.json")).toBe(true);
+    expect((await stat(DEFAULT_LOCK_PATH)).isFile()).toBe(true);
     expect(JSON.parse(await readFile(DEFAULT_LOCK_PATH, "utf8"))).toHaveProperty("releases.tools");
   });
 

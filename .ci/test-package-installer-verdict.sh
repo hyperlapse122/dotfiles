@@ -25,6 +25,9 @@ repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 prog=test-package-installer-verdict
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 fail() { printf '%s: FAIL: %s\n' "$prog" "$*" >&2; exit 1; }
 pass() { printf '%s: ok - %s\n' "$prog" "$*"; scenarios=$((scenarios + 1)); }
@@ -59,7 +62,7 @@ darwin_data='{"chezmoi":{"os":"darwin","osRelease":{"id":"macos"}}}'
 
 render_variant() {
   local src=$1 os=$2 data=$3 out=$scratch/rendered/$4
-  render "$repo_root" "$rscratch" "$chezmoi_bin" "$os" "$repo_root/$src" "$out" "$data" ||
+  render "$repo_root" "$rscratch" "$chezmoi_bin" "$os" "$source_root/$src" "$out" "$data" ||
     fail "$src does not render for $4"
   bash -n "$out" || fail "$4 is not valid shell"
 }
@@ -147,8 +150,8 @@ fi
 pass 'no rendered installer names --bucket=scriptState'
 
 hint_sources=(
-  "$repo_root/.chezmoiscripts/70-agents/run_after_assert-orchestration-hook.sh.tmpl"
-  "$repo_root/.chezmoitemplates/skip.sh.tmpl"
+  "$source_root/.chezmoiscripts/70-agents/run_after_assert-orchestration-hook.sh.tmpl"
+  "$source_root/.chezmoitemplates/skip.sh.tmpl"
   "$repo_root/AGENTS.md"
 )
 if grep -nF -- '--bucket=scriptState' "${hint_sources[@]}"; then

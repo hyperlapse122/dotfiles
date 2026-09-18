@@ -1,6 +1,6 @@
 exclude = [
-  ".chezmoiexternals/**",
-  ".chezmoidata/**",
+  "home/.chezmoiexternals/**",
+  "home/.chezmoidata/**",
   "crates/**",
   "packages/**",
 ]

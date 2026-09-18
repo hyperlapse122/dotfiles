@@ -11,6 +11,9 @@
 set -euo pipefail
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 matrix=".ci/skip-declaration-site-matrix.yaml"
 registry=".chezmoidata/.capability-registry.tsv"
@@ -25,19 +28,21 @@ fail() {
 
 for surface in "$matrix" "$registry" "$identity_helper" "$partial" "$hook" \
   ".chezmoitemplates/fingerprint.tmpl" ".chezmoitemplates/skip.sh.tmpl"; do
-  [[ -f "$repo_root/$surface" ]] || fail "missing source surface $surface"
+  path=$(join_source_state "$repo_root" "$surface")
+  [[ -f "$path" ]] || fail "missing source surface $surface"
 done
 
 # --- 1. Matrix and registry accounting -------------------------------------
 # The matrix is parsed by a fixed-shape reader rather than a YAML library: no
 # PyYAML on the CI runners, and the oracle only needs the subset it is written in.
-python3 - "$repo_root" "$matrix" "$registry" <<'PY' || fail 'matrix/registry accounting failed'
+python3 - "$repo_root" "$source_root" "$matrix" "$registry" <<'PY' || fail 'matrix/registry accounting failed'
 import hashlib
 import re
 import sys
 from pathlib import Path
 
-root, matrix_rel, registry_rel = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+repo_root, source_root = Path(sys.argv[1]), Path(sys.argv[2])
+matrix_rel, registry_rel = sys.argv[3], sys.argv[4]
 problems = []
 
 
@@ -86,7 +91,7 @@ def parse(path):
     return top
 
 
-matrix = parse(root / matrix_rel)
+matrix = parse(repo_root / matrix_rel)
 
 if matrix.get('schema') != 'skip-declaration-site-matrix-v1':
     problems.append(f'unexpected matrix schema {matrix.get("schema")!r}')
@@ -189,7 +194,7 @@ for row in owners:
     seen_owners.add(owner)
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*', owner):
         problems.append(f'{owner}: owner must be <script>/<site>, both safe filename components')
-    if not (root / row['template']).is_file():
+    if not (source_root / row['template']).is_file():
         problems.append(f'{owner}: template {row["template"]} does not exist')
     if row['form'] not in FORMS:
         problems.append(f'{owner}: unknown form {row["form"]!r}')
@@ -246,7 +251,7 @@ for row in owners:
         consumer, sep, tail = instance.partition('#')
         if not sep or tail != owner:
             problems.append(f'{owner}: instance {instance} must name its owner after #')
-        if not (root / consumer).is_file():
+        if not (source_root / consumer).is_file():
             problems.append(f'{owner}: instance consumer {consumer} does not exist')
 
 if shared_seen != SHARED:
@@ -324,7 +329,7 @@ for row in hard_errors:
         problems.append(f'hard error {owner}: must require a nonzero exit')
     if 'form' in row or 'direction' in row:
         problems.append(f'hard error {owner}: a hard error is never a declared skip')
-    if not (root / row.get('template', '')).is_file():
+    if not (source_root / row.get('template', '')).is_file():
         problems.append(f'hard error {owner}: template {row.get("template")} does not exist')
     if STATEMENT_SYNTAX.search(row.get('predicate', '')) or not row.get('predicate', '').strip():
         problems.append(f'hard error {owner}: predicate {row.get("predicate")!r} is not a canonical condition')
@@ -338,7 +343,7 @@ if seen_hard != expected_hard:
                     f'missing {sorted(expected_hard - seen_hard)}')
 
 # --- registry ---
-registry_text = (root / registry_rel).read_text()
+registry_text = (source_root / registry_rel).read_text()
 registry_lines = registry_text.split('\n')
 if registry_lines[0] != 'capability-registry-v2':
     problems.append('registry must start with capability-registry-v2')
@@ -400,13 +405,13 @@ while IFS=$'\t' read -r _ kind _ _ _ _; do
   [[ -n "$kind" ]] || continue
   grep -qE "^    ${kind}\)" "$repo_root/$hook" \
     || fail "registry probe kind $kind has no reviewed resolver branch in $hook"
-done < <(tail -n +2 "$repo_root/$registry")
+done < <(tail -n +2 "$source_root/$registry")
 
 # The reader may spawn exactly ONE child, and only to derive this command's
 # identity. Checking the `output` calls themselves (rather than any mention of a
 # probe) keeps this precise: the partial's header legitimately DISCUSSES sudo -nN
 # and gsettings while executing neither.
-mapfile -t output_calls < <(grep -nE '\{\{-? *[^*].*output "' "$repo_root/$partial")
+mapfile -t output_calls < <(grep -nE '\{\{-? *[^*].*output "' "$source_root/$partial")
 [[ ${#output_calls[@]} -eq 1 ]] \
   || fail "$partial makes ${#output_calls[@]} subprocess calls; only the identity child is allowed"
 for forbidden in sudo gsettings pgrep systemctl 'command -v'; do
@@ -416,13 +421,13 @@ for forbidden in sudo gsettings pgrep systemctl 'command -v'; do
 done
 [[ "${output_calls[0]}" == *'CAPABILITY_CACHE_OWNER_PID'* ]] \
   || fail "$partial's only subprocess must derive the capability-cache identity"
-grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$repo_root/$partial" \
+grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$source_root/$partial" \
   || fail "$partial must pass its direct chezmoi parent's PPID to the identity helper"
 grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$repo_root/$hook" \
   || fail "$hook must pass its direct chezmoi parent's PPID to the identity helper"
 grep -qE '^write_capability_cache "\$\{CHEZMOI_SOURCE_DIR:-\}"$' "$repo_root/$hook" \
   || fail "$hook must explicitly pass CHEZMOI_SOURCE_DIR to write_capability_cache"
-if grep -vE '^[[:space:]]*#' "$repo_root/$identity_helper" | grep -qE '\$\$|\$PPID|\$BASHPID|\$0'; then
+if grep -vE '^[[:space:]]*#' "$source_root/$identity_helper" | grep -qE '\$\$|\$PPID|\$BASHPID|\$0'; then
   fail "$identity_helper must derive no PID of its own; the caller supplies CAPABILITY_CACHE_OWNER_PID"
 fi
 grep -qE 'timeout [0-9]+ sudo -nN true' "$repo_root/$hook" \
@@ -434,7 +439,7 @@ grep -qF 'capability_with_deadline systemctl --user show-environment' "$repo_roo
 grep -qF 'capability_with_deadline systemctl --user cat podman.socket' "$repo_root/$hook" \
   || fail 'podman-socket-unit-present must use native bounded systemctl --user cat behavior'
 for banned in 'capability' 'sudo-usable' 'session-bus'; do
-  if grep -qi -- "$banned" "$repo_root/.chezmoidata/facts.yaml"; then
+  if grep -qi -- "$banned" "$source_root/.chezmoidata/facts.yaml"; then
     fail "capabilities leaked into the fact registry (.chezmoidata/facts.yaml mentions $banned)"
   fi
 done
@@ -442,7 +447,7 @@ done
 # --- 2. Runtime fixture ----------------------------------------------------
 chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is not on PATH'
 source_digest_before=$(sha256sum \
-  "$repo_root/$registry" "$repo_root/$identity_helper" "$repo_root/$partial" "$repo_root/$hook")
+  "$source_root/$registry" "$source_root/$identity_helper" "$source_root/$partial" "$repo_root/$hook")
 
 scratch_parent=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}
 mkdir -p -- "$scratch_parent"
@@ -484,7 +489,7 @@ format_probe="$scratch/format-probe"
 mkdir -p -- "$format_probe/.chezmoidata"
 : >"$scratch/format-probe.toml"
 printf 'rendered' >"$scratch/format-probe.tmpl"
-cp -- "$repo_root/$registry" "$format_probe/.chezmoidata/capability-registry.tsv"
+cp -- "$source_root/$registry" "$format_probe/.chezmoidata/capability-registry.tsv"
 render_format_probe() {
   env HOME="$fixture_home" "$chezmoi_bin" --config "$scratch/format-probe.toml" \
     --source "$format_probe" --destination "$destination" --no-tty execute-template \
@@ -502,15 +507,15 @@ mv -- "$format_probe/.chezmoidata/capability-registry.tsv" \
 render_format_probe || fail "chezmoi rejected the dot-prefixed registry: $(cat "$scratch/format-probe.err")"
 [[ "$(cat "$scratch/format-probe.out")" == rendered ]] \
   || fail 'the dot-prefixed registry did not leave rendering intact'
-[[ ! -e "$repo_root/.chezmoidata/capability-registry.tsv" ]] \
+[[ ! -e "$source_root/.chezmoidata/capability-registry.tsv" ]] \
   || fail 'a visible registry exists in the repository; it would break every chezmoi command'
 
 for shared in "$registry:.chezmoidata/.capability-registry.tsv" \
   "$identity_helper:.chezmoitemplates/capability-cache-identity.sh" \
   "$partial:.chezmoitemplates/capabilities.tmpl" \
   ".chezmoitemplates/fingerprint.tmpl:.chezmoitemplates/fingerprint.tmpl"; do
-  cp -- "$repo_root/${shared%%:*}" "$source_dir/${shared##*:}"
-  cp -- "$repo_root/${shared%%:*}" "$unknown_source/${shared##*:}"
+  cp -- "$source_root/${shared%%:*}" "$source_dir/${shared##*:}"
+  cp -- "$source_root/${shared%%:*}" "$unknown_source/${shared##*:}"
 done
 
 cat >"$source_dir/dot_probe.tmpl" <<'TEMPLATE'
@@ -745,8 +750,8 @@ reset_cache() {
 # function's CWD-independent environment and BASH_SOURCE fallbacks are both
 # independently exercised here.
 resolve_root_case() {
-  local label=$1 expected_registry=$2
-  shift 2
+  local label=$1 expected_registry=$2 hook_path=$3
+  shift 3
   reset_cache
   env -u DBUS_SESSION_BUS_ADDRESS HOME="$fixture_home" XDG_CACHE_HOME="$cache_home" \
     XDG_RUNTIME_DIR="$runtime_dir" PATH="$stub_bin:$tool_bin" FIXTURE_LOG="$log" \
@@ -754,7 +759,7 @@ resolve_root_case() {
     bash -c '_INSTALL_PREREQUISITES_TEST_SOURCE=1
       source "$1"
       unset _INSTALL_PREREQUISITES_TEST_SOURCE
-      write_capability_cache' bash "$repo_root/$hook" \
+      write_capability_cache' bash "$hook_path" \
     >"$scratch/resolve.out" 2>"$scratch/resolve.err" \
     || fail "$label: write_capability_cache failed: $(cat "$scratch/resolve.err")"
   local written=("$capability_dir"/*.tsv)
@@ -762,9 +767,46 @@ resolve_root_case() {
   [[ "$(head -n 1 "${written[0]}" | cut -f5)" == "$(sha256sum <"$expected_registry" | cut -d' ' -f1)" ]] \
     || fail "$label: the record digest does not come from $expected_registry"
 }
-resolve_root_case 'CHEZMOI_SOURCE_DIR' "$source_dir/.chezmoidata/.capability-registry.tsv" \
+
+flat_hook_dir="$scratch/flat-hook"
+mkdir -p -- "$flat_hook_dir/.chezmoidata" "$flat_hook_dir/.chezmoitemplates"
+cp "$repo_root/$hook" "$flat_hook_dir/$hook"
+cp "$source_root/$registry" "$flat_hook_dir/$registry"
+cp "$source_root/$identity_helper" "$flat_hook_dir/$identity_helper"
+
+rooted_hook_dir="$scratch/rooted-hook"
+mkdir -p -- "$rooted_hook_dir/home/.chezmoidata" "$rooted_hook_dir/home/.chezmoitemplates"
+printf 'home\n' >"$rooted_hook_dir/.chezmoiroot"
+cp "$repo_root/$hook" "$rooted_hook_dir/$hook"
+cp "$source_root/$registry" "$rooted_hook_dir/home/$registry"
+cp "$source_root/$identity_helper" "$rooted_hook_dir/home/$identity_helper"
+
+resolve_root_case 'CHEZMOI_SOURCE_DIR' "$source_dir/.chezmoidata/.capability-registry.tsv" "$repo_root/$hook" \
   CHEZMOI_SOURCE_DIR="$source_dir"
-resolve_root_case 'BASH_SOURCE fallback' "$repo_root/$registry"
+resolve_root_case 'BASH_SOURCE fallback' "$source_root/$registry" "$repo_root/$hook"
+resolve_root_case 'flat scratch fallback' "$flat_hook_dir/$registry" "$flat_hook_dir/$hook"
+resolve_root_case 'rooted scratch fallback' "$rooted_hook_dir/home/$registry" "$rooted_hook_dir/$hook"
+
+assert_hook_source_root_refusal() {
+  local label=$1 marker_content=$2 expected_diag=$3 hook_dir marker err
+  hook_dir="$scratch/refusal-hook-$label"
+  mkdir -p -- "$hook_dir"
+  cp "$repo_root/$hook" "$hook_dir/$hook"
+  marker="$hook_dir/.chezmoiroot"
+  printf '%s' "$marker_content" >"$marker"
+  err=$(env -u CHEZMOI_SOURCE_DIR HOME="$fixture_home" bash -c '_INSTALL_PREREQUISITES_TEST_SOURCE=1
+    source "$1"
+    hook_source_root' bash "$hook_dir/$hook" 2>&1 >/dev/null) &&
+    fail "hook_source_root refusal '$label': unexpectedly succeeded"
+  grep -qF -- "$marker" <<<"$err" ||
+    fail "hook_source_root refusal '$label': diagnostic did not name marker $marker: $err"
+  grep -qF -- "$expected_diag" <<<"$err" ||
+    fail "hook_source_root refusal '$label': diagnostic missing '$expected_diag': $err"
+}
+
+assert_hook_source_root_refusal 'empty' '' 'is empty'
+assert_hook_source_root_refusal 'absolute' '/etc' 'names an absolute path'
+assert_hook_source_root_refusal 'parent-escaping' '../home' 'escapes its parent'
 
 assert_registry_rejected() {
   local source=$1 expected=$2
@@ -1062,7 +1104,7 @@ env -i HOME="$fixture_home" PATH="$stub_bin:$tool_bin:/usr/bin:/bin" \
   --destination "$production_target" \
   --override-data '{"chezmoi":{"os":"linux","osRelease":{"id":"fedora"}}}' \
   execute-template \
-  <"$repo_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
+  <"$source_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
   >"$production_script" 2>"$production_render_err" \
   || fail "the production Podman template did not render: $(cat "$production_render_err")"
 [[ ! -s "$production_render_err" ]] \
@@ -1074,15 +1116,15 @@ podman_source="$scratch/podman-source"
 podman_destination="$scratch/podman-destination"
 mkdir -p -- "$podman_source/.chezmoidata" "$podman_source/.chezmoitemplates" \
   "$podman_destination"
-cp -- "$repo_root/.chezmoidata/.capability-registry.tsv" \
+cp -- "$source_root/.chezmoidata/.capability-registry.tsv" \
   "$podman_source/.chezmoidata/.capability-registry.tsv"
-cp -- "$repo_root/.chezmoidata/facts.yaml" "$podman_source/.chezmoidata/facts.yaml"
+cp -- "$source_root/.chezmoidata/facts.yaml" "$podman_source/.chezmoidata/facts.yaml"
 for shared in capability-cache-identity.sh capabilities.tmpl fingerprint.tmpl skip.sh.tmpl \
   facts.tmpl facts-sh.tmpl facts-validate.tmpl shared-host-guard.sh.tmpl \
   user-manager-deadline-guard.sh.tmpl; do
-  cp -- "$repo_root/.chezmoitemplates/$shared" "$podman_source/.chezmoitemplates/$shared"
+  cp -- "$source_root/.chezmoitemplates/$shared" "$podman_source/.chezmoitemplates/$shared"
 done
-cp -- "$repo_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
+cp -- "$source_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
   "$podman_source/.chezmoitemplates/podman.tmpl"
 cat >"$podman_source/dot_podman.tmpl" <<'TEMPLATE'
 {{ includeTemplate "podman.tmpl" . }}
@@ -1191,7 +1233,7 @@ grep -q 'user manager bus is unavailable' "$scratch/production-runtime.out" \
   || fail "the rendered Podman script emitted diagnostics: $(cat "$scratch/production-runtime.err")"
 
 source_digest_after=$(sha256sum \
-  "$repo_root/$registry" "$repo_root/$identity_helper" "$repo_root/$partial" "$repo_root/$hook")
+  "$source_root/$registry" "$source_root/$identity_helper" "$source_root/$partial" "$repo_root/$hook")
 [[ "$source_digest_after" == "$source_digest_before" ]] \
   || fail 'the fixture modified the repository capability sources'
 

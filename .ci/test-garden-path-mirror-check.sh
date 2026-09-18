@@ -17,7 +17,10 @@ set -euo pipefail
 # record that carries no remote at all.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-checker="$repo_root/.chezmoitemplates/garden-path-mirror-check.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+checker="$source_root/.chezmoitemplates/garden-path-mirror-check.sh"
 
 fail() {
   printf 'test-garden-path-mirror-check: %s\n' "$*" >&2
@@ -31,7 +34,7 @@ pass() { printf '  ok  %s\n' "$*"; }
 # Source the helper so the record producer can be driven directly. The guard
 # stops the sourced copy from consuming stdin on its own.
 GARDEN_PATH_MIRROR_SOURCED=1
-# shellcheck source=.chezmoitemplates/garden-path-mirror-check.sh
+# shellcheck source=home/.chezmoitemplates/garden-path-mirror-check.sh
 . "$checker"
 
 # Run the checker over a stream, capturing status and output together.

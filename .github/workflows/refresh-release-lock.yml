@@ -36,7 +36,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set +e
-          bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
+          lock="$source_root/.chezmoidata/releases.json"
+          bun run packages/release-lock/src/cli.ts --out "$lock"
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       # The rule lives in `.ci` so it is testable locally and runs on pull
@@ -49,14 +52,17 @@ jobs:
       - name: Commit the lock when it changed
         run: |
           set -euo pipefail
-          if git diff --quiet -- .chezmoidata/releases.json; then
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
+          lock="$source_root/.chezmoidata/releases.json"
+          if git diff --quiet -- "$lock"; then
             echo "Lock unchanged — nothing to commit."
             exit 0
           fi
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m 'chore(release-lock): refresh release lock' \
-              -- .chezmoidata/releases.json
+              -- "$lock"
           git push origin HEAD:"${GITHUB_REF_NAME}"
 
       - name: Fail when any source could not be resolved

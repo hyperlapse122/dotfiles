@@ -2,7 +2,10 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-config="$repo_root/dot_config/fontconfig/fonts.conf"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+config="$source_root/dot_config/fontconfig/fonts.conf"
 scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/fontconfig-korean.XXXXXX")

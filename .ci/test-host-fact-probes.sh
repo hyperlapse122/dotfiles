@@ -14,6 +14,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/host-fact-probes.XXXXXX")
@@ -32,15 +35,15 @@ probes="$scratch/probes.sh"
 {
   sed -n '/^PCI_SCAN_DONE=/,/^PCI_OTHER_DISPLAY=/p' "$repo_root/.install-prerequisites.sh"
   sed -n '/^scan_pci_bus()/,/^}/p' "$repo_root/.install-prerequisites.sh"
-  sed -n '/^fact_nvidia()/,/^}/p;/^fact_hybrid_graphics()/,/^}/p;/^fact_battery()/,/^}/p;/^usb_device_listed()/,/^}/p;/^fact_fingerprint_reader()/,/^}/p;/^fact_ir_camera()/,/^}/p;/^fact_display_manager()/,/^}/p;/^fact_gpu_device_id()/,/^}/p' \
+  sed -n '/^fact_nvidia()/,/^}/p;/^fact_hybrid_graphics()/,/^}/p;/^fact_battery()/,/^}/p;/^hook_source_root()/,/^}/p;/^usb_device_listed()/,/^}/p;/^fact_fingerprint_reader()/,/^}/p;/^fact_ir_camera()/,/^}/p;/^fact_display_manager()/,/^}/p;/^fact_gpu_device_id()/,/^}/p' \
     "$repo_root/.install-prerequisites.sh"
 } >"$probes"
 # Guard EVERY extracted function. An anchored sed range that matches nothing
 # fails silently, so without these a rename or a restyling to `function fact_x()`
 # would leave this file asserting against an empty extraction and still pass.
 for fn in scan_pci_bus fact_nvidia fact_hybrid_graphics fact_gpu_device_id \
-  fact_battery usb_device_listed fact_fingerprint_reader fact_ir_camera \
-  fact_display_manager; do
+  fact_battery hook_source_root usb_device_listed fact_fingerprint_reader \
+  fact_ir_camera fact_display_manager; do
   grep -q "^${fn}()" "$probes" || fail "${fn} was not extracted from the hook"
 done
 # shellcheck disable=SC1090
@@ -165,8 +168,8 @@ make_usb() {
   printf '%s\n' "$product" >"$root/sys/bus/usb/devices/$dev/idProduct"
 }
 
-listed_vendor=$(awk -F'\t' 'NR>1 {print $1; exit}' "$repo_root/.chezmoidata/.fingerprint-readers.tsv")
-listed_product=$(awk -F'\t' 'NR>1 {print $2; exit}' "$repo_root/.chezmoidata/.fingerprint-readers.tsv")
+listed_vendor=$(awk -F'\t' 'NR>1 {print $1; exit}' "$source_root/.chezmoidata/.fingerprint-readers.tsv")
+listed_product=$(awk -F'\t' 'NR>1 {print $2; exit}' "$source_root/.chezmoidata/.fingerprint-readers.tsv")
 [[ -n "$listed_vendor" && -n "$listed_product" ]] \
   || fail 'the fingerprint-reader table has no data row to test against'
 
@@ -174,28 +177,28 @@ while IFS=$'\t' read -r v p; do
   [[ -n "$v" && "$v" != "fingerprint-readers-v1" ]] || continue
   fp_entry="$scratch/fp-$v-$p"
   make_usb "$fp_entry" 1-1 "$v" "$p"
-  CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$fp_entry" fact_fingerprint_reader \
+  CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$fp_entry" fact_fingerprint_reader \
     || fail "listed fingerprint reader $v:$p did not resolve fingerprintReader=true"
-done < "$repo_root/.chezmoidata/.fingerprint-readers.tsv"
+done < "$source_root/.chezmoidata/.fingerprint-readers.tsv"
 
 fp_no="$scratch/fp-no"
 make_usb "$fp_no" 1-1 1d6b 0002
 make_usb "$fp_no" 1-2 8087 0026
-CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$fp_no" fact_fingerprint_reader \
+CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$fp_no" fact_fingerprint_reader \
   && fail 'a host with no listed reader must resolve fingerprintReader=false'
 
 # A vendor id that matches but a product id that does not must NOT match: the
 # table is a vendor/product PAIR, not a vendor allowlist.
 fp_partial="$scratch/fp-partial"
 make_usb "$fp_partial" 1-1 "$listed_vendor" ffff
-CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$fp_partial" fact_fingerprint_reader \
+CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$fp_partial" fact_fingerprint_reader \
   && fail 'a matching vendor with a different product must not resolve fingerprintReader=true'
 
 # --- IR camera ---------------------------------------------------------------
 # Same declared-table shape as the fingerprint reader, read from its own table:
 # a camera listed there is an IR camera, a reader listed in the OTHER table is not.
-ir_vendor=$(awk -F'\t' 'NR>1 {print $1; exit}' "$repo_root/.chezmoidata/.ir-cameras.tsv")
-ir_product=$(awk -F'\t' 'NR>1 {print $2; exit}' "$repo_root/.chezmoidata/.ir-cameras.tsv")
+ir_vendor=$(awk -F'\t' 'NR>1 {print $1; exit}' "$source_root/.chezmoidata/.ir-cameras.tsv")
+ir_product=$(awk -F'\t' 'NR>1 {print $2; exit}' "$source_root/.chezmoidata/.ir-cameras.tsv")
 [[ -n "$ir_vendor" && -n "$ir_product" ]] \
   || fail 'the ir-camera table has no data row to test against'
 
@@ -203,23 +206,60 @@ while IFS=$'\t' read -r v p; do
   [[ -n "$v" && "$v" != "ir-cameras-v1" ]] || continue
   ir_entry="$scratch/ir-$v-$p"
   make_usb "$ir_entry" 1-1 "$v" "$p"
-  CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$ir_entry" fact_ir_camera \
+  CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$ir_entry" fact_ir_camera \
     || fail "listed IR camera $v:$p did not resolve irCamera=true"
-done < "$repo_root/.chezmoidata/.ir-cameras.tsv"
+done < "$source_root/.chezmoidata/.ir-cameras.tsv"
 
-CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$fp_no" fact_ir_camera \
+CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$fp_no" fact_ir_camera \
   && fail 'a host with no listed camera must resolve irCamera=false'
 
 # The two tables are independent: a listed fingerprint reader is not an IR
 # camera, and a listed IR camera is not a fingerprint reader.
 fp_only="$scratch/fp-only"
 make_usb "$fp_only" 1-1 "$listed_vendor" "$listed_product"
-CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$fp_only" fact_ir_camera \
+CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$fp_only" fact_ir_camera \
   && fail 'a listed fingerprint reader must not resolve irCamera=true'
 ir_only="$scratch/ir-only"
 make_usb "$ir_only" 1-1 "$ir_vendor" "$ir_product"
-CHEZMOI_SOURCE_DIR="$repo_root" run_probe_under "$ir_only" fact_fingerprint_reader \
+CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$ir_only" fact_fingerprint_reader \
   && fail 'a listed IR camera must not resolve fingerprintReader=true'
+
+# --- fingerprint reader and IR camera through .chezmoiroot marker -----------
+marker_tree="$scratch/marker-tree"
+mkdir -p -- "$marker_tree/home/.chezmoidata"
+printf 'home\n' >"$marker_tree/.chezmoiroot"
+
+# Synthetic tables with unique hardware identifiers in home/.chezmoidata/
+printf 'fingerprint-readers-v1\n06cb\tbeef\n' >"$marker_tree/home/.chezmoidata/.fingerprint-readers.tsv"
+printf 'ir-cameras-v1\n04f2\tcafe\n' >"$marker_tree/home/.chezmoidata/.ir-cameras.tsv"
+
+fp_marker_usb="$scratch/usb-fp-marker"
+make_usb "$fp_marker_usb" 1-1 06cb beef
+
+ir_marker_usb="$scratch/usb-ir-marker"
+make_usb "$ir_marker_usb" 1-1 04f2 cafe
+
+relocate "$fp_marker_usb" "$marker_tree/fp_probes.sh"
+relocate "$ir_marker_usb" "$marker_tree/ir_probes.sh"
+relocate "$fp_no" "$marker_tree/fp_unlisted_probes.sh"
+
+env -u CHEZMOI_SOURCE_DIR bash -c '
+  . "$1"
+  fact_fingerprint_reader
+' bash "$marker_tree/fp_probes.sh" \
+  || fail 'fact_fingerprint_reader with CHEZMOI_SOURCE_DIR unset must read its table through .chezmoiroot'
+
+env -u CHEZMOI_SOURCE_DIR bash -c '
+  . "$1"
+  fact_ir_camera
+' bash "$marker_tree/ir_probes.sh" \
+  || fail 'fact_ir_camera with CHEZMOI_SOURCE_DIR unset must read its table through .chezmoiroot'
+
+env -u CHEZMOI_SOURCE_DIR bash -c '
+  . "$1"
+  fact_fingerprint_reader
+' bash "$marker_tree/fp_unlisted_probes.sh" \
+  && fail 'an unlisted device must not resolve fingerprintReader=true through .chezmoiroot'
 
 # --- display manager --------------------------------------------------------
 # This is the probe that shipped reporting the fake name "display-manager":

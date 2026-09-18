@@ -42,7 +42,10 @@ set -euo pipefail
 # which platform is wrong without saying whose it is.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-lock=${1:-$repo_root/.chezmoidata/releases.json}
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+lock=${1:-$source_root/.chezmoidata/releases.json}
 
 supported='["linux-amd64","linux-arm64","linux-amd64-musl","linux-arm64-musl","darwin-amd64","darwin-arm64"]'
 

@@ -1,12 +1,12 @@
 # top-level-boundary-inventory.yaml — CI-ONLY audit oracle for the repository's
-# top-level deployment boundary. NOT a chezmoi runtime input: it lives under
+# source-root deployment boundary. NOT a chezmoi runtime input: it lives under
 # .ci/, no template or script reads it, and chezmoi never parses it. The runtime
-# policy stays where it already is — the root .chezmoiignore.
+# policy stays where it already is — home/.chezmoiignore.
 #
-# WHAT IT DECLARES. Every git-tracked top-level entry, classified by what chezmoi
-# does with it. .ci/test-top-level-deployment-boundary.sh compares this
-# declaration against what chezmoi actually renders, in both directions: an entry
-# missing here fails, and an entry whose declared class disagrees with the
+# WHAT IT DECLARES. Every git-tracked entry at the chezmoi source root (home/),
+# classified by what chezmoi does with it. .ci/test-top-level-deployment-boundary.sh
+# compares this declaration against what chezmoi actually renders, in both directions:
+# an entry missing here fails, and an entry whose declared class disagrees with the
 # rendered .chezmoiignore fails. The declaration is therefore never a second
 # hand-maintained list that can drift quietly — drift is what the gate reports.
 #
@@ -21,10 +21,9 @@
 #   source-internal — the name starts with `.`, so chezmoi ignores it outright
 #                     (`.chezmoi*` excepted, which are chezmoi's own inputs).
 #                     These never need a .chezmoiignore line and never get one.
-#   repo-only       — a non-dot entry chezmoi must be told to ignore. This is the
-#                     class AGENTS.md's "non-dot metadata MUST be listed in the
-#                     root .chezmoiignore" rule governs, and the class whose
-#                     omission deploys repository internals into $HOME.
+#   repo-only       — a non-dot entry chezmoi must be told to ignore. Valid
+#                     class, currently empty at the source root since repository
+#                     infrastructure sits at the repository root outside home/.
 #   deployed        — chezmoi manages a target from it. `only_on` narrows that to
 #                     a subset of the profiles below; in every other profile the
 #                     entry must be ignored. Source-name prefixes carry the
@@ -36,11 +35,10 @@
 # reading it here: the transform is the one AGENTS.md documents, and a second
 # declaration of it would be one more thing to keep in sync.
 #
-# preemptive_denials sits outside `entries` and carries no safety duty. A denial
-# for a path that is absent from a clean checkout would otherwise read as stale,
-# so listing it says "this one is deliberate, not left over". Nothing is exempted
-# from checking by being listed: the disk enumeration covers those paths whenever
-# they are actually present.
+# preemptive_denials sits outside `entries` and carries no safety duty. With the
+# source root moved under home/, tools generating outputs at the repository root
+# (agents.lock, _artifacts) write outside the source root, so no preemptive
+# denials are needed at the source root. Kept empty to satisfy the inventory schema.
 
 # The profile set .ci/test-chezmoiignore-script-paths.sh already renders
 # .chezmoiignore across. Kept identical so the two gates cannot disagree about
@@ -85,34 +83,7 @@ entries:
   .chezmoiremove: { class: source-internal }
   .chezmoiscripts: { class: source-internal }
   .chezmoitemplates: { class: source-internal }
-  .ci: { class: source-internal }
-  .compound-engineering: { class: source-internal }
-  .gitattributes: { class: source-internal }
-  .github: { class: source-internal }
-  .gitignore: { class: source-internal }
-  .install-prerequisites.sh: { class: source-internal }
   .keys: { class: source-internal }
-  .mise: { class: source-internal }
-  .shellcheckrc: { class: source-internal }
-  .taplo.toml: { class: source-internal }
-  .vscode: { class: source-internal }
-
-  AGENTS.md: { class: repo-only }
-  CONCEPTS.md: { class: repo-only }
-  LICENSE: { class: repo-only }
-  README.md: { class: repo-only }
-  STRATEGY.md: { class: repo-only }
-  agents.toml: { class: repo-only }
-  crates: { class: repo-only }
-  docs: { class: repo-only }
-  firmware: { class: repo-only }
-  mise.lock: { class: repo-only }
-  mise.toml: { class: repo-only }
-  orca.schema.json: { class: repo-only }
-  orca.yaml: { class: repo-only }
-  package.json: { class: repo-only }
-  packages: { class: repo-only }
-  system: { class: repo-only }
 
   # ~/Library/Application Support is the native macOS location for the state
   # dot_config carries on Linux, so this tree deploys there and nowhere else.
@@ -139,12 +110,7 @@ entries:
   remove_dot_gitconfig: { class: deployed }
   symlink_dot_face.icon: { class: deployed }
 
-# Denials for paths a clean checkout does not have. Listing one says the denial
-# is deliberate, so the stale-entry check leaves it alone. It grants no exemption.
-preemptive_denials:
-  # dotagents regenerates this at the repository root on every sync.
-  - agents.lock
-  # .github/workflows/render-dotfiles.yml stages rendered trees here. CI cuts the
-  # chezmoi source copy before this exists, but a local checkout that ran those
-  # steps keeps it inside the source directory, where chezmoi still sees it.
-  - _artifacts
+# Denials for paths a clean checkout does not have. Generated outputs like
+# agents.lock and _artifacts sit at the repository root outside the source root,
+# so preemptive denials are empty.
+preemptive_denials: []

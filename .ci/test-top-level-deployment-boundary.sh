@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# test-top-level-deployment-boundary.sh — audit the repository's top-level
-# deployment boundary against .ci/top-level-boundary-inventory.yaml.
+# test-top-level-deployment-boundary.sh — audit the deployment boundary at the
+# chezmoi source root (home/) against .ci/top-level-boundary-inventory.yaml.
 #
-# AGENTS.md states the rule this enforces: "Dot-prefixed source paths are
-# internal; non-dot metadata (AGENTS.md, LICENSE) MUST be listed in the root
-# .chezmoiignore." Nothing checked it. Its failure mode is silent in a green run
-# and loud on a real host: a new non-dot top-level entry nobody remembered to
-# deny is deployed into $HOME, and the reverse — a denial whose file moved or
-# was renamed — leaves the list quietly disagreeing with the tree.
+# The chezmoi source state lives under home/ behind .chezmoiroot. This gate
+# enforces that repository infrastructure outside home/ cannot deploy to $HOME,
+# and that every entry at the source root is accounted for.
 #
-# FIVE CHECKS, all bidirectional against the rendered ignore file rather than a
-# restatement of it.
-#   1. The inventory's key set equals the git-tracked top-level entry set.
+# FIVE SOURCE-ROOT CHECKS, all bidirectional against the rendered ignore file
+# rather than a restatement of it.
+#   1. The inventory's key set equals the git-tracked source-root entry set.
 #   2. A `source-internal` class is declared for exactly the dot-prefixed names.
 #   3. Per profile, every declared verdict matches what chezmoi renders:
 #      `repo-only` is ignored everywhere, `deployed` is eligible (narrowed by
@@ -21,13 +18,15 @@
 #   5. Default deny: anything sitting at the source root that is not declared
 #      deployed must be ignored, tracked or not.
 #
-# Check 5 needs no list, and it closes the hole the others cannot. chezmoi reads
-# the source DIRECTORY, so a generated path is part of the source state whether
-# or not git tracks it; enumerating the disk catches a directory nobody thought
-# to declare because it is there, not because someone remembered to write it
-# down. `preemptive_denials` exists only to stop check 4 calling a denial stale
-# when the path it guards is legitimately absent from a clean checkout, and
-# forgetting to list one fails loudly rather than quietly.
+# THREE R12 REPOSITORY-ROOT CHECKS:
+#   (a) .chezmoiroot exists, holds `home` after whitespace trimming, and
+#       `chezmoi source-path` under the render contract equals resolve_source_root.
+#   (b) The repository root holds no .chezmoi* entry other than .chezmoiroot and
+#       no entry carrying a source-attribute prefix.
+#   (c) The hook literal in home/.chezmoi.toml.tmpl has basename
+#       .install-prerequisites.sh and directory src/github.com/hyperlapse122/dotfiles;
+#       the file exists and is executable at the repository root; no
+#       home/.install-prerequisites.sh exists.
 #
 # What divides this gate from .ci/test-chezmoiignore-script-paths.sh is whether a
 # rendered pattern can match a ROOT-level target. A bare name can, and so do the
@@ -52,6 +51,103 @@ setup_render_scratch top-level-boundary
 mkdir -p -- "$scratch/home"
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+
+check_chezmoiroot() {
+  local root=$1 scratch_dir=$2 chezmoi_cmd=$3
+  local marker="$root/.chezmoiroot"
+  [[ -f "$marker" ]] || { printf '%s\n' ".chezmoiroot is missing in $root" >&2; return 1; }
+  local raw content
+  raw=$(<"$marker")
+  content=$(_source_root_trim "$raw")
+  [[ "$content" == "home" ]] || {
+    printf '%s\n' ".chezmoiroot in $root must contain 'home', got '$content'" >&2
+    return 1
+  }
+  local resolved expected
+  resolved=$(resolve_source_root "$root") || return 1
+  expected=$(
+    PATH="$scratch_dir/bin:/usr/bin:/bin" "$chezmoi_cmd" \
+      --config "$scratch_dir/empty.toml" \
+      --source "$root" \
+      --destination "$scratch_dir/target" \
+      source-path
+  ) || { printf '%s\n' "chezmoi source-path failed for $root" >&2; return 1; }
+  [[ "$resolved" == "$expected" ]] || {
+    printf '%s\n' "chezmoi source-path ($expected) does not match resolve_source_root ($resolved) for $root" >&2
+    return 1
+  }
+}
+
+check_repo_root_entries() {
+  local root=$1
+  local failures=()
+  local entry
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    if [[ "$entry" == .chezmoi* && "$entry" != ".chezmoiroot" ]]; then
+      failures+=("repository root contains stray chezmoi input '$entry'; chezmoi inputs must live under the source root")
+    fi
+    case "$entry" in
+      dot_* | private_* | symlink_* | remove_* | executable_* | readonly_* | \
+      encrypted_* | create_* | modify_* | run_* | exact_* | literal_* | \
+      empty_* | once_* | onchange_* | before_* | after_*)
+        failures+=("repository root contains source-attribute-prefixed entry '$entry'; source state must live under the source root")
+        ;;
+    esac
+  done < <(find "$root" -mindepth 1 -maxdepth 1 -printf '%f\n')
+
+  if [[ ${#failures[@]} -gt 0 ]]; then
+    for f in "${failures[@]}"; do
+      printf '%s\n' "$f" >&2
+    done
+    return 1
+  fi
+  return 0
+}
+
+check_hook_location_and_literal() {
+  local root=$1 source_dir=$2
+  local config_tmpl="$source_dir/.chezmoi.toml.tmpl"
+  [[ -f "$config_tmpl" ]] || { printf '%s\n' "missing $config_tmpl" >&2; return 1; }
+
+  local hook_literal
+  hook_literal=$(sed -n -E 's/^[[:space:]]*script[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$config_tmpl")
+  [[ -n "$hook_literal" ]] || { printf '%s\n' "failed to find hook script literal in $config_tmpl" >&2; return 1; }
+
+  local hook_base hook_dir
+  hook_base=$(basename "$hook_literal")
+  hook_dir=$(dirname "$hook_literal")
+
+  [[ "$hook_base" == ".install-prerequisites.sh" ]] || {
+    printf '%s\n' "hook literal basename must be '.install-prerequisites.sh', got '$hook_base'" >&2
+    return 1
+  }
+  [[ "$hook_dir" == "src/github.com/hyperlapse122/dotfiles" ]] || {
+    printf '%s\n' "hook literal directory must be 'src/github.com/hyperlapse122/dotfiles', got '$hook_dir'" >&2
+    return 1
+  }
+
+  local hook_file="$root/$hook_base"
+  [[ -f "$hook_file" ]] || {
+    printf '%s\n' "hook script $hook_file is missing at repository root" >&2
+    return 1
+  }
+  [[ -x "$hook_file" ]] || {
+    printf '%s\n' "hook script $hook_file at repository root is not executable" >&2
+    return 1
+  }
+
+  local stray_hook="$source_dir/$hook_base"
+  if [[ -e "$stray_hook" ]]; then
+    printf '%s\n' "hook script must not exist under source root, found $stray_hook" >&2
+    return 1
+  fi
+  return 0
+}
+
 
 chezmoi_bin=$(command -v chezmoi) || fail 'chezmoi is not on PATH'
 
@@ -356,8 +452,13 @@ run_checker() {
 # --- Measure the real tree ---------------------------------------------------
 
 tracked_list="$scratch/tracked"
-git -C "$repo_root" ls-tree --name-only HEAD >"$tracked_list"
-[[ -s $tracked_list ]] || fail 'git ls-tree returned no top-level entries'
+source_rel=${source_root#"$repo_root"/}
+if [[ "$source_root" == "$repo_root" ]]; then
+  git -C "$repo_root" ls-tree --name-only HEAD >"$tracked_list"
+else
+  git -C "$repo_root" ls-tree --name-only "HEAD:$source_rel" >"$tracked_list"
+fi
+[[ -s $tracked_list ]] || fail 'git ls-tree returned no entries for source root'
 
 "$gate_python" -c '
 import pathlib, sys, yaml
@@ -408,12 +509,24 @@ done <"$scratch/profiles.tsv"
 # Every non-dot name actually sitting at the source root. chezmoi reads the
 # directory, not the index, so this -- not `git ls-files` -- is what it sees.
 present_list="$scratch/present"
-find "$repo_root" -mindepth 1 -maxdepth 1 -printf '%f\n' |
+find "$source_root" -mindepth 1 -maxdepth 1 -printf '%f\n' |
   grep -v '^\.' | LC_ALL=C sort >"$present_list"
 
 run_checker "$inventory" "$tracked_list" "$verdicts" "$rendered_index" "$present_list" ||
-  fail 'this repository has top-level deployment-boundary drift (listed above)'
-pass 'every top-level entry matches its declared verdict across all profiles'
+  fail 'this repository has source-root deployment-boundary drift (listed above)'
+pass 'every source-root entry matches its declared verdict across all profiles'
+
+check_chezmoiroot "$repo_root" "$scratch" "$chezmoi_bin" ||
+  fail 'R12 (a) failed: .chezmoiroot content or chezmoi source-path parity check failed'
+pass 'R12 (a): .chezmoiroot holds home and chezmoi source-path matches resolve_source_root'
+
+check_repo_root_entries "$repo_root" ||
+  fail 'R12 (b) failed: repository root contains stray chezmoi inputs or source-attribute-prefixed entries'
+pass 'R12 (b): repository root contains no stray chezmoi inputs or source-prefixed entries'
+
+check_hook_location_and_literal "$repo_root" "$source_root" ||
+  fail 'R12 (c) failed: hook location or literal check failed'
+pass 'R12 (c): hook script is at repository root, executable, and correctly referenced'
 
 # --- Fixtures: prove the gate would notice -----------------------------------
 #
@@ -587,5 +700,72 @@ assert_target remove_dot_gitconfig .gitconfig
 assert_target AGENTS.md AGENTS.md
 assert_target Library Library
 pass 'target_of maps every source-name prefix form to its target path'
+
+# Stale AGENTS.md denial mutant:
+stale_agents=$(fixture stale-agents)
+printf './AGENTS.md\n./README.md\n./Library\n./lock.generated\n' >"$stale_agents/rendered-linux-gnome"
+expect_reject "$stale_agents" 'a stale denial for AGENTS.md fails' \
+  '.chezmoiignore denies AGENTS.md in profile linux-gnome, which matches no declared top-level entry'
+
+# R12 (a) mutants:
+fx_missing_root="$scratch/fx-missing-root"
+mkdir -p -- "$fx_missing_root"
+report="$scratch/report-missing-root"
+if check_chezmoiroot "$fx_missing_root" "$scratch" "$chezmoi_bin" >"$report" 2>&1; then
+  fail 'missing .chezmoiroot was accepted'
+fi
+grep -qF '.chezmoiroot is missing' "$report" || fail "missing .chezmoiroot rejected for wrong reason: $(cat "$report")"
+pass 'R12 (a) mutant: missing .chezmoiroot fails'
+
+fx_wrong_root="$scratch/fx-wrong-root"
+mkdir -p -- "$fx_wrong_root"
+printf 'src\n' >"$fx_wrong_root/.chezmoiroot"
+report="$scratch/report-wrong-root"
+if check_chezmoiroot "$fx_wrong_root" "$scratch" "$chezmoi_bin" >"$report" 2>&1; then
+  fail '.chezmoiroot holding src was accepted'
+fi
+grep -qF "must contain 'home', got 'src'" "$report" ||
+  fail "wrong .chezmoiroot rejected for wrong reason: $(cat "$report")"
+pass "R12 (a) mutant: .chezmoiroot holding src fails naming expected value 'home'"
+
+# R12 (b) mutants (AE5):
+fx_stray_data="$scratch/fx-stray-data"
+mkdir -p -- "$fx_stray_data/.chezmoidata"
+report="$scratch/report-stray-data"
+if check_repo_root_entries "$fx_stray_data" >"$report" 2>&1; then
+  fail 'stray .chezmoidata at repository root was accepted'
+fi
+grep -qF "repository root contains stray chezmoi input '.chezmoidata'" "$report" ||
+  fail "stray .chezmoidata rejected for wrong reason: $(cat "$report")"
+pass 'R12 (b) mutant (AE5): stray .chezmoidata at repository root fails'
+
+fx_stray_dot="$scratch/fx-stray-dot"
+mkdir -p -- "$fx_stray_dot"
+touch "$fx_stray_dot/dot_example"
+report="$scratch/report-stray-dot"
+if check_repo_root_entries "$fx_stray_dot" >"$report" 2>&1; then
+  fail 'stray dot_example at repository root was accepted'
+fi
+grep -qF "repository root contains source-attribute-prefixed entry 'dot_example'" "$report" ||
+  fail "stray dot_example rejected for wrong reason: $(cat "$report")"
+pass 'R12 (b) mutant (AE5): stray dot_example at repository root fails'
+
+# R12 (c) mutant:
+fx_stray_hook_root="$scratch/fx-stray-hook-root"
+mkdir -p -- "$fx_stray_hook_root/home"
+touch "$fx_stray_hook_root/.install-prerequisites.sh"
+chmod 755 "$fx_stray_hook_root/.install-prerequisites.sh"
+touch "$fx_stray_hook_root/home/.install-prerequisites.sh"
+cat <<'EOF' >"$fx_stray_hook_root/home/.chezmoi.toml.tmpl"
+[hooks.read-source-state.pre]
+    script = "src/github.com/hyperlapse122/dotfiles/.install-prerequisites.sh"
+EOF
+report="$scratch/report-stray-hook"
+if check_hook_location_and_literal "$fx_stray_hook_root" "$fx_stray_hook_root/home" >"$report" 2>&1; then
+  fail 'hook copied under home/ was accepted'
+fi
+grep -qF 'hook script must not exist under source root' "$report" ||
+  fail "stray hook under home/ rejected for wrong reason: $(cat "$report")"
+pass 'R12 (c) mutant: hook copied under home/ fails'
 
 printf 'test-top-level-deployment-boundary: all tests passed\n'

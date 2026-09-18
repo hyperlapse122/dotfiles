@@ -15,6 +15,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/fact-cache-parsing.XXXXXX")
@@ -28,7 +31,7 @@ fail() {
 command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is required on PATH'
 
 mkdir -p "$scratch/source" "$scratch/target" "$scratch/cache/chezmoi" "$scratch/bin" "$scratch/home"
-cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$scratch/source/"
+cp -a "$source_root/.chezmoidata" "$source_root/.chezmoitemplates" "$scratch/source/"
 printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"
@@ -117,10 +120,10 @@ assert_fact "$out" headless true 'comments-only cache'
 
 # --- 7. gpuArch maps a listed device id through nvidia.deviceArchitectures.
 listed_id=$(sed -n 's/^ *"\([0-9a-f]\{4\}\)": *[a-z].*/\1/p' \
-  "$repo_root/.chezmoidata/nvidia.yaml" | head -1)
+  "$source_root/.chezmoidata/nvidia.yaml" | head -1)
 [[ -n "$listed_id" ]] || fail 'no device id is listed in .chezmoidata/nvidia.yaml'
 listed_arch=$(sed -n "s/^ *\"${listed_id}\": *\([a-z][a-z0-9]*\).*/\1/p" \
-  "$repo_root/.chezmoidata/nvidia.yaml" | head -1)
+  "$source_root/.chezmoidata/nvidia.yaml" | head -1)
 printf 'nvidia: true\ngpuDeviceId: "%s"\nvm: false\nvirt: false\nheadless: false\n' \
   "$listed_id" >"$cache_file"
 out=$(render) || fail 'render failed on a listed device id'
@@ -166,12 +169,12 @@ assert_fact "$out" nvidiaHybridDriver false 'no NVIDIA device'
 #         keeps its driver. The listed and unlisted ids are read from
 #         nvidia.yaml so a table edit cannot silently invalidate the case.
 integrated_arch=$(sed -n 's/^ *- *\([a-z][a-z0-9]*\) *$/\1/p' \
-  <(sed -n '/^ *integratedOnlyArchitectures:/,/^ *[a-zA-Z]*:/p' "$repo_root/.chezmoidata/nvidia.yaml") | head -1)
+  <(sed -n '/^ *integratedOnlyArchitectures:/,/^ *[a-zA-Z]*:/p' "$source_root/.chezmoidata/nvidia.yaml") | head -1)
 [[ -n "$integrated_arch" ]] || fail 'nvidia.yaml lists no integrated-only architecture'
 integrated_id=$(sed -n "s/^ *\"\([0-9a-f]\{4\}\)\": *${integrated_arch}.*/\1/p" \
-  "$repo_root/.chezmoidata/nvidia.yaml" | head -1)
+  "$source_root/.chezmoidata/nvidia.yaml" | head -1)
 [[ -n "$integrated_id" ]] || fail "no device id maps to ${integrated_arch} in nvidia.yaml"
-other_id=$(sed -n 's/^ *"\([0-9a-f]\{4\}\)": *[a-z].*/\1/p' "$repo_root/.chezmoidata/nvidia.yaml" |
+other_id=$(sed -n 's/^ *"\([0-9a-f]\{4\}\)": *[a-z].*/\1/p' "$source_root/.chezmoidata/nvidia.yaml" |
   grep -vx "$integrated_id" | head -1)
 [[ -n "$other_id" ]] || fail 'nvidia.yaml lists no architecture outside the integrated-only set'
 

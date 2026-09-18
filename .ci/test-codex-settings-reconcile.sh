@@ -340,7 +340,7 @@ bare_err=$(run "$bare_home" 2>&1 >/dev/null) || fail 'a CODEX_HOME without skill
 # present and wrong.
 assert_render_fails() {
   local label=$1 data=$2 want=$3
-  if render_settings "$data" <"$repo_root/$settings_sh" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
+  if render_settings "$data" <"$(join_source_state "$repo_root" "$settings_sh")" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
     fail "render-negative $label: expected a failed render, got exit 0"
   fi
   grep -qF -e "$want" -- "$scratch/neg.err" || {

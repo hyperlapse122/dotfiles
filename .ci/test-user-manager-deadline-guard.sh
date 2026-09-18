@@ -28,7 +28,10 @@ pass() {
 
 chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is required on PATH'
 
-template_file="$repo_root/.chezmoitemplates/user-manager-deadline-guard.sh.tmpl"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+template_file="$source_root/.chezmoitemplates/user-manager-deadline-guard.sh.tmpl"
 [[ -f "$template_file" ]] || fail "missing template $template_file"
 
 printf '[data]\n' >"$scratch/empty.toml"

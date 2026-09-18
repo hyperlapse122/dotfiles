@@ -24,6 +24,9 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 setup_render_scratch pinentry-card-wrapper
 mkdir -p "$scratch/home"
@@ -34,7 +37,7 @@ pass() { printf 'pinentry-card-wrapper: ok - %s\n' "$*"; }
 chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is required on PATH'
 command -v python3 >/dev/null 2>&1 || fail 'python3 is required'
 
-source_template="$repo_root/private_dot_gnupg/executable_pinentry-card.tmpl"
+source_template="$source_root/private_dot_gnupg/executable_pinentry-card.tmpl"
 require_file "$repo_root" "$scratch" "$chezmoi_bin" private_dot_gnupg/executable_pinentry-card.tmpl
 
 # ---------------------------------------------------------------------------

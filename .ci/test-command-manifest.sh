@@ -2,6 +2,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/command-manifest.XXXXXX")
@@ -42,8 +45,8 @@ make_fixture() {
   local dest="$scratch/fixture-$name"
   rm -rf "$dest"
   mkdir -p "$dest"
-  cp -a "$repo_root/.chezmoidata" "$dest/"
-  cp -a "$repo_root/.chezmoitemplates" "$dest/"
+  cp -a "$source_root/.chezmoidata" "$dest/"
+  cp -a "$source_root/.chezmoitemplates" "$dest/"
   printf '%s\n' "$dest"
 }
 
@@ -118,20 +121,23 @@ make_lock_fixture() {
     [[ -e "$entry" ]] || continue
     ln -s "$entry" "$dest/$(basename -- "$entry")"
   done
-  rm -f "$dest/.chezmoidata"
+  local dest_source_root
+  dest_source_root=$(populate_fixture_source_root "$dest" "$source_root")
+  rm -f "$dest_source_root/.chezmoidata"
   # -L dereferences: when $repo_root is itself a symlink farm (this helper's own
   # output, when a gate runs from a fixture), a plain `cp -a` copies the SYMLINK,
   # and mutate_lock then writes through it into the repository's real
   # .chezmoidata/releases.json. Observed live. Dereference, then refuse to
   # continue unless the fixture owns a regular file.
-  cp -a -L "$repo_root/.chezmoidata" "$dest/"
-  [[ -f "$dest/.chezmoidata/releases.json" && ! -L "$dest/.chezmoidata/releases.json" ]] ||
-    fail "lock fixture $dest/.chezmoidata/releases.json is not a regular file; refusing to mutate a lock outside the fixture"
+  cp -a -L "$source_root/.chezmoidata" "$dest_source_root/"
+  [[ -f "$dest_source_root/.chezmoidata/releases.json" && ! -L "$dest_source_root/.chezmoidata/releases.json" ]] ||
+    fail "lock fixture $dest_source_root/.chezmoidata/releases.json is not a regular file; refusing to mutate a lock outside the fixture"
   printf '%s\n' "$dest"
 }
 
 mutate_lock() {
-  local dir="$1" tool="$2" field="$3" value="$4"
+  local dir="$1" tool="$2" field="$3" value="$4" target_file
+  target_file=$(join_source_state "$dir" .chezmoidata/releases.json)
   python3 -c '
 import json, sys
 path, tool, field, value = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
@@ -142,7 +148,7 @@ for platform in artifacts:
     artifacts[platform][field] = value
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)
-' "$dir/.chezmoidata/releases.json" "$tool" "$field" "$value"
+' "$target_file" "$tool" "$field" "$value"
 }
 
 rejects unknown-producer 'producer: external' 'producer: madeUpProducer' 'unknown producer'
@@ -215,7 +221,7 @@ assert bumped_units["bunx"]["identity"] == bumped_units["bun"]["identity"]
 for unit_id, unit in externals(bumped_units).items():
     if unit_id not in ("bun", "bunx"):
         assert unit["identity"] == linux_ext[unit_id]["identity"], unit_id
-' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$macos_json" "$bumped_json"
+' "$source_root/.chezmoidata/releases.json" "$linux_json" "$macos_json" "$bumped_json"
 
 
 # The external identity names the artifact the host downloads, so a musl host
@@ -231,7 +237,7 @@ with open(path, "r", encoding="utf-8") as f:
 data["releases"]["tools"]["bun"]["artifacts"]["linux-amd64-musl"]["sha256"] = "b" * 64
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)
-' "$musl_bumped/.chezmoidata/releases.json"
+' "$(join_source_state "$musl_bumped" .chezmoidata/releases.json)"
 musl_bumped_json=$(render_source "$musl_bumped" linux amd64 '{{ includeTemplate "command-manifest.tmpl" . }}' "$musl_override")
 
 python3 -c '
@@ -280,7 +286,7 @@ for unit_id, unit in musl_ext.items():
 for unit_id, tool in (("kubectl", "kubectl"), ("kubectl-convert", "kubectl"), ("helm", "helm"), ("glab", "glab")):
     for scope in (linux_ext, musl_ext):
         assert scope[unit_id]["identity"] == tools[tool]["version"], scope[unit_id]["identity"]
-' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$musl_json" "$musl_bumped_json"
+' "$source_root/.chezmoidata/releases.json" "$linux_json" "$musl_json" "$musl_bumped_json"
 
 # The accessor change is contained: optional:true rescues a missing artifacts block,
 # but a non-optional call against one still fails loudly (R6, no live fallback).

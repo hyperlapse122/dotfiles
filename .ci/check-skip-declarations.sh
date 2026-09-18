@@ -68,15 +68,23 @@ while (($#)); do
   shift
 done
 
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+
 root=${positional[0]:-.}
 if ! root=$(CDPATH='' cd -- "$root" 2>/dev/null && pwd -P); then
   err "cannot resolve root ${positional[0]:-.}"
   exit 2
 fi
 
-matrix=$root/.ci/skip-declaration-site-matrix.yaml
-scan_root=$root/.chezmoiscripts
+if ! source_root=$(resolve_source_root "$root"); then
+  err "cannot resolve source root for $root"
+  exit 2
+fi
 
+matrix=$root/.ci/skip-declaration-site-matrix.yaml
+scan_root=$source_root/.chezmoiscripts
 # A missing scanned path must fail loudly rather than silently stop enforcing.
 if [[ ! -d $scan_root ]]; then
   err "missing scan root $scan_root"
@@ -721,8 +729,9 @@ def branch_span(events, branch, last_line):
     return branch['line'], last_line
 
 
-def check(root, plan_path, renders_path, fixture):
+def check(root, source_root, plan_path, renders_path, fixture):
     root = Path(root)
+    source_root = Path(source_root)
     # `defects` are reasons this check cannot enforce anything — a broken oracle,
     # a render that failed, rendered shell it could not parse. Those exit 2 so a
     # silently non-enforcing guard is impossible. `problems` are the findings: a
@@ -859,11 +868,11 @@ def check(root, plan_path, renders_path, fixture):
 
     for row in owners:
         template = row.get('template')
-        if template and not (root / template).exists():
+        if template and not (source_root / template).exists():
             defects.append(f'matrix: owner {row.get("owner")} names missing template {template}')
     for row in hard_errors:
         template = row.get('template')
-        if template and not (root / template).exists():
+        if template and not (source_root / template).exists():
             defects.append(f'matrix: hard error {row.get("owner")} names missing template {template}')
 
     # --- rendered surface -------------------------------------------------- #
@@ -1005,7 +1014,7 @@ def check(root, plan_path, renders_path, fixture):
                 if branch is not None:
                     problems.append(f'{site}: declared as a render-time branch but sits inside the '
                                     f'shell conditional at line {branch["branch_line"]}')
-                source = (root / row['template']).read_text()
+                source = (source_root / row['template']).read_text()
                 if not any(normalize_predicate(line) == row['predicate']
                            for line in source.split('\n')):
                     problems.append(f'{site}: render-time predicate {row["predicate"]!r} '
@@ -1188,12 +1197,12 @@ if __name__ == '__main__':
     if mode == 'plan':
         sys.exit(plan(sys.argv[2]))
     if mode == 'check':
-        sys.exit(check(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5] == '1'))
+        sys.exit(check(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6] == '1'))
     print(f'{prog_label}: unknown mode {mode!r}', file=sys.stderr)
     sys.exit(2)
 PYCORE
 
-if ! python3 "$core" plan "$root" >"$scratch/plan.tsv"; then
+if ! python3 "$core" plan "$source_root" >"$scratch/plan.tsv"; then
   err 'cannot enumerate the script surface'
   exit 2
 fi
@@ -1212,7 +1221,7 @@ while IFS=$'\t' read -r cls rel; do
     esac
     n=$((n + 1))
     out=$scratch/rendered/$n.sh
-    if ! render "$bindir" "$data" "$root/$rel" "$out"; then
+    if ! render "$bindir" "$data" "$source_root/$rel" "$out"; then
       err "cannot render $rel in the $variant variant: $(tr '\n' ' ' <"$scratch/render.err")"
       exit 2
     fi
@@ -1225,4 +1234,4 @@ if [[ ! -s $renders ]]; then
   exit 2
 fi
 
-python3 "$core" check "$root" "$scratch/plan.tsv" "$renders" "$fixture"
+python3 "$core" check "$root" "$source_root" "$scratch/plan.tsv" "$renders" "$fixture"

@@ -5,6 +5,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 guard_tmpl='.chezmoiscripts/70-agents/run_before_guard-codex-skills.sh.tmpl'
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/codex-skills-guard
@@ -21,7 +24,7 @@ chmod 0700 "$scratch/op/op"
 : >"$scratch/empty.toml"
 guard="$scratch/guard.sh"
 env PATH="$scratch/op:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
-  --destination "$scratch/target" execute-template <"$repo_root/$guard_tmpl" >"$guard" ||
+  --destination "$scratch/target" execute-template <"$source_root/$guard_tmpl" >"$guard" ||
   fail 'guard failed to render'
 chmod 0700 "$guard"
 grep -F '.codex/skills' "$guard" >/dev/null || fail 'rendered guard does not name ~/.codex/skills'

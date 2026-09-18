@@ -14,7 +14,10 @@ set -euo pipefail
 # assertion on the log.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-helper="$repo_root/.chezmoitemplates/orca-register.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+helper="$source_root/.chezmoitemplates/orca-register.sh"
 
 fail() {
   printf 'test-orca-register: %s\n' "$*" >&2
@@ -568,7 +571,7 @@ strip_attrs() {
 # non-matching glob would otherwise abort this file's own `set -euo pipefail`.
 reconcile_script=''
 register_script=''
-for candidate in "$repo_root"/.chezmoiscripts/90-src/*; do
+for candidate in "$source_root"/.chezmoiscripts/90-src/*; do
   [ -e "$candidate" ] || continue
   case "${candidate##*/}" in
     *reconcile-garden*) [ -n "$reconcile_script" ] || reconcile_script=$candidate ;;

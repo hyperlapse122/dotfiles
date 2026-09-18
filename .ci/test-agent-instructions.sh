@@ -78,6 +78,7 @@ soft_failed=0
 soft_fail() { printf 'agent instructions: %s\n' "$*" >&2; soft_failed=1; }
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 wrapper=dot_claude/readonly_CLAUDE.md.tmpl
 peer_wrappers=(
@@ -187,10 +188,10 @@ for i in "${!harness_ids[@]}"; do
     *) source_wrapper=${peer_wrappers[$((i - 1))]} ;;
   esac
   harness_render="$scratch/${harness_ids[$i]}.md"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$source_wrapper" "$harness_render"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/$source_wrapper" "$harness_render"
   [[ -s $harness_render ]] || fail "$source_wrapper rendered empty"
   other_os_render="$scratch/${harness_ids[$i]}-darwin.md"
-  render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/$source_wrapper" "$other_os_render"
+  render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$source_root/$source_wrapper" "$other_os_render"
   # The model-tuning line is compared whole, so an appended sentence cannot ride
   # in behind the peer diff that strips it. The fixture is the expectation; a
   # deliberate wording change updates it in the same commit.
@@ -717,7 +718,7 @@ stub_roster_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"s
   {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"}]'
 stub_roster_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_roster_workers")
 stub_roster_render="$scratch/claude-stub-roster.md"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$wrapper" "$stub_roster_render" "$stub_roster_override" ||
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/$wrapper" "$stub_roster_render" "$stub_roster_override" ||
   fail 'a stub roster failed to render the instruction core'
 grep -F 'the session resolves it as `stub-author`' "$stub_roster_render" >/dev/null ||
   fail 'the elevation-default paragraph did not pick up a roster change to the claude authoring model'

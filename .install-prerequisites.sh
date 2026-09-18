@@ -370,12 +370,58 @@ usb_device_listed() {
   return 1
 }
 
+# Resolve the chezmoi source root: CHEZMOI_SOURCE_DIR when set and non-empty;
+# else this file's own directory joined with the trimmed content of .chezmoiroot
+# when that file exists beside this hook; else this file's own directory.
+hook_source_root() {
+  if [[ -n "${CHEZMOI_SOURCE_DIR:-}" ]]; then
+    printf '%s\n' "$CHEZMOI_SOURCE_DIR"
+    return 0
+  fi
+  local hook_dir marker raw trimmed resolved
+  hook_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || return 1
+  marker="$hook_dir/.chezmoiroot"
+  if [[ ! -f "$marker" ]]; then
+    printf '%s\n' "$hook_dir"
+    return 0
+  fi
+  raw=$(<"$marker")
+  trimmed="${raw#"${raw%%[![:space:]]*}"}"
+  trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+  if [[ -z "$trimmed" ]]; then
+    printf 'install-prerequisites.sh: %s is empty\n' "$marker" >&2
+    return 1
+  fi
+  if [[ "$trimmed" == /* ]]; then
+    printf 'install-prerequisites.sh: %s names an absolute path: %s\n' "$marker" "$trimmed" >&2
+    return 1
+  fi
+  if [[ "$trimmed" == *..* ]]; then
+    printf 'install-prerequisites.sh: %s escapes its parent: %s\n' "$marker" "$trimmed" >&2
+    return 1
+  fi
+  resolved="$hook_dir/$trimmed"
+  if [[ ! -d "$resolved" ]]; then
+    printf 'install-prerequisites.sh: %s names a directory that does not exist: %s\n' "$marker" "$trimmed" >&2
+    return 1
+  fi
+  printf '%s\n' "$resolved"
+}
+
 fact_fingerprint_reader() {
-  usb_device_listed "${CHEZMOI_SOURCE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}/.chezmoidata/.fingerprint-readers.tsv"
+  local source_root=${1:-}
+  if [[ -z "$source_root" ]]; then
+    source_root=$(hook_source_root) || return 1
+  fi
+  usb_device_listed "$source_root/.chezmoidata/.fingerprint-readers.tsv"
 }
 
 fact_ir_camera() {
-  usb_device_listed "${CHEZMOI_SOURCE_DIR:-$(dirname -- "${BASH_SOURCE[0]}")}/.chezmoidata/.ir-cameras.tsv"
+  local source_root=${1:-}
+  if [[ -z "$source_root" ]]; then
+    source_root=$(hook_source_root) || return 1
+  fi
+  usb_device_listed "$source_root/.chezmoidata/.ir-cameras.tsv"
 }
 
 # Which display manager the host runs, as the bare unit name (`plasmalogin`,
@@ -860,13 +906,13 @@ prune_dead_capability_records() {
 
 # The optional argument is the source root; the fixtures pass a scratch tree. In a
 # real hook run chezmoi exports CHEZMOI_SOURCE_DIR, which is authoritative and
-# CWD-independent. The BASH_SOURCE fallback covers a caller that has neither (this
-# file always sits at the source root).
+# CWD-independent. The fallback covers a caller that has neither by resolving the
+# source root from this file's own directory and .chezmoiroot.
 write_capability_cache() {
   local source_root=${1:-${CHEZMOI_SOURCE_DIR:-}} helper registry identity_line
   local schema identity owner_pid marker dir record tmp_record perms index key kind platform token host_platform
   if [[ -z "$source_root" ]]; then
-    source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) \
+    source_root=$(hook_source_root) \
       || capability_cache_fail 'cannot resolve the chezmoi source root'
   fi
 
@@ -876,7 +922,7 @@ write_capability_cache() {
 
   # shellcheck disable=SC2034 # read by the sourced helper to suppress its emit.
   CAPABILITY_CACHE_IDENTITY_MAIN=0
-  # shellcheck source=.chezmoitemplates/capability-cache-identity.sh
+  # shellcheck source=home/.chezmoitemplates/capability-cache-identity.sh
   source "$helper"
   unset CAPABILITY_CACHE_IDENTITY_MAIN
 
@@ -1259,7 +1305,7 @@ preflight_card_stack() {
 read_user_data() {
   local source_root=${1:-${CHEZMOI_SOURCE_DIR:-}} data_file pubkey serials_raw
   if [[ -z "$source_root" ]]; then
-    source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || return 1
+    source_root=$(hook_source_root) || return 1
   fi
   data_file="$source_root/.chezmoidata/user.yaml"
   if [[ ! -f "$data_file" ]]; then

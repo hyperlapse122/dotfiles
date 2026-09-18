@@ -25,16 +25,19 @@ fail() {
 source "$repo_root/.ci/lib/render-scratch.sh"
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 setup_render_scratch user-systemd-reload
 chezmoi_bin=$(command -v chezmoi) || fail 'chezmoi is required to run this guard'
 mkdir -p -- "$scratch/home"
 
-[[ -f "$repo_root/$source_template" ]] || fail "missing source surface $source_template"
+[[ -f "$source_root/$source_template" ]] || fail "missing source surface $source_template"
 
 if [[ -z $rendered_script ]]; then
   rendered_script="$scratch/user-systemd-reload.sh"
   render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-    "$repo_root/$source_template" "$rendered_script" \
+    "$source_root/$source_template" "$rendered_script" \
     || fail 'the Linux template did not render'
 fi
 [[ -f $rendered_script ]] || fail "missing rendered script $rendered_script"
@@ -43,7 +46,7 @@ bash -n "$rendered_script" || fail 'the rendered Linux script is not valid shell
 
 darwin_render="$scratch/user-systemd-reload-darwin.sh"
 render "$repo_root" "$scratch" "$chezmoi_bin" darwin \
-  "$repo_root/$source_template" "$darwin_render" \
+  "$source_root/$source_template" "$darwin_render" \
   || fail 'the Darwin template did not render'
 [[ ! -s $darwin_render ]] || fail 'the template rendered a script on Darwin'
 

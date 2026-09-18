@@ -7,6 +7,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/fedora-fact-block-baseline.XXXXXX")
@@ -27,8 +30,8 @@ command -v node >/dev/null 2>&1 || fail 'node is required on PATH'
 # Render deterministic host facts so hashes are environment-independent.
 fixture_root="$scratch/source"
 mkdir -p "$fixture_root"
-cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" \
-  "$repo_root/.chezmoiscripts" "$repo_root/system" "$fixture_root/"
+cp -a "$source_root/.chezmoidata" "$source_root/.chezmoitemplates" \
+  "$source_root/.chezmoiscripts" "$repo_root/system" "$fixture_root/"
 cat >"$fixture_root/.chezmoitemplates/facts.tmpl" <<'FACTS'
 os: linux
 distro: fedora
@@ -152,6 +155,10 @@ NODE
 # Rendering (PISR) replaced render-time {{ $sourceDir }} interpolation with
 # runtime ${CHEZMOI_SOURCE_DIR:-...} parameter expansion, deliberately
 # decoupling rendered script bodies from worktree checkout paths.
+# REBASELINED again for install-system-* when the runtime repository-root
+# resolver introduced for issue #559 replaced the inline
+# ${CHEZMOI_SOURCE_DIR:-...} resolver in the install-system scripts; rendered
+# paths are unchanged.
 #
 # SCOPE, precisely: the fixture pins `desktop: none`, so these digests watch the
 # ladder's THREE-rung shape only. The askpass rung the kde and gnome shapes add
@@ -159,15 +166,15 @@ NODE
 # three renderings.
 declare -A baseline_hashes=(
   [.chezmoiscripts/30-linux/run_onchange_after_chsh-zsh.sh.tmpl]=d66169165fe4167fb0baeb515ddaba807e63579a2946ae1e51d4cdcb068afbc4
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=68f3e13aab373fe9f5e45bc2b123a941ef7189421c2f16688a4790b8311fd825
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=3881be450d9a15ba86727e36ab90b4ce70f825bfa87ded61d81e4dcfc653b120
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=271eeddc315098df82669acba26ce853caae4c798145227f2c2d08e9fab6880d
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=1ce5afd3cb6e807f16ac5384c303554982983687e20756c06b724180a0f6672d
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=f077503984d034c21fb61fc6c275898b4d1a3679750f1d8be72c2f3d1f7a6326
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=5548d795181a0e8475ec31448dae0f53e2cd42b8d8c99296b46afe08a4691d40
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl]=70610350fb6435cae45b4a94fe709d36cc994f4ca018e915026556cf35c1bc10
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-12-sudoers.sh.tmpl]=cf8d833d42a3c2b6ebe7e486444001e6f37921973e8aaf43cfd8847eb5e61081
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-14-sysctl.sh.tmpl]=b52608fd827adff0e6e7a169ac5dcae22329281dc88a671cc18bfed781e858df
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl]=b75828e5b167b51910f68ac960748f447c3fdd5a135dd0a8c8e1ed4888ebd28f
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-18-hardware.sh.tmpl]=a9a67e6d64ea72c78d0e194286606ea6bcf6e76f776cdec2799f86aec6deb78d
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-20-bluetooth.sh.tmpl]=4d66acc3009cc0207589750a67cc5c901404863bf3cf6bfdce5cd240f0af9006
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-22-host.sh.tmpl]=0d67f918c955ca9df3925434384f6a683349865017a2b9d091dd08aa76c760b0
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-24-keyd.sh.tmpl]=de667a915619a4ca5acdaa9a08af5d7ab1dbf40319c5b09f08232ed289c28fcc
-  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=2c5a774474b2c795c7145a73cbb05dab2484aa4a5236c35a6fd4e98e64b9a0a2
+  [.chezmoiscripts/30-linux/run_onchange_after_install-system-26-swap-hibernate.sh.tmpl]=41cdf84e2c5e7ee452fdb1adf3db7bf55a25a4cb26ea332729ef55c6a9bbd292
   [.chezmoiscripts/30-linux/run_onchange_after_install-system-30-network.sh.tmpl]=dc0b94a8166d05d1fddd55ae9c0e8a929ea8a417651073afe8e7d6e508d308d3
 )
 

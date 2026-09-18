@@ -16,6 +16,9 @@ set -euo pipefail
 
 usage='usage: test-kde-touchpad-devices.sh [RENDERED_SCRIPT]'
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 template='.chezmoiscripts/50-linux-kde/run_onchange_after_config-kde-touchpad.sh.tmpl'
 
 scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-$HOME/.cache}}
@@ -39,7 +42,7 @@ if [[ -z $rendered ]]; then
   env HOME="$scratch/render-home" PATH="$scratch/render-bin:$PATH" \
     chezmoi --config "$scratch/render.toml" --source "$repo_root" \
     --destination "$scratch/render-target" execute-template \
-    <"$repo_root/$template" >"$rendered" \
+    <"$source_root/$template" >"$rendered" \
     || fail "$usage -- rendering $template failed"
 fi
 [[ -s $rendered ]] || fail "rendered script is empty: $rendered"

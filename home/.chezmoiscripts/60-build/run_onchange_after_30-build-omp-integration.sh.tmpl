@@ -1,0 +1,45 @@
+{{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
+{{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
+{{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
+#!/usr/bin/env bash
+set -euo pipefail
+{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/omp-orca/src/**" "packages/omp-orca/package.json" "packages/omp-orca/tsconfig.json" "packages/omp-orca/vite.config.ts" "packages/antigravity-sidecar/src/**" "packages/antigravity-sidecar/package.json" "packages/antigravity-sidecar/tsconfig.json" "packages/antigravity-sidecar/vite.config.ts") "values" (list (dict "name" "bun-version" "value" $bunVersion))) }}
+
+{{ includeTemplate "repo-root.sh.tmpl" | trim }}
+SRC="$repo_root"
+export DOTFILES_BUN_VERSION={{ $bunVersion | quote }}
+export PATH="$HOME/.local/bin:$HOME/.local/sbin:$PATH"
+{{ includeTemplate "bun-resolve.sh.tmpl" | trim }}
+[[ -n "$BUN_BIN" ]] || { printf '%s\n' 'build-omp-integration: bun is unavailable' >&2; exit 1; }
+
+MISE_BIN="$(command -v mise || true)"
+if [[ -z "$MISE_BIN" && -x "$HOME/.local/share/chezmoi-commands/incomplete/mise/mise" ]]; then
+  MISE_BIN="$HOME/.local/share/chezmoi-commands/incomplete/mise/mise"
+fi
+[[ -n "$MISE_BIN" ]] || { printf '%s\n' 'build-omp-integration: mise is unavailable' >&2; exit 1; }
+
+"$MISE_BIN" -C "$SRC/packages" exec -- vp install --frozen-lockfile
+"$MISE_BIN" -C "$SRC/packages/omp-orca" exec -- vp run build
+"$MISE_BIN" -C "$SRC/packages/antigravity-sidecar" exec -- vp run build
+
+stage_file() {
+  local source=$1 destination=$2 mode=$3 temporary ancestor
+  [[ -s "$source" ]] || { printf 'build-omp-integration: missing artifact %s\n' "$source" >&2; return 1; }
+  ancestor=$destination
+  while [[ "$ancestor" != "$HOME" && "$ancestor" != / ]]; do
+    [[ ! -L "$ancestor" ]] || { printf 'build-omp-integration: symlink target path %s\n' "$ancestor" >&2; return 1; }
+    ancestor=${ancestor%/*}
+  done
+  [[ ! -e "$destination" || -f "$destination" ]] || { printf 'build-omp-integration: non-file target %s\n' "$destination" >&2; return 1; }
+  mkdir -p "${destination%/*}"
+  temporary="$(mktemp "${destination}.XXXXXX")"
+  if ! cp -- "$source" "$temporary" || ! chmod "$mode" "$temporary" || ! mv -f -- "$temporary" "$destination"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+}
+
+stage_file "$SRC/packages/omp-orca/dist/dotfiles-orca.js" "$HOME/.local/share/dotfiles-omp/dotfiles-orca.js" 0644
+stage_file "$SRC/packages/antigravity-sidecar/dist/antigravity-sidecar" "$HOME/.local/share/chezmoi-commands/incomplete/antigravity-sidecar/antigravity-sidecar" 0755
+{{ end -}}

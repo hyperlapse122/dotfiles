@@ -13,7 +13,10 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-partial="$repo_root/.chezmoitemplates/bun-resolve.sh.tmpl"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+partial="$source_root/.chezmoitemplates/bun-resolve.sh.tmpl"
 lib="$repo_root/.ci/lib/bun.sh"
 
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"

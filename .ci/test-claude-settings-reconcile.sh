@@ -557,7 +557,7 @@ assert_render_fails() {
   local label=$1 data=$2 want=$3
   if env HOME="$neg_home" PATH="$neg_bin:$PATH" \
     chezmoi --config "$render_config" --source "$repo_root" --override-data "$data" \
-    execute-template <"$repo_root/$settings_sh" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
+    execute-template <"$(join_source_state "$repo_root" "$settings_sh")" >"$scratch/neg.out" 2>"$scratch/neg.err"; then
     fail "render-negative $label: expected a failed render, got exit 0"
   fi
   grep -qF -e "$want" -- "$scratch/neg.err" || {

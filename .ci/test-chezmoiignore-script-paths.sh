@@ -3,6 +3,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_parent=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
 mkdir -p "$scratch_parent"
 scratch=$(mktemp -d "$scratch_parent/test-chezmoiignore.XXXXXX")
@@ -30,14 +33,14 @@ normalize_script_path() {
 
 # Collect all normalized script paths
 shopt -s globstar nullglob
-source_scripts=("$repo_root"/.chezmoiscripts/**/run_*)
+source_scripts=("$source_root"/.chezmoiscripts/**/run_*)
 shopt -u globstar nullglob
 
 [[ ${#source_scripts[@]} -gt 0 ]] || fail 'no .chezmoiscripts source files found'
 
 normalized_scripts=()
 for script in "${source_scripts[@]}"; do
-  rel=${script#"$repo_root/"}
+  rel=${script#"$source_root/"}
   norm=$(normalize_script_path "$rel")
   normalized_scripts+=("$norm")
 done
@@ -65,7 +68,7 @@ render_ignore_variant() {
       return [`"${key}"`, typeof val === "string" ? `"${val}"` : String(val)];
     });
     fs.writeFileSync(outPath, src.replace(needle, `{{- $f := dict ${entries.join(" ")} }}`));
-  ' "$repo_root/.chezmoiignore" "$template" "$os" "$desktop" "$container" "$jetson"
+  ' "$source_root/.chezmoiignore" "$template" "$os" "$desktop" "$container" "$jetson"
 
   env HOME="$scratch/home" PATH="$scratch/op-stub:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \

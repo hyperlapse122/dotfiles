@@ -4,11 +4,14 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 setup_render_scratch command-external-render
 
 fail() { printf 'command external render: %s\n' "$*" >&2; exit 1; }
 
-[[ ! -f "$repo_root/.chezmoiscripts/00-tools/run_onchange_after_codegraph.sh.tmpl" ]] || {
+[[ ! -f "$source_root/.chezmoiscripts/00-tools/run_onchange_after_codegraph.sh.tmpl" ]] || {
   fail "run_onchange_after_codegraph.sh.tmpl should be deleted"
 }
 
@@ -185,7 +188,7 @@ for plat in "${platforms[@]}"; do
   label="$os/$arch musl=$musl"
   out="$scratch/externals-$os-$arch-musl-$musl.toml"
   : >"$out"
-  for ext in "$repo_root/.chezmoiexternals"/*.toml; do
+  for ext in "$source_root/.chezmoiexternals"/*.toml; do
     env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
       --override-data "{\"chezmoi\":{\"os\":\"$os\",\"arch\":\"$arch\"},\"renderOverrides\":{\"muslLinux\":$musl}}" \
       execute-template <"$ext" >>"$out"
@@ -307,7 +310,7 @@ rendered_flutter="$scratch/flutter.sh"
 
 env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
   --override-data '{"chezmoi":{"os":"linux","arch":"amd64"}}' \
-  execute-template <"$repo_root/.chezmoiscripts/00-tools/run_onchange_after_flutter.sh.tmpl" >"$rendered_flutter"
+  execute-template <"$source_root/.chezmoiscripts/00-tools/run_onchange_after_flutter.sh.tmpl" >"$rendered_flutter"
 
 if grep -E '\$BIN_DIR|pruned=' "$rendered_flutter"; then
   fail "flutter script still contains public link or prune operations"

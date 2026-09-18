@@ -19,6 +19,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/system-removed-gates.XXXXXX")
@@ -34,11 +37,11 @@ hardware_installer='.chezmoiscripts/30-linux/run_onchange_after_install-system-1
 udev_installer='.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl'
 
 mkdir -p "$scratch/source" "$scratch/target" "$scratch/cache/chezmoi" "$scratch/bin" "$scratch/home"
-cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$repo_root/system" "$scratch/source/"
+cp -a "$source_root/.chezmoidata" "$source_root/.chezmoitemplates" "$repo_root/system" "$scratch/source/"
 mkdir -p "$scratch/source/.chezmoiscripts/30-linux"
-cp -a "$repo_root/$desktop_installer" "$scratch/source/$desktop_installer"
-cp -a "$repo_root/$hardware_installer" "$scratch/source/$hardware_installer"
-cp -a "$repo_root/$udev_installer" "$scratch/source/$udev_installer"
+cp -a "$source_root/$desktop_installer" "$scratch/source/$desktop_installer"
+cp -a "$source_root/$hardware_installer" "$scratch/source/$hardware_installer"
+cp -a "$source_root/$udev_installer" "$scratch/source/$udev_installer"
 printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 700 "$scratch/bin/op"

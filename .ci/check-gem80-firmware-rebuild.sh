@@ -68,6 +68,9 @@ EOF
 
 # shellcheck source=.ci/lib/gem80-firmware-data.sh
 source "$repo_root/.ci/lib/gem80-firmware-data.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 eval_mode=false
 eval_build_failed=false
@@ -138,6 +141,7 @@ while [[ $# -gt 0 ]]; do
         fail "unexpected argument '$1'; pass files as --build-info and --firmware-yaml"
       elif [[ -d $1 ]]; then
         repo_root=$(cd -- "$1" && pwd)
+        source_root=$(resolve_source_root "$repo_root")
       else
         fail "unknown argument or option: $1"
       fi
@@ -151,7 +155,7 @@ if [[ -n $source_fixture && $eval_mode != true ]]; then
 fi
 
 build_info="${custom_build_info:-$repo_root/firmware/nuphy-gem80-hostrgb/dist/build-info.json}"
-firmware_yaml="${custom_firmware_yaml:-$repo_root/.chezmoidata/firmware.yaml}"
+firmware_yaml="${custom_firmware_yaml:-$source_root/.chezmoidata/firmware.yaml}"
 
 validate_inputs() {
   command -v jq >/dev/null 2>&1 || fail "jq is required on PATH"
@@ -331,7 +335,7 @@ assert_scratch_carries_patches "$scratch_repo"
 rm -rf -- "$scratch_repo/firmware/nuphy-gem80-hostrgb/dist"
 
 rendered_cmd="$scratch/gem80-firmware"
-template="$scratch_repo/dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl"
+template=$(join_source_state "$scratch_repo" "dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl")
 [[ -f $template ]] || fail "gem80-firmware template not found: $template"
 
 printf '[data]\n' > "$scratch/empty.toml"

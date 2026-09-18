@@ -10,8 +10,11 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-reconcile_bin="$repo_root/dot_local/share/chezmoi-command-sources/executable_agent-trust-reconcile"
-orca_wrapper="$repo_root/dot_local/share/chezmoi-command-sources/executable_orca-ide"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+reconcile_bin="$source_root/dot_local/share/chezmoi-command-sources/executable_agent-trust-reconcile"
+orca_wrapper="$source_root/dot_local/share/chezmoi-command-sources/executable_orca-ide"
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/agent-trust-fixtures
 mkdir -p -- "$scratch_root"

@@ -33,6 +33,9 @@ set -euo pipefail
 # itself -- which is the whole point of check 1 having no exclusion list.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 cd -- "$repo_root"
 
 HOST_VAULT=njbkpy6emfxkbl7n6zmwmz7jfu
@@ -72,13 +75,13 @@ pass 'every reference carries a vault UUID'
 # sources behind those targets as out of scope for this check.
 container_block=$(
   awk '/^{{- if \$f\.container \}\}/{inblock=1; next} /^{{- end \}\}/{inblock=0} inblock' \
-    .chezmoiignore | grep -vE '^\s*(#|\{\{|$)' || true
+    "$source_root/.chezmoiignore" | grep -vE '^\s*(#|\{\{|$)' || true
 )
 
 [[ -n $container_block ]] || fail 'could not read the container guard block from .chezmoiignore; check 2 cannot compute its target set and must not pass vacuously'
 
 # Sources that resolve a host-vault reference at render time.
-host_refs=$(grep -rlE "${scheme}$HOST_VAULT/" --include='*.tmpl' --include='*.yaml' --exclude-dir=.git --exclude-dir=docs . || true)
+host_refs=$(cd -- "$source_root" || exit 1; grep -rlE "${scheme}$HOST_VAULT/" --include='*.tmpl' --include='*.yaml' --exclude-dir=.git --exclude-dir=docs . || true)
 
 [[ -n $host_refs ]] || fail 'no source references the host vault; the reference map has drifted from this gate'
 

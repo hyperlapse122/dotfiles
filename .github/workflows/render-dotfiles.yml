@@ -129,10 +129,12 @@ jobs:
           mkdir -p "${SRC}"
           cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
           rm -rf "${SRC}/.git"
+          . "${GITHUB_WORKSPACE}/.ci/lib/source-root.sh"
+          src_state=$(resolve_source_root "${SRC}")
           # This task renders managed FILES only; the .chezmoiexternals fetches
           # (git clones + release downloads) are rendered separately by the
           # render-internals job. Dropping them keeps this apply hermetic.
-          rm -rf "${SRC}/.chezmoiexternals"
+          rm -rf "${src_state}/.chezmoiexternals"
           cd "${HOME}"
 
           # Non-fatal: --keep-going renders everything it can and reports a
@@ -215,6 +217,8 @@ jobs:
         run: |
           set -euxo pipefail
           home="${RUNNER_TEMP}/fakehome"
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
           # `.chezmoiremove` is otherwise ungated: a stale or mistyped entry makes
           # `chezmoi apply` exit 0 with no diagnostic. The canaries seeded above
           # make all prune removals observable — and prove globs stay scoped.
@@ -227,7 +231,7 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
-          cmp "${home}/.omp/agent/models.yml" dot_omp/private_agent/private_readonly_models.yml
+          cmp "${home}/.omp/agent/models.yml" "${source_root}/dot_omp/private_agent/private_readonly_models.yml"
           # AGENTS.md and mcp.json are managed targets again, so the fixture
           # seeds them empty above and apply must have written real content
           # rather than pruned them. Non-empty is the falsifiable signal: a
@@ -334,6 +338,131 @@ jobs:
             >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
+  # Task 1b: real `chezmoi apply` (no --init) on upgrade from Phase A -> AE2/R10.
+  # ---------------------------------------------------------------------------
+  apply-no-init:
+    name: apply (no --init, ${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: fedora, image: "fedora:44" }
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          [ "$(uname -m)" = "x86_64" ]
+          . /etc/os-release
+          [ "${ID}" = "fedora" ]
+
+      - name: Install base tooling (${{ matrix.os }})
+        run: |
+          set -euxo pipefail
+          if command -v dnf >/dev/null 2>&1; then
+            dnf install -y --setopt=install_weak_deps=False git jq tar gzip diffutils >/dev/null
+          else
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends ca-certificates curl git jq tar gzip diffutils >/dev/null
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install chezmoi + dummy op/mise
+        run: |
+          set -euxo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
+          chezmoi --version
+
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' 'set -eu'
+            printf '%s\n' 'case "${1-}" in'
+            printf '%s\n' '  whoami)    printf "dummy@example.invalid\n" ;;'
+            printf '%s\n' '  --version) printf "2.0.0\n" ;;'
+            printf '%s\n' '  signin)    : ;;'
+            printf '%s\n' '  account)   printf "[]\n" ;;'
+            printf '%s\n' '  item)      printf "%s\n" "{\"fields\":[{\"id\":\"username\",\"label\":\"username\",\"value\":\"dummy-user\"},{\"id\":\"API\",\"label\":\"API\",\"value\":\"dummy-secret\"},{\"id\":\"password\",\"label\":\"password\",\"value\":\"dummy-secret\"},{\"id\":\"credential\",\"label\":\"credential\",\"value\":\"dummy-secret\"}]}" ;;'
+            printf '%s\n' '  *)         printf "dummy-secret\n" ;;'
+            printf '%s\n' 'esac'
+          } > /usr/local/bin/op
+          chmod 0755 /usr/local/bin/op
+
+          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > /usr/local/bin/mise
+          chmod 0755 /usr/local/bin/mise
+
+      - name: chezmoi apply without --init after upgrade from Phase A
+        run: |
+          set -euxo pipefail
+          export HOME="${RUNNER_TEMP}/fakehome"
+          SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
+          mkdir -p "${SRC}"
+
+          # Clone with full history so the job can switch between Phase A and
+          # Phase B in place. The container has no git-lfs, and home/dot_face is
+          # LFS-tracked: these clone-local settings disable the LFS filter so a
+          # checkout writes the pointer text, as the apply --init job's cp -a does.
+          git clone -c filter.lfs.required=false -c filter.lfs.smudge= -c filter.lfs.process= \
+            "${GITHUB_WORKSPACE}" "${SRC}"
+          git config --global --add safe.directory "${SRC}"
+
+          cd "${SRC}"
+          phase_b_head=$(git rev-parse HEAD)
+
+          # Find the Phase A head: newest ancestor without .chezmoiroot that has .chezmoi.toml.tmpl at root
+          phase_a_head=""
+          for commit in $(git rev-list HEAD); do
+            if ! git cat-file -e "${commit}:.chezmoiroot" 2>/dev/null; then
+              if git cat-file -e "${commit}:.chezmoi.toml.tmpl" 2>/dev/null; then
+                phase_a_head="$commit"
+                break
+              fi
+            fi
+          done
+          [ -n "${phase_a_head}" ] || { echo "failed to locate Phase A head" >&2; exit 1; }
+          echo "Phase A head: ${phase_a_head}"
+          echo "Phase B head: ${phase_b_head}"
+
+          # Step 1: Provision at Phase A head
+          git checkout --detach "${phase_a_head}"
+          rm -rf "${SRC}/.chezmoiexternals"
+          cd "${HOME}"
+          printf '\n\n\n' | chezmoi init --apply --source "${SRC}" --no-tty --exclude=scripts,encrypted
+
+          # Step 2: Switch to Phase B head in place
+          cd "${SRC}"
+          git checkout --force --detach "${phase_b_head}"
+          rm -rf "${SRC}/home/.chezmoiexternals"
+          cd "${HOME}"
+
+          # Step 3: Run chezmoi apply WITHOUT --init, capturing log
+          apply_log="${RUNNER_TEMP}/apply-no-init.log"
+          set +e
+          printf '\n\n\n' | chezmoi apply --source "${SRC}" --no-tty --exclude=scripts,encrypted 2>&1 | tee "${apply_log}"
+          rc=$?
+          set -e
+          [ "${rc}" -eq 0 ] || { echo "chezmoi apply failed with exit code ${rc}" >&2; exit 1; }
+
+          # Assertions:
+          # (1) no "config file template has changed" warning
+          if grep -i "config file template has changed" "${apply_log}"; then
+            echo "FAIL: log carries 'config file template has changed' warning" >&2
+            exit 1
+          fi
+
+          # This job does not check script re-runs because both applies exclude scripts.
+          # A run_onchange_ script re-runs only when its rendered bytes change,
+          # which the render-equivalence checks cover.
+
+          echo "Phase B apply without --init succeeded cleanly with no config-template warning."
+          echo "- \`chezmoi apply\` (no \`--init\`) exit code: 0" >> "${GITHUB_STEP_SUMMARY}"
+
+  # ---------------------------------------------------------------------------
   # Task 2: render .chezmoiscripts/** and .chezmoiexternals/** -> internals artifact.
   # ---------------------------------------------------------------------------
   render-internals:
@@ -402,11 +531,16 @@ jobs:
           mkdir -p "${scratch}/target" "${out}"
           : > "${scratch}/empty.toml"
 
+          repo_root="$PWD"
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "${repo_root}")
+
           export scratch out
           num_procs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
           # Both trees hold only template files: every .chezmoiscripts file is a
           # *.tmpl, and every .chezmoiexternals file is an implicit template.
+          cd "${source_root}"
           find .chezmoiscripts .chezmoiexternals -type f -print0 | \
             xargs -0 -n 1 -P "${num_procs}" bash -c '
               for f in "$@"; do
@@ -417,7 +551,7 @@ jobs:
                 mkdir -p "${worker_scratch}/target"
                 : > "${worker_scratch}/empty.toml"
                 if chezmoi --config "${worker_scratch}/empty.toml" \
-                    --source "'"$PWD"'" \
+                    --source "'"$repo_root"'" \
                     --destination "${worker_scratch}/target" \
                     execute-template < "${f}" > "${dest}" 2> "${worker_scratch}/render.stderr"; then
                   :
@@ -455,6 +589,8 @@ jobs:
         if: matrix.os == 'ubuntu-arm64'
         run: |
           set -euo pipefail
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           for path in \
             .chezmoiscripts/50-linux-gnome/run_onchange_after_config-gnome-app-grid-order.sh \
@@ -469,7 +605,7 @@ jobs:
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
             --source "$PWD" \
             --destination "${RUNNER_TEMP}/scratch/target" \
-            execute-template < dot_config/VSCodium/User/settings.json.tmpl > "${editor}"
+            execute-template < "${source_root}/dot_config/VSCodium/User/settings.json.tmpl" > "${editor}"
           test -s "${editor}"
 
       - name: Run Jetson render fixtures
@@ -482,6 +618,8 @@ jobs:
       - name: Assert Figma OAuth and retired skill lifecycle
         run: |
           set -euo pipefail
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           reconciler="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
@@ -489,12 +627,12 @@ jobs:
           test -f "${external}"
           test ! -e "${external}.render-error.txt"
           ! grep -RIFq -e "figma/mcp-server-guide" -e "figma-skills-stage" "${out}"
-          test ! -e "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
+          test ! -e "${source_root}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
           test ! -e "${reconciler}"
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
             --source "$PWD" \
             --destination "${RUNNER_TEMP}/scratch/target" \
-            execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
+            execute-template < "${source_root}/private_readonly_dot_mcp.json.tmpl" > "${mcp}"
           jq -e '.mcpServers.figma == {"type":"http","url":"https://mcp.figma.com/mcp"}' "${mcp}"
           echo "- Figma OAuth is headerless and retired skill lifecycle remains absent (${{ matrix.os }})" \
             >> "${GITHUB_STEP_SUMMARY}"
@@ -502,15 +640,17 @@ jobs:
       - name: Assert fact-registry failure contracts
         run: |
           set -euo pipefail
+          . .ci/lib/source-root.sh
           scratch="${RUNNER_TEMP}/registry-contracts"
           empty="${RUNNER_TEMP}/scratch/empty.toml"
           target="${RUNNER_TEMP}/scratch/target"
           installer=".chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl"
 
           render_from() {
-            local source=$1 template=$2
+            local source=$1 template=$2 root
+            root=$(resolve_source_root "${source}")
             chezmoi --config "${empty}" --source "${source}" \
-              --destination "${target}" execute-template < "${source}/${template}"
+              --destination "${target}" execute-template < "${root}/${template}"
           }
 
           # Each negative assertion gets a full disposable source copy. Never
@@ -518,6 +658,8 @@ jobs:
           mkdir -p "${scratch}/unknown" "${scratch}/missing"
           cp -a "${GITHUB_WORKSPACE}/." "${scratch}/unknown/"
           cp -a "${GITHUB_WORKSPACE}/." "${scratch}/missing/"
+          unknown_root=$(resolve_source_root "${scratch}/unknown")
+          missing_root=$(resolve_source_root "${scratch}/missing")
 
           # Aimed at the GDM dconf profile's gate, which this repository's
           # greeter work does not move. It previously substituted into the SDDM
@@ -526,8 +668,8 @@ jobs:
           # failed with "unknown fact unexpectedly rendered" -- a green-looking
           # assertion that had quietly stopped testing anything.
           sed -i 's/gate: gdm/gate: ciUndeclaredFact/' \
-            "${scratch}/unknown/.chezmoidata/system.yaml"
-          grep -qF 'gate: ciUndeclaredFact' "${scratch}/unknown/.chezmoidata/system.yaml" \
+            "${unknown_root}/.chezmoidata/system.yaml"
+          grep -qF 'gate: ciUndeclaredFact' "${unknown_root}/.chezmoidata/system.yaml" \
             || { echo "the undeclared-fact substitution matched no gate" >&2; exit 1; }
           if render_from "${scratch}/unknown" "${installer}" \
               > "${scratch}/unknown.out" 2> "${scratch}/unknown.err"; then
@@ -537,7 +679,7 @@ jobs:
           grep -F 'unknown fact "ciUndeclaredFact"' "${scratch}/unknown.err"
 
           sed -i '/^# FORCE_[*] overrides/i\  ciMissingProbe:\n    type: bool\n    probe: template\n    gates: CI-only registry parity assertion.\n    whenFalse: Test fixture only.' \
-            "${scratch}/missing/.chezmoidata/facts.yaml"
+            "${missing_root}/.chezmoidata/facts.yaml"
           if render_from "${scratch}/missing" "${installer}" \
               > "${scratch}/missing.out" 2> "${scratch}/missing.err"; then
             echo "declared fact without a probe unexpectedly rendered" >&2
@@ -651,7 +793,10 @@ jobs:
           SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
           mkdir -p "${SRC}"
           cp -a "${GITHUB_WORKSPACE}/." "${SRC}/"
-          rm -rf "${SRC}/.git" "${SRC}/.chezmoiexternals"
+          rm -rf "${SRC}/.git"
+          . "${GITHUB_WORKSPACE}/.ci/lib/source-root.sh"
+          src_state=$(resolve_source_root "${SRC}")
+          rm -rf "${src_state}/.chezmoiexternals"
           cd "${HOME}"
 
           # Seed canaries for all .chezmoiremove entries.
@@ -720,6 +865,8 @@ jobs:
         run: |
           set -euxo pipefail
           home="${RUNNER_TEMP}/fakehome"
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
 
           # Ungated prunes must be removed.
           test ! -e "${home}/.agents/skills/ce-plan"
@@ -729,7 +876,7 @@ jobs:
           test ! -e "${home}/.agents/CLAUDE.md"
           test ! -e "${home}/.codex/codex.toml"
           test ! -e "${home}/.omp/agent/CLAUDE.md"
-          cmp "${home}/.omp/agent/models.yml" dot_omp/private_agent/private_readonly_models.yml
+          cmp "${home}/.omp/agent/models.yml" "${source_root}/dot_omp/private_agent/private_readonly_models.yml"
           # AGENTS.md and mcp.json are managed targets again, so the fixture
           # seeds them empty above and apply must have written real content
           # rather than pruned them. Non-empty is the falsifiable signal: a
@@ -821,9 +968,13 @@ jobs:
           tar -C "${GITHUB_WORKSPACE}" --exclude=./_artifacts --exclude=./.git -cf - . | \
             tar -C "${source_copy}" -xf -
 
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
+
           export scratch out source_copy
           num_procs=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
 
+          cd "${source_root}"
           find .chezmoiscripts .chezmoiexternals -type f -print0 | \
             xargs -0 -n 1 -P "${num_procs}" bash -c '
               for f in "$@"; do
@@ -858,6 +1009,8 @@ jobs:
       - name: Assert Figma OAuth and retired skill lifecycle
         run: |
           set -euo pipefail
+          . .ci/lib/source-root.sh
+          source_root=$(resolve_source_root "$PWD")
           out="${GITHUB_WORKSPACE}/_artifacts/rendered-internals"
           external="${out}/.chezmoiexternals/ai-agents.toml"
           reconciler="${out}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh"
@@ -865,12 +1018,12 @@ jobs:
           test -f "${external}"
           test ! -e "${external}.render-error.txt"
           ! grep -RIFq -e "figma/mcp-server-guide" -e "figma-skills-stage" "${out}"
-          test ! -e "${GITHUB_WORKSPACE}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
+          test ! -e "${source_root}/.chezmoiscripts/70-agents/run_after_install-figma-skills.sh.tmpl"
           test ! -e "${reconciler}"
           chezmoi --config "${RUNNER_TEMP}/scratch/empty.toml" \
             --source "${RUNNER_TEMP}/scratch/source" \
             --destination "${RUNNER_TEMP}/scratch/target" \
-            execute-template < private_readonly_dot_mcp.json.tmpl > "${mcp}"
+            execute-template < "${source_root}/private_readonly_dot_mcp.json.tmpl" > "${mcp}"
           jq -e '.mcpServers.figma == {"type":"http","url":"https://mcp.figma.com/mcp"}' "${mcp}"
           echo "- Figma OAuth is headerless and retired skill lifecycle remains absent (macos)" \
             >> "${GITHUB_STEP_SUMMARY}"
@@ -981,6 +1134,7 @@ jobs:
     needs:
       [
         apply,
+        apply-no-init,
         render-internals,
         apply-macos,
         shellcheck,
@@ -990,6 +1144,7 @@ jobs:
       - name: Require every job to succeed
         env:
           APPLY_RESULT: ${{ needs.apply.result }}
+          APPLY_NO_INIT_RESULT: ${{ needs.apply-no-init.result }}
           RENDER_INTERNALS_RESULT: ${{ needs.render-internals.result }}
           APPLY_MACOS_RESULT: ${{ needs.apply-macos.result }}
           SHELLCHECK_RESULT: ${{ needs.shellcheck.result }}
@@ -998,6 +1153,7 @@ jobs:
           failed=0
           for result in \
             "apply=${APPLY_RESULT}" \
+            "apply-no-init=${APPLY_NO_INIT_RESULT}" \
             "render-internals=${RENDER_INTERNALS_RESULT}" \
             "apply-macos=${APPLY_MACOS_RESULT}" \
             "shellcheck=${SHELLCHECK_RESULT}"; do

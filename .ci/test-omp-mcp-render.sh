@@ -14,6 +14,9 @@ set -euo pipefail
 # appears.
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 # An ABSOLUTE path, resolved against the caller's PATH: `render` below narrows
 # PATH so a stub `op` shadows the real 1Password CLI, and `env` would then look
 # a bare name up in that narrowed PATH instead. Every sibling gate that renders
@@ -31,7 +34,7 @@ trap cleanup EXIT
 fail() { printf 'test-omp-mcp-render: %s\n' "$*" >&2; exit 1; }
 
 target=dot_omp/private_agent/private_readonly_mcp.json.tmpl
-[ -f "$repo_root/$target" ] || fail "missing source surface $target"
+[ -f "$source_root/$target" ] || fail "missing source surface $target"
 
 mkdir -p "$scratch/bin" "$scratch/home" "$scratch/target"
 printf '#!/usr/bin/env bash\nprintf %%s DUMMY-OP-VALUE\n' > "$scratch/bin/op"
@@ -42,7 +45,7 @@ source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 render_mcp() {
   local override=$1 out=$2 err=$3
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$target" "$out" "$override" 2>"$err"
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/$target" "$out" "$override" 2>"$err"
 }
 
 # --- the declared inventory renders omp's native shapes -------------------- #

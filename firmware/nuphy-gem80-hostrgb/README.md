@@ -45,7 +45,7 @@ A patch that no longer applies fails the build rather than being skipped. When t
 pinned fork commit moves, expect to refresh these; the daily pin watch tells you the
 commit moved before the next build does.
 
-The fork commit is pinned in `.chezmoidata/firmware.yaml` under
+The fork commit is pinned in `home/.chezmoidata/firmware.yaml` under
 `firmware.gem80.qmkFork`, not in the release lock: the lock refresh job re-resolves
 its entries hourly, which would move the SHA away from the committed binary.
 Change the fork revision there and rebuild.
@@ -92,7 +92,7 @@ on that issue rather than filing another, so one incident stays one thread —
 close it once the pin is repaired. Run either workflow on demand from the Actions
 tab when you want an answer now.
 
-`firmware.gem80.rebuildMode` in `.chezmoidata/firmware.yaml` decides what the
+`firmware.gem80.rebuildMode` in `home/.chezmoidata/firmware.yaml` decides what the
 weekly check treats as success. `build-only` requires the build to succeed and
 reports a hash difference without failing; `match-sha256` also requires the
 rebuilt binary to match the recorded hash exactly. The comparison runs in both

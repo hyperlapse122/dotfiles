@@ -10,6 +10,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/jetson-installer-render.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 
@@ -19,17 +22,17 @@ printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invali
   >"$scratch/bin/op"
 chmod 700 -- "$scratch/bin/op"
 
-source_root="$scratch/source"
-mkdir -p -- "$source_root"
-cp -a -- "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$repo_root/.chezmoiscripts" \
-  "$repo_root/system" "$source_root/"
+fixture_source="$scratch/source"
+mkdir -p -- "$fixture_source"
+cp -a -- "$source_root/.chezmoidata" "$source_root/.chezmoitemplates" "$source_root/.chezmoiscripts" \
+  "$repo_root/system" "$fixture_source/"
 
 # The fact map replaces facts.tmpl wholesale: every fact this repository declares
 # must appear, because a consumer reading a missing key would silently get nil
 # rather than the value under test.
 write_facts() {
   local jetson=$1 shared_host=$2
-  cat >"$source_root/.chezmoitemplates/facts.tmpl" <<FACTS
+  cat >"$fixture_source/.chezmoitemplates/facts.tmpl" <<FACTS
 os: linux
 distro: ubuntu
 desktop: gnome
@@ -63,7 +66,7 @@ render() {
   local template=$1 out=$2
   env PATH="$scratch/bin:$PATH" chezmoi \
     --config "$scratch/empty.toml" \
-    --source "$source_root" \
+    --source "$fixture_source" \
     --destination "$scratch/target" \
     --override-data '{"chezmoi":{"osRelease":{"id":"ubuntu"},"arch":"arm64"}}' \
     execute-template <"$template" >"$out"
@@ -74,7 +77,7 @@ fail() {
   exit 1
 }
 
-installer="$repo_root/.chezmoiscripts/20-linux-ubuntu/run_onchange_before_jetson.sh.tmpl"
+installer="$source_root/.chezmoiscripts/20-linux-ubuntu/run_onchange_before_jetson.sh.tmpl"
 
 write_facts true false
 render "$installer" "$scratch/on.sh"

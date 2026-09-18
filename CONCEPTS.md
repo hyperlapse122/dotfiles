@@ -16,7 +16,7 @@ An onchange script that installs one subsystem's slice of the System tree to its
 A script that reads the System tree carries the tree's location as a literal baked in at render time. Rendering that script against a different source location therefore changes its content, and content is what decides a re-run — so redirecting the whole apply at a different checkout re-runs every source-reading script, not only the one whose files changed. A script in this family that configures fixed state and reads nothing from the source tree is exempt: it renders identically from any checkout.
 
 ### Position-independent script rendering
-The technique of decoupling an onchange script's rendered body from the invoking checkout's absolute path. Instead of interpolating the dotfiles source directory at render time, the script resolves its source root at runtime from the manager's exported environment variable with an active source-path fallback. This ensures the rendered script text is bit-identical across worktrees, preventing false-positive execution cascades when applying from feature branches.
+The technique of decoupling an onchange script's rendered body from the invoking checkout's absolute path. Instead of interpolating the dotfiles source directory at render time, the script resolves its source root at runtime from the manager's exported environment variable with an active source-path fallback. When accessing repository-rooted trees, a shared shell partial (`home/.chezmoitemplates/repo-root.sh.tmpl`) resolves the repository root from the source directory, ascending to its parent if a `.chezmoiroot` marker exists. This ensures the rendered script text is bit-identical across worktrees, preventing false-positive execution cascades when applying from feature branches.
 
 ### Dependency fingerprint
 A comment block that lists each of a script's declared dependencies with a hash of its content, so that changing a dependency changes the script's rendered text and re-triggers it. It exists because the dotfiles manager re-runs an onchange script on rendered-content change alone and has no other notion of a dependency. Hashing covers file content and declared capability probe tokens; template dependencies are hashed as raw text, so no secret enters a fingerprint.
@@ -90,6 +90,12 @@ The number of lead tool calls a dispatch costs before the recipient can be given
 
 ## Repository layout
 
+### Source root
+The directory chezmoi reads its source state from, named by `.chezmoiroot`. Now `home/`.
+
+### Repository root
+The git top level. Holds repository infrastructure plus `.chezmoiroot` and `.install-prerequisites.sh`.
+
 ### Primary checkout
 The plain checkout of a project on its default branch, used for default-branch inspection and base sessions. It is also what the dotfiles manager treats as its configured source, so a file that exists only in a Development worktree is invisible to an ordinary apply.
 
@@ -100,7 +106,7 @@ A worktree holding one feature branch, created and destroyed through the session
 The line separating repository-only entries at the source root from the ones that deploy into the home directory. A dot-prefixed name falls outside it by construction; every other name is inside it and must be classified, either as deployed or as denied in the source-state ignore file. The boundary is declared as data and checked against what the source state actually renders, so a new entry cannot cross it silently.
 
 ### Generated-in-source path
-A path written into the source directory by a tool rather than by a commit. It is hidden from version control yet still part of the source state, so the source-state ignore file must deny it even though version control already hides it.
+A path written into the source root by a tool rather than by a commit. It is hidden from version control yet still part of the source state, so the source-state ignore file must deny it even though version control already hides it.
 
 ## Keyboard lighting
 

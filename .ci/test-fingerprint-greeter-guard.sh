@@ -16,6 +16,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/fingerprint-greeter-guard.XXXXXX")
@@ -33,7 +36,7 @@ rendered="$scratch/install-system-fingerprint.sh"
 chezmoi --config "$scratch/empty.toml" --source "$repo_root" \
   --destination "$scratch/target" \
   --override-data '{"chezmoi":{"os":"linux","arch":"amd64","username":"fixture","osRelease":{"id":"fedora"}}}' \
-  execute-template <"$repo_root/.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl" \
+  execute-template <"$source_root/.chezmoiscripts/30-linux/run_onchange_after_install-system-32-fingerprint.sh.tmpl" \
   >"$rendered" 2>"$scratch/render.err" \
   || { cat "$scratch/render.err" >&2; fail 'the fingerprint installer did not render'; }
 bash -n "$rendered" || fail 'the rendered fingerprint installer is not valid bash'

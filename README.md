@@ -9,7 +9,7 @@ cross-platform dotfiles plus a narrower, OS-native provision set
 ### Bootstrap
 
 Each command downloads chezmoi, clones this repo into
-`~/src/github.com/hyperlapse122/dotfiles` (the source state), and applies it.
+`~/src/github.com/hyperlapse122/dotfiles` (the source state is `home/`), and applies it.
 
 **Linux & macOS** — curl:
 
@@ -29,7 +29,7 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
 ### What the command does
 
 1. Installs the chezmoi binary into a temporary location.
-2. Clones this repo into `~/src/github.com/hyperlapse122/dotfiles` (the source state).
+2. Clones this repo into `~/src/github.com/hyperlapse122/dotfiles` (the source state is `home/`).
 3. Runs the `read-source-state.pre` hook —
    [`.install-prerequisites.sh`](.install-prerequisites.sh) on Linux/macOS —
    which installs the tooling chezmoi itself depends on **before** it reads the
@@ -57,8 +57,8 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
    prints an advisory — renders no longer call the GitHub API.
 
 4. Renders every template, applies it to `$HOME`, and runs the provisioning
-   scripts under [`.chezmoiscripts/`](.chezmoiscripts). What lands is OS-gated
-   in [`.chezmoiignore`](.chezmoiignore), so the scope depends on the host:
+   scripts under [`home/.chezmoiscripts/`](home/.chezmoiscripts). What lands is OS-gated
+   in [`home/.chezmoiignore`](home/.chezmoiignore), so the scope depends on the host:
 
    - **Fedora** (full): base and component packages via dnf/flatpak/dotnet, fonts,
      public key import and card stubs, GitHub / GitLab / Tailscale / Docker auth, the zsh login
@@ -72,13 +72,13 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
      installs the Kimpanel Shell extension so the candidate popup renders inside
      GNOME Shell. Root-owned `/etc` system config (NVIDIA / Secure Boot / TPM2,
      firewalld, resolved, …) is installed from
-     [`.chezmoidata/system.yaml`](.chezmoidata/system.yaml), and Tailscale
+     [`home/.chezmoidata/system.yaml`](home/.chezmoidata/system.yaml), and Tailscale
      egress-NAT via ufw is enabled.
    - **Ubuntu arm64 on an NVIDIA Jetson AGX Thor**: cross-platform dotfiles,
      supported Ubuntu packages, JetPack, the 1Password desktop app, and desktop
      configuration. This is not a generic Ubuntu host path.
    - **macOS**: the cross-platform dotfiles, Homebrew-managed tools (installed
-     by the [`20-darwin`](.chezmoiscripts/20-darwin) Homebrew reconciler),
+     by the [`20-darwin`](home/.chezmoiscripts/20-darwin) Homebrew reconciler),
      VSCodium user state, and the Winbox-from-1Password importer.
 
    Before the first apply on a shared host, create
@@ -89,9 +89,9 @@ sh -c "$(wget -qO- https://get.chezmoi.io/lb)" -- init --apply --source ~/src/gi
 
    Every OS fetches pinned standalone CLI binaries into `~/.local/bin` and
    coding-agent skills into `~/.agents/skills/`
-   (via [`.chezmoiexternals/`](.chezmoiexternals)), and provisions MCP servers
+   (via [`home/.chezmoiexternals/`](home/.chezmoiexternals)), and provisions MCP servers
    via `dotagents` into `~/.agents/` from the pinned set in
-   [`dot_agents/private_readonly_agents.toml.tmpl`](dot_agents/private_readonly_agents.toml.tmpl)
+   [`home/dot_agents/private_readonly_agents.toml.tmpl`](home/dot_agents/private_readonly_agents.toml.tmpl)
    (rendered to `~/.agents/agents.toml`).
 
 GitLab CLI authentication **is** provisioned on apply: personal access tokens for
@@ -107,7 +107,7 @@ a PAT, a revoked session, or a host you want on OAuth: browser flow by default,
 
 Container-registry authentication for podman/buildah/skopeo is rendered directly
 into `~/.config/containers/auth.json`
-([`dot_config/containers/private_auth.json.tmpl`](dot_config/containers/private_auth.json.tmpl),
+([`home/dot_config/containers/private_auth.json.tmpl`](home/dot_config/containers/private_auth.json.tmpl),
 0600): GitHub- and GitLab-hosted registries (`ghcr.io`, `registry.jpi.app`,
 `registry.gitlab.com`) carry stored base64("user:PAT") keys resolved live from
 1Password on every apply, so a rotated PAT propagates on the next apply. Docker
@@ -144,7 +144,7 @@ a non-blank answer, so:
 ### OpenPGP card prompt (keyring — User PIN)
 
 During an interactive `chezmoi init`, the config template checks each declared
-card serial (`yubikeySerials` in [`.chezmoidata/user.yaml`](.chezmoidata/user.yaml))
+card serial (`yubikeySerials` in [`home/.chezmoidata/user.yaml`](home/.chezmoidata/user.yaml))
 that has not been prompted yet. It prompts on `/dev/tty` for the card's OpenPGP
 User PIN (`YubiKey OpenPGP User PIN for serial <serial>...`). Non-blank answers
 are stored directly in the OS keyring under service `gnupg-card-pin` with the
@@ -169,7 +169,7 @@ Before any command that reads source state (`apply`, `init --apply`, `update`,
 `diff`, `status`, etc.) renders templates, the prerequisite hook runs the Key
 presence check (skipped in real containers and CI):
 
-1. It imports the committed public key ([`.keys/gpg-A7F1956CD1A035A139BC7ABFCC740A29852C0E95.asc`](.keys/gpg-A7F1956CD1A035A139BC7ABFCC740A29852C0E95.asc))
+1. It imports the committed public key ([`home/.keys/gpg-A7F1956CD1A035A139BC7ABFCC740A29852C0E95.asc`](home/.keys/gpg-A7F1956CD1A035A139BC7ABFCC740A29852C0E95.asc))
    and sets ultimate ownertrust if not already set.
 2. It checks for a usable private key. If the host has a local private key for
    fingerprint `A7F1956CD1A035A139BC7ABFCC740A29852C0E95` (existing hosts), the
@@ -195,8 +195,8 @@ decryption. Insert the YubiKey carrying the key to continue.
 To authorize a backup YubiKey:
 
 1. Append the new card's decimal serial to `yubikeySerials` in
-   [`.chezmoidata/user.yaml`](.chezmoidata/user.yaml) and the literal list in
-   [`.chezmoi.toml.tmpl`](.chezmoi.toml.tmpl).
+   [`home/.chezmoidata/user.yaml`](home/.chezmoidata/user.yaml) and the literal list in
+   [`home/.chezmoi.toml.tmpl`](home/.chezmoi.toml.tmpl).
 2. Run `chezmoi init` (or `chezmoi init --apply`). The template prompts for the
    new serial's User PIN and records it in the keyring.
 3. Insert the backup card and run any chezmoi command. The Key presence check
@@ -292,7 +292,7 @@ The prerequisite hook continues once `op vault list` confirms desktop-app or ser
 
 Reading the source state performs no GitHub API calls — every tool version,
 URL, and checksum is pinned by the generated release lock
-([`.chezmoidata/releases.json`](.chezmoidata/releases.json)). Applying still
+([`home/.chezmoidata/releases.json`](home/.chezmoidata/releases.json)). Applying still
 downloads external repos and release assets (fonts, mise-managed tools) from
 GitHub, and anonymous calls share GitHub's 60-requests/hour-per-IP limit, so a
 token remains useful on a fresh apply. Right after `op` is authenticated,
@@ -343,7 +343,7 @@ from the image and environment:
 
 ## Day-to-day
 
-This repo _is_ chezmoi's source state — edit files here, not the deployed copies
+The chezmoi source state lives under `home/` — edit files there, not the deployed copies
 in `$HOME` (a `chezmoi apply` would overwrite direct `$HOME` edits).
 
 ```sh
@@ -358,30 +358,35 @@ single-source-of-truth data files, OS gating, secrets, and commit style).
 
 ## Repository structure
 
-Everything at the top level is chezmoi source state rendered into `$HOME` (see
-the attribute table in [`AGENTS.md`](AGENTS.md)), except the source-only trees
-below — excluded from deployment via `.chezmoiignore` — and the repo-meta files
-(`AGENTS.md`, `LICENSE`, `mise.toml`, …).
+The chezmoi source state lives under `home/` behind `.chezmoiroot` (see
+the attribute table in [`AGENTS.md`](AGENTS.md)). Repository infrastructure
+and source-only trees live at the repository root outside `home/`.
 
-- [`.chezmoidata/`](.chezmoidata) — template data, the single source of truth
-  for fonts (`fonts.yaml`), the root-owned `/etc`
-  install manifest ([`system.yaml`](.chezmoidata/system.yaml): per-path
-  modes/gates + removed-path cleanup), and user identity (`user.yaml`).
-- [`.chezmoiscripts/`](.chezmoiscripts) — provisioning scripts run on apply,
-  grouped by area with numeric prefixes fixing cross-group execution order
-  (chezmoi runs each phase's scripts alphabetically by target path):
-  `00-tools/`, `10-auth/`, `20-linux-fedora/`, `30-linux/`, `50-linux-kde/`,
-  `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`.
-- [`.chezmoitemplates/`](.chezmoitemplates) — shared template partials inlined
-  into scripts via `includeTemplate`: the `run_onchange_` dependency
-  fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.
-- [`.chezmoiexternals/`](.chezmoiexternals) — pinned external fetches, grouped by
-  domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
-  `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
-  `~/.local/bin` (codegraph, gh, glab, kubectl, helm,
-  macOS jq, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
-  declared in `.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
-  into `~/.agents/skills/`.
+- [`home/`](home) — chezmoi source state rendered into `$HOME`:
+  - [`home/.chezmoidata/`](home/.chezmoidata) — template data, the single source of truth
+    for fonts (`fonts.yaml`), the root-owned `/etc`
+    install manifest ([`system.yaml`](home/.chezmoidata/system.yaml): per-path
+    modes/gates + removed-path cleanup), and user identity (`user.yaml`).
+  - [`home/.chezmoiscripts/`](home/.chezmoiscripts) — provisioning scripts run on apply,
+    grouped by area with numeric prefixes fixing cross-group execution order
+    (chezmoi runs each phase's scripts alphabetically by target path):
+    `00-tools/`, `10-auth/`, `20-base/`, `30-linux/`, `50-linux-kde/`,
+    `50-linux-gnome/`, `60-build/`, `70-agents/`, `80-keys/`, `90-src/`.
+  - [`home/.chezmoitemplates/`](home/.chezmoitemplates) — shared template partials inlined
+    into scripts via `includeTemplate`: the `run_onchange_` dependency
+    fingerprint macro plus the sudo/headless/KDE/GNOME guard blocks.
+  - [`home/.chezmoiexternals/`](home/.chezmoiexternals) — pinned external fetches, grouped by
+    domain into six files: `ai-agents.toml`, `dev-tools.toml`, `vcs.toml`,
+    `k8s.toml`, `system.toml`, `fonts.toml`. Mostly standalone CLI binaries into
+    `~/.local/bin` (codegraph, gh, glab, kubectl, helm,
+    macOS jq, shellcheck, uv, …), plus prezto, the fonts, and the agent skills
+    declared in `home/.chezmoidata/agents.yaml` (`agents.skills.external`), extracted
+    into `~/.agents/skills/`.
+  - [`home/dot_agents/`](home/dot_agents) — deploys to `~/.agents/`: the `dotagents` config
+    template (MCP servers) and any locally-authored personal skill under
+    `home/dot_agents/skills/<name>/` (e.g. `daily-report`), deployed to
+    `~/.agents/skills/<name>/`.
+  - [`home/Library/`](home/Library) — macOS-only `~/Library` payloads.
 - [`system/`](system) — root-owned `/etc` config, installed by a script rather
   than linked into `$HOME`. See [`system/README.md`](system/README.md).
 - [`crates/mxm4-haptic/`](crates/mxm4-haptic) — Rust haptic client sources and utilities.
@@ -392,12 +397,7 @@ below — excluded from deployment via `.chezmoiignore` — and the repo-meta fi
   input change or `chezmoi apply --force`.
   `release-lock/` generates the static external-tool lock consumed by templates
   and externals. See [`packages/README.md`](packages/README.md).
-- [`dot_agents/`](dot_agents) — deploys to `~/.agents/`: the `dotagents` config
-  template (MCP servers) and any locally-authored personal skill under
-  `dot_agents/skills/<name>/` (e.g. `daily-report`), deployed to
-  `~/.agents/skills/<name>/`.
-- [`Library/`](Library) — macOS-only `~/Library` payloads.
-
+- [`firmware/`](firmware) — keyboard firmware configurations (e.g. NuPhy Gem80 HostRGB).
 The source-only trees are also excluded from taplo formatting via
 [`.taplo.toml`](.taplo.toml).
 
@@ -405,9 +405,9 @@ The source-only trees are also excluded from taplo formatting via
 
 This repository manages **Claude Code** (`claude`), **OpenAI Codex CLI** (`codex`), and **oh-my-pi** (`omp`).
 
-- **Single source of truth:** `.chezmoidata/agents.yaml` defines MCP servers (`agents.mcp.servers` including Exa web search and Context7), external skills (`agents.skills.external`), and harness settings.
+- **Single source of truth:** `home/.chezmoidata/agents.yaml` defines MCP servers (`agents.mcp.servers` including Exa web search and Context7), external skills (`agents.skills.external`), and harness settings.
 - **Universal MCP discovery:** Chezmoi renders `~/.mcp.json` from `agents.mcp.servers` with live 1Password `op://` resolution at apply time, renders the same servers into `~/.omp/agent/mcp.json`, and asserts them into `~/.codex/config.toml`.
-- **Model roster:** `.chezmoidata/agents.yaml` defines two lead pins and six worker models by agent and role: Claude lead on `opus[1m]` (Fable is reached through Compound Engineering model elevation, which defaults to the authoring entry's model for whichever of `plan_model` and `brainstorm_model` a repository leaves unset), Codex lead on `gpt-6-astra`, Claude authoring on `fable` at max effort, Claude judgment on `fable` at medium effort, Claude implementation on `sonnet` at xhigh effort, Codex judgment and fallback on `gpt-5.6-luna`, and omp mechanical work at low effort and implementation at high effort on `google-antigravity/gemini-3.8-flash`. Roster changes propagate to settings pins, rendered payloads, and target configs at apply time.
+- **Model roster:** `home/.chezmoidata/agents.yaml` defines two lead pins and six worker models by agent and role: Claude lead on `opus[1m]` (Fable is reached through Compound Engineering model elevation, which defaults to the authoring entry's model for whichever of `plan_model` and `brainstorm_model` a repository leaves unset), Codex lead on `gpt-6-astra`, Claude authoring on `fable` at max effort, Claude judgment on `fable` at medium effort, Claude implementation on `sonnet` at xhigh effort, Codex judgment and fallback on `gpt-5.6-luna`, and omp mechanical work at low effort and implementation at high effort on `google-antigravity/gemini-3.8-flash`. Roster changes propagate to settings pins, rendered payloads, and target configs at apply time.
 - **Unified skills:** Canonical skills deploy to `~/.agents/skills/`. Chezmoi deploys symbolic links `~/.claude/skills` and `~/.codex/skills` pointing to `~/.agents/skills`.
 
 omp replaces Antigravity CLI in Orca. All eight Git actions use omp; the ordinary TUI default remains Claude. The native omp extension injects the current orchestration role before each model call.
@@ -430,7 +430,7 @@ Claude Code and Codex are managed again. Two steps stay with the operator:
   hand before trusting the reconciler. `codex mcp list` and `codex mcp get` print
   resolved header values; do not paste their output into issues or pull requests.
 
-`.chezmoiremove` prunes the stray `~/.codex/codex.toml` that an earlier source
+`home/.chezmoiremove` prunes the stray `~/.codex/codex.toml` that an earlier source
 deployed; nothing else under `~/.codex` is touched by removal. Old payloads under
 `~/.codex/packages/standalone/` and `~/.local/share/codex-plugins/` are not used
 by the command store and may be deleted by hand.

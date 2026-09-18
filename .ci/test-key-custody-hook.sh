@@ -5,6 +5,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 hook="$repo_root/.install-prerequisites.sh"
 [[ -f "$hook" ]] || { printf 'test-key-custody-hook: missing %s\n' "$hook" >&2; exit 1; }
 
@@ -22,7 +25,7 @@ _INSTALL_PREREQUISITES_TEST_SOURCE=1 source "$hook"
 # a python3 pty driver, which must re-source the hook in seam-only mode too.
 export _INSTALL_PREREQUISITES_TEST_SOURCE=1
 
-for fn in hook_distro_id hook_desktop resolve_sudo apt_installed bootstrap_homebrew seed_scdaemon_conf preflight_fedora preflight_ubuntu preflight_macos preflight_card_stack read_user_data key_check_import_public_key key_check_agent_probe key_check_classify key_check_verify_stub_safety key_check_run_learn normalize_aid_serial key_check_scd_serialno key_check_read_chv_status key_check_cancel_probe key_check_loopback_checkpin key_check_bounded_run key_check_keyring_get key_check_keyring_set key_check_clear_serials key_check_acquire_lock key_check_ask_operator key_check_pin_verify_impl key_check_pin_verify run_key_presence_check; do
+for fn in hook_distro_id hook_desktop hook_source_root resolve_sudo apt_installed bootstrap_homebrew seed_scdaemon_conf preflight_fedora preflight_ubuntu preflight_macos preflight_card_stack read_user_data key_check_import_public_key key_check_agent_probe key_check_classify key_check_verify_stub_safety key_check_run_learn normalize_aid_serial key_check_scd_serialno key_check_read_chv_status key_check_cancel_probe key_check_loopback_checkpin key_check_bounded_run key_check_keyring_get key_check_keyring_set key_check_clear_serials key_check_acquire_lock key_check_ask_operator key_check_pin_verify_impl key_check_pin_verify run_key_presence_check; do
   declare -F "$fn" >/dev/null || fail "the hook does not define required preflight function $fn"
 done
 pass 'the hook exposes all required preflight functions above the seam'
@@ -480,7 +483,7 @@ pass 'A real container marker and CI=true skip preflight without package manager
       "$chezmoi_bin" --config "$render_dir/empty.toml" --source "$repo_root" \
       --destination "$render_dir/target" \
       --override-data "$override_json" \
-      execute-template < "$repo_root/$tmpl_rel" > "$out_file"
+      execute-template < "$source_root/$tmpl_rel" > "$out_file"
   }
 
   # 1. Fedora base script: neither expect nor gnupg2
@@ -526,7 +529,7 @@ pass 'A real container marker and CI=true skip preflight without package manager
   fi
 
   # 5. Jetson installer: neither gnupg nor pinentry-qt
-  jetson_src="$repo_root/.chezmoiscripts/20-linux-ubuntu/run_onchange_before_jetson.sh.tmpl"
+  jetson_src="$source_root/.chezmoiscripts/20-linux-ubuntu/run_onchange_before_jetson.sh.tmpl"
   if grep -qE 'install_apt "(gnupg|pinentry-qt)"' "$jetson_src"; then
     fail 'Jetson installer source still contains install_apt gnupg or pinentry-qt'
   fi
@@ -1544,5 +1547,50 @@ pass 'T31: no /dev/tty when an ask is needed -> run-from-a-terminal message, no 
 ) || fail 'T9: no gpg-connect-agent call may carry -v, no chezmoi call may carry --value for a PIN, and no PIN may appear outside the dedicated inquiry-data log'
 pass 'T9: across every scenario, no -v to gpg-connect-agent, no --value for a PIN, PIN never in argv/stdout/stderr'
 
+
+# ============================== hook_source_root / read_user_data ============
+(
+  rud_root="$scratch/read-user-data-rooted"
+  mkdir -p -- "$rud_root/home/.chezmoidata"
+  printf 'home\n' >"$rud_root/.chezmoiroot"
+  cp "$hook" "$rud_root/.install-prerequisites.sh"
+  printf 'user:\n  fullname: Rooted User\n  email: rooted@example.invalid\n  gpgPubKey: 1111222233334444555566667777888899990000\n  yubikeySerials: [12345678]\n' \
+    >"$rud_root/home/.chezmoidata/user.yaml"
+
+  rud_err="$scratch/read-user-data-rooted.err"
+  env -u CHEZMOI_SOURCE_DIR bash -c '
+    _INSTALL_PREREQUISITES_TEST_SOURCE=1 source "$1"
+    unset _INSTALL_PREREQUISITES_TEST_SOURCE
+    read_user_data || exit 11
+    [[ "$KEY_CHECK_FPR" == "1111222233334444555566667777888899990000" ]] || exit 12
+    [[ "${KEY_CHECK_SERIALS[*]}" == "12345678" ]] || exit 13
+  ' bash "$rud_root/.install-prerequisites.sh" >/dev/null 2>"$rud_err" \
+    || fail "read_user_data failed to resolve home/.chezmoidata/user.yaml through .chezmoiroot: $(cat "$rud_err")"
+) || fail 'read_user_data with no argument and no environment must resolve home/.chezmoidata/user.yaml through .chezmoiroot'
+pass 'read_user_data resolves home/.chezmoidata/user.yaml through .chezmoiroot when CHEZMOI_SOURCE_DIR is unset'
+
+(
+  missing_root="$scratch/missing-root-hook"
+  mkdir -p -- "$missing_root/.chezmoidata"
+  printf 'nonexistent\n' >"$missing_root/.chezmoiroot"
+  cp "$hook" "$missing_root/.install-prerequisites.sh"
+  # Place a user.yaml in the hook dir so a silent fallback would have found it
+  printf 'user:\n  fullname: Fallback User\n  email: fallback@example.invalid\n  gpgPubKey: AAAA222233334444555566667777888899990000\n  yubikeySerials: [87654321]\n' \
+    >"$missing_root/.chezmoidata/user.yaml"
+
+  missing_err="$scratch/missing-root.err"
+  if env -u CHEZMOI_SOURCE_DIR bash -c '
+    _INSTALL_PREREQUISITES_TEST_SOURCE=1 source "$1"
+    unset _INSTALL_PREREQUISITES_TEST_SOURCE
+    is_container() { return 1; }
+    CI=false
+    run_key_presence_check
+  ' bash "$missing_root/.install-prerequisites.sh" >/dev/null 2>"$missing_err"; then
+    fail 'run_key_presence_check succeeded unexpectedly with a missing .chezmoiroot target'
+  fi
+  grep -qF 'names a directory that does not exist: nonexistent' "$missing_err" \
+    || fail "expected missing-directory diagnostic on stderr, got: $(cat "$missing_err")"
+) || fail 'a .chezmoiroot naming a missing directory must make the key presence check fail loudly'
+pass 'a .chezmoiroot naming a missing directory makes the key presence check fail loudly'
 
 printf 'test-key-custody-hook: all preflight scenarios passed\n'

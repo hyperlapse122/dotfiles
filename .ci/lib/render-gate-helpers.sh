@@ -9,11 +9,22 @@
 # globals are named or scoped differently cannot silently break it.
 #
 # `fail` stays script-local in each caller — its message prefix is the one
-# genuine per-script difference, and only `assert_gate` calls it.
+# genuine per-script difference, and require_file, render_ignore, and
+# render_reconciler are the callers of it.
+#
+# require_file, render_ignore, and render_reconciler each join a source-state
+# path (a .chezmoiignore, a .chezmoiscripts/... template, and so on) onto the
+# source root rather than onto repo_root, resolved through
+# .ci/lib/source-root.sh's join_source_state; render() itself keeps
+# `--source "$repo_root"` because chezmoi descends into the source root on
+# its own. When .chezmoiroot is absent, the source root falls back to
+# repo_root unchanged.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)/.ci/lib/source-root.sh"
 
 require_file() {
-  local repo_root=$1 path=$4
-  [[ -f "$repo_root/$path" ]] || fail "missing source surface $path"
+  local repo_root=$1 path=$4 target
+  target=$(join_source_state "$repo_root" "$path") || fail "missing source surface $path"
+  [[ -f "$target" ]] || fail "missing source surface $path"
 }
 
 render() {
@@ -49,9 +60,10 @@ write_fact_stub() {
 }
 
 render_ignore() {
-  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 jetson=${7:-false} desktop=${8:-gnome} variant
+  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 output=$6 jetson=${7:-false} desktop=${8:-gnome} variant ignore_path
   variant="$scratch/ignore-$os-$desktop-$container-$jetson.tmpl"
-  write_fact_stub "$repo_root/.chezmoiignore" "$variant" "$container" "$jetson" "$desktop"
+  ignore_path=$(join_source_state "$repo_root" .chezmoiignore) || fail "missing source surface .chezmoiignore"
+  write_fact_stub "$ignore_path" "$variant" "$container" "$jetson" "$desktop"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }
 
@@ -78,9 +90,10 @@ assert_gate() {
 }
 
 render_reconciler() {
-  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 template=$6 output=$7 jetson=${8:-false} variant
+  local repo_root=$1 scratch=$2 chezmoi_bin=$3 os=$4 container=$5 template=$6 output=$7 jetson=${8:-false} variant template_path
   variant="$scratch/reconciler-$os-$container-$jetson-$(basename "$template")"
   local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"gnome\" \"distro\" \"fedora\" \"headless\" false \"nvidia\" false"
-  sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$repo_root/$template" > "$variant"
+  template_path=$(join_source_state "$repo_root" "$template") || fail "missing source surface $template"
+  sed 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' "$template_path" > "$variant"
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$variant" "$output"
 }

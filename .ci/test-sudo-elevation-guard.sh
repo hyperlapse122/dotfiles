@@ -24,6 +24,9 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
@@ -38,8 +41,8 @@ pass() { printf 'sudo-elevation-guard: ok - %s\n' "$*"; }
 chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is required on PATH'
 
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/sudo-elevation-guard.sh.tmpl
-guard_src="$repo_root/.chezmoitemplates/sudo-elevation-guard.sh.tmpl"
-cp "$repo_root/.chezmoitemplates/skip.sh.tmpl" "$scratch/src/.chezmoitemplates/"
+guard_src="$source_root/.chezmoitemplates/sudo-elevation-guard.sh.tmpl"
+cp "$source_root/.chezmoitemplates/skip.sh.tmpl" "$scratch/src/.chezmoitemplates/"
 
 # A consumer that uses the SUDO array, so shellcheck sees the array consumed the
 # way a real provisioning script consumes it.

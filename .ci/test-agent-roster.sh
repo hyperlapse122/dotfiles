@@ -42,6 +42,9 @@ fail() {
 
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 mkdir -p "$scratch/home" "$scratch/bin" "$scratch/target"
 printf '[data]\n' >"$scratch/empty.toml"
@@ -520,13 +523,13 @@ for manifest in "${plugin_manifests[@]}"; do
   base="$scratch/$name-base.json"
   again="$scratch/$name-again.json"
   moved="$scratch/$name-moved.json"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$manifest" "$base" ||
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/$manifest" "$base" ||
     fail "$manifest failed to render"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$manifest" "$again" ||
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/$manifest" "$again" ||
     fail "$manifest failed to render a second time"
   diff -q "$base" "$again" >/dev/null ||
     fail "$manifest version moved with no input change"
-  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/$manifest" "$moved" "$stub_override" ||
+  render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/$manifest" "$moved" "$stub_override" ||
     fail "$manifest failed to render against a changed roster"
   diff -q "$base" "$moved" >/dev/null &&
     fail "$manifest version did not move when a roster entry changed"
@@ -536,7 +539,7 @@ done
 
 assert_script="$scratch/assert-orchestration-hook.sh"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-  "$repo_root/.chezmoiscripts/70-agents/run_after_assert-orchestration-hook.sh.tmpl" "$assert_script" ||
+  "$source_root/.chezmoiscripts/70-agents/run_after_assert-orchestration-hook.sh.tmpl" "$assert_script" ||
   fail 'the orchestration-hook assertion script failed to render'
 payload_dir="$scratch/home/.local/share/orchestration-hook"
 mkdir -p "$payload_dir" "$scratch/home/.local/libexec"

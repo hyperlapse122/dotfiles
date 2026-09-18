@@ -37,6 +37,9 @@
 set -euo pipefail
 
 root=${1:-$(pwd)}
+# shellcheck source=.ci/lib/source-root.sh
+source "$root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$root")
 scratch_root=${RUNNER_TEMP:-${XDG_RUNTIME_DIR:-"$HOME/.cache"}}
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/ce-overlays.XXXXXX")
@@ -56,20 +59,20 @@ env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
   --source "$root" \
   execute-template \
-  < "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" \
+  < "$source_root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" \
   > "$prov"
 env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
   --source "$root" \
   execute-template \
-  < "$root/.chezmoiexternals/ai-agents.toml" \
+  < "$source_root/.chezmoiexternals/ai-agents.toml" \
   > "$rendered_externals"
 prune="$scratch/prune.sh"
 env PATH="$bin:$PATH" chezmoi \
   --config "$scratch/empty.toml" \
   --source "$root" \
   execute-template \
-  < "$root/.chezmoiscripts/70-agents/run_onchange_after_zz-prune-agent-marketplace-archives.sh.tmpl" \
+  < "$source_root/.chezmoiscripts/70-agents/run_onchange_after_zz-prune-agent-marketplace-archives.sh.tmpl" \
   > "$prune"
 
 # The rendered script resolves CURRENT="$BASE_DIR/v<semver>" with BASE_DIR under $HOME.
@@ -81,7 +84,7 @@ version=$(grep -oE '"\$HOME/\.local/share/compound-engineering/v[0-9][0-9.]*"' "
 # additive, third-party-writable tree, so the reference has to be re-asserted on
 # every apply. A fingerprinted onchange run records a clean skip and would never
 # repair live drift such as a foreign symlink at the reference path.
-case "$root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" in
+case "$source_root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" in
   *"/run_onchange_"*) echo "overlay provisioner must retry on every apply" >&2; exit 1 ;;
   *"/run_after_"*) ;;
   *) echo "overlay provisioner must use the run_after_ lifecycle" >&2; exit 1 ;;
@@ -110,7 +113,7 @@ build_fake_ce() {
   mkdir -p "$omp_current/skills/ce-sweep/references/sources"
   cp "$root/.ci/fixtures/ce-sweep/SKILL.md" "$omp_current/skills/ce-sweep/SKILL.md"
   mkdir -p "$overlays"
-  cp -Rp "$root/dot_local/share/compound-engineering-overlays/." "$overlays/"
+  cp -Rp "$source_root/dot_local/share/compound-engineering-overlays/." "$overlays/"
   # Mirror chezmoi's own source-name convention: an `executable_` prefix marks
   # the target executable and is stripped from the deployed name. The raw `cp`
   # above does not know that convention, so replicate it here.
@@ -222,10 +225,10 @@ cmp -s "$foreign_dir/keep.md" <(printf 'outside\n') \
   || { echo "provisioner disturbed the symlinked directory contents" >&2; exit 1; }
 
 # --- CLI elevation adapter overlay: checksum-guarded whole-file replacement (KTD7) ---
-ce_plan_overlay="$root/dot_local/share/compound-engineering-overlays/skills/ce-plan/scripts/executable_elevation-dispatch.sh"
+ce_plan_overlay="$source_root/dot_local/share/compound-engineering-overlays/skills/ce-plan/scripts/executable_elevation-dispatch.sh"
 [ -f "$ce_plan_overlay" ] || { echo "ce-plan elevation overlay missing: $ce_plan_overlay" >&2; exit 1; }
 [ -x "$ce_plan_overlay" ] || { echo "ce-plan elevation overlay is not executable" >&2; exit 1; }
-[ ! -e "$root/dot_local/share/compound-engineering-overlays/skills/ce-brainstorm/scripts/executable_elevation-dispatch.sh" ] \
+[ ! -e "$source_root/dot_local/share/compound-engineering-overlays/skills/ce-brainstorm/scripts/executable_elevation-dispatch.sh" ] \
   || { echo "ce-brainstorm elevation overlay should be deleted; one overlay source now guards both destinations" >&2; exit 1; }
 
 guarded_sha=$(grep -oE 'GUARDED_UPSTREAM_SHA256="[0-9a-f]{64}"' "$prov" | grep -oE '[0-9a-f]{64}')
@@ -488,7 +491,7 @@ printf '%s\n' "$skill_block" | grep -q '^stripComponents = 3$' \
   || { echo "rendered i-have-adhd skill external lost stripComponents" >&2; exit 1; }
 printf '%s\n' "$skill_block" | grep -qxF 'include = ["*/skills/i-have-adhd/**"]' \
   || { echo "rendered i-have-adhd skill external lost include" >&2; exit 1; }
-skill_ref=$(jq -er '.releases.tools["i-have-adhd"].version' "$root/.chezmoidata/releases.json")
+skill_ref=$(jq -er '.releases.tools["i-have-adhd"].version' "$source_root/.chezmoidata/releases.json")
 printf '%s\n' "$skill_block" |
   grep -Fx "url = 'https://github.com/ayghri/i-have-adhd/archive/$skill_ref.tar.gz'" >/dev/null ||
   { echo "rendered i-have-adhd skill external has wrong URL" >&2; exit 1; }
@@ -506,7 +509,7 @@ env HOME="$prune_home" bash "$prune"
 [[ -L $prune_home/.local/share/compound-engineering/foreign ]]
 
 # --- persona content contract ---
-persona="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md"
+persona="$source_root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md"
 contract() { grep -qF -- "$1" "$persona" || { echo "persona missing: $1" >&2; exit 1; }; }
 contract 'glab'
 contract 'group/project#<iid>'
@@ -531,7 +534,7 @@ if grep -qiE 'glab mr\b|glab mr list|merge request list' "$persona"; then
 fi
 
 # --- interview content contract ---
-interview_file="$root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/interview.md"
+interview_file="$source_root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/interview.md"
 [ -f "$interview_file" ] || { echo "interview overlay missing: $interview_file" >&2; exit 1; }
 grep -qF -- 'gitlab-issues' "$interview_file" || { echo "interview missing gitlab-issues" >&2; exit 1; }
 grep -qF -- 'group/project' "$interview_file" || { echo "interview missing group/project target" >&2; exit 1; }

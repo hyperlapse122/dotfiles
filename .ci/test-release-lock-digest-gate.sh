@@ -20,7 +20,10 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 gate="$repo_root/.ci/check-release-lock-digests.sh"
 fixtures="$repo_root/.ci/fixtures/release-lock-digests"
-lock="$repo_root/.chezmoidata/releases.json"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+lock="$source_root/.chezmoidata/releases.json"
 
 [ -x "$gate" ] || {
   printf 'release-lock digest gate: missing or non-executable %s\n' "$gate" >&2

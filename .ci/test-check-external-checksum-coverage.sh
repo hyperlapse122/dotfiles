@@ -37,6 +37,9 @@ pass() { printf '  ok  %s\n' "$*"; }
 chezmoi_bin=$(command -v chezmoi) || fail 'chezmoi is not on PATH'
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 # A source tree the gate can render: everything symlinked back to the repo, with
 # the two directories the cases mutate copied so the originals stay untouched.
@@ -49,16 +52,23 @@ fixture() {
     [ -e "$entry" ] || continue
     ln -s -- "$entry" "$dest/$(basename -- "$entry")"
   done
-  rm -f -- "$dest/.chezmoiexternals" "$dest/.chezmoidata"
-  cp -a -- "$repo_root/.chezmoiexternals" "$dest/"
-  cp -a -- "$repo_root/.chezmoidata" "$dest/"
+  local dest_source_root
+  dest_source_root=$(populate_fixture_source_root "$dest" "$source_root")
+  rm -f -- "$dest_source_root/.chezmoiexternals" "$dest_source_root/.chezmoidata"
+  cp -a -L -- "$source_root/.chezmoiexternals" "$dest_source_root/"
+  cp -a -L -- "$source_root/.chezmoidata" "$dest_source_root/"
+  [[ -d "$dest_source_root/.chezmoiexternals" && ! -L "$dest_source_root/.chezmoiexternals" ]] ||
+    fail "fixture $name did not get a private copy of .chezmoiexternals"
+  [[ -d "$dest_source_root/.chezmoidata" && ! -L "$dest_source_root/.chezmoidata" ]] ||
+    fail "fixture $name did not get a private copy of .chezmoidata"
   printf '%s\n' "$dest"
 }
 
 # Replace an exact block in one external template. The literal must be present,
 # so a case cannot quietly stop testing anything when the template is reworded.
 edit_external() {
-  local tree=$1 file=$2 old=$3 new=$4
+  local tree=$1 file=$2 old=$3 new=$4 target_file
+  target_file=$(join_source_state "$tree" ".chezmoiexternals/$file")
   python3 -c '
 import sys
 path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -68,7 +78,7 @@ if old not in text:
     sys.exit(f"fixture literal not found in {path}:\n{old}")
 with open(path, "w", encoding="utf-8") as handle:
     handle.write(text.replace(old, new, 1))
-' "$tree/.chezmoiexternals/$file" "$old" "$new"
+' "$target_file" "$old" "$new"
 }
 
 expect_reject() {
@@ -134,7 +144,7 @@ printf '[data]\n' >"$scratch/empty.toml"
 
 render_leg() {
   local os=$1 arch=$2 ext name
-  for ext in "$repo_root/.chezmoiexternals"/*.toml; do
+  for ext in "$source_root/.chezmoiexternals"/*.toml; do
     name=$(basename -- "$ext" .toml)
     printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/external.tmpl"
     cat "$ext" >>"$scratch/external.tmpl"
@@ -205,7 +215,7 @@ if "agy" in tools or "agy" in stanzas["linux-amd64"]:
 for problem in problems:
     print(problem)
 sys.exit(1 if problems else 0)
-' "$render_dir" "$repo_root/.chezmoidata/releases.json" ||
+' "$render_dir" "$source_root/.chezmoidata/releases.json" ||
   fail 'the exemption corners no longer hold (listed above)'
 pass 'the version-only externals pass with no checksum table'
 pass 'retired agy is absent from lock and externals'
