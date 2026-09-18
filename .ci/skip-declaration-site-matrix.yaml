@@ -22,7 +22,7 @@
 #     via dotfiles-skips, but are permanently excluded from this matrix and MUST NOT
 #     be added as owner rows. The two renamed GNOME extension jobs appear only as
 #     gnome-guard CONSUMER instances, which is what keeps that guard's fan-out at eight.
-#     The frozen totals (150 classified owners / 225 instances / 145 phase-local
+#     The frozen totals (159 classified owners / 234 instances / 154 phase-local
 #     instances) remain strictly pinned.
 #   * One owner per skip decision that abandons a declared step or the whole script.
 #     Per-item notices inside an iteration over discovered items (per touchpad
@@ -90,7 +90,7 @@
 # enrollment keypair guard by build system added one. Retiring the SELinux policy
 # script removed one sudo-elevation-guard consumer, and the pasta dontaudit module
 # brought that consumer back, so the guard's fan-out is 25 again. The frozen totals —
-# 150 owners, 8 hard errors, 225 instances, 145 + 80 — are CI-enforced and must be
+# 159 owners, 8 hard errors, 234 instances, 154 + 80 — are CI-enforced and must be
 # re-frozen in .ci/check-skip-declarations.sh and .ci/test-capability-cache.sh
 # together with this file.
 
@@ -100,10 +100,10 @@ runtime_registry: '.chezmoidata/.capability-registry.tsv'
 runtime_input: false
 
 totals:
-  classified_owners: 150
+  classified_owners: 159
   hard_error_owners: 8
-  rendered_instances: 225
-  phase_local_instances: 145
+  rendered_instances: 234
+  phase_local_instances: 154
   shared_guard_instances: 80
 plan_contract:
   source: 'docs/plans/feedback-sweep-plan.md#r5-classified-site-boundary'
@@ -125,7 +125,7 @@ plan_contract_scopes:
 
 audited_forms:
   skip_here: 63
-  skip_step: 48
+  skip_step: 57
   done_here: 20
   not_applicable: 19
 
@@ -133,12 +133,12 @@ audited_directions:
   harmless: 34
   transient-blocking: 63
   transient-tolerable: 3
-  operator-blocking: 11
+  operator-blocking: 20
 audited_scopes:
   00-tools: 4
   10-auth: 5
-  20-base: 5
-  30-components: 28
+  20-base: 7
+  30-components: 35
   30-linux: 39
   50-linux-gnome: 29
   50-linux-kde: 33
@@ -171,8 +171,8 @@ divergence:
     reason: 'The auth phase carries a fifth step owner — auth-tailscale/already-authenticated — that the pre-U4 estimate folded into its four blocking rows.'
   - bucket: 'scope:20-linux-fedora'
     plan: 14
-    audited: 33
-    reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts. Four more arrive with the NVIDIA driver-branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and a signing keypair the out-of-tree module builder has not minted yet. Three more arrive with the non-interactive MOK enrollment that replaced the discarded mokutil --import exit status: an availability probe that answered nothing, no stored enrollment passphrase, and a stored passphrase that is not typeable on the MokManager console. Each of the last two prints the mokutil command to run by hand, which is the signal the silent original had none of. A fourth, an absent expect, retired with expect itself when the enrollment moved to writing the password on mokutil''s stdin. One more arrives with the enrollment keypair guard, which is now one owner per build system rather than a single not_applicable site. One more arrives with the integrated-only policy: the NVIDIA installer declares its skip before any branch resolves on a hybrid host whose GPU architecture is listed in nvidia.integratedOnlyArchitectures. Seven more arrive with the package installer failure policy: the devtools, apps and .NET installers on Fedora and Ubuntu each declare a skip_step when a post-attempt re-inspection still finds a package, group or tool missing, instead of hiding the failure behind a suppressed exit status.'
+    audited: 42
+    reason: 'The MOK generate/enroll guards, the kr-mirrorlist chassis guard, the empty-set opt-outs and enable_unit’s own unit-file guard are separate step owners, which the scope estimate collapsed into whole scripts. Four more arrive with the NVIDIA driver-branch axis: an unlisted GPU architecture, a conflicting installed branch, a declared package set the enabled sources do not offer, and a signing keypair the out-of-tree module builder has not minted yet. Three more arrive with the non-interactive MOK enrollment that replaced the discarded mokutil --import exit status: an availability probe that answered nothing, no stored enrollment passphrase, and a stored passphrase that is not typeable on the MokManager console. Each of the last two prints the mokutil command to run by hand, which is the signal the silent original had none of. A fourth, an absent expect, retired with expect itself when the enrollment moved to writing the password on mokutil''s stdin. One more arrives with the enrollment keypair guard, which is now one owner per build system rather than a single not_applicable site. One more arrives with the integrated-only policy: the NVIDIA installer declares its skip before any branch resolves on a hybrid host whose GPU architecture is listed in nvidia.integratedOnlyArchitectures. Seven more arrive with the package installer failure policy: the devtools, apps and .NET installers on Fedora and Ubuntu each declare a skip_step when a post-attempt re-inspection still finds a package, group or tool missing, instead of hiding the failure behind a suppressed exit status. Nine more arrive with the remaining installer conversion: tailscale, podman, desktop-IME and the base installer each declare a skip_step per OS branch (Fedora and Ubuntu) when their declared package set stays missing after the attempt, and flatpaks declares one shared skip_step whose predicate renders identically on both OS branches, so it is one owner with one instance rather than two.'
   - bucket: 'scope:30-linux'
     plan: 19
     audited: 39
@@ -2469,6 +2469,132 @@ owners:
     direction: 'operator-blocking'
     instances:
       - '.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl#install-dotnet-darwin/dotnet-tools-not-installed'
+  - owner: 'install-tailscale-fedora/tailscale-not-installed'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl'
+    anchor_line: 128
+    anchor: '  if ! rpm -q tailscale >/dev/null 2>&1 && report_tailscale_missing; then'
+    predicate: '! rpm -q tailscale >/dev/null 2>&1 && report_tailscale_missing'
+    predicate_digest: 'sha256:d3c14b952d0cec7bf1cee47a1e1928398b41c299c43bb3b682989bb2ffd106a5'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl#install-tailscale-fedora/tailscale-not-installed'
+  - owner: 'install-tailscale-ubuntu/tailscale-not-installed'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl'
+    anchor_line: 125
+    anchor: '  if ! command -v tailscale >/dev/null 2>&1 && report_tailscale_missing; then'
+    predicate: '! command -v tailscale >/dev/null 2>&1 && report_tailscale_missing'
+    predicate_digest: 'sha256:b81ad84f9d7a3c253b6585886f2fe9705d5380c02277ec022b098700807d184d'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'ubuntu'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl#install-tailscale-ubuntu/tailscale-not-installed'
+  - owner: 'install-flatpaks/flatpak-apps-not-installed'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_40-flatpaks.sh.tmpl'
+    anchor_line: 165
+    anchor: '  if [[ "${#missing_flatpaks[@]}" -gt 0 ]] && report_flatpaks_missing "${missing_flatpaks[@]}"; then'
+    predicate: '[[ "${#missing_flatpaks[@]}" -gt 0 ]] && report_flatpaks_missing "${missing_flatpaks[@]}"'
+    predicate_digest: 'sha256:ffbc05d5e13760584f9e1037816fac739d866a53f6f468a42ab73bcee225f1a6'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_40-flatpaks.sh.tmpl#install-flatpaks/flatpak-apps-not-installed'
+  - owner: 'install-podman-fedora/podman-packages-not-installed'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl'
+    anchor_line: 143
+    anchor: '  if [[ "${#missing_podman_packages[@]}" -gt 0 ]] && report_podman_missing; then'
+    predicate: '[[ "${#missing_podman_packages[@]}" -gt 0 ]] && report_podman_missing'
+    predicate_digest: 'sha256:158d29f399dcb0e4cc60dd6b2ecefa74e33dcec676cf53d9558b919c5d45f947'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl#install-podman-fedora/podman-packages-not-installed'
+  - owner: 'install-podman-ubuntu/podman-packages-not-installed'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl'
+    anchor_line: 153
+    anchor: '  if [[ "${#missing_podman_packages[@]}" -gt 0 ]] && report_podman_missing; then'
+    predicate: '[[ "${#missing_podman_packages[@]}" -gt 0 ]] && report_podman_missing'
+    predicate_digest: 'sha256:158d29f399dcb0e4cc60dd6b2ecefa74e33dcec676cf53d9558b919c5d45f947'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'ubuntu'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl#install-podman-ubuntu/podman-packages-not-installed'
+  - owner: 'install-desktop-ime-fedora/ime-packages-not-installed'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl'
+    anchor_line: 148
+    anchor: '  if [[ "${#missing_desktop_ime_packages[@]}" -gt 0 ]] && report_desktop_ime_missing; then'
+    predicate: '[[ "${#missing_desktop_ime_packages[@]}" -gt 0 ]] && report_desktop_ime_missing'
+    predicate_digest: 'sha256:63c022e4057dac525e416114b6e364f8f4e380c54009f267f65c84d0217db9ae'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl#install-desktop-ime-fedora/ime-packages-not-installed'
+  - owner: 'install-desktop-ime-ubuntu/ime-packages-not-installed'
+    scope: '30-components'
+    template: '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl'
+    anchor_line: 150
+    anchor: '  if [[ "${#missing_desktop_ime_packages[@]}" -gt 0 ]] && report_desktop_ime_missing; then'
+    predicate: '[[ "${#missing_desktop_ime_packages[@]}" -gt 0 ]] && report_desktop_ime_missing'
+    predicate_digest: 'sha256:63c022e4057dac525e416114b6e364f8f4e380c54009f267f65c84d0217db9ae'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'ubuntu'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl#install-desktop-ime-ubuntu/ime-packages-not-installed'
+  - owner: 'install-base-fedora/base-packages-not-installed'
+    scope: '20-base'
+    template: '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl'
+    anchor_line: 227
+    anchor: '  if [[ "${#missing[@]}" -gt 0 ]] && report_base_missing; then'
+    predicate: '[[ "${#missing[@]}" -gt 0 ]] && report_base_missing'
+    predicate_digest: 'sha256:d8dd69a8b8d893a4e16fc9eab0487a78a5b4b51931d55e7d1d8dff429388c5e3'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'linux-fedora'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl#install-base-fedora/base-packages-not-installed'
+  - owner: 'install-base-ubuntu/base-packages-not-installed'
+    scope: '20-base'
+    template: '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl'
+    anchor_line: 134
+    anchor: '  if [[ "${#missing[@]}" -gt 0 ]] && report_base_missing; then'
+    predicate: '[[ "${#missing[@]}" -gt 0 ]] && report_base_missing'
+    predicate_digest: 'sha256:d8dd69a8b8d893a4e16fc9eab0487a78a5b4b51931d55e7d1d8dff429388c5e3'
+    continuation: 'abandon-step-return-0'
+    continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
+    render_profile: 'ubuntu'
+    form: 'skip_step'
+    direction: 'operator-blocking'
+    instances:
+      - '.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl#install-base-ubuntu/base-packages-not-installed'
 hard_errors:
   - owner: 'config-gnome-1password-shortcut/gsettings-read-failed'
     scope: '50-linux-gnome'
