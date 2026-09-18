@@ -52,9 +52,27 @@ fixture() {
     [ -e "$entry" ] || continue
     ln -s -- "$entry" "$dest/$(basename -- "$entry")"
   done
-  rm -f -- "$dest/.chezmoiexternals" "$dest/.chezmoidata"
-  cp -a -- "$source_root/.chezmoiexternals" "$dest/"
-  cp -a -- "$source_root/.chezmoidata" "$dest/"
+  local dest_source_root
+  if [[ -f "$dest/.chezmoiroot" ]]; then
+    local rel_source
+    rel_source=$(resolve_source_root "$dest")
+    rm -f -- "$rel_source"
+    mkdir -p -- "$rel_source"
+    for entry in "$source_root"/* "$source_root"/.[!.]*; do
+      [ -e "$entry" ] || continue
+      ln -s -- "$entry" "$rel_source/$(basename -- "$entry")"
+    done
+    dest_source_root="$rel_source"
+  else
+    dest_source_root="$dest"
+  fi
+  rm -f -- "$dest_source_root/.chezmoiexternals" "$dest_source_root/.chezmoidata"
+  cp -a -L -- "$source_root/.chezmoiexternals" "$dest_source_root/"
+  cp -a -L -- "$source_root/.chezmoidata" "$dest_source_root/"
+  [[ -d "$dest_source_root/.chezmoiexternals" && ! -L "$dest_source_root/.chezmoiexternals" ]] ||
+    fail "fixture $name did not get a private copy of .chezmoiexternals"
+  [[ -d "$dest_source_root/.chezmoidata" && ! -L "$dest_source_root/.chezmoidata" ]] ||
+    fail "fixture $name did not get a private copy of .chezmoidata"
   printf '%s\n' "$dest"
 }
 
@@ -62,6 +80,8 @@ fixture() {
 # so a case cannot quietly stop testing anything when the template is reworded.
 edit_external() {
   local tree=$1 file=$2 old=$3 new=$4
+  local tree_source
+  tree_source=$(resolve_source_root "$tree")
   python3 -c '
 import sys
 path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -71,7 +91,7 @@ if old not in text:
     sys.exit(f"fixture literal not found in {path}:\n{old}")
 with open(path, "w", encoding="utf-8") as handle:
     handle.write(text.replace(old, new, 1))
-' "$tree/.chezmoiexternals/$file" "$old" "$new"
+' "$tree_source/.chezmoiexternals/$file" "$old" "$new"
 }
 
 expect_reject() {

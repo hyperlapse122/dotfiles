@@ -52,7 +52,7 @@ scripts=(
   .chezmoiscripts/60-build/run_onchange_after_build-settings-reconcile.sh.tmpl
 )
 for script in "${scripts[@]}"; do
-  [[ -f "$repo_root/$script" ]] || fail "$script is missing"
+  [[ -f "$source_root/$script" ]] || fail "$script is missing"
 done
 
 command -v jq >/dev/null 2>&1 || fail 'jq is required'
@@ -79,14 +79,28 @@ make_source_fixture() {
     [[ -e "$entry" ]] || continue
     ln -s -- "$entry" "$dest/$(basename -- "$entry")"
   done
-  rm -f -- "$dest/.chezmoidata"
+  local dest_source_root
+  if [[ -f "$dest/.chezmoiroot" ]]; then
+    local rel_source
+    rel_source=$(resolve_source_root "$dest")
+    rm -f -- "$rel_source"
+    mkdir -p -- "$rel_source"
+    for entry in "$source_root"/* "$source_root"/.[!.]*; do
+      [[ -e "$entry" ]] || continue
+      ln -s -- "$entry" "$rel_source/$(basename -- "$entry")"
+    done
+    dest_source_root="$rel_source"
+  else
+    dest_source_root="$dest"
+  fi
+  rm -f -- "$dest_source_root/.chezmoidata"
   # -L, and the regular-file guard below: when $repo_root is itself a symlink
   # farm (the gate's own tamper harness renders one), a plain `cp -a` would copy
   # the .chezmoidata SYMLINK, and set_lock_version would then rewrite the real
   # repository's lock through it.
-  mkdir -p -- "$dest/.chezmoidata"
-  cp -a -L -- "$source_root/.chezmoidata/." "$dest/.chezmoidata/"
-  [[ -f "$dest/.chezmoidata/releases.json" && ! -L "$dest/.chezmoidata/releases.json" ]] ||
+  mkdir -p -- "$dest_source_root/.chezmoidata"
+  cp -a -L -- "$source_root/.chezmoidata/." "$dest_source_root/.chezmoidata/"
+  [[ -f "$dest_source_root/.chezmoidata/releases.json" && ! -L "$dest_source_root/.chezmoidata/releases.json" ]] ||
     fail "fixture $name did not get a private copy of .chezmoidata/releases.json"
   printf '%s\n' "$dest"
 }
@@ -94,6 +108,8 @@ make_source_fixture() {
 set_lock_version() {
   local dir=$1 tool=$2 version=$3
   [[ $dir == "$scratch"/* ]] || fail "refusing to rewrite a lock outside the scratch tree: $dir"
+  local target_source
+  target_source=$(resolve_source_root "$dir")
   "$lock_python" -c '
 import json, sys
 path, tool, version = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -105,12 +121,13 @@ if tool not in tools:
 tools[tool]["version"] = version
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle)
-' "$dir/.chezmoidata/releases.json" "$tool" "$version"
+' "$target_source/.chezmoidata/releases.json" "$tool" "$version"
 }
 
 lock_version() {
-  local dir=$1 tool=$2 version
-  version=$(jq -r --arg tool "$tool" '.releases.tools[$tool].version' "$dir/.chezmoidata/releases.json")
+  local dir=$1 tool=$2 version target_source
+  target_source=$(resolve_source_root "$dir")
+  version=$(jq -r --arg tool "$tool" '.releases.tools[$tool].version' "$target_source/.chezmoidata/releases.json")
   [[ -n $version && $version != null ]] || fail "the lock in $dir carries no version for $tool"
   printf '%s\n' "$version"
 }
@@ -123,12 +140,14 @@ digest_of() {
 # os/arch override makes the gate runnable anywhere.
 render_script() {
   local source_dir=$1 script=$2 out=$3 err=$4
+  local script_source
+  script_source=$(join_source_state "$source_dir" "$script")
   env PATH="$scratch/bin:$PATH" chezmoi \
     --config "$scratch/empty.toml" \
     --source "$source_dir" \
     --destination "$scratch/target" \
     --override-data '{"chezmoi":{"os":"linux","arch":"amd64"}}' \
-    execute-template <"$source_dir/$script" >"$out" 2>"$err" ||
+    execute-template <"$script_source" >"$out" 2>"$err" ||
     {
       printf 'build bun-version fingerprint: rendering %s failed\n' "$script" >&2
       sed 's/^/  /' "$err" >&2

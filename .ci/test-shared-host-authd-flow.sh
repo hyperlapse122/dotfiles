@@ -2,6 +2,8 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/shared-host-authd-flow.XXXXXX")
@@ -20,7 +22,7 @@ command -v chezmoi >/dev/null 2>&1 || fail 'chezmoi is required on PATH'
 command -v node >/dev/null 2>&1 || fail 'node is required on PATH'
 
 render() {
-  local profile=$1 template=$2 output=$3 data
+  local profile=$1 template=$2 output=$3 data input
   case $profile in
     fedora)
       data='{"chezmoi":{"os":"linux","arch":"amd64","username":"fedora-fixture","osRelease":{"id":"fedora"}}}'
@@ -34,6 +36,7 @@ render() {
       ;;
     *) fail "unknown render profile $profile" ;;
   esac
+  input=$(join_source_state "$repo_root" "$template") || fail "missing template $template"
   (
     cd -- "$repo_root"
     PATH="$scratch/bin:$PATH" chezmoi \
@@ -41,7 +44,7 @@ render() {
       --source "$PWD" \
       --destination "$scratch/target" \
       --override-data "$data" \
-      execute-template <"$template"
+      execute-template <"$input"
   ) >"$output"
 }
 

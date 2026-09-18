@@ -49,12 +49,15 @@ done
 source "$repo_root/.ci/lib/render-scratch.sh"
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 setup_render_scratch android-skill-ownership
 
 sdk_script=.chezmoiscripts/00-tools/run_onchange_after_android-sdk.sh.tmpl
 externals=.chezmoiexternals/ai-agents.toml
-[[ -f "$repo_root/$sdk_script" ]] || fail "missing source surface $sdk_script"
-[[ -f "$repo_root/$externals" ]] || fail "missing source surface $externals"
+[[ -f "$source_root/$sdk_script" ]] || fail "missing source surface $sdk_script"
+[[ -f "$source_root/$externals" ]] || fail "missing source surface $externals"
 
 # --- Check 1: the SDK script drives the CLI, and never its skill installer ----
 
@@ -115,7 +118,7 @@ done <"$log"
 rendered_externals="$scratch/ai-agents.toml"
 env HOME="$home" PATH="$scratch/bin:/usr/bin:/bin" "$chezmoi_bin" \
   --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
-  execute-template <"$repo_root/$externals" >"$rendered_externals" \
+  execute-template <"$source_root/$externals" >"$rendered_externals" \
   || fail "$externals failed to render"
 
 "$toml_python" - "$rendered_externals" <<'PY' || fail 'the android-cli external is not the pinned archive it must be'

@@ -167,7 +167,7 @@ assert_render_ok ae6-reporoot "$scratch/rooted" "$scratch/ae6-reporoot.tmpl" \
 
 production_consumer=.chezmoiscripts/30-linux/run_onchange_after_install-system-10-desktop.sh.tmpl
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$production_consumer"
-assert_render_ok production-globs-consumer "$repo_root" "$repo_root/$production_consumer" \
+assert_render_ok production-globs-consumer "$repo_root" "$source_root/$production_consumer" \
   '#   system/linux/etc/locale.conf'
 
 # Position-independent script rendering (PISR):
@@ -183,12 +183,12 @@ fi
 # so the baked absolute path is unchanged from before this unit.
 host_facts_source=dot_local/share/chezmoi-command-sources/executable_host-facts.tmpl
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$host_facts_source"
-assert_render_ok host-facts-baked-path "$repo_root" "$repo_root/$host_facts_source" \
+assert_render_ok host-facts-baked-path "$repo_root" "$source_root/$host_facts_source" \
   "SRC_ROOT=\"$repo_root/system/linux\""
 
 gem80_firmware_source=dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$gem80_firmware_source"
-assert_render_ok gem80-firmware-baked-path "$repo_root" "$repo_root/$gem80_firmware_source" \
+assert_render_ok gem80-firmware-baked-path "$repo_root" "$source_root/$gem80_firmware_source" \
   "SOURCE_DIR=\"$repo_root\""
 
 # Scenario 1: The rendered partial contains no absolute path and no checkout-specific literal.

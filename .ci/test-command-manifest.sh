@@ -121,20 +121,36 @@ make_lock_fixture() {
     [[ -e "$entry" ]] || continue
     ln -s "$entry" "$dest/$(basename -- "$entry")"
   done
-  rm -f "$dest/.chezmoidata"
+  local dest_source_root
+  if [[ -f "$dest/.chezmoiroot" ]]; then
+    local rel_source
+    rel_source=$(resolve_source_root "$dest")
+    rm -f -- "$rel_source"
+    mkdir -p -- "$rel_source"
+    for entry in "$source_root"/* "$source_root"/.[!.]*; do
+      [[ -e "$entry" ]] || continue
+      ln -s "$entry" "$rel_source/$(basename -- "$entry")"
+    done
+    dest_source_root="$rel_source"
+  else
+    dest_source_root="$dest"
+  fi
+  rm -f "$dest_source_root/.chezmoidata"
   # -L dereferences: when $repo_root is itself a symlink farm (this helper's own
   # output, when a gate runs from a fixture), a plain `cp -a` copies the SYMLINK,
   # and mutate_lock then writes through it into the repository's real
   # .chezmoidata/releases.json. Observed live. Dereference, then refuse to
   # continue unless the fixture owns a regular file.
-  cp -a -L "$source_root/.chezmoidata" "$dest/"
-  [[ -f "$dest/.chezmoidata/releases.json" && ! -L "$dest/.chezmoidata/releases.json" ]] ||
-    fail "lock fixture $dest/.chezmoidata/releases.json is not a regular file; refusing to mutate a lock outside the fixture"
+  cp -a -L "$source_root/.chezmoidata" "$dest_source_root/"
+  [[ -f "$dest_source_root/.chezmoidata/releases.json" && ! -L "$dest_source_root/.chezmoidata/releases.json" ]] ||
+    fail "lock fixture $dest_source_root/.chezmoidata/releases.json is not a regular file; refusing to mutate a lock outside the fixture"
   printf '%s\n' "$dest"
 }
 
 mutate_lock() {
   local dir="$1" tool="$2" field="$3" value="$4"
+  local target_source
+  target_source=$(resolve_source_root "$dir")
   python3 -c '
 import json, sys
 path, tool, field, value = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
@@ -145,7 +161,7 @@ for platform in artifacts:
     artifacts[platform][field] = value
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)
-' "$dir/.chezmoidata/releases.json" "$tool" "$field" "$value"
+' "$target_source/.chezmoidata/releases.json" "$tool" "$field" "$value"
 }
 
 rejects unknown-producer 'producer: external' 'producer: madeUpProducer' 'unknown producer'
@@ -234,7 +250,7 @@ with open(path, "r", encoding="utf-8") as f:
 data["releases"]["tools"]["bun"]["artifacts"]["linux-amd64-musl"]["sha256"] = "b" * 64
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f)
-' "$musl_bumped/.chezmoidata/releases.json"
+' "$(resolve_source_root "$musl_bumped")/.chezmoidata/releases.json"
 musl_bumped_json=$(render_source "$musl_bumped" linux amd64 '{{ includeTemplate "command-manifest.tmpl" . }}' "$musl_override")
 
 python3 -c '

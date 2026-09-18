@@ -335,7 +335,7 @@ assert_scratch_carries_patches "$scratch_repo"
 rm -rf -- "$scratch_repo/firmware/nuphy-gem80-hostrgb/dist"
 
 rendered_cmd="$scratch/gem80-firmware"
-template="$scratch_repo/dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl"
+template=$(join_source_state "$scratch_repo" "dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl")
 [[ -f $template ]] || fail "gem80-firmware template not found: $template"
 
 printf '[data]\n' > "$scratch/empty.toml"

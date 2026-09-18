@@ -24,12 +24,15 @@ chmod 700 "$scratch/bin/op"
 fail() { printf 'orca cli shadow: %s\n' "$*" >&2; exit 1; }
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is required on PATH'
 
 wrapper_source=dot_local/share/chezmoi-command-sources/executable_orca
 require_file "$repo_root" "$scratch" "$chezmoi_bin" "$wrapper_source"
-wrapper="$repo_root/$wrapper_source"
+wrapper="$source_root/$wrapper_source"
 [[ -x $wrapper ]] || fail "$wrapper_source is not executable in the source tree"
 
 # Each stub records the argv it received, one argument per line, so an argument carrying a space

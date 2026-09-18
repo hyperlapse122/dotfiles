@@ -28,19 +28,21 @@ fail() {
 
 for surface in "$matrix" "$registry" "$identity_helper" "$partial" "$hook" \
   ".chezmoitemplates/fingerprint.tmpl" ".chezmoitemplates/skip.sh.tmpl"; do
-  [[ -f "$repo_root/$surface" ]] || fail "missing source surface $surface"
+  path=$(join_source_state "$repo_root" "$surface")
+  [[ -f "$path" ]] || fail "missing source surface $surface"
 done
 
 # --- 1. Matrix and registry accounting -------------------------------------
 # The matrix is parsed by a fixed-shape reader rather than a YAML library: no
 # PyYAML on the CI runners, and the oracle only needs the subset it is written in.
-python3 - "$repo_root" "$matrix" "$registry" <<'PY' || fail 'matrix/registry accounting failed'
+python3 - "$repo_root" "$source_root" "$matrix" "$registry" <<'PY' || fail 'matrix/registry accounting failed'
 import hashlib
 import re
 import sys
 from pathlib import Path
 
-root, matrix_rel, registry_rel = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+repo_root, source_root = Path(sys.argv[1]), Path(sys.argv[2])
+matrix_rel, registry_rel = sys.argv[3], sys.argv[4]
 problems = []
 
 
@@ -89,7 +91,7 @@ def parse(path):
     return top
 
 
-matrix = parse(root / matrix_rel)
+matrix = parse(repo_root / matrix_rel)
 
 if matrix.get('schema') != 'skip-declaration-site-matrix-v1':
     problems.append(f'unexpected matrix schema {matrix.get("schema")!r}')
@@ -192,7 +194,7 @@ for row in owners:
     seen_owners.add(owner)
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*', owner):
         problems.append(f'{owner}: owner must be <script>/<site>, both safe filename components')
-    if not (root / row['template']).is_file():
+    if not (source_root / row['template']).is_file():
         problems.append(f'{owner}: template {row["template"]} does not exist')
     if row['form'] not in FORMS:
         problems.append(f'{owner}: unknown form {row["form"]!r}')
@@ -249,7 +251,7 @@ for row in owners:
         consumer, sep, tail = instance.partition('#')
         if not sep or tail != owner:
             problems.append(f'{owner}: instance {instance} must name its owner after #')
-        if not (root / consumer).is_file():
+        if not (source_root / consumer).is_file():
             problems.append(f'{owner}: instance consumer {consumer} does not exist')
 
 if shared_seen != SHARED:
@@ -327,7 +329,7 @@ for row in hard_errors:
         problems.append(f'hard error {owner}: must require a nonzero exit')
     if 'form' in row or 'direction' in row:
         problems.append(f'hard error {owner}: a hard error is never a declared skip')
-    if not (root / row.get('template', '')).is_file():
+    if not (source_root / row.get('template', '')).is_file():
         problems.append(f'hard error {owner}: template {row.get("template")} does not exist')
     if STATEMENT_SYNTAX.search(row.get('predicate', '')) or not row.get('predicate', '').strip():
         problems.append(f'hard error {owner}: predicate {row.get("predicate")!r} is not a canonical condition')
@@ -341,7 +343,7 @@ if seen_hard != expected_hard:
                     f'missing {sorted(expected_hard - seen_hard)}')
 
 # --- registry ---
-registry_text = (root / registry_rel).read_text()
+registry_text = (source_root / registry_rel).read_text()
 registry_lines = registry_text.split('\n')
 if registry_lines[0] != 'capability-registry-v2':
     problems.append('registry must start with capability-registry-v2')
@@ -512,8 +514,8 @@ for shared in "$registry:.chezmoidata/.capability-registry.tsv" \
   "$identity_helper:.chezmoitemplates/capability-cache-identity.sh" \
   "$partial:.chezmoitemplates/capabilities.tmpl" \
   ".chezmoitemplates/fingerprint.tmpl:.chezmoitemplates/fingerprint.tmpl"; do
-  cp -- "$repo_root/${shared%%:*}" "$source_dir/${shared##*:}"
-  cp -- "$repo_root/${shared%%:*}" "$unknown_source/${shared##*:}"
+  cp -- "$source_root/${shared%%:*}" "$source_dir/${shared##*:}"
+  cp -- "$source_root/${shared%%:*}" "$unknown_source/${shared##*:}"
 done
 
 cat >"$source_dir/dot_probe.tmpl" <<'TEMPLATE'

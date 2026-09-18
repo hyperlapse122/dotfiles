@@ -50,8 +50,11 @@ set -euo pipefail
 # the retained Antigravity vendor resolver uses SHA-512.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
 tree=${1:-$repo_root}
-lock="$tree/.chezmoidata/releases.json"
+tree_source_root=$(resolve_source_root "$tree")
+lock="$tree_source_root/.chezmoidata/releases.json"
 
 fail() {
   printf 'check-external-checksum-coverage: %s\n' "$1" >&2
@@ -94,7 +97,7 @@ platforms=(
 rendered_args=()
 for plat in "${platforms[@]}"; do
   IFS=":" read -r os arch <<<"$plat"
-  for ext in "$tree/.chezmoiexternals"/*.toml; do
+  for ext in "$tree_source_root/.chezmoiexternals"/*.toml; do
     name=$(basename -- "$ext" .toml)
     out="$scratch/rendered/$os-$arch--$name.toml"
     printf '{{- $_ := set .chezmoi "arch" "%s" -}}\n' "$arch" >"$scratch/external.tmpl"
