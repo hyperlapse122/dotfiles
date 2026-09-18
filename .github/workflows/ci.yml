@@ -328,6 +328,7 @@ jobs:
           .ci/test-release-lock-digest-gate.sh
           .ci/test-gem80-firmware-pin-gates.sh
           .ci/test-gpg-key-data.sh
+          .ci/test-gpg-packages-parity.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)

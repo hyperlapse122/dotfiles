@@ -1,0 +1,45 @@
+# GPG smartcard stack and paper-backup ceremony tools, as data.
+#
+# Deliberately redundant with the preflight arrays in .install-prerequisites.sh
+# (preflight_fedora, preflight_ubuntu): that script bootstraps a fresh host
+# before chezmoi can even decrypt the repository's encrypted files, so it must
+# keep its own literals. This declaration is the steady-state half -- restoring
+# a package removed by hand after bootstrap, which preflight never notices.
+#
+# `core` lists the packages both paths install; `paperBackup` lists the three
+# tools issue #574's key ceremony needs that the bootstrap has no reason to
+# install. `.ci/test-gpg-packages-parity.sh` asserts `core` never drifts from
+# the preflight arrays; `paperBackup` is intentionally absent from preflight
+# and is not compared.
+gpg:
+  packages:
+    fedora:
+      core:
+        - gnupg2
+        - gnupg2-scdaemon
+        - pcsc-lite
+        - pcsc-lite-ccid
+        - pinentry
+        - libsecret
+      paperBackup:
+        - paperkey
+        - qrencode
+        - zbar
+
+    debian:
+      core:
+        - gnupg
+        - scdaemon
+        - pcscd
+        - pinentry-curses
+        - libsecret-tools
+      paperBackup:
+        - paperkey
+        - qrencode
+        - zbar-tools
+
+    # Same package names on both distros, so kept as one shared map rather
+    # than duplicated under each distro's core/paperBackup lists.
+    desktopPinentry:
+      kde: pinentry-qt
+      gnome: pinentry-gnome3
