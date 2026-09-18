@@ -235,11 +235,13 @@ agents:
       kind: localArchive
       source: EveryInc/compound-engineering-plugin
       externalPath: .local/share/compound-engineering
+      pristinePath: .local/share/compound-engineering-pristine
       versionSource: compoundEngineeringRelease
       exclude:
       - "*/skills/ce-sweep/references/interview.md"
       - "*/skills/ce-plan/scripts/elevation-dispatch.sh"
       - "*/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+      - "*/skills/ce-sweep/references/sources/gitlab-issues.md"
       os: [linux, darwin]
       container: keep
     # omp's own copy of the same archive, differing in one file: the ROOT
@@ -260,6 +262,7 @@ agents:
       - "*/plugin.json"
       - "*/skills/ce-plan/scripts/elevation-dispatch.sh"
       - "*/skills/ce-brainstorm/scripts/elevation-dispatch.sh"
+      - "*/skills/ce-sweep/references/sources/gitlab-issues.md"
       os: [linux, darwin]
       container: keep
     # This checkout's own Claude Code plugin. It and dotfiles-codex-plugin below

@@ -12,7 +12,9 @@
            tool; the segment is the full ref verbatim (a 40-character sha).
        Every consumer validates the neutral marketplace row before reading the
        resolved value. The extracted archive path is
-       ~/<externalPath>/<segment>/ on every OS.
+       ~/<externalPath>/<segment>/ on every OS. An optional pristinePath names
+       the include-only external that holds the unpatched upstream files at
+       ~/<pristinePath>/<segment>/; it follows the externalPath safety rule.
 
        Invoke as:
          includeTemplate "local-archive-ref.tmpl" (dict "ctx" . "marketplace" <name> "field" "ref"|"segment")
@@ -45,6 +47,12 @@
 {{- $path := printf "%v" (index $authority "externalPath") -}}
 {{- if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $path)) (hasPrefix "/" $path) (regexMatch "(^|/)\\.\\.(/|$)" $path) -}}
 {{-   fail (printf "local-archive: authority %q has unsafe externalPath %q" $name $path) -}}
+{{- end -}}
+{{- if hasKey $authority "pristinePath" -}}
+{{-   $pristine := printf "%v" (index $authority "pristinePath") -}}
+{{-   if or (not (regexMatch "^[A-Za-z0-9_./-]+$" $pristine)) (hasPrefix "/" $pristine) (regexMatch "(^|/)\\.\\.(/|$)" $pristine) -}}
+{{-     fail (printf "local-archive: authority %q has unsafe pristinePath %q" $name $pristine) -}}
+{{-   end -}}
 {{- end -}}
 {{- $tool := "" -}}
 {{- $tagPrefix := "" -}}

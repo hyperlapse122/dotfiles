@@ -1,0 +1,42 @@
+{
+  "version": "compound-engineering-v3.26.3",
+  "paths": {
+    "skills/ce-brainstorm/scripts/elevation-dispatch.sh": {
+      "preimage": {
+        "sha256": "ba8219c15db2909fb1c272d2137b124a78a06329af2cca0e80276f6e8918ef3d",
+        "mode": "0755"
+      },
+      "postimage": {
+        "sha256": "eef010654d36c9e4b4a9884815f05a513215d920d0694b5f249e2f1f70efef0e"
+      },
+      "mode": "0755"
+    },
+    "skills/ce-plan/scripts/elevation-dispatch.sh": {
+      "preimage": {
+        "sha256": "ba8219c15db2909fb1c272d2137b124a78a06329af2cca0e80276f6e8918ef3d",
+        "mode": "0755"
+      },
+      "postimage": {
+        "sha256": "eef010654d36c9e4b4a9884815f05a513215d920d0694b5f249e2f1f70efef0e"
+      },
+      "mode": "0755"
+    },
+    "skills/ce-sweep/references/interview.md": {
+      "preimage": {
+        "sha256": "1ad15971e23e1081c7bcd647f0b1273ed8f1b802a944777cfce23df535743194",
+        "mode": "0644"
+      },
+      "postimage": {
+        "sha256": "eef44783dc5e4fc864a70ea94669a0dd5d5032489a7e6ed5cce87cbccdd4c766"
+      },
+      "mode": "0644"
+    },
+    "skills/ce-sweep/references/sources/gitlab-issues.md": {
+      "preimage": "absent",
+      "postimage": {
+        "sha256": "987fb94f1ce4878c9765d8f3b7a138b180c78382954c2c54bbf3daea904417f0"
+      },
+      "mode": "0644"
+    }
+  }
+}

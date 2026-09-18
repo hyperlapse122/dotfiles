@@ -53,27 +53,24 @@ chmod 700 "$bin/op"
 : > "$scratch/empty.toml"
 
 # --- render the provisioner and external manifest ---
+# render() owns the stub-`op` PATH, the empty config and the throwaway destination.
+# Its scratch directory is separate from $home, which build_fake_ce recreates.
+# shellcheck source=.ci/lib/render-gate-helpers.sh
+source "$root/.ci/lib/render-gate-helpers.sh"
+chezmoi_bin=$(command -v chezmoi)
+render_scratch="$scratch/render"
+mkdir -p "$render_scratch/bin" "$render_scratch/home" "$render_scratch/target"
+cp "$bin/op" "$render_scratch/bin/op"
+: > "$render_scratch/empty.toml"
+render_source_template() { # <source-state path> <output> [override-data]
+  render "$root" "$render_scratch" "$chezmoi_bin" linux "$source_root/$1" "$2" "${3:-}"
+}
 prov="$scratch/provisioner.sh"
 rendered_externals="$scratch/ai-agents.toml"
-env PATH="$bin:$PATH" chezmoi \
-  --config "$scratch/empty.toml" \
-  --source "$root" \
-  execute-template \
-  < "$source_root/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl" \
-  > "$prov"
-env PATH="$bin:$PATH" chezmoi \
-  --config "$scratch/empty.toml" \
-  --source "$root" \
-  execute-template \
-  < "$source_root/.chezmoiexternals/ai-agents.toml" \
-  > "$rendered_externals"
 prune="$scratch/prune.sh"
-env PATH="$bin:$PATH" chezmoi \
-  --config "$scratch/empty.toml" \
-  --source "$root" \
-  execute-template \
-  < "$source_root/.chezmoiscripts/70-agents/run_onchange_after_zz-prune-agent-marketplace-archives.sh.tmpl" \
-  > "$prune"
+render_source_template .chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl "$prov"
+render_source_template .chezmoiexternals/ai-agents.toml "$rendered_externals"
+render_source_template .chezmoiscripts/70-agents/run_onchange_after_zz-prune-agent-marketplace-archives.sh.tmpl "$prune"
 
 # The rendered script resolves CURRENT="$BASE_DIR/v<semver>" with BASE_DIR under $HOME.
 # Point HOME at a scratch tree and build the matching structure there.
@@ -460,8 +457,8 @@ printf '%s\n' "$ce_block" | grep -q '^type = "archive"$' \
 if printf '%s\n' "$ce_block" | grep -q '^exact = true$'; then
   echo "rendered CE external is not additive" >&2; exit 1
 fi
-printf '%s\n' "$ce_block" | grep -qxF 'exclude = ["*/skills/ce-sweep/references/interview.md","*/skills/ce-plan/scripts/elevation-dispatch.sh","*/skills/ce-brainstorm/scripts/elevation-dispatch.sh"]' \
-  || { echo "rendered CE external missing exclude for interview.md and the elevation-dispatch adapters" >&2; exit 1; }
+printf '%s\n' "$ce_block" | grep -qxF 'exclude = ["*/skills/ce-sweep/references/interview.md","*/skills/ce-plan/scripts/elevation-dispatch.sh","*/skills/ce-brainstorm/scripts/elevation-dispatch.sh","*/skills/ce-sweep/references/sources/gitlab-issues.md"]' \
+  || { echo "rendered CE external missing exclude for interview.md, gitlab-issues.md, and the elevation-dispatch adapters" >&2; exit 1; }
 grep -q '^exact = true$' "$rendered_externals" \
   || { echo "agent-skills exact archives unexpectedly changed" >&2; exit 1; }
 
@@ -474,8 +471,8 @@ omp_ce_block=$(awk '
 ' "$rendered_externals")
 printf '%s\n' "$omp_ce_block" | grep -q '^type = "archive"$' \
   || { echo "rendered CE-omp external block missing" >&2; exit 1; }
-printf '%s\n' "$omp_ce_block" | grep -qxF 'exclude = ["*/skills/ce-sweep/references/interview.md","*/plugin.json","*/skills/ce-plan/scripts/elevation-dispatch.sh","*/skills/ce-brainstorm/scripts/elevation-dispatch.sh"]' \
-  || { echo "rendered CE-omp external missing exclude for interview.md, plugin.json, and the elevation-dispatch adapters" >&2; exit 1; }
+printf '%s\n' "$omp_ce_block" | grep -qxF 'exclude = ["*/skills/ce-sweep/references/interview.md","*/plugin.json","*/skills/ce-plan/scripts/elevation-dispatch.sh","*/skills/ce-brainstorm/scripts/elevation-dispatch.sh","*/skills/ce-sweep/references/sources/gitlab-issues.md"]' \
+  || { echo "rendered CE-omp external missing exclude for interview.md, gitlab-issues.md, plugin.json, and the elevation-dispatch adapters" >&2; exit 1; }
 
 # --- agent skill external is exact: skills/i-have-adhd from ayghri/i-have-adhd ---
 skill_block=$(awk '
@@ -503,10 +500,180 @@ mkdir -p "$ce_current" \
 foreign="$scratch/prune-foreign"
 mkdir -p "$foreign"
 ln -s "$foreign" "$prune_home/.local/share/compound-engineering/foreign"
+pristine_current="$prune_home/.local/share/compound-engineering-pristine/$version"
+mkdir -p "$pristine_current" \
+  "$prune_home/.local/share/compound-engineering-pristine/v-stale"
+ln -s "$foreign" "$prune_home/.local/share/compound-engineering-pristine/foreign"
 env HOME="$prune_home" bash "$prune"
 [[ -d $ce_current ]]
 [[ ! -e $prune_home/.local/share/compound-engineering/v-stale ]]
 [[ -L $prune_home/.local/share/compound-engineering/foreign ]]
+[[ -d $pristine_current ]] \
+  || { echo "pruner removed the current pristine version directory" >&2; exit 1; }
+[[ ! -e $prune_home/.local/share/compound-engineering-pristine/v-stale ]] \
+  || { echo "pruner left a stale pristine version directory" >&2; exit 1; }
+[[ -L $prune_home/.local/share/compound-engineering-pristine/foreign ]] \
+  || { echo "pruner removed a symlink under the pristine path" >&2; exit 1; }
+
+# --- patch set: schema, coverage, set equalities and the pristine external ---
+overlay_src="$source_root/dot_local/share/compound-engineering-overlays"
+base_json="$overlay_src/base.json"
+[ -f "$base_json" ] || { echo "base.json missing: $base_json" >&2; exit 1; }
+
+jq -e '
+  def sha: type == "string" and test("^[0-9a-f]{64}$");
+  def mode: . == "0644" or . == "0755";
+  (keys == ["paths", "version"])
+  and (.version | test("^compound-engineering-v[0-9]+\\.[0-9]+\\.[0-9]+$"))
+  and ((.paths | keys_unsorted) == (.paths | keys))
+  and (.paths | to_entries | all(
+    (.key | test("^[A-Za-z0-9_./-]+$") and (startswith("/") | not) and (test("(^|/)\\.\\.(/|$)") | not))
+    and (.value | keys == ["mode", "postimage", "preimage"])
+    and (.value.mode | mode)
+    and (.value.postimage | keys == ["sha256"] and (.sha256 | sha))
+    and (.value.preimage | . == "absent" or (keys == ["mode", "sha256"] and (.sha256 | sha) and (.mode | mode)))
+  ))' "$base_json" >/dev/null \
+  || { echo "base.json does not match the schema" >&2; exit 1; }
+
+base_tag=$(jq -er '.version' "$base_json")
+pin_tag=$(jq -er '.releases.tools["compound-engineering"].version' "$source_root/.chezmoidata/releases.json")
+[ "$base_tag" = "$pin_tag" ] \
+  || { echo "base.json records $base_tag but the lock pins $pin_tag; stamp base.json" >&2; exit 1; }
+[ "v${base_tag#compound-engineering-v}" = "$version" ] \
+  || { echo "base.json tag $base_tag does not yield the resolved version segment $version" >&2; exit 1; }
+
+base_keys=$(jq -r '.paths | keys[]' "$base_json" | LC_ALL=C sort)
+expected_keys=$(LC_ALL=C sort <<'EOF'
+skills/ce-brainstorm/scripts/elevation-dispatch.sh
+skills/ce-plan/scripts/elevation-dispatch.sh
+skills/ce-sweep/references/interview.md
+skills/ce-sweep/references/sources/gitlab-issues.md
+EOF
+)
+[ "$base_keys" = "$expected_keys" ] \
+  || { echo "base.json paths differ from the four declared patched paths" >&2; exit 1; }
+
+patch_files=$(cd "$overlay_src/patches" && find . -type f | sed 's|^\./||' | LC_ALL=C sort)
+expected_patch_files=$(while IFS= read -r key; do printf '%s.patch\n' "$key"; done <<<"$base_keys" | LC_ALL=C sort)
+[ "$patch_files" = "$expected_patch_files" ] \
+  || { echo "patches/ does not hold exactly one patch per base.json path" >&2; exit 1; }
+[ -z "$(find "$overlay_src/patches" ! -type f ! -type d)" ] \
+  || { echo "patches/ holds a link or special file" >&2; exit 1; }
+
+while IFS= read -r key; do
+  patch="$overlay_src/patches/$key.patch"
+  header=$(sed '/^@@/q' "$patch")
+  [ "$(grep -c '^diff --git ' "$patch")" = 1 ] \
+    || { echo "patch for $key holds more than one file diff" >&2; exit 1; }
+  grep -qxF "diff --git a/$key b/$key" <<<"$header" \
+    || { echo "patch for $key does not name its own path in the diff header" >&2; exit 1; }
+  grep -qxF "+++ b/$key" <<<"$header" \
+    || { echo "patch for $key does not write its own path" >&2; exit 1; }
+  if [ "$(jq -r --arg key "$key" '.paths[$key].preimage' "$base_json")" = absent ]; then
+    grep -qxF -- '--- /dev/null' <<<"$header" \
+      || { echo "patch for absent path $key does not create it" >&2; exit 1; }
+  else
+    grep -qxF -- "--- a/$key" <<<"$header" \
+      || { echo "patch for $key does not modify its own path" >&2; exit 1; }
+  fi
+  if grep -qE '^(rename |copy |similarity |dissimilarity |deleted file mode |old mode |new mode |Binary files |GIT binary patch)' <<<"$header"; then
+    echo "patch for $key carries a rename, copy, delete, mode change, or binary record" >&2; exit 1
+  fi
+done <<<"$base_keys"
+
+# Each whole-file copy that U4 removes is the post-image the patch set must reproduce.
+while IFS= read -r key; do
+  case $key in
+    skills/ce-plan/scripts/elevation-dispatch.sh | skills/ce-brainstorm/scripts/elevation-dispatch.sh)
+      legacy_copy="$overlay_src/skills/ce-plan/scripts/executable_elevation-dispatch.sh" ;;
+    *) legacy_copy="$overlay_src/$key" ;;
+  esac
+  [ -f "$legacy_copy" ] || { echo "whole-file copy for $key missing: $legacy_copy" >&2; exit 1; }
+  copy_sha=$(sha256sum "$legacy_copy" | cut -d' ' -f1)
+  [ "$copy_sha" = "$(jq -r --arg key "$key" '.paths[$key].postimage.sha256' "$base_json")" ] \
+    || { echo "base.json post-image sha256 for $key differs from its whole-file copy" >&2; exit 1; }
+  if [ -x "$legacy_copy" ]; then copy_mode=0755; else copy_mode=0644; fi
+  [ "$copy_mode" = "$(jq -r --arg key "$key" '.paths[$key].mode' "$base_json")" ] \
+    || { echo "base.json mode for $key differs from its whole-file copy" >&2; exit 1; }
+done <<<"$base_keys"
+
+# An adapter patch changes the effort line and nothing else.
+for adapter_key in skills/ce-plan/scripts/elevation-dispatch.sh skills/ce-brainstorm/scripts/elevation-dispatch.sh; do
+  adapter_patch="$overlay_src/patches/$adapter_key.patch"
+  adapter_body=$(sed '1,/^@@/d' "$adapter_patch")
+  [ "$(grep -c '^@@' "$adapter_patch")" = 1 ] \
+    && [ "$(grep -c '^-' <<<"$adapter_body")" = 1 ] \
+    && [ "$(grep -c '^+' <<<"$adapter_body")" = 1 ] \
+    || { echo "adapter patch for $adapter_key changes more than one line" >&2; exit 1; }
+  grep -q '^-EFFORT="' <<<"$adapter_body" \
+    || { echo "adapter patch for $adapter_key does not remove the upstream effort line" >&2; exit 1; }
+  grep -qE "^\+EFFORT=\"$authoring_effort\"([[:space:]]|\$)" <<<"$adapter_body" \
+    || { echo "adapter patch for $adapter_key does not assign the roster authoring effort $authoring_effort" >&2; exit 1; }
+done
+
+# The pristine external: same archive, include-only, and a directory nothing else writes.
+pristine_block=$(awk -v header="[\".local/share/compound-engineering-pristine/$version\"]" '
+  $0 == header { in_pristine=1; first=1 }
+  in_pristine && !first && /^\[/ { exit }
+  in_pristine { print; first=0 }
+' "$rendered_externals")
+[ -n "$pristine_block" ] || { echo "rendered pristine external block missing" >&2; exit 1; }
+[ "$(grep -c '^\[".local/share/compound-engineering-pristine/' "$rendered_externals")" = 1 ] \
+  || { echo "expected exactly one pristine external" >&2; exit 1; }
+printf '%s\n' "$pristine_block" | grep -qxF 'type = "archive"' \
+  || { echo "pristine external is not an archive" >&2; exit 1; }
+printf '%s\n' "$pristine_block" | grep -qxF 'exact = true' \
+  || { echo "pristine external is not exact" >&2; exit 1; }
+printf '%s\n' "$pristine_block" | grep -qxF 'stripComponents = 1' \
+  || { echo "pristine external lost stripComponents" >&2; exit 1; }
+if printf '%s\n' "$pristine_block" | grep -q '^exclude'; then
+  echo "pristine external must be include-only" >&2; exit 1
+fi
+[ "$(printf '%s\n' "$pristine_block" | grep '^url = ')" = "$(printf '%s\n' "$ce_block" | grep '^url = ')" ] \
+  || { echo "pristine external does not fetch the same archive as the CE external" >&2; exit 1; }
+[ "$(printf '%s\n' "$pristine_block" | grep '^include = ')" = "include = $(jq -c '[.paths | keys[] | "*/" + .]' "$base_json")" ] \
+  || { echo "pristine include list differs from the base.json keys" >&2; exit 1; }
+
+# The base.json keys, the pristine include list and each authority's excludes stay one set.
+expected_excludes=$(jq -r '.paths | keys[] | "*/" + .' "$base_json" | LC_ALL=C sort)
+pristine_includes=$(printf '%s\n' "$pristine_block" | sed -n 's/^include = //p' | jq -r '.[]' | LC_ALL=C sort)
+ce_excludes=$(printf '%s\n' "$ce_block" | sed -n 's/^exclude = //p' | jq -r '.[]' | LC_ALL=C sort)
+omp_excludes=$(printf '%s\n' "$omp_ce_block" | sed -n 's/^exclude = //p' | jq -r '.[]' | grep -vxF '*/plugin.json' | LC_ALL=C sort)
+[ "$pristine_includes" = "$expected_excludes" ] \
+  || { echo "pristine include list is not the base.json key set" >&2; exit 1; }
+[ "$ce_excludes" = "$expected_excludes" ] \
+  || { echo "CE external excludes are not the base.json key set" >&2; exit 1; }
+[ "$omp_excludes" = "$expected_excludes" ] \
+  || { echo "CE-omp external excludes, apart from plugin.json, are not the base.json key set" >&2; exit 1; }
+
+# Only the two CE copies are apply targets; the pristine tree is never one, and never a marketplace.
+target_dirs=$(awk '/^TARGET_DIRS=\(/ { in_targets=1; next } in_targets && /^\)/ { exit } in_targets { print }' "$prov")
+[ "$(printf '%s\n' "$target_dirs" | grep -c .)" = 2 ] \
+  || { echo "provisioner TARGET_DIRS should list the two CE copies" >&2; exit 1; }
+if printf '%s\n' "$target_dirs" | grep -q 'compound-engineering-pristine'; then
+  echo "provisioner TARGET_DIRS contain the pristine path" >&2; exit 1
+fi
+marketplace_names_tmpl="$scratch/marketplace-names.tmpl"
+printf '%s' '{{ range $name, $authority := .agents.marketplaces }}{{ $name }}{{ "\n" }}{{ end }}' > "$marketplace_names_tmpl"
+render "$root" "$render_scratch" "$chezmoi_bin" linux "$marketplace_names_tmpl" "$scratch/marketplace-names.out"
+if grep -q 'pristine' "$scratch/marketplace-names.out"; then
+  echo "the pristine tree is declared as an agents.marketplaces row" >&2; exit 1
+fi
+
+# pristinePath goes through the same safety rule as externalPath.
+pristine_override() { printf '{"chezmoi":{"os":"linux"},"agents":{"marketplaces":{"compound-engineering-plugin":{"pristinePath":"%s"}}}}' "$1"; }
+render_source_template .chezmoiexternals/ai-agents.toml "$scratch/alt-pristine.toml" "$(pristine_override .local/share/ce-alt-pristine)"
+grep -qxF "[\".local/share/ce-alt-pristine/$version\"]" "$scratch/alt-pristine.toml" \
+  || { echo "a safe pristinePath override did not move the pristine external" >&2; exit 1; }
+for unsafe_pristine in '../escape' '/abs/path' 'bad path' '.local/../x' '$HOME/x'; do
+  for unsafe_template in .chezmoiexternals/ai-agents.toml .chezmoiscripts/70-agents/run_onchange_after_zz-prune-agent-marketplace-archives.sh.tmpl; do
+    if render_source_template "$unsafe_template" "$scratch/unsafe.out" "$(pristine_override "$unsafe_pristine")" 2>"$scratch/unsafe.err"; then
+      echo "render accepted the unsafe pristinePath '$unsafe_pristine' in $unsafe_template" >&2; exit 1
+    fi
+    grep -qF 'unsafe pristinePath' "$scratch/unsafe.err" \
+      || { echo "render of $unsafe_template failed for '$unsafe_pristine' without naming the unsafe pristinePath" >&2; exit 1; }
+  done
+done
 
 # --- persona content contract ---
 persona="$source_root/dot_local/share/compound-engineering-overlays/skills/ce-sweep/references/sources/gitlab-issues.md"
