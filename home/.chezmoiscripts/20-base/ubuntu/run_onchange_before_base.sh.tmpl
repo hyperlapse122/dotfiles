@@ -41,17 +41,33 @@ base_packages=(
   zsh
 )
 
-install_base_packages() {
-  local -a missing=()
-  local pkg
+# Named generically, unlike the other converted installers' missing_<set>
+# arrays: the frozen base-packages-already-present matrix row's predicate
+# already reads "${#missing[@]}", so renaming it would move that row too.
+missing=()
+compute_missing() {
+  missing=()
+  local pkg status
   for pkg in "${base_packages[@]}"; do
-    local status=''
     status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
     if [[ "$status" != installed ]]; then
       missing+=("${pkg}")
     fi
   done
+}
 
+report_base_missing() {
+  printf 'install-base-ubuntu.sh: apt-get left these declared base packages uninstalled: %s\n' "${missing[*]}" >&2
+  printf '  sudo apt-get install -y %s\n' "${missing[*]}" >&2
+  return 0
+}
+
+clear_base_skip_record() {
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-base-ubuntu" "site" "base-packages-not-installed") | trim | indent 2 }}
+}
+
+install_base_packages() {
+  compute_missing
   if [[ "${#missing[@]}" -eq 0 ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-base-ubuntu" "site" "base-packages-already-present" "reason" "all declared base packages are already installed") | trim | indent 6 }}
@@ -63,7 +79,14 @@ install_base_packages() {
     "${#missing[@]}" "${#base_packages[@]}"
 
   "${SUDO[@]}" apt-get update -qq || true
-  "${SUDO[@]}" apt-get install -y "${missing[@]}"
+  # Exit status is discarded because the post-attempt re-inspection is the verdict.
+  if ! "${SUDO[@]}" apt-get install -y "${missing[@]}"; then :; fi
+  compute_missing
+
+  if [[ "${#missing[@]}" -gt 0 ]] && report_base_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-base-ubuntu" "site" "base-packages-not-installed" "direction" "operator-blocking" "reason" "apt-get left declared base packages uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}
+  fi
+  clear_base_skip_record
 }
 
 install_base_packages

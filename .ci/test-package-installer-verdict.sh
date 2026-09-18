@@ -42,7 +42,14 @@ chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is required on PATH'
 devtools_src=.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl
 apps_src=.chezmoiscripts/30-components/run_onchange_before_70-apps.sh.tmpl
 dotnet_src=.chezmoiscripts/30-components/run_onchange_before_50-dotnet.sh.tmpl
-for src in "$devtools_src" "$apps_src" "$dotnet_src"; do
+tailscale_src=.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl
+flatpaks_src=.chezmoiscripts/30-components/run_onchange_before_40-flatpaks.sh.tmpl
+podman_src=.chezmoiscripts/30-components/run_onchange_before_20-podman.sh.tmpl
+desktop_ime_src=.chezmoiscripts/30-components/run_onchange_before_60-desktop-ime.sh.tmpl
+base_fedora_src=.chezmoiscripts/20-base/fedora/run_onchange_before_base.sh.tmpl
+base_ubuntu_src=.chezmoiscripts/20-base/ubuntu/run_onchange_before_base.sh.tmpl
+for src in "$devtools_src" "$apps_src" "$dotnet_src" "$tailscale_src" "$flatpaks_src" \
+  "$podman_src" "$desktop_ime_src" "$base_fedora_src" "$base_ubuntu_src"; do
   require_file "$repo_root" "$scratch" "$chezmoi_bin" "$src"
 done
 
@@ -72,7 +79,17 @@ render_variant "$apps_src" linux "$fedora_data" apps-fedora.sh
 render_variant "$dotnet_src" linux "$fedora_data" dotnet-fedora.sh
 render_variant "$dotnet_src" linux "$ubuntu_data" dotnet-ubuntu.sh
 render_variant "$dotnet_src" darwin "$darwin_data" dotnet-darwin.sh
-pass 'the three installers render for Fedora, Ubuntu arm64 and darwin'
+render_variant "$tailscale_src" linux "$fedora_data" tailscale-fedora.sh
+render_variant "$tailscale_src" linux "$ubuntu_data" tailscale-ubuntu.sh
+render_variant "$flatpaks_src" linux "$fedora_data" flatpaks-fedora.sh
+render_variant "$flatpaks_src" linux "$ubuntu_data" flatpaks-ubuntu.sh
+render_variant "$podman_src" linux "$fedora_data" podman-fedora.sh
+render_variant "$podman_src" linux "$ubuntu_data" podman-ubuntu.sh
+render_variant "$desktop_ime_src" linux "$fedora_data" desktop-ime-fedora.sh
+render_variant "$desktop_ime_src" linux "$ubuntu_data" desktop-ime-ubuntu.sh
+render_variant "$base_fedora_src" linux "$fedora_data" base-fedora.sh
+render_variant "$base_ubuntu_src" linux "$ubuntu_data" base-ubuntu.sh
+pass 'all nine installers render for Fedora, Ubuntu arm64 and darwin'
 
 # --- Structural gates ----------------------------------------------------------
 
@@ -177,6 +194,16 @@ expect_sentinel dotnet-fedora.sh install-dotnet-fedora dotnet-tools-not-installe
 expect_sentinel dotnet-ubuntu.sh install-dotnet-ubuntu dotnet-absent transient-blocking
 expect_sentinel dotnet-ubuntu.sh install-dotnet-ubuntu dotnet-tools-not-installed operator-blocking
 expect_sentinel dotnet-darwin.sh install-dotnet-darwin dotnet-tools-not-installed operator-blocking
+expect_sentinel tailscale-fedora.sh install-tailscale-fedora tailscale-not-installed operator-blocking
+expect_sentinel tailscale-ubuntu.sh install-tailscale-ubuntu tailscale-not-installed operator-blocking
+expect_sentinel flatpaks-fedora.sh install-flatpaks flatpak-apps-not-installed operator-blocking
+expect_sentinel flatpaks-ubuntu.sh install-flatpaks flatpak-apps-not-installed operator-blocking
+expect_sentinel podman-fedora.sh install-podman-fedora podman-packages-not-installed operator-blocking
+expect_sentinel podman-ubuntu.sh install-podman-ubuntu podman-packages-not-installed operator-blocking
+expect_sentinel desktop-ime-fedora.sh install-desktop-ime-fedora ime-packages-not-installed operator-blocking
+expect_sentinel desktop-ime-ubuntu.sh install-desktop-ime-ubuntu ime-packages-not-installed operator-blocking
+expect_sentinel base-fedora.sh install-base-fedora base-packages-not-installed operator-blocking
+expect_sentinel base-ubuntu.sh install-base-ubuntu base-packages-not-installed operator-blocking
 pass 'every rendered variant carries its declaration sites'
 
 # --- Region extraction ---------------------------------------------------------
@@ -200,6 +227,16 @@ extract apps-fedora.sh '^DNF=\(' install_app_packages apps-fedora.region
 extract dotnet-fedora.sh '^dotnet_tools=\($' install_dotnet_tools dotnet-fedora.region
 extract dotnet-ubuntu.sh '^dotnet_tools=\($' install_dotnet_tools dotnet-ubuntu.region
 extract dotnet-darwin.sh '^dotnet_tools=\($' install_dotnet_tools dotnet-darwin.region
+extract tailscale-fedora.sh '^setup_tailscale_repo\(\) \{$' install_tailscale tailscale-fedora.region
+extract tailscale-ubuntu.sh '^setup_tailscale_repo\(\) \{$' install_tailscale tailscale-ubuntu.region
+extract flatpaks-fedora.sh '^flatpaks=\($' install_flatpak_apps flatpaks-fedora.region
+extract flatpaks-ubuntu.sh '^flatpaks=\($' install_flatpak_apps flatpaks-ubuntu.region
+extract podman-fedora.sh '^podman_packages=\($' install_podman_packages podman-fedora.region
+extract podman-ubuntu.sh '^apt_installed\(\) \{$' install_podman_packages podman-ubuntu.region
+extract desktop-ime-fedora.sh '^desktop_ime_packages=\($' install_desktop_ime_packages desktop-ime-fedora.region
+extract desktop-ime-ubuntu.sh '^apt_installed\(\) \{$' install_desktop_ime_packages desktop-ime-ubuntu.region
+extract base-fedora.sh '^core_packages=\($' install_base_packages base-fedora.region
+extract base-ubuntu.sh '^base_packages=\($' install_base_packages base-ubuntu.region
 
 # --- Stubs ---------------------------------------------------------------------
 #
@@ -275,6 +312,13 @@ for p in "$@"; do
     *" $p "*) printf 'E: Unable to locate package %s\n' "$p" >&2; rc=100 ;;
     *)
       printf '%s\n' "$p" >>"$STUB_STATE/debs"
+      # A command-v-checked package (tailscale) is also exposed as a runnable
+      # binary once "installed", so a re-inspection via `command -v` sees it.
+      if [[ -n "${STUB_LOCALBIN:-}" ]]; then
+        mkdir -p "$STUB_LOCALBIN"
+        printf '#!/bin/sh\n' >"$STUB_LOCALBIN/$p"
+        chmod 0755 "$STUB_LOCALBIN/$p"
+      fi
       for rule in ${APT_PULLS:-}; do
         [[ "$rule" == "$p:"* ]] && printf '%s\n' "${rule#*:}" >>"$STUB_STATE/debs"
       done
@@ -326,6 +370,77 @@ out="$STUB_STATE/tee/${!#//\//_}"
 cat >"$out"
 EOF
 
+stub "$stubs/curl" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+printf 'curl %s\n' "$*" >>"$STUB_LOG"
+printf 'stub-content\n'
+exit "${CURL_EXIT:-0}"
+EOF
+
+stub "$stubs/flatpak" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+printf 'flatpak %s\n' "$*" >>"$STUB_LOG"
+case "${1-}" in
+  list)
+    while IFS= read -r a; do [[ -n "$a" ]] && printf '%s\n' "$a"; done <"$STUB_STATE/flatpaks"
+    exit 0
+    ;;
+  remote-add)
+    exit "${FLATPAK_REMOTE_ADD_EXIT:-0}"
+    ;;
+  install)
+    shift
+    for a in "$@"; do
+      case "$a" in
+        -*|flathub) continue ;;
+      esac
+      case " ${FLATPAK_FAIL:-} " in
+        *" $a "*) ;;
+        *) printf '%s\n' "$a" >>"$STUB_STATE/flatpaks" ;;
+      esac
+    done
+    exit "${FLATPAK_INSTALL_EXIT:-0}"
+    ;;
+  *) exit 0 ;;
+esac
+EOF
+
+stub "$stubs/getent" <<'EOF'
+#!/usr/bin/env bash
+exit 2
+EOF
+
+stub "$stubs/usermod" <<'EOF'
+#!/usr/bin/env bash
+printf 'usermod %s\n' "$*" >>"$STUB_LOG"
+exit 0
+EOF
+
+stub "$stubs/gpasswd" <<'EOF'
+#!/usr/bin/env bash
+printf 'gpasswd %s\n' "$*" >>"$STUB_LOG"
+exit 0
+EOF
+
+stub "$stubs/systemctl" <<'EOF'
+#!/usr/bin/env bash
+printf 'systemctl %s\n' "$*" >>"$STUB_LOG"
+exit 0
+EOF
+
+# A PATH variant without the flatpak stub, so a scenario can drive the case
+# where the flatpak binary itself is still absent after a tolerated runtime
+# install failure.
+stubs_noflatpak=$scratch/bin-noflatpak
+mkdir -p "$stubs_noflatpak"
+for f in "$stubs"/*; do
+  base=$(basename "$f")
+  [[ "$base" == flatpak ]] && continue
+  ln -s "$f" "$stubs_noflatpak/$base"
+done
+
 # --- Driver --------------------------------------------------------------------
 #
 # run_case <label> <region> <body> [NAME=value...]
@@ -338,7 +453,7 @@ run_case() {
   local label=$1 region=$2 body=$3
   shift 3
   local case_dir=$scratch/cases/$label kv name
-  local rpms='' groups='' debs='' tools='' dotnet=0 seed=''
+  local rpms='' groups='' debs='' tools='' flatpaks='' dotnet=0 seed='' noflatpak=0
   local -a pass_env=()
   for kv in "$@"; do
     name=${kv%%=*}
@@ -347,7 +462,9 @@ run_case() {
       GROUPS) groups=${kv#*=} ;;
       DEBS) debs=${kv#*=} ;;
       TOOLS) tools=${kv#*=} ;;
+      FLATPAKS) flatpaks=${kv#*=} ;;
       DOTNET) dotnet=${kv#*=} ;;
+      NOFLATPAK) noflatpak=${kv#*=} ;;
       SEED) seed=${kv#*=} ;;
       *) pass_env+=("$kv") ;;
     esac
@@ -359,17 +476,22 @@ run_case() {
   printf '%s\n' $groups >"$case_dir/stub/groups"
   printf '%s\n' $debs >"$case_dir/stub/debs"
   printf '%s\n' $tools >"$case_dir/stub/tools"
+  printf '%s\n' $flatpaks >"$case_dir/stub/flatpaks"
+  local localbin=$case_dir/bin-local w
+  mkdir -p "$localbin"
+  for w in $debs; do printf '#!/bin/sh\n' >"$localbin/$w"; chmod 0755 "$localbin/$w"; done
   if [[ -n "$seed" ]]; then
     local seed_script=${seed%%__*} seed_site=${seed#*__}
     printf 'v1\t%s\t%s\toperator-blocking\tseeded by the harness\n' "$seed_script" "$seed_site" >"$skips/$seed"
   fi
-  local path="$stubs:$sysbin"
-  [[ "$dotnet" == 1 ]] && path="$stubs:$dotnet_dir:$sysbin"
+  local path="$localbin:$stubs:$sysbin"
+  [[ "$dotnet" == 1 ]] && path="$localbin:$stubs:$dotnet_dir:$sysbin"
+  [[ "$noflatpak" == 1 ]] && path="$localbin:$stubs_noflatpak:$sysbin"
   out=$case_dir/stdout err=$case_dir/stderr log=$case_dir/calls.log
   : >"$log"
   rc=0
   env -i HOME="$case_dir/home" XDG_STATE_HOME="$case_dir/state" PATH="$path" \
-    STUB_LOG="$log" STUB_STATE="$case_dir/stub" "${pass_env[@]}" \
+    STUB_LOG="$log" STUB_STATE="$case_dir/stub" STUB_LOCALBIN="$localbin" "${pass_env[@]}" \
     "$sysbin/bash" -c '
       set -euo pipefail
       SUDO=()
@@ -414,10 +536,24 @@ fd_groups=$(declared dev_groups devtools-fedora.region)
 ud_pkgs=$(declared dev_packages devtools-ubuntu.region)
 app_pkgs=$(declared app_packages apps-fedora.region)
 all_tools=$(declared dotnet_tools dotnet-fedora.region)
+podman_fd_pkgs=$(declared podman_packages podman-fedora.region)
+podman_ud_pkgs=$(declared podman_packages podman-ubuntu.region)
+ime_fd_pkgs=$(declared desktop_ime_packages desktop-ime-fedora.region)
+ime_ud_pkgs=$(declared desktop_ime_packages desktop-ime-ubuntu.region)
+base_fd_pkgs=$(declared core_packages base-fedora.region)
+base_ud_pkgs=$(declared base_packages base-ubuntu.region)
+flatpak_ids=$(declared flatpaks flatpaks-fedora.region)
 without() { local drop=$1 w; shift; for w in "$@"; do [[ "$w" == "$drop" ]] || printf '%s ' "$w"; done; }
 read -r fd_first fd_second _ <<<"$fd_pkgs"
 read -r fd_group1 _ <<<"$fd_groups"
 read -r tool1 tool2 _ <<<"$all_tools"
+read -r podman_fd1 _ <<<"$podman_fd_pkgs"
+read -r podman_ud1 podman_ud2 podman_ud3 podman_ud_rest <<<"$podman_ud_pkgs"
+read -r ime_fd1 _ <<<"$ime_fd_pkgs"
+read -r ime_ud1 ime_ud2 ime_ud_rest <<<"$ime_ud_pkgs"
+read -r base_fd1 _ <<<"$base_fd_pkgs"
+read -r base_ud1 _ <<<"$base_ud_pkgs"
+read -r flatpak1 _ <<<"$flatpak_ids"
 
 DFED=install-devtools-fedora__dev-packages-not-installed
 DUBU=install-devtools-ubuntu__dev-packages-not-installed
@@ -427,6 +563,15 @@ NFED_TOOLS=install-dotnet-fedora__dotnet-tools-not-installed
 NUBU_SDK=install-dotnet-ubuntu__dotnet-absent
 NUBU_TOOLS=install-dotnet-ubuntu__dotnet-tools-not-installed
 NMAC_TOOLS=install-dotnet-darwin__dotnet-tools-not-installed
+TSFED=install-tailscale-fedora__tailscale-not-installed
+TSUBU=install-tailscale-ubuntu__tailscale-not-installed
+FLATPAKS_REC=install-flatpaks__flatpak-apps-not-installed
+PMFED=install-podman-fedora__podman-packages-not-installed
+PMUBU=install-podman-ubuntu__podman-packages-not-installed
+IMEFED=install-desktop-ime-fedora__ime-packages-not-installed
+IMEUBU=install-desktop-ime-ubuntu__ime-packages-not-installed
+BASEFED=install-base-fedora__base-packages-not-installed
+BASEUBU=install-base-ubuntu__base-packages-not-installed
 
 # --- Devtools, Fedora ----------------------------------------------------------
 
@@ -712,6 +857,223 @@ run_case "$label" dotnet-darwin.region install_dotnet_tools
 check returned_zero
 check not_called '^dotnet '
 pass "$label: an absent dotnet is the deferred no-attempt path"
+
+# --- Tailscale, Fedora -----------------------------------------------------------
+
+label='tailscale-fedora-install-fails'
+run_case "$label" tailscale-fedora.region install_tailscale RPMS="" DNF_INSTALL_EXIT=1
+check returned_zero
+check record_is "$TSFED" operator-blocking
+check stderr_has 'sudo dnf install -y tailscale'
+check names_entry_state
+check called '^dnf install -y tailscale$'
+pass "$label: a failed dnf install is recorded, reported and the script continues"
+
+label='tailscale-fedora-converged'
+run_case "$label" tailscale-fedora.region install_tailscale RPMS=tailscale SEED="$TSFED"
+check returned_zero
+check no_record "$TSFED"
+check not_called '^dnf install'
+pass "$label: a converged host installs nothing and clears the record"
+
+label='tailscale-fedora-converges-now'
+run_case "$label" tailscale-fedora.region install_tailscale RPMS="" DNF_PROVIDES=tailscale SEED="$TSFED"
+check returned_zero
+check no_record "$TSFED"
+check called '^dnf install -y tailscale$'
+pass "$label: an install that provides tailscale clears the record"
+
+# --- Tailscale, Ubuntu -----------------------------------------------------------
+
+label='tailscale-ubuntu-install-fails'
+run_case "$label" tailscale-ubuntu.region install_tailscale DEBS="" APT_FAIL=tailscale
+check returned_zero
+check record_is "$TSUBU" operator-blocking
+check stderr_has 'sudo apt-get install -y tailscale'
+check names_entry_state
+check called '^apt-get install -y tailscale$'
+pass "$label: apt-get install -y tailscale || true no longer masks a failed install"
+
+label='tailscale-ubuntu-converged'
+run_case "$label" tailscale-ubuntu.region install_tailscale DEBS=tailscale SEED="$TSUBU"
+check returned_zero
+check no_record "$TSUBU"
+check not_called '^apt-get install'
+pass "$label: a converged host installs nothing and clears the record"
+
+label='tailscale-ubuntu-converges-now'
+run_case "$label" tailscale-ubuntu.region install_tailscale DEBS="" SEED="$TSUBU"
+check returned_zero
+check no_record "$TSUBU"
+check called '^apt-get install -y tailscale$'
+pass "$label: an install that provides tailscale clears the record"
+
+# --- Flatpaks ----------------------------------------------------------------
+
+label='flatpaks-fedora-install-fails'
+run_case "$label" flatpaks-fedora.region install_flatpak_apps RPMS=flatpak \
+  FLATPAKS="$(without "$flatpak1" $flatpak_ids)" FLATPAK_FAIL="$flatpak1"
+check returned_zero
+check record_is "$FLATPAKS_REC" operator-blocking
+check stderr_has "$flatpak1"
+check stderr_has "flatpak install --system flathub"
+check names_entry_state
+pass "$label: a failed flatpak install is recorded and reported"
+
+label='flatpaks-ubuntu-install-fails'
+run_case "$label" flatpaks-ubuntu.region install_flatpak_apps DEBS=flatpak \
+  FLATPAKS="$(without "$flatpak1" $flatpak_ids)" FLATPAK_FAIL="$flatpak1"
+check returned_zero
+check record_is "$FLATPAKS_REC" operator-blocking
+check stderr_has "$flatpak1"
+pass "$label: the Ubuntu branch reports the same way as Fedora"
+
+label='flatpaks-converged'
+run_case "$label" flatpaks-fedora.region install_flatpak_apps RPMS=flatpak \
+  FLATPAKS="$flatpak_ids" SEED="$FLATPAKS_REC"
+check returned_zero
+check no_record "$FLATPAKS_REC"
+check not_called '^flatpak install'
+pass "$label: every declared app already present clears the record"
+
+label='flatpaks-runtime-absent-after-tolerated-failure'
+run_case "$label" flatpaks-fedora.region install_flatpak_apps RPMS="" DNF_INSTALL_EXIT=1 NOFLATPAK=1
+check returned_zero
+check record_is "$FLATPAKS_REC" operator-blocking
+check stderr_has "$flatpak1"
+check not_called '^flatpak '
+pass "$label: a still-absent flatpak binary reports every declared app missing without invoking flatpak list"
+
+# --- Podman, Fedora ------------------------------------------------------------
+
+label='podman-fedora-install-fails'
+run_case "$label" podman-fedora.region install_podman_packages \
+  RPMS="$(without "$podman_fd1" $podman_fd_pkgs)" DNF_INSTALL_EXIT=1
+check returned_zero
+check record_is "$PMFED" operator-blocking
+check stderr_has "sudo dnf install -y"
+check stderr_has "$podman_fd1"
+check names_entry_state
+pass "$label: a failed dnf install is recorded, reported and the script continues"
+
+label='podman-fedora-converged'
+run_case "$label" podman-fedora.region install_podman_packages RPMS="$podman_fd_pkgs" SEED="$PMFED"
+check returned_zero
+check no_record "$PMFED"
+check not_called '^dnf install'
+pass "$label: a converged host installs nothing and clears the record"
+
+# --- Podman, Ubuntu ------------------------------------------------------------
+
+label='podman-ubuntu-second-fails'
+run_case "$label" podman-ubuntu.region install_podman_packages \
+  DEBS="$podman_ud_rest" APT_FAIL="$podman_ud2"
+check returned_zero
+check called "^apt-get install -y $podman_ud1\$"
+check called "^apt-get install -y $podman_ud2\$"
+check called "^apt-get install -y $podman_ud3\$"
+check record_is "$PMUBU" operator-blocking
+check stderr_has "sudo apt-get install -y"
+check stderr_has "$podman_ud2"
+check names_entry_state
+pass "$label: one failed package does not stop the rest and is the one recorded"
+
+label='podman-ubuntu-converged'
+run_case "$label" podman-ubuntu.region install_podman_packages DEBS="$podman_ud_pkgs" SEED="$PMUBU"
+check returned_zero
+check no_record "$PMUBU"
+check not_called '^apt-get install'
+pass "$label: a converged host installs nothing and clears the record"
+
+# --- Desktop-IME, Fedora --------------------------------------------------------
+
+label='desktop-ime-fedora-install-fails'
+run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages \
+  RPMS="$(without "$ime_fd1" $ime_fd_pkgs)" DNF_INSTALL_EXIT=1
+check returned_zero
+check record_is "$IMEFED" operator-blocking
+check stderr_has "$ime_fd1"
+check names_entry_state
+pass "$label: a failed dnf install is recorded, reported and the script continues"
+
+label='desktop-ime-fedora-converged'
+run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages RPMS="$ime_fd_pkgs" SEED="$IMEFED"
+check returned_zero
+check no_record "$IMEFED"
+check not_called '^dnf install'
+pass "$label: a converged host installs nothing and clears the record"
+
+label='desktop-ime-fedora-kde-ksshaskpass-missing'
+run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages \
+  RPMS="$ime_fd_pkgs" FACT_DESKTOP=kde DNF_INSTALL_EXIT=1
+check returned_zero
+check record_is "$IMEFED" operator-blocking
+check stderr_has ksshaskpass
+check called '^dnf install -y ksshaskpass$'
+pass "$label: the KDE-conditional ksshaskpass package is covered by the same verdict"
+
+# --- Desktop-IME, Ubuntu --------------------------------------------------------
+
+label='desktop-ime-ubuntu-second-fails'
+run_case "$label" desktop-ime-ubuntu.region install_desktop_ime_packages \
+  DEBS="$ime_ud_rest" APT_FAIL="$ime_ud2"
+check returned_zero
+check called "^apt-get install -y $ime_ud1\$"
+check called "^apt-get install -y $ime_ud2\$"
+check record_is "$IMEUBU" operator-blocking
+check stderr_has "$ime_ud2"
+check names_entry_state
+pass "$label: one failed package does not stop the rest and is the one recorded"
+
+label='desktop-ime-ubuntu-converged'
+run_case "$label" desktop-ime-ubuntu.region install_desktop_ime_packages DEBS="$ime_ud_pkgs" SEED="$IMEUBU"
+check returned_zero
+check no_record "$IMEUBU"
+check not_called '^apt-get install'
+pass "$label: a converged host installs nothing and clears the record"
+
+# --- Base, Fedora ----------------------------------------------------------------
+
+label='base-fedora-install-fails'
+run_case "$label" base-fedora.region install_base_packages \
+  RPMS="$(without "$base_fd1" $base_fd_pkgs)" DNF_INSTALL_EXIT=1
+check returned_zero
+check record_is "$BASEFED" operator-blocking
+check stderr_has "$base_fd1"
+check names_entry_state
+pass "$label: a failed dnf install is recorded, reported and the script continues"
+
+label='base-fedora-makecache-fails'
+run_case "$label" base-fedora.region install_base_packages \
+  RPMS="$(without "$base_fd1" $base_fd_pkgs)" DNF_MAKECACHE_EXIT=1 DNF_PROVIDES="$base_fd1"
+check returned_zero
+check called '^dnf makecache'
+check called "^dnf install -y"
+check no_record "$BASEFED"
+pass "$label: a failed makecache still reaches the install and the verdict decides"
+
+label='base-fedora-already-present'
+run_case "$label" base-fedora.region install_base_packages RPMS="$base_fd_pkgs"
+check returned_zero
+check not_called '^dnf install'
+pass "$label: the existing done_here early exit is unaffected by the new verdict"
+
+# --- Base, Ubuntu ----------------------------------------------------------------
+
+label='base-ubuntu-install-fails'
+run_case "$label" base-ubuntu.region install_base_packages \
+  DEBS="$(without "$base_ud1" $base_ud_pkgs)" APT_FAIL="$base_ud1"
+check returned_zero
+check record_is "$BASEUBU" operator-blocking
+check stderr_has "$base_ud1"
+check names_entry_state
+pass "$label: a failed apt-get install is recorded, reported and the script continues"
+
+label='base-ubuntu-already-present'
+run_case "$label" base-ubuntu.region install_base_packages DEBS="$base_ud_pkgs"
+check returned_zero
+check not_called '^apt-get install'
+pass "$label: the existing done_here early exit is unaffected by the new verdict"
 
 # --- The harness observes the declaration, not only the status -----------------
 #

@@ -14,14 +14,33 @@ DNF=("${SUDO[@]}" dnf)
 
 setup_tailscale_repo() {
   "${DNF[@]}" config-manager addrepo --from-repofile https://pkgs.tailscale.com/stable/fedora/tailscale.repo --overwrite
-  "${DNF[@]}" makecache -y
+  if ! "${DNF[@]}" makecache -y; then
+    printf 'install-tailscale-fedora: dnf makecache failed; continuing to the install attempt\n' >&2
+  fi
+}
+
+clear_tailscale_skip_record() {
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-tailscale-fedora" "site" "tailscale-not-installed") | trim | indent 2 }}
+}
+
+report_tailscale_missing() {
+  printf 'install-tailscale-fedora: tailscale is still not installed\n' >&2
+  printf 'install-tailscale-fedora: install it by hand:\n' >&2
+  printf '  sudo dnf install -y tailscale\n' >&2
+  return 0
 }
 
 install_tailscale() {
   if ! rpm -q tailscale >/dev/null 2>&1; then
     setup_tailscale_repo
-    "${DNF[@]}" install -y tailscale
+    # Exit status is discarded because the post-attempt re-inspection is the verdict.
+    if ! "${DNF[@]}" install -y tailscale; then :; fi
   fi
+
+  if ! rpm -q tailscale >/dev/null 2>&1 && report_tailscale_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-tailscale-fedora" "site" "tailscale-not-installed" "direction" "operator-blocking" "reason" "dnf left tailscale uninstalled; the by-hand install command was printed above") | trim | indent 4 }}
+  fi
+  clear_tailscale_skip_record
 }
 
 enable_tailscale() {
@@ -34,12 +53,37 @@ install_tailscale
 enable_tailscale
 
 {{ else if $isUbuntu -}}
-if ! command -v tailscale >/dev/null 2>&1; then
+setup_tailscale_repo() {
   curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg | "${SUDO[@]}" tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null || true
   curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list | "${SUDO[@]}" tee /etc/apt/sources.list.d/tailscale.list || true
   "${SUDO[@]}" apt-get update -qq || true
-  "${SUDO[@]}" apt-get install -y tailscale || true
-fi
+}
+
+clear_tailscale_skip_record() {
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-tailscale-ubuntu" "site" "tailscale-not-installed") | trim | indent 2 }}
+}
+
+report_tailscale_missing() {
+  printf 'install-tailscale-ubuntu: tailscale is still not installed\n' >&2
+  printf 'install-tailscale-ubuntu: install it by hand:\n' >&2
+  printf '  sudo apt-get install -y tailscale\n' >&2
+  return 0
+}
+
+install_tailscale() {
+  if ! command -v tailscale >/dev/null 2>&1; then
+    setup_tailscale_repo
+    # Exit status is discarded because the post-attempt re-inspection is the verdict.
+    if ! "${SUDO[@]}" apt-get install -y tailscale; then :; fi
+  fi
+
+  if ! command -v tailscale >/dev/null 2>&1 && report_tailscale_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-tailscale-ubuntu" "site" "tailscale-not-installed" "direction" "operator-blocking" "reason" "apt-get left tailscale uninstalled; the by-hand install command was printed above") | trim | indent 4 }}
+  fi
+  clear_tailscale_skip_record
+}
+
+install_tailscale
 
 if systemctl list-unit-files tailscaled.service 2>/dev/null | grep -q tailscaled; then
   "${SUDO[@]}" systemctl enable tailscaled 2>/dev/null || true

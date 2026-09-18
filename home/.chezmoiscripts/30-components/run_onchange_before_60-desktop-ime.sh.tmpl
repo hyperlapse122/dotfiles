@@ -29,26 +29,55 @@ elif [[ "${FACT_DESKTOP:-none}" == "gnome" ]]; then
   desktop_ime_packages+=(openssh-askpass)
 fi
 
-install_desktop_ime_packages() {
-  local -a missing=()
+missing_desktop_ime_packages=()
+compute_missing_desktop_ime_packages() {
+  missing_desktop_ime_packages=()
   local pkg
   for pkg in "${desktop_ime_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+    rpm -q "${pkg}" >/dev/null 2>&1 || missing_desktop_ime_packages+=("${pkg}")
   done
-  if [[ "${#missing[@]}" -gt 0 ]]; then
-    "${DNF[@]}" install -y "${missing[@]}"
+}
+
+report_desktop_ime_missing() {
+  printf 'install-desktop-ime-fedora: dnf left these declared packages uninstalled: %s\n' "${missing_desktop_ime_packages[*]}" >&2
+  printf '  sudo dnf install -y %s\n' "${missing_desktop_ime_packages[*]}" >&2
+  return 0
+}
+
+clear_desktop_ime_skip_record() {
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-desktop-ime-fedora" "site" "ime-packages-not-installed") | trim | indent 2 }}
+}
+
+install_desktop_ime_packages() {
+  compute_missing_desktop_ime_packages
+
+  if [[ "${#missing_desktop_ime_packages[@]}" -gt 0 ]]; then
+    # Exit status is discarded because the post-attempt re-inspection is the verdict.
+    if ! "${DNF[@]}" install -y "${missing_desktop_ime_packages[@]}"; then :; fi
+    compute_missing_desktop_ime_packages
   fi
+
+  if [[ "${#missing_desktop_ime_packages[@]}" -gt 0 ]] && report_desktop_ime_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-desktop-ime-fedora" "site" "ime-packages-not-installed" "direction" "operator-blocking" "reason" "dnf left declared desktop-IME packages uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}
+  fi
+  clear_desktop_ime_skip_record
 }
 
 install_desktop_ime_packages
 
 {{ else if $isUbuntu -}}
+apt_installed() {
+  local status
+  status="$(dpkg-query -f '${db:Status-Status}' -W "$1" 2>/dev/null)" || return 1
+  [[ "$status" == installed ]]
+}
+
 install_apt() {
   local pkg=$1
-  local status=''
-  status="$(dpkg-query -f '${db:Status-Status}' -W "$pkg" 2>/dev/null)" || status=''
-  if [[ "$status" != installed ]]; then
-    "${SUDO[@]}" apt-get install -y "$pkg"
+  if ! apt_installed "$pkg"; then
+    if ! "${SUDO[@]}" apt-get install -y "$pkg"; then
+      printf 'install-desktop-ime-ubuntu: apt-get install failed for %s\n' "$pkg" >&2
+    fi
   fi
 }
 
@@ -58,10 +87,41 @@ desktop_ime_packages=(
   wl-clipboard
 )
 
-"${SUDO[@]}" apt-get update -qq || true
-for pkg in "${desktop_ime_packages[@]}"; do
-  install_apt "$pkg"
-done
+missing_desktop_ime_packages=()
+compute_missing_desktop_ime_packages() {
+  missing_desktop_ime_packages=()
+  local pkg
+  for pkg in "${desktop_ime_packages[@]}"; do
+    apt_installed "$pkg" || missing_desktop_ime_packages+=("$pkg")
+  done
+}
+
+report_desktop_ime_missing() {
+  printf 'install-desktop-ime-ubuntu: apt-get left these declared packages uninstalled: %s\n' "${missing_desktop_ime_packages[*]}" >&2
+  printf '  sudo apt-get install -y %s\n' "${missing_desktop_ime_packages[*]}" >&2
+  return 0
+}
+
+clear_desktop_ime_skip_record() {
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-desktop-ime-ubuntu" "site" "ime-packages-not-installed") | trim | indent 2 }}
+}
+
+install_desktop_ime_packages() {
+  "${SUDO[@]}" apt-get update -qq || true
+  local pkg
+  for pkg in "${desktop_ime_packages[@]}"; do
+    install_apt "$pkg"
+  done
+
+  compute_missing_desktop_ime_packages
+
+  if [[ "${#missing_desktop_ime_packages[@]}" -gt 0 ]] && report_desktop_ime_missing; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-desktop-ime-ubuntu" "site" "ime-packages-not-installed" "direction" "operator-blocking" "reason" "apt-get left declared desktop-IME packages uninstalled; the missing set and the by-hand install command were printed above") | trim | indent 4 }}
+  fi
+  clear_desktop_ime_skip_record
+}
+
+install_desktop_ime_packages
 {{ end -}}
 
 {{ end -}}
