@@ -11,11 +11,18 @@ set -euo pipefail
 #   3. Mutant fixtures prove both checks actually fail on drift, naming both
 #      values -- one with a mutated gpg.yaml core list, one with a mutated
 #      preflight array (a scratch copy; the real file is never modified).
+#   4. The consumer chezmoiscript (run_after_install-gpg-packages.sh.tmpl) is
+#      actually rendered for Fedora and Ubuntu, and its `gpg_packages=(...)`
+#      array is asserted to match gpg.yaml's core+paperBackup union. Without
+#      this, checks 1-3 could stay green while the template itself referenced
+#      the wrong data path and installed nothing -- gpg.yaml would agree with
+#      preflight, and the consumer would still be broken.
 #
-# gpg.yaml's `paperBackup` lists are NOT compared here: preflight has no
-# reason to install the paper-backup/QR tools (they are not needed to
+# gpg.yaml's `paperBackup` lists are NOT compared to preflight: preflight has
+# no reason to install the paper-backup/QR tools (they are not needed to
 # bootstrap or decrypt chezmoi data), so their absence from preflight is
-# expected, not drift.
+# expected, not drift. Check 4 still verifies paperBackup reaches the
+# consumer script's install set.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$repo_root"
@@ -87,9 +94,46 @@ extract_gpg_core() {
     | extract_yaml_list_items
 }
 
+extract_gpg_paper_backup() {
+  local data_file="$1" distro="$2"
+  extract_yaml_block "^[[:space:]]*${distro}:[[:space:]]*\$" < "$data_file" \
+    | extract_yaml_block "^[[:space:]]*paperBackup:[[:space:]]*\$" \
+    | extract_yaml_list_items
+}
+
 extract_gpg_desktop_pinentry() {
   local data_file="$1" desktop="$2"
   sed -nE "s/^[[:space:]]*${desktop}:[[:space:]]*([^[:space:]]+).*/\\1/p" "$data_file" | head -1
+}
+
+# Renders the consumer chezmoiscript for one distro fixture in an isolated
+# scratch chezmoi config (empty data, restricted PATH) so it never reaches
+# this host's real chezmoi config or 1Password hook.
+render_gpg_consumer_script() {
+  local chezmoi_bin="$1" repo_root="$2" os_id="$3" render_scratch="$4" out_file="$5"
+  mkdir -p "$render_scratch/home" "$render_scratch/target"
+  printf '[data]\n' > "$render_scratch/empty.toml"
+  local err_file="$render_scratch/err.txt"
+  if ! env HOME="$render_scratch/home" PATH="/usr/bin:/bin" \
+    "$chezmoi_bin" --config "$render_scratch/empty.toml" --source "$repo_root" \
+      --destination "$render_scratch/target" \
+      --override-data "{\"chezmoi\":{\"os\":\"linux\",\"osRelease\":{\"id\":\"${os_id}\"}}}" \
+      execute-template < "$tmpl_file" > "$out_file" 2>"$err_file"
+  then
+    fail "failed to render $tmpl_file for osRelease.id=$os_id: $(cat "$err_file")"
+  fi
+}
+
+# Prints the quoted string literals inside `gpg_packages=( ... )` in a
+# rendered script, space-joined -- the array as the consumer script will
+# actually see it at install time.
+extract_rendered_gpg_packages() {
+  local rendered_file="$1"
+  awk '
+    /^gpg_packages=\(/ { infn=1; next }
+    infn && /^\)/ { exit }
+    infn { print }
+  ' "$rendered_file" | sed -nE 's/^[[:space:]]*"([^"]+)".*/\1/p' | xargs
 }
 
 # --- Validation ----------------------------------------------------------------
@@ -127,16 +171,49 @@ check_core_parity() {
   done
 }
 
+sorted_words() {
+  tr ' ' '\n' <<<"$1" | sort | xargs
+}
+
+# Renders the consumer script for one distro and asserts its gpg_packages
+# array is exactly gpg.yaml's core+paperBackup union for that distro.
+check_consumer_render() {
+  local chezmoi_bin="$1" repo_root="$2" data_file="$3" os_id="$4" gpg_distro_key="$5" scratch_dir="$6"
+
+  local rendered="$scratch_dir/rendered-$os_id.sh"
+  render_gpg_consumer_script "$chezmoi_bin" "$repo_root" "$os_id" "$scratch_dir/render-$os_id" "$rendered"
+
+  local rendered_pkgs core_pkgs paper_pkgs expected_pkgs
+  rendered_pkgs=$(extract_rendered_gpg_packages "$rendered")
+  [[ -n "$rendered_pkgs" ]] || fail "rendered $tmpl_file for osRelease.id=$os_id produced an empty gpg_packages array"
+
+  core_pkgs=$(extract_gpg_core "$data_file" "$gpg_distro_key")
+  paper_pkgs=$(extract_gpg_paper_backup "$data_file" "$gpg_distro_key")
+  expected_pkgs="$core_pkgs $paper_pkgs"
+
+  if [[ "$(sorted_words "$rendered_pkgs")" != "$(sorted_words "$expected_pkgs")" ]]; then
+    fail "osRelease.id=$os_id rendered gpg_packages '$rendered_pkgs' does not match gpg.yaml packages.${gpg_distro_key}.core+paperBackup '$expected_pkgs'"
+  fi
+}
+
 # --- Production checks ----------------------------------------------------------
 
 hook_file="$repo_root/.install-prerequisites.sh"
 gpg_data="$source_root/.chezmoidata/gpg.yaml"
+tmpl_file="$source_root/.chezmoiscripts/80-keys/run_after_install-gpg-packages.sh.tmpl"
+chezmoi_bin=$(command -v chezmoi) || fail "chezmoi is required on PATH"
 
 check_core_parity "$hook_file" "$gpg_data" preflight_fedora fedora "fedora"
 pass "preflight_fedora core packages and kde/gnome pinentry agree with gpg.yaml"
 
 check_core_parity "$hook_file" "$gpg_data" preflight_ubuntu debian "debian/ubuntu"
 pass "preflight_ubuntu core packages and kde/gnome pinentry agree with gpg.yaml"
+
+check_consumer_render "$chezmoi_bin" "$repo_root" "$gpg_data" fedora fedora "$scratch"
+pass "run_after_install-gpg-packages.sh.tmpl renders fedora's core+paperBackup set from gpg.yaml"
+
+check_consumer_render "$chezmoi_bin" "$repo_root" "$gpg_data" ubuntu debian "$scratch"
+pass "run_after_install-gpg-packages.sh.tmpl renders debian/ubuntu's core+paperBackup set from gpg.yaml"
 
 # --- Fixture and mutant checks ----------------------------------------------------
 
@@ -158,5 +235,15 @@ if ! grep -q "scdaemon-renamed" <<<"$mutant_hook_err" || ! grep -q "scdaemon" <<
   fail "mutant preflight_ubuntu array did not fail naming both values; output was: $mutant_hook_err"
 fi
 pass "fixture preflight_ubuntu with a renamed package fails naming both values"
+
+# Fixture 3: the rendered consumer script (from the real, unmutated tree) is
+# compared against a mutated expected set (mutant_data's renamed fedora core
+# package) and fails, proving check_consumer_render actually detects a
+# rendered-vs-declared divergence rather than trivially passing.
+mutant_render_err=$(check_consumer_render "$chezmoi_bin" "$repo_root" "$mutant_data" fedora fedora "$scratch" 2>&1) || true
+if ! grep -q "gnupg2-scdaemon-renamed" <<<"$mutant_render_err"; then
+  fail "mutant expected-set check_consumer_render did not fail naming the mismatch; output was: $mutant_render_err"
+fi
+pass "fixture rendered-vs-declared mismatch in check_consumer_render fails"
 
 pass "all GPG package parity checks passed"
