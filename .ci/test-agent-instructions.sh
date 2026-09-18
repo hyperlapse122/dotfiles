@@ -597,8 +597,11 @@ MUST confirm that every dispatch it started is settled and that its release was 
 A receipt that reports the worker released settles that dispatch on its own.
 the run MUST read the receipt's retention reason and make one Orca-side query of that dispatch's state.
 When that query reports the dispatch still active, the run MUST issue the guide's stop for that dispatch and query once more.
-is settled once the query reports the dispatch no longer active.
+A retention Orca bound to a proven identity — a reused or pre-existing terminal, or a retention the run itself requested — is settled once the query reports the dispatch no longer active.
 A retention of any reason is settled the same way when that query reports the dispatch's own process already gone — `stage: process_exited`, or a terminal state of released — and names no residual resources, because nothing stayed resident to record.
+A retention whose reason is `user_takeover` is not a proven identity: Orca records that reason for any keystroke or paste into the worker's pane, so the receipt cannot show that the user submitted a prompt rather than pressed a key while inspecting a finished worker.
+Viewing, focusing, or scrolling a worker's terminal is never a takeover, so the run MUST NOT settle a `user_takeover` retention on the dispatch being no longer active: when the query reports it no longer active but does not yet report its process gone, the run MUST still issue the guide's stop for that dispatch, request its release once more, and query once more, and in every case that retention is settled only under the process-gone sentence above.
+For a `user_takeover` retention, when the query after the stop does not report the dispatch's own process gone with no residual resources — it reports the process live, leaves its process state unknown, or names a residual resource — the run MUST record that dispatch as an unproven release with its other gaps, stating that its terminal stayed resident for the user to close, and proceed; a stop or release receipt whose `processAction` reports no process action is part of that record, never a settlement.
 A retention Orca could not bind to a process, and a retention whose reason the receipt does not state, are never settled by that query while it still reports the dispatch active or leaves its process state unknown
 When the query after a stop still reports the dispatch active, the run MUST record it the same way and proceed.
 it MUST NOT carry terminal previews, pane content, host paths, or any other verbatim command output
@@ -667,6 +670,14 @@ done <"$roster_ids"
 # closes.
 if grep -F 'rung' "$coordinator_claude_linux" | grep -F '`fable`' >/dev/null; then
   fail 'the coordinator payload names `fable` as a sizing rung again'
+fi
+
+# #548: a `user_takeover` retention is no longer a proven identity, because
+# Orca sets it for any keystroke into the pane. The retired member must not
+# return to the proven-identity list under its retired wording; the
+# whole-sentence needle above is what pins the member list itself.
+if grep -F 'a recorded user takeover' "$coordinator_claude_linux" >/dev/null; then
+  fail 'the coordinator payload credits a recorded user takeover as proven identity again'
 fi
 
 # The judgment row must not re-fold the model-elevation step back into its
