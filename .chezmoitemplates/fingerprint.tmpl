@@ -26,16 +26,28 @@ mode this partial exists to prevent.
 Both keys are optional, but at least one must be present. Passing only `globs`
 renders exactly as it always has.
 
-Usage (from any script template):
+Usage (from any script template), source-relative (stays inside the deployed
+tree, resolved through `.chezmoi.sourceDir` directly):
 
   {{ includeTemplate "fingerprint.tmpl" (dict
        "sourceDir" .chezmoi.sourceDir
-       "globs" (list "system/linux/etc/**" ".chezmoidata/fonts.yaml")) }}
+       "globs" (list ".chezmoidata/fonts.yaml")) }}
 
   {{ includeTemplate "fingerprint.tmpl" (dict
        "sourceDir" .chezmoi.sourceDir
        "globs"  (list ".chezmoidata/gnome.yaml")
        "values" (list (dict "name" "session-bus-present" "value" $probe))) }}
+
+Cross-root (reaches OUTSIDE the deployed tree -- `system/`, `packages/`,
+`crates/`, `firmware/`, `mise.toml` -- so `sourceDir` here is `$repoRoot`,
+the repository root from `.chezmoitemplates/repo-root.tmpl`, not
+`.chezmoi.sourceDir`, so the emitted relative paths stay `system/...` /
+`packages/...` regardless of where the chezmoi source directory sits):
+
+  {{ $repoRoot := includeTemplate "repo-root.tmpl" .chezmoi.sourceDir }}
+  {{ includeTemplate "fingerprint.tmpl" (dict
+       "sourceDir" $repoRoot
+       "globs" (list "system/linux/etc/**")) }}
 */ -}}
 {{- $sourceDir := .sourceDir -}}
 {{- $globs := list -}}{{- if hasKey . "globs" -}}{{- $globs = .globs -}}{{- end -}}

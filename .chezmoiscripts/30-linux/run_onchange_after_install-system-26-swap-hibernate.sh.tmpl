@@ -1,12 +1,13 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 #!/usr/bin/env bash
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-swap-hibernate") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-swap-hibernate") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-swap-hibernate") }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/dracut.conf.d/**")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/etc/dracut.conf.d/**")) }}
 SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
 
 os_id="$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" || os_id=""

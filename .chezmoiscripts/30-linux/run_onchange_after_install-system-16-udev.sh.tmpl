@@ -1,12 +1,13 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 #!/usr/bin/env bash
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-udev") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-udev") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-udev") }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/udev/rules.d/**" "system/linux/etc/libinput/**")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/etc/udev/rules.d/**" "system/linux/etc/libinput/**")) }}
 SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
 
 shopt -s globstar nullglob

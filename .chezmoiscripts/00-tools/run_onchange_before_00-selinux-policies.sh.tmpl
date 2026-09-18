@@ -1,5 +1,6 @@
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 {{ $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{ if not $facts.container -}}
 #!/usr/bin/env bash
@@ -37,7 +38,7 @@ set -euo pipefail
 
 {{ includeTemplate "facts-sh.tmpl" . }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "selinux-policies") }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/selinux/**")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/selinux/**")) }}
 
 if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v semodule >/dev/null 2>&1; then
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "selinux-policies") | trim | indent 2 }}

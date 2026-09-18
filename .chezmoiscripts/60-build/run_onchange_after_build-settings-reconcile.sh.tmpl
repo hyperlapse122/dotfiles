@@ -1,5 +1,6 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 {{ $misePresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "mise-present") -}}
 {{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
 #!/usr/bin/env bash
@@ -20,7 +21,7 @@ set -euo pipefail
    previous bun until an unrelated source edit happened to re-trigger the
    script. Hashing the version alone rather than globbing the lock keeps an
    unrelated tool's version out of this script's fingerprint. */ -}}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot
       "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/settings-reconcile/package.json" "packages/settings-reconcile/tsconfig.json" "packages/settings-reconcile/vite.config.ts" "packages/settings-reconcile/src/**")
       "values" (list (dict "name" "mise-present" "value" $misePresent)
                      (dict "name" "bun-version" "value" $bunVersion))) }}

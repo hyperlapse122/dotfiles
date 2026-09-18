@@ -5,6 +5,7 @@
 {{- $currentOs := .chezmoi.os -}}
 {{- if eq $currentOs "darwin" -}}{{- $currentOs = "macos" -}}{{- end -}}
 {{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 {{- $unitsList := list -}}
 {{- range $unitId, $unit := .commands.units -}}
 {{-   $eligible := has $currentOs $unit.platforms -}}
@@ -72,9 +73,9 @@
 {{-       $stagingPath = printf ".local/share/chezmoi-command-sources/%s" $targetBase -}}
 {{-     else if eq $unit.producer "build" -}}
 {{-       if hasKey $unit "fingerprintGlobs" -}}
-{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" $unit.fingerprintGlobs) | sha256sum -}}
+{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" $unit.fingerprintGlobs) | sha256sum -}}
 {{-       else -}}
-{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list (printf "packages/%s/**" $unitId))) | sha256sum -}}
+{{-         $identity = includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list (printf "packages/%s/**" $unitId))) | sha256sum -}}
 {{-       end -}}
 {{-       $stagingPath = printf ".local/share/chezmoi-commands/incomplete/%s" $unitId -}}
 {{-     else if eq $unit.producer "existingTree" -}}

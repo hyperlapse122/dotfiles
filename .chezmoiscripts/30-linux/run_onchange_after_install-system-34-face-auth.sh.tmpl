@@ -1,5 +1,6 @@
 {{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "fedora") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 {{ $authselectPresent := includeTemplate "capabilities.tmpl" (dict "ctx" . "probe" "authselect-present") -}}
 {{- /* The emitter tool ships one linux x86-64 build. Every other platform
    resolves to an empty URL through optional:true and takes the declared skip
@@ -20,8 +21,8 @@ set -euo pipefail
 {{- /* A captured emitter configuration is data this script installs, so it is a
    fingerprint input -- but only when one exists: fingerprint.tmpl fails on a
    glob that matches nothing, and a fleet with no captured camera yet is valid. */ -}}
-{{- if glob (joinPath $sourceDir "system/linux/etc/linux-enable-ir-emitter/*") }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/linux-enable-ir-emitter/*")) }}
+{{- if glob (joinPath $repoRoot "system/linux/etc/linux-enable-ir-emitter/*") }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/etc/linux-enable-ir-emitter/*")) }}
 {{- end }}
 {{ includeTemplate "facts-gate.sh.tmpl" . }}
 SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"

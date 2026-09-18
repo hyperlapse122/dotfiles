@@ -1,0 +1,31 @@
+{{- /*
+repo-root.tmpl — the ONLY template-time definition of the repository root, for
+a template-time expression that reaches OUTSIDE the deployed tree (a
+fingerprint glob against `system/`, `packages/`, `crates/`, `firmware/`, or
+`mise.toml`; a bare `glob` call; a deployed command source that bakes a path
+at render time).
+
+Input: the source directory string (e.g. `.chezmoi.sourceDir`), not a dict --
+there is nothing else to configure.
+
+  {{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir }}
+
+Rule, read from chezmoi's own source-root resolution: the source directory's
+PARENT when that parent holds a `.chezmoiroot` file, else the source
+directory itself. That makes this partial's return value the source directory
+today (no `.chezmoiroot` exists yet) and `dir .chezmoi.sourceDir` once a later
+unit adds one at the repository root -- with no edit to this file in between,
+because the file only ever reads the marker, never assumes its presence.
+
+A source-relative expression (one that stays inside the deployed tree, such as
+a `.chezmoidata/*.yaml` or `dot_local/...` glob) keeps resolving through
+`.chezmoi.sourceDir` directly and MUST NOT call this partial -- only a
+cross-root expression does.
+*/ -}}
+{{- $sourceDir := . -}}
+{{- $parent := dir $sourceDir -}}
+{{- if stat (joinPath $parent ".chezmoiroot") -}}
+{{- $parent -}}
+{{- else -}}
+{{- $sourceDir -}}
+{{- end -}}

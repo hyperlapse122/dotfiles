@@ -1,9 +1,10 @@
 {{- if and (eq .chezmoi.os "linux") (not (includeTemplate "facts.tmpl" . | fromYaml).container) -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 #!/usr/bin/env bash
 set -euo pipefail
 
-{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot
       "globs" (list "crates/gem80-rgb/Cargo.toml" "crates/gem80-rgb/Cargo.lock" "crates/gem80-rgb/build.rs" "crates/gem80-rgb/proto/**" "crates/gem80-rgb/src/**")) }}
 
 case ":$PATH:" in

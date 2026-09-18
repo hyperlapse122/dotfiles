@@ -1,12 +1,13 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 #!/usr/bin/env bash
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sleep") }}
 {{ includeTemplate "shared-host-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sleep") }}
 {{ includeTemplate "sudo-elevation-guard.sh.tmpl" (dict "ctx" . "name" "install-system-sleep") }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/systemd/sleep.conf.d/**" "system/linux/etc/systemd/logind.conf.d/**")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/etc/systemd/sleep.conf.d/**" "system/linux/etc/systemd/logind.conf.d/**")) }}
 SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(if command -v chezmoi >/dev/null 2>&1; then chezmoi source-path; else pwd; fi)}/system/linux"
 
 # Sleep policy for a battery-powered host: suspend first, hibernate before the

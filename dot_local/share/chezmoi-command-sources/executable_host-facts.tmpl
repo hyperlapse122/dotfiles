@@ -65,6 +65,7 @@ set -uo pipefail
 {{- $facts := includeTemplate "facts.tmpl" . | fromYaml -}}
 {{- $registry := .factRegistry -}}
 {{- $distro := $facts.distro -}}
+{{- $repoRoot := includeTemplate "repo-root.tmpl" .chezmoi.sourceDir -}}
 
 {{- /* Validate every gate expression this report reads from the /etc manifest.
    facts-validate.tmpl `fail`s the whole chezmoi command on an unknown fact name,
@@ -189,7 +190,7 @@ printf '  A file matching no override entry installs unconditionally (mode 0644)
 # report tracks a file added to system/linux/etc/ even before the next apply
 # re-renders the installer. The patterns are bash globs and `case` lets `*` cross
 # a `/` — which is how `etc/dconf/db/gdm.d/*` covers the locks/ subdirectory too.
-SRC_ROOT="{{ .chezmoi.sourceDir }}/system/linux"
+SRC_ROOT="{{ $repoRoot }}/system/linux"
 override_patterns=()
 override_gates=()
 {{- range $subsystem, $config := .system.linux }}

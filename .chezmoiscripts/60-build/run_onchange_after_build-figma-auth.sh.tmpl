@@ -1,5 +1,6 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 {{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
 #!/usr/bin/env bash
 set -euo pipefail
@@ -13,7 +14,7 @@ case ":$PATH:" in
 esac
 export PATH
 
-{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+{{ includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot
       "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/figma-auth/package.json" "packages/figma-auth/tsconfig.json" "packages/figma-auth/vite.config.ts" "packages/figma-auth/src/**")
       "values" (list (dict "name" "bun-version" "value" $bunVersion))) }}
 

@@ -1,9 +1,10 @@
 {{ if eq .chezmoi.os "linux" -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 #!/usr/bin/env bash
 
 {{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "values" (list (dict "name" "keyd-keyboards" "value" (toJson .system.linux.keyd.keyboards)))) }}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir "globs" (list "system/linux/etc/libinput/local-overrides.quirks")) }}
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot "globs" (list "system/linux/etc/libinput/local-overrides.quirks")) }}
 set -euo pipefail
 
 {{ includeTemplate "headless-guard.sh.tmpl" (dict "ctx" . "name" "install-keyd") }}

@@ -594,6 +594,9 @@ commands:
       proofEligible: true
       mode: "0755"
       platforms: [linux, macos]
+      # fingerprintGlobs names repository-rooted paths (packages/, crates/,
+      # mise.toml), so command-manifest.tmpl resolves them against $repoRoot
+      # (.chezmoitemplates/repo-root.tmpl), never against .chezmoi.sourceDir.
       fingerprintGlobs:
         - mise.toml
         - packages/package.json

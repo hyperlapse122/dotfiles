@@ -1,5 +1,6 @@
 {{ if or (eq .chezmoi.os "linux") (eq .chezmoi.os "darwin") -}}
 {{ $sourceDir := .chezmoi.sourceDir -}}
+{{ $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 {{ $bunVersion := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "bun") -}}
 {{- /* The payload bodies are NOT build inputs any more: the binary reads them
    as chezmoi-managed files at run time, so a reworded rule needs no rebuild and
@@ -7,7 +8,7 @@
    answers "did my edit reach this host" in one command over the only half the
    compiled binary's behavior still depends on — the package sources. */ -}}
 {{- $srcParts := "" -}}
-{{- range $f := (glob (joinPath $sourceDir "packages/orchestration-hook/src/**")) -}}
+{{- range $f := (glob (joinPath $repoRoot "packages/orchestration-hook/src/**")) -}}
 {{-   if not (stat $f).isDir -}}
 {{-     $srcParts = printf "%s%s" $srcParts (include $f | sha256sum) -}}
 {{-   end -}}
@@ -23,7 +24,7 @@ set -euo pipefail
    same files a second time on every render. The re-trigger condition is
    identical either way, and the zero-match guards stay — the build-id loop
    fails on an empty src glob and fingerprint.tmpl fails on an empty value. */ -}}
-{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $sourceDir
+{{- includeTemplate "fingerprint.tmpl" (dict "sourceDir" $repoRoot
       "globs" (list "mise.toml" "packages/package.json" "packages/bun.lock" "packages/bunfig.toml" "packages/vite.config.ts" "packages/orchestration-hook/package.json" "packages/orchestration-hook/tsconfig.json" "packages/orchestration-hook/vite.config.ts")
       "values" (list (dict "name" "bun-version" "value" $bunVersion)
                      (dict "name" "hook-build-id" "value" $buildId))) }}

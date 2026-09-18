@@ -1,4 +1,5 @@
 {{- $sourceDir := .chezmoi.sourceDir -}}
+{{- $repoRoot := includeTemplate "repo-root.tmpl" $sourceDir -}}
 {{- $fork := .firmware.gem80.qmkFork -}}
 #!/usr/bin/env bash
 # gem80-firmware — build and verify the NuPhy Gem80 `hostrgb` firmware from the
@@ -19,7 +20,7 @@
 
 set -euo pipefail
 
-SOURCE_DIR={{ $sourceDir | quote }}
+SOURCE_DIR={{ $repoRoot | quote }}
 FORK_SOURCE={{ $fork.source | quote }}
 FORK_REF={{ $fork.ref | quote }}
 FORK_SHA={{ $fork.sha | quote }}
