@@ -16,17 +16,18 @@
 #   3. Per profile, every declared verdict matches what chezmoi renders:
 #      `repo-only` is ignored everywhere, `deployed` is eligible (narrowed by
 #      `only_on`), and a disagreement in either direction fails.
-#   4. Per profile, every single-segment pattern the rendered .chezmoiignore
+#   4. Per profile, every top-level name the rendered .chezmoiignore
 #      carries matches exactly one declared name — no stale entry, no duplicate.
 #
 # Plus the two obligations `generated_in_source` owes: those names are untracked,
 # so check 1 cannot see them, yet they are written into the source directory
 # where chezmoi can. Each must be covered by .gitignore AND by .chezmoiignore.
 #
-# The single-segment rule is what divides this gate from
-# .ci/test-chezmoiignore-script-paths.sh. A rendered pattern with no slash names
-# a top-level entry and is this gate's business; a pattern with a slash is a
-# target path under one, and that gate (and the other render gates) own it.
+# What divides this gate from .ci/test-chezmoiignore-script-paths.sh is whether a
+# rendered pattern can match a ROOT-level target. A bare name can, and so do the
+# directory-only `name/` and recursive `**/name` spellings; all three are this
+# gate's business. A pattern addressing a path under a top-level entry is that
+# gate's (and the other render gates') business, not this one's.
 #
 # Renders go through .ci/lib/render-gate-helpers.sh because AGENTS.md requires a
 # CI gate to use its render() rather than hand-roll the scratch/op-stub/empty
@@ -121,22 +122,41 @@ def report(failures):
     return 1 if failures else 0
 
 
-def single_segment_patterns(path):
-    """Rendered ignore patterns that name a top-level entry.
+def root_target(pattern):
+    """The top-level name a rendered ignore pattern can match, else None.
 
-    A pattern with a slash is a target path under a top-level entry; the
-    script-path gate owns those. Order is preserved so duplicates are reportable
-    in the order a reader would meet them.
+    A bare name addresses a top-level entry directly. Two further shapes still
+    reach a root-level target and would otherwise slip past a plain "has a
+    slash" test: a directory-only trailing slash (`name/`) and a leading
+    recursive segment (`**/name`). Anything else addresses a path *under* a
+    top-level entry, which is the script-path gate's business, not this one's.
+    """
+    if pattern.startswith("./"):
+        pattern = pattern[2:]
+    if pattern.startswith("**/"):
+        pattern = pattern[3:]
+    if pattern.endswith("/"):
+        pattern = pattern[:-1]
+    if not pattern or "/" in pattern:
+        return None
+    return pattern
+
+
+def top_level_patterns(path):
+    """Every top-level name the rendered ignore file denies, in file order.
+
+    Order is preserved so a duplicate is reported where a reader would meet it.
+    Two spellings of the same name (`docs` and `docs/`) normalize to one name
+    and therefore read as the duplicate they are.
     """
     out = []
     for raw in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
         pattern = raw.strip()
         if not pattern or pattern.startswith("#"):
             continue
-        pattern = pattern[2:] if pattern.startswith("./") else pattern
-        if "/" in pattern:
-            continue
-        out.append(pattern)
+        name = root_target(pattern)
+        if name is not None:
+            out.append(name)
     return out
 
 
@@ -257,7 +277,7 @@ def main():
                         f"remove the .chezmoiignore entry or narrow the class with only_on"
                     )
 
-    # 4. Every single-segment rendered pattern names exactly one declared entry.
+    # 4. Every denied top-level name matches exactly one declared entry.
     declared = set(entries) | set(generated)
     for profile in profiles:
         path = rendered.get(profile)
@@ -265,7 +285,7 @@ def main():
             failures.append(f"profile {profile} was never rendered")
             continue
         seen = {}
-        for pattern in single_segment_patterns(path):
+        for pattern in top_level_patterns(path):
             seen[pattern] = seen.get(pattern, 0) + 1
             if seen[pattern] == 2:
                 failures.append(
@@ -295,7 +315,7 @@ def main():
             path = rendered.get(profile)
             if path is None:
                 continue
-            if name not in single_segment_patterns(path):
+            if name not in top_level_patterns(path):
                 failures.append(
                     f"{name} is generated inside the source directory but profile {profile} "
                     f"does not ignore it, so it would deploy into $HOME; add it to .chezmoiignore"
@@ -471,6 +491,24 @@ expect_reject "$stale" 'a denial matching no declared entry fails' \
 duplicate=$(fixture duplicate)
 printf './README.md\n./Library\n./lock.generated\n./README.md\n' >"$duplicate/rendered-linux-gnome"
 expect_reject "$duplicate" 'a duplicated denial fails' \
+  '.chezmoiignore denies README.md more than once in profile linux-gnome'
+
+# A denial can reach a root-level target without being a bare name. These two
+# spellings would slip past a plain "has a slash" test.
+stale_dir_form=$(fixture stale-dir-form)
+printf './README.md\n./Library\n./lock.generated\ngone/\n' >"$stale_dir_form/rendered-linux-gnome"
+expect_reject "$stale_dir_form" 'a stale denial written as a directory pattern fails' \
+  '.chezmoiignore denies gone in profile linux-gnome, which matches no declared top-level entry'
+
+stale_recursive_form=$(fixture stale-recursive-form)
+printf './README.md\n./Library\n./lock.generated\n**/gone\n' >"$stale_recursive_form/rendered-linux-gnome"
+expect_reject "$stale_recursive_form" 'a stale denial written as a recursive pattern fails' \
+  '.chezmoiignore denies gone in profile linux-gnome, which matches no declared top-level entry'
+
+# Two spellings of one name are the duplicate they look like.
+duplicate_mixed_form=$(fixture duplicate-mixed-form)
+printf './README.md\nREADME.md/\n./Library\n./lock.generated\n' >"$duplicate_mixed_form/rendered-linux-gnome"
+expect_reject "$duplicate_mixed_form" 'the same name denied in two spellings fails' \
   '.chezmoiignore denies README.md more than once in profile linux-gnome'
 
 unignored_generated=$(fixture unignored-generated)

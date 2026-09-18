@@ -183,7 +183,7 @@ flowchart TB
   H -->|정확히 하나| I["통과"]
 ```
 
-단일 세그먼트 규칙이 이 게이트와 `.ci/test-chezmoiignore-script-paths.sh`의 경계를 정합니다. 슬래시가 없는 렌더된 패턴(`docs`, `system`, `Library`)은 최상위 항목이므로 이 게이트가 봅니다. 슬래시가 있는 패턴(`.chezmoiscripts/30-linux/*.sh`, `.config/fontconfig`)은 형제 게이트와 기존 렌더 게이트들의 소관이며 이 게이트는 건드리지 않습니다.
+이 게이트와 `.ci/test-chezmoiignore-script-paths.sh`의 경계는 "렌더된 패턴이 루트 레벨 타깃에 닿을 수 있는가"입니다. 이름만 있는 패턴(`docs`, `system`, `Library`)은 물론이고, 디렉터리 전용 표기(`name/`)와 재귀 표기(`**/name`)도 루트에 닿으므로 셋 다 이 게이트가 봅니다. 최상위 항목 *아래*의 경로를 가리키는 패턴(`.chezmoiscripts/30-linux/*.sh`, `.config/fontconfig`)은 형제 게이트와 기존 렌더 게이트들의 소관이며 이 게이트는 건드리지 않습니다. 같은 이름의 서로 다른 표기는 하나로 정규화되므로 중복으로 잡힙니다.
 
 ### Assumptions
 
