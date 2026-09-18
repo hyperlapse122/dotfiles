@@ -81,7 +81,7 @@ container_block=$(
 [[ -n $container_block ]] || fail 'could not read the container guard block from .chezmoiignore; check 2 cannot compute its target set and must not pass vacuously'
 
 # Sources that resolve a host-vault reference at render time.
-host_refs=$(cd -- "$source_root" && grep -rlE "${scheme}$HOST_VAULT/" --include='*.tmpl' --include='*.yaml' --exclude-dir=.git --exclude-dir=docs . || true)
+host_refs=$(cd -- "$source_root" || exit 1; grep -rlE "${scheme}$HOST_VAULT/" --include='*.tmpl' --include='*.yaml' --exclude-dir=.git --exclude-dir=docs . || true)
 
 [[ -n $host_refs ]] || fail 'no source references the host vault; the reference map has drifted from this gate'
 

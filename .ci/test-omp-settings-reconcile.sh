@@ -21,7 +21,10 @@ set -euo pipefail
 
 usage='usage: test-omp-settings-reconcile.sh OMP_SETTINGS_SCRIPT'
 script=${1:?$usage}
-source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/omp-settings-fixtures
 mkdir -p -- "$scratch_root"
@@ -620,7 +623,7 @@ printf '[data]\n' >"$scratch/empty.toml"
 printf '#!/usr/bin/env bash\nprintf dummy-secret\n' >"$scratch/bin/op"
 chmod 0700 "$scratch/bin/op"
 # shellcheck source=.ci/lib/render-gate-helpers.sh
-source "$source_root/.ci/lib/render-gate-helpers.sh"
+source "$repo_root/.ci/lib/render-gate-helpers.sh"
 
 swapped_workers='[
  {"id":"omp-next","agent":"omp","model":"google-antigravity/gemini-4.0-flash","effort":"high",
@@ -629,7 +632,7 @@ swapped_workers='[
   "shapes":["mechanical"],"brief":"placeholder"}
 ]'
 swapped_script="$scratch/omp-settings-swapped.sh"
-render "$source_root" "$scratch" "$chezmoi_bin" linux \
+render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$source_root/.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl" \
   "$swapped_script" \
   "$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$swapped_workers")" ||
@@ -658,7 +661,7 @@ dedup_workers='[
   "shapes":["implementation"],"brief":"placeholder"}
 ]'
 dedup_script="$scratch/omp-settings-dedup.sh"
-render "$source_root" "$scratch" "$chezmoi_bin" linux \
+render "$repo_root" "$scratch" "$chezmoi_bin" linux \
   "$source_root/.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl" \
   "$dedup_script" \
   "$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$dedup_workers")" ||

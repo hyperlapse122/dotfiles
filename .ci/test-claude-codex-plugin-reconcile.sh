@@ -4,7 +4,10 @@ set -euo pipefail
 usage='usage: test-claude-codex-plugin-reconcile.sh CLAUDE_SCRIPT CODEX_SCRIPT'
 claude_script=${1:?$usage}
 codex_script=${2:?$usage}
-source_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/claude-codex-plugin-fixtures
 mkdir -p -- "$scratch_root"
@@ -435,7 +438,7 @@ printf '#!/usr/bin/env bash\ncase "${1-}" in whoami) printf dummy@example.invali
 chmod 0700 "$render_bin/op"
 : >"$scratch/empty.toml"
 render() {
-  env PATH="$render_bin:$PATH" "$chezmoi_bin" --config "$scratch/empty.toml" --source "$source_root" \
+  env PATH="$render_bin:$PATH" "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" \
     --destination "$scratch/render-target" execute-template "$@"
 }
 

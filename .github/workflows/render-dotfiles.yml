@@ -403,8 +403,12 @@ jobs:
           SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
           mkdir -p "${SRC}"
 
-          # Clone repository with full history so we can switch between Phase A and Phase B in place
-          git clone "${GITHUB_WORKSPACE}" "${SRC}"
+          # Clone with full history so the job can switch between Phase A and
+          # Phase B in place. The container has no git-lfs, and home/dot_face is
+          # LFS-tracked: these clone-local settings disable the LFS filter so a
+          # checkout writes the pointer text, as the apply --init job's cp -a does.
+          git clone -c filter.lfs.required=false -c filter.lfs.smudge= -c filter.lfs.process= \
+            "${GITHUB_WORKSPACE}" "${SRC}"
           git config --global --add safe.directory "${SRC}"
 
           cd "${SRC}"
