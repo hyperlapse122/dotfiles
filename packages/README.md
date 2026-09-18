@@ -15,7 +15,7 @@ the repo's TypeScript/JavaScript library packages.
 
 ## What this is NOT
 
-- **Built on apply, not directly deployed.** Unlike the other files here which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees. They are excluded from deployment via `.chezmoiignore`. Instead, `.chezmoiscripts/60-build/` run-on-change scripts build them and install standalone CLIs as regular executables in `~/.local/bin/`.
+- **Built on apply, not directly deployed.** Unlike the files under `home/` which chezmoi deploys to `$HOME`, `packages/` and `crates/` are source-only trees that sit at the repository root outside the source root. Instead, `home/.chezmoiscripts/60-build/` run-on-change scripts build them and install standalone CLIs as regular executables in `~/.local/bin/`.
 - **Not published.** Members are `private: true`; the `@h82/` scope is a naming
   namespace, not a registry target.
 
@@ -30,7 +30,7 @@ the repo's TypeScript/JavaScript library packages.
 | [`omp-orca/`](omp-orca/) | `@h82/omp-orca` | Native omp orchestration extension. |
 | [`antigravity-sidecar/`](antigravity-sidecar/) | `@h82/antigravity-sidecar` | Local proxy that transforms system-prompt text. |
 | [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | On-demand Figma OAuth for omp. |
-| [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
+| [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `home/.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
 
 ## Toolchain: Vite+
 

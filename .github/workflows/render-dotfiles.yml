@@ -338,6 +338,127 @@ jobs:
             >> "${GITHUB_STEP_SUMMARY}"
 
   # ---------------------------------------------------------------------------
+  # Task 1b: real `chezmoi apply` (no --init) on upgrade from Phase A -> AE2/R10.
+  # ---------------------------------------------------------------------------
+  apply-no-init:
+    name: apply (no --init, ${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: fedora, image: "fedora:44" }
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Assert runtime architecture
+        run: |
+          set -euxo pipefail
+          [ "$(uname -m)" = "x86_64" ]
+          . /etc/os-release
+          [ "${ID}" = "fedora" ]
+
+      - name: Install base tooling (${{ matrix.os }})
+        run: |
+          set -euxo pipefail
+          if command -v dnf >/dev/null 2>&1; then
+            dnf install -y --setopt=install_weak_deps=False git jq tar gzip diffutils >/dev/null
+          else
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends ca-certificates curl git jq tar gzip diffutils >/dev/null
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install chezmoi + dummy op/mise
+        run: |
+          set -euxo pipefail
+          sh -c "$(curl -fsLS https://get.chezmoi.io)" -- -b /usr/local/bin
+          chezmoi --version
+
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' 'set -eu'
+            printf '%s\n' 'case "${1-}" in'
+            printf '%s\n' '  whoami)    printf "dummy@example.invalid\n" ;;'
+            printf '%s\n' '  --version) printf "2.0.0\n" ;;'
+            printf '%s\n' '  signin)    : ;;'
+            printf '%s\n' '  account)   printf "[]\n" ;;'
+            printf '%s\n' '  item)      printf "%s\n" "{\"fields\":[{\"id\":\"username\",\"label\":\"username\",\"value\":\"dummy-user\"},{\"id\":\"API\",\"label\":\"API\",\"value\":\"dummy-secret\"},{\"id\":\"password\",\"label\":\"password\",\"value\":\"dummy-secret\"},{\"id\":\"credential\",\"label\":\"credential\",\"value\":\"dummy-secret\"}]}" ;;'
+            printf '%s\n' '  *)         printf "dummy-secret\n" ;;'
+            printf '%s\n' 'esac'
+          } > /usr/local/bin/op
+          chmod 0755 /usr/local/bin/op
+
+          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > /usr/local/bin/mise
+          chmod 0755 /usr/local/bin/mise
+
+      - name: chezmoi apply without --init after upgrade from Phase A
+        run: |
+          set -euxo pipefail
+          export HOME="${RUNNER_TEMP}/fakehome"
+          SRC="${HOME}/src/github.com/hyperlapse122/dotfiles"
+          mkdir -p "${SRC}"
+
+          # Clone repository with full history so we can switch between Phase A and Phase B in place
+          git clone "${GITHUB_WORKSPACE}" "${SRC}"
+          git config --global --add safe.directory "${SRC}"
+
+          cd "${SRC}"
+          phase_b_head=$(git rev-parse HEAD)
+
+          # Find the Phase A head: newest ancestor without .chezmoiroot that has .chezmoi.toml.tmpl at root
+          phase_a_head=""
+          for commit in $(git rev-list HEAD); do
+            if ! git cat-file -e "${commit}:.chezmoiroot" 2>/dev/null; then
+              if git cat-file -e "${commit}:.chezmoi.toml.tmpl" 2>/dev/null; then
+                phase_a_head="$commit"
+                break
+              fi
+            fi
+          done
+          [ -n "${phase_a_head}" ] || { echo "failed to locate Phase A head" >&2; exit 1; }
+          echo "Phase A head: ${phase_a_head}"
+          echo "Phase B head: ${phase_b_head}"
+
+          # Step 1: Provision at Phase A head
+          git checkout --detach "${phase_a_head}"
+          rm -rf "${SRC}/.chezmoiexternals"
+          cd "${HOME}"
+          printf '\n\n\n' | chezmoi init --apply --source "${SRC}" --no-tty --exclude=scripts,encrypted
+
+          # Step 2: Switch to Phase B head in place
+          cd "${SRC}"
+          git checkout --force --detach "${phase_b_head}"
+          rm -rf "${SRC}/home/.chezmoiexternals"
+          cd "${HOME}"
+
+          # Step 3: Run chezmoi apply WITHOUT --init, capturing log
+          apply_log="${RUNNER_TEMP}/apply-no-init.log"
+          set +e
+          printf '\n\n\n' | chezmoi apply --source "${SRC}" --no-tty --exclude=scripts,encrypted 2>&1 | tee "${apply_log}"
+          rc=$?
+          set -e
+          [ "${rc}" -eq 0 ] || { echo "chezmoi apply failed with exit code ${rc}" >&2; exit 1; }
+
+          # Assertions:
+          # (1) no "config file template has changed" warning
+          if grep -i "config file template has changed" "${apply_log}"; then
+            echo "FAIL: log carries 'config file template has changed' warning" >&2
+            exit 1
+          fi
+
+          # This job does not check script re-runs because both applies exclude scripts.
+          # A run_onchange_ script re-runs only when its rendered bytes change,
+          # which the render-equivalence checks cover.
+
+          echo "Phase B apply without --init succeeded cleanly with no config-template warning."
+          echo "- \`chezmoi apply\` (no \`--init\`) exit code: 0" >> "${GITHUB_STEP_SUMMARY}"
+
+  # ---------------------------------------------------------------------------
   # Task 2: render .chezmoiscripts/** and .chezmoiexternals/** -> internals artifact.
   # ---------------------------------------------------------------------------
   render-internals:
@@ -1009,6 +1130,7 @@ jobs:
     needs:
       [
         apply,
+        apply-no-init,
         render-internals,
         apply-macos,
         shellcheck,
@@ -1018,6 +1140,7 @@ jobs:
       - name: Require every job to succeed
         env:
           APPLY_RESULT: ${{ needs.apply.result }}
+          APPLY_NO_INIT_RESULT: ${{ needs.apply-no-init.result }}
           RENDER_INTERNALS_RESULT: ${{ needs.render-internals.result }}
           APPLY_MACOS_RESULT: ${{ needs.apply-macos.result }}
           SHELLCHECK_RESULT: ${{ needs.shellcheck.result }}
@@ -1026,6 +1149,7 @@ jobs:
           failed=0
           for result in \
             "apply=${APPLY_RESULT}" \
+            "apply-no-init=${APPLY_NO_INIT_RESULT}" \
             "render-internals=${RENDER_INTERNALS_RESULT}" \
             "apply-macos=${APPLY_MACOS_RESULT}" \
             "shellcheck=${SHELLCHECK_RESULT}"; do

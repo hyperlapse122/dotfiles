@@ -40,7 +40,7 @@ tree, resolved through `.chezmoi.sourceDir` directly):
 
 Cross-root (reaches OUTSIDE the deployed tree -- `system/`, `packages/`,
 `crates/`, `firmware/`, `mise.toml` -- so `sourceDir` here is `$repoRoot`,
-the repository root from `.chezmoitemplates/repo-root.tmpl`, not
+the repository root from `home/.chezmoitemplates/repo-root.tmpl`, not
 `.chezmoi.sourceDir`, so the emitted relative paths stay `system/...` /
 `packages/...` regardless of where the chezmoi source directory sits):
 

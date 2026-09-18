@@ -1,6 +1,6 @@
 # @h82/release-lock
 
-Resolves external tool releases into the static `.chezmoidata` release lock.
+Resolves external tool releases into the static `home/.chezmoidata` release lock.
 
 This exists so a chezmoi source-state read performs **no network I/O**.
 Versions, asset URLs, and checksums used to be resolved at render time —
@@ -16,10 +16,10 @@ The plan this package implements is
 ## Status
 
 All six resolver kinds are implemented, and the committed
-`.chezmoidata/releases.json` covers every render-time resolution source in the
+`home/.chezmoidata/releases.json` covers every render-time resolution source in the
 repo. The lock is the sole version, URL, and checksum source: every
-`.chezmoiexternals` file and every version-consuming script template reads it
-through `.chezmoitemplates/release-lock-ref.tmpl`. A source-state read performs
+`home/.chezmoiexternals` file and every version-consuming script template reads it
+through `home/.chezmoitemplates/release-lock-ref.tmpl`. A source-state read performs
 no network I/O; re-run this package to refresh the lock.
 
 | Resolver kind | State |
@@ -49,7 +49,7 @@ accepts either digest and rejects an artifact carrying neither.
 
 ```sh
 bun run packages/release-lock/src/cli.ts                          # refresh the repo lock in place
-bun run packages/release-lock/src/cli.ts --out .chezmoidata/releases.json
+bun run packages/release-lock/src/cli.ts --out home/.chezmoidata/releases.json
 bun run packages/release-lock/src/cli.ts --stdout                 # inspect merged JSON
 bun run packages/release-lock/src/cli.ts --only agy               # refresh only agy
 ```
@@ -65,7 +65,7 @@ lingers in a kept entry. Writes replace the destination atomically.
 
 `--stdout` reads the repository lock and prints the same complete merged JSON
 without modifying it. It is for inspection only: do not redirect any invocation
-over the lock it reads (for example, `--stdout > .chezmoidata/releases.json`).
+over the lock it reads (for example, `--stdout > home/.chezmoidata/releases.json`).
 The shell truncates a redirection target before the CLI starts, so the process
 cannot recover that prior content. Use plain invocation or `--out` to refresh a
 lock safely.
@@ -144,8 +144,8 @@ publishing per-platform artifacts verified by SHA-512. The external consumes
 
 The [native updater control](https://antigravity.google/docs/cli/troubleshooting/)
 is `AGY_CLI_DISABLE_AUTO_UPDATE=true`. The Linux desktop declaration is in
-`dot_config/environment.d/60-development.conf`. The common shell declaration
-is in `dot_config/zsh/dot_zshenv`, covering new zsh sessions on Linux and macOS.
+`home/dot_config/environment.d/60-development.conf`. The common shell declaration
+is in `home/dot_config/zsh/dot_zshenv`, covering new zsh sessions on Linux and macOS.
 Keep both declarations so chezmoi manages the binary version. Existing
 processes need a fresh inherited environment after deployment. This switch does
 not authorize changing permission policy.

@@ -4,7 +4,7 @@ import { REGISTRY } from "./registry.js";
 import { mergeLocks, pruneRetiredPlatforms, readLock, serializeLock, writeLock } from "./lock.js";
 
 export const DEFAULT_LOCK_PATH = fileURLToPath(
-  new URL("../../../.chezmoidata/releases.json", import.meta.url),
+  new URL("../../../home/.chezmoidata/releases.json", import.meta.url),
 );
 
 function githubToken(): string | undefined {

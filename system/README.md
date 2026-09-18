@@ -4,10 +4,10 @@ Root-owned config that ships to absolute system paths (`/etc/...`), plus the
 host's SELinux modules under [`linux/selinux/`](linux/selinux/).
 
 chezmoi manages files under `$HOME` and has no root-aware mode, so these files
-are **not** chezmoi-managed targets. The whole `system/` tree is listed in the
-repo-root [`.chezmoiignore`](../.chezmoiignore) so it is never linked into
+are **not** chezmoi-managed targets. The `system/` tree sits at the repository
+root outside the source root (`home/`), so it is never linked into
 `$HOME`. Instead it is installed to `/etc/` by modular
-`run_onchange_after_install-system-*.sh.tmpl` scripts under `.chezmoiscripts/30-linux/`:
+`run_onchange_after_install-system-*.sh.tmpl` scripts under `home/.chezmoiscripts/30-linux/`:
 
 which run:
 
@@ -16,15 +16,15 @@ sudo install -D -m <mode> "$SRC_ROOT"/etc/<abs/path> /etc/<abs/path>
 ```
 
 `install -D` is the only correct tool here — it sets the mode atomically and
-creates parent directories. `SRC_ROOT` points at this directory via chezmoi's
-`.chezmoi.sourceDir` template variable, so files are read straight from the
-source tree at apply time.
+creates parent directories. `SRC_ROOT` is resolved from the repository root
+at run time via `home/.chezmoitemplates/repo-root.sh.tmpl`, so files are read
+straight from the source tree at apply time.
 
-## The manifest: `.chezmoidata/system.yaml`
+## The manifest: `home/.chezmoidata/system.yaml`
 
 Per-path install **modes**, host **gates**, source **checks**, and the
 **removed-path** cleanup list all live in
-[`.chezmoidata/system.yaml`](../.chezmoidata/system.yaml) — the single source
+[`home/.chezmoidata/system.yaml`](../home/.chezmoidata/system.yaml) — the single source
 of truth, organized by subsystem:
 - Adding a file in a non-gated path requires no edit at all (files are
   discovered recursively at runtime; default mode `0644`).
@@ -40,7 +40,7 @@ of truth, organized by subsystem:
   installed under one gate and retired under its negation is never installed and
   then removed on the same run.
 
-Gates are *named host facts* from the registry (`.chezmoidata/facts.yaml`) —
+Gates are *named host facts* from the registry (`home/.chezmoidata/facts.yaml`) —
 `thinkpad`, `vm`, `sddmBreeze`, `gdm`, `fprintdPam`. The
 installer no longer probes for any of them: `gate_ok()` is a lookup into the
 `FACT_*` variables the registry resolved once for this chezmoi command. A gate
@@ -58,7 +58,7 @@ runtime case in the installer.
 The installers are `run_onchange_` scripts: chezmoi only re-runs a subsystem
 script when its *rendered* contents or fingerprinted files change. Each script
 embeds a `sha256` fingerprint of its managed files under `system/linux/etc/`
-(via `.chezmoitemplates/fingerprint.tmpl`), so modifying a file in one
+(via `home/.chezmoitemplates/fingerprint.tmpl`), so modifying a file in one
 subsystem only re-runs that specific subsystem installer.
 
 Force a re-run without changing any file with `chezmoi apply --force`.
@@ -68,7 +68,7 @@ Force a re-run without changing any file with `chezmoi apply --force`.
 Not part of the `/etc` mirror, and deliberately outside it: the `install-system-*`
 scripts fingerprint `system/linux/etc/**`, so a policy edit here re-runs the policy
 installer alone. That installer is
-[`.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl`](../.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl),
+[`home/.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl`](../home/.chezmoiscripts/00-tools/run_onchange_before_00-selinux-policies.sh.tmpl),
 which loads every `*.cil` in this directory with `sudo semodule -X 400 -i`. Phase
 `00` and `before` put the modules in the kernel ahead of every other apply phase.
 
@@ -100,7 +100,7 @@ system/linux/etc/locale.conf
 | `etc/modprobe.d/` | kernel module options: Bluetooth USB autosuspend disable; ThinkPad-only `thinkpad_acpi` (no `fan_control` — retired, nothing managed consumed it); `nvidiaHybridDriver`-gated `nvidia-hybrid-modeset.conf` / `nvidia-hybrid-power.conf` (PRIME KMS and discrete-GPU runtime power management), retired where `integratedOnly` holds |
 | `etc/modprobe.d/nvidia-integrated-only.conf` | `integratedOnly`-gated blacklist of the NVIDIA, nouveau and `nova_core` drivers, so the discrete GPU stays driverless and PCI runtime PM can power it off |
 | `etc/modules-load.d/` | modules loaded at boot, currently ThinkPad-only `thinkpad_acpi` |
-| `etc/linux-enable-ir-emitter/<v4l by-path device>` | the captured IR emitter control for a camera model listed in `.chezmoidata/.ir-cameras.tsv`, exactly as `linux-enable-ir-emitter` reads it; installed by `install-system-34-face-auth` on `irCamera` hosts, and matched by the tool on the device name alone, so a capture for another camera is inert |
+| `etc/linux-enable-ir-emitter/<v4l by-path device>` | the captured IR emitter control for a camera model listed in `home/.chezmoidata/.ir-cameras.tsv`, exactly as `linux-enable-ir-emitter` reads it; installed by `install-system-34-face-auth` on `irCamera` hosts, and matched by the tool on the device name alone, so a capture for another camera is inert |
 | `etc/sddm.conf.d/90-breeze.conf` | pin the SDDM login greeter to the stock Breeze theme (the `90-` prefix outranks vendor drop-ins); `sddmBreezeUsable` installs it only where the theme is present **and** the host runs SDDM, and `sddmBreezeRetirable` retires it from every host with a KNOWN display manager it is not usable on — an unknown display manager removes nothing |
 | `etc/sudoers.d/` | password-less sudo drop-ins (mode `0440`, `vm` gate, `visudo`-checked) |
 | `etc/systemd/logind.conf.d/` | laptop lid behaviour (`battery` gate): suspend on lid close on battery, ignore on external power and while docked |
@@ -112,7 +112,7 @@ system/linux/etc/locale.conf
 ## The modular install-system script set (30-linux)
 
 System file installation is modularized across discrete `run_onchange_after_`
-scripts under `.chezmoiscripts/30-linux/`, split by subsystem concern:
+scripts under `home/.chezmoiscripts/30-linux/`, split by subsystem concern:
 
 | Script | Does | Re-runs when |
 |---|---|---|
@@ -134,11 +134,11 @@ alphabetically), so files land before anything that might depend on them.
 
 All these scripts skip (`exit 0`) on headless/server installs — default boot
 target not `graphical.target` and no display-manager enabled — via the shared
-`.chezmoitemplates/headless-guard.sh.tmpl` partial. Override that skip with
+`home/.chezmoitemplates/headless-guard.sh.tmpl` partial. Override that skip with
 `INSTALL_SYSTEM_CONFIG_FORCE=1`; note chezmoi records a clean skip as a
 successful run, so re-run by hand with `chezmoi apply --force`.
 
-Elevation is different: `.chezmoitemplates/sudo-elevation-guard.sh.tmpl` walks
+Elevation is different: `home/.chezmoitemplates/sudo-elevation-guard.sh.tmpl` walks
 a ladder (already root, cached/NOPASSWD sudo, a TTY to prompt on, the desktop's
 own askpass helper) and **fails with `exit 1`** when no rung succeeds, rather
 than skipping. A host that cannot elevate is therefore never recorded as
@@ -147,4 +147,4 @@ retries the script by itself. To supply an elevation path, give the run a
 terminal (`ssh -t`) or authenticate first with `sudo -v`.
 
 There is no `system/macos/` tree: macOS settings belong under user-owned
-`Library/` (`~/Library`) paths.
+`home/Library/` (`~/Library`) paths.
