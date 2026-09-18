@@ -17,7 +17,11 @@ set -euo pipefail
 # HOLD SCRIPT, against a stub gate and driver: an unchanged, older, or malformed
 # version never calls the gate; the gate and stamp receive the right arguments in
 # the right order; a failed pinned-mode run rolls the stamp back; each gate status
-# maps to the right result; a gate crash fails the script.
+# maps to the right result; a gate or driver status outside 0, 1, and 2 holds the
+# entry back with the class tooling-failure and rolls the stamp back, so the rest
+# of the refresh still commits. `resolve-latest` prints the newest release, leaves
+# the working lock alone unless told to update it, and exits 2 when the resolver
+# fails. An upstream download failure reports curl's own message.
 # WORKFLOW STEPS: the commit and push steps run from the workflow file against a
 # scratch repository and a local bare remote. Nothing to commit, an allowlisted
 # change, and a change outside the allowlist (refused at commit and at push);
@@ -210,6 +214,7 @@ mkdir -p -- "$stub_bin"
 cat >"$stub_bin/curl" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$STUB_CURL_LOG"
+printf 'curl: (7) Failed to connect to github.com port 443: stub refused\n' >&2
 exit 7
 STUB
 chmod 0755 "$stub_bin/curl"
@@ -220,6 +225,7 @@ run env PATH="$stub_bin:$PATH" STUB_CURL_LOG="$scratch/curl.log" CE_OVERLAY_FETC
 expect_line 'an unreachable upstream restores without a candidate' \
   "$(line held no unavailable "$tag_new" "$tag_old")"
 grep -qF "/archive/refs/tags/$tag_new.tar.gz" "$scratch/curl.log" || fail 'the gate did not request the candidate tag'
+grep -qF 'stub refused' <<<"$err" || fail "an upstream download failure did not report curl's own message: $err"
 [[ $(ce_version "$dir/lock.json") == "$tag_old" && $(other_version "$dir/lock.json") == 2.0.0 ]] ||
   fail 'an unavailable upstream did not restore only the CE entry'
 [[ $(snapshot "$dir/overlay") == "$overlay_before" ]] || fail 'an unavailable upstream changed the overlay directory'
@@ -304,6 +310,11 @@ case ${STUB_STAMP:-ok} in
     ;;
   refuse) exit 1 ;;
   unavailable) exit 2 ;;
+  crash)
+    jq --arg v "$target" '.version = $v' "$overlay/base.json" >"$overlay/base.json.new"
+    mv -f "$overlay/base.json.new" "$overlay/base.json"
+    exit 64
+    ;;
 esac
 STUB
 chmod 0755 "$stub_tree/.ci/check-ce-overlay-patches.sh" "$stub_tree/.ci/ce-overlay-rebase.sh"
@@ -411,9 +422,78 @@ expect_line 'an unavailable candidate is not reported as a candidate' \
   "$(line held no unavailable "$tag_new" "$tag_old")"
 
 stub_case gate-crash "$tag_old" "$tag_new" STUB_GATE_CANDIDATE=crash
-[[ $rc != 0 && -z $out ]] || fail "a gate crash must fail the script with no result line (rc $rc, out '$out')"
-[[ $(ce_version "$dir/lock.json") == "$tag_new" ]] || fail 'a gate crash restored the entry instead of failing'
-pass 'a gate crash fails the script'
+expect_line 'a gate that exits 64 holds the release back without a candidate' \
+  "$(line held no tooling-failure "$tag_new" "$tag_old")"
+[[ $(ce_version "$dir/lock.json") == "$tag_old" && $(other_version "$dir/lock.json") == 2.0.0 ]] ||
+  fail 'a gate crash did not restore only the CE entry'
+[[ $(jq -r .version "$dir/overlay/base.json") == "$tag_old" ]] || fail 'a gate crash changed base.json'
+[[ $(wc -l <"$stub_log" | tr -d ' ') == 1 ]] || fail 'a gate crash went on to stamp'
+grep -qF 'status 64' <<<"$err" || fail "a gate crash did not report its status: $err"
+pass 'a gate crash holds the release back and lets the rest of the refresh commit'
+
+stub_case pinned-crash "$tag_old" "$tag_new" STUB_GATE_PINNED=crash
+expect_line 'a pinned-mode gate that exits 64 holds the release back' \
+  "$(line held no tooling-failure "$tag_new" "$tag_old")"
+[[ $(jq -r .version "$dir/overlay/base.json") == "$tag_old" ]] || fail 'the stamp was not rolled back after a pinned-mode crash'
+[[ $(ce_version "$dir/lock.json") == "$tag_old" && $(other_version "$dir/lock.json") == 2.0.0 ]] ||
+  fail 'a pinned-mode crash did not restore only the CE entry'
+
+stub_case stamp-crash "$tag_old" "$tag_new" STUB_STAMP=crash
+expect_line 'a driver that exits 64 holds the release back' \
+  "$(line held no tooling-failure "$tag_new" "$tag_old")"
+[[ $(jq -r .version "$dir/overlay/base.json") == "$tag_old" ]] || fail 'a driver crash left base.json stamped'
+[[ $(ce_version "$dir/lock.json") == "$tag_old" && $(other_version "$dir/lock.json") == 2.0.0 ]] ||
+  fail 'a driver crash did not restore only the CE entry'
+[[ ! -e $dir/overlay/base.json.rollback ]] || fail 'the rollback left a temporary file'
+pass 'a driver crash rolls the stamp back and holds the release'
+
+# --- resolve-latest ----------------------------------------------------------
+
+resolver_bin="$scratch/resolver-bin"
+mkdir -p -- "$resolver_bin"
+cat >"$resolver_bin/bun" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$STUB_BUN_LOG"
+out=''
+while [ $# -gt 0 ]; do
+  if [ "$1" = --out ]; then out=$2; fi
+  shift
+done
+[ "${STUB_RESOLVER:-ok}" = ok ] || exit 1
+jq --arg v "$STUB_LATEST" '.releases.tools["compound-engineering"].version = $v' "$out" >"$out.new"
+mv -f "$out.new" "$out"
+echo 'resolver noise on stdout'
+STUB
+chmod 0755 "$resolver_bin/bun"
+bun_log="$scratch/bun.log"
+resolve_dir="$scratch/resolve-latest"
+mkdir -p -- "$resolve_dir"
+write_lock "$resolve_dir/lock.json" "$tag_old" 1.0.0
+: >"$bun_log"
+run env PATH="$resolver_bin:$PATH" STUB_BUN_LOG="$bun_log" STUB_LATEST="$tag_new" "$stub_hold" resolve-latest --lock "$resolve_dir/lock.json"
+[[ $rc == 0 && $out == "$tag_new" ]] || fail "resolve-latest printed '$out' (rc $rc): $err"
+[[ $(ce_version "$resolve_dir/lock.json") == "$tag_old" ]] || fail 'resolve-latest changed the working lock'
+grep -qF -- '--only compound-engineering' "$bun_log" || fail 'resolve-latest did not resolve only compound-engineering'
+pass 'resolve-latest prints the newest release and leaves the working lock alone'
+
+run env PATH="$resolver_bin:$PATH" STUB_BUN_LOG="$bun_log" STUB_LATEST="$tag_new" "$stub_hold" resolve-latest --lock "$resolve_dir/lock.json" --update
+[[ $rc == 0 && $out == "$tag_new" ]] || fail "resolve-latest --update printed '$out' (rc $rc): $err"
+[[ $(ce_version "$resolve_dir/lock.json") == "$tag_new" && $(other_version "$resolve_dir/lock.json") == 1.0.0 ]] ||
+  fail 'resolve-latest --update did not write the resolved entry into the working lock'
+pass 'resolve-latest --update writes the resolved entry into the working lock'
+
+write_lock "$resolve_dir/lock.json" "$tag_old" 1.0.0
+run env PATH="$resolver_bin:$PATH" STUB_BUN_LOG="$bun_log" STUB_LATEST="$tag_new" STUB_RESOLVER=fail "$stub_hold" resolve-latest --lock "$resolve_dir/lock.json"
+[[ $rc == 2 && -z $out ]] || fail "a failed resolver must exit 2 with no output (rc $rc, out '$out')"
+run env PATH="$resolver_bin:$PATH" STUB_BUN_LOG="$bun_log" STUB_LATEST="$tag_new" STUB_RESOLVER=fail "$stub_hold" resolve-latest --lock "$resolve_dir/lock.json" --update
+[[ $rc == 2 && -z $out && $(ce_version "$resolve_dir/lock.json") == "$tag_old" ]] || fail 'a failed resolver changed the lock or did not exit 2'
+pass 'resolve-latest exits 2 when the resolver fails'
+
+run "$stub_hold" resolve-latest --overlay-dir "$dir/overlay"
+[[ $rc == 64 ]] || fail "resolve-latest accepted an option it does not take (rc $rc)"
+run "$stub_hold" --update
+[[ $rc == 64 ]] || fail "the hold accepted --update (rc $rc)"
+pass 'resolve-latest and the hold each refuse the other'"'"'s options'
 
 # --- workflow steps: commit and push -----------------------------------------
 
@@ -635,6 +715,14 @@ mutate_steps swap 'Mint the direct-push App token' 'Commit the lock and base.jso
 expect_rejected 'an App token minted before the commit' 'minted after the commit'
 mutate_steps append 'Open a pull request' 'gh pr create --title x --body y'
 expect_rejected 'a lock job that opens a pull request' 'creates or merges a pull request'
+mutate_text $'    environment: ce-overlay-rebase\n' ''
+expect_rejected 'a lock job that reads the App credentials outside the credential environment' 'without environment: ce-overlay-rebase'
+mutate_steps drop 'Fail when the overlay gate broke'
+expect_rejected 'a lock job that never fails on a tooling failure' 'tooling-failure step'
+mutate_steps swap 'Fail when the overlay gate broke' 'Commit the lock and base.json'
+expect_rejected 'a tooling-failure step that runs before the commit' 'steps must run in the order'
+mutate_text 'curl -fsSL --connect-timeout 20 --max-time 180' 'curl -fsSL'
+expect_rejected 'a locked chezmoi download with no deadline' 'downloads the locked chezmoi without'
 
 printf '%s\n' "$lock_wf_original" >"$lock_wf"
 cat >"$wf_tree/.github/workflows/gate-job.yml" <<'YAML'
@@ -663,5 +751,30 @@ YAML
 run "$wiring" "$wf_tree"
 [[ $rc == 0 ]] || fail "a job that installs chezmoi first was rejected: $err"
 pass 'wiring accepts a gate job that installs chezmoi first'
+
+cat >"$wf_tree/.github/workflows/gate-job.yml" <<'YAML'
+name: Gate job
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve the latest release
+        run: .ci/ce-overlay-lock-hold.sh resolve-latest
+YAML
+run "$wiring" "$wf_tree"
+[[ $rc == 0 ]] || fail "a job that only resolves the latest release was rejected: $err"
+pass 'wiring accepts resolve-latest without chezmoi, because it never renders the roster'
+cat >"$wf_tree/.github/workflows/gate-job.yml" <<'YAML'
+name: Gate job
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Hold back the release
+        run: .ci/ce-overlay-lock-hold.sh
+YAML
+expect_rejected 'a job that runs the hold without installing chezmoi' 'without installing chezmoi'
 
 printf 'test-ce-overlay-lock-hold: all cases passed\n'

@@ -15,6 +15,12 @@ name: Rebase CE overlays
 # The pull request comes from a branch named chore/rebase-ce-overlays-v<semver>.
 # claude-code-review.yml skips that branch prefix.
 #
+# CE_REBASE_TOKEN, CE_LOCK_APP_ID, and CE_LOCK_APP_PRIVATE_KEY live only in the
+# deployment environment ce-overlay-rebase (owner prerequisite P5), whose branch
+# policy allows the default branch alone. Every job that reads one of them
+# declares that environment, so a dispatch from any other ref cannot obtain them.
+# The owner check in `preflight` stays as a second guard and as the error message.
+#
 # No `run:` block holds a `${{ }}` expression. Values reach scripts through `env:`.
 
 on:
@@ -39,6 +45,7 @@ jobs:
     name: Check owner prerequisites
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: ce-overlay-rebase
     permissions:
       contents: read
     outputs:
@@ -126,18 +133,15 @@ jobs:
         run: |
           set -euo pipefail
           . .ci/lib/source-root.sh
-          tag_pattern='^compound-engineering-v[0-9]+\.[0-9]+\.[0-9]+$'
+          . .ci/lib/ce-overlay.sh
           lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
-          latest_lock="$RUNNER_TEMP/latest-lock.json"
-          cp -- "$lock" "$latest_lock"
           pin=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$lock")
-          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$latest_lock"; then
+          if ! target=$(.ci/ce-overlay-lock-hold.sh resolve-latest); then
             echo 'state=unavailable' >> "$GITHUB_OUTPUT"
             echo '::error::The resolver could not read the latest compound-engineering release.'
             exit 1
           fi
-          target=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$latest_lock")
-          if [[ ! $pin =~ $tag_pattern || ! $target =~ $tag_pattern ]]; then
+          if ! ceo_tag_valid "$pin" || ! ceo_tag_valid "$target"; then
             echo '::notice::The pin or the latest release is outside the compound-engineering-v<semver> form. Nothing to rebase.'
             echo 'state=skip' >> "$GITHUB_OUTPUT"
             exit 0
@@ -229,7 +233,12 @@ jobs:
           {
             printf 'import { readFileSync } from "node:fs";\n'
             printf 'import { classifyFailure } from "%s/packages/ce-overlay-rebase/src/classify.ts";\n' "$GITHUB_WORKSPACE"
-            printf 'process.stdout.write(classifyFailure(JSON.parse(readFileSync(0, "utf8"))) + "\\n");\n'
+            printf 'import { runCli } from "%s/packages/ce-overlay-rebase/src/cli.ts";\n' "$GITHUB_WORKSPACE"
+            printf 'if (process.argv[2] === "validate-class") {\n'
+            printf '  runCli(["validate-class", process.argv[3] ?? ""]).then((code) => process.exit(code));\n'
+            printf '} else {\n'
+            printf '  process.stdout.write(classifyFailure(JSON.parse(readFileSync(0, "utf8"))) + "\\n");\n'
+            printf '}\n'
           } > "$entry"
           bun build "$entry" --target=node --outfile "$WORK/ce-classify.mjs"
 
@@ -308,10 +317,7 @@ jobs:
             input=$(jq -n -c --arg o "$OUTCOME" --arg c "$CONCLUSION" --arg f "$EXECUTION_FILE" \
               '{stepOutcome: $o, actionConclusion: $c} + (if $f == "" then {} else {executionFile: $f} end)')
             class=$(printf '%s' "$input" | node ce-rebase-work/ce-classify.mjs 2>/dev/null) || class=unknown
-            case $class in
-              outage | quota | genuine | unknown | configuration) ;;
-              *) class=unknown ;;
-            esac
+            node ce-rebase-work/ce-classify.mjs validate-class "$class" >/dev/null 2>&1 || class=unknown
           fi
           echo "class=$class" >> "$GITHUB_OUTPUT"
 
@@ -362,6 +368,7 @@ jobs:
 
   publish:
     name: Verify, validate, and publish the rebase
+    environment: ce-overlay-rebase
     needs: [prepare, claude]
     if: >-
       ${{ !cancelled() && needs.prepare.result == 'success'
@@ -399,7 +406,7 @@ jobs:
           source_root=$(resolve_source_root "$PWD")
           artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' "$source_root/.chezmoidata/releases.json")
           artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' "$source_root/.chezmoidata/releases.json")
-          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          curl -fsSL --connect-timeout 20 --max-time 180 "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
           printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
           mkdir -p "$RUNNER_TEMP/bin"
           tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
@@ -542,13 +549,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          . .ci/lib/source-root.sh
-          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
-          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$lock"; then
+          if ! resolved=$(.ci/ce-overlay-lock-hold.sh resolve-latest --update); then
             echo 'class=outage' >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          resolved=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$lock")
           superseded=false
           if [ "$resolved" != "$TARGET" ]; then
             echo '::notice::A newer compound-engineering release exists. This run stops without publishing.'
@@ -598,15 +602,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          . .ci/lib/source-root.sh
-          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
-          latest_lock="$RUNNER_TEMP/latest-lock.json"
-          cp -- "$lock" "$latest_lock"
-          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$latest_lock"; then
+          if ! resolved=$(.ci/ce-overlay-lock-hold.sh resolve-latest); then
             echo 'class=outage' >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          resolved=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$latest_lock")
           superseded=false
           if [ "$resolved" != "$TARGET" ]; then
             echo '::notice::A newer compound-engineering release appeared while this run worked. It stops without publishing.'
@@ -725,6 +724,7 @@ jobs:
 
   record:
     name: Record the outcome
+    environment: ce-overlay-rebase
     needs: [preflight, prepare, claude, publish]
     if: ${{ always() && needs.preflight.outputs.authorized == 'true' }}
     runs-on: ubuntu-latest
@@ -763,80 +763,7 @@ jobs:
           PUB_RESULT: ${{ needs.publish.result }}
           PUB_CLASS: ${{ needs.publish.outputs.class }}
           PUB_MISSING: ${{ needs.publish.outputs.missing }}
-        run: |
-          set -euo pipefail
-          . .ci/lib/source-root.sh
-          tag_pattern='^compound-engineering-v[0-9]+\.[0-9]+\.[0-9]+$'
-          valid_class() {
-            case "$1" in
-              outage | quota | genuine | unknown | configuration) return 0 ;;
-              *) return 1 ;;
-            esac
-          }
-          action=none
-          class=''
-          missing=''
-          reached=false
-          if [ "$PF_RESULT" = cancelled ] || [ "$PREP_RESULT" = cancelled ] || [ "$CLAUDE_RESULT" = cancelled ] || [ "$PUB_RESULT" = cancelled ]; then
-            echo '::notice::The run was cancelled. Nothing is recorded.'
-          elif [ "$PF_RESULT" != success ]; then
-            action=failure
-            class=unknown
-            if [ "$PF_CLASS" = configuration ]; then
-              class=configuration
-              missing=$PF_MISSING
-            fi
-          elif [ "$PREP_RESULT" != success ]; then
-            action=failure
-            case "$PREP_STATE" in
-              genuine) class=genuine ;;
-              unavailable) class=outage ;;
-              *) class=unknown ;;
-            esac
-          elif [ "$CLAUDE_RESULT" = failure ]; then
-            action=failure
-            class=$CLAUDE_CLASS
-            reached=true
-          elif [ "$PUB_RESULT" = failure ]; then
-            action=failure
-            class=$PUB_CLASS
-            missing=$PUB_MISSING
-            if [ "$CLAUDE_RESULT" = success ]; then
-              reached=true
-            fi
-          fi
-          if [ "$action" = failure ]; then
-            valid_class "$class" || class=unknown
-            if [[ ! $missing =~ ^P[1-4](,P[1-4])*$ ]]; then
-              missing=''
-            fi
-            marker_file=$(join_source_state "$PWD" .chezmoidata/ce-overlay-rebase.json)
-            current=$(jq -c '.ceOverlayRebase' "$marker_file")
-            if [[ ! $TARGET =~ $tag_pattern ]]; then
-              lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
-              latest_lock="$RUNNER_TEMP/latest-lock.json"
-              cp -- "$lock" "$latest_lock"
-              bun run packages/release-lock/src/cli.ts --only compound-engineering --out "$latest_lock" || true
-              TARGET=$(jq -r '.releases.tools["compound-engineering"].version // ""' "$latest_lock")
-              if [[ ! $TARGET =~ $tag_pattern ]]; then
-                TARGET=$(jq -r '.target' <<<"$current")
-              fi
-            fi
-            now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            event=$(jq -n -c --arg t "$TARGET" --arg c "$class" --arg r "$reached" --arg m "$missing" --arg now "$now" --arg manual "$MANUAL" '
-              {type: "failure", target: $t, failureClass: $c, reachedClaude: ($r == "true"), now: $now}
-              + (if $m == "" then {} else {missing: ($m | split(","))} end)
-              + (if $manual == "true" then {manualTrigger: true} else {} end)')
-            status=$(jq -n -c --argjson c "$current" --argjson e "$event" '{currentMarker: $c, event: $e}' |
-              bun packages/ce-overlay-rebase/src/cli.ts transition | jq -r '.status')
-            needs_issue=false
-            case "$status" in
-              escalated | blocked-config) needs_issue=true ;;
-            esac
-            printf 'existing_issue=%s\n' "$(jq -r '.issue // ""' <<<"$current")" >> "$GITHUB_OUTPUT"
-            printf 'target=%s\nnow=%s\nneeds_issue=%s\n' "$TARGET" "$now" "$needs_issue" >> "$GITHUB_OUTPUT"
-          fi
-          printf 'action=%s\nclass=%s\nmissing=%s\nreached=%s\n' "$action" "$class" "$missing" "$reached" >> "$GITHUB_OUTPUT"
+        run: .ci/ce-overlay-classify-run.sh
 
       - name: Download the work directory for the conflict output
         if: steps.decision.outputs.needs_issue == 'true' && needs.prepare.outputs.state == 'claude'
@@ -890,6 +817,7 @@ jobs:
         if: ${{ !cancelled() && steps.decision.outputs.action == 'failure' }}
         env:
           CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ github.token }}
           TARGET: ${{ steps.decision.outputs.target }}
           CLASS: ${{ steps.decision.outputs.class }}
           MISSING: ${{ steps.decision.outputs.missing }}
@@ -914,8 +842,26 @@ jobs:
           status=$?
           set -e
           echo "$result"
-          if [ "$status" -ne 0 ] && [ "$CLASS" = configuration ]; then
-            echo '::warning::The marker write failed. The open tracking issue still stops automatic dispatch.'
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          # Dispatch reads its backoff only from the marker. Without a recorded
+          # attempt, only an open tracking issue stops the hourly redispatch.
+          issue_args=(issue --target "$TARGET" --failure-class configuration --missing P3)
+          if [[ $ISSUE =~ ^[0-9]+$ ]]; then
+            issue_args+=(--issue "$ISSUE")
+          fi
+          set +e
+          issue_result=$(.ci/ce-overlay-pr.sh "${issue_args[@]}")
+          issue_status=$?
+          set -e
+          echo "$issue_result"
+          if [ "$issue_status" -eq 0 ]; then
+            echo '::warning::The marker write failed. The open tracking issue stops automatic dispatch until the owner acts.'
+          else
+            echo '::error::The marker write failed and no tracking issue could be opened, so dispatch is not stopped.'
+          fi
+          if [ "$CLASS" = configuration ] && [ "$issue_status" -eq 0 ]; then
             exit 0
           fi
           exit "$status"

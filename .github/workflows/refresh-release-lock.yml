@@ -10,7 +10,12 @@ name: Refresh release lock
 # A new compound-engineering release lands only when the overlay patches survive
 # it. `.ci/ce-overlay-lock-hold.sh` puts the committed compound-engineering entry
 # back otherwise, and the rest of the refresh still commits. A hold-back keeps
-# the job green.
+# the job green. A tooling failure in the gate or driver holds the entry back the
+# same way, and the job then fails after the commit and push.
+#
+# The refresh job reads the App credentials, which live only in the deployment
+# environment ce-overlay-rebase (owner prerequisite P5). Its branch policy allows
+# the default branch alone, so a dispatch from another ref cannot obtain them.
 
 on:
   schedule:
@@ -32,6 +37,7 @@ jobs:
     name: Resolve upstream releases
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: ce-overlay-rebase
     env:
       # An expression over the secrets, so the job env carries a boolean and never
       # the key itself.
@@ -66,7 +72,7 @@ jobs:
           source_root=$(resolve_source_root "$PWD")
           artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' "$source_root/.chezmoidata/releases.json")
           artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' "$source_root/.chezmoidata/releases.json")
-          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          curl -fsSL --connect-timeout 20 --max-time 180 "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
           printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
           mkdir -p "$RUNNER_TEMP/bin"
           tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
@@ -196,4 +202,12 @@ jobs:
         if: steps.resolve.outputs.exit_code != '0'
         run: |
           echo "::error::One or more sources failed to resolve; their previous lock entries were kept."
+          exit 1
+
+      # The hold step keeps the job green for a tooling failure so the other
+      # tools still commit. This step reports it once they have.
+      - name: Fail when the overlay gate broke
+        if: ${{ !cancelled() && steps.hold.outputs.class == 'tooling-failure' }}
+        run: |
+          echo "::error::The overlay gate or driver failed, so the compound-engineering release was held back without validation. The rest of the refresh was committed."
           exit 1

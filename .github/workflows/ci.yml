@@ -332,6 +332,7 @@ jobs:
           .ci/check-ce-overlay-rebase-marker.sh
           .ci/test-ce-overlay-pr.sh
           .ci/test-ce-overlay-lock-hold.sh
+          .ci/test-ce-overlay-classify-run.sh
           .ci/check-ce-overlay-wiring.sh
 
   ts-workspace:

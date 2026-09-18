@@ -12,7 +12,12 @@ set -euo pipefail
 #   - every job has a timeout, and the workflow token holds exactly contents:
 #     write, actions: write, pull-requests: write, and issues: read
 #   - step order: resolve, install chezmoi, hold, digest check, commit, push,
-#     dispatch decision, unresolved-source failure
+#     dispatch decision, unresolved-source failure, tooling failure; the last step
+#     fails the job when the hold step reports the class tooling-failure, so a
+#     broken gate still lets the other tools commit first
+#   - a job that reads the App credentials declares environment:
+#     ce-overlay-rebase (owner prerequisite P5), and the locked chezmoi download
+#     sets a connect and a total deadline
 #   - the dispatch decision runs only when the push succeeded or nothing was
 #     committed, only for a rebase candidate, only on the default branch, names
 #     that branch as its ref, never runs after a failed commit or push, and
@@ -35,6 +40,19 @@ set -euo pipefail
 #   - CE_REBASE_TOKEN reaches only the preflight step and the open and await
 #     steps, and those steps never see GITHUB_TOKEN; the App private key reaches
 #     only a mint step or a boolean check
+#   - every job that reads CE_REBASE_TOKEN, CE_LOCK_APP_ID, or
+#     CE_LOCK_APP_PRIVATE_KEY declares environment: ce-overlay-rebase, whose
+#     branch policy (owner prerequisite P5) admits only the default branch
+#   - one entry point per rule: the release resolver runs only through
+#     `ce-overlay-lock-hold.sh resolve-latest` (the prepare resolve step, the
+#     publish lock step with --update, and the publish latest step), the release
+#     tag is checked with ceo_tag_valid, a failure class with the package's
+#     validate-class, and the record job's decision runs
+#     .ci/ce-overlay-classify-run.sh; the workflow holds no literal tag pattern
+#     or class list
+#   - the record job's marker step, run against a stub script, opens a tracking
+#     issue (class configuration, missing P3) whenever the marker write fails, and
+#     then fails the step unless the class is configuration
 #   - no run block holds an expression, a pull request is opened only by the
 #     script, every checkout drops its credentials, new actions are pinned to a
 #     full commit SHA
@@ -54,10 +72,14 @@ set -euo pipefail
 # EVERY WORKFLOW
 #   - a job that calls the hold script, the upstream gate, or an offline overlay
 #     test installs chezmoi in an earlier step, because the gate renders the
-#     roster's authoring effort
+#     roster's authoring effort; `ce-overlay-lock-hold.sh resolve-latest` never
+#     renders it and is exempt
 # DOCUMENTATION (AGENTS.md)
 #   - names CE_REBASE_TOKEN, base.json, home/.chezmoidata/ce-overlay-rebase.json,
-#     Final delivery, and the auto-merge setting
+#     Final delivery, the auto-merge setting, P5 and its environment, and the
+#     manual workflow run that resumes a closed rebase pull request
+#   - names missing=P1 to missing=P4, and every detail= value it names is one
+#     .ci/ce-overlay-pr.sh emits
 #   - does not name GUARDED_UPSTREAM_VERSION
 # NEGATIVE FIXTURES. When run against this repository, the check also applies
 # each mutation in .ci/fixtures/ce-overlay-wiring/mutations.json to a scratch copy
@@ -108,6 +130,12 @@ LOCK_PERMISSIONS = {
     "pull-requests": "write",
     "issues": "read",
 }
+# Owner prerequisite P5. The environment's branch policy admits the default
+# branch alone, so a job that declares it cannot run with these credentials from
+# any other ref.
+CREDENTIAL_ENVIRONMENT = "ce-overlay-rebase"
+CREDENTIALS = ("CE_REBASE_TOKEN", "CE_LOCK_APP_ID", "CE_LOCK_APP_PRIVATE_KEY")
+CURL_DEADLINE = ("--connect-timeout", "--max-time")
 # Actions that were already tag-pinned before this flow existed. Every other
 # action must carry a full commit SHA.
 TAG_PINNED_BEFORE_THIS_FLOW = {"actions/checkout", "oven-sh/setup-bun"}
@@ -147,6 +175,30 @@ def is_chezmoi_install(step):
 
 def steps_of(job):
     return [s for s in (job.get("steps") or []) if isinstance(s, dict)]
+
+
+def environment_name(job):
+    environment = job.get("environment")
+    if isinstance(environment, dict):
+        environment = environment.get("name")
+    return environment
+
+
+def check_credential_environments(label, document):
+    for name, job in (document.get("jobs") or {}).items():
+        used = [c for c in CREDENTIALS if c in json.dumps(job, sort_keys=True)]
+        if used and environment_name(job) != CREDENTIAL_ENVIRONMENT:
+            fail(
+                f"{label}: job {name} reads {', '.join(used)} without environment: "
+                f"{CREDENTIAL_ENVIRONMENT}, so a run from any ref could obtain them"
+            )
+
+
+def check_locked_chezmoi_deadline(label, document):
+    for name, job in (document.get("jobs") or {}).items():
+        for step in steps_of(job):
+            if is_chezmoi_install(step) and not all(flag in run_of(step) for flag in CURL_DEADLINE):
+                fail(f"{label}: job {name} downloads the locked chezmoi without {' and '.join(CURL_DEADLINE)}")
 
 
 parsed = {}
@@ -204,6 +256,8 @@ def check_lock_workflow(workflow_dir):
                 fail(f"{LOCK_WORKFLOW}: job {name} creates or merges a pull request")
 
     action_pin_failures(LOCK_WORKFLOW, jobs, raw)
+    check_credential_environments(LOCK_WORKFLOW, document)
+    check_locked_chezmoi_deadline(LOCK_WORKFLOW, document)
 
     if len(jobs) != 1:
         fail(f"{LOCK_WORKFLOW}: expected one job, found {len(jobs)}; update this check for the new shape")
@@ -224,14 +278,26 @@ def check_lock_workflow(workflow_dir):
     mint = find_once(
         steps, "App token mint", lambda s: str(s.get("uses") or "").startswith("actions/create-github-app-token@")
     )
-    order = [resolve, chezmoi, hold, digest, commit, push, dispatch, unresolved]
+    tooling = find_once(
+        steps, "tooling-failure", lambda s: "outputs.class == 'tooling-failure'" in str(s.get("if") or "")
+    )
+    order = [resolve, chezmoi, hold, digest, commit, push, dispatch, unresolved, tooling]
     if None in order:
         return
     if order != sorted(order) or len(set(order)) != len(order):
         fail(
             f"{LOCK_WORKFLOW}: steps must run in the order resolve, install chezmoi, hold, "
-            "digest check, commit, push, dispatch decision, unresolved-source failure"
+            "digest check, commit, push, dispatch decision, unresolved-source failure, tooling failure"
         )
+    tooling_step = steps[tooling]
+    if tooling != len(steps) - 1:
+        fail(f"{LOCK_WORKFLOW}: the tooling-failure step must be the last step, after the commit and the push")
+    if not steps[hold].get("id") or f"steps.{steps[hold]['id']}.outputs.class == 'tooling-failure'" not in str(
+        tooling_step.get("if") or ""
+    ):
+        fail(f"{LOCK_WORKFLOW}: the tooling-failure step must read the hold step's class")
+    if "exit 1" not in run_of(tooling_step) or "::error::" not in run_of(tooling_step):
+        fail(f"{LOCK_WORKFLOW}: the tooling-failure step must report an error and fail the job")
     if mint is not None and not (commit < mint < push):
         fail(f"{LOCK_WORKFLOW}: the App token must be minted after the commit and before the push")
 
@@ -578,6 +644,124 @@ def verify_scenarios(document, job):
     scenario("a symbolic link in the trusted work directory", False, make_trusted_link)
 
 
+def check_shared_entry_points(label, document, raw, aux_root):
+    jobs = document.get("jobs") or {}
+    if re.search(r"outage\s*\|\s*quota", raw):
+        fail(f"{label}: the workflow spells out the failure classes; call the package's validate-class instead")
+    if re.search(r"compound-engineering-v\[0-9\]", raw):
+        fail(f"{label}: the workflow spells out the release tag pattern; call ceo_tag_valid instead")
+    for name, job in jobs.items():
+        for index, step in enumerate(steps_of(job)):
+            if "release-lock/src/cli.ts" in run_of(step):
+                fail(
+                    f"{label}: step {step_key(step, index)} in {name} calls the release resolver directly; "
+                    "call .ci/ce-overlay-lock-hold.sh resolve-latest"
+                )
+
+    def step_of(job_name, step_id):
+        hits = [s for s in steps_of(jobs.get(job_name) or {}) if s.get("id") == step_id]
+        return hits[0] if len(hits) == 1 else None
+
+    for job_name, step_id, needle in (
+        ("prepare", "resolve", "resolve-latest"),
+        ("publish", "lock", "resolve-latest --update"),
+        ("publish", "latest", "resolve-latest"),
+    ):
+        step = step_of(job_name, step_id)
+        if step is None or f"ce-overlay-lock-hold.sh {needle}" not in run_of(step):
+            fail(f"{label}: the {step_id} step of {job_name} must call .ci/ce-overlay-lock-hold.sh {needle}")
+    resolve = step_of("prepare", "resolve")
+    if resolve is not None and "ceo_tag_valid" not in run_of(resolve):
+        fail(f"{label}: the resolve step of prepare must check the tags with ceo_tag_valid")
+    classify = step_of("claude", "classify")
+    if classify is None or "validate-class" not in run_of(classify):
+        fail(f"{label}: the classify step of claude must check its class with the package's validate-class")
+    decision = step_of("record", "decision")
+    if decision is None or ".ci/ce-overlay-classify-run.sh" not in run_of(decision):
+        fail(f"{label}: the decision step of record must run .ci/ce-overlay-classify-run.sh")
+    script = aux_root / ".ci" / "ce-overlay-classify-run.sh"
+    if not script.exists():
+        fail("no .ci/ce-overlay-classify-run.sh")
+    else:
+        text = script.read_text(encoding="utf-8")
+        for needle in ("validate-class", "resolve-latest", "ceo_tag_valid"):
+            if needle not in text:
+                fail(f".ci/ce-overlay-classify-run.sh does not use {needle}")
+
+
+def marker_scenarios(document, record):
+    label = REBASE_WORKFLOW
+    marker = [s for s in steps_of(record) if s.get("id") == "marker"]
+    if len(marker) != 1 or not run_of(marker[0]):
+        fail(f"{label}: record must have exactly one marker step that runs a script")
+        return
+    script = run_of(marker[0])
+    stub = (
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$*" >>"$STUB_LOG"\n'
+        'case $1 in\n'
+        '  marker) echo "result=push-rejected class=configuration missing=P3"; exit "$STUB_MARKER_RC" ;;\n'
+        '  issue) echo "result=created class=none issue=7"; exit "$STUB_ISSUE_RC" ;;\n'
+        "esac\n"
+        "exit 64\n"
+    )
+    target = "compound-engineering-v3.27.0"
+
+    def scenario(name, marker_rc, failure_class, issue_rc, expect_ok, expect_issue, tracked_issue=""):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            (base / ".ci").mkdir()
+            (base / ".ci" / "ce-overlay-pr.sh").write_text(stub, encoding="utf-8")
+            (base / ".ci" / "ce-overlay-pr.sh").chmod(0o755)
+            log = base / "calls.log"
+            log.write_text("", encoding="utf-8")
+            env = {
+                "PATH": "/usr/bin:/bin",
+                "STUB_LOG": str(log),
+                "STUB_MARKER_RC": str(marker_rc),
+                "STUB_ISSUE_RC": str(issue_rc),
+                "TARGET": target,
+                "CLASS": failure_class,
+                "MISSING": "",
+                "REACHED": "true",
+                "NOW": "2026-09-19T00:00:00Z",
+                "MANUAL": "false",
+                "ISSUE": tracked_issue,
+                "DEFAULT_BRANCH": "main",
+                "CE_PUSH_TOKEN": "unused",
+                "GH_TOKEN": "unused",
+            }
+            proc = subprocess.run(
+                ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                cwd=base, env=env, capture_output=True, text=True, check=False,
+            )
+            calls = [c for c in log.read_text(encoding="utf-8").splitlines() if c.startswith("issue ")]
+            if (proc.returncode == 0) != expect_ok:
+                fail(
+                    f"{label}: the marker step's status was {proc.returncode} for {name}; "
+                    f"a step that {'succeeds' if expect_ok else 'fails'} was expected"
+                )
+            if expect_issue and len(calls) != 1:
+                fail(f"{label}: the marker step did not open a tracking issue for {name}, so dispatch is not stopped")
+            elif expect_issue:
+                wanted = ["--target", target, "--failure-class", "configuration", "--missing", "P3"]
+                if tracked_issue:
+                    wanted += ["--issue", tracked_issue]
+                if calls[0].split() != ["issue"] + wanted:
+                    fail(f"{label}: the marker step's tracking issue call for {name} was {calls[0]!r}")
+            elif calls:
+                fail(f"{label}: the marker step opened a tracking issue for {name}, which needs none")
+
+    scenario("a marker write that succeeds", 0, "outage", 0, True, False)
+    scenario("a marker write that succeeds for a configuration failure", 0, "configuration", 0, True, False)
+    scenario("a rejected marker write after an outage", 1, "outage", 0, False, True)
+    scenario("a rejected marker write after a quota failure with a tracked issue", 1, "quota", 0, False, True, "12")
+    scenario("a rejected marker write after a genuine failure", 1, "genuine", 0, False, True)
+    scenario("a rejected marker write for a configuration failure", 1, "configuration", 0, True, True)
+    scenario("a rejected marker write that also cannot open the issue", 1, "outage", 1, False, True)
+    scenario("a configuration marker rejection that also cannot open the issue", 1, "configuration", 1, False, True)
+
+
 def check_rebase_workflow(workflow_dir, aux_root, dynamic=True):
     label = REBASE_WORKFLOW
     path = workflow_dir / label
@@ -622,6 +806,9 @@ def check_rebase_workflow(workflow_dir, aux_root, dynamic=True):
 
     check_claude_job(jobs["claude"], document)
     check_secret_placement(document)
+    check_credential_environments(label, document)
+    check_locked_chezmoi_deadline(label, document)
+    check_shared_entry_points(label, document, raw, aux_root)
 
     for name, job in jobs.items():
         for index, step in enumerate(steps_of(job)):
@@ -693,10 +880,11 @@ def check_rebase_workflow(workflow_dir, aux_root, dynamic=True):
             if not any(needle in run_of(s) for s in steps[: order.index("open")]):
                 fail(f"{label}: {needle} must run before the pull request opens")
         latest = steps[order.index("latest")]
-        if "release-lock/src/cli.ts --only compound-engineering" not in run_of(latest):
+        if "ce-overlay-lock-hold.sh resolve-latest" not in run_of(latest):
             fail(f"{label}: the publish job must re-resolve the latest release before it opens the pull request")
     if dynamic:
         verify_scenarios(document, publish)
+        marker_scenarios(document, record)
 
     prefix = branch_prefix(aux_root)
     if prefix is None:
@@ -779,6 +967,8 @@ def self_test(repo_root):
             shutil.copytree(repo_root / ".github" / "prompts", tree / ".github" / "prompts")
             (tree / ".ci").mkdir()
             shutil.copy(repo_root / ".ci" / "ce-overlay-pr.sh", tree / ".ci" / "ce-overlay-pr.sh")
+            shutil.copy(repo_root / ".ci" / "ce-overlay-classify-run.sh", tree / ".ci" / "ce-overlay-classify-run.sh")
+            shutil.copy(repo_root / "AGENTS.md", tree / "AGENTS.md")
             (tree / "packages" / "ce-overlay-rebase").mkdir(parents=True)
             shutil.copytree(
                 repo_root / "packages" / "ce-overlay-rebase" / "src",
@@ -793,7 +983,8 @@ def self_test(repo_root):
                 text = text.replace(old, new, 1)
             else:
                 target.write_text(text, encoding="utf-8")
-                found = run_checks(tree, tree, dynamic=any(word in case["expect"] for word in ("accepted", "mishandled")))
+                dynamic = case.get("dynamic", any(word in case["expect"] for word in ("accepted", "mishandled")))
+                found = run_checks(tree, tree, dynamic=dynamic)
                 if not any(case["expect"] in line for line in found):
                     problems.append(
                         f"mutation {case['name']!r} was not rejected with {case['expect']!r}; got {found!r}"
@@ -807,7 +998,9 @@ def check_chezmoi_before_gates(workflow_dir):
         for name, job in (document.get("jobs") or {}).items():
             steps = steps_of(job)
             for index, step in enumerate(steps):
-                called = [script for script in GATE_CALLERS if script in run_of(step)]
+                # `resolve-latest` reads the release list and never renders the roster.
+                run = re.sub(r"ce-overlay-lock-hold\.sh\s+resolve-latest\b", "", run_of(step))
+                called = [script for script in GATE_CALLERS if script in run]
                 if not called:
                     continue
                 if not any(is_chezmoi_install(earlier) for earlier in steps[:index]):
@@ -829,6 +1022,9 @@ def check_documentation(root, aux_root):
         "base.json",
         "home/.chezmoidata/ce-overlay-rebase.json",
         "Final delivery",
+        "P5",
+        "environment `ce-overlay-rebase`",
+        "manual workflow run",
     ):
         if needle not in text:
             fail(f"AGENTS.md: missing documentation for {needle!r}")
@@ -836,6 +1032,17 @@ def check_documentation(root, aux_root):
         fail("AGENTS.md: missing documentation for the auto-merge setting")
     if "GUARDED_UPSTREAM_VERSION" in text:
         fail("AGENTS.md: still names retired GUARDED_UPSTREAM_VERSION")
+    script = aux_root / ".ci" / "ce-overlay-pr.sh"
+    if not script.exists():
+        return
+    emitted = script.read_text(encoding="utf-8")
+    for number in (1, 2, 3, 4):
+        if f"missing=P{number}" not in text:
+            fail(f"AGENTS.md: the failure signal for P{number} does not name missing=P{number}")
+    for detail in sorted(set(re.findall(r"detail=([a-z0-9-]+)", text))):
+        if not re.search(rf"(?<![A-Za-z0-9-]){re.escape(detail)}(?![A-Za-z0-9-])", emitted):
+            fail(f"AGENTS.md: the failure signal detail={detail} is not emitted by .ci/ce-overlay-pr.sh")
+
 
 def main():
     root = pathlib.Path(sys.argv[1]).resolve()

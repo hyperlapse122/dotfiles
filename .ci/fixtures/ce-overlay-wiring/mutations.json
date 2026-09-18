@@ -188,7 +188,7 @@
   {
     "name": "the App private key in the marker step",
     "file": ".github/workflows/rebase-ce-overlays.yml",
-    "replace": [["          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}\n          TARGET: ${{ steps.decision.outputs.target }}\n", "          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}\n          KEY: ${{ secrets.CE_LOCK_APP_PRIVATE_KEY }}\n          TARGET: ${{ steps.decision.outputs.target }}\n"]],
+    "replace": [["          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}\n          GH_TOKEN: ${{ github.token }}\n", "          CE_PUSH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}\n          GH_TOKEN: ${{ github.token }}\n          KEY: ${{ secrets.CE_LOCK_APP_PRIVATE_KEY }}\n"]],
     "expect": "the App private key appears in record"
   },
   {
@@ -260,7 +260,7 @@
   {
     "name": "a missing latest-release check",
     "file": ".github/workflows/rebase-ce-overlays.yml",
-    "replace": [["          if ! bun run packages/release-lock/src/cli.ts --only compound-engineering --out \"$latest_lock\"; then\n            echo 'class=outage'", "          if ! true; then\n            echo 'class=outage'"]],
+    "replace": [["          if ! resolved=$(.ci/ce-overlay-lock-hold.sh resolve-latest); then\n            echo 'class=outage'", "          if ! resolved=$(true); then\n            echo 'class=outage'"]],
     "expect": "must re-resolve the latest release"
   },
   {
@@ -388,5 +388,160 @@
     "file": ".github/workflows/claude-code-review.yml",
     "replace": [["    timeout-minutes: 30\n", ""]],
     "expect": "job claude-review has no timeout-minutes"
+  },
+  {
+    "name": "a preflight job without the credential environment",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    timeout-minutes: 10\n    environment: ce-overlay-rebase\n", "    timeout-minutes: 10\n"]],
+    "expect": "job preflight reads"
+  },
+  {
+    "name": "a publish job without the credential environment",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    name: Verify, validate, and publish the rebase\n    environment: ce-overlay-rebase\n", "    name: Verify, validate, and publish the rebase\n"]],
+    "expect": "job publish reads"
+  },
+  {
+    "name": "a record job without the credential environment",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    name: Record the outcome\n    environment: ce-overlay-rebase\n", "    name: Record the outcome\n"]],
+    "expect": "job record reads"
+  },
+  {
+    "name": "a credential environment with another name",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["    timeout-minutes: 10\n    environment: ce-overlay-rebase\n", "    timeout-minutes: 10\n    environment: other\n"]],
+    "expect": "job preflight reads"
+  },
+  {
+    "name": "an App credential read by a job without the credential environment",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["        id: resolve\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n", "        id: resolve\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n          APP: ${{ vars.CE_LOCK_APP_ID }}\n"]],
+    "expect": "job prepare reads CE_LOCK_APP_ID"
+  },
+  {
+    "name": "a lock job without the credential environment",
+    "file": ".github/workflows/refresh-release-lock.yml",
+    "replace": [["    environment: ce-overlay-rebase\n", ""]],
+    "expect": "job refresh reads"
+  },
+  {
+    "name": "a locked chezmoi download without a deadline in the rebase workflow",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["curl -fsSL --connect-timeout 20 --max-time 180 \"$artifact_url\"", "curl -fsSL \"$artifact_url\""]],
+    "expect": "downloads the locked chezmoi without"
+  },
+  {
+    "name": "a locked chezmoi download without a deadline in the lock workflow",
+    "file": ".github/workflows/refresh-release-lock.yml",
+    "replace": [["curl -fsSL --connect-timeout 20 --max-time 180 \"$artifact_url\"", "curl -fsSL --connect-timeout 20 \"$artifact_url\""]],
+    "expect": "downloads the locked chezmoi without"
+  },
+  {
+    "name": "a literal failure class list in the workflow",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            node ce-rebase-work/ce-classify.mjs validate-class \"$class\" >/dev/null 2>&1 || class=unknown\n", "            case $class in\n              outage | quota | genuine | unknown | configuration) ;;\n              *) class=unknown ;;\n            esac\n"]],
+    "expect": "spells out the failure classes"
+  },
+  {
+    "name": "a Claude classifier that does not validate its class",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["            node ce-rebase-work/ce-classify.mjs validate-class \"$class\" >/dev/null 2>&1 || class=unknown\n", ""]],
+    "expect": "classify step of claude must check its class"
+  },
+  {
+    "name": "an inline release tag pattern in the workflow",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          . .ci/lib/ce-overlay.sh\n", "          tag_pattern='^compound-engineering-v[0-9]+\\.[0-9]+\\.[0-9]+$'\n"]],
+    "expect": "spells out the release tag pattern"
+  },
+  {
+    "name": "a prepare step that skips the tag validator",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["if ! ceo_tag_valid \"$pin\" || ! ceo_tag_valid \"$target\"; then", "if false; then"]],
+    "expect": "must check the tags with ceo_tag_valid"
+  },
+  {
+    "name": "a direct call to the release resolver in the workflow",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["if ! resolved=$(.ci/ce-overlay-lock-hold.sh resolve-latest --update); then", "if ! resolved=$(bun run packages/release-lock/src/cli.ts --only compound-engineering); then"]],
+    "expect": "calls the release resolver directly"
+  },
+  {
+    "name": "a lock step that resolves into a scratch copy",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["resolve-latest --update", "resolve-latest"]],
+    "expect": "the lock step of publish must call .ci/ce-overlay-lock-hold.sh resolve-latest --update"
+  },
+  {
+    "name": "a decision step that no longer runs the classify script",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["        run: .ci/ce-overlay-classify-run.sh\n", "        run: echo inline\n"]],
+    "expect": "decision step of record must run .ci/ce-overlay-classify-run.sh"
+  },
+  {
+    "name": "a marker failure that opens no tracking issue",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          issue_result=$(.ci/ce-overlay-pr.sh \"${issue_args[@]}\")\n", "          issue_result=$(echo skipped)\n"]],
+    "expect": "did not open a tracking issue",
+    "dynamic": true
+  },
+  {
+    "name": "a tracking issue opened after a marker write that succeeded",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          if [ \"$status\" -eq 0 ]; then\n            exit 0\n          fi\n", ""]],
+    "expect": "which needs none",
+    "dynamic": true
+  },
+  {
+    "name": "a marker failure that ends the step green",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          if [ \"$CLASS\" = configuration ] && [ \"$issue_status\" -eq 0 ]; then\n            exit 0\n          fi\n          exit \"$status\"", "          exit 0"]],
+    "expect": "a step that fails was expected",
+    "dynamic": true
+  },
+  {
+    "name": "a configuration marker failure that fails the step although the issue is open",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["          if [ \"$CLASS\" = configuration ] && [ \"$issue_status\" -eq 0 ]; then", "          if false; then"]],
+    "expect": "a step that succeeds was expected",
+    "dynamic": true
+  },
+  {
+    "name": "a tracking issue for the wrong class after a marker failure",
+    "file": ".github/workflows/rebase-ce-overlays.yml",
+    "replace": [["issue_args=(issue --target \"$TARGET\" --failure-class configuration --missing P3)", "issue_args=(issue --target \"$TARGET\" --failure-class outage --missing P3)"]],
+    "expect": "tracking issue call for",
+    "dynamic": true
+  },
+  {
+    "name": "a lock workflow without the tooling-failure step",
+    "file": ".github/workflows/refresh-release-lock.yml",
+    "replace": [["steps.hold.outputs.class == 'tooling-failure'", "steps.hold.outputs.class == 'invalid'"]],
+    "expect": "expected exactly one tooling-failure step"
+  },
+  {
+    "name": "a tooling-failure step that does not fail the job",
+    "file": ".github/workflows/refresh-release-lock.yml",
+    "replace": [["The rest of the refresh was committed.\"\n          exit 1", "The rest of the refresh was committed.\"\n          exit 0"]],
+    "expect": "must report an error and fail the job"
+  },
+  {
+    "name": "AGENTS.md naming a failure signal the script never emits",
+    "file": "AGENTS.md",
+    "replace": [["detail=auto-merge-off", "detail=auto-merge-disabled"]],
+    "expect": "is not emitted by .ci/ce-overlay-pr.sh"
+  },
+  {
+    "name": "AGENTS.md without the P4 failure signal",
+    "file": "AGENTS.md",
+    "replace": [["missing=P4 detail=app-missing", "detail=app-missing"]],
+    "expect": "the failure signal for P4 does not name missing=P4"
+  },
+  {
+    "name": "AGENTS.md without the manual run that resumes a closed rebase pull request",
+    "file": "AGENTS.md",
+    "replace": [["Only a manual workflow run of", "Only a run of"]],
+    "expect": "missing documentation for 'manual workflow run'"
   }
 ]

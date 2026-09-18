@@ -432,9 +432,10 @@ ceo_stage_pristine_dir() {
 }
 
 ceo_download() { # <tag> <archive-out>
-  local url attempt=1 header delay=${CE_OVERLAY_FETCH_RETRY_DELAY:-5}
+  local url attempt=1 header delay=${CE_OVERLAY_FETCH_RETRY_DELAY:-5} curl_err reason
   local -a auth=()
   url="https://github.com/$CEO_OWNER_REPO/archive/refs/tags/$1.tar.gz"
+  curl_err="$(ceo_scratch_dir dl)/curl.err"
   if [[ -n ${GITHUB_TOKEN:-} ]]; then
     header="$(ceo_scratch_dir hdr)/header"
     (umask 077 && printf 'Authorization: Bearer %s\n' "$GITHUB_TOKEN" >"$header")
@@ -442,14 +443,15 @@ ceo_download() { # <tag> <archive-out>
   fi
   while :; do
     if curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
-      --connect-timeout 20 --max-time 180 "${auth[@]+"${auth[@]}"}" --output "$2" -- "$url" 2>/dev/null; then
+      --connect-timeout 20 --max-time 180 "${auth[@]+"${auth[@]}"}" --output "$2" -- "$url" 2>"$curl_err"; then
       return 0
     fi
     [[ $attempt -lt 3 ]] || break
     attempt=$((attempt + 1))
     sleep "$delay"
   done
-  ceo_report unavailable - "download failed after 3 attempts: $url"
+  reason=$(tail -n 1 "$curl_err" | LC_ALL=C tr -c '[:print:]' ' ' | head -c 200 || true)
+  ceo_report unavailable - "download failed after 3 attempts: $url (${reason:-no curl message})"
   return 2
 }
 
