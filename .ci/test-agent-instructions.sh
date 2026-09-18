@@ -441,7 +441,7 @@ Every other run treats the key as unset, and the session model authors the step 
 Compound Engineering's `learnings-researcher` is dispatched only for a Deep run.
 No worker is dispatched for that step, and the inline search satisfies the skill's learnings step.
 A value the repository sets, a caller carrier, or live user intent wins over this default, in Compound Engineering's own order.
-launches the elevation entry at its roster effort `max`
+launches the elevation entry at its roster effort `medium`
 outside Orca the native subagent adapter runs at the Claude Code `modelSettings` effort for that model and the CLI adapter at the effort this repository's overlay sets, both held at the same value.
 A session outside Orca then runs Compound Engineering's elevation adapters as shipped, apart from that overlay.
 A run MUST NOT end with an actionable finding that is only listed
@@ -659,7 +659,7 @@ takes a Unit that keeps real design judgment inside its own bounds — the plan 
 is the top rung: there is no higher one to escalate to, so a Unit too wide for it is two Units and MUST be split rather than raised.
 MAY open directly on that rung, skipping the cheaper row above, and the run MUST record the signals that justified the skip; a Unit that trips none of the
 signals MUST NOT take that bypass.
-An unrecorded `claude` implementation dispatch is a rule violation.
+An unrecorded `claude` implementation dispatch is a rule violation, and an unrecorded `claude` judgment dispatch
 A failure re-opens that sizing and never replaces it, so classify a failure only after the Unit is sized: a mechanical failure carries no information about the Unit, while a substantive failure — a wrong approach, an escalation that asks a design question, verification that fails on approach grounds and not on a typo — is new evidence about depth or blast radius, so feed it back into the four signals and re-size before dispatching again.
 is classified as a brief defect: it does not raise the rung, so the coordinator extracts what was missing into the brief and re-dispatches at the same rung.
 MUST NOT re-dispatch the same Unit at the same rung with the same brief — sharpen the brief, split the Unit, or re-size on evidence.
@@ -668,10 +668,10 @@ Model and effort apply to a fresh agent terminal only; the version-matched Orca 
 Each recipient takes a different brief.
 | Model | Brief guidance |
 goes to that entry, launched with `--model
-Every `claude` launch from the judgment row selects `--model
+Every `claude` launch from the `judgment-deep` row selects `--model
 and the elevation worker selects the authoring pair
 the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
-The `claude` reviewer's judgment effort holds while the `codex` reviewer stands beside it; when that reviewer is removed or a run records it as degraded, the `claude` reviewer runs at `
+The `claude` reviewer's `judgment-deep` effort holds while the `codex` reviewer stands beside it; when that reviewer is removed or a run records it as degraded, the `claude` reviewer runs at `
 A second launch miss there records that reviewer's pass as degraded, and the review proceeds on the remaining reviewer without waiting and without escalating.
 pinned by omp's own `--model` and `--thinking` flags
 so the lead MUST NOT type, paste, or send the prompt itself.
