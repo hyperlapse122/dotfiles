@@ -10,6 +10,9 @@ chezmoi_bin=$(type -P chezmoi) || fail 'no chezmoi binary found on PATH'
 source "$repo_root/.ci/lib/render-scratch.sh"
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 # Builds the sandbox render() assumes — scratch dir, EXIT trap, bin/ and target/,
 # the `op` stub and the empty config. This gate adds only what is its own.
 setup_render_scratch orchestration-hook
@@ -49,7 +52,7 @@ payload_dir="$scratch/home/.local/share/orchestration-hook"
 mkdir -p "$payload_dir"
 for body in everyone coordinator; do
   render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-    "$repo_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$payload_dir/$body.md"
+    "$source_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$payload_dir/$body.md"
   [[ -s "$payload_dir/$body.md" ]] || fail "the rendered $body payload is empty"
 done
 
@@ -281,7 +284,7 @@ parity_dir="$scratch/parity-payloads"
 mkdir -p "$parity_dir"
 for body in everyone coordinator; do
   render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-    "$repo_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$parity_dir/$body.md"
+    "$source_root/dot_local/share/orchestration-hook/$body.md.tmpl" "$parity_dir/$body.md"
   env -i DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$parity_dir" \
     "$binary" print-payload --body "$body" </dev/null >"$scratch/$body.binary"
   diff -q "$parity_dir/$body.md" "$scratch/$body.binary" >/dev/null \
@@ -311,7 +314,7 @@ out=$(env -i PATH="$closed_path" HOME="$scratch/empty-home" \
 pass 'an unwritten payload file delivers nothing and never fails session start'
 
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-  "$repo_root/dot_omp/private_agent/private_readonly_AGENTS.md.tmpl" "$scratch/omp.rendered"
+  "$source_root/dot_omp/private_agent/private_readonly_AGENTS.md.tmpl" "$scratch/omp.rendered"
 if grep -F 'orchestration-everyone:begin' "$scratch/omp.rendered" >/dev/null; then
   fail 'omp instructions must not carry a stale static payload'
 fi
@@ -319,9 +322,9 @@ pass 'payloads match source and omp receives context dynamically'
 
 # --------------------------------------------------------- declared commands
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-  "$repo_root/dot_local/share/dotfiles-claude-plugin/hooks/hooks.json.tmpl" "$scratch/claude-hooks.json"
+  "$source_root/dot_local/share/dotfiles-claude-plugin/hooks/hooks.json.tmpl" "$scratch/claude-hooks.json"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-  "$repo_root/dot_local/share/dotfiles-codex-plugin/hooks/hooks.json.tmpl" "$scratch/codex-hooks.json"
+  "$source_root/dot_local/share/dotfiles-codex-plugin/hooks/hooks.json.tmpl" "$scratch/codex-hooks.json"
 
 expected_binary="$scratch/home/.local/libexec/orchestration-hook"
 claude_command=$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/claude-hooks.json")
@@ -401,7 +404,7 @@ pass 'the Codex trust record hashes exactly one event, SessionStart, keyed as be
 
 # --------------------------------------------------- every-apply path assertion
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
-  "$repo_root/.chezmoiscripts/70-agents/run_after_assert-orchestration-hook.sh.tmpl" "$scratch/assert.sh"
+  "$source_root/.chezmoiscripts/70-agents/run_after_assert-orchestration-hook.sh.tmpl" "$scratch/assert.sh"
 mkdir -p "$scratch/home/.local/libexec"
 rm -f "$expected_binary"
 if bash "$scratch/assert.sh" 2>"$scratch/assert.err"; then
@@ -433,7 +436,7 @@ for target in \
   .local/share/dotfiles-claude-plugin/payloads/coordinator.md \
   .local/share/dotfiles-codex-plugin/hooks/orchestration.sh \
   .local/share/dotfiles-codex-plugin/payloads/everyone.md; do
-  grep -Fxq "$target" "$repo_root/.chezmoiremove" \
+  grep -Fxq "$target" "$source_root/.chezmoiremove" \
     || fail "retired target is not declared for removal: $target"
 done
 pass 'the retired hook scripts and payload wrappers are gone and declared for removal'

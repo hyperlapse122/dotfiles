@@ -20,7 +20,10 @@ set -euo pipefail
 # failed: this runs on whatever runner CI provides.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-lock=${1:-$repo_root/.chezmoidata/releases.json}
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+lock=${1:-$source_root/.chezmoidata/releases.json}
 
 fail() {
   printf 'fff-mcp runtime: %s\n' "$1" >&2

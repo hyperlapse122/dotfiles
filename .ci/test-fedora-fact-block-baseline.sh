@@ -7,6 +7,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/fedora-fact-block-baseline.XXXXXX")
@@ -27,8 +30,8 @@ command -v node >/dev/null 2>&1 || fail 'node is required on PATH'
 # Render deterministic host facts so hashes are environment-independent.
 fixture_root="$scratch/source"
 mkdir -p "$fixture_root"
-cp -a "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" \
-  "$repo_root/.chezmoiscripts" "$repo_root/system" "$fixture_root/"
+cp -a "$source_root/.chezmoidata" "$source_root/.chezmoitemplates" \
+  "$source_root/.chezmoiscripts" "$repo_root/system" "$fixture_root/"
 cat >"$fixture_root/.chezmoitemplates/facts.tmpl" <<'FACTS'
 os: linux
 distro: fedora

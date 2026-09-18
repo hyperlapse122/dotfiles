@@ -41,6 +41,9 @@ fail() {
   exit 1
 }
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 chezmoi_bin=$(command -v "${CHEZMOI:-chezmoi}") ||
   { echo "chezmoi is not on PATH" >&2; exit 1; }
 mkdir -p "$scratch/render-bin" "$scratch/render-home" "$scratch/render-target"
@@ -53,7 +56,7 @@ render_variant() {
   env HOME="$scratch/render-home" PATH="$scratch/render-bin:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/render-empty.toml" --source "$repo_root" \
       --destination "$scratch/render-target" --override-data "$override" \
-      execute-template <"$repo_root/.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl" \
+      execute-template <"$source_root/.chezmoiscripts/70-agents/run_onchange_after_update-omp-plugins.sh.tmpl" \
       >"$out" 2>"$err"
 }
 

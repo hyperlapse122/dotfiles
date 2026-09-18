@@ -5,6 +5,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 hook="$repo_root/.install-prerequisites.sh"
 [[ -f "$hook" ]] || { printf 'test-key-custody-hook: missing %s\n' "$hook" >&2; exit 1; }
 
@@ -480,7 +483,7 @@ pass 'A real container marker and CI=true skip preflight without package manager
       "$chezmoi_bin" --config "$render_dir/empty.toml" --source "$repo_root" \
       --destination "$render_dir/target" \
       --override-data "$override_json" \
-      execute-template < "$repo_root/$tmpl_rel" > "$out_file"
+      execute-template < "$source_root/$tmpl_rel" > "$out_file"
   }
 
   # 1. Fedora base script: neither expect nor gnupg2
@@ -526,7 +529,7 @@ pass 'A real container marker and CI=true skip preflight without package manager
   fi
 
   # 5. Jetson installer: neither gnupg nor pinentry-qt
-  jetson_src="$repo_root/.chezmoiscripts/20-linux-ubuntu/run_onchange_before_jetson.sh.tmpl"
+  jetson_src="$source_root/.chezmoiscripts/20-linux-ubuntu/run_onchange_before_jetson.sh.tmpl"
   if grep -qE 'install_apt "(gnupg|pinentry-qt)"' "$jetson_src"; then
     fail 'Jetson installer source still contains install_apt gnupg or pinentry-qt'
   fi

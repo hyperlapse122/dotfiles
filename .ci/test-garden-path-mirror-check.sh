@@ -17,7 +17,10 @@ set -euo pipefail
 # record that carries no remote at all.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-checker="$repo_root/.chezmoitemplates/garden-path-mirror-check.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+checker="$source_root/.chezmoitemplates/garden-path-mirror-check.sh"
 
 fail() {
   printf 'test-garden-path-mirror-check: %s\n' "$*" >&2

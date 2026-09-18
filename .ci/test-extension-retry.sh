@@ -2,6 +2,9 @@
 set -euo pipefail
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 new_templates=(
   ".chezmoiscripts/30-linux/run_after_install-vscodium-extensions.sh.tmpl"
@@ -18,11 +21,11 @@ fail() {
 }
 
 for template in "${old_templates[@]}"; do
-  [[ ! -e "$repo_root/$template" ]] || fail "old extension lifecycle source remains: $template"
+  [[ ! -e "$source_root/$template" ]] || fail "old extension lifecycle source remains: $template"
 done
 for template in "${new_templates[@]}"; do
-  [[ -f "$repo_root/$template" ]] || fail "missing run_after extension source: $template"
-  if grep -q 'run_onchange_after_install-' "$repo_root/$template"; then
+  [[ -f "$source_root/$template" ]] || fail "missing run_after extension source: $template"
+  if grep -q 'run_onchange_after_install-' "$source_root/$template"; then
     fail "stale onchange lifecycle wording remains: $template"
   fi
 done
@@ -52,12 +55,12 @@ mkdir -p -- \
 
 for template in "${new_templates[@]}"; do
   mkdir -p -- "$source_dir/$(dirname -- "$template")"
-  cp -- "$repo_root/$template" "$source_dir/$template"
+  cp -- "$source_root/$template" "$source_dir/$template"
 done
 
 # Copied real, unlike the stubbed guard below: this partial's atomic write and
 # symlink refusal are what the signature cases exercise.
-cp -- "$repo_root/.chezmoitemplates/extension-signature-stamp.sh.tmpl" \
+cp -- "$source_root/.chezmoitemplates/extension-signature-stamp.sh.tmpl" \
   "$source_dir/.chezmoitemplates/extension-signature-stamp.sh.tmpl"
 
 cat >"$source_dir/.chezmoitemplates/gnome-guard.sh.tmpl" <<'TEMPLATE'
@@ -225,7 +228,7 @@ chmod +x "$stub_bin/codium" "$stub_bin/curl" "$stub_bin/gnome-extensions" \
   "$stub_bin/gnome-shell" "$stub_bin/gsettings"
 
 chezmoi_bin=$(type -P chezmoi)
-source_digest_before=$(sha256sum "${new_templates[@]/#/$repo_root/}")
+source_digest_before=$(sha256sum "${new_templates[@]/#/$source_root/}")
 apply_stdout="$scratch/apply.stdout"
 apply_stderr="$scratch/apply.stderr"
 
@@ -409,6 +412,6 @@ grep -qF 'HARD ERROR: gnome-extensions install --force failed for kimpanel@test'
   || fail 'gnome-extensions install failure lacked explicit hard-error diagnostic'
 assert_no_signature "$kimpanel_signature"
 assert_no_log_prefix 'later-phase'
-source_digest_after=$(sha256sum "${new_templates[@]/#/$repo_root/}")
+source_digest_after=$(sha256sum "${new_templates[@]/#/$source_root/}")
 [[ "$source_digest_after" == "$source_digest_before" ]] || fail 'fixture changed repository extension sources'
 printf '%s\n' 'extension retry fixture passed'

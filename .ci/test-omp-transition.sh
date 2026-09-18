@@ -5,21 +5,24 @@ fail() { printf 'omp transition: %s\n' "$*" >&2; exit 1; }
 chezmoi_bin=$(type -P chezmoi)
 source "$repo_root/.ci/lib/render-scratch.sh"
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 setup_render_scratch omp-transition
 mkdir -p "$scratch/home/.local/bin" "$scratch/home/.config/systemd/user" "$scratch/home/Library/LaunchAgents"
 
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/.chezmoiremove" "$scratch/remove"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/.chezmoiremove" "$scratch/remove"
 ! grep -Fxq '.local/bin/agy' "$scratch/remove" || fail 'absent public command was selected'
 printf 'personal executable\n' >"$scratch/home/.local/bin/agy"
 ln -s /personal/antigravity "$scratch/home/.local/bin/antigravity"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/.chezmoiremove" "$scratch/remove"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/.chezmoiremove" "$scratch/remove"
 for command in agy antigravity; do
   ! grep -Fxq ".local/bin/$command" "$scratch/remove" || fail "unmanaged $command selected for removal"
 done
 rm "$scratch/home/.local/bin/agy" "$scratch/home/.local/bin/antigravity"
 ln -s ../lib/commands/current/agy/agy "$scratch/home/.local/bin/agy"
 ln -s "$scratch/home/.local/lib/commands/current/agy/agy" "$scratch/home/.local/bin/antigravity"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$repo_root/.chezmoiremove" "$scratch/remove"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_root/.chezmoiremove" "$scratch/remove"
 for command in agy antigravity; do
   grep -Fxq ".local/bin/$command" "$scratch/remove" || fail "managed $command not selected"
 done
@@ -49,8 +52,8 @@ done
 
 printf '#!/usr/bin/env bash\nexit 0\n' >"$scratch/home/.local/bin/antigravity-sidecar"
 chmod 0700 "$scratch/home/.local/bin/antigravity-sidecar"
-cp "$repo_root/dot_config/systemd/user/antigravity-sidecar.service" "$scratch/home/.config/systemd/user/"
-render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$repo_root/Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist.tmpl" "$scratch/home/Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist"
+cp "$source_root/dot_config/systemd/user/antigravity-sidecar.service" "$scratch/home/.config/systemd/user/"
+render "$repo_root" "$scratch" "$chezmoi_bin" darwin "$source_root/Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist.tmpl" "$scratch/home/Library/LaunchAgents/app.dotfiles.antigravity-sidecar.plist"
 cat >"$scratch/bin/systemctl" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$CALLS"
@@ -68,7 +71,7 @@ case $1 in
 esac
 STUB
 chmod 0700 "$scratch/bin/systemctl" "$scratch/bin/launchctl"
-template="$repo_root/.chezmoiscripts/70-agents/run_after_activate-antigravity-sidecar.sh.tmpl"
+template="$source_root/.chezmoiscripts/70-agents/run_after_activate-antigravity-sidecar.sh.tmpl"
 for os in linux darwin; do
   render "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$template" "$scratch/activate-$os.sh"
   bash -n "$scratch/activate-$os.sh"

@@ -2,6 +2,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/command-manifest.XXXXXX")
@@ -42,8 +45,8 @@ make_fixture() {
   local dest="$scratch/fixture-$name"
   rm -rf "$dest"
   mkdir -p "$dest"
-  cp -a "$repo_root/.chezmoidata" "$dest/"
-  cp -a "$repo_root/.chezmoitemplates" "$dest/"
+  cp -a "$source_root/.chezmoidata" "$dest/"
+  cp -a "$source_root/.chezmoitemplates" "$dest/"
   printf '%s\n' "$dest"
 }
 
@@ -124,7 +127,7 @@ make_lock_fixture() {
   # and mutate_lock then writes through it into the repository's real
   # .chezmoidata/releases.json. Observed live. Dereference, then refuse to
   # continue unless the fixture owns a regular file.
-  cp -a -L "$repo_root/.chezmoidata" "$dest/"
+  cp -a -L "$source_root/.chezmoidata" "$dest/"
   [[ -f "$dest/.chezmoidata/releases.json" && ! -L "$dest/.chezmoidata/releases.json" ]] ||
     fail "lock fixture $dest/.chezmoidata/releases.json is not a regular file; refusing to mutate a lock outside the fixture"
   printf '%s\n' "$dest"
@@ -215,7 +218,7 @@ assert bumped_units["bunx"]["identity"] == bumped_units["bun"]["identity"]
 for unit_id, unit in externals(bumped_units).items():
     if unit_id not in ("bun", "bunx"):
         assert unit["identity"] == linux_ext[unit_id]["identity"], unit_id
-' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$macos_json" "$bumped_json"
+' "$source_root/.chezmoidata/releases.json" "$linux_json" "$macos_json" "$bumped_json"
 
 
 # The external identity names the artifact the host downloads, so a musl host
@@ -280,7 +283,7 @@ for unit_id, unit in musl_ext.items():
 for unit_id, tool in (("kubectl", "kubectl"), ("kubectl-convert", "kubectl"), ("helm", "helm"), ("glab", "glab")):
     for scope in (linux_ext, musl_ext):
         assert scope[unit_id]["identity"] == tools[tool]["version"], scope[unit_id]["identity"]
-' "$repo_root/.chezmoidata/releases.json" "$linux_json" "$musl_json" "$musl_bumped_json"
+' "$source_root/.chezmoidata/releases.json" "$linux_json" "$musl_json" "$musl_bumped_json"
 
 # The accessor change is contained: optional:true rescues a missing artifacts block,
 # but a non-optional call against one still fails loudly (R6, no live fallback).

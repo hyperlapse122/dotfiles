@@ -16,11 +16,14 @@ chezmoi_bin=$(type -P chezmoi) || {
 fail() { printf 'fingerprint gates: %s\n' "$*" >&2; exit 1; }
 # shellcheck source=.ci/lib/render-gate-helpers.sh
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 require_file "$repo_root" "$scratch" "$chezmoi_bin" .chezmoitemplates/fingerprint.tmpl
 # The fixture source tree dereferences the production partial on every render;
 # its inline consumers only supply data and never duplicate fingerprint logic.
-ln -s "$repo_root/.chezmoitemplates/fingerprint.tmpl" \
+ln -s "$source_root/.chezmoitemplates/fingerprint.tmpl" \
   "$scratch/source/.chezmoitemplates/fingerprint.tmpl"
 
 assert_render_ok() {
@@ -93,7 +96,7 @@ if grep -qF -e "$repo_root" "$scratch/production-globs-consumer.out"; then
   fail "rendered script leaked source root literal $repo_root"
 fi
 
-for template in "$repo_root"/.chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl; do
+for template in "$source_root"/.chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl; do
   [[ -f "$template" ]] || continue
   if grep -q 'SRC_ROOT=' "$template"; then
     grep -q 'SRC_ROOT="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
@@ -101,8 +104,8 @@ for template in "$repo_root"/.chezmoiscripts/30-linux/run_onchange_after_install
   fi
 done
 
-for template in "$repo_root"/.chezmoiscripts/60-build/run_onchange_after_*.sh.tmpl \
-                "$repo_root"/.chezmoiscripts/00-tools/run_onchange_after_*.sh.tmpl; do
+for template in "$source_root"/.chezmoiscripts/60-build/run_onchange_after_*.sh.tmpl \
+                "$source_root"/.chezmoiscripts/00-tools/run_onchange_after_*.sh.tmpl; do
   [[ -f "$template" ]] || continue
   if grep -q '^[[:space:]]*SRC=' "$template"; then
     grep -q 'SRC="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
@@ -110,7 +113,7 @@ for template in "$repo_root"/.chezmoiscripts/60-build/run_onchange_after_*.sh.tm
   fi
 done
 
-grep -q 'config="\${CHEZMOI_SOURCE_DIR:-' "$repo_root/.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl" || \
+grep -q 'config="\${CHEZMOI_SOURCE_DIR:-' "$source_root/.chezmoiscripts/00-tools/run_once_before_mise-trust.sh.tmpl" || \
   fail "run_once_before_mise-trust.sh.tmpl does not use position-independent config resolution"
 
 # The two loops above glob the phases that held a source-path assignment when the
@@ -121,7 +124,7 @@ while IFS= read -r template; do
   grep -q '^[[:space:]]*SRC_DIR=' "$template" || continue
   grep -q 'SRC_DIR="\${CHEZMOI_SOURCE_DIR:-' "$template" || \
     fail "template $(basename "$template") does not use position-independent SRC_DIR resolution"
-done < <(find "$repo_root/.chezmoiscripts" -type f \
+done < <(find "$source_root/.chezmoiscripts" -type f \
   \( -name 'run_onchange_*.sh.tmpl' -o -name 'run_once_*.sh.tmpl' \))
 
 printf '%s\n' 'fingerprint render gates passed'

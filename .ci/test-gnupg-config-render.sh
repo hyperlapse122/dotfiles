@@ -23,6 +23,9 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 setup_render_scratch gnupg-config-render
 mkdir -p "$scratch/home"
@@ -47,7 +50,7 @@ render_gpg_agent_conf() {
   env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
     "$chezmoi_bin" --config "$scratch/empty.toml" --source "$repo_root" --destination "$scratch/target" \
     --override-data "{\"chezmoi\":{\"os\":\"$os\"}}" \
-    execute-template -f "$repo_root/private_dot_gnupg/gpg-agent.conf.tmpl" > "$out"
+    execute-template -f "$source_root/private_dot_gnupg/gpg-agent.conf.tmpl" > "$out"
   printf '%s\n' "$out"
 }
 
@@ -69,13 +72,13 @@ pass 'gpg-agent.conf points to wrapper under home dir with no direct pinentry pa
 # ---------------------------------------------------------------------------
 # Scenario 2: scdaemon.conf in scratch target tree
 # ---------------------------------------------------------------------------
-target_path=$("$chezmoi_bin" --source "$repo_root" target-path "$repo_root/private_dot_gnupg/scdaemon.conf")
+target_path=$("$chezmoi_bin" --source "$repo_root" target-path "$source_root/private_dot_gnupg/scdaemon.conf")
 [[ "$target_path" == */.gnupg/scdaemon.conf ]] || \
   fail "target-path for scdaemon.conf ($target_path) does not end in .gnupg/scdaemon.conf"
 
 mini_source="$scratch/mini-source/private_dot_gnupg"
 mkdir -p "$mini_source"
-cp "$repo_root/private_dot_gnupg/scdaemon.conf" "$mini_source/scdaemon.conf"
+cp "$source_root/private_dot_gnupg/scdaemon.conf" "$mini_source/scdaemon.conf"
 tar_out="$scratch/scdaemon-archive.tar.gz"
 
 env HOME="$scratch/home" PATH="$scratch/bin:/usr/bin:/bin" \
@@ -97,7 +100,7 @@ pass 'scratch target tree contains .gnupg/scdaemon.conf with disable-ccid and pc
 # ---------------------------------------------------------------------------
 # Scenario 3: reload script fails naming missing delegate before any gpgconf call
 # ---------------------------------------------------------------------------
-reload_script_tmpl="$repo_root/.chezmoiscripts/80-keys/run_onchange_after_reload-gpg-agent.sh.tmpl"
+reload_script_tmpl="$source_root/.chezmoiscripts/80-keys/run_onchange_after_reload-gpg-agent.sh.tmpl"
 rendered_reload_linux="$scratch/rendered-reload-linux.sh"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$reload_script_tmpl" "$rendered_reload_linux"
 
@@ -162,7 +165,7 @@ pass 'darwin variant with failing xcode-select fails naming xcode-select --insta
 # ---------------------------------------------------------------------------
 # Scenario 5: fingerprint lines, bash -n, and fake gpgconf logs reloads
 # ---------------------------------------------------------------------------
-for src_file in "$repo_root/private_dot_gnupg"/* "$repo_root/private_dot_gnupg"/.*; do
+for src_file in "$source_root/private_dot_gnupg"/* "$source_root/private_dot_gnupg"/.*; do
   [[ -f "$src_file" ]] || continue
   rel_path="private_dot_gnupg/${src_file##*/}"
   grep -qE "^#   $rel_path  [0-9a-f]{64}$" "$rendered_reload_linux" || \

@@ -15,6 +15,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 hook="$repo_root/.install-prerequisites.sh"
 [[ -f "$hook" ]] || { printf 'test-skip-record-pruning: missing %s\n' "$hook" >&2; exit 1; }
 
@@ -128,7 +131,7 @@ pass 'an applying command retires cleared blocking and tolerable records only'
 #
 # End to end against the real dotfiles-skips: what survives the prune is exactly
 # what an operator is still asked to look at.
-dotfiles_skips="$repo_root/dot_local/share/chezmoi-command-sources/executable_dotfiles-skips"
+dotfiles_skips="$source_root/dot_local/share/chezmoi-command-sources/executable_dotfiles-skips"
 seed_records reader
 CHEZMOI_COMMAND=apply prune_stale_skip_records
 out=$("$dotfiles_skips" 2>/dev/null)

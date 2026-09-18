@@ -35,6 +35,9 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 setup_render_scratch build-bun-version-fingerprint
 
 fail() { printf 'build bun-version fingerprint: %s\n' "$*" >&2; exit 1; }
@@ -82,7 +85,7 @@ make_source_fixture() {
   # the .chezmoidata SYMLINK, and set_lock_version would then rewrite the real
   # repository's lock through it.
   mkdir -p -- "$dest/.chezmoidata"
-  cp -a -L -- "$repo_root/.chezmoidata/." "$dest/.chezmoidata/"
+  cp -a -L -- "$source_root/.chezmoidata/." "$dest/.chezmoidata/"
   [[ -f "$dest/.chezmoidata/releases.json" && ! -L "$dest/.chezmoidata/releases.json" ]] ||
     fail "fixture $name did not get a private copy of .chezmoidata/releases.json"
   printf '%s\n' "$dest"

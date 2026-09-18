@@ -2,6 +2,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root="${XDG_RUNTIME_DIR:-$HOME/.cache}/agent-scratch"
 mkdir -p "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/test-garden-shallow.XXXXXX")
@@ -84,7 +87,7 @@ fi
 sed \
   -e "s|\$HOME/src|$scratch/src|g" \
   -e "s|\$HOME/.config/garden/garden.yaml|$scratch/garden.yaml|g" \
-  "$repo_root/dot_local/share/chezmoi-command-sources/executable_src-audit" > "$scratch/src-audit"
+  "$source_root/dot_local/share/chezmoi-command-sources/executable_src-audit" > "$scratch/src-audit"
 chmod +x "$scratch/src-audit"
 HOME="$scratch" "$scratch/src-audit" >"$scratch/audit.out" 2>&1 || {
   printf 'test-garden-shallow-pull: src-audit failed on shallow checkout\n' >&2
@@ -121,7 +124,7 @@ if ! printf '%s' "$unshallow_second" | grep -F "is already unshallow" >/dev/null
   exit 1
 fi
 
-chezmoi --source "$repo_root" decrypt "$repo_root/dot_config/garden/encrypted_readonly_garden.yaml.asc" > "$scratch/real_garden.yaml"
+chezmoi --source "$repo_root" decrypt "$source_root/dot_config/garden/encrypted_readonly_garden.yaml.asc" > "$scratch/real_garden.yaml"
 garden --config "$scratch/real_garden.yaml" ls -v >/dev/null 2>&1 || {
   printf 'test-garden-shallow-pull: real garden.yaml failed to parse with garden ls\n' >&2
   exit 1

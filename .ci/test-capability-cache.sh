@@ -11,6 +11,9 @@
 set -euo pipefail
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 matrix=".ci/skip-declaration-site-matrix.yaml"
 registry=".chezmoidata/.capability-registry.tsv"
@@ -400,13 +403,13 @@ while IFS=$'\t' read -r _ kind _ _ _ _; do
   [[ -n "$kind" ]] || continue
   grep -qE "^    ${kind}\)" "$repo_root/$hook" \
     || fail "registry probe kind $kind has no reviewed resolver branch in $hook"
-done < <(tail -n +2 "$repo_root/$registry")
+done < <(tail -n +2 "$source_root/$registry")
 
 # The reader may spawn exactly ONE child, and only to derive this command's
 # identity. Checking the `output` calls themselves (rather than any mention of a
 # probe) keeps this precise: the partial's header legitimately DISCUSSES sudo -nN
 # and gsettings while executing neither.
-mapfile -t output_calls < <(grep -nE '\{\{-? *[^*].*output "' "$repo_root/$partial")
+mapfile -t output_calls < <(grep -nE '\{\{-? *[^*].*output "' "$source_root/$partial")
 [[ ${#output_calls[@]} -eq 1 ]] \
   || fail "$partial makes ${#output_calls[@]} subprocess calls; only the identity child is allowed"
 for forbidden in sudo gsettings pgrep systemctl 'command -v'; do
@@ -416,13 +419,13 @@ for forbidden in sudo gsettings pgrep systemctl 'command -v'; do
 done
 [[ "${output_calls[0]}" == *'CAPABILITY_CACHE_OWNER_PID'* ]] \
   || fail "$partial's only subprocess must derive the capability-cache identity"
-grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$repo_root/$partial" \
+grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$source_root/$partial" \
   || fail "$partial must pass its direct chezmoi parent's PPID to the identity helper"
 grep -qE 'CAPABILITY_CACHE_OWNER_PID=.*\$PPID' "$repo_root/$hook" \
   || fail "$hook must pass its direct chezmoi parent's PPID to the identity helper"
 grep -qE '^write_capability_cache "\$\{CHEZMOI_SOURCE_DIR:-\}"$' "$repo_root/$hook" \
   || fail "$hook must explicitly pass CHEZMOI_SOURCE_DIR to write_capability_cache"
-if grep -vE '^[[:space:]]*#' "$repo_root/$identity_helper" | grep -qE '\$\$|\$PPID|\$BASHPID|\$0'; then
+if grep -vE '^[[:space:]]*#' "$source_root/$identity_helper" | grep -qE '\$\$|\$PPID|\$BASHPID|\$0'; then
   fail "$identity_helper must derive no PID of its own; the caller supplies CAPABILITY_CACHE_OWNER_PID"
 fi
 grep -qE 'timeout [0-9]+ sudo -nN true' "$repo_root/$hook" \
@@ -434,7 +437,7 @@ grep -qF 'capability_with_deadline systemctl --user show-environment' "$repo_roo
 grep -qF 'capability_with_deadline systemctl --user cat podman.socket' "$repo_root/$hook" \
   || fail 'podman-socket-unit-present must use native bounded systemctl --user cat behavior'
 for banned in 'capability' 'sudo-usable' 'session-bus'; do
-  if grep -qi -- "$banned" "$repo_root/.chezmoidata/facts.yaml"; then
+  if grep -qi -- "$banned" "$source_root/.chezmoidata/facts.yaml"; then
     fail "capabilities leaked into the fact registry (.chezmoidata/facts.yaml mentions $banned)"
   fi
 done
@@ -442,7 +445,7 @@ done
 # --- 2. Runtime fixture ----------------------------------------------------
 chezmoi_bin=$(type -P chezmoi) || fail 'chezmoi is not on PATH'
 source_digest_before=$(sha256sum \
-  "$repo_root/$registry" "$repo_root/$identity_helper" "$repo_root/$partial" "$repo_root/$hook")
+  "$source_root/$registry" "$source_root/$identity_helper" "$source_root/$partial" "$repo_root/$hook")
 
 scratch_parent=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}
 mkdir -p -- "$scratch_parent"
@@ -484,7 +487,7 @@ format_probe="$scratch/format-probe"
 mkdir -p -- "$format_probe/.chezmoidata"
 : >"$scratch/format-probe.toml"
 printf 'rendered' >"$scratch/format-probe.tmpl"
-cp -- "$repo_root/$registry" "$format_probe/.chezmoidata/capability-registry.tsv"
+cp -- "$source_root/$registry" "$format_probe/.chezmoidata/capability-registry.tsv"
 render_format_probe() {
   env HOME="$fixture_home" "$chezmoi_bin" --config "$scratch/format-probe.toml" \
     --source "$format_probe" --destination "$destination" --no-tty execute-template \
@@ -502,7 +505,7 @@ mv -- "$format_probe/.chezmoidata/capability-registry.tsv" \
 render_format_probe || fail "chezmoi rejected the dot-prefixed registry: $(cat "$scratch/format-probe.err")"
 [[ "$(cat "$scratch/format-probe.out")" == rendered ]] \
   || fail 'the dot-prefixed registry did not leave rendering intact'
-[[ ! -e "$repo_root/.chezmoidata/capability-registry.tsv" ]] \
+[[ ! -e "$source_root/.chezmoidata/capability-registry.tsv" ]] \
   || fail 'a visible registry exists in the repository; it would break every chezmoi command'
 
 for shared in "$registry:.chezmoidata/.capability-registry.tsv" \
@@ -764,7 +767,7 @@ resolve_root_case() {
 }
 resolve_root_case 'CHEZMOI_SOURCE_DIR' "$source_dir/.chezmoidata/.capability-registry.tsv" \
   CHEZMOI_SOURCE_DIR="$source_dir"
-resolve_root_case 'BASH_SOURCE fallback' "$repo_root/$registry"
+resolve_root_case 'BASH_SOURCE fallback' "$source_root/$registry"
 
 assert_registry_rejected() {
   local source=$1 expected=$2
@@ -1062,7 +1065,7 @@ env -i HOME="$fixture_home" PATH="$stub_bin:$tool_bin:/usr/bin:/bin" \
   --destination "$production_target" \
   --override-data '{"chezmoi":{"os":"linux","osRelease":{"id":"fedora"}}}' \
   execute-template \
-  <"$repo_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
+  <"$source_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
   >"$production_script" 2>"$production_render_err" \
   || fail "the production Podman template did not render: $(cat "$production_render_err")"
 [[ ! -s "$production_render_err" ]] \
@@ -1074,15 +1077,15 @@ podman_source="$scratch/podman-source"
 podman_destination="$scratch/podman-destination"
 mkdir -p -- "$podman_source/.chezmoidata" "$podman_source/.chezmoitemplates" \
   "$podman_destination"
-cp -- "$repo_root/.chezmoidata/.capability-registry.tsv" \
+cp -- "$source_root/.chezmoidata/.capability-registry.tsv" \
   "$podman_source/.chezmoidata/.capability-registry.tsv"
-cp -- "$repo_root/.chezmoidata/facts.yaml" "$podman_source/.chezmoidata/facts.yaml"
+cp -- "$source_root/.chezmoidata/facts.yaml" "$podman_source/.chezmoidata/facts.yaml"
 for shared in capability-cache-identity.sh capabilities.tmpl fingerprint.tmpl skip.sh.tmpl \
   facts.tmpl facts-sh.tmpl facts-validate.tmpl shared-host-guard.sh.tmpl \
   user-manager-deadline-guard.sh.tmpl; do
-  cp -- "$repo_root/.chezmoitemplates/$shared" "$podman_source/.chezmoitemplates/$shared"
+  cp -- "$source_root/.chezmoitemplates/$shared" "$podman_source/.chezmoitemplates/$shared"
 done
-cp -- "$repo_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
+cp -- "$source_root/.chezmoiscripts/30-linux/run_after_setup-podman-cluster.sh.tmpl" \
   "$podman_source/.chezmoitemplates/podman.tmpl"
 cat >"$podman_source/dot_podman.tmpl" <<'TEMPLATE'
 {{ includeTemplate "podman.tmpl" . }}
@@ -1191,7 +1194,7 @@ grep -q 'user manager bus is unavailable' "$scratch/production-runtime.out" \
   || fail "the rendered Podman script emitted diagnostics: $(cat "$scratch/production-runtime.err")"
 
 source_digest_after=$(sha256sum \
-  "$repo_root/$registry" "$repo_root/$identity_helper" "$repo_root/$partial" "$repo_root/$hook")
+  "$source_root/$registry" "$source_root/$identity_helper" "$source_root/$partial" "$repo_root/$hook")
 [[ "$source_digest_after" == "$source_digest_before" ]] \
   || fail 'the fixture modified the repository capability sources'
 

@@ -18,7 +18,10 @@ set -euo pipefail
 # Plus the ABI composition and the container gate, which are render-time.
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-template="$repo_root/.chezmoiscripts/00-tools/run_onchange_after_android-sdk.sh.tmpl"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
+template="$source_root/.chezmoiscripts/00-tools/run_onchange_after_android-sdk.sh.tmpl"
 
 fail() {
   printf 'test-android-sdk-provision: %s\n' "$*" >&2

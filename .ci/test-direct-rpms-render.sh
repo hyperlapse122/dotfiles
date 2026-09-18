@@ -16,6 +16,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 scratch_root=${XDG_RUNTIME_DIR:-${HOME:?HOME is required}/.cache}
 mkdir -p -- "$scratch_root"
 scratch=$(mktemp -d "$scratch_root/direct-rpms-render.XXXXXX")
@@ -25,7 +28,7 @@ fail() { printf 'test-direct-rpms-render: FAIL: %s\n' "$*" >&2; exit 1; }
 pass() { printf 'test-direct-rpms-render: ok - %s\n' "$*"; }
 
 template=.chezmoiscripts/30-components/run_onchange_before_75-direct-rpms.sh.tmpl
-[ -f "$repo_root/$template" ] || fail "missing $template"
+[ -f "$source_root/$template" ] || fail "missing $template"
 
 mkdir -p -- "$scratch/bin" "$scratch/target" "$scratch/serve"
 : >"$scratch/empty.toml"
@@ -38,16 +41,16 @@ printf 'orca-ide fixture payload\n' >"$scratch/serve/orca-ide-9.9.9.x86_64.rpm"
 printf 'teamviewer fixture payload\n' >"$scratch/serve/teamviewer_88.8.8.x86_64.rpm"
 orca_sha=$(sha256sum "$scratch/serve/orca-ide-9.9.9.x86_64.rpm" | cut -d' ' -f1)
 
-source_root="$scratch/source"
-mkdir -p -- "$source_root"
-cp -a -- "$repo_root/.chezmoidata" "$repo_root/.chezmoitemplates" "$repo_root/.chezmoiscripts" \
-  "$source_root/"
+fixture_source="$scratch/source"
+mkdir -p -- "$fixture_source"
+cp -a -- "$source_root/.chezmoidata" "$source_root/.chezmoitemplates" "$source_root/.chezmoiscripts" \
+  "$fixture_source/"
 
 # Rewrite only the two entries under test; every other tool keeps its real entry
 # so release-lock-ref.tmpl resolves exactly as it does in production.
 write_lock() {
   local orca_version=$1 tv_version=$2
-  python3 - "$source_root/.chezmoidata/releases.json" "$orca_version" "$tv_version" "$orca_sha" <<'PY'
+  python3 - "$fixture_source/.chezmoidata/releases.json" "$orca_version" "$tv_version" "$orca_sha" <<'PY'
 import json, sys
 path, orca_version, tv_version, orca_sha = sys.argv[1:5]
 lock = json.load(open(path))
@@ -75,9 +78,9 @@ PY
 
 render() {
   env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" \
-    --source "$source_root" --destination "$scratch/target" \
+    --source "$fixture_source" --destination "$scratch/target" \
     --override-data '{"chezmoi":{"os":"linux","arch":"amd64","username":"fixture","osRelease":{"id":"fedora"}}}' \
-    execute-template <"$repo_root/$template"
+    execute-template <"$source_root/$template"
 }
 
 write_lock v9.9.9 88.8.8
@@ -108,9 +111,9 @@ pass "a locked-version bump changes the rendered bytes"
 
 # Non-Fedora hosts render nothing at all, so no runtime skip is declared.
 env PATH="$scratch/bin:$PATH" chezmoi --config "$scratch/empty.toml" \
-  --source "$source_root" --destination "$scratch/target" \
+  --source "$fixture_source" --destination "$scratch/target" \
   --override-data '{"chezmoi":{"os":"linux","arch":"amd64","username":"fixture","osRelease":{"id":"ubuntu"}}}' \
-  execute-template <"$repo_root/$template" >"$scratch/rendered-ubuntu.sh"
+  execute-template <"$source_root/$template" >"$scratch/rendered-ubuntu.sh"
 [ -s "$scratch/rendered-ubuntu.sh" ] && [ -n "$(tr -d '[:space:]' <"$scratch/rendered-ubuntu.sh")" ] \
   && fail "the template rendered a body on a non-Fedora host"
 pass "a non-Fedora host renders an empty body"

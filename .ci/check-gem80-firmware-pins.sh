@@ -40,6 +40,9 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 # shellcheck source=.ci/lib/gem80-firmware-data.sh
 source "$repo_root/.ci/lib/gem80-firmware-data.sh"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 # Without these a stalled TLS handshake blocks on the kernel socket timeout,
 # which outlives the workflow's own timeout and reports as an ambiguous job
@@ -57,7 +60,7 @@ validation_error() {
 # image the build no longer uses.
 assert_image_matches_command() {
   local recorded="$1"
-  local template="$repo_root/dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl"
+  local template="$source_root/dot_local/share/chezmoi-command-sources/executable_gem80-firmware.tmpl"
 
   [ -f "$template" ] || {
     validation_error "gem80-firmware template not found: $template"
@@ -573,7 +576,7 @@ main() {
     esac
   done
 
-  fw_yaml="${fw_yaml:-$repo_root/.chezmoidata/firmware.yaml}"
+  fw_yaml="${fw_yaml:-$source_root/.chezmoidata/firmware.yaml}"
   b_info="${b_info:-$repo_root/firmware/nuphy-gem80-hostrgb/dist/build-info.json}"
 
   if [ "$eval_mode" = true ]; then

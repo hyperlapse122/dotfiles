@@ -24,6 +24,9 @@ set -euo pipefail
 # runs. The last case runs the checker with no flags against the repository.
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 checker=$repo_root/.ci/check-skip-declarations.sh
 prog=test-skip-declaration-gates
 
@@ -37,7 +40,7 @@ ok() { printf '%s: ok - %s\n' "$prog" "$*"; }
 [[ -x $checker ]] || fail "missing $checker"
 for surface in .chezmoitemplates/skip.sh.tmpl .chezmoitemplates/fingerprint.tmpl \
   .chezmoitemplates/capabilities.tmpl .ci/skip-declaration-site-matrix.yaml; do
-  [[ -e $repo_root/$surface ]] || fail "missing source surface $surface"
+  [[ -e $(join_source_state "$repo_root" "$surface") ]] || fail "missing source surface $surface"
 done
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/$prog.XXXXXX")
@@ -48,8 +51,8 @@ trap 'rm -rf -- "$scratch"' EXIT
 # --------------------------------------------------------------------------- #
 clean=$scratch/clean
 mkdir -p "$clean/.chezmoiscripts/fixture" "$clean/.ci"
-cp -a -- "$repo_root/.chezmoidata" "$clean/.chezmoidata"
-cp -a -- "$repo_root/.chezmoitemplates" "$clean/.chezmoitemplates"
+cp -a -- "$source_root/.chezmoidata" "$clean/.chezmoidata"
+cp -a -- "$source_root/.chezmoitemplates" "$clean/.chezmoitemplates"
 
 # A synthetic SHARED producer: one owner, three consumer instances, exactly the
 # shape U6's guards have — the consumer's name is the `script`, the partial's own

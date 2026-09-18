@@ -25,6 +25,9 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$repo_root"
+# shellcheck source=.ci/lib/source-root.sh
+source "$repo_root/.ci/lib/source-root.sh"
+source_root=$(resolve_source_root "$repo_root")
 
 scratch_root=${XDG_RUNTIME_DIR:-"$HOME/.cache"}/gpg-key-data-test
 mkdir -p "$scratch_root"
@@ -166,7 +169,7 @@ validate_key_file() {
 }
 
 check_scdaemon_conf_parity() {
-  local managed="$repo_root/private_dot_gnupg/scdaemon.conf"
+  local managed="$source_root/private_dot_gnupg/scdaemon.conf"
   local hook="$repo_root/.install-prerequisites.sh"
 
   if [[ -f "$managed" ]] && grep -q 'scdaemon\.conf' "$hook"; then
@@ -182,12 +185,12 @@ check_scdaemon_conf_parity() {
 # --- Production checks --------------------------------------------------------
 
 # 1. Parity between .chezmoi.toml.tmpl and .chezmoidata/user.yaml
-check_parity "$repo_root/.chezmoi.toml.tmpl" "$repo_root/.chezmoidata/user.yaml"
+check_parity "$source_root/.chezmoi.toml.tmpl" "$source_root/.chezmoidata/user.yaml"
 pass "recipient literal equals gpgPubKey and serial literal equals yubikeySerials"
 
 # 2. Key file validation
-pubkey=$(extract_user_gpg_pubkey "$repo_root/.chezmoidata/user.yaml")
-key_file="$repo_root/.keys/gpg-${pubkey}.asc"
+pubkey=$(extract_user_gpg_pubkey "$source_root/.chezmoidata/user.yaml")
+key_file="$source_root/.keys/gpg-${pubkey}.asc"
 validate_key_file "$key_file" "$pubkey"
 pass "committed key file is public only, matches fingerprint, and imports cleanly"
 
@@ -199,8 +202,8 @@ pass "scdaemon.conf parity verified"
 
 # Fixture 1: Template with changed serial fails naming both values
 mutant_tmpl="$scratch/mutant-tmpl.toml.tmpl"
-sed 's/14963605/14963606/' "$repo_root/.chezmoi.toml.tmpl" > "$mutant_tmpl"
-mutant_err=$(check_parity "$mutant_tmpl" "$repo_root/.chezmoidata/user.yaml" 2>&1) || true
+sed 's/14963605/14963606/' "$source_root/.chezmoi.toml.tmpl" > "$mutant_tmpl"
+mutant_err=$(check_parity "$mutant_tmpl" "$source_root/.chezmoidata/user.yaml" 2>&1) || true
 if ! grep -q "14963606" <<<"$mutant_err" || ! grep -q "14963605" <<<"$mutant_err"; then
   fail "mutant template check did not fail naming both values; output was: $mutant_err"
 fi
@@ -208,8 +211,8 @@ pass "fixture template with altered serial fails naming both values"
 
 # Fixture 2: Data file with empty yubikeySerials fails
 empty_data="$scratch/empty-serials.yaml"
-sed 's/yubikeySerials:.*/yubikeySerials: []/' "$repo_root/.chezmoidata/user.yaml" > "$empty_data"
-empty_err=$(check_parity "$repo_root/.chezmoi.toml.tmpl" "$empty_data" 2>&1) || true
+sed 's/yubikeySerials:.*/yubikeySerials: []/' "$source_root/.chezmoidata/user.yaml" > "$empty_data"
+empty_err=$(check_parity "$source_root/.chezmoi.toml.tmpl" "$empty_data" 2>&1) || true
 if ! grep -qi "empty" <<<"$empty_err"; then
   fail "mutant data file with empty serials did not fail with empty message; output was: $empty_err"
 fi
@@ -217,8 +220,8 @@ pass "fixture data file with empty yubikeySerials fails"
 
 # Fixture 3: Data file with a serial containing a leading zero fails
 leading_zero_data="$scratch/leading-zero-serials.yaml"
-sed 's/14963605/014963605/' "$repo_root/.chezmoidata/user.yaml" > "$leading_zero_data"
-zero_err=$(check_parity "$repo_root/.chezmoi.toml.tmpl" "$leading_zero_data" 2>&1) || true
+sed 's/14963605/014963605/' "$source_root/.chezmoidata/user.yaml" > "$leading_zero_data"
+zero_err=$(check_parity "$source_root/.chezmoi.toml.tmpl" "$leading_zero_data" 2>&1) || true
 if ! grep -qi "leading zero" <<<"$zero_err"; then
   fail "mutant data file with leading zero did not fail with leading zero message; output was: $zero_err"
 fi
@@ -264,7 +267,7 @@ render_out1=$(env PATH="$render_scratch/bin:/usr/bin:/bin" SNIPPET_LOG="$snippet
   --config "$render_scratch/empty.toml" \
   --source "$repo_root" \
   --destination "$render_scratch/target" \
-  execute-template --init < "$repo_root/.chezmoi.toml.tmpl")
+  execute-template --init < "$source_root/.chezmoi.toml.tmpl")
 
 if [[ -f "$snippet_log" ]] && [[ -s "$snippet_log" ]]; then
   fail "non-TTY init render ran snippet for serials: $(cat "$snippet_log")"
@@ -282,7 +285,7 @@ render_out2=$(env PATH="$render_scratch/bin:/usr/bin:/bin" SNIPPET_LOG="$snippet
   --source "$repo_root" \
   --destination "$render_scratch/target" \
   --override-data '{"yubikeyPinPrompted":["14963605"]}' \
-  execute-template --init < "$repo_root/.chezmoi.toml.tmpl")
+  execute-template --init < "$source_root/.chezmoi.toml.tmpl")
 
 if [[ -f "$snippet_log" ]] && [[ -s "$snippet_log" ]]; then
   fail "non-TTY override render ran snippet for serials: $(cat "$snippet_log")"
@@ -296,7 +299,7 @@ pass "non-TTY init render with existing prompted list carries it forward unchang
 # Render 3: fixture render with multiple serials targets only unprompted serial
 fixture_tmpl="$render_scratch/fixture-multi-serial.toml.tmpl"
 sed 's/\$yubikeySerials := list [0-9 ]*-}}/$yubikeySerials := list 14963605 20000001 -}}/' \
-  "$repo_root/.chezmoi.toml.tmpl" > "$fixture_tmpl"
+  "$source_root/.chezmoi.toml.tmpl" > "$fixture_tmpl"
 
 rm -f "$snippet_log"
 python3 -c "
