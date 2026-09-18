@@ -61,7 +61,7 @@ execution: code
 **현재 상태 정리**
 
 - R8. 실물이 없는 `./agents`와 `./plans`, 그리고 중복된 `./docs`를 `.chezmoiignore`에서 제거한다.
-- R9. `_artifacts`를 `.gitignore`가 소유하게 하고 `.chezmoiignore`에서 제거한다.
+- R9. `_artifacts`를 `.gitignore`가 소유하게 하고, 소스 디렉터리 안에 존재할 수 있으므로 `.chezmoiignore`의 부인도 함께 유지한다. 게이트가 두 의무를 모두 검사한다.
 
 ### Gate decision boundary
 
@@ -97,11 +97,16 @@ flowchart TB
   - **Given:** `Library`가 darwin에서만 배포되는 항목으로 선언되어 있다.
   - **When:** 게이트가 linux와 darwin 프로필에서 실행된다.
   - **Then:** linux에서는 무시됨, darwin에서는 배포됨으로 실측되고 양쪽 다 통과한다.
-- AE4. 추적되지 않는 경로는 검사 대상이 아니다
-  - **Covers R5, R9.**
-  - **Given:** `_artifacts`가 워크스페이스에 존재하지만 git이 추적하지 않는다.
+- AE4. 선언되지 않은 추적 외 경로는 검사 대상이 아니다
+  - **Covers R5.**
+  - **Given:** 추적되지 않고 어느 선언에도 없는 최상위 경로가 워크스페이스에 존재한다.
   - **When:** 게이트가 실행된다.
   - **Then:** 인벤토리에 없어도 통과한다.
+- AE5. 소스 안에 생성되는 추적 외 경로는 두 의무를 진다
+  - **Covers R9.**
+  - **Given:** `_artifacts`와 `agents.lock`이 `generated_in_source`에 선언되어 있다.
+  - **When:** 게이트가 실행된다.
+  - **Then:** `.gitignore`와 `.chezmoiignore` 양쪽이 덮을 때만 통과하고, 어느 한쪽이 빠지면 실패한다.
 
 ### Scope Boundaries
 
@@ -114,7 +119,7 @@ flowchart TB
 
 - `.ci/lib/render-gate-helpers.sh`의 렌더 헬퍼와 `.ci/lib/render-scratch.sh`의 스크래치 설정을 재사용할 수 있다고 가정한다. 게이트가 렌더 인프라를 새로 만들 필요는 없다.
 - chezmoi가 소스 디렉터리에서 `.` 접두 항목을 (`.chezmoi*` 제외) 무시한다는 동작에 의존한다. 이 동작이 바뀌면 검사 대상 집합이 달라진다.
-- `_artifacts`는 `${GITHUB_WORKSPACE}`에 생성되고 chezmoi 소스는 그 전에 만들어진 사본이므로, 소스 트리 안에 들어간 적이 없다는 전제 위에서 R9가 성립한다.
+- `_artifacts`가 소스 트리 안에 들어간 적이 없다는 전제는 **CI에서만 성립한다.** 교차 모델 리뷰가 이 전제를 반증했다: `.github/workflows/render-dotfiles.yml`은 chezmoi 소스 사본을 먼저 뜨지만, 그 스텝을 로컬에서 돌린 체크아웃은 `_artifacts/`를 소스 디렉터리 안에 남기고, chezmoi는 `.gitignore`를 읽지 않으므로 그것을 그대로 본다. R9는 그 반증을 반영해 두 의무를 모두 요구한다.
 
 <!-- ce-section: work-relationships -->
 ### How This Work Fits Together
@@ -153,8 +158,8 @@ flowchart TB
 - KTD4. **`render_ignore`에 desktop 인자를 통과시키고, 게이트는 `.ci/test-chezmoiignore-script-paths.sh`와 같은 6개 프로필을 돈다.** `write_fact_stub`은 이미 desktop을 다섯 번째 인자로 받지만 `render_ignore`가 그것을 넘기지 않아 `gnome`에 고정됩니다. 인자를 통과시키면 최상위 판정이 desktop 축에 대해 불변이라는 것을 가정하지 않고 증명합니다. Governs R7.
 - KTD5. **인벤토리는 `.ci/top-level-boundary-inventory.yaml`에 데이터로 선언한다.** `.ci/skip-declaration-site-matrix.yaml`이 세운 CI 전용 감사 오라클 선례를 따릅니다. 이 파일은 chezmoi 런타임 입력이 아닙니다. Governs R5, R6.
 - KTD6. **인벤토리는 세 가지 class로 분류한다: `source-internal`, `repo-only`, `deployed`.** `deployed`는 프로필을 좁히는 `only_on`을 함께 선언합니다. 세 class 모두 R5가 정한 대로 git이 추적하는 항목만 담습니다. Governs R6.
-- KTD9. **소스 디렉터리 안에 생성되지만 추적되지 않는 경로는 인벤토리 밖의 별도 목록 `generated_in_source`로 선언한다.** 오늘 그 목록의 유일한 항목은 `agents.lock`입니다. 항목마다 두 가지 의무를 검사합니다: `.gitignore`가 덮을 것, 그리고 `.chezmoiignore`가 덮을 것. 검사되지 않는 면제가 아니라 의무를 지는 선언입니다.
-  - **충돌 알림 — settled decision 3 / R5:** R5는 "추적되지 않는 경로는 인벤토리에도, 판정에도 들어가지 않는다"고 못박습니다. `agents.lock`은 그 조건에 해당하지만, dotagents가 저장소 루트에 생성하므로 실제 호스트의 적용 시점에 소스 디렉터리 안에 존재하고, `.chezmoiignore`에서 지우면 `~/agents.lock`이 배포됩니다. R2를 문자 그대로 적용하면 `./agents.lock`이 추적 항목과 매칭되지 않아 실패하고, 그것을 해소하려면 항목을 지워 배포를 부르게 됩니다. `generated_in_source`는 R5의 인벤토리 밖에 있으므로 R5의 문언을 고치지 않으면서 이 경로를 검사 아래 둡니다. 이 회피가 R5의 의도와 맞는지는 Open Questions에 남깁니다.
+- KTD9. **소스 디렉터리 안에 생성되지만 추적되지 않는 경로는 인벤토리 밖의 별도 목록 `generated_in_source`로 선언한다.** 오늘 그 목록은 `agents.lock`과 `_artifacts` 둘입니다. 항목마다 두 가지 의무를 검사합니다: `.gitignore`가 덮을 것, 그리고 `.chezmoiignore`가 덮을 것. 검사되지 않는 면제가 아니라 의무를 지는 선언입니다. Governs R9.
+  - **충돌 알림 — settled decision 3 / R5:** R5는 "추적되지 않는 경로는 인벤토리에도, 판정에도 들어가지 않는다"고 못박습니다. `agents.lock`과 `_artifacts`는 그 조건에 해당하지만, 각각 dotagents와 CI 렌더 워크플로가 저장소 루트에 생성하므로 소스 디렉터리 안에 존재할 수 있고, `.chezmoiignore`에서 지우면 `$HOME`으로 배포됩니다. R2를 문자 그대로 적용하면 그 부인 항목들이 추적 항목과 매칭되지 않아 실패하고, 그것을 해소하려면 항목을 지워 배포를 부르게 됩니다. `generated_in_source`는 R5의 인벤토리 밖에 있으므로 R5의 문언을 고치지 않으면서 이 경로들을 검사 아래 둡니다. 이 회피가 R5의 의도와 맞는지는 Open Questions에 남깁니다.
 - KTD7. **게이트는 `.github/workflows/ci.yml`의 `repo-meta` 잡에 배선한다.** 그 잡은 이미 고정된 chezmoi와 `python3-yaml`을 설치하고, `.ci/test-ci-wiring.sh`·`.ci/test-garden-path-mirror-check.sh`와 관심사가 같습니다. `delivery`의 `needs`에 `repo-meta`가 이미 있으므로 집계 변경은 없습니다.
 - KTD8. **mutant fixture로 게이트의 검출력을 증명한다.** `.ci/test-ci-wiring.sh`와 `.ci/test-chezmoiignore-script-paths.sh`가 세운 규율입니다. 실제 트리가 깨끗하다는 것만으로는 게이트가 무언가를 잡는다는 증거가 되지 않습니다. Governs R1, R2, R3.
 
@@ -195,7 +200,8 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
 
 **Deferred to the user (planning이 정할 수 없음):**
 
-- `generated_in_source` 목록이 R5의 의도에 부합하는가. R5는 추적되지 않는 경로를 인벤토리와 판정 모두에서 배제하지만, `agents.lock`을 판정 밖에 두면 `.chezmoiignore`의 그 항목이 R2에 걸려 제거를 부르고, 제거하면 `~/agents.lock`이 배포됩니다. KTD9는 인벤토리 밖의 검사되는 목록으로 이를 피하지만, 이것을 R5가 금지한 면제 목록으로 볼지 R5가 다루지 않은 별개 표면으로 볼지는 사용자의 판단입니다. 구현은 KTD9대로 진행할 수 있으며, 판단이 뒤집히면 바뀌는 것은 `agents.lock` 한 항목의 위치뿐입니다.
+- `generated_in_source` 목록이 R5의 의도에 부합하는가. R5는 추적되지 않는 경로를 인벤토리와 판정 모두에서 배제하지만, `agents.lock`과 `_artifacts`를 판정 밖에 두면 `.chezmoiignore`의 그 항목들이 R2에 걸려 제거를 부르고, 제거하면 `$HOME`으로 배포됩니다. KTD9는 인벤토리 밖의 검사되는 목록으로 이를 피하지만, 이것을 R5가 금지한 면제 목록으로 볼지 R5가 다루지 않은 별개 표면으로 볼지는 사용자의 판단입니다. 구현은 KTD9대로 진행할 수 있으며, 판단이 뒤집히면 바뀌는 것은 두 항목의 위치뿐입니다.
+- R9의 원래 문언은 `_artifacts`를 `.chezmoiignore`에서 제거하라고 했고, 그 근거는 "CI가 chezmoi 소스 사본 이후에 생성한다"였습니다. 교차 모델 리뷰가 그 근거는 로컬 체크아웃을 덮지 못한다는 것을 보였고, 제거하면 기존 방어가 사라져 이 작업의 목적과 반대가 됩니다. R9를 두 의무를 요구하는 형태로 고쳤습니다 — 확정 결정 3의 목적(검사되지 않는 면제를 만들지 않는다)은 유지되지만, 사용자가 고른 문언과는 다릅니다.
 
 ---
 
@@ -224,7 +230,7 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
 - **Goal:** `.chezmoiignore`의 모든 단일 세그먼트 항목이 실재하는 최상위 항목을 정확히 한 번 가리킨다.
 - **Requirements:** R8, R9.
 - **Files:** `.chezmoiignore`, `.gitignore`.
-- **Approach:** `.chezmoiignore`에서 `./agents`(dotagents가 `.agents/`로 옮겨간 뒤의 잔재)와 `./plans`(`docs/plans`로 이동)를 제거하고, 두 번 선언된 `./docs`와 `./agents.lock`을 각각 한 번만 남깁니다. `./_artifacts`를 제거하고 `.gitignore`에 `_artifacts/`를 추가합니다 — 생성 지점(`.github/workflows/render-dotfiles.yml:278`)이 chezmoi 소스 사본 생성(`:120-135`) 이후이므로 소스 트리 안에 들어간 적이 없습니다. `./agents.lock`은 남깁니다: KTD6의 충돌 알림대로 dotagents가 저장소 루트에 생성하므로 적용 시점에 소스 안에 존재합니다.
+- **Approach:** `.chezmoiignore`에서 `./agents`(dotagents가 `.agents/`로 옮겨간 뒤의 잔재)와 `./plans`(`docs/plans`로 이동)를 제거하고, 두 번 선언된 `./docs`와 `./agents.lock`을 각각 한 번만 남깁니다. `.gitignore`에 `_artifacts/`를 추가하되 `./_artifacts`의 부인은 유지합니다 — KTD9의 충돌 알림대로 두 경로 모두 소스 디렉터리 안에 존재할 수 있고, `.gitignore`는 git에만 가릴 뿐 chezmoi에는 가리지 못합니다. `./agents.lock`도 같은 이유로 남깁니다.
 - **Test Scenarios:** `.github/workflows/render-dotfiles.yml`의 아티팩트 업로드 스텝이 `_artifacts/`를 계속 쓴다 — `.gitignore` 추가는 업로드 경로에 영향이 없다. `.chezmoiignore`에 남은 단일 세그먼트 항목이 모두 실재하는 최상위 항목과 매칭된다.
 - **Verification:** `.ci/test-chezmoiignore-script-paths.sh`가 통과한다. `git status --short`가 `_artifacts/`를 더는 추적 후보로 보고하지 않는다.
 
@@ -288,6 +294,6 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
 
 - U1: 인벤토리 키 집합이 `git ls-tree --name-only HEAD`의 최상위 출력과 정확히 일치한다.
 - U2: `.ci/lib/render-gate-helpers.sh`가 0644로 커밋되어 있고, `render_ignore`의 기존 두 호출자가 수정 없이 통과한다.
-- U3: `./agents`, `./plans`, `./_artifacts`, 중복된 `./docs`와 `./agents.lock`이 `.chezmoiignore`에서 사라졌고, `.gitignore`가 `_artifacts/`를 덮는다.
+- U3: `./agents`, `./plans`, 중복된 `./docs`와 `./agents.lock`이 `.chezmoiignore`에서 사라졌고, `./_artifacts`와 `./agents.lock`은 각각 한 번씩 남아 있으며, `.gitignore`가 `_artifacts/`를 덮는다.
 - U4: 검사 실패 모드마다 mutant가 하나씩 있고, 각각 기대한 실패 문구로 거부된다.
 - U5: 배선 줄을 제거하면 `.ci/test-ci-wiring.sh`가 새 게이트를 orphan으로 보고한다.

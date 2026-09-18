@@ -102,6 +102,24 @@ import yaml
 
 CLASSES = {"source-internal", "repo-only", "deployed"}
 
+# Every per-profile check loops over the inventory's profile list, so the list is
+# pinned here rather than trusted: an emptied or thinned list would otherwise
+# switch the gate off while it still reported green.
+REQUIRED_PROFILES = {
+    "linux-gnome",
+    "linux-kde",
+    "linux-headless",
+    "linux-jetson",
+    "linux-container",
+    "macos",
+}
+
+
+def report(failures):
+    for line in failures:
+        print(line, file=sys.stderr)
+    return 1 if failures else 0
+
 
 def single_segment_patterns(path):
     """Rendered ignore patterns that name a top-level entry.
@@ -129,6 +147,21 @@ def main():
     entries = doc.get("entries") or {}
     generated = doc.get("generated_in_source") or []
     profiles = [p["id"] for p in (doc.get("profiles") or [])]
+
+    if len(profiles) != len(set(profiles)):
+        return report([
+            "the inventory declares a profile id more than once; every profile "
+            "must appear exactly once in .ci/top-level-boundary-inventory.yaml"
+        ])
+    if set(profiles) != REQUIRED_PROFILES:
+        missing = sorted(REQUIRED_PROFILES - set(profiles))
+        extra = sorted(set(profiles) - REQUIRED_PROFILES)
+        return report([
+            "the inventory's profile set does not match the canonical set; "
+            f"missing {missing or 'nothing'}, unexpected {extra or 'nothing'}. "
+            "Every per-profile check loops over this list, so a thinned list "
+            "silently stops checking."
+        ])
 
     tracked = [
         line for line in pathlib.Path(tracked_path).read_text(encoding="utf-8").splitlines() if line
@@ -185,6 +218,14 @@ def main():
                 f"{name} does not start with a dot, so chezmoi reads it, but the "
                 f"inventory declares it source-internal; declare it repo-only or deployed"
             )
+        only_on = (spec or {}).get("only_on")
+        if only_on is not None:
+            unknown = sorted(set(only_on) - REQUIRED_PROFILES)
+            if unknown:
+                failures.append(
+                    f"{name} narrows only_on to {unknown}, which are not profile ids; "
+                    f"an unknown id silently makes the entry ignored everywhere"
+                )
 
     # 3. Declared verdict matches the rendered verdict, per profile.
     for profile in profiles:
@@ -260,9 +301,7 @@ def main():
                     f"does not ignore it, so it would deploy into $HOME; add it to .chezmoiignore"
                 )
 
-    for line in failures:
-        print(line, file=sys.stderr)
-    return 1 if failures else 0
+    return report(failures)
 
 
 sys.exit(main())
@@ -278,20 +317,31 @@ tracked_list="$scratch/tracked"
 git -C "$repo_root" ls-tree --name-only HEAD >"$tracked_list"
 [[ -s $tracked_list ]] || fail 'git ls-tree returned no top-level entries'
 
-profile_ids=$("$gate_python" -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-for p in doc["profiles"]:
-    print("\t".join([p["id"], p["os"], p["desktop"], str(p["container"]).lower(), str(p["jetson"]).lower()]))
-' "$inventory")
+"$gate_python" -c '
+import pathlib, sys, yaml
+doc = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+out = pathlib.Path(sys.argv[2])
+out.joinpath("profiles.tsv").write_text("".join(
+    "\t".join([p["id"], p["os"], p["desktop"], str(p["container"]).lower(), str(p["jetson"]).lower()]) + "\n"
+    for p in doc["profiles"]
+), encoding="utf-8")
+out.joinpath("audited.txt").write_text("".join(
+    name + "\n"
+    for name, spec in (doc.get("entries") or {}).items()
+    if (spec or {}).get("class") != "source-internal"
+), encoding="utf-8")
+out.joinpath("generated.txt").write_text("".join(
+    name + "\n" for name in (doc.get("generated_in_source") or [])
+), encoding="utf-8")
+' "$inventory" "$scratch"
 
-audited_entries=$("$gate_python" -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-for name, spec in (doc.get("entries") or {}).items():
-    if (spec or {}).get("class") != "source-internal":
-        print(name)
-' "$inventory")
+# The target a source name maps to does not vary by profile, so resolve it once.
+audited_targets="$scratch/audited-targets"
+: >"$audited_targets"
+while IFS= read -r entry; do
+  [[ -n $entry ]] || continue
+  printf '%s\t%s\n' "$entry" "$(target_of "$entry")" >>"$audited_targets"
+done <"$scratch/audited.txt"
 
 rendered_index="$scratch/rendered-index"
 verdicts="$scratch/verdicts"
@@ -303,29 +353,27 @@ while IFS=$'\t' read -r id os desktop container jetson; do
   out="$scratch/rendered-$id"
   render_ignore "$repo_root" "$scratch" "$chezmoi_bin" "$os" "$container" "$out" "$jetson" "$desktop"
   printf '%s\t%s\n' "$id" "$out" >>"$rendered_index"
-  while IFS= read -r entry; do
+  while IFS=$'\t' read -r entry target; do
     [[ -n $entry ]] || continue
-    if is_ignored "$repo_root" "$scratch" "$chezmoi_bin" "$out" "$(target_of "$entry")"; then
+    if is_ignored "$repo_root" "$scratch" "$chezmoi_bin" "$out" "$target"; then
       printf '%s\t%s\t%s\n' "$id" "$entry" ignored >>"$verdicts"
     else
       printf '%s\t%s\t%s\n' "$id" "$entry" eligible >>"$verdicts"
     fi
-  done <<<"$audited_entries"
-done <<<"$profile_ids"
+  done <"$audited_targets"
+done <"$scratch/profiles.tsv"
 
 gitignored="$scratch/gitignored"
 : >"$gitignored"
 while IFS= read -r name; do
   [[ -n $name ]] || continue
-  if git -C "$repo_root" check-ignore -q -- "$name"; then
+  # Ask about both forms: a directory-only .gitignore pattern (`_artifacts/`)
+  # does not match the bare name when the path is absent from the checkout.
+  if git -C "$repo_root" check-ignore -q -- "$name" ||
+    git -C "$repo_root" check-ignore -q -- "$name/"; then
     printf '%s\n' "$name" >>"$gitignored"
   fi
-done < <("$gate_python" -c '
-import sys, yaml
-doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-for name in (doc.get("generated_in_source") or []):
-    print(name)
-' "$inventory")
+done <"$scratch/generated.txt"
 
 run_checker "$inventory" "$tracked_list" "$verdicts" "$rendered_index" "$gitignored" ||
   fail 'this repository has top-level deployment-boundary drift (listed above)'
@@ -337,16 +385,19 @@ pass 'every top-level entry matches its declared verdict across all profiles'
 # would fail if it were not — the same mutant discipline .ci/test-ci-wiring.sh
 # and .ci/test-chezmoiignore-script-paths.sh use.
 
+# The canonical profile ids, mirrored from the checker so a fixture exercises the
+# same set the real inventory must declare.
+fixture_profiles=(linux-gnome linux-kde linux-headless linux-jetson linux-container macos)
+
 fixture() {
-  local name=$1 tree="$scratch/fx-$1"
+  local name=$1 tree="$scratch/fx-$1" id
   mkdir -p -- "$tree"
-  cat <<'YAML' >"$tree/inventory.yaml"
-profiles:
-  - id: only
-    os: linux
-    desktop: gnome
-    container: false
-    jetson: false
+  {
+    printf 'profiles:\n'
+    for id in "${fixture_profiles[@]}"; do
+      printf '  - { id: %s, os: linux, desktop: gnome, container: false, jetson: false }\n' "$id"
+    done
+    cat <<'YAML'
 entries:
   .ci: { class: source-internal }
   README.md: { class: repo-only }
@@ -355,10 +406,23 @@ entries:
 generated_in_source:
   - lock.generated
 YAML
-  printf './README.md\n./Library\n./lock.generated\n.config/thing\n' >"$tree/rendered"
+  } >"$tree/inventory.yaml"
   printf '.ci\nREADME.md\nLibrary\ndot_zshenv\n' >"$tree/tracked"
-  printf 'only\tREADME.md\tignored\nonly\tLibrary\tignored\nonly\tdot_zshenv\teligible\n' >"$tree/verdicts"
-  printf 'only\t%s/rendered\n' "$tree" >"$tree/index"
+  : >"$tree/verdicts"
+  : >"$tree/index"
+  for id in "${fixture_profiles[@]}"; do
+    # Library is deployed on macos only, so only that profile leaves it eligible
+    # and only the others deny it.
+    if [[ $id == macos ]]; then
+      printf './README.md\n./lock.generated\n.config/thing\n' >"$tree/rendered-$id"
+      printf '%s\tLibrary\teligible\n' "$id" >>"$tree/verdicts"
+    else
+      printf './README.md\n./Library\n./lock.generated\n.config/thing\n' >"$tree/rendered-$id"
+      printf '%s\tLibrary\tignored\n' "$id" >>"$tree/verdicts"
+    fi
+    printf '%s\tREADME.md\tignored\n%s\tdot_zshenv\teligible\n' "$id" "$id" >>"$tree/verdicts"
+    printf '%s\t%s/rendered-%s\n' "$id" "$tree" "$id" >>"$tree/index"
+  done
   printf 'lock.generated\n' >"$tree/gitignored"
   printf '%s' "$tree"
 }
@@ -388,33 +452,69 @@ expect_reject "$undeclared" 'a tracked entry missing from the inventory fails' \
   'NEWTHING.md is tracked at the top level but absent from the inventory'
 
 exposed=$(fixture exposed)
-printf 'only\tREADME.md\teligible\nonly\tLibrary\tignored\nonly\tdot_zshenv\teligible\n' >"$exposed/verdicts"
+sed 's/^linux-gnome\tREADME.md\tignored$/linux-gnome\tREADME.md\teligible/' \
+  "$exposed/verdicts" >"$exposed/verdicts.new" && mv "$exposed/verdicts.new" "$exposed/verdicts"
 expect_reject "$exposed" 'a repo-only entry the render does not ignore fails' \
-  'README.md is declared repo-only but profile only does not ignore it'
+  'README.md is declared repo-only but profile linux-gnome does not ignore it'
 
 withheld=$(fixture withheld)
-printf 'only\tREADME.md\tignored\nonly\tLibrary\tignored\nonly\tdot_zshenv\tignored\n' >"$withheld/verdicts"
+sed 's/^linux-gnome\tdot_zshenv\teligible$/linux-gnome\tdot_zshenv\tignored/' \
+  "$withheld/verdicts" >"$withheld/verdicts.new" && mv "$withheld/verdicts.new" "$withheld/verdicts"
 expect_reject "$withheld" 'a deployed entry the render ignores fails' \
-  'dot_zshenv is declared deployed but profile only ignores it'
+  'dot_zshenv is declared deployed but profile linux-gnome ignores it'
 
 stale=$(fixture stale)
-printf './README.md\n./Library\n./lock.generated\n./gone\n' >"$stale/rendered"
+printf './README.md\n./Library\n./lock.generated\n./gone\n' >"$stale/rendered-linux-gnome"
 expect_reject "$stale" 'a denial matching no declared entry fails' \
-  '.chezmoiignore denies gone in profile only, which matches no declared top-level entry'
+  '.chezmoiignore denies gone in profile linux-gnome, which matches no declared top-level entry'
 
 duplicate=$(fixture duplicate)
-printf './README.md\n./Library\n./lock.generated\n./README.md\n' >"$duplicate/rendered"
+printf './README.md\n./Library\n./lock.generated\n./README.md\n' >"$duplicate/rendered-linux-gnome"
 expect_reject "$duplicate" 'a duplicated denial fails' \
-  '.chezmoiignore denies README.md more than once in profile only'
+  '.chezmoiignore denies README.md more than once in profile linux-gnome'
 
 unignored_generated=$(fixture unignored-generated)
-printf './README.md\n./Library\n' >"$unignored_generated/rendered"
+printf './README.md\n./Library\n' >"$unignored_generated/rendered-linux-gnome"
 expect_reject "$unignored_generated" 'a generated-in-source path the render does not ignore fails' \
-  'lock.generated is generated inside the source directory but profile only does not ignore it'
+  'lock.generated is generated inside the source directory but profile linux-gnome does not ignore it'
 
 uncommitted_generated=$(fixture uncommitted-generated)
 : >"$uncommitted_generated/gitignored"
 expect_reject "$uncommitted_generated" 'a generated-in-source path .gitignore does not cover fails' \
   'lock.generated is listed in generated_in_source but .gitignore does not cover it'
+
+# An inventory that thins its own profile list would otherwise switch off every
+# per-profile check while still reporting green.
+thinned=$(fixture thinned)
+grep -v 'id: linux-kde' "$thinned/inventory.yaml" >"$thinned/inventory.new" &&
+  mv "$thinned/inventory.new" "$thinned/inventory.yaml"
+expect_reject "$thinned" 'an inventory dropping a profile fails' \
+  "the inventory's profile set does not match the canonical set"
+
+unknown_only_on=$(fixture unknown-only-on)
+sed 's/only_on: \[macos\]/only_on: [mac-os]/' "$unknown_only_on/inventory.yaml" \
+  >"$unknown_only_on/inventory.new" && mv "$unknown_only_on/inventory.new" "$unknown_only_on/inventory.yaml"
+expect_reject "$unknown_only_on" 'an only_on naming no real profile fails' \
+  "Library narrows only_on to ['mac-os'], which are not profile ids"
+
+# target_of decides which path each entry is measured at. A regression there is
+# silent for a `deployed` entry -- the wrong path matches no denial, reads
+# eligible, and that is what `deployed` is expected to be -- so assert the
+# transform directly rather than only through the tree.
+assert_target() {
+  local source_name=$1 want=$2 got
+  got=$(target_of "$source_name")
+  [[ $got == "$want" ]] || fail "target_of $source_name gave '$got', expected '$want'"
+}
+
+assert_target dot_zshenv .zshenv
+assert_target dot_androidrc.tmpl .androidrc
+assert_target private_dot_gnupg .gnupg
+assert_target private_readonly_dot_mcp.json.tmpl .mcp.json
+assert_target symlink_dot_face.icon .face.icon
+assert_target remove_dot_gitconfig .gitconfig
+assert_target AGENTS.md AGENTS.md
+assert_target Library Library
+pass 'target_of maps every source-name prefix form to its target path'
 
 printf 'test-top-level-deployment-boundary: all tests passed\n'

@@ -136,3 +136,7 @@ entries:
 generated_in_source:
   # dotagents regenerates this at the repository root on every sync.
   - agents.lock
+  # .github/workflows/render-dotfiles.yml stages rendered trees here. CI cuts the
+  # chezmoi source copy before this exists, but a local checkout that ran those
+  # steps keeps it inside the source directory, where chezmoi still sees it.
+  - _artifacts

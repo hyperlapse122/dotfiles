@@ -8,6 +8,11 @@
 ./LICENSE
 ./package.json
 ./docs
+# Created in the workspace by .github/workflows/render-dotfiles.yml. .gitignore
+# hides it from git, which chezmoi does not consult -- a local checkout that has
+# it would otherwise deploy it. .ci/top-level-boundary-inventory.yaml lists it
+# under generated_in_source, which requires both this line and the .gitignore one.
+./_artifacts
 # Root-owned system config installed to /etc by
 # .chezmoiscripts/30-linux/run_onchange_after_install-system-*.sh.tmpl
 # (manifest: .chezmoidata/system.yaml), never linked into $HOME.
