@@ -748,8 +748,8 @@ reset_cache() {
 # function's CWD-independent environment and BASH_SOURCE fallbacks are both
 # independently exercised here.
 resolve_root_case() {
-  local label=$1 expected_registry=$2
-  shift 2
+  local label=$1 expected_registry=$2 hook_path=$3
+  shift 3
   reset_cache
   env -u DBUS_SESSION_BUS_ADDRESS HOME="$fixture_home" XDG_CACHE_HOME="$cache_home" \
     XDG_RUNTIME_DIR="$runtime_dir" PATH="$stub_bin:$tool_bin" FIXTURE_LOG="$log" \
@@ -757,7 +757,7 @@ resolve_root_case() {
     bash -c '_INSTALL_PREREQUISITES_TEST_SOURCE=1
       source "$1"
       unset _INSTALL_PREREQUISITES_TEST_SOURCE
-      write_capability_cache' bash "$repo_root/$hook" \
+      write_capability_cache' bash "$hook_path" \
     >"$scratch/resolve.out" 2>"$scratch/resolve.err" \
     || fail "$label: write_capability_cache failed: $(cat "$scratch/resolve.err")"
   local written=("$capability_dir"/*.tsv)
@@ -765,9 +765,25 @@ resolve_root_case() {
   [[ "$(head -n 1 "${written[0]}" | cut -f5)" == "$(sha256sum <"$expected_registry" | cut -d' ' -f1)" ]] \
     || fail "$label: the record digest does not come from $expected_registry"
 }
-resolve_root_case 'CHEZMOI_SOURCE_DIR' "$source_dir/.chezmoidata/.capability-registry.tsv" \
+
+flat_hook_dir="$scratch/flat-hook"
+mkdir -p -- "$flat_hook_dir/.chezmoidata" "$flat_hook_dir/.chezmoitemplates"
+cp "$repo_root/$hook" "$flat_hook_dir/$hook"
+cp "$source_root/$registry" "$flat_hook_dir/$registry"
+cp "$source_root/$identity_helper" "$flat_hook_dir/$identity_helper"
+
+rooted_hook_dir="$scratch/rooted-hook"
+mkdir -p -- "$rooted_hook_dir/home/.chezmoidata" "$rooted_hook_dir/home/.chezmoitemplates"
+printf 'home\n' >"$rooted_hook_dir/.chezmoiroot"
+cp "$repo_root/$hook" "$rooted_hook_dir/$hook"
+cp "$source_root/$registry" "$rooted_hook_dir/home/$registry"
+cp "$source_root/$identity_helper" "$rooted_hook_dir/home/$identity_helper"
+
+resolve_root_case 'CHEZMOI_SOURCE_DIR' "$source_dir/.chezmoidata/.capability-registry.tsv" "$repo_root/$hook" \
   CHEZMOI_SOURCE_DIR="$source_dir"
-resolve_root_case 'BASH_SOURCE fallback' "$source_root/$registry"
+resolve_root_case 'BASH_SOURCE fallback' "$source_root/$registry" "$repo_root/$hook"
+resolve_root_case 'flat scratch fallback' "$flat_hook_dir/$registry" "$flat_hook_dir/$hook"
+resolve_root_case 'rooted scratch fallback' "$rooted_hook_dir/home/$registry" "$rooted_hook_dir/$hook"
 
 assert_registry_rejected() {
   local source=$1 expected=$2

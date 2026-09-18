@@ -35,15 +35,15 @@ probes="$scratch/probes.sh"
 {
   sed -n '/^PCI_SCAN_DONE=/,/^PCI_OTHER_DISPLAY=/p' "$repo_root/.install-prerequisites.sh"
   sed -n '/^scan_pci_bus()/,/^}/p' "$repo_root/.install-prerequisites.sh"
-  sed -n '/^fact_nvidia()/,/^}/p;/^fact_hybrid_graphics()/,/^}/p;/^fact_battery()/,/^}/p;/^usb_device_listed()/,/^}/p;/^fact_fingerprint_reader()/,/^}/p;/^fact_ir_camera()/,/^}/p;/^fact_display_manager()/,/^}/p;/^fact_gpu_device_id()/,/^}/p' \
+  sed -n '/^fact_nvidia()/,/^}/p;/^fact_hybrid_graphics()/,/^}/p;/^fact_battery()/,/^}/p;/^hook_source_root()/,/^}/p;/^usb_device_listed()/,/^}/p;/^fact_fingerprint_reader()/,/^}/p;/^fact_ir_camera()/,/^}/p;/^fact_display_manager()/,/^}/p;/^fact_gpu_device_id()/,/^}/p' \
     "$repo_root/.install-prerequisites.sh"
 } >"$probes"
 # Guard EVERY extracted function. An anchored sed range that matches nothing
 # fails silently, so without these a rename or a restyling to `function fact_x()`
 # would leave this file asserting against an empty extraction and still pass.
 for fn in scan_pci_bus fact_nvidia fact_hybrid_graphics fact_gpu_device_id \
-  fact_battery usb_device_listed fact_fingerprint_reader fact_ir_camera \
-  fact_display_manager; do
+  fact_battery hook_source_root usb_device_listed fact_fingerprint_reader \
+  fact_ir_camera fact_display_manager; do
   grep -q "^${fn}()" "$probes" || fail "${fn} was not extracted from the hook"
 done
 # shellcheck disable=SC1090
@@ -223,6 +223,43 @@ ir_only="$scratch/ir-only"
 make_usb "$ir_only" 1-1 "$ir_vendor" "$ir_product"
 CHEZMOI_SOURCE_DIR="$source_root" run_probe_under "$ir_only" fact_fingerprint_reader \
   && fail 'a listed IR camera must not resolve fingerprintReader=true'
+
+# --- fingerprint reader and IR camera through .chezmoiroot marker -----------
+marker_tree="$scratch/marker-tree"
+mkdir -p -- "$marker_tree/home/.chezmoidata"
+printf 'home\n' >"$marker_tree/.chezmoiroot"
+
+# Synthetic tables with unique hardware identifiers in home/.chezmoidata/
+printf 'fingerprint-readers-v1\n06cb\tbeef\n' >"$marker_tree/home/.chezmoidata/.fingerprint-readers.tsv"
+printf 'ir-cameras-v1\n04f2\tcafe\n' >"$marker_tree/home/.chezmoidata/.ir-cameras.tsv"
+
+fp_marker_usb="$scratch/usb-fp-marker"
+make_usb "$fp_marker_usb" 1-1 06cb beef
+
+ir_marker_usb="$scratch/usb-ir-marker"
+make_usb "$ir_marker_usb" 1-1 04f2 cafe
+
+relocate "$fp_marker_usb" "$marker_tree/fp_probes.sh"
+relocate "$ir_marker_usb" "$marker_tree/ir_probes.sh"
+relocate "$fp_no" "$marker_tree/fp_unlisted_probes.sh"
+
+env -u CHEZMOI_SOURCE_DIR bash -c '
+  . "$1"
+  fact_fingerprint_reader
+' bash "$marker_tree/fp_probes.sh" \
+  || fail 'fact_fingerprint_reader with CHEZMOI_SOURCE_DIR unset must read its table through .chezmoiroot'
+
+env -u CHEZMOI_SOURCE_DIR bash -c '
+  . "$1"
+  fact_ir_camera
+' bash "$marker_tree/ir_probes.sh" \
+  || fail 'fact_ir_camera with CHEZMOI_SOURCE_DIR unset must read its table through .chezmoiroot'
+
+env -u CHEZMOI_SOURCE_DIR bash -c '
+  . "$1"
+  fact_fingerprint_reader
+' bash "$marker_tree/fp_unlisted_probes.sh" \
+  && fail 'an unlisted device must not resolve fingerprintReader=true through .chezmoiroot'
 
 # --- display manager --------------------------------------------------------
 # This is the probe that shipped reporting the fake name "display-manager":
