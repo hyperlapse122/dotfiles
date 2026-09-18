@@ -429,6 +429,10 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Run overlay injection test
         run: .ci/test-compound-engineering-overlays.sh "$GITHUB_WORKSPACE"
+      - name: Run overlay patch tooling test
+        run: .ci/test-ce-overlay-tooling.sh "$GITHUB_WORKSPACE"
+      - name: Run overlay ownership regression test
+        run: .ci/test-ce-overlay-entrystate.sh "$GITHUB_WORKSPACE"
 
   delivery:
     name: Final delivery

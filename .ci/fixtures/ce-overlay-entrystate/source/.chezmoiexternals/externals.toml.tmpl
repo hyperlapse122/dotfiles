@@ -1,0 +1,26 @@
+["target"]
+type = "archive"
+url = {{ .archive_url | quote }}
+stripComponents = 1
+{{- if .with_exclude }}
+exclude = [
+  "*/skills/ce-sweep/references/interview.md",
+  "*/skills/ce-plan/scripts/elevation-dispatch.sh",
+]
+{{- end }}
+
+["pristine"]
+type = "archive"
+url = {{ .archive_url | quote }}
+stripComponents = 1
+exact = true
+include = [
+  "*/skills/ce-sweep/references/interview.md",
+  "*/skills/ce-sweep/references",
+  "*/skills/ce-sweep",
+  "*/skills/ce-plan/scripts/elevation-dispatch.sh",
+  "*/skills/ce-plan/scripts",
+  "*/skills/ce-plan",
+  "*/skills",
+  "*/nonexistent/member/**",
+]

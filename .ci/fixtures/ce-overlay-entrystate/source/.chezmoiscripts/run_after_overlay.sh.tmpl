@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# run_after_ script simulating the CE overlays provisioner:
+# copies pristine files to the target tree and applies local customizations.
+set -euo pipefail
+
+dest="{{ .chezmoi.destDir }}"
+
+# Overlay interview.md with local customization
+mkdir -p "$dest/target/skills/ce-sweep/references"
+cp "$dest/pristine/skills/ce-sweep/references/interview.md" "$dest/target/skills/ce-sweep/references/interview.md"
+printf '\n<!-- customized interview by overlay script -->\n' >> "$dest/target/skills/ce-sweep/references/interview.md"
+
+# Overlay elevation-dispatch.sh with local customization
+mkdir -p "$dest/target/skills/ce-plan/scripts"
+cp "$dest/pristine/skills/ce-plan/scripts/elevation-dispatch.sh" "$dest/target/skills/ce-plan/scripts/elevation-dispatch.sh"
+chmod 755 "$dest/target/skills/ce-plan/scripts/elevation-dispatch.sh"
+printf '\n# customized dispatch by overlay script\n' >> "$dest/target/skills/ce-plan/scripts/elevation-dispatch.sh"
