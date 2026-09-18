@@ -1,0 +1,16 @@
+{
+  "cwd": "/REDACTED/repo",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6-astra",
+  "permission_mode": "bypassPermissions",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "tool_input": {
+    "fork_turns": "none",
+    "message": "gAAAAABqrQxjL-13Lno8x3UMlOHSHKiT4GWXkimzEXzUcHay_xGIelBq0YuzqMOS2FtThYUdcoJr-O9gVMqvNrQgxs5VvvdfkfmsqcFuYnL6uyJ2J6mGFS7wPBE0ARngmKyLnOp-YE8c5eSCEZr2N2B9gftIxC-JGw==",
+    "task_name": "reply_done"
+  },
+  "tool_name": "collaborationspawn_agent",
+  "tool_use_id": "call_REDACTED",
+  "transcript_path": "/REDACTED/transcript.jsonl",
+  "turn_id": "00000000-0000-0000-0000-000000000000"
+}

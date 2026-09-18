@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   composeContext,
   emptyOutput,
+  LEAD_INTRO,
   leadContext,
   PREAMBLE,
   deliveryEnvelope,
@@ -36,6 +37,10 @@ describe("workerContext", () => {
     expect(workerContext(env)).not.toContain(COORDINATOR);
   });
 
+  it("does not carry the lead's skill re-entry instruction", () => {
+    expect(workerContext(env)).not.toContain("Before each dispatch");
+  });
+
   it("delivers nothing when the everyone file is absent", () => {
     expect(workerContext(MISSING)).toBeNull();
   });
@@ -54,6 +59,14 @@ describe("leadContext", () => {
     ];
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("opens with the skill re-entry instruction directly after the preamble", () => {
+    const text = leadContext(parts, env);
+    if (text === null) throw new Error("expected a lead envelope");
+    const preambleEnd = PREAMBLE.length;
+    expect(text.indexOf(LEAD_INTRO)).toBeGreaterThan(preambleEnd - 1);
+    expect(text.slice(preambleEnd, text.indexOf(LEAD_INTRO))).toBe("\n\n");
   });
 
   it("delivers nothing when the guide half is missing", () => {

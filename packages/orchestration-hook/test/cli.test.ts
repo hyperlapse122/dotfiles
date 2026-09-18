@@ -522,35 +522,155 @@ describe("version and unknown commands", () => {
   });
 });
 
+// A lead resolved through resolveRole's interactive-coordinator fallback: no
+// pane variables at all, so ORCA_AGENT_TEAMS_LEADER_PANE's presence cannot
+// exempt the call from the guard the way it would in an agent-teams session.
 const LEAD_ENV = {
   ORCA_TERMINAL_HANDLE: "term_abc",
-  ORCA_AGENT_TEAMS_LEADER_PANE: "%3",
-  TMUX_PANE: "%3",
 };
 
-describe("guard compatibility shim", () => {
-  // A stale cached hook declaration may still invoke `guard` until the session
-  // that cached it restarts. The shim answers it without reading stdin at all,
-  // so a PreToolUse event that would once have been denied, malformed bytes,
-  // and no input whatsoever are all the same case: only --harness selects the
-  // output.
-  it("prints {} for claude and exits 0 with empty stderr, ignoring a launch on stdin", async () => {
-    const { io, out, err } = capture(LEAD_ENV);
+// Captured, unedited (redaction only) real PreToolUse events from a live
+// session — see the U2 report for the capture commands. The Bash event stays
+// synthetic: it is the stale-declaration edge case, not a captured subagent
+// launch.
+const EVENT_FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const CLAUDE_AGENT_EVENT = readFileSync(join(EVENT_FIXTURES, "pretooluse-claude-agent.json"), "utf8");
+const CODEX_SPAWN_AGENT_EVENT = readFileSync(
+  join(EVENT_FIXTURES, "pretooluse-codex-spawn-agent.json"),
+  "utf8",
+);
+const BASH_EVENT = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash" });
+
+function seedGuardLeadHome(label: string): string {
+  const home = mkdtempSync(join(tmpdir(), `guard-cli-${label}-`));
+  mkdirSync(join(home, ".agents", "skills", "orchestration"), { recursive: true });
+  writeFileSync(join(home, ".agents/skills/orchestration/SKILL.md"), "SKILL BODY\n");
+  return home;
+}
+
+describe("guard", () => {
+  it("denies an injected Claude Code lead's Agent call, naming the orchestration skill and the Orca dispatch path (AE3)", async () => {
+    const home = seedGuardLeadHome("deny");
+    try {
+      const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = CLAUDE_AGENT_EVENT;
+      expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
+      const parsed = JSON.parse(out.join("")) as {
+        hookSpecificOutput: {
+          hookEventName: string;
+          permissionDecision: string;
+          permissionDecisionReason: string;
+        };
+      };
+      expect(parsed.hookSpecificOutput.hookEventName).toBe("PreToolUse");
+      expect(parsed.hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain("`orchestration` skill");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("allows the same environment when stdin is not JSON (AE3)", async () => {
+    const home = seedGuardLeadHome("notjson");
+    try {
+      const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = "not json";
+      expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("allows outside Orca (AE4)", async () => {
+    const { io, out, err } = capture({});
+    io.stdin = CLAUDE_AGENT_EVENT;
     expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
     expect(out.join("")).toBe("{}");
     expect(err.join("")).toBe("");
   });
 
-  it("prints nothing for codex and exits 0", async () => {
-    const { io, out, err } = capture(LEAD_ENV);
-    expect(await main(["guard", "--harness", "codex"], io)).toBe(0);
-    expect(out.join("")).toBe("");
-    expect(err.join("")).toBe("");
+  it("allows a stale cached declaration's Bash event even in an injected session (AE6)", async () => {
+    const home = seedGuardLeadHome("bash");
+    try {
+      const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = BASH_EVENT;
+      expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
-  it("prints nothing when --harness is missing or unknown", async () => {
+  it("denies Codex's own subagent tool call and prints nothing on allow", async () => {
+    const home = seedGuardLeadHome("codex");
+    try {
+      const { io, out } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = CODEX_SPAWN_AGENT_EVENT;
+      expect(await main(["guard", "--harness", "codex"], io)).toBe(0);
+      const parsed = JSON.parse(out.join("")) as {
+        hookSpecificOutput: { permissionDecision: string };
+      };
+      expect(parsed.hookSpecificOutput.permissionDecision).toBe("deny");
+
+      const allow = capture({ ...LEAD_ENV, HOME: home });
+      allow.io.stdin = BASH_EVENT;
+      expect(await main(["guard", "--harness", "codex"], allow.io)).toBe(0);
+      expect(allow.out.join("")).toBe("");
+      expect(allow.err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("denies omp's task tool call", async () => {
+    const home = seedGuardLeadHome("omp");
+    try {
+      const { io, out } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "task" });
+      expect(await main(["guard", "--harness", "omp"], io)).toBe(0);
+      const parsed = JSON.parse(out.join("")) as {
+        hookSpecificOutput: { permissionDecision: string };
+      };
+      expect(parsed.hookSpecificOutput.permissionDecision).toBe("deny");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("fails open on malformed stdin", async () => {
+    const home = seedGuardLeadHome("malformed");
+    try {
+      const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = "{not valid json";
+      expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("fails open on empty stdin", async () => {
+    const home = seedGuardLeadHome("empty-stdin");
+    try {
+      const { io, out, err } = capture({ ...LEAD_ENV, HOME: home });
+      io.stdin = "";
+      expect(await main(["guard", "--harness", "claude"], io)).toBe(0);
+      expect(out.join("")).toBe("{}");
+      expect(err.join("")).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("prints nothing when --harness is missing or unknown, exiting 0 with empty stderr", async () => {
     for (const argv of [["guard"], ["guard", "--harness", "nonesuch"]]) {
       const { io, out, err } = capture(LEAD_ENV);
+      io.stdin = CLAUDE_AGENT_EVENT;
       expect(await main(argv, io)).toBe(0);
       expect(out.join("")).toBe("");
       expect(err.join("")).toBe("");

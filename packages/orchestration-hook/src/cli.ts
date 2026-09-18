@@ -15,8 +15,6 @@
 
 import { execFileSync } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   composeContext,
   deliveryEnvelope,
@@ -24,7 +22,7 @@ import {
   type Harness,
   isHarness,
 } from "./envelope.js";
-import { resolveHome } from "./home.js";
+import { decide, denyOutput, readOrchestrationSkill } from "./guard.js";
 import { isPayloadBody, payload, payloadPath } from "./payload.js";
 import { resolveRole, type RoleEnv } from "./role.js";
 import { fetchGuide, resolveOrcaCommand } from "./orca.js";
@@ -33,6 +31,12 @@ import { fetchGuide, resolveOrcaCommand } from "./orca.js";
 const HOOK_DEADLINE_MS = 8_000;
 /** Stops at the event's own newline; this is the backstop for a producer that sends none. */
 const STDIN_DEADLINE_MS = 3_000;
+/**
+ * The guard's own stdin bound, deliberately much smaller than the SessionStart
+ * one: this path runs on EVERY tool call, so the budget is a latency cost the
+ * user pays all day rather than once at session start.
+ */
+const GUARD_STDIN_DEADLINE_MS = 500;
 
 // Dot notation, not a bracket read: `bun build --define` substitutes this exact
 // expression at compile time, which is what puts the id inside the binary. The
@@ -45,7 +49,13 @@ export interface Io {
   stderr: (text: string) => void;
   env: NodeJS.ProcessEnv;
   /** Overrides the production bounds. Tests set these; the hook path does not. */
-  deadlines?: { hookMs?: number; stdinMs?: number } | undefined;
+  deadlines?: { hookMs?: number; stdinMs?: number; guardMs?: number } | undefined;
+  /**
+   * Supplies the guard's event body instead of reading the real stdin. Tests
+   * set it; the deployed hook never does, so the production path stays the one
+   * the built-binary gate exercises on the real file descriptor.
+   */
+  stdin?: string | undefined;
 }
 
 function flagValue(argv: readonly string[], name: string): string | undefined {
@@ -117,15 +127,6 @@ function unameS(): string | undefined {
   }
 }
 
-function readOrchestrationSkill(env: NodeJS.ProcessEnv): string {
-  const home = resolveHome(env);
-  try {
-    return readFileSync(join(home, ".agents", "skills", "orchestration", "SKILL.md"), "utf8");
-  } catch {
-    return "";
-  }
-}
-
 async function runHook(argv: readonly string[], io: Io): Promise<number> {
   // The clock starts here, before the drain, because the budget bounds the
   // WHOLE run. Starting it after the drain resolved would hand the Orca call a
@@ -169,16 +170,33 @@ async function runHook(argv: readonly string[], io: Io): Promise<number> {
 }
 
 /**
- * Compatibility no-op for a stale cached hook declaration.
+ * The subagent tool guard.
  *
- * A live session whose declaration still calls `guard` would otherwise hit the
- * unknown-command exit code 2, which Claude Code treats as a blocking
- * PreToolUse error on every Bash call until the session restarts. This shim
- * answers with the harness's empty allow output and exits 0, without reading
- * stdin, until that restart picks up the declaration that no longer calls it.
+ * A stale cached declaration may still send an event whose `tool_name` this
+ * binary does not block (`Bash`, for instance) — that call is allowed exactly
+ * like any other name outside the harness's blocked set, by construction, with
+ * no separate compatibility branch needed.
  */
-function runGuard(argv: readonly string[], io: Io): number {
-  io.stdout(emptyOutput(requestedHarness(argv) ?? "codex"));
+async function runGuard(argv: readonly string[], io: Io): Promise<number> {
+  const harness = requestedHarness(argv);
+  const deadline = io.deadlines?.guardMs ?? GUARD_STDIN_DEADLINE_MS;
+  const text = io.stdin !== undefined ? io.stdin : await readStdin(deadline, (chunk) => chunk.includes(0x0a));
+
+  if (harness === null) {
+    io.stdout(emptyOutput("codex"));
+    return 0;
+  }
+
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  const event = typeof parsed === "object" && parsed !== null ? (parsed as { tool_name?: unknown }) : {};
+
+  const decision = decide(event, harness, io.env);
+  io.stdout(decision.deny ? denyOutput(decision.reason ?? "") : emptyOutput(harness));
   return 0;
 }
 
@@ -233,7 +251,13 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   }
 
   if (command === "guard") {
-    return runGuard(rest, io);
+    try {
+      return await runGuard(rest, io);
+    } catch {
+      // Fail open: never let an internal fault break a tool call.
+      io.stdout(emptyOutput(requestedHarness(rest) ?? "codex"));
+      return 0;
+    }
   }
 
   if (command === "hook") {
@@ -259,7 +283,9 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       io.stderr(
         `orchestration-hook: unknown command ${JSON.stringify(command)}\n` +
           "usage: orchestration-hook <hook --harness <claude|codex|omp> | " +
-          "guard --harness <claude|codex|omp> (compatibility no-op for a stale cached hook declaration) | " +
+          "guard --harness <claude|codex|omp> (the subagent tool guard; a stale cached " +
+          "declaration that sends a Bash event is still allowed, because Bash is not a " +
+          "blocked tool name) | " +
           "print-payload [--body <everyone|coordinator>] | role | --version>\n",
       );
       return 2;
