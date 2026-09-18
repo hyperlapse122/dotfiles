@@ -6,6 +6,11 @@ name: Refresh release lock
 # overlays the result onto the committed lock, so a failed source keeps its last
 # good entry instead of being blanked. The commit therefore happens even on a
 # partial failure, and the job still reports failure afterwards.
+#
+# A new compound-engineering release lands only when the overlay patches survive
+# it. `.ci/ce-overlay-lock-hold.sh` puts the committed compound-engineering entry
+# back otherwise, and the rest of the refresh still commits. A hold-back keeps
+# the job green.
 
 on:
   schedule:
@@ -14,6 +19,9 @@ on:
 
 permissions:
   contents: write
+  actions: write
+  pull-requests: write
+  issues: read
 
 concurrency:
   group: refresh-release-lock
@@ -23,8 +31,15 @@ jobs:
   refresh:
     name: Resolve upstream releases
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # An expression over the secrets, so the job env carries a boolean and never
+      # the key itself.
+      CE_LOCK_APP_CONFIGURED: ${{ (vars.CE_LOCK_APP_ID != '' || secrets.CE_LOCK_APP_ID != '') && secrets.CE_LOCK_APP_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -42,28 +57,140 @@ jobs:
           bun run packages/release-lock/src/cli.ts --out "$lock"
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
-      # The rule lives in `.ci` so it is testable locally and runs on pull
-      # requests too, not only on this hourly schedule. `.ci/test-release-lock-
-      # digest-gate.sh` covers it; the digest and exemption rationale is in the
-      # script's own header.
-      - name: Validate lock architecture and sources
-        run: .ci/check-release-lock-digests.sh
-
-      - name: Commit the lock when it changed
+      # The overlay gate renders the roster's authoring effort, so chezmoi must
+      # be on PATH before the hold step.
+      - name: Install locked chezmoi
         run: |
           set -euo pipefail
           . .ci/lib/source-root.sh
           source_root=$(resolve_source_root "$PWD")
-          lock="$source_root/.chezmoidata/releases.json"
-          if git diff --quiet -- "$lock"; then
-            echo "Lock unchanged — nothing to commit."
+          artifact_url=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].url' "$source_root/.chezmoidata/releases.json")
+          artifact_sha=$(jq -r '.releases.tools.chezmoi.artifacts["linux-amd64"].sha256' "$source_root/.chezmoidata/releases.json")
+          curl -fsSL "$artifact_url" -o "$RUNNER_TEMP/chezmoi.tar.gz"
+          printf '%s  %s\n' "$artifact_sha" "$RUNNER_TEMP/chezmoi.tar.gz" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/chezmoi.tar.gz" -C "$RUNNER_TEMP/bin" chezmoi
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      # Restores the committed compound-engineering entry, and leaves every other
+      # tool's new entry, unless the overlay patches survive the resolved release.
+      # A hold-back exits 0 and names the held release in the job summary.
+      - name: Hold back compound-engineering unless the overlay patches survive it
+        id: hold
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          result=$(.ci/ce-overlay-lock-hold.sh)
+          echo "$result"
+          tr ' ' '\n' <<<"$result" >> "$GITHUB_OUTPUT"
+
+      # The rule lives in `.ci` so it is testable locally and runs on pull
+      # requests too, not only on this hourly schedule. `.ci/test-release-lock-
+      # digest-gate.sh` covers it; the digest and exemption rationale is in the
+      # script's own header. It runs after the hold step, so it checks the lock
+      # that would be committed.
+      - name: Validate lock architecture and sources
+        run: .ci/check-release-lock-digests.sh
+
+      - name: Commit the lock and base.json when they changed
+        id: commit
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
+          lock=${lock#"$PWD"/}
+          base=$(join_source_state "$PWD" dot_local/share/compound-engineering-overlays/base.json)
+          base=${base#"$PWD"/}
+          changed=$({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+          if [ -z "$changed" ]; then
+            echo "Nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          paths=()
+          while IFS= read -r path; do
+            if [ "$path" != "$lock" ] && [ "$path" != "$base" ]; then
+              echo "::error::Refusing to commit $path: only $lock and $base may change."
+              exit 1
+            fi
+            paths+=("$path")
+          done <<<"$changed"
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m 'chore(release-lock): refresh release lock' \
-              -- "$lock"
-          git push origin HEAD:"${GITHUB_REF_NAME}"
+              -- "${paths[@]}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # The token exists only for the push. Without the App configured, the push
+      # falls back to GITHUB_TOKEN, which works while no ruleset requires a check.
+      - name: Mint the direct-push App token
+        id: app-token
+        if: steps.commit.outputs.changed == 'true' && env.CE_LOCK_APP_CONFIGURED == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CE_LOCK_APP_ID || secrets.CE_LOCK_APP_ID }}
+          private-key: ${{ secrets.CE_LOCK_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Push the lock commit
+        id: push
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          PUSH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          . .ci/lib/source-root.sh
+          lock=$(join_source_state "$PWD" .chezmoidata/releases.json)
+          lock=${lock#"$PWD"/}
+          base=$(join_source_state "$PWD" dot_local/share/compound-engineering-overlays/base.json)
+          base=${base#"$PWD"/}
+          while IFS= read -r path; do
+            if [ "$path" != "$lock" ] && [ "$path" != "$base" ]; then
+              echo "::error::Refusing to push: the commit changes $path, and only $lock and $base may change."
+              exit 1
+            fi
+          done < <(git diff --name-only HEAD~1 HEAD)
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=2
+          export GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=
+          export GIT_CONFIG_KEY_1=credential.helper
+          # git runs the helper and expands PUSH_TOKEN then, so it stays out of argv.
+          # shellcheck disable=SC2016
+          export GIT_CONFIG_VALUE_1='!f() { printf "username=x-access-token\npassword=%s\n" "$PUSH_TOKEN"; }; f'
+          if ! git push origin HEAD:"${GITHUB_REF_NAME}"; then
+            echo "::error::The push to ${GITHUB_REF_NAME} failed, so the refresh of every tool stopped. If the ruleset requires status checks, the direct-push GitHub App (CE_LOCK_APP_ID and CE_LOCK_APP_PRIVATE_KEY, owner prerequisite P4) must be on the ruleset's bypass list (P3)."
+            exit 1
+          fi
+
+      # Runs after a successful push, or when there was nothing to commit, so a
+      # hold-back that leaves the lock unchanged still reaches the decision. A
+      # failed commit or push skips it. It only warns when it cannot dispatch.
+      - name: Decide whether to dispatch the overlay rebase
+        id: dispatch
+        if: >-
+          steps.hold.outputs.candidate == 'yes'
+          && (steps.push.outcome == 'success' || steps.commit.outputs.changed == 'false')
+          && github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESOLVED_TAG: ${{ steps.hold.outputs.resolved }}
+          PIN: ${{ steps.hold.outputs.pin }}
+          GATE_CLASS: ${{ steps.hold.outputs.class }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -uo pipefail
+          if ! (cd packages && bun install --frozen-lockfile); then
+            echo "::warning::Cannot install the rebase decision package, so no rebase was dispatched. The next hourly run retries."
+            exit 0
+          fi
+          if ! result=$(.ci/ce-overlay-pr.sh decide \
+              --resolved-tag "$RESOLVED_TAG" --pin "$PIN" --gate-class "$GATE_CLASS" \
+              --default-branch "$DEFAULT_BRANCH"); then
+            echo "::warning::The rebase dispatch decision failed, so no rebase was dispatched. The next hourly run retries."
+            exit 0
+          fi
+          echo "$result"
+          printf '### Overlay rebase dispatch\n\n%s\n' "$result" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail when any source could not be resolved
         if: steps.resolve.outputs.exit_code != '0'

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import { DEFAULT_LOCK_PATH, runCli } from "../src/cli.js";
+import { serializeLock } from "../src/lock.js";
 
 test("prunes retired tools without resolving or changing retained releases", async () => {
   const dir = await scratch();
@@ -598,6 +599,169 @@ describe("runCli", () => {
       ).rejects.toThrow();
       expect(await readFile(malformed, "utf8")).toBe(content);
     }
+  });
+
+  describe("--restore-tool", () => {
+    const entry = (version: string): ReleaseLock["releases"]["tools"][string] => ({
+      kind: "githubTag",
+      source: "everyinc/compound-engineering-plugin",
+      version,
+    });
+    const other = (version: string): ReleaseLock["releases"]["tools"][string] => ({
+      kind: "githubRelease",
+      source: "owner/other",
+      version,
+    });
+    const lockOf = (tools: ReleaseLock["releases"]["tools"]): ReleaseLock => ({
+      releases: { tools },
+    });
+    const forbidden = async (): Promise<ReturnType<typeof resolution>> => {
+      throw new Error("restore must not resolve");
+    };
+
+    async function pair(
+      committed: ReleaseLock,
+      working: ReleaseLock,
+    ): Promise<{ from: string; out: string }> {
+      const root = await scratch();
+      const from = join(root, "committed.json");
+      const out = join(root, "working.json");
+      await writeFile(from, serializeLock(committed));
+      await writeFile(out, serializeLock(working));
+      return { from, out };
+    }
+
+    test("a CE-only change returns the committed entry and a byte-identical file", async () => {
+      const committed = lockOf({
+        "compound-engineering": entry("compound-engineering-v3.26.3"),
+        other: other("1.0.0"),
+      });
+      const { from, out } = await pair(
+        committed,
+        lockOf({
+          "compound-engineering": entry("compound-engineering-v3.27.0"),
+          other: other("1.0.0"),
+        }),
+      );
+      expect(
+        await runCli(["--restore-tool", "compound-engineering", "--from", from, "--out", out], {
+          stderr: capture(),
+          resolve: forbidden,
+        }),
+      ).toBe(0);
+      expect(await readFile(out, "utf8")).toBe(await readFile(from, "utf8"));
+    });
+
+    test("another tool's new entry survives the restore", async () => {
+      const { from, out } = await pair(
+        lockOf({
+          "compound-engineering": entry("compound-engineering-v3.26.3"),
+          other: other("1.0.0"),
+        }),
+        lockOf({
+          "compound-engineering": entry("compound-engineering-v3.27.0"),
+          other: other("2.0.0"),
+        }),
+      );
+      expect(
+        await runCli(["--restore-tool", "compound-engineering", "--from", from, "--out", out], {
+          stderr: capture(),
+          resolve: forbidden,
+        }),
+      ).toBe(0);
+      const written = JSON.parse(await readFile(out, "utf8")) as ReleaseLock;
+      expect(written.releases.tools["compound-engineering"]?.version).toBe(
+        "compound-engineering-v3.26.3",
+      );
+      expect(written.releases.tools["other"]?.version).toBe("2.0.0");
+      expect(await readFile(out, "utf8")).toBe(
+        serializeLock(
+          lockOf({
+            "compound-engineering": entry("compound-engineering-v3.26.3"),
+            other: other("2.0.0"),
+          }),
+        ),
+      );
+    });
+
+    test("a tool missing from the second lock fails and leaves the output untouched", async () => {
+      const { from, out } = await pair(
+        lockOf({ other: other("1.0.0") }),
+        lockOf({
+          "compound-engineering": entry("compound-engineering-v3.27.0"),
+          other: other("2.0.0"),
+        }),
+      );
+      const before = await readFile(out, "utf8");
+      const stderr = capture();
+      expect(
+        await runCli(["--restore-tool", "compound-engineering", "--from", from, "--out", out], {
+          stderr,
+          resolve: forbidden,
+        }),
+      ).toBe(1);
+      expect(stderr.values.join("")).toContain("compound-engineering");
+      expect(await readFile(out, "utf8")).toBe(before);
+    });
+
+    test("a missing output lock or second lock fails without writing", async () => {
+      const root = await scratch();
+      const present = join(root, "present.json");
+      await writeFile(present, serializeLock(lockOf({ "compound-engineering": entry("v1") })));
+      const missing = join(root, "missing.json");
+      for (const [from, out] of [
+        [present, missing],
+        [missing, present],
+      ] as const) {
+        expect(
+          await runCli(["--restore-tool", "compound-engineering", "--from", from, "--out", out], {
+            stderr: capture(),
+            resolve: forbidden,
+          }),
+        ).toBe(1);
+      }
+      await expect(stat(missing)).rejects.toThrow();
+    });
+
+    test("--stdout emits the restored lock and leaves the file alone", async () => {
+      const { from, out } = await pair(
+        lockOf({ "compound-engineering": entry("compound-engineering-v3.26.3") }),
+        lockOf({ "compound-engineering": entry("compound-engineering-v3.27.0") }),
+      );
+      const before = await readFile(out, "utf8");
+      const stdout = capture();
+      expect(
+        await runCli(["--restore-tool", "compound-engineering", "--from", from, "--stdout"], {
+          defaultPath: out,
+          stdout,
+          stderr: capture(),
+          resolve: forbidden,
+        }),
+      ).toBe(0);
+      expect(stdout.values.join("")).toBe(await readFile(from, "utf8"));
+      expect(await readFile(out, "utf8")).toBe(before);
+    });
+
+    test.each([
+      ["--restore-tool", "compound-engineering"],
+      ["--from", "committed.json"],
+      ["--restore-tool", "compound-engineering", "--from", "a.json", "--only", "codex"],
+      ["--restore-tool", "compound-engineering", "--from", "a.json", "--prune-retired"],
+      ["--restore-tool", "unregistered-tool", "--from", "a.json"],
+      ["--restore-tool", "toString", "--from", "a.json"],
+      ["--restore-tool", "compound-engineering", "--restore-tool", "codex", "--from", "a.json"],
+      ["--restore-tool", "compound-engineering", "--from", "a.json", "--from", "b.json"],
+      ["--restore-tool", "--from", "a.json"],
+      ["--restore-tool", "compound-engineering", "--from"],
+    ])("invalid restore selection %j is a usage error that touches nothing", async (...args) => {
+      const path = join(await scratch(), "releases.json");
+      const before = "must not be read";
+      await writeFile(path, before);
+      expect(await runCli(args, { defaultPath: path, stderr: capture(), resolve: forbidden })).toBe(
+        2,
+      );
+      expect(await readFile(path, "utf8")).toBe(before);
+    });
   });
 
   test("invalid output flags fail before resolution", async () => {
