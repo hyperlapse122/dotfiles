@@ -295,11 +295,11 @@ agent_seat_pair() {
   cat "$out"
 }
 
-# KTD6/KTD9: the omp seat is chosen by launching the terminal with that
-# entry's model; render the mechanical seat through agent-roster-lookup.tmpl
-# instead of grepping a hand-written id, so a roster edit to the mechanical
-# entry reaches this assertion with no edit here.
-grep -F 'worker-start --terminal' "$coordinator_body" >/dev/null ||
+# KTD6/KTD9: the terminal is launched per dispatch with that entry's model;
+# render the mechanical seat through agent-roster-lookup.tmpl instead of
+# grepping a hand-written id, so a roster edit to the mechanical entry reaches
+# this assertion with no edit here.
+grep -F 'worker-start --task <task_id> --terminal <handle>' "$coordinator_body" >/dev/null ||
   fail 'the rendered coordinator does not carry the omp seat-selection line'
 read -r mechanical_model mechanical_effort <<<"$(agent_seat_pair omp mechanical '')"
 grep -F -- "$mechanical_model" "$coordinator_body" >/dev/null ||

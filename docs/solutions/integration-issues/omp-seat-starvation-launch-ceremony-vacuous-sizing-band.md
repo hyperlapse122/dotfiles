@@ -1,6 +1,7 @@
 ---
 title: An omp/Gemini Roster Seat Named First in Two Routing Rows Received Zero Dispatches for Ten Days
 date: 2026-09-18
+last_updated: 2026-09-18
 category: integration-issues
 module: agents
 problem_type: integration_issue
@@ -110,6 +111,8 @@ run and re-engages it for every later dispatch of that shape with one call,
 sequence on every dispatch. The standing seat is exempted from the review-and-peer contract's
 same-turn release rule so it can persist across dispatches, and is released before the run ends.
 
+> **Superseded on 2026-09-18, cause 1 only.** Issue #551 forbids omp seat reuse: every dispatch opens a new omp terminal, takes its one Dispatch with `worker-start --task <task_id> --terminal <handle>`, and is released in the turn that Dispatch settles, so the ceremony is per dispatch again and the same-turn release exemption is gone. The pressure this cause describes is now held by the cause 2 fix alone — the omp row's default membership and the recorded-signal rule for a `claude` implementation dispatch — and the launch cost is tracked in issue #550. Cause 2 and its fix stand as written. Two sentences below still describe the reverted state in the present tense and are left in place as the record they are: "one call either way in steady state" under "Why This Works", and "reduces the ceremony's steady-state cost from per-dispatch to per-run" under "Related Issues".
+
 **Cause 2 — the vacuous band was deleted, and omp named as the sizing rule's own floor.**
 `.chezmoitemplates/orchestration-coordinator.tmpl:43` now reads "Implementation Units of every
 deliverable format — code, frontend, and repository Markdown alike — that no recorded signal
@@ -147,6 +150,8 @@ This fact is recorded here because "the fix compiled/rendered and reviewers appr
 exactly the false confidence that let both original causes ship in the first place — a syntactic
 check on a coordination protocol proves nothing about whether the CLI on the other end accepts
 the call.
+
+> **Updated 2026-09-18.** The re-engage call this section corrects is retired by issue #551. The corrected spelling survives as the one dispatch call into a freshly launched terminal, and the lesson stands: an argv acceptance check is a different guarantee from a render.
 
 ## Why This Works
 
