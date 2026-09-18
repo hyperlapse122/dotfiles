@@ -100,7 +100,7 @@ A worktree holding one feature branch, created and destroyed through the session
 The line separating repository-only entries at the source root from the ones that deploy into the home directory. A dot-prefixed name falls outside it by construction; every other name is inside it and must be classified, either as deployed or as denied in the source-state ignore file. The boundary is declared as data and checked against what the source state actually renders, so a new entry cannot cross it silently.
 
 ### Generated-in-source path
-A path written into the source directory by a tool rather than by a commit. It is hidden from version control yet still part of the source state, so it owes two denials: one to the version-control ignore file and one to the source-state ignore file.
+A path written into the source directory by a tool rather than by a commit. It is hidden from version control yet still part of the source state, so the source-state ignore file must deny it even though version control already hides it.
 
 ## Keyboard lighting
 

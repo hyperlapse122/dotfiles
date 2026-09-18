@@ -51,7 +51,8 @@ execution: code
 
 **인벤토리 선언**
 
-- R5. 검사 대상은 git이 추적하는 최상위 항목이다. 추적되지 않는 경로는 인벤토리에도, 판정에도 들어가지 않는다.
+- R5. **인벤토리**는 git이 추적하는 최상위 항목에서 도출한다. 추적되지 않는 경로는 인벤토리에 들어가지 않는다.
+- R10. 소스 루트에 실제로 존재하는 비닷 항목 중 인벤토리가 `배포됨`으로 선언하지 않은 것은 모두 무시되어야 한다. 추적 여부는 이 판정에 영향을 주지 않는다.
 - R6. 인벤토리의 각 항목은 `배포됨` 또는 `무시됨`으로 분류되고, 분류가 프로필에 따라 달라지는 항목은 그 조건을 함께 선언한다.
 
 **커버리지**
@@ -61,7 +62,7 @@ execution: code
 **현재 상태 정리**
 
 - R8. 실물이 없는 `./agents`와 `./plans`, 그리고 중복된 `./docs`를 `.chezmoiignore`에서 제거한다.
-- R9. `_artifacts`를 `.gitignore`가 소유하게 하고, 소스 디렉터리 안에 존재할 수 있으므로 `.chezmoiignore`의 부인도 함께 유지한다. 게이트가 두 의무를 모두 검사한다.
+- R9. `_artifacts`를 `.gitignore`가 소유하게 하고, `.chezmoiignore`의 부인도 유지한다. 부인이 필요한 이유는 R10이며, 부인이 스테일로 보고되지 않는 이유는 그것이 과도기 부인으로 선언되어 있기 때문이다.
 
 ### Gate decision boundary
 
@@ -102,11 +103,16 @@ flowchart TB
   - **Given:** 추적되지 않고 어느 선언에도 없는 최상위 경로가 워크스페이스에 존재한다.
   - **When:** 게이트가 실행된다.
   - **Then:** 인벤토리에 없어도 통과한다.
-- AE5. 소스 안에 생성되는 추적 외 경로는 두 의무를 진다
+- AE5. 과도기 부인은 스테일로 보고되지 않는다
   - **Covers R9.**
-  - **Given:** `_artifacts`와 `agents.lock`이 `generated_in_source`에 선언되어 있다.
+  - **Given:** `_artifacts`가 깨끗한 체크아웃에 없지만 `preemptive_denials`에 선언되어 있다.
   - **When:** 게이트가 실행된다.
-  - **Then:** `.gitignore`와 `.chezmoiignore` 양쪽이 덮을 때만 통과하고, 어느 한쪽이 빠지면 실패한다.
+  - **Then:** 그 부인은 스테일로 보고되지 않고 통과한다. 선언에서 빼면 스테일로 실패한다.
+- AE6. 아무도 선언하지 않은 새 경로도 잡힌다
+  - **Covers R10.**
+  - **Given:** 어떤 도구가 소스 루트에 비닷 디렉터리를 만들었고, 인벤토리에도 과도기 목록에도 없으며 `.chezmoiignore`도 덮지 않는다.
+  - **When:** 게이트가 실행된다.
+  - **Then:** 실패하고, 그 경로가 `$HOME`으로 배포된다는 것과 부인 또는 선언 중 무엇을 하면 되는지를 말한다.
 
 ### Scope Boundaries
 
@@ -158,8 +164,9 @@ flowchart TB
 - KTD4. **`render_ignore`에 desktop 인자를 통과시키고, 게이트는 `.ci/test-chezmoiignore-script-paths.sh`와 같은 6개 프로필을 돈다.** `write_fact_stub`은 이미 desktop을 다섯 번째 인자로 받지만 `render_ignore`가 그것을 넘기지 않아 `gnome`에 고정됩니다. 인자를 통과시키면 최상위 판정이 desktop 축에 대해 불변이라는 것을 가정하지 않고 증명합니다. Governs R7.
 - KTD5. **인벤토리는 `.ci/top-level-boundary-inventory.yaml`에 데이터로 선언한다.** `.ci/skip-declaration-site-matrix.yaml`이 세운 CI 전용 감사 오라클 선례를 따릅니다. 이 파일은 chezmoi 런타임 입력이 아닙니다. Governs R5, R6.
 - KTD6. **인벤토리는 세 가지 class로 분류한다: `source-internal`, `repo-only`, `deployed`.** `deployed`는 프로필을 좁히는 `only_on`을 함께 선언합니다. 세 class 모두 R5가 정한 대로 git이 추적하는 항목만 담습니다. Governs R6.
-- KTD9. **소스 디렉터리 안에 생성되지만 추적되지 않는 경로는 인벤토리 밖의 별도 목록 `generated_in_source`로 선언한다.** 오늘 그 목록은 `agents.lock`과 `_artifacts` 둘입니다. 항목마다 두 가지 의무를 검사합니다: `.gitignore`가 덮을 것, 그리고 `.chezmoiignore`가 덮을 것. 검사되지 않는 면제가 아니라 의무를 지는 선언입니다. Governs R9.
-  - **충돌 알림 — settled decision 3 / R5:** R5는 "추적되지 않는 경로는 인벤토리에도, 판정에도 들어가지 않는다"고 못박습니다. `agents.lock`과 `_artifacts`는 그 조건에 해당하지만, 각각 dotagents와 CI 렌더 워크플로가 저장소 루트에 생성하므로 소스 디렉터리 안에 존재할 수 있고, `.chezmoiignore`에서 지우면 `$HOME`으로 배포됩니다. R2를 문자 그대로 적용하면 그 부인 항목들이 추적 항목과 매칭되지 않아 실패하고, 그것을 해소하려면 항목을 지워 배포를 부르게 됩니다. `generated_in_source`는 R5의 인벤토리 밖에 있으므로 R5의 문언을 고치지 않으면서 이 경로들을 검사 아래 둡니다. 이 회피가 R5의 의도와 맞는지는 Open Questions에 남깁니다.
+- KTD9. **노출 판정은 git이 아니라 디스크를 열거하고 기본 거부한다.** 소스 루트의 비닷 항목 중 인벤토리가 `배포됨`으로 선언하지 않은 것은 모두 무시되어야 합니다. chezmoi가 인덱스가 아니라 디렉터리를 읽으므로, 이것이 chezmoi가 실제로 보는 집합입니다. 이 검사는 목록을 필요로 하지 않으며, 아무도 선언하지 않은 새 생성 경로를 "거기 있다"는 이유만으로 잡습니다. Governs R10.
+- KTD10. **`preemptive_denials`는 스테일 보고만 억제하고 안전 의무를 지지 않는다.** 깨끗한 체크아웃에 없는 경로를 부인하면 스테일로 보이므로, 그 부인이 의도된 것임을 선언합니다. 면제가 아닙니다 — 그 경로가 실제로 존재할 때는 KTD9가 덮습니다. 목록에 넣는 걸 잊으면 부인이 스테일로 보고되어 시끄럽게 실패합니다. Governs R9.
+  - **해소된 충돌 — settled decision 3 / R5:** R5의 원래 둘째 절은 추적되지 않는 경로를 판정에서도 뺐고, 그것이 구멍이었습니다. `agents.lock`과 `_artifacts`는 각각 dotagents와 CI 렌더 워크플로가 저장소 루트에 생성하므로 소스 디렉터리 안에 존재할 수 있고, 판정 밖에 두면 배포됩니다. R10(KTD9)이 디스크를 열거해 기본 거부하므로 이제 판정이 그 경로들을 덮고, R5는 인벤토리로 좁혀졌습니다.
 - KTD7. **게이트는 `.github/workflows/ci.yml`의 `repo-meta` 잡에 배선한다.** 그 잡은 이미 고정된 chezmoi와 `python3-yaml`을 설치하고, `.ci/test-ci-wiring.sh`·`.ci/test-garden-path-mirror-check.sh`와 관심사가 같습니다. `delivery`의 `needs`에 `repo-meta`가 이미 있으므로 집계 변경은 없습니다.
 - KTD8. **mutant fixture로 게이트의 검출력을 증명한다.** `.ci/test-ci-wiring.sh`와 `.ci/test-chezmoiignore-script-paths.sh`가 세운 규율입니다. 실제 트리가 깨끗하다는 것만으로는 게이트가 무언가를 잡는다는 증거가 되지 않습니다. Governs R1, R2, R3.
 
@@ -172,7 +179,7 @@ flowchart TB
   A["git ls-tree --name-only HEAD (최상위)"] --> B{"인벤토리 키 집합과 동일한가"}
   B -->|아니오| F1["실패: 인벤토리 드리프트"]
   B -->|예| C["class별 정합성: source-internal은 . 로 시작"]
-  C --> C2["generated_in_source: .gitignore와 .chezmoiignore 양쪽이 덮는가"]
+  C --> C2["디스크 열거: 선언 안 된 소스 루트 항목은 무시되는가 (기본 거부)"]
   C2 --> D["프로필 6개 × render_ignore"]
   D --> E{"선언된 verdict == is_ignored 실측"}
   E -->|불일치| F2["실패: 경계 어긋남"]
@@ -196,12 +203,11 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
 
 ### Open Questions
 
-**Resolve Before Planning:** 없음.
+없음. 두 항목 모두 R10으로 해소되었고, 그 경위는 아래와 같습니다.
 
-**Deferred to the user (planning이 정할 수 없음):**
+**해소 — 면제 목록이 확정 결정 3의 실패 양식을 갖는가.** 가졌습니다. 그 지적이 옳았습니다. 초기 설계의 `generated_in_source`는 새 생성 경로를 아무도 선언하지 않으면 게이트가 통과하고 `$HOME`으로 배포되는, 정확히 "누군가 목록에 넣는 걸 잊으면 조용히 실패하는 목록"이었습니다. 해법은 목록을 정당화하는 것이 아니라 **안전을 목록에서 떼어내는 것**이었습니다. R10은 git이 아니라 디스크를 열거해 기본 거부하므로 선언이 없어도 노출을 잡습니다. 남은 목록은 스테일 보고만 억제하며, 거기에 넣는 걸 잊으면 결과가 조용한 통과가 아니라 시끄러운 실패입니다 — 실패 양식이 뒤집혔습니다.
 
-- `generated_in_source` 목록이 R5의 의도에 부합하는가. R5는 추적되지 않는 경로를 인벤토리와 판정 모두에서 배제하지만, `agents.lock`과 `_artifacts`를 판정 밖에 두면 `.chezmoiignore`의 그 항목들이 R2에 걸려 제거를 부르고, 제거하면 `$HOME`으로 배포됩니다. KTD9는 인벤토리 밖의 검사되는 목록으로 이를 피하지만, 이것을 R5가 금지한 면제 목록으로 볼지 R5가 다루지 않은 별개 표면으로 볼지는 사용자의 판단입니다. 구현은 KTD9대로 진행할 수 있으며, 판단이 뒤집히면 바뀌는 것은 두 항목의 위치뿐입니다.
-- R9의 원래 문언은 `_artifacts`를 `.chezmoiignore`에서 제거하라고 했고, 그 근거는 "CI가 chezmoi 소스 사본 이후에 생성한다"였습니다. 교차 모델 리뷰가 그 근거는 로컬 체크아웃을 덮지 못한다는 것을 보였고, 제거하면 기존 방어가 사라져 이 작업의 목적과 반대가 됩니다. R9를 두 의무를 요구하는 형태로 고쳤습니다 — 확정 결정 3의 목적(검사되지 않는 면제를 만들지 않는다)은 유지되지만, 사용자가 고른 문언과는 다릅니다.
+**해소 — R5와 R9의 문언.** R5의 첫 문장(인벤토리는 추적 항목에서 도출한다)은 옳았고 그대로입니다. 틀린 것은 그것을 **판정**까지 확장한 둘째 절이었습니다. 추적되지 않는 경로를 판정에서 빼는 것이 바로 구멍을 만들었습니다. R5는 인벤토리로 좁혔고, 판정은 R10이 맡습니다. R9는 더 이상 특례가 아니라 R10의 한 사례이며, `.chezmoiignore` 부인이 필요한 이유는 "소스 루트에 있을 수 있으니까"라는 일반 규칙입니다.
 
 ---
 
@@ -212,7 +218,7 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
 - **Goal:** 추적되는 모든 최상위 항목의 배포 여부와 그 프로필 조건이 한 파일에 선언된다.
 - **Requirements:** R5, R6.
 - **Files:** `.ci/top-level-boundary-inventory.yaml` (신규).
-- **Approach:** `.ci/skip-declaration-site-matrix.yaml`의 헤더 주석 관례를 따라 이 파일이 CI 전용 감사 오라클이며 chezmoi가 읽지 않는다는 것을 첫 줄에 적습니다. `profiles` 목록은 `.ci/test-chezmoiignore-script-paths.sh:121-128`의 6개 변형을 그대로 옮기고(`linux-gnome`, `linux-kde`, `linux-headless`, `linux-jetson`, `linux-container`, `macos`), 각 항목은 `os`·`desktop`·`container`·`jetson`을 담습니다. `entries` 맵은 `git ls-tree --name-only HEAD`의 최상위 55개 항목을 키로 하고 각각 `class`를 선언합니다. 닷 접두 18개는 `source-internal`, 비닷 37개 중 `dot_*`·`private_dot_gnupg`·`private_readonly_dot_mcp.json.tmpl`·`remove_dot_gitconfig`·`symlink_dot_face.icon`은 `deployed`, `Library`는 `deployed`에 `only_on: [macos]`, 나머지는 `repo-only`입니다. 인벤토리와 나란히 `generated_in_source` 목록을 두고 `agents.lock` 하나를 담습니다 (KTD9). `_artifacts`는 어느 쪽에도 넣지 않습니다 — AE4가 추적되지 않는 경로는 선언 없이 통과해야 한다고 정합니다.
+- **Approach:** `.ci/skip-declaration-site-matrix.yaml`의 헤더 주석 관례를 따라 이 파일이 CI 전용 감사 오라클이며 chezmoi가 읽지 않는다는 것을 첫 줄에 적습니다. `profiles` 목록은 `.ci/test-chezmoiignore-script-paths.sh:121-128`의 6개 변형을 그대로 옮기고(`linux-gnome`, `linux-kde`, `linux-headless`, `linux-jetson`, `linux-container`, `macos`), 각 항목은 `os`·`desktop`·`container`·`jetson`을 담습니다. `entries` 맵은 `git ls-tree --name-only HEAD`의 최상위 55개 항목을 키로 하고 각각 `class`를 선언합니다. 닷 접두 18개는 `source-internal`, 비닷 37개 중 `dot_*`·`private_dot_gnupg`·`private_readonly_dot_mcp.json.tmpl`·`remove_dot_gitconfig`·`symlink_dot_face.icon`은 `deployed`, `Library`는 `deployed`에 `only_on: [macos]`, 나머지는 `repo-only`입니다. 인벤토리와 나란히 `preemptive_denials` 목록을 두고 깨끗한 체크아웃에 없는 부인 대상 — `agents.lock`, `_artifacts` — 을 담습니다 (KTD10). 이 목록은 스테일 보고만 억제하며 안전 의무를 지지 않습니다.
 - **Test Scenarios:** 이 유닛 자체는 데이터이며 U4의 게이트가 검증합니다. 선언이 실제와 맞는지는 U4의 첫 실행이 증명합니다.
 - **Verification:** `python3 -c 'import yaml,sys; yaml.safe_load(open(".ci/top-level-boundary-inventory.yaml"))'`가 성공한다.
 
@@ -230,7 +236,7 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
 - **Goal:** `.chezmoiignore`의 모든 단일 세그먼트 항목이 실재하는 최상위 항목을 정확히 한 번 가리킨다.
 - **Requirements:** R8, R9.
 - **Files:** `.chezmoiignore`, `.gitignore`.
-- **Approach:** `.chezmoiignore`에서 `./agents`(dotagents가 `.agents/`로 옮겨간 뒤의 잔재)와 `./plans`(`docs/plans`로 이동)를 제거하고, 두 번 선언된 `./docs`와 `./agents.lock`을 각각 한 번만 남깁니다. `.gitignore`에 `_artifacts/`를 추가하되 `./_artifacts`의 부인은 유지합니다 — KTD9의 충돌 알림대로 두 경로 모두 소스 디렉터리 안에 존재할 수 있고, `.gitignore`는 git에만 가릴 뿐 chezmoi에는 가리지 못합니다. `./agents.lock`도 같은 이유로 남깁니다.
+- **Approach:** `.chezmoiignore`에서 `./agents`(dotagents가 `.agents/`로 옮겨간 뒤의 잔재)와 `./plans`(`docs/plans`로 이동)를 제거하고, 두 번 선언된 `./docs`와 `./agents.lock`을 각각 한 번만 남깁니다. `.gitignore`에 `_artifacts/`를 추가하되 `./_artifacts`의 부인은 유지합니다 — 두 경로 모두 소스 디렉터리 안에 존재할 수 있고, `.gitignore`는 git에만 가릴 뿐 chezmoi에는 가리지 못합니다 (R10). `./agents.lock`도 같은 이유로 남깁니다.
 - **Test Scenarios:** `.github/workflows/render-dotfiles.yml`의 아티팩트 업로드 스텝이 `_artifacts/`를 계속 쓴다 — `.gitignore` 추가는 업로드 경로에 영향이 없다. `.chezmoiignore`에 남은 단일 세그먼트 항목이 모두 실재하는 최상위 항목과 매칭된다.
 - **Verification:** `.ci/test-chezmoiignore-script-paths.sh`가 통과한다. `git status --short`가 `_artifacts/`를 더는 추적 후보로 보고하지 않는다.
 
@@ -239,7 +245,7 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
 - **Goal:** 선언과 실측이 어긋나면 CI가 실패한다.
 - **Requirements:** R1, R2, R3, R4.
 - **Files:** `.ci/test-top-level-deployment-boundary.sh` (신규, 0755).
-- **Approach:** 저장소 관례를 따릅니다 — `set -euo pipefail`, `repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)`, `.ci/lib/render-scratch.sh`의 `setup_render_scratch`로 스크래치와 `op` 스텁을 세우고, `chezmoi_bin=$(command -v chezmoi)`로 해석하고, `test-top-level-boundary: ` 접두사를 붙이는 스크립트 로컬 `fail`/`pass`를 둡니다. `.ci/lib/render-gate-helpers.sh`를 source합니다. bash가 프로필마다 `render_ignore`로 렌더한 뒤 항목마다 `is_ignored`를 불러 실측 verdict를 `<profile>\t<entry>\t<ignored|eligible>` 줄로 모읍니다 (KTD2). 대조와 보고는 PyYAML을 쓰는 파이썬 체커가 맡고, 스크래치에 heredoc으로 쓰며 `/usr/bin/python3`를 먼저 프로브합니다(mise·pyenv 인터프리터에 배포판 모듈이 없는 저장소 관례). 체커는 인벤토리·`generated_in_source` 목록·추적 최상위 목록·verdict 표·렌더된 ignore 파일을 인자로 받아 High-Level Technical Design의 검사를 돌리고, 실패마다 경로·어긋난 방향·고칠 파일을 한 줄로 출력합니다(R4). mutant fixture는 최소 인벤토리와 최소 ignore 파일을 만들어 실패 모드마다 돌연변이를 하나씩 넣고, 각각이 거부되며 **올바른 이유로** 거부되는지를 `.ci/test-ci-wiring.sh`의 `expect_reject` 모양으로 확인합니다.
+- **Approach:** 저장소 관례를 따릅니다 — `set -euo pipefail`, `repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)`, `.ci/lib/render-scratch.sh`의 `setup_render_scratch`로 스크래치와 `op` 스텁을 세우고, `chezmoi_bin=$(command -v chezmoi)`로 해석하고, `test-top-level-boundary: ` 접두사를 붙이는 스크립트 로컬 `fail`/`pass`를 둡니다. `.ci/lib/render-gate-helpers.sh`를 source합니다. bash가 프로필마다 `render_ignore`로 렌더한 뒤 항목마다 `is_ignored`를 불러 실측 verdict를 `<profile>\t<entry>\t<ignored|eligible>` 줄로 모읍니다 (KTD2). 대조와 보고는 PyYAML을 쓰는 파이썬 체커가 맡고, 스크래치에 heredoc으로 쓰며 `/usr/bin/python3`를 먼저 프로브합니다(mise·pyenv 인터프리터에 배포판 모듈이 없는 저장소 관례). 체커는 인벤토리·추적 최상위 목록·verdict 표·렌더된 ignore 파일·디스크에 존재하는 비닷 최상위 목록을 인자로 받아 High-Level Technical Design의 검사를 돌리고, 실패마다 경로·어긋난 방향·고칠 파일을 한 줄로 출력합니다(R4). mutant fixture는 최소 인벤토리와 최소 ignore 파일을 만들어 실패 모드마다 돌연변이를 하나씩 넣고, 각각이 거부되며 **올바른 이유로** 거부되는지를 `.ci/test-ci-wiring.sh`의 `expect_reject` 모양으로 확인합니다.
 - **Test Scenarios:**
   - 인벤토리에 없는 추적 최상위 항목 → 실패, 메시지가 그 경로와 인벤토리 등록을 지목한다 (AE1).
   - `repo-only`로 선언됐는데 렌더에서 무시되지 않는 항목 → 실패, 경계 누락으로 보고한다 (AE1).
@@ -248,7 +254,8 @@ U1·U2·U3은 서로 독립입니다. U4는 U1과 U2에 의존하고, U3가 함�
   - 같은 최상위 경로를 두 번 선언 → 실패, 중복으로 지목한다.
   - `Library`가 `macos` 프로필에서 배포되고 나머지 다섯 프로필에서 무시된다 → 통과 (AE3).
   - `_artifacts`가 추적되지 않고 어느 선언에도 없으므로 통과한다 (AE4).
-  - `agents.lock`이 `generated_in_source`에 있으므로 `.gitignore`와 `.chezmoiignore` 양쪽이 덮어야 통과하고, 어느 한쪽이 빠지면 실패한다.
+  - 소스 루트에 있지만 인벤토리에도 과도기 목록에도 없고 부인되지도 않은 경로 → 실패, 배포된다는 것과 해소 방법을 말한다 (AE6).
+  - `agents.lock`이 `preemptive_denials`에 있으므로 부인이 스테일로 보고되지 않는다 (AE5).
 - **Verification:** `.ci/test-top-level-deployment-boundary.sh`가 통과하고, 모든 mutant가 기대한 문구로 거부된다. `shellcheck .ci/test-top-level-deployment-boundary.sh`가 통과한다.
 
 ### U5. 게이트를 CI에 배선한다

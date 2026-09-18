@@ -63,26 +63,27 @@ A path that is generated inside the source directory and hidden from git owes
 - `.gitignore` covers it, so it never reaches a commit.
 - `.chezmoiignore` covers it, so it never reaches `$HOME`.
 
-`.ci/top-level-boundary-inventory.yaml` declares those paths under
-`generated_in_source`, deliberately outside the tracked `entries` inventory, and
-`.ci/test-top-level-deployment-boundary.sh` fails when either obligation is
-missing. Today the list holds `agents.lock`, written by dotagents, and
-`_artifacts`, written by the render workflow.
+`.ci/test-top-level-deployment-boundary.sh` enforces the second one without a
+list. It enumerates the source root on disk — not `git ls-files` — and requires
+every non-dot name it finds there to be ignored unless the inventory declares it
+deployed. A generated directory nobody thought to declare is caught because it is
+present, not because someone remembered to write it down.
 
-**When adding a tool that generates a non-dot path at the repository root, add
-it to `generated_in_source` as well as to `.gitignore`.** The gate cannot infer
-it: the inventory is derived from git-tracked entries, so an untracked path is
-invisible to the inventory check and passes silently.
+The first obligation needs no gate of its own: a path that is not gitignored
+gets committed, which makes it a tracked top-level entry, which the inventory
+check already covers.
 
-### Asking git about a directory-only pattern
+`.ci/top-level-boundary-inventory.yaml` also carries `preemptive_denials`
+(`agents.lock`, `_artifacts`). That list grants nothing. It only says a denial is
+deliberate, so the stale-entry check does not report it when the path it guards
+is legitimately absent from a clean checkout. Forgetting to list one is loud: the
+denial gets flagged stale.
 
-`git check-ignore -q -- _artifacts` does **not** match a `.gitignore` entry of
-`_artifacts/`. A directory-only pattern needs a path git can see as a directory,
-and an absent path is not one. Query both forms:
-
-```sh
-git check-ignore -q -- "$name" || git check-ignore -q -- "$name/"
-```
+**When adding a tool that generates a non-dot path at the repository root, deny
+it in `.chezmoiignore` and add it to `.gitignore`.** The gate will tell you if
+you miss the denial while the path exists, and will tell you the denial looks
+stale if the path is usually absent — at which point list it under
+`preemptive_denials`.
 
 ## Why This Works
 
