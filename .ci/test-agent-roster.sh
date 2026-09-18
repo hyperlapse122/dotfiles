@@ -485,7 +485,7 @@ two_entry_omp_workers='[{"id":"claude-fable-authoring","agent":"claude","model":
   {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
   {"id":"omp-lite-stub","agent":"omp","model":"google-antigravity/gemini-9.8-lite-stub","effort":"high","shapes":["mechanical"],"brief":"x"},
   {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","judgment"],"rung":"judgment-standard","brief":"x"},
-  {"id":"omp-judgment-cheap-stub","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["judgment"],"rung":"judgment-cheap","brief":"x"}]'
+  {"id":"omp-judgment-cheap-stub","agent":"omp","model":"google-antigravity/gemini-9.7-cheap-stub","effort":"low","shapes":["judgment"],"rung":"judgment-cheap","brief":"x"}]'
 two_entry_omp_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$two_entry_omp_workers")
 two_entry_omp_body="$scratch/coordinator-two-entry-omp.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$two_entry_omp_body" "$two_entry_omp_override" ||
@@ -494,6 +494,20 @@ grep -F -- '`omp` `google-antigravity/gemini-9.8-lite-stub` high' "$two_entry_om
   fail 'the two-entry omp stub: the mechanical row does not name the fake mechanical model as first recipient'
 grep -F -- '`google-antigravity/gemini-9.8-lite-stub` at `high` for mechanical work, `google-antigravity/gemini-3.8-flash` at `high` otherwise' "$two_entry_omp_body" >/dev/null ||
   fail 'the two-entry omp stub: the seat-selection line does not render the two-seat branch'
+
+# The judgment-standard and judgment-cheap rows resolve to genuinely distinct
+# models here (unlike the committed roster, which differs only by effort), so
+# this fixture proves the two rung-scoped lookups do not leak into each other.
+# Scoped to each row's own line: the cheap model legitimately appears
+# elsewhere in the body (on its own row), so a whole-document search would
+# never be able to fail.
+two_entry_omp_standard_row=$(grep -F 'judgment-standard` rung' "$two_entry_omp_body")
+[[ -n $two_entry_omp_standard_row ]] ||
+  fail 'the two-entry omp stub: no judgment-standard row rendered'
+grep -qF -- 'google-antigravity/gemini-3.8-flash' <<<"$two_entry_omp_standard_row" ||
+  fail 'the two-entry omp stub: the judgment-standard row does not name its own rung model'
+grep -qF -- 'google-antigravity/gemini-9.7-cheap-stub' <<<"$two_entry_omp_standard_row" &&
+  fail 'the two-entry omp stub: the judgment-standard row leaked the judgment-cheap model'
 
 # --- committed prose (R6): README.md and AGENTS.md are never rendered ------- #
 #
