@@ -565,7 +565,7 @@ jq -e '. == null' <<<"$bash_allowed" >/dev/null \
 
 outside_task_allowed=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
   DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
-  ORCA_TERMINAL_HANDLE= \
+  ORCA_TERMINAL_HANDLE='' \
   TMUX_PANE=%9 \
   "$BUN_BIN" "$runner" "$bundle" tool_call task) || fail 'the extension runner failed on outside task tool_call'
 jq -e '. == null' <<<"$outside_task_allowed" >/dev/null \
