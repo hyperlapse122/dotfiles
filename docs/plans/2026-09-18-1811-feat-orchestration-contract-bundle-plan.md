@@ -140,7 +140,7 @@ The hook binary's `guard` subcommand stops being a no-op. In an Orca-managed ses
   | Harness | Blocking target | Blocked `tool_name` | Declared in |
   |---|---|---|---|
   | Claude Code | plugin `PreToolUse` hook, matcher `Agent\|Task` | `Agent`, `Task` | `home/.chezmoitemplates/claude-hook-declaration.tmpl` |
-| Codex | plugin `PreToolUse` hook, no matcher (the historical shape) | `spawn_agent` | `home/.chezmoitemplates/codex-hook-declaration.tmpl` |
+  | Codex | plugin `PreToolUse` hook, no matcher (the historical shape) | `spawn_agent` | `home/.chezmoitemplates/codex-hook-declaration.tmpl` |
   | omp | `tool_call` handler in the native extension | `task` | `packages/omp-orca/src/index.ts` |
 
   The matcher is only a cost filter. A matcher that also reaches `TaskCreate` costs one process and changes nothing, because the binary compares `tool_name` for equality.

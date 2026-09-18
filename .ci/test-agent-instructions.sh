@@ -625,7 +625,11 @@ only after the query itself failed, and then MUST also record the command it ran
 This clause never blocks a run.
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
-A substantive failure on the omp mechanical seat is retried once on the omp implementation seat before the mechanical row leaves the agent
+A substantive failure on the omp mechanical entry is retried once on the omp implementation entry before the mechanical row leaves the agent
+A revision of the current workflow's own planning artifact is lead work, and the lead makes that edit itself.
+That artifact is the one plan or requirements document under `<docs_root>/plans/` or `<docs_root>/brainstorms/`
+The first write of an artifact is not a revision and keeps its recipient, so model elevation still authors the first plan.
+A Unit the sizing cannot split returns to this same entry as a recorded plan defect for a re-cut.
 the one value written over the guide's own figure is the four-minute `--timeout-ms` checkpoint
 COORDINATOR_NEEDLES
 
@@ -668,12 +672,21 @@ Every `claude` launch from the judgment row selects `--model
 and the elevation worker selects the authoring pair
 the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
 The `claude` reviewer's judgment effort holds while the `codex` reviewer stands beside it; when that reviewer is removed or a run records it as degraded, the `claude` reviewer runs at `
+A second launch miss there records that reviewer's pass as degraded, and the review proceeds on the remaining reviewer without waiting and without escalating.
+pinned by omp's own `--model` and `--thinking` flags
+so the lead MUST NOT type, paste, or send the prompt itself.
+are not a dispatch path: such a process runs one prompt and exits
 CLAUDE_COORDINATOR_NEEDLES
 for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   if grep -F 're-engages that terminal' "$payload" >/dev/null \
     || grep -F 'standing seat' "$payload" >/dev/null \
     || grep -F 'standing omp seat' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains retired omp seat-reuse rule"
+  fi
+  if grep -F 'omp mechanical seat' "$payload" >/dev/null \
+    || grep -F 'omp implementation seat' "$payload" >/dev/null \
+    || grep -F 'the seat changes while' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains roster-entry use of seat"
   fi
 done
 
