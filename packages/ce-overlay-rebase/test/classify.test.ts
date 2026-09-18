@@ -120,6 +120,103 @@ describe("classifyFailure", () => {
     ).toBe("unknown");
   });
 
+  describe("claude-code-action transcript array", () => {
+    const toolResult = {
+      type: "user",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            content: 'run_timeout_cmd() { timeout "$1" "${@:2}"; } # rate limit, unauthorized',
+          },
+        ],
+      },
+    };
+
+    test("ignores trigger words in tool results and reads the final result entry", () => {
+      expect(
+        classifyFailure({
+          executionFileContent: JSON.stringify([
+            toolResult,
+            { type: "result", subtype: "error_max_turns", is_error: true },
+          ]),
+        }),
+      ).toBe("unknown");
+    });
+
+    test("classifies from the last result entry", () => {
+      expect(
+        classifyFailure({
+          executionFileContent: JSON.stringify([
+            { type: "result", subtype: "success", is_error: true, result: "API Error: 529" },
+            toolResult,
+            {
+              type: "result",
+              subtype: "success",
+              is_error: true,
+              result: "API Error: 401 Unauthorized",
+            },
+          ]),
+        }),
+      ).toBe("configuration");
+
+      expect(
+        classifyFailure({
+          executionFileContent: JSON.stringify([
+            toolResult,
+            {
+              type: "result",
+              subtype: "success",
+              is_error: true,
+              result: 'API Error: {"type":"overloaded_error"}',
+            },
+          ]),
+        }),
+      ).toBe("outage");
+
+      expect(
+        classifyFailure({
+          executionFileContent: JSON.stringify([
+            toolResult,
+            {
+              type: "result",
+              subtype: "error_during_execution",
+              error: { type: "rate_limit_error" },
+            },
+          ]),
+        }),
+      ).toBe("quota");
+    });
+
+    test("returns unknown when the transcript has no result entry", () => {
+      expect(classifyFailure({ executionFileContent: JSON.stringify([toolResult]) })).toBe(
+        "unknown",
+      );
+      expect(classifyFailure({ executionFileContent: "[]" })).toBe("unknown");
+    });
+
+    test("ignores the final answer of a run that reported no error", () => {
+      expect(
+        classifyFailure({
+          executionFileContent: JSON.stringify([
+            { type: "result", subtype: "success", is_error: false, result: "fixed the timeout" },
+          ]),
+        }),
+      ).toBe("unknown");
+    });
+  });
+
+  test("ignores trigger words outside the error fields of an object", () => {
+    expect(
+      classifyFailure({
+        executionFileContent: JSON.stringify({
+          error: { type: "custom_weird_error", message: "unusual issue" },
+          log: "gateway timeout while reading; rate limit noted; unauthorized",
+        }),
+      }),
+    ).toBe("unknown");
+  });
+
   test("caller value outside closed set maps to unknown", () => {
     expect(
       classifyFailure({

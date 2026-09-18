@@ -132,6 +132,13 @@ export function decideDispatch(input: DecideInput): DecisionResult {
     }
   }
 
+  if (
+    effectiveMarker.status === "awaiting-review" &&
+    !openPullRequests.some((pr) => doesPrTargetTag(pr, resolvedTag))
+  ) {
+    return { action: "skip", reason: "Awaiting-review pull request was closed by the owner" };
+  }
+
   const unhealthyPrs: number[] = [];
 
   for (const pr of openPullRequests) {

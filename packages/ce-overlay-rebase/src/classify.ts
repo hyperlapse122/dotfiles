@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { FAILURE_CLASSES, type FailureClass } from "./marker.js";
+import { type FailureClass, isFailureClass } from "./marker.js";
 
 export interface ClassifyInput {
   stepOutcome?: string | null;
@@ -55,10 +55,7 @@ export function classifyFailure(input: ClassifyInput): FailureClass {
     ) {
       return "genuine";
     }
-    if (FAILURE_CLASSES.includes(callerReason as FailureClass)) {
-      return callerReason as FailureClass;
-    }
-    return "unknown";
+    return isFailureClass(callerReason) ? callerReason : "unknown";
   }
 
   if (actionConclusion === "timed_out") {
@@ -78,33 +75,60 @@ export function classifyFailure(input: ClassifyInput): FailureClass {
     return "unknown";
   }
 
-  let parsed: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    const raw = JSON.parse(content);
-    if (typeof raw !== "object" || raw === null) {
-      return "unknown";
-    }
-    parsed = raw as Record<string, unknown>;
+    parsed = JSON.parse(content);
   } catch {
     return "unknown";
   }
 
-  const status = typeof parsed["status"] === "number" ? parsed["status"] : null;
+  const entry = Array.isArray(parsed) ? lastResultEntry(parsed) : parsed;
+  if (typeof entry !== "object" || entry === null) {
+    return "unknown";
+  }
 
-  if (status === 429 || QUOTA_PATTERNS.some((p) => p.test(content))) {
+  const record = entry as Record<string, unknown>;
+  const status = typeof record["status"] === "number" ? record["status"] : null;
+  const text = errorText(record);
+
+  if (status === 429 || QUOTA_PATTERNS.some((p) => p.test(text))) {
     return "quota";
   }
 
   if (
     (status !== null && status >= 500 && status < 600) ||
-    OUTAGE_PATTERNS.some((p) => p.test(content))
+    OUTAGE_PATTERNS.some((p) => p.test(text))
   ) {
     return "outage";
   }
 
-  if (status === 401 || CONFIG_PATTERNS.some((p) => p.test(content))) {
+  if (status === 401 || CONFIG_PATTERNS.some((p) => p.test(text))) {
     return "configuration";
   }
 
   return "unknown";
+}
+
+function lastResultEntry(messages: unknown[]): unknown {
+  return messages.findLast(
+    (m) => typeof m === "object" && m !== null && (m as { type?: unknown }).type === "result",
+  );
+}
+
+// The claude-code-action transcript also holds every tool result, so only the fields that
+// carry the API failure are matched. A final answer counts only when the run did not report
+// success.
+function errorText(record: Record<string, unknown>): string {
+  const parts: unknown[] = [record["subtype"], record["message"]];
+  if (record["is_error"] !== false) {
+    parts.push(record["result"]);
+  }
+  const error = record["error"];
+  if (typeof error === "object" && error !== null) {
+    const { type, message } = error as Record<string, unknown>;
+    parts.push(type, message);
+  } else {
+    parts.push(error);
+  }
+  return parts.filter((p): p is string => typeof p === "string").join("\n");
 }

@@ -5,6 +5,7 @@ import {
   type Marker,
   type MarkerDocument,
   type MarkerEvent,
+  isFailureClass,
   transitionMarker,
   validateMarker,
 } from "./marker.js";
@@ -44,12 +45,21 @@ export async function runCli(args: string[], io?: CliIo): Promise<number> {
 
   if (!command || command === "--help" || command === "-h") {
     writeOut(
-      "Usage: ce-overlay-rebase <validate-marker|write-marker|decide|classify|transition> [options] [file]\n",
+      "Usage: ce-overlay-rebase <validate-marker|write-marker|decide|classify|transition> [options] [file]\n" +
+        "       ce-overlay-rebase validate-class <value>\n",
     );
     return 0;
   }
 
   const subArgs = args.slice(1);
+
+  if (command === "validate-class") {
+    if (subArgs.length !== 1 || !isFailureClass(subArgs[0])) {
+      writeErr(`Not a failure class: ${subArgs.join(" ")}\n`);
+      return 1;
+    }
+    return 0;
+  }
 
   if (command === "validate-marker") {
     try {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { decideDispatch } from "../src/decide.js";
+import { type DecideInput, decideDispatch } from "../src/decide.js";
 import type { Marker } from "../src/marker.js";
 
 const DEFAULT_MARKER: Marker = {
@@ -182,7 +182,48 @@ describe("decideDispatch", () => {
       now: t0,
     });
     expect(result.action).toBe("skip");
-    expect(result.reason).toMatch(/escalated|tracking issue/i);
+    expect(result.reason).toMatch(/tracking issue/i);
+  });
+
+  test("skips for escalated marker when no tracking issue exists", () => {
+    const result = decideDispatch({
+      resolvedTag: "compound-engineering-v3.27.0",
+      pin: "compound-engineering-v3.26.3",
+      gateClass: "invalid",
+      marker: {
+        ...DEFAULT_MARKER,
+        target: "compound-engineering-v3.27.0",
+        status: "escalated",
+        issue: null,
+      },
+      rebaseRuns: [],
+      openPullRequests: [],
+      trackingIssue: null,
+      now: t0,
+    });
+    expect(result.action).toBe("skip");
+    expect(result.reason).toMatch(/escalated/i);
+  });
+
+  test("skips for blocked-config marker when no tracking issue exists", () => {
+    const result = decideDispatch({
+      resolvedTag: "compound-engineering-v3.27.0",
+      pin: "compound-engineering-v3.26.3",
+      gateClass: "invalid",
+      marker: {
+        ...DEFAULT_MARKER,
+        target: "compound-engineering-v3.27.0",
+        status: "blocked-config",
+        failureClass: "configuration",
+        missing: ["P1"],
+      },
+      rebaseRuns: [],
+      openPullRequests: [],
+      trackingIssue: null,
+      now: t0,
+    });
+    expect(result.action).toBe("skip");
+    expect(result.reason).toMatch(/configuration/i);
   });
 
   test("skips for open tracking issue with an idle marker", () => {
@@ -292,6 +333,59 @@ describe("decideDispatch", () => {
     });
     expect(result.action).toBe("skip");
     expect(result.reason).toMatch(/awaiting-review|awaiting review/i);
+  });
+
+  test("awaiting-review marker with no open PR for the resolved tag skips after the owner closes it", () => {
+    const base: Omit<DecideInput, "openPullRequests"> = {
+      resolvedTag: "compound-engineering-v3.27.0",
+      pin: "compound-engineering-v3.26.3",
+      gateClass: "invalid",
+      marker: {
+        ...DEFAULT_MARKER,
+        target: "compound-engineering-v3.27.0",
+        status: "awaiting-review",
+      },
+      rebaseRuns: [],
+      trackingIssue: null,
+      now: t0,
+    };
+
+    const closed = decideDispatch({ ...base, openPullRequests: [] });
+    expect(closed.action).toBe("skip");
+    expect(closed.reason).toMatch(/closed/i);
+
+    const other = decideDispatch({
+      ...base,
+      openPullRequests: [
+        {
+          number: 107,
+          headRefName: "chore/rebase-ce-overlays-v3.26.9",
+          targetTag: "compound-engineering-v3.26.9",
+          createdAt: new Date(t0.getTime() - 48 * 60 * 60 * 1000).toISOString(),
+          autoMergeEnabled: false,
+        },
+      ],
+    });
+    expect(other.action).toBe("skip");
+    expect(other.reason).toMatch(/closed/i);
+  });
+
+  test("awaiting-review marker for an older target still dispatches with no open PR", () => {
+    const result = decideDispatch({
+      resolvedTag: "compound-engineering-v3.28.0",
+      pin: "compound-engineering-v3.26.3",
+      gateClass: "invalid",
+      marker: {
+        ...DEFAULT_MARKER,
+        target: "compound-engineering-v3.27.0",
+        status: "awaiting-review",
+      },
+      rebaseRuns: [],
+      openPullRequests: [],
+      trackingIssue: null,
+      now: t0,
+    });
+    expect(result.action).toBe("dispatch");
   });
 
   test("stored marker whose target is older than resolvedTag is treated as idle", () => {

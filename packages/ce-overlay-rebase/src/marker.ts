@@ -12,6 +12,10 @@ export type MarkerStatus = (typeof MARKER_STATUSES)[number];
 export const FAILURE_CLASSES = ["outage", "quota", "genuine", "unknown", "configuration"] as const;
 export type FailureClass = (typeof FAILURE_CLASSES)[number];
 
+export function isFailureClass(value: unknown): value is FailureClass {
+  return typeof value === "string" && FAILURE_CLASSES.includes(value as FailureClass);
+}
+
 export const MISSING_PREREQUISITES = ["P1", "P2", "P3", "P4"] as const;
 export type MissingPrerequisite = (typeof MISSING_PREREQUISITES)[number];
 
@@ -44,8 +48,7 @@ const REQUIRED_KEYS: (keyof Marker)[] = [
 ];
 
 const TARGET_PREFIX = "compound-engineering-v";
-const TAG_PATTERN =
-  /^compound-engineering-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const TAG_PATTERN = /^compound-engineering-v\d+\.\d+\.\d+$/;
 
 export function extractSemverFromTag(tag: string): string | null {
   if (!tag.startsWith(TARGET_PREFIX)) {
@@ -109,11 +112,7 @@ export function validateMarker(val: unknown): ValidationResult {
     }
   }
 
-  if (
-    record["failureClass"] !== null &&
-    (typeof record["failureClass"] !== "string" ||
-      !FAILURE_CLASSES.includes(record["failureClass"] as FailureClass))
-  ) {
+  if (record["failureClass"] !== null && !isFailureClass(record["failureClass"])) {
     errors.push(`failureClass must be one of ${FAILURE_CLASSES.join(", ")} or null`);
   }
 
@@ -142,17 +141,6 @@ export function validateMarker(val: unknown): ValidationResult {
   };
 }
 
-export function validateMarkerDocument(val: unknown): ValidationResult {
-  if (typeof val !== "object" || val === null || Array.isArray(val)) {
-    return { valid: false, errors: ["document must be a non-null object"] };
-  }
-  const record = val as Record<string, unknown>;
-  if (!("ceOverlayRebase" in record)) {
-    return { valid: false, errors: ["missing top-level key: ceOverlayRebase"] };
-  }
-  return validateMarker(record["ceOverlayRebase"]);
-}
-
 export function createIdleMarker(target: string): Marker {
   return {
     target,
@@ -165,10 +153,6 @@ export function createIdleMarker(target: string): Marker {
     missing: [],
     issue: null,
   };
-}
-
-export function resetMarker(target: string): Marker {
-  return createIdleMarker(target);
 }
 
 export interface FailureEvent {
@@ -205,7 +189,7 @@ export function resolveNow(now?: Date | string): Date {
 
 export function transitionMarker(current: Marker, event: MarkerEvent): Marker {
   if (event.type === "reset") {
-    return resetMarker(event.target);
+    return createIdleMarker(event.target);
   }
 
   const nowDate = resolveNow(event.now);

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { runCli } from "../src/cli.js";
+import { FAILURE_CLASSES } from "../src/marker.js";
 
 async function scratch(): Promise<string> {
   return await mkdtemp(join(tmpdir(), "ce-rebase-test-"));
@@ -171,6 +172,32 @@ describe("CLI", () => {
     });
     expect(code2).toBe(0);
     expect(JSON.parse(stdout2).failureClass).toBe("unknown");
+  });
+
+  test("validate-class exits 0 for every member of the closed failure-class set", async () => {
+    for (const failureClass of FAILURE_CLASSES) {
+      let stderr = "";
+      const code = await runCli(["validate-class", failureClass], {
+        stderr: (msg: string) => (stderr += msg),
+      });
+      expect(code).toBe(0);
+      expect(stderr).toBe("");
+    }
+  });
+
+  test("validate-class exits non-zero for a value outside the set or a missing value", async () => {
+    for (const args of [
+      ["validate-class", "none"],
+      ["validate-class", "Outage"],
+      ["validate-class", ""],
+      ["validate-class", "outage", "quota"],
+      ["validate-class"],
+    ]) {
+      let stderr = "";
+      const code = await runCli(args, { stderr: (msg: string) => (stderr += msg) });
+      expect(code).not.toBe(0);
+      expect(stderr).toMatch(/failure class/i);
+    }
   });
 
   test("transition command produces new marker", async () => {

@@ -4,13 +4,12 @@ import {
   MARKER_STATUSES,
   MISSING_PREREQUISITES,
   type Marker,
-  type MarkerDocument,
   type MissingPrerequisite,
   createIdleMarker,
-  resetMarker,
+  isFailureClass,
+  isValidTargetTag,
   transitionMarker,
   validateMarker,
-  validateMarkerDocument,
 } from "../src/marker.js";
 
 const VALID_MARKER: Marker = {
@@ -30,18 +29,6 @@ describe("marker schema validation", () => {
     const res = validateMarker(VALID_MARKER);
     expect(res.valid).toBe(true);
     expect(res.errors).toHaveLength(0);
-  });
-
-  test("valid document with ceOverlayRebase wrapper passes", () => {
-    const doc: MarkerDocument = { ceOverlayRebase: VALID_MARKER };
-    const res = validateMarkerDocument(doc);
-    expect(res.valid).toBe(true);
-  });
-
-  test("missing top-level ceOverlayRebase key fails document validation", () => {
-    const res = validateMarkerDocument({ otherKey: VALID_MARKER });
-    expect(res.valid).toBe(false);
-    expect(res.errors[0]).toMatch(/ceOverlayRebase/);
   });
 
   test("missing key fails validation", () => {
@@ -81,8 +68,20 @@ describe("marker schema validation", () => {
       true,
     );
     expect(
-      validateMarker({ ...VALID_MARKER, target: "compound-engineering-v10.20.30-alpha.1" }).valid,
+      validateMarker({ ...VALID_MARKER, target: "compound-engineering-v10.20.30" }).valid,
     ).toBe(true);
+  });
+
+  test("prerelease and build-metadata tags fail validation", () => {
+    for (const target of [
+      "compound-engineering-v10.20.30-alpha.1",
+      "compound-engineering-v1.2.3-rc.1",
+      "compound-engineering-v1.2.3+build.5",
+      "compound-engineering-v1.2.3-rc.1+build.5",
+    ]) {
+      expect(isValidTargetTag(target)).toBe(false);
+      expect(validateMarker({ ...VALID_MARKER, target }).valid).toBe(false);
+    }
   });
 
   test("missing value outside P1-P4 fails validation", () => {
@@ -107,6 +106,15 @@ describe("marker schema validation", () => {
   test("invalid issue number fails validation", () => {
     const res = validateMarker({ ...VALID_MARKER, issue: -5 });
     expect(res.valid).toBe(false);
+  });
+
+  test("isFailureClass accepts exactly the closed failure classes", () => {
+    for (const failureClass of FAILURE_CLASSES) {
+      expect(isFailureClass(failureClass)).toBe(true);
+    }
+    for (const value of ["", "Outage", "outage ", "timeout", "none", null, undefined, 1]) {
+      expect(isFailureClass(value)).toBe(false);
+    }
   });
 
   test("closed sets match specification", () => {
@@ -247,6 +255,31 @@ describe("marker state transitions", () => {
     expect(mUnk.failureClass).toBe("unknown");
   });
 
+  test("failure before Claude runs does not count an attempt", () => {
+    const failure = {
+      type: "failure",
+      target: "compound-engineering-v3.27.0",
+      failureClass: "outage",
+      reachedClaude: false,
+    } as const;
+
+    const first = transitionMarker(VALID_MARKER, { ...failure, now: t0 });
+    expect(first.status).toBe("deferred");
+    expect(first.attempts).toBe(0);
+    expect(first.firstAttempt).toBe(t0.toISOString());
+    expect(first.notBefore).toBe(new Date("2026-09-19T12:00:00.000Z").toISOString());
+
+    let marker = first;
+    for (const hour of [13, 14, 15]) {
+      marker = transitionMarker(marker, {
+        ...failure,
+        now: new Date(`2026-09-19T${hour}:00:00.000Z`),
+      });
+      expect(marker.status).toBe("deferred");
+      expect(marker.attempts).toBe(0);
+    }
+  });
+
   test("configuration gives blocked-config with missing names and no attempt increment", () => {
     const mConfig = transitionMarker(VALID_MARKER, {
       type: "failure",
@@ -316,10 +349,25 @@ describe("marker state transitions", () => {
     expect(mRev.notBefore).toBeNull();
   });
 
-  test("resetMarker returns clean idle marker", () => {
-    const idle = resetMarker("compound-engineering-v3.27.0");
+  test("reset event returns a clean idle marker for the event target", () => {
+    const failed = transitionMarker(VALID_MARKER, {
+      type: "failure",
+      target: "compound-engineering-v3.27.0",
+      failureClass: "genuine",
+      issue: 42,
+      now: t0,
+    });
+    const idle = transitionMarker(failed, {
+      type: "reset",
+      target: "compound-engineering-v3.28.0",
+    });
+    expect(idle).toEqual(createIdleMarker("compound-engineering-v3.28.0"));
+  });
+
+  test("createIdleMarker returns an idle marker for the target", () => {
+    const idle = createIdleMarker("compound-engineering-v3.26.3");
     expect(idle.status).toBe("idle");
-    expect(idle.target).toBe("compound-engineering-v3.27.0");
+    expect(idle.target).toBe("compound-engineering-v3.26.3");
     expect(idle.attempts).toBe(0);
     expect(idle.firstAttempt).toBeNull();
     expect(idle.lastAttempt).toBeNull();
@@ -327,11 +375,5 @@ describe("marker state transitions", () => {
     expect(idle.failureClass).toBeNull();
     expect(idle.missing).toEqual([]);
     expect(idle.issue).toBeNull();
-  });
-
-  test("createIdleMarker returns an idle marker for the target", () => {
-    const idle = createIdleMarker("compound-engineering-v3.26.3");
-    expect(idle.status).toBe("idle");
-    expect(idle.target).toBe("compound-engineering-v3.26.3");
   });
 });
