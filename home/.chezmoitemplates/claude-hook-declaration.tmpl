@@ -16,6 +16,12 @@
        The command is an absolute path resolved at render time, so no runtime
        variable expansion is needed either.
 
+       The PreToolUse entry is the tool-call guard: it denies a call to Claude
+       Code's own subagent tools (Agent, Task) while Orca manages the session.
+       Its matcher is `Agent|Task` as a cost filter; the binary decides by exact
+       tool_name equality. Its timeout is shorter than SessionStart's: the guard
+       fails open, so waiting longer buys nothing.
+
        Takes the chezmoi context as its argument. */ -}}
 {{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
 {
@@ -29,6 +35,19 @@
             "command": {{ $binary | quote }},
             "args": ["hook", "--harness", "claude"],
             "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ $binary | quote }},
+            "args": ["guard", "--harness", "claude"],
+            "timeout": 10
           }
         ]
       }

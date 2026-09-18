@@ -1,0 +1,18 @@
+{
+  "cwd": "/REDACTED/repo",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "bypassPermissions",
+  "prompt_id": "00000000-0000-0000-0000-000000000000",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "tool_input": {
+    "description": "Reply with done",
+    "prompt": "Reply with the single word: done",
+    "subagent_type": "general-purpose"
+  },
+  "tool_name": "Agent",
+  "tool_use_id": "toolu_REDACTED",
+  "transcript_path": "/REDACTED/transcript.jsonl"
+}

@@ -15,8 +15,22 @@ export type BeforeAgentStartHandler = (
   event: BeforeAgentStartEvent,
 ) => BeforeAgentStartResult | Promise<BeforeAgentStartResult>;
 
+export interface ToolCallEvent {
+  toolName: string;
+}
+
+export interface ToolCallResult {
+  block: true;
+  reason: string;
+}
+
+export type ToolCallHandler = (
+  event: ToolCallEvent,
+) => ToolCallResult | undefined | Promise<ToolCallResult | undefined>;
+
 export interface ExtensionAPI {
   on(event: "before_agent_start", handler: BeforeAgentStartHandler): void;
+  on(event: "tool_call", handler: ToolCallHandler): void;
 }
 
 export interface HookResult {
@@ -118,6 +132,95 @@ export function invokeHook(
   });
 }
 
+export const GUARD_TIMEOUT_MS = 2_000;
+
+function parseDenyReason(text: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || !("hookSpecificOutput" in parsed))
+    return null;
+  const output = parsed.hookSpecificOutput;
+  if (
+    typeof output !== "object" ||
+    output === null ||
+    !("permissionDecision" in output) ||
+    !("permissionDecisionReason" in output)
+  ) {
+    return null;
+  }
+  return output.permissionDecision === "deny" && typeof output.permissionDecisionReason === "string"
+    ? output.permissionDecisionReason
+    : null;
+}
+
+export function invokeGuard(
+  toolName: string,
+  command = hookPath(),
+  env: NodeJS.ProcessEnv = process.env,
+  timeoutMs = GUARD_TIMEOUT_MS,
+): Promise<string | null> {
+  if (timeoutMs <= 0) {
+    return Promise.resolve(null);
+  }
+
+  const { promise, resolve } = Promise.withResolvers<string | null>();
+  let settled = false;
+  let stdout = "";
+  const child = spawn(command, ["guard", "--harness", HOOK_HARNESS], {
+    detached: true,
+    env: { ...env },
+    stdio: ["pipe", "pipe", "ignore"],
+  });
+
+  const timer = setTimeout(() => {
+    stopChild(child);
+    finish(null, `orchestration guard timed out after ${timeoutMs}ms`);
+  }, timeoutMs);
+
+  const finish = (reason: string | null, diagnostic?: string): void => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (diagnostic !== undefined) {
+      console.error(`dotfiles-orca: ${diagnostic}`);
+    }
+    resolve(reason);
+  };
+
+  child.stdin?.on("error", () => {});
+  const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: toolName }) + "\n";
+  child.stdin?.end(input);
+
+  child.stdout?.setEncoding("utf8");
+  child.stdout?.on("data", (chunk: string) => {
+    if (settled) return;
+    stdout += chunk;
+    if (Buffer.byteLength(stdout) > MAX_CONTEXT_BYTES) {
+      stopChild(child);
+      finish(null, "orchestration guard output exceeded its size limit");
+    }
+  });
+
+  child.once("error", (error: Error) => {
+    finish(null, `orchestration guard failed: ${error.message}`);
+  });
+
+  child.once("close", (code, signal) => {
+    if (code === 0) {
+      finish(parseDenyReason(stdout));
+      return;
+    }
+    const status = code === null ? `signal ${signal ?? "unknown"}` : `exit ${code}`;
+    finish(null, `orchestration guard failed with ${status}`);
+  });
+
+  return promise;
+}
+
 interface BlockRemoval {
   text: string;
   count: number;
@@ -172,5 +275,14 @@ export default async function dotfilesOrca(api: ExtensionAPI): Promise<void> {
       return { systemPrompt: event.systemPrompt.slice() };
     }
     return { systemPrompt };
+  });
+
+  api.on("tool_call", async (event) => {
+    if (event.toolName !== "task") return undefined;
+    const reason = await invokeGuard(event.toolName);
+    if (reason !== null) {
+      return { block: true, reason };
+    }
+    return undefined;
   });
 }

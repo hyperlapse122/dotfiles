@@ -85,29 +85,16 @@ run_hook() {
   env -i PATH="$path" HOME="$scratch/home" $role_env "$binary" hook --harness "$harness" </dev/null
 }
 
-# `guard` is now a compatibility no-op for a stale cached hook declaration: it
-# never reads stdin, so this feeds real bytes on the real fd to prove the
-# input is ignored rather than merely untested.
-run_guard_shim() {
-  local harness=$1 role_env=$2 stdin_mode=${3:-none}
-  local out
-  case $stdin_mode in
-    none)
-      # shellcheck disable=SC2086
-      out=$(env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness" </dev/null)
-      ;;
-    malformed)
-      # shellcheck disable=SC2086
-      out=$(printf 'not json' | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness")
-      ;;
-    launch)
-      # shellcheck disable=SC2086
-      out=$(jq -nc '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"codex exec x"}}' \
-        | env -i PATH="$closed_path" HOME="$scratch/home" $role_env "$binary" guard --harness "$harness")
-      ;;
-  esac
-  printf '%s' "$out"
+run_with_event() {
+  local subcommand=$1 harness=$2 role_env=$3 event_json=${4:-} extra_path=${5:-}
+  local path="$closed_path"
+  [[ -n $extra_path ]] && path="$extra_path:$closed_path"
+  # shellcheck disable=SC2086
+  printf '%s' "$event_json" \
+    | env -i PATH="$path" HOME="$scratch/home" $role_env "$binary" "$subcommand" --harness "$harness"
 }
+
+run_guard() { run_with_event guard "$@"; }
 
 # ------------------------------------------------------- fail-open contracts
 out=$(run_hook claude "")
@@ -193,7 +180,7 @@ for half in 'CI ORCHESTRATION SKILL BODY' 'CUSTOM GUIDE' 'orchestration-everyone
 done
 pass 'an interactive Orca terminal without pane variables receives lead context'
 
-worker_env="ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%9"
+worker_env="ORCA_TERMINAL_HANDLE=term_ci TMUX_PANE=%9"
 out=$(run_hook claude "$worker_env")
 [[ $out == *'orchestration-everyone:begin'* ]] \
   || fail 'an Orca-managed worker must receive the everyone payload'
@@ -347,60 +334,134 @@ jq -e '.hooks.SessionStart[0].hooks[0] | has("args") | not' "$scratch/codex-hook
 pass 'Codex declares the staged binary without an args key the trust record would miss'
 
 
-# --------------------------------------------------------- the guard shim
-# `guard` no longer gates anything: it is a compatibility no-op for a stale
-# cached hook declaration, kept only so that declaration does not hit the
-# unknown-command exit code 2 until its session restarts.
+# -------------------------------------------------------- subagent tool guard
 TEAM='ORCA_TERMINAL_HANDLE=term_ci ORCA_AGENT_TEAMS_LEADER_PANE=%1 TMUX_PANE=%1'
+lead_healthy_env="ORCA_TERMINAL_HANDLE=term_ci"
 
-out=$(run_guard_shim claude "$TEAM" launch)
-[[ $out == '{}' ]] || fail "guard --harness claude must print {} and ignore a launch on stdin (got: $out)"
-pass 'guard --harness claude allows unconditionally, ignoring a launch on stdin'
+# compact and startup SessionStart events
+compact_event='{"hook_event_name":"SessionStart","source":"compact"}'
+startup_event='{"hook_event_name":"SessionStart","source":"startup"}'
+out_compact=$(run_with_event hook claude "$lead_healthy_env" "$compact_event" "$ok_bin")
+out_startup=$(run_with_event hook claude "$lead_healthy_env" "$startup_event" "$ok_bin")
+[[ $out_compact == "$out_startup" ]] \
+  || fail 'SessionStart compact and startup events must produce byte-identical envelopes'
+context=$(jq -er '.hookSpecificOutput.additionalContext' <<<"$out_compact") \
+  || fail 'SessionStart compact output missing additionalContext'
+[[ $context == *"Before each dispatch, MUST open the \`orchestration\` skill"* ]] \
+  || fail 'the lead envelope does not contain the skill re-entry instruction'
+pass 'the compact and startup SessionStart envelopes are byte-identical and carry the re-entry instruction'
 
-out=$(run_guard_shim codex "$TEAM" launch)
-[[ -z $out ]] || fail "guard --harness codex must print nothing (got: $out)"
-pass 'guard --harness codex prints nothing'
+# subagent tool calls are denied for both roles
+claude_agent_event=$(<"$repo_root/packages/orchestration-hook/test/fixtures/pretooluse-claude-agent.json")
+claude_task_event='{"hook_event_name":"PreToolUse","tool_name":"Task"}'
+codex_spawn_event=$(<"$repo_root/packages/orchestration-hook/test/fixtures/pretooluse-codex-spawn-agent.json")
+codex_bare_spawn_event='{"hook_event_name":"PreToolUse","tool_name":"spawn_agent"}'
 
-out=$(run_guard_shim claude "$TEAM" none)
+assert_guard_denies() {
+  local label=$1 harness=$2 role_env=$3 event=$4 extra_bin=${5:-}
+  local out decision reason
+  out=$(run_guard "$harness" "$role_env" "$event" "$extra_bin")
+  decision=$(jq -er '.hookSpecificOutput.permissionDecision' <<<"$out" 2>/dev/null) \
+    || fail "$label guard must return a decision document (got: $out)"
+  [[ $decision == "deny" ]] || fail "$label guard must deny (got: $decision)"
+  reason=$(jq -er '.hookSpecificOutput.permissionDecisionReason' <<<"$out" 2>/dev/null)
+  [[ $reason == *orchestration* ]] || fail "$label deny reason must contain orchestration (got: $reason)"
+}
+
+for role in "healthy lead|$lead_healthy_env|$ok_bin" "worker|$worker_env|"; do
+  IFS='|' read -r env_label role_env extra_bin <<<"$role"
+  assert_guard_denies "Claude Code $env_label" claude "$role_env" "$claude_agent_event" "$extra_bin"
+  assert_guard_denies "Claude Code $env_label" claude "$role_env" "$claude_task_event" "$extra_bin"
+  assert_guard_denies "Codex $env_label" codex "$role_env" "$codex_spawn_event" "$extra_bin"
+done
+
+out=$(run_guard codex "$lead_healthy_env" "$codex_bare_spawn_event" "$ok_bin")
+[[ -z $out ]] || fail "Codex guard must allow bare spawn_agent in lead (got: $out)"
+out=$(run_guard codex "$worker_env" "$codex_bare_spawn_event")
+[[ -z $out ]] || fail "Codex guard must allow bare spawn_agent in worker (got: $out)"
+pass 'subagent tool calls are denied for both roles, and bare spawn_agent is allowed for Codex'
+
+# exceptions and edge cases
+out=$(run_guard claude "" "$claude_agent_event")
+[[ $out == '{}' ]] || fail "Claude Code outside Orca must allow Agent (got: $out)"
+out=$(run_guard claude "" "$claude_task_event")
+[[ $out == '{}' ]] || fail "Claude Code outside Orca must allow Task (got: $out)"
+out=$(run_guard codex "" "$codex_spawn_event")
+[[ -z $out ]] || fail "Codex outside Orca must allow collaborationspawn_agent (got: $out)"
+
+out=$(run_guard claude "$lead_healthy_env HOME=$scratch/empty-home" "$claude_agent_event" "$ok_bin")
+[[ $out == '{}' ]] || fail "Claude Code with unwritten payload must allow Agent (got: $out)"
+
+out=$(run_guard claude "$TEAM" "$claude_agent_event" "$ok_bin")
+[[ $out == '{}' ]] || fail "Orca agent-teams session must allow Agent (got: $out)"
+
+fail_bin="$scratch/fail-bin"
+mkdir -p "$fail_bin"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$fail_bin/orca-ide"
+chmod 0755 "$fail_bin/orca-ide"
+
+assert_guard_denies 'Claude Code with failing Orca CLI' claude "$lead_healthy_env" "$claude_agent_event" "$fail_bin"
+pass 'outside Orca, unwritten payload, and agent-teams allow; failing CLI still denies'
+
+# fail-open cases (no stdin, malformed stdin, unknown harness, and stale Bash)
+out=$(run_guard claude "$lead_healthy_env" "" "$ok_bin")
 [[ $out == '{}' ]] || fail "guard --harness claude with no stdin must still print {} (got: $out)"
-out=$(run_guard_shim claude "$TEAM" malformed)
+out=$(run_guard claude "$lead_healthy_env" "not json" "$ok_bin")
 [[ $out == '{}' ]] || fail "guard --harness claude with malformed stdin must still print {} (got: $out)"
 pass 'guard never blocks on stdin: no input and malformed input both exit 0 immediately'
 
-out=$(run_guard_shim nonesuch "$TEAM" launch)
+out=$(run_guard nonesuch "$lead_healthy_env" "$claude_agent_event" "$ok_bin")
 [[ -z $out ]] || fail "guard with an unknown --harness must print nothing (got: $out)"
 pass 'guard with a missing or unknown --harness prints nothing'
 
-# The PreToolUse declarations are gone: the launch gate was removed end to
-# end, so neither plugin may declare that event, and SessionStart must still
-# name the staged binary.
-jq -e '.hooks | has("PreToolUse") | not' "$scratch/claude-hooks.json" >/dev/null \
-  || fail 'Claude Code must not declare a PreToolUse hook'
-[[ $(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/claude-hooks.json") == "$expected_binary" ]] \
-  || fail 'Claude Code SessionStart must still name the staged binary'
-pass 'Claude Code declares no PreToolUse hook, and SessionStart still names the binary'
+bash_event='{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"codex exec x"}}'
+out=$(run_guard claude "$lead_healthy_env" "$bash_event" "$ok_bin")
+[[ $out == '{}' ]] || fail "guard --harness claude must allow a Bash event (got: $out)"
+out=$(run_guard codex "$lead_healthy_env" "$bash_event" "$ok_bin")
+[[ -z $out ]] || fail "guard --harness codex must allow a Bash event (got: $out)"
+pass 'guard allows a stale Bash declaration, in both harnesses'
 
-jq -e '.hooks | has("PreToolUse") | not' "$scratch/codex-hooks.json" >/dev/null \
-  || fail 'Codex must not declare a PreToolUse hook'
-[[ $(jq -r '.hooks.SessionStart[0].hooks[0].command' "$scratch/codex-hooks.json") == "$expected_binary hook --harness codex" ]] \
-  || fail 'Codex SessionStart must still name the staged binary'
-pass 'Codex declares no PreToolUse hook, and SessionStart still names the binary'
+# declarations and trust record
+claude_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/claude-hooks.json")
+[[ $claude_guard == "$expected_binary" ]] \
+  || fail "Claude Code must declare the guard by absolute path (got: $claude_guard)"
+jq -e '.hooks.PreToolUse[0].hooks[0].args == ["guard","--harness","claude"]' \
+  "$scratch/claude-hooks.json" >/dev/null \
+  || fail 'Claude Code must declare exec form for the guard'
+jq -e '.hooks.PreToolUse[0].matcher == "Agent|Task"' \
+  "$scratch/claude-hooks.json" >/dev/null \
+  || fail 'Claude Code PreToolUse hook must match Agent|Task'
+pass 'Claude Code declares the PreToolUse guard in exec form, matching Agent|Task'
+
+codex_guard=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$scratch/codex-hooks.json")
+[[ $codex_guard == "$expected_binary guard --harness codex" ]] \
+  || fail "Codex must declare the guard by absolute path (got: $codex_guard)"
+jq -e '.hooks.PreToolUse[0] | has("matcher") | not' "$scratch/codex-hooks.json" >/dev/null \
+  || fail 'Codex PreToolUse hook must carry no matcher'
+jq -e '.hooks.PreToolUse[0].hooks[0] | has("args") | not' "$scratch/codex-hooks.json" >/dev/null \
+  || fail 'Codex PreToolUse hook must carry no args key'
+jq -e '.hooks.PreToolUse[0].hooks[0].additionalContextLimit == 0' "$scratch/codex-hooks.json" >/dev/null \
+  || fail 'Codex PreToolUse hook must declare additionalContextLimit 0'
+pass 'Codex declares the PreToolUse guard with no matcher and no args key'
 
 # The trust record is the silent-failure surface: a Codex hook whose recorded
-# hash disagrees with the deployed declaration simply never runs. Removing the
+# hash disagrees with the deployed declaration simply never runs. Adding the
 # PreToolUse event must not disturb the SessionStart record, whose key is
-# positional WITHIN its own event, and the record must now hash that one event
-# alone.
+# positional WITHIN its own event, and the record must now hash both events.
 trust_wrapper="$scratch/trust-wrapper.tmpl"
 printf '{{ includeTemplate "codex-hook-trust.tmpl" (dict "ctx" .) }}\n' >"$trust_wrapper"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$trust_wrapper" "$scratch/trust.json"
 session_keys=$(jq -r '.state | keys[] | select(endswith(":session_start:0:0"))' "$scratch/trust.json")
 [[ -n $session_keys ]] || fail 'the SessionStart trust record disappeared'
-[[ $(jq -r '.state | keys | length' "$scratch/trust.json") == 1 ]] \
-  || fail 'the Codex trust record must hash exactly one event now that PreToolUse is removed'
+pretooluse_keys=$(jq -r '.state | keys[] | select(endswith(":pre_tool_use:0:0"))' "$scratch/trust.json")
+[[ -n $pretooluse_keys ]] || fail 'the PreToolUse trust record disappeared'
+[[ $(jq -r '.state | keys | length' "$scratch/trust.json") == 2 ]] \
+  || fail 'the Codex trust record must hash exactly two events'
 [[ $(jq -r ".state[\"$session_keys\"].trusted_hash" "$scratch/trust.json") == sha256:* ]] \
   || fail 'the SessionStart trust hash is not a sha256 record'
-pass 'the Codex trust record hashes exactly one event, SessionStart, keyed as before'
+[[ $(jq -r ".state[\"$pretooluse_keys\"].trusted_hash" "$scratch/trust.json") == sha256:* ]] \
+  || fail 'the PreToolUse trust hash is not a sha256 record'
+pass 'the Codex trust record hashes both events, SessionStart and PreToolUse'
 
 # --------------------------------------------------- every-apply path assertion
 render "$repo_root" "$scratch" "$chezmoi_bin" linux \
@@ -450,15 +511,31 @@ bundle="$scratch/dotfiles-orca.js"
 
 extension_hook="$scratch/extension-hook"
 extension_env="$scratch/extension-env"
-printf '#!/usr/bin/env bash\nprintf "%%s|%%s|%%s" "$ORCA_TERMINAL_HANDLE" "$ORCA_AGENT_TEAMS_LEADER_PANE" "$TMUX_PANE" >%q\nexec %q hook --harness %q\n' "$extension_env" "$binary" "omp" >"$extension_hook"
+printf '#!/usr/bin/env bash\nprintf "%%s|%%s|%%s" "$ORCA_TERMINAL_HANDLE" "$ORCA_AGENT_TEAMS_LEADER_PANE" "$TMUX_PANE" >%q\nexec %q "$@"\n' "$extension_env" "$binary" >"$extension_hook"
 chmod 0755 "$extension_hook"
 runner="$scratch/extension-runner.mjs"
 cat >"$runner" <<'RUNNER'
 const { default: load } = await import(process.argv[2]);
-let handler;
-await load({ on(event, next) { if (event !== "before_agent_start") throw new Error("wrong event"); handler = next; } });
-const result = await handler({ prompt: "test", systemPrompt: ["BASE"] });
-process.stdout.write(JSON.stringify(result));
+const mode = process.argv[3] ?? "before_agent_start";
+const toolName = process.argv[4] ?? "task";
+let beforeHandler;
+let toolHandler;
+await load({
+  on(event, next) {
+    if (event === "before_agent_start") beforeHandler = next;
+    else if (event === "tool_call") toolHandler = next;
+    else throw new Error(`wrong event: ${event}`);
+  },
+});
+if (mode === "before_agent_start") {
+  const result = await beforeHandler({ prompt: "test", systemPrompt: ["BASE"] });
+  process.stdout.write(JSON.stringify(result));
+} else if (mode === "tool_call") {
+  const result = await toolHandler({ toolName });
+  process.stdout.write(JSON.stringify(result ?? null));
+} else {
+  throw new Error(`unknown mode: ${mode}`);
+}
 RUNNER
 result=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
   DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
@@ -471,5 +548,28 @@ jq -e '.systemPrompt[1] | contains("dotfiles-orca:begin") and contains("orchestr
 [[ $(cat "$extension_env") == 'term_ext|%7|%9' ]] \
   || fail 'the extension did not pass the current role environment to the child'
 pass 'the built extension calls the real hook binary path contract without credentials'
+
+task_blocked=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
+  ORCA_TERMINAL_HANDLE=term_ci TMUX_PANE=%9 \
+  "$BUN_BIN" "$runner" "$bundle" tool_call task) || fail 'the extension runner failed on task tool_call'
+jq -e '.block == true and (.reason | contains("orchestration"))' <<<"$task_blocked" >/dev/null \
+  || fail "the extension did not block task with orchestration reason in worker (got: $task_blocked)"
+
+bash_allowed=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
+  ORCA_TERMINAL_HANDLE=term_ci TMUX_PANE=%9 \
+  "$BUN_BIN" "$runner" "$bundle" tool_call bash) || fail 'the extension runner failed on bash tool_call'
+jq -e '. == null' <<<"$bash_allowed" >/dev/null \
+  || fail "the extension must not block bash (got: $bash_allowed)"
+
+outside_task_allowed=$(DOTFILES_ORCHESTRATION_HOOK="$extension_hook" \
+  DOTFILES_ORCHESTRATION_HOOK_PAYLOAD_DIR="$payload_dir" \
+  ORCA_TERMINAL_HANDLE='' \
+  TMUX_PANE=%9 \
+  "$BUN_BIN" "$runner" "$bundle" tool_call task) || fail 'the extension runner failed on outside task tool_call'
+jq -e '. == null' <<<"$outside_task_allowed" >/dev/null \
+  || fail "the extension must not block task without ORCA_TERMINAL_HANDLE (got: $outside_task_allowed)"
+pass 'the built extension blocks task in worker and allows bash and non-managed task'
 
 printf 'orchestration hook: all gates passed\n'

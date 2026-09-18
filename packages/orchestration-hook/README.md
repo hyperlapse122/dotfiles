@@ -13,11 +13,13 @@ managed host.
 | Command | Purpose |
 | --- | --- |
 | `orchestration-hook hook --harness <id>` | Deliver role-aware context and exit 0 on every path. |
-| `orchestration-hook guard --harness <id>` | Compatibility no-op for a stale cached hook declaration: answers the harness's empty allow output and exits 0 without reading stdin. |
+| `orchestration-hook guard --harness <id>` | Deny the harness subagent tool in an injected Orca session, allow in agent teams and outside Orca, and fail open on any error. |
 | `orchestration-hook print-payload --body <everyone\|coordinator>` | Print the managed payload body read from `~/.local/share/orchestration-hook`. |
 | `orchestration-hook role` | Print the resolved role and its environment inputs. |
 | `orchestration-hook --version` | Print the build identifier. |
 
 Lead delivery is atomic. The hook emits no partial context when the local Orca
-guide is unavailable. The plain-output client replaces one managed block in its
-system-prompt array on each `before_agent_start` event.
+guide is unavailable. The lead intro instructs the lead to open the orchestration
+skill before each dispatch and repeats this rule across context compaction. The
+plain-output client replaces one managed block in its system-prompt array on each
+`before_agent_start` event.

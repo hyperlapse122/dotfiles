@@ -36,7 +36,7 @@ export interface RoleEnv {
 export interface RoleOptions {
   isWorker?: (handle: string, env: RoleEnv) => boolean;
 }
-function present(value: string | undefined): value is string {
+export function present(value: string | undefined): value is string {
   return value !== undefined && value !== "";
 }
 

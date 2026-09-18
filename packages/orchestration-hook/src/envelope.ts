@@ -22,10 +22,14 @@ export const PREAMBLE =
   "instruction file and carry the same precedence as its own text. Where they and " +
   "the Orca guide state one subject at different strictness, the stricter statement wins.";
 
-const LEAD_INTRO =
-  "This session is the lead of an Orca-managed agent team. Both texts below " +
-  "were read at session start from this host's installed Orca CLI. The guide is the " +
-  "current output of `skills get orchestration`, so do not re-fetch it.";
+export const LEAD_INTRO =
+  "This session is the lead of an Orca-managed agent team. Before each dispatch, " +
+  "MUST open the `orchestration` skill and follow its version-matched guide. Both " +
+  "texts are below. They were read at session start from this host's installed " +
+  "Orca CLI. The guide is the current output of `skills get orchestration`, so do " +
+  "not re-fetch it. This instruction holds again after every context compaction, " +
+  "because a summary does not carry these rules. MUST NOT use the harness's own " +
+  "subagent tool in place of an Orca dispatch.";
 
 export interface LeadParts {
   /** Contents of the orchestration skill file. */

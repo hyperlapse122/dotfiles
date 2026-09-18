@@ -22,10 +22,34 @@
        accepts exec form is unsettled; adopting it here means extending that
        normalization in the same change.
 
+       The PreToolUse entry is the tool-call guard: it denies a call to Codex's
+       own subagent tool (collaborationspawn_agent) while Orca manages the
+       session.
+
+       It carries NO matcher, deliberately: the binary decides by exact
+       tool_name equality, so no matcher can hide a renamed tool from it.
+
+       Each event has its own trust record. codex-hook-trust.tmpl indexes group
+       and handler positionally WITHIN one event (`…:<event>:<group>:<handler>`),
+       so this entry is `…:pre_tool_use:0:0` and `…:session_start:0:0` keeps its
+       key and hash whatever other events are declared.
+
        Takes the chezmoi context as its argument. */ -}}
 {{- $binary := joinPath .chezmoi.homeDir ".local/libexec/orchestration-hook" -}}
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": {{ printf "%s guard --harness codex" $binary | quote }},
+            "timeout": 10,
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact",
