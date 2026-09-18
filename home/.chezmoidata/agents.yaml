@@ -19,7 +19,7 @@ agents:
     - id: claude-fable-authoring
       agent: claude
       model: fable
-      effort: max
+      effort: medium
       shapes: [authoring]
       brief: >-
         Name the plan file it may write as its single permitted write and
@@ -33,12 +33,23 @@ agents:
       model: fable
       effort: medium
       shapes: [judgment]
+      rung: judgment-escalation
       brief: >-
         Give one clear deliverable, the effort, action boundaries, and a
         definition of done. Tell it to finish the whole task and never end a
         turn on a plan or a question about authorized work. Ask for a
         one-line preamble and a standalone closing recap. Add no re-check or
         verification instructions.
+    - id: claude-opus-judgment
+      agent: claude
+      model: opus
+      effort: xhigh
+      shapes: [judgment]
+      rung: judgment-deep
+      brief: >-
+        State scope literally and per item, because it does not generalize
+        an instruction from one item to another. Ask for every finding with
+        confidence and severity instead of filtering.
     - id: claude-sonnet
       agent: claude
       model: sonnet
@@ -63,7 +74,8 @@ agents:
       agent: omp
       model: google-antigravity/gemini-3.8-flash
       effort: low
-      shapes: [mechanical]
+      shapes: [mechanical, judgment]
+      rung: judgment-cheap
       brief: >-
         Ask for one read or lookup per dispatch, never a batch. Require
         verbatim excerpts with repo-relative paths and line numbers instead
@@ -75,7 +87,8 @@ agents:
       agent: omp
       model: google-antigravity/gemini-3.8-flash
       effort: high
-      shapes: [implementation]
+      shapes: [implementation, judgment]
+      rung: judgment-standard
       brief: >-
         Order the brief as rules, context, definitions, task, tool policy,
         output, verification, stop condition. Define ambiguous terms and
@@ -317,7 +330,7 @@ agents:
     settings:
       language: Korean
       skipDangerousModePermissionPrompt: true
-      modelSettings.claude-fable-5-1.effortLevel: max
+      modelSettings.claude-fable-5-1.effortLevel: medium
       modelSettings.claude-opus-5.effortLevel: medium
       modelSettings.claude-sonnet-5.effortLevel: xhigh
       inputNeededNotifEnabled: true

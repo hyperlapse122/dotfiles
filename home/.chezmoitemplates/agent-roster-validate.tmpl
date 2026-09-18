@@ -64,6 +64,7 @@
 {{- $seenIds := list -}}
 {{- $seenRungs := list -}}
 {{- $codexJudgment := false -}}
+{{- $ompJudgment := false -}}
 {{- range $workers -}}
 {{-   $id := .id -}}
 {{-   if not $id -}}
@@ -94,6 +95,9 @@
 {{-     if and (eq $agent "codex") (eq . "judgment") -}}
 {{-       $codexJudgment = true -}}
 {{-     end -}}
+{{-     if and (eq $agent "omp") (eq . "judgment") -}}
+{{-       $ompJudgment = true -}}
+{{-     end -}}
 {{-   end -}}
 {{-   $rung := "" -}}
 {{-   if hasKey . "rung" -}}
@@ -117,6 +121,9 @@
 {{- end -}}
 {{- if not $codexJudgment -}}
 {{-   fail "agent-roster-validate: no codex entry declares the judgment shape" -}}
+{{- end -}}
+{{- if not $ompJudgment -}}
+{{-   fail "agent-roster-validate: no omp entry declares the judgment shape" -}}
 {{- end -}}
 {{- $models := list -}}
 {{- range $workers -}}

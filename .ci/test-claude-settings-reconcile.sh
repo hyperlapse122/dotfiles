@@ -84,7 +84,7 @@ hand_written_model=$(env HOME="$neg_home" PATH="$neg_bin:$PATH" \
 # sonnet leaf is `xhigh`, the documented coding sweet spot, now that sonnet is a
 # rare exception path rather than the default implementation rung (KTD9).
 jq -e '
-  .["modelSettings.claude-fable-5-1.effortLevel"] == "max"
+  .["modelSettings.claude-fable-5-1.effortLevel"] == "medium"
   and .["modelSettings.claude-opus-5.effortLevel"] == "medium"
   and .["modelSettings.claude-sonnet-5.effortLevel"] == "xhigh"' <<<"$declared" >/dev/null \
   || fail 'the three declared effortLevel leaves did not survive the roster merge'
