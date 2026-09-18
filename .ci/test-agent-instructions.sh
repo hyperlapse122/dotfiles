@@ -451,8 +451,7 @@ the section itself MUST then be deleted from the MR/PR description and from the 
 An entry that survives as a bare checkbox, with no fix and no link, is an incomplete run.
 when review runs report-only (such as `mode:agent` in an `lfg` pipeline run), apply the findings caller-side before proceeding
 including a single-reviewer anchor-75 finding; a skill's narrower confidence bar or cross-persona requirement does not authorize deferral
-A finding whose fix touches only files the branch already changes is in scope by default
-Only a fix that requires touching files outside the branch's changes qualifies for the out-of-scope deferral.
+an out-of-branch fix lands in the same MR/PR under review, as its own commit, listed under its own heading in the MR/PR description, never deferred to a follow-up MR/PR
 A step that a skill, command, or workflow the user invoked by name declares mandatory MUST be carried out without a confirming question
 This authority is transitive: it reaches the mandatory steps of every skill the invoked skill itself invokes as part of its own mandatory flow
 It covers the step's dispatch scale — the worker count, the reviewer set, and the cross-model fan-out that the workflow's own rules produce
