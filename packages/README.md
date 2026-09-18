@@ -30,6 +30,7 @@ the repo's TypeScript/JavaScript library packages.
 | [`omp-orca/`](omp-orca/) | `@h82/omp-orca` | Native omp orchestration extension. |
 | [`figma-auth/`](figma-auth/) | `@h82/figma-auth` | On-demand Figma OAuth for omp. |
 | [`release-lock/`](release-lock/) | `@h82/release-lock` | Resolves external tool releases into the static `home/.chezmoidata` release lock consumed by templates and externals, so a source-state read needs no network. |
+| [`ce-overlay-rebase/`](ce-overlay-rebase/) | `@h82/ce-overlay-rebase` | Rebase state transitions, dispatch decision, and failure classifier for Compound Engineering overlays. |
 
 ## Toolchain: Vite+
 

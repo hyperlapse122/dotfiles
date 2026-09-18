@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "custom_weird_error",
+    "message": "Unrecognized failure in execution container"
+  }
+}

@@ -329,6 +329,7 @@ jobs:
           .ci/test-gem80-firmware-pin-gates.sh
           .ci/test-gpg-key-data.sh
           .ci/test-gpg-packages-parity.sh
+          .ci/check-ce-overlay-rebase-marker.sh
 
   ts-workspace:
     name: TypeScript workspace (packages/)
