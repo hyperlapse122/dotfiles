@@ -1,7 +1,7 @@
 ---
 title: A Missing akmods Builder Deadlocks the Fedora NVIDIA MOK Wait
 date: 2026-09-04
-last_updated: 2026-09-04
+last_updated: 2026-09-19
 category: integration-issues
 module: nvidia
 problem_type: integration_issue
@@ -127,7 +127,7 @@ pipeline shape in `report_stale_mok` made that report unreachable too.
 
 ## Resolution
 
-- `.chezmoidata/nvidia.yaml` declares `akmods` in the `pascal` branch package
+- `home/.chezmoidata/nvidia.yaml` declares `akmods` in the `pascal` branch package
   set. The builder is the branch's build system, so its absence is now a missing
   declared package the next apply installs, not an invisible dependency.
 - `ensure_dkms_mok_generated` runs `kmodgenca -a` when that generator exists,
@@ -185,14 +185,13 @@ nvidia ...
 `modinfo -F signer` naming the certificate's own symlink target is the proof the
 enrolled key and the signing key are the same one.
 
-## Known gap
+## Resolution of Earlier Gap
 
-A `transient-blocking` record is written by its own site and cleared only by a
-later declaration carrying the same `script`/`site` pair. A wait-only site has no
-such success-path twin, so `~/.local/state/chezmoi/skips/install-nvidia-fedora__mok-generate-awaiting-builder`
-survives after the key appears and `dotfiles-skips` goes on reporting a converged
-host as outstanding. This is a property of the skip contract, not of this
-installer; removing the stale record by hand is the current remedy.
+Earlier versions of the skip contract required removing the `mok-generate-awaiting-builder`
+record by hand because wait-only sites have no success-path twin. `prune_stale_skip_records`
+in `.install-prerequisites.sh` now automates this: on any command running scripts (`apply`,
+`update`, `init`), it tests the associated capability probe (`akmods-signing-key-present`)
+and removes the `transient-blocking` record once the key appears.
 
 ## Wider lesson
 

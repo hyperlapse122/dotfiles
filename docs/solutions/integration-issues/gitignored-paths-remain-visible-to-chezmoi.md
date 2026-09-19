@@ -1,7 +1,7 @@
 ---
 title: A Gitignored Path Is Still Part of the chezmoi Source State
 date: 2026-09-18
-last_updated: 2026-09-18
+last_updated: 2026-09-19
 category: integration-issues
 module: chezmoi
 problem_type: integration_issue
@@ -50,7 +50,7 @@ Each clause is true except the last.
 
 **Reading the CI workflow as proof about every checkout.**
 `.github/workflows/render-dotfiles.yml:120-135` cuts the chezmoi source copy,
-and `:278` stages `_artifacts/` afterwards. That ordering is real, and it does
+and subsequent steps stage `_artifacts/` (e.g. lines 308, 557, 981). That ordering is real, and it does
 prove `_artifacts` is absent from the source copy *in CI*. It proves nothing
 about a local checkout where someone ran those steps, and a requirement written
 on that premise removed a denial that had been protecting the local case.
@@ -64,7 +64,7 @@ A path that is generated inside the source directory and hidden from git owes
 - `.chezmoiignore` covers it, so it never reaches `$HOME`.
 
 `.ci/test-top-level-deployment-boundary.sh` enforces the second one without a
-list. It enumerates the source root on disk — not `git ls-files` — and requires
+list. It enumerates the source root (`home/`) on disk — not `git ls-files` — and requires
 every non-dot name it finds there to be ignored unless the inventory declares it
 deployed. A generated directory nobody thought to declare is caught because it is
 present, not because someone remembered to write it down.
@@ -73,17 +73,14 @@ The first obligation needs no gate of its own: a path that is not gitignored
 gets committed, which makes it a tracked top-level entry, which the inventory
 check already covers.
 
-`.ci/top-level-boundary-inventory.yaml` also carries `preemptive_denials`
-(`agents.lock`, `_artifacts`). That list grants nothing. It only says a denial is
-deliberate, so the stale-entry check does not report it when the path it guards
-is legitimately absent from a clean checkout. Forgetting to list one is loud: the
-denial gets flagged stale.
+`.ci/top-level-boundary-inventory.yaml` previously carried `preemptive_denials`
+(`agents.lock`, `_artifacts`) when the repository root was the chezmoi source directory.
+With the source root moved under `home/` behind `.chezmoiroot`, repository-root outputs
+now sit outside the chezmoi source state entirely, and `preemptive_denials` is kept empty (`[]`).
 
-**When adding a tool that generates a non-dot path at the repository root, deny
-it in `.chezmoiignore` and add it to `.gitignore`.** The gate will tell you if
-you miss the denial while the path exists, and will tell you the denial looks
-stale if the path is usually absent — at which point list it under
-`preemptive_denials`.
+**When adding a tool that generates a non-dot path inside the chezmoi source root (`home/`),
+deny it in `home/.chezmoiignore` and add it to `.gitignore`.** The gate will catch any undeclared
+generated path sitting in `home/`.
 
 ## Why This Works
 

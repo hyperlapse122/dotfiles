@@ -43,15 +43,15 @@ To run Compound Engineering's CLI elevation at `max` effort, a `run_after` scrip
 
 Take the paths out of chezmoi's ownership, then let the overlay script own them.
 
-1. Add both adapter paths to the `exclude` list of both localArchive authorities (`.chezmoidata/agents.yaml:212-213` for `compound-engineering-plugin`, `:232-233` for `compound-engineering-omp`), next to the existing `*/skills/ce-sweep/references/interview.md` entry, which uses the same mechanism.
-2. In `.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl`, install the overlay as a guarded file:
-   - `GUARDED_FILES`, one `GUARDED_SOURCE`, `GUARDED_UPSTREAM_SHA256`, and `GUARDED_UPSTREAM_VERSION` pin the overlay to the upstream file it was forked from (`:64-70`).
-   - A version directory other than `GUARDED_UPSTREAM_VERSION` is left untouched with a warning (`:157-160`).
-   - On the pinned version, an absent adapter is installed. An existing one is replaced only when its digest equals the recorded upstream digest. Any other digest is left alone with a warning (`:162-197`).
-   - A symlink at the destination is reclaimed before the digest shortcut, so a same-content foreign link is not accepted.
-3. Make `.ci/test-compound-engineering-overlays.sh` fail when the resolved plugin version differs from `GUARDED_UPSTREAM_VERSION` (`:233-236`). The hourly release-lock refresh bumps the plugin with no human review. This check blocks that bump until someone refreshes the overlay, its digest, and its version. Without it, the overlay would quietly degrade to upstream `high`.
+1. Add both adapter paths to the `exclude` list of both localArchive authorities (`home/.chezmoidata/agents.yaml:219-224` for `compound-engineering-plugin`, `:239-245` for `compound-engineering-omp`), next to the existing `*/skills/ce-sweep/references/interview.md` entry (and the later `gitlab-issues.md` entry), which use the same mechanism.
+2. In `home/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl`, install the overlays via a patch-based architecture:
+   - Upstream pre-images and post-images (sha256 and mode) are recorded in `base.json` (`home/dot_local/share/compound-engineering-overlays/base.json`), and individual customizations are maintained as patches (`home/dot_local/share/compound-engineering-overlays/patches/`).
+   - An include-only archive external extracts unmodified upstream files to `~/.local/share/compound-engineering-pristine/<segment>/`.
+   - The script applies patches in a private scratch git repository, verifying post-image digests before installing them into both target directories (`compound-engineering` and `compound-engineering-omp`).
+   - A version mismatch, digest mismatch, or patch failure causes all paths to gracefully degrade together by restoring pristine upstream files.
+3. Release lock gating via `.ci/ce-overlay-lock-hold.sh` and `.ci/check-ce-overlay-patches.sh` validates candidate Compound Engineering releases against the overlay patches during the hourly refresh, holding back the version bump and preserving the committed pin if patches do not cleanly apply. Comprehensive verification is maintained in `.ci/test-compound-engineering-overlays.sh`.
 
-The fix is on branch `feature/fable-max-effort-drop-flash-lite` for issue #535 and was unmerged when this was written.
+The initial fix landed on branch `feature/fable-max-effort-drop-flash-lite` for issue #535, followed by the patch-based overlay refactor in `docs/plans/2026-09-18-2330-refactor-ce-overlays-validated-patches-plan.md`.
 
 ## Why This Works
 
@@ -59,10 +59,10 @@ chezmoi's drift check compares every tracked entry with its last-written state, 
 
 ## Prevention
 
-- Before a `run_after` or `run_onchange` script writes under the `externalPath` of an archive or localArchive external, exclude that exact path from the external. `.chezmoiexternals/dev-tools.toml:262-276` records the same hazard for the Flutter SDK, which is why Flutter is not an archive external at all.
+- Before a `run_after` or `run_onchange` script writes under the `externalPath` of an archive or localArchive external, exclude that exact path from the external. `home/.chezmoiexternals/dev-tools.toml` records the same hazard for the Flutter SDK, which is why Flutter is not an archive external at all.
 - Pin a whole-file fork of a third-party file to both its upstream version and digest, and degrade (warn, leave unchanged) on any mismatch instead of aborting or installing.
 - When an unattended process can bump the upstream pin, add a CI check that fails on the bump until the fork is refreshed.
-- Keep apply-time installers bash 3.2 and macOS safe: macOS has no `sha256sum` (fall back to `shasum -a 256`) and bash 3.2 has no `declare -A`. A missing tool must skip with a warning, never abort under `set -euo pipefail` (`.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl:72-88`).
+- Keep apply-time installers bash 3.2 and macOS safe: macOS has no `sha256sum` (fall back to `shasum -a 256`) and bash 3.2 has no `declare -A`. A missing tool must skip with a warning, never abort under `set -euo pipefail` (`home/.chezmoiscripts/00-tools/run_after_compound-engineering-overlays.sh.tmpl`).
 
 ## Related
 

@@ -1,7 +1,7 @@
 ---
 title: Deploying a Root-Owned /etc File from an Orca Worktree Re-Runs Every onchange System Script
 date: 2026-09-10
-last_updated: 2026-09-10
+last_updated: 2026-09-19
 category: integration-issues
 module: chezmoi
 problem_type: integration_issue
@@ -61,14 +61,14 @@ Render only the script that owns the new file, and run that rendering directly:
 
 ```sh
 chezmoi --source=<worktree> execute-template \
-  < .chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl \
+  < home/.chezmoiscripts/30-linux/run_onchange_after_install-system-16-udev.sh.tmpl \
   > /tmp/udev.sh
 bash /tmp/udev.sh
 ```
 
 `run_onchange_after_install-system-16-udev.sh.tmpl` is the declared owner of
-`/etc/udev/rules.d` and `/etc/libinput` deployment — `system/README.md:90` and
-`:103` list it as the script that installs udev rules and libinput quirks and
+`/etc/udev/rules.d` and `/etc/libinput` deployment — `system/README.md:98, :109, and :122`
+list it as the script that installs udev rules and libinput quirks and
 reloads udev, and the template's own glob at line 9 covers
 `system/linux/etc/udev/rules.d/**`. This is not a bypass of the ownership model:
 it is the same script `chezmoi apply --source=<worktree>` would run for this
@@ -89,26 +89,29 @@ what it will touch is part of the practice, not an optional aside.
 
 ### Permanent Architectural Fix: Position-Independent Script Rendering (PISR)
 
-Rather than requiring manual single-script extraction for every worktree test, the root cause is eliminated by decoupling the rendered script body from compile-time `$sourceDir` interpolation. In every `install-system-*.sh.tmpl` (and build script), `SRC_ROOT="{{ $sourceDir }}/system/linux"` is replaced with:
+Rather than requiring manual single-script extraction for every worktree test, the root cause is eliminated by decoupling the rendered script body from compile-time `$sourceDir` interpolation.
 
-```bash
-SRC_ROOT="${CHEZMOI_SOURCE_DIR:-$(command -v chezmoi >/dev/null 2>&1 && chezmoi source-path || pwd)}/system/linux"
+In every `install-system-*.sh.tmpl` (and build script), scripts now include the shared `home/.chezmoitemplates/repo-root.sh.tmpl` partial:
+
+```gotemplate
+{{ includeTemplate "repo-root.sh.tmpl" | trim }}
+SRC_ROOT="$repo_root/system/linux"
 ```
 
-Because `fingerprint.tmpl` already trims the source directory and emits relative paths in its dependency comments, the rendered script text becomes 100% bit-identical across any checkout or worktree. During standard `chezmoi apply`, `CHEZMOI_SOURCE_DIR` is set by Chezmoi and evaluated as an instant parameter expansion without subshell overhead. As a result, switching to a feature worktree no longer triggers false-positive hash mismatches or cascades of unrelated `sudo` scripts.
+The partial evaluates `${CHEZMOI_SOURCE_DIR:-...}`, checks for `.chezmoiroot` to resolve the repository root from the source directory, and emits relative paths in `fingerprint.tmpl` dependency comments via `repo-root.tmpl`. As a result, rendered script text is 100% bit-identical across checkouts and worktrees, eliminating cascades of false-positive `run_onchange` re-runs when applying from feature worktrees.
 
 ## Why This Works
 
-`run_onchange_after_install-system-16-udev.sh.tmpl:2` captures the render-time
+`run_onchange_after_install-system-16-udev.sh.tmpl` previously captured the render-time
 source path into a template variable:
 
-```
+```gotemplate
 {{ $sourceDir := .chezmoi.sourceDir -}}
 ```
 
-and line 10 interpolates it into the rendered script body:
+and interpolated it directly into the rendered script body:
 
-```
+```bash
 SRC_ROOT="{{ $sourceDir }}/system/linux"
 ```
 
@@ -121,7 +124,7 @@ that literal changes, but the rendered text differs, so its hash differs, so
 chezmoi re-runs it.
 
 `system/README.md:18-20` documents this as the pattern for the whole script
-family, and `grep -rl 'chezmoi.sourceDir' .chezmoiscripts/` matches 48 script
+family, and `grep -rl 'chezmoi.sourceDir' home/.chezmoiscripts/` matches 57 script
 templates. The re-run set is therefore a property of the source-path switch, not
 of anything the change itself touched.
 

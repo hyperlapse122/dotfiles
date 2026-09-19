@@ -1,7 +1,7 @@
 ---
 title: An omp/Gemini Roster Seat Named First in Two Routing Rows Received Zero Dispatches for Ten Days
 date: 2026-09-18
-last_updated: 2026-09-18
+last_updated: 2026-09-19
 category: integration-issues
 module: agents
 problem_type: integration_issue
@@ -113,6 +113,8 @@ same-turn release rule so it can persist across dispatches, and is released befo
 
 > **Superseded on 2026-09-18, cause 1 only.** Issue #551 forbids omp seat reuse: every dispatch opens a new omp terminal, takes its one Dispatch with `worker-start --task <task_id> --terminal <handle>`, and is released in the turn that Dispatch settles, so the ceremony is per dispatch again and the same-turn release exemption is gone. The pressure this cause describes is now held by the cause 2 fix alone — the omp row's default membership and the recorded-signal rule for a `claude` implementation dispatch — and the launch cost is tracked in issue #550. Cause 2 and its fix stand as written. Two sentences below still describe the reverted state in the present tense and are left in place as the record they are: "one call either way in steady state" under "Why This Works", and "reduces the ceremony's steady-state cost from per-dispatch to per-run" under "Related Issues".
 
+> **Updated on 2026-09-19.** PR #582 (commit cddc1359) permanently eliminated Cause 1 by introducing single-command `worker-start --agent omp` launch support in Orca (`worker-start --spec <brief> --worktree current --agent omp`). Manual terminal opening, handle readback, and model confirmation are no longer required; launch ceremony is now uniform across all roster entries.
+
 **Cause 2 — the vacuous band was deleted, and omp named as the sizing rule's own floor.**
 `.chezmoitemplates/orchestration-coordinator.tmpl:43` now reads "Implementation Units of every
 deliverable format — code, frontend, and repository Markdown alike — that no recorded signal
@@ -122,8 +124,9 @@ places at `{{ $sonnet.rung }}`" as the omp row's membership, and the sizing para
 signals do not claim." The omp seat became the unmarked default for every Implementation Unit; a
 `claude` worker is used only when the lead has recorded, before dispatch, which of the four
 sizing signals sent the Unit there — an unrecorded `claude` implementation dispatch is now a
-named rule violation. `.chezmoidata/agents.yaml:62-86` and `AGENTS.md:74` describe the resulting
-six-entry roster and the omp seat's role.
+named rule violation. `home/.chezmoidata/agents.yaml` and `AGENTS.md` describe the resulting
+five-worker roster (with `omp-flash` serving mechanical, implementation, and judgment shapes)
+and the omp seat's role.
 
 The same landing also removed the `opus` worker rung entirely (renamed to a `fable`-backed
 `authoring` entry for plan/approach-generation work) and split two seats that had been serving
@@ -192,8 +195,7 @@ what the row claims and what the sizing rule defines.
 ## Related Issues
 
 - GitHub issue #543 ("chore(agents): tighten orca session release, wait timeout, and omp
-  dispatch") item 3 raises the same launch-ceremony inefficiency (three-step
-  open → confirm → attach vs. a single non-interactive call) independently, and is still open;
-  this fix reduces the ceremony's steady-state cost from per-dispatch to per-run but does not
-  investigate whether omp supports a genuinely single-call non-interactive launch, which is what
-  that issue asks for.
+  dispatch") item 3 raised the same launch-ceremony inefficiency (three-step
+  open → confirm → attach vs. a single non-interactive call) independently, and issue #550 tracked
+  launch cost. Both were resolved by PR #582, which added single-command `worker-start --agent omp`
+  launch support in Orca.

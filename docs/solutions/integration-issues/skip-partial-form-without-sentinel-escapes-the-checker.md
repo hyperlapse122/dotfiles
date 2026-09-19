@@ -33,7 +33,7 @@ Adding `clear_record` as a fifth form made that concrete. The form emits one lin
 
 - A new form is added and `.ci/check-skip-declarations.sh` passes with identical totals on the first run, with no checker change. That is the correct outcome and also the warning sign.
 - `clear_record` is called with a `site` that no declaration writes. The rendered script removes a record that never exists, the real record survives the success path, and `dotfiles-skips` reports a converged host as blocked forever. Every suite stays green.
-- The render-time gates in `.chezmoitemplates/skip.sh.tmpl:163-195` do not catch it either: they validate the form name, the identity charset and the direction/probe combination, none of which a wrong-but-well-formed `site` violates.
+- The render-time gates in `home/.chezmoitemplates/skip.sh.tmpl:163-195` do not catch it either: they validate the form name, the identity charset and the direction/probe combination, none of which a wrong-but-well-formed `site` violates.
 
 ## What Didn't Work
 
@@ -45,19 +45,19 @@ Adding `clear_record` as a fifth form made that concrete. The form emits one lin
 
 Give the sentinel-less form its own reconciliation pass, because it cannot ride on the existing one.
 
-`.ci/check-skip-declarations.sh:353` matches the exact line the partial emits:
+`.ci/check-skip-declarations.sh:361` matches the exact line the partial emits:
 
 ```python
 RM_SKIPS = re.compile(r'^rm -f "\$\{XDG_STATE_HOME:-\$HOME/\.local/state\}/chezmoi/skips/([^"]+)" 2>/dev/null \|\| true$')
 ```
 
-and the pass at `.ci/check-skip-declarations.sh:1070` recovers `<script>` and `<site>` from every such rendered line **outside a declared branch**, then requires the pair to name an owner and an instance the matrix knows. Three exclusions are deliberate:
+and the pass at `.ci/check-skip-declarations.sh:1079-1101` (loop at line 1082) recovers `<script>` and `<site>` from every such rendered line **outside a declared branch**, then requires the pair to name an owner and an instance the matrix knows. Three exclusions are deliberate:
 
 | Excluded | Why |
 |---|---|
 | removal lines inside a declared branch | `done_here`, `not_applicable` and `harmless` emit the same `rm -f`, but each sits under a sentinel that the existing reconciliation already validates. Checking them twice would double-report one defect. |
-| a path containing `$` | `.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl:212` builds its record name from a shell variable. A value resolved at runtime cannot be reconciled against a static matrix. |
-| always-run scripts | the checker's existing lifecycle filter already excludes them, which is why `.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl` and its two literal removals never reach the pass. |
+| a path containing `$` | `home/.chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl:212` builds its record name from a shell variable. A value resolved at runtime cannot be reconciled against a static matrix. |
+| always-run scripts | the checker's existing lifecycle filter already excludes them, which is why `home/.chezmoiscripts/70-agents/run_after_config-omp-settings.sh.tmpl` and its two literal removals (lines 78, 83) never reach the pass. |
 
 The proof is a negative fixture, not the production tree: `.ci/test-skip-declaration-gates.sh` renders a fixture whose `clear_record` names `fx-main/unknown-site` and asserts the checker fails with that pair in the message. Without it the pass is a claim rather than a guard — the production call sites are all correct, so a broken pass would look exactly like a working one.
 
@@ -67,8 +67,8 @@ Landed on branch `refactor/installer-skip-record-dedup` in commits `564bb4c0` (t
 
 The checker observes rendered shell through exactly two lenses, both visible in its own source:
 
-- `SENTINEL` at `.ci/check-skip-declarations.sh:345` finds `# skip-declaration-v1 …` comment lines. Everything about owners, instances, predicates and continuations hangs off a sentinel match.
-- `TERM_ANY` at `.ci/check-skip-declarations.sh:347` finds `exit` and `return` statements, which is how an undeclared conditional success exit is caught.
+- `SENTINEL` at `.ci/check-skip-declarations.sh:353` finds `# skip-declaration-v1 …` comment lines. Everything about owners, instances, predicates and continuations hangs off a sentinel match.
+- `TERM_ANY` at `.ci/check-skip-declarations.sh:355` finds `exit` and `return` statements, which is how an undeclared conditional success exit is caught.
 
 `clear_record` emits `rm -f …`. That is not a comment and not a terminator, so it raises no event in either lens, and every downstream structure — the owner map, the instance set, the predicate digests — is built from events. This is not an oversight in the checker; it is what let the form be added without touching it. The same property that made the form cheap to adopt is the property that left it unvalidated, and only a pass built on a third lens closes that.
 
@@ -83,5 +83,5 @@ The checker observes rendered shell through exactly two lenses, both visible in 
 
 - `docs/solutions/integration-issues/chezmoi-run-onchange-entrystate-bucket.md` — the other half of the skip framework's recovery story: which state bucket actually re-runs an onchange script.
 - `docs/plans/2026-09-18-0104-refactor-installer-skip-record-dedup-plan.md` — the plan that added the form, and whose Risks section recorded this blind spot before the reconciliation pass closed it.
-- `.chezmoitemplates/skip.sh.tmpl` — the declaration contract and its five call forms; the header comment states which of them declare nothing.
+- `home/.chezmoitemplates/skip.sh.tmpl` — the declaration contract and its five call forms; the header comment states which of them declare nothing.
 - `.ci/skip-declaration-site-matrix.yaml` — the CI-only oracle the reconciliation compares against.

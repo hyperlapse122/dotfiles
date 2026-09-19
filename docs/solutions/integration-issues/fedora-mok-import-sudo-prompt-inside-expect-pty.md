@@ -1,7 +1,7 @@
 ---
 title: sudo Re-Prompts Inside the expect pty and the MOK Import Never Runs
 date: 2026-09-08
-last_updated: 2026-09-08
+last_updated: 2026-09-19
 category: integration-issues
 module: nvidia
 problem_type: integration_issue
@@ -14,7 +14,7 @@ symptoms:
   - "mokutil --list-new is empty after an apply that reported enrollment, and the signed module stays untrusted under Secure Boot"
   - "the same apply authenticated sudo successfully moments earlier, for the package and keypair steps"
 root_cause: incorrect_configuration
-resolution_type: code_change
+resolution_type: code_fix
 severity: high
 tags:
   - nvidia
@@ -103,8 +103,10 @@ Why this holds:
 `expect` is no longer a precondition of the enrollment, so the
 `mok-enroll-no-expect` skip site and the `expect-present` capability probe are
 gone, with the matrix totals and the frozen CI boundaries retuned to match.
-`expect` stays in the Fedora base package set for the one-time GPG trust edit in
-`80-keys`, which does still need a pty.
+`expect` was subsequently removed from the Fedora base package set and `80-keys`
+when the GPG key presence check moved to `.install-prerequisites.sh` (using
+`gpg --import-ownertrust` instead of an interactive trust edit); `expect` is now
+provisioned only as an optional developer tool in `home/.chezmoiscripts/30-components/run_onchange_before_80-devtools.sh.tmpl`.
 
 ## Verification
 

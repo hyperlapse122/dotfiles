@@ -1,10 +1,10 @@
 ---
 title: Remove the NVIDIA Stack by Hand on a Pascal Hybrid Host Declared Integrated-Only
 date: 2026-09-05
-last_updated: 2026-09-05
+last_updated: 2026-09-19
 category: integration-issues
 module: nvidia
-problem_type: workflow_pattern
+problem_type: integration_issue
 component: package_provisioning
 symptoms:
   - "install-nvidia-fedora.sh reports that this hybrid host's GPU architecture is declared integrated-only and prints this file's path"
@@ -12,7 +12,7 @@ symptoms:
   - "the discrete GPU's power/runtime_status stays active and runtime_suspended_time stays 0 on battery"
   - "akmod-nvidia-580xx rebuilds and signs a module on every kernel update for a GPU nothing uses"
 root_cause: design_limitation
-resolution_type: manual_procedure
+resolution_type: workflow_improvement
 severity: medium
 tags:
   - nvidia
@@ -26,7 +26,7 @@ tags:
 
 ## Problem
 
-A hybrid laptop whose discrete GPU architecture is listed in `nvidia.integratedOnlyArchitectures` (`.chezmoidata/nvidia.yaml`) resolves the `integratedOnly` fact to true. From that apply on, dotfiles installs nothing for NVIDIA, retires the two hybrid modprobe drop-ins, installs a driver blacklist, and installs a udev rule that leaves the discrete GPU driverless under PCI runtime power management so its root port enters D3cold.
+A hybrid laptop whose discrete GPU architecture is listed in `nvidia.integratedOnlyArchitectures` (`home/.chezmoidata/nvidia.yaml`) resolves the `integratedOnly` fact to true. From that apply on, dotfiles installs nothing for NVIDIA, retires the two hybrid modprobe drop-ins, installs a driver blacklist, and installs a udev rule that leaves the discrete GPU driverless under PCI runtime power management so its root port enters D3cold.
 
 Dotfiles never removes packages. A host that already carried the stack when the policy landed keeps it until the operator removes it by hand. This is a decision, not a gap: the repository stops installing and documents the reversal here rather than owning a removal path.
 
