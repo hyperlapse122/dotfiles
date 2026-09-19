@@ -1,4 +1,11 @@
-{{- $settings := .orca.settings -}}
+{{- /* settings.agentDefaultArgs.omp is derived from agents.roster rather than
+   declared in orca.yaml, so no settings map hard-codes an omp model id or
+   effort. The merge happens before validation so the derived leaf passes
+   through the validator. */ -}}
+{{- $_ := includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}
+{{- $omp := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "implementation" "rung" "" "name" "an omp implementation entry") | fromJson -}}
+{{- $ompArgs := printf "--model %s --thinking %s" $omp.model $omp.effort -}}
+{{- $settings := merge (dict "settings.agentDefaultArgs.omp" $ompArgs) .orca.settings -}}
 {{- includeTemplate "orca-settings-validate.tmpl" (dict "ctx" . "settings" $settings) -}}
 {{- $home := .chezmoi.homeDir -}}
 {{- $resolved := dict -}}

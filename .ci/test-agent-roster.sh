@@ -326,38 +326,28 @@ agent_seat_pair() {
   cat "$out"
 }
 
-# KTD6/KTD9: the terminal is launched per dispatch with that entry's model;
-# render the mechanical seat through agent-roster-lookup.tmpl instead of
-# grepping a hand-written id, so a roster edit to the mechanical entry reaches
-# this assertion with no edit here.
-grep -F 'worker-start --task <task_id> --terminal <handle>' "$coordinator_body" >/dev/null ||
-  fail 'the rendered coordinator does not carry the omp seat-selection line'
-read -r mechanical_model mechanical_effort <<<"$(agent_seat_pair omp mechanical '')"
-grep -F -- "$mechanical_model" "$coordinator_body" >/dev/null ||
-  fail 'the omp seat-selection line does not name the mechanical entry model'
+# U3 / AE4: An omp dispatch is one start command with --agent omp;
+# it no longer uses worker-start --task <task_id> --terminal <handle>.
+! grep -F 'worker-start --task <task_id> --terminal <handle>' "$coordinator_body" >/dev/null ||
+  fail 'AE4: coordinator still carries worker-start with --terminal attach'
+grep -F 'worker-start' "$coordinator_body" | grep -F -- '--agent omp' >/dev/null ||
+  fail 'AE4: coordinator does not describe omp launch as worker-start with --agent omp'
+grep -F 'worker-read' "$coordinator_body" >/dev/null ||
+  fail 'AE4: coordinator does not describe status-line model check through worker-read'
+read -r omp_model omp_effort <<<"$(agent_seat_pair omp implementation '')"
+grep -F -- "$omp_model" "$coordinator_body" >/dev/null ||
+  fail 'coordinator omp launch line does not name the implementation entry model'
 
-# The committed roster's mechanical and implementation entries resolve to the
-# single omp-flash seat (high), so it renders the one-seat branch.
-read -r omp_impl_model omp_impl_effort <<<"$(agent_seat_pair omp implementation '')"
-grep -F "one seat (\`$omp_impl_model\` at \`$omp_impl_effort\`) for mechanical and implementation work alike" "$coordinator_body" >/dev/null ||
-  fail 'the committed roster does not render the one-seat branch'
-grep -F 'for mechanical work, ' "$coordinator_body" >/dev/null &&
-  fail 'the committed roster rendered the two-seat branch'
-# A single omp entry carrying both shapes, at one pair, proves the one-seat
-# branch still renders when a future roster collapses back to it.
-one_seat_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
-  {"id":"claude-fable","agent":"claude","model":"fable","effort":"medium","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
-  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["mechanical","implementation","judgment"],"rung":"judgment-standard","brief":"x"},
-  {"id":"omp-judgment-cheap-stub","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["judgment"],"rung":"judgment-cheap","brief":"x"}]'
-one_seat_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$one_seat_workers")
-one_seat_body="$scratch/coordinator-one-seat.md"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$one_seat_body" "$one_seat_override" ||
-  fail 'the coordinator body failed to render against a single-omp-entry stub'
-grep -F 'one seat (`google-antigravity/gemini-3.8-flash` at `high`) for mechanical and implementation work alike' "$one_seat_body" >/dev/null ||
-  fail 'the single-omp-entry stub does not render the one-seat branch'
-grep -F 'for mechanical work, ' "$one_seat_body" >/dev/null &&
-  fail 'the single-omp-entry stub rendered the two-seat branch'
+# Error path & AE1: forbids re-engaging settled seats, records missing/mismatched model as degraded,
+# keeps relaunch-once rule, and second miss is agent unavailability.
+grep -F 'MUST NOT re-engage an omp terminal a previous Dispatch ran in' "$coordinator_body" >/dev/null ||
+  fail 'coordinator lost rule forbidding re-engaging settled omp terminal'
+grep -F 'missing or mismatched model records the pass as degraded' "$coordinator_body" >/dev/null ||
+  fail 'coordinator lost rule recording missing or mismatched model as degraded'
+grep -F 'launches once more' "$coordinator_body" >/dev/null ||
+  fail 'coordinator lost relaunch-once rule'
+grep -F 'second launch that yields no such seat is agent unavailability' "$coordinator_body" >/dev/null ||
+  fail 'coordinator lost second-miss-is-unavailability rule'
 
 # R13: the routing table has six rows (mechanical, two implementation rows,
 # and three judgment rungs); the brief-guidance table has seven, one per
@@ -461,7 +451,7 @@ grep -F -- '--effort max' "$stub_body" >/dev/null &&
 
 # A two-entry omp roster proves a future distinct mechanical entry still
 # drives its consumers with no template change: the mechanical row's first
-# recipient and the two-seat branch of the seat-selection line both name it.
+# recipient and the brief-guidance table both name it.
 two_entry_omp_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
   {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
@@ -473,8 +463,6 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$two
   fail 'the coordinator body failed to render against a two-entry omp stub'
 grep -F -- '`omp` `google-antigravity/gemini-9.8-lite-stub` high' "$two_entry_omp_body" >/dev/null ||
   fail 'the two-entry omp stub: the mechanical row does not name the fake mechanical model as first recipient'
-grep -F -- '`google-antigravity/gemini-9.8-lite-stub` at `high` for mechanical work, `google-antigravity/gemini-3.8-flash` at `high` otherwise' "$two_entry_omp_body" >/dev/null ||
-  fail 'the two-entry omp stub: the seat-selection line does not render the two-seat branch'
 
 two_entry_omp_judgment_row=$(grep -F 'judgment-standard` or `judgment-cheap` rung' "$two_entry_omp_body")
 [[ -n $two_entry_omp_judgment_row ]] ||

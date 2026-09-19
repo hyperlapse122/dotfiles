@@ -613,7 +613,7 @@ only after the query itself failed, and then MUST also record the command it ran
 This clause never blocks a run.
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
-A substantive failure on the omp mechanical entry is retried once on the omp implementation entry before the mechanical row leaves the agent
+A substantive failure on the mechanical row is retried once on the same omp seat with a sharpened brief, then goes to
 A revision of the current workflow's own planning artifact is lead work, and the lead makes that edit itself.
 That artifact is the one plan or requirements document under `<docs_root>/plans/` or `<docs_root>/brainstorms/`
 The first write of an artifact is not a revision and keeps its recipient, so model elevation still authors the first plan.
@@ -635,12 +635,12 @@ while IFS= read -r needle; do
 done <<'CLAUDE_COORDINATOR_NEEDLES'
 A Unit that needs live MCP access its intended recipient does not hold MUST NOT be dispatched to that recipient
 Orca's `worker-start --model` and `--effort` forward to Claude, Codex, and Cursor launches only, so an `omp` row is not selected that way
-confirms the model from the terminal, and dispatches with `worker-start --task <task_id> --terminal <handle>`.
+every omp dispatch starts in one command, `worker-start
+checks the model name on the worker's own status line through `worker-read`
 the lead MUST NOT re-engage an omp terminal a previous Dispatch ran in, settled or not
 When its Dispatch settles, the seat is a release target and never a reuse target
-the lead therefore closes the terminal it opened in that same turn
-omp's own `modelRoles` then never decides which Gemini seat a dispatch uses.
-The version-matched Orca guide owns the exact terminal-launch spelling.
+ordinary release closes the agent terminal.
+The version-matched Orca guide owns the exact launch spelling.
 Size an Implementation Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
 takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
 takes a Unit that keeps real design judgment inside its own bounds — the plan names the outcome and not the approach, the change crosses a module, process, or service boundary, or the surface is correctness-critical, such as authentication, a schema or data migration, concurrency, money, or anything that can lose data.
@@ -661,9 +661,9 @@ and the elevation worker selects the authoring pair
 the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
 When either reviewer from the `judgment-deep` row is unavailable or fails, the review proceeds on the other, recorded as degraded, and the `claude` reviewer keeps its `judgment-deep` effort.
 A second launch miss there records that reviewer's pass as degraded, and the review proceeds on the remaining reviewer without waiting and without escalating.
-pinned by omp's own `--model` and `--thinking` flags
-so the lead MUST NOT type, paste, or send the prompt itself.
-are not a dispatch path: such a process runs one prompt and exits
+the thinking level is trusted from the default arguments the reconciler asserted.
+missing or mismatched model records the pass as degraded.
+omp's non-interactive forms — `--print` and piped stdin — are not a dispatch path.
 CLAUDE_COORDINATOR_NEEDLES
 for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   if grep -F 're-engages that terminal' "$payload" >/dev/null \
@@ -675,6 +675,12 @@ for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
     || grep -F 'omp implementation seat' "$payload" >/dev/null \
     || grep -F 'the seat changes while' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains roster-entry use of seat"
+  fi
+  if grep -F 'worker-start --task <task_id> --terminal <handle>' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired omp terminal-attach launch"
+  fi
+  if grep -F 'closes the terminal it opened' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired omp terminal-close cleanup"
   fi
   if grep -F 'No PreToolUse hook enforces any of this.' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains retired un-enforced sentence"
