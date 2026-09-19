@@ -7,9 +7,6 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/.ci/lib/render-gate-helpers.sh"
 # shellcheck source=.ci/lib/render-scratch.sh
 source "$repo_root/.ci/lib/render-scratch.sh"
-# shellcheck source=.ci/lib/source-root.sh
-source "$repo_root/.ci/lib/source-root.sh"
-source_root=$(resolve_source_root "$repo_root")
 
 setup_render_scratch test-render-gate-helpers
 mkdir -p "$scratch/home"
