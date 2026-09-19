@@ -57,10 +57,6 @@ strip_ignore_template() {
     const endMarker = "# END inapplicable-script-exclusions";
     const bCount = content.split(beginMarker).length - 1;
     const eCount = content.split(endMarker).length - 1;
-    if (bCount === 0 && eCount === 0) {
-      fs.writeFileSync(destPath, content);
-      process.exit(0);
-    }
     if (bCount !== 1 || eCount !== 1) {
       console.error(`strip_ignore_template: markers count mismatch (BEGIN: ${bCount}, END: ${eCount})`);
       process.exit(1);
@@ -297,6 +293,7 @@ discover_consumer "jetson-off-tailnet" "jetson-off-tailnet" 1
 profiles=(
   'baseline:{"desktop":"kde","battery":true,"fingerprintReader":true,"irCamera":true,"nvidia":true,"virt":false,"thinkpad":false,"sharedHost":false,"jetson":false,"container":false,"headless":false}'
   'gnome:{"desktop":"gnome","battery":true,"fingerprintReader":true,"irCamera":true,"nvidia":true,"virt":false,"thinkpad":false,"sharedHost":false,"jetson":false,"container":false,"headless":false}'
+  'headless:{"desktop":"none","battery":true,"fingerprintReader":true,"irCamera":true,"nvidia":true,"virt":false,"thinkpad":false,"sharedHost":false,"jetson":false,"container":false,"headless":true}'
   'sharedHost:{"desktop":"kde","battery":true,"fingerprintReader":true,"irCamera":true,"nvidia":true,"virt":false,"thinkpad":false,"sharedHost":true,"jetson":false,"container":false,"headless":false}'
   'virt:{"desktop":"kde","battery":true,"fingerprintReader":true,"irCamera":true,"nvidia":true,"virt":true,"thinkpad":false,"sharedHost":false,"jetson":false,"container":false,"headless":false}'
   'battery:{"desktop":"kde","battery":false,"fingerprintReader":true,"irCamera":true,"nvidia":true,"virt":false,"thinkpad":false,"sharedHost":false,"jetson":false,"container":false,"headless":false}'
@@ -314,7 +311,7 @@ check_parity() {
 
   local stripped_tmpl
   stripped_tmpl="$scratch/stripped-$$-$(basename "$template_src").tmpl"
-  strip_ignore_template "$template_src" "$stripped_tmpl"
+  strip_ignore_template "$template_src" "$stripped_tmpl" || return 1
 
   for p_entry in "${profiles[@]}"; do
     local p_name=${p_entry%%:*}
@@ -482,7 +479,7 @@ if mutant_out=$(check_parity "$mutant_tmpl_fedora" consumer_map normalized_scrip
   fail 'template missing fedora/base.sh in sharedHost should fail parity check'
 fi
 [[ "$mutant_out" == *".chezmoiscripts/20-base/fedora/base.sh"* ]] || fail "mutant no fedora base did not name target: $mutant_out"
-[[ "$mutant_out" == *"fedora"* ]] || fail "mutant no fedora base should fail on fedora pass: $mutant_out"
+[[ "$mutant_out" == *"profile sharedHost (fedora) parity mismatch"* ]] || fail "mutant no fedora base should fail on fedora pass: $mutant_out"
 pass 'mutant: removed fedora/base from sharedHost fails under sharedHost profile in fedora pass'
 
 # Remove virt disjunct from thermald rule -> fails under virt profile
@@ -511,5 +508,30 @@ if mutant_out=$(check_parity "$mutant_tmpl_overreach" consumer_map normalized_sc
 fi
 [[ "$mutant_out" == *"exclusion over-reaches: .chezmoiscripts/30-linux/chsh-zsh.sh"* ]] || fail "mutant overreach did not name target: $mutant_out"
 pass 'mutant: over-reaching rule in sharedHost fails under sharedHost profile'
+
+# Over-reach: add install-system-10-desktop.sh under desktop == none -> fails under headless profile
+mutant_tmpl_headless="$scratch/mutant-headless-overreach.tmpl"
+node -e '
+  const fs = require("node:fs");
+  const [srcPath, outPath] = process.argv.slice(1);
+  const src = fs.readFileSync(srcPath, "utf8");
+  const marker = "# BEGIN inapplicable-script-exclusions";
+  const rule = "\n{{- if eq $f.desktop \"none\" }}\n.chezmoiscripts/30-linux/install-system-10-desktop.sh\n{{- end }}";
+  fs.writeFileSync(outPath, src.replace(marker, marker + rule));
+' "$source_root/.chezmoiignore" "$mutant_tmpl_headless"
+if mutant_out=$(check_parity "$mutant_tmpl_headless" consumer_map normalized_scripts "headless" 2>&1); then
+  fail 'over-reaching headless template should fail parity check'
+fi
+[[ "$mutant_out" == *"exclusion over-reaches: .chezmoiscripts/30-linux/install-system-10-desktop.sh"* ]] || fail "mutant headless overreach did not name target: $mutant_out"
+pass 'mutant: over-reaching headless rule fails under headless profile'
+
+# Template missing both markers -> strip_ignore_template fails -> check_parity fails
+mutant_tmpl_nomarkers="$scratch/mutant-no-markers.tmpl"
+sed '/# BEGIN inapplicable-script-exclusions/d; /# END inapplicable-script-exclusions/d' "$source_root/.chezmoiignore" > "$mutant_tmpl_nomarkers"
+if mutant_out=$(check_parity "$mutant_tmpl_nomarkers" consumer_map normalized_scripts "baseline" 2>&1); then
+  fail 'template missing both markers should fail check_parity'
+fi
+[[ "$mutant_out" == *"markers count mismatch (BEGIN: 0, END: 0)"* ]] || fail "mutant no markers did not report count mismatch: $mutant_out"
+pass 'mutant: template missing both markers fails check_parity'
 
 printf 'test-chezmoiignore-script-paths: all tests passed\n'

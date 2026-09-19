@@ -17,9 +17,11 @@ site with that consumer as its `script`, so each of the nine consumers carries
 its own kde-guard/non-kde-desktop instance and clears its own state entry.
 The skip message is the pre-registry one, verbatim.
 
-Baking the fact means a desktop swap changes this partial's rendered output, and
-with it the content of every consuming run_onchange_ script — so they all re-run.
-That is correct, not churn: the host became a different host.
+Because .chezmoiignore keeps other-desktop hosts from deploying them, and
+chezmoi preserves a run_onchange_ script's recorded run-state while ignored,
+returning to a previously active desktop does not re-run returning scripts
+automatically. Re-run them with `chezmoi apply --force` or delete the state
+bucket with `chezmoi state delete-bucket --bucket=entryState`.
 
 ARGUMENT — a dict, NOT the bare display-name string this partial used to take:
 
