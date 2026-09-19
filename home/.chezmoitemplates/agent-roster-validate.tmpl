@@ -63,6 +63,8 @@
 {{- end -}}
 {{- $seenIds := list -}}
 {{- $seenRungs := list -}}
+{{- $ompMechanical := false -}}
+{{- $ompImplementation := false -}}
 {{- $ompJudgment := false -}}
 {{- range $workers -}}
 {{-   $id := .id -}}
@@ -91,8 +93,10 @@
 {{-     if not (has . $validShapes) -}}
 {{-       fail (printf "agent-roster-validate: %s declares unknown shape %q" $id .) -}}
 {{-     end -}}
-{{-     if and (eq $agent "omp") (eq . "judgment") -}}
-{{-       $ompJudgment = true -}}
+{{-     if eq $agent "omp" -}}
+{{-       if eq . "mechanical" -}}{{- $ompMechanical = true -}}{{- end -}}
+{{-       if eq . "implementation" -}}{{- $ompImplementation = true -}}{{- end -}}
+{{-       if eq . "judgment" -}}{{- $ompJudgment = true -}}{{- end -}}
 {{-     end -}}
 {{-   end -}}
 {{-   $rung := "" -}}
@@ -114,6 +118,12 @@
 {{-       fail (printf "agent-roster-validate: %s omp model %q does not start with google-antigravity/" $id .model) -}}
 {{-     end -}}
 {{-   end -}}
+{{- end -}}
+{{- if not $ompMechanical -}}
+{{-   fail "agent-roster-validate: no omp entry declares the mechanical shape" -}}
+{{- end -}}
+{{- if not $ompImplementation -}}
+{{-   fail "agent-roster-validate: no omp entry declares the implementation shape" -}}
 {{- end -}}
 {{- if not $ompJudgment -}}
 {{-   fail "agent-roster-validate: no omp entry declares the judgment shape" -}}

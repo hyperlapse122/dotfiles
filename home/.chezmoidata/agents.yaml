@@ -61,33 +61,20 @@ agents:
         an instruction from one item to another. Fix the approach in the
         brief. For review briefs, ask for every finding with confidence and
         severity instead of filtering.
-    - id: omp-flash-mechanical
-      agent: omp
-      model: google-antigravity/gemini-3.8-flash
-      effort: low
-      shapes: [mechanical, judgment]
-      rung: judgment-cheap
-      brief: >-
-        Ask for one read or lookup per dispatch, never a batch. Require
-        verbatim excerpts with repo-relative paths and line numbers instead
-        of a summary. Forbid edits. Name the returned excerpt as the stop
-        condition. Forbid the real `op`: never invoke it, never let a render
-        reach it, and use only the stub `op` on a PATH naming the stub
-        directory and the system directories.
     - id: omp-flash
       agent: omp
       model: google-antigravity/gemini-3.8-flash
       effort: high
-      shapes: [implementation, judgment]
-      rung: judgment-standard
+      shapes: [mechanical, implementation, judgment]
       brief: >-
-        Order the brief as rules, context, definitions, task, tool policy,
-        output, verification, stop condition. Define ambiguous terms and
-        thresholds. Place long context before the task. Name what must
-        never be invented. In the tool policy, forbid the real `op`: never
-        invoke it, never let a render reach it, and use only the stub `op`
-        on a PATH naming the stub directory and the system directories,
-        because a live secret in rendered output is the harm.
+        For mechanical work, ask for one read or lookup per dispatch with
+        verbatim excerpts, repo-relative paths, and line numbers instead of a
+        summary. For implementation work, order the brief as rules, context,
+        definitions, task, tool policy, output, verification, stop
+        condition; define ambiguous terms and place long context before the
+        task. For both, forbid the real `op`: never invoke it, never let a
+        render reach it, and use only the stub `op` on a PATH naming the stub
+        directory and the system directories.
   mcp:
     servers:
     - name: figma
