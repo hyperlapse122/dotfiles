@@ -46,6 +46,7 @@ orca:
     settings.voice.sttModel: zipformer-streaming-korean
 
     settings.refreshLocalBaseRefOnWorktreeCreate: true
+    settings.nestedWorkerMaxDepth: 5
 
     settings.sourceControlAi.actions.commitMessage.agentId: custom
     settings.sourceControlAi.actions.commitMessage.commandInputTemplate: "{basePrompt}\n\nUse conventional commit message"
