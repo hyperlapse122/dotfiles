@@ -433,7 +433,7 @@ In an Orca-managed session, before launching ANY subagent, worker, or peer revie
 Orca owns dispatch.
 In that session the harness's own in-process subagent tool is never a substitute for it.
 The detailed contract does not live in this file: an Orca-managed session receives it by injection at session start, as a normative extension of this file carrying the same precedence as this file's own text.
-omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex.
+omp leads, dispatches, and serves as a worker on the same terms as Claude Code, and leads and dispatches on the same terms as Codex.
 Compound Engineering model elevation has a default: for each of `plan_model` and `brainstorm_model` separately
 This default is size-gated: it applies only to a Deep run, or to a Standard run whose scope carries a risk surface
 A CI workflow, a build script, or a repository-internal config path is not a risk surface by itself.
@@ -478,11 +478,6 @@ wait 2:  <the same command, acknowledging the delivery just read>  -> worker B a
 # Never. Each of these builds the wait out of shell control flow:
 until [ "$(ls out/*.json | wc -l)" -ge 7 ]; do sleep 20; done
 for w in $workers; do <the guide's blocking wait command>; done
-Before dispatching a Codex worker, the session MUST run `orca-ide agent hooks prepare-codex` once to repair Orca-managed Codex hook trust.
-The repair command is idempotent and silent on success, so a pre-dispatch run costs effectively nothing.
-agentWait.reason: codex-hooks-review-prompt
-run `orca-ide agent hooks prepare-codex` and retry the dispatch rather than editing `~/.codex/config.toml` by hand
-MUST NOT edit `~/.codex/config.toml` trust records by hand, because `chezmoi apply` owns the dotfiles-side hook records and manual edits would contend with them.
 the run writes the four-minute checkpoint fixed above into `--timeout-ms` in place of the figure the guide prints
 the blocking interval a harness paragraph tells a coordinator to maximize is this inner layer, never the checkpoint
 NEEDLES
@@ -538,14 +533,7 @@ The ban on bundled dispatchers and direct peer CLIs is NOT a reason to skip a re
 MUST first load the `orchestration` skill and attempt its supported Orca workflow.
 MUST NOT declare orchestration unavailable without an observed failure; if the app is stopped, follow the skill's startup procedure before declaring it blocked.
 If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
-Claude Code, Codex, and omp lead, dispatch, and serve as workers on the same terms.
-omp receives this text through its before_agent_start extension before each model call.
-When another agent launches Codex through Orca, the launch MUST explicitly select the model and reasoning effort its purpose names.
-The coordinator MUST compare `launch.requested` with `launch.effective` and claim the requested pair only when the effective fields report it.
-If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the requirement.
-Recovery and release remain governed by the installed Orca lifecycle rules.
-Being inside Orca alone MUST NOT trigger this override.
-A launch that does not meet both the delegation and work-purpose conditions keeps its existing explicit model-selection rules.
+Claude Code and omp lead, dispatch, and serve as workers on the same terms; Codex leads and dispatches on those same terms.
 A brief defect is required context the brief does not carry.
 A URL kept beside a usable extraction is provenance, not a defect.
 <!-- orchestration-everyone:end -->
@@ -580,7 +568,7 @@ A session that received no orchestration injection is not a lead: it keeps its e
 a tool-call guard denies the harness's own subagent tool — `Agent` and `Task` in Claude Code, `collaborationspawn_agent` in Codex, `task` in omp
 No hook enforces the lead boundary itself.
 The shell-launch guard stays removed, no edit notice is built, and this paragraph together with the no-direct-CLI rule in the Everyone payload is the whole enforcement of that boundary.
-Dispatch targets are the `claude`, `codex`, and `omp` agents, and this table decides which one receives a unit of work.
+Dispatch targets are the `claude` and `omp` agents, and this table decides which one receives a unit of work.
 | Work shape | First recipient | On substantive failure | On agent unavailable |
 re-dispatches at the same row with a sharpened brief and never advances a row.
 An unavailable agent hands its work to the next agent named in its row; only when every agent in that row is unavailable does the lead escalate to the user
@@ -594,7 +582,7 @@ The plan file a dispatched model-elevation worker authors is that worker's singl
 Its cross-model review and its cross-model implementation MUST be carried out as Orca dispatches
 MUST NOT be reported as skipped or degraded while the Orca workflow has not been attempted and observed to fail
 The compound-engineering harness vocabulary — the `codex`, `claude`, `grok`, `cursor`, and `opencode` values a stage-routing carrier or a `work_engine_preferences` entry accepts — is the argument grammar of the banned bundled scripts, so it constrains nothing once the dispatch moves to Orca.
-Choose the Orca recipient from the agents the environment actually has.
+A Compound Engineering cross-model peer or work-engine preference, its default `codex` peer included, resolves to the routing table's recipients and never to a Codex worker.
 A recipient that vocabulary cannot name is a valid choice, never a routing blocker.
 An `lfg` run that cannot reach Orca degrades and keeps going; it does not stop, and it does not fall back to a bundled script.
 When a run dispatches Orca workers for a code review, document review, or peer pass, the following contract binds it.
@@ -625,7 +613,7 @@ only after the query itself failed, and then MUST also record the command it ran
 This clause never blocks a run.
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
-A substantive failure on the omp mechanical entry is retried once on the omp implementation entry before the mechanical row leaves the agent
+A substantive failure on the mechanical row is retried once on the same omp entry, in a fresh seat, with a sharpened brief, then goes to
 A revision of the current workflow's own planning artifact is lead work, and the lead makes that edit itself.
 That artifact is the one plan or requirements document under `<docs_root>/plans/` or `<docs_root>/brainstorms/`
 The first write of an artifact is not a revision and keeps its recipient, so model elevation still authors the first plan.
@@ -647,12 +635,12 @@ while IFS= read -r needle; do
 done <<'CLAUDE_COORDINATOR_NEEDLES'
 A Unit that needs live MCP access its intended recipient does not hold MUST NOT be dispatched to that recipient
 Orca's `worker-start --model` and `--effort` forward to Claude, Codex, and Cursor launches only, so an `omp` row is not selected that way
-confirms the model from the terminal, and dispatches with `worker-start --task <task_id> --terminal <handle>`.
+every omp dispatch starts in one command, `worker-start
+checks the model name on the worker's own status line through `worker-read`
 the lead MUST NOT re-engage an omp terminal a previous Dispatch ran in, settled or not
 When its Dispatch settles, the seat is a release target and never a reuse target
-the lead therefore closes the terminal it opened in that same turn
-omp's own `modelRoles` then never decides which Gemini seat a dispatch uses.
-The version-matched Orca guide owns the exact terminal-launch spelling.
+ordinary release closes the agent terminal.
+The version-matched Orca guide owns the exact launch spelling.
 Size an Implementation Unit FIRST, before any dispatch and before any failure exists, on four signals: the blast radius the Unit actually touches, the depth of judgment the plan leaves to the worker, the risk class of the surface it changes, and whether its acceptance signal is mechanically checkable.
 takes a Unit whose approach the plan fixes, that stays inside one module and a few files, and whose acceptance a test or a command settles.
 takes a Unit that keeps real design judgment inside its own bounds — the plan names the outcome and not the approach, the change crosses a module, process, or service boundary, or the surface is correctness-critical, such as authentication, a schema or data migration, concurrency, money, or anything that can lose data.
@@ -671,11 +659,11 @@ goes to that entry, launched with `--model
 Every `claude` launch from the `judgment-deep` row selects `--model
 and the elevation worker selects the authoring pair
 the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
-The `claude` reviewer's `judgment-deep` effort holds while the `codex` reviewer stands beside it; when that reviewer is removed or a run records it as degraded, the `claude` reviewer runs at `
+When either reviewer from the `judgment-deep` row is unavailable or fails, the review proceeds on the other, recorded as degraded, and the `claude` reviewer keeps its `judgment-deep` effort.
 A second launch miss there records that reviewer's pass as degraded, and the review proceeds on the remaining reviewer without waiting and without escalating.
-pinned by omp's own `--model` and `--thinking` flags
-so the lead MUST NOT type, paste, or send the prompt itself.
-are not a dispatch path: such a process runs one prompt and exits
+the thinking level is trusted from the default arguments the reconciler asserted.
+missing or mismatched model records the pass as degraded.
+omp's non-interactive forms — `--print` and piped stdin — are not a dispatch path.
 CLAUDE_COORDINATOR_NEEDLES
 for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   if grep -F 're-engages that terminal' "$payload" >/dev/null \
@@ -685,8 +673,17 @@ for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   fi
   if grep -F 'omp mechanical seat' "$payload" >/dev/null \
     || grep -F 'omp implementation seat' "$payload" >/dev/null \
-    || grep -F 'the seat changes while' "$payload" >/dev/null; then
+    || grep -F 'the seat changes while' "$payload" >/dev/null \
+    || grep -F 'same omp seat' "$payload" >/dev/null \
+    || grep -F 'same `omp` seat' "$payload" >/dev/null \
+    || grep -F 'cheap` omp seat' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains roster-entry use of seat"
+  fi
+  if grep -F 'worker-start --task <task_id> --terminal <handle>' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired omp terminal-attach launch"
+  fi
+  if grep -F 'closes the terminal it opened' "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired omp terminal-close cleanup"
   fi
   if grep -F 'No PreToolUse hook enforces any of this.' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains retired un-enforced sentence"
@@ -741,7 +738,6 @@ fi
 stub_roster_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"stub-author","effort":"low","shapes":["authoring"],"brief":"x"},
   {"id":"claude-fable","agent":"claude","model":"stub-judge","effort":"high","shapes":["judgment"],"brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
   {"id":"omp-flash-mechanical","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["mechanical"],"brief":"x"},
   {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"}]'
 stub_roster_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_roster_workers")

@@ -109,11 +109,44 @@ declared_source=$(render_stdin <<<'{{ .orca.settings | toJson }}')
 declared=$(sed -n "s/^DECLARED=\"\$(decode_b64 '\([A-Za-z0-9+/=]*\)')\"$/\1/p" "$reconcile_script" | base64 --decode)
 [[ -n $declared ]] || fail 'could not read the declaration payload out of the rendered reconciler'
 
+roster_omp_leaf=$(render_stdin <<<'{{ $omp := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "implementation" "rung" "" "name" "an omp implementation entry") | fromJson }}{{ dict "settings.agentDefaultArgs.omp" (printf "--model %s --thinking %s" $omp.model $omp.effort) | toJson }}')
+expected_declared=$(jq -c --argjson omp "$roster_omp_leaf" '. + $omp' <<<"$declared_source")
+
 declared_count=$(jq -r 'length' <<<"$declared")
 [[ $declared_count -gt 0 ]] || fail 'orca.yaml declares no settings paths'
-[[ $(jq -r 'length' <<<"$declared_source") -eq $declared_count ]] \
-  || fail 'the rendered reconciler carries a different number of paths than orca.yaml declares'
+[[ $(jq -r 'length' <<<"$expected_declared") -eq $declared_count ]] \
+  || fail 'the rendered reconciler carries a different number of paths than orca.yaml declares plus derived leaves'
 ok "$declared_count paths declared"
+
+# U3: settings.agentDefaultArgs.omp is derived from the omp roster row
+jq -e '.["settings.agentDefaultArgs.omp"] == "--model google-antigravity/gemini-3.8-flash --thinking high"' <<<"$declared" >/dev/null \
+  || fail "the rendered reconciler does not declare settings.agentDefaultArgs.omp as --model google-antigravity/gemini-3.8-flash --thinking high: $(jq '.["settings.agentDefaultArgs.omp"]' <<<"$declared")"
+ok 'settings.agentDefaultArgs.omp is derived from roster'
+
+# settings.agentDefaultArgs.omp is derived from the roster, not hand-written:
+# a literal in orca.yaml would be dead config behind the reconciler's merge.
+jq -e --arg k "settings.agentDefaultArgs.omp" 'has($k) | not' <<<"$declared_source" >/dev/null \
+  || fail "orca.yaml still declares settings.agentDefaultArgs.omp by hand; it is derived from agents.roster"
+ok 'settings.agentDefaultArgs.omp is not declared by hand in orca.yaml'
+# U3: the declared codex default-args leaf is unchanged beside the new omp leaf
+jq -e '.["settings.agentDefaultArgs.codex"] == "--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust"' <<<"$declared" >/dev/null \
+  || fail "the declared settings.agentDefaultArgs.codex was changed or removed: $(jq '.["settings.agentDefaultArgs.codex"]' <<<"$declared")"
+ok 'settings.agentDefaultArgs.codex is unchanged beside the new omp leaf'
+
+# U3: a roster fixture with a different omp model and effort renders those values into the leaf
+stub_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"medium","shapes":["authoring"],"brief":"x"},
+{"id":"claude-opus-judgment","agent":"claude","model":"opus","effort":"xhigh","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
+{"id":"claude-fable","agent":"claude","model":"fable","effort":"medium","shapes":["judgment"],"rung":"judgment-escalation","brief":"x"},
+{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"xhigh","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+{"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"low","shapes":["mechanical","implementation","judgment"],"brief":"x"}]'
+stub_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_workers")
+stub_reconcile_out="$scratch/orca-settings-reconcile-stub.sh"
+source_template="$(resolve_source_root "$repo_root")/dot_local/share/chezmoi-command-sources/executable_orca-settings-reconcile.tmpl"
+render "$repo_root" "$scratch" "$chezmoi_bin" linux "$source_template" "$stub_reconcile_out" "$stub_override"
+stub_declared=$(sed -n "s/^DECLARED=\"\$(decode_b64 '\([A-Za-z0-9+/=]*\)')\"$/\1/p" "$stub_reconcile_out" | base64 --decode)
+jq -e '.["settings.agentDefaultArgs.omp"] == "--model google-antigravity/gemini-9.9-stub --thinking low"' <<<"$stub_declared" >/dev/null \
+  || fail "a roster fixture with a different omp model and effort did not render into the leaf: $(jq '.["settings.agentDefaultArgs.omp"]' <<<"$stub_declared")"
+ok 'a roster fixture with a different omp model and effort renders into the leaf'
 
 # Every declared path is rooted at the document, not at its settings object.
 offenders=$(jq -r 'keys[] | select(startswith("settings.") | not)' <<<"$declared")

@@ -2,10 +2,7 @@
      session receives.
 
      Same signature as the coordinator body, `dict "ctx" . "harness" <harness>`.
-     The Codex launch rule below renders its model ids and efforts from
-     agents.roster: the judgment entry for a review or cross-model launch, the
-     fallback entry for an implementation-fallback launch. The prose is
-     hand-written. */ -}}
+     The prose is hand-written. */ -}}
 {{- if not (kindIs "map" .) -}}
 {{-   fail (printf "orchestration-everyone.tmpl: expected a dict, got %s" (kindOf .)) -}}
 {{- end -}}
@@ -17,8 +14,6 @@
 {{- end -}}
 {{- $roster := .ctx.agents.roster -}}
 {{- $_ := includeTemplate "agent-roster-validate.tmpl" (dict "roster" $roster) -}}
-{{- $judgeCodex := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "codex" "shape" "judgment" "rung" "" "name" "a codex judgment entry") | fromJson -}}
-{{- $fallbackCodex := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" $roster "agent" "codex" "shape" "fallback" "rung" "" "name" "a codex fallback entry") | fromJson -}}
 <!-- orchestration-everyone:begin -->
 
 ## Orchestration rules for every agent
@@ -33,9 +28,7 @@ The executable-selection rule that keeps a bare `orca` from reaching the GNOME s
 
 This routing rule fixes the path a dispatch takes, never whether to dispatch. The ban on bundled dispatchers and direct peer CLIs is NOT a reason to skip a requested or workflow-required review. MUST first load the `orchestration` skill and attempt its supported Orca workflow. MUST NOT declare orchestration unavailable without an observed failure; if the app is stopped, follow the skill's startup procedure before declaring it blocked. If the skill cannot be loaded or the supported workflow fails, report the failed path or command and its exact error, then continue with the current agent's own reasoning only, without launching substitute agents, and record which delegated or cross-model passes did not happen.
 
-Claude Code, Codex, and omp lead, dispatch, and serve as workers on the same terms. omp receives this text through its before_agent_start extension before each model call.
-
-When another agent launches Codex through Orca, the launch MUST explicitly select the model and reasoning effort its purpose names. A review, a judgment pass, or any other cross-model or cross-harness opinion launches `{{ $judgeCodex.model }}` with `{{ $judgeCodex.effort }}` reasoning effort. An implementation-fallback launch — the recipient the coordinator's routing table reaches after the Gemini row — launches `{{ $fallbackCodex.model }}` with `{{ $fallbackCodex.effort }}` reasoning effort. Each launch takes the pair its own purpose names, whether or not the two purposes resolve to one model. The coordinator MUST compare `launch.requested` with `launch.effective` and claim the requested pair only when the effective fields report it. If that pair differs or is unverified, the coordinator MUST record the pass as degraded, report the effective values or their absence, and MUST NOT count it as satisfying the requirement. Recovery and release remain governed by the installed Orca lifecycle rules. Being inside Orca alone MUST NOT trigger this override. A launch that does not meet both the delegation and work-purpose conditions keeps its existing explicit model-selection rules.
+Claude Code and omp lead, dispatch, and serve as workers on the same terms; Codex leads and dispatches on those same terms. omp receives this text through its before_agent_start extension before each model call.
 
 A brief defect is required context the brief does not carry. A dispatched worker MUST report one rather than guess at the missing content, both when its brief names a source only an MCP can read that the worker cannot reach and carries no extraction of it, and when the extraction it does carry does not answer the question the work turns on. A URL kept beside a usable extraction is provenance, not a defect. A worker holds only the tools and authorization of its own harness, so guessing at unextracted context produces ungrounded work that defeats verification.
 

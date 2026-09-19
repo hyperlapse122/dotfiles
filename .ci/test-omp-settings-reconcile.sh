@@ -143,10 +143,10 @@ role_offenders() {
     "gemini": "google-antigravity/gemini-3.8-flash:high",
     "plan": "@fable",
     "reviewer": "google-antigravity/gemini-3.8-flash:high",
-    "skim": "google-antigravity/gemini-3.8-flash:low",
+    "skim": "google-antigravity/gemini-3.8-flash:high",
     "slow": "google-antigravity/gemini-3.8-flash:high",
-    "smol": "google-antigravity/gemini-3.8-flash:low",
-    "tiny": "google-antigravity/gemini-3.8-flash:low",
+    "smol": "google-antigravity/gemini-3.8-flash:high",
+    "tiny": "google-antigravity/gemini-3.8-flash:high",
     "worker": "google-antigravity/gemini-3.8-flash:high"
   }' '
     (.modelRoles // {}) as $have
@@ -642,18 +642,18 @@ swapped_declared="$scratch/declared-swapped.json"
 declared_of "$swapped_script" > "$swapped_declared"
 jq -e '
   .modelRoles.default == "google-antigravity/gemini-4.0-flash:high"
-  and .modelRoles.tiny == "google-antigravity/gemini-9.8-lite-stub:high"
+  and .modelRoles.tiny == "google-antigravity/gemini-4.0-flash:high"
   and .enabledModels == ["google-antigravity/gemini-4.0-flash", "google-antigravity/gemini-9.8-lite-stub"]' \
   "$swapped_declared" >/dev/null ||
   fail "a changed roster model did not reach the derived roles: $(jq -c '{enabledModels, roles: .modelRoles}' "$swapped_declared")"
 
-# --- two entries on one model dedupe enabledModels but keep two selectors -- #
+# --- two entries on one model dedupe enabledModels, and every model role, tiny and default included, resolves to the implementation entry's selector --- #
 
 # KTD8. A mechanical entry and an implementation entry can name the same
-# model at two different thinking levels: an operator adding a rung does not
-# always reach for a second model. enabledModels must still list that model
-# once, while modelRoles.tiny and modelRoles.default keep diverging, because
-# the selector carries the effort alongside the model id.
+# model at two different thinking levels. An operator adding a rung does not
+# always reach for a second model. Two entries on one model dedupe
+# `enabledModels`, and every model role, `tiny` and `default` included,
+# resolves to the implementation entry's selector.
 dedup_workers='[
  {"id":"omp-dedup-mechanical","agent":"omp","model":"google-antigravity/gemini-9.9-dedup-stub","effort":"low",
   "shapes":["mechanical"],"brief":"placeholder"},
@@ -671,9 +671,9 @@ dedup_declared="$scratch/declared-dedup.json"
 declared_of "$dedup_script" > "$dedup_declared"
 jq -e '
   .enabledModels == ["google-antigravity/gemini-9.9-dedup-stub"]
-  and .modelRoles.tiny == "google-antigravity/gemini-9.9-dedup-stub:low"
+  and .modelRoles.tiny == "google-antigravity/gemini-9.9-dedup-stub:high"
   and .modelRoles.default == "google-antigravity/gemini-9.9-dedup-stub:high"' \
   "$dedup_declared" >/dev/null ||
-  fail "two entries on one model did not dedupe enabledModels or keep both selectors: $(jq -c '{enabledModels, roles: .modelRoles}' "$dedup_declared")"
+  fail "two entries on one model did not dedupe enabledModels or set both roles: $(jq -c '{enabledModels, roles: .modelRoles}' "$dedup_declared")"
 
 printf 'omp settings reconcile: ok\n'

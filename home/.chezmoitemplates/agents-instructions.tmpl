@@ -26,7 +26,7 @@ Do not add mandatory `ce-work`/`ce-debug` routing here; use the available workfl
 
 In an Orca-managed session, before launching ANY subagent, worker, or peer reviewer, MUST open and read the `orchestration` skill, load its version-matched guide, and use its Orca dispatch workflow. Orca owns dispatch. In that session the harness's own in-process subagent tool is never a substitute for it. The detailed contract does not live in this file: an Orca-managed session receives it by injection at session start, as a normative extension of this file carrying the same precedence as this file's own text. Where that injected contract and the installed Orca guide state one subject at different strictness, the stricter statement wins.
 
-omp leads, dispatches, and serves as a worker on the same terms as Claude Code and Codex. Its before_agent_start extension adds the current role instructions to the system prompt before each model call.
+omp leads, dispatches, and serves as a worker on the same terms as Claude Code, and leads and dispatches on the same terms as Codex. Its before_agent_start extension adds the current role instructions to the system prompt before each model call.
 
 {{- $authoring := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .ctx.agents.roster "agent" "claude" "shape" "authoring" "rung" "" "name" "a claude authoring entry") | fromJson }}
 
@@ -41,8 +41,6 @@ MUST use `orca-ide` for Orca commands, never bare `orca`, because bare `orca` re
 {{- else -}}
 Resolve the Orca executable as the `orchestration` skill directs.
 {{- end }}
-
-Before dispatching a Codex worker, the session MUST run `orca-ide agent hooks prepare-codex` once to repair Orca-managed Codex hook trust. The repair command is idempotent and silent on success, so a pre-dispatch run costs effectively nothing. When a dispatch fails with `agentWait.reason: codex-hooks-review-prompt`, that failure signals unseeded hook trust rather than a worker fault: run `orca-ide agent hooks prepare-codex` and retry the dispatch rather than editing `~/.codex/config.toml` by hand. MUST NOT edit `~/.codex/config.toml` trust records by hand, because `chezmoi apply` owns the dotfiles-side hook records and manual edits would contend with them.
 
 During `lfg` pipeline execution, MUST run fully autonomously — MUST NOT pause to ask the user questions or seek confirmations, and MUST drive every stage (plan, implement, review and fix, commit, push, PR, CI watch) to completion itself. Per the skill's purpose, MUST open the MR/PR itself rather than surfacing a command for the user, and merge it itself once CI is green and the change is mergeable — never stop at an unmerged PR. This autopilot overrides the general ask-before-ambiguous/irreversible-action guidance for the duration of the run; the secrets guards, the CI-weakening guards, and the not-the-user's-repository ask-first rule below are separate prohibitions, not confirmations, and still hold. An unattended run does not resume prompting: in the user's own repositories it files without asking, and for a repository that is not the user's it neither files nor comments there, and routes the finding to the committed-record fallback.
 

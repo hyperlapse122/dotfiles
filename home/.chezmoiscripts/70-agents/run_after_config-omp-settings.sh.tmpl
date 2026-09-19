@@ -2,13 +2,9 @@
    agents.omp.settings, so no settings map names a model id. $ompModels is
    deduped with sprig's uniq, so two roster entries naming the same model
    at two thinking levels still render one enabledModels element, with the
-   first occurrence keeping roster order; the two role
-   selectors below still differ, because the mechanical and implementation
-   entries carry different efforts. Omp roster entries are selected by
-   SHAPE: the mechanical entry takes the background and skim roles, the
-   implementation entry takes every other model-valued role; an entry may
-   carry both shapes, in which case the two selectors name the same one
-   seat. The merge happens HERE rather than in the data file so the derived
+   first occurrence keeping roster order. Omp roster entries are selected by
+   SHAPE: the single omp entry gives every model-valued role its selector.
+   The merge happens HERE rather than in the data file so the derived
    leaves still pass through the validator below, which is what proves
    every role selector names a provider the allowlist admits. A fresh dict
    is the merge destination because sprig's merge mutates its first
@@ -20,24 +16,22 @@
 {{-   end -}}
 {{- end -}}
 {{- $ompModels = uniq $ompModels -}}
-{{- $ompMechanical := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "mechanical" "rung" "" "name" "an omp mechanical entry") | fromJson -}}
-{{- $ompImplementation := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "implementation" "rung" "" "name" "an omp implementation entry") | fromJson -}}
-{{- $mechanicalSelector := printf "%s:%s" $ompMechanical.model $ompMechanical.effort -}}
-{{- $implementationSelector := printf "%s:%s" $ompImplementation.model $ompImplementation.effort -}}
+{{- $omp := includeTemplate "agent-roster-lookup.tmpl" (dict "roster" .agents.roster "agent" "omp" "shape" "implementation" "rung" "" "name" "an omp implementation entry") | fromJson -}}
+{{- $ompSelector := printf "%s:%s" $omp.model $omp.effort -}}
 {{- $modelRoles := dict
       "advisor" "@worker"
       "commit" "@worker"
       "plan" "@fable"
-      "tiny" $mechanicalSelector
-      "skim" $mechanicalSelector
-      "smol" $mechanicalSelector
-      "claude" $implementationSelector
-      "default" $implementationSelector
-      "fable" $implementationSelector
-      "gemini" $implementationSelector
-      "reviewer" $implementationSelector
-      "slow" $implementationSelector
-      "worker" $implementationSelector -}}
+      "tiny" $ompSelector
+      "skim" $ompSelector
+      "smol" $ompSelector
+      "claude" $ompSelector
+      "default" $ompSelector
+      "fable" $ompSelector
+      "gemini" $ompSelector
+      "reviewer" $ompSelector
+      "slow" $ompSelector
+      "worker" $ompSelector -}}
 {{- $settings := merge (dict "enabledModels" $ompModels "modelRoles" $modelRoles) .agents.omp.settings -}}
 {{- includeTemplate "omp-settings-validate.tmpl" (dict "settings" $settings) -}}
 #!/usr/bin/env bash
