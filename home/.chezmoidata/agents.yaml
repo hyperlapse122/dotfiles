@@ -61,15 +61,6 @@ agents:
         an instruction from one item to another. Fix the approach in the
         brief. For review briefs, ask for every finding with confidence and
         severity instead of filtering.
-    - id: codex-luna
-      agent: codex
-      model: gpt-5.6-luna
-      effort: max
-      shapes: [judgment, fallback]
-      brief: >-
-        Keep the brief lean and state approval boundaries once. Name the
-        validation to run (targeted tests, type or lint, build) and what to
-        do when it cannot run.
     - id: omp-flash-mechanical
       agent: omp
       model: google-antigravity/gemini-3.8-flash

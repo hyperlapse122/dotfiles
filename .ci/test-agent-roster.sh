@@ -54,14 +54,13 @@ chmod 0700 "$scratch/bin/op"
 wrapper="$scratch/roster-wrapper.tmpl"
 printf '%s\n' '{{- includeTemplate "agent-roster-validate.tmpl" (dict "roster" .agents.roster) -}}' >"$wrapper"
 
-# --- positive: the committed roster renders and prints seven ids ---------- #
+# --- positive: the committed roster renders and prints six ids ----------- #
 
 positive_out="$scratch/positive.out"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$wrapper" "$positive_out" ||
   fail 'the committed roster failed to render'
 model_count=$(grep -c . "$positive_out")
-[[ $model_count -eq 7 ]] || fail "the committed roster printed $model_count model id(s), want 7"
-
+[[ $model_count -eq 6 ]] || fail "the committed roster printed $model_count model id(s), want 6"
 # --- negative and alternate-valid cases ------------------------------------ #
 
 # Shared render-and-expect-failure tail for assert_render_fails and
@@ -129,14 +128,14 @@ assert_render_fails null-brief \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":null}]' \
   'has an empty brief'
 
-# A roster missing a judgment shape for codex fails.
-assert_render_fails codex-missing-judgment \
+# A worker declaring the retired fallback shape fails with unknown-shape.
+assert_render_fails worker-declaring-fallback \
   '[{"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["fallback"],"brief":"x"}]' \
-  'no codex entry declares the judgment shape'
+  'declares unknown shape "fallback"'
 
-# A roster missing a judgment shape for omp fails, mirroring the codex guard.
+# A roster missing a judgment shape for omp fails.
 assert_render_fails omp-missing-judgment \
-  '[{"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
+  '[{"id":"claude-fable","agent":"claude","model":"fable","effort":"medium","shapes":["judgment"],"rung":"judgment-escalation","brief":"x"},
     {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation"],"brief":"x"}]' \
   'no omp entry declares the judgment shape'
 
@@ -147,19 +146,18 @@ assert_render_fails omp-missing-judgment \
 assert_render_ok claude-two-rungs \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"claude-stub-rung","agent":"claude","model":"claude-9.9-stub","effort":"medium","shapes":["implementation"],"rung":"stub-rung","brief":"x"},
-    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
     {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["judgment"],"brief":"x"}]'
 
 # Two claude implementation entries sharing a rung fail the render naming it.
 assert_render_fails claude-missing-rung \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"brief":"x"},
-    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]' \
+    {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["judgment"],"brief":"x"}]' \
   'is a claude implementation entry without rung'
 
 assert_render_fails claude-duplicate-rung \
   '[{"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
     {"id":"claude-stub-rung","agent":"claude","model":"claude-9.9-stub","effort":"medium","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-    {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"}]' \
+    {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["judgment"],"brief":"x"}]' \
   'duplicate rung "sonnet" for agent claude'
 
 # --- lead map validation ---------------------------------------------------- #
@@ -335,7 +333,6 @@ grep -F "one seat (\`$omp_impl_model\` at \`$omp_impl_effort\`) for mechanical a
 one_seat_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
   {"id":"claude-fable","agent":"claude","model":"fable","effort":"medium","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
   {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["mechanical","implementation","judgment"],"rung":"judgment-standard","brief":"x"},
   {"id":"omp-judgment-cheap-stub","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["judgment"],"rung":"judgment-cheap","brief":"x"}]'
 one_seat_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$one_seat_workers")
@@ -362,7 +359,7 @@ count_table_rows() {
 routing_rows=$(count_table_rows "$coordinator_body" '| Work shape |')
 [[ $routing_rows -eq 6 ]] || fail "the routing table rendered $routing_rows row(s), want 6"
 brief_rows=$(count_table_rows "$coordinator_body" '| Model |')
-[[ $brief_rows -eq 7 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 7"
+[[ $brief_rows -eq 6 ]] || fail "the brief-guidance table rendered $brief_rows row(s), want 6"
 
 # R30/KTD13: the real-`op` prohibition is brief guidance that exists because a
 # Gemini seat ignored the rule in AGENTS.md. Counting rows does not prove the
@@ -371,19 +368,29 @@ op_rows=$(grep -c 'the real `op`: never invoke it' "$coordinator_body")
 [[ $op_rows -eq 2 ]] \
   || fail "the rendered brief table carries the real-op prohibition on $op_rows row(s), want 2"
 
-read -r judge_model judge_effort <<<"$(agent_seat_pair codex judgment '')"
-read -r fallback_model fallback_effort <<<"$(agent_seat_pair codex fallback '')"
+# U1: The rendered Everyone body contains no Codex launch rule.
+grep -F 'When another agent launches Codex' "$everyone_body" >/dev/null &&
+  fail 'the everyone body still carries the Codex launch rule'
 
-judgment_anchor="opinion launches \`$judge_model\` with \`$judge_effort\` reasoning effort"
-fallback_anchor="after the Gemini row — launches \`$fallback_model\` with \`$fallback_effort\` reasoning effort"
+# U1: The rendered coordinator body routing table names no codex recipient.
+grep -F '|' "$coordinator_body" | grep -F '`codex`' >/dev/null &&
+  fail 'the coordinator routing table still names codex'
 
-grep -F -- "$judgment_anchor" "$everyone_body" >/dev/null ||
-  fail 'the everyone body does not carry the judgment seat anchor with its rendered pair'
-grep -F -- "$fallback_anchor" "$everyone_body" >/dev/null ||
-  fail 'the everyone body does not carry the fallback seat anchor with its rendered pair'
-grep -F 'launch.requested' "$everyone_body" >/dev/null ||
-  fail 'the everyone body lost the launch-receipt comparison rule'
+# U1 AE3: The implementation row failure column names sonnet after omp.
+grep -F 're-size on the four signals; at the same size, `omp`' "$coordinator_body" | grep -F 'then `claude` `sonnet`' >/dev/null ||
+  fail 'AE3: implementation row failure column does not name sonnet after omp'
 
+# U1 AE1: The judgment-deep row names claude opus and omp over the same brief,
+# and a degraded reviewer leaves claude at xhigh.
+grep -F 'Judgment work at the `judgment-deep` rung' "$coordinator_body" | grep -F '`claude` `opus` xhigh and `omp`' | grep -F 'over the same brief' >/dev/null ||
+  fail 'AE1: judgment-deep row does not name claude opus and omp over the same brief'
+grep -F 'the review proceeds on the other, recorded as degraded, and the `claude` reviewer keeps its `judgment-deep` effort' "$coordinator_body" >/dev/null ||
+  fail 'AE1: coordinator body does not carry the rule that claude keeps judgment-deep effort when degraded'
+
+# U1: The rendered coordinator says a Compound Engineering cross-model peer,
+# codex included, resolves to the routing table's recipients.
+grep -F 'A Compound Engineering cross-model peer or work-engine preference, its default `codex` peer included, resolves to the routing table'"'"'s recipients and never to a Codex worker.' "$coordinator_body" >/dev/null ||
+  fail 'coordinator does not carry the CE peer routing rule naming codex'
 # KTD4: the Claude judgment-deep pair is asserted the same way, from its own
 # rendered seat rather than a literal, and pinned to the judgment-deep rung
 # explicitly rather than whichever claude judgment row happens to sort last.
@@ -408,43 +415,10 @@ grep -F 'records the pass as degraded' "$coordinator_body" >/dev/null ||
 # leakage between the two omp judgment rows.
 read -r judgment_standard_model judgment_standard_effort <<<"$(agent_seat_pair omp judgment '' judgment-standard)"
 read -r judgment_cheap_model judgment_cheap_effort <<<"$(agent_seat_pair omp judgment '' judgment-cheap)"
-grep -F -- "\`omp\` \`$judgment_standard_model\` $judgment_standard_effort and \`codex\`" "$coordinator_body" >/dev/null ||
+grep -F -- "\`omp\` \`$judgment_standard_model\` $judgment_standard_effort" "$coordinator_body" >/dev/null ||
   fail 'the coordinator body does not carry the judgment-standard row anchored on its own rung'
-grep -F -- "\`omp\` \`$judgment_cheap_model\` $judgment_cheap_effort and \`codex\`" "$coordinator_body" >/dev/null ||
+grep -F -- "\`omp\` \`$judgment_cheap_model\` $judgment_cheap_effort" "$coordinator_body" >/dev/null ||
   fail 'the coordinator body does not carry the judgment-cheap row anchored on its own rung'
-
-# R8: the fallback seat is no longer justified by a cost comparison with the
-# judgment seat.
-grep -F 'belongs to recovery' "$everyone_body" >/dev/null &&
-  fail 'the everyone body still justifies the fallback seat by a cost comparison'
-
-# A two-entry Codex stub with each seat on a distinct model proves the anchors
-# resolve independently: one rendered match cannot satisfy both assertions.
-two_seat_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
-  {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"brief":"x"},
-  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"codex-judge","agent":"codex","model":"gpt-9.8-judge","effort":"medium","shapes":["judgment"],"brief":"x"},
-  {"id":"codex-fallback","agent":"codex","model":"gpt-9.9-fallback","effort":"high","shapes":["fallback"],"brief":"x"},
-  {"id":"omp-flash-mechanical","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["mechanical"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","judgment"],"brief":"x"}]'
-two_seat_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$two_seat_workers")
-two_seat_everyone="$scratch/everyone-two-seat.md"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$everyone_wrapper" "$two_seat_everyone" "$two_seat_override" ||
-  fail 'the everyone body failed to render against the two-entry Codex stub'
-
-two_seat_judge_anchor='opinion launches `gpt-9.8-judge` with `medium` reasoning effort'
-two_seat_judge_leak='opinion launches `gpt-9.9-fallback` with `high` reasoning effort'
-two_seat_fallback_anchor='after the Gemini row — launches `gpt-9.9-fallback` with `high` reasoning effort'
-two_seat_fallback_leak='after the Gemini row — launches `gpt-9.8-judge` with `medium` reasoning effort'
-
-grep -F -- "$two_seat_judge_anchor" "$two_seat_everyone" >/dev/null ||
-  fail 'two-entry Codex stub: the judgment anchor does not carry the judgment seat model'
-grep -F -- "$two_seat_judge_leak" "$two_seat_everyone" >/dev/null &&
-  fail 'two-entry Codex stub: the judgment anchor leaked the fallback seat model'
-grep -F -- "$two_seat_fallback_anchor" "$two_seat_everyone" >/dev/null ||
-  fail 'two-entry Codex stub: the fallback anchor does not carry the fallback seat model'
-grep -F -- "$two_seat_fallback_leak" "$two_seat_everyone" >/dev/null &&
-  fail 'two-entry Codex stub: the fallback anchor leaked the judgment seat model'
 
 # --- AE9: a roster edit re-renders the payload, with no hand edit ----------- #
 
@@ -455,7 +429,6 @@ grep -F -- "$two_seat_fallback_leak" "$two_seat_everyone" >/dev/null &&
 stub_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"low","shapes":["authoring"],"brief":"x"},
   {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"codex-luna","agent":"codex","model":"gpt-9.9-stub","effort":"medium","shapes":["judgment","fallback"],"brief":"x"},
   {"id":"omp-flash-mechanical","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"low","shapes":["mechanical","judgment"],"rung":"judgment-cheap","brief":"x"},
   {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["implementation","judgment"],"rung":"judgment-standard","brief":"x"}]'
 stub_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_workers")
@@ -482,7 +455,6 @@ grep -F -- '--effort max' "$stub_body" >/dev/null &&
 two_entry_omp_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
   {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"codex-luna","agent":"codex","model":"gpt-5.6-luna","effort":"max","shapes":["judgment","fallback"],"brief":"x"},
   {"id":"omp-lite-stub","agent":"omp","model":"google-antigravity/gemini-9.8-lite-stub","effort":"high","shapes":["mechanical"],"brief":"x"},
   {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","judgment"],"rung":"judgment-standard","brief":"x"},
   {"id":"omp-judgment-cheap-stub","agent":"omp","model":"google-antigravity/gemini-9.7-cheap-stub","effort":"low","shapes":["judgment"],"rung":"judgment-cheap","brief":"x"}]'
@@ -525,7 +497,8 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$lead_wrapper_tmpl" "$lead_
   fail 'the committed agents.roster.lead map failed to render'
 
 prose_allowlist="$scratch/prose-allowlist.txt"
-sort -u "$roster_aliases" "$lead_models" >"$prose_allowlist"
+# Until U4 updates committed prose in README.md and AGENTS.md, gpt-5.6-luna is tolerated.
+printf 'gpt-5.6-luna\n' | sort -u "$roster_aliases" "$lead_models" - >"$prose_allowlist"
 
 prose_models="$scratch/prose-models.txt"
 extract_model_ids "$repo_root/README.md" "$repo_root/AGENTS.md" >"$prose_models"
@@ -563,7 +536,6 @@ grep -qF 'six worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
 
 plugin_manifests=(
   dot_local/share/dotfiles-claude-plugin/dot_claude-plugin/plugin.json.tmpl
-  dot_local/share/dotfiles-codex-plugin/dot_codex-plugin/plugin.json.tmpl
 )
 for manifest in "${plugin_manifests[@]}"; do
   name=$(basename "$(dirname "$manifest")")
