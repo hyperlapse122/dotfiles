@@ -13,10 +13,10 @@ The single declaration of how the System tree is installed: per-path file modes,
 ### Install-system script
 An onchange script that installs one subsystem's slice of the System tree to its absolute paths and then reloads whatever consumes it. Each one declares the paths it owns, so a change to a given system file has exactly one script that deploys it.
 
-A script that reads the System tree carries the tree's location as a literal baked in at render time. Rendering that script against a different source location therefore changes its content, and content is what decides a re-run — so redirecting the whole apply at a different checkout re-runs every source-reading script, not only the one whose files changed. A script in this family that configures fixed state and reads nothing from the source tree is exempt: it renders identically from any checkout.
+Scripts in this family resolve repository-rooted trees using position-independent script rendering rather than baking absolute checkout paths into rendered bodies. This ensures that applying from different worktrees produces bit-identical rendered scripts, preventing false-positive re-runs across unrelated checkouts.
 
 ### Position-independent script rendering
-The technique of decoupling an onchange script's rendered body from the invoking checkout's absolute path. Instead of interpolating the dotfiles source directory at render time, the script resolves its source root at runtime from the manager's exported environment variable with an active source-path fallback. When accessing repository-rooted trees, a shared shell partial (`home/.chezmoitemplates/repo-root.sh.tmpl`) resolves the repository root from the source directory, ascending to its parent if a `.chezmoiroot` marker exists. This ensures the rendered script text is bit-identical across worktrees, preventing false-positive execution cascades when applying from feature branches.
+The technique of decoupling an onchange script's rendered body from the invoking checkout's absolute path. Instead of interpolating the dotfiles source directory at render time, the script resolves its source root at runtime from the manager's exported environment variable with an active source-path fallback. When accessing repository-rooted trees, a shared shell partial resolves the repository root from the source directory, ascending to its parent if a source-root marker exists. This ensures the rendered script text is bit-identical across worktrees, preventing false-positive execution cascades when applying from feature branches.
 
 ### Dependency fingerprint
 A comment block that lists each of a script's declared dependencies with a hash of its content, so that changing a dependency changes the script's rendered text and re-triggers it. It exists because the dotfiles manager re-runs an onchange script on rendered-content change alone and has no other notion of a dependency. Hashing covers file content and declared capability probe tokens; template dependencies are hashed as raw text, so no secret enters a fingerprint.
@@ -70,6 +70,11 @@ The single composed delivery a lead receives through its hook or native extensio
 ### Subagent guard
 The mechanism that stops an injected session from bypassing Orca dispatch. In an Orca-managed session whose local payload files are staged, the guard intercepts calls to the harness's own subagent tool — `Agent` and `Task` in Claude Code, `collaborationspawn_agent` in Codex, and `task` in omp — and denies them with a message directing the agent to the `orchestration` skill. It permits all calls in an Orca agent-teams session and outside Orca. The guard fails open on any error, missing file, or unexpected format.
 
+### Workspace trust seeding
+The proactive assertion of directory trust into agent harness configurations, preventing interactive security prompts from stalling unattended execution in fresh checkouts or worktrees.
+
+Trust is seeded at two points: during repository deployment across registered checkouts, and via runtime interception whenever a new development worktree is created. Trust is asserted additively across supported harness stores, preserving unrelated user configurations and existing trust grants.
+
 ### Brief file
 The file a dispatch names by path to carry context the dispatch spec itself cannot hold. A spec travels as an argv string, so context large enough to exceed the kernel argument limit is written to a brief instead of inlined. It is also where a coordinator materializes content only it can reach, such as facts extracted from an MCP the recipient has no access to.
 
@@ -77,27 +82,32 @@ The file a dispatch names by path to carry context the dispatch spec itself cann
 A worker escalation or failure caused by context missing from its brief rather than by the difficulty of the work. It carries no information about the unit's blast radius or judgment depth, so it never raises the model rung; the coordinator repairs the brief and re-dispatches at the same rung.
 
 ### Model roster
-The single declaration in the agent data file of two things: one lead pin per agent that can run as the orchestrator, and every worker entry a lead may dispatch to. A worker entry carries agent, model id, effort or thinking level, the work shapes it takes, brief guidance for that model, and a `rung` for an entry the coordinator selects by name rather than by shape alone — `sonnet` for the Claude implementation entry, and the judgment rungs described under Judgment work below; a lead pin carries only the model and, where the harness takes one, its effort. The two halves are independent — a model that a lead session opens on need not be a dispatch target, and removing it from the worker list does not change what a direct session runs. The rendered payloads, instruction files, prose, and tests derive their model ids from it, so no other file names a model by hand.
+The single declaration in the agent data file of two things: one lead pin per agent that can run as the orchestrator, and every worker entry a lead may dispatch to. A worker entry carries agent, model id, effort or thinking level, the work shapes it takes, brief guidance for that model, and a `rung` for an entry the coordinator selects by name rather than by shape alone — such as a named implementation entry or the judgment rungs described under Judgment work below; a lead pin carries only the model and, where the harness takes one, its effort. The two halves are independent — a model that a lead session opens on need not be a dispatch target, and removing it from the worker list does not change what a direct session runs. The rendered payloads, instruction files, prose, and tests derive their model ids from it, so no other file names a model by hand.
 
 ### Judgment work
-Work whose deliverable is the judgment itself: a code review, a document review, a `ce-simplify-code` pass, or a `ce-pov` verdict. It is never performed by the lead in place; it is dispatched to a roster judgment rung matched to the CE tier the persona under review declares. `judgment-cheap` and `judgment-standard` carry CE's cheapest-capable and platform-mid-tier personas to `omp` alone, with `claude` `sonnet` replacing it on failure or unavailability; `judgment-deep` carries CE's session-model tier to a two-vendor pair (`claude` `opus` plus `omp` over the same brief); `judgment-escalation` (`claude` `fable`) is not part of that default routing — it is reached only through an explicit user upgrade request for that run or the three-consecutive-failure "most capable review agent" consult path.
+Work whose deliverable is the judgment itself: a code review, a document review, a code simplification pass, or an architectural evaluation verdict. It is never performed by the lead in place; it is dispatched to a roster judgment rung matched to the workflow tier the persona under review declares. The cheapest and standard rungs route to the primary judgment worker, with a secondary worker replacing it on failure or unavailability; deep judgment dispatches a cross-vendor pair over the same brief; escalation rungs sit outside default routing and are reached only through an explicit user upgrade request or after three consecutive consultation failures.
 
 ### Authoring work
-Plan authoring's model-elevation step and `ce-brainstorm`'s approach generation, dispatched as one worker to the roster's `authoring` entry whose model matches the alias Compound Engineering resolved. When no entry matches the alias, or that single dispatch fails, the lead runs the step inline on its own model and prints the transparency line. A Unit the sizing cannot split returns to this same entry as a recorded plan defect for a re-cut. A later revision of that plan, or of the workflow's requirements document, is lead work: the lead edits that one artifact in place.
+Plan authoring's model-elevation step and brainstorm approach generation, dispatched as one worker to the roster's `authoring` entry whose model matches the alias the workflow resolved. When no entry matches the alias, or that single dispatch fails, the lead runs the step inline on its own model and prints the transparency line. A Unit the sizing cannot split returns to this same entry as a recorded plan defect for a re-cut. A later revision of that plan, or of the workflow's requirements document, is lead work: the lead edits that one artifact in place.
 
 ### Mechanical work
-A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster entry that takes the mechanical shape; today the single `omp` seat (`google-antigravity/gemini-3.8-flash` at high effort) serves mechanical, implementation, and judgment work.
+A short, bounded, low-context unit: a scout read, a symbol or file lookup, or a worker step whose approach is fixed and whose acceptance a command settles. It goes to the roster entry that takes the mechanical shape, serving as the default recipient for bounded, low-complexity tasks.
 
 ### Launch ceremony
-The number of lead tool calls a dispatch costs before the recipient can be given work. It is uniform across the roster: `worker-start` carries model and effort for Claude and Cursor launches, and an `omp` dispatch starts in one command (`worker-start --agent omp`) with the roster model pinned by default arguments; the lead checks the effective model on the worker status line with `worker-read`. Each terminal serves that single dispatch and is released in the turn its dispatch settles. Ceremony decides which row a lead actually picks when two rows are equally eligible, so a routing rule that leaves it uneven is re-decided on every dispatch regardless of what the table declares; the omp row holds against that pressure by being the default recipient for mechanical and implementation work and by the rule that an unrecorded `claude` implementation dispatch is a violation.
+The number of lead tool calls a dispatch costs before the recipient can be given work. It is uniform across the roster so that no recipient requires multi-step setup over another. Each worker terminal serves a single dispatch and is released in the turn its dispatch settles. Ceremony influences which worker a lead selects when multiple entries are eligible, so uneven ceremony distorts routing away from declared policies; maintaining uniform single-command dispatch and explicit routing defaults ensures dispatches follow intended model allocations rather than tooling friction.
+
+### Unproven release
+A terminal settlement record for a dispatched worker whose release was retained or unverified and could not be proven to have exited without residual resources.
+
+A coordinator cannot treat an unproven retention as settled, even when the query reports the dispatch inactive, because actions such as typing into a terminal pane trigger retention without indicating a genuine user takeover. When an explicit stop and repeated release still fail to verify process exit, the coordinator records the dispatch as an unproven release and proceeds, leaving the resident terminal for the operator to inspect and close.
 
 ## Repository layout
 
 ### Source root
-The directory chezmoi reads its source state from, named by `.chezmoiroot`. Now `home/`.
+The directory the dotfiles manager reads its source state from, configured by a source-root marker at the repository root.
 
 ### Repository root
-The git top level. Holds repository infrastructure plus `.chezmoiroot` and `.install-prerequisites.sh`.
+The git top level. Holds repository infrastructure, root markers, and bootstrapping prerequisites.
 
 ### Primary checkout
 The plain checkout of a project on its default branch, used for default-branch inspection and base sessions. It is also what the dotfiles manager treats as its configured source, so a file that exists only in a Development worktree is invisible to an ordinary apply.

@@ -24,7 +24,7 @@ tags:
 
 ## Problem
 
-This repository's `.github/workflows/ci.yml` "Shellcheck (rendered scripts + repo-meta)" job lints every `.ci/*.sh` file directly (not only chezmoi's rendered installer output), with no `-S`/severity filter, so any shellcheck warning fails the job. Adding new `label=<hyphenated-name>` scenario assignments to `.ci/test-package-installer-verdict.sh` — the exact style the file's existing `devtools`/`apps` scenarios already use — produced `SC2100 (warning): Use $((..)) for arithmetics, e.g. i=$((i - 2))` on 14 of the new lines, none of which contain an arithmetic expression.
+This repository's `.github/workflows/render-dotfiles.yml` "Shellcheck (rendered scripts + repo-meta)" job (formerly in `.github/workflows/ci.yml`) lints every `.ci/*.sh` file directly (not only chezmoi's rendered installer output), with no `-S`/severity filter, so any shellcheck warning fails the job. Adding new `label=<hyphenated-name>` scenario assignments to `.ci/test-package-installer-verdict.sh` — the exact style the file's existing `devtools`/`apps` scenarios already use — produced `SC2100 (warning): Use $((..)) for arithmetics, e.g. i=$((i - 2))` on 14 of the new lines, none of which contain an arithmetic expression.
 
 ## Symptoms
 
@@ -65,4 +65,4 @@ Quoting the value removes the syntactic shape (`identifier=identifier-identifier
 
 - `docs/solutions/integration-issues/helper-return-0-with-no-other-return-reads-as-abandoned-skip-step.md` — a different false-positive-shaped CI finding from the same PR, in this repo's own custom `check-skip-declarations.sh` checker rather than shellcheck.
 - `.ci/test-package-installer-verdict.sh` — the file with the quoted scenario labels.
-- `.github/workflows/ci.yml` — the "Shellcheck (rendered scripts + repo-meta)" job that lints `.ci/*.sh` directly.
+- `.github/workflows/render-dotfiles.yml` — the "Shellcheck (rendered scripts + repo-meta)" job that lints `.ci/*.sh` directly (moved from `.github/workflows/ci.yml`).

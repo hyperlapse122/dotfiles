@@ -51,7 +51,7 @@ Route every apt call through `.ci/lib/apt-install.sh` and bound the workflow.
 
 The helper's contract is `apt-install.sh COMMAND|- PACKAGE [PACKAGE...]`. `COMMAND` is a binary whose presence proves the install is unnecessary; `-` skips that probe for a library package with no binary to test.
 
-Drop the dead host from the mirrorlist, and never leave the list empty:
+Drop the dead host from the mirrorlist, never leave the list empty, and rewrite inline entries as fallback:
 
 ```bash
 mirrorlist=/etc/apt/apt-mirrors.txt
@@ -60,6 +60,11 @@ if [ -f "$mirrorlist" ]; then
   grep -q '://' "$mirrorlist" ||
     printf 'https://archive.ubuntu.com/ubuntu/\n' | sudo tee "$mirrorlist" >/dev/null
 fi
+
+for src in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+  [ -f "$src" ] || continue
+  sudo sed -i 's|http://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$src"
+done
 ```
 
 Skip the network when the tool is already there, and bound what remains:
@@ -75,7 +80,7 @@ sudo timeout 180 env DEBIAN_FRONTEND=noninteractive \
   apt-get install -y --no-install-recommends -o Acquire::Retries=3 "$@"
 ```
 
-The three call sites are `apt-install.sh tmux tmux`, `apt-install.sh zsh zsh`, and `apt-install.sh - libudev-dev pkg-config`. The Rust job sets a `defaults.run.working-directory`, so its step also sets `working-directory: ${{ github.workspace }}`; a bare relative path would not resolve there.
+Current call sites include `ci.yml` (`python3-yaml zsh`, `libudev-dev pkg-config`) and firmware workflows (`gem80-firmware-pins-daily.yml`, `gem80-firmware-rebuild-weekly.yml`). The Rust job sets a `defaults.run.working-directory`, so its step also sets `working-directory: ${{ github.workspace }}`; a bare relative path would not resolve there.
 
 Bound and deduplicate the workflow, matching the pattern `render-dotfiles.yml` already used:
 
@@ -96,7 +101,7 @@ Verified by run `32237882640`: all 8 jobs green in 3 minutes 57 seconds. The tmu
 
 The probe also settled which tools the image ships: `tmux` is preinstalled, so its guard short-circuits, and `zsh` is not.
 
-This fix is on PR #258 and is not merged, so `main` still carries the flake.
+This fix merged in PR #258 and has since stabilized all Ubuntu workflow runners.
 
 ## Why This Works
 
