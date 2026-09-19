@@ -7,8 +7,8 @@ facts.tmpl). The verdict is the one this guard always gave — desktop=kde IS
 but it is now probed ONCE per chezmoi command and BAKED IN by facts-sh.tmpl,
 instead of re-derived by a `command -v` at each of the 15 include sites.
 
-Deploy-everywhere-and-self-select is unchanged (KTD12): a non-KDE host exits 0,
-so this stays a runtime skip, not a non-deployment gate. That exit is now a
+.chezmoiignore keeps hosts with another desktop from deploying the consumer,
+and this guard is the second line. That exit is now a
 DECLARED one — skip.sh.tmpl, form skip_here, direction harmless, site
 non-kde-desktop — because a host whose ISO shipped no plasmashell does not
 acquire one later: nothing is outstanding, so exiting 0 is correct AND final,
@@ -17,9 +17,11 @@ site with that consumer as its `script`, so each of the nine consumers carries
 its own kde-guard/non-kde-desktop instance and clears its own state entry.
 The skip message is the pre-registry one, verbatim.
 
-Baking the fact means a desktop swap changes this partial's rendered output, and
-with it the content of every consuming run_onchange_ script — so they all re-run.
-That is correct, not churn: the host became a different host.
+Because .chezmoiignore keeps other-desktop hosts from deploying them, and
+chezmoi preserves a run_onchange_ script's recorded run-state while ignored,
+returning to a previously active desktop does not re-run returning scripts
+automatically. Re-run them with `chezmoi apply --force` or delete the state
+bucket with `chezmoi state delete-bucket --bucket=entryState`.
 
 ARGUMENT — a dict, NOT the bare display-name string this partial used to take:
 

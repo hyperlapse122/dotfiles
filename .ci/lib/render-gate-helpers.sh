@@ -37,26 +37,49 @@ render() {
       execute-template <"$input" >"$output"
 }
 
-# Render the production ignore template with only its fact provider replaced by
-# deterministic fixture facts. This exercises the real path gates without
-# consulting this runner's container markers or desktop session.
-# Rewrite a repo-meta template so the fixture can pin `container`, replacing the
-# real fact provider with a literal dict. The dict is built from the `$f.<key>`
-# references the template ACTUALLY makes, because a hand-listed subset silently
-# omits every fact added later and chezmoi then fails with `map has no entry for
-# key` in CI only.
+# Rewrite a template so fixtures pin deterministic host facts instead of
+# consulting the live host. The literal dict preserves explicit pins
+# (container, jetson, desktop, distro, headless, nvidia) and sets any other
+# fact referenced through a bound template variable to false. A template with no
+# facts include passes through unchanged; an unrewritten include fails loudly.
 write_fact_stub() {
   local source_path=$1 output_path=$2 container=$3 jetson=${4:-false} desktop=${5:-gnome}
-  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"$desktop\" \"distro\" \"fedora\" \"headless\" false \"nvidia\" false"
+
+  if ! grep -qF 'includeTemplate "facts.tmpl"' "$source_path"; then
+    cat "$source_path" > "$output_path"
+    return 0
+  fi
+
+  local vars
+  vars=$(sed -n -E 's/.*\$([A-Za-z0-9_]+)[[:space:]]*:?=[[:space:]]*includeTemplate "facts\.tmpl" (\.|\.ctx)[[:space:]]*\|[[:space:]]*fromYaml.*/\1/p' "$source_path" | sort -u)
+
   # Two call forms reach facts.tmpl: a top-level template passes `.`, while a
   # shared partial must pass `.ctx` because a partial's `.` is only ever what its
   # caller handed it. Both are matched, so a fixture can pin facts for either.
   # `desktop` is a parameter rather than a constant: the fact is derived from
   # `lookPath` and KDE wins a tie, so a PATH stub cannot produce a `gnome`
   # rendering on a host that has plasmashell — only substitution can.
-  sed -e 's|includeTemplate "facts.tmpl" \. \| fromYaml|'"$stub"'|g' \
-      -e 's|includeTemplate "facts.tmpl" \.ctx \| fromYaml|'"$stub"'|g' \
+  local stub="dict \"container\" $container \"jetson\" $jetson \"desktop\" \"$desktop\" \"distro\" \"fedora\" \"headless\" false \"nvidia\" false"
+  local fact
+  while IFS= read -r fact; do
+    [[ -n "$fact" ]] || continue
+    case "$fact" in
+      container|jetson|desktop|distro|headless|nvidia) ;;
+      *) stub+=" \"$fact\" false" ;;
+    esac
+  done < <(
+    for v in $vars; do
+      { grep -o -E "\\\$${v}\\.[A-Za-z0-9_]+" "$source_path" || true; } | sed "s/^\\\$${v}\\.//"
+    done | sort -u
+  )
+
+  sed -e "s|includeTemplate \"facts.tmpl\" \. \| fromYaml|$stub|g" \
+      -e "s|includeTemplate \"facts.tmpl\" \.ctx \| fromYaml|$stub|g" \
       "$source_path" > "$output_path"
+
+  if grep -qF 'includeTemplate "facts.tmpl"' "$output_path"; then
+    fail "write_fact_stub: unrewritten facts include in $source_path"
+  fi
 }
 
 render_ignore() {
