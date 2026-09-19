@@ -123,6 +123,13 @@ jq -e '.["settings.agentDefaultArgs.omp"] == "--model google-antigravity/gemini-
   || fail "the rendered reconciler does not declare settings.agentDefaultArgs.omp as --model google-antigravity/gemini-3.8-flash --thinking high: $(jq '.["settings.agentDefaultArgs.omp"]' <<<"$declared")"
 ok 'settings.agentDefaultArgs.omp is derived from roster'
 
+# settings.agentDefaultArgs.omp is derived from the roster, not hand-written:
+# a literal in orca.yaml would be dead config behind the reconciler's merge.
+for derived in "settings.agentDefaultArgs.omp"; do
+  jq -e --arg k "$derived" 'has($k) | not' <<<"$declared_source" >/dev/null \
+    || fail "orca.yaml still declares $derived by hand; it is derived from agents.roster"
+done
+ok 'settings.agentDefaultArgs.omp is not declared by hand in orca.yaml'
 # U3: the declared codex default-args leaf is unchanged beside the new omp leaf
 jq -e '.["settings.agentDefaultArgs.codex"] == "--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust"' <<<"$declared" >/dev/null \
   || fail "the declared settings.agentDefaultArgs.codex was changed or removed: $(jq '.["settings.agentDefaultArgs.codex"]' <<<"$declared")"

@@ -613,7 +613,7 @@ only after the query itself failed, and then MUST also record the command it ran
 This clause never blocks a run.
 MUST treat a host process sweep over the agent CLI's own process name as a secondary signal only
 These timeout, deadline, and release obligations OUTRANK the orchestration guide's keep-waiting, do-not-stop-a-live-worker, and do-not-release-on-timeout guidance
-A substantive failure on the mechanical row is retried once on the same omp seat with a sharpened brief, then goes to
+A substantive failure on the mechanical row is retried once on the same omp entry, in a fresh seat, with a sharpened brief, then goes to
 A revision of the current workflow's own planning artifact is lead work, and the lead makes that edit itself.
 That artifact is the one plan or requirements document under `<docs_root>/plans/` or `<docs_root>/brainstorms/`
 The first write of an artifact is not a revision and keeps its recipient, so model elevation still authors the first plan.
@@ -673,7 +673,10 @@ for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   fi
   if grep -F 'omp mechanical seat' "$payload" >/dev/null \
     || grep -F 'omp implementation seat' "$payload" >/dev/null \
-    || grep -F 'the seat changes while' "$payload" >/dev/null; then
+    || grep -F 'the seat changes while' "$payload" >/dev/null \
+    || grep -F 'same omp seat' "$payload" >/dev/null \
+    || grep -F 'same `omp` seat' "$payload" >/dev/null \
+    || grep -F 'cheap` omp seat' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains roster-entry use of seat"
   fi
   if grep -F 'worker-start --task <task_id> --terminal <handle>' "$payload" >/dev/null; then

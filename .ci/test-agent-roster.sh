@@ -151,16 +151,25 @@ assert_render_fails omp-missing-judgment \
     {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["mechanical","implementation"],"brief":"x"}]' \
   'no omp entry declares the judgment shape'
 
-# An edge case: a fixture with two omp rows still renders, so the guard
-# enforces presence and not a count.
+# An edge case: a fixture with two omp rows on identical pairs still renders,
+# so the guard enforces presence and not a count.
 assert_render_ok omp-two-rows \
   '[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"medium","shapes":["authoring"],"brief":"x"},
     {"id":"claude-fable","agent":"claude","model":"fable","effort":"medium","shapes":["judgment"],"rung":"judgment-escalation","brief":"x"},
     {"id":"claude-opus-judgment","agent":"claude","model":"opus","effort":"xhigh","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
     {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-    {"id":"omp-flash-mech","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["mechanical"],"brief":"x"},
+    {"id":"omp-flash-mech","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["mechanical"],"brief":"x"},
     {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","judgment"],"brief":"x"}]'
 
+# Two omp rows with differing model/effort pairs fail the render.
+assert_render_fails omp-differing-pairs \
+  '[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"medium","shapes":["authoring"],"brief":"x"},
+    {"id":"claude-fable","agent":"claude","model":"fable","effort":"medium","shapes":["judgment"],"rung":"judgment-escalation","brief":"x"},
+    {"id":"claude-opus-judgment","agent":"claude","model":"opus","effort":"xhigh","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
+    {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
+    {"id":"omp-flash-mech","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"low","shapes":["mechanical"],"brief":"x"},
+    {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","judgment"],"brief":"x"}]' \
+  'Orca'\''s single settings.agentDefaultArgs.omp leaf and the one-step worker-start --agent omp launch can pin only one pair'
 # Two claude implementation entries distinguished by rung (sonnet, a fake
 # second rung) pass. The second rung is a visibly fake id rather than `opus`,
 # which the roster no longer declares. An omp entry carrying all three shapes
@@ -349,9 +358,9 @@ grep -F 'launches once more' "$coordinator_body" >/dev/null ||
 grep -F 'second launch that yields no such seat is agent unavailability' "$coordinator_body" >/dev/null ||
   fail 'coordinator lost second-miss-is-unavailability rule'
 
-# R13: the routing table has six rows (mechanical, two implementation rows,
-# and three judgment rungs); the brief-guidance table has seven, one per
-# committed roster worker including the new claude-opus-judgment row.
+# R13: the routing table has five rows (mechanical, two implementation rows,
+# and two judgment rows: `judgment-deep` and the shared standard-and-cheap row).
+# The brief-guidance table has five, one per committed roster worker.
 count_table_rows() {
   awk -v header="$2" '
     index($0, header) == 1 { inside = 1; next }
@@ -385,6 +394,14 @@ grep -F '|' "$coordinator_body" | grep -F '`codex`' >/dev/null &&
 grep -F 're-size on the four signals; at the same size, `omp`' "$coordinator_body" | grep -F 'then `claude` `sonnet`' >/dev/null ||
   fail 'AE3: implementation row failure column does not name sonnet after omp'
 
+# KTD5: The mechanical row failure cell names retry on fresh omp launch then sonnet.
+grep -F 'Mechanical work:' "$coordinator_body" | grep -F 'retry once on the same `omp` entry in a fresh `worker-start --agent omp` launch with a sharpened brief, then `claude` `sonnet`' >/dev/null ||
+  fail 'the coordinator routing table mechanical row failure cell does not name fresh omp launch then sonnet'
+
+# KTD5: The sonnet row unavailable cell names omp with a sharpened brief, recorded as degraded.
+read -r omp_impl_model omp_impl_effort <<<"$(agent_seat_pair omp implementation '')"
+grep -F 'Implementation Units the lead has placed at `sonnet`' "$coordinator_body" | grep -F "\`omp\` \`$omp_impl_model\` $omp_impl_effort with a sharpened brief, recorded as degraded" >/dev/null ||
+  fail 'the coordinator routing table sonnet row unavailable cell does not name omp degraded fallback'
 # U1 AE1: The judgment-deep row names claude opus and omp over the same brief,
 # and a degraded reviewer leaves claude at xhigh.
 grep -F 'Judgment work at the `judgment-deep` rung' "$coordinator_body" | grep -F '`claude` `opus` xhigh and `omp`' | grep -F 'over the same brief' >/dev/null ||
@@ -429,8 +446,7 @@ grep -F "Judgment work at the \`judgment-standard\` or \`judgment-cheap\` rung" 
 stub_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"low","shapes":["authoring"],"brief":"x"},
   {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
   {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"omp-flash-mechanical","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"low","shapes":["mechanical","judgment"],"rung":"judgment-cheap","brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["implementation","judgment"],"rung":"judgment-standard","brief":"x"}]'
+  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-9.9-stub","effort":"high","shapes":["mechanical","implementation","judgment"],"brief":"x"}]'
 stub_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$stub_workers")
 stub_body="$scratch/coordinator-stub.md"
 render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$stub_body" "$stub_override" ||
@@ -449,26 +465,6 @@ grep -F -- 'selects `--model fable --effort high`' "$stub_body" >/dev/null ||
 grep -F -- '--effort max' "$stub_body" >/dev/null &&
   fail 'AE9: the coordinator body still names an effort the stub roster does not declare'
 
-# A two-entry omp roster proves a future distinct mechanical entry still
-# drives its consumers with no template change: the mechanical row's first
-# recipient and the brief-guidance table both name it.
-two_entry_omp_workers='[{"id":"claude-fable-authoring","agent":"claude","model":"fable","effort":"max","shapes":["authoring"],"brief":"x"},
-  {"id":"claude-fable","agent":"claude","model":"fable","effort":"high","shapes":["judgment"],"rung":"judgment-deep","brief":"x"},
-  {"id":"claude-sonnet","agent":"claude","model":"sonnet","effort":"high","shapes":["implementation"],"rung":"sonnet","brief":"x"},
-  {"id":"omp-lite-stub","agent":"omp","model":"google-antigravity/gemini-9.8-lite-stub","effort":"high","shapes":["mechanical"],"brief":"x"},
-  {"id":"omp-flash","agent":"omp","model":"google-antigravity/gemini-3.8-flash","effort":"high","shapes":["implementation","judgment"],"brief":"x"}]'
-two_entry_omp_override=$(printf '{"chezmoi":{"os":"linux"},"agents":{"roster":{"workers":%s}}}' "$two_entry_omp_workers")
-two_entry_omp_body="$scratch/coordinator-two-entry-omp.md"
-render "$repo_root" "$scratch" "$chezmoi_bin" linux "$coordinator_wrapper" "$two_entry_omp_body" "$two_entry_omp_override" ||
-  fail 'the coordinator body failed to render against a two-entry omp stub'
-grep -F -- '`omp` `google-antigravity/gemini-9.8-lite-stub` high' "$two_entry_omp_body" >/dev/null ||
-  fail 'the two-entry omp stub: the mechanical row does not name the fake mechanical model as first recipient'
-
-two_entry_omp_judgment_row=$(grep -F 'judgment-standard` or `judgment-cheap` rung' "$two_entry_omp_body")
-[[ -n $two_entry_omp_judgment_row ]] ||
-  fail 'the two-entry omp stub: no standard-and-cheap judgment row rendered'
-grep -qF -- 'google-antigravity/gemini-3.8-flash' <<<"$two_entry_omp_judgment_row" ||
-  fail 'the two-entry omp stub: the judgment row does not name the judgment model'
 # --- committed prose (R6): README.md and AGENTS.md are never rendered ------- #
 #
 # KTD5: the prose allowlist is wider than the payload-parity set above. Prose
@@ -526,6 +522,7 @@ grep -qF 'six worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
 
 plugin_manifests=(
   dot_local/share/dotfiles-claude-plugin/dot_claude-plugin/plugin.json.tmpl
+  dot_local/share/dotfiles-codex-plugin/dot_codex-plugin/plugin.json.tmpl
 )
 for manifest in "${plugin_manifests[@]}"; do
   name=$(basename "$(dirname "$manifest")")

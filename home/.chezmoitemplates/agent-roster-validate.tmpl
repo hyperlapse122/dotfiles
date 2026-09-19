@@ -66,6 +66,8 @@
 {{- $ompMechanical := false -}}
 {{- $ompImplementation := false -}}
 {{- $ompJudgment := false -}}
+{{- $ompModel := "" -}}
+{{- $ompEffort := "" -}}
 {{- range $workers -}}
 {{-   $id := .id -}}
 {{-   if not $id -}}
@@ -116,6 +118,12 @@
 {{-   if eq $agent "omp" -}}
 {{-     if not (hasPrefix "google-antigravity/" .model) -}}
 {{-       fail (printf "agent-roster-validate: %s omp model %q does not start with google-antigravity/" $id .model) -}}
+{{-     end -}}
+{{-     if eq $ompModel "" -}}
+{{-       $ompModel = .model -}}
+{{-       $ompEffort = .effort -}}
+{{-     else if or (ne $ompModel .model) (ne $ompEffort .effort) -}}
+{{-       fail (printf "agent-roster-validate: %s declares omp model/effort (%s/%s) differing from (%s/%s); Orca's single settings.agentDefaultArgs.omp leaf and the one-step worker-start --agent omp launch can pin only one pair" $id .model .effort $ompModel $ompEffort) -}}
 {{-     end -}}
 {{-   end -}}
 {{- end -}}

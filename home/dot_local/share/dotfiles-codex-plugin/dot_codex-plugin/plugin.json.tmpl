@@ -25,7 +25,9 @@
        walk below never sees a change to the declaration it renders. Hash the
        RENDERED declaration here, or the cache Codex serves keeps a stale
        hooks.json while the source moves. */ -}}
-{{- $payloadBodies := list "orchestration-everyone.tmpl" -}}
+{{- $payloadBodies := list
+      "orchestration-everyone.tmpl"
+      "orchestration-coordinator.tmpl" -}}
 {{- $parts := includeTemplate "codex-hook-declaration.tmpl" . | sha256sum -}}
 {{- range $body := $payloadBodies -}}
 {{-   $bodyPath := joinPath $.chezmoi.sourceDir ".chezmoitemplates" $body -}}
