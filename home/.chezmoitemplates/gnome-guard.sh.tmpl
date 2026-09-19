@@ -9,8 +9,8 @@ stable from first boot — but it is now probed ONCE per chezmoi command and BAK
 IN by facts-sh.tmpl, instead of re-derived by a `command -v` at each of the 7
 include sites.
 
-Deploy-everywhere-and-self-select is unchanged (KTD12): a non-GNOME host exits 0,
-so this stays a runtime skip, not a non-deployment gate. That exit is now a
+.chezmoiignore keeps hosts with another desktop from deploying the consumer,
+and this guard is the second line. That exit is now a
 DECLARED one — skip.sh.tmpl, form skip_here, direction harmless, site
 non-gnome-desktop — because a host whose ISO shipped no gnome-shell does not
 acquire one later: nothing is outstanding, so exiting 0 is correct AND final,

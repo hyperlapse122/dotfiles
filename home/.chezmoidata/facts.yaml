@@ -535,12 +535,10 @@ factRegistry:
       authd enumeration depends on the daemon's ListUsers and can report only the
       users who have logged in.
     gates: >-
-      The system-manifest install set (install-system-10-files, -20-host,
-      -30-network) and every change to a system-wide daemon's identity or
-      configuration — the Tailscale daemon enable, the Fedora CDI descriptor, unit
-      enablement, and group and subid membership. Package installation and
-      package-source trust are NOT gated: adding an apt source is additive delivery,
-      and gating it would make a shared host unable to provision itself.
+      The root .chezmoiignore inapplicable-script-exclusions block, which excludes
+      every consuming script from deployment, with shared-host-guard as the second
+      line. Every installer that includes this guard skips as a whole: system
+      manifests, base packages, components, and daemon identity and configuration.
       INSTALL_SYSTEM_CONFIG_FORCE=1 overrides the headless guard ONLY and never
       this fact.
     whenFalse: >-
