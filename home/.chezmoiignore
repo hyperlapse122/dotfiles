@@ -60,6 +60,61 @@
 {{- if not (default dict $features).devtools }}
 .chezmoiscripts/30-components/80-devtools.sh
 {{- end }}
+# BEGIN inapplicable-script-exclusions
+# Exclude scripts whose whole-script skip is decided entirely by render-time
+# host facts. Runtime guards stay in place as a second line of defense.
+# headless-guard consumers stay deployed because INSTALL_SYSTEM_CONFIG_FORCE=1
+# overrides that guard per run.
+{{- if ne $f.desktop "gnome" }}
+.chezmoiscripts/50-linux-gnome/*.sh
+{{- end }}
+{{- if ne $f.desktop "kde" }}
+.chezmoiscripts/50-linux-kde/*.sh
+{{- end }}
+{{- if or $f.virt (not $f.battery) $f.thinkpad }}
+.chezmoiscripts/30-linux/install-system-19-thermald.sh
+{{- end }}
+{{- if not $f.fingerprintReader }}
+.chezmoiscripts/30-linux/install-system-32-fingerprint.sh
+{{- end }}
+{{- if not $f.irCamera }}
+.chezmoiscripts/30-linux/install-system-34-face-auth.sh
+{{- end }}
+{{- if $f.jetson }}
+.chezmoiscripts/10-auth/auth-tailscale.sh
+{{- end }}
+{{- if $f.sharedHost }}
+.chezmoiscripts/00-tools/00-selinux-policies.sh
+.chezmoiscripts/20-base/fedora/base.sh
+.chezmoiscripts/20-base/ubuntu/base.sh
+.chezmoiscripts/30-components/10-nvidia.sh
+.chezmoiscripts/30-components/20-podman.sh
+.chezmoiscripts/30-components/30-tailscale.sh
+.chezmoiscripts/30-components/40-flatpaks.sh
+.chezmoiscripts/30-components/50-dotnet.sh
+.chezmoiscripts/30-components/60-desktop-ime.sh
+.chezmoiscripts/30-components/70-apps.sh
+.chezmoiscripts/30-components/72-camera-ipu6.sh
+.chezmoiscripts/30-components/75-direct-rpms.sh
+.chezmoiscripts/30-components/80-devtools.sh
+.chezmoiscripts/30-linux/install-system-10-desktop.sh
+.chezmoiscripts/30-linux/install-system-12-sudoers.sh
+.chezmoiscripts/30-linux/install-system-14-sysctl.sh
+.chezmoiscripts/30-linux/install-system-16-udev.sh
+.chezmoiscripts/30-linux/install-system-18-hardware.sh
+.chezmoiscripts/30-linux/install-system-19-thermald.sh
+.chezmoiscripts/30-linux/install-system-20-bluetooth.sh
+.chezmoiscripts/30-linux/install-system-22-host.sh
+.chezmoiscripts/30-linux/install-system-24-keyd.sh
+.chezmoiscripts/30-linux/install-system-26-swap-hibernate.sh
+.chezmoiscripts/30-linux/install-system-28-sleep.sh
+.chezmoiscripts/30-linux/install-system-30-network.sh
+.chezmoiscripts/30-linux/install-system-32-fingerprint.sh
+.chezmoiscripts/30-linux/install-system-34-face-auth.sh
+.chezmoiscripts/30-linux/setup-podman-cluster.sh
+.chezmoiscripts/80-keys/install-gpg-packages.sh
+{{- end }}
+# END inapplicable-script-exclusions
 # macOS-only
 {{- if ne .chezmoi.os "darwin" }}
 ./Library
