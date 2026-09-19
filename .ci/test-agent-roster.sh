@@ -358,6 +358,31 @@ grep -F 'launches once more' "$coordinator_body" >/dev/null ||
 grep -F 'second launch that yields no such seat is agent unavailability' "$coordinator_body" >/dev/null ||
   fail 'coordinator lost second-miss-is-unavailability rule'
 
+# Issue #585: Orca gives omp no paste-ready signal and no submit retry, so a
+# multi-line spec can stay in the composer as an unsubmitted pasted block.
+grep -F 'passes a one-line `--spec` that names a brief file' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not require a one-line brief-file spec for omp at any size'
+grep -F 'An omp dispatch is the one exception to the size test' "$coordinator_body" >/dev/null ||
+  fail '#585: the brief-file size rule does not name omp as its exception'
+grep -F 'worker-read --dispatch <id> --source terminal' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not read the omp seat terminal after launch'
+# Orca rejects --wait-submit without --text (terminal-send.js), so the bare
+# submit must carry neither.
+grep -F -- '`orca-ide terminal send --terminal <handle> --enter --json`, with no `--text` and no `--wait-submit`' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not send one bare submit without --text and --wait-submit'
+! grep -F -- '--enter --wait-submit' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator pairs --wait-submit with a text-free terminal send, which Orca rejects'
+grep -F 'MUST NOT omit `--terminal`' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not bind the bare submit to the seat handle'
+grep -F 'at most one bare submit' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not bound the resubmit to one'
+grep -F 'MUST NOT add `--text` to answer a CLI error' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not forbid a duplicate --text prompt'
+grep -F 'second read still shows no started turn is a launch miss' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not treat an unsubmitted second read as a launch miss'
+grep -F 'is not a re-engagement of a previous Dispatch' "$coordinator_body" >/dev/null ||
+  fail '#585: coordinator does not separate the bare submit from the no-reuse rule'
+
 # R13: the routing table has five rows (mechanical, two implementation rows,
 # and two judgment rows: `judgment-deep` and the shared standard-and-cheap row).
 # The brief-guidance table has five, one per committed roster worker.
