@@ -268,7 +268,10 @@ exclude = {{ toJson $authority.exclude }}
 {{-     if hasKey $authority "pristinePath" }}
 {{-       $pristineIncludes := list -}}
 {{-       range $patchedPath := keys (include "dot_local/share/compound-engineering-overlays/base.json" | fromJson).paths | sortAlpha -}}
-{{-         $pristineIncludes = append $pristineIncludes (printf "*/%s" $patchedPath) -}}
+{{-         $parts := splitList "/" $patchedPath -}}
+{{-         range $i := until (len $parts) -}}
+{{-           $pristineIncludes = append $pristineIncludes (printf "*/%s" (join "/" (slice $parts 0 (add1 $i)))) -}}
+{{-         end -}}
 {{-       end }}
 
 [{{ printf "%s/%s" $authority.pristinePath $segment | quote }}]
@@ -276,7 +279,7 @@ type = "archive"
 url = '{{ printf "https://github.com/%s/archive/%s.tar.gz" $authority.source $ref }}'
 stripComponents = 1
 exact = true
-include = {{ toJson $pristineIncludes }}
+include = {{ toJson ($pristineIncludes | uniq | sortAlpha) }}
 {{-     end }}
 {{-   end -}}
 {{- end }}

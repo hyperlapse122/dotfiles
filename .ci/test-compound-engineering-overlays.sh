@@ -645,6 +645,20 @@ printf '%s\n' "$omp_ce_block" | grep -q '^type = "archive"$' \
 printf '%s\n' "$omp_ce_block" | grep -qxF 'exclude = ["*/skills/ce-sweep/references/interview.md","*/plugin.json","*/skills/ce-plan/scripts/elevation-dispatch.sh","*/skills/ce-brainstorm/scripts/elevation-dispatch.sh","*/skills/ce-sweep/references/sources/gitlab-issues.md"]' \
   || fail "rendered CE-omp external missing exclude for interview.md, gitlab-issues.md, plugin.json, and the elevation-dispatch adapters"
 
+pristine_block=$(awk '
+  /^\["\.local\/share\/compound-engineering-pristine\/v/ { in_ce=1; first=1 }
+  in_ce && !first && /^\[/ { exit }
+  in_ce { print; first=0 }
+' "$rendered_externals")
+printf '%s\n' "$pristine_block" | grep -q '^type = "archive"$' \
+  || fail "rendered pristine CE external block missing"
+printf '%s\n' "$pristine_block" | grep -q '^exact = true$' \
+  || fail "rendered pristine CE external is not exact"
+base_json="$source_root/dot_local/share/compound-engineering-overlays/base.json"
+expected_pristine_include="include = $(jq -c '[.paths | keys[] | split("/") as $parts | range(1; ($parts | length) + 1) as $i | "*/" + ($parts[0:$i] | join("/"))] | unique' "$base_json")"
+printf '%s\n' "$pristine_block" | grep -qxF "$expected_pristine_include" \
+  || fail "rendered pristine CE external include list does not match expected parent directory patterns"
+
 # --- agent skill external is exact: skills/i-have-adhd from ayghri/i-have-adhd ---
 skill_block=$(awk '
   /^\["\.agents\/skills\/i-have-adhd"\]/ { in_skill=1; first=1 }
@@ -801,16 +815,13 @@ if printf '%s\n' "$pristine_block" | grep -q '^exclude'; then
 fi
 [ "$(printf '%s\n' "$pristine_block" | grep '^url = ')" = "$(printf '%s\n' "$ce_block" | grep '^url = ')" ] \
   || fail "pristine external does not fetch the same archive as the CE external"
-[ "$(printf '%s\n' "$pristine_block" | grep '^include = ')" = "include = $(jq -c '[.paths | keys[] | "*/" + .]' "$base_json")" ] \
-  || fail "pristine include list differs from the base.json keys"
+[ "$(printf '%s\n' "$pristine_block" | grep '^include = ')" = "$expected_pristine_include" ] \
+  || fail "pristine include list differs from the expected parent directory patterns"
 
-# The base.json keys, the pristine include list and each authority's excludes stay one set.
+# The base.json keys and each authority's excludes stay one set.
 expected_excludes=$(jq -r '.paths | keys[] | "*/" + .' "$base_json" | LC_ALL=C sort)
-pristine_includes=$(printf '%s\n' "$pristine_block" | sed -n 's/^include = //p' | jq -r '.[]' | LC_ALL=C sort)
 ce_excludes=$(printf '%s\n' "$ce_block" | sed -n 's/^exclude = //p' | jq -r '.[]' | LC_ALL=C sort)
 omp_excludes=$(printf '%s\n' "$omp_ce_block" | sed -n 's/^exclude = //p' | jq -r '.[]' | grep -vxF '*/plugin.json' | LC_ALL=C sort)
-[ "$pristine_includes" = "$expected_excludes" ] \
-  || fail "pristine include list is not the base.json key set"
 [ "$ce_excludes" = "$expected_excludes" ] \
   || fail "CE external excludes are not the base.json key set"
 [ "$omp_excludes" = "$expected_excludes" ] \
