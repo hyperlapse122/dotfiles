@@ -485,8 +485,7 @@ render "$repo_root" "$scratch" "$chezmoi_bin" linux "$lead_wrapper_tmpl" "$lead_
   fail 'the committed agents.roster.lead map failed to render'
 
 prose_allowlist="$scratch/prose-allowlist.txt"
-# Until U4 updates committed prose in README.md and AGENTS.md, gpt-5.6-luna is tolerated.
-printf 'gpt-5.6-luna\n' | sort -u "$roster_aliases" "$lead_models" - >"$prose_allowlist"
+sort -u "$roster_aliases" "$lead_models" >"$prose_allowlist"
 
 prose_models="$scratch/prose-models.txt"
 extract_model_ids "$repo_root/README.md" "$repo_root/AGENTS.md" >"$prose_models"
@@ -508,15 +507,18 @@ else
   fail 'the prose scan does not see a model id a stub README names'
 fi
 
-# R2: the retired worker id and the stale worker counts must not resurface.
-# "seven worker" is not in this list: the roster grew back to seven workers
-# with claude-opus-judgment, so that count is current prose, not a retired one.
+# R2: the retired worker ids, stale worker counts, and codex-as-worker prose must not resurface.
+# Five workers is current again; seven and six are stale.
 grep -qF 'codex-astra' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
   fail 'committed prose still names the retired codex-astra worker id'
+grep -qF 'codex-luna' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still names the retired codex-luna worker id'
+grep -qiE '(`?codex`? )worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still names a codex worker'
 grep -qF 'omp-flash-lite' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
   fail 'committed prose still names the retired omp-flash-lite worker id'
-grep -qF 'five worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
-  fail 'committed prose still describes five workers'
+grep -qF 'seven worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
+  fail 'committed prose still describes seven workers'
 grep -qF 'six worker' "$repo_root/README.md" "$repo_root/AGENTS.md" &&
   fail 'committed prose still describes six workers'
 
