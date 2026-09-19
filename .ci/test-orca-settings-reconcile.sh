@@ -125,10 +125,8 @@ ok 'settings.agentDefaultArgs.omp is derived from roster'
 
 # settings.agentDefaultArgs.omp is derived from the roster, not hand-written:
 # a literal in orca.yaml would be dead config behind the reconciler's merge.
-for derived in "settings.agentDefaultArgs.omp"; do
-  jq -e --arg k "$derived" 'has($k) | not' <<<"$declared_source" >/dev/null \
-    || fail "orca.yaml still declares $derived by hand; it is derived from agents.roster"
-done
+jq -e --arg k "settings.agentDefaultArgs.omp" 'has($k) | not' <<<"$declared_source" >/dev/null \
+  || fail "orca.yaml still declares settings.agentDefaultArgs.omp by hand; it is derived from agents.roster"
 ok 'settings.agentDefaultArgs.omp is not declared by hand in orca.yaml'
 # U3: the declared codex default-args leaf is unchanged beside the new omp leaf
 jq -e '.["settings.agentDefaultArgs.codex"] == "--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust"' <<<"$declared" >/dev/null \

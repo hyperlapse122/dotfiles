@@ -343,7 +343,7 @@ grep -F 'worker-start' "$coordinator_body" | grep -F -- '--agent omp' >/dev/null
   fail 'AE4: coordinator does not describe omp launch as worker-start with --agent omp'
 grep -F 'worker-read' "$coordinator_body" >/dev/null ||
   fail 'AE4: coordinator does not describe status-line model check through worker-read'
-read -r omp_model omp_effort <<<"$(agent_seat_pair omp implementation '')"
+read -r omp_model _ <<<"$(agent_seat_pair omp implementation '')"
 grep -F -- "$omp_model" "$coordinator_body" >/dev/null ||
   fail 'coordinator omp launch line does not name the implementation entry model'
 
