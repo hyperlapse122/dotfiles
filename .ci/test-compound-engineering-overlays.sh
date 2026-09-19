@@ -801,16 +801,14 @@ if printf '%s\n' "$pristine_block" | grep -q '^exclude'; then
 fi
 [ "$(printf '%s\n' "$pristine_block" | grep '^url = ')" = "$(printf '%s\n' "$ce_block" | grep '^url = ')" ] \
   || fail "pristine external does not fetch the same archive as the CE external"
-[ "$(printf '%s\n' "$pristine_block" | grep '^include = ')" = "include = $(jq -c '[.paths | keys[] | "*/" + .]' "$base_json")" ] \
-  || fail "pristine include list differs from the base.json keys"
+expected_pristine_include="include = $(jq -c '[.paths | keys[] | split("/") as $parts | range(1; ($parts | length) + 1) as $i | "*/" + ($parts[0:$i] | join("/"))] | unique' "$base_json")"
+[ "$(printf '%s\n' "$pristine_block" | grep '^include = ')" = "$expected_pristine_include" ] \
+  || fail "pristine include list differs from the expected parent directory patterns"
 
-# The base.json keys, the pristine include list and each authority's excludes stay one set.
+# The base.json keys and each authority's excludes stay one set.
 expected_excludes=$(jq -r '.paths | keys[] | "*/" + .' "$base_json" | LC_ALL=C sort)
-pristine_includes=$(printf '%s\n' "$pristine_block" | sed -n 's/^include = //p' | jq -r '.[]' | LC_ALL=C sort)
 ce_excludes=$(printf '%s\n' "$ce_block" | sed -n 's/^exclude = //p' | jq -r '.[]' | LC_ALL=C sort)
 omp_excludes=$(printf '%s\n' "$omp_ce_block" | sed -n 's/^exclude = //p' | jq -r '.[]' | grep -vxF '*/plugin.json' | LC_ALL=C sort)
-[ "$pristine_includes" = "$expected_excludes" ] \
-  || fail "pristine include list is not the base.json key set"
 [ "$ce_excludes" = "$expected_excludes" ] \
   || fail "CE external excludes are not the base.json key set"
 [ "$omp_excludes" = "$expected_excludes" ] \
