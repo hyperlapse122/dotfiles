@@ -1188,10 +1188,8 @@ preflight_fedora() {
     *) ;;
   esac
 
-  # A declared name is a capability, not necessarily a package name. `dnf
-  # install <name>` is satisfied by whichever installed package provides
-  # <name>, so the inspection that decides what to install asks the same
-  # question.
+  # A declared name is a capability another installed package may provide, so
+  # the inspection asks what `dnf install <name>` itself resolves through.
   local -a missing=()
   local pkg
   if ! rpm -q --whatprovides "${pkgs[@]}" >/dev/null 2>&1; then

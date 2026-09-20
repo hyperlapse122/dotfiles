@@ -125,6 +125,10 @@ clear_base_skip_record() {
 
 install_base_packages() {
   compute_missing
+  # The early return below is the converged path, and it never reaches the
+  # retirement at the end of this function. A host an earlier apply blocked
+  # converges there and nowhere else, so retire its record before taking it.
+  [[ "${#missing[@]}" -gt 0 ]] || clear_base_skip_record
   if [[ "${#missing[@]}" -eq 0 ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-base-fedora" "site" "base-packages-already-present" "reason" "all declared base packages are already installed") | trim | indent 6 }}

@@ -108,9 +108,8 @@ report_apps_missing() {
   return 0
 }
 
-# A declared name is a capability, not necessarily a package name. `dnf install
-# <name>` is satisfied by whichever installed package provides <name>, so the
-# re-inspection that decides convergence asks the same question.
+# A declared name is a capability another installed package may provide, so the
+# re-inspection asks what `dnf install <name>` itself resolves through.
 rpm_installed() {
   rpm -q --whatprovides "$1" >/dev/null 2>&1
 }
