@@ -342,7 +342,7 @@ agent_seat_pair() {
 grep -F 'worker-start' "$coordinator_body" | grep -F -- '--agent omp' >/dev/null ||
   fail 'AE4: coordinator does not describe omp launch as worker-start with --agent omp'
 grep -F 'worker-read' "$coordinator_body" >/dev/null ||
-  fail 'AE4: coordinator does not describe status-line model check through worker-read'
+  fail 'AE4: coordinator does not describe post-launch read through worker-read'
 read -r omp_model _ <<<"$(agent_seat_pair omp implementation '')"
 grep -F -- "$omp_model" "$coordinator_body" >/dev/null ||
   fail 'coordinator omp launch line does not name the implementation entry model'
@@ -351,8 +351,12 @@ grep -F -- "$omp_model" "$coordinator_body" >/dev/null ||
 # keeps relaunch-once rule, and second miss is agent unavailability.
 grep -F 'MUST NOT re-engage an omp terminal a previous Dispatch ran in' "$coordinator_body" >/dev/null ||
   fail 'coordinator lost rule forbidding re-engaging settled omp terminal'
-grep -F 'missing or mismatched model records the pass as degraded' "$coordinator_body" >/dev/null ||
-  fail 'coordinator lost rule recording missing or mismatched model as degraded'
+grep -F 'the model and thinking level are trusted from the default arguments the reconciler asserted' "$coordinator_body" >/dev/null ||
+  fail 'coordinator does not trust model and thinking level from reconciler default arguments'
+! grep -F 'missing or mismatched model records the pass as degraded' "$coordinator_body" >/dev/null ||
+  fail 'coordinator still carries retired missing/mismatched model rule'
+! grep -F "checks the model name on the worker's own status line" "$coordinator_body" >/dev/null ||
+  fail 'coordinator still carries retired status-line model check'
 grep -F 'launches once more' "$coordinator_body" >/dev/null ||
   fail 'coordinator lost relaunch-once rule'
 grep -F 'second launch that yields no such seat is agent unavailability' "$coordinator_body" >/dev/null ||
