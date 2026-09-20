@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "032be146865d973682535de75f2287da438550bf"
+        "version": "6ed0f7a9504f577d7529064103cecce9be7dfc5e"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "032be146865d973682535de75f2287da438550bf"
+        "version": "6ed0f7a9504f577d7529064103cecce9be7dfc5e"
       },
       "uv": {
         "kind": "githubRelease",
