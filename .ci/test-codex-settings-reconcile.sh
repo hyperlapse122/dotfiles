@@ -97,8 +97,8 @@ jq -e 'type == "object"' <<<"$declared" >/dev/null \
 # leaves the script derives from agents.roster rather than from agents.yaml.
 raw_codex_settings=$(render_settings <<<'{{ .agents.codex.settings | toJson }}')
 roster_pair=$(render_settings <<<'{{ dict "model" .agents.roster.lead.codex.model "model_reasoning_effort" .agents.roster.lead.codex.effort | toJson }}')
-jq -e '.model == "gpt-6-astra" and .model_reasoning_effort == "medium"' <<<"$roster_pair" >/dev/null \
-  || fail "the codex lead roster entry is not gpt-6-astra at medium: $roster_pair"
+jq -e '.model == "gpt-6-astra" and .model_reasoning_effort == "low"' <<<"$roster_pair" >/dev/null \
+  || fail "the codex lead roster entry is not gpt-6-astra at low: $roster_pair"
 expected_settings=$(jq -c --argjson pair "$roster_pair" \
   '($pair + .) | reduce to_entries[] as $e ({}; setpath($e.key | split("."); $e.value))' <<<"$raw_codex_settings")
 [[ $(jq -Sc 'del(.mcp_servers) | del(.hooks)' <<<"$declared") == "$(jq -Sc . <<<"$expected_settings")" ]] \
@@ -174,7 +174,7 @@ for expected_trust_key in "${expected_trust_keys[@]}"; do
 done
 jq -e '.approval_policy == "never" and .sandbox_mode == "workspace-write"
   and .sandbox_workspace_write.network_access == true
-  and .model_reasoning_effort == "medium" and .model == "gpt-6-astra"
+  and .model_reasoning_effort == "low" and .model == "gpt-6-astra"
   and .features.memories == false' <<<"$declared" >/dev/null \
   || fail 'the declared headless posture does not carry the Codex default pair'
 

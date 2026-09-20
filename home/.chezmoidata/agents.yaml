@@ -14,7 +14,7 @@ agents:
         model: opus[1m]
       codex:
         model: gpt-6-astra
-        effort: medium
+        effort: low
     workers:
     - id: claude-fable-authoring
       agent: claude
