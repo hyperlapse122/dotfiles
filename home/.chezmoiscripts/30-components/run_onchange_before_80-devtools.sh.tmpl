@@ -70,12 +70,20 @@ setup_dev_repos() {
   fi
 }
 
+# A declared name is a capability, not necessarily a package name:
+# pkgconf-pkg-config provides pkg-config. `dnf install <name>` is satisfied by
+# whichever installed package provides <name>, so the re-inspection that
+# decides convergence asks the same question.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 missing_dev_packages=()
 compute_missing_dev_packages() {
   missing_dev_packages=()
   local pkg
   for pkg in "${dev_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing_dev_packages+=("${pkg}")
+    rpm_installed "${pkg}" || missing_dev_packages+=("${pkg}")
   done
 }
 

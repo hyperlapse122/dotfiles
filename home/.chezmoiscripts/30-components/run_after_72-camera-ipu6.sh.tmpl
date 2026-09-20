@@ -17,11 +17,18 @@ ipu6_packages=(
   ipu6-camera-bins-firmware
 )
 
+# A declared name is a capability, not necessarily a package name. `dnf install
+# <name>` is satisfied by whichever installed package provides <name>, so the
+# inspection that decides what to install asks the same question.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 install_ipu6() {
   local -a missing=()
   local pkg
   for pkg in "${ipu6_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+    rpm_installed "${pkg}" || missing+=("${pkg}")
   done
 
   if [[ "${#missing[@]}" -eq 0 ]]; then

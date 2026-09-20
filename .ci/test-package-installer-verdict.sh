@@ -107,6 +107,21 @@ grep -qE -- '--repofrompath .*terra-release.*\|\| true$' "$scratch/rendered/devt
   fail 'the Terra bootstrap is no longer the tolerant repository setup step the allowance names'
 pass 'no declared-set install call keeps || true or || :; the Terra bootstrap is the one allowance'
 
+# A declared package name is a capability, not necessarily a package name:
+# pkgconf-pkg-config provides pkg-config, wget2-wget provides wget and
+# kubernetes1.36-client provides kubernetes-client. `dnf install <name>` is
+# satisfied by any installed package that provides <name>, so an exact-name
+# re-inspection reports a converged host as unconverged forever.
+exact_name_checks=$(grep -nE 'rpm -q "\$\{?pkg\}?"' "${rendered[@]}" || true)
+[[ -z "$exact_name_checks" ]] || fail "a declared-set loop still checks the exact package name:
+$exact_name_checks"
+for fedora_installer in base-fedora.sh podman-fedora.sh devtools-fedora.sh apps-fedora.sh \
+  desktop-ime-fedora.sh; do
+  grep -qF 'rpm -q --whatprovides' "$scratch/rendered/$fedora_installer" ||
+    fail "$fedora_installer does not resolve a declared package through its provides"
+done
+pass 'every Fedora declared-set loop resolves a package name through its provides'
+
 # Scenarios 1-3: verify the widened gate expression rejects || : on dnf, apt-get and dotnet tool
 for sample in \
   'dnf install -y foo || :' \
@@ -292,7 +307,17 @@ stub "$stubs/rpm" <<'EOF'
 set -uo pipefail
 printf 'rpm %s\n' "$*" >>"$STUB_LOG"
 case "${1-}" in
-  -q) grep -qxF -- "${2-}" "$STUB_STATE/rpms" ;;
+  -q)
+    # `--whatprovides <cap>` succeeds for an installed package's own name and
+    # for a capability another installed package provides under a different
+    # name, which is what real rpm reports and what `dnf install <cap>` acts on.
+    if [[ "${2-}" == --whatprovides ]]; then
+      grep -qxF -- "${3-}" "$STUB_STATE/rpms" ||
+        grep -qxF -- "${3-}" "$STUB_STATE/provides"
+      exit $?
+    fi
+    grep -qxF -- "${2-}" "$STUB_STATE/rpms"
+    ;;
   --import) exit "${RPM_IMPORT_EXIT:-0}" ;;
   *) exit 1 ;;
 esac
@@ -445,6 +470,7 @@ done
 #
 # run_case <label> <region> <body> [NAME=value...]
 # Installed sets come from RPMS, GROUPS, DEBS and TOOLS (space separated);
+# PROVIDES names capabilities an installed package supplies under another name;
 # DOTNET=1 puts the dotnet stub on PATH; SEED=<script>__<site> pre-seeds a
 # record. Everything else is passed to the stubs as environment. The result is
 # left in $out, $err, $log, $rc and $skips.
@@ -453,12 +479,13 @@ run_case() {
   local label=$1 region=$2 body=$3
   shift 3
   local case_dir=$scratch/cases/$label kv name
-  local rpms='' groups='' debs='' tools='' flatpaks='' dotnet=0 seed='' noflatpak=0
+  local rpms='' provides='' groups='' debs='' tools='' flatpaks='' dotnet=0 seed='' noflatpak=0
   local -a pass_env=()
   for kv in "$@"; do
     name=${kv%%=*}
     case "$name" in
       RPMS) rpms=${kv#*=} ;;
+      PROVIDES) provides=${kv#*=} ;;
       GROUPS) groups=${kv#*=} ;;
       DEBS) debs=${kv#*=} ;;
       TOOLS) tools=${kv#*=} ;;
@@ -473,6 +500,7 @@ run_case() {
   skips=$case_dir/state/chezmoi/skips
   mkdir -p "$skips"
   printf '%s\n' $rpms >"$case_dir/stub/rpms"
+  printf '%s\n' $provides >"$case_dir/stub/provides"
   printf '%s\n' $groups >"$case_dir/stub/groups"
   printf '%s\n' $debs >"$case_dir/stub/debs"
   printf '%s\n' $tools >"$case_dir/stub/tools"
@@ -963,6 +991,14 @@ check no_record "$PMFED"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
 
+label='podman-fedora-virtual-provide'
+run_case "$label" podman-fedora.region install_podman_packages \
+  RPMS="$(without "$podman_fd1" $podman_fd_pkgs)" PROVIDES="$podman_fd1" SEED="$PMFED"
+check returned_zero
+check not_called '^dnf install'
+check no_record "$PMFED"
+pass "$label: a declared package supplied under another package's name clears the record"
+
 # --- Podman, Ubuntu ------------------------------------------------------------
 
 label='podman-ubuntu-second-fails'
@@ -1057,6 +1093,14 @@ run_case "$label" base-fedora.region install_base_packages RPMS="$base_fd_pkgs"
 check returned_zero
 check not_called '^dnf install'
 pass "$label: the existing done_here early exit is unaffected by the new verdict"
+
+label='base-fedora-virtual-provide'
+run_case "$label" base-fedora.region install_base_packages \
+  RPMS="$(without "$base_fd1" $base_fd_pkgs)" PROVIDES="$base_fd1"
+check returned_zero
+check not_called '^dnf install'
+check no_record "$BASEFED"
+pass "$label: a declared package supplied under another package's name counts as installed"
 
 # --- Base, Ubuntu ----------------------------------------------------------------
 

@@ -36,10 +36,13 @@ case "${FACT_DESKTOP:-none}" in
 esac
 
 {{ if $isFedora -}}
+# A declared name is a capability, not necessarily a package name. `dnf install
+# <name>` is satisfied by whichever installed package provides <name>, so the
+# inspection that decides what to install asks the same question.
 missing=()
-if ! rpm -q "${gpg_packages[@]}" >/dev/null 2>&1; then
+if ! rpm -q --whatprovides "${gpg_packages[@]}" >/dev/null 2>&1; then
   for pkg in "${gpg_packages[@]}"; do
-    rpm -q "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+    rpm -q --whatprovides "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
   done
 fi
 

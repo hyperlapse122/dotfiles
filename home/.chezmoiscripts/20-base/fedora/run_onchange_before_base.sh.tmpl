@@ -93,6 +93,14 @@ setup_base_repos() {
   fi
 }
 
+# A declared name is a capability, not necessarily a package name:
+# pkgconf-pkg-config provides pkg-config and wget2-wget provides wget. `dnf
+# install <name>` is satisfied by whichever installed package provides <name>,
+# so the re-inspection that decides convergence asks the same question.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 # Named generically, unlike the other converted installers' missing_<set>
 # arrays: the frozen base-packages-already-present matrix row's predicate
 # already reads "${#missing[@]}", so renaming it would move that row too.
@@ -101,7 +109,7 @@ compute_missing() {
   missing=()
   local pkg
   for pkg in "${core_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+    rpm_installed "${pkg}" || missing+=("${pkg}")
   done
 }
 
