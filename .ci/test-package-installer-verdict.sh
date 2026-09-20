@@ -91,6 +91,27 @@ render_variant "$base_fedora_src" linux "$fedora_data" base-fedora.sh
 render_variant "$base_ubuntu_src" linux "$ubuntu_data" base-ubuntu.sh
 pass 'all nine installers render for Fedora, Ubuntu arm64 and darwin'
 
+# --- The provides-aware surface ------------------------------------------------
+#
+# The four installers below drive no scenario here, but they compute a missing
+# set from a declared package list exactly as the nine above do, so a revert in
+# any of them reintroduces the same permanent non-convergence. They are rendered
+# into their own directory so the gates over $rendered keep meaning what they
+# meant, and the provides gate reads the union.
+mkdir -p "$scratch/converted"
+render_converted() {
+  local src=$1 out=$scratch/converted/$2
+  require_file "$repo_root" "$scratch" "$chezmoi_bin" "$src"
+  render "$repo_root" "$rscratch" "$chezmoi_bin" linux "$source_root/$src" "$out" "$fedora_data" ||
+    fail "$src does not render for Fedora"
+  bash -n "$out" || fail "$2 is not valid shell"
+}
+render_converted .chezmoiscripts/30-components/run_onchange_before_10-nvidia.sh.tmpl nvidia-fedora.sh
+render_converted .chezmoiscripts/30-components/run_after_72-camera-ipu6.sh.tmpl camera-ipu6-fedora.sh
+render_converted .chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl face-auth-fedora.sh
+render_converted .chezmoiscripts/80-keys/run_after_install-gpg-packages.sh.tmpl gpg-packages-fedora.sh
+pass 'the four Fedora installers no scenario drives also render'
+
 # --- Structural gates ----------------------------------------------------------
 
 rendered=("$scratch"/rendered/*.sh)
@@ -106,6 +127,40 @@ $offenders"
 grep -qE -- '--repofrompath .*terra-release.*\|\| true$' "$scratch/rendered/devtools-fedora.sh" ||
   fail 'the Terra bootstrap is no longer the tolerant repository setup step the allowance names'
 pass 'no declared-set install call keeps || true or || :; the Terra bootstrap is the one allowance'
+
+# A declared package name is a capability, not necessarily a package name:
+# pkgconf-pkg-config provides pkg-config, wget2-wget provides wget and
+# kubernetes1.36-client provides kubernetes-client. `dnf install <name>` is
+# satisfied by any installed package that provides <name>, so an exact-name
+# re-inspection reports a converged host as unconverged forever.
+#
+# A declared-set check always passes a shell variable; a repository or marker
+# probe names a literal package. So the gate is: an `rpm -q` whose arguments
+# carry a variable must resolve through provides. Two sites are exempt by their
+# own text -- the NVIDIA conflicting-branch detector, where the presence of one
+# named package IS the verdict, and the direct-RPM version reconciler, which
+# reads a pinned version rather than asking whether anything is installed.
+provides_surface=("${rendered[@]}" "$scratch"/converted/*.sh)
+exact_name_checks=$(grep -nE 'rpm -q [^|#]*"\$' "${provides_surface[@]}" |
+  grep -v -- '--whatprovides' |
+  grep -vF 'rpm -q "$installed"' |
+  grep -vF -- '--queryformat' || true)
+[[ -z "$exact_name_checks" ]] || fail "an rpm query over a declared name still asks for the exact package:
+$exact_name_checks"
+
+# The gate above cannot tell a helper that is defined from one that is used, so
+# assert both: the helper resolves through provides, and the installer calls it.
+# Read the body with its comments stripped, or a comment naming the flag would
+# satisfy the check on its own.
+for fedora_installer in "$scratch"/rendered/*-fedora.sh "$scratch"/converted/*.sh; do
+  grep -q '^rpm_installed() {$' "$fedora_installer" || continue
+  sed -n '/^rpm_installed() {$/,/^}$/p' "$fedora_installer" |
+    grep -v '^[[:space:]]*#' | grep -qF 'rpm -q --whatprovides' ||
+    fail "$(basename "$fedora_installer"): rpm_installed does not resolve a declared name through its provides"
+  grep -qE '(^|[^[:alnum:]_])rpm_installed[[:space:]]+[^(]' "$fedora_installer" ||
+    fail "$(basename "$fedora_installer"): rpm_installed is defined but never called"
+done
+pass 'every Fedora declared-set query resolves a package name through its provides'
 
 # Scenarios 1-3: verify the widened gate expression rejects || : on dnf, apt-get and dotnet tool
 for sample in \
@@ -280,6 +335,18 @@ if [[ "$args" == *' --repofrompath '* ]]; then
 fi
 if [[ "$args" == *' install '* ]]; then
   for p in "$@"; do
+    # DNF_PROVIDER_NAMES="<cap>:<provider>" is the shape the bug lives in: dnf
+    # resolves the requested capability and installs a package under a DIFFERENT
+    # name, so only a provides-aware re-inspection sees it afterwards.
+    resolved=''
+    for rule in ${DNF_PROVIDER_NAMES:-}; do
+      [[ "$rule" == "$p:"* ]] || continue
+      resolved=${rule#*:}
+      printf '%s\n' "$resolved" >>"$STUB_STATE/rpms"
+      printf '%s\n' "$p" >>"$STUB_STATE/provides"
+      break
+    done
+    [[ -n "$resolved" ]] && continue
     listed "${DNF_PROVIDES:-}" "$p" && printf '%s\n' "$p" >>"$STUB_STATE/rpms"
   done
   exit "${DNF_INSTALL_EXIT:-0}"
@@ -292,7 +359,25 @@ stub "$stubs/rpm" <<'EOF'
 set -uo pipefail
 printf 'rpm %s\n' "$*" >>"$STUB_LOG"
 case "${1-}" in
-  -q) grep -qxF -- "${2-}" "$STUB_STATE/rpms" ;;
+  -q)
+    # `--whatprovides <cap>` succeeds for an installed package's own name and
+    # for a capability another installed package provides under a different
+    # name, which is what real rpm reports and what `dnf install <cap>` acts on.
+    # Both forms take several names at once and fail when any one of them is
+    # unsatisfied, so the bulk callers are modelled the same way.
+    sources=("$STUB_STATE/rpms")
+    if [[ "${2-}" == --whatprovides ]]; then
+      sources+=("$STUB_STATE/provides")
+      shift
+    fi
+    shift
+    [[ $# -gt 0 ]] || exit 1
+    for name in "$@"; do
+      [[ -n "$name" ]] || exit 1
+      grep -qxF -- "$name" "${sources[@]}" || exit 1
+    done
+    exit 0
+    ;;
   --import) exit "${RPM_IMPORT_EXIT:-0}" ;;
   *) exit 1 ;;
 esac
@@ -445,6 +530,7 @@ done
 #
 # run_case <label> <region> <body> [NAME=value...]
 # Installed sets come from RPMS, GROUPS, DEBS and TOOLS (space separated);
+# PROVIDES names capabilities an installed package supplies under another name;
 # DOTNET=1 puts the dotnet stub on PATH; SEED=<script>__<site> pre-seeds a
 # record. Everything else is passed to the stubs as environment. The result is
 # left in $out, $err, $log, $rc and $skips.
@@ -452,13 +538,14 @@ out='' err='' log='' rc=0 skips=''
 run_case() {
   local label=$1 region=$2 body=$3
   shift 3
-  local case_dir=$scratch/cases/$label kv name
-  local rpms='' groups='' debs='' tools='' flatpaks='' dotnet=0 seed='' noflatpak=0
+  local case_dir=$scratch/cases/$label kv name rule
+  local rpms='' provides='' groups='' debs='' tools='' flatpaks='' dotnet=0 seed='' noflatpak=0
   local -a pass_env=()
   for kv in "$@"; do
     name=${kv%%=*}
     case "$name" in
       RPMS) rpms=${kv#*=} ;;
+      PROVIDES) provides=${kv#*=} ;;
       GROUPS) groups=${kv#*=} ;;
       DEBS) debs=${kv#*=} ;;
       TOOLS) tools=${kv#*=} ;;
@@ -473,6 +560,15 @@ run_case() {
   skips=$case_dir/state/chezmoi/skips
   mkdir -p "$skips"
   printf '%s\n' $rpms >"$case_dir/stub/rpms"
+  # PROVIDES="<cap>:<provider>": the provider is installed under its own name
+  # and supplies <cap>, which is the state a rename leaves behind. A capability
+  # with no installed provider is a state real rpm cannot produce, so the
+  # harness does not offer one.
+  : >"$case_dir/stub/provides"
+  for rule in $provides; do
+    printf '%s\n' "${rule%%:*}" >>"$case_dir/stub/provides"
+    printf '%s\n' "${rule#*:}" >>"$case_dir/stub/rpms"
+  done
   printf '%s\n' $groups >"$case_dir/stub/groups"
   printf '%s\n' $debs >"$case_dir/stub/debs"
   printf '%s\n' $tools >"$case_dir/stub/tools"
@@ -622,6 +718,14 @@ check not_called '^dnf .*install -y'
 check not_called '--repofrompath'
 pass "$label: a converged host installs nothing and clears the record"
 
+label='devtools-fedora-virtual-provide'
+run_case "$label" devtools-fedora.region install_devtools \
+  RPMS="$(without "$fd_first" $fd_pkgs)" GROUPS="$fd_groups" PROVIDES="$fd_first:other-$fd_first" SEED="$DFED"
+check returned_zero
+check not_called '^dnf .*install -y'
+check no_record "$DFED"
+pass "$label: a declared package supplied under another package's name clears the record"
+
 label=devtools-fedora-converges-now
 run_case "$label" devtools-fedora.region install_devtools \
   RPMS="$(without "$fd_first" $fd_pkgs)" GROUPS="$fd_groups" DNF_PROVIDES="$fd_first" SEED="$DFED"
@@ -736,6 +840,14 @@ check returned_zero
 check no_record "$APPS"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
+
+label='apps-virtual-provide'
+run_case "$label" apps-fedora.region install_app_packages \
+  RPMS="$(without "$app1" $app_pkgs) steam" PROVIDES="$app1:other-$app1" SEED="$APPS"
+check returned_zero
+check not_called '^dnf install'
+check no_record "$APPS"
+pass "$label: a declared package supplied under another package's name clears the record"
 
 label=apps-converges-now
 run_case "$label" apps-fedora.region install_app_packages \
@@ -963,6 +1075,14 @@ check no_record "$PMFED"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
 
+label='podman-fedora-virtual-provide'
+run_case "$label" podman-fedora.region install_podman_packages \
+  RPMS="$(without "$podman_fd1" $podman_fd_pkgs)" PROVIDES="$podman_fd1:other-$podman_fd1" SEED="$PMFED"
+check returned_zero
+check not_called '^dnf install'
+check no_record "$PMFED"
+pass "$label: a declared package supplied under another package's name clears the record"
+
 # --- Podman, Ubuntu ------------------------------------------------------------
 
 label='podman-ubuntu-second-fails'
@@ -1002,6 +1122,14 @@ check returned_zero
 check no_record "$IMEFED"
 check not_called '^dnf install'
 pass "$label: a converged host installs nothing and clears the record"
+
+label='desktop-ime-fedora-virtual-provide'
+run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages \
+  RPMS="$(without "$ime_fd1" $ime_fd_pkgs)" PROVIDES="$ime_fd1:other-$ime_fd1" SEED="$IMEFED"
+check returned_zero
+check not_called '^dnf install'
+check no_record "$IMEFED"
+pass "$label: a declared package supplied under another package's name clears the record"
 
 label='desktop-ime-fedora-kde-ksshaskpass-missing'
 run_case "$label" desktop-ime-fedora.region install_desktop_ime_packages \
@@ -1053,10 +1181,35 @@ check no_record "$BASEFED"
 pass "$label: a failed makecache still reaches the install and the verdict decides"
 
 label='base-fedora-already-present'
-run_case "$label" base-fedora.region install_base_packages RPMS="$base_fd_pkgs"
+run_case "$label" base-fedora.region install_base_packages RPMS="$base_fd_pkgs" SEED="$BASEFED"
 check returned_zero
 check not_called '^dnf install'
-pass "$label: the existing done_here early exit is unaffected by the new verdict"
+# The host this bug blocked carries an operator-blocking record from an earlier
+# apply. It converges by the early exit, which is the one path that must still
+# retire that record -- otherwise dotfiles-skips reports the host NOT converged
+# forever and an operator has to delete the file by hand.
+check no_record "$BASEFED"
+pass "$label: the done_here early exit retires a record an earlier apply left"
+
+label='base-fedora-virtual-provide'
+run_case "$label" base-fedora.region install_base_packages \
+  RPMS="$(without "$base_fd1" $base_fd_pkgs)" PROVIDES="$base_fd1:other-$base_fd1" SEED="$BASEFED"
+check returned_zero
+check not_called '^dnf install'
+check no_record "$BASEFED"
+pass "$label: a declared package supplied under another package's name counts as installed"
+
+# The sequence the production bug lives in: the declared name is genuinely
+# absent, dnf resolves it and installs a package under a DIFFERENT name, and
+# only the provides-aware re-inspection sees that afterwards. An exact-name
+# verdict records the host as blocked here, on every apply, forever.
+label='base-fedora-install-resolves-to-another-name'
+run_case "$label" base-fedora.region install_base_packages \
+  RPMS="$(without "$base_fd1" $base_fd_pkgs)" DNF_PROVIDER_NAMES="$base_fd1:other-$base_fd1" SEED="$BASEFED"
+check returned_zero
+check called "^dnf install -y $base_fd1\$"
+check no_record "$BASEFED"
+pass "$label: an install that lands under the provider's name still converges"
 
 # --- Base, Ubuntu ----------------------------------------------------------------
 
@@ -1070,10 +1223,11 @@ check names_entry_state
 pass "$label: a failed apt-get install is recorded, reported and the script continues"
 
 label='base-ubuntu-already-present'
-run_case "$label" base-ubuntu.region install_base_packages DEBS="$base_ud_pkgs"
+run_case "$label" base-ubuntu.region install_base_packages DEBS="$base_ud_pkgs" SEED="$BASEUBU"
 check returned_zero
 check not_called '^apt-get install'
-pass "$label: the existing done_here early exit is unaffected by the new verdict"
+check no_record "$BASEUBU"
+pass "$label: the done_here early exit retires a record an earlier apply left"
 
 # --- The harness observes the declaration, not only the status -----------------
 #

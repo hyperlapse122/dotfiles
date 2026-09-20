@@ -2472,10 +2472,10 @@ owners:
   - owner: 'install-tailscale-fedora/tailscale-not-installed'
     scope: '30-components'
     template: '.chezmoiscripts/30-components/run_onchange_before_30-tailscale.sh.tmpl'
-    anchor_line: 128
-    anchor: '  if ! rpm -q tailscale >/dev/null 2>&1 && report_tailscale_missing; then'
-    predicate: '! rpm -q tailscale >/dev/null 2>&1 && report_tailscale_missing'
-    predicate_digest: 'sha256:d3c14b952d0cec7bf1cee47a1e1928398b41c299c43bb3b682989bb2ffd106a5'
+    anchor_line: 135
+    anchor: '  if ! rpm_installed tailscale && report_tailscale_missing; then'
+    predicate: '! rpm_installed tailscale && report_tailscale_missing'
+    predicate_digest: 'sha256:573b748290bb4aa957b85945c9eb337a0d1a22e4aa330ad66b313fb9faee4d9e'
     continuation: 'abandon-step-return-0'
     continuation_digest: 'sha256:c6f29ae30822da8953f48d87c05eb7e5df3160b3f18c0d7ed3a15c9b147703be'
     render_profile: 'linux-fedora'

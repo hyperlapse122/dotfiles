@@ -1188,11 +1188,13 @@ preflight_fedora() {
     *) ;;
   esac
 
+  # A declared name is a capability another installed package may provide, so
+  # the inspection asks what `dnf install <name>` itself resolves through.
   local -a missing=()
   local pkg
-  if ! rpm -q "${pkgs[@]}" >/dev/null 2>&1; then
+  if ! rpm -q --whatprovides "${pkgs[@]}" >/dev/null 2>&1; then
     for pkg in "${pkgs[@]}"; do
-      rpm -q "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+      rpm -q --whatprovides "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
     done
   fi
 

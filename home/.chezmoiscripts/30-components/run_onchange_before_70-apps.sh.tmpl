@@ -108,12 +108,18 @@ report_apps_missing() {
   return 0
 }
 
+# A declared name is a capability another installed package may provide, so the
+# re-inspection asks what `dnf install <name>` itself resolves through.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 missing_app_packages=()
 compute_missing_app_packages() {
   missing_app_packages=()
   local pkg
   for pkg in "${app_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing_app_packages+=("${pkg}")
+    rpm_installed "${pkg}" || missing_app_packages+=("${pkg}")
   done
 }
 

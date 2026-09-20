@@ -218,11 +218,20 @@ clear_nvidia_package_skips() {
   clear_nvidia_skip_record 'nvidia-branch-packages-unavailable'
 }
 
+# A declared name is a capability, not necessarily a package name. `dnf install
+# <name>` is satisfied by whichever installed package provides <name>, so the
+# re-inspection that decides convergence asks the same question.
+# conflicting_nvidia_branch above stays an exact-name query on purpose: it names
+# the one package whose presence is the conflict, not a capability.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 install_nvidia_packages() {
   local -a missing=()
   local pkg conflict
   for pkg in "${nvidia_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+    rpm_installed "${pkg}" || missing+=("${pkg}")
   done
   [[ "${#missing[@]}" -gt 0 ]] || clear_nvidia_package_skips
   if [[ "${#missing[@]}" -eq 0 ]]; then

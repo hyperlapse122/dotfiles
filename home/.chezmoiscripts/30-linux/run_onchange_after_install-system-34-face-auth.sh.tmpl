@@ -106,9 +106,15 @@ if ! dnf copr list 2>/dev/null | grep -qx -- "copr.fedorainfracloud.org/${FACE_C
   "${DNF[@]}" -y copr enable "$FACE_COPR"
 fi
 
+# A declared name is a capability another installed package may provide, so the
+# inspection asks what `dnf install <name>` itself resolves through.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 missing=()
 for pkg in "${FACE_PACKAGES[@]}"; do
-  rpm -q "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+  rpm_installed "$pkg" || missing+=("$pkg")
 done
 if [[ ${#missing[@]} -gt 0 ]]; then
   printf '  -> installing %s\n' "${missing[*]}"

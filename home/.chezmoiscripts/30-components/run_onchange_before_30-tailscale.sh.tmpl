@@ -23,6 +23,12 @@ clear_tailscale_skip_record() {
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-tailscale-fedora" "site" "tailscale-not-installed") | trim | indent 2 }}
 }
 
+# A declared name is a capability another installed package may provide, so the
+# re-inspection asks what `dnf install <name>` itself resolves through.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 report_tailscale_missing() {
   printf 'install-tailscale-fedora: tailscale is still not installed\n' >&2
   printf 'install-tailscale-fedora: install it by hand:\n' >&2
@@ -31,13 +37,13 @@ report_tailscale_missing() {
 }
 
 install_tailscale() {
-  if ! rpm -q tailscale >/dev/null 2>&1; then
+  if ! rpm_installed tailscale; then
     setup_tailscale_repo
     # Exit status is discarded because the post-attempt re-inspection is the verdict.
     if ! "${DNF[@]}" install -y tailscale; then :; fi
   fi
 
-  if ! rpm -q tailscale >/dev/null 2>&1 && report_tailscale_missing; then
+  if ! rpm_installed tailscale && report_tailscale_missing; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_step" "script" "install-tailscale-fedora" "site" "tailscale-not-installed" "direction" "operator-blocking" "reason" "dnf left tailscale uninstalled; the by-hand install command was printed above") | trim | indent 4 }}
   fi
   clear_tailscale_skip_record

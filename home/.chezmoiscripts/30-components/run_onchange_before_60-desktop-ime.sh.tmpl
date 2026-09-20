@@ -29,12 +29,18 @@ elif [[ "${FACT_DESKTOP:-none}" == "gnome" ]]; then
   desktop_ime_packages+=(openssh-askpass)
 fi
 
+# A declared name is a capability another installed package may provide, so the
+# re-inspection asks what `dnf install <name>` itself resolves through.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 missing_desktop_ime_packages=()
 compute_missing_desktop_ime_packages() {
   missing_desktop_ime_packages=()
   local pkg
   for pkg in "${desktop_ime_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing_desktop_ime_packages+=("${pkg}")
+    rpm_installed "${pkg}" || missing_desktop_ime_packages+=("${pkg}")
   done
 }
 

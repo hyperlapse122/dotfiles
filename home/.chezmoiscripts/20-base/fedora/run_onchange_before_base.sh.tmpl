@@ -93,6 +93,14 @@ setup_base_repos() {
   fi
 }
 
+# A declared name is a capability, not necessarily a package name:
+# pkgconf-pkg-config provides pkg-config and wget2-wget provides wget. `dnf
+# install <name>` is satisfied by whichever installed package provides <name>,
+# so the re-inspection that decides convergence asks the same question.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 # Named generically, unlike the other converted installers' missing_<set>
 # arrays: the frozen base-packages-already-present matrix row's predicate
 # already reads "${#missing[@]}", so renaming it would move that row too.
@@ -101,7 +109,7 @@ compute_missing() {
   missing=()
   local pkg
   for pkg in "${core_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing+=("${pkg}")
+    rpm_installed "${pkg}" || missing+=("${pkg}")
   done
 }
 
@@ -117,6 +125,10 @@ clear_base_skip_record() {
 
 install_base_packages() {
   compute_missing
+  # The early return below is the converged path, and it never reaches the
+  # retirement at the end of this function. A host an earlier apply blocked
+  # converges there and nowhere else, so retire its record before taking it.
+  [[ "${#missing[@]}" -gt 0 ]] || clear_base_skip_record
   if [[ "${#missing[@]}" -eq 0 ]]; then
     (
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "done_here" "script" "install-base-fedora" "site" "base-packages-already-present" "reason" "all declared base packages are already installed") | trim | indent 6 }}

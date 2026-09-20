@@ -24,12 +24,20 @@ podman_packages=(
   slirp4netns
 )
 
+# A declared name is a capability, not necessarily a package name:
+# kubernetes1.36-client provides kubernetes-client. `dnf install <name>` is
+# satisfied by whichever installed package provides <name>, so the
+# re-inspection that decides convergence asks the same question.
+rpm_installed() {
+  rpm -q --whatprovides "$1" >/dev/null 2>&1
+}
+
 missing_podman_packages=()
 compute_missing_podman_packages() {
   missing_podman_packages=()
   local pkg
   for pkg in "${podman_packages[@]}"; do
-    rpm -q "${pkg}" >/dev/null 2>&1 || missing_podman_packages+=("${pkg}")
+    rpm_installed "${pkg}" || missing_podman_packages+=("${pkg}")
   done
 }
 
