@@ -130,11 +130,40 @@ the content of an empty configuration directory. Two rules follow:
 
 ### The infrared emitter: diagnosis, the failing configure dialogue, and the captured control
 
-The IR sensor is the `/dev/video*` node whose only pixel format is `GREY`
+On THIS camera the IR sensor is the `/dev/video*` node whose only pixel format is `GREY`
 (`v4l2-ctl -d $node --list-formats`); its stable name is the `/dev/v4l/by-path/…-video-index0`
 symlink, which is what `howdy set device_path` records. A GREY frame captured before any
 emitter work had a mean pixel value of 6.4 with the face nearly black while the ceiling
 light was visible: the sensor works, the emitters are dark.
+
+Greyscale is not the general rule, and treating it as one cost a second host its
+provisioning. The Realtek `0bda:571d` module of the MS-7D91 desktop streams `MJPG` and
+`YUYV` on its infrared node and no greyscale format at all, so the scan found nothing and
+the installer left through its harmless skip before selecting the authselect profile. The
+installer now identifies the node within a declared attached camera — greyscale first,
+otherwise the camera's later video-streaming function — and decodes the capture before
+measuring it. That camera also needed no emitter configuration: its Microsoft Camera
+Control extension unit reports the face-authentication control at `1 3 2 0 0 0 0 0 0`,
+which is that control's default AND its maximum, and its frames already alternate 67/79
+overall with the centre alternating 51/84. Where the ThinkPad had to be told to turn its
+emitters on, that one ships with them on.
+
+Replacing the rule cost something that was easy to miss, and the replacement had to buy it
+back. `GREY`-only was not just a way to FIND the infrared node; it was a way to KNOW it was
+one, because no ordinary camera sensor streams nothing but greyscale. "The node on the
+camera's highest USB interface" finds a node and knows nothing. A wrong pick there is not a
+failed provision, it is `pam_howdy` reading the camera's visible-light sensor, where a
+printed photograph authenticates. So the positional rule is now allowed to propose a node
+and never to confirm one: the installer accepts it only when a stored emitter instruction
+exists for that exact device, or when a capture from it strobes. When neither holds, Howdy
+is left alone and the host keeps an operator-blocking record. Refusing to provision is the
+safe direction; pointing a face factor at an unverified sensor is not.
+
+The emitter verdict has the same shape of trap. An early version read the emitters as
+working when frames alternated OR any frame was bright, which is wrong in a lit room: a
+camera whose emitters are dark reads bright from ambient infrared, the installer reports a
+converged host, and the operator is never told to run `configure`. Only the alternation is
+evidence of an emitter. Brightness is evidence of a light being on somewhere.
 
 ```bash
 v4l2-ctl -d /dev/video2 --set-fmt-video=width=640,height=360,pixelformat=GREY \

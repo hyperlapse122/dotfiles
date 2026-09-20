@@ -349,9 +349,11 @@ fact_battery() {
 # enabled for hardware nobody verified.
 #
 # The IR camera table (.chezmoidata/.ir-cameras.tsv) is declared the same way and
-# for the same reason: a UVC camera's sysfs entry names neither its greyscale
-# stream nor its emitter, so the identity is a vendor/product pair somebody
-# verified, and an unlisted camera enables no face-authentication factor.
+# for the same reason: a UVC camera's sysfs entry names neither its infrared
+# sensor nor its emitter, so the identity is a vendor/product pair somebody
+# verified, and an unlisted camera enables no face-authentication factor. The
+# table carries identity only -- the pixel format an infrared node streams varies
+# by module, so the installer resolves the node instead of the table doing it.
 usb_device_listed() {
   local table="$1" dev vendor product known=''
   [[ -r "$table" ]] || return 1

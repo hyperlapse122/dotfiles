@@ -129,6 +129,7 @@ jobs:
           .ci/test-fontconfig-korean-local-font.sh
           .ci/test-fingerprint-gates.sh
           .ci/test-fingerprint-greeter-guard.sh
+          .ci/test-face-auth-node.sh
           .ci/test-extension-retry.sh
           .ci/test-fact-cache-parsing.sh
           .ci/test-host-fact-probes.sh

@@ -130,10 +130,10 @@ audited_forms:
   not_applicable: 19
 
 audited_directions:
-  harmless: 34
+  harmless: 33
   transient-blocking: 63
   transient-tolerable: 3
-  operator-blocking: 20
+  operator-blocking: 21
 audited_scopes:
   00-tools: 4
   10-auth: 5
@@ -155,8 +155,8 @@ shared_guard_fanout:
 divergence:
   - bucket: 'harmless'
     plan: 41
-    audited: 34
-    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). One more arrives with the NVIDIA branch axis: an unlisted GPU architecture, which stays here because a device this table does not classify is a fact about the table and not a precondition a later phase supplies. Its two siblings -- a conflicting installed branch, and a declared package set the enabled sources do not offer -- were reclassified OUT of this bucket into the operator-blocking direction: harmless deletes the state record and claims the skip is final, but the reason text of the first one prints the dnf command that clears it, so an operator who ran that command was left with a host recorded as provisioned and no driver. A third NVIDIA site joined them there: an availability probe that returned no output at all could not be asked whether the packages exist, which is not the same answer as the sources not offering them. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies. One more with the integrated-only policy: a hybrid host whose GPU architecture is listed in nvidia.integratedOnlyArchitectures never gets the NVIDIA stack, which is a decision recorded in data and not a precondition a later phase supplies. Four more with the Fedora face path, each the face twin of a fingerprint site or a fact about the hardware: a host with no infrared camera this repository knows how to manage, a platform the emitter tool publishes no build for, a listed camera that exposes no greyscale stream, and a greeter whose authentication stack would gain the face module.'
+    audited: 33
+    reason: 'The plan estimate counted the pre-U4 inventory, whose harmless mass sat in the three extension jobs (no-compatible-build, gnome-extensions/curl/python3 absent, already-installed). U4 converted those to run_after_ signature lifecycles, so they left this surface; re-reading the remaining owners against skip.sh.tmpl, a tool this repository installs later is transient-blocking, not harmless. Two later additions land here: the authd schema opt-out (an authd build with no users.shell column will never accept a shell change) and the shared-host guard (a machine with other users does not stop having them). One more arrives with the NVIDIA branch axis: an unlisted GPU architecture, which stays here because a device this table does not classify is a fact about the table and not a precondition a later phase supplies. Its two siblings -- a conflicting installed branch, and a declared package set the enabled sources do not offer -- were reclassified OUT of this bucket into the operator-blocking direction: harmless deletes the state record and claims the skip is final, but the reason text of the first one prints the dnf command that clears it, so an operator who ran that command was left with a host recorded as provisioned and no driver. A third NVIDIA site joined them there: an availability probe that returned no output at all could not be asked whether the packages exist, which is not the same answer as the sources not offering them. The fourth NVIDIA site, the out-of-tree signing keypair, was reclassified out of this bucket in review: the module builder mints that key on its first build, so the condition clears on its own and harmless would have recorded a Secure Boot host with an unsigned module as converged forever. Two more with the Fedora fingerprint path: a host with no reader this repository knows how to manage, and a greeter whose authentication stack would gain the factor -- neither is a precondition a later phase supplies. One more with the integrated-only policy: a hybrid host whose GPU architecture is listed in nvidia.integratedOnlyArchitectures never gets the NVIDIA stack, which is a decision recorded in data and not a precondition a later phase supplies. Three more with the Fedora face path, each the face twin of a fingerprint site or a fact about the hardware: a host with no infrared camera this repository knows how to manage, a platform the emitter tool publishes no build for, and a greeter whose authentication stack would gain the face module. A fourth, a declared camera whose infrared node cannot be resolved, was reclassified out of this bucket into the operator-blocking direction: harmless deletes the state record and claims the skip is final, which hid the desktop camera from dotfiles-skips for as long as the greyscale rule stood, and a node rule is something an operator can change.'
   - bucket: 'transient_blocking'
     plan: 47
     audited: 63
@@ -176,7 +176,7 @@ divergence:
   - bucket: 'scope:30-linux'
     plan: 19
     audited: 39
-    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply. Four more arrive with the fingerprint installer, which is its own subsystem, and seven with the face installer beside it: four harmless hardware and greeter facts, one authselect precondition, one operator-blocking refusal to select over hand-edited PAM files, and one completion record for its interactive steps.'
+    reason: 'setup-podman-cluster contributes five substep owners and install-system-* two service-level owners; the estimate counted this phase at the granularity of whole scripts. The post-inventory WakaTime keyring site adds one transient-blocking owner, and the authd login-shell branch adds five: an sqlite3 precondition, a harmless schema opt-out, a converged-state completion, and the two transient-tolerable deferrals that keep a locked authd database retryable instead of aborting the apply. Four more arrive with the fingerprint installer, which is its own subsystem, and seven with the face installer beside it: three harmless hardware and greeter facts, one authselect precondition, two operator-blocking sites (a refusal to select over hand-edited PAM files, and a declared camera whose infrared node cannot be resolved), and one completion record for its interactive steps.'
   - bucket: 'scope:50-linux-gnome'
     plan: 40
     audited: 29
@@ -2020,20 +2020,20 @@ owners:
     direction: 'harmless'
     instances:
       - '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl#install-system-face-auth/no-ir-emitter-build'
-  - owner: 'install-system-face-auth/no-grey-video-node'
+  - owner: 'install-system-face-auth/no-infrared-node'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'
-    anchor_line: 168
-    anchor: 'if [[ -z "$grey_node" ]]; then'
-    predicate: '[[ -z "$grey_node" ]]'
-    predicate_digest: 'sha256:6437726a1c803ce04457a0a44e195bc3a449a91c333a8144d95f869cddc6e92b'
+    anchor_line: 439
+    anchor: 'if [[ -z "$ir_node" ]]; then'
+    predicate: '[[ -z "$ir_node" ]]'
+    predicate_digest: 'sha256:96a1a96f5532c5e432da8a360ea5e6b04c1d68eab019604ea53a069f016ec5ed'
     continuation: 'terminate-script-exit-0'
     continuation_digest: 'sha256:1daab05da9e2c2337e30859777eea84382f6239f3f0a93bcc1022d2188295625'
     render_profile: 'linux-fedora'
     form: 'skip_here'
-    direction: 'harmless'
+    direction: 'operator-blocking'
     instances:
-      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl#install-system-face-auth/no-grey-video-node'
+      - '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl#install-system-face-auth/no-infrared-node'
   - owner: 'install-system-face-auth/pam-modified-outside-authselect'
     scope: '30-linux'
     template: '.chezmoiscripts/30-linux/run_onchange_after_install-system-34-face-auth.sh.tmpl'

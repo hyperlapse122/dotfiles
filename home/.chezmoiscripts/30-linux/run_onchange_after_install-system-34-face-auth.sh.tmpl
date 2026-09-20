@@ -10,6 +10,25 @@
 {{ $irUrl := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "linux-enable-ir-emitter" "field" "url" "platform" "auto" "optional" true) -}}
 {{ $irSha := includeTemplate "release-lock-ref.tmpl" (dict "ctx" . "tool" "linux-enable-ir-emitter" "field" "sha256" "platform" "auto" "optional" true) -}}
 {{ $face := .system.linux.faceAuth -}}
+{{- /* The declared infrared cameras come from the table the irCamera fact reads,
+   baked in at render time: adding a camera changes this script's rendered
+   content, so it re-runs on its own. A malformed row fails the render instead
+   of silently declaring nothing. */ -}}
+{{ $irCameraTable := joinPath $sourceDir ".chezmoidata/.ir-cameras.tsv" -}}
+{{ if not (stat $irCameraTable) -}}
+{{   fail "install-system-face-auth: .chezmoidata/.ir-cameras.tsv is missing, so no infrared camera is declared" -}}
+{{ end -}}
+{{ $irCameras := list -}}
+{{ range $row := splitList "\n" (include $irCameraTable) -}}
+{{   if regexMatch "^[0-9a-f]{4}\t[0-9a-f]{4}$" $row -}}
+{{     $irCameras = append $irCameras (replace "\t" ":" $row) -}}
+{{   else if and (ne $row "") (ne $row "ir-cameras-v1") -}}
+{{     fail (printf "install-system-face-auth: .ir-cameras.tsv row %q is not a lowercase hex vendor<TAB>product pair" $row) -}}
+{{   end -}}
+{{ end -}}
+{{ if not $irCameras -}}
+{{   fail "install-system-face-auth: .chezmoidata/.ir-cameras.tsv declares no camera" -}}
+{{ end -}}
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -58,18 +77,39 @@ SRC_ROOT="$repo_root/system/linux"
 # pam_howdy would reach it. Unknown display manager or unresolvable stack both
 # withhold.
 #
-# THE EMITTER. The camera's greyscale stream is dark until a vendor UVC control
-# turns the IR emitters on, and only linux-enable-ir-emitter knows which one.
+# THE INFRARED NODE comes from the camera, never from a pixel format: a module's
+# infrared stream is GREY on one camera and MJPG/YUYV on another. The search
+# reads /sys/class/video4linux. A node belongs to a USB camera when its `device`
+# link resolves to an interface directory whose parent carries idVendor and
+# idProduct -- the attributes .install-prerequisites.sh reads for the irCamera
+# fact -- and only nodes of a camera listed in .chezmoidata/.ir-cameras.tsv are
+# considered. A node counts only if it lists a capture format (each interface has
+# a metadata node beside its video node). A node whose only format is GREY wins;
+# otherwise the node on the highest USB interface does, because the infrared
+# function follows the RGB one on both managed cameras. A camera whose formats
+# cannot be listed, or whose nodes fit no rule, resolves nothing: the authselect
+# feature is still provisioned, and the script then leaves through a kept record.
+# The by-path symlink of the node, not /dev/videoN, goes into the Howdy config,
+# and Howdy is told to read MJPEG unless the node advertises a greyscale format.
+#
+# THE EMITTER. On some modules the infrared stream is dark until a vendor UVC
+# control turns the emitters on, and only linux-enable-ir-emitter knows which one.
+# Other modules ship with that control already at its face-authentication value
+# and need no configuration at all.
 # Its systemd tarball is installed from the release lock (sha256-verified) under
 # / exactly as upstream documents. Finding the control is interactive (the
 # operator answers whether the emitters lit), but the RESULT is a fact about the
-# camera model: upstream documents that a file under /etc/linux-enable-ir-emitter/
+# camera: upstream documents that a file under /etc/linux-enable-ir-emitter/
 # can be saved and restored on any later installation. A captured file therefore
 # lives under system/linux/etc/linux-enable-ir-emitter/, named for the v4l
 # by-path device exactly as the tool wrote it, and is installed here before the
-# emitter unit starts. Only a file carrying a `status: start` instruction counts
-# as a configuration: a failed `configure` run leaves a file of idle and disable
-# entries behind, and that must keep reporting the manual step.
+# emitter unit starts -- only when its name is the resolved device's own. Only a
+# file carrying a `status: start` instruction counts as a configuration: a failed
+# `configure` run leaves a file of idle and disable entries behind, and that must
+# keep reporting the manual step. A camera with no such file is measured instead:
+# a short burst from its node is decoded to greyscale, and emitters that operate
+# strobe (consecutive frame means differ) or light the scene (a bright mean). An
+# inconclusive measurement reports the manual step, as it always did.
 
 FACE_COPR={{ $face.copr | quote }}
 FACE_PROFILE={{ $face.authselectProfile | quote }}
@@ -81,8 +121,16 @@ FACE_PACKAGES=(
 IR_VERSION={{ $irVersion | quote }}
 IR_URL={{ $irUrl | quote }}
 IR_SHA256={{ $irSha | quote }}
+IR_CAMERAS=(
+{{ range $irCameras }}  {{ . | quote }}
+{{ end -}}
+)
 AUTHSELECT_BASE=/usr/share/authselect/default/local
 AUTHSELECT_CUSTOM="/etc/authselect/custom/${FACE_PROFILE}"
+# The two roots the node search reads, overridable so the fixture test can drive
+# this script against a tree: a fixture cannot hold character devices.
+DEV_ROOT="${FACE_AUTH_DEV_ROOT:-/dev}"
+SYS_ROOT="${FACE_AUTH_SYS_ROOT:-/sys}"
 
 if ! fact_gate 'irCamera'; then
 {{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "no-ir-camera" "direction" "harmless" "reason" "this host has no infrared camera this repository knows how to manage") | trim | indent 2 }}
@@ -162,35 +210,193 @@ if ! systemctl is-enabled --quiet linux-enable-ir-emitter.service 2>/dev/null; t
 fi
 
 # --- Howdy camera -------------------------------------------------------------
-# The IR sensor is the video node whose only pixel format is 8-bit greyscale;
-# the RGB sensor on the same module advertises MJPG/YUYV. The by-path symlink is
-# what goes into the config, because /dev/videoN numbering is enumeration order.
-grey_node=''
-for node in /dev/video*; do
-  [[ -c "$node" ]] || continue
-  if "${SUDO[@]}" v4l2-ctl -d "$node" --list-formats 2>/dev/null | grep -q "'GREY'"; then
-    grey_node="$node"
-    break
+# Set by resolve_ir_node: the chosen node, its camera's vendor:product, the
+# capture formats it advertises, and the `v4l2-ctl --list-formats-ext` text they
+# came from.
+ir_node=''
+ir_formats=''
+ir_ext=''
+# 1 when the node was chosen by the positional heuristic rather than identified
+# by a greyscale-only format list. Such a node is not yet known to be infrared.
+ir_positional=0
+device_path=''
+
+camera_declared() {
+  local declared
+  for declared in "${IR_CAMERAS[@]}"; do
+    [[ "$declared" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# One property of /etc/howdy/config.ini, empty when the file or the key is absent.
+howdy_get() {
+  sed -n "s/^$1 = //p" /etc/howdy/config.ini 2>/dev/null | head -n1
+}
+
+# The FOURCC of every format in `v4l2-ctl --list-formats-ext` output, one per
+# line. Only lines shaped `[N]: 'XXXX'` count, so a PAM prompt that a sudo stack
+# printed into the same stream cannot pass for a format.
+node_formats() {
+  sed -n "s/^[[:space:]]*\[[0-9]*\]:[[:space:]]*'\(.\{4\}\)'.*/\1/p" <<<"$1"
+}
+
+resolve_ir_node() {
+  local vdir name node iface usb vendor product camera if_num formats ext
+  local -A group_nodes=()
+  local -a names cand_node cand_if cand_formats cand_ext
+  local i pick best failed
+
+  for vdir in "$SYS_ROOT"/class/video4linux/video*; do
+    [[ -e "$vdir/device" ]] || continue
+    iface="$(readlink -f "$vdir/device")" || continue
+    usb="${iface%/*}"
+    [[ -r "$usb/idVendor" && -r "$usb/idProduct" ]] || continue
+    read -r vendor <"$usb/idVendor" || continue
+    read -r product <"$usb/idProduct" || continue
+    camera_declared "${vendor}:${product}" || continue
+    group_nodes["$usb"]+="${vdir##*/} "
+  done
+
+  while IFS= read -r usb; do
+    [[ -n "$usb" ]] || continue
+    read -r vendor <"$usb/idVendor"
+    read -r product <"$usb/idProduct"
+    camera="${vendor}:${product}"
+    cand_node=() cand_if=() cand_formats=() cand_ext=()
+    failed=0
+    read -r -a names <<<"${group_nodes[$usb]}"
+    for name in "${names[@]}"; do
+      node="$DEV_ROOT/$name"
+      [[ -e "$node" ]] || continue
+      # sudo WRITES, this script READS: a fingerprint-carrying sudo stack prints
+      # its PAM prompt into a captured stream, which this repository already
+      # recorded as a measured failure for this very script. The exit status is
+      # the only thing taken from the privileged call.
+      if ! "${SUDO[@]}" sh -c 'v4l2-ctl -d "$1" --list-formats-ext >"$2" 2>"$3"' _ \
+        "$node" "$scratch/formats.txt" "$scratch/v4l2-ctl.err"; then
+        printf 'install-system-face-auth: v4l2-ctl could not list the formats of %s (camera %s): %s\n' \
+          "$node" "$camera" "$(tr '\n' ' ' <"$scratch/v4l2-ctl.err")" >&2
+        failed=1
+        continue
+      fi
+      ext="$(<"$scratch/formats.txt")"
+      formats="$(node_formats "$ext" | tr '\n' ' ')"
+      formats="${formats% }"
+      if [[ -z "$formats" ]]; then
+        # Every one of these modules carries a metadata node beside each sensor,
+        # and those list no capture format. Skipping one is therefore normal and
+        # must not fail the camera. The risk this leaves -- that the node with
+        # no formats was the infrared one, and its RGB sibling gets promoted in
+        # its place -- is closed by the proof gate further down, which refuses a
+        # positional pick that cannot be confirmed as the infrared sensor.
+        printf 'install-system-face-auth: camera %s, %s: no capture formats\n' "$camera" "$node"
+        continue
+      fi
+      printf 'install-system-face-auth: camera %s, %s: %s\n' "$camera" "$node" "$formats"
+      # The interface number is the last `.N` of the interface directory name
+      # (`1-5.1.1:1.2`), the same component the by-path link spells `:1.2`.
+      if_num=0
+      iface="$(readlink -f "$SYS_ROOT/class/video4linux/$name/device")"
+      if [[ "${iface##*/}" =~ :[0-9]+\.([0-9]+)$ ]]; then
+        if_num="${BASH_REMATCH[1]}"
+      fi
+      cand_node+=("$node")
+      cand_if+=("$if_num")
+      cand_formats+=("$formats")
+      cand_ext+=("$ext")
+    done
+
+    # A greyscale-only node identifies itself: no ordinary camera sensor streams
+    # nothing but GREY, so this match stands on its own and a sibling node this
+    # script could not read cannot take it away.
+    pick=-1
+    pick_positional=0
+    for i in "${!cand_node[@]}"; do
+      if [[ "${cand_formats[i]}" == GREY ]]; then
+        pick="$i"
+        break
+      fi
+    done
+    # The positional rule is a heuristic, not an identification: it takes the
+    # camera's later video-streaming function because that is where the infrared
+    # sensor sits on both managed modules. It therefore needs BOTH guards. A
+    # camera whose nodes could not all be listed resolves nothing, because the
+    # node that failed may be the infrared one and the RGB node beside it would
+    # then be chosen for the wrong reason. And the node it does pick is only
+    # accepted once the emitter probe sees the sensor strobe, below: wiring
+    # pam_howdy to a visible-light camera would authenticate a face against a
+    # photograph, which is worse than not provisioning at all.
+    if [[ "$pick" -lt 0 && "$failed" -eq 0 ]]; then
+      best=-1
+      for i in "${!cand_node[@]}"; do
+        if [[ "$((10#${cand_if[i]}))" -gt "$best" ]]; then
+          best="$((10#${cand_if[i]}))"
+          pick="$i"
+          pick_positional=1
+        fi
+      done
+    fi
+    if [[ "$pick" -ge 0 ]]; then
+      ir_node="${cand_node[pick]}"
+      ir_formats="${cand_formats[pick]}"
+      ir_ext="${cand_ext[pick]}"
+      ir_positional="$pick_positional"
+      printf 'install-system-face-auth: infrared node %s of camera %s (formats: %s, %s)\n' \
+        "$ir_node" "$camera" "$ir_formats" \
+        "$([[ "$pick_positional" -eq 1 ]] && printf 'by interface number' || printf 'greyscale-only')"
+      break
+    fi
+  done < <(printf '%s\n' "${!group_nodes[@]}" | sort)
+
+  if [[ -z "$ir_node" ]]; then
+    printf 'install-system-face-auth: no infrared video node could be resolved for a declared camera\n'
   fi
-done
-if [[ -z "$grey_node" ]]; then
-{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "no-grey-video-node" "direction" "harmless" "reason" "the listed camera exposes no greyscale video node, so there is no infrared stream for Howdy to read") | trim | indent 2 }}
+}
+
+resolve_ir_node
+if [[ -n "$ir_node" ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "clear_record" "script" "install-system-face-auth" "site" "no-infrared-node") | trim | indent 2 }}
+
+  device_path="$ir_node"
+  ir_node_real="$(readlink -f "$ir_node")"
+  for link in "$DEV_ROOT"/v4l/by-path/pci-*-usb-*-video-index*; do
+    [[ -L "$link" ]] || continue
+    if [[ "$(readlink -f "$link")" == "$ir_node_real" ]]; then
+      device_path="$link"
+      break
+    fi
+  done
 fi
 
-device_path="$grey_node"
-for link in /dev/v4l/by-path/pci-*-usb-*-video-index*; do
-  [[ -L "$link" ]] || continue
-  if [[ "$(readlink -f "$link")" == "$grey_node" ]]; then
-    device_path="$link"
-    break
+# Howdy is pointed at the node only after the node is PROVEN infrared, further
+# down. A greyscale-only node proved itself by its format list; a node the
+# positional rule picked has not, and wiring pam_howdy to a visible-light camera
+# would authenticate a face against a photograph.
+howdy_follow_node() {
+  local current_device current_mjpeg
+  current_device="$(howdy_get device_path)" || current_device=''
+  if [[ "$current_device" != "$device_path" ]]; then
+    printf '  -> howdy set device_path %s\n' "$device_path"
+    "${SUDO[@]}" howdy set device_path "$device_path"
   fi
-done
 
-current_device="$(sed -n 's/^device_path = //p' /etc/howdy/config.ini 2>/dev/null | head -n1)" || current_device=''
-if [[ "$current_device" != "$device_path" ]]; then
-  printf '  -> howdy set device_path %s\n' "$device_path"
-  "${SUDO[@]}" howdy set device_path "$device_path"
-fi
+  # A node with no greyscale format is read as MJPEG: on the desktop's Realtek
+  # module the YUYV path returns corrupted short buffers where MJPG streams
+  # cleanly. A greyscale node leaves the option as the operator has it.
+  if [[ "$ir_formats" != *GREY* ]]; then
+    current_mjpeg="$(howdy_get force_mjpeg)" || current_mjpeg=''
+    if [[ "$current_mjpeg" != true ]]; then
+      printf '  -> howdy set force_mjpeg true\n'
+      # Not fatal: a Howdy build that does not know this key must not abort the
+      # apply at phase 30-linux and strand phases 50 through 90.
+      if ! "${SUDO[@]}" howdy set force_mjpeg true; then
+        printf 'install-system-face-auth: howdy rejected force_mjpeg; the camera streams %s and may need it set by hand\n' \
+          "$ir_formats" >&2
+      fi
+    fi
+  fi
+}
 
 # --- authselect profile -------------------------------------------------------
 {{ includeTemplate "pam-greeter-guard.sh.tmpl" . }}
@@ -283,30 +489,145 @@ fi
 # whether they happened must not be invisible. They are reported through the
 # same declared-skip surface `dotfiles-skips` reads, distinguishable from a
 # convergence failure by their reason.
-# A captured emitter configuration from the source tree lands before the unit
-# starts. The file name is the device path the tool matches on, so a capture
-# from another camera model is simply never matched on this host.
-for src in "$SRC_ROOT"/etc/linux-enable-ir-emitter/*; do
-  [[ -f "$src" ]] || continue
-  dst="/etc/linux-enable-ir-emitter/${src##*/}"
-  if ! cmp -s "$src" "$dst" 2>/dev/null; then
-    printf '  -> %s\n' "$dst"
-    "${SUDO[@]}" install -D -m 644 "$src" "$dst"
+
+# Whether the emitters of the resolved node light the scene. A burst from the
+# node is decoded to greyscale raster first: a node that advertises only MJPG
+# yields JPEG payloads, and measuring those bytes would say nothing. The verdict
+# rests on the ALTERNATION alone -- consecutive frame means differing by at
+# least 8 -- because a camera whose emitters are dark reads bright in a lit room
+# and accepting that would report a converged host while the operator is never
+# told to run `configure`. A failed or empty capture is inconclusive and reads
+# as not operating. Measured once: the proof gate below and the manual-step
+# decision further down both ask, and the second must not re-open the camera.
+emitters_measured=0
+emitters_verdict=1
+emitters_operating() {
+  local fourcc input size width height capture frames_wanted=10 bytes frames means stats verdict rc=0
+  if [[ "$emitters_measured" -eq 1 ]]; then
+    return "$emitters_verdict"
   fi
-done
+  emitters_measured=1
+  capture="${scratch}/ir-probe.raw"
+  case " $ir_formats " in
+    *" GREY "*) fourcc=GREY input=gray ;;
+    *" MJPG "*) fourcc=MJPG input=mjpeg ;;
+    *" YUYV "*) fourcc=YUYV input=yuyv422 ;;
+    *)
+      printf 'install-system-face-auth: emitter probe inconclusive: %s advertises no format this probe decodes (%s)\n' "$ir_node" "$ir_formats"
+      return 1
+      ;;
+  esac
+  size="$(awk -v want="'${fourcc}'" '
+      /^[[:space:]]*\[[0-9]+\]:/ { infmt = index($0, want) > 0; next }
+      infmt && /Size: Discrete/ { print $NF; exit }
+    ' <<<"$ir_ext")"
+  if [[ ! "$size" =~ ^([0-9]+)x([0-9]+)$ ]]; then
+    printf 'install-system-face-auth: emitter probe inconclusive: no discrete %s frame size for %s\n' "$fourcc" "$ir_node"
+    return 1
+  fi
+  width="${BASH_REMATCH[1]}"
+  height="${BASH_REMATCH[2]}"
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    printf 'install-system-face-auth: emitter probe inconclusive: ffmpeg is not installed\n'
+    return 1
+  fi
+  printf 'install-system-face-auth: no stored emitter configuration for %s; measuring %s frames of %s from %s\n' "${device_path##*/}" "$fourcc" "$size" "$ir_node"
+  if ! "${SUDO[@]}" timeout -k 2 20 ffmpeg -nostdin -loglevel error -f v4l2 -input_format "$input" \
+    -video_size "$size" -i "$ir_node" -frames:v "$frames_wanted" -f rawvideo -pix_fmt gray pipe:1 \
+    >"$capture" 2>"${scratch}/ffmpeg.err"; then
+    printf 'install-system-face-auth: emitter probe inconclusive: the capture failed: %s\n' "$(tr '\n' ' ' <"${scratch}/ffmpeg.err")"
+    return 1
+  fi
+  bytes="$((width * height))"
+  frames="$(($(stat -c %s "$capture") / bytes))"
+  if [[ "$frames" -lt 1 ]]; then
+    printf 'install-system-face-auth: emitter probe inconclusive: the capture decoded to no frames\n'
+    return 1
+  fi
+  means="$(od -An -v -tu1 -w"$bytes" "$capture" | awk -v frames="$frames" '
+      NR <= frames { s = 0; for (i = 1; i <= NF; i++) s += $i; printf "%.1f\n", s / NF }
+    ')"
+  stats="$(awk '
+      { m[NR] = $1 }
+      END {
+        max = 0; step = 0
+        for (i = 1; i <= NR; i++) {
+          if (m[i] > max) max = m[i]
+          if (i > 1) { d = m[i] - m[i - 1]; if (d < 0) d = -d; if (d > step) step = d }
+        }
+        printf "highest %s, largest step %s\n", max, step
+        # The alternation ALONE decides. A bright capture proves nothing: a
+        # camera whose emitters are dark reads bright in a lit room, and
+        # accepting that would report a converged host while the operator is
+        # never told to run `configure`. Only a strobe is evidence of an
+        # emitter, so a flat-but-bright capture stays inconclusive.
+        exit !(step >= 8)
+      }
+    ' <<<"$means")" || rc=$?
+  verdict='look dark'
+  if [[ "$rc" -eq 0 ]]; then
+    verdict='operate'
+  fi
+  printf 'install-system-face-auth: infrared frame means: %s; %s; emitters %s\n' \
+    "$(tr '\n' ' ' <<<"$means")" "$stats" "$verdict"
+  emitters_verdict="$rc"
+  return "$rc"
+}
+
+# The proof gate. A greyscale-only node identified itself by its format list. A
+# node the positional rule picked has not: it is simply the camera's later
+# video-streaming function, which is where the infrared sensor sits on both
+# managed modules but is not a fact about this one. Confirm it, or do not use
+# it. Either a stored emitter instruction written for this exact device counts,
+# or a capture in which the sensor strobes. Refusing to provision is the safe
+# direction, because authenticating a face against a camera's visible-light
+# sensor would accept a photograph.
+if [[ -n "$ir_node" && "$ir_positional" -eq 1 ]]; then
+  if "${SUDO[@]}" grep -q 'status: start' "/etc/linux-enable-ir-emitter/${device_path##*/}" 2>/dev/null; then
+    printf 'install-system-face-auth: %s carries a stored emitter instruction, which confirms it as the infrared sensor\n' \
+      "${device_path##*/}"
+  elif ! emitters_operating; then
+    printf 'install-system-face-auth: %s was chosen by interface number and did not strobe, so it is not confirmed to be the infrared sensor of its camera\n' \
+      "$ir_node" >&2
+    ir_node=''
+  fi
+fi
+
+# A host with no usable node has nothing below to act on: the feature is
+# selected, and the record says what an operator has to clear.
+if [[ -z "$ir_node" ]]; then
+{{ includeTemplate "skip.sh.tmpl" (dict "ctx" . "form" "skip_here" "script" "install-system-face-auth" "site" "no-infrared-node" "direction" "operator-blocking" "reason" "no infrared video node was confirmed for a declared camera (the node listing above names what was seen): either none resolved, or the one picked by interface number neither carries a stored emitter instruction nor strobed. The face feature is selected but Howdy has not been pointed at a camera. Fix the camera, run sudo linux-enable-ir-emitter configure for it, or fix the node rule") | trim | indent 2 }}
+fi
+
+howdy_follow_node
+
+# A captured configuration lands before the unit starts, and only one named for
+# this device: the tool matches a file on the device path it is configured for,
+# so a capture from another camera never applies here and must not read as this
+# camera being configured either.
+device_name="${device_path##*/}"
+stored="$SRC_ROOT/etc/linux-enable-ir-emitter/${device_name}"
+if [[ -f "$stored" ]]; then
+  dst="/etc/linux-enable-ir-emitter/${device_name}"
+  if ! cmp -s "$stored" "$dst" 2>/dev/null; then
+    printf '  -> %s\n' "$dst"
+    "${SUDO[@]}" install -D -m 644 "$stored" "$dst"
+  fi
+fi
 
 pending=()
+# `configured` means this device has a stored instruction the tool applies.
 # Exit status only, never captured output: a fingerprint-carrying sudo stack
 # prints its PAM prompt on the captured stream and would read as a config file.
 # `status: start` is the tool's marker for an instruction it applies; a file of
 # idle/disable entries is the residue of a failed configure run.
-if ! "${SUDO[@]}" sh -c 'grep -lq "status: start" /etc/linux-enable-ir-emitter/* 2>/dev/null'; then
-  pending+=('sudo linux-enable-ir-emitter configure')
-  printf 'install-system-face-auth: manual step: sudo linux-enable-ir-emitter configure   (answer whether the IR emitters light; do this first)\n'
-else
+if "${SUDO[@]}" grep -q 'status: start' "/etc/linux-enable-ir-emitter/${device_name}" 2>/dev/null; then
   # Re-assert the emitter control now; the unit also does so at boot and on
   # every resume, because the UVC control resets with the camera's power.
   "${SUDO[@]}" systemctl start linux-enable-ir-emitter.service || true
+elif ! emitters_operating; then
+  pending+=('sudo linux-enable-ir-emitter configure')
+  printf 'install-system-face-auth: manual step: sudo linux-enable-ir-emitter configure   (answer whether the IR emitters light; do this first)\n'
 fi
 if ! "${SUDO[@]}" test -s "/etc/howdy/models/${USER:-$(id -un)}.dat"; then
   pending+=('sudo howdy add')
