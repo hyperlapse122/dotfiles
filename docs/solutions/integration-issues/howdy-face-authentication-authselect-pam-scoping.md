@@ -148,6 +148,23 @@ which is that control's default AND its maximum, and its frames already alternat
 overall with the centre alternating 51/84. Where the ThinkPad had to be told to turn its
 emitters on, that one ships with them on.
 
+Replacing the rule cost something that was easy to miss, and the replacement had to buy it
+back. `GREY`-only was not just a way to FIND the infrared node; it was a way to KNOW it was
+one, because no ordinary camera sensor streams nothing but greyscale. "The node on the
+camera's highest USB interface" finds a node and knows nothing. A wrong pick there is not a
+failed provision, it is `pam_howdy` reading the camera's visible-light sensor, where a
+printed photograph authenticates. So the positional rule is now allowed to propose a node
+and never to confirm one: the installer accepts it only when a stored emitter instruction
+exists for that exact device, or when a capture from it strobes. When neither holds, Howdy
+is left alone and the host keeps an operator-blocking record. Refusing to provision is the
+safe direction; pointing a face factor at an unverified sensor is not.
+
+The emitter verdict has the same shape of trap. An early version read the emitters as
+working when frames alternated OR any frame was bright, which is wrong in a lit room: a
+camera whose emitters are dark reads bright from ambient infrared, the installer reports a
+converged host, and the operator is never told to run `configure`. Only the alternation is
+evidence of an emitter. Brightness is evidence of a light being on somewhere.
+
 ```bash
 v4l2-ctl -d /dev/video2 --set-fmt-video=width=640,height=360,pixelformat=GREY \
   --stream-mmap --stream-count=10 --stream-to=ir.raw
