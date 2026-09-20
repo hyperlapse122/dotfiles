@@ -18,12 +18,14 @@
 #           nothing -- and the authselect feature is still selected, behind a
 #           kept operator-blocking record.
 #   emitter a stored capture is installed and read only under the resolved
-#           device's own name. A camera with no capture of its own is measured:
-#           consecutive frame means that differ, or a bright one, mean the
-#           emitters already operate and no configure step is reported.
-#   howdy   the device path is written only when a node resolved, and the MJPEG
-#           capture option only when that node advertises no greyscale format.
-#           Both writes are read-then-compare, so a second run writes nothing.
+#           device's own name. A camera with no capture of its own is measured,
+#           and only the ALTERNATION counts: a camera whose emitters are dark
+#           reads bright in a lit room, so brightness alone certifies nothing.
+#   howdy   the device path is written only when a node was CONFIRMED infrared
+#           -- by its format list, or by a stored instruction, or by strobing --
+#           and the MJPEG capture option only when that node advertises no
+#           greyscale format. Both writes are read-then-compare, so a second run
+#           writes nothing.
 #
 # HOW IT RUNS. The installer is rendered through .ci/lib/render-gate-helpers.sh,
 # its host facts are pinned and its absolute paths are rewritten into a fixture
@@ -356,6 +358,35 @@ expect_authselect_selected() {
 installed_captures() { ls -A "$host/etc/linux-enable-ir-emitter" 2>/dev/null || true; }
 
 # =============================================================================
+# U1 -- the greeter guard
+# =============================================================================
+
+# Gap: every fixture below renders a clean greeter stack, so
+# greeter_would_gain_module never returns true and the withhold branch has
+# never run -- deleting the guard from the installer would leave every other
+# scenario green. Render the greeter's own included stack (plasmalogin
+# substacks password-auth) as authselect would carry pam_howdy.so, and prove
+# the installer takes the greeter-would-gain-face site instead of selecting
+# the profile or pointing Howdy at a camera.
+desktop_host
+{
+  printf 'File %s/etc/pam.d/system-auth:\n' "$host"
+  printf 'auth        sufficient                                   pam_howdy.so\n'
+  printf 'auth        sufficient                                   pam_fprintd.so\n'
+  printf 'File %s/etc/pam.d/password-auth:\n' "$host"
+  printf 'auth        sufficient                                   pam_howdy.so\n'
+  printf 'auth        required                                     pam_env.so\n'
+} >"$host/authselect.test"
+cp "$host/etc/howdy/config.ini" "$host/config.before"
+run_installer
+expect_rc0 'greeter withhold'
+expect_out 'the login greeter authentication stack would reach the face module' 'greeter withhold takes the greeter-would-gain-face site'
+expect_calls 0 'authselect select' 'greeter withhold never selects the face profile'
+expect_calls 0 'howdy set' 'greeter withhold never writes to /etc/howdy/config.ini'
+cmp -s "$host/etc/howdy/config.ini" "$host/config.before" || fail 'greeter withhold: /etc/howdy/config.ini changed although the profile was withheld'
+pass 'U1: a greeter stack that would gain pam_howdy.so withholds the face profile and leaves Howdy untouched'
+
+# =============================================================================
 # U2 -- node resolution
 # =============================================================================
 
@@ -376,6 +407,7 @@ add_node 30c9 0052 1-8 2 video2 "$thinkpad_by_path" 'MJPG 640x480\nYUYV 640x480\
 run_installer
 expect_rc0 'greyscale precedence'
 expect_out "infrared node $host/dev/video0 of camera 30c9:0052" 'greyscale precedence'
+expect_calls 1 "ffmpeg -nostdin -loglevel error -f v4l2 -input_format gray -video_size 340x340 -i $host/dev/video0" 'greyscale precedence the emitter probe reads GREY frames from the GREY-only node, with no committed capture'
 pass 'a greyscale-only node outranks a format-capable node on a higher interface'
 
 # AE2: no greyscale anywhere, so the later video-streaming function is chosen.
@@ -445,6 +477,24 @@ expect_rc0 'record retirement'
 [[ ! -e $skip_record ]] || fail 'a resolved node left the stale no-infrared-node record behind'
 pass 'resolving the node retires the kept record'
 
+# Gap: a camera whose infrared node lists no capture formats must not end up
+# with Howdy pointed at its RGB sibling instead. The RGB node becomes the only
+# surviving candidate and is picked positionally, so it still needs the proof
+# gate's confirmation -- a flat, dark capture withholds it.
+new_host
+add_node 0bda 571d 1-5.1.1 0 video0 'pci-0000:00:14.0-usb-0:5.1.1:1.0-video-index0' 'MJPG 640x480\nYUYV 640x360\n'
+add_node 0bda 571d 1-5.1.1 0 video1 'pci-0000:00:14.0-usb-0:5.1.1:1.0-video-index1' ''
+add_node 0bda 571d 1-5.1.1 2 video2 "$desktop_by_path" ''
+add_node 0bda 571d 1-5.1.1 2 video3 'pci-0000:00:14.0-usb-0:5.1.1:1.2-video-index1' ''
+printf '6\n' >"$host/ffmpeg.means"
+run_installer
+expect_rc0 'no-format IR node does not promote its RGB sibling'
+expect_out "$host/dev/video2: no capture formats" 'the no-format IR node is reported and skipped'
+expect_out "infrared node $host/dev/video0 of camera 0bda:571d" 'the RGB node is the only remaining candidate and is picked positionally'
+expect_calls 0 'howdy set' 'the RGB sibling is never accepted or pointed at by Howdy'
+expect_kept_record 'no-format IR node does not promote its RGB sibling'
+pass 'a camera whose infrared node lists no capture formats does not promote its RGB sibling past the proof gate'
+
 # =============================================================================
 # U3 -- the emitter expectation
 # =============================================================================
@@ -461,16 +511,68 @@ expect_no_out 'manual step' 'AE5 an enrolled, operating host has no manual step'
 expect_no_records 'AE5'
 pass 'AE5: alternating frame brightness means the emitters operate and no emitter step is reported'
 
-# A uniformly dark sensor needs a configuration.
+# Gap: the proof gate's strobe-accept outcome above only checks that no manual
+# step is reported; it never asserts that Howdy is actually pointed at the
+# confirmed node, or that no unconverged record survives.
+desktop_host
+printf '67 79\n' >"$host/ffmpeg.means"
+run_installer
+expect_rc0 'proof gate: strobe accepted'
+expect_calls 1 "howdy set device_path $host/dev/v4l/by-path/$desktop_by_path" 'proof gate: strobe accepted points Howdy at the confirmed node'
+expect_no_records 'proof gate: strobe accepted'
+pass 'a positional node whose capture strobes is accepted: Howdy is pointed at it and no record is kept'
+
+# Gap: emitters_operating picks its ffmpeg input format from what the node
+# advertises; only the MJPG branch above is exercised. A YUYV-only node.
+new_host
+add_node 0bda 571d 1-5.1.1 0 video0 'pci-0000:00:14.0-usb-0:5.1.1:1.0-video-index0' 'YUYV 640x360\n'
+add_node 0bda 571d 1-5.1.1 0 video1 'pci-0000:00:14.0-usb-0:5.1.1:1.0-video-index1' ''
+add_node 0bda 571d 1-5.1.1 2 video2 "$desktop_by_path" 'YUYV 640x360\n'
+add_node 0bda 571d 1-5.1.1 2 video3 'pci-0000:00:14.0-usb-0:5.1.1:1.2-video-index1' ''
+run_installer
+expect_rc0 'YUYV-only emitter probe'
+expect_out "infrared node $host/dev/video2 of camera 0bda:571d" 'YUYV-only emitter probe the interface-2 node is chosen'
+expect_calls 1 "ffmpeg -nostdin -loglevel error -f v4l2 -input_format yuyv422 -video_size 640x360 -i $host/dev/video2" 'YUYV-only emitter probe reads YUYV frames with -input_format yuyv422'
+pass 'a YUYV-only node probes the emitters with -input_format yuyv422'
+
+# A node advertising only a fourth format this probe does not decode reports
+# why. It was picked by interface number, so it is never confirmed to be the
+# infrared sensor -- a node this script cannot even decode certainly is not --
+# and the proof gate refuses it rather than pointing Howdy at it.
+new_host
+add_node 0bda 571d 1-5.1.1 0 video0 'pci-0000:00:14.0-usb-0:5.1.1:1.0-video-index0' 'MJPG 640x480\n'
+add_node 0bda 571d 1-5.1.1 0 video1 'pci-0000:00:14.0-usb-0:5.1.1:1.0-video-index1' ''
+add_node 0bda 571d 1-5.1.1 2 video2 "$desktop_by_path" 'H264 640x480\n'
+add_node 0bda 571d 1-5.1.1 2 video3 'pci-0000:00:14.0-usb-0:5.1.1:1.2-video-index1' ''
+run_installer
+expect_rc0 'unrecognized-format emitter probe'
+expect_out "infrared node $host/dev/video2 of camera 0bda:571d" 'unrecognized-format emitter probe the interface-2 node is still chosen'
+expect_out 'advertises no format this probe decodes (H264)' 'unrecognized-format emitter probe names the format it cannot decode'
+expect_calls 0 'ffmpeg' 'unrecognized-format emitter probe never invokes ffmpeg'
+expect_calls 0 'howdy set' 'an undecodable node is never written into the Howdy config'
+expect_kept_record 'unrecognized-format emitter probe'
+expect_authselect_selected 'unrecognized-format emitter probe'
+pass 'a node advertising a format the probe does not decode reports it and asks for manual configuration'
+
+# A uniformly dark sensor on a camera with no greyscale node needs a
+# configuration, and until it has one the node it picked by interface number is
+# not confirmed to be the infrared sensor. The host is therefore recorded
+# unconverged and Howdy is not pointed at it -- the kept record, unlike the
+# one-shot manual-step report, survives to the next apply and names the fix.
 desktop_host
 printf '6\n' >"$host/ffmpeg.means"
 run_installer
 expect_rc0 'dark'
-expect_out 'manual step: sudo linux-enable-ir-emitter configure' 'a dark sensor reports the configure step'
+expect_out 'did not strobe' 'a dark sensor on a positionally-picked node is not confirmed'
+expect_kept_record 'dark'
+expect_authselect_selected 'dark'
+expect_calls 0 'howdy set' 'an unconfirmed node is never written into the Howdy config'
 pass 'a uniformly dark capture reports the configure step'
 
-# The thresholds: a difference of 8 between frames, or a mean of 20, is enough;
-# a difference of 7 with a low mean, or a mean of 19, is not.
+# The threshold is the ALTERNATION alone: a difference of 8 between consecutive
+# frames. Brightness by itself certifies nothing, because a camera whose
+# emitters are dark reads bright in a lit room, and accepting that would report
+# a converged host while the operator is never told to run `configure`.
 threshold_case() {
   local means=$1 want=$2
   desktop_host
@@ -485,9 +587,26 @@ threshold_case() {
 }
 threshold_case '5 13' operating
 threshold_case '5 12' dark
-threshold_case '20' operating
+# A flat capture is inconclusive however bright it is.
+threshold_case '20' dark
+threshold_case '200' dark
 threshold_case '19' dark
-pass 'the brightness thresholds are a frame-to-frame difference of 8 or a highest mean of 20'
+pass 'the emitter verdict rests on a frame-to-frame difference of 8, never on brightness alone'
+
+# Gap: a status: start configuration already on the HOST for the resolved
+# device's own name accepts a positional node without ever measuring it --
+# distinct from AE6 below, which installs a capture from the committed source
+# tree first. Here the file is already live, as a previous manual `configure`
+# run would have left it.
+desktop_host
+mkdir -p "$host/etc/linux-enable-ir-emitter"
+printf 'status: start\n' >"$host/etc/linux-enable-ir-emitter/$desktop_by_path"
+run_installer
+expect_rc0 'proof gate: stored configuration accepted'
+expect_calls 0 'ffmpeg' 'proof gate: stored configuration accepted never measures the node'
+expect_calls 1 "howdy set device_path $host/dev/v4l/by-path/$desktop_by_path" 'proof gate: stored configuration accepted points Howdy at the node'
+expect_no_records 'proof gate: stored configuration accepted'
+pass 'a positional node with a stored configuration for its own device is accepted without any strobe measurement'
 
 # AE6: the ThinkPad's committed capture and camera. The capture is installed
 # unchanged, applied, and the brightness test never runs.
@@ -520,24 +639,30 @@ cp "$repo_root/$capture_dir/$thinkpad_by_path" "$host/etc/linux-enable-ir-emitte
 printf '6\n' >"$host/ffmpeg.means"
 run_installer
 expect_rc0 'directory-wide status'
-expect_out 'manual step: sudo linux-enable-ir-emitter configure' "another device's status: start must not satisfy this camera"
+# The foreign file must not confirm this camera either: with it present and this
+# camera's own capture dark, the node stays unconfirmed and the host unconverged.
+expect_out 'did not strobe' "another device's status: start must not satisfy this camera"
+expect_kept_record 'directory-wide status'
+expect_calls 0 'howdy set' "another device's configuration never points Howdy at this camera"
 pass "another device's installed configuration does not satisfy this camera"
 
-# A failed capture, and a decode that produces no frames, need a configuration
-# and say why.
+# A failed capture, and a decode that produces no frames, are inconclusive: they
+# say why, and they leave a positionally-picked node unconfirmed rather than
+# guessing in either direction.
 desktop_host
 printf 'fail\n' >"$host/ffmpeg.mode"
 run_installer
 expect_rc0 'capture failure'
-expect_out 'manual step: sudo linux-enable-ir-emitter configure' 'a failed capture reports the configure step'
 expect_out 'ffmpeg: cannot open the capture device' 'a failed capture prints why'
+expect_kept_record 'capture failure'
+expect_calls 0 'howdy set' 'a failed capture never points Howdy at the node'
 desktop_host
 printf 'empty\n' >"$host/ffmpeg.mode"
 run_installer
 expect_rc0 'empty decode'
-expect_out 'manual step: sudo linux-enable-ir-emitter configure' 'a decode with no frames reports the configure step'
 expect_out 'no frames' 'a decode with no frames prints why'
-pass 'a failed capture and an empty decode both report the configure step with a reason'
+expect_kept_record 'empty decode'
+pass 'a failed capture and an empty decode are inconclusive, print why, and confirm nothing'
 
 # =============================================================================
 # U4 -- the capture format Howdy reads
