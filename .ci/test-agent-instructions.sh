@@ -636,7 +636,6 @@ done <<'CLAUDE_COORDINATOR_NEEDLES'
 A Unit that needs live MCP access its intended recipient does not hold MUST NOT be dispatched to that recipient
 Orca's `worker-start --model` and `--effort` forward to Claude, Codex, and Cursor launches only, so an `omp` row is not selected that way
 every omp dispatch starts in one command, `worker-start
-checks the model name on the worker's own status line through `worker-read`
 the lead MUST NOT re-engage an omp terminal a previous Dispatch ran in, settled or not
 When its Dispatch settles, the seat is a release target and never a reuse target
 ordinary release closes the agent terminal.
@@ -661,8 +660,7 @@ and the elevation worker selects the authoring pair
 the lead compares `launch.requested` with `launch.effective`, claims the pair only when the effective fields report it, and otherwise records the pass as degraded with the effective values or their absence.
 When either reviewer from the `judgment-deep` row is unavailable or fails, the review proceeds on the other, recorded as degraded, and the `claude` reviewer keeps its `judgment-deep` effort.
 A second launch miss there records that reviewer's pass as degraded, and the review proceeds on the remaining reviewer without waiting and without escalating.
-the thinking level is trusted from the default arguments the reconciler asserted.
-missing or mismatched model records the pass as degraded.
+the model and thinking level are trusted from the default arguments the reconciler asserted.
 omp's non-interactive forms — `--print` and piped stdin — are not a dispatch path.
 CLAUDE_COORDINATOR_NEEDLES
 for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
@@ -687,6 +685,10 @@ for payload in "$coordinator_claude_linux" "$coordinator_claude_darwin"; do
   fi
   if grep -F 'No PreToolUse hook enforces any of this.' "$payload" >/dev/null; then
     fail "$(basename "$payload") contains retired un-enforced sentence"
+  fi
+  if grep -F 'missing or mismatched model records the pass as degraded' "$payload" >/dev/null \
+    || grep -F "checks the model name on the worker's own status line" "$payload" >/dev/null; then
+    fail "$(basename "$payload") contains retired omp status-line model check rule"
   fi
 done
 
