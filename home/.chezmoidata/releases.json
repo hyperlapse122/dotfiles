@@ -516,31 +516,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.9.11",
+        "version": "v2026.9.12",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.11/mise-v2026.9.11-linux-x64",
-            "sha256": "6e39ee1ffa926a1f64814efbf1d26c3f617255e2a6ba6152e3c8a5135fa5a35f"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-x64",
+            "sha256": "e79ae57945034903aee8aa2ea66b4c7ca9cd4f4edd5a8a78a589cbae6d0f428a"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.11/mise-v2026.9.11-linux-arm64",
-            "sha256": "80ad6e9589d3c4483fd67a4a97f07e28330964dde64ca8cad15d5cb56134a54d"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-arm64",
+            "sha256": "f344c6961190ed2f68e595ed7cb4f03c36c17812bd608886bec799a3082180ff"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.11/mise-v2026.9.11-macos-x64",
-            "sha256": "167137820c857491cc649c5502276ad94e31edb4a5e9e6339aed8d812031d031"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-macos-x64",
+            "sha256": "fa1e35456f1e27a4555a1ccec82d5367d7037f3b4f46d48b83c4a3bceb4d78f2"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.11/mise-v2026.9.11-macos-arm64",
-            "sha256": "bbfd47ef65c2278c4e9ba09b523beb1019365a3c0b9c9fc60f686dc16f358e0f"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-macos-arm64",
+            "sha256": "f20d7cc555a5b0ee7b8a504acbc2583be1b0848d64115cfbe84119ceb705025b"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.11/mise-v2026.9.11-linux-x64-musl",
-            "sha256": "8658a006b6e80206cd4a1f6fb2d02bcaa3210e2d06a95c5b4c3123f2501a9044"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-x64-musl",
+            "sha256": "e59a38683c9d776e0ea6c7b35c9829de915bb7df15d16d0bf6890afa0278bd7c"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.11/mise-v2026.9.11-linux-arm64-musl",
-            "sha256": "b49ffaf99c0ae6db36a599ef98ffb312d4dc6d6dfc7a2e4e14ae21229919f6b7"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-arm64-musl",
+            "sha256": "2d2982b12f7a13894aa88272e4cd360e68591fe105b43cff29b1ac4588c6fe83"
           }
         }
       },
