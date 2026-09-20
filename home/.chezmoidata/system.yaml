@@ -145,6 +145,10 @@ system:
       packages:
         - howdy
         - v4l-utils
+        # The installer decides whether a camera's emitters already work by
+        # measuring frame brightness, and a node that streams only MJPG yields
+        # JPEG payloads, so the capture has to be decoded before it is measured.
+        - ffmpeg-free
       authselectProfile: face-auth
       authselectFeature: with-howdy
 
