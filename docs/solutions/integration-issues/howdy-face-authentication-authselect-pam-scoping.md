@@ -130,11 +130,23 @@ the content of an empty configuration directory. Two rules follow:
 
 ### The infrared emitter: diagnosis, the failing configure dialogue, and the captured control
 
-The IR sensor is the `/dev/video*` node whose only pixel format is `GREY`
+On THIS camera the IR sensor is the `/dev/video*` node whose only pixel format is `GREY`
 (`v4l2-ctl -d $node --list-formats`); its stable name is the `/dev/v4l/by-path/…-video-index0`
 symlink, which is what `howdy set device_path` records. A GREY frame captured before any
 emitter work had a mean pixel value of 6.4 with the face nearly black while the ceiling
 light was visible: the sensor works, the emitters are dark.
+
+Greyscale is not the general rule, and treating it as one cost a second host its
+provisioning. The Realtek `0bda:571d` module of the MS-7D91 desktop streams `MJPG` and
+`YUYV` on its infrared node and no greyscale format at all, so the scan found nothing and
+the installer left through its harmless skip before selecting the authselect profile. The
+installer now identifies the node within a declared attached camera — greyscale first,
+otherwise the camera's later video-streaming function — and decodes the capture before
+measuring it. That camera also needed no emitter configuration: its Microsoft Camera
+Control extension unit reports the face-authentication control at `1 3 2 0 0 0 0 0 0`,
+which is that control's default AND its maximum, and its frames already alternate 67/79
+overall with the centre alternating 51/84. Where the ThinkPad had to be told to turn its
+emitters on, that one ships with them on.
 
 ```bash
 v4l2-ctl -d /dev/video2 --set-fmt-video=width=640,height=360,pixelformat=GREY \
