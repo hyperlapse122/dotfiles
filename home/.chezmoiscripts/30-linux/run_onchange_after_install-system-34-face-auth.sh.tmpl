@@ -58,8 +58,10 @@ SRC_ROOT="$repo_root/system/linux"
 # pam_howdy would reach it. Unknown display manager or unresolvable stack both
 # withhold.
 #
-# THE EMITTER. The camera's greyscale stream is dark until a vendor UVC control
-# turns the IR emitters on, and only linux-enable-ir-emitter knows which one.
+# THE EMITTER. On some modules the infrared stream is dark until a vendor UVC
+# control turns the emitters on, and only linux-enable-ir-emitter knows which one.
+# Other modules ship with that control already at its face-authentication value
+# and need no configuration at all.
 # Its systemd tarball is installed from the release lock (sha256-verified) under
 # / exactly as upstream documents. Finding the control is interactive (the
 # operator answers whether the emitters lit), but the RESULT is a fact about the
