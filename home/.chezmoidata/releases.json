@@ -328,31 +328,31 @@
       "fff-mcp": {
         "kind": "githubRelease",
         "source": "dmtrKovalenko/fff",
-        "version": "v0.10.6",
+        "version": "v0.11.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-x86_64-unknown-linux-gnu",
-            "sha256": "3b887b272d580f34f9fe6c60cd126be54c4a7cf5f8ffb122d86c81f29b98524e"
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.11.0/fff-mcp-x86_64-unknown-linux-gnu",
+            "sha256": "1b645947cfa086f8080cd6419899e32cb2c531b122618c1141d9155e449ce647"
           },
           "linux-arm64": {
-            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-aarch64-unknown-linux-gnu",
-            "sha256": "c557a0fc6463d013bd1850e8d2cfbd823b5ff41a7386e0803ab552ef55c6bf31"
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.11.0/fff-mcp-aarch64-unknown-linux-gnu",
+            "sha256": "f413fd1809f18f7ba44524010192d29562d6ba5745e33926be18b99cab6edb89"
           },
           "darwin-amd64": {
-            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-x86_64-apple-darwin",
-            "sha256": "12f374554f1930434cacee8221d9a76afd9e4dde0d9112c3bbc3ea59d5b56e83"
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.11.0/fff-mcp-x86_64-apple-darwin",
+            "sha256": "33377a8f96442ebc8b06d3bd2863cf66a520f97a33700e0fb85a09dd7988e862"
           },
           "darwin-arm64": {
-            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-aarch64-apple-darwin",
-            "sha256": "02e0f57f5b88fa698494f310d8005a0c34d5bda5a1fcd069520b35f8e2319892"
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.11.0/fff-mcp-aarch64-apple-darwin",
+            "sha256": "cc606d9418cfa7764376dcd7b32a33e6459a6cb9a4718be366b024dca6e9fead"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-x86_64-unknown-linux-musl",
-            "sha256": "a44ef64015f1754aa63b690c24d9a748ed16298f05350da7b09554c4c98dfb0f"
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.11.0/fff-mcp-x86_64-unknown-linux-musl",
+            "sha256": "d1e8671f40c89c445aaa1728a21ec04b74be2e5f99091485caeabcc97f99aceb"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.10.6/fff-mcp-aarch64-unknown-linux-musl",
-            "sha256": "028b9e388716a8c0c39de3f153dd8e14e5ee998ffa70d4951f1cd2a3fc42f6ce"
+            "url": "https://github.com/dmtrKovalenko/fff/releases/download/v0.11.0/fff-mcp-aarch64-unknown-linux-musl",
+            "sha256": "35f8e05d6c865266bf451d13bfa5e1b0d98438fda7dc1c9bdbc1c6a83484577d"
           }
         }
       },
@@ -547,31 +547,31 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.2.6",
+        "version": "v18.2.7",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.6/omp-linux-x64",
-            "sha256": "0f38598c91e823d8cce07f151ec3999d51f213fb2cc3e07d89f1af8eef9247a2"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.7/omp-linux-x64",
+            "sha256": "1c28ed66566ecabab814514cfe626b4aff5981b7ca9892477b46550fe6b6d83b"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.6/omp-linux-arm64",
-            "sha256": "07245cbe050c3999ab5cea9babfe84e7e8819d2f4d5e49bef47c0aacb6b957e4"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.7/omp-linux-arm64",
+            "sha256": "dee01159c63577eafe1e9396b1687462352063ec1b62203177946fc5d5acff1a"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.6/omp-darwin-x64",
-            "sha256": "d558800fa326abc68ae3cbbb3e536322ec643bdcfddc71e6a988857dbe1a94a3"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.7/omp-darwin-x64",
+            "sha256": "d06854d75506be68d6314ebdb60798539ecc02bf65051b360689dd9ba37b2285"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.6/omp-darwin-arm64",
-            "sha256": "d498da40d577e1ffa681ca8632c2ea40a9f722a08b880412011d37dffee9513a"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.7/omp-darwin-arm64",
+            "sha256": "2b2ff2084a34f61a018634c03929aaa9117009d107dbef553d8fc51eb5c28b14"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.6/omp-linux-musl-x64",
-            "sha256": "d73333024279d876c45cfbfe5257e4b388aad130a346a92e522aad6c875c99be"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.7/omp-linux-musl-x64",
+            "sha256": "0d6d55db070259f69521c1d353627f8ae825b9809ea259be90d7502ba5090ac4"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.6/omp-linux-musl-arm64",
-            "sha256": "f53c2f6d9c4aaa93ede2e01bbbdcfec943ae9157a3ba54fbcfc290d6157b8629"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.2.7/omp-linux-musl-arm64",
+            "sha256": "aaaeb6821a1cebc4c2203e616cec949ff8b760a61f3ae8dfd98f32ef24eca983"
           }
         }
       },
@@ -633,23 +633,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-09-14",
+        "version": "2026-09-21",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "7609ba53f85cd80a3bde77a4b2e94e304d0f94650e4f4cffc061b9bca454ba75"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-21/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "b2d24ce2bda2ea05b1ad7c2917d205f8111775f703ccd908e6061803ae8257d0"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "3d32c50aebf9288c2fd11b559813441bdff2aa57fbbb7177ad0ffe5ac4e9ad3d"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-21/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "32a75657041a7a2ebf635c1e3968753e2639778b68dd4fb13c4b2584255f2ba8"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "58d827adc7bde3b8986ff52795484f462564a2beed3ba4f4b2cbc3cfd58ae05e"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-21/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "1e2f706ee97d9f931ea36ed4e83f839efd0ac09870e18ec8350877d7b98ad8a0"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-14/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "0c579403271f4021eb1efdfaa9bedb43e099595d02a02ee9b1f34c6c51a3ac26"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-21/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "eb474adfd12b6e66a6d0a7c25ed51210a64a0237f326f898e32e25164c9b11ad"
           }
         }
       },
@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.26.4",
+        "version": "v2.26.5",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.4/wakatime-cli-linux-amd64.zip",
-            "sha256": "9c2b2112c021b6eedb236efeb61958b3083be3d109d407acb3fe67c4221ebd42"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.5/wakatime-cli-linux-amd64.zip",
+            "sha256": "40a1bdd69ecea1efbad8d906005d6e627e5dc6a523bcc3cfd0bbd5bfead3b842"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.4/wakatime-cli-linux-arm64.zip",
-            "sha256": "3a68328341dbb18c0b44d8ec9307251e1722b5952a4d1ccc1abc67683bb217dd"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.5/wakatime-cli-linux-arm64.zip",
+            "sha256": "f1c24213fb55a3d823352edd69f83a42b23450a494560e402c4110642a1ed9df"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.4/wakatime-cli-darwin-amd64.zip",
-            "sha256": "023df0d88f8ecf1411b383b0e99194078b677f87a1a31ba6ec6463185294195e"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.5/wakatime-cli-darwin-amd64.zip",
+            "sha256": "ebf3641c8fb694839cd48f215241c68b44cbdae978ca0967123a9090285b6197"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.4/wakatime-cli-darwin-arm64.zip",
-            "sha256": "ea210be760cb8789dd511d6331d5ec6ddb7fe489a958b5ecbf0dfcb902f2649c"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.5/wakatime-cli-darwin-arm64.zip",
+            "sha256": "69fd025823f3613bcdc53515cd2650b64f77aecf4090744c9f277810139ee109"
           }
         }
       },
