@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.278",
+        "version": "2.1.280",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.278/linux-x64/claude",
-            "sha256": "5c4735937844e84f8a93306e841a5b0e12252909b07870f789b190468da147ab",
-            "size": 234119480
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-x64/claude",
+            "sha256": "1e08503dbdf3c2cb0d706d32f3408277388d1c76ef108673e8fe42c1b322925b",
+            "size": 233709640
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.278/linux-arm64/claude",
-            "sha256": "7de6cab134e48321148e30182c98614118e8f4666819412bead45865190b34ed",
-            "size": 234021104
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-arm64/claude",
+            "sha256": "92f2b4fd05d0bdcf7b9a0d4e0ecef4a1e4b368b290cd8fd07cff9a50013f45a2",
+            "size": 233103352
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.278/linux-x64-musl/claude",
-            "sha256": "e21d4818a7282c1b18f7949af863a58e640f017a8ffa4053f5ae927ac95d954a",
-            "size": 228036568
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-x64-musl/claude",
+            "sha256": "8d25ffbf600882d7b985706cc10ea45995060637ed009b5700b65e162bb00b96",
+            "size": 227467360
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.278/linux-arm64-musl/claude",
-            "sha256": "cc8266db086b92faa10180d8c34fb4f196022ad13d0d8800b656966f94a9f0f4",
-            "size": 226637472
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-arm64-musl/claude",
+            "sha256": "6a9f349dccd1c74ab854f1877c5ebdf074998571d0177e26c1f7f46f29e0f971",
+            "size": 225457992
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.278/darwin-x64/claude",
-            "sha256": "c522425e3d42275d2ac2238757ef8ba7f80d165a934044ec5a7a5fd7d7b9950b",
-            "size": 226521952
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/darwin-x64/claude",
+            "sha256": "c1d32d87630482250633208ab77855429b24010ae3086a7ff7539b57b93168d4",
+            "size": 225565024
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.278/darwin-arm64/claude",
-            "sha256": "bd245662fb8a0e321b3bf133e930371d6563c387527885f30b2613aef3ba14d6",
-            "size": 217695408
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/darwin-arm64/claude",
+            "sha256": "387a5c5dcdbb815085edf0baf79591f9d8894efe922bceaf3d75b1b08055229d",
+            "size": 217254576
           }
         }
       },
@@ -290,7 +290,7 @@
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
-        "version": "compound-engineering-v3.28.0"
+        "version": "compound-engineering-v3.28.1"
       },
       "computer-use": {
         "kind": "githubRelease",
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "53e579f1481697931fc44f5445171397cfa2b24b"
+        "version": "24a3d46ec623779950736d935661b4fd2bf9d19f"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "53e579f1481697931fc44f5445171397cfa2b24b"
+        "version": "24a3d46ec623779950736d935661b4fd2bf9d19f"
       },
       "uv": {
         "kind": "githubRelease",
