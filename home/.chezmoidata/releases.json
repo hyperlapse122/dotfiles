@@ -295,7 +295,7 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "deslop": {
         "kind": "gitRef",
@@ -429,7 +429,7 @@
       "glab": {
         "kind": "gitlabRelease",
         "source": "https://gitlab.com/api/v4/projects/34675721",
-        "version": "v1.118.0"
+        "version": "v1.119.0"
       },
       "helm": {
         "kind": "githubRelease",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -578,47 +578,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206",
+        "version": "v1.4.207",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.206/orca-ide-1.4.206.x86_64.rpm",
-            "sha256": "3fb71ff53dee83e18695f11518a79475fc1abf455346f610262edb486aaaf86d"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.207/orca-ide-1.4.207.x86_64.rpm",
+            "sha256": "ce35106ad154a1485c31442f69be273d9c355b367bf0d18d0c3c50da193f7e72"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.206/orca-ide-1.4.206.aarch64.rpm",
-            "sha256": "88e80c91b2ecc3bb0d9cee7fb4200f7041d7d06cb461e4c61b301d6fdae31789"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.207/orca-ide-1.4.207.aarch64.rpm",
+            "sha256": "ae10d86a927088d5dee8ba0936ca6376640b636e851e294fa45949d0f799252b"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.206"
+        "version": "v1.4.207"
       },
       "react-best-practices": {
         "kind": "gitRef",
