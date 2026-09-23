@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.280",
+        "version": "2.1.281",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-x64/claude",
-            "sha256": "1e08503dbdf3c2cb0d706d32f3408277388d1c76ef108673e8fe42c1b322925b",
-            "size": 233709640
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-x64/claude",
+            "sha256": "56fe3da88458465fb27d7e9299dddb3fead55750fb9c2de795f233b5eea6dce1",
+            "size": 237375560
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-arm64/claude",
-            "sha256": "92f2b4fd05d0bdcf7b9a0d4e0ecef4a1e4b368b290cd8fd07cff9a50013f45a2",
-            "size": 233103352
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-arm64/claude",
+            "sha256": "dd27b36438a4fed1670cd29bad2fda6a73b628b6da55443e5c2f647fe6ed328f",
+            "size": 236773368
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-x64-musl/claude",
-            "sha256": "8d25ffbf600882d7b985706cc10ea45995060637ed009b5700b65e162bb00b96",
-            "size": 227467360
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-x64-musl/claude",
+            "sha256": "30220a5cf0628634599e0ede13a5cc814d21880116abf762f0598a33636f7bca",
+            "size": 231137376
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/linux-arm64-musl/claude",
-            "sha256": "6a9f349dccd1c74ab854f1877c5ebdf074998571d0177e26c1f7f46f29e0f971",
-            "size": 225457992
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-arm64-musl/claude",
+            "sha256": "4f72ebbb08706651e7a2204303793700698f4046bc31f3e7e65b381063b7c210",
+            "size": 229128008
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/darwin-x64/claude",
-            "sha256": "c1d32d87630482250633208ab77855429b24010ae3086a7ff7539b57b93168d4",
-            "size": 225565024
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/darwin-x64/claude",
+            "sha256": "a9355cbb0d291ce948efcf61a6ef397401672f64fa5e5e67bca092fed6cd9088",
+            "size": 229263712
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.280/darwin-arm64/claude",
-            "sha256": "387a5c5dcdbb815085edf0baf79591f9d8894efe922bceaf3d75b1b08055229d",
-            "size": 217254576
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/darwin-arm64/claude",
+            "sha256": "a922981f6f3b55a251ef9f9dbaa0621a5f99cbcb5ca67f8a797476ccfc83f626",
+            "size": 220931760
           }
         }
       },
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "b0b9c7a0baf8b6aa1d00bf77d4101e577d4ba411"
+        "version": "12d587dfb20741cafc376c42c696c5f6e2a64487"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -449,7 +449,7 @@
       "kubectl": {
         "kind": "githubRelease",
         "source": "kubernetes/kubernetes",
-        "version": "v1.37.0"
+        "version": "v1.37.1"
       },
       "linear-tickets": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "b0b9c7a0baf8b6aa1d00bf77d4101e577d4ba411"
+        "version": "12d587dfb20741cafc376c42c696c5f6e2a64487"
       },
       "uv": {
         "kind": "githubRelease",
