@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.281",
+        "version": "2.1.282",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-x64/claude",
-            "sha256": "56fe3da88458465fb27d7e9299dddb3fead55750fb9c2de795f233b5eea6dce1",
-            "size": 237375560
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-x64/claude",
+            "sha256": "3afe8535c0cc33f0e24f7b25dab7a1727b8b592196f8496a8bc302ba2161eed3",
+            "size": 238767288
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-arm64/claude",
-            "sha256": "dd27b36438a4fed1670cd29bad2fda6a73b628b6da55443e5c2f647fe6ed328f",
-            "size": 236773368
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-arm64/claude",
+            "sha256": "6764ffc39e9fed425a493ff61ea28506d1ba83996ce81a48d1177dbb393419c9",
+            "size": 238084088
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-x64-musl/claude",
-            "sha256": "30220a5cf0628634599e0ede13a5cc814d21880116abf762f0598a33636f7bca",
-            "size": 231137376
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-x64-musl/claude",
+            "sha256": "e01fc77a210c54acf69205db13d8d50d11fa6ac62b81b6c6201de8440c293b0d",
+            "size": 232525912
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/linux-arm64-musl/claude",
-            "sha256": "4f72ebbb08706651e7a2204303793700698f4046bc31f3e7e65b381063b7c210",
-            "size": 229128008
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-arm64-musl/claude",
+            "sha256": "5c3b3c9904f84b59d01c4e7f5c9305a4fc1981b18b26745688c9c1dab9cb25ae",
+            "size": 230438720
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/darwin-x64/claude",
-            "sha256": "a9355cbb0d291ce948efcf61a6ef397401672f64fa5e5e67bca092fed6cd9088",
-            "size": 229263712
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/darwin-x64/claude",
+            "sha256": "5c34b00b5c0f3862b76011015c334e91904c4593afea7a5451e00746ad7934c1",
+            "size": 230651344
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.281/darwin-arm64/claude",
-            "sha256": "a922981f6f3b55a251ef9f9dbaa0621a5f99cbcb5ca67f8a797476ccfc83f626",
-            "size": 220931760
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/darwin-arm64/claude",
+            "sha256": "fcfd837103965c64de34a6b9b94370d77a347ea71819715a27d5f0ef01775ea4",
+            "size": 222245312
           }
         }
       },
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "12d587dfb20741cafc376c42c696c5f6e2a64487"
+        "version": "fadd23794c0075468eb8964b0fd93e06e09486ad"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -516,31 +516,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.9.12",
+        "version": "v2026.9.13",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-x64",
-            "sha256": "e79ae57945034903aee8aa2ea66b4c7ca9cd4f4edd5a8a78a589cbae6d0f428a"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.13/mise-v2026.9.13-linux-x64",
+            "sha256": "a72f49916b33ba952ba398046c5cc91a58238f0b718fee1d938206ef2af21c6d"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-arm64",
-            "sha256": "f344c6961190ed2f68e595ed7cb4f03c36c17812bd608886bec799a3082180ff"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.13/mise-v2026.9.13-linux-arm64",
+            "sha256": "dbfdfe99fe56cffda0b1c91ccbbe81e75e8475d2680bee2a7248fd779cdacde8"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-macos-x64",
-            "sha256": "fa1e35456f1e27a4555a1ccec82d5367d7037f3b4f46d48b83c4a3bceb4d78f2"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.13/mise-v2026.9.13-macos-x64",
+            "sha256": "820bda7a3547edf75dd9e9390846cc87219583bef4fe72666f35a4935d330f47"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-macos-arm64",
-            "sha256": "f20d7cc555a5b0ee7b8a504acbc2583be1b0848d64115cfbe84119ceb705025b"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.13/mise-v2026.9.13-macos-arm64",
+            "sha256": "3977349e71eea611cf25717ddca753172cae6a92597a47bc4b9efada123b237e"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-x64-musl",
-            "sha256": "e59a38683c9d776e0ea6c7b35c9829de915bb7df15d16d0bf6890afa0278bd7c"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.13/mise-v2026.9.13-linux-x64-musl",
+            "sha256": "7683f32fecc47d50d4c5b7170ad53e6817503ba10bbd723917e5f867c70d743c"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.9.12/mise-v2026.9.12-linux-arm64-musl",
-            "sha256": "2d2982b12f7a13894aa88272e4cd360e68591fe105b43cff29b1ac4588c6fe83"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.9.13/mise-v2026.9.13-linux-arm64-musl",
+            "sha256": "91b4960f3b83d82e604a22af627d383b569988f48a27d9d30c284f1ce9ebce4e"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "12d587dfb20741cafc376c42c696c5f6e2a64487"
+        "version": "fadd23794c0075468eb8964b0fd93e06e09486ad"
       },
       "uv": {
         "kind": "githubRelease",
