@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.282",
+        "version": "2.1.283",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-x64/claude",
-            "sha256": "3afe8535c0cc33f0e24f7b25dab7a1727b8b592196f8496a8bc302ba2161eed3",
-            "size": 238767288
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/linux-x64/claude",
+            "sha256": "1859583ce32920595c61ef868bee52e1b1594f7486db209935e01f1e5e804ae2",
+            "size": 241556664
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-arm64/claude",
-            "sha256": "6764ffc39e9fed425a493ff61ea28506d1ba83996ce81a48d1177dbb393419c9",
-            "size": 238084088
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/linux-arm64/claude",
+            "sha256": "346d294f0103d6fc0de11ac953579b5c62dfa90698a4cfc486b6f927c615e697",
+            "size": 240902136
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-x64-musl/claude",
-            "sha256": "e01fc77a210c54acf69205db13d8d50d11fa6ac62b81b6c6201de8440c293b0d",
-            "size": 232525912
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/linux-x64-musl/claude",
+            "sha256": "bed45d96869935e0fa4674d5099fd3e724162d5234b601771e7418beb699c5a8",
+            "size": 235311192
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/linux-arm64-musl/claude",
-            "sha256": "5c3b3c9904f84b59d01c4e7f5c9305a4fc1981b18b26745688c9c1dab9cb25ae",
-            "size": 230438720
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/linux-arm64-musl/claude",
+            "sha256": "7e607db312a84ed8d7e17c34be93accad5f79366c5a043758ba8de95fdb5d070",
+            "size": 233256768
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/darwin-x64/claude",
-            "sha256": "5c34b00b5c0f3862b76011015c334e91904c4593afea7a5451e00746ad7934c1",
-            "size": 230651344
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/darwin-x64/claude",
+            "sha256": "c896d2aee12ff4d95861033d9730d3d22dc19e4f32779134d3399ef3dfb0e77a",
+            "size": 233458384
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.282/darwin-arm64/claude",
-            "sha256": "fcfd837103965c64de34a6b9b94370d77a347ea71819715a27d5f0ef01775ea4",
-            "size": 222245312
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/darwin-arm64/claude",
+            "sha256": "d8cb1e5c79684cc12a8bfc813e3a2073406921b6245744b3009be3ab5651d21e",
+            "size": 225036032
           }
         }
       },
@@ -295,12 +295,12 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "78f46dacbafc71fd7d937bfc2c26da914f1bc09b"
+        "version": "ecc249f1e306fc64ddf83c7bed16cacf7c2239db"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -578,47 +578,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211",
+        "version": "v1.4.212",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.211/orca-ide-1.4.211.x86_64.rpm",
-            "sha256": "88fb9f5b872ab3e4d0059be3f25c3c1d6740bbc7b3ab4464af9b71ae062407f2"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.212/orca-ide-1.4.212.x86_64.rpm",
+            "sha256": "88c3d1d0a6c7c6be64bcce568dbb92f25a260a9c239eba9935d76386fe4da946"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.211/orca-ide-1.4.211.aarch64.rpm",
-            "sha256": "cc6b2ed23d6f9b38526462e7a8ab1d6d68bb582f50d29f6b8bc46eaea30db232"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.212/orca-ide-1.4.212.aarch64.rpm",
+            "sha256": "d55b8ca6b92b4af1b4a94d15be657b5ed5160fa915fdb0b82527bf877a0329e4"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.211"
+        "version": "v1.4.212"
       },
       "react-best-practices": {
         "kind": "gitRef",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "78f46dacbafc71fd7d937bfc2c26da914f1bc09b"
+        "version": "ecc249f1e306fc64ddf83c7bed16cacf7c2239db"
       },
       "uv": {
         "kind": "githubRelease",
@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.26.10",
+        "version": "v2.26.11",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.10/wakatime-cli-linux-amd64.zip",
-            "sha256": "381db808684bdc1fb47b7cd967ccf6568b7d93de2d6a9d68369d4a496b3f1865"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-linux-amd64.zip",
+            "sha256": "d0c384698bd6d1bfb1690bfc7f303cb879edf6e1b666cc7cb449b6c5356a7fbb"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.10/wakatime-cli-linux-arm64.zip",
-            "sha256": "ed9ece63ec90c8f649d4e378117fce5daf272927388e170051dba3dcefbd6061"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-linux-arm64.zip",
+            "sha256": "641d1e177f75ce9dcb4bc5fd978976c36678708f5472818861aafcb99b4f7fcd"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.10/wakatime-cli-darwin-amd64.zip",
-            "sha256": "56e27d95c31e3056f9da36505135a83c67df34b32ea843466b472a8f2e9a9390"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-darwin-amd64.zip",
+            "sha256": "ffebd40e3922fb7be5d215c6924e84e46299a5981dc428200472a29e0bd18a8b"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.10/wakatime-cli-darwin-arm64.zip",
-            "sha256": "a65de10c8f89bb21d6343218b7731d67f13b7705657d3bef6bb111ab9f2ba3ca"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-darwin-arm64.zip",
+            "sha256": "c22141a4b6e91d919b955504d7a2bcadbdc646293acfd22f7bdc0395248203e2"
           }
         }
       },
