@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.26.11",
+        "version": "v2.26.13",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-linux-amd64.zip",
-            "sha256": "d0c384698bd6d1bfb1690bfc7f303cb879edf6e1b666cc7cb449b6c5356a7fbb"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-linux-amd64.zip",
+            "sha256": "39b0f775b5afad6cd23331f11c21258ed7ab7823a2954e3704cd651f920efdc6"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-linux-arm64.zip",
-            "sha256": "641d1e177f75ce9dcb4bc5fd978976c36678708f5472818861aafcb99b4f7fcd"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-linux-arm64.zip",
+            "sha256": "12b8dfbff9eaea17904fc0387926af81315d31383e6cf867c8f3184624d76982"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-darwin-amd64.zip",
-            "sha256": "ffebd40e3922fb7be5d215c6924e84e46299a5981dc428200472a29e0bd18a8b"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-darwin-amd64.zip",
+            "sha256": "326bd028f975477b2eacbf8d1dd9deb06c492199880acc05cf7365a093d8b5fa"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.11/wakatime-cli-darwin-arm64.zip",
-            "sha256": "c22141a4b6e91d919b955504d7a2bcadbdc646293acfd22f7bdc0395248203e2"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-darwin-arm64.zip",
+            "sha256": "bc2c8471e9bae1b7f988632078072e3c8fdb5b32b30a78c37030906c6c1dd6ef"
           }
         }
       },
