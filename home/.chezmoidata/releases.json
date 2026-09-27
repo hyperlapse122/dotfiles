@@ -295,7 +295,7 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "deslop": {
         "kind": "gitRef",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -547,78 +547,78 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.3.2",
+        "version": "v18.3.4",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.2/omp-linux-x64",
-            "sha256": "8cbbcd4bea7a7b86116a13352f31e3778fd4d93df931036bb1771738b0702534"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.4/omp-linux-x64",
+            "sha256": "e8d13ea8da6281f183108bc25ae94c4a1a5159a2072d188ea8c30bbfce4735b8"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.2/omp-linux-arm64",
-            "sha256": "f56f4775abbf269c481c78799691eaa59a7d69644fa7d592c775e2c65f7b13da"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.4/omp-linux-arm64",
+            "sha256": "bb058d49dde5bb84e6f1b96aa798d7393d3bce1a6927392694e49120ba2c2619"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.2/omp-darwin-x64",
-            "sha256": "695d3cfd3dc31198362f0be4344dfe64dcc4655fb9ef3316d94368ad7af294d6"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.4/omp-darwin-x64",
+            "sha256": "12e4f01fd9c8939e947d0c5a1d3b7861e98285051112f835d74d5096dbbad535"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.2/omp-darwin-arm64",
-            "sha256": "9fccf2cdd7a472c93cb54d99d95d914c86b5f41652054e3cdd0b17c5d28393a6"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.4/omp-darwin-arm64",
+            "sha256": "10a79c56fc459245eac41d5b4318cd7fce88a1dea294d00593859346ada7aa8a"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.2/omp-linux-musl-x64",
-            "sha256": "1db4bfedd06685438b076f70eb394e93d69d8c498b9cc72049d7403ea0bfb87c"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.4/omp-linux-musl-x64",
+            "sha256": "5d8523c1028bdeb24e27c8b2343878c11420793c47e9f2a39c8b0dedaea06df8"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.2/omp-linux-musl-arm64",
-            "sha256": "3637404c77771b6d923986c8d026f8b0f9545e84772df5c9d8f0aaab52c8507d"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.3.4/omp-linux-musl-arm64",
+            "sha256": "e91c51d75ad1391cf7ad6a6e748c1c23b54b7811295830062cd46ead9f3279e2"
           }
         }
       },
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214",
+        "version": "v1.4.215",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.214/orca-ide-1.4.214.x86_64.rpm",
-            "sha256": "cec9771665a505a2bb4567beeb6cfd82bfd36c95d7afd47276f49436ae11c25f"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.215/orca-ide-1.4.215.x86_64.rpm",
+            "sha256": "2297becbc63d98358acdd099dec0d55328f594b5002d888373254e9d91b1af00"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.214/orca-ide-1.4.214.aarch64.rpm",
-            "sha256": "f33518c43a0942d18786dc1d838575e3c350c952c469ffdfedec68c8092f5544"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.215/orca-ide-1.4.215.aarch64.rpm",
+            "sha256": "c1ec62a3162fcd6464cc3ac3194a3429ee92b5b039d06b818f83549656aa66e1"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.214"
+        "version": "v1.4.215"
       },
       "react-best-practices": {
         "kind": "gitRef",
