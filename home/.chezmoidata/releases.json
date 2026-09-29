@@ -429,7 +429,7 @@
       "glab": {
         "kind": "gitlabRelease",
         "source": "https://gitlab.com/api/v4/projects/34675721",
-        "version": "v1.119.0"
+        "version": "v1.120.0"
       },
       "helm": {
         "kind": "githubRelease",
@@ -679,7 +679,7 @@
       "teamviewer": {
         "kind": "vendorManifest",
         "source": "https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm",
-        "version": "15.81.5"
+        "version": "15.82.6"
       },
       "unslop": {
         "kind": "gitRef",
