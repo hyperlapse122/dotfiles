@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.26.13",
+        "version": "v2.26.14",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-linux-amd64.zip",
-            "sha256": "39b0f775b5afad6cd23331f11c21258ed7ab7823a2954e3704cd651f920efdc6"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.14/wakatime-cli-linux-amd64.zip",
+            "sha256": "17fb957d6cf7fd1dad78270e4a6e9c896cbd51c0778f24496cc656c6a301c8f3"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-linux-arm64.zip",
-            "sha256": "12b8dfbff9eaea17904fc0387926af81315d31383e6cf867c8f3184624d76982"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.14/wakatime-cli-linux-arm64.zip",
+            "sha256": "3b304115426ae1896b543f37649d4271aca1944eefff286da299e164f61a782c"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-darwin-amd64.zip",
-            "sha256": "326bd028f975477b2eacbf8d1dd9deb06c492199880acc05cf7365a093d8b5fa"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.14/wakatime-cli-darwin-amd64.zip",
+            "sha256": "aa463dfd56ba98723e137c10894e4e715fc1d52e4f3d4922ac8a58a38ec89954"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.13/wakatime-cli-darwin-arm64.zip",
-            "sha256": "bc2c8471e9bae1b7f988632078072e3c8fdb5b32b30a78c37030906c6c1dd6ef"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.26.14/wakatime-cli-darwin-arm64.zip",
+            "sha256": "281f26fefd8f24a5aaa5722ee14c4e1719d2550672fb00660314b78cdb22e23e"
           }
         }
       },
