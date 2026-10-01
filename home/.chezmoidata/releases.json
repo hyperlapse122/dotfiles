@@ -4,10 +4,10 @@
       "1password": {
         "kind": "vendorManifest",
         "source": "https://releases.1password.com/linux/stable/index.xml",
-        "version": "8.12.36",
+        "version": "8.12.38",
         "artifacts": {
           "linux-arm64": {
-            "url": "https://downloads.1password.com/linux/tar/stable/aarch64/1password-8.12.36.arm64.tar.gz",
+            "url": "https://downloads.1password.com/linux/tar/stable/aarch64/1password-8.12.38.arm64.tar.gz",
             "sha256": null
           }
         }
@@ -46,28 +46,28 @@
       "android": {
         "kind": "vendorManifest",
         "source": "https://dl.google.com/android/cli/latest",
-        "version": "1.0.16457483",
+        "version": "1.0.16486076",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://dl.google.com/android/cli/1.0.16457483/linux_x86_64/android",
-            "sha256": "02e04ae27ee7b5bbd479468d037def1096f84836d418e7f6bbcd893e044508b4",
+            "url": "https://dl.google.com/android/cli/1.0.16486076/linux_x86_64/android",
+            "sha256": "9be791d78ef7706b25e037d07f56765bd86f01c38d6b7cf1412d207ffdf0af4f",
             "size": 5041744
           },
           "linux-arm64": {
-            "url": "https://dl.google.com/android/cli/1.0.16457483/linux_x86_64/android",
-            "sha256": "02e04ae27ee7b5bbd479468d037def1096f84836d418e7f6bbcd893e044508b4",
+            "url": "https://dl.google.com/android/cli/1.0.16486076/linux_x86_64/android",
+            "sha256": "9be791d78ef7706b25e037d07f56765bd86f01c38d6b7cf1412d207ffdf0af4f",
             "size": 5041744,
             "emulated": true
           },
           "darwin-amd64": {
-            "url": "https://dl.google.com/android/cli/1.0.16457483/darwin_x86_64/android",
-            "sha256": "d352652929e8899608549dd6aa74607e513d4be58f5c648ab8122cc3eb448efc",
-            "size": 4704928
+            "url": "https://dl.google.com/android/cli/1.0.16486076/darwin_x86_64/android",
+            "sha256": "a6bebeadc0fbe5e21cdb8c11bcfce04f5cb7b99a6ed34571523404c876d7016f",
+            "size": 4706304
           },
           "darwin-arm64": {
-            "url": "https://dl.google.com/android/cli/1.0.16457483/darwin_arm64/android",
-            "sha256": "99623a9252a90585c8e977c20811cb1f8b220be826e6d6e555faa802b60bc02d",
-            "size": 3652416
+            "url": "https://dl.google.com/android/cli/1.0.16486076/darwin_arm64/android",
+            "sha256": "e0254a9e06ae63afe0edac3f3eb6046fe81d8be4d0f5a8eba75299400af278c9",
+            "size": 3650880
           }
         }
       },
@@ -547,31 +547,31 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.4.5",
+        "version": "v18.4.8",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.5/omp-linux-x64",
-            "sha256": "42c710239b3fc30b9759424f973c6c143709935d5752be7eec8d7b011f40d864"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.8/omp-linux-x64",
+            "sha256": "1b88f7a0da3f61edda915d836e11f63f20f2b56aeac2ddfa4ece0faa726f31c2"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.5/omp-linux-arm64",
-            "sha256": "3dcf6a7f847b8c2f7bc5294c52a09151e858578ae3610655b82bf97ffa120a72"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.8/omp-linux-arm64",
+            "sha256": "0bb8bc86e3f46f67f9d8a53a83023e599a5cb1594bdf373f88998f3bbba0abdd"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.5/omp-darwin-x64",
-            "sha256": "823cdd2202cbe336908c0d7a4add4cb063048e000fa9b2083b8576755d1c2523"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.8/omp-darwin-x64",
+            "sha256": "1cd12434a72270ebb0c4e0053e78031b555c094d4e63145b83e63532ff6437b8"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.5/omp-darwin-arm64",
-            "sha256": "64f5d0a99a2c5b5d9b453a7666257306244ac4c6fd8fdbe0e760bf3449fc8ea6"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.8/omp-darwin-arm64",
+            "sha256": "3bde40ca27371ecb86b92f12bf959128f325ef3e4344a361c0adb3d586c02b1a"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.5/omp-linux-musl-x64",
-            "sha256": "1e4a1c4d7ad624181f269d357f4961d3f619107ccac9ed1f894310fa4a7c3f93"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.8/omp-linux-musl-x64",
+            "sha256": "6e77b97fc1888e9013a00664acff244cdc73921152992e66d42fb531b9732fc0"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.5/omp-linux-musl-arm64",
-            "sha256": "1f4eb56f9e671d59b402224718c380cda77f52671d54a24de5c9d7fd148ca26c"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.4.8/omp-linux-musl-arm64",
+            "sha256": "e1e9ff45b03c3774277c35578d634e68c20b080d61b05e75afeef8c32852b699"
           }
         }
       },
