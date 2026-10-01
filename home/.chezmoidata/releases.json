@@ -239,46 +239,46 @@
       "codex": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.159.2",
+        "version": "rust-v0.159.3",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "26586b0d246d41a799b0ef8ee1add370f0fb0721b3709340f28db612381616ea"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "b48ca1b2d6b1bf42b944e02c3d937c898e24651916684cdc35fdedf31b291bcb"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "472ee4d49464a4f8792bbf0162bd9ac18d7036dbc00900a03e95f715887e930f"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "cd5f307b3fcd6080773e684b86c3114a67d4f1c61dc447be09876b552eb4bea7"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-x86_64-apple-darwin.tar.gz",
-            "sha256": "3f4e1f71aa05b1dd3d02dd66e780f7857cf19c693498a171f038f74ef3ef3be9"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-x86_64-apple-darwin.tar.gz",
+            "sha256": "cbaea8206d3189b8a7cd7c1b476e14a541ab22d469c37253f758ff71d4ed24b7"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-aarch64-apple-darwin.tar.gz",
-            "sha256": "025deffd84cbc99d88ef952e585dc67c7c94e4273f89ba3d45f7e5799743c13c"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-aarch64-apple-darwin.tar.gz",
+            "sha256": "51de50a39ea592b5b0a64ae0474548c282181cb6b96d9bd08965a682ae12774c"
           }
         }
       },
       "codex-code-mode-host": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.159.2",
+        "version": "rust-v0.159.3",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "fb6b0c4a7b24ed0728d1208ebc0061383da60debc6d61cf63e02c48ac7f7630f"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "0f58dd9848c717382e5223e39c1fc8f43a8f4a8cbe20d7af0c0dee0ef3abd438"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "011967737e5eef730963dd63636e1006408ced43cbb3d6ca68c5c233998d6430"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "7cbb47c472c2dc115abfeebf52ff11bf66eb364bf8f5d14659742615919b8e6f"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
-            "sha256": "cfe7d17004ecaaa7c7b9084d89746bc99e815ee4b39a1b5d686b430b6b067cc1"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
+            "sha256": "d27385b2c5bc0cd9537154c84abafeeddba38f93e135257f1cf6ca4e862fcb9f"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
-            "sha256": "4f9f3c0e3eabe9bee128946bb04cc9523423e82f9751880b7f03d41aa9e482f2"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+            "sha256": "d1a3254374b733fff1fa31cbeb20f65e3ef871e3431c196353dea189df15d4c5"
           }
         }
       },
@@ -295,7 +295,7 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "deslop": {
         "kind": "gitRef",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -578,47 +578,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217",
+        "version": "v1.4.218",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.217/orca-ide-1.4.217.x86_64.rpm",
-            "sha256": "1948cae7038b77b2289bac193b5a343e7132285e25005bab60ef73c6f599bb5d"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.218/orca-ide-1.4.218.x86_64.rpm",
+            "sha256": "5f0ec40bcd82f4fe3be8b4938f2b63892e362a7846b92758e34b0ceba427022b"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.217/orca-ide-1.4.217.aarch64.rpm",
-            "sha256": "1111ae1b143991d5ade2fc9360546a8e1a4c519711d9b15a79362d9e0336540d"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.218/orca-ide-1.4.218.aarch64.rpm",
+            "sha256": "7a5d4cec89263d404291ade0d46498a4bb5dafcf5cda6afc18bac9b58cbebfa0"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.217"
+        "version": "v1.4.218"
       },
       "react-best-practices": {
         "kind": "gitRef",
