@@ -547,31 +547,31 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.5.0",
+        "version": "v18.5.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.0/omp-linux-x64",
-            "sha256": "b8413e6e085a423c7a9b1d7bc025c2af794923b6b6c57330a309639b6176c8a1"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.1/omp-linux-x64",
+            "sha256": "fb7638e82f0c9d087e96e15d3eb83a662d92374cd907187d6d4d2605e39f1e3a"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.0/omp-linux-arm64",
-            "sha256": "1244860c58bb68a3a45390d4932e5c7983183ec8c12cb6848c1afd709de38a07"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.1/omp-linux-arm64",
+            "sha256": "e7b81b96b3f9f391ec8afc7ee64c052ce1783290f88bbb59ba36d15b3b4e927c"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.0/omp-darwin-x64",
-            "sha256": "be01b2213d7633b716bf18250c7ef756ee29111dfd76ccabc42e7e3b35d35b4b"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.1/omp-darwin-x64",
+            "sha256": "9e796c6d9aa1ebed9fcac20d5937b57b3af15b964eba8483add59667d315949c"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.0/omp-darwin-arm64",
-            "sha256": "5608ba1705ae8081f4bced9b54b583752d05926ff9c63779aa866a4c13d43aad"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.1/omp-darwin-arm64",
+            "sha256": "2abd8161abf1354c592547e669e2a7a9f6e63be1156fa65865d2a7db0b11ff79"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.0/omp-linux-musl-x64",
-            "sha256": "ad7c286bc621c18dbcaf29146cc7bfdccef4bc5a71f3c0bc65e9474f7fc31608"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.1/omp-linux-musl-x64",
+            "sha256": "159f3bcfdf4810fb25ab4b4578ca9a67515fcd893d44352208ce8f57a235f351"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.0/omp-linux-musl-arm64",
-            "sha256": "a8f7c2435a0763cb924bae76e0cbead8bfb98f90267ef6f26ae4b24ff0d6701e"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.5.1/omp-linux-musl-arm64",
+            "sha256": "e6db6659ff4fb9c41f0703eaf33c1862f1a0aac68759bd7eee518fe879584761"
           }
         }
       },
