@@ -216,23 +216,23 @@
       "codegraph": {
         "kind": "githubRelease",
         "source": "colbymchenry/codegraph",
-        "version": "v1.6.1",
+        "version": "v1.6.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.1/codegraph-linux-x64.tar.gz",
-            "sha256": "767c112faf8175a3dd768defc1688203fef459de29c4b52c02e16a472b8f5d26"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.2/codegraph-linux-x64.tar.gz",
+            "sha256": "ef0af416092128fb1ccc723786000b7edf4a6971fe604acd08bf966e4f37b828"
           },
           "linux-arm64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.1/codegraph-linux-arm64.tar.gz",
-            "sha256": "3e31bfd645416ab4e34516a9fe444a907132b3527b18889c877148219cdcc966"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.2/codegraph-linux-arm64.tar.gz",
+            "sha256": "c8c6be292be21d00dea26bad8b28d434731cf612fb8cc475dc10f5b3038b5b64"
           },
           "darwin-amd64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.1/codegraph-darwin-x64.tar.gz",
-            "sha256": "403b99a29b91adc3eb78a625a653c531f315de82ae80d32000eb60e50d385275"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.2/codegraph-darwin-x64.tar.gz",
+            "sha256": "53d1a4d1a9af31d6cec11b346df2ae792087081e13f623f583e27783c1e7f9bc"
           },
           "darwin-arm64": {
-            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.1/codegraph-darwin-arm64.tar.gz",
-            "sha256": "7a08cf8cf26cdf9e4ba5f8b2a36bb9c039b8966a6cb30b5e27c4b82074abf499"
+            "url": "https://github.com/colbymchenry/codegraph/releases/download/v1.6.2/codegraph-darwin-arm64.tar.gz",
+            "sha256": "d74d1bfb4060db63ec3c2b72c4e17f76c31978af3bad6ace4370d1501ac0662e"
           }
         }
       },
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "7022c81efb48d8b5eb15498ce6043a3bd74b694c"
+        "version": "23e4138daa01c42d4969f7a5465f82704e64f798"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "7022c81efb48d8b5eb15498ce6043a3bd74b694c"
+        "version": "23e4138daa01c42d4969f7a5465f82704e64f798"
       },
       "uv": {
         "kind": "githubRelease",
