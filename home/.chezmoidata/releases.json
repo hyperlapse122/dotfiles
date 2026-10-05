@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a"
+        "version": "4e5b1cf2ccb0ea3716f08c8ee0a5856b5ab93536"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -633,23 +633,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-09-28",
+        "version": "2026-10-05",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-28/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "23f711d86b5f826e22886f01d7355dc01e0f4c1357dafa29710a95b903b48c85"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "28070188df63b6f217768040781decc8db43bc9d29b126847acb365575b09bc9"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-28/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "03bad9c3dabb0f07a2678d5f9f8f1575a3742ea141506e14b3a26b42a1f896f3"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "3974c863acbbd96ef2cc02a7aaa79123935b05f27ffe4fd393fc229522f75cb9"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-28/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "d032c0eb75e4597cc8ffc35ea4cdbd9eecc8341936b6edac6749e679fc3f0682"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "32400dfe2b1472fff9689e063dbb80b8c90e0d4f883af49de7abbba3f2e20705"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-09-28/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "54ec873d8996e2c127d758bf45d4eacb6d3371dae4f6f6d5d3f05cedbae5fd59"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "64d3f6b8aacd94a93a03298d7988dfa0c747f8a4fcc539a4e59d9c9f920ca62f"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "e43c7ee26e0038c6c1fa8380dd34ce86ff94cb2a"
+        "version": "4e5b1cf2ccb0ea3716f08c8ee0a5856b5ab93536"
       },
       "uv": {
         "kind": "githubRelease",
