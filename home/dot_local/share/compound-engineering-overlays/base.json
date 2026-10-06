@@ -1,5 +1,5 @@
 {
-  "version": "compound-engineering-v3.30.3",
+  "version": "compound-engineering-v3.30.4",
   "paths": {
     "skills/ce-brainstorm/scripts/elevation-dispatch.sh": {
       "preimage": {
