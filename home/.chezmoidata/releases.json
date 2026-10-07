@@ -239,46 +239,46 @@
       "codex": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.160.1",
+        "version": "rust-v0.161.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "9226581be592d18f7e7f740a352fdb63aa61e45e39f7eb9b09d3888c84bba33f"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "b1efb95097660d7f2e5a3887618a23f2ea1b0d548078bf92b0f7a5d229a0cef2"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "f54dc5852042445bf41da3aa31156f3cb02f52c5a1a04074de73dc5598f7e1f7"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "5c90bf4be3c97fc62fcafb28ec2335ee318e6ecb332e1e8ee3d2c63814a5a26a"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-x86_64-apple-darwin.tar.gz",
-            "sha256": "8d938ddb93c4424b1d45f1606984ed514c5aa70e463302a6a2227fba7af02db7"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-x86_64-apple-darwin.tar.gz",
+            "sha256": "cb3d72225b15f070eabf1b0e3602014ca8bf067e20f11e3b73c88db7b2463853"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-aarch64-apple-darwin.tar.gz",
-            "sha256": "670af2b049d9c95afb74d7da385f30c5033d13a07175001dd8958c51944984d0"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-aarch64-apple-darwin.tar.gz",
+            "sha256": "bd83479f3ae21474c407ec2164fbc2a63fa763f7afbbd123fb6a69c5201cfd38"
           }
         }
       },
       "codex-code-mode-host": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.160.1",
+        "version": "rust-v0.161.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "8a69207d97545ac753b6585974e1e67a4c51ae5deacf06517db512bb25e0e3c2"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "30cc945f77b3eed15ee385cc2f844a33bf1d7c422ff3a97161f701bffe4f77f8"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "e5e027e6689efda2e3570aa600179f0ebb18632803350e152ed6c9b97dcf9741"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "aaf902c8586ce82c201b5467042994efe89974a718d6079cd7ffc354ab4384ad"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
-            "sha256": "cd0ae67e1c2c6cab9c065e3287a56f068961c5592e114c1ccd6e9a4909bba147"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
+            "sha256": "286ff5298b9f7a77689fabfa5944cd38cb321675ede6c5e6474c70863d18e78f"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
-            "sha256": "6e502df69d9220fa305b0c3c7c17ba8f31ab1d4591fc140084dbb823e800c7db"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.161.0/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+            "sha256": "821224158c51304cb3f19af6f3fa85ca4566d8a12be0787604cf10f070c4c644"
           }
         }
       },
@@ -516,62 +516,62 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.10.3",
+        "version": "v2026.10.4",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-linux-x64",
-            "sha256": "8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-linux-x64",
+            "sha256": "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-linux-arm64",
-            "sha256": "357260e28904569a6e7124d33b65cef6d043846c07bb8f4906ddf22cc353d61d"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-linux-arm64",
+            "sha256": "9013ce1d7d9bbbf65254cda178562f5450c474a705907c18b77e6b678bb10041"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-macos-x64",
-            "sha256": "38cdd1d904b25e66ec2fff3b5c88930853ab929b63e72c70e77198f82d6ac144"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-macos-x64",
+            "sha256": "9f58d924a4d7b47aeb1610cd981beca2125907b2591d805237efbca8aae4308e"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-macos-arm64",
-            "sha256": "0999bd4943523ccdbd149b5ad4080281536801b3f6406ac4495699bd0310969c"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-macos-arm64",
+            "sha256": "5c530143fc750e8a98c9a36be8d361e5dd953fa0b004d58f7577783f7cf2ac24"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-linux-x64-musl",
-            "sha256": "eb956895c3620ed3d753b2da3c15ea179f892c8980fa8875ba6096f585b844f8"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-linux-x64-musl",
+            "sha256": "46ecfd7d391a22d442a650c4a7d717b3d35a01d6c3b8f37808f71abbcaa855ab"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-linux-arm64-musl",
-            "sha256": "1b849098a23ca0b7ec2733bddf243e9d29507779bba4e0e1101eec3c518bc542"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-linux-arm64-musl",
+            "sha256": "7f92c8a883a489b31ef09862e9e198cc1b80ab32a67efebc9ae75146b7ea0e4c"
           }
         }
       },
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.8.0",
+        "version": "v18.8.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.0/omp-linux-x64",
-            "sha256": "6d0bd5d624f96b42513859558bc001d523a1eada1d71446ab7ca743ec2aa7de1"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.1/omp-linux-x64",
+            "sha256": "8ec0762eceb082c9109b20aeb08c0c522a6dfd2fef6a833ec5cf91c6469fcbcf"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.0/omp-linux-arm64",
-            "sha256": "72b563479eac18fe60605e5374628ec3200b3878a32a2f5bf76591d4a5347409"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.1/omp-linux-arm64",
+            "sha256": "529936be59da3006fc34d9e7651844db9666b25219bc6671f159b900cb8a5492"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.0/omp-darwin-x64",
-            "sha256": "ee65bb4d2079ce5c0d3878a88d9e773c99e4f9a68d6b196184ca2fdda48c16d5"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.1/omp-darwin-x64",
+            "sha256": "f2c10efa6525cb7879e7618e85ab185b0e7988c49cd33e35fd2c52772b6e23cf"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.0/omp-darwin-arm64",
-            "sha256": "8fb220c84b0e15cee596f5f94bd5c44b477685aca6678a0fdaf75819f607cb98"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.1/omp-darwin-arm64",
+            "sha256": "840a005ea114e40051c5631cffd0379ee2cf67ce2e40810f725e43eef7ed7004"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.0/omp-linux-musl-x64",
-            "sha256": "785013f726ed623683654952ca80b0a531beb96219232f68cbd2735dff3203ee"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.1/omp-linux-musl-x64",
+            "sha256": "825d95644813df8c8ab91de71e9fc66a160f12ae33a541a02db27035a95c7a7c"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.0/omp-linux-musl-arm64",
-            "sha256": "ca4691c02487e37d9cf1e79c2d9252e101d9e6b4d15af917576c73fa8cebaac3"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.8.1/omp-linux-musl-arm64",
+            "sha256": "9cd1cd5782557c6906c47274250d8705d4c4d8bb2a15e5bec8311b33bd5d5bcc"
           }
         }
       },
