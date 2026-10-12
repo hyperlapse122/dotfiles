@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "11713c683fe4add4fd403ea880580abbc9e0875f"
+        "version": "1b6d44ff26d4e242f4e8f68c391e6d2f7ca16def"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -547,31 +547,31 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.9.2",
+        "version": "v18.10.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.9.2/omp-linux-x64",
-            "sha256": "647237242329897c3a7c0f3591fdd9cafe4a4e13872baa9bbdfe45b84f9d8992"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.1/omp-linux-x64",
+            "sha256": "9798d22d518b23342b4cadf57672b276ef09e756c1832adc6571b04b26ad4f1b"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.9.2/omp-linux-arm64",
-            "sha256": "5dcd64f584cfebae84315d9e6122997f794b0870d336860b6d99b271ac68ff9f"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.1/omp-linux-arm64",
+            "sha256": "5cad38a8edee60cec9c0ce91810eba38bda0efe349562157023810343dacb8d5"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.9.2/omp-darwin-x64",
-            "sha256": "d8e224bd6cab142b4ee8136975493fdca80d5641a48b30b5efbcf090e3104ab9"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.1/omp-darwin-x64",
+            "sha256": "057b47eb1b3d57c0af9d89c3b144be455d2064e9febdc85bec8a38191302e1d6"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.9.2/omp-darwin-arm64",
-            "sha256": "f0426c1c71f10aa94d9ac5e5b74e384b1286b2947d3325be8e19fdb0f0e04088"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.1/omp-darwin-arm64",
+            "sha256": "74d920b72e7af01dbe258b41bb0684da7e747af63628eee41e98b5e74e2f21ac"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.9.2/omp-linux-musl-x64",
-            "sha256": "c45420cf08aa4cc0a68acf0069fc60c3ab8c6023b7576d0fd989e125bd2baa7e"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.1/omp-linux-musl-x64",
+            "sha256": "8295acd7827f1b7c23d312a9951e4f10e15f734394d4a3e80b79b55a12b56aa2"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.9.2/omp-linux-musl-arm64",
-            "sha256": "085b475ff2384c9522c969bef3e8730b82b68bddfbb9943ace73c08be4b103d4"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.1/omp-linux-musl-arm64",
+            "sha256": "eaf26165c86fd1d4165374b9e49d65788470f31b9503ba24f60e2b011eb5cf74"
           }
         }
       },
@@ -633,23 +633,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-10-05",
+        "version": "2026-10-12",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "28070188df63b6f217768040781decc8db43bc9d29b126847acb365575b09bc9"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-12/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "040cab4e2abc490fadd95c3f6cbc60b941a78761dbc3acf0ec66fd7a97f31db3"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "3974c863acbbd96ef2cc02a7aaa79123935b05f27ffe4fd393fc229522f75cb9"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-12/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "d7219d5d8f5537bb227b521157aebddfe7e4a90f4a85a74f31e53722f5691025"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "32400dfe2b1472fff9689e063dbb80b8c90e0d4f883af49de7abbba3f2e20705"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-12/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "56a5698a2e0d495c3ec28155416db310c879f21a70f6f38db549166cf157cfab"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-05/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "64d3f6b8aacd94a93a03298d7988dfa0c747f8a4fcc539a4e59d9c9f920ca62f"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-12/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "a2e45e828b37bfc4b507c2ca456e8b61096e0bdfbae225f3d33295546d1eeacf"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "11713c683fe4add4fd403ea880580abbc9e0875f"
+        "version": "1b6d44ff26d4e242f4e8f68c391e6d2f7ca16def"
       },
       "uv": {
         "kind": "githubRelease",
