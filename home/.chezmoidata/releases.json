@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "fe53d9e9093dbb9ae298563b1a9d702dd6e2ca08"
+        "version": "1dcc2bacde73ddd284803b7af28164d0436198fc"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "fe53d9e9093dbb9ae298563b1a9d702dd6e2ca08"
+        "version": "1dcc2bacde73ddd284803b7af28164d0436198fc"
       },
       "uv": {
         "kind": "githubRelease",
@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.27.3",
+        "version": "v2.27.4",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-linux-amd64.zip",
-            "sha256": "33fbfc4b103dbb9d1ffc952b8708fe47a8189ce6cb70750144aec52a960baa7a"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-linux-amd64.zip",
+            "sha256": "fe8eff26b70f46d4d8a5ce97dbcc3386019542df7732c9e369729006fef26893"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-linux-arm64.zip",
-            "sha256": "020fe0645dd8527c7c576f787f935c466627610f83cbfa39e64eb04753742a91"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-linux-arm64.zip",
+            "sha256": "d2a671f24d1b5097cee618042fa2f68d420358de4055bf821ced8866f4aacc4d"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-darwin-amd64.zip",
-            "sha256": "a0388cb7d748a72af2f02bf7067e53f33bd32b4531eeada89d24789b368fa968"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-darwin-amd64.zip",
+            "sha256": "df42c70685aeef599e1019b4f1ba2d7c73b23bebfdd9beade6ea1f4d6cbcd02b"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-darwin-arm64.zip",
-            "sha256": "fd025cc1378c9eb768fda9c056b7ed49a1059bdae2772f1403033146816022ad"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-darwin-arm64.zip",
+            "sha256": "1c1ec9c9a5f18ed47941d341a82e6e222e4b9d8d35dc53492066724a1b403fa3"
           }
         }
       },
