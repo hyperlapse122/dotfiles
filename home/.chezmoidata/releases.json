@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "997ffc7fe26bdaa6478a14e7f5b8d5f9ed747102"
+        "version": "fe53d9e9093dbb9ae298563b1a9d702dd6e2ca08"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -547,31 +547,31 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.10.2",
+        "version": "v18.10.3",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.2/omp-linux-x64",
-            "sha256": "3d8f967bb4cf2a154592115edaf4bb723d7a6a6448eec933ac5eb49344938125"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-linux-x64",
+            "sha256": "366ffcda80db57b825921b6ff4b0e5e623bc62cf18478f2828cd8a322fc72ff9"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.2/omp-linux-arm64",
-            "sha256": "a3ca5d7c4bf09c0d0cd1bc6bdeb77b59b3c33d4fb13240f05d272d46ec0c6a0e"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-linux-arm64",
+            "sha256": "7f580e1fe06ebffe16ae46cc6881051aca4980db7f654702feefed5651555862"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.2/omp-darwin-x64",
-            "sha256": "76b0d22a95f3b8a8f4023ed0940ba7f262f1032b61c15dd65c4f6c20776ad5cb"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-darwin-x64",
+            "sha256": "f19f9a7b4c715456f778ab3ae28fbc38978c6bae6296a832506bc7225f343942"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.2/omp-darwin-arm64",
-            "sha256": "9752e3d7f7bdab636e21495a6affc196e8ffc3a2dffaf529db2dd73d2bdea255"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-darwin-arm64",
+            "sha256": "985c70cbcd264f6c6313de45ee81df6734664ec8ed8e72fa39fc644df625f0ce"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.2/omp-linux-musl-x64",
-            "sha256": "3bb5c8a448da726465ebbcad16da3f984e276fb68c94445e44a989359344ec5f"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-linux-musl-x64",
+            "sha256": "9dcaa7aebfef367c5022781a79b831bb769946694b3a5de6099fd7af13e008ad"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.2/omp-linux-musl-arm64",
-            "sha256": "b0590a6dcda0bb5c35f9072f613cbb5fdcdaf38ef3b4c497aade50540b89e79b"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-linux-musl-arm64",
+            "sha256": "37b545c2e5164a55d17a15c451d3a26f97053000a08e44f7830c105812e855c6"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "997ffc7fe26bdaa6478a14e7f5b8d5f9ed747102"
+        "version": "fe53d9e9093dbb9ae298563b1a9d702dd6e2ca08"
       },
       "uv": {
         "kind": "githubRelease",
@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.27.1",
+        "version": "v2.27.3",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.1/wakatime-cli-linux-amd64.zip",
-            "sha256": "536295de6fa1529648de83ba6d233a461b7dd475626b5ae0af1287fc4eb5c5b3"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-linux-amd64.zip",
+            "sha256": "33fbfc4b103dbb9d1ffc952b8708fe47a8189ce6cb70750144aec52a960baa7a"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.1/wakatime-cli-linux-arm64.zip",
-            "sha256": "54e1450a37d6a1e34b0c83178d18c1228c7cf6ab6d27d214c4e9db75ad6123f7"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-linux-arm64.zip",
+            "sha256": "020fe0645dd8527c7c576f787f935c466627610f83cbfa39e64eb04753742a91"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.1/wakatime-cli-darwin-amd64.zip",
-            "sha256": "8fb3735e7bb1a330172d9ac15177dce57c487cb7e8f49e9a5591f8f77fa65721"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-darwin-amd64.zip",
+            "sha256": "a0388cb7d748a72af2f02bf7067e53f33bd32b4531eeada89d24789b368fa968"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.1/wakatime-cli-darwin-arm64.zip",
-            "sha256": "076d65d4e47bd34c12b0dab7abf22b671c2a7a95045355c922835bc5bdc77446"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.3/wakatime-cli-darwin-arm64.zip",
+            "sha256": "fd025cc1378c9eb768fda9c056b7ed49a1059bdae2772f1403033146816022ad"
           }
         }
       },
