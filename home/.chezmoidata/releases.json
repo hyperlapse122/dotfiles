@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "1dcc2bacde73ddd284803b7af28164d0436198fc"
+        "version": "dbf49813a39c1a5389c5e28cb8e4c1c2379e2454"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -429,7 +429,7 @@
       "glab": {
         "kind": "gitlabRelease",
         "source": "https://gitlab.com/api/v4/projects/34675721",
-        "version": "v1.122.0"
+        "version": "v1.123.0"
       },
       "helm": {
         "kind": "githubRelease",
@@ -516,31 +516,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.10.8",
+        "version": "v2026.10.9",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-x64",
-            "sha256": "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-linux-x64",
+            "sha256": "6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-arm64",
-            "sha256": "6ee0bd8173f1347514f4974d55fb1fae13aa7f6de0a55338adbefa0667cad7e5"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-linux-arm64",
+            "sha256": "e5cf4820b0d3fd47776acf7811c855a52277262d35dcda1a9e8754e6d5442a39"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-macos-x64",
-            "sha256": "a122fd04db5f2da07d24528ed61109bc82142ca44e821d4faafa05650f6ba627"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-macos-x64",
+            "sha256": "8e243d9afcb73f3ee3ea35998e61f828cc0fc4a1cb0962defa702e54454bc1a7"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-macos-arm64",
-            "sha256": "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-macos-arm64",
+            "sha256": "93a0703c25fc15cd4fbe02019c9ea23ca9045e077af5e96c01207e1346edb14a"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-x64-musl",
-            "sha256": "043dc6b9077db988269ca2f85059851cb09fc080355350021363e95a5e227f84"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-linux-x64-musl",
+            "sha256": "77fbb428fff656ec0bbacb99d7ed5b038a0e09a9cc0168909fcf3da56b5d51e0"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-arm64-musl",
-            "sha256": "d9c5447ad5084b7bf9705ef2913dfad97268235f15849a51e88a21ede7e7204a"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-linux-arm64-musl",
+            "sha256": "0c7f27abf12f80949837fe281137b6c68a8af47cd70068559516eb6160e1728d"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "1dcc2bacde73ddd284803b7af28164d0436198fc"
+        "version": "dbf49813a39c1a5389c5e28cb8e4c1c2379e2454"
       },
       "uv": {
         "kind": "githubRelease",
@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.27.4",
+        "version": "v2.27.5",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-linux-amd64.zip",
-            "sha256": "fe8eff26b70f46d4d8a5ce97dbcc3386019542df7732c9e369729006fef26893"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.5/wakatime-cli-linux-amd64.zip",
+            "sha256": "81c8792f2747b00e0ea7ac775869037b4e8517b1a08f54d784d467b9ba93d2ca"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-linux-arm64.zip",
-            "sha256": "d2a671f24d1b5097cee618042fa2f68d420358de4055bf821ced8866f4aacc4d"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.5/wakatime-cli-linux-arm64.zip",
+            "sha256": "fd6225a15bf951ad39bd2f32cf8c1af0c707f5f2c7e42368915473fe984eb330"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-darwin-amd64.zip",
-            "sha256": "df42c70685aeef599e1019b4f1ba2d7c73b23bebfdd9beade6ea1f4d6cbcd02b"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.5/wakatime-cli-darwin-amd64.zip",
+            "sha256": "54abc847ffce119d81e4dd8742728c9e42a5cfd5c91d8ca108f368c83507cb76"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.4/wakatime-cli-darwin-arm64.zip",
-            "sha256": "1c1ec9c9a5f18ed47941d341a82e6e222e4b9d8d35dc53492066724a1b403fa3"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.5/wakatime-cli-darwin-arm64.zip",
+            "sha256": "44cfd693b7a20586a5d2f23ee13a5321ea5acab9af4e6dd8bf0ed7b88e469212"
           }
         }
       },
