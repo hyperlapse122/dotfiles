@@ -121,7 +121,7 @@ export async function fetchLatestReleaseByPrefix(
 ): Promise<GitHubRelease> {
   const releases = (await fetchReleaseJson(
     source,
-    "releases?per_page=100",
+    "releases?per_page=30",
     "releases",
     token,
   )) as GitHubRelease[];
