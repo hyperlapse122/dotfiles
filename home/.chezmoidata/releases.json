@@ -102,23 +102,23 @@
       "buf": {
         "kind": "githubRelease",
         "source": "bufbuild/buf",
-        "version": "v1.73.0",
+        "version": "v1.74.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/bufbuild/buf/releases/download/v1.73.0/buf-Linux-x86_64.tar.gz",
-            "sha256": "f8092c1be08d5606a8d22b4ae0e4079dd690154cebb4894dc5e24a5046093aff"
+            "url": "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Linux-x86_64.tar.gz",
+            "sha256": "cc482285b2c388c93f8bed0a972330695c1c8dd121d5ece460d25ceed93f21ac"
           },
           "linux-arm64": {
-            "url": "https://github.com/bufbuild/buf/releases/download/v1.73.0/buf-Linux-aarch64.tar.gz",
-            "sha256": "e928fa64061ddb5144d93df30fe48f3451231b0e77ea5ade684cb7b53037cc66"
+            "url": "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Linux-aarch64.tar.gz",
+            "sha256": "54a5d5500992deb3239bfee61c9f0ef7646b6f6b231d2c255fdfc16eeb50564c"
           },
           "darwin-amd64": {
-            "url": "https://github.com/bufbuild/buf/releases/download/v1.73.0/buf-Darwin-x86_64.tar.gz",
-            "sha256": "12ededc2a5b55eee89be6f35b5f290938eb4c710109d47746d29fb5fc6c4d66c"
+            "url": "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Darwin-x86_64.tar.gz",
+            "sha256": "1a8d6778176f8d6dfc9182342109a44a8dfafb73f91f5d297276f25960589483"
           },
           "darwin-arm64": {
-            "url": "https://github.com/bufbuild/buf/releases/download/v1.73.0/buf-Darwin-arm64.tar.gz",
-            "sha256": "7eb1b167b729815b470e88d85cc1dbcb5d16bfbe73af248c9ed20cfbc4de060b"
+            "url": "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Darwin-arm64.tar.gz",
+            "sha256": "4bc72e8d823e3b0e27df1715dec2c0c7a1a533bc07b67f98f8fdfbc4007a82ca"
           }
         }
       },
@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.299",
+        "version": "2.1.300",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.299/linux-x64/claude",
-            "sha256": "2d894a4b1bfaaa9aab72aeff7803e3c73bc2510f279a171f6b8f59f72d17d077",
-            "size": 265342136
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.300/linux-x64/claude",
+            "sha256": "674deba0bba9aee479f4503c438b49303b6fdd304b9a471b14977aaec5215453",
+            "size": 266972344
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.299/linux-arm64/claude",
-            "sha256": "4cd5ab006b49dc12a247fed4dbc42a925ad1aea1e711d9aa24587d285ee87c2f",
-            "size": 264626168
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.300/linux-arm64/claude",
+            "sha256": "ae2295ae2da156936bf5831ab01971ce924d0c9a0af174e28d96fffa8d5fa0a6",
+            "size": 266264568
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.299/linux-x64-musl/claude",
-            "sha256": "af9b922a7a018c69eb6de3a9d401b32b6cdfba3c01bf75a5edb6b477ef17f117",
-            "size": 258953576
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.300/linux-x64-musl/claude",
+            "sha256": "426e7b0a3726d656babc943a92392eb3653377587658a240ab442d19e4eef3c9",
+            "size": 260587880
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.299/linux-arm64-musl/claude",
-            "sha256": "3e90af8f81cf7db932bbda3ab2ba57facb1e2a19a43f911b70536bf627472757",
-            "size": 256784472
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.300/linux-arm64-musl/claude",
+            "sha256": "267fecafb9df3dc1ef93f01ea936742455151d38b9bceebc4c12b531df827a2c",
+            "size": 258422872
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.299/darwin-x64/claude",
-            "sha256": "099dcc53dabbbefabed8926dab25b0318775c175a7c87bb6ba6c54fde9f8ece2",
-            "size": 257765072
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.300/darwin-x64/claude",
+            "sha256": "5824fc36863e70bbd070491bb9359e217d3f17b38c45697c085b31a3a67356b3",
+            "size": 259416272
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.299/darwin-arm64/claude",
-            "sha256": "ba5ab7b8c195fa03ab8d5bf3915c76153b576a2c40e79a5c46e265e7ed9744b3",
-            "size": 247931696
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.300/darwin-arm64/claude",
+            "sha256": "475517caa611e3318a2f298fa071287ec98955538df78c58f709ecc01e5ae2d3",
+            "size": 249556880
           }
         }
       },
@@ -295,7 +295,7 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "deslop": {
         "kind": "gitRef",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -578,47 +578,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224",
+        "version": "v1.4.225",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.224/orca-ide-1.4.224.x86_64.rpm",
-            "sha256": "af583eb5ae139b27240e68e9ec5f849b7d6063a4786cc63071b4ff82b60008de"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.225/orca-ide-1.4.225.x86_64.rpm",
+            "sha256": "a7ab3c80e3a1ccb8a730c3971c67e8ae90549f42a28b10c7255f63206e9c5f18"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.224/orca-ide-1.4.224.aarch64.rpm",
-            "sha256": "e344b2f8928ea3f6163716e5d910068b1d71ba9781bfcbc87672531dc9aeb07c"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.225/orca-ide-1.4.225.aarch64.rpm",
+            "sha256": "a508d0e13aede01d82037ee82f9ef4cbfdbaa9879586a60364bae149a1c04feb"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.224"
+        "version": "v1.4.225"
       },
       "react-best-practices": {
         "kind": "gitRef",
