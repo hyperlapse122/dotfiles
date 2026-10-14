@@ -293,6 +293,22 @@ describe("resolveGitHubRelease tagPrefix", () => {
       })) as typeof globalThis.fetch;
   }
 
+  test("requests a 30-release page so large release lists do not time out", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      urls.push(input instanceof Request ? input.url : String(input));
+      return Response.json([{ tag_name: "rust-v0.153.4", assets: [] }]);
+    }) as typeof globalThis.fetch;
+
+    await resolveGitHubRelease(
+      "codex",
+      { kind: "githubRelease", source: "openai/codex", tagPrefix: "rust-v" },
+      undefined,
+    );
+
+    expect(urls).toEqual(["https://api.github.com/repos/openai/codex/releases?per_page=30"]);
+  });
+
   test("resolves the newest release whose tag carries the prefix, skipping other tag trains", async () => {
     stubReleaseList(["marketplace-v1.0.3", "compound-engineering-v3.20.0", "cli-v3.13.1"]);
 
