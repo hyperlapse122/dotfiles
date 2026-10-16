@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "f713f14203cd6420cec13cd7c55c32d598dbab68"
+        "version": "2f8377461fd533f5af782e1fd643783b1067b847"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -516,31 +516,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.10.11",
+        "version": "v2026.10.12",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.11/mise-v2026.10.11-linux-x64",
-            "sha256": "f9612efcddda0ae55b62d3b6f82a6c860d5b54ebee0807d4f1a1d578055e1607"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-x64",
+            "sha256": "72404716768b5b044cbd5170136d3d795cbd592658b6e932b66f0f8d67a54875"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.11/mise-v2026.10.11-linux-arm64",
-            "sha256": "370b4b4cfd740402e9a55aa1a8a01fbb1ac95c50af1207b2db2c5489dd4da0cd"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-arm64",
+            "sha256": "31bbf697b289fde4b5623b223af288edd9ef86298ce9ecff705ac867f6f27e09"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.11/mise-v2026.10.11-macos-x64",
-            "sha256": "7e4328b82d9f8a785500c5624bc7bf36afec9bd9a5fadeca089a51c824f030b5"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-macos-x64",
+            "sha256": "471a885e775cf5022372d4c5c2f426228e8e1f48cdc4dca5cc718547cb390cab"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.11/mise-v2026.10.11-macos-arm64",
-            "sha256": "62e86e51f834899610e9bd0ee37580cfe01fac5fff03002318e714fbdb86faeb"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-macos-arm64",
+            "sha256": "0cb03302051f844c9f9dddc4d53e3c5c9ea5fdd72ee1ca7fd3e3b1a55ac34ddf"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.11/mise-v2026.10.11-linux-x64-musl",
-            "sha256": "2b010104bfedca93b0dd69a8276a4f364bd9236a41d1faceae367d39b5e53f8a"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-x64-musl",
+            "sha256": "0bd4ec393b46a71f2aa8df541214350f9755b862dfa9771c0315a0abde8046e8"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.11/mise-v2026.10.11-linux-arm64-musl",
-            "sha256": "b8994b622e2065e6bb083322bd011fd4111102bfec4883c4ce0336c1e3cb9e0d"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-arm64-musl",
+            "sha256": "c82f1a0ea14192b854301c9f04f29f020a5c6bca3dcd025f868b7a574b546779"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "f713f14203cd6420cec13cd7c55c32d598dbab68"
+        "version": "2f8377461fd533f5af782e1fd643783b1067b847"
       },
       "uv": {
         "kind": "githubRelease",
