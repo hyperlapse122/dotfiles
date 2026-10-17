@@ -156,23 +156,23 @@
       "chezmoi": {
         "kind": "githubRelease",
         "source": "twpayne/chezmoi",
-        "version": "v2.73.1",
+        "version": "v2.73.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.1/chezmoi_2.73.1_linux_amd64.tar.gz",
-            "sha256": "a3f958acb7d0e5d53fa43c2eec9bc8ae3b4fba8bcbfdce29a8881ca3ffc20a53"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.2/chezmoi_2.73.2_linux_amd64.tar.gz",
+            "sha256": "4d7bd8072f15373d5f5c801209bac218527452c8e54f9ae46ba6c5bd4a6eca41"
           },
           "linux-arm64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.1/chezmoi_2.73.1_linux_arm64.tar.gz",
-            "sha256": "e60275b27f505ae2086bfb87b144eacf7377a89803120f6bd933d1852a93b0c6"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.2/chezmoi_2.73.2_linux_arm64.tar.gz",
+            "sha256": "db92b343a32cade0b1d4ff5e30da54c5156f7a580349281e583a5402c57c7bcf"
           },
           "darwin-amd64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.1/chezmoi_2.73.1_darwin_amd64.tar.gz",
-            "sha256": "0ec1869c60752644863bc4690878a290455f0d35c6e9b200ca4a822b35d2be54"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.2/chezmoi_2.73.2_darwin_amd64.tar.gz",
+            "sha256": "c6c3e2a8eb3126c33cef454ad354e580d91290b92003c7bf21608d1e73832fc6"
           },
           "darwin-arm64": {
-            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.1/chezmoi_2.73.1_darwin_arm64.tar.gz",
-            "sha256": "19a8d9778d90476cc2f0463be69e9d82e2b91ba7b2361dbfc5348f243b1ba731"
+            "url": "https://github.com/twpayne/chezmoi/releases/download/v2.73.2/chezmoi_2.73.2_darwin_arm64.tar.gz",
+            "sha256": "b41f5a51700a7dc0b7c2ae02652d42824ee112d3d97cb2f3c725d53e8d9f6b32"
           }
         }
       },
