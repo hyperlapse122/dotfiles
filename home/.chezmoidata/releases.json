@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "101b274dd991f694e1f7024be2157e5f3adf07de"
+        "version": "0317eb8b858c991c57721358daaee19dbe8c814d"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -516,62 +516,62 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.10.12",
+        "version": "v2026.10.13",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-x64",
-            "sha256": "72404716768b5b044cbd5170136d3d795cbd592658b6e932b66f0f8d67a54875"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-linux-x64",
+            "sha256": "94c45523c7b6760b7da704f16051171ca32e8447a849a02266a439a4455e9a12"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-arm64",
-            "sha256": "31bbf697b289fde4b5623b223af288edd9ef86298ce9ecff705ac867f6f27e09"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-linux-arm64",
+            "sha256": "983fabf36625566f216400b907b33b4daca99adb5bc3d3cdab123b5e791575b2"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-macos-x64",
-            "sha256": "471a885e775cf5022372d4c5c2f426228e8e1f48cdc4dca5cc718547cb390cab"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-macos-x64",
+            "sha256": "4e4a996f4747eb59d55497fdd4b0d60d3add9a06c0dc5d65a70402015ee445d0"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-macos-arm64",
-            "sha256": "0cb03302051f844c9f9dddc4d53e3c5c9ea5fdd72ee1ca7fd3e3b1a55ac34ddf"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-macos-arm64",
+            "sha256": "92fd6898dc213808d1c81f0bead9668dbea036e5946c94c0e82554603205a3aa"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-x64-musl",
-            "sha256": "0bd4ec393b46a71f2aa8df541214350f9755b862dfa9771c0315a0abde8046e8"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-linux-x64-musl",
+            "sha256": "6766ee30f68cea686dae555ea999c8e11abb1dc2acc50c41fcf5c0442b5eb9fb"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.12/mise-v2026.10.12-linux-arm64-musl",
-            "sha256": "c82f1a0ea14192b854301c9f04f29f020a5c6bca3dcd025f868b7a574b546779"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-linux-arm64-musl",
+            "sha256": "600bfc6f10542455aae93b3780627b5301e6e688779f09f4ef42852c54ce11df"
           }
         }
       },
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.11.3",
+        "version": "v18.12.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.11.3/omp-linux-x64",
-            "sha256": "01fbb5f08b0ce0d70bd0b1d6655a6ccd59cefcae0f1023e02bb30f9a70bc2d0a"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.0/omp-linux-x64",
+            "sha256": "44c921037279d0572390c05a11f3608e76422d96ae77233be10fb1e63e2f487f"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.11.3/omp-linux-arm64",
-            "sha256": "c39cf4ab3633a7003a37c619744838125a99208d36ca748e59c4e62815170cba"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.0/omp-linux-arm64",
+            "sha256": "39565ecc88f7548955f1fadc5d926becb59661a860ae99cf37e4e1ba03df345e"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.11.3/omp-darwin-x64",
-            "sha256": "42f51af9b9d015a4c422283b803378fceca9a6b0516809797485ade298d07b3a"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.0/omp-darwin-x64",
+            "sha256": "975855513aca8f58381b5bf7663c10cae3ae3f90d10fbed84072b0228e87b5cd"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.11.3/omp-darwin-arm64",
-            "sha256": "d518310d647d467a2c5c3f2d38e34489a761996d766395c03b37c61a2203d02b"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.0/omp-darwin-arm64",
+            "sha256": "27520fa8edc5d9c98b2204a8141f4ab490bfb5ddbf3592e70fc78b3dd0aab1bb"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.11.3/omp-linux-musl-x64",
-            "sha256": "d472de359fcfe9b8cc6a824149572c8708b3b3deecac8f7c122fb2d95ed6f669"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.0/omp-linux-musl-x64",
+            "sha256": "6cd9e8f50e8cf252d892b8194ed6593b2d1466f8faa84f8a6ab4323c6a6c2caf"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.11.3/omp-linux-musl-arm64",
-            "sha256": "34a22d08e5f1e5753a2b46acd2a209a4ad28da90f4824f048b9bcd8f14dc208a"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.0/omp-linux-musl-arm64",
+            "sha256": "9dd0e7d2efccd6f92ba53c5fa8cc9f1516a1102c8b1c6c749af8926dcaf8ba67"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "101b274dd991f694e1f7024be2157e5f3adf07de"
+        "version": "0317eb8b858c991c57721358daaee19dbe8c814d"
       },
       "uv": {
         "kind": "githubRelease",
