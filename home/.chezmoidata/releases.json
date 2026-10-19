@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.303",
+        "version": "2.1.304",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.303/linux-x64/claude",
-            "sha256": "375988f457756524234695cf2d8f64ace99c5f68682e47ea24862a843c191450",
-            "size": 285809912
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-x64/claude",
+            "sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
+            "size": 288730480
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.303/linux-arm64/claude",
-            "sha256": "f384f49826336d4ac0484ac6ac9d8d16f64d244d186ce227cbd7cc088c03315d",
-            "size": 285335616
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-arm64/claude",
+            "sha256": "c487117526509ab6d2ee6013e14f181faf68d6d6afe6bb0d4b2b4a9feca5ecb3",
+            "size": 288612536
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.303/linux-x64-musl/claude",
-            "sha256": "8dfd02ad4590c6f4c419ec73af4f5462223a07f64495e2c2fce45990faf1ede6",
-            "size": 279442960
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-x64-musl/claude",
+            "sha256": "e11074c51f730bd91d0cd9568471d828d6552796b5dbcde10e7aaca19f1650c8",
+            "size": 282384648
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.303/linux-arm64-musl/claude",
-            "sha256": "a0d9d4dcb99a1782cdfc332fed8510467e99efc7ff2f3d7443fea27d9af55e7e",
-            "size": 277560568
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-arm64-musl/claude",
+            "sha256": "d15758462f08940f6d2736cd422e291258b9bcaf09c013b63dcfca6cc69a5316",
+            "size": 280772600
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.303/darwin-x64/claude",
-            "sha256": "6c5d63b43568c5d60963d40f05b0087cb03ba44a90740d27adc505f4157806db",
-            "size": 279275760
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/darwin-x64/claude",
+            "sha256": "f2ae409b46b1bdc1dec7afa12c6a094ff64e7d4ca272ca09f69dd0080c846703",
+            "size": 282334128
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.303/darwin-arm64/claude",
-            "sha256": "d2da3b003dc08b88b7230469014fe3e1dc6fe94bc8f648e89b34175d30269370",
-            "size": 267973136
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/darwin-arm64/claude",
+            "sha256": "b9ac5374839f14abf3f1f45610637c332b5daee5ce0d1634726cef87aab78e6a",
+            "size": 271161296
           }
         }
       },
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "d457567332aa6989e753ea289f30ea2bfbc80bc0"
+        "version": "ddf824aff1e55ba14bd666b30bce3fc69962abe6"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -684,28 +684,28 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "d457567332aa6989e753ea289f30ea2bfbc80bc0"
+        "version": "ddf824aff1e55ba14bd666b30bce3fc69962abe6"
       },
       "uv": {
         "kind": "githubRelease",
         "source": "astral-sh/uv",
-        "version": "0.13.1",
+        "version": "0.13.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.13.1/uv-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "6c86040a8f045ab9adc9e3ec4cdafa03fd00e9a988ed2bf28971c7fc2d0debd0"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "aba5d9e0af3662ee85772c5da147c3824cd6728a50bce6c507ae20672df7e83e"
           },
           "linux-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.13.1/uv-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "345a8308e4d1835cdfaadf692836fd3137a6d45864773f05ad7bf59442b1ba16"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "b7444ae484d951d856b1ea0bae8224bf0ea856e9cefe8bd67c6d3f5d98375c78"
           },
           "darwin-amd64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.13.1/uv-x86_64-apple-darwin.tar.gz",
-            "sha256": "bb7b805bdcf3d0bc8c74ceb94569e6b3e8aa35bd492acdbb9d46bf46d9d4ff6b"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-x86_64-apple-darwin.tar.gz",
+            "sha256": "08f0cb0d63a012ffa07659d1872030c1110fccdd665d49bc3683b0ca262b4a62"
           },
           "darwin-arm64": {
-            "url": "https://github.com/astral-sh/uv/releases/download/0.13.1/uv-aarch64-apple-darwin.tar.gz",
-            "sha256": "cfe454573412ff7380d15fc7dae5997ab53ffce72fce0a78e91ddbc84001acd2"
+            "url": "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-aarch64-apple-darwin.tar.gz",
+            "sha256": "4a5d878cd0db3a57d79eec638c275e71c394e10533ae54c77b33d940866f53b7"
           }
         }
       },
