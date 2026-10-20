@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.304",
+        "version": "2.1.305",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-x64/claude",
-            "sha256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
-            "size": 288730480
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.305/linux-x64/claude",
+            "sha256": "86cb722ab68348877dba7971e4d0c659919e05e6228c05e006e83da320e656ef",
+            "size": 290532720
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-arm64/claude",
-            "sha256": "c487117526509ab6d2ee6013e14f181faf68d6d6afe6bb0d4b2b4a9feca5ecb3",
-            "size": 288612536
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.305/linux-arm64/claude",
+            "sha256": "5265a60217e667b75e126e887b49ac0f168ad8bb13c605c3e3df528519876dc0",
+            "size": 290447544
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-x64-musl/claude",
-            "sha256": "e11074c51f730bd91d0cd9568471d828d6552796b5dbcde10e7aaca19f1650c8",
-            "size": 282384648
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.305/linux-x64-musl/claude",
+            "sha256": "9c517d738c8bd608c0ea97f12ad20655a5f28470c99181d626cba370c1dbddba",
+            "size": 284192368
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/linux-arm64-musl/claude",
-            "sha256": "d15758462f08940f6d2736cd422e291258b9bcaf09c013b63dcfca6cc69a5316",
-            "size": 280772600
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.305/linux-arm64-musl/claude",
+            "sha256": "7fc83af6edf609219dd6412ae2c9a592a1903b912baf61779adc5b41159af333",
+            "size": 282608984
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/darwin-x64/claude",
-            "sha256": "f2ae409b46b1bdc1dec7afa12c6a094ff64e7d4ca272ca09f69dd0080c846703",
-            "size": 282334128
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.305/darwin-x64/claude",
+            "sha256": "af7ad8d6d8b1e49059988f6657d91bb8b9feac127bf8bec005c4c27d0093f153",
+            "size": 284167840
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.304/darwin-arm64/claude",
-            "sha256": "b9ac5374839f14abf3f1f45610637c332b5daee5ce0d1634726cef87aab78e6a",
-            "size": 271161296
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.305/darwin-arm64/claude",
+            "sha256": "ea3ea3c08d2a9634a4651e687fcf900d410c489bce2b00f22bd7352b91ba704f",
+            "size": 272984176
           }
         }
       },
@@ -300,28 +300,28 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "a66a8931c2dd71f1ed6abf6a52b1898a9f389ae4"
+        "version": "29fa9382c9c250d134f6a2f1aa86c01c5f63119d"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
         "source": "docker/docker-credential-helpers",
-        "version": "v0.9.10",
+        "version": "v0.9.12",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.10/docker-credential-secretservice-v0.9.10.linux-amd64",
-            "sha256": "2669b03846eb0c865d6d3c8730243f30801b56469af62175bc3bda1fc803471a"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-secretservice-v0.9.12.linux-amd64",
+            "sha256": "a7031335bebc9a8573fbacae6e56fe7848a360d6746c62a7680849012dac0068"
           },
           "linux-arm64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.10/docker-credential-secretservice-v0.9.10.linux-arm64",
-            "sha256": "7328a46ec8f470ac9a8f954abbbc634ed12ddec3ecdbeac97d47f134af47b76a"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-secretservice-v0.9.12.linux-arm64",
+            "sha256": "8075d247efcb133805d63bebc797833e108c5dca36351d501f87c031c683823f"
           },
           "darwin-amd64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.10/docker-credential-osxkeychain-v0.9.10.darwin-amd64",
-            "sha256": "39daf2d29e30dc2e218bcaaf37ab1aeb06f630e71792dbcfa2afa6fe169e7aaf"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-osxkeychain-v0.9.12.darwin-amd64",
+            "sha256": "2b27d34ad2065a3413740b59359dac56f2e1bd00a40629de51e29fa30cf1390f"
           },
           "darwin-arm64": {
-            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.10/docker-credential-osxkeychain-v0.9.10.darwin-arm64",
-            "sha256": "773d22547e96c3a3a60303ad9dd419bcf1449cc0627de3314be10f612d325b24"
+            "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-osxkeychain-v0.9.12.darwin-arm64",
+            "sha256": "0e43ec22d3fd186b2d69a3c76fd9ac0a1ae4ec4f2c2b2e4ee156e048c8258cb0"
           }
         }
       },
@@ -406,23 +406,23 @@
       "gh": {
         "kind": "githubRelease",
         "source": "cli/cli",
-        "version": "v2.102.0",
+        "version": "v2.102.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_linux_amd64.tar.gz",
-            "sha256": "bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386"
+            "url": "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_linux_amd64.tar.gz",
+            "sha256": "77b9e297e94c50336823d0f84de7ef1be60cba704601fa0d98f129f47a94987b"
           },
           "linux-arm64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_linux_arm64.tar.gz",
-            "sha256": "7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef6484"
+            "url": "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_linux_arm64.tar.gz",
+            "sha256": "5019b3cc6e8a03bb4d88600f8dbda2add8e6407705c159b0c63151036e77a1af"
           },
           "darwin-amd64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_macOS_amd64.zip",
-            "sha256": "b245f24eb2bf5f75b426b4c26da3651a107f8d5b6f4fddfbfccc5679041378b3"
+            "url": "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_macOS_amd64.zip",
+            "sha256": "91c5fbd493274b545b03ef32a89c2a21238393c0c0b1108210967199b3230d9d"
           },
           "darwin-arm64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_macOS_arm64.zip",
-            "sha256": "da922c20d1792e5b2cbf375593d7a658acf034c12c84e007e71c76ef959c337e"
+            "url": "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_macOS_arm64.zip",
+            "sha256": "08bfef98b50c553df122bb34ee8dcf415cae7d3b108891488964a0df07aa2aeb"
           }
         }
       },
@@ -547,31 +547,31 @@
       "omp": {
         "kind": "githubRelease",
         "source": "can1357/oh-my-pi",
-        "version": "v18.12.3",
+        "version": "v18.12.4",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.3/omp-linux-x64",
-            "sha256": "065b5079d65ff6b77d961c935ba808e8f0f569ca6a2cb7b5fb6a1e8da72d7dec"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.4/omp-linux-x64",
+            "sha256": "7cba13c3cf37c3791ac63dfea498fa047408d249a3e39bad37fe882c63bb2792"
           },
           "linux-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.3/omp-linux-arm64",
-            "sha256": "58f7c25e9b729b082192049ada07a31820c8b257325545a5fe232ff1679f1093"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.4/omp-linux-arm64",
+            "sha256": "8c2aa64d280067de81bb40b7ca9f35331c0d0133a6562430c151e3bd855a58ec"
           },
           "darwin-amd64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.3/omp-darwin-x64",
-            "sha256": "73918ae225fa63bc0686081dce4eb90716540ef94e55185b999c697999f7b2c9"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.4/omp-darwin-x64",
+            "sha256": "1d487928b38ce4b28208b21d4df1e680581dfc70fa6887173dd0c8230a6f4607"
           },
           "darwin-arm64": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.3/omp-darwin-arm64",
-            "sha256": "f2a657b3320fcafa23055053940a45b26a8d3254e1412a158838013d670d6ec5"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.4/omp-darwin-arm64",
+            "sha256": "6b3137f1f307733f10565499eaeb747ed2f6acdf2319c8af20ace22939f872e3"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.3/omp-linux-musl-x64",
-            "sha256": "8e1dfb5aa052600ba17f28be5af74626cc8377c7fd5025d72cd7ce910dc83e39"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.4/omp-linux-musl-x64",
+            "sha256": "6dbb0c35e226b23291466d3e764460c226c939e47d5418cba71b5a056fdcafa1"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.3/omp-linux-musl-arm64",
-            "sha256": "cd5497cf754c2278f62fbd1d0c0e5e3dbb01c55201eeb4d20ffba877de00af6d"
+            "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.12.4/omp-linux-musl-arm64",
+            "sha256": "3dff9efde67bbc8867a1446bda42d167ca9a31ad1caea98c40bad31c90c38094"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "a66a8931c2dd71f1ed6abf6a52b1898a9f389ae4"
+        "version": "29fa9382c9c250d134f6a2f1aa86c01c5f63119d"
       },
       "uv": {
         "kind": "githubRelease",
