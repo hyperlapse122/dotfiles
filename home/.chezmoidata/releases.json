@@ -74,7 +74,7 @@
       "android-cli": {
         "kind": "githubRelease",
         "source": "android/skills",
-        "version": "v1.0.16"
+        "version": "v1.0.17"
       },
       "ast-grep": {
         "kind": "githubRelease",
@@ -406,23 +406,23 @@
       "gh": {
         "kind": "githubRelease",
         "source": "cli/cli",
-        "version": "v2.103.0",
+        "version": "v2.103.1",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_linux_amd64.tar.gz",
-            "sha256": "fdd768eb70f6409f80fcfa9f3a1c0adf0fc98d827ab3ce0bed2ac22762c5d786"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_linux_amd64.tar.gz",
+            "sha256": "57500f347b5e84efb6578c9b644eeb3b4e54046762635a939dd0ee2cca1c1add"
           },
           "linux-arm64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_linux_arm64.tar.gz",
-            "sha256": "7f322df34e624d14f5ec0c4acb121fd6dfa14392fdbbd1066aa8e0a05ac3721e"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_linux_arm64.tar.gz",
+            "sha256": "25b1287471a73a3cca32e5d2d2798ae26abea0243db1b9e4a8c1be506fad1bfe"
           },
           "darwin-amd64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_macOS_amd64.zip",
-            "sha256": "64d1734941f104f996271c820daa50e96902c2618f9b4c1e63c41519517a9c6b"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_macOS_amd64.zip",
+            "sha256": "9adb0d23fe3c463e8600ea5288b5ac0ba9438a49678db0b3e955471be1df42c3"
           },
           "darwin-arm64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_macOS_arm64.zip",
-            "sha256": "54be566e9f614bea5de8021e95b9ad33dfee3b9d2ea120c9c294c00defaa5014"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_macOS_arm64.zip",
+            "sha256": "71b5ffc74bb69cdb72ca397d9b486d78755019be33ca927288299197ad7f6807"
           }
         }
       },
@@ -712,23 +712,23 @@
       "wakatime-cli": {
         "kind": "githubRelease",
         "source": "wakatime/wakatime-cli",
-        "version": "v2.27.13",
+        "version": "v2.28.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.13/wakatime-cli-linux-amd64.zip",
-            "sha256": "89aff6d4f5ee067b910d6927ece9ffa1da88cc62f73b340370a86d034865678b"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.28.0/wakatime-cli-linux-amd64.zip",
+            "sha256": "1419d6aea4fa238a9befac328be3b1622f7ca71ea0df020432117431cf485372"
           },
           "linux-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.13/wakatime-cli-linux-arm64.zip",
-            "sha256": "3b223b7d4b1e1a76a2be6ff8a1544c0b8478b9147a3ed36ad525d07d6407ad44"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.28.0/wakatime-cli-linux-arm64.zip",
+            "sha256": "5b74570a741255fde2435cc75b0e34a7b4f73c882baa9554b79d062e53a6a09f"
           },
           "darwin-amd64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.13/wakatime-cli-darwin-amd64.zip",
-            "sha256": "181faed82405e8839ec1bdc9d5b016a2dc7cdc9f8cef81bc20670e45911879d0"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.28.0/wakatime-cli-darwin-amd64.zip",
+            "sha256": "7ad50cb8ac28a1f88a25c9a0547c53d6e21fe442b7a7e8e3c8dcb82812e79cbc"
           },
           "darwin-arm64": {
-            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.27.13/wakatime-cli-darwin-arm64.zip",
-            "sha256": "1ee2d1ab2f622379de7f88d744ae0da0c857c5203e839ea1c7e92cb4a2ed5d2f"
+            "url": "https://github.com/wakatime/wakatime-cli/releases/download/v2.28.0/wakatime-cli-darwin-arm64.zip",
+            "sha256": "8b043ebfb1133eca1649198555e07358e0ae6455616c34511bb3ec84c69cfdf6"
           }
         }
       },
