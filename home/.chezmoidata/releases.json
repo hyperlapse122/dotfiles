@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "8b3326d99fd4b993cb33a24dad8af03175c642c5"
+        "version": "e7fb9647db242b96206978d56e8aff4a68718088"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -359,24 +359,24 @@
       "flutter": {
         "kind": "vendorManifest",
         "source": "https://storage.googleapis.com/flutter_infra_release/releases",
-        "version": "3.47.7",
+        "version": "3.47.8",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz",
-            "sha256": "af7455f540df951184c7953fbe3cf884766e7541dacf8571f9f582db03dd6230"
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.8-stable.tar.xz",
+            "sha256": "baf7dcc5a3dbba60fe863bf493a6cf203195621f7786eaa5a1bba02cd0d87dd2"
           },
           "linux-arm64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz",
-            "sha256": "af7455f540df951184c7953fbe3cf884766e7541dacf8571f9f582db03dd6230",
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.8-stable.tar.xz",
+            "sha256": "baf7dcc5a3dbba60fe863bf493a6cf203195621f7786eaa5a1bba02cd0d87dd2",
             "emulated": true
           },
           "darwin-amd64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.47.7-stable.zip",
-            "sha256": "17d39b000a5d0681e3f7b61a105a36f6f31dd41ab9073f625fd466f38035f901"
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.47.8-stable.zip",
+            "sha256": "b8a3c255a51a8c0c0943a4d5bdf9b26008c34f02febf69640c8aab413afd896f"
           },
           "darwin-arm64": {
-            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.7-stable.zip",
-            "sha256": "dd9da574c3168460550117eb0e8dd0313ae934fabf64a82a6d557fff5fd1422e"
+            "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.47.8-stable.zip",
+            "sha256": "6114edc2dae3636cfefb7e4456a4510399ee856e324149b34dbacb509e329d05"
           }
         }
       },
@@ -406,23 +406,23 @@
       "gh": {
         "kind": "githubRelease",
         "source": "cli/cli",
-        "version": "v2.103.1",
+        "version": "v2.103.2",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_linux_amd64.tar.gz",
-            "sha256": "57500f347b5e84efb6578c9b644eeb3b4e54046762635a939dd0ee2cca1c1add"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_linux_amd64.tar.gz",
+            "sha256": "62ccf747115ddc61237efffdde66a3c8f70ba249433dc64f70801089b59c59c8"
           },
           "linux-arm64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_linux_arm64.tar.gz",
-            "sha256": "25b1287471a73a3cca32e5d2d2798ae26abea0243db1b9e4a8c1be506fad1bfe"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_linux_arm64.tar.gz",
+            "sha256": "4c3e99a50bd8b181a3fe9d69b25dd978bac768148d88f01507c6b4d1ef61a443"
           },
           "darwin-amd64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_macOS_amd64.zip",
-            "sha256": "9adb0d23fe3c463e8600ea5288b5ac0ba9438a49678db0b3e955471be1df42c3"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_macOS_amd64.zip",
+            "sha256": "2dc7f1fc4761f96732995f6e4f4c6b4d705f2635da4126620c8b30eaa67b9c98"
           },
           "darwin-arm64": {
-            "url": "https://github.com/cli/cli/releases/download/v2.103.1/gh_2.103.1_macOS_arm64.zip",
-            "sha256": "71b5ffc74bb69cdb72ca397d9b486d78755019be33ca927288299197ad7f6807"
+            "url": "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_macOS_arm64.zip",
+            "sha256": "5416000f5d17580a187339e0c4068a01ca5c87f7d4fe6ca64933696f967bc418"
           }
         }
       },
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "8b3326d99fd4b993cb33a24dad8af03175c642c5"
+        "version": "e7fb9647db242b96206978d56e8aff4a68718088"
       },
       "uv": {
         "kind": "githubRelease",
