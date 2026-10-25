@@ -290,7 +290,7 @@
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
-        "version": "compound-engineering-v3.32.0"
+        "version": "compound-engineering-v3.32.1"
       },
       "computer-use": {
         "kind": "githubRelease",
