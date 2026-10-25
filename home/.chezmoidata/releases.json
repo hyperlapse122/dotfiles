@@ -46,28 +46,28 @@
       "android": {
         "kind": "vendorManifest",
         "source": "https://dl.google.com/android/cli/latest",
-        "version": "1.0.16625370",
+        "version": "1.1.16717390",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://dl.google.com/android/cli/1.0.16625370/linux_x86_64/android",
-            "sha256": "c8f88b14aa00e44a542dd3597cbdcb015e55511e33c2dd69920f41f5b086e228",
+            "url": "https://dl.google.com/android/cli/1.1.16717390/linux_x86_64/android",
+            "sha256": "43204dcc42955f4698b7a7ca945f26c26f594f9239f5f8e11b3b73d4ceaa11ae",
             "size": 5042944
           },
           "linux-arm64": {
-            "url": "https://dl.google.com/android/cli/1.0.16625370/linux_x86_64/android",
-            "sha256": "c8f88b14aa00e44a542dd3597cbdcb015e55511e33c2dd69920f41f5b086e228",
+            "url": "https://dl.google.com/android/cli/1.1.16717390/linux_x86_64/android",
+            "sha256": "43204dcc42955f4698b7a7ca945f26c26f594f9239f5f8e11b3b73d4ceaa11ae",
             "size": 5042944,
             "emulated": true
           },
           "darwin-amd64": {
-            "url": "https://dl.google.com/android/cli/1.0.16625370/darwin_x86_64/android",
-            "sha256": "0a2788260a88b78191f23155ce21be0b4b2d7f0801243b555dfe482a47ef79dd",
-            "size": 4710608
+            "url": "https://dl.google.com/android/cli/1.1.16717390/darwin_x86_64/android",
+            "sha256": "37f4b613b859ab49c3598ecf28b75526044ea29dcfac73145dc58e52143b5335",
+            "size": 4710560
           },
           "darwin-arm64": {
-            "url": "https://dl.google.com/android/cli/1.0.16625370/darwin_arm64/android",
-            "sha256": "a9601000fae0f40d9428b05b57ff11f101428581ec0e54b9eb5e3daf8c0492ca",
-            "size": 3651056
+            "url": "https://dl.google.com/android/cli/1.1.16717390/darwin_arm64/android",
+            "sha256": "564d8ad922e8026b75915b3a7e8dafa9c2da7a209bde005edaf5c30e97a5aea5",
+            "size": 3652688
           }
         }
       },
@@ -295,12 +295,12 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "9580c23696ac8d7abed0c166f2f9918800afb819"
+        "version": "99b609a72323b70204eab407c622f436e858e112"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -578,47 +578,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239",
+        "version": "v1.4.240",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.239/orca-ide-1.4.239.x86_64.rpm",
-            "sha256": "41844a2cefdedd1f0a3f5952b559cd2a4599652709a850f2982e231b5b89f4af"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.240/orca-ide-1.4.240.x86_64.rpm",
+            "sha256": "784fd1c37b0ddbe2dd880bdd0b70ec954fa6ae4e34573e3121967bbe3e528677"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.239/orca-ide-1.4.239.aarch64.rpm",
-            "sha256": "4bd0ce2d3fb2c61138f90cb505bd50ebf58c5ec2d1414463d8a11103bcf972f0"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.240/orca-ide-1.4.240.aarch64.rpm",
+            "sha256": "f9e966b0d82b121f43631e94d4561b93bd6a7ac69ed1ecb3fb57f043af1bfb84"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.239"
+        "version": "v1.4.240"
       },
       "react-best-practices": {
         "kind": "gitRef",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "9580c23696ac8d7abed0c166f2f9918800afb819"
+        "version": "99b609a72323b70204eab407c622f436e858e112"
       },
       "uv": {
         "kind": "githubRelease",
