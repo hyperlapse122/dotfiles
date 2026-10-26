@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.39.3",
+        "version": "v0.39.4",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-x64",
-            "sha256": "2628338df946e186a7b0267d16e7e5b5ebe567adbc18084c59504227f05b274f"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-x64",
+            "sha256": "aa82c8ee81a38b8ad9ba61af02ced6dcbbb8af36dd8b2b479384177f8aa077a6"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-arm64",
-            "sha256": "6f86b0d8ba2d92bd52f72ed83424b5232d8f572e7f75b78e6331a64cb6b7439e"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-arm64",
+            "sha256": "922b60dbd9f5c8b5c0f39b453bfe8cbf61b83abd487344028a508e8c4dca7883"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-darwin-x64",
-            "sha256": "b8dd9f70bc68959a502407c13fd7394d7647a12d6740c46710d94e94a90904a4"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-darwin-x64",
+            "sha256": "21522a8ec34063fa294b0c928ad03d3485f1821ebe22f9da2b47b89963f731af"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-darwin-arm64",
-            "sha256": "87bab1c94acc93d66fdceef2d0f894ffcdb31065402d677b6626a5f22db2517c"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-darwin-arm64",
+            "sha256": "0317ce35172905c775c25b393914bc259701a464877aab9753ec8896f6e38bf7"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-musl-x64",
-            "sha256": "f2c057b4b1b3c2be688b7ee483a9313f4cccc7dfb8adfd0f017cb57668b6465d"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-musl-x64",
+            "sha256": "34a8be7c062a99164fc02322f22ac5f42870206cc7b59bb40ef045958ad3705b"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-musl-arm64",
-            "sha256": "4e39fcee3cf1d1160fb1c1f63de015730905c6b799a8e6b84bfd045046233afa"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-musl-arm64",
+            "sha256": "a532c13bdf40c6b8755cc52c711f63fd022c9e7403fce7a16b8fe8487c88c595"
           }
         }
       },
@@ -295,7 +295,7 @@
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "deslop": {
         "kind": "gitRef",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -578,47 +578,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240",
+        "version": "v1.4.241",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.240/orca-ide-1.4.240.x86_64.rpm",
-            "sha256": "784fd1c37b0ddbe2dd880bdd0b70ec954fa6ae4e34573e3121967bbe3e528677"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.241/orca-ide-1.4.241.x86_64.rpm",
+            "sha256": "072def733e1fc2ceb3991f6de84dbaa14605a1945145485e4c12047ffda1b9a1"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.240/orca-ide-1.4.240.aarch64.rpm",
-            "sha256": "f9e966b0d82b121f43631e94d4561b93bd6a7ac69ed1ecb3fb57f043af1bfb84"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.241/orca-ide-1.4.241.aarch64.rpm",
+            "sha256": "dcf4e238c8738111a6f77a5fdc149dafeedd797b2baeced192dd06cbeae0dac6"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.240"
+        "version": "v1.4.241"
       },
       "react-best-practices": {
         "kind": "gitRef",
@@ -633,23 +633,23 @@
       "rust-analyzer": {
         "kind": "githubRelease",
         "source": "rust-lang/rust-analyzer",
-        "version": "2026-10-19",
+        "version": "2026-10-26",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-19/rust-analyzer-x86_64-unknown-linux-gnu.gz",
-            "sha256": "8fde1c9dae81459f98e99eedae3654846a9166abea686306c26e57773be558da"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-26/rust-analyzer-x86_64-unknown-linux-gnu.gz",
+            "sha256": "4c83773525f93b636ed79761389568b4d2a89c05fa7ecc440245032d49ad80ce"
           },
           "linux-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-19/rust-analyzer-aarch64-unknown-linux-gnu.gz",
-            "sha256": "d31ee384ab788b9abd8e7aa8e1322f23e6cd4310471d373e9a79ce4656e21896"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-26/rust-analyzer-aarch64-unknown-linux-gnu.gz",
+            "sha256": "1b225c4c9ae329ca96e8a75a5bbcb5562a7f1d25c57c8b55d3e02299a3dbe836"
           },
           "darwin-amd64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-19/rust-analyzer-x86_64-apple-darwin.gz",
-            "sha256": "bdfd46e82731a8d3502d852d28b6462c1f1c13eed0b3e76bbcf1ba839028249c"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-26/rust-analyzer-x86_64-apple-darwin.gz",
+            "sha256": "b3e4904877bcf7013a4a342c449cff1bf0ea0b91d5a1a30ac8df3d32142519c0"
           },
           "darwin-arm64": {
-            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-19/rust-analyzer-aarch64-apple-darwin.gz",
-            "sha256": "eedad08a96f7bf92afd0890463787337d17591ea2e3df216033c6bc3ccc9d802"
+            "url": "https://github.com/rust-lang/rust-analyzer/releases/download/2026-10-26/rust-analyzer-aarch64-apple-darwin.gz",
+            "sha256": "8fb90cb58f5910d8d8b24ac1a93cca49f053365cbf0eb3c682144ad0a0027dcf"
           }
         }
       },
