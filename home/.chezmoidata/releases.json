@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.39.2",
+        "version": "v0.39.3",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.2/agent-browser-linux-x64",
-            "sha256": "0f68e74e792bf7d0814c58ee4b86dbcacfd3997c27805cd12c2d15e0ca38638e"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-x64",
+            "sha256": "2628338df946e186a7b0267d16e7e5b5ebe567adbc18084c59504227f05b274f"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.2/agent-browser-linux-arm64",
-            "sha256": "72be7bfed76bb03142d9fba9f3b0e5e9ae535ff1789f6be6bdfc26f8daa136e5"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-arm64",
+            "sha256": "6f86b0d8ba2d92bd52f72ed83424b5232d8f572e7f75b78e6331a64cb6b7439e"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.2/agent-browser-darwin-x64",
-            "sha256": "c851f2eaf1a9b42567c53b4e287b62afbffa8cfef5ff2d7e3e51b36db51e3ad7"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-darwin-x64",
+            "sha256": "b8dd9f70bc68959a502407c13fd7394d7647a12d6740c46710d94e94a90904a4"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.2/agent-browser-darwin-arm64",
-            "sha256": "6ae802a41130e49d0515d85db296bc170de4314b4560ca446b6c51091117b7b8"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-darwin-arm64",
+            "sha256": "87bab1c94acc93d66fdceef2d0f894ffcdb31065402d677b6626a5f22db2517c"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.2/agent-browser-linux-musl-x64",
-            "sha256": "60914f5e3e064e54e9d07da2fa235589e7fcf84efe278cd94fc320746b2b81d7"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-musl-x64",
+            "sha256": "f2c057b4b1b3c2be688b7ee483a9313f4cccc7dfb8adfd0f017cb57668b6465d"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.2/agent-browser-linux-musl-arm64",
-            "sha256": "1b2650c25c5dc1aadec3d3caa7d8fb435791e2ba30ee7dd9940f6e87b7f2974a"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.3/agent-browser-linux-musl-arm64",
+            "sha256": "4e39fcee3cf1d1160fb1c1f63de015730905c6b799a8e6b84bfd045046233afa"
           }
         }
       },
