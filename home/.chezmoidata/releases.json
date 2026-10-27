@@ -285,7 +285,7 @@
       "composition-patterns": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
+        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
       },
       "compound-engineering": {
         "kind": "githubRelease",
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "ab69380dd50ee47d426b35cb8369cffdddafc218"
+        "version": "519d36aa98955bf680db01bcde5fdfba686dc901"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -623,12 +623,12 @@
       "react-best-practices": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
+        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
       },
       "react-view-transitions": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
+        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
       },
       "rust-analyzer": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "ab69380dd50ee47d426b35cb8369cffdddafc218"
+        "version": "519d36aa98955bf680db01bcde5fdfba686dc901"
       },
       "uv": {
         "kind": "githubRelease",
@@ -758,7 +758,7 @@
       "web-design-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
+        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
       },
       "winbox": {
         "kind": "vendorManifest",
@@ -768,7 +768,7 @@
       "writing-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "063bee94c3f4df8453406c830b0a7df0f2860278"
+        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
       }
     }
   }
