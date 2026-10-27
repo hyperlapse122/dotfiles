@@ -290,7 +290,7 @@
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
-        "version": "compound-engineering-v3.33.0"
+        "version": "compound-engineering-v3.33.1"
       },
       "computer-use": {
         "kind": "githubRelease",
@@ -429,7 +429,7 @@
       "glab": {
         "kind": "gitlabRelease",
         "source": "https://gitlab.com/api/v4/projects/34675721",
-        "version": "v1.124.0"
+        "version": "v1.125.0"
       },
       "helm": {
         "kind": "githubRelease",
@@ -516,31 +516,31 @@
       "mise": {
         "kind": "githubRelease",
         "source": "jdx/mise",
-        "version": "v2026.10.20",
+        "version": "v2026.10.21",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.20/mise-v2026.10.20-linux-x64",
-            "sha256": "2eb27467b6f369915ee76f18d66a0696cdb5c20e7ecc8cb49c2bfaca60f0fc9c"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64",
+            "sha256": "ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07"
           },
           "linux-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.20/mise-v2026.10.20-linux-arm64",
-            "sha256": "81047ebf136016297f4515132265c3e5fc052f2c4090130a4e8d68fd64b96b57"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-arm64",
+            "sha256": "a7c96627e56c075543fe1c1aafeb289d2588d6ddfd4d705fce4ae140c57e190c"
           },
           "darwin-amd64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.20/mise-v2026.10.20-macos-x64",
-            "sha256": "98b031e88eb0fd33c1507acb538f429747d26b770cd3cfe257408ec104ac9f6d"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-macos-x64",
+            "sha256": "5dde6e3fcda4d8a68b95cc2180dacd58e7b940f86e4579991e13540a5d009055"
           },
           "darwin-arm64": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.20/mise-v2026.10.20-macos-arm64",
-            "sha256": "7acfdbf412c8ec5b0d919d277417648c0534333d55f0242d5f9520d0d8ca7cc9"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-macos-arm64",
+            "sha256": "b20d30788a819fade398a1cb92aee56c383e3c34324162ec39fb8567dee79ba6"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.20/mise-v2026.10.20-linux-x64-musl",
-            "sha256": "bfeb49cc86189d259e4eadbde30841e6bb7e9b4d669588fc2cc746e31d1cf632"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-x64-musl",
+            "sha256": "2e0a76d246a2189505e3b116f0c85ec8ac7d42611a7eb805216f2c058aa8a4c7"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/jdx/mise/releases/download/v2026.10.20/mise-v2026.10.20-linux-arm64-musl",
-            "sha256": "bc9c9eeed54f4a26fc88b4acc9a61804cbab4cd95c7d4d29cd47b6e3f1ea52c8"
+            "url": "https://github.com/jdx/mise/releases/download/v2026.10.21/mise-v2026.10.21-linux-arm64-musl",
+            "sha256": "5ff3db329eb4e9c97e826b7303e333ce740f52d0ca33c0545435d6e484be0bcb"
           }
         }
       },
@@ -679,7 +679,7 @@
       "teamviewer": {
         "kind": "vendorManifest",
         "source": "https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm",
-        "version": "15.82.6"
+        "version": "15.83.3"
       },
       "unslop": {
         "kind": "gitRef",
