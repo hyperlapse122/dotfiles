@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.39.4",
+        "version": "v0.40.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-x64",
-            "sha256": "aa82c8ee81a38b8ad9ba61af02ced6dcbbb8af36dd8b2b479384177f8aa077a6"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-x64",
+            "sha256": "da26cc8029c004325b960fa955951063380cb61e622cc580fd5adf3aa89e4676"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-arm64",
-            "sha256": "922b60dbd9f5c8b5c0f39b453bfe8cbf61b83abd487344028a508e8c4dca7883"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-arm64",
+            "sha256": "f33b4dd9bd7707ad952125937f9de18f93548c5d51283b18092fe21ced6b9e53"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-darwin-x64",
-            "sha256": "21522a8ec34063fa294b0c928ad03d3485f1821ebe22f9da2b47b89963f731af"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-darwin-x64",
+            "sha256": "478cba056938c5cde286fbeea3994a8b8144f2e18f054684b93abb80c0340d25"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-darwin-arm64",
-            "sha256": "0317ce35172905c775c25b393914bc259701a464877aab9753ec8896f6e38bf7"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-darwin-arm64",
+            "sha256": "b064c9107a0431c76d8916e47c2c8ac322f49c2b2720d6c9036ab538ec1ed911"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-musl-x64",
-            "sha256": "34a8be7c062a99164fc02322f22ac5f42870206cc7b59bb40ef045958ad3705b"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-musl-x64",
+            "sha256": "aeebf976eb429064efb10179ccdf737ec7d798c019bae7067ce2751c9c6e176a"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.39.4/agent-browser-linux-musl-arm64",
-            "sha256": "a532c13bdf40c6b8755cc52c711f63fd022c9e7403fce7a16b8fe8487c88c595"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-musl-arm64",
+            "sha256": "3d4352c0b39f173896aa12af0e63d5905ac8ce7c95575fe6f1f93ce21f9b9e26"
           }
         }
       },
@@ -179,37 +179,37 @@
       "claude": {
         "kind": "vendorManifest",
         "source": "https://downloads.claude.ai/claude-code-releases",
-        "version": "2.1.311",
+        "version": "2.1.312",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.311/linux-x64/claude",
-            "sha256": "86dc1fcc69498159eaf15f446613e847010f9036bfbbdffd4c49350be8489ada",
-            "size": 293776752
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.312/linux-x64/claude",
+            "sha256": "4f4178ce41d83e23341ebfbaecdbcf8ea6bf7baea0690025abe49eeec3a5d01d",
+            "size": 293592432
           },
           "linux-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.311/linux-arm64/claude",
-            "sha256": "2e2496c9a8065df93acb0fca2d341f59a6b8777649b2e025ab8c9bcd5eef61f3",
-            "size": 293658808
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.312/linux-arm64/claude",
+            "sha256": "dc4af28917455e009d26704b82a438353a06149e825b6cdf782908b2d28661f5",
+            "size": 293462200
           },
           "linux-amd64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.311/linux-x64-musl/claude",
-            "sha256": "cd40dd327145ee47aa0deacd571801c1d782388f709d71242eee6b91de8ed11f",
-            "size": 287442392
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.312/linux-x64-musl/claude",
+            "sha256": "78adef63924b762580b039c9ff0dd2ae44eb06171d467db62fd9040442505f76",
+            "size": 287258072
           },
           "linux-arm64-musl": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.311/linux-arm64-musl/claude",
-            "sha256": "172150e3f9ea07e8e2e2e29862d7d9a25f5c234d8e909e4063df237665bf09b9",
-            "size": 285822152
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.312/linux-arm64-musl/claude",
+            "sha256": "62555d1d87e4fff49298b70f306ef851fa167fc58b179958680f7c4d407a8c5c",
+            "size": 285625544
           },
           "darwin-amd64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.311/darwin-x64/claude",
-            "sha256": "d34e1cb82015b050471a97574aa6ea6f698ecf3a97a61c980961f43ad9f838f5",
-            "size": 287420928
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.312/darwin-x64/claude",
+            "sha256": "9534770e162cfd6e39301d9ab775affce214df032a68484085bdbab966a7f8cf",
+            "size": 287239296
           },
           "darwin-arm64": {
-            "url": "https://downloads.claude.ai/claude-code-releases/2.1.311/darwin-arm64/claude",
-            "sha256": "85d8c08707fcfd1e78ffa0204eefbc6ec9e4fe22f375fb2767ef85d957ed3161",
-            "size": 276185504
+            "url": "https://downloads.claude.ai/claude-code-releases/2.1.312/darwin-arm64/claude",
+            "sha256": "6b5ec691195e551b02c41df9f7d723f4ea61eaa03c2df90acefe3736f1aeb620",
+            "size": 275988512
           }
         }
       },
@@ -239,53 +239,53 @@
       "codex": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.164.0",
+        "version": "rust-v0.165.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "90dd0b03b28afcb7fa733a4f73b413db2916a47347efd43fb669cc1c774ee8e4"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "be635d3486a5bd060d0fff582ae6d30160280c31344dd85719707fa920e187f0"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "29a507a2a3fd8f6cd94b96b762d281d299d15d7902dee6132d314b78cf9108eb"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "6522e056d0be7f531da915c9a81ae05bc70811b782542499cc0a9776d3abf5d3"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-x86_64-apple-darwin.tar.gz",
-            "sha256": "de6bbc013c56337f6ddd3f26dfbfd62aad5924cb68cd5ef6430538922bfa0e75"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-x86_64-apple-darwin.tar.gz",
+            "sha256": "f46451741936ebdf5201b8becd0820a41be2a01d271b98703e0d9a1670c99993"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-aarch64-apple-darwin.tar.gz",
-            "sha256": "aa8299c169d80111aac05543ad2621c9bdbedb9bc252c905fe3f5a5baf9a4142"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-aarch64-apple-darwin.tar.gz",
+            "sha256": "78ea9c178d2dc8fde71d6494df3b9eab902fd6d6de0a84e65234220d93bb6144"
           }
         }
       },
       "codex-code-mode-host": {
         "kind": "githubRelease",
         "source": "openai/codex",
-        "version": "rust-v0.164.0",
+        "version": "rust-v0.165.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
-            "sha256": "feade7026436baa4e82e898050c7ef82a8adbd98163dc504771275b5ef224f2f"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+            "sha256": "9577b09b2a546eeb3da8a09807de6d58fbaa207755256390113772ea4f05235e"
           },
           "linux-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
-            "sha256": "0e0bdde24d5b31b05519693635baa9c4f2dc4fe7eee31c67b92155f190dd32d2"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+            "sha256": "400956c325a2118768029f235958b7d2fd2ea4e59c5466d336fb4fb7f0e94b61"
           },
           "darwin-amd64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
-            "sha256": "50f93d5413647488940aa23db9b1c822ee86f2c45fa37af34993e992c9848211"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
+            "sha256": "adf4ef991fccc0b5a6afdda9c9bf88b233aaded13edf51e4523ff8d959c8cb8d"
           },
           "darwin-arm64": {
-            "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
-            "sha256": "7bc3ca697567bc884a76233999c46cb22b023b09f2d4d4ab3518f1354c64e415"
+            "url": "https://github.com/openai/codex/releases/download/rust-v0.165.0/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+            "sha256": "d861a7dd3656e91d04d3753f2ca5624f100e37401993b299661ab6631bda8610"
           }
         }
       },
       "composition-patterns": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
+        "version": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62"
       },
       "compound-engineering": {
         "kind": "githubRelease",
@@ -300,7 +300,7 @@
       "deslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "ab1f702ce8e8b6557edb56b09f52cde8bfb83f17"
+        "version": "c742dd61706fbacc1b95f1a20b7b988cf096ce6c"
       },
       "docker-credential-helpers": {
         "kind": "githubRelease",
@@ -623,12 +623,12 @@
       "react-best-practices": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
+        "version": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62"
       },
       "react-view-transitions": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
+        "version": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62"
       },
       "rust-analyzer": {
         "kind": "githubRelease",
@@ -684,7 +684,7 @@
       "unslop": {
         "kind": "gitRef",
         "source": "cursor/plugins",
-        "version": "ab1f702ce8e8b6557edb56b09f52cde8bfb83f17"
+        "version": "c742dd61706fbacc1b95f1a20b7b988cf096ce6c"
       },
       "uv": {
         "kind": "githubRelease",
@@ -758,7 +758,7 @@
       "web-design-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
+        "version": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62"
       },
       "winbox": {
         "kind": "vendorManifest",
@@ -768,7 +768,7 @@
       "writing-guidelines": {
         "kind": "gitRef",
         "source": "vercel-labs/agent-skills",
-        "version": "6ec269328bc400712ee225a173a14b6b29128df7"
+        "version": "1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62"
       }
     }
   }
