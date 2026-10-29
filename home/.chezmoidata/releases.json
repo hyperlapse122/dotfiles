@@ -15,31 +15,31 @@
       "agent-browser": {
         "kind": "githubRelease",
         "source": "vercel-labs/agent-browser",
-        "version": "v0.40.0",
+        "version": "v0.41.0",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-x64",
-            "sha256": "da26cc8029c004325b960fa955951063380cb61e622cc580fd5adf3aa89e4676"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.41.0/agent-browser-linux-x64",
+            "sha256": "399c7e9f06bd29aa933fdf25c0bd958eea06927fc0ce6f536ba6347aabd64628"
           },
           "linux-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-arm64",
-            "sha256": "f33b4dd9bd7707ad952125937f9de18f93548c5d51283b18092fe21ced6b9e53"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.41.0/agent-browser-linux-arm64",
+            "sha256": "e196e9cabe6cb1b01bd5912973628361b9f40a332683a12426abad007f0d3589"
           },
           "darwin-amd64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-darwin-x64",
-            "sha256": "478cba056938c5cde286fbeea3994a8b8144f2e18f054684b93abb80c0340d25"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.41.0/agent-browser-darwin-x64",
+            "sha256": "f108d4aa02f41eee05d6b1b05817475fd5d576d802826783ef80800da16f33e2"
           },
           "darwin-arm64": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-darwin-arm64",
-            "sha256": "b064c9107a0431c76d8916e47c2c8ac322f49c2b2720d6c9036ab538ec1ed911"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.41.0/agent-browser-darwin-arm64",
+            "sha256": "a402fef2489c221b17522aa21f103ca5dc47f00ff5879d4a72c39881544730ab"
           },
           "linux-amd64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-musl-x64",
-            "sha256": "aeebf976eb429064efb10179ccdf737ec7d798c019bae7067ce2751c9c6e176a"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.41.0/agent-browser-linux-musl-x64",
+            "sha256": "9585897e9453517683a4ca42f3c3f8d8376282f3160268d911ed219b2e0ad62a"
           },
           "linux-arm64-musl": {
-            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.40.0/agent-browser-linux-musl-arm64",
-            "sha256": "3d4352c0b39f173896aa12af0e63d5905ac8ce7c95575fe6f1f93ce21f9b9e26"
+            "url": "https://github.com/vercel-labs/agent-browser/releases/download/v0.41.0/agent-browser-linux-musl-arm64",
+            "sha256": "77d0dd11dd5e2e9b30e4987603960c2a3f9b4794af782292259a90f3cc1010a1"
           }
         }
       },
@@ -290,12 +290,12 @@
       "compound-engineering": {
         "kind": "githubRelease",
         "source": "everyinc/compound-engineering-plugin",
-        "version": "compound-engineering-v3.33.1"
+        "version": "compound-engineering-v3.33.2"
       },
       "computer-use": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "deslop": {
         "kind": "gitRef",
@@ -454,7 +454,7 @@
       "linear-tickets": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "linux-enable-ir-emitter": {
         "kind": "githubRelease",
@@ -578,47 +578,47 @@
       "orca-cli": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "orca-emulator": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "orca-emulator-android": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "orca-ide": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243",
+        "version": "v1.4.244",
         "artifacts": {
           "linux-amd64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.243/orca-ide-1.4.243.x86_64.rpm",
-            "sha256": "2091ba152f90fa10d839c3f539185f39f52a66efeadb97daf15bb0374c06b659"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.244/orca-ide-1.4.244.x86_64.rpm",
+            "sha256": "f2f50eeab7ee0a96927b391d489971e61a1b3bdac86406672705df4bd3365908"
           },
           "linux-arm64": {
-            "url": "https://github.com/stablyai/orca/releases/download/v1.4.243/orca-ide-1.4.243.aarch64.rpm",
-            "sha256": "3ea466b6717f398c3f03da475c2f168b8747d8851216ce0992f6ce975606c0f6"
+            "url": "https://github.com/stablyai/orca/releases/download/v1.4.244/orca-ide-1.4.244.aarch64.rpm",
+            "sha256": "bfd236d2bf952c4eed07457192ab67226e30915e7c76187764cc20eea1054924"
           }
         }
       },
       "orca-linear": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "orca-per-workspace-env": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "orchestration": {
         "kind": "githubRelease",
         "source": "stablyai/orca",
-        "version": "v1.4.243"
+        "version": "v1.4.244"
       },
       "react-best-practices": {
         "kind": "gitRef",
