@@ -1,13 +1,15 @@
 {
   "ceOverlayRebase": {
-    "target": "compound-engineering-v3.26.3",
-    "status": "idle",
+    "target": "compound-engineering-v3.34.0",
+    "status": "blocked-config",
     "attempts": 0,
-    "firstAttempt": null,
-    "lastAttempt": null,
+    "firstAttempt": "2026-10-31T06:39:09.000Z",
+    "lastAttempt": "2026-10-31T06:39:09.000Z",
     "notBefore": null,
-    "failureClass": null,
-    "missing": [],
-    "issue": null
+    "failureClass": "configuration",
+    "missing": [
+      "P1"
+    ],
+    "issue": 595
   }
 }
