@@ -1,12 +1,13 @@
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
 import json
 import os
-import io
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import tarfile
 import threading
 import tomllib
 import unittest
@@ -77,10 +78,12 @@ class PersonalAppsTest(unittest.TestCase):
         self.addCleanup(self.stop_server)
         self.base_url = "http://127.0.0.1:" + str(self.server.server_port)
         self.apps = json.loads((self.source / ".chezmoidata" / "personal-apps.json").read_text(encoding="utf-8"))
-        # These fixtures exercise omp independently of other declared applications.
+        self.archive_apps = {
+            name: self.apps["personalApps"][name] for name in ("gh", "ghq")
+        }
+        # Raw-file fixtures declare only their local application; no public downloads.
         self.apps["personalApps"] = {"omp": self.apps["personalApps"]["omp"]}
-        (self.source / ".chezmoidata" / "personal-apps.json").write_text(
-            json.dumps(self.apps), encoding="utf-8")
+        self.write_apps()
         self.set_pin()
         self.binary = self.home / ".local" / "bin" / ("omp.exe" if os.name == "nt" else "omp")
 
@@ -93,11 +96,46 @@ class PersonalAppsTest(unittest.TestCase):
         checksum = checksum or hashlib.sha256(self.payloads[path]).hexdigest()
         self.locks = {"personalAppLocks": {"omp": {
             "tag": "fixture", "targets": {
-                target: {"url": self.base_url + path, "sha256": checksum}
+                target: {"url": self.base_url + path, "sha256": checksum, "kind": "file"}
                 for target in self.apps["personalApps"]["omp"]["targets"]
             },
         }}}
         self.write_locks()
+
+    def write_apps(self):
+        (self.source / ".chezmoidata/personal-apps.json").write_text(
+            json.dumps(self.apps), encoding="utf-8")
+
+    def add_archive(self, format, *, path="/gh", member="release/bin/gh", payload=b"fixture gh\n",
+                    checksum=None, pin_member=None):
+        archive = io.BytesIO()
+        if format == "zip":
+            with zipfile.ZipFile(archive, "w") as stream:
+                stream.writestr(member, payload)
+                stream.writestr("release/share/unselected.txt", b"not installed")
+        else:
+            with tarfile.open(fileobj=archive, mode="w:gz") as stream:
+                for name, content in ((member, payload), ("release/share/unselected.txt", b"not installed")):
+                    info = tarfile.TarInfo(name)
+                    info.size = len(content)
+                    stream.addfile(info, io.BytesIO(content))
+        self.payloads[path] = archive.getvalue()
+        targets = self.apps["personalApps"]["omp"]["targets"]
+        self.apps["personalApps"]["gh"] = {
+            "command": "gh", "repository": "cli/cli",
+            "targets": {target: {
+                "asset": "fixture", "kind": "archive-file", "format": format, "path": member,
+            } for target in targets},
+        }
+        self.locks["personalAppLocks"]["gh"] = {
+            "tag": "fixture", "targets": {target: {
+                "url": self.base_url + path, "sha256": checksum or hashlib.sha256(self.payloads[path]).hexdigest(),
+                "kind": "archive-file", "format": format, "path": pin_member or member,
+            } for target in targets},
+        }
+        self.write_apps()
+        self.write_locks()
+        return self.home / ".local/bin" / ("gh.exe" if os.name == "nt" else "gh")
 
     def write_locks(self):
         (self.source / ".chezmoidata" / "personal-app-lock.json").write_text(
@@ -171,15 +209,16 @@ class PersonalAppsTest(unittest.TestCase):
         self.payloads["/ghq.zip"] = archive.getvalue()
         self.apps["personalApps"]["ghq"] = {
             "command": "ghq", "repository": "x-motemen/ghq",
-            "archive": {"path": "ghq", "stripComponents": 1},
-            "targets": dict(self.apps["personalApps"]["omp"]["targets"]),
+            "targets": self.archive_apps["ghq"]["targets"],
         }
-        (self.source / ".chezmoidata" / "personal-apps.json").write_text(
-            json.dumps(self.apps), encoding="utf-8")
+        self.write_apps()
         self.locks["personalAppLocks"]["ghq"] = {
             "tag": "fixture", "targets": {
                 target: {"url": self.base_url + "/ghq.zip",
-                         "sha256": hashlib.sha256(archive.getvalue()).hexdigest()}
+                         "sha256": hashlib.sha256(archive.getvalue()).hexdigest(),
+                         "kind": "archive-file", "format": "zip",
+                         "path": "ghq.exe" if target.startswith("windows-") else "ghq",
+                         "stripComponents": 1}
                 for target in self.apps["personalApps"]["ghq"]["targets"]
             },
         }
@@ -188,6 +227,9 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(binary.read_bytes(), payload)
         self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
         self.assertFalse((binary.parent / "README").exists())
+        self.apply()
+        self.assertEqual(binary.read_bytes(), payload)
+        binary.write_bytes(b"local archive command drift")
         self.apply()
         self.assertEqual(binary.read_bytes(), payload)
         self.assertEqual(self.requests.count("/ghq.zip"), 1)
@@ -200,6 +242,40 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(binary.read_bytes(), payload)
         self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
 
+    def test_tar_and_zip_install_selected_member_reapply_and_repair_drift(self):
+        for format in ("tar.gz", "zip"):
+            with self.subTest(format=format):
+                payload = ("fixture gh " + format + "\n").encode()
+                binary = self.add_archive(format, path="/" + format, payload=payload)
+                self.apply()
+                self.assertEqual(binary.read_bytes(), payload)
+                self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+                if os.name != "nt":
+                    self.assertTrue(os.access(binary, os.X_OK))
+                self.assertFalse((self.home / "release").exists())
+                requests = list(self.requests)
+                self.apply()
+                binary.write_bytes(b"drift")
+                self.apply()
+                self.assertEqual(binary.read_bytes(), payload)
+                self.assertEqual(self.requests, requests)
+
+    def test_archive_failure_preserves_installed_executable(self):
+        for format in ("tar.gz", "zip"):
+            for failure in ("missing-member", "bad-checksum"):
+                with self.subTest(format=format, failure=failure):
+                    binary = self.add_archive(format, path=f"/good-{format}-{failure}")
+                    self.apply()
+                    original = binary.read_bytes()
+                    self.add_archive(
+                        format, path=f"/bad-{format}-{failure}", payload=b"replacement\n",
+                        pin_member="absent/bin/gh" if failure == "missing-member" else None,
+                        checksum="f" * 64 if failure == "bad-checksum" else None,
+                    )
+                    result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(binary.read_bytes(), original)
+
     def render_external(self, os_name, arch):
         template = (self.source / ".chezmoiexternals" / "personal-apps.toml.tmpl").read_text(encoding="utf-8")
         wrapper = ('{{ template "external" (dict "chezmoi" (dict "os" '
@@ -208,8 +284,78 @@ class PersonalAppsTest(unittest.TestCase):
                    + '{{ define "external" }}' + template + '{{ end }}')
         return self.run_chezmoi("execute-template", input=wrapper)
 
+    def test_supported_platforms_select_their_locked_target(self):
+        targets = self.apps["personalApps"]["omp"]["targets"]
+        for number, target in enumerate(targets):
+            self.locks["personalAppLocks"]["omp"]["targets"][target] = {
+                "url": self.base_url + "/" + target, "sha256": f"{number + 1:064x}", "kind": "file",
+            }
+        self.write_locks()
+        for target in targets:
+            with self.subTest(target=target):
+                os_name, arch = target.split("-")
+                result = self.render_external(os_name, arch)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                rendered = tomllib.loads(result.stdout)
+                command = ".local/bin/omp" + (".exe" if os_name == "windows" else "")
+                self.assertEqual(list(rendered), [command])
+                entry = rendered[command]
+                pin = self.locks["personalAppLocks"]["omp"]["targets"][target]
+                self.assertEqual(entry["type"], "file")
+                self.assertTrue(entry["executable"])
+                self.assertEqual(entry["url"], pin["url"] + "#sha256=" + pin["sha256"])
+                self.assertEqual(entry["checksum"]["sha256"], pin["sha256"])
+        self.assertEqual(self.requests, [])
 
-    def test_unsupported_platform_emits_no_app(self):
+    def test_archive_platforms_render_resolved_metadata_without_downloads(self):
+        self.apps["personalApps"].update(self.archive_apps)
+        for name, application in self.archive_apps.items():
+            self.locks["personalAppLocks"][name] = {"tag": "v2.3.4", "targets": {
+                target: {
+                    "kind": "archive-file", "format": declaration["format"],
+                    "path": declaration["path"].replace("{version}", "2.3.4"),
+                    **({"stripComponents": declaration["stripComponents"]}
+                       if "stripComponents" in declaration else {}),
+                    "url": self.base_url + "/" + declaration["asset"].replace("{version}", "2.3.4"),
+                    "sha256": f"{number + 10:064x}",
+                } for number, (target, declaration) in enumerate(application["targets"].items())
+            }}
+            # Pending authored edits must not override resolved extraction metadata.
+            for declaration in application["targets"].values():
+                declaration["path"] = "pending/{version}/different-command"
+                declaration["format"] = "tar.gz" if declaration["format"] == "zip" else "zip"
+                declaration["stripComponents"] = 7
+        self.write_apps()
+        self.write_locks()
+        targets = {target for app in self.apps["personalApps"].values() for target in app["targets"]}
+        for target in sorted(targets | {"freebsd-amd64", "linux-386"}):
+            with self.subTest(target=target):
+                os_name, arch = target.split("-")
+                result = self.render_external(os_name, arch)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                rendered = tomllib.loads(result.stdout)
+                suffix = ".exe" if os_name == "windows" else ""
+                supported = {
+                    name: app for name, app in self.apps["personalApps"].items()
+                    if target in app["targets"]
+                }
+                self.assertEqual(set(rendered), {
+                    ".local/bin/" + app["command"] + suffix for app in supported.values()
+                })
+                for name, app in supported.items():
+                    entry = rendered[".local/bin/" + app["command"] + suffix]
+                    pin = self.locks["personalAppLocks"][name]["targets"][target]
+                    self.assertEqual(entry["type"], pin["kind"])
+                    if pin["kind"] == "archive-file":
+                        self.assertEqual(entry["format"], pin["format"])
+                        self.assertEqual(entry["path"], pin["path"])
+                        self.assertEqual(entry.get("stripComponents"), pin.get("stripComponents"))
+                    self.assertEqual(entry["url"], pin["url"] + "#sha256=" + pin["sha256"])
+                    self.assertEqual(entry["checksum"]["sha256"], pin["sha256"])
+                    self.assertTrue(entry["executable"])
+        self.assertEqual(self.requests, [])
+
+    def test_undeclared_raw_file_platform_emits_no_app_even_with_pin(self):
         self.locks["personalAppLocks"]["omp"]["targets"]["darwin-amd64"] = (
             self.locks["personalAppLocks"]["omp"]["targets"]["linux-amd64"]
         )

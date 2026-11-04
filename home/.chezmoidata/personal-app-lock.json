@@ -1,30 +1,94 @@
 {
   "personalAppLocks": {
+    "gh": {
+      "tag": "v2.103.3",
+      "targets": {
+        "darwin-arm64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "gh_2.103.3_macOS_arm64/bin/gh",
+          "sha256": "d700207eae9ae98fe2b89535c2c087c07823d4628c56364695a5a07ef311c062",
+          "url": "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_macOS_arm64.zip"
+        },
+        "linux-amd64": {
+          "format": "tar.gz",
+          "kind": "archive-file",
+          "path": "gh_2.103.3_linux_amd64/bin/gh",
+          "sha256": "4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d",
+          "url": "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_linux_amd64.tar.gz"
+        },
+        "linux-arm64": {
+          "format": "tar.gz",
+          "kind": "archive-file",
+          "path": "gh_2.103.3_linux_arm64/bin/gh",
+          "sha256": "ee32df2323c8847f5fac6cb6b4b69ca75828e9329a8f22f677021f7b3306ce63",
+          "url": "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_linux_arm64.tar.gz"
+        },
+        "windows-amd64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "bin/gh.exe",
+          "sha256": "98d0cfa794721665d7973dd728c78aff7bd836d58f10f6d7a03568eccb0a22e0",
+          "url": "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_windows_amd64.zip"
+        },
+        "windows-arm64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "bin/gh.exe",
+          "sha256": "197211c98687d7770ac331fe8a3b6c198c389108c1536cdbedf659fe4703e484",
+          "url": "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_windows_arm64.zip"
+        }
+      }
+    },
     "ghq": {
       "tag": "v1.12.0",
       "targets": {
         "darwin-amd64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "ghq",
           "sha256": "e5dc9f2173e32c0fddc0ffffa67f770492e0f93f734a9bd898f63a21a64cc34d",
+          "stripComponents": 1,
           "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_darwin_amd64.zip"
         },
         "darwin-arm64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "ghq",
           "sha256": "c1a3d26d435c35b3fa7ca1188488a7cd81d1ee975a4a00db8ee4dbe32be56dfe",
+          "stripComponents": 1,
           "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_darwin_arm64.zip"
         },
         "linux-amd64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "ghq",
           "sha256": "160e4430014f67eceea4aa899e9dcd8c09e3944d90902ed96fd6cac916f8aad6",
+          "stripComponents": 1,
           "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_linux_amd64.zip"
         },
         "linux-arm64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "ghq",
           "sha256": "3108a4d8a06c968bd669897a1c3d17c6af70afe015c72b982cc8f227b9c4e8e1",
+          "stripComponents": 1,
           "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_linux_arm64.zip"
         },
         "windows-amd64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "ghq.exe",
           "sha256": "1525c69728ced46ccf7ed364c8daf7ea12b25b3ee63881e6da0e8584c8ca3159",
+          "stripComponents": 1,
           "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_windows_amd64.zip"
         },
         "windows-arm64": {
+          "format": "zip",
+          "kind": "archive-file",
+          "path": "ghq.exe",
           "sha256": "8ce738041c0022c4b1a27808a2306ed508ccf7bd351344d48fe397d1a5678a28",
+          "stripComponents": 1,
           "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_windows_arm64.zip"
         }
       }
@@ -33,22 +97,27 @@
       "tag": "v18.16.0",
       "targets": {
         "darwin-arm64": {
+          "kind": "file",
           "sha256": "d4a10d97488d6054d2b18198bd24f461079952c7e0fb75ba66336ca0df0cb99e",
           "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-darwin-arm64"
         },
         "linux-amd64": {
+          "kind": "file",
           "sha256": "6498ed785bab00d2926e0387e0ec02362d6d45f1c3d0d1b57c1618b7f95c9264",
           "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-linux-x64"
         },
         "linux-arm64": {
+          "kind": "file",
           "sha256": "c2be1ea85ce17c4270854b57efff2a7ea1d5a03c7557fd08721f2b9bb32698de",
           "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-linux-arm64"
         },
         "windows-amd64": {
+          "kind": "file",
           "sha256": "c249a9ed0a57c748fb1247d8ee9e2d0fe1b13229266ce74d8810a76a591e21fc",
           "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-windows-x64.exe"
         },
         "windows-arm64": {
+          "kind": "file",
           "sha256": "3de50c05b84851089c962aaff4d39d1622bfa079334a5a295bf70028cfdcbc6d",
           "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-windows-arm64.exe"
         }

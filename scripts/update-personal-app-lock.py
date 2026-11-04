@@ -17,14 +17,32 @@ def github_release(repository):
     return json.loads(result.stdout)
 
 
+def expand_version(pattern, version):
+    expanded = pattern.replace("{version}", version)
+    if "{" in expanded or "}" in expanded:
+        raise ValueError("Personal application patterns support only {version}")
+    return expanded
+
+
 def resolve_application(application, release):
     repository = application["repository"]
     tag = release["tag_name"]
     if not tag or release.get("draft") or release.get("prerelease"):
         raise ValueError(f"{repository}: expected a published stable release")
 
+    version = tag.removeprefix("v")
     targets = {}
-    for target, name in application["targets"].items():
+    for target, declaration in application["targets"].items():
+        name = expand_version(declaration["asset"], version)
+        kind = declaration["kind"]
+        if kind not in ("file", "archive-file"):
+            raise ValueError(f"{repository}: unsupported installation kind {kind}")
+        pin = {"kind": kind}
+        if kind == "archive-file":
+            pin["format"] = declaration["format"]
+            pin["path"] = expand_version(declaration["path"], version)
+            if "stripComponents" in declaration:
+                pin["stripComponents"] = declaration["stripComponents"]
         matches = [asset for asset in release["assets"] if asset["name"] == name]
         if len(matches) != 1:
             raise ValueError(f"{repository} {tag}: expected one asset named {name}")
@@ -40,7 +58,7 @@ def resolve_application(application, release):
             raise ValueError(f"{repository} {tag}: unexpected release URL for {name}")
         if asset.get("state") != "uploaded":
             raise ValueError(f"{repository} {tag}: asset {name} is not fully uploaded")
-        targets[target] = {"url": expected_url, "sha256": digest[7:].lower()}
+        targets[target] = {**pin, "url": expected_url, "sha256": digest[7:].lower()}
     return {"tag": tag, "targets": targets}
 
 
