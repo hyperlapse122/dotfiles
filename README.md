@@ -30,9 +30,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 The execution-policy option applies only to that child process; it does not change a persistent Windows policy.
 Do not bypass organizational policy if it blocks the script.
 Approve WinGet source/package agreements and any UAC prompts for the missing prerequisites.
-The script installs Git and mise through WinGet, clones this repository to `$HOME\src\dotfiles`, and invokes the existing mise preparation workflow.
+The script installs missing Git, mise, and native Windows chezmoi (`twpayne.chezmoi`) through WinGet, clones this repository to `$HOME\src\dotfiles`, and invokes the existing mise preparation workflow.
 It checks preparation explicitly because mise can report a failed postinstall hook as a warning.
-It does not apply personal settings or modify shell profiles.
+It does not apply personal settings, register a global chezmoi source, or modify shell profiles.
 
 To select another checkout location, pass `-Destination`:
 
@@ -46,15 +46,35 @@ An unrelated directory is rejected rather than replaced.
 Failures return a nonzero exit status and identify the failing step; resolve the reported problem and rerun the same command.
 
 After completion, open a new PowerShell window so it inherits the installers' PATH updates.
-To apply personal configuration deliberately, enter the selected checkout and run the separate apply operation:
+Register the permanent checkout explicitly, using your custom destination if you supplied one:
 
 ```powershell
-Set-Location "$HOME\src\dotfiles"
-mise run apply
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\src\dotfiles\configure-chezmoi.ps1"
 ```
 
-The current source contains no concrete personal settings, so reaching this command completes the initial bootstrap scope.
-GUI applications, Git/GPG personal configuration, secrets, and organizational sign-in are not configured by this entry point.
+The registration script defaults to its own checkout; `-Source 'C:\src\dotfiles'` selects another permanent checkout.
+It rejects temporary linked worktrees and configurations pointing to another source.
+It creates TOML configuration or preserves unrelated values in same-source TOML; other existing formats require explicit migration and are left untouched.
+Registration does not apply managed home files.
+
+After registration, use the native Windows installation from any unrelated directory:
+
+```powershell
+chezmoi update
+chezmoi update --init
+```
+
+The first command pulls the registered repository and applies its home source state.
+The second also regenerates and reloads chezmoi configuration from its template before applying.
+`--init` here does not clone an uninitialized source.
+Chezmoi's default pull uses autostash and rebase; existing custom update settings remain unchanged.
+These commands update dotfiles, not the installed chezmoi binary; use WinGet to maintain that installation.
+
+The Windows installation is for everyday use; the mise-managed copy is for repository development and tests.
+In a fresh shell outside a mise project, `Get-Command chezmoi` should identify the Windows installation.
+Inside an intentionally mise-activated shell, mise can take precedence; use a fresh non-activated shell for everyday commands.
+Registration itself selects the native executable even when a mise copy appears first in PATH.
+No settings are applied automatically, and GUI applications, Git/GPG personal configuration, secrets, and organizational sign-in remain outside bootstrap.
 
 ## Prepare a worktree
 
@@ -66,7 +86,7 @@ Then initialize the worktree with:
 mise install
 ```
 
-This installs the locked tools, including chezmoi, and runs the `bootstrap` task through the project-level `postinstall` hook.
+This installs the locked development tools, including a separate chezmoi copy, and runs the `bootstrap` task through the project-level `postinstall` hook.
 The task lists managed chezmoi entries with scripts excluded; it does not apply files or execute chezmoi scripts.
 It uses the repository's hook-free `.chezmoi-bootstrap.toml` so existing personal chezmoi hooks cannot run during preparation.
 The hook also runs when all tools are already installed, so use the same command for an existing worktree.
@@ -89,9 +109,9 @@ Run this only when you intend to change the actual user home directory:
 mise run apply
 ```
 
-Both tasks resolve the current worktree's source, including when called from a subdirectory.
-They do not initialize or redirect a separate global chezmoi source.
-The initial source has no personal settings to apply.
+Repository preparation and apply tasks resolve the current worktree's source, including when called from a subdirectory.
+They do not initialize or redirect the global chezmoi source.
+The source contains a chezmoi configuration template but no concrete personal dotfiles payload yet.
 
 To preview future changes without applying them, run from the repository root:
 
@@ -106,7 +126,8 @@ Repository tooling and documentation outside that directory are not managed home
 See [home/README.md](home/README.md) for source naming and script ordering.
 
 Declare development tools in `mise.toml` and commit their generated lockfile.
-Keep tool installation in mise; chezmoi owns personal configuration and the actions needed to apply it.
+Keep development-tool installation in mise; the Windows bootstrap installs the separate everyday chezmoi through WinGet.
+Chezmoi owns personal configuration and the actions needed to apply it.
 
 ## Verify bootstrap isolation
 
@@ -119,5 +140,6 @@ mise exec -- python -m unittest discover -s tests
 The bootstrap isolation test initializes twice with an isolated user home and an existing chezmoi config containing mutating hooks.
 It checks that preparation does not execute those hooks or alter the existing personal setting and config.
 On Windows, entry-point regressions also exercise Windows PowerShell, repeated preparation, Unicode checkout paths with OEM console encoding, destination/origin rejection, and native-command failure propagation.
+Global-source regressions use real Git and chezmoi with isolated homes and a local remote to verify pull/apply, configuration regeneration, repeated registration, and conflict preservation.
 Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.

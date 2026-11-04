@@ -22,6 +22,13 @@ class WindowsBootstrapTest(unittest.TestCase):
         self.checkout.mkdir()
         self.env = os.environ.copy()
         self.env["MISE_CONFIG_DIR"] = str(self.root / "mise config")
+        self.commands = self.root / "commands"
+        self.commands.mkdir()
+        (self.commands / "chezmoi.cmd").write_text("@echo off\nexit /b 0\n", encoding="ascii")
+        self.native_candidates = [self.commands / "chezmoi.cmd"]
+        # Never let this regression suite install packages on the host.
+        (self.commands / "winget.cmd").write_text("@echo off\nexit /b 89\n", encoding="ascii")
+        self.env["PATH"] = str(self.commands) + os.pathsep + self.env["PATH"]
         self.git_run("init", str(self.checkout))
         self.git_run("-C", str(self.checkout), "remote", "add", "origin", "https://github.com/hyperlapse122/dotfiles.git")
         for name in ("mise.toml", "mise.lock", ".chezmoiroot", ".chezmoi-bootstrap.toml"):
@@ -32,18 +39,25 @@ class WindowsBootstrapTest(unittest.TestCase):
         return subprocess.run([self.git, *args], check=True, capture_output=True, text=True)
 
     def run_bootstrap(self, destination=None):
+        candidates = ", ".join("'" + str(p).replace("'", "''") + "'" for p in self.native_candidates)
+        script = str(self.repo / "bootstrap.ps1").replace("'", "''")
+        target = str(destination or self.checkout).replace("'", "''")
+        launcher = (
+            "function Get-Command { [CmdletBinding()] param([string[]] $Name, "
+            "[switch] $All, [string[]] $CommandType); "
+            f"if ($Name.Count -eq 1 -and $Name[0] -eq 'chezmoi') {{ $PSBoundParameters['Name'] = @({candidates}) }}; "
+            "Microsoft.PowerShell.Core\\Get-Command @PSBoundParameters }; "
+            f"& '{script}' -Destination '{target}'"
+        )
+        encoded = base64.b64encode(launcher.encode("utf-16le")).decode("ascii")
         return subprocess.run(
-            [str(self.shell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-             str(self.repo / "bootstrap.ps1"), "-Destination", str(destination or self.checkout)],
+            [str(self.shell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
             env=self.env, capture_output=True, text=True, encoding="utf-8",
             errors="backslashreplace", timeout=120,
         )
 
     def failing_mise(self, body):
-        commands = self.root / "commands"
-        commands.mkdir()
-        (commands / "mise.cmd").write_text("@echo off\n" + body + "\n", encoding="ascii")
-        self.env["PATH"] = str(commands) + os.pathsep + self.env["PATH"]
+        (self.commands / "mise.cmd").write_text("@echo off\n" + body + "\n", encoding="ascii")
 
     def test_repeat_preserves_uncommitted_checkout_files(self):
         sentinel = self.checkout / "local setting.txt"
@@ -104,6 +118,28 @@ class WindowsBootstrapTest(unittest.TestCase):
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "not our repository")
         origin = self.git_run("-C", str(self.checkout), "remote", "get-url", "origin").stdout.strip()
         self.assertEqual(origin, "https://example.com/other.git")
+
+    def test_mise_copy_does_not_satisfy_native_installation(self):
+        (self.commands / "chezmoi.cmd").unlink()
+        self.failing_mise("exit /b 0")
+        cases = (
+            ("MISE_DATA_DIR", self.root / "relocated mise", "shims"),
+            ("MISE_SHIMS_DIR", self.root / "custom shims", ""),
+            ("XDG_DATA_HOME", self.root / "xdg data", "mise/shims"),
+            ("MISE_INSTALL_STORE_DIR", self.root / "custom store", "chezmoi"),
+        )
+        for key, root, suffix in cases:
+            with self.subTest(key=key):
+                directory = root / suffix
+                directory.mkdir(parents=True)
+                shim = directory / "chezmoi.cmd"
+                shim.write_text("@echo off\nexit /b 0\n", encoding="ascii")
+                self.native_candidates = [shim]
+                self.env[key] = root.as_posix()
+                result = self.run_bootstrap()
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                del self.env[key]
+
 
     def test_install_failure_cannot_report_completion(self):
         self.failing_mise('if "%1"=="install" exit /b 17\nexit /b 0')

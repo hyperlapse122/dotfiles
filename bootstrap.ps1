@@ -9,8 +9,28 @@ $RepositoryUrl = 'https://github.com/hyperlapse122/dotfiles.git'
 
 function Find-Application {
     param([string] $Name)
-    $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($command) { return $command.Source }
+    $commands = @(Get-Command $Name -All -CommandType Application -ErrorAction SilentlyContinue)
+    foreach ($command in $commands) {
+        if ($Name -eq 'chezmoi') {
+            $miseRoots = @(
+                (Join-Path $env:LOCALAPPDATA 'mise')
+                if ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME 'mise' }
+                $env:MISE_DATA_DIR
+                $env:MISE_SHIMS_DIR
+                $env:MISE_INSTALLS_DIR
+                $env:MISE_INSTALL_STORE_DIR
+            )
+            $isMise = $false
+            foreach ($root in $miseRoots) {
+                if ($root -and [IO.Path]::GetFullPath($command.Source).StartsWith(([IO.Path]::GetFullPath($root).TrimEnd('\', '/') + '\'), [StringComparison]::OrdinalIgnoreCase)) {
+                    $isMise = $true
+                    break
+                }
+            }
+            if ($isMise) { continue }
+        }
+        return $command.Source
+    }
 }
 
 function Update-ProcessPath {
@@ -69,10 +89,12 @@ try {
     }
 
     $Destination = [IO.Path]::GetFullPath($Destination)
-    Write-Host 'Checking Git and mise prerequisites...'
+    Write-Host 'Checking Git, mise, and native chezmoi prerequisites...'
     Update-ProcessPath
     $git = Install-Prerequisite 'git' 'Git.Git'
     $mise = Install-Prerequisite 'mise' 'jdx.mise'
+    $chezmoi = Install-Prerequisite 'chezmoi' 'twpayne.chezmoi'
+    Invoke-Checked $chezmoi @('--version') 'Check native chezmoi' | Out-Host
 
     if (Test-Path -LiteralPath $Destination) {
         if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
@@ -116,7 +138,9 @@ try {
     }
 
     Write-Host "Bootstrap complete: $Destination"
-    Write-Host 'Personal settings were not applied. In a new PowerShell window, enter this checkout and run mise run apply only when intended.'
+    Write-Host 'Personal settings were not applied and no global source was registered.'
+    Write-Host "To register this permanent checkout, open a new PowerShell window and run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$Destination\configure-chezmoi.ps1`""
+    Write-Host 'Then run chezmoi update from any directory when you intend to pull and apply personal settings.'
 }
 catch {
     Write-Error "Windows bootstrap failed: $($_.Exception.Message)" -ErrorAction Continue

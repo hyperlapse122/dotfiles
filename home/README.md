@@ -4,7 +4,9 @@ This directory is the chezmoi source state, not the application destination.
 The repository's `.chezmoiroot` selects it; managed files are applied to the actual user home directory.
 This README is excluded by `.chezmoiignore`.
 
-The initial source intentionally contains no personal settings or installation scripts.
+The source contains `.chezmoi.toml.tmpl` to retain the permanent checkout binding when chezmoi configuration is regenerated.
+It preserves existing TOML values while updating the source and working-tree paths.
+The source has no concrete personal dotfiles payload or installation scripts yet.
 Place managed configuration here using chezmoi's source naming conventions.
 Use scripts only for actions that cannot be represented as managed files.
 
