@@ -1,0 +1,5 @@
+{{/* Common instructions for every managed harness go here. */ -}}
+
+{{ if eq .harness "omp" -}}
+{{/* omp-only instructions go here. */ -}}
+{{ end -}}
