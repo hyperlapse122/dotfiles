@@ -9,13 +9,39 @@ function ConvertTo-NormalizedPath([string] $Entry) {
 }
 
 # Never persist the combined process PATH: it includes machine and transient entries.
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-$normalizedBin = ConvertTo-NormalizedPath $bin
-foreach ($entry in ($userPath -split ';')) {
-    if ([string]::Equals((ConvertTo-NormalizedPath $entry), $normalizedBin, [StringComparison]::OrdinalIgnoreCase)) {
-        return
+$key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+try {
+    $userPath = $key.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    $kind = if ($null -eq $userPath) {
+        [Microsoft.Win32.RegistryValueKind]::String
+    } else {
+        $key.GetValueKind('Path')
     }
+    $normalizedBin = ConvertTo-NormalizedPath $bin
+    foreach ($entry in ($userPath -split ';')) {
+        if ([string]::Equals((ConvertTo-NormalizedPath $entry), $normalizedBin, [StringComparison]::OrdinalIgnoreCase)) {
+            return
+        }
+    }
+    $separator = if ($userPath -and -not $userPath.EndsWith(';')) { ';' } else { '' }
+    $key.SetValue('Path', ($userPath + $separator + $bin), $kind)
+} finally {
+    $key.Dispose()
 }
-$separator = if ($userPath -and -not $userPath.EndsWith(';')) { ';' } else { '' }
-[Environment]::SetEnvironmentVariable('Path', ($userPath + $separator + $bin), 'User')
+
+# Direct registry writes must notify terminal hosts without rewriting the value.
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class PersonalAppEnvironment {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(
+        IntPtr window, uint message, UIntPtr parameter, string value,
+        uint flags, uint timeout, out UIntPtr result);
+}
+'@
+$result = [UIntPtr]::Zero
+[PersonalAppEnvironment]::SendMessageTimeout(
+    [IntPtr]0xffff, 0x1a, [UIntPtr]::Zero, 'Environment', 0x2, 5000, [ref]$result
+) | Out-Null
 {{ end -}}

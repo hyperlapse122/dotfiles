@@ -152,6 +152,41 @@ def check_terminal_path(home, outside, env, tag, shells):
             print(f"Fresh {name} {mode}: {output}")
 
 
+def check_windows_path_preservation(apply_and_check, home, env):
+    import winreg
+
+    env["CE_PATH_SMOKE_ROOT"] = str(home / "unrelated tools")
+    env["CE_PATH_SMOKE_HOME"] = str(home)
+    expandable = r"%CE_PATH_SMOKE_ROOT%\bin"
+    equivalent = expandable + ';%CE_PATH_SMOKE_HOME%/.LOCAL/BIN/'
+    cases = (
+        (expandable, winreg.REG_EXPAND_SZ, False),
+        (str(home / "literal tools"), winreg.REG_SZ, False),
+        (equivalent, winreg.REG_EXPAND_SZ, True),
+    )
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
+                       winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as key:
+        for original, kind, already_present in cases:
+            winreg.SetValueEx(key, "Path", 0, kind, original)
+            apply_and_check()
+            actual, actual_kind = winreg.QueryValueEx(key, "Path")
+            if actual_kind != kind:
+                raise RuntimeError("PATH integration changed the existing registry value kind")
+            if already_present:
+                if actual != original:
+                    raise RuntimeError("PATH integration rewrote an equivalent existing entry")
+            else:
+                prefix = original + ";"
+                appended = actual[len(prefix):]
+                expected = os.path.normcase(str(home / ".local/bin"))
+                if not actual.startswith(prefix) or os.path.normcase(os.path.normpath(appended)) != expected:
+                    raise RuntimeError("PATH integration changed unrelated raw entries or appended the wrong directory")
+            apply_and_check()
+            if winreg.QueryValueEx(key, "Path") != (actual, actual_kind):
+                raise RuntimeError("Repeated PATH integration changed the existing value")
+    print("Windows PATH: expandable and literal entries, registry kinds, and equivalent-entry idempotence preserved")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--path-integration", action="store_true",
@@ -236,7 +271,7 @@ def main():
 
         if args.path_integration and os.name == "nt":
             with windows_path_restored():
-                apply_and_check()
+                check_windows_path_preservation(apply_and_check, home, env)
         else:
             apply_and_check()
 

@@ -207,6 +207,7 @@ chezmoi update
 ```
 
 Windows apply adds the installation directory to the user PATH without copying the combined process PATH into persistent settings.
+Existing expandable entries and their registry value kind are preserved; only a separate comparison copy is expanded for duplicate detection.
 Fully close and reopen the terminal host from the desktop or Start menu afterward; a new tab in an already-running terminal may retain its old environment.
 Close running omp sessions before replacing `omp.exe`, and run the update from a separate ordinary terminal.
 
@@ -234,9 +235,11 @@ An unchanged result does not rewrite the file.
 Do not edit generated pins by hand or replace release-specific URLs with `latest/download` links.
 
 After this feature is merged, the **Update personal application pins** workflow checks daily at 06:23 UTC and supports manual dispatch.
-It uses the automatically injected `secrets.GITHUB_TOKEN`, exposed to gh as `GH_TOKEN`, with job-level `contents: write`.
+Release resolution uses the automatically injected `secrets.GITHUB_TOKEN`, exposed to gh as `GH_TOKEN`.
 No custom secret or personal access token is required.
 The workflow validates the new pins and runs the Linux native smoke before committing only a changed lock directly to the default branch.
+Resolution, native validation, and publication use separate jobs; only publication has `contents: write`, and it never executes the downloaded application.
+Validation and publication consume the same immutable lock artifact from the same recorded default-branch base.
 It does not create a PR, force-push, or apply changes to personal devices.
 A conflicting default-branch update fails the normal push instead of overwriting it.
 Hosted schedules are best effort; manual dispatch remains available.
