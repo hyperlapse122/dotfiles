@@ -1,3 +1,5 @@
+gpgRecipient: 621512777E6933FEB4458FDC4945855D4F283F05
+
 gpgPlatforms:
   windows:
     program: C:/Program Files/GnuPG/bin/gpg.exe

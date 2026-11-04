@@ -1,4 +1,5 @@
 README.md
+.secrets
 {{ if eq .chezmoi.os "windows" }}
 .gnupg
 {{ else }}

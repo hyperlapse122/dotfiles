@@ -22,10 +22,10 @@ The work environment includes GUI applications as well as CLI tools. Application
 ## Boundaries
 
 - Repository-managed settings take precedence over local changes; repeated runs reconcile those settings to the repository's desired state.
-- Encrypt secrets with the user's GPG key and commit them to this repository using SOPS; decryption is limited to YubiKeys holding the same GPG key and already available on each PC.
+- Encrypt secrets with the user's GPG public key as the sole recipient and commit them to this repository using chezmoi's built-in GPG encryption. Delegate private-key access to GPG without repository-level assumptions about key-storage hardware.
 - Exclude OAuth logins that are difficult to automate and management of applications provisioned by Intune, such as Microsoft 365 applications.
 
-_Resist a change when:_ It weakens repository precedence to preserve local changes, introduces a decryption method other than YubiKey, or takes on the excluded authentication or application-management responsibilities.
+_Resist a change when:_ It weakens repository precedence to preserve local changes, commits plaintext secrets, or takes on the excluded authentication or application-management responsibilities.
 
 ## Key metrics
 

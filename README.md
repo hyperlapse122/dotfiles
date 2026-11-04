@@ -113,7 +113,7 @@ mise run apply
 
 Repository preparation and apply tasks resolve the current worktree's source, including when called from a subdirectory.
 They do not initialize or redirect the global chezmoi source.
-The source manages global Git settings and GPG pinentry selection; tool installation and signing-key provisioning are prerequisites.
+The source manages global Git settings, GPG pinentry selection, and native GPG secret encryption; tool installation and key provisioning are prerequisites.
 
 To preview future changes without applying them, run from the repository root:
 
@@ -164,6 +164,69 @@ Configuration rendering on another OS does not prove its native PIN dialog or ha
 
 omp settings migration and release/checksum update automation are separate work and are not included here.
 
+### Encrypted API tokens
+
+Secrets use chezmoi's built-in GPG encryption, not SOPS.
+The sole recipient is the public key with primary fingerprint `621512777E6933FEB4458FDC4945855D4F283F05`.
+GPG selects an encryption-capable subkey and obtains private-key access; the repository does not inspect or require particular storage hardware.
+The public key and working GPG/pinentry environment must already exist on each device.
+
+From the selected checkout, explicitly initialize or regenerate chezmoi's configuration before using encryption:
+
+```sh
+mise exec -- chezmoi --source . init
+```
+
+This does not apply managed home files or decrypt secrets.
+It preserves unrelated TOML configuration but replaces encryption settings, recipient lists, symmetric mode, and GPG arguments with repository policy.
+The executable follows the existing `gpgProgram` override and platform selection.
+Reinitialize after changing those source settings; `apply` alone does not regenerate chezmoi configuration.
+
+Chezmoi's GPG calls use `--no-options` so personal `gpg.conf` options cannot add recipients, including hidden recipients or recipient groups.
+This also means other personal `gpg.conf` options do not apply to this workflow.
+GPG still uses its existing key stores and agent; `gpg-agent.conf` and pinentry remain separate.
+No symmetric-passphrase fallback or additional recovery recipient is configured.
+
+`home/.secrets/api-tokens.yaml.asc` contains two encrypted dummy tokens under `example.serviceA` and `example.serviceB`.
+The `.secrets` directory is source-only and ignored as a destination.
+No dummy application configuration is installed automatically.
+Edit and re-encrypt it with:
+
+```sh
+mise exec -- chezmoi --source . edit-encrypted home/.secrets/api-tokens.yaml.asc
+```
+
+Chezmoi 2.74's `edit-encrypted` requires the encrypted file to be under the current user home.
+The standard checkout under `~/src/github.com/hyperlapse122/dotfiles` meets that requirement; changing `--destination` does not change this editing constraint.
+For an outside-home checkout, edit a local plaintext copy outside the repository and use the encryption command below to replace the encrypted source.
+
+To create or replace the encrypted source from a plaintext file kept outside the repository:
+
+```sh
+mise exec -- chezmoi --source . encrypt --output home/.secrets/api-tokens.yaml.asc /absolute/path/outside-repo/api-tokens.yaml
+```
+
+Preserve the `example` mapping when trying the example below; real application-specific token migration is not included.
+Do not put decrypted tokens in `.chezmoidata`, tracked templates, or persistent chezmoi configuration.
+The shared `secrets` partial decrypts only when a consumer calls it.
+For example, a managed JSON template can select one token:
+
+```gotemplate
+{{- $secrets := includeTemplate "secrets" . | fromYaml -}}
+{"apiToken": {{ $secrets.example.serviceB | toJson }}}
+```
+
+After adding an intended consumer template to the source, apply it explicitly with `mise run apply`.
+GPG may request a PIN or passphrase through its normal environment.
+Missing private-key access is an error, not an empty-value or dummy-value fallback.
+Worktree preparation and bootstrap do not call the secrets partial or require decryption.
+
+Encryption protects committed source, not a running device.
+Generated application files contain plaintext; `diff`, `cat`, and template previews can expose it.
+Native GPG encryption/decryption and encrypted-file editing use temporary plaintext files, and editors may leave backups or recovery files.
+Use a trusted local editor and terminal, protect destination access, and never commit or log real decrypted values.
+Losing access to the private key makes existing ciphertext unavailable; key recovery and rotation are not managed here.
+
 ## Source layout
 
 The repository-root `.chezmoiroot` selects `./home` as chezmoi's source state.
@@ -186,5 +249,7 @@ The bootstrap isolation test initializes twice with an isolated user home and an
 It checks that preparation does not execute those hooks or alter the existing personal setting and config.
 On Windows, entry-point regressions also exercise Windows PowerShell, repeated preparation, Unicode checkout paths with OEM console encoding, destination/origin rejection, and native-command failure propagation.
 Global-source regressions use real Git and chezmoi with isolated homes and a local remote to verify pull/apply, configuration regeneration, repeated registration, and conflict preservation.
+Secret regressions use real GPG and chezmoi with temporary software keys to check effective ciphertext recipients, named-token consumption, destination preservation on decryption failure, repeat application, and preparation without decryption.
+GPG and chezmoi must be available for those tests; they do not exercise the owner's private key or prove native Linux/macOS behavior.
 Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.
