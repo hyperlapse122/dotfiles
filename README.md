@@ -60,13 +60,20 @@ Registration does not apply managed home files.
 After registration, use the native Windows installation from any unrelated directory:
 
 ```powershell
-chezmoi update
-chezmoi update --init
+chezmoi apply
 ```
 
-The first command pulls the registered repository and applies its home source state.
-The second also regenerates and reloads chezmoi configuration from its template before applying.
-`--init` here does not clone an uninitialized source.
+To pull changes and refresh the generated configuration before applying:
+
+```powershell
+chezmoi update --apply=false
+chezmoi init
+chezmoi apply
+```
+
+The separate apply invokes the Windows WSL2 prerequisite hook.
+Plain `chezmoi update` applies internally without running `hooks.apply.pre`; do not use it for protected application.
+An existing configuration must be initialized before its first guarded apply; `apply --init` cannot protect the invocation that first adds the hook.
 Chezmoi's default pull uses autostash and rebase; existing custom update settings remain unchanged.
 These commands update dotfiles, not the installed chezmoi binary; use WinGet to maintain that installation.
 
@@ -117,7 +124,7 @@ The source manages global Git settings, GPG pinentry selection, native GPG secre
 Git/GPG installation and key provisioning remain prerequisites.
 The source also installs pinned personal CLI applications and applies their PATH integration; see the application workflow below.
 
-When upgrading to the native PowerShell scripts, regenerate chezmoi configuration from the intended checkout before applying:
+Before the first Windows apply, or after pulling configuration-template changes, regenerate chezmoi configuration from the intended checkout:
 
 ```sh
 mise exec -- chezmoi --source . init
@@ -127,6 +134,14 @@ Initialization does not apply personal settings.
 It preserves unrelated configuration and configures `.ps1` execution with `-NoProfile`, noninteractive operation, and a process-local execution-policy override.
 Chezmoi uses the built-in Windows PowerShell executable by absolute path, so initialization inside mise cannot pin a development-only interpreter.
 For an everyday global source, run this from the permanent checkout, not a temporary worktree.
+
+On Windows, `hooks.apply.pre` checks WSL2 prerequisites before managed files or apply scripts change the environment.
+It also runs for unchanged applies and `apply --dry-run`, including applies unrelated to Kubernetes.
+The check is read-only: it does not install WSL, enable Windows features, change the default distribution/version, or reboot.
+WSL2 must already be prepared; resolve the reported prerequisite outside this workflow and rerun apply.
+No Linux distribution or prior Rancher Desktop installation is required.
+Bootstrap, registration, and `mise install` remain usable without WSL2; Linux and macOS do not receive this gate.
+Existing apply-pre hooks run after a successful check, with their failures still stopping apply.
 
 To preview future changes without applying them, run from the repository root:
 
@@ -138,8 +153,8 @@ Previewing externals can download and cache their pinned contents, but does not 
 
 ### Windows host applications
 
-On Windows, explicit application provisions Google Chrome, 1Password, 1Password CLI, and system PowerShell through WinGet when the installation action is eligible.
-Use `mise run apply` from this worktree, or `chezmoi update` after registering a permanent checkout.
+On Windows, explicit application provisions Google Chrome, 1Password, 1Password CLI, system PowerShell, and Rancher Desktop through WinGet when the installation action is eligible.
+Use `mise run apply` from an initialized worktree, or the separate source-update and apply sequence above for a permanent checkout.
 Bootstrap and source registration do not install these applications.
 
 The package list lives in `home/.chezmoidata/windows.yaml`:
@@ -148,6 +163,7 @@ The package list lives in `home/.chezmoidata/windows.yaml`:
 - 1Password: `AgileBits.1Password`
 - 1Password CLI: `AgileBits.1Password.CLI`
 - PowerShell: `Microsoft.PowerShell`
+- Rancher Desktop: `SUSE.RancherDesktop`
 
 Install or update Windows App Installer if WinGet is unavailable.
 Approve WinGet agreements and any UAC prompts when requested; package scope and installer behavior use WinGet's defaults.
@@ -162,6 +178,36 @@ Account sign-in, CLI/app integration, browser extensions, default-browser select
 After installing the CLI, open a fresh shell and check `op --version`.
 After installing PowerShell, open a fresh shell and check `pwsh --version`.
 The system installation is for everyday use outside mise; mise still manages the repository's development runtime.
+
+### Windows Kubernetes environment
+
+Rancher Desktop provides the reusable local Kubernetes cluster and bundled command-line tools.
+The installer skips package dependencies for Rancher Desktop so WinGet cannot install or update its WSL dependency.
+After installation, apply enables only the built-in Kubernetes setting through `rdctl`; it leaves the container engine, Kubernetes version, and unrelated preferences unchanged.
+The application may open its GUI, but first-run modal dialogs are suppressed.
+Apply waits up to five minutes for the Kubernetes API and a Ready node; a startup error or readiness timeout fails apply without resetting the cluster.
+
+Open a fresh PowerShell window after installation so the installer's PATH change is available, then check the explicit local context:
+
+```powershell
+kubectl --context rancher-desktop cluster-info
+kubectl --context rancher-desktop get nodes
+```
+
+Bundled kubectl may download its compatible client on first use, so network access or an existing cache is required.
+Use this context explicitly when other clusters are configured.
+Rancher Desktop also bundles Helm, but this repository does not separately install or configure it.
+kind is not installed.
+Application repositories own their charts, deployment, tests, and cleanup.
+
+The cluster survives normal repeated applies.
+For a clean cluster, use Rancher Desktop **Troubleshooting → Reset Kubernetes** manually.
+This deletes all workloads and cluster configuration; deleting container images is optional.
+Do not use **Factory Reset** for ordinary test cleanup: it also removes Rancher Desktop settings.
+No reset is automated by this repository.
+
+GitHub CLI authentication and Docker Hub (`docker.io`) token authentication through the Windows keyring are tracked separately in [issue #21](https://github.com/hyperlapse122/dotfiles/issues/21).
+This setup does not acquire tokens, configure registry credentials, or create Kubernetes image-pull secrets.
 
 ### Git signing and GPG pinentry
 

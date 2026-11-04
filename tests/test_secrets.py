@@ -36,6 +36,11 @@ class SecretsTest(unittest.TestCase):
             ".chezmoiexternals", "personal-app*.json", "run_onchange_after_10-personal-app-path.*",
             "run_onchange_after_20-harness-plugins.*", "harness-plugin*.json", "private_dot_omp",
         ))
+        hook_scripts = self.source / "scripts"
+        hook_scripts.mkdir()
+        shutil.copy2(self.repo / "scripts/windows-apply-pre.ps1", hook_scripts)
+        # Secret tests isolate encryption from host WSL prerequisites.
+        (hook_scripts / "check-wsl2.ps1").write_text("# Ready fixture\n", encoding="utf-8")
         self.config = self.root / "chezmoi.toml"
         self.env = os.environ.copy()
         self.env.update({

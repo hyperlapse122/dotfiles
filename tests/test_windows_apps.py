@@ -10,7 +10,8 @@ import unittest
 
 @unittest.skipUnless(os.name == "nt", "Windows host application installation")
 class WindowsAppsTest(unittest.TestCase):
-    packages = ("Google.Chrome", "AgileBits.1Password", "AgileBits.1Password.CLI", "Microsoft.PowerShell")
+    packages = ("Google.Chrome", "AgileBits.1Password", "AgileBits.1Password.CLI",
+                "Microsoft.PowerShell", "SUSE.RancherDesktop")
 
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
@@ -73,6 +74,9 @@ if not args or args[0] != "install" or "--id" not in args:
 package = args[args.index("--id") + 1]
 if "--exact" not in args or "--source" not in args or args[args.index("--source") + 1] != "winget":
     sys.exit(87)
+if ("--skip-dependencies" in args) != (package == "SUSE.RancherDesktop"):
+    print("Only Rancher Desktop may bypass package dependencies", file=sys.stderr)
+    sys.exit(87)
 if package == os.environ.get("APP_TEST_FAIL_PACKAGE"):
     print("Simulated package installation failure", file=sys.stderr)
     sys.exit(23)
@@ -104,7 +108,8 @@ path.write_text(json.dumps(inventory), encoding="utf-8")
 
     def test_existing_version_survives_and_unchanged_apply_skips_installer(self):
         self.inventory.write_text(json.dumps({self.packages[0]: "1.0"}), encoding="utf-8")
-        expected = dict(zip(self.packages, ("1.0", "2.0", "2.0", "2.0")))
+        expected = dict.fromkeys(self.packages, "2.0")
+        expected[self.packages[0]] = "1.0"
         self.apply()
         self.assertEqual(self.installed(), expected)
         calls = self.invocations.read_text(encoding="utf-8")

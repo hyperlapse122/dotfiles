@@ -127,7 +127,7 @@ try {
     }
     Write-Host "Registered native chezmoi: $chezmoi"
     Write-Host "Permanent checkout: $Source"
-    Write-Host 'No managed home files were applied. Run chezmoi update when you intend to pull and apply.'
+    Write-Host 'No managed home files were applied. Run chezmoi update --apply=false, then chezmoi init and chezmoi apply.'
 }
 catch {
     Write-Error "Global chezmoi registration failed: $($_.Exception.Message)" -ErrorAction Continue
