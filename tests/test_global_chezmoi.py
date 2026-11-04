@@ -50,11 +50,6 @@ class GlobalChezmoiTest(unittest.TestCase):
         self.git("clone", str(self.remote), str(self.publisher))
         for name in (".chezmoiroot", ".chezmoi-bootstrap.toml", "configure-chezmoi.ps1"):
             shutil.copy2(self.repo / name, self.publisher / name)
-        hook_scripts = self.publisher / "scripts"
-        hook_scripts.mkdir()
-        shutil.copy2(self.repo / "scripts/windows-apply-pre.ps1", hook_scripts)
-        # Registration tests isolate source selection from host WSL prerequisites.
-        (hook_scripts / "check-wsl2.ps1").write_text("# Ready fixture\n", encoding="utf-8")
         (self.publisher / "home").mkdir()
         for name in (".chezmoi.toml.tmpl", ".chezmoiignore"):
             shutil.copy2(self.repo / "home" / name, self.publisher / "home" / name)

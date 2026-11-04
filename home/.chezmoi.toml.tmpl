@@ -20,33 +20,15 @@
 -}}
 {{- $previous := dig "hooks" "apply" "pre" (dict) $config -}}
 {{- $saved := dig "data" "dotfilesWindowsApplyPre" (dict) $config -}}
-{{- $invocation := dict -}}
 {{- if and $saved (deepEqual $previous (get $saved "generated")) -}}
-{{- $previous = get $saved "original" -}}
-{{- end -}}
-{{- if $previous -}}
-{{- if and (get $previous "command") (get $previous "script") -}}
-{{- fail "The existing apply.pre hook has both command and script; resolve it before initializing." -}}
-{{- end -}}
-{{- $command := get $previous "command" | default "" -}}
-{{- $args := get $previous "args" | default list -}}
-{{- if get $previous "script" -}}
-{{- $script := get $previous "script" -}}
-{{- $extension := trimPrefix "." (ext $script) | lower -}}
-{{- $interpreter := get .chezmoi.config.interpreters $extension | default dict -}}
-{{- if get $interpreter "command" -}}
-{{- $command = get $interpreter "command" -}}
-{{- $args = concat (get $interpreter "args" | default list) (list $script) $args -}}
+{{- if get $saved "original" -}}
+{{- $config = setValueAtPath "hooks.apply.pre" (get $saved "original") $config -}}
 {{- else -}}
-{{- $command = $script -}}
+{{- $_ := unset $config.hooks.apply "pre" -}}
 {{- end -}}
 {{- end -}}
-{{- $invocation = dict "command" $command "args" $args -}}
+{{- if $saved -}}
+{{- $_ := unset $config.data "dotfilesWindowsApplyPre" -}}
 {{- end -}}
-{{- $hook := dict "command" $config.interpreters.ps1.command "args" (concat $config.interpreters.ps1.args (list (joinPath .chezmoi.workingTree "scripts" "windows-apply-pre.ps1") "-Payload" ($invocation | toJson | b64enc))) -}}
-{{- $config = $config
-    | setValueAtPath "hooks.apply.pre" $hook
-    | setValueAtPath "data.dotfilesWindowsApplyPre" (dict "original" $previous "generated" $hook)
--}}
 {{- end -}}
 {{- $config | setValueAtPath "sourceDir" .chezmoi.workingTree | setValueAtPath "workingTree" .chezmoi.workingTree | toToml -}}

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 
-@unittest.skipUnless(os.name == "nt" and shutil.which("chezmoi"), "Windows chezmoi apply hooks")
+@unittest.skipUnless(os.name == "nt" and shutil.which("chezmoi"), "Windows chezmoi configuration")
 class WindowsApplyHookTest(unittest.TestCase):
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
@@ -22,32 +22,14 @@ class WindowsApplyHookTest(unittest.TestCase):
         shutil.copy2(self.repo / "home/.chezmoi.toml.tmpl", self.source)
         for name in (".chezmoidata", ".chezmoitemplates"):
             shutil.copytree(self.repo / "home" / name, self.source / name)
-        scripts = self.checkout / "scripts"
-        scripts.mkdir()
-        shutil.copy2(self.repo / "scripts/windows-apply-pre.ps1", scripts)
-        # The OS probe is covered separately; this fixture tests real chezmoi dispatch.
-        (scripts / "check-wsl2.ps1").write_text(
-            "Add-Content -LiteralPath $env:HOOK_TRACE -Value 'gate'\n"
-            "if ($env:HOOK_BLOCK -eq '1') { throw 'WSL2 fixture is not ready' }\n",
-            encoding="utf-8",
-        )
-        self.home = self.root / "home"
+        self.home = self.root / "user home"
         self.home.mkdir()
         self.target = self.home / ".apply-proof"
         self.target.write_text("old", encoding="utf-8")
         (self.source / "dot_apply-proof").write_text("new", encoding="utf-8")
-        self.script_marker = self.root / "applied.txt"
-        actions = self.source / ".chezmoiscripts"
-        actions.mkdir()
-        (actions / "run_after-proof.ps1").write_text(
-            "Set-Content -LiteralPath $env:APPLY_MARKER -Value 'applied'\n", encoding="utf-8"
-        )
         self.config = self.root / "chezmoi.toml"
-        self.trace = self.root / "trace.txt"
-        self.outside = self.root / "unrelated directory"
-        self.outside.mkdir()
+        self.trace = self.root / "trace.json"
         self.chezmoi = shutil.which("chezmoi")
-        self.shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
         self.env = os.environ.copy()
         self.env.update({
             "HOME": str(self.home), "USERPROFILE": str(self.home),
@@ -57,143 +39,81 @@ class WindowsApplyHookTest(unittest.TestCase):
             "XDG_CACHE_HOME": str(self.root / "cache"),
             "XDG_DATA_HOME": str(self.root / "data"),
             "XDG_STATE_HOME": str(self.root / "state"),
-            "HOOK_TRACE": str(self.trace), "APPLY_MARKER": str(self.script_marker),
+            "HOOK_TRACE": str(self.trace),
         })
-        self.env.pop("HOOK_BLOCK", None)
         self.config.write_text('[data]\nkeep = "unrelated"\n', encoding="utf-8")
 
     def run_chezmoi(self, *args, check=True):
         result = subprocess.run([
             self.chezmoi, "--config", str(self.config), "--source", str(self.checkout),
             "--destination", str(self.home), "--no-tty", *args,
-        ], cwd=self.outside, env=self.env, capture_output=True, text=True,
-            encoding="utf-8", errors="backslashreplace", timeout=60)
+        ], env=self.env, capture_output=True, text=True, encoding="utf-8",
+            errors="backslashreplace", timeout=60)
         if check:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
-    def init(self):
-        return self.run_chezmoi("init")
+    def seed_legacy_hook(self, original, current=None):
+        generated = {"command": "powershell.exe", "args": ["-File", str(self.root / "removed-gate.ps1")]}
+        tables = {
+            "data": {"keep": "unrelated"},
+            "interpreters.py": {"command": sys.executable, "args": []},
+            "hooks.apply.pre": generated if current is None else current,
+            "data.dotfilesWindowsApplyPre.original": original,
+            "data.dotfilesWindowsApplyPre.generated": generated,
+        }
+        self.config.write_text("\n".join(
+            "[" + table + "]\n" + "\n".join(key + " = " + json.dumps(value) for key, value in values.items())
+            for table, values in tables.items()
+        ), encoding="utf-8")
 
-    def lines(self):
-        return self.trace.read_text(encoding="utf-8-sig").splitlines() if self.trace.exists() else []
-
-    def test_failed_gate_blocks_files_and_apply_scripts(self):
-        self.env["HOOK_BLOCK"] = "1"
-        self.init()
-        self.assertFalse(self.trace.exists(), "Initialization ran the apply gate")
-        result = self.run_chezmoi("apply", "--force", check=False)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("WSL2", result.stderr)
-        self.assertEqual(self.target.read_text(encoding="utf-8"), "old")
-        self.assertFalse(self.script_marker.exists())
-
-    def test_dry_run_checks_prerequisites_without_applying(self):
-        self.init()
-        self.run_chezmoi("apply", "--dry-run")
-        self.assertEqual(self.lines(), ["gate"])
-        self.assertEqual(self.target.read_text(encoding="utf-8"), "old")
-        self.assertFalse(self.script_marker.exists())
-        self.env["HOOK_BLOCK"] = "1"
-        result = self.run_chezmoi("apply", "--dry-run", check=False)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(self.target.read_text(encoding="utf-8"), "old")
-
-    def test_script_hook_survives_reinitialization_and_unchanged_apply(self):
-        previous = self.root / "prior hook.py"
-        previous.write_text(
-            "import os, pathlib, sys\n"
-            "with pathlib.Path(os.environ['HOOK_TRACE']).open('a', encoding='utf-8') as stream:\n"
-            "    stream.write('previous:' + sys.argv[1] + '\\n')\n",
-            encoding="utf-8",
-        )
-        self.config.write_text(
-            '[data]\nkeep = "unrelated"\n'
-            '[interpreters.py]\ncommand = ' + json.dumps(sys.executable) + '\nargs = []\n'
-            '[hooks.apply.pre]\nscript = ' + json.dumps(str(previous)) +
-            '\nargs = ["argument with spaces"]\n', encoding="utf-8"
-        )
-        self.init()
-        self.run_chezmoi("apply", "--force")
-        self.init()
-        self.run_chezmoi("apply", "--force")
-        self.assertEqual(self.lines(), ["gate", "previous:argument with spaces"] * 2)
-        self.assertEqual(self.target.read_text(encoding="utf-8"), "new")
-        data = json.loads(self.run_chezmoi("dump-config", "--format", "json").stdout)
-        self.assertEqual(data["data"]["keep"], "unrelated")
-        self.env["HOOK_BLOCK"] = "1"
-        result = self.run_chezmoi("apply", "--force", check=False)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(self.lines()[-1], "gate")
-        self.assertEqual(self.lines().count("previous:argument with spaces"), 2)
-
-    def configure_argument_recorder(self, extension, arguments):
-        previous = self.root / ("argument recorder" + extension)
-        output = self.root / "arguments.json"
-        self.env["HOOK_ARGV"] = str(output)
-        previous.write_text(
+    def recording_hook(self, arguments):
+        script = self.root / "previous hook.py"
+        script.write_text(
             "import json, os, pathlib, sys\n"
-            "pathlib.Path(os.environ['HOOK_ARGV']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n",
+            "pathlib.Path(os.environ['HOOK_TRACE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n",
             encoding="utf-8",
         )
-        self.config.write_text(
-            '[interpreters.py]\ncommand = ' + json.dumps(sys.executable) + '\nargs = []\n'
-            '[hooks.apply.pre]\nscript = ' + json.dumps(str(previous)) +
-            '\nargs = ' + json.dumps(arguments) + '\n', encoding="utf-8",
-        )
-        self.init()
-        return output
+        return {"script": str(script), "args": arguments}
 
-    def test_native_hook_preserves_empty_quotes_and_backslashes(self):
-        arguments = ["", 'say "hello"', 'C:\\path with spaces\\', 'backslash\\"quote']
-        output = self.configure_argument_recorder(".py", arguments)
+    def test_fresh_configuration_applies_without_kubernetes_prerequisites(self):
+        self.run_chezmoi("init")
         self.run_chezmoi("apply", "--force")
-        self.assertEqual(json.loads(output.read_text(encoding="utf-8")), arguments)
-
-    def test_script_interpreter_lookup_ignores_extension_case(self):
-        output = self.configure_argument_recorder(".PY", ["uppercase extension"])
-        self.run_chezmoi("apply", "--force")
-        self.assertEqual(json.loads(output.read_text(encoding="utf-8")), ["uppercase extension"])
-
-    def test_reinitialization_honors_changed_script_interpreter(self):
-        output = self.configure_argument_recorder(".py", [])
-        (self.root / "argument recorder.py").write_text(
-            "import os, pathlib, sys\n"
-            "pathlib.Path(os.environ['HOOK_ARGV']).write_text(str(sys.flags.isolated))\n",
-            encoding="utf-8",
-        )
-        self.run_chezmoi("apply", "--force")
-        self.assertEqual(output.read_text(), "0")
-        template = ("{{ include " + json.dumps(str(self.config)) +
-                    ' | fromToml | setValueAtPath "interpreters.py.args" (list "-I") | toToml }}')
-        self.config.write_text(self.run_chezmoi("execute-template", template).stdout, encoding="utf-8")
-        self.init()
-        self.run_chezmoi("apply", "--force")
-        self.assertEqual(output.read_text(), "1")
-
-    def test_prior_command_does_not_resolve_powershell_alias(self):
-        self.config.write_text(
-            '[hooks.apply.pre]\ncommand = "where"\nargs = ["powershell.exe"]\n',
-            encoding="utf-8",
-        )
-        self.init()
-        result = self.run_chezmoi("apply", "--force")
-        self.assertIn("powershell.exe", result.stdout.lower())
         self.assertEqual(self.target.read_text(encoding="utf-8"), "new")
 
-    def test_previous_command_failure_prevents_application(self):
-        previous = self.root / "previous.ps1"
-        previous.write_text("exit 19\n", encoding="utf-8")
-        self.config.write_text(
-            '[hooks.apply.pre]\ncommand = ' + json.dumps(self.shell) +
-            '\nargs = ["-NoProfile", "-File", ' + json.dumps(str(previous)) + ']\n',
-            encoding="utf-8",
-        )
-        self.init()
+    def test_legacy_gate_without_prior_hook_is_removed_idempotently(self):
+        self.seed_legacy_hook({})
+        self.run_chezmoi("init")
+        self.run_chezmoi("init")
+        self.run_chezmoi("apply", "--force")
+        self.assertEqual(self.target.read_text(encoding="utf-8"), "new")
+        config = json.loads(self.run_chezmoi("dump-config", "--format", "json").stdout)
+        self.assertEqual(config["data"]["keep"], "unrelated")
+        self.assertNotIn("dotfilesWindowsApplyPre", config["data"])
+
+    def test_original_hook_is_restored_and_executes_after_reinitialization(self):
+        arguments = ["", 'say "hello"', "C:\\path with spaces\\"]
+        self.seed_legacy_hook(self.recording_hook(arguments))
+        self.run_chezmoi("init")
+        self.run_chezmoi("init")
+        self.run_chezmoi("apply", "--force")
+        self.assertEqual(json.loads(self.trace.read_text(encoding="utf-8")), arguments)
+        self.assertEqual(self.target.read_text(encoding="utf-8"), "new")
+
+    def test_user_replacement_hook_is_not_overwritten_by_saved_original(self):
+        self.seed_legacy_hook({"command": "missing-original-hook"}, self.recording_hook(["user replacement"]))
+        self.run_chezmoi("init")
+        self.run_chezmoi("apply", "--force")
+        self.assertEqual(json.loads(self.trace.read_text(encoding="utf-8")), ["user replacement"])
+        self.assertEqual(self.target.read_text(encoding="utf-8"), "new")
+
+    def test_restored_hook_failure_still_prevents_application(self):
+        self.seed_legacy_hook({"command": sys.executable, "args": ["-c", "raise SystemExit(19)"]})
+        self.run_chezmoi("init")
         result = self.run_chezmoi("apply", "--force", check=False)
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("19", result.stderr)
         self.assertEqual(self.target.read_text(encoding="utf-8"), "old")
-        self.assertFalse(self.script_marker.exists())
 
 
 if __name__ == "__main__":
