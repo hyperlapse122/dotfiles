@@ -544,6 +544,21 @@ Apply only with omp closed, then start a new session to load the resulting skill
 The existing explicit `mise run apply` and registered-checkout `chezmoi update` flows apply these changes.
 Preparation with `mise install` does not install plugins or change configuration; archive enumeration may populate chezmoi's download cache.
 
+### Shared user-scope instructions
+
+All repository-managed AI harnesses must connect to the common instruction source, including harnesses added later.
+Edit `home/.chezmoitemplates/agent-instructions`: common content applies to every connected harness, and render-time `if` branches select harness-specific content without exposing other branches.
+The source is intentionally empty of instruction policies.
+Only omp is currently connected, at `~/.omp/agent/AGENTS.md`; no Claude Code or Codex destination is created.
+
+Explicit apply owns the whole destination and replaces local content, even with the initial empty result.
+It does not migrate personal instructions.
+The `empty_` source attribute keeps the empty file present, while `private_` keeps its POSIX permissions owner-only.
+This uses normal context discovery rather than replacing omp's system prompt.
+It covers the default user-global profile; omp task subagents do not inherit files named `AGENTS.md`.
+See [the source editing and harness onboarding procedure](home/README.md#shared-user-scope-harness-instructions) before adding content or another managed harness.
+
+
 ### Mutable omp settings
 
 The repository uses `modify_` templates rather than storing a complete personal `config.yml`.
