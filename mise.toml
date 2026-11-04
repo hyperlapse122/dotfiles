@@ -3,7 +3,19 @@ lockfile = true
 
 [tools]
 ast-grep = "latest"
+chezmoi = { version = "latest", libc = "musl" }
 gh = "latest"
 jq = "latest"
 powershell = "latest"
 python = "latest"
+
+[hooks]
+postinstall = { task = "bootstrap" }
+
+[tasks.bootstrap]
+description = "Check the chezmoi source without applying personal settings"
+run = 'chezmoi --config "{{config_root}}/.chezmoi-bootstrap.toml" --source "{{config_root}}" managed --exclude=scripts'
+
+[tasks.apply]
+description = "Apply this worktree's chezmoi configuration to the user home"
+run = 'chezmoi --source "{{config_root}}" apply'

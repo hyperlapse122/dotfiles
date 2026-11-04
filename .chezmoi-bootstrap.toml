@@ -1,0 +1,2 @@
+# Bootstrap deliberately has no personal configuration or hooks.
+# Keep this separate from the config used for explicit application.
