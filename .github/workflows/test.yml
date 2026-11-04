@@ -10,11 +10,12 @@ permissions:
 
 jobs:
   unit:
-    name: Unit and six-target rendering (${{ matrix.runner }})
+    name: Unit and supported-target rendering (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, windows-2025, macos-15]
+        # Two newest Ubuntu LTS releases, latest Xcode on ARM64, unchanged Windows.
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, windows-2025, xcode-27]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,7 +50,7 @@ jobs:
         run: mise exec -- python -m unittest discover -s tests
 
   native:
-    name: Native pinned omp and terminal PATH (${{ matrix.target }})
+    name: Native pinned omp and terminal PATH (${{ matrix.runner }}, ${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -58,13 +59,15 @@ jobs:
             target: linux-amd64
           - runner: ubuntu-24.04-arm
             target: linux-arm64
+          - runner: ubuntu-26.04
+            target: linux-amd64
+          - runner: ubuntu-26.04-arm
+            target: linux-arm64
           - runner: windows-2025
             target: windows-amd64
           - runner: windows-11-arm
             target: windows-arm64
-          - runner: macos-15-intel
-            target: darwin-amd64
-          - runner: macos-15
+          - runner: xcode-27
             target: darwin-arm64
     runs-on: ${{ matrix.runner }}
     env:

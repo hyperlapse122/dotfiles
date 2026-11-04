@@ -153,7 +153,7 @@ class PersonalAppsTest(unittest.TestCase):
                    + '{{ define "external" }}' + template + '{{ end }}')
         return self.run_chezmoi("execute-template", input=wrapper)
 
-    def test_all_six_platforms_select_their_locked_target(self):
+    def test_supported_platforms_select_their_locked_target(self):
         targets = self.apps["personalApps"]["omp"]["targets"]
         for number, target in enumerate(targets):
             self.locks["personalAppLocks"]["omp"]["targets"][target] = {
@@ -177,9 +177,15 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(self.requests, [])
 
     def test_unsupported_platform_emits_no_app(self):
-        result = self.render_external("freebsd", "amd64")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(tomllib.loads(result.stdout), {})
+        self.locks["personalAppLocks"]["omp"]["targets"]["darwin-amd64"] = (
+            self.locks["personalAppLocks"]["omp"]["targets"]["linux-amd64"]
+        )
+        self.write_locks()
+        for os_name, arch in (("freebsd", "amd64"), ("darwin", "amd64")):
+            with self.subTest(os=os_name, arch=arch):
+                result = self.render_external(os_name, arch)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(tomllib.loads(result.stdout), {})
         self.assertEqual(self.requests, [])
 
     def test_missing_supported_target_pin_fails(self):

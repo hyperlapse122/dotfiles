@@ -43,7 +43,7 @@ Private-key access remains GPG's responsibility, without source-level hardware c
 ## Personal application data
 
 `.chezmoidata/personal-apps.json` owns the `personalApps` declarations: a GitHub repository, command name, and asset name for each supported Go OS/architecture key.
-Use `amd64` for x64 hosts and `darwin` for macOS.
+Use `amd64` for Linux and Windows x64 hosts and `darwin` for macOS; macOS application targets are ARM64 only.
 `.chezmoidata/personal-app-lock.json` owns the generated `personalAppLocks` records with the release tag and each target's URL and SHA-256.
 Chezmoi merges both JSON files at the data root; filenames do not create namespaces.
 

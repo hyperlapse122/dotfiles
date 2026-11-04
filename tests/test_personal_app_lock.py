@@ -22,7 +22,9 @@ class PersonalAppLockTest(unittest.TestCase):
         self.data_dir.mkdir(parents=True)
         self.application = {
             "command": "example", "repository": "owner/example",
-            "targets": {f"{os}-{arch}": f"example-{os}-{arch}" for os in ("darwin", "linux", "windows") for arch in ("amd64", "arm64")},
+            "targets": {target: f"example-{target}" for target in (
+                "darwin-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "windows-arm64",
+            )},
         }
         self.manifest = self.data_dir / "personal-apps.json"
         self.manifest.write_text(json.dumps({"personalApps": {"example": self.application}}), encoding="utf-8")
@@ -59,7 +61,7 @@ class PersonalAppLockTest(unittest.TestCase):
         self.release["assets"][0]["digest"] = "sha256:" + "f" * 64
         self.assertTrue(self.refresh())
         lock = json.loads(self.lock_path.read_text(encoding="utf-8"))["personalAppLocks"]["example"]
-        self.assertEqual(lock["targets"]["darwin-amd64"]["sha256"], "f" * 64)
+        self.assertEqual(lock["targets"]["darwin-arm64"]["sha256"], "f" * 64)
 
     def test_incomplete_or_ambiguous_release_preserves_lock(self):
         cases = []
