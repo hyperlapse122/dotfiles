@@ -151,6 +151,7 @@ pinentryProgram = "D:/Tools/Gpg4win/bin/pinentry.exe"
 The managed GPG home is `%USERPROFILE%/AppData/Roaming/gnupg` on Windows and `~/.gnupg` on Linux/macOS.
 Before writing personal files, application checks the selected installation's effective GPG home and stops if it differs, including custom `GNUPGHOME` or Windows registry/portable-installation choices.
 Reconcile that location before applying; custom GPG-home relocation is not managed here.
+Linked GPG-home directories are rejected rather than replaced, including Windows reparse points in the managed parent directories.
 
 Only active `pinentry-program` entries in `gpg-agent.conf` are replaced.
 Comments, unrelated agent settings, keys, and trust databases remain unmanaged.

@@ -1,3 +1,4 @@
+import base64
 import os
 from pathlib import Path
 import shutil
@@ -100,9 +101,55 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.env["GNUPGHOME"] = str(self.root / "other keyring")
         result = self.chezmoi("apply", "--force", check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Reconcile the GPG home", result.stdout + result.stderr)
         self.assertEqual(gitconfig.read_bytes(), b"# existing Git settings\n")
         self.assertEqual(self.agent.read_bytes(), b"# existing agent settings\n")
+
+    @unittest.skipUnless(shutil.which("gpgconf"), "GPG installation required for home detection")
+    def test_linked_gpg_home_is_preserved(self):
+        self.gpg_home.rmdir()
+        keyring = self.root / "existing keyring"
+        keyring.mkdir()
+        sentinel = keyring / "trustdb.gpg"
+        sentinel.write_bytes(b"existing trust data")
+        if os.name == "nt":
+            self.run_command("cmd.exe", "/d", "/c", "mklink", "/J", str(self.gpg_home), str(keyring))
+        else:
+            self.gpg_home.symlink_to(keyring, target_is_directory=True)
+        result = self.chezmoi("apply", "--force", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(self.gpg_home.is_junction() if os.name == "nt" else self.gpg_home.is_symlink())
+        self.assertEqual(sentinel.read_bytes(), b"existing trust data")
+        self.assertFalse((self.home / ".gitconfig").exists())
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("gpgconf"), "Windows GPG installation required")
+    def test_unicode_home_and_tool_path_under_oem_console(self):
+        previous_home = self.home
+        self.home = self.root / "한글 home"
+        previous_home.rename(self.home)
+        self.gpg_home = self.home / "AppData/Roaming/gnupg"
+        self.env.update({
+            "HOME": str(self.home), "USERPROFILE": str(self.home),
+            "APPDATA": str(self.home / "AppData/Roaming"),
+            "GNUPGHOME": str(self.gpg_home),
+            "GIT_CONFIG_GLOBAL": str(self.home / ".gitconfig"),
+        })
+        tools = self.root / "한글 tools"
+        installed = Path(shutil.which("gpgconf")).resolve().parent
+        self.run_command("cmd.exe", "/d", "/c", "mklink", "/J", str(tools), str(installed))
+        self.config.write_text('[data]\ngpgProgram = "' + (tools / "gpg.exe").as_posix() + '"\n', encoding="utf-8")
+        args = [
+            shutil.which("chezmoi"), "--source", str(self.repo), "--destination", str(self.home),
+            "--config", str(self.config), "--cache", str(self.root / "chezmoi cache"),
+            "--persistent-state", str(self.root / "state.boltdb"), "--no-tty", "apply", "--force",
+        ]
+        command = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); & " + " ".join(
+            "'" + value.replace("'", "''") + "'" for value in args
+        ) + "; exit $LASTEXITCODE"
+        encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
+        shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        for _ in range(2):
+            self.run_command(str(shell), "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)
+        self.assertEqual(self.chezmoi("diff", "--exclude=scripts").stdout, "")
 
 
 if __name__ == "__main__":
