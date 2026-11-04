@@ -1,0 +1,5 @@
+{{- $config := dict -}}
+{{- if stat .chezmoi.configFile -}}
+{{- $config = include .chezmoi.configFile | fromToml -}}
+{{- end -}}
+{{- $config | setValueAtPath "sourceDir" .chezmoi.workingTree | setValueAtPath "workingTree" .chezmoi.workingTree | toToml -}}
