@@ -122,6 +122,10 @@ def main():
             "XDG_DATA_HOME": str(root / "data"), "XDG_CACHE_HOME": str(root / "cache"),
             "XDG_STATE_HOME": str(root / "state"),
         })
+        if sys.platform == "darwin":
+            # Security resolves account Keychain preferences through the real HOME.
+            # Git config, gh executable, and destination still use the complex fixture path.
+            env["HOME"] = os.environ["HOME"]
         # HOME is not keyring isolation; preserve the disposable OS's session bus.
         command = [tools["chezmoi"], "--source", str(repository), "--destination", str(home),
                    "--config", str(config), "--cache", str(root / "chezmoi-cache"),
@@ -144,6 +148,13 @@ def main():
             data.write_text(original.replace("621512777E6933FEB4458FDC4945855D4F283F05", recipient),
                             encoding="utf-8")
             run(command + ["init"], env, operation="Initialize fixture encryption policy")
+            # --exclude=scripts does not suppress config-level apply hooks.
+            config.write_text(run(
+                command + ["execute-template", '{{ unset (.chezmoi.stdin | fromToml) "hooks" | toToml }}',
+                           "--with-stdin"],
+                env, input=config.read_text(encoding="utf-8"),
+                operation="Isolate fixture from personal apply hooks",
+            ), encoding="utf-8")
             run(command + ["apply", "--force", "--exclude=scripts"], env,
                 operation="Install personal gh fixture")
             gh = home / ".local/bin" / ("gh.exe" if os.name == "nt" else "gh")
