@@ -23,8 +23,11 @@ class SecretsTest(unittest.TestCase):
         self.root = Path(scratch.name)
         self.home = self.root / "h"
         self.home.mkdir()
-        self.gpg_home = self.home / ("AppData/Roaming/gnupg" if os.name == "nt" else ".gnupg")
-        self.gpg_home.mkdir(parents=True)
+        # Unix needs a non-default home to avoid the per-user default agent socket.
+        # Windows already isolates sockets by profile; keep its short native layout.
+        self.gpg_home = (self.home / "AppData/Roaming/gnupg"
+                         if os.name == "nt" else self.root / "keyring")
+        self.gpg_home.mkdir(parents=True, mode=0o700)
         self.source = self.root / "source"
         self.source.mkdir()
         shutil.copy2(self.repo / ".chezmoiroot", self.source)

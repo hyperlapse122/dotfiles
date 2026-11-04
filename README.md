@@ -189,69 +189,6 @@ Because the check and reload run on every explicit application, `chezmoi diff` i
 To verify on a configured device, create a temporary repository, make a commit with the existing key, complete PIN entry if prompted, and inspect it with `git verify-commit HEAD`.
 Configuration rendering on another OS does not prove its native PIN dialog or hardware integration.
 
-## Personal CLI applications
-
-Chezmoi manages personal application installation independently of mise's development environment.
-The first application is [omp](https://github.com/can1357/oh-my-pi), using native GitHub release binaries for Windows, macOS, and GNU/Linux on x64 and arm64.
-Linux musl is not supported.
-No Bun or Python runtime is needed to install the prebuilt application through chezmoi.
-
-Explicit apply installs commands under `~/.local/bin` (`omp.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
-It does not ask upstream for the latest version.
-Preparation with `mise install` does not install personal applications or run PATH actions.
-
-On a registered permanent checkout, update with:
-
-```sh
-chezmoi update
-```
-
-Windows apply adds the installation directory to the user PATH without copying the combined process PATH into persistent settings.
-Existing expandable entries and their registry value kind are preserved; only a separate comparison copy is expanded for duplicate detection.
-Fully close and reopen the terminal host from the desktop or Start menu afterward; a new tab in an already-running terminal may retain its old environment.
-Close running omp sessions before replacing `omp.exe`, and run the update from a separate ordinary terminal.
-
-On macOS/Linux, apply preserves existing Bash and Zsh profiles and adds a source line for the managed PATH fragment.
-It uses the first existing Bash login profile rather than creating a higher-precedence profile, and also covers interactive shells.
-An exported `ZDOTDIR` is respected.
-Custom startup files that exit early or reset PATH afterward may need adjustment; other shells are not configured by this integration.
-If another installation wins command discovery, inspect `Get-Command omp -All` on Windows or `command -v omp` on POSIX and resolve that installation deliberately.
-Apply does not uninstall unrelated software.
-
-### Refresh application pins
-
-Authored declarations live in `home/.chezmoidata/personal-apps.json`.
-Generated tags, release-specific asset URLs, and SHA-256 values live in `home/.chezmoidata/personal-app-lock.json`.
-To resolve the declarations through the mise-installed GitHub CLI:
-
-```sh
-mise exec -- python scripts/update-personal-app-lock.py
-```
-
-The updater invokes `gh api` using the current CLI authentication.
-It publishes a complete pin set only after every required asset and GitHub SHA-256 digest resolves.
-Missing assets, missing digests, and query failures leave the previous lock unchanged.
-An unchanged result does not rewrite the file.
-Do not edit generated pins by hand or replace release-specific URLs with `latest/download` links.
-
-After this feature is merged, the **Update personal application pins** workflow checks daily at 06:23 UTC and supports manual dispatch.
-Release resolution uses the automatically injected `secrets.GITHUB_TOKEN`, exposed to gh as `GH_TOKEN`.
-No custom secret or personal access token is required.
-The workflow validates the new pins and runs the Linux native smoke before committing only a changed lock directly to the default branch.
-Resolution, native validation, and publication use separate jobs; only publication has `contents: write`, and it never executes the downloaded application.
-Validation and publication consume the same immutable lock artifact from the same recorded default-branch base.
-It does not create a PR, force-push, or apply changes to personal devices.
-A conflicting default-branch update fails the normal push instead of overwriting it.
-Hosted schedules are best effort; manual dispatch remains available.
-
-To add another application, add its repository, command name, and supported asset-name mappings to the authored declarations, then regenerate the lock.
-The current renderer supports standalone executable assets; archive-based distributions need an explicit extraction extension before being added.
-Claude Code, gh, and glab are not installed by this change.
-Development-tool declarations in `mise.toml` and `mise.lock` remain separate.
-
-Chezmoi caches downloads, and the renderer includes the pinned digest in the cache identity so same-URL asset replacements are reconciled.
-If a cached download is corrupt, rerun explicitly with `chezmoi apply --refresh-externals`; checksum failure leaves the existing executable untouched.
-
 ### Encrypted API tokens
 
 Secrets use chezmoi's built-in GPG encryption, not SOPS.
@@ -372,6 +309,69 @@ Do not fix that conflict by disabling verification or setting one global CA-file
 CA-file integration and macOS/Linux CA files encrypted with chezmoi's native GPG support, committed as secrets, and installed during explicit apply are tracked separately in [issue #10](https://github.com/hyperlapse122/dotfiles/issues/10).
 The follow-up still needs to distinguish local application files from OS trust-store registration.
 
+## Personal CLI applications
+
+Chezmoi manages personal application installation independently of mise's development environment.
+The first application is [omp](https://github.com/can1357/oh-my-pi), using native GitHub release binaries for Windows, macOS, and GNU/Linux on x64 and arm64.
+Linux musl is not supported.
+No Bun or Python runtime is needed to install the prebuilt application through chezmoi.
+
+Explicit apply installs commands under `~/.local/bin` (`omp.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
+It does not ask upstream for the latest version.
+Preparation with `mise install` does not install personal applications or run PATH actions.
+
+On a registered permanent checkout, update with:
+
+```sh
+chezmoi update
+```
+
+Windows apply adds the installation directory to the user PATH without copying the combined process PATH into persistent settings.
+Existing expandable entries and their registry value kind are preserved; only a separate comparison copy is expanded for duplicate detection.
+Fully close and reopen the terminal host from the desktop or Start menu afterward; a new tab in an already-running terminal may retain its old environment.
+Close running omp sessions before replacing `omp.exe`, and run the update from a separate ordinary terminal.
+
+On macOS/Linux, apply preserves existing Bash and Zsh profiles and adds a source line for the managed PATH fragment.
+It uses the first existing Bash login profile rather than creating a higher-precedence profile, and also covers interactive shells.
+An exported `ZDOTDIR` is respected.
+Custom startup files that exit early or reset PATH afterward may need adjustment; other shells are not configured by this integration.
+If another installation wins command discovery, inspect `Get-Command omp -All` on Windows or `command -v omp` on POSIX and resolve that installation deliberately.
+Apply does not uninstall unrelated software.
+
+### Refresh application pins
+
+Authored declarations live in `home/.chezmoidata/personal-apps.json`.
+Generated tags, release-specific asset URLs, and SHA-256 values live in `home/.chezmoidata/personal-app-lock.json`.
+To resolve the declarations through the mise-installed GitHub CLI:
+
+```sh
+mise exec -- python scripts/update-personal-app-lock.py
+```
+
+The updater invokes `gh api` using the current CLI authentication.
+It publishes a complete pin set only after every required asset and GitHub SHA-256 digest resolves.
+Missing assets, missing digests, and query failures leave the previous lock unchanged.
+An unchanged result does not rewrite the file.
+Do not edit generated pins by hand or replace release-specific URLs with `latest/download` links.
+
+After this feature is merged, the **Update personal application pins** workflow checks daily at 06:23 UTC and supports manual dispatch.
+Release resolution uses the automatically injected `secrets.GITHUB_TOKEN`, exposed to gh as `GH_TOKEN`.
+No custom secret or personal access token is required.
+The workflow validates the new pins and runs the Linux native smoke before committing only a changed lock directly to the default branch.
+Resolution, native validation, and publication use separate jobs; only publication has `contents: write`, and it never executes the downloaded application.
+Validation and publication consume the same immutable lock artifact from the same recorded default-branch base.
+It does not create a PR, force-push, or apply changes to personal devices.
+A conflicting default-branch update fails the normal push instead of overwriting it.
+Hosted schedules are best effort; manual dispatch remains available.
+
+To add another application, add its repository, command name, and supported asset-name mappings to the authored declarations, then regenerate the lock.
+The current renderer supports standalone executable assets; archive-based distributions need an explicit extraction extension before being added.
+Claude Code, gh, and glab are not installed by this change.
+Development-tool declarations in `mise.toml` and `mise.lock` remain separate.
+
+Chezmoi caches downloads, and the renderer includes the pinned digest in the cache identity so same-URL asset replacements are reconciled.
+If a cached download is corrupt, rerun explicitly with `chezmoi apply --refresh-externals`; checksum failure leaves the existing executable untouched.
+
 ## Source layout
 
 The repository-root `.chezmoiroot` selects `./home` as chezmoi's source state.
@@ -394,8 +394,8 @@ The bootstrap isolation test initializes twice with an isolated user home and an
 It checks that preparation does not execute those hooks or alter the existing personal setting and config.
 On Windows, entry-point regressions also exercise Windows PowerShell, repeated preparation, Unicode checkout paths with OEM console encoding, destination/origin rejection, and native-command failure propagation.
 Global-source regressions use real Git and chezmoi with isolated homes and a local remote to verify pull/apply, configuration regeneration, repeated registration, and conflict preservation.
-Secret regressions use real GPG and chezmoi with temporary software keys to check effective ciphertext recipients, named-token consumption, destination preservation on decryption failure, repeat application, and preparation without decryption.
-GPG and chezmoi must be available for those tests; they do not exercise the owner's private key or prove native Linux/macOS behavior.
+Secret regressions use real GPG and chezmoi with temporary software keys in fixture-scoped keyrings to check effective ciphertext recipients, named-token consumption, destination preservation on decryption failure, repeat application, and preparation without decryption.
+GPG and chezmoi must be available for those tests; they do not exercise the owner's private key or hardware PIN dialogs.
 Native-CA regressions exercise real Bash startup behavior and Windows registry-provider writes against disposable state; Windows tests never execute the CA apply hook against the owner's actual environment.
 Native Linux/macOS graphical-login behavior requires those platforms; rendering or parsing their configuration is not GUI activation proof.
 Windows app regressions execute real chezmoi scripts against a disposable package inventory, covering repeat application, existing-version preservation, restoration after uninstall, and failure propagation without reaching the host's WinGet.
