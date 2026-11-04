@@ -1,0 +1,23 @@
+{{- $marketplaces := includeTemplate "harness-plugin-marketplaces" . | fromJson -}}
+$ErrorActionPreference = 'Stop'
+$env:HOME = '{{ .chezmoi.destDir | replace "'" "''" }}'
+$env:USERPROFILE = $env:HOME
+$omp = Join-Path $env:HOME '.local/bin/omp.exe'
+
+function Invoke-Omp {
+    & $omp @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "omp exited with code $LASTEXITCODE"
+    }
+}
+{{ range $entry := $marketplaces }}
+{{ if $entry.remove -}}
+Invoke-Omp 'plugin' 'marketplace' 'remove' '{{ $entry.remove | replace "'" "''" }}'
+{{ end -}}
+{{ if $entry.add -}}
+Invoke-Omp 'plugin' 'marketplace' 'add' '{{ $entry.source | replace "'" "''" }}'
+{{ end -}}
+Invoke-Omp 'plugin' 'marketplace' 'update' '{{ $entry.marketplace | replace "'" "''" }}'
+Invoke-Omp 'plugin' 'install' '--scope' 'user' '--force' '{{ $entry.plugin | replace "'" "''" }}'
+Invoke-Omp 'plugin' 'enable' '--scope' 'user' '{{ $entry.plugin | replace "'" "''" }}'
+{{ end -}}

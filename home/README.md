@@ -65,6 +65,28 @@ PATH actions fingerprint the effective destination; Unix also fingerprints the m
 They do not consume application declarations or release pins, so changes to those data alone do not rerun PATH integration.
 Keep executables declarative: scripts are for PATH integration, not downloading or installing the application payload.
 
+## Harness plugin data and partial settings
+
+`.chezmoidata/harness-plugins.json` owns `harnessPlugins` declarations, including upstream repository, stable-tag prefix, native omp identity, and archive exclusions.
+`.chezmoidata/harness-plugin-lock.json` owns the generated `harnessPluginLocks` tag and full commit SHA records.
+Keep these pins independent of host runtime registries and secret-bearing settings.
+
+`.chezmoiexternals/harness-plugins.toml.tmpl` extracts immutable source archives into dedicated exact directories under `.local/share/dotfiles/harness-plugins`.
+The CE declaration excludes alternate-host and site symlink aliases; it does not change the pinned skill content.
+The `.chezmoiscripts/run_onchange_after_20-harness-plugins` scripts reconcile native omp registration and cache after source files exist.
+They fingerprint the selected CE source/pin, native identity, destination, selected omp asset, and consumed template sources; unrelated platform pins and mutable runtime files are excluded.
+Unchanged successful actions are skipped. Native cache/enabled-state drift requires a changed action input or explicit native repair; managed source and YAML still reconcile on every apply.
+Marketplace decisions are rendered at execution time through the current chezmoi executable with a hook-free empty config and a disposable state database, so destination state cannot become an onchange dependency or reopen the parent's database lock.
+Windows uses a BOM-prefixed `.ps1.tmpl`; UTF-8 data/output files avoid PowerShell 5.1 native-argument JSON quoting and stdout decoding.
+Only CE's registration and managed package are reconciled; other plugin records remain native state.
+
+The `private_dot_omp/private_agent/modify_private_config.yml` and `.yaml` targets share the `omp-config` partial.
+Conditional ignores select the effective existing YAML file, and the partial updates only the owned semantic value.
+Keep the `chezmoi:modify-template` marker and omit `.tmpl` from these filenames.
+The private attributes keep configuration files owner-only (`0600`) and their managed parent directories private (`0700`) on POSIX, including unchanged-content reapplication.
+The template refuses to create YAML over pending legacy settings migration and propagates parse failures.
+This is not a comment-preserving editor or a lock shared with a running omp process.
+
 ## Script lifecycle
 
 Use scripts only when managed files cannot represent the action.

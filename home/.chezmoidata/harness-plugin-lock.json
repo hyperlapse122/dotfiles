@@ -1,0 +1,8 @@
+{
+  "harnessPluginLocks": {
+    "compound-engineering": {
+      "commit": "42f9745ea0a4b70f8dde059aa8cf7f974d2991f1",
+      "tag": "compound-engineering-v3.35.1"
+    }
+  }
+}

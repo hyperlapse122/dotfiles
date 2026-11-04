@@ -1,0 +1,8 @@
+{{- $plugins := dict -}}
+{{- $pins := dict -}}
+{{- range $name, $plugin := .harnessPlugins -}}
+{{- $_ := set $plugins $name (dict "omp" $plugin.omp "repository" $plugin.repository "archiveExclude" $plugin.archiveExclude) -}}
+{{- $_ := set $pins $name (dict "commit" (index $.harnessPluginLocks $name).commit) -}}
+{{- end -}}
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- dict "harnessPlugins" $plugins "harnessPluginLocks" $pins "ompBinary" (index .personalAppLocks.omp.targets $target) "home" .chezmoi.destDir "target" $target | toJson -}}

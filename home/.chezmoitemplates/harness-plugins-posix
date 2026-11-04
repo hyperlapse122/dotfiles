@@ -1,0 +1,18 @@
+{{- $marketplaces := includeTemplate "harness-plugin-marketplaces" . | fromJson -}}
+#!/bin/sh
+set -eu
+
+HOME='{{ .chezmoi.destDir | replace "'" "'\\''" }}'
+export HOME
+omp="$HOME/.local/bin/omp"
+{{ range $entry := $marketplaces }}
+{{ if $entry.remove -}}
+"$omp" plugin marketplace remove '{{ $entry.remove | replace "'" "'\\''" }}'
+{{ end -}}
+{{ if $entry.add -}}
+"$omp" plugin marketplace add '{{ $entry.source | replace "'" "'\\''" }}'
+{{ end -}}
+"$omp" plugin marketplace update '{{ $entry.marketplace | replace "'" "'\\''" }}'
+"$omp" plugin install --scope user --force '{{ $entry.plugin | replace "'" "'\\''" }}'
+"$omp" plugin enable --scope user '{{ $entry.plugin | replace "'" "'\\''" }}'
+{{ end -}}

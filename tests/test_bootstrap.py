@@ -4,8 +4,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
+
+from smoke_personal_apps import temporary_destination
 
 
 class BootstrapIsolationTest(unittest.TestCase):
@@ -14,7 +15,7 @@ class BootstrapIsolationTest(unittest.TestCase):
         mise = shutil.which("mise")
         self.assertIsNotNone(mise, "Install mise before running bootstrap tests")
 
-        with tempfile.TemporaryDirectory(prefix="bootstrap isolation ") as scratch:
+        with temporary_destination() as scratch:
             root = Path(scratch)
             home = root / "user home"
             home.mkdir()

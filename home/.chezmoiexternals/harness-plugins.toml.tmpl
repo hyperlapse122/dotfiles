@@ -1,0 +1,15 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if hasKey .personalApps.omp.targets $target -}}
+{{- range $name, $plugin := .harnessPlugins -}}
+{{- $pin := index $.harnessPluginLocks $name | default dict -}}
+{{- if not (regexMatch "^[0-9a-f]{40}$" (get $pin "commit")) -}}
+{{- fail (printf "Missing full harness plugin commit pin for %s" $name) -}}
+{{- end }}
+[{{ printf ".local/share/dotfiles/harness-plugins/%s" $name | quote }}]
+type = "archive"
+url = {{ printf "https://github.com/%s/archive/%s.tar.gz" $plugin.repository $pin.commit | quote }}
+stripComponents = 1
+exact = true
+exclude = {{ get $plugin "archiveExclude" | default list | toJson }}
+{{ end -}}
+{{- end -}}

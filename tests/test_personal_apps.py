@@ -28,7 +28,10 @@ class PersonalAppsTest(unittest.TestCase):
         self.source = self.root / "source"
         self.source.mkdir()
         for directory in (".chezmoidata", ".chezmoiexternals", "dot_config"):
-            shutil.copytree(self.repo / "home" / directory, self.source / directory)
+            shutil.copytree(
+                self.repo / "home" / directory, self.source / directory,
+                ignore=shutil.ignore_patterns("harness-plugins.toml.tmpl"),
+            )
         for name in (".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
                      ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl"):
             target = self.source / name
