@@ -1,0 +1,9 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+@echo off
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ^
+ "$gpgconf = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{ printf "%s/gpgconf.exe" (dir ($gpg.program | replace "\\" "/")) | b64enc }}'));" ^
+ "& $gpgconf --reload gpg-agent;" ^
+ "exit $LASTEXITCODE"
+exit /b %errorlevel%
+{{ end -}}

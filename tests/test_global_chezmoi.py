@@ -49,7 +49,9 @@ class GlobalChezmoiTest(unittest.TestCase):
         self.git("clone", str(self.remote), str(self.publisher))
         for name in (".chezmoiroot", ".chezmoi-bootstrap.toml", "configure-chezmoi.ps1"):
             shutil.copy2(self.repo / name, self.publisher / name)
-        shutil.copytree(self.repo / "home", self.publisher / "home")
+        (self.publisher / "home").mkdir()
+        for name in (".chezmoi.toml.tmpl", ".chezmoiignore"):
+            shutil.copy2(self.repo / "home" / name, self.publisher / "home" / name)
         (self.publisher / "home" / "dot_global-proof").write_text("first", encoding="utf-8")
         self.publish("initial")
         self.git("clone", str(self.remote), str(self.checkout))

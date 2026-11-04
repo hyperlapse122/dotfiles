@@ -1,0 +1,12 @@
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+[user]
+    name = {{ .git.name | quote }}
+    email = {{ .git.email | quote }}
+    signingkey = {{ .git.signingKey | quote }}
+[commit]
+    gpgsign = true
+[gpg]
+    format = openpgp
+    program = {{ $gpg.program | replace "\\" "/" | quote }}
+[init]
+    defaultBranch = main
