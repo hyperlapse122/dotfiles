@@ -109,6 +109,7 @@ def main():
                 local = repository / ".git/glab-cli/config.yml"
                 local.parent.mkdir()
                 local.write_text('is_oauth2: "true"\n', encoding="utf-8")
+                local.chmod(0o600)
                 ciphertext = source / ".secrets/api-tokens.yaml.asc"
                 ciphertext.parent.mkdir(mode=0o700)
 
@@ -126,52 +127,10 @@ def main():
                             or document["host"] != "other.invalid"
                             or token in metadata.read_text(encoding="utf-8")):
                         raise RuntimeError("GitLab metadata preservation failed")
-                    credential_input = "protocol=https\nhost=" + host + "\n\n"
-                    result = subprocess.run(
-                        [tools["git"], "-C", str(repository), "-c", "core.askPass=", "credential", "fill"],
-                        env=env, input=credential_input, capture_output=True, text=True,
-                        encoding="utf-8", timeout=120)
-                    if result.returncode:
-                        # Temporary hosted discriminator; never expose credential stdout.
-                        for label, probe_env in (("private-repository", auth.private_environment()),
-                                                 ("smoke-repository", env)):
-                            probe = subprocess.run(
-                                [str(glab), "auth", "git-credential", "get"], cwd=repository,
-                                env=probe_env, input=credential_input, capture_output=True,
-                                text=True, encoding="utf-8", timeout=120)
-                            actual = dict(line.split("=", 1) for line in probe.stdout.splitlines() if "=" in line)
-                            print("GitLab boundary " + label + ": returncode=" + str(probe.returncode)
-                                  + " username_matches=" + str(actual.get("username") == user)
-                                  + " password_matches=" + str(actual.get("password") == token))
-                        stderr = result.stderr
-                        categories = [
-                            label for label, marker in (
-                                ("config-parse", "bad config"), ("helper-launch", "not found"),
-                                ("helper-execution", "cannot run"), ("credential-resolution", "failed to resolve"),
-                                ("username-unavailable", "could not read Username"),
-                                ("password-unavailable", "could not read Password"),
-                                ("unsafe-directory", "dubious ownership"),
-                            ) if marker.lower() in stderr.lower()
-                        ]
-                        print("GitLab boundary git: returncode=" + str(result.returncode)
-                              + " categories=" + ",".join(categories or ["unclassified"]))
-                        redactions = {host, user, token, "other.invalid", "unrelated-fixture",
-                                      "registry.example.invalid", "stale-refresh"}
-                        redactions.update(value for name, value in env.items() if value and any(
-                            word in name.upper() for word in
-                            ("TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "AUTH", "KEY", "HOST",
-                             "USER", "ENDPOINT", "URL")))
-                        safe_lines = []
-                        for line in stderr.splitlines():
-                            if any(marker in line.lower() for marker in
-                                   ("://", "authorization", "private-token", "bearer ", "basic ")):
-                                continue
-                            for value in sorted(redactions, key=len, reverse=True):
-                                line = line.replace(value, "<REDACTED>")
-                            safe_lines.append(line)
-                        print("GitLab boundary sanitized stderr: " + " | ".join(safe_lines))
-                        raise RuntimeError("Git-to-glab native credential lookup failed")
-                    fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+                    result = run([tools["git"], "-C", str(repository), "-c", "core.askPass=", "credential", "fill"],
+                                 env, input="protocol=https\nhost=" + host + "\n\n",
+                                 operation="Git-to-glab native credential lookup")
+                    fields = dict(line.split("=", 1) for line in result.splitlines() if "=" in line)
                     if fields.get("username") != user or fields.get("password") != token:
                         raise RuntimeError("GitLab native credential mismatch")
 

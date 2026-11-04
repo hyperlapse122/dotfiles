@@ -417,6 +417,7 @@ Outside explicit credential import, only runtime application reads the encrypted
 Preparation, initialization, and script-excluded application do not decrypt it or write credentials.
 Local glab configuration contains connection metadata but no managed token; unrelated hosts and settings are preserved.
 The native smoke reads this metadata as YAML because glab can rewrite JSON-compatible configuration during its own migrations.
+Its repository-local OAuth fixture is mode `0600`, as required by glab's Unix configuration permission checks before credential lookup.
 The active configuration directory follows glab's explicit `GLAB_CONFIG_DIR`, existing legacy directory, and platform XDG precedence.
 When only a system XDG configuration exists, its effective settings are preserved in the writable user configuration without modifying the system file.
 An explicit directory value is literal, so expand a leading `~` in the invoking shell if needed.
