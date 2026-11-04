@@ -9,7 +9,13 @@
 {{- $suffix := "" -}}
 {{- if eq $.chezmoi.os "windows" -}}{{- $suffix = ".exe" -}}{{- end }}
 [{{ printf ".local/bin/%s%s" $app.command $suffix | quote }}]
+{{ if hasKey $app "archive" -}}
+type = "archive-file"
+path = {{ printf "%s%s" $app.archive.path $suffix | quote }}
+stripComponents = {{ $app.archive.stripComponents }}
+{{ else -}}
 type = "file"
+{{ end -}}
 url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
 executable = true
 checksum.sha256 = {{ $pin.sha256 | quote }}

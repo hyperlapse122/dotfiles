@@ -209,6 +209,21 @@ No reset is automated by this repository.
 GitHub CLI authentication and Docker Hub (`docker.io`) token authentication through the Windows keyring are tracked separately in [issue #21](https://github.com/hyperlapse122/dotfiles/issues/21).
 This setup does not acquire tokens, configure registry credentials, or create Kubernetes image-pull secrets.
 
+### Repository clones with ghq
+
+Explicitly applying personal settings installs the pinned [ghq](https://github.com/x-motemen/ghq) binary under `~/.local/bin` and sets `ghq.root` to `~/src` in the managed global Git configuration.
+After refreshing the terminal environment as described under Personal CLI applications, run from any directory:
+
+```sh
+ghq root
+ghq get https://github.com/hyperlapse122/dotfiles.git
+```
+
+The clone is placed at `~/src/github.com/hyperlapse122/dotfiles`, matching the Windows bootstrap checkout layout.
+If that clone already exists, `ghq get` leaves it unchanged unless `-u` is supplied.
+Existing clones elsewhere are not moved, and bootstrap does not apply the Git setting.
+An existing `GHQ_ROOT` environment variable overrides `ghq.root`; unset it to use `~/src`.
+
 ### Git signing and GPG pinentry
 
 The managed global Git configuration uses `Joosung Park`, `hyperlapse@jpi.co.kr`, signing key `621512777E6933FEB4458FDC4945855D4F283F05`, and automatic OpenPGP commit signing.
@@ -377,11 +392,13 @@ The follow-up still needs to distinguish local application files from OS trust-s
 ## Personal CLI applications
 
 Chezmoi manages personal application installation independently of mise's development environment.
-The first application is [omp](https://github.com/can1357/oh-my-pi), using native GitHub release binaries for Windows and GNU/Linux on x64 and ARM64, and for macOS on ARM64 (Apple Silicon) only.
+The applications are [omp](https://github.com/can1357/oh-my-pi) and [ghq](https://github.com/x-motemen/ghq), using native GitHub release binaries for Windows and GNU/Linux on x64 and ARM64, and for macOS on ARM64 (Apple Silicon).
+ghq also supports macOS on x64.
 Linux musl is not supported.
 No Bun or Python runtime is needed to install the prebuilt application through chezmoi.
 
-Explicit apply installs commands under `~/.local/bin` (`omp.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
+Explicit apply installs commands under `~/.local/bin` (`omp.exe` and `ghq.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
+For ghq, the checksum covers the release ZIP; chezmoi extracts only the executable through an `archive-file` external.
 It does not ask upstream for the latest version.
 Preparation with `mise install` does not install personal applications or run PATH actions.
 
@@ -409,6 +426,7 @@ Apply does not uninstall unrelated software.
 
 Authored declarations live in `home/.chezmoidata/personal-apps.json`.
 Generated tags, release-specific asset URLs, and SHA-256 values live in `home/.chezmoidata/personal-app-lock.json`.
+Applications shipped as archives declare `archive.path` without the Windows `.exe` suffix and `archive.stripComponents` alongside their target assets.
 To resolve the declarations through the mise-installed GitHub CLI:
 
 ```sh
@@ -572,7 +590,7 @@ This CI setup does not install GPG during worktree preparation or add it to the 
 
 Personal-application regressions use loopback HTTP payloads and real chezmoi in temporary destinations to verify cache reconciliation, checksum failure preservation, and platform selection.
 The ordinary suite never changes the owner's persistent PATH.
-To download and run the actual committed omp binary in an isolated temporary destination:
+To download and run the actual committed personal CLI binaries in an isolated temporary destination:
 
 ```sh
 mise exec -- python tests/smoke_personal_apps.py
