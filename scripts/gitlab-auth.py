@@ -77,8 +77,7 @@ def import_token(source, config, token_file, connection_file):
     except (OSError, ValueError, UnicodeError):
         raise common.AuthError("Cannot read the local GitLab connection file.") from None
     token = common.read_token(token_file)
-    previous = common.read_secrets(source, config)
-    desired = copy.deepcopy(previous)
+    desired = common.read_secrets(source, config)
     record = desired.setdefault("gitlab", {})
     if not isinstance(record, dict):
         raise common.AuthError("Existing GitLab secrets must contain a mapping.")
@@ -89,23 +88,38 @@ def import_token(source, config, token_file, connection_file):
     common.publish_secrets(source, config, desired, token_file)
 
 
-def windows_config_home():
-    # adrg/xdg prefers the Windows Known Folder over LOCALAPPDATA overrides.
+def windows_known_folder(identifier, env_names, fallback):
+    # adrg/xdg prefers Windows Known Folders over environment overrides.
     folder_id = (ctypes.c_ubyte * 16).from_buffer_copy(
-        uuid.UUID("f1b32785-6fba-4fcf-9d55-7b8e7f157091").bytes_le)
+        uuid.UUID(identifier).bytes_le)
     value = ctypes.c_wchar_p()
     shell = ctypes.WinDLL("shell32")
     shell.SHGetKnownFolderPath.argtypes = [ctypes.c_void_p, ctypes.c_uint32,
                                          ctypes.c_void_p, ctypes.POINTER(ctypes.c_wchar_p)]
     shell.SHGetKnownFolderPath.restype = ctypes.c_long
-    if shell.SHGetKnownFolderPath(ctypes.byref(folder_id), 0, None, ctypes.byref(value)) == 0:
-        try:
-            return Path(value.value)
-        finally:
-            ole = ctypes.WinDLL("ole32")
-            ole.CoTaskMemFree.argtypes = [ctypes.c_void_p]
-            ole.CoTaskMemFree(value)
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local")
+    for flags in (0x4000, 0x4400):  # DONT_VERIFY, then DEFAULT_PATH | DONT_VERIFY.
+        if shell.SHGetKnownFolderPath(ctypes.byref(folder_id), flags, None, ctypes.byref(value)) == 0:
+            try:
+                return Path(value.value)
+            finally:
+                ole = ctypes.WinDLL("ole32")
+                ole.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+                ole.CoTaskMemFree(value)
+    return Path(next((os.environ[name] for name in env_names if os.environ.get(name)), fallback))
+
+
+def xdg_path(value):
+    if not value:
+        return None
+    if sys.platform == "win32":
+        if value.startswith("%USERPROFILE%"):
+            home = windows_known_folder(
+                "5e6c858f-0e22-4760-9afe-ea3317b67173", ("USERPROFILE",), Path.home())
+            value = str(home / value[13:].lstrip("/\\"))
+    elif value.startswith(("~", "$HOME")):
+        value = str(Path.home() / value[1 if value.startswith("~") else 5:].lstrip("/"))
+    path = Path(value)
+    return path if path.is_absolute() else None
 
 
 def glab_config_directory():
@@ -114,16 +128,44 @@ def glab_config_directory():
     legacy = Path.home() / ".config/glab-cli"
     if (legacy / "config.yml").is_file():
         return legacy
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    if xdg and Path(xdg).is_absolute():
-        return Path(xdg) / "glab-cli"
+    xdg = xdg_path(os.environ.get("XDG_CONFIG_HOME"))
+    if xdg:
+        return xdg / "glab-cli"
     if sys.platform == "win32":
-        base = windows_config_home()
+        base = windows_known_folder(
+            "f1b32785-6fba-4fcf-9d55-7b8e7f157091", ("LOCALAPPDATA",), Path.home() / "AppData/Local")
     elif sys.platform == "darwin":
         base = Path.home() / "Library/Application Support"
     else:
         base = Path.home() / ".config"
     return base / "glab-cli"
+
+
+def glab_config_source(metadata):
+    if os.environ.get("GLAB_CONFIG_DIR") or metadata.exists():
+        return metadata
+    directories = [path for value in os.environ.get("XDG_CONFIG_DIRS", "").split(os.pathsep)
+                   if (path := xdg_path(value)) is not None]
+    if not directories:
+        if sys.platform == "win32":
+            directories = [
+                windows_known_folder("62ab5d82-fdc1-4dc3-a9dd-070d1d495d97",
+                                     ("ProgramData", "ALLUSERSPROFILE"),
+                                     Path(Path.home().anchor) / "ProgramData"),
+                windows_known_folder("3eb685db-65f9-4cf6-a03a-e3ef65729f3d",
+                                     ("APPDATA",), Path.home() / "AppData/Roaming"),
+            ]
+        elif sys.platform == "darwin":
+            directories = [Path.home() / "Library/Preferences", Path("/Library/Application Support"),
+                           Path("/Library/Preferences"), Path.home() / ".config"]
+        else:
+            directories = [Path("/etc/xdg")]
+    # glab reads one global document, but always persists to its writable user directory.
+    for directory in directories:
+        candidate = directory / "glab-cli/config.yml"
+        if candidate.exists():
+            return candidate
+    return metadata
 
 
 def private_environment():
@@ -191,8 +233,10 @@ def apply_auth(source, config, destination):
     if gitlab_user(host, token) != user:
         raise common.AuthError("GitLab token account does not match encrypted account metadata.")
     env = private_environment()
-    metadata = glab_config_directory() / "config.yml"
-    document = common.read_mapping(source, config, metadata)
+    metadata = glab_config_directory().resolve() / "config.yml"
+    active_metadata = glab_config_source(metadata)
+    env["GLAB_CONFIG_DIR"] = str(metadata.parent)
+    document = common.read_mapping(source, config, active_metadata)
     desired = desired_config(document, host, user)
     command = [keyring, "--keyring-path", str(source / "scripts"),
                "--keyring-backend", "cli_native.Keyring"]
@@ -201,7 +245,7 @@ def apply_auth(source, config, destination):
         common.native_set(command, service, "", token, env)
     if common.native_get(command, service, "", env) != token:
         raise common.AuthError("Native GitLab credential verification failed.")
-    if desired != document:
+    if desired != document or active_metadata != metadata:
         common.publish_mapping(metadata, desired)
     verify_credential(glab, host, user, token, env, destination)
     common.publish_text(destination / ".local/share/dotfiles/gitlab.gitconfig", git_include(host, glab))

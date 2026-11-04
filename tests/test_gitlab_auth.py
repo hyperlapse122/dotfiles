@@ -15,6 +15,7 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 SPEC = importlib.util.spec_from_file_location("gitlab_auth", REPO / "scripts/gitlab-auth.py")
+REAL_GLAB = shutil.which("glab")
 
 
 def load_auth():
@@ -45,6 +46,7 @@ class GitlabAuthApplyTest(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
         original_private = self.auth.common.run_private
+        self.original_private = original_private
 
         def read_secrets(*args):
             return {"github": {"token": "untouched"}, "gitlab": {
@@ -140,6 +142,62 @@ class GitlabAuthApplyTest(unittest.TestCase):
             self.assertIn(expected, result.stdout)
             if host == self.host:
                 self.assertNotIn("sentinel", result.stdout)
+
+    @unittest.skipUnless(REAL_GLAB, "Real glab required for config-path contract")
+    def test_relative_config_is_used_from_verification_working_directory(self):
+        selected_users = []
+        def private(argv, **kwargs):
+            if argv[0] == str(self.glab):
+                user = self.original_private(
+                    [REAL_GLAB, "config", "get", "user", "--host", self.host],
+                    env=kwargs["env"], cwd=kwargs["cwd"],
+                    operation="Real glab could not read relative configuration.",
+                ).strip()
+                selected_users.append(user)
+                token = self.store.get(("glab:" + self.host + ":token", ""), "")
+                return "username=" + user + "\npassword=" + token + "\n"
+            return self.original_private(argv, **kwargs)
+
+        with (contextlib.chdir(self.root),
+              mock.patch.dict(os.environ, {"GLAB_CONFIG_DIR": "glab"}),
+              mock.patch.object(self.auth.common, "run_private", side_effect=private)):
+            self.apply()
+        self.assertEqual(selected_users[0], self.user)
+
+    @unittest.skipUnless(REAL_GLAB, "Real glab required for XDG configuration preservation")
+    def test_system_configuration_survives_first_apply_then_user_configuration_wins(self):
+        system = self.root / "system/glab-cli/config.yml"
+        system.parent.mkdir(parents=True)
+        original = {"host": "other.invalid", "git_protocol": "https",
+                    "glamour_style_auto_migrated": "true", "hosts": {
+                        "other.invalid": {"user": "another-owner", "custom": "preserved"}}}
+        system.write_text(json.dumps(original, indent=2), encoding="utf-8")
+        system_bytes = system.read_bytes()
+        self.metadata = self.root / "xdg/glab-cli/config.yml"
+        with (mock.patch.dict(os.environ, {
+                  "GLAB_CONFIG_DIR": "", "XDG_CONFIG_HOME": str(self.metadata.parent.parent),
+                  "XDG_CONFIG_DIRS": str(system.parent.parent), "HOME": str(self.home),
+                  "USERPROFILE": str(self.home)}),
+              mock.patch.object(Path, "home", return_value=self.home)):
+            def protocol():
+                return self.original_private(
+                    [REAL_GLAB, "config", "get", "git_protocol"],
+                    env=self.auth.private_environment(), cwd=self.home,
+                    operation="Real glab could not read isolated XDG configuration.",
+                ).strip()
+
+            self.assertEqual(protocol(), "https")
+            self.assertFalse(self.metadata.exists())
+            self.apply()
+            document = json.loads(self.metadata.read_text(encoding="utf-8"))
+            self.assertEqual(document["host"], original["host"])
+            self.assertEqual(document["hosts"]["other.invalid"], original["hosts"]["other.invalid"])
+            self.assertEqual(protocol(), "https")
+            document["git_protocol"] = "ssh"
+            self.metadata.write_text(json.dumps(document, indent=2), encoding="utf-8")
+            self.apply()
+            self.assertEqual(protocol(), "ssh")
+        self.assertEqual(system.read_bytes(), system_bytes)
 
     def test_failed_cli_selection_withholds_new_git_helper(self):
         with mock.patch.object(self.auth, "verify_credential",

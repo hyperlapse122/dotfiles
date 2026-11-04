@@ -414,6 +414,7 @@ Outside explicit credential import, only runtime application reads the encrypted
 Preparation, initialization, and script-excluded application do not decrypt it or write credentials.
 Local glab configuration contains connection metadata but no managed token; unrelated hosts and settings are preserved.
 The active configuration directory follows glab's explicit `GLAB_CONFIG_DIR`, existing legacy directory, and platform XDG precedence.
+When only a system XDG configuration exists, its effective settings are preserved in the writable user configuration without modifying the system file.
 An explicit directory value is literal, so expand a leading `~` in the invoking shell if needed.
 Host-local PAT selection supersedes stale OAuth state without changing unrelated inherited settings.
 
