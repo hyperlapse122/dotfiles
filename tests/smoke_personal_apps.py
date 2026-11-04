@@ -118,10 +118,24 @@ def fresh_windows_environment(isolated):
     for name, value in isolated.items():
         if name.startswith("XDG_"):
             env[name] = value
-    return {
+    expanded = {
         name: re.sub(r"%([^%]+)%", lambda match: env.get(match[1].upper(), match[0]), value)
         for name, value in env.items()
     }
+    # A machine-wide gh installation legitimately precedes the user's PATH.
+    # Isolate competing installs in this child only; the managed directory
+    # must still be discovered from the PATH action's real registry value.
+    installed = Path(isolated["HOME"]) / ".local/bin"
+    commands = [executable.name for executable in installed.glob("*.exe")]
+    paths = []
+    for entry in expanded["PATH"].split(os.pathsep):
+        directory = Path(entry.strip('"'))
+        if (entry and directory.is_dir() and not directory.samefile(installed)
+                and any((directory / command).is_file() for command in commands)):
+            continue
+        paths.append(entry)
+    expanded["PATH"] = os.pathsep.join(paths)
+    return expanded
 
 
 def check_terminal_path(home, outside, env, name, tag, shells):

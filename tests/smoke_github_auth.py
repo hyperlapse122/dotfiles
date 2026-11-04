@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import traceback
 import uuid
 from unittest import mock
 
@@ -23,6 +24,21 @@ def run(arguments, env, *, input=None, operation="Native authentication smoke"):
     if result.returncode:
         raise RuntimeError(operation + " failed")
     return result.stdout
+
+
+def failure_summary(error):
+    failures = [error]
+    if error.__context__ is not None:
+        failures.append(error.__context__)
+    summaries = []
+    for failure in failures:
+        locations = " -> ".join(
+            f"{Path(frame.filename).name}:{frame.lineno}"
+            for frame in traceback.extract_tb(failure.__traceback__)
+            if Path(frame.filename).name in ("smoke_github_auth.py", "github-auth.py")
+        )
+        summaries.append(type(failure).__name__ + (" at " + locations if locations else ""))
+    return "Native authentication smoke failed: " + "; ".join(summaries) + "; credential output withheld"
 
 
 def main():
@@ -236,6 +252,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
-        # Even a failed subprocess may hold a complete credential response.
-        raise SystemExit("Native authentication smoke failed; credential output withheld") from None
+    except Exception as error:
+        # Exception messages and child output may contain complete credentials.
+        raise SystemExit(failure_summary(error)) from None

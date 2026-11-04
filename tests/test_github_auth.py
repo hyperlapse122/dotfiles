@@ -163,5 +163,24 @@ class GithubAuthApplyTest(unittest.TestCase):
             self.assertEqual(os.environ["GH_TOKEN"], "different")
 
 
+class NativeAuthFailureTest(unittest.TestCase):
+    def test_diagnostics_hide_chained_credential_messages(self):
+        spec = importlib.util.spec_from_file_location(
+            "native_auth_smoke_test", REPO / "tests/smoke_github_auth.py")
+        smoke = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(smoke)
+        secret = "sensitive-fixture-credential-response"
+        try:
+            try:
+                raise ValueError(secret)
+            except ValueError:
+                raise RuntimeError(secret) from None
+        except RuntimeError as error:
+            summary = smoke.failure_summary(error)
+        self.assertNotIn(secret, summary)
+        self.assertIn("RuntimeError", summary)
+        self.assertIn("ValueError", summary)
+
+
 if __name__ == "__main__":
     unittest.main()

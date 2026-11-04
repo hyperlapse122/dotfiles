@@ -638,12 +638,14 @@ mise exec -- python tests/smoke_personal_apps.py
 ```
 
 This smoke excludes PATH scripts.
-CI separately exercises native binaries and fresh-terminal PATH discovery on all five supported application targets.
+CI separately exercises native binaries and fresh-terminal PATH discovery on the five common application targets.
 Its `--path-integration` mode is restricted to disposable GitHub-hosted runners and restores the Windows user PATH afterward.
+On Windows, the child PATH comes from the registry but excludes competing preinstalled application directories; the fixture never inserts the managed directory directly or changes machine PATH.
+Credential smoke uses disposable GPG keys and native stores. Failure diagnostics expose exception types and code locations, not exception messages or credential output.
 
 ### CI runner policy
 
-macOS uses the latest Xcode runner on ARM64 only; Intel Macs are not supported.
+macOS CI uses the latest Xcode runner on ARM64 only; this matrix has no Intel Mac runner.
 Ubuntu coverage follows the two newest LTS releases, each on x64 and ARM64, for both unit tests and native installation/PATH checks.
 Windows runner selection remains fixed, with unit tests on x64 only.
 Keep the explicit labels in `.github/workflows/test.yml` aligned with this policy as new images become available; `xcode-27` is currently a preview image.
@@ -658,4 +660,4 @@ Keep the explicit labels in `.github/workflows/test.yml` aligned with this polic
 | `windows-2025` | `windows-amd64` | Yes |
 | `windows-11-arm` | `windows-arm64` | No |
 
-The scheduled pin updater retains its separate Ubuntu x64 validation job; it is not the cross-platform support matrix.
+The scheduled pin updater reuses this unit and native matrix against its immutable candidate lock before publication.
