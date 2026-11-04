@@ -1,5 +1,34 @@
 {
   "personalAppLocks": {
+    "ghq": {
+      "tag": "v1.12.0",
+      "targets": {
+        "darwin-amd64": {
+          "sha256": "e5dc9f2173e32c0fddc0ffffa67f770492e0f93f734a9bd898f63a21a64cc34d",
+          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_darwin_amd64.zip"
+        },
+        "darwin-arm64": {
+          "sha256": "c1a3d26d435c35b3fa7ca1188488a7cd81d1ee975a4a00db8ee4dbe32be56dfe",
+          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_darwin_arm64.zip"
+        },
+        "linux-amd64": {
+          "sha256": "160e4430014f67eceea4aa899e9dcd8c09e3944d90902ed96fd6cac916f8aad6",
+          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_linux_amd64.zip"
+        },
+        "linux-arm64": {
+          "sha256": "3108a4d8a06c968bd669897a1c3d17c6af70afe015c72b982cc8f227b9c4e8e1",
+          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_linux_arm64.zip"
+        },
+        "windows-amd64": {
+          "sha256": "1525c69728ced46ccf7ed364c8daf7ea12b25b3ee63881e6da0e8584c8ca3159",
+          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_windows_amd64.zip"
+        },
+        "windows-arm64": {
+          "sha256": "8ce738041c0022c4b1a27808a2306ed508ccf7bd351344d48fe397d1a5678a28",
+          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_windows_arm64.zip"
+        }
+      }
+    },
     "omp": {
       "tag": "v18.16.0",
       "targets": {
