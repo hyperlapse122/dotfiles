@@ -52,7 +52,7 @@ def native_keychain(root, env):
         yield
 
 
-def failure_summary(error):
+def failure_summary(error, filenames=("smoke_github_auth.py", "github-auth.py")):
     failures = [error]
     if error.__context__ is not None:
         failures.append(error.__context__)
@@ -61,7 +61,7 @@ def failure_summary(error):
         locations = " -> ".join(
             f"{Path(frame.filename).name}:{frame.lineno}"
             for frame in traceback.extract_tb(failure.__traceback__)
-            if Path(frame.filename).name in ("smoke_github_auth.py", "github-auth.py")
+            if Path(frame.filename).name in filenames
         )
         summaries.append(type(failure).__name__ + (" at " + locations if locations else ""))
     return "Native authentication smoke failed: " + "; ".join(summaries) + "; credential output withheld"

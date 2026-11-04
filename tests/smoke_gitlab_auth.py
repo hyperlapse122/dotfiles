@@ -9,7 +9,7 @@ import tempfile
 import uuid
 from unittest import mock
 
-from smoke_github_auth import native_keychain, run
+from smoke_github_auth import failure_summary, native_keychain, run
 from smoke_personal_apps import temporary_destination
 
 
@@ -160,4 +160,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as error:
-        raise SystemExit("Native GitLab smoke failed (" + type(error).__name__ + "); private output withheld") from None
+        raise SystemExit(failure_summary(
+            error, ("smoke_gitlab_auth.py", "gitlab-auth.py", "smoke_github_auth.py"))) from None
