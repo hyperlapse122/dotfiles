@@ -50,7 +50,7 @@ jobs:
         run: mise exec -- python -m unittest discover -s tests
 
   native:
-    name: Native pinned omp, CE and terminal PATH (${{ matrix.runner }}, ${{ matrix.target }})
+    name: Native apps, CE, PATH, and credentials (${{ matrix.runner }}, ${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -82,8 +82,23 @@ jobs:
       # support that target. Resolve only these existing declarations there;
       # never change the repository's development-tool declarations or pins.
       - name: Install only the tools needed for native smoke
-        run: mise install chezmoi python gh
+        run: mise install chezmoi python gh uv pipx:keyring
       - name: Apply real pins and prove discovery in a fresh terminal
         run: mise exec chezmoi python gh -- python tests/smoke_personal_apps.py --path-integration --expected-target ${{ matrix.target }}
       - name: Apply pinned CE and prove native skill discovery
         run: mise exec chezmoi python gh -- python tests/smoke_harness_plugins.py --expected-target ${{ matrix.target }}
+      - name: Provision disposable Linux credential service
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring
+      - name: Prove native GitHub and Gist credential interoperability
+        if: runner.os != 'Linux'
+        timeout-minutes: 5
+        run: mise exec chezmoi python gh uv pipx:keyring -- python tests/smoke_github_auth.py
+      - name: Prove native credentials in an isolated Linux session
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: |
+          dbus-run-session -- sh -eu -c '
+            printf "%s" fixture-keyring-password | gnome-keyring-daemon --unlock --components=secrets
+            mise exec chezmoi python gh uv pipx:keyring -- python tests/smoke_github_auth.py
+          '

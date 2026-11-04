@@ -291,7 +291,7 @@ This also means other personal `gpg.conf` options do not apply to this workflow.
 GPG still uses its existing key stores and agent; `gpg-agent.conf` and pinentry remain separate.
 No symmetric-passphrase fallback or additional recovery recipient is configured.
 
-`home/.secrets/api-tokens.yaml.asc` contains two encrypted dummy tokens under `example.serviceA` and `example.serviceB`.
+`home/.secrets/api-tokens.yaml.asc` preserves the example mappings and stores the managed GitHub PAT under `github.token`.
 The `.secrets` directory is source-only and ignored as a destination.
 No dummy application configuration is installed automatically.
 Edit and re-encrypt it with:
@@ -310,7 +310,7 @@ To create or replace the encrypted source from a plaintext file kept outside the
 mise exec -- chezmoi --source . encrypt --output home/.secrets/api-tokens.yaml.asc /absolute/path/outside-repo/api-tokens.yaml
 ```
 
-Preserve the `example` mapping when trying the example below; real application-specific token migration is not included.
+Preserve unrelated mappings when editing the encrypted document; the GitHub importer below merges its token without removing them.
 Do not put decrypted tokens in `.chezmoidata`, tracked templates, or persistent chezmoi configuration.
 The shared `secrets` partial decrypts only when a consumer calls it.
 For example, a managed JSON template can select one token:
@@ -330,6 +330,44 @@ Generated application files contain plaintext; `diff`, `cat`, and template previ
 Native GPG encryption/decryption and encrypted-file editing use temporary plaintext files, and editors may leave backups or recovery files.
 Use a trusted local editor and terminal, protect destination access, and never commit or log real decrypted values.
 Losing access to the private key makes existing ciphertext unavailable; key recovery and rotation are not managed here.
+
+### GitHub CLI and Git authentication
+
+`gh` remains declared in both `mise.toml` and generated `mise.lock` for development.
+Chezmoi separately installs the personal executable from `home/.chezmoidata/personal-apps.json` and its generated release lock.
+Git uses that stable `~/.local/bin/gh` path, not a versioned mise path or the checkout's location.
+
+After `mise install` and the explicit encryption initialization above, import a UTF-8 token file:
+
+```sh
+mise exec -- python scripts/github-auth.py import --token-file /path/to/github-token.txt
+```
+
+`--source` selects another repository root; `--config` selects its existing initialized chezmoi configuration.
+The importer keeps the document in memory, stages only ciphertext, verifies the published encrypted document, and then deletes the input.
+Failures before publication retain the input and previous ciphertext; a later input-deletion failure leaves the verified ciphertext available and reports incomplete cleanup.
+Deletion is ordinary filesystem deletion, not secure erasure.
+Do not pass a token value as a command argument or environment setting.
+
+Explicit `mise run apply` installs the personal executable and reconciles authentication for `github.com` and Git HTTPS access to `gist.github.com`.
+The authentication hooks run on every apply so rotation or external keyring deletion is repaired.
+They use the validated chezmoi GPG policy with streaming GPG stdin/stdout, avoiding the temporary plaintext files used by chezmoi's built-in GPG commands.
+Rendered scripts contain only paths and commands, never decrypted tokens.
+Preparation, initialization, and `chezmoi apply --exclude=scripts` do not decrypt or register credentials.
+
+Credentials use Windows Credential Manager, macOS Keychain, or the existing Linux Secret Service login/default collection.
+The mise-managed keyring tool is installed through uv; the explicit native backend never selects a file store or a fallback backend.
+Linux needs a working user-session Secret Service, and native unlock/access prompts remain user actions.
+Unavailable, locked, or denied storage is an error: the hook never calls `gh auth login`, whose plaintext fallback would violate this policy.
+Only the managed account's token fields and active selection are reconciled; unrelated hosts and accounts are preserved.
+Gist receives a native credential alias without being newly registered as a separate GitHub API host.
+
+The managed Git config resets earlier helper chains only for the two HTTPS hosts and then invokes the personal gh helper.
+SSH remotes and other hosts are unchanged.
+Later repository-specific helper settings and ordinary `GH_TOKEN`/`GITHUB_TOKEN` overrides retain their normal precedence; verification excludes those overrides.
+Check account access with `gh auth status --active --hostname github.com`, without `--show-token`.
+Never send `gh auth token` or `git credential fill` output to terminal logs or CI artifacts.
+
 
 ### Native system CA trust
 
@@ -392,13 +430,12 @@ The follow-up still needs to distinguish local application files from OS trust-s
 ## Personal CLI applications
 
 Chezmoi manages personal application installation independently of mise's development environment.
-The applications are [omp](https://github.com/can1357/oh-my-pi) and [ghq](https://github.com/x-motemen/ghq), using native GitHub release binaries for Windows and GNU/Linux on x64 and ARM64, and for macOS on ARM64 (Apple Silicon).
+The managed applications are [omp](https://github.com/can1357/oh-my-pi), [GitHub CLI](https://github.com/cli/cli), and [ghq](https://github.com/x-motemen/ghq), using official releases for Windows and GNU/Linux on x64 and ARM64, and for macOS on ARM64 (Apple Silicon).
 ghq also supports macOS on x64.
 Linux musl is not supported.
-No Bun or Python runtime is needed to install the prebuilt application through chezmoi.
+Installing the prebuilt executables needs no Bun or Python runtime; the separate authentication hooks require the mise-managed Python and keyring tools.
 
-Explicit apply installs commands under `~/.local/bin` (`omp.exe` and `ghq.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
-For ghq, the checksum covers the release ZIP; chezmoi extracts only the executable through an `archive-file` external.
+Explicit apply installs commands under `~/.local/bin` (`omp.exe`, `gh.exe`, and `ghq.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
 It does not ask upstream for the latest version.
 Preparation with `mise install` does not install personal applications or run PATH actions.
 
@@ -426,7 +463,10 @@ Apply does not uninstall unrelated software.
 
 Authored declarations live in `home/.chezmoidata/personal-apps.json`.
 Generated tags, release-specific asset URLs, and SHA-256 values live in `home/.chezmoidata/personal-app-lock.json`.
-Applications shipped as archives declare `archive.path` without the Windows `.exe` suffix and `archive.stripComponents` alongside their target assets.
+Targets declare an asset pattern and installation kind: raw `file` for omp, or `archive-file` with format/member path for gh and ghq.
+Archive targets may also declare `stripComponents`, used by ghq to remove the release ZIP's top-level directory.
+Only `{version}` expansion is supported; generated pins resolve it from the selected release tag and record the archive metadata.
+Checksums cover the downloaded archive, and chezmoi extracts only the executable.
 To resolve the declarations through the mise-installed GitHub CLI:
 
 ```sh
