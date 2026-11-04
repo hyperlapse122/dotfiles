@@ -137,14 +137,22 @@ class GitGpgSettingsTest(unittest.TestCase):
         installed = Path(shutil.which("gpgconf")).resolve().parent
         self.run_command("cmd.exe", "/d", "/c", "mklink", "/J", str(tools), str(installed))
         self.config.write_text('[data]\ngpgProgram = "' + (tools / "gpg.exe").as_posix() + '"\n', encoding="utf-8")
+        # A temporary HOME does not isolate HKCU; execute only the GPG hook.
         args = [
             shutil.which("chezmoi"), "--source", str(self.repo), "--destination", str(self.home),
             "--config", str(self.config), "--cache", str(self.root / "chezmoi cache"),
-            "--persistent-state", str(self.root / "state.boltdb"), "--no-tty", "apply", "--force",
+            "--persistent-state", str(self.root / "state.boltdb"), "--no-tty",
+            "apply", "--force", "--exclude=scripts",
         ]
+        reload_script = self.root / "reload-gpg-agent.cmd"
+        rendered = self.chezmoi(
+            "execute-template", "--file",
+            str(self.repo / "home/run_after_10-reload-gpg-agent.cmd.tmpl"),
+        ).stdout
+        reload_script.write_text(rendered, encoding="utf-8")
         command = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); & " + " ".join(
             "'" + value.replace("'", "''") + "'" for value in args
-        ) + "; exit $LASTEXITCODE"
+        ) + "; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '" + str(reload_script).replace("'", "''") + "'; exit $LASTEXITCODE"
         encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
         shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
         for _ in range(2):

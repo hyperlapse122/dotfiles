@@ -16,6 +16,11 @@ OS-conditional ignores select the Windows or Unix GPG home.
 Before/after scripts check the effective GPG home and reload the agent only during explicit application; Windows uses a profile-free PowerShell invocation through `.cmd` scripts.
 Keys and trust databases are not source-state entries.
 Use scripts only for actions that cannot be represented as managed files.
+Native-CA startup modify templates share `.chezmoitemplates/native-ca-shell` and preserve content outside their marked block.
+Optional Bash login files are selected only when they already exist at the destination.
+Linux uses an OS-managed `environment.d` file; macOS uses an Aqua login LaunchAgent.
+Windows explicit apply invokes the shared registry-provider body in `.chezmoitemplates/native-ca-windows`, changing only the managed user environment value.
+These settings do not provision certificates; the root README lists runtime support and activation limits.
 
 ## Secret source
 

@@ -2,6 +2,23 @@ README.md
 .secrets
 {{ if eq .chezmoi.os "windows" }}
 .gnupg
+.profile
+.bashrc
+.bash_profile
+.bash_login
+.zshenv
 {{ else }}
 AppData
+{{ end }}
+{{ if ne .chezmoi.os "linux" }}
+.config
+{{ end }}
+{{ if ne .chezmoi.os "darwin" }}
+Library
+{{ end }}
+{{ if not (stat (joinPath .chezmoi.destDir ".bash_profile")) }}
+.bash_profile
+{{ end }}
+{{ if not (stat (joinPath .chezmoi.destDir ".bash_login")) }}
+.bash_login
 {{ end }}

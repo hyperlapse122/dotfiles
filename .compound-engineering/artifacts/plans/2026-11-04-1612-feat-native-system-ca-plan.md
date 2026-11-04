@@ -121,7 +121,7 @@ The broader separation below records the current understanding, not a committed 
 - [Java JSSE](https://docs.oracle.com/en/java/javase/21/security/java-secure-socket-extension-jsse-reference-guide.html) and [JDK 25 providers](https://docs.oracle.com/en/java/javase/25/security/oracle-providers.html): default trust selection and native store/provider boundaries.
 - [Git HTTPS configuration](https://git-scm.com/docs/git-config#Documentation/git-config.txt-httpsslCAInfo), [curl native CA options](https://curl.se/docs/manpage.html#--ca-native), and [libcurl environment variables](https://curl.se/libcurl/c/libcurl-env.html): backend-specific trust and CLI/library distinctions.
 - [Go 1.27 crypto/x509 changes](https://go.dev/doc/go1.27#cryptox509) and [Go 1.27.3 root loading](https://github.com/golang/go/blob/go1.27.3/src/crypto/x509/root.go): version-specific filesystem override behavior on Windows and macOS.
-- [Deferred CA integration issue #10](https://github.com/hyperlapse122/dotfiles/issues/10): the recorded follow-up boundary, including SOPS/YubiKey-backed encrypted CA provisioning for macOS and Linux.
+- [Deferred CA integration issue #10](https://github.com/hyperlapse122/dotfiles/issues/10): the recorded follow-up boundary, including encrypted CA provisioning for macOS and Linux; implementation must follow the repository's current chezmoi-native GPG policy.
 
 ---
 

@@ -1,0 +1,5 @@
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path -LiteralPath 'HKCU:\Environment')) {
+    New-Item -Path 'HKCU:\Environment' -ErrorAction Stop | Out-Null
+}
+New-ItemProperty -LiteralPath 'HKCU:\Environment' -Name 'NODE_USE_SYSTEM_CA' -Value '1' -PropertyType String -Force -ErrorAction Stop | Out-Null
