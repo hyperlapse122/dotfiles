@@ -206,7 +206,7 @@ This deletes all workloads and cluster configuration; deleting container images 
 Do not use **Factory Reset** for ordinary test cleanup: it also removes Rancher Desktop settings.
 No reset is automated by this repository.
 
-GitHub CLI authentication and Docker Hub (`docker.io`) token authentication through the Windows keyring are tracked separately in [issue #21](https://github.com/hyperlapse122/dotfiles/issues/21).
+Docker Hub (`docker.io`) token authentication through the Windows keyring remains tracked in [issue #21](https://github.com/hyperlapse122/dotfiles/issues/21).
 This setup does not acquire tokens, configure registry credentials, or create Kubernetes image-pull secrets.
 
 ### Repository clones with ghq
@@ -291,7 +291,7 @@ This also means other personal `gpg.conf` options do not apply to this workflow.
 GPG still uses its existing key stores and agent; `gpg-agent.conf` and pinentry remain separate.
 No symmetric-passphrase fallback or additional recovery recipient is configured.
 
-`home/.secrets/api-tokens.yaml.asc` contains two encrypted dummy tokens under `example.serviceA` and `example.serviceB`.
+`home/.secrets/api-tokens.yaml.asc` preserves the example mappings and stores the managed GitHub PAT under `github.token`.
 The `.secrets` directory is source-only and ignored as a destination.
 No dummy application configuration is installed automatically.
 Edit and re-encrypt it with:
@@ -310,7 +310,7 @@ To create or replace the encrypted source from a plaintext file kept outside the
 mise exec -- chezmoi --source . encrypt --output home/.secrets/api-tokens.yaml.asc /absolute/path/outside-repo/api-tokens.yaml
 ```
 
-Preserve the `example` mapping when trying the example below; real application-specific token migration is not included.
+Preserve unrelated mappings when editing the encrypted document; the GitHub importer below merges its token without removing them.
 Do not put decrypted tokens in `.chezmoidata`, tracked templates, or persistent chezmoi configuration.
 The shared `secrets` partial decrypts only when a consumer calls it.
 For example, a managed JSON template can select one token:
@@ -330,6 +330,46 @@ Generated application files contain plaintext; `diff`, `cat`, and template previ
 Native GPG encryption/decryption and encrypted-file editing use temporary plaintext files, and editors may leave backups or recovery files.
 Use a trusted local editor and terminal, protect destination access, and never commit or log real decrypted values.
 Losing access to the private key makes existing ciphertext unavailable; key recovery and rotation are not managed here.
+
+### GitHub CLI and Git authentication
+
+`gh` remains declared in both `mise.toml` and generated `mise.lock` for development.
+Chezmoi separately installs the personal executable from `home/.chezmoidata/personal-apps.json` and its generated release lock.
+Git uses that stable `~/.local/bin/gh` path, not a versioned mise path or the checkout's location.
+
+After `mise install` and the explicit encryption initialization above, import a UTF-8 token file:
+
+```sh
+mise exec -- python scripts/github-auth.py import --token-file /path/to/github-token.txt
+```
+
+`--source` selects another repository root; `--config` selects its existing initialized chezmoi configuration.
+The importer keeps the document in memory, stages only ciphertext, verifies the published encrypted document, and then deletes the input.
+Failures before publication retain the input and previous ciphertext; a later input-deletion failure leaves the verified ciphertext available and reports incomplete cleanup.
+Deletion is ordinary filesystem deletion, not secure erasure.
+Do not pass a token value as a command argument or environment setting.
+
+Explicit `mise run apply` installs the personal executable and reconciles authentication for `github.com` and Git HTTPS access to `gist.github.com`.
+The authentication hooks run on every apply so rotation or external keyring deletion is repaired.
+They use the validated chezmoi GPG policy with streaming GPG stdin/stdout, avoiding the temporary plaintext files used by chezmoi's built-in GPG commands.
+Rendered scripts contain only paths and commands, never decrypted tokens.
+Preparation, initialization, and `chezmoi apply --exclude=scripts` do not decrypt or register credentials.
+
+Credentials use Windows Credential Manager, macOS Keychain, or the existing Linux Secret Service login/default collection.
+The mise-managed keyring tool is installed through uv; the explicit native backend never selects a file store or a fallback backend.
+On macOS, writes use `security -i` over stdin and gh's native go-keyring encoding; token values never become process arguments.
+Linux needs a working user-session Secret Service, and native unlock/access prompts remain user actions.
+Unavailable, locked, or denied storage is an error: the hook never calls `gh auth login`, whose plaintext fallback would violate this policy.
+Only the managed account's token fields and active selection are reconciled; unrelated hosts and accounts are preserved.
+Gist receives a native credential alias without being newly registered as a separate GitHub API host.
+`GH_CONFIG_DIR` is used verbatim, matching gh; expand a leading `~` in the invoking shell when a home-relative path is intended.
+
+The managed Git config resets earlier helper chains only for the two HTTPS hosts and then invokes the personal gh helper.
+SSH remotes and other hosts are unchanged.
+Later repository-specific helper settings and ordinary `GH_TOKEN`/`GITHUB_TOKEN` overrides retain their normal precedence; verification excludes those overrides.
+Check account access with `gh auth status --active --hostname github.com`, without `--show-token`.
+Never send `gh auth token` or `git credential fill` output to terminal logs or CI artifacts.
+
 
 ### Native system CA trust
 
@@ -392,13 +432,12 @@ The follow-up still needs to distinguish local application files from OS trust-s
 ## Personal CLI applications
 
 Chezmoi manages personal application installation independently of mise's development environment.
-The applications are [omp](https://github.com/can1357/oh-my-pi) and [ghq](https://github.com/x-motemen/ghq), using native GitHub release binaries for Windows and GNU/Linux on x64 and ARM64, and for macOS on ARM64 (Apple Silicon).
+The managed applications are [omp](https://github.com/can1357/oh-my-pi), [GitHub CLI](https://github.com/cli/cli), and [ghq](https://github.com/x-motemen/ghq), using official releases for Windows and GNU/Linux on x64 and ARM64, and for macOS on ARM64 (Apple Silicon).
 ghq also supports macOS on x64.
 Linux musl is not supported.
-No Bun or Python runtime is needed to install the prebuilt application through chezmoi.
+Installing the prebuilt executables needs no Bun or Python runtime; the separate authentication hooks require the mise-managed Python and keyring tools.
 
-Explicit apply installs commands under `~/.local/bin` (`omp.exe` and `ghq.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
-For ghq, the checksum covers the release ZIP; chezmoi extracts only the executable through an `archive-file` external.
+Explicit apply installs commands under `~/.local/bin` (`omp.exe`, `gh.exe`, and `ghq.exe` on Windows), verifies the committed SHA-256, and reconciles them to the repository's pins.
 It does not ask upstream for the latest version.
 Preparation with `mise install` does not install personal applications or run PATH actions.
 
@@ -426,7 +465,10 @@ Apply does not uninstall unrelated software.
 
 Authored declarations live in `home/.chezmoidata/personal-apps.json`.
 Generated tags, release-specific asset URLs, and SHA-256 values live in `home/.chezmoidata/personal-app-lock.json`.
-Applications shipped as archives declare `archive.path` without the Windows `.exe` suffix and `archive.stripComponents` alongside their target assets.
+Targets declare an asset pattern and installation kind: raw `file` for omp, or `archive-file` with format/member path for gh and ghq.
+Archive targets may also declare `stripComponents`, used by ghq to remove the release ZIP's top-level directory.
+Only `{version}` expansion is supported; generated pins resolve it from the selected release tag and record the archive metadata.
+Checksums cover the downloaded archive, and chezmoi extracts only the executable.
 To resolve the declarations through the mise-installed GitHub CLI:
 
 ```sh
@@ -442,7 +484,7 @@ Do not edit generated pins by hand or replace release-specific URLs with `latest
 After this feature is merged, the **Update personal application pins** workflow checks daily at 06:23 UTC and supports manual dispatch.
 Release resolution uses the automatically injected `secrets.GITHUB_TOKEN`, exposed to gh as `GH_TOKEN`.
 No custom secret or personal access token is required.
-The workflow validates the new pins and runs the Linux native smoke before committing only a changed lock directly to the default branch.
+The workflow validates the new pins with the supported-target unit and native application/credential matrix before committing only a changed lock directly to the default branch.
 Resolution, native validation, and publication use separate jobs; only publication has `contents: write`, and it never executes the downloaded application.
 Validation and publication consume the same immutable lock artifact from the same recorded default-branch base.
 It does not create a PR, force-push, or apply changes to personal devices.
@@ -450,8 +492,8 @@ A conflicting default-branch update fails the normal push instead of overwriting
 Hosted schedules are best effort; manual dispatch remains available.
 
 To add another application, add its repository, command name, and supported asset-name mappings to the authored declarations, then regenerate the lock.
-The current renderer supports standalone executable assets; archive-based distributions need an explicit extraction extension before being added.
-Claude Code, gh, and glab are not installed by this change.
+The renderer supports raw executables and archives with an explicit format and executable member path.
+Claude Code and glab are not installed by this change.
 Development-tool declarations in `mise.toml` and `mise.lock` remain separate.
 
 Chezmoi caches downloads, and the renderer includes the pinned digest in the cache identity so same-URL asset replacements are reconciled.
@@ -597,12 +639,16 @@ mise exec -- python tests/smoke_personal_apps.py
 ```
 
 This smoke excludes PATH scripts.
-CI separately exercises native binaries and fresh-terminal PATH discovery on all five supported application targets.
+CI separately exercises native binaries and fresh-terminal PATH discovery on the five common application targets.
 Its `--path-integration` mode is restricted to disposable GitHub-hosted runners and restores the Windows user PATH afterward.
+On Windows, the child PATH comes from the registry but excludes competing preinstalled application directories; the fixture never inserts the managed directory directly or changes machine PATH.
+Credential smoke uses disposable GPG keys and native stores. Failure diagnostics expose exception types and code locations, not exception messages or credential output.
+Its GPG home is separate from the non-ASCII personal-home path probe. macOS uses a disposable unlocked Keychain and restores the runner's original default and search list afterward.
+Credential-store fixtures use LF records on every OS because Git treats a trailing CR as part of the credential URL.
 
 ### CI runner policy
 
-macOS uses the latest Xcode runner on ARM64 only; Intel Macs are not supported.
+macOS CI uses the latest Xcode runner on ARM64 only; this matrix has no Intel Mac runner.
 Ubuntu coverage follows the two newest LTS releases, each on x64 and ARM64, for both unit tests and native installation/PATH checks.
 Windows runner selection remains fixed, with unit tests on x64 only.
 Keep the explicit labels in `.github/workflows/test.yml` aligned with this policy as new images become available; `xcode-27` is currently a preview image.
@@ -617,4 +663,4 @@ Keep the explicit labels in `.github/workflows/test.yml` aligned with this polic
 | `windows-2025` | `windows-amd64` | Yes |
 | `windows-11-arm` | `windows-arm64` | No |
 
-The scheduled pin updater retains its separate Ubuntu x64 validation job; it is not the cross-platform support matrix.
+The scheduled pin updater reuses this unit and native matrix against its immutable candidate lock before publication.

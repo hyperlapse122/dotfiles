@@ -33,6 +33,7 @@ class WindowsBootstrapTest(unittest.TestCase):
         self.git_run("-C", str(self.checkout), "remote", "add", "origin", "https://github.com/hyperlapse122/dotfiles.git")
         for name in ("mise.toml", "mise.lock", ".chezmoiroot", ".chezmoi-bootstrap.toml"):
             shutil.copy2(self.repo / name, self.checkout / name)
+        shutil.copytree(self.repo / ".mise", self.checkout / ".mise")
         shutil.copytree(self.repo / "home", self.checkout / "home")
 
     def git_run(self, *args):

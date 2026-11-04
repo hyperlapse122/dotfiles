@@ -35,6 +35,7 @@ class SecretsTest(unittest.TestCase):
         shutil.copytree(self.repo / "home", self.source / "home", ignore=shutil.ignore_patterns(
             ".chezmoiexternals", "personal-app*.json", "run_onchange_after_10-personal-app-path.*",
             "run_onchange_after_20-harness-plugins.*", "harness-plugin*.json", "private_dot_omp",
+            "run_after_40-github-auth.*",
         ))
         hook_scripts = self.source / "scripts"
         hook_scripts.mkdir()

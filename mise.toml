@@ -6,8 +6,10 @@ ast-grep = "latest"
 chezmoi = { version = "latest", libc = "musl" }
 gh = "latest"
 jq = "latest"
+"pipx:keyring" = { version = "25.7.0", uvx = true }
 powershell = "latest"
 python = "latest"
+uv = "latest"
 
 [hooks]
 postinstall = { task = "bootstrap" }
