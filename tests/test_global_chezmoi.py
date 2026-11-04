@@ -79,6 +79,21 @@ class GlobalChezmoiTest(unittest.TestCase):
         return subprocess.run([str(self.chezmoi), *args], cwd=self.outside, env=self.env,
                               capture_output=True, text=True, encoding="utf-8", timeout=60)
 
+    def test_file_invocation_defaults_to_its_own_checkout(self):
+        script = self.checkout / "configure-chezmoi.ps1"
+        shutil.copy2(self.repo / script.name, script)
+        shutil.copy2(self.repo / ".chezmoi-bootstrap.toml", self.checkout)
+        result = subprocess.run(
+            [str(self.shell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+            cwd=self.outside, env=self.env, capture_output=True, text=True,
+            encoding="utf-8", errors="backslashreplace", timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.run_chezmoi("execute-template", "{{ .chezmoi.workingTree }}")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, self.checkout.as_posix())
+        self.assertFalse((self.home / ".global-proof").exists())
+
     def test_registration_and_updates_keep_permanent_checkout(self):
         result = self.register()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

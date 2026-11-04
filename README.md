@@ -74,6 +74,7 @@ The Windows installation is for everyday use; the mise-managed copy is for repos
 In a fresh shell outside a mise project, `Get-Command chezmoi` should identify the Windows installation.
 Inside an intentionally mise-activated shell, mise can take precedence; use a fresh non-activated shell for everyday commands.
 Registration itself selects the native executable even when a mise copy appears first in PATH.
+It refreshes PATH from the Windows registry for its own process so it can find a newly installed native executable without restarting the parent terminal; persistent PATH values are unchanged.
 No settings are applied automatically, and GUI applications, Git/GPG personal configuration, secrets, and organizational sign-in remain outside bootstrap.
 
 ## Prepare a worktree
