@@ -1,5 +1,3 @@
-"""Native-only Python keyring adapter matching GitHub CLI's storage format."""
-
 from contextlib import closing
 import ctypes
 import sys
@@ -12,8 +10,6 @@ SERVICES = {"gh:github.com", "gh:gist.github.com"}
 
 
 class Keyring(KeyringBackend):
-    """Selected explicitly by the orchestrator, never by backend discovery."""
-
     priority = 1
 
     def _operate(self, operation, service, username, password=None):
