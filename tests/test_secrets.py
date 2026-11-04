@@ -36,6 +36,7 @@ class SecretsTest(unittest.TestCase):
             ".chezmoiexternals", "personal-app*.json", "run_onchange_after_10-personal-app-path.*",
             "run_onchange_after_20-harness-plugins.*", "harness-plugin*.json", "private_dot_omp",
             "run_after_40-github-auth.*",
+            "run_after_45-gitlab-auth.*",
         ))
         hook_scripts = self.source / "scripts"
         hook_scripts.mkdir()
