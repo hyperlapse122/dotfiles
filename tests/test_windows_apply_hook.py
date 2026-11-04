@@ -127,6 +127,60 @@ class WindowsApplyHookTest(unittest.TestCase):
         self.assertEqual(self.lines()[-1], "gate")
         self.assertEqual(self.lines().count("previous:argument with spaces"), 2)
 
+    def configure_argument_recorder(self, extension, arguments):
+        previous = self.root / ("argument recorder" + extension)
+        output = self.root / "arguments.json"
+        self.env["HOOK_ARGV"] = str(output)
+        previous.write_text(
+            "import json, os, pathlib, sys\n"
+            "pathlib.Path(os.environ['HOOK_ARGV']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        self.config.write_text(
+            '[interpreters.py]\ncommand = ' + json.dumps(sys.executable) + '\nargs = []\n'
+            '[hooks.apply.pre]\nscript = ' + json.dumps(str(previous)) +
+            '\nargs = ' + json.dumps(arguments) + '\n', encoding="utf-8",
+        )
+        self.init()
+        return output
+
+    def test_native_hook_preserves_empty_quotes_and_backslashes(self):
+        arguments = ["", 'say "hello"', 'C:\\path with spaces\\', 'backslash\\"quote']
+        output = self.configure_argument_recorder(".py", arguments)
+        self.run_chezmoi("apply", "--force")
+        self.assertEqual(json.loads(output.read_text(encoding="utf-8")), arguments)
+
+    def test_script_interpreter_lookup_ignores_extension_case(self):
+        output = self.configure_argument_recorder(".PY", ["uppercase extension"])
+        self.run_chezmoi("apply", "--force")
+        self.assertEqual(json.loads(output.read_text(encoding="utf-8")), ["uppercase extension"])
+
+    def test_reinitialization_honors_changed_script_interpreter(self):
+        output = self.configure_argument_recorder(".py", [])
+        (self.root / "argument recorder.py").write_text(
+            "import os, pathlib, sys\n"
+            "pathlib.Path(os.environ['HOOK_ARGV']).write_text(str(sys.flags.isolated))\n",
+            encoding="utf-8",
+        )
+        self.run_chezmoi("apply", "--force")
+        self.assertEqual(output.read_text(), "0")
+        template = ("{{ include " + json.dumps(str(self.config)) +
+                    ' | fromToml | setValueAtPath "interpreters.py.args" (list "-I") | toToml }}')
+        self.config.write_text(self.run_chezmoi("execute-template", template).stdout, encoding="utf-8")
+        self.init()
+        self.run_chezmoi("apply", "--force")
+        self.assertEqual(output.read_text(), "1")
+
+    def test_prior_command_does_not_resolve_powershell_alias(self):
+        self.config.write_text(
+            '[hooks.apply.pre]\ncommand = "where"\nargs = ["powershell.exe"]\n',
+            encoding="utf-8",
+        )
+        self.init()
+        result = self.run_chezmoi("apply", "--force")
+        self.assertIn("powershell.exe", result.stdout.lower())
+        self.assertEqual(self.target.read_text(encoding="utf-8"), "new")
+
     def test_previous_command_failure_prevents_application(self):
         previous = self.root / "previous.ps1"
         previous.write_text("exit 19\n", encoding="utf-8")

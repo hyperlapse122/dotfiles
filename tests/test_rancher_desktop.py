@@ -69,6 +69,24 @@ function global:Start-Sleep {
     $global:RancherTestNow = $global:RancherTestNow.AddSeconds($Seconds)
     Add-Content -LiteralPath $env:RANCHER_TEST_SLEEPS -Value $Seconds
 }
+function global:Start-Process {
+    [CmdletBinding()]
+    param([string]$FilePath, [string[]]$ArgumentList, [switch]$NoNewWindow, [switch]$PassThru)
+    if ($env:RANCHER_TEST_MODE -ne 'startup-timeout') {
+        return Microsoft.PowerShell.Management\\Start-Process @PSBoundParameters
+    }
+    $process = [pscustomobject]@{ Handle = 1 }
+    $process | Add-Member ScriptMethod WaitForExit {
+        param([int]$Milliseconds)
+        if ($Milliseconds -lt 0 -or $Milliseconds -gt 300000) { throw 'Invalid startup deadline' }
+        return $false
+    }
+    $process | Add-Member ScriptMethod Kill {
+        Set-Content -LiteralPath $env:RANCHER_TEST_SLEEPS -Value 'startup-terminated'
+    }
+    $process | Add-Member ScriptMethod Dispose {}
+    return $process
+}
 & $Script
 ''', encoding="utf-8-sig")
         self.config = self.root / "chezmoi.toml"
@@ -199,6 +217,14 @@ print(json.dumps({"items": [{"metadata": {"name": "rancher-node"}, "status": {
         self.assertIn("23", result.stdout + result.stderr)
         self.assertEqual(self.cluster(), self.initial)
         self.assertFalse(self.sleeps.exists())
+
+    def test_startup_timeout_terminates_only_its_process_and_stops_apply(self):
+        self.env["RANCHER_TEST_MODE"] = "startup-timeout"
+        result = self.apply(check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("startup timed out", result.stdout + result.stderr)
+        self.assertEqual(self.sleeps.read_text().strip(), "startup-terminated")
+        self.assertEqual(self.cluster(), self.initial)
 
     def test_missing_tools_fail_before_startup(self):
         for tool in ("rdctl", "kubectl"):

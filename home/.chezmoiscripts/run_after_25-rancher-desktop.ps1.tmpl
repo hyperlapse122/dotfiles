@@ -26,12 +26,22 @@ foreach ($extension in @('.exe', '.cmd')) {
     if (Test-Path -LiteralPath $candidate -PathType Leaf) { $kubectl = $candidate; break }
 }
 if (-not $kubectl) { throw 'Rancher Desktop bundled kubectl was not found beside rdctl. Repair the Rancher Desktop installation and rerun chezmoi apply.' }
-& $rdctl start --kubernetes.enabled=true --no-modal-dialogs
-if ($LASTEXITCODE -ne 0) {
-    throw ('Rancher Desktop startup failed (exit {0}). Check Rancher Desktop diagnostics, then rerun chezmoi apply.' -f $LASTEXITCODE)
+$deadline = (Get-Date).AddSeconds(300)
+$startup = Start-Process -FilePath $rdctl -ArgumentList @('start', '--kubernetes.enabled=true', '--no-modal-dialogs') -NoNewWindow -PassThru
+try {
+    $null = $startup.Handle
+    $milliseconds = [Math]::Max(0, [Math]::Floor(($deadline - (Get-Date)).TotalMilliseconds))
+    if (-not $startup.WaitForExit([int]$milliseconds)) {
+        $startup.Kill()
+        throw 'Rancher Desktop startup timed out within 300 seconds. Check Rancher Desktop diagnostics and rerun chezmoi apply.'
+    }
+    if ($startup.ExitCode -ne 0) {
+        throw ('Rancher Desktop startup failed (exit {0}). Check Rancher Desktop diagnostics, then rerun chezmoi apply.' -f $startup.ExitCode)
+    }
+} finally {
+    $startup.Dispose()
 }
 
-$deadline = (Get-Date).AddSeconds(300)
 $diagnostic = 'No Kubernetes readiness response was received.'
 while (($remaining = ($deadline - (Get-Date)).TotalSeconds) -gt 0) {
     $requestTimeout = [Math]::Min(5, [Math]::Floor($remaining))
