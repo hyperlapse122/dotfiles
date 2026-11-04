@@ -149,12 +149,6 @@ class GitGpgSettingsTest(unittest.TestCase):
         })
         tools = self.root / "한글 tools"
         installed = Path(shutil.which("gpgconf")).resolve().parent
-        print("CE_GPG_DIAGNOSTIC binary:", installed, flush=True)
-        print("CE_GPG_DIAGNOSTIC version:",
-              self.run_command(str(installed / "gpgconf.exe"), "--version").stdout, flush=True)
-        print("CE_GPG_DIAGNOSTIC homedir:",
-              repr(self.run_command(str(installed / "gpgconf.exe"), "--list-dirs", "homedir").stdout),
-              flush=True)
         self.run_command("cmd.exe", "/d", "/c", "mklink", "/J", str(tools), str(installed))
         self.config.write_text('[data]\ngpgProgram = "' + (tools / "gpg.exe").as_posix() + '"\n', encoding="utf-8")
         # A temporary HOME does not isolate HKCU; execute only the GPG hook.

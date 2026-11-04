@@ -401,6 +401,9 @@ Native Linux/macOS graphical-login behavior requires those platforms; rendering 
 Windows app regressions execute real chezmoi scripts against a disposable package inventory, covering repeat application, existing-version preservation, restoration after uninstall, and failure propagation without reaching the host's WinGet.
 Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.
+Windows unit CI provisions native Gpg4win on its disposable runner for the existing Git/GPG integration tests.
+Git's bundled MSYS GPG has different path semantics and is not the native Windows prerequisite.
+This CI setup does not install GPG during worktree preparation or add it to the personal application catalog.
 
 Personal-application regressions use loopback HTTP payloads and real chezmoi in temporary destinations to verify cache reconciliation, checksum failure preservation, and platform selection.
 The ordinary suite never changes the owner's persistent PATH.
