@@ -162,7 +162,6 @@ The existing signing key and any required YubiKey must already be ready on the d
 | --- | --- | --- |
 | Windows / Gpg4win | `C:/Program Files/GnuPG/bin/gpg.exe` | `C:/Program Files/Gpg4win/bin/pinentry.exe` |
 | Linux | `/usr/bin/gpg` | `/usr/bin/pinentry` |
-| macOS / Intel Homebrew | `/usr/local/bin/gpg` | `/usr/local/bin/pinentry-mac` |
 | macOS / Apple Silicon Homebrew | `/opt/homebrew/bin/gpg` | `/opt/homebrew/bin/pinentry-mac` |
 
 Common values and platform defaults are split by tool under `home/.chezmoidata/`: `git.yaml` contains the Git identity and `gpg.yaml` contains the OS-specific executable defaults.
@@ -312,7 +311,7 @@ The follow-up still needs to distinguish local application files from OS trust-s
 ## Personal CLI applications
 
 Chezmoi manages personal application installation independently of mise's development environment.
-The first application is [omp](https://github.com/can1357/oh-my-pi), using native GitHub release binaries for Windows, macOS, and GNU/Linux on x64 and arm64.
+The first application is [omp](https://github.com/can1357/oh-my-pi), using native GitHub release binaries for Windows and GNU/Linux on x64 and ARM64, and for macOS on ARM64 (Apple Silicon) only.
 Linux musl is not supported.
 No Bun or Python runtime is needed to install the prebuilt application through chezmoi.
 
@@ -414,5 +413,24 @@ mise exec -- python tests/smoke_personal_apps.py
 ```
 
 This smoke excludes PATH scripts.
-CI separately exercises native binaries and fresh-terminal PATH discovery on all six supported targets.
+CI separately exercises native binaries and fresh-terminal PATH discovery on all five supported application targets.
 Its `--path-integration` mode is restricted to disposable GitHub-hosted runners and restores the Windows user PATH afterward.
+
+### CI runner policy
+
+macOS uses the latest Xcode runner on ARM64 only; Intel Macs are not supported.
+Ubuntu coverage follows the two newest LTS releases, each on x64 and ARM64, for both unit tests and native installation/PATH checks.
+Windows runner selection remains fixed, with unit tests on x64 only.
+Keep the explicit labels in `.github/workflows/test.yml` aligned with this policy as new images become available; `xcode-27` is currently a preview image.
+
+| Runner | Native application target | Unit tests |
+| --- | --- | --- |
+| `ubuntu-24.04` | `linux-amd64` | Yes |
+| `ubuntu-24.04-arm` | `linux-arm64` | Yes |
+| `ubuntu-26.04` | `linux-amd64` | Yes |
+| `ubuntu-26.04-arm` | `linux-arm64` | Yes |
+| `xcode-27` | `darwin-arm64` | Yes |
+| `windows-2025` | `windows-amd64` | Yes |
+| `windows-11-arm` | `windows-arm64` | No |
+
+The scheduled pin updater retains its separate Ubuntu x64 validation job; it is not the cross-platform support matrix.

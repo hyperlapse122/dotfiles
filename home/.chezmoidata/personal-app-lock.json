@@ -3,10 +3,6 @@
     "omp": {
       "tag": "v18.16.0",
       "targets": {
-        "darwin-amd64": {
-          "sha256": "abd62d315b66314f0f635d537407037e7b0d06782513d8035669db5ef744242d",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-darwin-x64"
-        },
         "darwin-arm64": {
           "sha256": "d4a10d97488d6054d2b18198bd24f461079952c7e0fb75ba66336ca0df0cb99e",
           "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-darwin-arm64"

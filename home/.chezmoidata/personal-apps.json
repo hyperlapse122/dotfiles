@@ -4,7 +4,6 @@
       "command": "omp",
       "repository": "can1357/oh-my-pi",
       "targets": {
-        "darwin-amd64": "omp-darwin-x64",
         "darwin-arm64": "omp-darwin-arm64",
         "linux-amd64": "omp-linux-x64",
         "linux-arm64": "omp-linux-arm64",

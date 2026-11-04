@@ -1,6 +1,2 @@
-{{- $platform := .chezmoi.os -}}
-{{- if and (eq $platform "darwin") (eq .chezmoi.arch "arm64") -}}
-{{- $platform = "darwin-arm64" -}}
-{{- end -}}
-{{- $defaults := index .gpgPlatforms $platform -}}
+{{- $defaults := index .gpgPlatforms .chezmoi.os -}}
 {{- dict "program" (get . "gpgProgram" | default $defaults.program) "pinentry" (get . "pinentryProgram" | default $defaults.pinentry) | toJson -}}
