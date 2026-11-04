@@ -100,7 +100,8 @@ Do not hash mutable destination contents, timestamps, or prior execution results
 Use `.ps1.tmpl`, not cmd wrappers or encoded inline commands.
 Emit a UTF-8 BOM with `{{ "\ufeff" -}}` inside the Windows condition so Windows PowerShell 5.1 reads non-ASCII literals correctly.
 Keep scripts compatible with Windows PowerShell 5.1 for first application without pwsh.
-Configuration initialization selects pwsh when discoverable, otherwise Windows PowerShell, and supplies profile-free, noninteractive arguments.
+Configuration initialization selects the built-in Windows PowerShell executable by absolute path and supplies profile-free, noninteractive arguments.
+This remains available outside mise and before system pwsh is installed; the scripts also support direct execution under pwsh.
 Regenerate existing configuration before adopting these scripts, as described in the root README.
 
 ### Repeat application

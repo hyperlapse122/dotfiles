@@ -125,7 +125,7 @@ mise exec -- chezmoi --source . init
 
 Initialization does not apply personal settings.
 It preserves unrelated configuration and configures `.ps1` execution with `-NoProfile`, noninteractive operation, and a process-local execution-policy override.
-It selects pwsh when discoverable, otherwise Windows PowerShell 5.1; rerun initialization to select a newly installed pwsh.
+Chezmoi uses the built-in Windows PowerShell executable by absolute path, so initialization inside mise cannot pin a development-only interpreter.
 For an everyday global source, run this from the permanent checkout, not a temporary worktree.
 
 To preview future changes without applying them, run from the repository root:
