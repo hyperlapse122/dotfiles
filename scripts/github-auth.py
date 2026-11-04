@@ -26,7 +26,8 @@ def run_private(argv, *, input=None, env=None, operation="Private command failed
     try:
         result = subprocess.run(
             argv, input="" if input is None else input, env=env,
-            capture_output=True, text=True, encoding="utf-8", errors="strict", timeout=180,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="strict", timeout=180,
         )
         if result.returncode != 0:
             raise AuthError(operation)
@@ -244,7 +245,8 @@ def native_get(command, host, user, env):
     try:
         result = subprocess.run(
             command + ["get", "gh:" + host, user], env=env, input="",
-            capture_output=True, text=True, encoding="utf-8", timeout=120,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", timeout=120,
         )
         if result.returncode == 1:
             return None

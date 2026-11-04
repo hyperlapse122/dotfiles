@@ -1,5 +1,8 @@
+import base64
 from contextlib import closing
 import ctypes
+import shlex
+import subprocess
 import sys
 
 from keyring.backend import KeyringBackend
@@ -21,13 +24,7 @@ class Keyring(KeyringBackend):
             if sys.platform == "linux":
                 return self._linux(operation, service, username, password)
             if sys.platform == "darwin":
-                from keyring.backends.macOS import Keyring as MacKeyring
-                native = MacKeyring()
-                if operation == "get":
-                    return native.get_password(service, username)
-                if operation == "set":
-                    return native.set_password(service, username, password)
-                return native.delete_password(service, username)
+                return self._macos(operation, service, username, password)
             raise KeyringError("No supported native credential store on this OS")
         except Exception:
             # Backend exceptions may include credentials or service replies.
@@ -43,6 +40,38 @@ class Keyring(KeyringBackend):
 
     def delete_password(self, service, username):
         self._operate("delete", service, username)
+
+    @staticmethod
+    def _macos(operation, service, username, password):
+        if any(character in username for character in "\r\n\0"):
+            raise KeyringError("Unsupported GitHub credential identity")
+        arguments = ["/usr/bin/security"]
+        payload = b""
+        if operation == "set":
+            # Match go-keyring's reader identity and stdin protocol. The Python
+            # Keychain API can require GUI authorization in headless sessions.
+            encoded = "go-keyring-base64:" + base64.b64encode(password.encode("utf-8")).decode("ascii")
+            arguments.append("-i")
+            payload = ("add-generic-password -U -s " + shlex.quote(service)
+                       + " -a " + shlex.quote(username) + " -w " + shlex.quote(encoded) + "\n").encode("utf-8")
+        elif operation == "get":
+            arguments.extend(["find-generic-password", "-s", service, "-wa", username])
+        else:
+            arguments.extend(["delete-generic-password", "-s", service, "-a", username])
+        result = subprocess.run(arguments, input=payload, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, timeout=90)
+        if operation == "get" and result.returncode == 44:
+            return None
+        if result.returncode:
+            raise KeyringError("macOS credential operation failed")
+        if operation != "get":
+            return None
+        value = result.stdout.decode("utf-8").strip()
+        if value.startswith("go-keyring-base64:"):
+            return base64.b64decode(value[len("go-keyring-base64:"):], validate=True).decode("utf-8")
+        if value.startswith("go-keyring-encoded:"):
+            return bytes.fromhex(value[len("go-keyring-encoded:"):]).decode("utf-8")
+        return value
 
     @staticmethod
     def _windows(operation, service, username, password):

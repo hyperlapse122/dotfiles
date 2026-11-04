@@ -206,7 +206,7 @@ This deletes all workloads and cluster configuration; deleting container images 
 Do not use **Factory Reset** for ordinary test cleanup: it also removes Rancher Desktop settings.
 No reset is automated by this repository.
 
-GitHub CLI authentication and Docker Hub (`docker.io`) token authentication through the Windows keyring are tracked separately in [issue #21](https://github.com/hyperlapse122/dotfiles/issues/21).
+Docker Hub (`docker.io`) token authentication through the Windows keyring remains tracked in [issue #21](https://github.com/hyperlapse122/dotfiles/issues/21).
 This setup does not acquire tokens, configure registry credentials, or create Kubernetes image-pull secrets.
 
 ### Repository clones with ghq
@@ -357,6 +357,7 @@ Preparation, initialization, and `chezmoi apply --exclude=scripts` do not decryp
 
 Credentials use Windows Credential Manager, macOS Keychain, or the existing Linux Secret Service login/default collection.
 The mise-managed keyring tool is installed through uv; the explicit native backend never selects a file store or a fallback backend.
+On macOS, writes use `security -i` over stdin and gh's native go-keyring encoding; token values never become process arguments.
 Linux needs a working user-session Secret Service, and native unlock/access prompts remain user actions.
 Unavailable, locked, or denied storage is an error: the hook never calls `gh auth login`, whose plaintext fallback would violate this policy.
 Only the managed account's token fields and active selection are reconciled; unrelated hosts and accounts are preserved.
@@ -642,6 +643,7 @@ CI separately exercises native binaries and fresh-terminal PATH discovery on the
 Its `--path-integration` mode is restricted to disposable GitHub-hosted runners and restores the Windows user PATH afterward.
 On Windows, the child PATH comes from the registry but excludes competing preinstalled application directories; the fixture never inserts the managed directory directly or changes machine PATH.
 Credential smoke uses disposable GPG keys and native stores. Failure diagnostics expose exception types and code locations, not exception messages or credential output.
+Its GPG home is separate from the non-ASCII personal-home path probe. macOS uses a disposable unlocked Keychain and restores the runner's original default and search list afterward.
 
 ### CI runner policy
 

@@ -5,8 +5,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
+import sys
+import tempfile
 import traceback
 import uuid
 from unittest import mock
@@ -19,11 +22,33 @@ HOSTS = ("github.com", "gist.github.com")
 
 
 def run(arguments, env, *, input=None, operation="Native authentication smoke"):
-    result = subprocess.run(arguments, env=env, input=input, capture_output=True,
-                            text=True, encoding="utf-8", timeout=120)
+    result = subprocess.run(arguments, env=env, input=input, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True, encoding="utf-8", timeout=120)
     if result.returncode:
         raise RuntimeError(operation + " failed")
     return result.stdout
+
+
+@contextlib.contextmanager
+def native_keychain(root, env):
+    if sys.platform != "darwin":
+        yield
+        return
+    security = "/usr/bin/security"
+    default = shlex.split(run([security, "default-keychain", "-d", "user"], env))
+    search = shlex.split(run([security, "list-keychains", "-d", "user"], env))
+    if len(default) != 1:
+        raise RuntimeError("Cannot identify the runner's default Keychain")
+    target = str(root / "native-auth.keychain-db")
+    with contextlib.ExitStack() as cleanup:
+        run([security, "create-keychain", "-p", "ci-fixture-keychain", target], env)
+        cleanup.callback(run, [security, "delete-keychain", target], env)
+        cleanup.callback(run, [security, "list-keychains", "-d", "user", "-s", *search], env)
+        cleanup.callback(run, [security, "default-keychain", "-d", "user", "-s", default[0]], env)
+        run([security, "list-keychains", "-d", "user", "-s", target], env)
+        run([security, "default-keychain", "-d", "user", "-s", target], env)
+        run([security, "unlock-keychain", "-p", "ci-fixture-keychain", target], env)
+        yield
 
 
 def failure_summary(error):
@@ -48,7 +73,8 @@ def main():
     tools = {name: shutil.which(name) for name in ("chezmoi", "keyring", "git", "gpg", "gpgconf")}
     if not all(tools.values()):
         raise SystemExit("Native authentication smoke tools are missing")
-    with temporary_destination() as scratch:
+    with (temporary_destination() as scratch,
+          tempfile.TemporaryDirectory(prefix="native-gpg-", dir=os.environ["RUNNER_TEMP"]) as gpg_scratch):
         root = Path(scratch)
         home = root / "home with 'quotes and caf\u00e9"
         repository = root / "repository"
@@ -73,7 +99,10 @@ def main():
         config = root / "chezmoi.toml"
         config.write_text('[data]\ngpgProgram = ' + json.dumps(Path(tools["gpg"]).as_posix()) + '\n',
                           encoding="utf-8")
-        gpg_home = home / "AppData/Roaming/gnupg" if os.name == "nt" else root / "gpg"
+        # GPG's Windows agent needs a short data/socket path, unlike the Git path probe.
+        gpg_profile = Path(gpg_scratch)
+        gpg_home = (gpg_profile / "AppData/Roaming/gnupg"
+                    if os.name == "nt" else gpg_profile / "gnupg")
         gpg_home.mkdir(parents=True, mode=0o700)
         env = os.environ.copy()
         for name in list(env):
@@ -82,8 +111,10 @@ def main():
                                 "KEYCHAIN_PATH", "GIT_CURL_VERBOSE")):
                 env.pop(name)
         env.update({
-            "HOME": str(home), "USERPROFILE": str(home), "GNUPGHOME": str(gpg_home),
-            "APPDATA": str(home / "AppData/Roaming"), "LOCALAPPDATA": str(root / "local"),
+            "HOME": str(home), "USERPROFILE": str(gpg_profile) if os.name == "nt" else str(home),
+            "GNUPGHOME": str(gpg_home),
+            "APPDATA": str(gpg_profile / "AppData/Roaming"),
+            "LOCALAPPDATA": str(gpg_profile / "AppData/Local"),
             "GH_CONFIG_DIR": "~/gh fixture",
             "GIT_CONFIG_GLOBAL": str(home / ".gitconfig"), "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_TERMINAL_PROMPT": "0", "GH_PROMPT_DISABLED": "1",
@@ -98,7 +129,9 @@ def main():
         keyring = [tools["keyring"], "--keyring-path", str(repository / "scripts"),
                    "--keyring-backend", "gh_native.Keyring"]
         records = []
+        keychain_scope = contextlib.ExitStack()
         try:
+            keychain_scope.enter_context(native_keychain(root, env))
             run([tools["gpg"], "--no-options", "--batch", "--pinentry-mode", "loopback",
                  "--passphrase", "", "--quick-generate-key",
                  "Native Auth Fixture <fixture@example.invalid>", "rsa2048", "encr", "1d"], env,
@@ -244,8 +277,11 @@ def main():
                     arguments = keyring + (["del", *identity] if previous is None else ["set", *identity])
                     run(arguments, env, input=previous, operation="Native fixture cleanup")
             finally:
-                subprocess.run([tools["gpgconf"], "--homedir", str(gpg_home), "--kill", "all"],
-                               env=env, capture_output=True, timeout=30)
+                try:
+                    subprocess.run([tools["gpgconf"], "--homedir", str(gpg_home), "--kill", "all"],
+                                   env=env, capture_output=True, timeout=30)
+                finally:
+                    keychain_scope.close()
         print("Native production apply, repeat, rotation, repair, and GitHub/Gist routing passed")
 
 

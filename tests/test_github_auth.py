@@ -1,9 +1,11 @@
 import contextlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -164,6 +166,18 @@ class GithubAuthApplyTest(unittest.TestCase):
 
 
 class NativeAuthFailureTest(unittest.TestCase):
+    def test_successful_command_survives_non_utf8_diagnostics(self):
+        auth = importlib.util.module_from_spec(SPEC)
+        SPEC.loader.exec_module(auth)
+        diagnostics = io.StringIO()
+        with contextlib.redirect_stderr(diagnostics):
+            output = auth.run_private([
+                sys.executable, "-c",
+                "import os; os.write(1, b'valid\\n'); os.write(2, b'\\xff')",
+            ])
+        self.assertEqual(output, "valid\n")
+        self.assertEqual(diagnostics.getvalue(), "")
+
     def test_diagnostics_hide_chained_credential_messages(self):
         spec = importlib.util.spec_from_file_location(
             "native_auth_smoke_test", REPO / "tests/smoke_github_auth.py")
