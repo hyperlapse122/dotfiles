@@ -113,7 +113,8 @@ mise run apply
 
 Repository preparation and apply tasks resolve the current worktree's source, including when called from a subdirectory.
 They do not initialize or redirect the global chezmoi source.
-The source manages global Git settings, GPG pinentry selection, native GPG secret encryption, and native system-CA trust settings; tool installation and key provisioning are prerequisites.
+The source manages global Git settings, GPG pinentry selection, native GPG secret encryption, native system-CA trust settings, and Windows host applications.
+Git/GPG installation and key provisioning remain prerequisites.
 
 To preview future changes without applying them, run from the repository root:
 
@@ -121,6 +122,30 @@ To preview future changes without applying them, run from the repository root:
 mise exec -- chezmoi --source . diff
 ```
 
+
+### Windows host applications
+
+On Windows, explicit application installs missing Google Chrome, 1Password, and 1Password CLI packages through WinGet.
+Use `mise run apply` from this worktree, or `chezmoi update` after registering a permanent checkout.
+Bootstrap and source registration do not install these applications.
+
+The package list lives in `home/.chezmoidata/windows.yaml`:
+
+- Google Chrome: `Google.Chrome`
+- 1Password: `AgileBits.1Password`
+- 1Password CLI: `AgileBits.1Password.CLI`
+
+Install or update Windows App Installer if WinGet is unavailable.
+Approve WinGet agreements and any UAC prompts when requested; package scope and installer behavior use WinGet's defaults.
+The app script runs after the GPG-home check, so the Git/GPG prerequisites below still apply.
+It renders empty on Linux and macOS, and previews do not execute it.
+
+Each apply uses WinGet's `--no-upgrade`: recognized existing installations are retained, including older versions.
+Repeating apply restores an uninstalled package without requesting upgrades or downgrades of the others.
+This does not disable applications' own update mechanisms.
+Installation failures stop apply with the package ID and exit code; resolve the reported problem and rerun to complete the remaining installations.
+Account sign-in, CLI/app integration, browser extensions, default-browser selection, and application preferences remain manual.
+After installing the CLI, open a fresh shell and check `op --version`.
 
 ### Git signing and GPG pinentry
 
@@ -310,5 +335,6 @@ Secret regressions use real GPG and chezmoi with temporary software keys to chec
 GPG and chezmoi must be available for those tests; they do not exercise the owner's private key or prove native Linux/macOS behavior.
 Native-CA regressions exercise real Bash startup behavior and Windows registry-provider writes against disposable state; Windows tests never execute the CA apply hook against the owner's actual environment.
 Native Linux/macOS graphical-login behavior requires those platforms; rendering or parsing their configuration is not GUI activation proof.
+Windows app regressions execute real chezmoi scripts against a disposable package inventory, covering repeat application, existing-version preservation, restoration after uninstall, and failure propagation without reaching the host's WinGet.
 Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.

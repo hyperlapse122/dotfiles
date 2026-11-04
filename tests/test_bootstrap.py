@@ -21,6 +21,7 @@ class BootstrapIsolationTest(unittest.TestCase):
             existing = home / "personal-setting"
             existing.write_text("unchanged", encoding="utf-8")
             marker = home / "unexpected-hook"
+            install_marker = home / "unexpected-app-install"
             config_root = root / "config"
             config_dir = config_root / "chezmoi"
             config_dir.mkdir(parents=True)
@@ -50,6 +51,15 @@ class BootstrapIsolationTest(unittest.TestCase):
                 "XDG_DATA_HOME": str(root / "data"),
                 "XDG_STATE_HOME": str(root / "state"),
             })
+            if os.name == "nt":
+                commands = root / "commands"
+                commands.mkdir()
+                (commands / "winget.cmd").write_text(
+                    '@echo off\necho invoked> "%BOOTSTRAP_INSTALL_MARKER%"\nexit /b 89\n',
+                    encoding="ascii",
+                )
+                env["PATH"] = str(commands) + os.pathsep + env["PATH"]
+                env["BOOTSTRAP_INSTALL_MARKER"] = str(install_marker)
 
             for attempt in range(2):
                 with self.subTest(attempt=attempt + 1):
@@ -60,6 +70,7 @@ class BootstrapIsolationTest(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertFalse(marker.exists(), "Initialization ran a personal chezmoi hook")
+                    self.assertFalse(install_marker.exists(), "Initialization invoked an app installer")
                     self.assertEqual(existing.read_text(encoding="utf-8"), "unchanged")
                     self.assertEqual(config.read_text(encoding="utf-8"), config_text)
 
