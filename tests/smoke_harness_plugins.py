@@ -27,7 +27,7 @@ def main():
 
     with temporary_destination() as scratch:
         root = Path(scratch)
-        home, source, outside = (root / part for part in ("home", "source", "outside"))
+        home, source, outside = (root / part for part in ("home ' 한글", "source", "outside"))
         for directory in (home, source, outside):
             directory.mkdir()
         # Stop native nearest-project discovery before it reaches an ancestor's
@@ -42,8 +42,8 @@ def main():
             ".chezmoiexternals/harness-plugins.toml.tmpl",
             ".chezmoitemplates",
             "private_dot_omp",
-            "run_after_20-harness-plugins.cmd.tmpl",
-            "run_after_20-harness-plugins.sh.tmpl",
+            ".chezmoiscripts/run_onchange_after_20-harness-plugins.ps1.tmpl",
+            ".chezmoiscripts/run_onchange_after_20-harness-plugins.sh.tmpl",
         ):
             origin, destination = REPO / "home" / relative, source / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -55,7 +55,12 @@ def main():
         # unrelated personal app/PATH/GPG scripts in the smoke source.
         shutil.copy2(REPO / "home/.chezmoiignore", source / ".chezmoiignore")
         config = root / "chezmoi.toml"
-        config.write_text("", encoding="utf-8")
+        config_text = ""
+        if os.name == "nt":
+            shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+            config_text = ('[interpreters.ps1]\ncommand = ' + json.dumps(str(shell)) +
+                           '\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n')
+        config.write_text(config_text, encoding="utf-8")
         env = os.environ.copy()
         for key in (
             "PI_CODING_AGENT_DIR", "PI_CONFIG_DIR", "PI_CONFIG_FILES", "PI_PACKAGE_DIR",
@@ -142,28 +147,51 @@ def main():
         ce_registry = next(item for item in registry["marketplaces"] if item["name"] == plugin["omp"]["marketplace"])
         if Path(ce_registry["sourceUri"]).resolve() != managed.resolve():
             raise RuntimeError("CE marketplace still follows a moving remote source")
+        source_pins = json.loads((source / ".chezmoidata/harness-plugin-lock.json").read_text(encoding="utf-8"))
+        source_pins["harnessPluginLocks"]["unconfigured"] = {"commit": "0" * 40}
+        (source / ".chezmoidata/harness-plugin-lock.json").write_text(json.dumps(source_pins, indent=4), encoding="utf-8")
+        source_apps = json.loads((source / ".chezmoidata/personal-app-lock.json").read_text(encoding="utf-8"))
+        other_target = next(key for key in source_apps["personalAppLocks"]["omp"]["targets"] if key != target)
+        source_apps["personalAppLocks"]["omp"]["targets"][other_target]["sha256"] = "0" * 64
+        (source / ".chezmoidata/personal-app-lock.json").write_text(json.dumps(source_apps, indent=4), encoding="utf-8")
+        (source / ".chezmoidata/unrelated.yaml").write_text("unrelated: changed\n", encoding="utf-8")
+        if chez("status", "--include=scripts"):
+            raise RuntimeError("Successful onchange reconciliation is still pending")
 
         omp("plugin", "disable", plugin_id, "--scope", "user")
         (cache / "skills/ce-pov/SKILL.md").write_text("local cache drift", encoding="utf-8")
         (managed / "skills/ce-pov/SKILL.md").write_text("local source drift", encoding="utf-8")
         chez("apply", "--force")
+        if (managed / "skills/ce-pov/SKILL.md").read_bytes() != original_skill:
+            raise RuntimeError("Unchanged apply did not repair the managed source")
+        if (cache / "skills/ce-pov/SKILL.md").read_text(encoding="utf-8") != "local cache drift":
+            raise RuntimeError("Unchanged apply unexpectedly reran native installation")
+        runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+        if runtime["plugins"]["compound-engineering"]["enabled"] is not False:
+            raise RuntimeError("Unchanged apply unexpectedly reset native enabled state")
+        helper = source / ".chezmoitemplates/harness-plugin-marketplaces"
+        with helper.open("a", encoding="utf-8") as stream:
+            stream.write("{{/* smoke: consumed template change */}}\n")
+        chez("apply", "--force")
         if (cache / "skills/ce-pov/SKILL.md").read_bytes() != original_skill:
-            raise RuntimeError("Repeat apply did not repair native same-version cache drift")
+            raise RuntimeError("Consumed-template change did not repair native same-version cache drift")
         runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
         if runtime["plugins"]["compound-engineering"]["enabled"] is not True:
-            raise RuntimeError("Repeat apply did not enable the managed CE plugin")
+            raise RuntimeError("Consumed-template change did not enable the managed CE plugin")
         if runtime["plugins"]["smoke-unrelated"]["settings"] != {"fixtureValue": "retain-me"}:
             raise RuntimeError("Apply discarded unrelated plugin settings")
         installed = json.loads(installed_path.read_text(encoding="utf-8"))["plugins"]
         if installed["smoke-unrelated@smoke-unrelated"] != unrelated_before:
             raise RuntimeError("Apply changed an unrelated plugin installation")
-        # The source and modified config should now be at desired state; scripts
-        # are deliberately excluded because they reconcile native runtime state.
+        if chez("status", "--include=scripts"):
+            raise RuntimeError("Reconciled onchange action remains pending")
+        # Managed source/config and the successful action should now be stable.
         if chez("diff", "--exclude=scripts"):
             raise RuntimeError("Managed source/config still differs after reconciliation")
         print(f"Native {target}: {version}; CE {pin['tag']} ({pin['commit']})")
         print("Verified: local-source cutover, native skill URI discovery, autoUpdate=off, "
-              "same-version source/cache repair, enabled state, unrelated plugin preservation, and clean file diff")
+              "unchanged-action skipping, template-triggered cache repair, enabled state, "
+              "unrelated plugin preservation, and clean file diff")
 
 
 if __name__ == "__main__":

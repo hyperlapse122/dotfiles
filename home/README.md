@@ -73,8 +73,11 @@ Keep these pins independent of host runtime registries and secret-bearing settin
 
 `.chezmoiexternals/harness-plugins.toml.tmpl` extracts immutable source archives into dedicated exact directories under `.local/share/dotfiles/harness-plugins`.
 The CE declaration excludes alternate-host and site symlink aliases; it does not change the pinned skill content.
-The `run_after_20-harness-plugins` scripts reconcile native omp registration and cache after source files exist.
-They run on every explicit apply to repair runtime drift, using the repository-installed binary rather than PATH or a mise shim.
+The `.chezmoiscripts/run_onchange_after_20-harness-plugins` scripts reconcile native omp registration and cache after source files exist.
+They fingerprint the selected CE source/pin, native identity, destination, selected omp asset, and consumed template sources; unrelated platform pins and mutable runtime files are excluded.
+Unchanged successful actions are skipped. Native cache/enabled-state drift requires a changed action input or explicit native repair; managed source and YAML still reconcile on every apply.
+Marketplace decisions are rendered at execution time through the current chezmoi executable with a hook-free empty config and a disposable state database, so destination state cannot become an onchange dependency or reopen the parent's database lock.
+Windows uses a BOM-prefixed `.ps1.tmpl`; UTF-8 data/output files avoid PowerShell 5.1 native-argument JSON quoting and stdout decoding.
 Only CE's registration and managed package are reconciled; other plugin records remain native state.
 
 The `private_dot_omp/private_agent/modify_private_config.yml` and `.yaml` targets share the `omp-config` partial.

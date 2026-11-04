@@ -421,7 +421,7 @@ The runtime-resolved files are not entries in `chezmoi managed`; `chezmoi apply 
 
 ## Harness plugins
 
-Explicit apply installs [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) for the standard user-global omp environment on the same six targets as the omp executable.
+Explicit apply installs [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) for the standard user-global omp environment on the same declared targets as the omp executable.
 Other harnesses are not installed or configured yet.
 
 Plugin declarations live in `home/.chezmoidata/harness-plugins.json`; generated stable-release tags and full commit SHAs live in `home/.chezmoidata/harness-plugin-lock.json`.
@@ -445,7 +445,17 @@ When neither file exists, apply creates a minimal `.yml`.
 If legacy `settings.json` or `agent.db` exists without YAML, apply stops before creating YAML; let omp complete its native first-start migration, close it, and apply again.
 Malformed YAML fails without replacement.
 
-Repeated apply restores the owned property and pinned plugin content, including same-version source/cache drift, while retaining other property values and plugin settings.
+Repeated apply restores the owned YAML property and managed source while retaining other property values and plugin settings.
+Native registration, force installation, and enabling use `run_onchange_`: a successful action is skipped until its effective pin, selected executable asset, source identity, or consumed template changes.
+Mutable runtime files are not fingerprint inputs. Manually disabled plugins or modified native cache content are not repaired by an unchanged apply.
+For an immediate native cache repair without a source change, run these native commands with omp closed:
+
+```sh
+omp plugin marketplace update compound-engineering-plugin
+omp plugin install --scope user --force compound-engineering@compound-engineering-plugin
+omp plugin enable --scope user compound-engineering@compound-engineering-plugin
+```
+
 Parsing and serialization can remove comments and normalize formatting.
 Do not apply while another process writes the same file: modify is an apply-time transformation, not continuous enforcement or a shared application lock.
 This integration targets the standard default profile; independently configured profiles, relocated roots, project settings, and process overlays are not managed.
@@ -475,8 +485,8 @@ Run the isolated native plugin check with:
 mise exec -- python tests/smoke_harness_plugins.py
 ```
 
-It uses a disposable home, not the owner's configuration, and checks actual skill URI discovery, the local marketplace cutover, automatic-update policy, cache repair, and unrelated plugin preservation.
-CI runs this check on all six native targets.
+It uses a disposable home, not the owner's configuration, and checks actual skill URI discovery, the local marketplace cutover, automatic-update policy, unchanged-action skipping, template-triggered cache repair, and unrelated plugin preservation.
+CI runs this check across the current native executable matrix.
 
 ## Source layout
 

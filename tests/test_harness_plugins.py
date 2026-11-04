@@ -30,8 +30,9 @@ class HarnessPluginsTest(unittest.TestCase):
         (self.source / ".chezmoiexternals").mkdir()
         self.external = self.source / ".chezmoiexternals/harness-plugins.toml.tmpl"
         shutil.copy2(self.repo / "home/.chezmoiexternals/harness-plugins.toml.tmpl", self.external)
-        for name in ("run_after_20-harness-plugins.cmd.tmpl", "run_after_20-harness-plugins.sh.tmpl"):
-            shutil.copy2(self.repo / "home" / name, self.source / name)
+        (self.source / ".chezmoiscripts").mkdir()
+        for name in ("run_onchange_after_20-harness-plugins.ps1.tmpl", "run_onchange_after_20-harness-plugins.sh.tmpl"):
+            shutil.copy2(self.repo / "home/.chezmoiscripts" / name, self.source / ".chezmoiscripts" / name)
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("", encoding="utf-8")
         self.env = os.environ.copy()
@@ -284,7 +285,7 @@ class HarnessPluginsTest(unittest.TestCase):
         return self.run_chezmoi("execute-template", input=wrapper)
 
     def test_supported_platforms_render_sha_archive_only_in_dedicated_tree(self):
-        for target in ("darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "windows-arm64"):
+        for target in ("darwin-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "windows-arm64"):
             with self.subTest(target=target):
                 result = self.render_external(*target.split("-"))
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -296,6 +297,9 @@ class HarnessPluginsTest(unittest.TestCase):
                 self.assertEqual(entry["stripComponents"], 1)
                 self.assertTrue(entry["exact"])
         result = self.render_external("freebsd", "amd64")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(tomllib.loads(result.stdout), {})
+        result = self.render_external("darwin", "amd64")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(tomllib.loads(result.stdout), {})
         result = self.render_external("linux", "arm")

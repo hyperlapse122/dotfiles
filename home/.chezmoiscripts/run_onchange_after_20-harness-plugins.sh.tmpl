@@ -1,0 +1,16 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if and (ne .chezmoi.os "windows") (hasKey .personalApps.omp.targets $target) -}}
+{{- $inputs := includeTemplate "harness-plugin-script-inputs" . -}}
+#!/bin/sh
+# file harness-plugin-script-inputs sha256: {{ include ".chezmoitemplates/harness-plugin-script-inputs" | sha256sum }}
+# file harness-plugin-marketplaces sha256: {{ include ".chezmoitemplates/harness-plugin-marketplaces" | sha256sum }}
+# file harness-plugins-posix sha256: {{ include ".chezmoitemplates/harness-plugins-posix" | sha256sum }}
+# data harness.action sha256: {{ $inputs | fromJson | toJson | sha256sum }}
+set -eu
+# Keep mutable native state out of the onchange fingerprint and avoid the
+# parent chezmoi process's locked database during runtime rendering.
+state=$(mktemp)
+trap 'rm -f "$state"' 0
+commands=$('{{ .chezmoi.executable | replace "'" "'\\''" }}' --config /dev/null --config-format toml --source '{{ .chezmoi.sourceDir | replace "'" "'\\''" }}' --destination '{{ .chezmoi.destDir | replace "'" "'\\''" }}' --persistent-state "$state" --override-data '{{ $inputs | replace "'" "'\\''" }}' execute-template '{{`{{ includeTemplate "harness-plugins-posix" . }}`}}')
+/bin/sh -c "$commands"
+{{ end -}}

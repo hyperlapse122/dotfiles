@@ -1,5 +1,3 @@
-{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
-{{- if and (ne .chezmoi.os "windows") (hasKey .personalApps.omp.targets $target) -}}
 {{- $marketplaces := includeTemplate "harness-plugin-marketplaces" . | fromJson -}}
 #!/bin/sh
 set -eu
@@ -18,4 +16,3 @@ omp="$HOME/.local/bin/omp"
 "$omp" plugin install --scope user --force '{{ $entry.plugin | replace "'" "'\\''" }}'
 "$omp" plugin enable --scope user '{{ $entry.plugin | replace "'" "'\\''" }}'
 {{ end -}}
-{{- end -}}

@@ -38,6 +38,7 @@ The repository already reproduces the omp executable, but it does not yet declar
 - **Automate pin refresh, not device-local version selection.** Governs R2, R3, R8, R9. This reuses the existing personal-application update model. (session-settled: user-directed — chosen over native automatic updates and manual pin refresh: repository pins retain reproducibility while automatic refresh avoids manual release tracking.)
 - **Reuse native chezmoi modify support.** Governs R4–R7. A new parser engine or jq/yq dependency is not needed for the narrow setting. (session-settled: user-approved — chosen over a custom reconciler or native CLI setter as the current approach: modify supports property updates within the existing chezmoi workflow.)
 - **Preserve values, not source formatting.** Governs R5. Parse-and-serialize transformations can remove comments and normalize layout. (session-settled: user-approved — chosen over requiring comment and formatting preservation: semantic preservation is sufficient for this work.)
+- **Adopt the rebased script lifecycle.** Governs R3 and R10. Use `.chezmoiscripts/`, dependency signatures, native Windows PowerShell scripts, and `run_onchange_`; successful unchanged native actions are skipped. (session-settled: user-directed — requested after rebasing onto origin/main, replacing every-apply native reconciliation.)
 
 <!-- ce-section: work-relationships -->
 ### How This Work Fits Together
@@ -53,9 +54,9 @@ The following relationships describe the current scope split, not a committed ro
 
 **Installation and version authority**
 
-- R1. Explicit application must install and enable CE for the owner's user-global omp environment on Windows, macOS, and GNU/Linux on x64 and arm64, matching the existing omp target coverage and excluding Linux musl.
+- R1. Explicit application must install and enable CE for the owner's user-global omp environment on the current declared omp targets: Windows and GNU/Linux x64 and arm64, and macOS arm64; Linux musl remains excluded.
 - R2. A repository-owned plugin lock must identify an upstream stable CE release and its resolved full commit SHA, independently of secret-bearing host runtime state.
-- R3. Application must reconcile the managed CE installation to the committed SHA, including restoring an older committed pin, without selecting upstream latest locally.
+- R3. First application and effective action-input changes must reconcile native CE to the committed SHA, including restoring an older committed pin, without selecting upstream latest locally. Successful unchanged native actions are skipped; managed source and YAML still reconcile on each apply.
 
 **Partial omp configuration management**
 
@@ -79,7 +80,7 @@ The following relationships describe the current scope split, not a committed ro
 
 - F1. **Refresh CE pins. Covers R2, R8, R9.** The daily schedule or owner-triggered Actions run resolves a complete stable-release identity; changed pins are committed, unchanged pins produce no commit, and resolution failure retains the previous pins.
 - F2. **Apply the pinned environment. Covers R1, R3–R7, R10–R12.** The owner obtains the desired repository revision and explicitly applies it; the managed CE installation follows that revision and the current omp YAML is transformed at the owned property.
-- F3. **Reconcile later drift. Covers R3, R5, R6, R11.** After local changes, another explicit apply restores the managed CE version and setting while retaining unrelated property changes.
+- F3. **Reconcile later drift. Covers R3, R5, R6, R11.** Another explicit apply restores the owned YAML property and source tree while retaining unrelated values. Native cache/enabled-state reconciliation runs after an action-input change, not merely after destination-state drift.
 
 ```mermaid
 flowchart TB
@@ -97,7 +98,7 @@ flowchart TB
 - AE2. **Upstream advances. Covers R2, R3.** Given unchanged committed pins and newer upstream content, another apply still selects the committed SHA rather than the newer content.
 - AE3. **Pin changes or rolls back. Covers R3.** Given an installed CE revision and a different committed pin, including an older pin, explicit apply reconciles to that exact revision and a new omp session discovers its skills.
 - AE4. **Mutable YAML. Covers R4, R5, R6, R11.** Given `marketplace.autoUpdate: auto`, an unrelated sibling, and unrelated nested or array values, apply changes the setting to the string `off` and retains the other values; later unmanaged edits survive reapplication while managed drift is corrected.
-- AE5. **No further changes. Covers R3, R6.** Given an installation and YAML already at desired state, repeating apply leaves the desired content unchanged.
+- AE5. **No further changes. Covers R3, R6.** Given an installation and YAML already at desired state, repeating apply leaves desired content unchanged and skips the successful native action. Unrelated data, another OS's pins, and mutable runtime state do not schedule it; consumed template changes do.
 - AE6. **Missing or invalid configuration. Covers R7.** Given no global YAML, apply can create the minimal managed configuration; given an existing `config.yaml`, it must not create a higher-priority `config.yml` that hides its values; given malformed YAML, it fails without replacing that file.
 - AE7. **Refresh outcomes. Covers R8, R9.** A complete newer release yields a direct default-branch pin commit; an unchanged release yields no commit; an unsuccessful release/SHA lookup retains the previous committed pins.
 - AE8. **Preparation isolation and existing state. Covers R10, R11, R12.** Preparing a worktree does not install plugins or change personal settings; explicit apply does not remove unrelated plugins or commit personal configuration/runtime settings as pin data.
@@ -146,7 +147,7 @@ These checks establish the partial-update primitive, not end-to-end pinned CE in
 
 ## Planning Contract
 
-**Product Contract preservation:** Product Contract unchanged; the Problem Frame clarifies the existing motivation and the technical questions are resolved below.
+**Product Contract preservation:** The owner-requested rebase/onchange amendment updates native action lifecycle and follows the current main branch's declared platform coverage; YAML ownership and the release-pinning decisions remain unchanged.
 
 ### Key Technical Decisions
 
@@ -155,7 +156,8 @@ These checks establish the partial-update primitive, not end-to-end pinned CE in
 - KTD3. **Use the native local-marketplace install path.** For R1, R3, R11, reconcile the CE marketplace registration to the managed source directory, refresh that local catalog, force-install the user-scoped plugin, and explicitly enable it. Force installation is needed because native cache keys use version rather than SHA, including same-version source changes and rollback. Native local installation needs neither external Bun nor dependency installation. Do not layer a direct link over an existing marketplace installation. Native commands must fail visibly; modify only CE's marketplace/plugin state and preserve other entries.
 - KTD4. **Modify the existing effective global YAML rather than invoking a setter script.** For R4–R7, use `chezmoi:modify-template`, `fromYaml`, `setValueAtPath`, and `toYaml`. Prefer an existing `config.yml`; otherwise modify an existing `config.yaml`; create only `config.yml` when neither exists. Keep the ignored sibling out of the target state. Empty input starts from an empty mapping, and parse errors must propagate. This implements the settled modify choice without a new runtime utility. (session-settled: user-approved — chosen over a custom reconciler or native setter: built-in modify supports the required partial update and chezmoi diff.)
   If neither YAML exists but legacy `settings.json` or `agent.db` exists, fail before creating YAML and instruct the owner to complete omp's native first-start migration before applying again; this avoids hiding legacy settings without adding an unrelated migrator.
-- KTD5. **Validate the resolved lock before publication without write credentials.** For R8–R10, mirror the existing resolve/validate/publish separation in a plugin-specific workflow. Publish only the generated plugin lock from the immutable resolved artifact and recorded base. Extend the existing six-target native matrix to run a real pinned CE installation/discovery smoke in an isolated home.
+- KTD5. **Validate the resolved lock before publication without write credentials.** For R8–R10, mirror the existing resolve/validate/publish separation in a plugin-specific workflow. Publish only the generated plugin lock from the immutable resolved artifact and recorded base. Extend the existing native matrix to run a real pinned CE installation/discovery smoke in an isolated home.
+- KTD6. **Fingerprint effective inputs, not native destination state.** Put native Windows `.ps1.tmpl` and POSIX `.sh.tmpl` entry points under `.chezmoiscripts/run_onchange_after_20-harness-plugins`. Hash selected plugin identity/source/commit, selected omp asset, destination, and consumed templates. Render marketplace decisions only when the scheduled action executes, through the same chezmoi executable with an empty hook-free config and a disposable database. This keeps runtime state out of the fingerprint and avoids the parent database lock. Windows transports UTF-8 data/output through files to support PowerShell 5.1.
 
 ### Assumptions and Risks
 
@@ -218,7 +220,7 @@ flowchart TB
 
 **Dependencies:** U1's declaration/lock shape.
 
-**Files:** Create `home/.chezmoiexternals/harness-plugins.toml.tmpl`, native OS-conditional `home/run_after_20-harness-plugins.cmd.tmpl` and `home/run_after_20-harness-plugins.sh.tmpl`, a shared omp YAML partial, private modify targets under `home/private_dot_omp/private_agent/`, and `tests/test_harness_plugins.py`; update `home/.chezmoiignore`.
+**Files:** Create `home/.chezmoiexternals/harness-plugins.toml.tmpl`, native OS-conditional `home/.chezmoiscripts/run_onchange_after_20-harness-plugins.ps1.tmpl` and `.sh.tmpl`, shared native-runtime/input-signature and omp YAML partials, private modify targets under `home/private_dot_omp/private_agent/`, and `tests/test_harness_plugins.py`; update `home/.chezmoiignore`.
 
 **Approach:** Apply KTD2–KTD4 after managed files exist, invoke the repository-installed omp by absolute path, check every native exit code, and avoid relying on an activated mise shell. Keep native runtime records out of source control.
 
@@ -247,10 +249,10 @@ flowchart TB
 
 **Test scenarios:**
 1. Covers AE1. An isolated real apply installs the locked native omp and CE, then discovery finds CE skills in a fresh process outside the checkout.
-2. Covers AE3 / AE8. Native force installation repairs the managed CE while retaining an unrelated plugin entry and its settings.
+2. Covers AE3 / AE5 / AE8. Native installation preserves unrelated plugin settings; unchanged actions skip even after runtime drift, and a consumed-template change schedules same-version cache repair and enabling.
 3. Covers AE7. Candidate-lock native validation runs without write credentials; publication copies and commits only the validated lock.
 
-**Verification:** Existing deterministic suite plus native smoke on Windows locally and the six-target CI matrix; do not claim an unavailable native platform was exercised locally.
+**Verification:** Existing deterministic suite plus native smoke on Windows locally and the current native CI matrix; do not claim an unavailable native platform was exercised locally.
 
 ---
 
@@ -259,7 +261,7 @@ flowchart TB
 - Run `mise exec -- python -m unittest discover -s tests` after integration, not while parallel edits are in flight.
 - Run `mise exec -- python tests/smoke_harness_plugins.py` against the real committed omp and CE pins in a temporary destination; observe config, registration, pinned source, and discovered skills.
 - Keep native application execution out of publication jobs and real user homes.
-- Preserve the existing six-target executable/PATH smoke and extend its native jobs with plugin proof.
+- Preserve the current executable/PATH native matrix and extend its jobs with plugin proof.
 - Browser verification is not applicable to this CLI/dotfiles change; the delivery workflow must record that disposition.
 
 ## Definition of Done
