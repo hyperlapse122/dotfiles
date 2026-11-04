@@ -12,4 +12,11 @@
     | setValueAtPath "gpg.symmetric" false
     | setValueAtPath "gpg.args" (list "--no-options" "--no-auto-check-trustdb")
 -}}
+{{- if eq .chezmoi.os "windows" -}}
+{{- /* Interpreter entries replace defaults; use the system runtime even when init runs inside mise. */ -}}
+{{- $config = $config
+    | setValueAtPath "interpreters.ps1.command" (joinPath (env "SystemRoot") "System32" "WindowsPowerShell" "v1.0" "powershell.exe")
+    | setValueAtPath "interpreters.ps1.args" (list "-NoLogo" "-NoProfile" "-NonInteractive" "-ExecutionPolicy" "Bypass" "-File")
+-}}
+{{- end -}}
 {{- $config | setValueAtPath "sourceDir" .chezmoi.workingTree | setValueAtPath "workingTree" .chezmoi.workingTree | toToml -}}

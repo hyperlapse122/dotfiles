@@ -17,7 +17,7 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.source = self.root / "source"
         shutil.copytree(self.repo / "home", self.source, ignore=shutil.ignore_patterns(
             ".chezmoiexternals", "personal-app*.json", "dot_config",
-            "run_after_10-personal-app-path.*",
+            "run_onchange_after_10-personal-app-path.*",
         ))
         self.home = self.root / "user home"
         self.home.mkdir()
@@ -25,7 +25,10 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.gpg_home.mkdir(parents=True)
         self.agent = self.gpg_home / "gpg-agent.conf"
         self.config = self.root / "chezmoi.toml"
-        self.config.write_text("", encoding="utf-8")
+        self.config.write_text(
+            '[interpreters.ps1]\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n'
+            if os.name == "nt" else "", encoding="utf-8",
+        )
         self.env = os.environ.copy()
         for key in list(self.env):
             if key.startswith("GIT_CONFIG_"):
@@ -113,6 +116,7 @@ class GitGpgSettingsTest(unittest.TestCase):
         gitconfig.write_bytes(b"# existing Git settings\n")
         self.agent.write_bytes(b"# existing agent settings\n")
         self.env["GNUPGHOME"] = str(self.root / "other keyring")
+        Path(self.env["GNUPGHOME"]).mkdir()
         result = self.chezmoi("apply", "--force", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(gitconfig.read_bytes(), b"# existing Git settings\n")
@@ -138,19 +142,28 @@ class GitGpgSettingsTest(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt" and shutil.which("gpgconf"), "Windows GPG installation required")
     def test_unicode_home_and_tool_path_under_oem_console(self):
         previous_home = self.home
-        self.home = self.root / "한글 home"
+        self.home = self.root / "한글 😀 home"
         previous_home.rename(self.home)
         self.gpg_home = self.home / "AppData/Roaming/gnupg"
+        # GnuPG's ANSI getenv cannot transport arbitrary Unicode GNUPGHOME values.
+        # Use an ASCII alias, retaining the real Unicode home and executable paths.
+        gpg_alias = self.root / "ascii gpg home"
+        self.run_command("cmd.exe", "/d", "/c", "mklink", "/J", str(gpg_alias), str(self.gpg_home))
+        self.addCleanup(gpg_alias.rmdir)
         self.env.update({
             "HOME": str(self.home), "USERPROFILE": str(self.home),
             "APPDATA": str(self.home / "AppData/Roaming"),
-            "GNUPGHOME": str(self.gpg_home),
+            "GNUPGHOME": str(gpg_alias),
             "GIT_CONFIG_GLOBAL": str(self.home / ".gitconfig"),
         })
         tools = self.root / "한글 tools"
         installed = Path(shutil.which("gpgconf")).resolve().parent
         self.run_command("cmd.exe", "/d", "/c", "mklink", "/J", str(tools), str(installed))
         self.config.write_text('[data]\ngpgProgram = "' + (tools / "gpg.exe").as_posix() + '"\n', encoding="utf-8")
+        self.run_command(str(installed / "gpg.exe"), "--batch", "--no-options",
+                         "--no-autostart", "--list-keys")
+        trust = self.gpg_home / "trustdb.gpg"
+        original_trust = trust.read_bytes()
         # A temporary HOME does not isolate HKCU; execute only the GPG hook.
         args = [
             shutil.which("chezmoi"), "--source", str(self.source), "--destination", str(self.home),
@@ -158,20 +171,71 @@ class GitGpgSettingsTest(unittest.TestCase):
             "--persistent-state", str(self.root / "state.boltdb"), "--no-tty",
             "apply", "--force", "--exclude=scripts",
         ]
-        reload_script = self.root / "reload-gpg-agent.cmd"
+        reload_script = self.root / "reload-gpg-agent.ps1"
         rendered = self.chezmoi(
             "execute-template", "--file",
-            str(self.repo / "home/run_after_10-reload-gpg-agent.cmd.tmpl"),
+            str(self.repo / "home/.chezmoiscripts/run_onchange_after_10-reload-gpg-agent.ps1.tmpl"),
         ).stdout
         reload_script.write_text(rendered, encoding="utf-8")
+        guard = self.root / "check-gpg-home.ps1"
+        guard.write_text(self.chezmoi(
+            "execute-template", "--file",
+            str(self.repo / "home/.chezmoiscripts/run_before_10-check-gpg-home.ps1.tmpl"),
+        ).stdout, encoding="utf-8")
         command = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); & " + " ".join(
             "'" + value.replace("'", "''") + "'" for value in args
-        ) + "; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '" + str(reload_script).replace("'", "''") + "'; exit $LASTEXITCODE"
+        ) + "; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '" + str(guard).replace("'", "''") + (
+            "'; if (-not $?) { exit 1 }; & '" + str(reload_script).replace("'", "''") + "'; exit $LASTEXITCODE")
         encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
-        shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
-        for _ in range(2):
-            self.run_command(str(shell), "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)
+        shells = [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")]
+        if shutil.which("pwsh"):
+            shells.append(shutil.which("pwsh"))
+        for shell in shells:
+            with self.subTest(shell=shell):
+                self.run_command(shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                                 "-EncodedCommand", encoded)
         self.assertEqual(self.chezmoi("diff", "--exclude=scripts").stdout, "")
+        self.assertEqual(trust.read_bytes(), original_trust)
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("gpgconf"), "Windows GPG installation required")
+    def test_native_utf8_home_output_under_oem_console(self):
+        installed = Path(shutil.which("gpgconf")).resolve().parent
+        tools = self.root / "한글 😀 portable tools"
+        tools.mkdir()
+        for program in ("gpg.exe", "gpgconf.exe"):
+            shutil.copy2(installed / program, tools / program)
+        for library in installed.glob("*.dll"):
+            shutil.copy2(library, tools / library.name)
+        # An empty native control file selects portable mode without changing HKCU.
+        (tools / "gpgconf.ctl").write_bytes(b"")
+        portable_home = tools / "home"
+        self.run_command("cmd.exe", "/d", "/c", "mklink", "/J", str(portable_home), str(self.gpg_home))
+        self.addCleanup(portable_home.rmdir)
+        self.run_command(str(tools / "gpg.exe"), "--batch", "--no-options",
+                         "--no-autostart", "--list-keys")
+        trust = self.gpg_home / "trustdb.gpg"
+        original_trust = trust.read_bytes()
+        self.config.write_text(
+            '[data]\ngpgProgram = "' + (tools / "gpg.exe").as_posix() + '"\n', encoding="utf-8",
+        )
+        guard = self.root / "native-utf8-guard.ps1"
+        guard.write_text(self.chezmoi(
+            "execute-template", "--file",
+            str(self.source / ".chezmoiscripts/run_before_10-check-gpg-home.ps1.tmpl"),
+        ).stdout, encoding="utf-8")
+        command = (
+            "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); & '"
+            + str(guard).replace("'", "''") + "'; if (-not $?) { exit 1 }"
+        )
+        encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
+        shells = [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")]
+        if shutil.which("pwsh"):
+            shells.append(shutil.which("pwsh"))
+        for shell in shells:
+            with self.subTest(shell=shell):
+                self.run_command(shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                                 "-EncodedCommand", encoded)
+        self.assertEqual(trust.read_bytes(), original_trust)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 {{- if ne .chezmoi.os "windows" -}}
 #!/bin/sh
+# file path-fragment sha256: {{ include "dot_config/dotfiles/path.sh" | sha256sum }}
+# data path.settings sha256: {{ dict "home" .chezmoi.destDir "zshHome" (env "ZDOTDIR" | default .chezmoi.destDir) | toJson | sha256sum }}
 set -eu
 
 home='{{ .chezmoi.destDir | replace "'" "'\\''" }}'

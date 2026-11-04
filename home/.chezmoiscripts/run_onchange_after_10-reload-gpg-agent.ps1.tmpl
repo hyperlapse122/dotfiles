@@ -1,0 +1,12 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+{{ "\ufeff" -}}
+# file gpg-settings sha256: {{ include ".chezmoitemplates/gpg-settings" | sha256sum }}
+# file gpg-agent-config sha256: {{ include ".chezmoitemplates/gpg-agent-config" | sha256sum }}
+# file agent-target sha256: {{ include "AppData/Roaming/gnupg/modify_gpg-agent.conf" | sha256sum }}
+# data gpg.settings sha256: {{ $gpg | toJson | sha256sum }}
+$ErrorActionPreference = 'Stop'
+$gpgconf = '{{ printf "%s/gpgconf.exe" (dir ($gpg.program | replace "\\" "/")) | replace "'" "''" }}'
+& $gpgconf --reload gpg-agent
+exit $LASTEXITCODE
+{{ end -}}

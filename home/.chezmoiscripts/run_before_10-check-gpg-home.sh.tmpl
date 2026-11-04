@@ -1,6 +1,9 @@
 {{ if ne .chezmoi.os "windows" -}}
 {{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
 #!/bin/sh
+# file gpg-settings sha256: {{ include ".chezmoitemplates/gpg-settings" | sha256sum }}
+# file gpg-home sha256: {{ include ".chezmoitemplates/gpg-home" | sha256sum }}
+# data gpg.program sha256: {{ dict "program" $gpg.program | toJson | sha256sum }}
 set -eu
 gpgconf='{{ printf "%s/gpgconf" (dir $gpg.program) | replace "'" "'\\''" }}'
 expected='{{ includeTemplate "gpg-home" . | replace "'" "'\\''" }}'

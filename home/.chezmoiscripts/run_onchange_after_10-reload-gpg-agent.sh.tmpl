@@ -1,0 +1,10 @@
+{{ if ne .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+#!/bin/sh
+# file gpg-settings sha256: {{ include ".chezmoitemplates/gpg-settings" | sha256sum }}
+# file gpg-agent-config sha256: {{ include ".chezmoitemplates/gpg-agent-config" | sha256sum }}
+# file agent-target sha256: {{ include "private_dot_gnupg/modify_gpg-agent.conf" | sha256sum }}
+# data gpg.settings sha256: {{ $gpg | toJson | sha256sum }}
+set -eu
+exec '{{ printf "%s/gpgconf" (dir $gpg.program) | replace "'" "'\\''" }}' --reload gpg-agent
+{{ end -}}

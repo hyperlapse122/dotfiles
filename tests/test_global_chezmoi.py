@@ -140,6 +140,31 @@ class GlobalChezmoiTest(unittest.TestCase):
         self.assertEqual(result.stdout, "existing setting")
         self.assertFalse((self.home / ".global-proof").exists())
 
+    def test_init_only_pwsh_does_not_block_application_outside_mise(self):
+        init_only = self.chezmoi.parent / "pwsh.cmd"
+        init_only.write_text("@echo off\nexit /b 17\n", encoding="ascii")
+        result = self.register()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        init_only.unlink()
+        windows = Path(os.environ["SystemRoot"])
+        self.env["PATH"] = os.pathsep.join((
+            str(self.chezmoi.parent),
+            str(windows / "System32/WindowsPowerShell/v1.0"),
+            str(windows / "System32"),
+            str(Path(shutil.which("git")).resolve().parent),
+        ))
+        self.assertIsNone(shutil.which("pwsh", path=self.env["PATH"]))
+        scripts = self.checkout / "home/.chezmoiscripts"
+        scripts.mkdir()
+        (scripts / "run_before_10-interpreter-proof.ps1").write_text(
+            "$ErrorActionPreference = 'Stop'\n"
+            "[IO.File]::WriteAllText((Join-Path $env:USERPROFILE 'interpreter-proof.txt'), 'ran without mise')\n",
+            encoding="ascii",
+        )
+        result = self.run_chezmoi("apply", "--force")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.home / "interpreter-proof.txt").read_text(encoding="utf-8"), "ran without mise")
+
     def test_other_source_and_format_are_not_overwritten(self):
         for filename, content in (
             ("chezmoi.toml", 'sourceDir = "C:/other-dotfiles"\n'),

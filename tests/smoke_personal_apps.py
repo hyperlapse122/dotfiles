@@ -166,9 +166,9 @@ def check_windows_path_preservation(apply_and_check, home, env):
     )
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
                        winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as key:
-        for original, kind, already_present in cases:
+        for case_index, (original, kind, already_present) in enumerate(cases):
             winreg.SetValueEx(key, "Path", 0, kind, original)
-            apply_and_check()
+            apply_and_check(case_index)
             actual, actual_kind = winreg.QueryValueEx(key, "Path")
             if actual_kind != kind:
                 raise RuntimeError("PATH integration changed the existing registry value kind")
@@ -181,7 +181,7 @@ def check_windows_path_preservation(apply_and_check, home, env):
                 expected = os.path.normcase(str(home / ".local/bin"))
                 if not actual.startswith(prefix) or os.path.normcase(os.path.normpath(appended)) != expected:
                     raise RuntimeError("PATH integration changed unrelated raw entries or appended the wrong directory")
-            apply_and_check()
+            apply_and_check(case_index)
             if winreg.QueryValueEx(key, "Path") != (actual, actual_kind):
                 raise RuntimeError("Repeated PATH integration changed the existing value")
     print("Windows PATH: expandable and literal entries, registry kinds, and equivalent-entry idempotence preserved")
@@ -227,8 +227,8 @@ def main():
             ".chezmoidata/personal-app-lock.json",
             ".chezmoiexternals/personal-apps.toml.tmpl",
             "dot_config/dotfiles/path.sh",
-            "run_after_10-personal-app-path.ps1.tmpl",
-            "run_after_10-personal-app-path.sh.tmpl",
+            ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
+            ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
         ):
             destination = source / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -248,17 +248,21 @@ def main():
         command = [
             chezmoi, "--config", str(config), "--source", str(source),
             "--destination", str(home), "--cache", str(root / "cache"),
-            "--persistent-state", str(root / "state/chezmoi.boltdb"), "--no-tty",
+            "--no-tty",
         ]
-        target = run(command + ["execute-template", "{{ .chezmoi.os }}-{{ .chezmoi.arch }}"],
+        target = run(command + ["--persistent-state", str(root / "state/chezmoi.boltdb"),
+                                "execute-template", "{{ .chezmoi.os }}-{{ .chezmoi.arch }}"],
                      env=env, cwd=outside)
         if args.expected_target and target != args.expected_target:
             raise RuntimeError(f"Expected native {args.expected_target}, got {target}")
         if target not in lock["personalAppLocks"]["omp"]["targets"]:
             raise RuntimeError(f"No committed omp pin for native target {target}")
 
-        def apply_and_check():
-            arguments = command + ["apply"]
+        def apply_and_check(case_index=0):
+            # Separate initial-state cases, but preserve onchange history within each case.
+            arguments = command + [
+                "--persistent-state", str(root / "state" / f"chezmoi-{case_index}.boltdb"), "apply",
+            ]
             if not args.path_integration:
                 arguments.append("--exclude=scripts")
             run(arguments, env=env, cwd=outside)

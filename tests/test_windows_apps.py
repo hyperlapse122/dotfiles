@@ -10,7 +10,7 @@ import unittest
 
 @unittest.skipUnless(os.name == "nt", "Windows host application installation")
 class WindowsAppsTest(unittest.TestCase):
-    packages = ("Google.Chrome", "AgileBits.1Password", "AgileBits.1Password.CLI")
+    packages = ("Google.Chrome", "AgileBits.1Password", "AgileBits.1Password.CLI", "Microsoft.PowerShell")
 
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
@@ -20,7 +20,7 @@ class WindowsAppsTest(unittest.TestCase):
         self.source = self.root / "source with spaces"
         self.source.mkdir()
         # Use just the app source state: Git/GPG prerequisites are tested separately.
-        for relative in (".chezmoidata/windows.yaml", "run_before_20-install-windows-apps.cmd.tmpl"):
+        for relative in (".chezmoidata/windows.yaml", ".chezmoiscripts/run_onchange_before_20-install-windows-apps.ps1.tmpl"):
             source = self.repo / "home" / relative
             if source.exists():
                 target = self.source / relative
@@ -29,7 +29,13 @@ class WindowsAppsTest(unittest.TestCase):
         self.home = self.root / "user home"
         self.home.mkdir()
         self.config = self.root / "chezmoi.toml"
-        self.config.write_text("", encoding="utf-8")
+        # Hide pwsh and real WinGet: first application must work with Windows PowerShell.
+        shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        self.config.write_text(
+            '[interpreters.ps1]\ncommand = ' + json.dumps(str(shell)) +
+            '\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n',
+            encoding="utf-8",
+        )
         self.inventory = self.root / "inventory.json"
         self.inventory.write_text("{}", encoding="utf-8")
         self.invocations = self.root / "invocations.txt"
@@ -96,18 +102,21 @@ path.write_text(json.dumps(inventory), encoding="utf-8")
     def installed(self):
         return json.loads(self.inventory.read_text(encoding="utf-8"))
 
-    def test_existing_version_survives_reruns_and_missing_cli_is_restored(self):
+    def test_existing_version_survives_and_unchanged_apply_skips_installer(self):
         self.inventory.write_text(json.dumps({self.packages[0]: "1.0"}), encoding="utf-8")
-        expected = dict(zip(self.packages, ("1.0", "2.0", "2.0")))
+        expected = dict(zip(self.packages, ("1.0", "2.0", "2.0", "2.0")))
         self.apply()
         self.assertEqual(self.installed(), expected)
+        calls = self.invocations.read_text(encoding="utf-8")
         self.apply()
         self.assertEqual(self.installed(), expected)
+        self.assertEqual(self.invocations.read_text(encoding="utf-8"), calls)
         removed = self.installed()
         del removed[self.packages[2]]
         self.inventory.write_text(json.dumps(removed), encoding="utf-8")
         self.apply()
-        self.assertEqual(self.installed(), expected)
+        self.assertEqual(self.installed(), removed)
+        self.assertEqual(self.invocations.read_text(encoding="utf-8"), calls)
 
     def test_failed_install_preserves_progress_and_can_complete_on_rerun(self):
         self.env["APP_TEST_FAIL_PACKAGE"] = self.packages[1]
@@ -119,12 +128,12 @@ path.write_text(json.dumps(inventory), encoding="utf-8")
         self.apply()
         self.assertEqual(self.installed(), dict.fromkeys(self.packages, "2.0"))
 
-    def test_last_package_failure_is_not_hidden_by_launcher(self):
-        self.env["APP_TEST_FAIL_PACKAGE"] = self.packages[2]
+    def test_last_package_failure_is_not_hidden(self):
+        self.env["APP_TEST_FAIL_PACKAGE"] = self.packages[-1]
         result = self.apply(check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn(self.packages[2], result.stdout + result.stderr)
-        self.assertEqual(self.installed(), dict.fromkeys(self.packages[:2], "2.0"))
+        self.assertIn(self.packages[-1], result.stdout + result.stderr)
+        self.assertEqual(self.installed(), dict.fromkeys(self.packages[:-1], "2.0"))
 
     def test_dry_run_does_not_execute_installer(self):
         self.apply("--dry-run")
@@ -137,6 +146,23 @@ path.write_text(json.dumps(inventory), encoding="utf-8")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("App Installer", result.stdout + result.stderr)
         self.assertEqual(self.installed(), {})
+
+    def test_package_data_change_runs_installer_again(self):
+        self.apply()
+        added = "Example.NewApp"
+        with (self.source / ".chezmoidata/windows.yaml").open("a", encoding="utf-8") as data:
+            data.write(f"    - {added}\n")
+        self.apply()
+        self.assertEqual(self.installed(), dict.fromkeys((*self.packages, added), "2.0"))
+
+    def test_data_formatting_and_unrelated_values_do_not_run_installer(self):
+        self.apply()
+        calls = self.invocations.read_text(encoding="utf-8")
+        data = self.source / ".chezmoidata/windows.yaml"
+        data.write_text("# formatting only\n" + data.read_text(encoding="utf-8") +
+                        "\nunrelated: changed\n", encoding="utf-8")
+        self.apply()
+        self.assertEqual(self.invocations.read_text(encoding="utf-8"), calls)
 
 
 if __name__ == "__main__":

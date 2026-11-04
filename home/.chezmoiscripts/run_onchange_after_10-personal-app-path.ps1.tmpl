@@ -1,4 +1,6 @@
 {{- if eq .chezmoi.os "windows" -}}
+{{ "\ufeff" -}}
+# data path.settings sha256: {{ dict "home" .chezmoi.destDir | toJson | sha256sum }}
 $ErrorActionPreference = 'Stop'
 
 $bin = Join-Path '{{ .chezmoi.destDir | replace "'" "''" }}' '.local\bin'
