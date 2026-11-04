@@ -13,7 +13,8 @@ class GlobalChezmoiTest(unittest.TestCase):
         self.shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
         self.scratch = tempfile.TemporaryDirectory(prefix="global chezmoi ")
         self.addCleanup(self.scratch.cleanup)
-        self.root = Path(self.scratch.name)
+        # Native tools must share one spelling instead of mixing 8.3 and long paths.
+        self.root = Path(self.scratch.name).resolve()
         self.home = self.root / "user home"
         self.home.mkdir()
         self.config_root = self.root / "config"

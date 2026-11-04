@@ -1,0 +1,84 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit and six-target rendering (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-2025, macos-15]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+      - name: Provision native Windows GPG integration-test prerequisite
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          # Git's MSYS GPG interprets Windows GNUPGHOME as a relative POSIX path.
+          # Hosted Windows installers stalled; these tests need only the CLI payload.
+          # Verify and unpack it without executing either installer or package scripts.
+          $package = Join-Path $env:RUNNER_TEMP 'gnupg-fixture.zip'
+          $packageRoot = Join-Path $env:RUNNER_TEMP 'gnupg-package'
+          $gpgRoot = Join-Path $env:RUNNER_TEMP 'native-gnupg'
+          Invoke-WebRequest 'https://community.chocolatey.org/api/v2/package/gnupg/2.5.21' -OutFile $package
+          $expected = 'ec0d87043a192be65d7bd9678609bfb29154f565183c135f7569ad9682e208c6230ed9cce706c706726f4436084528775d7ae993e4994033068021904c22fdd3'
+          if ((Get-FileHash -LiteralPath $package -Algorithm SHA512).Hash -ne $expected) {
+            throw 'Native GnuPG fixture checksum mismatch.'
+          }
+          Expand-Archive -LiteralPath $package -DestinationPath $packageRoot
+          $installer = Join-Path $packageRoot 'tools/gnupg-w32-2.5.21_20260702.exe'
+          mise exec -- 7z x -y "-o$gpgRoot" $installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gpgBin = Join-Path $gpgRoot 'bin'
+          if (-not (Test-Path -LiteralPath (Join-Path $gpgBin 'gpgconf.exe'))) {
+            throw 'Native GnuPG payload was not found.'
+          }
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $gpgBin -Encoding utf8
+          mise exec -- (Join-Path $gpgBin 'gpgconf.exe') --version
+      - name: Run deterministic tests and isolated existing contracts
+        run: mise exec -- python -m unittest discover -s tests
+
+  native:
+    name: Native pinned omp and terminal PATH (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: linux-amd64
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+          - runner: windows-2025
+            target: windows-amd64
+          - runner: windows-11-arm
+            target: windows-arm64
+          - runner: macos-15-intel
+            target: darwin-amd64
+          - runner: macos-15
+            target: darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      MISE_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install: false
+          env: false
+      # The development lock has no Windows ARM records and ast-grep does not
+      # support that target. Resolve only these existing declarations there;
+      # never change the repository's development-tool declarations or pins.
+      - name: Install only the tools needed for native smoke
+        run: mise install chezmoi python gh
+      - name: Apply real pins and prove discovery in a fresh terminal
+        run: mise exec chezmoi python gh -- python tests/smoke_personal_apps.py --path-integration --expected-target ${{ matrix.target }}

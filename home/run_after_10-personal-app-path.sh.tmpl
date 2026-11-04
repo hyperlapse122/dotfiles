@@ -1,0 +1,32 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/bin/sh
+set -eu
+
+home='{{ .chezmoi.destDir | replace "'" "'\\''" }}'
+fragment="$home/.config/dotfiles/path.sh"
+# Quote the destination as shell data, including homes containing apostrophes.
+quoted_fragment=$(printf '%s' "$fragment" | sed "s/'/'\\\\''/g")
+source_line="[ ! -r '$quoted_fragment' ] || . '$quoted_fragment'"
+
+append_source() {
+    profile=$1
+    if [ -f "$profile" ] && grep -Fqx "$source_line" "$profile"; then
+        return
+    fi
+    printf '\n%s\n' "$source_line" >> "$profile"
+}
+
+login_profile="$home/.profile"
+for profile in "$home/.bash_profile" "$home/.bash_login" "$home/.profile"; do
+    if [ -f "$profile" ]; then
+        login_profile=$profile
+        break
+    fi
+done
+append_source "$login_profile"
+append_source "$home/.bashrc"
+zsh_home=${ZDOTDIR:-$home}
+mkdir -p "$zsh_home"
+append_source "$zsh_home/.zprofile"
+append_source "$zsh_home/.zshrc"
+{{ end -}}
