@@ -1,0 +1,15 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+@echo off
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ^
+ "$ErrorActionPreference = 'Stop';" ^
+ "$gpgconf = '{{ printf "%s/gpgconf.exe" (dir ($gpg.program | replace "\\" "/")) | replace "'" "''" | replace "%" "%%" }}';" ^
+ "$expected = '{{ includeTemplate "gpg-home" . | replace "'" "''" | replace "%" "%%" }}';" ^
+ "$actual = & $gpgconf --list-dirs homedir;" ^
+ "if ($LASTEXITCODE -ne 0) { throw ('Cannot determine the GPG home (exit {0}).' -f $LASTEXITCODE) };" ^
+ "$actual = [IO.Path]::GetFullPath(($actual -join [Environment]::NewLine).Trim()).TrimEnd('\', '/');" ^
+ "$expected = [IO.Path]::GetFullPath($expected).TrimEnd('\', '/');" ^
+ "if (-not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {" ^
+ "throw ('GPG uses {0}, but these dotfiles manage {1}. Reconcile the GPG home before applying.' -f $actual, $expected) }"
+exit /b %errorlevel%
+{{ end -}}

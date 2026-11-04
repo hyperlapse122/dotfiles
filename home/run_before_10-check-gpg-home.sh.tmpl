@@ -1,0 +1,12 @@
+{{ if ne .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+#!/bin/sh
+set -eu
+gpgconf='{{ printf "%s/gpgconf" (dir $gpg.program) | replace "'" "'\\''" }}'
+expected='{{ includeTemplate "gpg-home" . | replace "'" "'\\''" }}'
+actual="$("$gpgconf" --list-dirs homedir)"
+if [ "${actual%/}" != "${expected%/}" ]; then
+    printf "GPG uses '%s', but these dotfiles manage '%s'. Reconcile the GPG home before applying.\n" "$actual" "$expected" >&2
+    exit 1
+fi
+{{ end -}}

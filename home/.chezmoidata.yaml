@@ -1,0 +1,18 @@
+git:
+  name: Joosung Park
+  email: hyperlapse@jpi.co.kr
+  signingKey: 621512777E6933FEB4458FDC4945855D4F283F05
+
+gpgPlatforms:
+  windows:
+    program: C:/Program Files/GnuPG/bin/gpg.exe
+    pinentry: C:/Program Files/Gpg4win/bin/pinentry.exe
+  linux:
+    program: /usr/bin/gpg
+    pinentry: /usr/bin/pinentry
+  darwin:
+    program: /usr/local/bin/gpg
+    pinentry: /usr/local/bin/pinentry-mac
+  darwin-arm64:
+    program: /opt/homebrew/bin/gpg
+    pinentry: /opt/homebrew/bin/pinentry-mac

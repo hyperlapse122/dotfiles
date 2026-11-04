@@ -1,0 +1,6 @@
+{{ if ne .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+#!/bin/sh
+set -eu
+exec '{{ printf "%s/gpgconf" (dir $gpg.program) | replace "'" "'\\''" }}' --reload gpg-agent
+{{ end -}}

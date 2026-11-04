@@ -113,13 +113,55 @@ mise run apply
 
 Repository preparation and apply tasks resolve the current worktree's source, including when called from a subdirectory.
 They do not initialize or redirect the global chezmoi source.
-The source contains a chezmoi configuration template but no concrete personal dotfiles payload yet.
+The source manages global Git settings and GPG pinentry selection; tool installation and signing-key provisioning are prerequisites.
 
 To preview future changes without applying them, run from the repository root:
 
 ```sh
 mise exec -- chezmoi --source . diff
 ```
+
+
+### Git signing and GPG pinentry
+
+The managed global Git configuration uses `Joosung Park`, `hyperlapse@jpi.co.kr`, signing key `621512777E6933FEB4458FDC4945855D4F283F05`, and automatic OpenPGP commit signing.
+New repositories created with `git init` start on `main`; existing branch names and repository-local configuration are unchanged.
+The entire global `.gitconfig` is repository-managed, so put shared changes in the source rather than editing the generated file.
+
+Install Git, GPG (including `gpgconf`), and the platform's pinentry before applying.
+The existing signing key and any required YubiKey must already be ready on the device; this repository does not generate or import keys, distribute public keys, or change trust.
+
+| Platform | GPG executable | Pinentry executable |
+| --- | --- | --- |
+| Windows / Gpg4win | `C:/Program Files/GnuPG/bin/gpg.exe` | `C:/Program Files/Gpg4win/bin/pinentry.exe` |
+| Linux | `/usr/bin/gpg` | `/usr/bin/pinentry` |
+| macOS / Intel Homebrew | `/usr/local/bin/gpg` | `/usr/local/bin/pinentry-mac` |
+| macOS / Apple Silicon Homebrew | `/opt/homebrew/bin/gpg` | `/opt/homebrew/bin/pinentry-mac` |
+
+Common values and platform defaults live in `home/.chezmoidata.yaml`.
+For nonstandard installations, set absolute paths in the current chezmoi TOML configuration:
+
+```toml
+[data]
+gpgProgram = "D:/Tools/GnuPG/bin/gpg.exe"
+pinentryProgram = "D:/Tools/Gpg4win/bin/pinentry.exe"
+```
+
+`gpgconf` must be next to the selected GPG executable.
+The managed GPG home is `%USERPROFILE%/AppData/Roaming/gnupg` on Windows and `~/.gnupg` on Linux/macOS.
+Before writing personal files, application checks the selected installation's effective GPG home and stops if it differs, including custom `GNUPGHOME` or Windows registry/portable-installation choices.
+Reconcile that location before applying; custom GPG-home relocation is not managed here.
+
+Only active `pinentry-program` entries in `gpg-agent.conf` are replaced.
+Comments, unrelated agent settings, keys, and trust databases remain unmanaged.
+Application reloads the agent so the selected pinentry takes effect; Windows scripts launch Windows PowerShell with `-NoProfile`, independent of the user's shell setup.
+Repeated application restores managed values after local edits.
+Because the check and reload run on every explicit application, `chezmoi diff` includes those scripts even when configuration files are unchanged; use `chezmoi diff --exclude=scripts` to inspect file drift only.
+
+To verify on a configured device, create a temporary repository, make a commit with the existing key, complete PIN entry if prompted, and inspect it with `git verify-commit HEAD`.
+Configuration rendering on another OS does not prove its native PIN dialog or hardware integration.
+
+omp settings migration and release/checksum update automation are separate work and are not included here.
 
 ## Source layout
 
