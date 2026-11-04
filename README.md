@@ -16,8 +16,10 @@ mise install
 
 This installs the locked tools, including chezmoi, and runs the `bootstrap` task through the project-level `postinstall` hook.
 The task lists managed chezmoi entries with scripts excluded; it does not apply files or execute chezmoi scripts.
+It uses the repository's hook-free `.chezmoi-bootstrap.toml` so existing personal chezmoi hooks cannot run during preparation.
 The hook also runs when all tools are already installed, so use the same command for an existing worktree.
 Shell activation is not required.
+On x64 Linux, chezmoi uses its static musl build to avoid requiring a glibc compatibility layer on musl hosts.
 
 Additional preparation belongs in the `postinstall` path, not in a separate setup command.
 Mise reports hook failures as warnings and may still exit successfully: a warning means preparation did not complete.
@@ -53,3 +55,14 @@ See [home/README.md](home/README.md) for source naming and script ordering.
 
 Declare development tools in `mise.toml` and commit their generated lockfile.
 Keep tool installation in mise; chezmoi owns personal configuration and the actions needed to apply it.
+
+## Verify bootstrap isolation
+
+After installing the tools, run:
+
+```sh
+mise exec -- python -m unittest discover -s tests
+```
+
+The regression test initializes twice with an isolated user home and an existing chezmoi config containing mutating hooks.
+It checks that preparation does not execute those hooks or alter the existing personal setting and config.

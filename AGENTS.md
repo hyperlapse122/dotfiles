@@ -10,6 +10,7 @@ Write repository documentation in English.
 
 - Initialize every new or existing worktree with `mise install`. Put any additional preparation scripts behind the project-level `postinstall` hook, not a separate setup entry point.
 - Keep initialization read-only with respect to personal settings: do not apply chezmoi state or change user-home or OS configuration from bootstrap.
+- Bootstrap must use the repository's hook-free chezmoi config; excluding source scripts alone does not prevent hooks from a personal chezmoi config.
 - Declare development tools in `mise.toml` and commit the generated `mise.lock`. Keep tool installation in mise rather than duplicating it in chezmoi scripts.
 - Use chezmoi for dotfiles. Its source state belongs in `./home`, selected by the repository-root `.chezmoiroot`; the destination is the actual user home directory.
 - Use `mise run apply` only when explicitly applying personal configuration. Bind chezmoi commands to the current worktree source rather than changing a user's global source configuration.
