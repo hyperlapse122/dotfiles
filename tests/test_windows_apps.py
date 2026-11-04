@@ -10,8 +10,7 @@ import unittest
 
 @unittest.skipUnless(os.name == "nt", "Windows host application installation")
 class WindowsAppsTest(unittest.TestCase):
-    packages = ("Google.Chrome", "AgileBits.1Password", "AgileBits.1Password.CLI",
-                "Microsoft.PowerShell", "RedHat.Podman-Desktop")
+    packages = ("Example.Existing", "Example.New", "Example.Third", "Example.Last")
 
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
@@ -21,12 +20,14 @@ class WindowsAppsTest(unittest.TestCase):
         self.source = self.root / "source with spaces"
         self.source.mkdir()
         # Use just the app source state: Git/GPG prerequisites are tested separately.
-        for relative in (".chezmoidata/windows.yaml", ".chezmoiscripts/run_onchange_before_20-install-windows-apps.ps1.tmpl"):
-            source = self.repo / "home" / relative
-            if source.exists():
-                target = self.source / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, target)
+        relative = ".chezmoiscripts/run_onchange_before_20-install-windows-apps.ps1.tmpl"
+        target = self.source / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.repo / "home" / relative, target)
+        data = self.source / ".chezmoidata/windows.yaml"
+        data.parent.mkdir(parents=True)
+        data.write_text("windows:\n  apps:\n" + "".join(
+            f"    - {package}\n" for package in self.packages), encoding="utf-8")
         self.home = self.root / "user home"
         self.home.mkdir()
         self.config = self.root / "chezmoi.toml"

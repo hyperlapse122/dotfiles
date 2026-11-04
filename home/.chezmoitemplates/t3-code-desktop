@@ -1,0 +1,16 @@
+{{- $os := .chezmoi.os -}}
+{{- $arch := .chezmoi.arch -}}
+{{- $ubuntu := and (eq $os "linux") (eq (get (get .chezmoi "osRelease" | default dict) "id") "ubuntu") -}}
+{{- $supported := or (and (eq $os "windows") (has $arch (list "amd64" "arm64"))) (and (eq $os "darwin") (eq $arch "arm64")) (and $ubuntu (has $arch (list "amd64" "arm64"))) -}}
+{{- $installed := false -}}
+{{- if and $supported $ubuntu -}}
+{{- $installed = not (not (stat "/opt/T3 Code (Beta)/t3code")) -}}
+{{- if and (not $installed) (stat "/var/lib/dpkg/status") -}}
+{{- range splitList "\n\n" (include "/var/lib/dpkg/status") -}}
+{{- if and (has "Package: t3code" (splitList "\n" .)) (has "Status: install ok installed" (splitList "\n" .)) -}}
+{{- $installed = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- dict "supported" $supported "ubuntu" $ubuntu "installed" $installed "stagedDeb" (joinPath .chezmoi.destDir ".cache" "t3-code" "t3code.deb") | toJson -}}

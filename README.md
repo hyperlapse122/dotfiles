@@ -154,7 +154,7 @@ Previewing externals can download and cache their pinned contents, but does not 
 
 ### Windows host applications
 
-On Windows, explicit application provisions Google Chrome, 1Password, 1Password CLI, system PowerShell, and Podman Desktop through WinGet when the installation action is eligible.
+On Windows, explicit application provisions Google Chrome, 1Password, 1Password CLI, system PowerShell, Podman Desktop, and T3 Code through WinGet when the installation action is eligible.
 Use `mise run apply` from an initialized worktree, or the separate source-update and apply sequence above for a permanent checkout.
 Bootstrap and source registration do not install these applications.
 
@@ -165,6 +165,7 @@ The package list lives in `home/.chezmoidata/windows.yaml`:
 - 1Password CLI: `AgileBits.1Password.CLI`
 - PowerShell: `Microsoft.PowerShell`
 - Podman Desktop: `RedHat.Podman-Desktop`
+- T3 Code: `T3Tools.T3Code`
 
 Install or update Windows App Installer if WinGet is unavailable.
 Approve WinGet agreements and any UAC prompts when requested; package scope and installer behavior use WinGet's defaults.
@@ -175,10 +176,48 @@ The action uses WinGet's `--no-upgrade`: recognized existing installations are r
 After success it runs again only when the script or consumed application data changes; an unchanged apply does not restore a manually uninstalled package.
 This does not disable applications' own update mechanisms.
 Installation failures stop apply with the package ID and exit code; resolve the reported problem and rerun to complete the remaining installations.
-Account sign-in, CLI/app integration, browser extensions, default-browser selection, and application preferences remain manual.
+Account sign-in, browser extensions, default-browser selection, and application preferences remain manual, except for the explicitly managed integrations below.
 After installing the CLI, open a fresh shell and check `op --version`.
 After installing PowerShell, open a fresh shell and check `pwsh --version`.
 The system installation is for everyday use outside mise; mise still manages the repository's development runtime.
+
+### T3 Code desktop and omp ACP
+
+Explicit apply installs [T3 Code](https://github.com/pingdotgg/t3code) on Windows and Ubuntu x64/ARM64, and on Apple Silicon Macs.
+macOS requires native Homebrew at `/opt/homebrew`; Ubuntu requires apt and Debian package tooling.
+Recognized existing installations are retained, including older versions; use the desktop app's updater for later upgrades.
+The source-driven install actions do not continuously repair an app removed after an unchanged successful apply.
+Intel Mac support removal is tracked separately in [issue #29](https://github.com/hyperlapse122/dotfiles/issues/29).
+
+Windows uses the host application list above.
+macOS installs the `t3-code` cask only when no existing application is recognized.
+Ubuntu stages the latest stable architecture-matched `.deb` through a checksum-verified chezmoi external, then installs it through apt.
+Public release metadata is read with the mise-managed Python runtime; no GitHub login is required.
+Neither bootstrap nor `mise install` installs the desktop app or applies its settings.
+
+Managed launchers in `~/.local/bin` expose the desktop app's bundled CLI without a separate CLI installation or an initial GUI launch.
+Restart the terminal host after PATH integration, then check:
+
+```sh
+t3 --version
+```
+
+Open the desktop app normally; with it running, `t3 app` opens the current project there.
+If another `t3` command precedes `~/.local/bin` on PATH, resolve that conflict explicitly.
+The launchers use the installed desktop bundle; uninstalling or moving that bundle can make the command unavailable.
+
+Close T3 Code before applying its settings.
+The private `modify_` target reconciles `~/.t3/userdata/settings.json` on every apply, creating provider ID `omp` when absent.
+It enables a local ACP provider that invokes the repository-managed `~/.local/bin/omp` (`omp.exe` on Windows) with the `acp` argument.
+It preserves other providers, unrelated settings, and unowned fields within the omp provider.
+The initial display name and color follow the inspected oh-my-pi registration; existing presentation choices remain unchanged.
+Missing or empty settings initialize minimally; malformed JSON or incompatible object shapes fail without replacing the existing file.
+Formatting may normalize.
+
+This manages the default `~/.t3` state directory, not arbitrary `T3CODE_HOME` relocations.
+Provider credentials and login stay in omp's existing local configuration and are not copied into T3 settings.
+Automatic startup, background services, and remote access are not configured.
+
 
 ### Windows Kubernetes environment
 

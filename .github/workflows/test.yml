@@ -122,6 +122,11 @@ jobs:
         run: brew install gnupg
       - name: Apply real pins and prove discovery in a fresh terminal
         run: mise exec chezmoi python gh -- python tests/smoke_personal_apps.py --path-integration --expected-target ${{ matrix.target }}
+      - name: Prove desktop-bundled T3 command and omp ACP integration
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target ${{ matrix.target }}
       - name: Apply pinned CE and prove native skill discovery
         run: mise exec chezmoi python gh -- python tests/smoke_harness_plugins.py --expected-target ${{ matrix.target }}
       - name: Provision disposable Linux credential service

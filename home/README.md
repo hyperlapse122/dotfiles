@@ -73,6 +73,29 @@ PATH actions fingerprint the effective destination; Unix also fingerprints the m
 They do not consume application declarations or release pins, so changes to those data alone do not rerun PATH integration.
 Keep executable installation declarative: scripts handle PATH and authentication, not application downloads or extraction.
 
+## T3 Code desktop integration
+
+The desktop app uses native package installation rather than the pinned personal CLI model.
+`windows.yaml` adds its WinGet identity; `run_onchange_after_30-install-t3-code.sh.tmpl` retains existing macOS/Ubuntu installations.
+The Ubuntu external stages a checksummed `.deb` only when no installed app is recognized.
+Its public metadata reader, `scripts/t3-code-release.py`, uses the existing mise-managed Python runtime because chezmoi's typed GitHub release helper omits asset digests.
+The apply script installs the staged file and never downloads or extracts packages.
+
+`dot_local/bin` supplies desktop-dependent CLI launchers.
+They follow the released Electron/server entrypoint contract and work without the GUI-generated `~/.t3/bin` shim.
+Keep their OS/architecture selection aligned with the T3 exclusions in `.chezmoiignore`.
+The macOS ignore rule also permits the shared PATH fragment while excluding Linux environment configuration.
+
+`private_dot_t3/private_userdata/modify_private_settings.json` delegates to `t3-code-settings`.
+It owns only the omp ACP launch fields and seeds missing presentation fields; unrelated values remain native application state.
+Keep the `chezmoi:modify-template` marker, private attributes, and no `.tmpl` suffix.
+Invalid JSON or non-object boundaries fail rather than being treated as missing.
+Apply with T3 Code closed; filesystem watching is not a lock shared with chezmoi.
+
+`tests/smoke_t3_code.py` applies only the relevant source into temporary state, runs the real bundled CLI, and initializes the managed omp ACP executable.
+Its optional desktop provisioning is restricted to disposable GitHub-hosted runners; Windows CI uses the official installer directly, not WinGet acquisition.
+
+
 ## Harness plugin data and partial settings
 
 `.chezmoidata/harness-plugins.json` owns `harnessPlugins` declarations, including upstream repository, stable-tag prefix, native omp identity, and archive exclusions.
