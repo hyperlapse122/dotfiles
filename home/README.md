@@ -100,6 +100,35 @@ The private attributes keep configuration files owner-only (`0600`) and their ma
 The template refuses to create YAML over pending legacy settings migration and propagates parse failures.
 This is not a comment-preserving editor or a lock shared with a running omp process.
 
+## Shared user-scope harness instructions
+
+`.chezmoitemplates/agent-instructions` is the single editable source for user-scope instructions.
+Add shared Markdown below the common template comment and omp-specific Markdown inside its `harness == "omp"` branch.
+The template receives `harness` and `chezmoi`, so OS-dependent content can also use `chezmoi.os`.
+Conditions run during chezmoi rendering; agents receive only common content and their matching branch.
+Keep paragraph boundaries when editing the template rather than trimming preceding Markdown with branch actions.
+
+`private_dot_omp/private_agent/private_empty_AGENTS.md.tmpl` supplies the `omp` identifier and deploys to `~/.omp/agent/AGENTS.md`.
+The `private_` and `empty_` attributes preserve an owner-only file even while the shared source renders empty.
+The committed source currently contains only template comments and an empty branch, with no instruction policies.
+Edit the shared source, not the generated destination.
+Explicit apply replaces local destination content with the repository result, including an empty result; it does not merge or migrate personal instructions.
+Bootstrap only enumerates the source and does not apply it.
+
+Every managed harness, including future additions, must use this shared source.
+Onboard a harness by adding a thin template adapter at its documented native user-scope path, passing its identifier and the chezmoi context.
+Add a matching conditional region only when that harness needs its own content, and follow the harness's existing platform eligibility.
+Verify common inclusion, foreign-branch exclusion, and native discovery in a disposable home without copying the common body.
+Do not create destinations for unmanaged harnesses.
+
+The current deployment covers omp's standard default profile, not relocated agent directories or named profiles.
+In [omp v18.16.0](https://github.com/can1357/oh-my-pi/blob/v18.16.0/docs/context-files.md), a non-empty native user file takes precedence over other user-context conventions.
+Main sessions and advisors receive it; task subagents exclude files named `AGENTS.md`.
+An empty file contributes no context.
+For smoke proof, use temporary markers and inspect a fresh native session with `/extensions` and `/dump`, or RPC `get_state`'s assembled `systemPrompt`; no model turn is needed.
+Remove the markers afterward and keep the committed output empty until real instructions are added.
+
+
 ## Script lifecycle
 
 Use scripts only when managed files cannot represent the action.

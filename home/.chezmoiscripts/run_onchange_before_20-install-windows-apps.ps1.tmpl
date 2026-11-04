@@ -10,9 +10,6 @@ $packages = @({{ range $index, $package := .windows.apps }}{{ if $index }}, {{ e
 foreach ($package in $packages) {
     Write-Host ('Ensuring {0} is installed with WinGet; approve installation prompts when requested.' -f $package)
     $installArgs = @('install', '--id', $package, '--exact', '--source', 'winget', '--no-upgrade')
-    if ($package -eq 'SUSE.RancherDesktop') {
-        $installArgs += '--skip-dependencies'
-    }
     & $winget.Source @installArgs
     $result = [long]$LASTEXITCODE -band 0xFFFFFFFFL
     if ($result -ne 0 -and $result -ne 0x8A150061L) {

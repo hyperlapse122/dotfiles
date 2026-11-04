@@ -16,3 +16,9 @@ Write repository documentation in English.
 - Use `mise run apply` only when explicitly applying personal configuration. Bind chezmoi commands to the current worktree source rather than changing a user's global source configuration.
 - When chezmoi scripts require relative execution order within the same phase, use consistently padded numeric prefixes in their descriptive names, such as `run_once_before_10-windows.ps1.tmpl` and `run_once_before_20-windows-tools.ps1.tmpl`. Preserve `before_` and `after_` phase semantics.
 - Keep setup and chezmoi scripts idempotent. Use OS-conditional templates for platform-specific chezmoi scripts.
+
+## User-scope harness instructions
+
+- Every repository-managed AI harness MUST wire its native user-scope instruction file to `home/.chezmoitemplates/agent-instructions`. Adding a harness is incomplete without this connection.
+- Keep common instructions in that shared template and select harness-specific content with its explicit `harness` identifier at render time. Never copy the common body into an adapter or expose another harness's branch in generated instructions.
+- When onboarding a harness, verify common-content inclusion, foreign-branch exclusion, and native user-scope discovery in a disposable home. Follow the source layout and editing procedure in `home/README.md`.

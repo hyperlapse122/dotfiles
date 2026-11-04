@@ -11,7 +11,7 @@ import unittest
 @unittest.skipUnless(os.name == "nt", "Windows host application installation")
 class WindowsAppsTest(unittest.TestCase):
     packages = ("Google.Chrome", "AgileBits.1Password", "AgileBits.1Password.CLI",
-                "Microsoft.PowerShell", "SUSE.RancherDesktop")
+                "Microsoft.PowerShell", "RedHat.Podman-Desktop")
 
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
@@ -73,9 +73,6 @@ if not args or args[0] != "install" or "--id" not in args:
     sys.exit(87)
 package = args[args.index("--id") + 1]
 if "--exact" not in args or "--source" not in args or args[args.index("--source") + 1] != "winget":
-    sys.exit(87)
-if ("--skip-dependencies" in args) != (package == "SUSE.RancherDesktop"):
-    print("Only Rancher Desktop may bypass package dependencies", file=sys.stderr)
     sys.exit(87)
 if package == os.environ.get("APP_TEST_FAIL_PACKAGE"):
     print("Simulated package installation failure", file=sys.stderr)
