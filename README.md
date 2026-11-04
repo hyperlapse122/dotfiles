@@ -350,6 +350,8 @@ Close running omp sessions before replacing `omp.exe`, and run the update from a
 On macOS/Linux, apply preserves existing Bash and Zsh profiles and adds a source line for the managed PATH fragment.
 It uses the first existing Bash login profile rather than creating a higher-precedence profile, and also covers interactive shells.
 An exported `ZDOTDIR` is respected.
+PATH integration runs on change: an unchanged apply does not restore manually removed user PATH entries or profile source lines.
+The Unix action tracks the managed fragment source and effective destination/`ZDOTDIR`; application release-pin changes alone do not rerun PATH integration.
 Custom startup files that exit early or reset PATH afterward may need adjustment; other shells are not configured by this integration.
 If another installation wins command discovery, inspect `Get-Command omp -All` on Windows or `command -v omp` on POSIX and resolve that installation deliberately.
 Apply does not uninstall unrelated software.

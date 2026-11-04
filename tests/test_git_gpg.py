@@ -17,7 +17,7 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.source = self.root / "source"
         shutil.copytree(self.repo / "home", self.source, ignore=shutil.ignore_patterns(
             ".chezmoiexternals", "personal-app*.json", "dot_config",
-            "run_after_10-personal-app-path.*",
+            "run_onchange_after_10-personal-app-path.*",
         ))
         self.home = self.root / "user home"
         self.home.mkdir()

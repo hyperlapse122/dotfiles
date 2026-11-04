@@ -9,6 +9,10 @@ import tempfile
 import threading
 import tomllib
 import unittest
+import uuid
+
+if os.name == "nt":
+    import winreg
 
 
 class PersonalAppsTest(unittest.TestCase):
@@ -25,9 +29,11 @@ class PersonalAppsTest(unittest.TestCase):
         self.source.mkdir()
         for directory in (".chezmoidata", ".chezmoiexternals", "dot_config"):
             shutil.copytree(self.repo / "home" / directory, self.source / directory)
-        for name in ("run_after_10-personal-app-path.ps1.tmpl",
-                     "run_after_10-personal-app-path.sh.tmpl"):
-            shutil.copy2(self.repo / "home" / name, self.source / name)
+        for name in (".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
+                     ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl"):
+            target = self.source / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.repo / "home" / name, target)
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("", encoding="utf-8")
         self.env = os.environ.copy()
@@ -241,7 +247,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(list(other_home.iterdir()), [])
 
     @unittest.skipIf(os.name == "nt", "POSIX shell startup files")
-    def test_default_profile_and_highest_existing_login_profile(self):
+    def test_new_login_profile_is_integrated_only_after_fragment_change(self):
         self.apply(scripts=True)
         self.assertFalse((self.home / ".bash_profile").exists())
         self.assertFalse((self.home / ".bash_login").exists())
@@ -252,6 +258,10 @@ class PersonalAppsTest(unittest.TestCase):
         self.apply(scripts=True)
         self.assertEqual((self.home / ".profile").read_bytes(), lower)
         self.assertEqual((self.home / ".bash_login").read_text(encoding="utf-8"), "# second priority\n")
+        self.assertEqual((self.home / ".bash_profile").read_text(encoding="utf-8"), "# highest priority\n")
+        with (self.source / "dot_config/dotfiles/path.sh").open("a", encoding="utf-8") as stream:
+            stream.write("\n# update PATH integration\n")
+        self.apply(scripts=True)
         self.assert_startup_resolves_command(self.home / ".bash_profile")
 
     def assert_startup_resolves_command(self, profile):
@@ -265,6 +275,155 @@ class PersonalAppsTest(unittest.TestCase):
         lines = result.stdout.splitlines()
         self.assertEqual(lines[0], str(self.binary))
         self.assertEqual(lines[1].split(os.pathsep).count(str(self.binary.parent)), 1)
+
+
+class PersonalAppPathTest(unittest.TestCase):
+    def setUp(self):
+        self.repo = Path(__file__).resolve().parents[1]
+        self.assertIsNotNone(shutil.which("chezmoi"), "Install chezmoi before running PATH tests")
+        scratch = tempfile.TemporaryDirectory(prefix="personal app path ' ")
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name)
+        self.home = self.root / "user home"
+        self.home.mkdir()
+        self.source = self.root / "source"
+        for relative in (
+            ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
+            ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
+            "dot_config/dotfiles/path.sh",
+            ".chezmoidata/personal-apps.json",
+            ".chezmoidata/personal-app-lock.json",
+        ):
+            target = self.source / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.repo / "home" / relative, target)
+        self.config = self.root / "chezmoi.toml"
+        self.config.write_text("", encoding="utf-8")
+        self.env = os.environ.copy()
+        self.env.pop("ZDOTDIR", None)
+        self.env.update({
+            "HOME": str(self.home), "USERPROFILE": str(self.home),
+            "APPDATA": str(self.root / "config"), "LOCALAPPDATA": str(self.root / "local"),
+            "XDG_CONFIG_HOME": str(self.root / "config"),
+            "XDG_CONFIG_DIRS": str(self.root / "system config"),
+            "XDG_DATA_HOME": str(self.root / "data"),
+            "XDG_CACHE_HOME": str(self.root / "cache"),
+            "XDG_STATE_HOME": str(self.root / "state"),
+        })
+        if os.name == "nt":
+            self.registry_path = "Software\\dotfiles-personal-path-test-" + uuid.uuid4().hex
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.registry_path) as key:
+                winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, "%USERPROFILE%\\keep")
+            self.addCleanup(winreg.DeleteKey, winreg.HKEY_CURRENT_USER, self.registry_path)
+            shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+            wrapper = self.root / "isolated-interpreter.ps1"
+            # The production body uses .NET directly, so PSDrive redirection cannot isolate it.
+            wrapper.write_text(
+                "param([string]$Script)\n$ErrorActionPreference = 'Stop'\n"
+                "$body = [IO.File]::ReadAllText($Script)\n"
+                "$call = \"[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')\"\n"
+                "if (-not $body.Contains($call)) { throw 'Cannot isolate PATH registry write' }\n"
+                "$body = $body.Replace($call, "
+                f"\"[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('{self.registry_path}')\")\n"
+                "& ([scriptblock]::Create($body))\n", encoding="utf-8-sig",
+            )
+            self.config.write_text(
+                "[interpreters.ps1]\ncommand = " + json.dumps(str(shell)) +
+                "\nargs = " + json.dumps(["-NoLogo", "-NoProfile", "-NonInteractive",
+                                          "-ExecutionPolicy", "Bypass", "-File", str(wrapper)]) + "\n",
+                encoding="utf-8",
+            )
+
+    def chezmoi(self, *args):
+        result = subprocess.run(
+            ["chezmoi", "--config", str(self.config), "--source", str(self.source),
+             "--destination", str(self.home), "--cache", str(self.root / "cache"),
+             "--persistent-state", str(self.root / "state.boltdb"), "--no-tty", *args],
+            env=self.env, capture_output=True, text=True, encoding="utf-8", timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result
+
+    def apply(self):
+        self.chezmoi("apply", "--force")
+
+    def remove_integration(self):
+        if os.name == "nt":
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.registry_path, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, "%USERPROFILE%\\manual")
+        else:
+            (self.home / ".bashrc").write_text("# manual removal\n", encoding="utf-8")
+
+    def assert_integration(self):
+        if os.name == "nt":
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.registry_path) as key:
+                value, kind = winreg.QueryValueEx(key, "Path")
+            self.assertEqual(kind, winreg.REG_EXPAND_SZ)
+            self.assertIn(str(self.home / ".local" / "bin"), value.split(";"))
+            self.assertTrue(value.startswith("%USERPROFILE%\\"))
+        else:
+            env = {**self.env, "HOME": str(self.home), "PATH": os.defpath}
+            result = subprocess.run(
+                ["sh", "-c", '. "$1"; printf "%s\\n" "$PATH"', "sh", str(self.home / ".bashrc")],
+                env=env, capture_output=True, text=True, encoding="utf-8", timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.strip().split(os.pathsep).count(str(self.home / ".local/bin")), 1)
+
+    def assert_integration_absent(self):
+        if os.name == "nt":
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.registry_path) as key:
+                self.assertEqual(winreg.QueryValueEx(key, "Path"),
+                                 ("%USERPROFILE%\\manual", winreg.REG_EXPAND_SZ))
+        else:
+            self.assertEqual((self.home / ".bashrc").read_text(encoding="utf-8"), "# manual removal\n")
+
+    def test_unchanged_apply_does_not_restore_host_only_path_drift(self):
+        self.apply()
+        self.assert_integration()
+        self.remove_integration()
+        self.apply()
+        self.assert_integration_absent()
+
+    def test_application_pin_change_does_not_schedule_path_action(self):
+        self.apply()
+        self.remove_integration()
+        lock = self.source / ".chezmoidata/personal-app-lock.json"
+        data = json.loads(lock.read_text(encoding="utf-8"))
+        data["personalAppLocks"]["omp"]["tag"] = "unrelated-release"
+        lock.write_text(json.dumps(data, indent=4), encoding="utf-8")
+        self.assertNotIn("personal-app-path", self.chezmoi("status").stdout)
+        self.apply()
+        self.assert_integration_absent()
+
+    def test_destination_change_schedules_path_action(self):
+        self.apply()
+        self.home = self.root / "different destination"
+        self.home.mkdir()
+        self.assertIn("personal-app-path", self.chezmoi("status").stdout)
+        self.apply()
+        self.assert_integration()
+
+    @unittest.skipIf(os.name == "nt", "POSIX shell startup files")
+    def test_fragment_source_change_reintegrates_profiles(self):
+        self.apply()
+        self.remove_integration()
+        fragment = self.source / "dot_config/dotfiles/path.sh"
+        with fragment.open("a", encoding="utf-8") as stream:
+            stream.write("\n# consumed fragment changed\n")
+        self.assertIn("personal-app-path", self.chezmoi("status").stdout)
+        self.apply()
+        self.assert_integration()
+
+    @unittest.skipIf(os.name == "nt", "POSIX shell startup files")
+    def test_effective_zdotdir_change_integrates_new_startup_location(self):
+        self.apply()
+        zdotdir = self.root / "new zsh home"
+        self.env["ZDOTDIR"] = str(zdotdir)
+        self.assertIn("personal-app-path", self.chezmoi("status").stdout)
+        self.apply()
+        self.assertIn(".config/dotfiles/path.sh", (zdotdir / ".zprofile").read_text(encoding="utf-8"))
+        self.assertIn(".config/dotfiles/path.sh", (zdotdir / ".zshrc").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
