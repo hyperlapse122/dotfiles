@@ -1,10 +1,14 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string] $Source = $PSScriptRoot
+    [string] $Source
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $PSBoundParameters.ContainsKey('Source')) {
+    # Windows PowerShell 5.1 -File does not set $PSScriptRoot for parameter defaults.
+    $Source = $PSScriptRoot
+}
 
 function Invoke-Checked {
     param([string] $Command, [string[]] $Arguments, [string] $Step)
@@ -29,6 +33,13 @@ try {
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
         throw 'Global registration with this entry point requires Windows.'
     }
+    # WinGet updates the registry PATH, not an already-running parent process.
+    $paths = @(
+        $env:PATH
+        [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        [Environment]::GetEnvironmentVariable('Path', 'User')
+    )
+    $env:PATH = [Environment]::ExpandEnvironmentVariables(($paths -join ';'))
     # Native command output must preserve Unicode paths in Windows PowerShell.
     [Console]::OutputEncoding = New-Object Text.UTF8Encoding
     $Source = Resolve-HomePath $Source
