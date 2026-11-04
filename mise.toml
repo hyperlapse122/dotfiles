@@ -5,6 +5,7 @@ lockfile = true
 ast-grep = "latest"
 chezmoi = { version = "latest", libc = "musl" }
 gh = "latest"
+glab = "1.128.0"
 jq = "latest"
 "pipx:keyring" = { version = "25.7.0", uvx = true }
 powershell = "latest"
