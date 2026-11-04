@@ -22,10 +22,11 @@ jobs:
       - name: Provision native Windows GPG integration-test prerequisite
         if: runner.os == 'Windows'
         shell: pwsh
+        timeout-minutes: 5
         run: |
           # Git's MSYS GPG interprets Windows GNUPGHOME as a relative POSIX path.
-          # Test the documented native Windows prerequisite on this disposable runner.
-          mise exec -- choco install gpg4win --version=5.1.1 --yes --no-progress --limit-output
+          # Use the CLI-only native prerequisite, not a desktop-suite installer.
+          mise exec -- choco install gnupg --version=2.5.21 --yes --no-progress --limit-output
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $gpgBin = @("$env:ProgramFiles\GnuPG\bin", "${env:ProgramFiles(x86)}\GnuPG\bin") |
             Where-Object { Test-Path -LiteralPath (Join-Path $_ 'gpgconf.exe') } |
