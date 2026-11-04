@@ -77,9 +77,10 @@ The `run_after_20-harness-plugins` scripts reconcile native omp registration and
 They run on every explicit apply to repair runtime drift, using the repository-installed binary rather than PATH or a mise shim.
 Only CE's registration and managed package are reconciled; other plugin records remain native state.
 
-The `dot_omp/agent/modify_config.yml` and `.yaml` targets share the `omp-config` partial.
+The `private_dot_omp/private_agent/modify_private_config.yml` and `.yaml` targets share the `omp-config` partial.
 Conditional ignores select the effective existing YAML file, and the partial updates only the owned semantic value.
 Keep the `chezmoi:modify-template` marker and omit `.tmpl` from these filenames.
+The private attributes keep configuration files owner-only (`0600`) and their managed parent directories private (`0700`) on POSIX, including unchanged-content reapplication.
 The template refuses to create YAML over pending legacy settings migration and propagates parse failures.
 This is not a comment-preserving editor or a lock shared with a running omp process.
 

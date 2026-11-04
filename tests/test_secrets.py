@@ -34,7 +34,7 @@ class SecretsTest(unittest.TestCase):
         # Secret proofs must not fetch production apps or run personal PATH hooks.
         shutil.copytree(self.repo / "home", self.source / "home", ignore=shutil.ignore_patterns(
             ".chezmoiexternals", "personal-app*.json", "run_onchange_after_10-personal-app-path.*",
-            "run_after_20-harness-plugins.*", "harness-plugin*.json", "dot_omp",
+            "run_after_20-harness-plugins.*", "harness-plugin*.json", "private_dot_omp",
         ))
         self.config = self.root / "chezmoi.toml"
         self.env = os.environ.copy()

@@ -218,7 +218,7 @@ flowchart TB
 
 **Dependencies:** U1's declaration/lock shape.
 
-**Files:** Create `home/.chezmoiexternals/harness-plugins.toml.tmpl`, native OS-conditional `home/run_after_20-harness-plugins.cmd.tmpl` and `home/run_after_20-harness-plugins.sh.tmpl`, a shared omp YAML partial, modify targets under `home/dot_omp/agent/`, and `tests/test_harness_plugins.py`; update `home/.chezmoiignore`.
+**Files:** Create `home/.chezmoiexternals/harness-plugins.toml.tmpl`, native OS-conditional `home/run_after_20-harness-plugins.cmd.tmpl` and `home/run_after_20-harness-plugins.sh.tmpl`, a shared omp YAML partial, private modify targets under `home/private_dot_omp/private_agent/`, and `tests/test_harness_plugins.py`; update `home/.chezmoiignore`.
 
 **Approach:** Apply KTD2–KTD4 after managed files exist, invoke the repository-installed omp by absolute path, check every native exit code, and avoid relying on an activated mise shell. Keep native runtime records out of source control.
 

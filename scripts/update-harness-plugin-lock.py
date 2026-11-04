@@ -1,5 +1,3 @@
-"""Resolve stable harness plugin releases to immutable GitHub commit pins."""
-
 import json
 import os
 from pathlib import Path

@@ -24,7 +24,7 @@ class HarnessPluginsTest(unittest.TestCase):
         self.home.mkdir()
         self.source = self.root / "source"
         self.source.mkdir()
-        for directory in (".chezmoidata", ".chezmoitemplates", "dot_omp"):
+        for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_omp"):
             shutil.copytree(self.repo / "home" / directory, self.source / directory)
         shutil.copy2(self.repo / "home/.chezmoiignore", self.source / ".chezmoiignore")
         (self.source / ".chezmoiexternals").mkdir()
@@ -155,6 +155,27 @@ class HarnessPluginsTest(unittest.TestCase):
         result = self.run_chezmoi("diff", "--exclude=scripts")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout, "")
+
+    def test_configuration_and_parents_remain_owner_only(self):
+        self.config.write_text("umask = 0o022\n", encoding="utf-8")
+        self.agent.mkdir(parents=True)
+        for directory in (self.agent.parent, self.agent):
+            directory.chmod(0o700)
+        for path in (self.yml, self.yaml):
+            with self.subTest(filename=path.name):
+                path.write_text("auth: {broker: {token: fixture-only}}\n", encoding="utf-8")
+                path.chmod(0o600)
+                for _ in range(2):
+                    self.apply()
+                    result = self.run_chezmoi("dump", "--format=json", "--parent-dirs", str(path))
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    state = json.loads(result.stdout)
+                    for target, mode in ((".omp", 0o700), (".omp/agent", 0o700),
+                                         (".omp/agent/" + path.name, 0o600)):
+                        self.assertEqual(state[target]["perm"], mode)
+                        if os.name != "nt":
+                            self.assertEqual((self.home / target).stat().st_mode & 0o777, mode)
+                path.unlink()
 
     def test_effective_yaml_preserves_mutable_values_and_has_no_shadow(self):
         self.agent.mkdir(parents=True)

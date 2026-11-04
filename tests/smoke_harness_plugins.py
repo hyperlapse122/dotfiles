@@ -41,7 +41,7 @@ def main():
             ".chezmoiexternals/personal-apps.toml.tmpl",
             ".chezmoiexternals/harness-plugins.toml.tmpl",
             ".chezmoitemplates",
-            "dot_omp",
+            "private_dot_omp",
             "run_after_20-harness-plugins.cmd.tmpl",
             "run_after_20-harness-plugins.sh.tmpl",
         ):
