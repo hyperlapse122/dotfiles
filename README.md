@@ -88,6 +88,7 @@ mise install
 ```
 
 This installs the locked development tools, including a separate chezmoi copy, and runs the `bootstrap` task through the project-level `postinstall` hook.
+Git keeps `mise.lock` in LF format on every platform, matching mise's output even when `core.autocrlf` is enabled.
 The task lists managed chezmoi entries with scripts excluded; it does not apply files or execute chezmoi scripts.
 It uses the repository's hook-free `.chezmoi-bootstrap.toml` so existing personal chezmoi hooks cannot run during preparation.
 The hook also runs when all tools are already installed, so use the same command for an existing worktree.

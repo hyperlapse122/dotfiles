@@ -1,0 +1,2 @@
+# mise writes its lockfile with LF, including on Windows.
+/mise.lock text eol=lf
