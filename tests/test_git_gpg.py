@@ -13,6 +13,12 @@ class GitGpgSettingsTest(unittest.TestCase):
         scratch = tempfile.TemporaryDirectory(prefix="git gpg settings ")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
+        # Keep Git/GPG proofs offline and unable to run personal-app PATH actions.
+        self.source = self.root / "source"
+        shutil.copytree(self.repo / "home", self.source, ignore=shutil.ignore_patterns(
+            ".chezmoiexternals", "personal-app*.json", "dot_config",
+            "run_after_10-personal-app-path.*",
+        ))
         self.home = self.root / "user home"
         self.home.mkdir()
         self.gpg_home = self.home / ("AppData/Roaming/gnupg" if os.name == "nt" else ".gnupg")
@@ -55,7 +61,7 @@ class GitGpgSettingsTest(unittest.TestCase):
 
     def chezmoi(self, *args, check=True):
         return self.run_command(
-            "chezmoi", "--source", str(self.repo), "--destination", str(self.home),
+            "chezmoi", "--source", str(self.source), "--destination", str(self.home),
             "--config", str(self.config), "--cache", str(self.root / "chezmoi cache"),
             "--persistent-state", str(self.root / "state.boltdb"), "--no-tty",
             *args, check=check,
@@ -147,7 +153,7 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.config.write_text('[data]\ngpgProgram = "' + (tools / "gpg.exe").as_posix() + '"\n', encoding="utf-8")
         # A temporary HOME does not isolate HKCU; execute only the GPG hook.
         args = [
-            shutil.which("chezmoi"), "--source", str(self.repo), "--destination", str(self.home),
+            shutil.which("chezmoi"), "--source", str(self.source), "--destination", str(self.home),
             "--config", str(self.config), "--cache", str(self.root / "chezmoi cache"),
             "--persistent-state", str(self.root / "state.boltdb"), "--no-tty",
             "apply", "--force", "--exclude=scripts",
