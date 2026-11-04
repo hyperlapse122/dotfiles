@@ -483,7 +483,7 @@ Do not edit generated pins by hand or replace release-specific URLs with `latest
 After this feature is merged, the **Update personal application pins** workflow checks daily at 06:23 UTC and supports manual dispatch.
 Release resolution uses the automatically injected `secrets.GITHUB_TOKEN`, exposed to gh as `GH_TOKEN`.
 No custom secret or personal access token is required.
-The workflow validates the new pins and runs the Linux native smoke before committing only a changed lock directly to the default branch.
+The workflow validates the new pins with the supported-target unit and native application/credential matrix before committing only a changed lock directly to the default branch.
 Resolution, native validation, and publication use separate jobs; only publication has `contents: write`, and it never executes the downloaded application.
 Validation and publication consume the same immutable lock artifact from the same recorded default-branch base.
 It does not create a PR, force-push, or apply changes to personal devices.
@@ -491,8 +491,8 @@ A conflicting default-branch update fails the normal push instead of overwriting
 Hosted schedules are best effort; manual dispatch remains available.
 
 To add another application, add its repository, command name, and supported asset-name mappings to the authored declarations, then regenerate the lock.
-The current renderer supports standalone executable assets; archive-based distributions need an explicit extraction extension before being added.
-Claude Code, gh, and glab are not installed by this change.
+The renderer supports raw executables and archives with an explicit format and executable member path.
+Claude Code and glab are not installed by this change.
 Development-tool declarations in `mise.toml` and `mise.lock` remain separate.
 
 Chezmoi caches downloads, and the renderer includes the pinned digest in the cache identity so same-URL asset replacements are reconciled.
