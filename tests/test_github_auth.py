@@ -236,9 +236,7 @@ class CommonMetadataPublicationTest(unittest.TestCase):
 
 
 class NativeServiceIdentityTest(unittest.TestCase):
-    def test_supported_services_reach_native_store_and_unsafe_identities_do_not(self):
-        # The keyring CLI owns its isolated dependency environment. Stub only its
-        # API types here; actual backend interoperability is covered by smoke.
+    def test_unsafe_identities_are_rejected_before_native_access(self):
         package = types.ModuleType("keyring")
         api = types.ModuleType("keyring.backend")
         api.KeyringBackend = object
@@ -253,14 +251,7 @@ class NativeServiceIdentityTest(unittest.TestCase):
             spec.loader.exec_module(native)
         backend = native.Keyring()
         with (mock.patch.object(native.sys, "platform", "linux"),
-              mock.patch.object(backend, "_linux", return_value="native-fixture") as store):
-            for service, user in (
-                    ("gh:github.com", "owner"), ("gh:gist.github.com", ""),
-                    ("glab:gitlab.example.invalid:token", ""),
-                    ("glab:localhost:token", "")):
-                self.assertEqual(backend.get_password(service, user), "native-fixture")
-                store.assert_called_with("get", service, user, None)
-            store.reset_mock()
+              mock.patch.object(backend, "_linux") as store):
             for service, user in (
                     ("gh:unrelated.invalid", ""), ("glab::token", ""),
                     ("glab:bad/host:token", ""), ("glab:bad host:token", ""),

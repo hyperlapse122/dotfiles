@@ -1,5 +1,3 @@
-"""Private encrypted transport and native credential operations for CLI authentication."""
-
 import json
 import os
 from pathlib import Path
@@ -235,10 +233,10 @@ def native_set(command, service, user, token, env):
 
 def read_mapping(source, config, path):
     try:
-        path = Path(path)
-        if not path.exists():
+        try:
+            raw = Path(path).read_text(encoding="utf-8")
+        except FileNotFoundError:
             return {}
-        raw = path.read_text(encoding="utf-8")
         encoded = run_private(
             chezmoi_argv(source, config) + ["execute-template", "--with-stdin",
                                          "{{ .chezmoi.stdin | fromYaml | toJson }}"],
@@ -259,8 +257,11 @@ def publish_text(path, text):
     staged = None
     try:
         path = Path(path)
-        if path.exists() and path.read_bytes() == text.encode("utf-8"):
-            return
+        try:
+            if path.read_bytes() == text.encode("utf-8"):
+                return
+        except FileNotFoundError:
+            pass
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         descriptor, name = tempfile.mkstemp(prefix=".metadata-", dir=path.parent)
         staged = Path(name)

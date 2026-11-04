@@ -16,7 +16,7 @@ import auth_common as common
 def import_token(source, config, token_file):
     source = common.repository_root(source)
     token = common.read_token(token_file)
-    intended = copy.deepcopy(common.read_secrets(source, config))
+    intended = common.read_secrets(source, config)
     github = intended.setdefault("github", {})
     if not isinstance(github, dict):
         raise common.AuthError("Existing GitHub secrets must contain a mapping.")

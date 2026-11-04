@@ -1,5 +1,3 @@
-"""Resolve declared official GitHub/GitLab release assets and update chezmoi pins."""
-
 import json
 import os
 from pathlib import Path

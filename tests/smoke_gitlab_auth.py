@@ -1,6 +1,3 @@
-"""Prove real glab/Git/native-keyring interoperability on disposable runners."""
-
-import contextlib
 import importlib.util
 import json
 import os
