@@ -27,6 +27,13 @@ Linux uses an OS-managed `environment.d` file; macOS uses an Aqua login LaunchAg
 Windows explicit apply invokes the shared registry-provider body in `.chezmoitemplates/native-ca-windows`, changing only the managed user environment value.
 These settings do not provision certificates; the root README lists runtime support and activation limits.
 
+PowerShell apply hooks share `.chezmoitemplates/powershell-mise-profile` and `.chezmoitemplates/powershell-mise-profile-install`.
+They replace the entire CurrentUserAllHosts profile reported by each applicable runtime, rather than preserving an unmanaged block.
+Runtime-resolved paths can lie outside the chezmoi destination, so these are explicit apply actions instead of managed file entries.
+The Windows hook invokes both system Windows PowerShell 5.1 and the checkout's mise-declared PowerShell; the Unix hook invokes only the latter.
+Both start profile-free and do not activate mise during application.
+Preparation and script-excluding apply commands do not install these profiles.
+
 ## Secret source
 
 `.secrets/api-tokens.yaml.asc` is encrypted source data, excluded from destination enumeration by `.chezmoiignore`.
