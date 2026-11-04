@@ -5,3 +5,13 @@ After a solved, verified problem, automatically invoke the `ce-compound` skill w
 Write every report, summary, or handoff to the user through the `ce-noslop` skill. This applies when you are the top-level agent writing to the user, not when you are a subagent reporting to its caller. Do not apply it to code, config, verbatim quotes, or text the user asked to post as written.
 
 Write repository documentation in English.
+
+## Worktree bootstrap
+
+- Initialize every new or existing worktree with `mise install`. Put any additional preparation scripts behind the project-level `postinstall` hook, not a separate setup entry point.
+- Keep initialization read-only with respect to personal settings: do not apply chezmoi state or change user-home or OS configuration from bootstrap.
+- Declare development tools in `mise.toml` and commit the generated `mise.lock`. Keep tool installation in mise rather than duplicating it in chezmoi scripts.
+- Use chezmoi for dotfiles. Its source state belongs in `./home`, selected by the repository-root `.chezmoiroot`; the destination is the actual user home directory.
+- Use `mise run apply` only when explicitly applying personal configuration. Bind chezmoi commands to the current worktree source rather than changing a user's global source configuration.
+- When chezmoi scripts require relative execution order within the same phase, use consistently padded numeric prefixes in their descriptive names, such as `run_once_before_10-windows.ps1.tmpl` and `run_once_before_20-windows-tools.ps1.tmpl`. Preserve `before_` and `after_` phase semantics.
+- Keep setup and chezmoi scripts idempotent. Use OS-conditional templates for platform-specific chezmoi scripts.
