@@ -163,6 +163,23 @@ After installing the CLI, open a fresh shell and check `op --version`.
 After installing PowerShell, open a fresh shell and check `pwsh --version`.
 The system installation is for everyday use outside mise; mise still manages the repository's development runtime.
 
+### Repository clones with ghq
+
+`mise install` installs the locked [ghq](https://github.com/x-motemen/ghq) release.
+Applying personal settings sets `ghq.root` to `~/src` in the managed global Git configuration.
+In a shell with this repository's mise environment active, run:
+
+```sh
+ghq root
+ghq get https://github.com/hyperlapse122/dotfiles.git
+```
+
+Without an activated shell, run these commands from this checkout with `mise exec -- ghq` instead of `ghq`.
+The clone is placed at `~/src/github.com/hyperlapse122/dotfiles`, matching the Windows bootstrap checkout layout.
+If that clone already exists, `ghq get` leaves it unchanged unless `-u` is supplied.
+Existing clones elsewhere are not moved, and bootstrap does not apply the Git setting.
+An existing `GHQ_ROOT` environment variable overrides `ghq.root`; unset it to use `~/src`.
+
 ### Git signing and GPG pinentry
 
 The managed global Git configuration uses `Joosung Park`, `hyperlapse@jpi.co.kr`, signing key `621512777E6933FEB4458FDC4945855D4F283F05`, and automatic OpenPGP commit signing.

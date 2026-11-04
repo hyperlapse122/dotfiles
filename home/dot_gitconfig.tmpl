@@ -10,6 +10,8 @@
     program = {{ $gpg.program | replace "\\" "/" | quote }}
 [init]
     defaultBranch = main
+[ghq]
+    root = ~/src
 {{ if eq .chezmoi.os "windows" }}
 [http]
     sslBackend = schannel

@@ -5,6 +5,7 @@ lockfile = true
 ast-grep = "latest"
 chezmoi = { version = "latest", libc = "musl" }
 gh = "latest"
+ghq = "latest"
 jq = "latest"
 powershell = "latest"
 python = "latest"
