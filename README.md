@@ -644,6 +644,7 @@ Its `--path-integration` mode is restricted to disposable GitHub-hosted runners 
 On Windows, the child PATH comes from the registry but excludes competing preinstalled application directories; the fixture never inserts the managed directory directly or changes machine PATH.
 Credential smoke uses disposable GPG keys and native stores. Failure diagnostics expose exception types and code locations, not exception messages or credential output.
 Its GPG home is separate from the non-ASCII personal-home path probe. macOS uses a disposable unlocked Keychain and restores the runner's original default and search list afterward.
+Credential-store fixtures use LF records on every OS because Git treats a trailing CR as part of the credential URL.
 
 ### CI runner policy
 

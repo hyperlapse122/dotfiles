@@ -187,10 +187,11 @@ def main():
                 run(keyring + ["set", "gh:gist.github.com", user], env, input="stale-gist-fixture")
             # Earlier generic helpers must not serve or receive either managed PAT.
             store = root / "stale-credentials"
+            # credential-store's LF parser treats a Windows CR as part of the host.
             store.write_text(
                 "".join("https://fixture:stale@" + host + "\n"
                         "http://fixture:control@" + host + "\n" for host in HOSTS)
-                + "https://fixture:control@unrelated.invalid\n", encoding="utf-8")
+                + "https://fixture:control@unrelated.invalid\n", encoding="utf-8", newline="\n")
             prefix = root / "prefix.gitconfig"
             run([tools["git"], "config", "--file", str(prefix), "credential.helper",
                  'store --file="' + store.as_posix() + '"'], env)
