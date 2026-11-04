@@ -117,6 +117,17 @@ The source manages global Git settings, GPG pinentry selection, native GPG secre
 Git/GPG installation and key provisioning remain prerequisites.
 The source also installs pinned personal CLI applications and applies their PATH integration; see the application workflow below.
 
+When upgrading to the native PowerShell scripts, regenerate chezmoi configuration from the intended checkout before applying:
+
+```sh
+mise exec -- chezmoi --source . init
+```
+
+Initialization does not apply personal settings.
+It preserves unrelated configuration and configures `.ps1` execution with `-NoProfile`, noninteractive operation, and a process-local execution-policy override.
+It selects pwsh when discoverable, otherwise Windows PowerShell 5.1; rerun initialization to select a newly installed pwsh.
+For an everyday global source, run this from the permanent checkout, not a temporary worktree.
+
 To preview future changes without applying them, run from the repository root:
 
 ```sh
@@ -127,7 +138,7 @@ Previewing externals can download and cache their pinned contents, but does not 
 
 ### Windows host applications
 
-On Windows, explicit application installs missing Google Chrome, 1Password, and 1Password CLI packages through WinGet.
+On Windows, explicit application provisions Google Chrome, 1Password, 1Password CLI, and system PowerShell through WinGet when the installation action is eligible.
 Use `mise run apply` from this worktree, or `chezmoi update` after registering a permanent checkout.
 Bootstrap and source registration do not install these applications.
 
@@ -136,18 +147,21 @@ The package list lives in `home/.chezmoidata/windows.yaml`:
 - Google Chrome: `Google.Chrome`
 - 1Password: `AgileBits.1Password`
 - 1Password CLI: `AgileBits.1Password.CLI`
+- PowerShell: `Microsoft.PowerShell`
 
 Install or update Windows App Installer if WinGet is unavailable.
 Approve WinGet agreements and any UAC prompts when requested; package scope and installer behavior use WinGet's defaults.
 The app script runs after the GPG-home check, so the Git/GPG prerequisites below still apply.
 It renders empty on Linux and macOS, and previews do not execute it.
 
-Each apply uses WinGet's `--no-upgrade`: recognized existing installations are retained, including older versions.
-Repeating apply restores an uninstalled package without requesting upgrades or downgrades of the others.
+The action uses WinGet's `--no-upgrade`: recognized existing installations are retained, including older versions.
+After success it runs again only when the script or consumed application data changes; an unchanged apply does not restore a manually uninstalled package.
 This does not disable applications' own update mechanisms.
 Installation failures stop apply with the package ID and exit code; resolve the reported problem and rerun to complete the remaining installations.
 Account sign-in, CLI/app integration, browser extensions, default-browser selection, and application preferences remain manual.
 After installing the CLI, open a fresh shell and check `op --version`.
+After installing PowerShell, open a fresh shell and check `pwsh --version`.
+The system installation is for everyday use outside mise; mise still manages the repository's development runtime.
 
 ### Git signing and GPG pinentry
 
@@ -181,9 +195,11 @@ Linked GPG-home directories are rejected rather than replaced, including Windows
 
 Only active `pinentry-program` entries in `gpg-agent.conf` are replaced.
 Comments, unrelated agent settings, keys, and trust databases remain unmanaged.
-Application reloads the agent so the selected pinentry takes effect; Windows scripts launch Windows PowerShell with `-NoProfile`, independent of the user's shell setup.
-Repeated application restores managed values after local edits.
-Because the check and reload run on every explicit application, `chezmoi diff` includes those scripts even when configuration files are unchanged; use `chezmoi diff --exclude=scripts` to inspect file drift only.
+Application reloads the agent after relevant source templates or the current platform's effective GPG/pinentry settings change.
+An unchanged apply skips reload but still checks the current GPG home before writing personal files.
+Managed file values still reconcile after local edits, but destination drift alone does not schedule reload.
+Windows scripts execute directly in PowerShell using the generated profile-free interpreter configuration.
+The always-run guard still appears in `chezmoi diff`; use `chezmoi diff --exclude=scripts` to inspect file drift only.
 
 To verify on a configured device, create a temporary repository, make a commit with the existing key, complete PIN entry if prompted, and inspect it with `git verify-commit HEAD`.
 Configuration rendering on another OS does not prove its native PIN dialog or hardware integration.
@@ -276,7 +292,8 @@ An existing OS-maintained Linux CA bundle counts as system trust; a separately g
 
 #### Activate the user environment
 
-- **Windows:** apply writes only the named value under `HKCU\Environment`.
+- **Windows:** the change-driven action writes only the named value under `HKCU\Environment`.
+  After success, an unchanged apply does not repair an externally changed value.
   Sign out and sign back in for the reliable CLI/GUI refresh baseline.
   A new tab in an old terminal or IDE can still inherit its parent's old environment.
 - **Linux:** apply installs `~/.config/environment.d/60-native-system-ca.conf`.
@@ -425,7 +442,8 @@ Native-CA regressions exercise real Bash startup behavior and Windows registry-p
 Native Linux/macOS graphical-login behavior requires those platforms; rendering or parsing their configuration is not GUI activation proof.
 PowerShell regressions replace disposable profiles and load them with real mise in each available runtime, including Windows PowerShell 5.1.
 Automatic startup is exercised with isolated Unix configuration directories and on disposable GitHub-hosted Windows runners; local Windows tests do not write the owner's actual profiles.
-Windows app regressions execute real chezmoi scripts against a disposable package inventory, covering repeat application, existing-version preservation, restoration after uninstall, and failure propagation without reaching the host's WinGet.
+Windows app regressions execute real chezmoi scripts against a disposable package inventory, covering unchanged-action skips, application-data changes, existing-version preservation, no-pwsh first application, and failure propagation without reaching the host's WinGet.
+Script lifecycle regressions cover consumed-template and effective-data invalidation, unchanged reload skips, failed-action eligibility, and guards that still inspect changed host state.
 Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.
 Windows unit CI extracts a SHA-512-verified native GnuPG CLI payload into its temporary workspace for the existing Git/GPG integration tests; it never executes the Windows installer.

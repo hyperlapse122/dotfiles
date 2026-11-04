@@ -1,0 +1,32 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+{{ "\ufeff" -}}
+# file gpg-settings sha256: {{ include ".chezmoitemplates/gpg-settings" | sha256sum }}
+# file gpg-home sha256: {{ include ".chezmoitemplates/gpg-home" | sha256sum }}
+# data gpg.program sha256: {{ dict "program" $gpg.program | toJson | sha256sum }}
+$ErrorActionPreference = 'Stop'
+# GnuPG emits Windows paths in the system ANSI code page, even under pwsh.
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    [Text.Encoding]::RegisterProvider([Text.CodePagesEncodingProvider]::Instance)
+}
+[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(0)
+$OutputEncoding = [Console]::OutputEncoding
+$gpgconf = '{{ printf "%s/gpgconf.exe" (dir ($gpg.program | replace "\\" "/")) | replace "'" "''" }}'
+$expected = '{{ includeTemplate "gpg-home" . | replace "'" "''" }}'
+$parents = @($expected, (Split-Path -Parent $expected), (Split-Path -Parent (Split-Path -Parent $expected)))
+foreach ($path in $parents) {
+    $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    if ($null -ne $item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw ('Refusing to replace linked GPG directory {0}.' -f $path)
+    }
+}
+$actual = & $gpgconf --list-dirs homedir
+if ($LASTEXITCODE -ne 0) {
+    throw ('Cannot determine the GPG home (exit {0}).' -f $LASTEXITCODE)
+}
+$actual = [IO.Path]::GetFullPath(($actual -join [Environment]::NewLine).Trim()).TrimEnd('\', '/')
+$expected = [IO.Path]::GetFullPath($expected).TrimEnd('\', '/')
+if (-not [string]::Equals($actual, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+    throw ('GPG uses {0}, but these dotfiles manage {1}. Reconcile the GPG home before applying.' -f $actual, $expected)
+}
+{{ end -}}

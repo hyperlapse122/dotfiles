@@ -25,7 +25,10 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.gpg_home.mkdir(parents=True)
         self.agent = self.gpg_home / "gpg-agent.conf"
         self.config = self.root / "chezmoi.toml"
-        self.config.write_text("", encoding="utf-8")
+        self.config.write_text(
+            '[interpreters.ps1]\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n'
+            if os.name == "nt" else "", encoding="utf-8",
+        )
         self.env = os.environ.copy()
         for key in list(self.env):
             if key.startswith("GIT_CONFIG_"):
@@ -158,19 +161,29 @@ class GitGpgSettingsTest(unittest.TestCase):
             "--persistent-state", str(self.root / "state.boltdb"), "--no-tty",
             "apply", "--force", "--exclude=scripts",
         ]
-        reload_script = self.root / "reload-gpg-agent.cmd"
+        reload_script = self.root / "reload-gpg-agent.ps1"
         rendered = self.chezmoi(
             "execute-template", "--file",
-            str(self.repo / "home/run_after_10-reload-gpg-agent.cmd.tmpl"),
+            str(self.repo / "home/.chezmoiscripts/run_onchange_after_10-reload-gpg-agent.ps1.tmpl"),
         ).stdout
         reload_script.write_text(rendered, encoding="utf-8")
+        guard = self.root / "check-gpg-home.ps1"
+        guard.write_text(self.chezmoi(
+            "execute-template", "--file",
+            str(self.repo / "home/.chezmoiscripts/run_before_10-check-gpg-home.ps1.tmpl"),
+        ).stdout, encoding="utf-8")
         command = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); & " + " ".join(
             "'" + value.replace("'", "''") + "'" for value in args
-        ) + "; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '" + str(reload_script).replace("'", "''") + "'; exit $LASTEXITCODE"
+        ) + "; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '" + str(guard).replace("'", "''") + (
+            "'; if (-not $?) { exit 1 }; & '" + str(reload_script).replace("'", "''") + "'; exit $LASTEXITCODE")
         encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
-        shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
-        for _ in range(2):
-            self.run_command(str(shell), "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)
+        shells = [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")]
+        if shutil.which("pwsh"):
+            shells.append(shutil.which("pwsh"))
+        for shell in shells:
+            with self.subTest(shell=shell):
+                self.run_command(shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                                 "-EncodedCommand", encoded)
         self.assertEqual(self.chezmoi("diff", "--exclude=scripts").stdout, "")
 
 

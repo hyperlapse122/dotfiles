@@ -149,6 +149,53 @@ class NativeCaWindowsTest(unittest.TestCase):
             self.assertEqual(winreg.QueryValueEx(key, "unrelated-value"), ("preserve value", winreg.REG_SZ))
         self.assert_root_preserved()
 
+    def test_onchange_apply_skips_drift_and_runs_for_helper_change(self):
+        import json
+
+        source = self.root / "source"
+        script_name = ".chezmoiscripts/run_onchange_after_20-native-system-ca.ps1.tmpl"
+        helper_name = ".chezmoitemplates/native-ca-windows"
+        for name in (script_name, helper_name):
+            target = source / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.repo / "home" / name, target)
+        wrapper = self.root / "isolated-interpreter.ps1"
+        registry_root = ("HKEY_CURRENT_USER\\" + self.registry_path).replace("'", "''")
+        wrapper.write_text(
+            "param([string]$Script)\n$ErrorActionPreference = 'Stop'\n"
+            "Remove-PSDrive HKCU -Force\n"
+            f"New-PSDrive HKCU Registry '{registry_root}' -Scope Global | Out-Null\n"
+            f"if ((Get-PSDrive HKCU).Root -ne '{registry_root}') {{ throw 'HKCU isolation failed' }}\n"
+            "& $Script\n", encoding="utf-8-sig",
+        )
+        self.config.write_text(
+            "[interpreters.ps1]\ncommand = " + json.dumps(str(self.shell)) +
+            "\nargs = " + json.dumps(["-NoProfile", "-NonInteractive", "-ExecutionPolicy",
+                                      "Bypass", "-File", str(wrapper)]) + "\n", encoding="utf-8",
+        )
+        def apply():
+            result = subprocess.run(
+                ["chezmoi", "--source", str(source), "--destination", str(self.home),
+                 "--config", str(self.config), "--cache", str(self.root / "cache"),
+                 "--persistent-state", str(self.root / "state.boltdb"), "--no-tty", "apply"],
+                capture_output=True, text=True, encoding="utf-8", timeout=60,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        environment = self.registry_path + "\\Environment"
+        apply()
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, environment, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, "NODE_USE_SYSTEM_CA", 0, winreg.REG_SZ, "external drift")
+        apply()
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, environment) as key:
+            self.assertEqual(winreg.QueryValueEx(key, "NODE_USE_SYSTEM_CA")[0], "external drift")
+        with (source / helper_name).open("a", encoding="utf-8") as helper:
+            helper.write("\n# consumed helper changed\n")
+        apply()
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, environment) as key:
+            self.assertEqual(winreg.QueryValueEx(key, "NODE_USE_SYSTEM_CA"), ("1", winreg.REG_SZ))
+        self.assert_root_preserved()
+
 
 if __name__ == "__main__":
     unittest.main()
