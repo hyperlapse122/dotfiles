@@ -5,3 +5,4 @@ windows:
     - AgileBits.1Password.CLI
     - Microsoft.PowerShell
     - RedHat.Podman-Desktop
+    - T3Tools.T3Code

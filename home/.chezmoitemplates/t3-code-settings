@@ -1,0 +1,41 @@
+{{- $settings := dict -}}
+{{- if .chezmoi.stdin | trim -}}
+{{- $settings = .chezmoi.stdin | fromJson -}}
+{{- if not (kindIs "map" $settings) -}}
+{{- fail "Invalid T3 Code settings.json: expected a settings object; refusing to replace existing settings" -}}
+{{- end -}}
+{{- end -}}
+{{- $providers := dict -}}
+{{- if hasKey $settings "providerInstances" -}}
+{{- $providers = get $settings "providerInstances" -}}
+{{- if not (kindIs "map" $providers) -}}
+{{- fail "Invalid T3 Code settings.json: providerInstances must be an object" -}}
+{{- end -}}
+{{- end -}}
+{{- $provider := dict -}}
+{{- if hasKey $providers "omp" -}}
+{{- $provider = get $providers "omp" -}}
+{{- if not (kindIs "map" $provider) -}}
+{{- fail "Invalid T3 Code settings.json: providerInstances.omp must be an object" -}}
+{{- end -}}
+{{- end -}}
+{{- $config := dict -}}
+{{- if hasKey $provider "config" -}}
+{{- $config = get $provider "config" -}}
+{{- if not (kindIs "map" $config) -}}
+{{- fail "Invalid T3 Code settings.json: providerInstances.omp.config must be an object" -}}
+{{- end -}}
+{{- end -}}
+{{- $executable := "omp" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $executable = "omp.exe" -}}{{- end -}}
+{{- $command := joinPath .chezmoi.destDir ".local" "bin" $executable | replace "\\" "/" -}}
+{{- $config = $config | setValueAtPath "enabled" true | setValueAtPath "source" "local" | setValueAtPath "commandPath" $command | setValueAtPath "commandArgs" (list "acp") -}}
+{{- $provider = $provider | setValueAtPath "driver" "acpRegistry" | setValueAtPath "enabled" true | setValueAtPath "config" $config -}}
+{{- if not (hasKey $provider "displayName") -}}
+{{- $provider = $provider | setValueAtPath "displayName" "oh-my-pi" -}}
+{{- end -}}
+{{- if not (hasKey $provider "accentColor") -}}
+{{- $provider = $provider | setValueAtPath "accentColor" "#f84fcc" -}}
+{{- end -}}
+{{- $providers = $providers | setValueAtPath "omp" $provider -}}
+{{- $settings | setValueAtPath "providerInstances" $providers | toPrettyJson -}}

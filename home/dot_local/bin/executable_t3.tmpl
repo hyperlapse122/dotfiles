@@ -1,0 +1,36 @@
+{{- $desktop := includeTemplate "t3-code-desktop" . | fromJson -}}
+{{- if and $desktop.supported (ne .chezmoi.os "windows") -}}
+#!/bin/sh
+export T3CODE_CLI_PATH='{{ joinPath .chezmoi.destDir ".local" "bin" "t3" | replace "'" "'\\''" }}'
+home='{{ joinPath .chezmoi.destDir ".t3" | replace "'" "'\\''" }}'
+export T3CODE_HOME="${T3CODE_HOME:-$home}"
+export ELECTRON_RUN_AS_NODE=1
+{{ if eq .chezmoi.os "darwin" -}}
+app=
+for bundle in '{{ joinPath .chezmoi.destDir "Applications" "T3 Code (Beta).app" | replace "'" "'\\''" }}' '/Applications/T3 Code (Beta).app'; do
+    if [ -x "$bundle/Contents/MacOS/T3 Code (Beta)" ]; then
+        app="$bundle/Contents/MacOS/T3 Code (Beta)"
+        entry="$bundle/Contents/Resources/app.asar/apps/server/dist/bin.mjs"
+        break
+    fi
+done
+if [ -z "$app" ] && [ -x /opt/homebrew/bin/brew ]; then
+    cask=$(/opt/homebrew/bin/brew --caskroom t3-code 2>/dev/null) || cask=
+    for bundle in "$cask"/*/'T3 Code (Beta).app'; do
+        if [ -x "$bundle/Contents/MacOS/T3 Code (Beta)" ]; then
+            app="$bundle/Contents/MacOS/T3 Code (Beta)"
+            entry="$bundle/Contents/Resources/app.asar/apps/server/dist/bin.mjs"
+            break
+        fi
+    done
+fi
+{{ else -}}
+app='/opt/T3 Code (Beta)/t3code'
+entry='/opt/T3 Code (Beta)/resources/app.asar/apps/server/dist/bin.mjs'
+{{ end -}}
+if [ ! -x "$app" ]; then
+    echo 'T3 Code desktop is missing. Run chezmoi apply to install it, then retry t3.' >&2
+    exit 127
+fi
+exec "$app" "$entry" "$@"
+{{ end -}}

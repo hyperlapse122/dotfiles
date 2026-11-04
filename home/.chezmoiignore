@@ -11,7 +11,11 @@ README.md
 AppData
 {{ end }}
 {{ if ne .chezmoi.os "linux" }}
+{{ if and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") }}
+.config/environment.d
+{{ else }}
 .config
+{{ end }}
 {{ end }}
 {{ if ne .chezmoi.os "darwin" }}
 Library
@@ -35,4 +39,16 @@ Library
 {{ else }}
 .omp/agent/config.yml
 {{ end }}
+{{ end }}
+{{ $release := get .chezmoi "osRelease" | default dict }}
+{{ $t3Windows := and (eq .chezmoi.os "windows") (has .chezmoi.arch (list "amd64" "arm64")) }}
+{{ $t3Posix := or (and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64")) (and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (has .chezmoi.arch (list "amd64" "arm64"))) }}
+{{ if not (or $t3Windows $t3Posix) }}
+.t3
+{{ end }}
+{{ if not $t3Windows }}
+.local/bin/t3.cmd
+{{ end }}
+{{ if not $t3Posix }}
+.local/bin/t3
 {{ end }}

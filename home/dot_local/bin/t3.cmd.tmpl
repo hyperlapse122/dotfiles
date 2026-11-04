@@ -1,0 +1,23 @@
+{{- $desktop := includeTemplate "t3-code-desktop" . | fromJson -}}
+{{- if and $desktop.supported (eq .chezmoi.os "windows") -}}
+@echo off
+setlocal EnableExtensions DisableDelayedExpansion
+set "T3CODE_CLI_PATH=%~f0"
+if not defined T3CODE_HOME for %%I in ("%~dp0..\..\.t3") do set "T3CODE_HOME=%%~fI"
+set "ELECTRON_RUN_AS_NODE=1"
+set "T3CODE_DESKTOP_CLI_LAUNCHER=1"
+set "t3_app=%LOCALAPPDATA%\Programs\t3code\T3 Code (Beta).exe"
+if exist "%t3_app%" goto run
+set "t3_app=%ProgramW6432%\t3code\T3 Code (Beta).exe"
+if exist "%t3_app%" goto run
+set "t3_app=%ProgramFiles%\t3code\T3 Code (Beta).exe"
+if exist "%t3_app%" goto run
+set "t3_app=%ProgramFiles(x86)%\t3code\T3 Code (Beta).exe"
+if exist "%t3_app%" goto run
+echo T3 Code desktop is missing. Run chezmoi apply to install it, then retry t3. 1>&2
+exit /b 127
+:run
+for %%I in ("%t3_app%") do set "t3_entry=%%~dpIresources\server.asar\apps\server\dist\bin.mjs"
+"%t3_app%" "%t3_entry%" %*
+exit /b %ERRORLEVEL%
+{{ end -}}
