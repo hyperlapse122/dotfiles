@@ -68,7 +68,8 @@ class T3CodeSettingsTest(unittest.TestCase):
         return {
             "driver": "acpRegistry", "enabled": True,
             "displayName": "oh-my-pi", "accentColor": "#f84fcc",
-            "config": {"source": "local", "commandPath": (self.home / ".local/bin" / executable).as_posix(),
+            "config": {"enabled": True, "source": "local",
+                       "commandPath": (self.home / ".local/bin" / executable).as_posix(),
                        "commandArgs": ["acp"]},
         }
 
@@ -107,9 +108,10 @@ class T3CodeSettingsTest(unittest.TestCase):
             "providerInstances": {
                 "codex": {"driver": "codex", "enabled": False, "custom": {"keep": "雪"}},
                 "omp": {
-                    "driver": "stale", "enabled": False, "displayName": "My agent",
+                    "driver": "stale", "enabled": True, "displayName": "My agent",
                     "accentColor": "#123456", "unowned": {"array": [False, {"keep": None}]},
-                    "config": {"source": "remote", "commandPath": "old executable", "commandArgs": ["old"],
+                    "config": {"enabled": False, "source": "remote",
+                               "commandPath": "old executable", "commandArgs": ["old"],
                                "env": {"TOKEN_NAME": "fixture-only"}, "custom": [None, 7]},
                 },
             },
@@ -129,7 +131,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         drifted["providerInstances"]["omp"]["driver"] = "wrong"
         drifted["providerInstances"]["omp"]["enabled"] = False
         drifted["providerInstances"]["omp"]["config"].update(
-            source="remote", commandPath="drift", commandArgs=[])
+            enabled=False, source="remote", commandPath="drift", commandArgs=[])
         self.write_settings(drifted)
         self.apply()
         self.assertEqual(self.read_settings(), expected)

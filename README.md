@@ -209,6 +209,7 @@ The launchers use the installed desktop bundle; uninstalling or moving that bund
 Close T3 Code before applying its settings.
 The private `modify_` target reconciles `~/.t3/userdata/settings.json` on every apply, creating provider ID `omp` when absent.
 It enables a local ACP provider that invokes the repository-managed `~/.local/bin/omp` (`omp.exe` on Windows) with the `acp` argument.
+Both `enabled` and the legacy `config.enabled` flag are reconciled to `true`.
 It preserves other providers, unrelated settings, and unowned fields within the omp provider.
 The initial display name and color follow the inspected oh-my-pi registration; existing presentation choices remain unchanged.
 Missing or empty settings initialize minimally; malformed JSON or incompatible object shapes fail without replacing the existing file.

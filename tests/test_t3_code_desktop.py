@@ -45,6 +45,12 @@ class T3CodeDesktopTest(unittest.TestCase):
                               "destDir": self.home.as_posix(), "workingTree": self.repo.as_posix()},
                    "t3CodeRelease": self.release if release is None else release}
         template = (self.repo / "home" / relative).read_text(encoding="utf-8")
+        if relative == ".chezmoiexternals/t3-code.toml.tmpl":
+            for native, isolated in (
+                ("/opt/T3 Code (Beta)/t3code", self.root / "installed-desktop"),
+                ("/var/lib/dpkg/status", self.root / "dpkg-status"),
+            ):
+                template = template.replace(native, isolated.as_posix())
         wrapper = ('{{ template "subject" (' + json.dumps(json.dumps(context)) + ' | fromJson) }}'
                    '{{ define "subject" }}' + template + '{{ end }}')
         return subprocess.run([
@@ -74,6 +80,14 @@ class T3CodeDesktopTest(unittest.TestCase):
         result = self.render(".chezmoiexternals/t3-code.toml.tmpl", "linux", "amd64", release)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SHA-256", result.stdout + result.stderr)
+
+    def test_installed_ubuntu_package_skips_release_lookup_and_download(self):
+        (self.root / "dpkg-status").write_bytes(
+            b"Package: t3code\nStatus: install ok installed\n\n")
+        result = self.render(".chezmoiexternals/t3-code.toml.tmpl", "linux", "amd64",
+                             {"invalid": "must not be examined"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(tomllib.loads(result.stdout), {})
 
     def test_other_platforms_do_not_stage_a_debian_payload(self):
         for os_name, arch in (("windows", "amd64"), ("windows", "arm64"),

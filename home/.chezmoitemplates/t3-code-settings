@@ -29,7 +29,7 @@
 {{- $executable := "omp" -}}
 {{- if eq .chezmoi.os "windows" -}}{{- $executable = "omp.exe" -}}{{- end -}}
 {{- $command := joinPath .chezmoi.destDir ".local" "bin" $executable | replace "\\" "/" -}}
-{{- $config = $config | setValueAtPath "source" "local" | setValueAtPath "commandPath" $command | setValueAtPath "commandArgs" (list "acp") -}}
+{{- $config = $config | setValueAtPath "enabled" true | setValueAtPath "source" "local" | setValueAtPath "commandPath" $command | setValueAtPath "commandArgs" (list "acp") -}}
 {{- $provider = $provider | setValueAtPath "driver" "acpRegistry" | setValueAtPath "enabled" true | setValueAtPath "config" $config -}}
 {{- if not (hasKey $provider "displayName") -}}
 {{- $provider = $provider | setValueAtPath "displayName" "oh-my-pi" -}}
