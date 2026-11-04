@@ -413,6 +413,7 @@ The native identity is glab's host-scoped PAT service with an empty keyring acco
 Outside explicit credential import, only runtime application reads the encrypted GitLab data.
 Preparation, initialization, and script-excluded application do not decrypt it or write credentials.
 Local glab configuration contains connection metadata but no managed token; unrelated hosts and settings are preserved.
+The native smoke reads this metadata as YAML because glab can rewrite JSON-compatible configuration during its own migrations.
 The active configuration directory follows glab's explicit `GLAB_CONFIG_DIR`, existing legacy directory, and platform XDG precedence.
 When only a system XDG configuration exists, its effective settings are preserved in the writable user configuration without modifying the system file.
 An explicit directory value is literal, so expand a leading `~` in the invoking shell if needed.

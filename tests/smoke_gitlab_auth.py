@@ -121,7 +121,7 @@ def main():
                         operation="Encrypt synthetic GitLab credentials"), encoding="utf-8")
 
                 def verify(token):
-                    document = json.loads(metadata.read_text(encoding="utf-8"))
+                    document = auth.common.read_mapping(repository, config, metadata)
                     if (document["hosts"]["other.invalid"] != unrelated
                             or document["host"] != "other.invalid"
                             or token in metadata.read_text(encoding="utf-8")):
