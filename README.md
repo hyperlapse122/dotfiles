@@ -192,6 +192,9 @@ The managed GPG home is `%USERPROFILE%/AppData/Roaming/gnupg` on Windows and `~/
 Before writing personal files, application checks the selected installation's effective GPG home and stops if it differs, including custom `GNUPGHOME` or Windows registry/portable-installation choices.
 Reconcile that location before applying; custom GPG-home relocation is not managed here.
 Linked GPG-home directories are rejected rather than replaced, including Windows reparse points in the managed parent directories.
+On Windows, an existing GPG path alias is accepted only when its volume and 128-bit file ID match the managed directory.
+GnuPG reads `GNUPGHOME` through the ANSI environment API; use an ASCII-representable alias if that override contains characters outside the system code page.
+Do not force `--homedir` to the expected location to bypass this safety check.
 
 Only active `pinentry-program` entries in `gpg-agent.conf` are replaced.
 Comments, unrelated agent settings, keys, and trust databases remain unmanaged.
