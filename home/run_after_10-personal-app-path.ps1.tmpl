@@ -1,0 +1,21 @@
+{{- if eq .chezmoi.os "windows" -}}
+$ErrorActionPreference = 'Stop'
+
+$bin = Join-Path '{{ .chezmoi.destDir | replace "'" "''" }}' '.local\bin'
+function ConvertTo-NormalizedPath([string] $Entry) {
+    $expanded = [Environment]::ExpandEnvironmentVariables($Entry.Trim().Trim('"'))
+    if (-not $expanded) { return '' }
+    return [IO.Path]::GetFullPath($expanded.Replace('/', '\')).TrimEnd('\', '/')
+}
+
+# Never persist the combined process PATH: it includes machine and transient entries.
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+$normalizedBin = ConvertTo-NormalizedPath $bin
+foreach ($entry in ($userPath -split ';')) {
+    if ([string]::Equals((ConvertTo-NormalizedPath $entry), $normalizedBin, [StringComparison]::OrdinalIgnoreCase)) {
+        return
+    }
+}
+$separator = if ($userPath -and -not $userPath.EndsWith(';')) { ';' } else { '' }
+[Environment]::SetEnvironmentVariable('Path', ($userPath + $separator + $bin), 'User')
+{{ end -}}
