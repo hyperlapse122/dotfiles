@@ -38,7 +38,6 @@ def run_private(argv, *, input=None, env=None, operation="Private command failed
 
 
 def repository_root(source=None):
-    """Select the script's repository unless an explicit repository is given."""
     try:
         root = Path(source).resolve() if source is not None else Path(__file__).resolve().parents[1]
         if not (root / ".chezmoiroot").is_file():
@@ -49,7 +48,6 @@ def repository_root(source=None):
 
 
 def source_directory(source):
-    """Resolve chezmoi's source subdirectory without changing global config."""
     root = repository_root(source)
     try:
         relative = Path((root / ".chezmoiroot").read_text(encoding="utf-8").strip())
@@ -62,7 +60,6 @@ def source_directory(source):
 
 
 def chezmoi_argv(source, config=None):
-    """Bind every invocation to this repository, leaving initialized config alone."""
     root = repository_root(source)
     argv = ["chezmoi", "--source", str(source_directory(root)),
             "--working-tree", str(root), "--no-tty", "--no-pager"]
@@ -79,7 +76,6 @@ def _private_json(argv, operation, *, input=None):
 
 
 def require_encryption_policy(source, config=None):
-    """Require the existing repository-initialized, sole-recipient GPG policy."""
     argv = chezmoi_argv(source, config)
     effective = _private_json(argv + ["dump-config", "--format", "json"],
                               "Cannot read initialized encryption policy.")
@@ -133,7 +129,6 @@ def _read_token(token_file):
         token = Path(token_file).read_bytes().decode("utf-8-sig")
     except (OSError, UnicodeError, ValueError):
         raise AuthError("Cannot read the token input file as UTF-8.") from None
-    # Remove one conventional text-file line ending, not meaningful token bytes.
     if token.endswith("\r\n"):
         token = token[:-2]
     elif token.endswith(("\n", "\r")):
@@ -151,13 +146,11 @@ def _verify_document(actual, expected):
 
 
 def import_token(source, config, token_file):
-    """Publish a verified encrypted merge, then remove the original token file."""
     staged = None
     try:
         source = repository_root(source)
         token_file = Path(token_file)
         target = source_directory(source) / ".secrets/api-tokens.yaml.asc"
-        # An input alias must never let the final unlink remove the ciphertext.
         if token_file.resolve() == target.resolve() or (
                 token_file.exists() and target.exists() and os.path.samefile(token_file, target)):
             raise AuthError("Token input must be separate from encrypted source.")
@@ -223,7 +216,7 @@ def private_environment():
 
 def gh_config_directory():
     if os.environ.get("GH_CONFIG_DIR"):
-        return Path(os.environ["GH_CONFIG_DIR"]).expanduser()
+        return Path(os.environ["GH_CONFIG_DIR"])
     if os.environ.get("XDG_CONFIG_HOME"):
         return Path(os.environ["XDG_CONFIG_HOME"]) / "gh"
     if os.name == "nt" and os.environ.get("APPDATA"):

@@ -361,6 +361,7 @@ Linux needs a working user-session Secret Service, and native unlock/access prom
 Unavailable, locked, or denied storage is an error: the hook never calls `gh auth login`, whose plaintext fallback would violate this policy.
 Only the managed account's token fields and active selection are reconciled; unrelated hosts and accounts are preserved.
 Gist receives a native credential alias without being newly registered as a separate GitHub API host.
+`GH_CONFIG_DIR` is used verbatim, matching gh; expand a leading `~` in the invoking shell when a home-relative path is intended.
 
 The managed Git config resets earlier helper chains only for the two HTTPS hosts and then invokes the personal gh helper.
 SSH remotes and other hosts are unchanged.

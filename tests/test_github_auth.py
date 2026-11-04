@@ -1,3 +1,4 @@
+import contextlib
 import importlib.util
 import json
 import os
@@ -101,6 +102,25 @@ class GithubAuthApplyTest(unittest.TestCase):
         self.assertNotIn("oauth_token", result["gist.github.com"])
         self.assertTrue(all(value == self.token for value in self.store.values()), "competing credential remained")
         self.assertNotIn(self.token, self.metadata.read_text(encoding="utf-8"))
+
+    def test_literal_tilde_config_reconciles_the_file_gh_reads(self):
+        literal = self.root / "~" / "gh-fixture" / "hosts.yml"
+        literal.parent.mkdir(parents=True)
+        literal.write_text('{"github.com": {"oauth_token": "stale-config-token"}}',
+                           encoding="utf-8")
+        expanded = self.home / "gh-fixture" / "hosts.yml"
+        expanded.parent.mkdir(parents=True)
+        untouched = '{"unrelated.invalid": {"user": "untouched"}}'
+        expanded.write_text(untouched, encoding="utf-8")
+        with mock.patch.dict(os.environ, {
+            "GH_CONFIG_DIR": "~/gh-fixture",
+            "HOME": str(self.home), "USERPROFILE": str(self.home),
+        }), contextlib.chdir(self.root):
+            self.apply()
+        result = json.loads(literal.read_text(encoding="utf-8"))
+        self.assertNotIn("oauth_token", result["github.com"])
+        self.assertEqual(result["github.com"]["user"], "owner")
+        self.assertEqual(expanded.read_text(encoding="utf-8"), untouched)
 
     def test_denied_write_cannot_publish_plaintext_fallback(self):
         with mock.patch.object(self.auth, "native_set", side_effect=self.auth.AuthError("denied")):
