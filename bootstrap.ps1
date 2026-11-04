@@ -140,7 +140,7 @@ try {
     Write-Host "Bootstrap complete: $Destination"
     Write-Host 'Personal settings were not applied and no global source was registered.'
     Write-Host "To register this permanent checkout, open a new PowerShell window and run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$Destination\configure-chezmoi.ps1`""
-    Write-Host 'Then run chezmoi update from any directory when you intend to pull and apply personal settings.'
+    Write-Host 'Then update sources with chezmoi update --apply=false, regenerate configuration with chezmoi init, and run chezmoi apply.'
 }
 catch {
     Write-Error "Windows bootstrap failed: $($_.Exception.Message)" -ErrorAction Continue

@@ -4,3 +4,4 @@ windows:
     - AgileBits.1Password
     - AgileBits.1Password.CLI
     - Microsoft.PowerShell
+    - SUSE.RancherDesktop
