@@ -37,6 +37,14 @@ class GitGpgSettingsTest(unittest.TestCase):
             "GIT_CONFIG_GLOBAL": str(self.home / ".gitconfig"),
             "GIT_CONFIG_NOSYSTEM": "1",
         })
+        if os.name == "nt":
+            commands = self.root / "commands"
+            commands.mkdir()
+            # Full-source applies must never invoke the host's real app installer.
+            (commands / "winget.cmd").write_text(
+                "@echo off\nexit /b -1978335135\n", encoding="ascii",
+            )
+            self.env["PATH"] = str(commands) + os.pathsep + self.env["PATH"]
 
     def run_command(self, *args, check=True):
         result = subprocess.run(args, env=self.env, capture_output=True, text=True,
