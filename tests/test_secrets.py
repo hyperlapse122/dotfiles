@@ -28,7 +28,10 @@ class SecretsTest(unittest.TestCase):
         self.source = self.root / "source"
         self.source.mkdir()
         shutil.copy2(self.repo / ".chezmoiroot", self.source)
-        shutil.copytree(self.repo / "home", self.source / "home")
+        # Secret proofs must not fetch production apps or run personal PATH hooks.
+        shutil.copytree(self.repo / "home", self.source / "home", ignore=shutil.ignore_patterns(
+            ".chezmoiexternals", "personal-app*.json", "run_after_10-personal-app-path.*",
+        ))
         self.config = self.root / "chezmoi.toml"
         self.env = os.environ.copy()
         self.env.update({

@@ -25,13 +25,24 @@ jobs:
         timeout-minutes: 5
         run: |
           # Git's MSYS GPG interprets Windows GNUPGHOME as a relative POSIX path.
-          # Use the CLI-only native prerequisite, not a desktop-suite installer.
-          mise exec -- choco install gnupg --version=2.5.21 --yes --no-progress --limit-output
+          # Hosted Windows installers stalled; these tests need only the CLI payload.
+          # Verify and unpack it without executing either installer or package scripts.
+          $package = Join-Path $env:RUNNER_TEMP 'gnupg-fixture.zip'
+          $packageRoot = Join-Path $env:RUNNER_TEMP 'gnupg-package'
+          $gpgRoot = Join-Path $env:RUNNER_TEMP 'native-gnupg'
+          Invoke-WebRequest 'https://community.chocolatey.org/api/v2/package/gnupg/2.5.21' -OutFile $package
+          $expected = 'ec0d87043a192be65d7bd9678609bfb29154f565183c135f7569ad9682e208c6230ed9cce706c706726f4436084528775d7ae993e4994033068021904c22fdd3'
+          if ((Get-FileHash -LiteralPath $package -Algorithm SHA512).Hash -ne $expected) {
+            throw 'Native GnuPG fixture checksum mismatch.'
+          }
+          Expand-Archive -LiteralPath $package -DestinationPath $packageRoot
+          $installer = Join-Path $packageRoot 'tools/gnupg-w32-2.5.21_20260702.exe'
+          mise exec -- 7z x -y "-o$gpgRoot" $installer
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $gpgBin = @("$env:ProgramFiles\GnuPG\bin", "${env:ProgramFiles(x86)}\GnuPG\bin") |
-            Where-Object { Test-Path -LiteralPath (Join-Path $_ 'gpgconf.exe') } |
-            Select-Object -First 1
-          if (-not $gpgBin) { throw 'Native GnuPG installation was not found.' }
+          $gpgBin = Join-Path $gpgRoot 'bin'
+          if (-not (Test-Path -LiteralPath (Join-Path $gpgBin 'gpgconf.exe'))) {
+            throw 'Native GnuPG payload was not found.'
+          }
           Add-Content -LiteralPath $env:GITHUB_PATH -Value $gpgBin -Encoding utf8
           mise exec -- (Join-Path $gpgBin 'gpgconf.exe') --version
       - name: Run deterministic tests and isolated existing contracts
