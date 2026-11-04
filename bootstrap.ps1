@@ -80,8 +80,8 @@ try {
         }
         $entries = Get-ChildItem -LiteralPath $Destination -Force | Select-Object -First 1
         if ($entries) {
-            $top = Invoke-Checked $git @('-C', $Destination, 'rev-parse', '--show-toplevel') 'Check destination repository'
-            if ([IO.Path]::GetFullPath($top.Trim()) -ne $Destination.TrimEnd('\', '/')) {
+            $prefix = Invoke-Checked $git @('-C', $Destination, 'rev-parse', '--show-prefix') 'Check destination repository'
+            if ($prefix) {
                 throw "Destination must be the repository root, not a nested directory: $Destination"
             }
         }

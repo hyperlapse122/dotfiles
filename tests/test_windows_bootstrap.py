@@ -1,3 +1,4 @@
+import base64
 import os
 from pathlib import Path
 import shutil
@@ -12,6 +13,8 @@ class WindowsBootstrapTest(unittest.TestCase):
         self.repo = Path(__file__).resolve().parents[1]
         self.shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
         self.git = shutil.which("git")
+        self.assertIsNotNone(self.git, "Install Git before running bootstrap tests")
+        self.assertIsNotNone(shutil.which("mise"), "Install mise before running bootstrap tests")
         self.scratch = tempfile.TemporaryDirectory(prefix="windows bootstrap ")
         self.addCleanup(self.scratch.cleanup)
         self.root = Path(self.scratch.name)
@@ -51,6 +54,26 @@ class WindowsBootstrapTest(unittest.TestCase):
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep this local edit")
             origin = self.git_run("-C", str(self.checkout), "remote", "get-url", "origin").stdout.strip()
             self.assertEqual(origin, "https://github.com/hyperlapse122/dotfiles.git")
+
+    def test_unicode_checkout_with_oem_console_encoding(self):
+        destination = self.root / "한글 checkout"
+        self.checkout.rename(destination)
+        sentinel = destination / "local setting.txt"
+        sentinel.write_text("keep Unicode checkout", encoding="utf-8")
+        script_path = str(self.repo / "bootstrap.ps1").replace("'", "''")
+        destination_path = str(destination).replace("'", "''")
+        command = (
+            "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); "
+            f"& '{script_path}' -Destination '{destination_path}'"
+        )
+        encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
+        result = subprocess.run(
+            [str(self.shell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+            env=self.env, capture_output=True, text=True, encoding="utf-8",
+            errors="backslashreplace", timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep Unicode checkout")
 
     def test_unrelated_directory_is_untouched(self):
         destination = self.root / "unrelated"

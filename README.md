@@ -118,5 +118,6 @@ mise exec -- python -m unittest discover -s tests
 
 The bootstrap isolation test initializes twice with an isolated user home and an existing chezmoi config containing mutating hooks.
 It checks that preparation does not execute those hooks or alter the existing personal setting and config.
-On Windows, entry-point regressions also exercise Windows PowerShell, repeated preparation, destination/origin rejection, and native-command failure propagation.
+On Windows, entry-point regressions also exercise Windows PowerShell, repeated preparation, Unicode checkout paths with OEM console encoding, destination/origin rejection, and native-command failure propagation.
+Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.
