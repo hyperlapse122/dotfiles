@@ -115,7 +115,7 @@ jobs:
       # support that target. Resolve only these existing declarations there;
       # never change the repository's development-tool declarations or pins.
       - name: Install only the tools needed for native smoke
-        run: mise install chezmoi python gh uv pipx:keyring
+        run: mise install chezmoi python gh glab uv pipx:keyring
       - *native-windows-gpg
       - name: Provision disposable macOS encryption fixture prerequisite
         if: runner.os == 'macOS'
@@ -131,6 +131,10 @@ jobs:
         if: runner.os != 'Linux'
         timeout-minutes: 5
         run: mise exec chezmoi python gh uv pipx:keyring -- python tests/smoke_github_auth.py
+      - name: Prove native GitLab credential interoperability
+        if: runner.os != 'Linux'
+        timeout-minutes: 5
+        run: mise exec chezmoi python gh glab uv pipx:keyring -- python tests/smoke_gitlab_auth.py
       - name: Prove native credentials in an isolated Linux session
         if: runner.os == 'Linux'
         timeout-minutes: 5
@@ -138,4 +142,5 @@ jobs:
           dbus-run-session -- sh -eu -c '
             printf "%s" fixture-keyring-password | gnome-keyring-daemon --unlock --components=secrets
             mise exec chezmoi python gh uv pipx:keyring -- python tests/smoke_github_auth.py
+            mise exec chezmoi python gh glab uv pipx:keyring -- python tests/smoke_gitlab_auth.py
           '

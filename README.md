@@ -371,6 +371,69 @@ Check account access with `gh auth status --active --hostname github.com`, witho
 Never send `gh auth token` or `git credential fill` output to terminal logs or CI artifacts.
 
 
+### GitLab CLI and private Git HTTPS authentication
+
+Development `glab` is pinned through mise; personal `glab` is installed from official GitLab release assets under `~/.local/bin`.
+Both use v1.128.0.
+The personal-application updater supports GitHub releases by default and explicit GitLab release sources with published SHA-256 manifests.
+
+Keep private connection details in a local JSON file outside the repository:
+
+```json
+{
+  "host": "gitlab.example.invalid",
+  "registry": "registry.example.invalid",
+  "user": "example-user"
+}
+```
+
+These are synthetic examples, not managed endpoint values.
+Omit `user` to resolve it through the instance's authenticated user API during import.
+Supply a PAT with the GitLab API and repository permissions needed for the intended operations.
+Token issuance and permissions remain the owner's responsibility.
+
+After initializing repository encryption, import the token and connection file:
+
+```sh
+mise exec -- python scripts/gitlab-auth.py import --token-file /path/outside-repo/gitlab-token.txt --connection-file /path/outside-repo/gitlab-connection.json
+```
+
+The importer merges `gitlab.host`, `gitlab.registry`, `gitlab.user`, and `gitlab.token` into the existing encrypted source without removing unrelated mappings.
+It uses the shared streaming GPG transport, stages only ciphertext, and retains a ciphertext-only recovery copy until final publication verification succeeds.
+If final verification fails after replacement, the token input and a `.api-tokens-recovery-*.asc` file remain in the source secrets directory; automatic rollback is not performed.
+After verified publication, recovery cleanup precedes token-input deletion.
+The connection file is retained: it contains private metadata and must remain outside version control.
+Neither ordinary deletion nor this workflow securely erases backups or historical copies.
+
+Explicit `mise run apply` reconciles the token through Windows Credential Manager, macOS Keychain, or Linux Secret Service.
+It never calls `glab auth login`, whose unavailable-keyring and CI behavior can fall back to plaintext storage.
+An inaccessible native store is an error, not a reason to write a token into configuration.
+The native identity is glab's host-scoped PAT service with an empty keyring account, independent of the GitLab username.
+
+Outside explicit credential import, only runtime application reads the encrypted GitLab data.
+Preparation, initialization, and script-excluded application do not decrypt it or write credentials.
+Local glab configuration contains connection metadata but no managed token; unrelated hosts and settings are preserved.
+The active configuration directory follows glab's explicit `GLAB_CONFIG_DIR`, existing legacy directory, and platform XDG precedence.
+An explicit directory value is literal, so expand a leading `~` in the invoking shell if needed.
+Host-local PAT selection supersedes stale OAuth state without changing unrelated inherited settings.
+
+The managed Git template includes a generic local file at `~/.local/share/dotfiles/gitlab.gitconfig`.
+Authentication application writes the private host's HTTPS helper chain there and points it at the stable personal glab executable.
+SSH remotes, other hosts, and existing GitHub authentication remain unchanged.
+glab's normal environment and repository-local overrides keep upstream precedence during ordinary use; reconciliation verifies with credential, identity, CI, and trace overrides removed from its subprocesses.
+Never print `glab auth git-credential get` or `git credential fill` output: both can contain the token.
+
+For targeted authentication reconciliation without running unrelated personal-application hooks, install the personal glab executable and apply the managed Git template first, then run:
+
+```sh
+mise exec -- python scripts/gitlab-auth.py apply --destination /absolute/path/to/user-home
+```
+
+Both commands accept `--source` for another repository root and `--config` for an existing initialized chezmoi configuration.
+Docker/Podman login, registry credential-helper configuration, and registry pull/push checks are deferred to [issue #25](https://github.com/hyperlapse122/dotfiles/issues/25) while container-runtime changes proceed separately.
+The registry hostname is encrypted metadata only in this workflow.
+
+
 ### Native system CA trust
 
 The DPI/enterprise CA must already be trusted by the operating system.
