@@ -1,0 +1,7 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if and (eq .chezmoi.os "windows") (hasKey .personalApps.omp.targets $target) -}}
+@echo off
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ^
+ "& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{ includeTemplate "harness-plugins-windows" . | b64enc }}'))))"
+exit /b %errorlevel%
+{{ end -}}

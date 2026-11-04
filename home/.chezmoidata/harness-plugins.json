@@ -3,6 +3,14 @@
     "compound-engineering": {
       "repository": "EveryInc/compound-engineering-plugin",
       "tagPrefix": "compound-engineering-v",
+      "archiveExclude": [
+        "*/.agy",
+        "*/.agy/*",
+        "*/.claude/skills",
+        "*/CLAUDE.md",
+        "*/site",
+        "*/site/*"
+      ],
       "omp": {
         "marketplace": "compound-engineering-plugin",
         "plugin": "compound-engineering"

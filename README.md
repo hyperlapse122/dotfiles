@@ -419,6 +419,65 @@ Windows PowerShell 5.1 can show mise's directory-change warning and updates the 
 Profile installation runs only through explicit apply scripts, not `mise install` or `mise run bootstrap`.
 The runtime-resolved files are not entries in `chezmoi managed`; `chezmoi apply --exclude=scripts` also excludes their installation.
 
+## Harness plugins
+
+Explicit apply installs [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) for the standard user-global omp environment on the same six targets as the omp executable.
+Other harnesses are not installed or configured yet.
+
+Plugin declarations live in `home/.chezmoidata/harness-plugins.json`; generated stable-release tags and full commit SHAs live in `home/.chezmoidata/harness-plugin-lock.json`.
+Chezmoi extracts the SHA-addressed archive into `~/.local/share/dotfiles/harness-plugins/compound-engineering`, then registers that directory as omp's local CE marketplace, refreshes its catalog, force-installs CE at user scope, and enables it.
+This replaces a preexisting remote CE marketplace registration without removing unrelated marketplaces or plugins.
+The archive excludes alternate-host and site link aliases, so Windows installation does not require file-symlink privileges.
+The underlying skill files and native omp metadata remain from the pinned commit.
+No separately installed Bun or Python is needed for device application.
+
+Apply only with omp closed, then start a new session to load the resulting skills.
+The existing explicit `mise run apply` and registered-checkout `chezmoi update` flows apply these changes.
+Preparation with `mise install` does not install plugins or change configuration; archive enumeration may populate chezmoi's download cache.
+
+### Mutable omp settings
+
+The repository uses `modify_` templates rather than storing a complete personal `config.yml`.
+They set `marketplace.autoUpdate` to the string `"off"` while retaining unrelated property values.
+**This disables startup automatic updates for all omp marketplace plugins, not only CE.**
+An existing `~/.omp/agent/config.yml` takes precedence; otherwise an existing `config.yaml` is modified without creating a shadowing `.yml`.
+When neither file exists, apply creates a minimal `.yml`.
+If legacy `settings.json` or `agent.db` exists without YAML, apply stops before creating YAML; let omp complete its native first-start migration, close it, and apply again.
+Malformed YAML fails without replacement.
+
+Repeated apply restores the owned property and pinned plugin content, including same-version source/cache drift, while retaining other property values and plugin settings.
+Parsing and serialization can remove comments and normalize formatting.
+Do not apply while another process writes the same file: modify is an apply-time transformation, not continuous enforcement or a shared application lock.
+This integration targets the standard default profile; independently configured profiles, relocated roots, project settings, and process overlays are not managed.
+Reusable multi-format property declarations remain separate in [issue #17](https://github.com/hyperlapse122/dotfiles/issues/17).
+
+### Refresh or restore plugin pins
+
+```sh
+mise exec -- python scripts/update-harness-plugin-lock.py
+```
+
+The updater accepts the repository's latest release only when it is a published stable CE release, resolves its exact tag through annotated tags to a commit, and leaves existing pins unchanged on incomplete resolution.
+It does not search older releases when repository-level latest belongs to another component.
+After merge, **Update harness plugin pins** checks daily at 06:43 UTC and supports manual dispatch.
+Read-only resolution and native validation precede a separate write-authorized job that commits only the validated lock directly to the default branch.
+Unchanged pins create no commit; a conflicting push fails without force.
+The workflow does not apply to personal devices.
+
+To restore an earlier CE revision, restore its committed plugin lock and explicitly apply it.
+The dedicated source directory is reconciled exactly, removing files introduced by a newer pin; native force installation also supports version rollback.
+The commit identifies extracted upstream content, not a checksum of GitHub's compressed archive bytes.
+Do not commit omp's `omp-plugins.lock.json`: it contains runtime settings and can contain secrets.
+
+Run the isolated native plugin check with:
+
+```sh
+mise exec -- python tests/smoke_harness_plugins.py
+```
+
+It uses a disposable home, not the owner's configuration, and checks actual skill URI discovery, the local marketplace cutover, automatic-update policy, cache repair, and unrelated plugin preservation.
+CI runs this check on all six native targets.
+
 ## Source layout
 
 The repository-root `.chezmoiroot` selects `./home` as chezmoi's source state.

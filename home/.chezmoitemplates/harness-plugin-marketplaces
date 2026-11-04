@@ -1,0 +1,37 @@
+{{- $registry := dict "version" 1 "marketplaces" list -}}
+{{- $path := joinPath .chezmoi.destDir ".omp" "marketplaces.json" -}}
+{{- if stat $path -}}
+{{- $registry = include $path | fromJson -}}
+{{- if not (kindIs "map" $registry) -}}
+{{- fail "Invalid omp marketplaces.json: expected a registry object; refusing to replace unrelated registrations" -}}
+{{- end -}}
+{{- if or (ne (toString $registry.version) "1") (not (kindIs "slice" $registry.marketplaces)) -}}
+{{- fail "Invalid omp marketplaces.json: expected version 1 and marketplaces array; refusing to replace unrelated registrations" -}}
+{{- end -}}
+{{- end -}}
+{{- $decisions := list -}}
+{{- range $name, $plugin := .harnessPlugins -}}
+{{- $source := joinPath $.chezmoi.destDir ".local" "share" "dotfiles" "harness-plugins" $name | replace "\\" "/" -}}
+{{- $found := false -}}
+{{- $remove := "" -}}
+{{- $add := true -}}
+{{- range $entry := $registry.marketplaces -}}
+{{- if not (kindIs "map" $entry) -}}
+{{- fail "Invalid omp marketplace entry: expected an object" -}}
+{{- end -}}
+{{- if not (and (kindIs "string" $entry.name) (kindIs "string" $entry.sourceType) (kindIs "string" $entry.sourceUri)) -}}
+{{- fail "Invalid omp marketplace entry: expected name, sourceType and sourceUri strings" -}}
+{{- end -}}
+{{- if eq (lower $entry.name) (lower $plugin.omp.marketplace) -}}
+{{- if $found -}}{{- fail "Duplicate CE marketplace registrations; refusing ambiguous reconciliation" -}}{{- end -}}
+{{- $found = true -}}
+{{- if and (eq $entry.name $plugin.omp.marketplace) (eq $entry.sourceType "local") (eq ($entry.sourceUri | replace "\\" "/") $source) -}}
+{{- $add = false -}}
+{{- else -}}
+{{- $remove = $entry.name -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $decisions = append $decisions (dict "marketplace" $plugin.omp.marketplace "plugin" (printf "%s@%s" $plugin.omp.plugin $plugin.omp.marketplace) "source" $source "remove" $remove "add" $add) -}}
+{{- end -}}
+{{- $decisions | toJson -}}

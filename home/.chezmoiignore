@@ -22,3 +22,17 @@ Library
 {{ if not (stat (joinPath .chezmoi.destDir ".bash_login")) }}
 .bash_login
 {{ end }}
+{{ $target := printf "%s-%s" .chezmoi.os .chezmoi.arch }}
+{{ $apps := get . "personalApps" | default dict }}
+{{ $omp := get $apps "omp" | default dict }}
+{{ $targets := get $omp "targets" | default dict }}
+{{ if not (hasKey $targets $target) }}
+.omp
+{{ else }}
+{{ $agent := joinPath .chezmoi.destDir ".omp" "agent" }}
+{{ if or (stat (joinPath $agent "config.yml")) (not (stat (joinPath $agent "config.yaml"))) }}
+.omp/agent/config.yaml
+{{ else }}
+.omp/agent/config.yml
+{{ end }}
+{{ end }}

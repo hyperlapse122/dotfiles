@@ -1,0 +1,7 @@
+{{- $agent := joinPath .chezmoi.destDir ".omp" "agent" -}}
+{{- if and (not (stat (joinPath $agent "config.yml"))) (not (stat (joinPath $agent "config.yaml"))) -}}
+{{- if or (stat (joinPath $agent "settings.json")) (stat (joinPath $agent "agent.db")) -}}
+{{- fail "Complete omp's native first-start settings migration before applying: legacy settings.json or agent.db exists without global YAML" -}}
+{{- end -}}
+{{- end -}}
+{{- .chezmoi.stdin | fromYaml | default dict | setValueAtPath "marketplace.autoUpdate" "off" | toYaml -}}
