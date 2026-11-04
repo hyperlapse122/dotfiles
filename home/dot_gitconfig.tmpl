@@ -10,3 +10,8 @@
     program = {{ $gpg.program | replace "\\" "/" | quote }}
 [init]
     defaultBranch = main
+{{ if eq .chezmoi.os "windows" }}
+[http]
+    sslBackend = schannel
+    schannelUseSSLCAInfo = false
+{{ end }}

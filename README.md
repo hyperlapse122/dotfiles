@@ -105,7 +105,7 @@ mise run bootstrap
 
 ## Apply personal settings
 
-Run this only when you intend to change the actual user home directory:
+Run this only when you intend to change the actual user home directory and managed per-user environment settings:
 
 ```sh
 mise run apply
@@ -113,7 +113,7 @@ mise run apply
 
 Repository preparation and apply tasks resolve the current worktree's source, including when called from a subdirectory.
 They do not initialize or redirect the global chezmoi source.
-The source manages global Git settings, GPG pinentry selection, and native GPG secret encryption; tool installation and key provisioning are prerequisites.
+The source manages global Git settings, GPG pinentry selection, native GPG secret encryption, and native system-CA trust settings; tool installation and key provisioning are prerequisites.
 
 To preview future changes without applying them, run from the repository root:
 
@@ -227,6 +227,63 @@ Native GPG encryption/decryption and encrypted-file editing use temporary plaint
 Use a trusted local editor and terminal, protect destination access, and never commit or log real decrypted values.
 Losing access to the private key makes existing ciphertext unavailable; key recovery and rotation are not managed here.
 
+### Native system CA trust
+
+The DPI/enterprise CA must already be trusted by the operating system.
+Explicit apply persists `NODE_USE_SYSTEM_CA=1` without disabling TLS certificate or hostname verification.
+It does not install certificates, export a CA bundle, or modify machine-wide environment settings.
+
+| Target | Native coverage and prerequisites | Managed behavior |
+| --- | --- | --- |
+| Node.js | Environment-variable support starts at 22.19.0 in the 22.x line and 24.6.0 in the 24.x line; check support for other releases | Enable system roots in addition to bundled roots |
+| Bun | 1.2.23 or newer | Enable system roots in addition to bundled roots |
+| Standalone omp | Depends on its embedded Bun, not a separately installed runtime | Inherit the same opt-in; explicit request-level CA settings remain a boundary |
+| Python standard-library TLS | Windows loads its documented CA/ROOT stores; Linux follows the build's OpenSSL system paths; macOS OpenSSL paths do not automatically imply Keychain trust | Leave suitable native defaults unchanged |
+| pip | pip 24.2+ with Python 3.10+ uses system certificates alongside certifi | Leave the native default unchanged; older combinations are not upgraded here |
+| Requests | Upstream defaults to certifi rather than OS trust | No automatic native integration; CA-file support is deferred |
+| Java JSSE | Native providers exist, but store selection can omit other trust domains or Java's existing roots | No JVM-wide truststore override; application/distribution-specific integration is not guaranteed |
+| Git HTTPS | Git for Windows with Schannel switching support, introduced in 2.14.0; other platforms depend on their linked libcurl | Select Schannel on Windows and prevent a CA-file setting from replacing Windows trust |
+| curl | Windows Schannel already uses Windows trust; macOS needs a compatible native/SecTrust build; Linux can use an existing OS-maintained OpenSSL CA bundle | Leave suitable native defaults unchanged; do not add an unconditional shared curlrc option |
+| Go-based tools | Windows/macOS normally use platform trust; Linux uses system CA files/directories | Leave native defaults unchanged; inspect version-dependent filesystem overrides |
+
+The Windows Git settings keep TLS and revocation verification enabled.
+They do not configure an unrelated GUI client's embedded Git or libcurl.
+An existing OS-maintained Linux CA bundle counts as system trust; a separately generated or distributed file is outside this change.
+
+#### Activate the user environment
+
+- **Windows:** apply writes only the named value under `HKCU\Environment`.
+  Sign out and sign back in for the reliable CLI/GUI refresh baseline.
+  A new tab in an old terminal or IDE can still inherit its parent's old environment.
+- **Linux:** apply installs `~/.config/environment.d/60-native-system-ca.conf`.
+  For an already-running systemd user manager, run `systemctl --user daemon-reload`, then restart the relevant applications or graphical session.
+  This covers user-manager services and desktop launchers that consume that manager's environment, not every display manager or desktop.
+- **macOS:** apply installs `~/Library/LaunchAgents/com.hyperlapse.native-system-ca.plist` for the next Aqua login.
+  After logging in, `launchctl getenv NODE_USE_SYSTEM_CA` should print `1` before launching the application being checked.
+  Login-restored applications can start before the setter; fully quit and reopen affected applications and stale launchers after it completes.
+  The agent does not guarantee ordering before every other login application.
+
+Unix shell startup files receive a small marked export block.
+Unrelated contents are preserved, and incomplete or conflicting owned delimiters stop modification rather than deleting an uncertain range.
+The source always manages `.profile`, `.bashrc`, and `.zshenv` on Unix; existing `.bash_profile` and `.bash_login` are modified without creating new ones that would shadow the user's current Bash login file.
+Nonstandard `ZDOTDIR`, custom rc-file options, nondefault Linux XDG/session paths, and startup code that later overrides the variable need separate configuration.
+No shell hook can update a process that is already running.
+
+#### Check effective trust, not just the variable
+
+Restart the application through the intended CLI or GUI launch path and exercise its affected HTTPS operation outside this checkout.
+For example, `omp update --check` checks the public update endpoint without installing an update.
+A standalone executable's own request is stronger evidence than a probe using a different installed runtime.
+The public update check does not establish every model-provider or custom transport's behavior.
+
+Inspect inherited `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, application-specific CA settings, and URL-specific Git settings if a connection still fails.
+They are not deleted by this repository.
+In particular, omp can supply explicit request-level CAs when `NODE_EXTRA_CA_CERTS` is present, and Go 1.27 can select filesystem roots on Windows/macOS when the SSL certificate override variables are set.
+Do not fix that conflict by disabling verification or setting one global CA-file path for all tools.
+
+CA-file integration and macOS/Linux CA files encrypted with chezmoi's native GPG support, committed as secrets, and installed during explicit apply are tracked separately in [issue #10](https://github.com/hyperlapse122/dotfiles/issues/10).
+The follow-up still needs to distinguish local application files from OS trust-store registration.
+
 ## Source layout
 
 The repository-root `.chezmoiroot` selects `./home` as chezmoi's source state.
@@ -251,5 +308,7 @@ On Windows, entry-point regressions also exercise Windows PowerShell, repeated p
 Global-source regressions use real Git and chezmoi with isolated homes and a local remote to verify pull/apply, configuration regeneration, repeated registration, and conflict preservation.
 Secret regressions use real GPG and chezmoi with temporary software keys to check effective ciphertext recipients, named-token consumption, destination preservation on decryption failure, repeat application, and preparation without decryption.
 GPG and chezmoi must be available for those tests; they do not exercise the owner's private key or prove native Linux/macOS behavior.
+Native-CA regressions exercise real Bash startup behavior and Windows registry-provider writes against disposable state; Windows tests never execute the CA apply hook against the owner's actual environment.
+Native Linux/macOS graphical-login behavior requires those platforms; rendering or parsing their configuration is not GUI activation proof.
 Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.

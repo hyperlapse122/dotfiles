@@ -1,0 +1,6 @@
+{{ if eq .chezmoi.os "windows" -}}
+@echo off
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ^
+ "& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{ includeTemplate "native-ca-windows" . | b64enc }}'))))"
+exit /b %errorlevel%
+{{ end -}}
