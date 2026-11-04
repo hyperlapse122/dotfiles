@@ -71,9 +71,9 @@ chezmoi init
 chezmoi apply
 ```
 
-The separate apply invokes the Windows WSL2 prerequisite hook.
-Plain `chezmoi update` applies internally without running `hooks.apply.pre`; do not use it for protected application.
-An existing configuration must be initialized before its first guarded apply; `apply --init` cannot protect the invocation that first adds the hook.
+Run `chezmoi init` before applying after configuration-template changes.
+This also removes the former repository-managed WSL2 apply gate and restores any hook it previously wrapped.
+An independently replaced user hook is preserved.
 Chezmoi's default pull uses autostash and rebase; existing custom update settings remain unchanged.
 These commands update dotfiles, not the installed chezmoi binary; use WinGet to maintain that installation.
 
@@ -135,13 +135,14 @@ It preserves unrelated configuration and configures `.ps1` execution with `-NoPr
 Chezmoi uses the built-in Windows PowerShell executable by absolute path, so initialization inside mise cannot pin a development-only interpreter.
 For an everyday global source, run this from the permanent checkout, not a temporary worktree.
 
-On Windows, `hooks.apply.pre` checks WSL2 prerequisites before managed files or apply scripts change the environment.
-It also runs for unchanged applies and `apply --dry-run`, including applies unrelated to Kubernetes.
-The check is read-only: it does not install WSL, enable Windows features, change the default distribution/version, or reboot.
-WSL2 must already be prepared; resolve the reported prerequisite outside this workflow and rerun apply.
-No Linux distribution or prior Rancher Desktop installation is required.
-Bootstrap, registration, and `mise install` remain usable without WSL2; Linux and macOS do not receive this gate.
-Existing apply-pre hooks run after a successful check, with their failures still stopping apply.
+On Windows, an always-run `run_before_05` script checks current WSL availability with `wsl.exe --version` and `wsl.exe --status`, plus the enabled state of Virtual Machine Platform (`VirtualMachinePlatform`) and Windows Hypervisor Platform (`HypervisorPlatform`).
+Virtual Machine Platform is required by WSL2; Windows Hypervisor Platform is a separate feature required by this repository's Windows environment.
+Disabled, missing, unknown, or unreadable prerequisite state stops apply before managed files and later apply scripts change the environment.
+The check is read-only: it does not enable features, install or update WSL, change the default WSL version, create a distribution, start Podman, or reboot.
+Complete missing prerequisites and any requested restart manually, then rerun apply.
+Bootstrap, initialization, and non-Windows applies do not run the check; `apply --dry-run` renders scripts without executing it.
+This validates prerequisite state, not VM startup or Kubernetes readiness.
+Podman, Kubernetes, and Compose provisioning remains manual through Podman Desktop.
 
 To preview future changes without applying them, run from the repository root:
 
@@ -153,7 +154,7 @@ Previewing externals can download and cache their pinned contents, but does not 
 
 ### Windows host applications
 
-On Windows, explicit application provisions Google Chrome, 1Password, 1Password CLI, system PowerShell, and Rancher Desktop through WinGet when the installation action is eligible.
+On Windows, explicit application provisions Google Chrome, 1Password, 1Password CLI, system PowerShell, and Podman Desktop through WinGet when the installation action is eligible.
 Use `mise run apply` from an initialized worktree, or the separate source-update and apply sequence above for a permanent checkout.
 Bootstrap and source registration do not install these applications.
 
@@ -163,7 +164,7 @@ The package list lives in `home/.chezmoidata/windows.yaml`:
 - 1Password: `AgileBits.1Password`
 - 1Password CLI: `AgileBits.1Password.CLI`
 - PowerShell: `Microsoft.PowerShell`
-- Rancher Desktop: `SUSE.RancherDesktop`
+- Podman Desktop: `RedHat.Podman-Desktop`
 
 Install or update Windows App Installer if WinGet is unavailable.
 Approve WinGet agreements and any UAC prompts when requested; package scope and installer behavior use WinGet's defaults.
@@ -181,30 +182,32 @@ The system installation is for everyday use outside mise; mise still manages the
 
 ### Windows Kubernetes environment
 
-Rancher Desktop provides the reusable local Kubernetes cluster and bundled command-line tools.
-The installer skips package dependencies for Rancher Desktop so WinGet cannot install or update its WSL dependency.
-After installation, apply enables only the built-in Kubernetes setting through `rdctl`; it leaves the container engine, Kubernetes version, and unrelated preferences unchanged.
-The application may open its GUI, but first-run modal dialogs are suppressed.
-Apply waits up to five minutes for the Kubernetes API and a Ready node; a startup error or readiness timeout fails apply without resetting the cluster.
+The repository installs Podman Desktop only.
+Follow [Podman Desktop's Windows onboarding](https://podman-desktop.io/docs/installation/windows-install) to complete WSL2 setup, install Podman, and create and start a Podman machine.
+Use its [Kubernetes setup guidance](https://podman-desktop.io/docs/kubernetes/creating-a-kube-cluster) to install kubectl and configure a local cluster, such as kind, and its [Compose setup guidance](https://podman-desktop.io/docs/compose/setting-up-compose) to install a Compose provider.
+For kind on WSL, follow the documented [rootful machine requirement](https://podman-desktop.io/docs/kind/configuring-podman-for-kind-on-windows).
+The repository does not automate these steps, change engine or cluster settings, or install Helm.
 
-Open a fresh PowerShell window after installation so the installer's PATH change is available, then check the explicit local context:
+Open a fresh PowerShell window after onboarding and check the tools and your explicit local context:
 
 ```powershell
-kubectl --context rancher-desktop cluster-info
-kubectl --context rancher-desktop get nodes
+podman info
+podman compose version
+kubectl config get-contexts
+$localContext = 'kind-kind-cluster' # Replace with the context created during onboarding.
+kubectl --context $localContext cluster-info
+kubectl --context $localContext get nodes
 ```
 
-Bundled kubectl may download its compatible client on first use, so network access or an existing cache is required.
-Use this context explicitly when other clusters are configured.
-Rancher Desktop also bundles Helm, but this repository does not separately install or configure it.
-kind is not installed.
-Application repositories own their charts, deployment, tests, and cleanup.
+Use the intended context explicitly when other clusters are configured.
+Application repositories manage Helm, their charts, deployment, tests, and test-resource cleanup.
+Ordinary dotfile applies do not start, stop, reset, or delete the manually configured environment.
+Cluster reset and deletion remain manual operations in Podman Desktop and can delete workloads and data.
 
-The cluster survives normal repeated applies.
-For a clean cluster, use Rancher Desktop **Troubleshooting → Reset Kubernetes** manually.
-This deletes all workloads and cluster configuration; deleting container images is optional.
-Do not use **Factory Reset** for ordinary test cleanup: it also removes Rancher Desktop settings.
-No reset is automated by this repository.
+Existing Rancher Desktop installations, clusters, and data are not automatically migrated or uninstalled.
+After updating this checkout, regenerate chezmoi configuration with `chezmoi init` (or `mise exec -- chezmoi --source . init` for this worktree) before applying to remove the old WSL2 gate.
+Only the unchanged repository-generated hook is removed; the hook it wrapped is restored, and independently replaced hooks are left intact.
+Once Podman is configured and any required workloads or data are migrated, uninstall Rancher Desktop manually if it is no longer needed.
 
 Docker Hub (`docker.io`) token authentication through the Windows keyring remains tracked in [issue #21](https://github.com/hyperlapse122/dotfiles/issues/21).
 This setup does not acquire tokens, configure registry credentials, or create Kubernetes image-pull secrets.

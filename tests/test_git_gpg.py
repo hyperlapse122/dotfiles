@@ -19,6 +19,7 @@ class GitGpgSettingsTest(unittest.TestCase):
             ".chezmoiexternals", "personal-app*.json", "dot_config",
             "run_onchange_after_10-personal-app-path.*", "run_onchange_after_20-harness-plugins.*",
             "harness-plugin*.json", "private_dot_omp", "run_after_40-github-auth.*",
+            "run_before_05-check-windows-virtualization.ps1.tmpl",
         ))
         self.home = self.root / "user home"
         self.home.mkdir()
