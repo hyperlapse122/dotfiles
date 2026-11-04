@@ -7,12 +7,16 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import types
 import unittest
 from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
 SPEC = importlib.util.spec_from_file_location("github_auth", REPO / "scripts/github-auth.py")
+
+import auth_common
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "Chezmoi required")
@@ -36,7 +40,7 @@ class GithubAuthApplyTest(unittest.TestCase):
         self.token = "dummy-repository-sensitive-token"
         self.store = {}
         self.writes = 0
-        real_private = self.auth.run_private
+        real_private = self.auth.common.run_private
 
         def private(argv, **kwargs):
             if argv[0] == str(self.gh):
@@ -45,20 +49,24 @@ class GithubAuthApplyTest(unittest.TestCase):
                 return self.store.get((host, user), "") + "\n"
             return real_private(argv, **kwargs)
 
-        def get(command, host, user, env):
-            return self.store.get((host, user))
+        def get(command, service, user, env):
+            self.assertIn(service, ("gh:github.com", "gh:gist.github.com"))
+            return self.store.get((service.removeprefix("gh:"), user))
 
-        def set_password(command, host, user, token, env):
-            self.store[(host, user)] = token
+        def set_password(command, service, user, token, env):
+            self.assertIn(service, ("gh:github.com", "gh:gist.github.com"))
+            self.store[(service.removeprefix("gh:"), user)] = token
             self.writes += 1
 
-        for name, replacement in (
-            ("require_encryption_policy", lambda *args: None),
-            ("read_secrets", lambda *args: {"github": {"token": self.token}}),
-            ("github_login", lambda token: "owner"),
-            ("native_get", get), ("native_set", set_password), ("run_private", private),
+        for module, name, replacement in (
+            (self.auth.common, "require_encryption_policy", lambda *args: None),
+            (self.auth.common, "read_secrets", lambda *args: {"github": {"token": self.token}}),
+            (self.auth, "github_login", lambda token: "owner"),
+            (self.auth.common, "native_get", get),
+            (self.auth.common, "native_set", set_password),
+            (self.auth.common, "run_private", private),
         ):
-            patcher = mock.patch.object(self.auth, name, side_effect=replacement)
+            patcher = mock.patch.object(module, name, side_effect=replacement)
             patcher.start()
             self.addCleanup(patcher.stop)
         # This seam represents an installed tool; no native backend is invoked.
@@ -125,19 +133,19 @@ class GithubAuthApplyTest(unittest.TestCase):
         self.assertEqual(expanded.read_text(encoding="utf-8"), untouched)
 
     def test_denied_write_cannot_publish_plaintext_fallback(self):
-        with mock.patch.object(self.auth, "native_set", side_effect=self.auth.AuthError("denied")):
-            with self.assertRaises(self.auth.AuthError):
+        with mock.patch.object(self.auth.common, "native_set", side_effect=self.auth.common.AuthError("denied")):
+            with self.assertRaises(self.auth.common.AuthError):
                 self.apply()
         self.assertFalse(self.metadata.exists())
         self.assertEqual(self.store, {})
 
     def test_failure_after_initial_write_does_not_publish_metadata(self):
-        def fail_after_first(command, host, user, token, env):
+        def fail_after_first(command, service, user, token, env):
             if self.store:
-                raise self.auth.AuthError("denied")
-            self.store[(host, user)] = token
-        with mock.patch.object(self.auth, "native_set", side_effect=fail_after_first):
-            with self.assertRaises(self.auth.AuthError):
+                raise self.auth.common.AuthError("denied")
+            self.store[(service.removeprefix("gh:"), user)] = token
+        with mock.patch.object(self.auth.common, "native_set", side_effect=fail_after_first):
+            with self.assertRaises(self.auth.common.AuthError):
                 self.apply()
         self.assertFalse(self.metadata.exists())
 
@@ -145,8 +153,8 @@ class GithubAuthApplyTest(unittest.TestCase):
         self.metadata.parent.mkdir()
         self.metadata.write_text('{"unrelated": {"user": "other"}}', encoding="utf-8")
         original = self.metadata.read_bytes()
-        with mock.patch.object(self.auth, "github_login", side_effect=self.auth.AuthError("identity failed")):
-            with self.assertRaises(self.auth.AuthError):
+        with mock.patch.object(self.auth, "github_login", side_effect=self.auth.common.AuthError("identity failed")):
+            with self.assertRaises(self.auth.common.AuthError):
                 self.apply()
         self.assertEqual(self.metadata.read_bytes(), original)
         self.assertEqual(self.store, {})
@@ -171,12 +179,18 @@ class NativeAuthFailureTest(unittest.TestCase):
         SPEC.loader.exec_module(auth)
         diagnostics = io.StringIO()
         with contextlib.redirect_stderr(diagnostics):
-            output = auth.run_private([
+            output = auth.common.run_private([
                 sys.executable, "-c",
                 "import os; os.write(1, b'valid\\n'); os.write(2, b'\\xff')",
             ])
         self.assertEqual(output, "valid\n")
         self.assertEqual(diagnostics.getvalue(), "")
+
+    def test_private_command_uses_requested_working_directory(self):
+        with tempfile.TemporaryDirectory(prefix="private command ") as scratch:
+            output = auth_common.run_private(
+                [sys.executable, "-c", "import os; print(os.getcwd())"], cwd=scratch)
+            self.assertEqual(Path(output.strip()).resolve(), Path(scratch).resolve())
 
     def test_diagnostics_hide_chained_credential_messages(self):
         spec = importlib.util.spec_from_file_location(
@@ -194,6 +208,61 @@ class NativeAuthFailureTest(unittest.TestCase):
         self.assertNotIn(secret, summary)
         self.assertIn("RuntimeError", summary)
         self.assertIn("ValueError", summary)
+
+
+class CommonMetadataPublicationTest(unittest.TestCase):
+    def test_mapping_publication_preserves_content_and_unchanged_file(self):
+        with tempfile.TemporaryDirectory(prefix="metadata publication ") as scratch:
+            path = Path(scratch) / "config" / "hosts.yml"
+            document = {"unrelated.invalid": {"user": "other"}, "nested": [True, None]}
+            auth_common.publish_mapping(path, document)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), document)
+            before = path.stat().st_mtime_ns
+            auth_common.publish_mapping(path, document)
+            self.assertEqual(path.stat().st_mtime_ns, before)
+            self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_text_publication_failure_keeps_previous_file_and_hides_diagnostics(self):
+        with tempfile.TemporaryDirectory(prefix="metadata publication ") as scratch:
+            path = Path(scratch) / "private.gitconfig"
+            path.write_text("previous metadata\n", encoding="utf-8")
+            with mock.patch.object(auth_common.os, "replace",
+                                   side_effect=PermissionError("confidential-child-detail")):
+                with self.assertRaises(auth_common.AuthError) as caught:
+                    auth_common.publish_text(path, "replacement metadata\n")
+            self.assertNotIn("confidential-child-detail", str(caught.exception))
+            self.assertEqual(path.read_text(encoding="utf-8"), "previous metadata\n")
+            self.assertEqual(list(path.parent.iterdir()), [path])
+
+
+class NativeServiceIdentityTest(unittest.TestCase):
+    def test_unsafe_identities_are_rejected_before_native_access(self):
+        package = types.ModuleType("keyring")
+        api = types.ModuleType("keyring.backend")
+        api.KeyringBackend = object
+        errors = types.ModuleType("keyring.errors")
+        errors.KeyringError = type("KeyringError", (Exception,), {})
+        errors.PasswordDeleteError = type("PasswordDeleteError", (Exception,), {})
+        spec = importlib.util.spec_from_file_location(
+            "native_service_identity", REPO / "scripts/cli_native.py")
+        native = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(sys.modules, {
+                "keyring": package, "keyring.backend": api, "keyring.errors": errors}):
+            spec.loader.exec_module(native)
+        backend = native.Keyring()
+        with (mock.patch.object(native.sys, "platform", "linux"),
+              mock.patch.object(backend, "_linux") as store):
+            for service, user in (
+                    ("gh:unrelated.invalid", ""), ("glab::token", ""),
+                    ("glab:bad/host:token", ""), ("glab:bad host:token", ""),
+                    ("glab:bad\nhost:token", ""), ("glab:-bad.invalid:token", ""),
+                    ("glab:bad..invalid:token", ""), ("glab:host:443:token", ""),
+                    ("glab:" + "a" * 64 + ".invalid:token", ""),
+                    ("glab:gitlab.example.invalid:token", "owner")):
+                with self.subTest(service=service, user=user):
+                    with self.assertRaises(errors.KeyringError):
+                        backend.get_password(service, user)
+            store.assert_not_called()
 
 
 if __name__ == "__main__":

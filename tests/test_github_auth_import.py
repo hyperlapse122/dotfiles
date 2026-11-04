@@ -15,6 +15,7 @@ from test_secrets import GPG, OWNER
 
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
 SPEC = importlib.util.spec_from_file_location("github_auth_import", REPO / "scripts/github-auth.py")
 
 
@@ -116,7 +117,7 @@ class GithubAuthImportTest(unittest.TestCase):
 
     def assert_document(self, expected):
         # A fixed assertion label prevents unittest from printing secret-bearing documents.
-        actual = self.auth.read_secrets(self.source, self.config)
+        actual = self.auth.common.read_secrets(self.source, self.config)
         self.assertTrue(actual == expected, "decrypted document differs")
 
     def assert_retained(self):
@@ -139,18 +140,20 @@ class GithubAuthImportTest(unittest.TestCase):
         self.assertNotIn(self.token, result.stdout + result.stderr)
         self.assert_document(self.expected())
         self.assertFalse(self.token_file.exists())
+        self.assertEqual(list(self.ciphertext.parent.iterdir()), [self.ciphertext],
+                         "verified publication left a staging or recovery copy")
         for path in self.ciphertext.parent.iterdir():
             self.assertNotIn(self.token.encode(), path.read_bytes())
 
     def test_runtime_child_arguments_and_files_never_contain_token(self):
-        original = self.auth.run_private
+        original = self.auth.common.run_private
         arguments = []
 
         def observe(argv, **kwargs):
             arguments.append(tuple(str(value) for value in argv))
             return original(argv, **kwargs)
 
-        with mock.patch.object(self.auth, "run_private", side_effect=observe):
+        with mock.patch.object(self.auth.common, "run_private", side_effect=observe):
             self.run_import()
         self.assertTrue(all(self.token not in value for argv in arguments for value in argv),
                         "secret appeared in child arguments")
@@ -189,19 +192,19 @@ class GithubAuthImportTest(unittest.TestCase):
         for value in (b"", b"\xef\xbb\xbf\r\n", b"first\nsecond", b"first\n\n", b"\xff"):
             with self.subTest(value_length=len(value)):
                 self.token_file.write_bytes(value)
-                with self.assertRaises(self.auth.AuthError):
+                with self.assertRaises(self.auth.common.AuthError):
                     self.run_import()
                 self.assert_retained()
 
     def test_ciphertext_cannot_be_used_as_deletable_input(self):
-        with self.assertRaises(self.auth.AuthError):
+        with self.assertRaises(self.auth.common.AuthError):
             self.auth.import_token(self.source, self.config, self.ciphertext)
         self.assert_retained()
 
     def test_missing_private_key_retains_input_and_ciphertext(self):
         self.stop_agent()
         shutil.rmtree(self.gpg_home / "private-keys-v1.d")
-        with self.assertRaises(self.auth.AuthError):
+        with self.assertRaises(self.auth.common.AuthError):
             self.run_import()
         self.assert_retained()
 
@@ -209,13 +212,13 @@ class GithubAuthImportTest(unittest.TestCase):
         self.config.write_text('[data]\ngpgProgram = "' + Path(GPG).as_posix() + '"\n',
                                encoding="utf-8")
         before = self.config.read_bytes()
-        with self.assertRaises(self.auth.AuthError):
+        with self.assertRaises(self.auth.common.AuthError):
             self.run_import()
         self.assertTrue(self.config.read_bytes() == before, "config was rewritten")
         self.assert_retained()
 
     def test_child_encryption_failure_is_value_free_and_retains_input(self):
-        original = self.auth.run_private
+        original = self.auth.common.run_private
 
         def fail_encrypt(argv, **kwargs):
             if "--encrypt" in argv:
@@ -226,7 +229,7 @@ class GithubAuthImportTest(unittest.TestCase):
             return original(argv, **kwargs)
 
         output = io.StringIO()
-        with mock.patch.object(self.auth, "run_private", side_effect=fail_encrypt), \
+        with mock.patch.object(self.auth.common, "run_private", side_effect=fail_encrypt), \
                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             result = self.auth.main(["import", "--source", str(self.source),
                                      "--config", str(self.config),
@@ -237,36 +240,43 @@ class GithubAuthImportTest(unittest.TestCase):
         self.assert_retained()
 
     def test_staged_comparison_failure_retains_original(self):
-        original = self.auth.read_secrets
+        original = self.auth.common.read_secrets
 
         def mismatch(source, config=None, *, ciphertext=None):
             if ciphertext is not None:
                 return {"github": {"token": "dummy-different"}}
             return original(source, config)
 
-        with mock.patch.object(self.auth, "read_secrets", side_effect=mismatch):
-            with self.assertRaises(self.auth.AuthError):
+        with mock.patch.object(self.auth.common, "read_secrets", side_effect=mismatch):
+            with self.assertRaises(self.auth.common.AuthError):
                 self.run_import()
         self.assert_retained()
 
     def test_atomic_publication_failure_retains_original(self):
-        with mock.patch.object(self.auth.os, "replace", side_effect=PermissionError(self.token)):
-            with self.assertRaises(self.auth.AuthError) as caught:
+        with mock.patch.object(self.auth.common.os, "replace", side_effect=PermissionError(self.token)):
+            with self.assertRaises(self.auth.common.AuthError) as caught:
                 self.run_import()
         self.assertNotIn(self.token, str(caught.exception))
         self.assert_retained()
 
     def test_final_ciphertext_is_reread_before_input_deletion(self):
-        original = self.auth.os.replace
+        original = self.auth.common.os.replace
 
         def corrupt_after_publish(source, target):
             original(source, target)
             Path(target).write_text("not encrypted", encoding="utf-8")
 
-        with mock.patch.object(self.auth.os, "replace", side_effect=corrupt_after_publish):
-            with self.assertRaises(self.auth.AuthError):
+        with mock.patch.object(self.auth.common.os, "replace", side_effect=corrupt_after_publish):
+            with self.assertRaises(self.auth.common.AuthError):
                 self.run_import()
         self.assertTrue(self.token_file.exists())
+        recovery = [path for path in self.ciphertext.parent.iterdir()
+                    if path.name.startswith(".api-tokens-recovery-")]
+        self.assertEqual(len(recovery), 1, "prior ciphertext recovery copy was not retained")
+        self.assertTrue(recovery[0].read_bytes() == self.original,
+                        "recovery copy does not contain the prior ciphertext")
+        self.assertTrue(self.token.encode() not in recovery[0].read_bytes(),
+                        "recovery copy contains plaintext input")
 
     def test_input_unlink_failure_keeps_verified_ciphertext_and_reports_cleanup(self):
         original = Path.unlink
@@ -277,12 +287,14 @@ class GithubAuthImportTest(unittest.TestCase):
             return original(path, *args, **kwargs)
 
         with mock.patch.object(Path, "unlink", new=fail_input):
-            with self.assertRaises(self.auth.AuthError) as caught:
+            with self.assertRaises(self.auth.common.AuthError) as caught:
                 self.run_import()
         self.assertNotIn(self.token, str(caught.exception))
         self.assertIn("verified", str(caught.exception).lower())
         self.assertTrue(self.token_file.exists())
         self.assert_document(self.expected())
+        self.assertEqual(list(self.ciphertext.parent.iterdir()), [self.ciphertext],
+                         "verified publication left a staging or recovery copy")
 
 
 if __name__ == "__main__":
