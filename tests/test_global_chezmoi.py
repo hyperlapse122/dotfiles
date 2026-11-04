@@ -47,7 +47,7 @@ class GlobalChezmoiTest(unittest.TestCase):
         })
         self.git("init", "--bare", str(self.remote))
         self.git("clone", str(self.remote), str(self.publisher))
-        for name in (".chezmoiroot",):
+        for name in (".chezmoiroot", ".chezmoi-bootstrap.toml", "configure-chezmoi.ps1"):
             shutil.copy2(self.repo / name, self.publisher / name)
         shutil.copytree(self.repo / "home", self.publisher / "home")
         (self.publisher / "home" / "dot_global-proof").write_text("first", encoding="utf-8")
@@ -68,9 +68,10 @@ class GlobalChezmoiTest(unittest.TestCase):
         self.git("-C", str(self.publisher), "push", "origin", "HEAD")
 
     def register(self, source=None):
+        arguments = ["-Source", str(source)] if source is not None else []
         return subprocess.run(
             [str(self.shell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-             str(self.repo / "configure-chezmoi.ps1"), "-Source", str(source or self.checkout)],
+             str(self.checkout / "configure-chezmoi.ps1"), *arguments],
             cwd=self.outside, env=self.env, capture_output=True, text=True,
             encoding="utf-8", errors="backslashreplace", timeout=60,
         )
@@ -175,12 +176,12 @@ class GlobalChezmoiTest(unittest.TestCase):
         self.assertFalse(self.config.exists())
 
     def test_home_shorthand_preserves_same_source_configuration(self):
-        source = self.home / "src" / "dotfiles"
-        source.parent.mkdir()
+        source = self.home / "src" / "github.com" / "hyperlapse122" / "dotfiles"
+        source.parent.mkdir(parents=True)
         self.checkout.rename(source)
         self.checkout = source
         self.config.write_text(
-            'sourceDir = "~/src/dotfiles"\nworkingTree = "~/src/dotfiles"\n[data]\nkeep = "preserved"\n',
+            'sourceDir = "~/src/github.com/hyperlapse122/dotfiles"\nworkingTree = "~/src/github.com/hyperlapse122/dotfiles"\n[data]\nkeep = "preserved"\n',
             encoding="utf-8",
         )
         result = self.register()

@@ -30,14 +30,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 The execution-policy option applies only to that child process; it does not change a persistent Windows policy.
 Do not bypass organizational policy if it blocks the script.
 Approve WinGet source/package agreements and any UAC prompts for the missing prerequisites.
-The script installs missing Git, mise, and native Windows chezmoi (`twpayne.chezmoi`) through WinGet, clones this repository to `$HOME\src\dotfiles`, and invokes the existing mise preparation workflow.
+The script installs missing Git, mise, and native Windows chezmoi (`twpayne.chezmoi`) through WinGet, clones this repository to `$HOME\src\github.com\hyperlapse122\dotfiles` (`~/src/github.com/hyperlapse122/dotfiles`, matching the ghq layout), and invokes the existing mise preparation workflow.
 It checks preparation explicitly because mise can report a failed postinstall hook as a warning.
 It does not apply personal settings, register a global chezmoi source, or modify shell profiles.
 
 To select another checkout location, pass `-Destination`:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap -Destination 'C:\src\dotfiles'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap -Destination 'C:\src\github.com\hyperlapse122\dotfiles'
 ```
 
 An existing destination must be this repository's Git root with origin `https://github.com/hyperlapse122/dotfiles.git`.
@@ -49,10 +49,10 @@ After completion, open a new PowerShell window so it inherits the installers' PA
 Register the permanent checkout explicitly, using your custom destination if you supplied one:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\src\dotfiles\configure-chezmoi.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\src\github.com\hyperlapse122\dotfiles\configure-chezmoi.ps1"
 ```
 
-The registration script defaults to its own checkout; `-Source 'C:\src\dotfiles'` selects another permanent checkout.
+The registration script defaults to its own checkout; `-Source 'C:\src\github.com\hyperlapse122\dotfiles'` selects another permanent checkout.
 It rejects temporary linked worktrees and configurations pointing to another source.
 It creates TOML configuration or preserves unrelated values in same-source TOML; other existing formats require explicit migration and are left untouched.
 Registration does not apply managed home files.

@@ -1,7 +1,7 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [string] $Destination = (Join-Path $env:USERPROFILE 'src\dotfiles')
+    [string] $Destination = (Join-Path $env:USERPROFILE 'src\github.com\hyperlapse122\dotfiles')
 )
 
 $ErrorActionPreference = 'Stop'

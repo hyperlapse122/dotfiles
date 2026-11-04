@@ -10,6 +10,11 @@ if (-not $PSBoundParameters.ContainsKey('Source')) {
     $Source = $PSScriptRoot
 }
 
+# Windows PowerShell 5.1 initializes PSScriptRoot after -File parameter defaults.
+if (-not $PSBoundParameters.ContainsKey('Source')) {
+    $Source = $PSScriptRoot
+}
+
 function Invoke-Checked {
     param([string] $Command, [string[]] $Arguments, [string] $Step)
     & $Command @Arguments
