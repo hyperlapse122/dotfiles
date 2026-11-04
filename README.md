@@ -4,6 +4,58 @@ Personal environment configuration for Windows, Linux, and macOS.
 Worktree preparation and applying personal settings are separate operations.
 See [STRATEGY.md](STRATEGY.md) for the repository's scope.
 
+## Bootstrap a new Windows PC
+
+Start in Windows PowerShell 5.1 or newer on Windows 10 1809 or newer, including Windows 11.
+Git, mise, and PowerShell 7 do not need to be installed first.
+Internet access and permission to approve installer prompts are required.
+WinGet is supplied by Windows App Installer; if it is missing, install or update [App Installer](https://apps.microsoft.com/detail/9nblggh4nns1) first.
+The script requests WinGet registration when App Installer is present but its command is not registered yet.
+
+Download the entry point from this repository and inspect it before running it:
+
+```powershell
+$bootstrap = Join-Path $env:TEMP 'dotfiles-bootstrap.ps1'
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/hyperlapse122/dotfiles/main/bootstrap.ps1' -OutFile $bootstrap
+notepad $bootstrap
+```
+
+After reviewing it, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
+```
+
+The execution-policy option applies only to that child process; it does not change a persistent Windows policy.
+Do not bypass organizational policy if it blocks the script.
+Approve WinGet source/package agreements and any UAC prompts for the missing prerequisites.
+The script installs Git and mise through WinGet, clones this repository to `$HOME\src\dotfiles`, and invokes the existing mise preparation workflow.
+It checks preparation explicitly because mise can report a failed postinstall hook as a warning.
+It does not apply personal settings or modify shell profiles.
+
+To select another checkout location, pass `-Destination`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap -Destination 'C:\src\dotfiles'
+```
+
+An existing destination must be this repository's Git root with origin `https://github.com/hyperlapse122/dotfiles.git`.
+Reruns reuse that checkout without pulling, resetting, switching branches, or discarding local files.
+An unrelated directory is rejected rather than replaced.
+Failures return a nonzero exit status and identify the failing step; resolve the reported problem and rerun the same command.
+
+After completion, open a new PowerShell window so it inherits the installers' PATH updates.
+To apply personal configuration deliberately, enter the selected checkout and run the separate apply operation:
+
+```powershell
+Set-Location "$HOME\src\dotfiles"
+mise run apply
+```
+
+The current source contains no concrete personal settings, so reaching this command completes the initial bootstrap scope.
+GUI applications, Git/GPG personal configuration, secrets, and organizational sign-in are not configured by this entry point.
+
 ## Prepare a worktree
 
 Git and mise must already be installed.
@@ -64,5 +116,7 @@ After installing the tools, run:
 mise exec -- python -m unittest discover -s tests
 ```
 
-The regression test initializes twice with an isolated user home and an existing chezmoi config containing mutating hooks.
+The bootstrap isolation test initializes twice with an isolated user home and an existing chezmoi config containing mutating hooks.
 It checks that preparation does not execute those hooks or alter the existing personal setting and config.
+On Windows, entry-point regressions also exercise Windows PowerShell, repeated preparation, destination/origin rejection, and native-command failure propagation.
+These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.
