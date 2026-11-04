@@ -17,6 +17,9 @@ Before/after scripts check the effective GPG home and reload the agent only duri
 The Windows app script uses WinGet after the GPG-home check and runs on every explicit apply to restore missing apps without requesting upgrades of existing installations.
 Its package list includes Chrome, 1Password, and 1Password CLI; account sign-in and app preferences are not managed.
 Keys and trust databases are not source-state entries.
+
+The source also declares personal CLI applications, their generated release pins, and apply-only PATH integration.
+Place managed configuration here using chezmoi's source naming conventions.
 Use scripts only for actions that cannot be represented as managed files.
 Native-CA startup modify templates share `.chezmoitemplates/native-ca-shell` and preserve content outside their marked block.
 Optional Bash login files are selected only when they already exist at the destination.
@@ -36,6 +39,21 @@ The recipient in `.chezmoidata/gpg.yaml` is authoritative during explicit initia
 The configuration template replaces recipient-affecting options, including inherited symmetric mode and additional recipients.
 It uses the shared GPG executable selection, but ignores personal `gpg.conf` options for these calls to prevent implicit extra recipients.
 Private-key access remains GPG's responsibility, without source-level hardware checks.
+
+## Personal application data
+
+`.chezmoidata/personal-apps.json` owns the `personalApps` declarations: a GitHub repository, command name, and asset name for each supported Go OS/architecture key.
+Use `amd64` for x64 hosts and `darwin` for macOS.
+`.chezmoidata/personal-app-lock.json` owns the generated `personalAppLocks` records with the release tag and each target's URL and SHA-256.
+Chezmoi merges both JSON files at the data root; filenames do not create namespaces.
+
+`.chezmoiexternals/personal-apps.toml.tmpl` renders the selected raw-file downloads from those records.
+It never performs release discovery.
+Regenerate pins with `mise exec -- python scripts/update-personal-app-lock.py` from the repository root rather than editing them manually.
+
+The `run_after_10-personal-app-path` templates run only during explicit application and render empty on the other OS family.
+Windows updates the user PATH; POSIX startup files source `.config/dotfiles/path.sh` without replacing existing profile contents.
+Keep executables declarative: scripts are for PATH integration, not downloading or installing the application payload.
 
 ## Script ordering
 

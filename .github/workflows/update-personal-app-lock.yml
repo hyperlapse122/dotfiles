@@ -1,0 +1,47 @@
+name: Update personal application pins
+
+on:
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: update-personal-app-lock
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+      - name: Refresh the complete pin set
+        run: mise exec -- python scripts/update-personal-app-lock.py
+      # GITHUB_TOKEN pushes do not start push workflows: validate the new lock here.
+      - name: Validate deterministic lock and installation contracts
+        run: mise exec -- python -m unittest discover -s tests
+      - name: Run the newly pinned native executable
+        run: mise exec -- python tests/smoke_personal_apps.py --expected-target linux-amd64
+      - name: Publish only changed generated pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock=home/.chezmoidata/personal-app-lock.json
+          if git diff --quiet -- "$lock"; then
+            echo "Personal application pins are unchanged; no commit needed."
+            exit 0
+          fi
+          git add -- "$lock"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'chore: refresh personal application pins' -- "$lock"
+          git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
