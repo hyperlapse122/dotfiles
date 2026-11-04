@@ -1,12 +1,11 @@
-"""Resolve declared GitHub release assets through gh and update chezmoi pins."""
-
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import tempfile
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
+from urllib.request import urlopen
 
 
 def github_release(repository):
@@ -15,6 +14,76 @@ def github_release(repository):
         check=True, capture_output=True, text=True, encoding="utf-8", timeout=60,
     )
     return json.loads(result.stdout)
+
+
+def gitlab_release(repository):
+    url = f"https://gitlab.com/api/v4/projects/{quote(repository, safe='')}/releases/permalink/latest"
+    with urlopen(url, timeout=60) as response:
+        return json.loads(response.read())
+
+
+def gitlab_checksums(url):
+    with urlopen(url, timeout=60) as response:
+        return response.read().decode("utf-8")
+
+
+def release_asset_url(source, repository, tag, name):
+    if source == "gitlab":
+        return (
+            f"https://gitlab.com/{repository}/-/releases/"
+            f"{quote(tag, safe='')}/downloads/{quote(name, safe='')}"
+        )
+    return (
+        f"https://github.com/{repository}/releases/download/"
+        f"{quote(tag, safe='')}/{quote(name, safe='')}"
+    )
+
+
+def normalize_gitlab_release(application, release, fetch_checksums):
+    repository = application["repository"]
+    tag = release["tag_name"]
+    if release.get("upcoming_release") or not re.fullmatch(r"v?\d+\.\d+\.\d+", tag or ""):
+        raise ValueError(f"{repository}: expected a published stable release")
+    version = tag.removeprefix("v")
+    links = release["assets"]["links"]
+    names = [expand_version(target["asset"], version) for target in application["targets"].values()]
+    assets = {}
+    for name in dict.fromkeys([*names, "checksums.txt"]):
+        matches = [link for link in links if link.get("name") == name]
+        if len(matches) != 1:
+            raise ValueError(f"{repository} {tag}: expected one asset named {name}")
+        link = matches[0]
+        expected_url = release_asset_url("gitlab", repository, tag, name)
+        if link.get("direct_asset_url") != expected_url:
+            raise ValueError(f"{repository} {tag}: unexpected release URL for {name}")
+        # GitLab's official release redirect points into the project's package registry.
+        package_url = urlsplit(link.get("url") or "")
+        expected_path = (
+            f"/api/v4/projects/{repository}/packages/generic/"
+            f"{application['command']}/{version}/{name}"
+        )
+        if (
+            package_url.scheme != "https" or package_url.netloc != "gitlab.com"
+            or unquote(package_url.path) != expected_path or package_url.query or package_url.fragment
+        ):
+            raise ValueError(f"{repository} {tag}: unexpected package URL for {name}")
+        assets[name] = {"name": name, "browser_download_url": expected_url, "state": "uploaded"}
+
+    checksums = {}
+    manifest = fetch_checksums(assets["checksums.txt"]["browser_download_url"])
+    for line in manifest.splitlines():
+        if not line.strip():
+            continue
+        match = re.fullmatch(r"([0-9a-fA-F]{64}) [ *](\S+)", line)
+        if not match or match[2] in checksums:
+            raise ValueError(f"{repository} {tag}: malformed or duplicate SHA-256 checksum")
+        checksums[match[2]] = match[1].lower()
+    normalized = []
+    for name in dict.fromkeys(names):
+        if name not in checksums:
+            raise ValueError(f"{repository} {tag}: missing SHA-256 digest for {name}")
+        normalized.append({**assets[name], "digest": "sha256:" + checksums[name]})
+    return {"tag_name": tag, "assets": normalized}
 
 
 def expand_version(pattern, version):
@@ -50,10 +119,7 @@ def resolve_application(application, release):
         digest = asset.get("digest") or ""
         if not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
             raise ValueError(f"{repository} {tag}: missing SHA-256 digest for {name}")
-        expected_url = (
-            f"https://github.com/{repository}/releases/download/"
-            f"{quote(tag, safe='')}/{quote(name, safe='')}"
-        )
+        expected_url = release_asset_url(application.get("source", "github"), repository, tag, name)
         if asset["browser_download_url"] != expected_url:
             raise ValueError(f"{repository} {tag}: unexpected release URL for {name}")
         if asset.get("state") != "uploaded":
@@ -62,15 +128,24 @@ def resolve_application(application, release):
     return {"tag": tag, "targets": targets}
 
 
-def update_lock(root, fetch_release=github_release):
+def update_lock(
+    root, fetch_release=github_release, *, fetch_gitlab_release=gitlab_release, fetch_checksums=gitlab_checksums,
+):
     data_dir = root / "home" / ".chezmoidata"
     applications = json.loads((data_dir / "personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
     resolved = {}
     for name, application in applications.items():
+        source = application.get("source", "github")
+        if source not in ("github", "gitlab"):
+            raise ValueError(f"{name}: unsupported release source {source}")
         repository = application["repository"]
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
-            raise ValueError(f"{name}: expected a GitHub owner/repository")
-        resolved[name] = resolve_application(application, fetch_release(repository))
+            raise ValueError(f"{name}: expected an owner/repository")
+        if source == "gitlab":
+            release = normalize_gitlab_release(application, fetch_gitlab_release(repository), fetch_checksums)
+        else:
+            release = fetch_release(repository)
+        resolved[name] = resolve_application(application, release)
     lock = {"personalAppLocks": resolved}
     lock_path = data_dir / "personal-app-lock.json"
     if lock_path.exists() and json.loads(lock_path.read_text(encoding="utf-8")) == lock:

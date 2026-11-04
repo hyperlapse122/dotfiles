@@ -4,6 +4,8 @@
 {{- $ghPath := joinPath .chezmoi.destDir ".local" "bin" $ghName | replace "\\" "/" -}}
 {{- $ghShell := printf "'%s'" ($ghPath | replace "'" "'\"'\"'") -}}
 {{- $ghHelper := printf "!%s auth git-credential" $ghShell -}}
+[include]
+    path = {{ joinPath .chezmoi.destDir ".local" "share" "dotfiles" "gitlab.gitconfig" | replace "\\" "/" | quote }}
 [user]
     name = {{ .git.name | quote }}
     email = {{ .git.email | quote }}

@@ -79,7 +79,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.base_url = "http://127.0.0.1:" + str(self.server.server_port)
         self.apps = json.loads((self.source / ".chezmoidata" / "personal-apps.json").read_text(encoding="utf-8"))
         self.archive_apps = {
-            name: self.apps["personalApps"][name] for name in ("gh", "ghq")
+            name: self.apps["personalApps"][name] for name in ("gh", "ghq", "glab")
         }
         # Raw-file fixtures declare only their local application; no public downloads.
         self.apps["personalApps"] = {"omp": self.apps["personalApps"]["omp"]}
@@ -107,7 +107,7 @@ class PersonalAppsTest(unittest.TestCase):
             json.dumps(self.apps), encoding="utf-8")
 
     def add_archive(self, format, *, path="/gh", member="release/bin/gh", payload=b"fixture gh\n",
-                    checksum=None, pin_member=None):
+                    checksum=None, pin_member=None, command="gh"):
         archive = io.BytesIO()
         if format == "zip":
             with zipfile.ZipFile(archive, "w") as stream:
@@ -121,13 +121,13 @@ class PersonalAppsTest(unittest.TestCase):
                     stream.addfile(info, io.BytesIO(content))
         self.payloads[path] = archive.getvalue()
         targets = self.apps["personalApps"]["omp"]["targets"]
-        self.apps["personalApps"]["gh"] = {
-            "command": "gh", "repository": "cli/cli",
+        self.apps["personalApps"][command] = {
+            **self.archive_apps[command],
             "targets": {target: {
                 "asset": "fixture", "kind": "archive-file", "format": format, "path": member,
             } for target in targets},
         }
-        self.locks["personalAppLocks"]["gh"] = {
+        self.locks["personalAppLocks"][command] = {
             "tag": "fixture", "targets": {target: {
                 "url": self.base_url + path, "sha256": checksum or hashlib.sha256(self.payloads[path]).hexdigest(),
                 "kind": "archive-file", "format": format, "path": pin_member or member,
@@ -135,7 +135,7 @@ class PersonalAppsTest(unittest.TestCase):
         }
         self.write_apps()
         self.write_locks()
-        return self.home / ".local/bin" / ("gh.exe" if os.name == "nt" else "gh")
+        return self.home / ".local/bin" / (command + ".exe" if os.name == "nt" else command)
 
     def write_locks(self):
         (self.source / ".chezmoidata" / "personal-app-lock.json").write_text(
@@ -256,6 +256,27 @@ class PersonalAppsTest(unittest.TestCase):
                 requests = list(self.requests)
                 self.apply()
                 binary.write_bytes(b"drift")
+                self.apply()
+                self.assertEqual(binary.read_bytes(), payload)
+                self.assertEqual(self.requests, requests)
+
+    def test_gitlab_archives_use_existing_installer_and_stable_command_path(self):
+        for format in ("tar.gz", "zip"):
+            with self.subTest(format=format):
+                member = "bin/glab.exe" if os.name == "nt" else "bin/glab"
+                payload = ("fixture glab " + format + "\n").encode()
+                binary = self.add_archive(
+                    format, path="/glab-" + format, member=member, payload=payload, command="glab",
+                )
+                self.apply()
+                self.assertEqual(binary.read_bytes(), payload)
+                self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+                if os.name != "nt":
+                    self.assertTrue(os.access(binary, os.X_OK))
+                self.assertFalse((self.home / "bin").exists())
+                requests = list(self.requests)
+                self.apply()
+                binary.write_bytes(b"local glab drift")
                 self.apply()
                 self.assertEqual(binary.read_bytes(), payload)
                 self.assertEqual(self.requests, requests)

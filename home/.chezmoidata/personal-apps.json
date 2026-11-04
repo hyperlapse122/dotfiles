@@ -84,6 +84,43 @@
         }
       }
     },
+    "glab": {
+      "command": "glab",
+      "source": "gitlab",
+      "repository": "gitlab-org/cli",
+      "targets": {
+        "darwin-arm64": {
+          "asset": "glab_{version}_darwin_arm64.tar.gz",
+          "kind": "archive-file",
+          "format": "tar.gz",
+          "path": "bin/glab"
+        },
+        "linux-amd64": {
+          "asset": "glab_{version}_linux_amd64.tar.gz",
+          "kind": "archive-file",
+          "format": "tar.gz",
+          "path": "bin/glab"
+        },
+        "linux-arm64": {
+          "asset": "glab_{version}_linux_arm64.tar.gz",
+          "kind": "archive-file",
+          "format": "tar.gz",
+          "path": "bin/glab"
+        },
+        "windows-amd64": {
+          "asset": "glab_{version}_windows_amd64.zip",
+          "kind": "archive-file",
+          "format": "zip",
+          "path": "bin/glab.exe"
+        },
+        "windows-arm64": {
+          "asset": "glab_{version}_windows_arm64.zip",
+          "kind": "archive-file",
+          "format": "zip",
+          "path": "bin/glab.exe"
+        }
+      }
+    },
     "omp": {
       "command": "omp",
       "repository": "can1357/oh-my-pi",
