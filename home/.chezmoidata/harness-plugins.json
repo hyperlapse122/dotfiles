@@ -1,0 +1,12 @@
+{
+  "harnessPlugins": {
+    "compound-engineering": {
+      "repository": "EveryInc/compound-engineering-plugin",
+      "tagPrefix": "compound-engineering-v",
+      "omp": {
+        "marketplace": "compound-engineering-plugin",
+        "plugin": "compound-engineering"
+      }
+    }
+  }
+}
