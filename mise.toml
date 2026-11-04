@@ -1,0 +1,9 @@
+[settings]
+lockfile = true
+
+[tools]
+ast-grep = "latest"
+gh = "latest"
+jq = "latest"
+powershell = "latest"
+python = "latest"
