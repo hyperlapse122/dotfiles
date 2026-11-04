@@ -1,5 +1,21 @@
 {
   "personalApps": {
+    "ghq": {
+      "command": "ghq",
+      "repository": "x-motemen/ghq",
+      "archive": {
+        "path": "ghq",
+        "stripComponents": 1
+      },
+      "targets": {
+        "darwin-amd64": "ghq_darwin_amd64.zip",
+        "darwin-arm64": "ghq_darwin_arm64.zip",
+        "linux-amd64": "ghq_linux_amd64.zip",
+        "linux-arm64": "ghq_linux_arm64.zip",
+        "windows-amd64": "ghq_windows_amd64.zip",
+        "windows-arm64": "ghq_windows_arm64.zip"
+      }
+    },
     "omp": {
       "command": "omp",
       "repository": "can1357/oh-my-pi",

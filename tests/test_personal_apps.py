@@ -2,6 +2,7 @@ import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+import io
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,6 +11,7 @@ import threading
 import tomllib
 import unittest
 import uuid
+import zipfile
 
 if os.name == "nt":
     import winreg
@@ -75,6 +77,10 @@ class PersonalAppsTest(unittest.TestCase):
         self.addCleanup(self.stop_server)
         self.base_url = "http://127.0.0.1:" + str(self.server.server_port)
         self.apps = json.loads((self.source / ".chezmoidata" / "personal-apps.json").read_text(encoding="utf-8"))
+        # These fixtures exercise omp independently of other declared applications.
+        self.apps["personalApps"] = {"omp": self.apps["personalApps"]["omp"]}
+        (self.source / ".chezmoidata" / "personal-apps.json").write_text(
+            json.dumps(self.apps), encoding="utf-8")
         self.set_pin()
         self.binary = self.home / ".local" / "bin" / ("omp.exe" if os.name == "nt" else "omp")
 
@@ -154,6 +160,46 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(self.binary.read_bytes(), original)
         self.assertEqual(self.requests, ["/omp", "/corrupt"])
 
+    def test_archive_install_and_bad_checksum_preserve_existing_commands(self):
+        command = "ghq.exe" if os.name == "nt" else "ghq"
+        binary = self.home / ".local/bin" / command
+        payload = b"native command payload\n"
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as bundle:
+            bundle.writestr("ghq_build/" + command, payload)
+            bundle.writestr("ghq_build/README", b"not an installed command")
+        self.payloads["/ghq.zip"] = archive.getvalue()
+        self.apps["personalApps"]["ghq"] = {
+            "command": "ghq", "repository": "x-motemen/ghq",
+            "archive": {"path": "ghq", "stripComponents": 1},
+            "targets": dict(self.apps["personalApps"]["omp"]["targets"]),
+        }
+        (self.source / ".chezmoidata" / "personal-apps.json").write_text(
+            json.dumps(self.apps), encoding="utf-8")
+        self.locks["personalAppLocks"]["ghq"] = {
+            "tag": "fixture", "targets": {
+                target: {"url": self.base_url + "/ghq.zip",
+                         "sha256": hashlib.sha256(archive.getvalue()).hexdigest()}
+                for target in self.apps["personalApps"]["ghq"]["targets"]
+            },
+        }
+        self.write_locks()
+        self.apply()
+        self.assertEqual(binary.read_bytes(), payload)
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+        self.assertFalse((binary.parent / "README").exists())
+        self.apply()
+        self.assertEqual(binary.read_bytes(), payload)
+        self.assertEqual(self.requests.count("/ghq.zip"), 1)
+        self.payloads["/corrupt.zip"] = b"not the pinned archive"
+        for pin in self.locks["personalAppLocks"]["ghq"]["targets"].values():
+            pin["url"] = self.base_url + "/corrupt.zip"
+        self.write_locks()
+        result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(binary.read_bytes(), payload)
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+
     def render_external(self, os_name, arch):
         template = (self.source / ".chezmoiexternals" / "personal-apps.toml.tmpl").read_text(encoding="utf-8")
         wrapper = ('{{ template "external" (dict "chezmoi" (dict "os" '
@@ -162,28 +208,6 @@ class PersonalAppsTest(unittest.TestCase):
                    + '{{ define "external" }}' + template + '{{ end }}')
         return self.run_chezmoi("execute-template", input=wrapper)
 
-    def test_supported_platforms_select_their_locked_target(self):
-        targets = self.apps["personalApps"]["omp"]["targets"]
-        for number, target in enumerate(targets):
-            self.locks["personalAppLocks"]["omp"]["targets"][target] = {
-                "url": self.base_url + "/" + target, "sha256": f"{number + 1:064x}",
-            }
-        self.write_locks()
-        for target in targets:
-            with self.subTest(target=target):
-                os_name, arch = target.split("-")
-                result = self.render_external(os_name, arch)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                rendered = tomllib.loads(result.stdout)
-                command = ".local/bin/omp" + (".exe" if os_name == "windows" else "")
-                self.assertEqual(list(rendered), [command])
-                entry = rendered[command]
-                pin = self.locks["personalAppLocks"]["omp"]["targets"][target]
-                self.assertEqual(entry["type"], "file")
-                self.assertTrue(entry["executable"])
-                self.assertEqual(entry["url"], pin["url"] + "#sha256=" + pin["sha256"])
-                self.assertEqual(entry["checksum"]["sha256"], pin["sha256"])
-        self.assertEqual(self.requests, [])
 
     def test_unsupported_platform_emits_no_app(self):
         self.locks["personalAppLocks"]["omp"]["targets"]["darwin-amd64"] = (

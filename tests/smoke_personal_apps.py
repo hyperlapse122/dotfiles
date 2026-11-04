@@ -1,4 +1,4 @@
-"""Run the committed omp binary in an OS-temporary chezmoi destination.
+"""Run the committed personal CLI binaries in an OS-temporary chezmoi destination.
 
 The default mode never runs PATH scripts. --path-integration is restricted to
 GitHub-hosted disposable runners and restores the exact Windows user PATH.
@@ -124,13 +124,13 @@ def fresh_windows_environment(isolated):
     }
 
 
-def check_terminal_path(home, outside, env, tag, shells):
-    installed = home / ".local/bin" / ("omp.exe" if os.name == "nt" else "omp")
+def check_terminal_path(home, outside, env, name, tag, shells):
+    installed = home / ".local/bin" / (name + ".exe" if os.name == "nt" else name)
     if os.name == "nt":
         output = run([
             shells["powershell"], "-NoProfile", "-Command",
-            "(Get-Command omp -CommandType Application -ErrorAction Stop).Source; "
-            "& omp --version; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+            f"(Get-Command {name} -CommandType Application -ErrorAction Stop).Source; "
+            f"& {name} --version; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}",
         ], env=fresh_windows_environment(env), cwd=outside)
         lines = output.splitlines()
         if not lines or os.path.normcase(lines[0]) != os.path.normcase(str(installed)):
@@ -141,15 +141,15 @@ def check_terminal_path(home, outside, env, tag, shells):
 
     terminal_env = env.copy()
     terminal_env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
-    for name, shell in shells.items():
+    for shell_name, shell in shells.items():
         for mode in ("-lc", "-ic"):
-            output = run([shell, mode, "command -v omp && omp --version"],
+            output = run([shell, mode, f"command -v {name} && {name} --version"],
                          env=terminal_env, cwd=outside)
             lines = output.splitlines()
             if not lines or Path(lines[0]) != installed:
-                raise RuntimeError(f"{name} {mode} did not discover {installed}: {output}")
+                raise RuntimeError(f"{shell_name} {mode} did not discover {installed}: {output}")
             check_version("\n".join(lines[1:]), tag)
-            print(f"Fresh {name} {mode}: {output}")
+            print(f"Fresh {shell_name} {mode}: {output}")
 
 
 def check_windows_path_preservation(apply_and_check, home, env):
@@ -214,7 +214,7 @@ def main():
                 raise RuntimeError("PATH smoke requires Bash or Zsh")
 
     lock = json.loads((REPO / "home/.chezmoidata/personal-app-lock.json").read_text(encoding="utf-8"))
-    tag = lock["personalAppLocks"]["omp"]["tag"]
+    applications = json.loads((REPO / "home/.chezmoidata/personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
     with temporary_destination() as scratch:
         root = Path(scratch)
         home = root / "home"
@@ -255,8 +255,8 @@ def main():
                      env=env, cwd=outside)
         if args.expected_target and target != args.expected_target:
             raise RuntimeError(f"Expected native {args.expected_target}, got {target}")
-        if target not in lock["personalAppLocks"]["omp"]["targets"]:
-            raise RuntimeError(f"No committed omp pin for native target {target}")
+        if not any(target in app["targets"] for app in applications.values()):
+            raise RuntimeError(f"No declared personal application for native target {target}")
 
         def apply_and_check(case_index=0):
             # Separate initial-state cases, but preserve onchange history within each case.
@@ -266,12 +266,16 @@ def main():
             if not args.path_integration:
                 arguments.append("--exclude=scripts")
             run(arguments, env=env, cwd=outside)
-            binary = home / ".local/bin" / ("omp.exe" if os.name == "nt" else "omp")
-            output = run([str(binary), "--version"], env=env, cwd=outside)
-            check_version(output, tag)
-            print(f"Native {target}, committed {tag}: {output}")
-            if args.path_integration:
-                check_terminal_path(home, outside, env, tag, shells)
+            for name, application in applications.items():
+                if target not in application["targets"]:
+                    continue
+                tag = lock["personalAppLocks"][name]["tag"]
+                binary = home / ".local/bin" / (application["command"] + ".exe" if os.name == "nt" else application["command"])
+                output = run([str(binary), "--version"], env=env, cwd=outside)
+                check_version(output, tag)
+                print(f"Native {target}, {name}, committed {tag}: {output}")
+                if args.path_integration:
+                    check_terminal_path(home, outside, env, application["command"], tag, shells)
 
         if args.path_integration and os.name == "nt":
             with windows_path_restored():
