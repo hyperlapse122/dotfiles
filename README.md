@@ -138,7 +138,7 @@ The existing signing key and any required YubiKey must already be ready on the d
 | macOS / Intel Homebrew | `/usr/local/bin/gpg` | `/usr/local/bin/pinentry-mac` |
 | macOS / Apple Silicon Homebrew | `/opt/homebrew/bin/gpg` | `/opt/homebrew/bin/pinentry-mac` |
 
-Common values and platform defaults live in `home/.chezmoidata.yaml`.
+Common values and platform defaults are split by tool under `home/.chezmoidata/`: `git.yaml` contains the Git identity and `gpg.yaml` contains the OS-specific executable defaults.
 For nonstandard installations, set absolute paths in the current chezmoi TOML configuration:
 
 ```toml
