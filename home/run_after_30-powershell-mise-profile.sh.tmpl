@@ -1,0 +1,6 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/bin/sh
+set -eu
+exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\\''" }}' exec -- pwsh -NoLogo -NoProfile -NonInteractive -Command \
+  "& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{ includeTemplate "powershell-mise-profile-install" . | b64enc }}'))))"
+{{ end -}}

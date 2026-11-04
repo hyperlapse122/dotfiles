@@ -371,6 +371,32 @@ Development-tool declarations in `mise.toml` and `mise.lock` remain separate.
 Chezmoi caches downloads, and the renderer includes the pinned digest in the cache identity so same-URL asset replacements are reconciled.
 If a cached download is corrupt, rerun explicitly with `chezmoi apply --refresh-externals`; checksum failure leaves the existing executable untouched.
 
+## PowerShell mise activation
+
+Explicit application installs the same startup line in each runtime's current-user, all-hosts profile:
+
+```powershell
+(&mise activate pwsh) | Out-String | Invoke-Expression
+```
+
+Windows applies it to both Windows PowerShell 5.1 and modern PowerShell; macOS and Linux apply it to modern PowerShell.
+Each runtime resolves its own `$PROFILE.CurrentUserAllHosts` path, including redirected Windows Documents folders and Unix configuration directories.
+The apply scripts use the current checkout's mise-declared PowerShell, so it does not need to be discoverable before activation.
+mise itself must already be available on the shell's startup PATH.
+
+**The repository replaces the entire selected profile.**
+Existing local customizations in that file are discarded, and applying again restores repository content after local edits.
+Host-specific profiles and all-users profiles are not changed.
+Host-specific profiles load later and can override this setup.
+
+Open a new local PowerShell session after applying.
+Sessions started with `-NoProfile`, remote sessions, and Windows execution policies that block profiles do not load this configuration.
+Application does not change persistent execution policy.
+Windows PowerShell 5.1 can show mise's directory-change warning and updates the environment at the next prompt; the repository does not suppress that warning.
+
+Profile installation runs only through explicit apply scripts, not `mise install` or `mise run bootstrap`.
+The runtime-resolved files are not entries in `chezmoi managed`; `chezmoi apply --exclude=scripts` also excludes their installation.
+
 ## Source layout
 
 The repository-root `.chezmoiroot` selects `./home` as chezmoi's source state.
@@ -397,6 +423,8 @@ Secret regressions use real GPG and chezmoi with temporary software keys in fixt
 GPG and chezmoi must be available for those tests; they do not exercise the owner's private key or hardware PIN dialogs.
 Native-CA regressions exercise real Bash startup behavior and Windows registry-provider writes against disposable state; Windows tests never execute the CA apply hook against the owner's actual environment.
 Native Linux/macOS graphical-login behavior requires those platforms; rendering or parsing their configuration is not GUI activation proof.
+PowerShell regressions replace disposable profiles and load them with real mise in each available runtime, including Windows PowerShell 5.1.
+Automatic startup is exercised with isolated Unix configuration directories and on disposable GitHub-hosted Windows runners; local Windows tests do not write the owner's actual profiles.
 Windows app regressions execute real chezmoi scripts against a disposable package inventory, covering repeat application, existing-version preservation, restoration after uninstall, and failure propagation without reaching the host's WinGet.
 Git and mise must already be installed before running the regression suite.
 These tests do not install packages on the host; a real first-time WinGet installation requires a disposable Windows environment.
