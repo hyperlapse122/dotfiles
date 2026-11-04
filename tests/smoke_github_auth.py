@@ -18,6 +18,7 @@ from smoke_personal_apps import temporary_destination
 
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
 HOSTS = ("github.com", "gist.github.com")
 
 
@@ -91,7 +92,7 @@ def main():
         for name in ("dot_gitconfig.tmpl", ".chezmoi.toml.tmpl"):
             shutil.copy2(REPO / "home" / name, source)
         (repository / "scripts").mkdir()
-        shutil.copy2(REPO / "scripts/gh_native.py", repository / "scripts")
+        shutil.copy2(REPO / "scripts/cli_native.py", repository / "scripts")
         applications = source / ".chezmoidata/personal-apps.json"
         manifest = json.loads(applications.read_text(encoding="utf-8"))
         manifest["personalApps"] = {"gh": manifest["personalApps"]["gh"]}
@@ -131,7 +132,7 @@ def main():
                    "--config", str(config), "--cache", str(root / "chezmoi-cache"),
                    "--persistent-state", str(root / "chezmoi-state"), "--no-tty"]
         keyring = [tools["keyring"], "--keyring-path", str(repository / "scripts"),
-                   "--keyring-backend", "gh_native.Keyring"]
+                   "--keyring-backend", "cli_native.Keyring"]
         records = []
         keychain_scope = contextlib.ExitStack()
         try:

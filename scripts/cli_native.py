@@ -1,6 +1,7 @@
 import base64
 from contextlib import closing
 import ctypes
+import re
 import shlex
 import subprocess
 import sys
@@ -10,14 +11,22 @@ from keyring.errors import KeyringError, PasswordDeleteError
 
 
 SERVICES = {"gh:github.com", "gh:gist.github.com"}
+HOSTNAME = re.compile(
+    r"(?=.{1,253}\Z)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\Z"
+)
 
 
 class Keyring(KeyringBackend):
     priority = 1
 
     def _operate(self, operation, service, username, password=None):
-        if service not in SERVICES or not isinstance(username, str):
-            raise KeyringError("Unsupported GitHub credential identity")
+        gitlab = (isinstance(service, str) and service.startswith("glab:")
+                  and service.endswith(":token") and HOSTNAME.fullmatch(service[5:-6])
+                  and username == "")
+        if (not isinstance(service, str) or not isinstance(username, str)
+                or not (service in SERVICES or gitlab)):
+            raise KeyringError("Unsupported CLI credential identity")
         try:
             if sys.platform == "win32":
                 return self._windows(operation, service, username, password)
@@ -28,14 +37,14 @@ class Keyring(KeyringBackend):
             raise KeyringError("No supported native credential store on this OS")
         except Exception:
             # Backend exceptions may include credentials or service replies.
-            raise KeyringError("Native GitHub credential store operation failed") from None
+            raise KeyringError("Native CLI credential store operation failed") from None
 
     def get_password(self, service, username):
         return self._operate("get", service, username)
 
     def set_password(self, service, username, password):
         if not isinstance(password, str) or not password:
-            raise KeyringError("A nonempty GitHub token is required")
+            raise KeyringError("A nonempty CLI token is required")
         self._operate("set", service, username, password)
 
     def delete_password(self, service, username):
@@ -44,7 +53,7 @@ class Keyring(KeyringBackend):
     @staticmethod
     def _macos(operation, service, username, password):
         if any(character in username for character in "\r\n\0"):
-            raise KeyringError("Unsupported GitHub credential identity")
+            raise KeyringError("Unsupported CLI credential identity")
         arguments = ["/usr/bin/security"]
         payload = b""
         if operation == "set":
@@ -146,7 +155,8 @@ class Keyring(KeyringBackend):
                 selected.ensure_not_locked()
             attributes = {"service": service, "username": username}
             if operation == "set":
-                selected.create_item("GitHub CLI credential", attributes, password.encode("utf-8"),
+                label = "GitHub CLI credential" if service in SERVICES else "GitLab CLI credential"
+                selected.create_item(label, attributes, password.encode("utf-8"),
                                      replace=True, content_type="text/plain; charset=utf8")
                 return None
             for item in selected.search_items(attributes):
