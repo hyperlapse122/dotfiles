@@ -5,6 +5,7 @@ It does not test WinGet acquisition; the normal Windows apply uses WinGet.
 """
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -137,6 +138,107 @@ class T3Rpc:
                     return message["exit"]["value"]
 
 
+class WindowsProcessJob:
+    """Own descendants even if the command wrapper exits before teardown."""
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes
+
+        self.ctypes = ctypes
+        self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        signatures = {
+            "CreateJobObjectW": ([ctypes.c_void_p, wintypes.LPCWSTR], wintypes.HANDLE),
+            "OpenProcess": ([wintypes.DWORD, wintypes.BOOL, wintypes.DWORD], wintypes.HANDLE),
+            "AssignProcessToJobObject": ([wintypes.HANDLE, wintypes.HANDLE], wintypes.BOOL),
+            "TerminateJobObject": ([wintypes.HANDLE, wintypes.UINT], wintypes.BOOL),
+            "QueryInformationJobObject": ([wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                           wintypes.DWORD, ctypes.c_void_p], wintypes.BOOL),
+            "CloseHandle": ([wintypes.HANDLE], wintypes.BOOL),
+            "WaitForSingleObject": ([wintypes.HANDLE, wintypes.DWORD], wintypes.DWORD),
+        }
+        for name, (argtypes, restype) in signatures.items():
+            function = getattr(self.kernel, name)
+            function.argtypes, function.restype = argtypes, restype
+        self.handle = self.check(self.kernel.CreateJobObjectW(None, None))
+
+    def check(self, result):
+        if not result:
+            raise self.ctypes.WinError(self.ctypes.get_last_error())
+        return result
+
+    def assign(self, process):
+        # AssignProcessToJobObject requires PROCESS_SET_QUOTA | PROCESS_TERMINATE.
+        handle = self.check(self.kernel.OpenProcess(0x0100 | 0x0001, False, process.pid))
+        try:
+            self.check(self.kernel.AssignProcessToJobObject(self.handle, handle))
+        finally:
+            self.kernel.CloseHandle(handle)
+
+    def terminate(self):
+        handles = []
+        try:
+            capacity = 64
+            while True:
+                size = self.ctypes.sizeof(self.ctypes.c_size_t)
+                members = self.ctypes.create_string_buffer(8 + capacity * size)
+                # JobObjectBasicProcessIdList retains membership after the wrapper exits.
+                if self.kernel.QueryInformationJobObject(
+                        self.handle, 3, members, len(members), None):
+                    break
+                if self.ctypes.get_last_error() != 234:  # ERROR_MORE_DATA
+                    self.check(False)
+                capacity *= 2
+            count = struct.unpack_from("I", members, 4)[0]
+            for index in range(count):
+                pid = self.ctypes.c_size_t.from_buffer(members, 8 + index * size).value
+                handle = self.kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+                if handle:
+                    handles.append(handle)
+                elif self.ctypes.get_last_error() != 87:  # already exited
+                    self.check(False)
+            self.check(self.kernel.TerminateJobObject(self.handle, 1))
+            deadline = time.monotonic() + 30
+            # Termination and job membership updates precede release of Windows
+            # resources. Wait for each process handle before deleting its cwd.
+            for handle in handles:
+                remaining = max(0, int((deadline - time.monotonic()) * 1000))
+                result = self.kernel.WaitForSingleObject(handle, remaining)
+                if result == 258:
+                    raise TimeoutError("T3 server descendants did not exit within 30 seconds")
+                if result != 0:
+                    raise self.ctypes.WinError(self.ctypes.get_last_error())
+        finally:
+            for handle in handles:
+                self.kernel.CloseHandle(handle)
+            self.kernel.CloseHandle(self.handle)
+
+
+@contextmanager
+def server_process(args, **kwargs):
+    job = WindowsProcessJob() if os.name == "nt" else None
+    process = None
+    try:
+        process = subprocess.Popen(args, start_new_session=os.name != "nt", **kwargs)
+        if job:
+            try:
+                job.assign(process)
+            except Exception:
+                process.kill()
+                raise
+        yield process
+    finally:
+        if job:
+            job.terminate()
+        elif process:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if process:
+            process.wait(timeout=30)
+
+
 def prove_t3_codex(launcher, settings, env, outside, root, expected_version):
     # The managed settings remain intact; only this disposable server's other
     # providers are disabled so no default driver probes personal installations.
@@ -175,9 +277,9 @@ def prove_t3_codex(launcher, settings, env, outside, root, expected_version):
                 + ' "' + subprocess.list2cmdline(args) + '"')
     log_path = root / "t3-server.log"
     rpc = None
-    with log_path.open("w+", encoding="utf-8", errors="backslashreplace") as log:
-        process = subprocess.Popen(args, env=isolated, cwd=outside, stdout=log,
-                                   stderr=subprocess.STDOUT, start_new_session=os.name != "nt")
+    with log_path.open("w+", encoding="utf-8", errors="backslashreplace") as log, server_process(
+        args, env=isolated, cwd=outside, stdout=log, stderr=subprocess.STDOUT,
+    ) as process:
         try:
             deadline = time.monotonic() + 90
             while True:
@@ -210,15 +312,6 @@ def prove_t3_codex(launcher, settings, env, outside, root, expected_version):
         finally:
             if rpc:
                 rpc.close()
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                               capture_output=True, check=False)
-            else:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            process.wait(timeout=30)
 
 
 def main():
