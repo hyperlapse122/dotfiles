@@ -2,7 +2,7 @@
 
 --verify-only never provisions host tools or changes persistent configuration.
 Project-local restores (NuGet and the manifest-owned fmt dependency) need network.
---provision runs only the explicit windows-build task, twice, on disposable CI.
+Machine preparation is separate: prepare_windows_build_environment.py --provision.
 ARM64 artifacts are inspected, never advertised as executed on this x64 host.
 """
 
@@ -22,9 +22,9 @@ REPO = Path(__file__).resolve().parents[1]
 MACHINES = {"Win32": 0x14C, "x64": 0x8664, "ARM64": 0xAA64}
 
 
-def run(arguments, *, cwd, env, timeout=3600, print_output=True, stream=False):
+def run(arguments, *, cwd, env, timeout=3600, print_output=True):
     print("+ " + subprocess.list2cmdline([str(arg) for arg in arguments]), flush=True)
-    result = subprocess.run(arguments, cwd=cwd, env=env, capture_output=not stream,
+    result = subprocess.run(arguments, cwd=cwd, env=env, capture_output=True,
                             text=True, encoding="utf-8", errors="backslashreplace", timeout=timeout)
     if print_output and result.stdout:
         print(result.stdout, end="" if result.stdout.endswith("\n") else "\n", flush=True)
@@ -71,18 +71,53 @@ def check_output(path, target, marker, *, cwd, env):
             raise RuntimeError(f"Missing runtime marker {marker!r}: {output!r}")
 
 
+def is_administrator():
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    security = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    security.OpenProcessToken.argtypes = (wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE))
+    security.GetTokenInformation.argtypes = (wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID,
+                                            wintypes.DWORD, ctypes.POINTER(wintypes.DWORD))
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    token = wintypes.HANDLE()
+    if not security.OpenProcessToken(kernel.GetCurrentProcess(), 0x0008, ctypes.byref(token)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        elevated, size = wintypes.DWORD(), wintypes.DWORD()
+        if not security.GetTokenInformation(token, 20, ctypes.byref(elevated),
+                                            ctypes.sizeof(elevated), ctypes.byref(size)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return bool(elevated.value)
+    finally:
+        kernel.CloseHandle(token)
+
+
 def visual_studio(env):
     vswhere = Path(env.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio/Installer/vswhere.exe"
+    if not vswhere.is_file():
+        raise RuntimeError("Missing vswhere: prepare Build Tools explicitly with mise run windows-build; verification never installs tools.")
     config = json.loads((REPO / "scripts/windows-build-tools.vsconfig").read_text(encoding="utf-8-sig"))
-    output = run([str(vswhere), "-products", "Microsoft.VisualStudio.Product.BuildTools",
-                  "-version", "[18.0,19.0)", "-requires", *config["components"],
-                  "-format", "json", "-utf8"], cwd=REPO, env=env)
-    instances = json.loads(output)
-    instances = [item for item in instances if item.get("isComplete") and
-                 item.get("isLaunchable") and not item.get("isPrerelease")]
-    if not instances:
-        raise RuntimeError("No complete stable VS 2026 Build Tools instance has every tracked component")
-    instance = max(instances, key=lambda item: tuple(int(part) for part in item["installationVersion"].split(".")))
+    discovery = [str(vswhere), "-products", "Microsoft.VisualStudio.Product.BuildTools",
+                 "-version", "[18.0,19.0)", "-format", "json", "-utf8"]
+    output = run(discovery + ["-all"], cwd=REPO, env=env)
+    instances = [item for item in json.loads(output) if not item.get("isPrerelease") and
+                 item.get("productId") == "Microsoft.VisualStudio.Product.BuildTools" and
+                 item.get("channelId") == "VisualStudio.18.Release" and
+                 18 <= int(item["installationVersion"].split(".")[0]) < 19]
+    if len(instances) != 1:
+        raise RuntimeError("Expected one complete stable VS 2026 Build Tools instance with every tracked component. "
+                           "Use Visual Studio Installer to maintain Build Tools with scripts/windows-build-tools.vsconfig; "
+                           "resolve missing components, unhealthy state, or ambiguous instances before verification.")
+    instance = instances[0]
+    ready = json.loads(run(discovery + ["-requires", *config["components"]], cwd=REPO, env=env))
+    if (not instance.get("isComplete") or not instance.get("isLaunchable") or
+            instance.get("isRebootRequired", False) or
+            not any(item["instanceId"] == instance["instanceId"] for item in ready)):
+        raise RuntimeError("Selected stable VS 2026 Build Tools is not ready. Use Visual Studio Installer with "
+                           "scripts/windows-build-tools.vsconfig for missing components, repair, or required restart.")
     root = Path(instance["installationPath"])
     print(f"VS 2026: {instance['installationVersion']} at {root}")
     return root, root / "MSBuild/Current/Bin/MSBuild.exe"
@@ -177,7 +212,8 @@ def vc_project(directory, toolset, target, *, dependency=False):
 """)
 
 
-def mfc_builds(root, msbuild, env):
+def prepare_mfc_projects(root, msbuild, env):
+    projects = []
     for toolset in (None, "v143", "v142"):
         for target in ("Win32", "x64", "ARM64"):
             directory = root / f"mfc-{toolset or 'latest'}-{target}"
@@ -195,8 +231,28 @@ def mfc_builds(root, msbuild, env):
                 if selected_version != default_version:
                     raise RuntimeError(f"Latest toolset selected {selected_version}, expected {default_version}")
             print(f"MFC {target} selected toolset: {selected}, compiler {selected_version}")
-            run(args + ["/t:Build"], cwd=directory, env=env)
-            check_output(directory / "out/smoke.exe", target, "mfc-smoke", cwd=directory, env=env)
+            compiler_root = msbuild.parents[3] / "VC/Tools/MSVC" / selected_version
+            architecture = {"Win32": "x86", "x64": "x64", "ARM64": "arm64"}[target]
+            for path in (compiler_root / f"bin/Hostx64/{architecture}/cl.exe",
+                         compiler_root / "atlmfc/include/afx.h",
+                         compiler_root / f"atlmfc/lib/{architecture}/uafxcw.lib"):
+                if not path.is_file():
+                    raise RuntimeError(f"Missing {selected} {target} compiler/MFC prerequisite: {path}")
+            sdk = Path(run(args + ["-getProperty:WindowsSdkDir"], cwd=directory, env=env))
+            sdk_version = "10.0.22621.0" if selected == "v142" else "10.0.26100.0"
+            for path in (sdk / f"Include/{sdk_version}/um/Windows.h",
+                         sdk / f"Lib/{sdk_version}/um/{architecture}/kernel32.lib",
+                         sdk / f"Lib/{sdk_version}/ucrt/{architecture}/ucrt.lib"):
+                if not path.is_file():
+                    raise RuntimeError(f"Missing Windows SDK {sdk_version} {target} prerequisite: {path}")
+            projects.append((directory, args, target))
+    return projects
+
+
+def mfc_builds(projects, env):
+    for directory, args, target in projects:
+        run(args + ["/t:Build"], cwd=directory, env=env)
+        check_output(directory / "out/smoke.exe", target, "mfc-smoke", cwd=directory, env=env)
 
 
 def wpf_sources(directory):
@@ -220,10 +276,53 @@ namespace Smoke {
     write(directory / "MainWindow.xaml.cs", 'namespace Smoke { public partial class MainWindow : System.Windows.Window { public MainWindow() { InitializeComponent(); } } }\n')
 
 
-def dotnet_builds(root, msbuild, env):
+def preflight_languages(root, env):
+    versions = dotnet_sdks(root, env)
+    for framework in ("v4.8", "v4.8.1"):
+        references = Path(env.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Reference Assemblies/Microsoft/Framework/.NETFramework" / framework
+        for name in ("mscorlib.dll", "PresentationFramework.dll", "PresentationCore.dll", "WindowsBase.dll"):
+            if not (references / name).is_file():
+                raise RuntimeError(f"Missing {framework} targeting assembly: {references / name}")
+    rustup = Path(env["CARGO_HOME"]) / "bin/rustup.exe"
+    installed = run([str(rustup), "target", "list", "--installed", "--toolchain",
+                     "stable-x86_64-pc-windows-msvc"], cwd=root, env=env).splitlines()
+    for target in ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"):
+        if target not in installed:
+            raise RuntimeError(f"Missing installed stable MSVC Rust target: {target}")
+    selected = [str(rustup), "run", "stable-x86_64-pc-windows-msvc"]
+    version = run(selected + ["rustc", "--version", "--verbose"], cwd=root, env=env)
+    if "host: x86_64-pc-windows-msvc" not in version or not re.search(r"^release: \d+\.\d+\.\d+$", version, re.MULTILINE):
+        raise RuntimeError("The managed toolchain is not stable native x64 MSVC Rust")
+    run(selected + ["cargo", "--version"], cwd=root, env=env)
+    return versions
+
+
+def vcpkg_projects(root, msbuild, env):
+    vcpkg_root = Path(env["VCPKG_ROOT"])
+    run([str(vcpkg_root / "vcpkg.exe"), "version"], cwd=root, env=env)
+    revision = run([executable("git"), "-C", str(vcpkg_root), "rev-parse", "HEAD"], cwd=root, env=env)
+    for target in ("x64", "ARM64"):
+        directory = root / f"vcpkg-{target}"
+        write(directory / "main.cpp", '#include <fmt/core.h>\nint main() { fmt::print("vcpkg-smoke\\n"); }\n')
+        write(directory / "vcpkg.json", json.dumps({"name": "dotfiles-build-smoke", "version-string": "1", "builtin-baseline": revision, "dependencies": ["fmt"]}))
+        project = vc_project(directory, latest_toolset(msbuild, target), target, dependency=True)
+        args = [str(msbuild), str(project), "/nologo", "/p:Configuration=Release", f"/p:Platform={target}"]
+        selected = run(args + ["-getProperty:VcpkgRoot"], cwd=directory, env=env)
+        if not selected or Path(selected).resolve() != vcpkg_root.resolve():
+            raise RuntimeError(f"User-wide MSBuild integration selected {selected!r}, expected {vcpkg_root}")
+        yield directory, args, target
+
+
+def preflight_vcpkg(root, msbuild, env):
+    for _ in vcpkg_projects(root, msbuild, env):
+        pass
+
+
+def dotnet_sdks(root, env):
     dotnet = str(Path(env["DOTNET_ROOT"]) / "dotnet.exe")
     listed = run([dotnet, "--list-sdks"], cwd=root, env=env)
     run([dotnet, "--list-runtimes"], cwd=root, env=env)
+    selected = {}
     for major in (8, 10):
         versions = re.findall(rf"^({major}\.\d+\.\d+)\s+\[([^\]]+)\]", listed, re.MULTILINE)
         if not versions:
@@ -231,6 +330,13 @@ def dotnet_builds(root, msbuild, env):
         version, sdk_path = max(versions, key=lambda item: tuple(map(int, item[0].split('.'))))
         if Path(sdk_path).resolve() != (Path(env["DOTNET_ROOT"]) / "sdk").resolve():
             raise RuntimeError(f"SDK {version} came from a different root: {sdk_path}")
+        selected[major] = version
+    return selected
+
+
+def dotnet_builds(root, msbuild, env, versions):
+    dotnet = str(Path(env["DOTNET_ROOT"]) / "dotnet.exe")
+    for major, version in versions.items():
         for target in ("x64", "ARM64"):
             directory = root / f"wpf-net{major}-{target}"
             wpf_sources(directory)
@@ -277,10 +383,6 @@ def rust_builds(root, vs, env):
     # Select the managed toolchain for this project without replacing a user's
     # existing default or project override. rustup run never installs a toolchain.
     selected = [rustup, "run", "stable-x86_64-pc-windows-msvc"]
-    version = run(selected + ["rustc", "--version", "--verbose"], cwd=root, env=env)
-    if "host: x86_64-pc-windows-msvc" not in version or not re.search(r"^release: \d+\.\d+\.\d+$", version, re.MULTILINE):
-        raise RuntimeError("The managed toolchain is not stable native x64 MSVC Rust")
-    run(selected + ["cargo", "--version"], cwd=root, env=env)
     directory = root / "rust"
     write(directory / "Cargo.toml", '[package]\nname = "smoke"\nversion = "0.1.0"\nedition = "2021"\n')
     write(directory / "src/main.rs", 'fn main() { println!("rust-smoke"); }\n')
@@ -291,18 +393,7 @@ def rust_builds(root, vs, env):
 
 
 def vcpkg_builds(root, msbuild, env):
-    vcpkg_root = Path(env["VCPKG_ROOT"])
-    run([str(vcpkg_root / "vcpkg.exe"), "version"], cwd=root, env=env)
-    revision = run([executable("git"), "-C", str(vcpkg_root), "rev-parse", "HEAD"], cwd=root, env=env)
-    for target in ("x64", "ARM64"):
-        directory = root / f"vcpkg-{target}"
-        write(directory / "main.cpp", '#include <fmt/core.h>\nint main() { fmt::print("vcpkg-smoke\\n"); }\n')
-        write(directory / "vcpkg.json", json.dumps({"name": "dotfiles-build-smoke", "version-string": "1", "builtin-baseline": revision, "dependencies": ["fmt"]}))
-        project = vc_project(directory, latest_toolset(msbuild, target), target, dependency=True)
-        args = [str(msbuild), str(project), "/nologo", "/p:Configuration=Release", f"/p:Platform={target}"]
-        selected = run(args + ["-getProperty:VcpkgRoot"], cwd=directory, env=env)
-        if not selected or Path(selected).resolve() != vcpkg_root.resolve():
-            raise RuntimeError(f"User-wide MSBuild integration selected {selected!r}, expected {vcpkg_root}")
+    for directory, args, target in vcpkg_projects(root, msbuild, env):
         # No explicit import or /p:VcpkgRoot: this must consume user-wide integration.
         run(args + ["/t:Build"], cwd=directory, env=env)
         check_output(directory / "out/smoke.exe", target, "vcpkg-smoke", cwd=directory, env=env)
@@ -310,29 +401,31 @@ def vcpkg_builds(root, msbuild, env):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--verify-only", action="store_true")
-    mode.add_argument("--provision", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--verify-only", action="store_true", required=True)
+    parser.parse_args()
     if os.name != "nt" or platform.machine().lower() not in ("amd64", "x86_64") or os.environ.get("PROCESSOR_ARCHITEW6432"):
         raise RuntimeError("The build smoke requires a native Windows x64 host and Python")
     env = os.environ.copy()
-    if args.provision:
-        if env.get("GITHUB_ACTIONS") != "true" or env.get("RUNNER_ENVIRONMENT") != "github-hosted":
-            raise RuntimeError("--provision is restricted to disposable GitHub-hosted Windows x64 runners")
-        # Installer and integration changes remain only on the disposable host.
-        # Both invocations must succeed, including component reconciliation.
-        for application in (1, 2):
-            print(f"Explicit build-environment application {application}/2", flush=True)
-            run([executable("mise"), "run", "windows-build"], cwd=REPO, env=env, timeout=10800, stream=True)
-            visual_studio(env)
+    elevated = is_administrator()
+    print(f"Windows verification token: IsElevated={elevated}", flush=True)
+    if elevated:
+        raise RuntimeError("Verification requires a non-elevated session. Open an ordinary terminal; run privileged preparation separately.")
     vs, msbuild = visual_studio(env)
     with tempfile.TemporaryDirectory(prefix="windows-build-smoke-") as scratch:
         root = Path(scratch)
         write(root / "empty.toml", "")
         active = fresh_environment(root, env)
-        mfc_builds(root, msbuild, active)
-        dotnet_builds(root, msbuild, active)
+        try:
+            projects = prepare_mfc_projects(root, msbuild, active)
+            versions = preflight_languages(root, active)
+            preflight_vcpkg(root, msbuild, active)
+        except (RuntimeError, OSError) as error:
+            raise RuntimeError(f"Build prerequisites are not ready: {error}\n"
+                               "Use Visual Studio Installer for existing VS component/repair maintenance, or explicitly run "
+                               "mise run windows-build to prepare missing tools in the intended user's environment; "
+                               "verification never installs or elevates.") from error
+        mfc_builds(projects, active)
+        dotnet_builds(root, msbuild, active, versions)
         rust_builds(root, vs, active)
         vcpkg_builds(root, msbuild, active)
     print("PASS: all required MFC, WPF, Framework, Rust, vcpkg and fresh-profile proofs completed. ARM64 outputs were cross-built and PE-inspected, not executed.")

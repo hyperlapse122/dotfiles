@@ -1,3 +1,4 @@
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -15,11 +16,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Web.Script.Serialization;
 
 public static class VisualStudioDouble {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetConsoleWindow();
     static string StatePath { get { return Environment.GetEnvironmentVariable("VS_TEST_STATE"); } }
     static Dictionary<string, object> Read(string path) {
         return (Dictionary<string, object>)Json.DeserializeObject(File.ReadAllText(path, Encoding.UTF8));
@@ -51,7 +55,7 @@ public static class VisualStudioDouble {
                 new Version((string)instance["installationVersion"]) >= new Version("18.0") &&
                 new Version((string)instance["installationVersion"]) < new Version("19.0") &&
                 !Convert.ToBoolean(instance["isPrerelease"]) &&
-                (args.Contains("-all") || Convert.ToBoolean(instance["isComplete"])) &&
+                (args.Contains("-all") || (Convert.ToBoolean(instance["isComplete"]) && Convert.ToBoolean(instance["isLaunchable"]))) &&
                 components.All(component => Items(instance["components"]).Contains(component)));
             Console.WriteLine(Json.Serialize(selected.ToArray()));
             return 0;
@@ -59,10 +63,13 @@ public static class VisualStudioDouble {
         string operation = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : "install";
         var calls = Items(state["calls"]).ToList();
         calls.Add(new Dictionary<string, object> {
-            {"operation", operation}, {"argv", args}, {"executable", executable}
+            {"operation", operation}, {"argv", args}, {"executable", executable},
+            {"console_window", GetConsoleWindow().ToInt64()}
         });
         state["calls"] = calls;
         Save(state);
+        Console.WriteLine("native installer stdout 空白: " + operation);
+        Console.Error.WriteLine("native installer stderr 空白: " + operation);
         var results = (Dictionary<string, object>)state["results"];
         int exit = results.ContainsKey(operation) ? Convert.ToInt32(results[operation]) : 0;
         if (exit != 0) return exit;
@@ -73,7 +80,7 @@ public static class VisualStudioDouble {
                 {"instanceId", "new-build-tools"}, {"productId", "Microsoft.VisualStudio.Product.BuildTools"},
                 {"channelId", Value(args, "--channelId")}, {"installationVersion", "18.11.3"},
                 {"installationPath", installPath}, {"isPrerelease", false},
-                {"isComplete", false}, {"components", new object[0]}
+                {"isComplete", false}, {"isLaunchable", true}, {"isRebootRequired", false}, {"components", new object[0]}
             };
             instances.Add(target);
             string discoveryPath = Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles(x86)"),
@@ -81,10 +88,9 @@ public static class VisualStudioDouble {
             Directory.CreateDirectory(Path.GetDirectoryName(discoveryPath));
             if (!File.Exists(discoveryPath)) File.Copy(executable, discoveryPath);
         } else {
-            target = instances.Single(instance => (string)instance["installationPath"] == installPath);
+            throw new Exception("Existing installations must not be serviced");
         }
-        if (operation == "update") target["installationVersion"] = "18.11.3";
-        if ((operation == "install" || operation == "modify") && !Convert.ToBoolean(state["ineffective_config"])) {
+        if (!Convert.ToBoolean(state["ineffective_config"])) {
             object[] required = Items(Read(Value(args, "--config"))["components"]);
             target["components"] = Items(target["components"]).Concat(required).Distinct().ToArray();
             target["isComplete"] = true;
@@ -156,6 +162,7 @@ $ErrorActionPreference = 'Stop'
 function Invoke-WebRequest {
     param($Uri, $OutFile, [switch]$UseBasicParsing)
     if ($Uri -cne 'https://aka.ms/vs/18/stable/vs_buildtools.exe') { throw 'Unexpected download' }
+    Add-Content -LiteralPath $env:VS_TEST_DOWNLOADS -Value $Uri
     Copy-Item -LiteralPath $env:VS_TEST_DOUBLE -Destination $OutFile
 }
 function Get-AuthenticodeSignature {
@@ -172,11 +179,17 @@ function Start-Process {
     if ($Verb -and $Verb -ne 'RunAs') { throw 'Unexpected installer verb' }
     [pscustomobject]@{ executable = $FilePath; arguments = $ArgumentList; verb = $Verb } |
         ConvertTo-Json -Compress | Add-Content -LiteralPath $env:VS_TEST_LAUNCHES -Encoding UTF8
-    # Keep process creation and Windows argv decoding real, but never request elevation.
-    Microsoft.PowerShell.Management\Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru
+    if ($env:VS_TEST_CANCEL -eq 'true') { throw 'Elevation cancelled by user (1223)' }
+    # Reuse the test console and its output handles; keep real argv/exit handling, never elevation.
+    Microsoft.PowerShell.Management\Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow
 }
-& $Script -ConfigurationPath $Config -BootstrapperUri 'https://aka.ms/vs/18/stable/vs_buildtools.exe' `
+. $Script -ConfigurationPath $Config -BootstrapperUri 'https://aka.ms/vs/18/stable/vs_buildtools.exe' `
     -ChannelId 'VisualStudio.18.Release' -InstallPath $Root
+if ($env:VS_TEST_ADMIN) {
+    function Test-VisualStudioAdministrator { $env:VS_TEST_ADMIN -eq 'true' }
+}
+Invoke-VisualStudioProvisioning -ConfigPath $Config -DownloadUri 'https://aka.ms/vs/18/stable/vs_buildtools.exe' `
+    -StableChannel 'VisualStudio.18.Release' -NewInstallPath $Root
 ''', encoding="utf-8-sig")
         self.env = os.environ.copy()
         self.env.update({
@@ -184,6 +197,7 @@ function Start-Process {
             "TEMP": str(self.temp), "TMP": str(self.temp), "VS_TEST_STATE": str(self.state_path),
             "VS_TEST_DOUBLE": str(self.double), "VS_TEST_LAUNCHES": str(self.launches),
             "VS_TEST_SIGNATURE_STATUS": "Valid", "VS_TEST_SIGNER": "CN=Microsoft Corporation, O=Microsoft Corporation, C=US",
+            "VS_TEST_DOWNLOADS": str(self.root / "downloads.txt"),
         })
 
     def instance(self, **changes):
@@ -191,7 +205,7 @@ function Start-Process {
             "instanceId": "existing-build-tools", "productId": "Microsoft.VisualStudio.Product.BuildTools",
             "channelId": "VisualStudio.18.Release", "installationVersion": "18.0.1",
             "installationPath": str(self.install_path), "isPrerelease": False,
-            "isComplete": True, "components": list(self.components),
+            "isComplete": True, "isLaunchable": True, "isRebootRequired": False, "components": list(self.components),
         }
         instance.update(changes)
         return instance
@@ -224,32 +238,40 @@ function Start-Process {
     def operations(self):
         return [call["operation"] for call in self.state["calls"]]
 
-    def test_complete_existing_instance_updates_on_every_apply(self):
+    def assert_no_acquisition(self):
+        self.assertEqual(self.operations(), [])
+        self.assertFalse(self.launches.exists())
+        self.assertFalse(Path(self.env["VS_TEST_DOWNLOADS"]).exists())
+
+    def test_complete_existing_instance_is_reused_without_update_or_elevation(self):
         self.state["instances"] = [self.instance()]
-        self.apply()
-        self.assertEqual(self.operations(), ["update"])
-        self.assertEqual(self.state["instances"][0]["installationVersion"], "18.11.3")
-        self.apply()
-        self.assertEqual(self.operations(), ["update", "update"])
+        original = self.state["instances"].copy()
+        for _ in range(2):
+            self.apply()
+            self.assertEqual(self.state["instances"], original)
+            self.assert_no_acquisition()
 
-    def test_missing_component_is_added_and_unrelated_components_survive(self):
-        self.state["instances"] = [self.instance(components=[*self.components[:-1], "Unrelated.Component"])]
-        self.apply()
-        self.assertEqual(self.operations(), ["update", "modify"])
-        self.assertEqual(set(self.state["instances"][0]["components"]), {*self.components, "Unrelated.Component"})
-        queries = self.state["queries"]
-        complete_queries = [query for query in queries if "-requires" in query]
-        self.assertGreaterEqual(len(complete_queries), 2)
-        for query in complete_queries:
-            self.assertEqual(query[query.index("-requires") + 1:], list(self.components))
-            self.assertNotIn("-all", query)
+    def test_missing_components_require_manual_maintenance(self):
+        self.state["instances"] = [self.instance(components=[*self.components[:-2], "Unrelated.Component"])]
+        original = self.state["instances"].copy()
+        result = self.apply(check=False)
+        diagnostic = (result.stdout + result.stderr).replace("\n", "")
+        self.assertIn("Visual Studio Installer", diagnostic)
+        self.assertIn(str(self.install_path), diagnostic)
+        for component in self.components[-2:]:
+            self.assertIn(component, diagnostic)
+        self.assertNotIn("Unrelated.Component", diagnostic)
+        self.assertEqual(self.state["instances"], original)
+        self.assert_no_acquisition()
 
-    def test_partial_registered_instance_is_reconciled_not_reinstalled(self):
-        self.state["instances"] = [self.instance(isComplete=False, components=[])]
-        self.apply()
-        self.assertEqual(self.operations(), ["update", "modify"])
-        self.assertEqual(self.state["instances"][0]["instanceId"], "existing-build-tools")
-        self.assertTrue(self.state["instances"][0]["isComplete"])
+    def test_unhealthy_existing_instances_require_manual_maintenance(self):
+        for field, value in (("isComplete", False), ("isLaunchable", False), ("isRebootRequired", True)):
+            with self.subTest(field=field):
+                self.state["instances"] = [self.instance(**{field: value})]
+                result = self.apply(check=False)
+                self.assertIn(field, result.stdout + result.stderr)
+                self.assertIn("Visual Studio Installer", result.stdout + result.stderr)
+                self.assert_no_acquisition()
 
     def test_absence_including_missing_vswhere_installs_and_verifies(self):
         self.apply(discovery=False)
@@ -264,10 +286,12 @@ function Start-Process {
                                 installationPath=str(self.root / "preview"))
         other_channel = self.instance(instanceId="other-channel", channelId="VisualStudio.18.LTSC",
                                       installationPath=str(self.root / "other channel"))
-        self.state["instances"] = [ide, preview, other_channel]
+        older = self.instance(instanceId="older", installationVersion="17.14.1",
+                              installationPath=str(self.root / "older"))
+        self.state["instances"] = [ide, preview, other_channel, older]
         self.apply()
         self.assertEqual(self.operations(), ["install"])
-        self.assertEqual(self.state["instances"][:3], [ide, preview, other_channel])
+        self.assertEqual(self.state["instances"][:4], [ide, preview, other_channel, older])
 
     def test_multiple_stable_instances_fail_without_arbitrary_selection(self):
         self.state["instances"] = [self.instance(), self.instance(instanceId="second", installationPath=str(self.root / "second"))]
@@ -275,6 +299,12 @@ function Start-Process {
         self.assertIn("Multiple stable", result.stdout + result.stderr)
         self.assertEqual(self.operations(), [])
         self.assertFalse(self.launches.exists())
+
+    def test_occupied_unregistered_install_path_fails_before_download(self):
+        self.install_path.mkdir()
+        result = self.apply(check=False)
+        self.assertIn("install path already exists", result.stdout + result.stderr)
+        self.assert_no_acquisition()
 
     def test_invalid_or_wrong_signer_never_executes(self):
         for status, signer in (("NotSigned", "CN=Microsoft Corporation"),
@@ -289,42 +319,42 @@ function Start-Process {
                 self.assertEqual(self.operations(), [])
                 self.assertFalse(self.launches.exists())
 
-    def test_installer_failure_and_reboot_stop_before_dependent_operations(self):
+    def test_installer_failure_and_reboot_stop_before_readiness(self):
         for code in (23, 1003, 1641, 3010):
             with self.subTest(code=code):
-                self.state["instances"] = [self.instance(isComplete=False, components=[])]
+                self.state["instances"] = []
                 self.state["calls"] = []
-                self.state["results"] = {"update": code}
+                self.state["results"] = {"install": code}
                 result = self.apply(check=False)
                 diagnostic = result.stdout + result.stderr
-                self.assertIn("update", diagnostic)
+                self.assertIn("installation", diagnostic)
                 self.assertIn(str(code), diagnostic)
-                if code == 3010:
+                if code in (1641, 3010):
                     self.assertIn("reboot required", diagnostic)
-                self.assertEqual(self.operations(), ["update"])
-                self.assertFalse(self.state["instances"][0]["isComplete"])
+                self.assertEqual(self.operations(), ["install"])
 
-    def test_install_and_modify_failures_report_the_failed_operation(self):
-        for operation, diagnostic in (("install", "installation"), ("modify", "component reconciliation")):
-            with self.subTest(operation=operation):
-                self.state["instances"] = [] if operation == "install" else [self.instance(components=[])]
+    def test_installer_elevation_selection_and_cancellation(self):
+        for administrator in ("false", "true"):
+            with self.subTest(administrator=administrator):
+                self.state["instances"] = []
                 self.state["calls"] = []
-                self.state["results"] = {operation: 23}
-                result = self.apply(check=False)
-                self.assertIn(diagnostic, result.stdout + result.stderr)
-                self.assertIn("23", result.stdout + result.stderr)
-                self.assertEqual(self.operations()[-1], operation)
+                self.env["VS_TEST_ADMIN"] = administrator
+                self.apply()
+                launch = json.loads(self.launches.read_text(encoding="utf-8-sig").splitlines()[-1])
+                self.assertEqual(launch["verb"] or "", "" if administrator == "true" else "RunAs")
+        self.state["instances"] = []
+        self.state["calls"] = []
+        self.env.update(VS_TEST_ADMIN="false", VS_TEST_CANCEL="true")
+        result = self.apply(check=False)
+        self.assertIn("could not start", result.stdout + result.stderr)
+        self.assertIn("1223", result.stdout + result.stderr)
+        self.assertEqual(self.operations(), [])
 
     def test_success_without_required_inventory_is_not_ready(self):
         self.state["ineffective_config"] = True
         result = self.apply(check=False)
         self.assertIn("missing required components", result.stdout + result.stderr)
         self.assertEqual(self.operations(), ["install"])
-        self.state["instances"] = [self.instance(components=[])]
-        self.state["calls"] = []
-        result = self.apply(check=False)
-        self.assertIn("missing required components", result.stdout + result.stderr)
-        self.assertEqual(self.operations(), ["update", "modify"])
 
     def test_discovery_failure_is_not_treated_as_absence(self):
         self.state["discovery_exit"] = 19
@@ -344,9 +374,26 @@ function Start-Process {
         self.assertEqual(self.config.read_bytes(), original_config)
         self.assertFalse(Path(self.state["calls"][0]["executable"]).exists())
         self.apply()
-        arguments = self.state["calls"][-1]["argv"]
-        self.assertEqual(self.operations(), ["install", "update"])
-        self.assertEqual(arguments[arguments.index("--installPath") + 1], str(self.install_path))
+        self.assertEqual(self.operations(), ["install"])
+
+    def test_installer_double_reuses_console_and_preserves_output(self):
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetConsoleWindow.restype = ctypes.c_void_p
+        parent_console = kernel32.GetConsoleWindow() or 0
+        result = self.apply()
+        self.assertEqual(self.state["calls"][-1]["console_window"], parent_console,
+                         "The installer test double must not create a separate console")
+        self.assertIn("native installer stdout 空白: install", result.stdout)
+        self.assertIn("native installer stderr 空白: install", result.stderr)
+
+        self.state["instances"] = []
+        self.state["results"] = {"install": 23}
+        result = self.apply(check=False)
+        self.assertIn("native installer stdout 空白: install", result.stdout)
+        self.assertIn("native installer stderr 空白: install", result.stderr)
+        self.assertIn("exit code 23", result.stderr)
+        self.assertEqual(self.state["calls"][-1]["console_window"], parent_console,
+                         "A failing installer test double must also reuse the parent console")
 
 
 if __name__ == "__main__":
