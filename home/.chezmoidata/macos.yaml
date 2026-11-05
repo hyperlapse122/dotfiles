@@ -1,0 +1,7 @@
+macos:
+  formulae: []
+  casks:
+    - google-chrome
+    - 1password
+    - 1password-cli
+    - podman-desktop

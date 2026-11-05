@@ -200,3 +200,44 @@ jobs:
             printf "%s" fixture-keyring-password | gnome-keyring-daemon --unlock --components=secrets
             mise exec chezmoi python uv pipx:keyring -- python "$SMOKE_SCRIPT"
           '
+
+  macos-build:
+    name: Native macOS ARM64 builds
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - *checkout
+      - *candidate-lock
+      - *select-lock
+      - *download-harness-lock
+      - *select-harness-lock
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        env: &macos-build-env
+          MISE_DATA_DIR: ${{ runner.temp }}/mise-macos-build/data
+          MISE_CACHE_DIR: ${{ runner.temp }}/mise-macos-build/cache
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+      - name: Provision native build tools in a disposable home
+        shell: bash
+        env: *macos-build-env
+        run: |
+          set -eu
+          fixture_home="$RUNNER_TEMP/macos-build-home"
+          mkdir -p "$fixture_home"
+          env -u DOTNET_ROOT -u CARGO_HOME -u RUSTUP_HOME -u RUSTUP_TOOLCHAIN \
+            HOME="$fixture_home" mise run macos-build
+      - name: Compile, identify and run native programs
+        shell: bash
+        env: *macos-build-env
+        run: |
+          set -eu
+          mise exec -- python tests/smoke_macos_build_environment.py \
+            --home "$RUNNER_TEMP/macos-build-home" \
+            --report "$RUNNER_TEMP/native-macos-build.json"
+      - name: Retain native build evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-macos-build
+          path: ${{ runner.temp }}/native-macos-build.json
+          retention-days: 7
+          if-no-files-found: warn

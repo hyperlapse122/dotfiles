@@ -21,4 +21,20 @@ if ($env:OS -eq 'Windows_NT') {
         }
     }
 }
+if ($IsMacOS) {
+    & {
+        $state = Join-Path $HOME '.local/share/dotfiles/build'
+        foreach ($name in @('DOTNET_ROOT', 'CARGO_HOME', 'RUSTUP_HOME', 'VCPKG_ROOT')) {
+            $file = Join-Path $state $name
+            if (Test-Path -LiteralPath $file -PathType Leaf) {
+                [Environment]::SetEnvironmentVariable($name, [IO.File]::ReadAllText($file).TrimEnd("`r", "`n"), 'Process')
+            }
+        }
+        foreach ($directory in @((Join-Path $HOME '.local/bin'), (Join-Path $state 'bin'), $env:VCPKG_ROOT, $(if ($env:CARGO_HOME) { Join-Path $env:CARGO_HOME 'bin' }), $env:DOTNET_ROOT)) {
+            if ($directory -and (Test-Path -LiteralPath $directory -PathType Container) -and $directory -notin ($env:PATH -split ':')) {
+                $env:PATH = "$directory`:$env:PATH"
+            }
+        }
+    }
+}
 (&mise activate pwsh) | Out-String | Invoke-Expression

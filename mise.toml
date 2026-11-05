@@ -78,3 +78,34 @@ shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
 tools = { "core:dotnet" = { version = "10", os = ["windows"] }, "core:rust" = { version = "stable-x86_64-pc-windows-msvc", profile = "default", targets = ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"], os = ["windows"] } }
 run = []
 run_windows = "& ./scripts/windows-build-environment.ps1 -Phase Vcpkg -VcpkgRepository '{{vars.windows_vcpkg_repository}}' -VcpkgRevision '{{vars.windows_vcpkg_revision}}' -VcpkgRoot (Join-Path $HOME '.local/share/dotfiles/vcpkg')"
+
+[tasks.macos-build]
+description = "Provision the native Apple Silicon macOS build environment"
+run = [
+  "sh ./scripts/macos-build-environment.sh preflight",
+  { task = "macos-build:dotnet8" },
+  { task = "macos-build:dotnet10" },
+  { task = "macos-build:rust" },
+  { task = "macos-build:tools" },
+  "sh ./scripts/macos-build-environment.sh vcpkg '{{vars.windows_vcpkg_repository}}' '{{vars.windows_vcpkg_revision}}'",
+]
+
+[tasks."macos-build:dotnet8"]
+description = "Install and publish native .NET SDK 8"
+tools = { "core:dotnet" = { version = "8", os = ["macos"] } }
+run = "sh ./scripts/macos-build-environment.sh dotnet 8"
+
+[tasks."macos-build:dotnet10"]
+description = "Install and publish native .NET SDK 10"
+tools = { "core:dotnet" = { version = "10", os = ["macos"] } }
+run = "sh ./scripts/macos-build-environment.sh dotnet 10"
+
+[tasks."macos-build:rust"]
+description = "Install and publish native stable Rust"
+tools = { "core:rust" = { version = "stable-aarch64-apple-darwin", profile = "default", targets = ["aarch64-apple-darwin"], os = ["macos"] } }
+run = "sh ./scripts/macos-build-environment.sh rust"
+
+[tasks."macos-build:tools"]
+description = "Install build utilities and publish persistent mise tool commands"
+tools = { cmake = { version = "latest", os = ["macos"] }, ninja = { version = "latest", os = ["macos"] } }
+run = "sh ./scripts/macos-build-environment.sh tools"

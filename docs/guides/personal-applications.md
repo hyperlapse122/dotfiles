@@ -67,7 +67,7 @@ On Windows, the apply script updates the user PATH environment variable in the r
 
 On Linux and macOS, apply creates `~/.config/dotfiles/path.sh` and appends a source block to your shell startup files:
 - Configures `.bashrc` and the existing Bash login profile (`.bash_profile`, `.bash_login`, or `.profile`).
-- Configures `.zshenv`, respecting an exported `ZDOTDIR` if set.
+- Configures `.zprofile` and `.zshrc`, respecting an exported `ZDOTDIR` if set.
 - PATH integration runs only on change; an unchanged apply will not overwrite manual removals.
 
 ### Checking Command Discovery
@@ -83,6 +83,11 @@ command -v omp
 ```
 
 If another copy precedes `~/.local/bin`, resolve the conflicting PATH entry in your shell configuration.
+
+On Apple Silicon macOS, explicit application also publishes native build roots and mise-owned Python/PowerShell/CMake/Ninja links under `~/.local/share/dotfiles/build`.
+The PATH fragment loads these roots so native commands remain available outside a mise task.
+Development tool versions remain declared in `mise.toml`/`mise.lock`; they are not duplicated as Homebrew packages.
+See the [macOS setup guide](../setup/macos.md) for first-device prerequisites, per-project Zsh activation, native build verification and the complete readiness checklist.
 
 ---
 
