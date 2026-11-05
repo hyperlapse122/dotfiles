@@ -155,7 +155,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding
 function Invoke-WebRequest {
     param($Uri, $OutFile, [switch]$UseBasicParsing)
-    if ($Uri -cne 'https://aka.ms/vs/stable/vs_buildtools.exe') { throw 'Unexpected download' }
+    if ($Uri -cne 'https://aka.ms/vs/18/stable/vs_buildtools.exe') { throw 'Unexpected download' }
     Copy-Item -LiteralPath $env:VS_TEST_DOUBLE -Destination $OutFile
 }
 function Get-AuthenticodeSignature {
@@ -175,8 +175,8 @@ function Start-Process {
     # Keep process creation and Windows argv decoding real, but never request elevation.
     Microsoft.PowerShell.Management\Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru
 }
-& $Script -ConfigurationPath $Config -BootstrapperUri 'https://aka.ms/vs/stable/vs_buildtools.exe' `
-    -ChannelId 'VisualStudio.18.Stable' -InstallPath $Root
+& $Script -ConfigurationPath $Config -BootstrapperUri 'https://aka.ms/vs/18/stable/vs_buildtools.exe' `
+    -ChannelId 'VisualStudio.18.Release' -InstallPath $Root
 ''', encoding="utf-8-sig")
         self.env = os.environ.copy()
         self.env.update({
@@ -189,7 +189,7 @@ function Start-Process {
     def instance(self, **changes):
         instance = {
             "instanceId": "existing-build-tools", "productId": "Microsoft.VisualStudio.Product.BuildTools",
-            "channelId": "VisualStudio.18.Stable", "installationVersion": "18.0.1",
+            "channelId": "VisualStudio.18.Release", "installationVersion": "18.0.1",
             "installationPath": str(self.install_path), "isPrerelease": False,
             "isComplete": True, "components": list(self.components),
         }

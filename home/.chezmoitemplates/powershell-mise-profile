@@ -1,1 +1,24 @@
+if ($env:OS -eq 'Windows_NT') {
+    & {
+        $managed = @()
+        foreach ($tool in @(
+            @{ Root = $env:DOTNET_ROOT; Bin = ''; Command = 'dotnet.exe' },
+            @{ Root = $env:CARGO_HOME; Bin = 'bin'; Command = 'cargo.exe' },
+            @{ Root = $env:VCPKG_ROOT; Bin = ''; Command = 'vcpkg.exe' }
+        )) {
+            if (-not $tool.Root) { continue }
+            $directory = $tool.Root
+            if ($tool.Bin) { $directory = Join-Path $directory $tool.Bin }
+            if (Test-Path -LiteralPath (Join-Path $directory $tool.Command) -PathType Leaf) {
+                $managed += (Get-Item -LiteralPath $directory).FullName.TrimEnd('\', '/')
+            }
+        }
+        if ($managed.Count) {
+            $remaining = @($env:PATH -split ';' | Where-Object {
+                $managed -notcontains $_.Trim().Trim('"').TrimEnd('\', '/')
+            })
+            $env:PATH = (@($managed | Select-Object -Unique) + $remaining) -join ';'
+        }
+    }
+}
 (&mise activate pwsh) | Out-String | Invoke-Expression

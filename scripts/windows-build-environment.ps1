@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 
 function Invoke-BuildNative {
     param([string] $Command, [string[]] $Arguments = @())
-    $application = Get-Command -Name $Command -CommandType Application -ErrorAction Stop
+    $application = @(Get-Command -Name $Command -CommandType Application -ErrorAction Stop)[0]
     # Windows PowerShell can surface native stderr as nonterminating errors.
     # Keep diagnostics visible and decide success from the process exit code.
     $ErrorActionPreference = 'Continue'
@@ -32,7 +32,6 @@ function ConvertTo-BuildPath([string] $Entry) {
         $expanded = [Environment]::ExpandEnvironmentVariables($Entry.Trim().Trim('"'))
         return [IO.Path]::GetFullPath($expanded.Replace('/', '\')).TrimEnd('\', '/')
     } catch {
-        # An unrelated malformed entry must survive reconciliation unchanged.
         return $Entry
     }
 }
@@ -164,7 +163,7 @@ function Get-BuildVcpkgEnvironment {
     }
     if (-not (Test-BuildAbsolutePath $Root)) { throw 'VcpkgRoot must be an absolute writable user path.' }
     $Root = [IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
-    $git = (Get-Command git -CommandType Application -ErrorAction Stop).Source
+    $git = @(Get-Command git -CommandType Application -ErrorAction Stop)[0].Source
     if (-not (Test-Path -LiteralPath (Join-Path $Root '.git'))) {
         if ((Test-Path -LiteralPath $Root) -and @(Get-ChildItem -LiteralPath $Root -Force).Count -ne 0) {
             throw "Refusing unrelated directory '$Root': select an empty root or a clean Microsoft vcpkg checkout."
@@ -207,7 +206,6 @@ function Get-BuildVcpkgEnvironment {
     return @{ VCPKG_ROOT = $Root }
 }
 
-# Dot sourcing exposes ordinary operations without applying to the real user.
 if ($MyInvocation.InvocationName -ne '.') {
     if (-not $Phase) { throw 'Specify -Phase Dotnet, Rust, or Vcpkg.' }
     $values = switch ($Phase) {

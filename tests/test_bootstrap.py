@@ -51,6 +51,9 @@ class BootstrapIsolationTest(unittest.TestCase):
                 "XDG_CACHE_HOME": str(root / "cache"),
                 "XDG_DATA_HOME": str(root / "data"),
                 "XDG_STATE_HOME": str(root / "state"),
+                "MISE_DOTNET_ROOT": str(root / "native dotnet"),
+                "MISE_CARGO_HOME": str(root / "native cargo"),
+                "MISE_RUSTUP_HOME": str(root / "native rustup"),
             })
             if os.name == "nt":
                 commands = root / "commands"
@@ -74,6 +77,11 @@ class BootstrapIsolationTest(unittest.TestCase):
                     self.assertFalse(install_marker.exists(), "Initialization invoked an app installer")
                     self.assertEqual(existing.read_text(encoding="utf-8"), "unchanged")
                     self.assertEqual(config.read_text(encoding="utf-8"), config_text)
+                    for name in ("native dotnet", "native cargo", "native rustup"):
+                        self.assertFalse((root / name).exists(),
+                                         "Initialization installed task-only build tools")
+                    self.assertFalse((home / ".local/share/dotfiles/vcpkg").exists(),
+                                     "Initialization provisioned a native dependency checkout")
 
 
 if __name__ == "__main__":

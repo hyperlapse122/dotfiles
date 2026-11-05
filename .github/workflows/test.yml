@@ -70,6 +70,25 @@ jobs:
       - name: Run deterministic tests and isolated existing contracts
         run: mise exec -- python -m unittest discover -s tests
 
+  windows-build:
+    name: Windows x64 native and ARM64 cross-build environment
+    runs-on: windows-2025
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.base-sha || github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install: false
+          env: false
+      - name: Prepare only the smoke harness tools
+        run: mise install chezmoi python
+      - name: Provision twice and prove every required build target
+        timeout-minutes: 220
+        run: mise exec chezmoi python -- python tests/smoke_windows_build_environment.py --provision
+
   native:
     name: Native apps, CE, PATH, and credentials (${{ matrix.runner }}, ${{ matrix.target }})
     strategy:

@@ -91,8 +91,8 @@ function Invoke-VisualStudioInstaller {
 function Invoke-VisualStudioProvisioning {
     param([string]$ConfigPath, [string]$DownloadUri, [string]$StableChannel, [string]$NewInstallPath)
 
-    if ($DownloadUri -cne 'https://aka.ms/vs/stable/vs_buildtools.exe' -or $StableChannel -cne 'VisualStudio.18.Stable') {
-        throw 'Visual Studio provisioning requires the official stable Build Tools bootstrapper and VisualStudio.18.Stable channel.'
+    if ($DownloadUri -cne 'https://aka.ms/vs/18/stable/vs_buildtools.exe' -or $StableChannel -cne 'VisualStudio.18.Release') {
+        throw 'Visual Studio provisioning requires the official stable Build Tools 18 bootstrapper and VisualStudio.18.Release channel.'
     }
     if (-not [IO.Path]::IsPathRooted($ConfigPath)) { throw 'The Visual Studio configuration path must be absolute.' }
     $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
@@ -109,6 +109,8 @@ function Invoke-VisualStudioProvisioning {
     $bootstrapper = Join-Path $temporaryDirectory 'vs_buildtools.exe'
     try {
         Invoke-WebRequest -Uri $DownloadUri -OutFile $bootstrapper -UseBasicParsing
+        # A mise PowerShell environment can include another edition's module path.
+        Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
         $signature = Get-AuthenticodeSignature -LiteralPath $bootstrapper
         if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate -or
             $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)CN=Microsoft Corporation(?:,|$)') {

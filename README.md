@@ -181,6 +181,90 @@ After installing the CLI, open a fresh shell and check `op --version`.
 After installing PowerShell, open a fresh shell and check `pwsh --version`.
 The system installation is for everyday use outside mise; mise still manages the repository's development runtime.
 
+### Windows native build environment
+
+On Windows x64, explicit `chezmoi apply` (including `mise run apply`) also invokes
+`mise run windows-build` from the registered source checkout. This is a substantial
+development-tool installation: it downloads components and can request UAC approval.
+Only the Visual Studio machine installer elevates; SDKs, Rust, vcpkg, and environment
+integration run as the current user. Bootstrap, worktree preparation, `mise install`,
+dry runs, and script-excluding applies do not provision this environment.
+The build action does not run on Linux, macOS, or Windows ARM64 hosts.
+
+The environment includes:
+
+- **Visual Studio 2026 Build Tools:** every explicit apply updates the selected
+  stable 2026-channel installation to the latest available release, then reconciles
+  `scripts/windows-build-tools.vsconfig`. No Preview release, older Visual Studio
+  product, or full IDE is installed. Existing unrelated products are retained.
+- **C++:** latest MSVC plus v143 and v142, with matching ATL/MFC for Win32/x86,
+  x64, and ARM64 targets, and the Windows SDK.
+  Both SDK 26100 and 22621 are installed. v142 ARM64 projects must select
+  `WindowsTargetPlatformVersion=10.0.22621.0`; SDK 26100 uses an unsupported
+  intrinsic with that older compiler.
+- **WPF:** .NET 8 and .NET 10 SDKs side by side, including x64 and ARM64 target
+  builds; .NET Framework 4.8 and 4.8.1 SDKs and targeting packs. Framework runtimes
+  are in-place updates, not independently installed parallel runtimes.
+- **Rust:** stable `cargo`/`rustc` and the `x86_64-pc-windows-msvc` and
+  `aarch64-pc-windows-msvc` targets.
+- **vcpkg:** a writable user-owned Microsoft checkout, command discovery, and
+  user-wide MSBuild integration, all selecting the same `VCPKG_ROOT`.
+
+The native task declarations in `mise.toml` and their `mise.lock` resolutions own
+the SDK/Rust versions; these are task-local tools, not base bootstrap dependencies.
+The vcpkg revision is an explicit immutable task input. Updating those declarations
+and resolutions is distinct from Visual Studio's deliberate latest-stable-on-apply
+policy. SDKs share mise's native user-local `dotnet-root`; vcpkg lives at
+`$HOME\.local\share\dotfiles\vcpkg`. Rust respects existing `CARGO_HOME` and
+`RUSTUP_HOME`, defaulting to `$HOME\.cargo` and `$HOME\.rustup`.
+No toolchain is installed into a disposable source worktree.
+
+Choose the SDK in each application repository with `global.json`; having both
+installed does not force an existing project to use its matching major version.
+For example, set `sdk.version` to the exact installed 8.x SDK from `dotnet --list-sdks`
+and `sdk.rollForward` to `disable` when an exact SDK selection is required.
+Each project also owns its target framework, platform/toolset, Rust overrides,
+vcpkg manifest, baseline, and triplets. Provisioning does not retarget projects or
+install a global library collection. User-wide vcpkg integration replaces the
+previous user's selected vcpkg instance; it is not an additional parallel selector.
+
+Restart the terminal host after apply to refresh inherited user environment values.
+The managed PowerShell profile prioritizes installed `DOTNET_ROOT`, `CARGO_HOME\bin`,
+and `VCPKG_ROOT` ahead of competing machine PATH entries before activating mise.
+This applies to the managed Windows PowerShell 5.1 and PowerShell profiles; a
+profile-free shell deliberately does not receive that precedence adjustment.
+Machine PATH is not rewritten. `RUSTUP_TOOLCHAIN` is not persisted, so project
+`rust-toolchain.toml` files continue to work.
+
+Installer failure, missing required components, or failed language/dependency
+integration stops apply. A reboot-required installer result (3010) stops
+dependent setup and reports the required restart; the scripts do not initiate
+a reboot. Restart Windows when requested, then repeat explicit apply.
+To maintain only these tools without applying personal settings, run
+`mise run windows-build` from this checkout.
+
+For an already provisioned Windows x64 machine:
+
+```powershell
+mise exec chezmoi python -- python tests/smoke_windows_build_environment.py --verify-only
+```
+
+This does not install host tools or change persistent configuration. It creates
+temporary real projects, restores their NuGet/manifest-owned `fmt` dependencies
+(network access is required), and sources the managed profile only in an isolated
+fresh shell. It builds/links all nine MFC toolset/architecture combinations, WPF
+with exact SDK 8/10 selection for x64 and ARM64, Framework 4.8/4.8.1 WPF, Rust
+x64/ARM64, and vcpkg-backed MSBuild x64/ARM64. Native outputs run; ARM64 PE machine
+types are checked without claiming ARM64 execution.
+Missing prerequisites fail rather than skip a required target.
+
+The dedicated `windows-2025` CI job uses `--provision`, restricted to disposable
+GitHub-hosted Windows x64 runners. It invokes only `windows-build`, twice, to check
+reapplication and component reconciliation, not a full personal apply.
+Installation and user-integration changes remain on that disposable runner.
+Generic native/ARM smoke jobs do not acquire this environment; CI cross-builds
+are not evidence of execution on an ARM64 device.
+
 ### T3 Code desktop and omp ACP
 
 Explicit apply installs [T3 Code](https://github.com/pingdotgg/t3code) on Windows and Ubuntu x64/ARM64, and on Apple Silicon Macs.
