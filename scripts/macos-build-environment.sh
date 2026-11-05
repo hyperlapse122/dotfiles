@@ -1,5 +1,4 @@
 #!/bin/sh
-# This helper is called only by explicit macos-build tasks, never preparation.
 set -eu
 [ "$(uname -s)" = Darwin ] || exit 0
 
@@ -36,21 +35,31 @@ rust)
     : "${CARGO_HOME:?The mise Rust task must supply CARGO_HOME}"
     : "${RUSTUP_HOME:?The mise Rust task must supply RUSTUP_HOME}"
     : "${RUSTUP_TOOLCHAIN:?The mise Rust task must supply RUSTUP_TOOLCHAIN}"
-    info=$("$CARGO_HOME/bin/rustc" --version --verbose)
+    rustc=$(command -v rustc) || fail 'The mise Rust task must supply rustc.'
+    case "$rustc" in /*) ;; *) fail 'rustc must resolve to an absolute executable.';; esac
+    info=$("$rustc" --version --verbose)
     printf '%s\n' "$info" | grep -Fx 'host: aarch64-apple-darwin' >/dev/null || fail 'Rust must use the native aarch64-apple-darwin host.'
-    targets=$("$CARGO_HOME/bin/rustup" target list --installed --toolchain "$RUSTUP_TOOLCHAIN")
+    rustup=$(command -v rustup) || fail 'The mise Rust task must supply rustup.'
+    cargo=$(command -v cargo) || fail 'The mise Rust task must supply cargo.'
+    for executable in "$rustup" "$cargo"; do
+        case "$executable" in /*) ;; *) fail 'Rust proxies must resolve to absolute executables.';; esac
+    done
+    targets=$("$rustup" target list --installed --toolchain "$RUSTUP_TOOLCHAIN")
     printf '%s\n' "$targets" | grep -Fx aarch64-apple-darwin >/dev/null || fail 'Rust is missing the aarch64-apple-darwin target.'
-    toolchains=$("$CARGO_HOME/bin/rustup" toolchain list)
+    toolchains=$("$rustup" toolchain list)
     if ! printf '%s\n' "$toolchains" | grep -Eq '\([^)]*default[^)]*\)'; then
-        "$CARGO_HOME/bin/rustup" default "$RUSTUP_TOOLCHAIN"
+        "$rustup" default "$RUSTUP_TOOLCHAIN"
     fi
     publish CARGO_HOME "$CARGO_HOME"
     publish RUSTUP_HOME "$RUSTUP_HOME"
+    mkdir -p "$state/bin"
+    ln -sf "$rustc" "$state/bin/rustc"
+    ln -sf "$rustup" "$state/bin/rustup"
+    ln -sf "$cargo" "$state/bin/cargo"
     printf '%s\n' "$info"
     ;;
 tools)
     mkdir -p "$state/bin"
-    # Root mise declarations supply Python and PowerShell in this task too.
     for tool in cmake ninja python pwsh; do
         executable=$(command -v "$tool") || fail "The mise task must supply $tool."
         case "$executable" in /*) ;; *) fail "$tool must resolve to an absolute executable.";; esac

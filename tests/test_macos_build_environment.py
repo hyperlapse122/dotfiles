@@ -39,7 +39,7 @@ class MacosBuildEnvironmentTest(unittest.TestCase):
 
     def run_phase(self, *args):
         return subprocess.run([find_bash(), "-c", 'PATH="$1:/usr/bin:/bin"; export PATH; shift; exec /bin/sh "$@"',
-                               "probe", shell_path(self.bin), self.repo.joinpath("scripts/macos-build-environment.sh").as_posix(), *args],
+                               "probe", getattr(self, "task_path", shell_path(self.bin)), self.repo.joinpath("scripts/macos-build-environment.sh").as_posix(), *args],
                               env=self.env, capture_output=True, text=True, timeout=30)
 
     def test_other_platform_does_not_publish_environment(self):
@@ -83,11 +83,35 @@ class MacosBuildEnvironmentTest(unittest.TestCase):
         rustc = cargo / "bin/rustc"
         rustc.write_text("#!/bin/sh\necho 'host: x86_64-apple-darwin'\n", newline="\n")
         rustc.chmod(0o755)
+        self.task_path = shell_path(cargo / "bin") + ":" + shell_path(self.bin)
         self.env.update(CARGO_HOME=shell_path(cargo), RUSTUP_HOME=shell_path(self.root / "rustup"), RUSTUP_TOOLCHAIN="stable-aarch64-apple-darwin")
         result = self.run_phase("rust")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("aarch64-apple-darwin", result.stderr)
         self.assertFalse((self.home / ".local/share/dotfiles/build/CARGO_HOME").exists())
+
+    def test_external_rust_proxies_work_without_cargo_bin(self):
+        cargo = self.root / "cargo data"
+        cargo.mkdir()
+        self.env.update(CARGO_HOME=shell_path(cargo), RUSTUP_HOME=shell_path(self.root / "rustup"),
+                        RUSTUP_TOOLCHAIN="stable-aarch64-apple-darwin")
+        self.command("rustc", "echo 'host: aarch64-apple-darwin'")
+        self.command("cargo", "echo 'cargo external-proxy'")
+        self.command("rustup", '''case "$1 $2" in
+"target list") echo aarch64-apple-darwin;;
+"toolchain list") echo 'stable-aarch64-apple-darwin (default)';;
+*) exit 31;;
+esac''')
+        result = self.run_phase("rust")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((cargo / "bin").exists())
+        fragment = self.repo / "home/dot_config/dotfiles/path.sh"
+        probe = 'uname() { echo Darwin; }; PATH=/usr/bin:/bin; export PATH; . "$1"; rustc --version --verbose; cargo --version; rustup target list --installed'
+        result = subprocess.run([find_bash(), "-c", probe, "fresh-shell", fragment.as_posix()],
+                                env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("host: aarch64-apple-darwin", result.stdout)
+        self.assertIn("cargo external-proxy", result.stdout)
 
     def test_dirty_vcpkg_checkout_is_not_updated(self):
         checkout = self.home / ".local/share/dotfiles/vcpkg"

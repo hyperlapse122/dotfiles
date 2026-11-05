@@ -130,7 +130,7 @@ flowchart TB
 - R13 and R14 cover Mac outputs; MSVC, MFC, WPF, .NET Framework targeting packs, Windows SDKs, and Windows-target build outputs remain Windows concerns.
 - Full Xcode IDE, iOS development, and additional application-specific SDKs are not requested.
 - Project source migration, retargeting existing applications, and preinstalling an arbitrary global library collection are excluded.
-- Existing exclusions for Intune-provisioned applications, automated OAuth login, private-key distribution, and installation of organization root certificates remain in force.
+- Existing exclusions for Intune-provisioned applications, automated OAuth login, private GPG key distribution, and installation of organization root certificates remain in force.
 - New harnesses, replacement editors, and unrelated Windows/Linux feature expansion are excluded; R19 covers compatibility.
 
 ### Dependencies / Assumptions
@@ -194,7 +194,8 @@ flowchart TB
 The owner gains a macOS device entry path without changing Windows bootstrap or the common worktree preparation contract.
 New Darwin hooks must render empty on other systems; common shell/profile changes must preserve existing PATH content and remain idempotent.
 The shared harness instruction template, CE release pin, native registries and existing app downloads remain their current authorities.
-Host-specific SSH identities remain host-specific; the existing MS-7D91 private SSH configuration is not copied to the Mac.
+The existing repository-managed default SSH identity is restored on explicit application after GPG decryption, including on the Mac.
+The former MS-7D91 host name records key provenance, not an application restriction; pre-apply instructions must direct the owner to review any existing default SSH identity under `docs/guides/secrets-and-authentication.md`.
 Documentation must correct the stale bootstrap example to match `mise.toml`'s hook-free root configuration and root source selection.
 
 ### Assumptions and Execution-Time Checks

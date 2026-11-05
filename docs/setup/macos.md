@@ -32,6 +32,8 @@ Do not install second Homebrew copies of those development tools for this setup.
 Configure GPG private-key or hardware-token access before personal application.
 The repository does not distribute private GPG keys, establish trust, sign in to accounts, or install organization root certificates.
 Use the [Git/GPG guide](../guides/git-and-gpg.md) and [secrets guide](../guides/secrets-and-authentication.md) to confirm the expected `~/.gnupg` location and key access.
+Explicit application also restores the existing repository-managed default SSH identity as `~/.ssh/id_ed25519` and `~/.ssh/id_ed25519.pub` after GPG decryption.
+Review any existing default SSH identity before previewing and applying, as described in the [SSH identity guide](../guides/secrets-and-authentication.md#ssh-identity).
 Never paste tokens or private keys into tracked files or diagnostic output.
 
 ## Prepare and Register the Permanent Checkout
@@ -64,7 +66,7 @@ Registration does not apply dotfiles.
 
 ## Preview and Apply
 
-Close active Codex, omp, Antigravity and T3 sessions before updating their managed configuration and plugins.
+Close active Claude Code, Codex, omp, Antigravity and T3 sessions before updating their managed configuration and plugins.
 From the selected checkout:
 
 ```sh
@@ -102,7 +104,7 @@ PowerShell receives its existing managed mise profile integration.
 Check discovery in a fresh shell outside the dotfiles directory:
 
 ```sh
-command -v codex omp agy antigravity-acp gh glab ghq t3 op podman
+command -v claude codex omp agy antigravity-acp gh glab ghq t3 op podman
 command -v python pwsh dotnet rustc cargo cmake ninja vcpkg
 dotnet --list-sdks
 ```
@@ -131,7 +133,7 @@ A successful installer or a discovered skill alone does not establish full devic
 | --- | --- |
 | Native prerequisites | macOS 15+, native `arm64`, Homebrew `/opt/homebrew`, selected clang and macOS SDK |
 | CLI and shells | Commands above resolve in fresh Zsh/Bash and PowerShell sessions outside the repository |
-| AI instructions | Codex `~/.codex/AGENTS.md`, omp `~/.omp/agent/AGENTS.md`, Antigravity `~/.gemini/GEMINI.md` are discovered natively; shared content includes no foreign harness branch |
+| AI instructions | Claude Code `~/.claude/CLAUDE.md`, Codex `~/.codex/AGENTS.md`, omp `~/.omp/agent/AGENTS.md`, Antigravity `~/.gemini/GEMINI.md` are discovered natively; shared content includes no foreign harness branch |
 | CE installation and discovery | Each harness lists/enables the pinned user-scope CE plugin and discovers its native skills; existing disposable-home smoke coverage is described in the testing guide |
 | Authenticated CE execution | Sign in through each harness's supported flow and invoke a harmless CE skill; retain the result separately from installation/discovery evidence |
 | T3 and desktop apps | `t3 --version`, `t3 app` in a project, managed preferences/provider initialization, Chrome, 1Password and Podman Desktop launch |
@@ -142,7 +144,8 @@ A successful installer or a discovered skill alone does not establish full devic
 | Native builds | The explicit smoke command below builds, ARM64-identifies and runs Rust, C++, both .NET SDK outputs and a CMake/vcpkg fmt consumer |
 | Repeat application | A second `mise run apply` preserves unrelated settings/plugins, keeps commands usable, repairs missing apps and reuses the selected Podman machine |
 | New worktree | `mise trust`, `mise install`, and `mise run bootstrap` prepare another worktree without applying personal settings or executing personal chezmoi hooks |
-| Host-specific exclusions | MS-7D91's SSH identity stays on its intended host; Windows MSVC/MFC/WPF/.NET Framework/SDK provisioning and WSL-specific behavior are not copied to Mac |
+| SSH identity | Review the existing default key before explicit application restores the repository-managed encrypted SSH identity; the former host name records its origin, not a host restriction |
+| Platform exclusions | Windows MSVC/MFC/WPF/.NET Framework/SDK provisioning and WSL-specific behavior are not copied to Mac |
 
 Run native build verification explicitly after provisioning:
 
