@@ -1,9 +1,16 @@
 name: Test
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
+    inputs:
+      base-sha:
+        description: Immutable checkout SHA (empty uses the dispatch ref)
+        type: string
+        default: ""
+      lock-artifact:
+        description: Candidate personal-app lock artifact ID
+        type: string
+        default: ""
   workflow_call:
     inputs:
       base-sha:

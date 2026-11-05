@@ -31,6 +31,7 @@ AREAS = {
     "build-contracts": (
         "test_windows_build_apply", "test_windows_build_environment", "test_windows_build_prepare",
         "test_windows_build_smoke", "test_windows_visual_studio", "test_ci_areas",
+        "test_ci_event_policy",
     ),
 }
 

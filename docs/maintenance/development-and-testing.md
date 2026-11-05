@@ -70,11 +70,13 @@ mise exec -- python scripts/run-test-area.py --area all --report area-results.js
 | applications | `test_personal_apps`, `test_personal_app_lock`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
 | security | `test_secrets`, `test_git_gpg`, `test_script_lifecycle`, `test_github_auth`, `test_github_auth_import`, `test_gitlab_auth`, `test_gitlab_auth_import` | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
 | platform | `test_bootstrap`, `test_global_chezmoi`, `test_windows_bootstrap`, `test_windows_apply_hook`, `test_windows_apps`, `test_windows_virtualization` | Root mise tools; Windows PowerShell and Git for Windows fixture checks |
-| build-contracts | `test_windows_build_apply`, `test_windows_build_environment`, `test_windows_build_prepare`, `test_windows_build_smoke`, `test_windows_visual_studio`, `test_ci_areas` | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles, never real provisioning |
+| build-contracts | `test_windows_build_apply`, `test_windows_build_environment`, `test_windows_build_prepare`, `test_windows_build_smoke`, `test_windows_visual_studio`, `test_ci_areas`, `test_ci_event_policy` | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles, never real provisioning |
 
 All areas remain selected on every existing unit runner. Platform guards stay with the tests: Windows-named build-apply/rendering and mocked verifier contracts also run on Unix. The entire tests directory remains importable for credential fixture reuse, but imports do not schedule another area's cases.
 
 The initial three-area candidate put 182 seconds of the measured local baseline in platform contracts, versus about 31 seconds for applications and 63 seconds for security. Four physical areas combine small shell checks with applications and separate build contracts from bootstrap. This reduces the estimated longest local area to about 88 seconds without splitting class fixtures. Hosted setup, queue, and aggregate-runner measurements remain necessary; local estimates do not establish hosted savings.
+
+The first actual selected-area run passed 226 cases with the baseline's 10 platform skips: applications 56.165s, security 63.524s, platform 108.185s, and build-contracts 69.160s. The platform run exceeded the additive estimate, which reinforces the need to measure full jobs rather than infer savings from summed test timings.
 
 ### Windows Test Console Policy
 
@@ -191,3 +193,33 @@ Hosted-only PATH, desktop-installation, and credential-write modes must not run 
 Windows credential jobs verify and unpack the existing checksummed native GPG fixture; Git's MSYS GPG is not a substitute. Each Linux credential job provisions and starts its own D-Bus/Secret Service session. macOS credential fixtures restore the original default keychain and search list. Windows ARM installs only the tools needed by its area, not the unsupported full development tool set.
 
 Unit jobs retain the root mise tool environment because the bootstrap contract runs ordinary `mise install` twice. Each unit job validates the entire assignment map and uploads its test-ID/skip/timing report, even though it executes only one area.
+
+### Automatic event policy
+
+`test-events.yml` owns push/PR admission and obsolete-run cancellation. `test.yml` remains the read-only reusable and manually dispatchable suite. The personal-lock updater still calls `test.yml` with its immutable `base-sha` and `lock-artifact`; every suite checkout uses `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials.
+
+| Event or state | Validation |
+|---|---|
+| Nondefault branch without a PR | Branch-head suite |
+| PR opens or reopens | Event merge-result suite; eligible in-flight branch suite is canceled |
+| Push updates an open, mergeable PR | PR merge-result suite owns validation once its matching run is scheduled; duplicate push fan-out is omitted |
+| PR conflicts or mergeability/run scheduling is unknown | Branch suite remains as fallback, with the admission reason in logs |
+| Default-branch push | Branch suite, regardless of PR lookup |
+| Tag push | Tag suite, distinct from a branch with the same short name |
+| Fork PR | Read-only merge-result suite; no write-capable cancellation controller |
+| Manual dispatch | Independent suite, with optional `base-sha` and `lock-artifact` inputs |
+| Reusable call | Independent caller-owned suite and input identity; automatic events cannot cancel it |
+
+PR checkout uses the event's immutable merge SHA, never a substituted head SHA. If only the base branch advances before admission, the original merge snapshot still runs: base advancement alone does not schedule a replacement PR event. This policy does not promise continuous revalidation against every later base commit.
+
+The primary deduplication decision is the read-only admission lookup, not cancellation. A metadata-only controller has job-local `actions: write`, no checkout, and no repository-code execution. It targets only older runs of the exact event-entry workflow and verified logical target. Full refs in run titles distinguish branches from tags. Freshness checks and run-number bounds prevent delayed old controllers from selecting newer runs. An exact event/ref/SHA concurrency group cancels duplicate snapshots without making arrival order decide which commit is current.
+
+PR opening is not an atomic handoff: a push can pass admission before the PR exists, and API listing/cancellation can race. Targeted cleanup cancels the replaceable push while the merge suite remains authoritative. Unknown metadata retains coverage rather than guessing; any overlap and actual cancellation evidence belong in the PR validation record.
+
+### Check-name migration and validation records
+
+Combined `Unit and supported-target rendering (...)` and `Native apps, CE, PATH, and credentials (...)` checks are replaced by `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, displayed beneath the `Validate` reusable call for automatic events. Each area's result remains independently visible. No required-check configuration or ruleset was returned for main during this change; repository protection settings are not modified. If protection is enabled, select the new per-area merge-result checks rather than the removed combined names or admission-only checks.
+
+The comparable baseline is the successful [PR run 41959406936](https://github.com/hyperlapse122/dotfiles/actions/runs/41959406936) and [push run 41959146646](https://github.com/hyperlapse122/dotfiles/actions/runs/41959146646), both at `86ae6829b0bf1f0f194724196d34cb34f6643040`. They used 13 jobs each: PR elapsed 309s / aggregate job time 1532s; push elapsed 283s / aggregate job time 1599s. Together they used 3131 runner-seconds, excluding billing rounding.
+
+The PR validation record must link the resulting full hosted matrix, event transition runs, and before/after elapsed and aggregate job times. Measure elapsed from run creation through completion and aggregate runner time from each job's start/end timestamps; report queue effects and canceled work separately. More independent jobs repeat setup and can queue longer, so job count alone is not evidence of improvement.
