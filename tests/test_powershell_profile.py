@@ -30,7 +30,8 @@ class PowerShellProfileTest(unittest.TestCase):
         self.repo = Path(__file__).resolve().parents[1]
         scratch = tempfile.TemporaryDirectory(prefix="powershell profile ")
         self.addCleanup(scratch.cleanup)
-        self.root = Path(scratch.name)
+        # Match PowerShell's long-path spelling when TEMP contains an 8.3 alias.
+        self.root = Path(scratch.name).resolve()
         self.home = self.root / "user home"
         self.home.mkdir()
         self.project = self.root / "project"

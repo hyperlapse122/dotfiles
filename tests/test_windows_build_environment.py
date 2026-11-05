@@ -152,7 +152,8 @@ class WindowsBuildEnvironmentTest(unittest.TestCase):
         self.repo = Path(__file__).resolve().parents[1]
         scratch = tempfile.TemporaryDirectory(prefix="build environment '")
         self.addCleanup(scratch.cleanup)
-        self.root = Path(scratch.name) / "ユーザー tools"
+        # Canonicalize only fixture paths; raw registry strings remain exact below.
+        self.root = Path(scratch.name).resolve() / "ユーザー tools"
         self.root.mkdir()
         self.registry = "Software\\dotfiles-build-test-" + uuid.uuid4().hex
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.registry) as key:

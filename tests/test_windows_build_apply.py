@@ -18,7 +18,8 @@ class WindowsBuildApplyTest(unittest.TestCase):
         self.repo = Path(__file__).resolve().parents[1]
         scratch = tempfile.TemporaryDirectory(prefix="windows build apply ")
         self.addCleanup(scratch.cleanup)
-        self.root = Path(scratch.name)
+        # Match native working-directory receipts even when TEMP uses an 8.3 alias.
+        self.root = Path(scratch.name).resolve()
         self.worktree = self.root / "active 한글 worktree's source"
         self.source = self.worktree / "home"
         scripts = self.source / ".chezmoiscripts"
