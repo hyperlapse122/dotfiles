@@ -73,6 +73,16 @@ class T3CodeSettingsTest(unittest.TestCase):
                        "commandArgs": ["acp"]},
         }
 
+    def expected_codex(self, os_name=None):
+        if os_name is None:
+            os_name = self.chez("execute-template", "{{ .chezmoi.os }}").stdout
+        executable = "codex.exe" if os_name == "windows" else "codex"
+        return {
+            "driver": "codex", "enabled": True,
+            "config": {"enabled": True, "setupMode": "existing",
+                       "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
+        }
+
     def render(self, body, os_name, arch, *, existing="", distro="ubuntu"):
         context = ('(dict "chezmoi" (dict "os" ' + json.dumps(os_name)
                    + ' "arch" ' + json.dumps(arch)
@@ -85,7 +95,8 @@ class T3CodeSettingsTest(unittest.TestCase):
 
     def test_missing_empty_and_missing_provider_objects_initialize_minimally(self):
         cases = (None, "", " \n\t", "{}", '{"preferences":{"theme":"dark"}}',
-                 '{"providerInstances":{}}', '{"providerInstances":{"omp":{}}}')
+                 '{"providerInstances":{}}', '{"providerInstances":{"omp":{}}}',
+                 '{"providerInstances":{"codex":{"config":{}}}}')
         for existing in cases:
             with self.subTest(existing=existing):
                 self.settings.parent.mkdir(parents=True, exist_ok=True)
@@ -93,7 +104,8 @@ class T3CodeSettingsTest(unittest.TestCase):
                 if existing is not None:
                     self.settings.write_text(existing, encoding="utf-8")
                 self.apply()
-                expected = {"providerInstances": {"omp": self.expected_provider()}}
+                expected = {"providerInstances": {"omp": self.expected_provider(),
+                                                  "codex": self.expected_codex()}}
                 if existing and "preferences" in existing:
                     expected["preferences"] = {"theme": "dark"}
                 self.assertEqual(self.read_settings(), expected)
@@ -106,7 +118,14 @@ class T3CodeSettingsTest(unittest.TestCase):
         original = {
             "preferences": {"theme": "custom", "nested": [1, None, {"keep": True}]},
             "providerInstances": {
-                "codex": {"driver": "codex", "enabled": False, "custom": {"keep": "雪"}},
+                "unrelated": {"driver": "codex", "enabled": False, "custom": {"keep": "雪"}},
+                "codex": {
+                    "driver": "stale", "enabled": False, "displayName": "My Codex",
+                    "accentColor": None, "custom": [1, None],
+                    "config": {"enabled": False, "setupMode": "managed", "binaryPath": "old",
+                               "launchArgs": "--config model_reasoning_effort=low",
+                               "custom": {"keep": "雪"}},
+                },
                 "omp": {
                     "driver": "stale", "enabled": True, "displayName": "My agent",
                     "accentColor": "#123456", "unowned": {"array": [False, {"keep": None}]},
@@ -123,6 +142,9 @@ class T3CodeSettingsTest(unittest.TestCase):
         desired = self.expected_provider()
         provider.update(driver=desired["driver"], enabled=True)
         provider["config"].update(desired["config"])
+        codex = expected["providerInstances"]["codex"]
+        codex.update(driver="codex", enabled=True)
+        codex["config"].update(self.expected_codex()["config"])
         self.assertEqual(self.read_settings(), expected)
         converged = self.settings.read_bytes()
         self.apply()
@@ -132,17 +154,35 @@ class T3CodeSettingsTest(unittest.TestCase):
         drifted["providerInstances"]["omp"]["enabled"] = False
         drifted["providerInstances"]["omp"]["config"].update(
             enabled=False, source="remote", commandPath="drift", commandArgs=[])
+        drifted["providerInstances"]["codex"].update(driver="wrong", enabled=False)
+        drifted["providerInstances"]["codex"]["config"].update(
+            enabled=False, setupMode="managed", binaryPath="drift")
         self.write_settings(drifted)
         self.apply()
         self.assertEqual(self.read_settings(), expected)
-        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "codex"})
+        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "codex", "unrelated"})
 
     def test_existing_presentation_keys_are_not_owned_even_when_null(self):
         self.write_settings({"providerInstances": {"omp": {"displayName": None, "accentColor": ""}}})
         self.apply()
         expected = self.expected_provider()
         expected.update(displayName=None, accentColor="")
-        self.assertEqual(self.read_settings(), {"providerInstances": {"omp": expected}})
+        self.assertEqual(self.read_settings(), {"providerInstances": {
+            "omp": expected, "codex": self.expected_codex()}})
+
+    def test_existing_native_codex_options_and_presentation_survive_reapply(self):
+        codex = self.expected_codex()
+        codex.update(displayName="Local Codex", accentColor="#abcdef",
+                     environment=[{"name": "EXAMPLE", "value": "fixture", "sensitive": False}])
+        codex["config"].update(launchArgs="--config model_reasoning_effort=low",
+                               homePath="/custom/codex/home", customModels=["custom-model"])
+        self.write_settings({"providerInstances": {"codex": codex}})
+        self.apply()
+        expected = {"providerInstances": {"codex": codex, "omp": self.expected_provider()}}
+        self.assertEqual(self.read_settings(), expected)
+        before = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), before)
 
     def test_invalid_json_and_incompatible_object_boundaries_preserve_bytes(self):
         originals = [b'{ "providerInstances": ', b"{bad json}", b"null", b"[]", b"false", b'"text"', b"42"]
@@ -151,6 +191,8 @@ class T3CodeSettingsTest(unittest.TestCase):
                 {"providerInstances": invalid},
                 {"providerInstances": {"omp": invalid}},
                 {"providerInstances": {"omp": {"config": invalid}}},
+                {"providerInstances": {"codex": invalid}},
+                {"providerInstances": {"codex": {"config": invalid}}},
             ))
         self.settings.parent.mkdir(parents=True, exist_ok=True)
         for original in originals:
@@ -166,8 +208,10 @@ class T3CodeSettingsTest(unittest.TestCase):
                               ("linux", "amd64"), ("linux", "arm64"), ("darwin", "arm64")):
             with self.subTest(os=os_name, arch=arch):
                 rendered = json.loads(self.render(body, os_name, arch))
-                self.assertEqual(rendered, {"providerInstances": {"omp": self.expected_provider(os_name)}})
+                self.assertEqual(rendered, {"providerInstances": {
+                    "omp": self.expected_provider(os_name), "codex": self.expected_codex(os_name)}})
                 self.assertTrue(Path(rendered["providerInstances"]["omp"]["config"]["commandPath"]).is_absolute())
+                self.assertTrue(Path(rendered["providerInstances"]["codex"]["config"]["binaryPath"]).is_absolute())
 
     def test_configuration_and_parent_directories_are_private(self):
         for _ in range(2):
