@@ -76,7 +76,10 @@
 {{- if eq .chezmoi.os "windows" -}}{{- $claudeExecutable = "claude.exe" -}}{{- end -}}
 {{- $claudeCommand := joinPath .chezmoi.destDir ".local" "bin" $claudeExecutable | replace "\\" "/" -}}
 {{- $claudeHome := joinPath .chezmoi.destDir ".claude" | replace "\\" "/" -}}
-{{- $claudeConfig = $claudeConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $claudeCommand | setValueAtPath "homePath" $claudeHome -}}
+{{- if and (kindIs "string" (get $claudeConfig "homePath")) (eq (get $claudeConfig "homePath") $claudeHome) -}}
+{{- $claudeConfig = omit $claudeConfig "homePath" -}}
+{{- end -}}
+{{- $claudeConfig = $claudeConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $claudeCommand -}}
 {{- $claude = $claude | setValueAtPath "driver" "claudeAgent" | setValueAtPath "enabled" true | setValueAtPath "config" $claudeConfig -}}
 {{- $providers = $providers | setValueAtPath "claudeAgent" $claude -}}
 {{- $settings = $settings | setValueAtPath "providerInstances" $providers -}}

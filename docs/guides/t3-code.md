@@ -83,7 +83,7 @@ The template also manages a single `claudeAgent` provider entry:
 
 - Uses T3's native `claudeAgent` driver and enables both the provider and its configuration.
 - Sets `binaryPath` to the fully expanded destination `.local/bin/claude` path (`claude.exe` on Windows).
-- Sets `homePath` to the fully expanded destination `.claude` directory so the provider reads managed preferences, instructions, and CE. T3 maps this field to `CLAUDE_CONFIG_DIR` without replacing `HOME`.
+- Uses Claude's native default user context. It does not add `homePath`: forcing that field to `.claude` would set `CLAUDE_CONFIG_DIR` and move the normally separate `~/.claude.json`, bypassing terminal login/MCP/trust metadata. Reapply clears only the previous repository-added absolute default; a different custom scope stays user-owned and unmanaged.
 - Preserves unowned options, model choices, presentation, and unrelated providers. A custom path on this managed instance is restored to the managed destination on reapply.
 
 Claude uses its native SDK protocol; no ACP argument is added. Run `claude auth login` manually before authenticated use. Native compatibility is verified against T3 Code 0.1.7; a retained older desktop may need its normal update first.

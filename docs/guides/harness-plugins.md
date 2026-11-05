@@ -41,7 +41,7 @@ The managed scope is the default `~/.codex`. Custom `CODEX_HOME` locations remai
 
 Explicit apply registers, installs, and enables CE at Claude user scope from the shared local directory. Claude uses the same CE release and commit pin as Codex and omp; the initial pin is `compound-engineering-v3.35.1` at `42f9745ea0a4b70f8dde059aa8cf7f974d2991f1`.
 
-The after hook runs the absolute managed Claude executable with `HOME` and `CLAUDE_CONFIG_DIR` bound to the destination home and its `.claude` directory. Windows also sets `USERPROFILE`. It performs the native lifecycle:
+The after hook runs the absolute managed Claude executable with `HOME` bound to the destination home; Windows also sets `USERPROFILE`. It clears `CLAUDE_CONFIG_DIR` so native global state remains in `~/.claude.json`, alongside the default `.claude` directory. Setting that variable even to the default directory would relocate the global file. It performs the native lifecycle:
 
 ```sh
 claude plugin marketplace add /absolute/path/to/.local/share/dotfiles/harness-plugins/compound-engineering --scope user --json

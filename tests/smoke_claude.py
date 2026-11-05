@@ -98,7 +98,7 @@ def main():
         config.write_text(config_text, encoding="utf-8")
         env = {key: value for key, value in os.environ.items()
             if not key.upper().startswith(("CLAUDE", "ANTHROPIC_", "AWS_", "AZURE_", "GOOGLE_"))}
-        env.update({"HOME": str(home), "USERPROFILE": str(home), "CLAUDE_CONFIG_DIR": str(home / ".claude"),
+        env.update({"HOME": str(home), "USERPROFILE": str(home),
             "APPDATA": str(root / "config"), "LOCALAPPDATA": str(root / "local"),
             "XDG_CONFIG_HOME": str(root / "config"), "XDG_CONFIG_DIRS": str(root / "system-config"),
             "XDG_DATA_HOME": str(root / "data"), "XDG_CACHE_HOME": str(root / "cache"),
@@ -115,6 +115,8 @@ def main():
             raise RuntimeError(f"Expected {args.expected_target}, got {target}")
         if target not in declarations["personalApps"]["claude"]["targets"]:
             raise RuntimeError(f"No committed Claude binary for {target}")
+        global_config = home / ".claude.json"
+        global_config.write_text(json.dumps({"ownerScopeFixture": "native-default"}), encoding="utf-8")
         chez("apply", "--force", "--exclude=scripts")
         binary = home / ".local/bin" / ("claude.exe" if os.name == "nt" else "claude")
 
@@ -136,6 +138,10 @@ def main():
             return ce
 
         installed_ce()
+        if json.loads(global_config.read_text(encoding="utf-8")).get("ownerScopeFixture") != "native-default":
+            raise RuntimeError("Native apply changed unrelated default global state")
+        if (home / ".claude/.claude.json").exists():
+            raise RuntimeError("Native plugin apply split the default global configuration")
         unrelated = root / "unrelated"
         (unrelated / ".claude-plugin").mkdir(parents=True)
         (unrelated / ".claude-plugin/marketplace.json").write_text(json.dumps({
@@ -210,6 +216,15 @@ def main():
             raise RuntimeError("Native explicit CE invocation did not expand the pinned skill body\n" + result.stdout + result.stderr)
         print("Verified: native user instructions, Korean preference, disabled automatic memory, and explicit pinned CE skill expansion in the outgoing model request")
         print("Model completion NOT exercised: the localhost capture-only endpoint deliberately returned HTTP 400; no real credentials or OAuth were used.")
+        plugin_data = source / ".chezmoidata/harness-plugins.json"
+        declared = json.loads(plugin_data.read_text(encoding="utf-8"))
+        declared["harnessPlugins"]["compound-engineering"]["claude"]["plugin"] = "dotfiles-missing-native-plugin"
+        plugin_data.write_text(json.dumps(declared), encoding="utf-8")
+        failed = subprocess.run(command + ["apply", "--force"], env=env, cwd=outside,
+            capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=90)
+        if failed.returncode == 0:
+            raise RuntimeError("Apply swallowed a genuine native plugin installation failure")
+        print("Verified: a genuine native plugin installation failure stops apply")
 
 
 if __name__ == "__main__":

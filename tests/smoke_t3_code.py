@@ -149,8 +149,7 @@ def prove_t3_provider(launcher, settings, env, outside, root, instance_id, expec
     isolated = {key: value for key, value in env.items() if key.upper() in safe_keys}
     isolated.update({key: env[key] for key in (
         "HOME", "USERPROFILE", "APPDATA", "XDG_CONFIG_HOME", "XDG_CONFIG_DIRS",
-        "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "T3CODE_HOME", "CODEX_HOME",
-        "CLAUDE_CONFIG_DIR")})
+        "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "T3CODE_HOME", "CODEX_HOME")})
     managed_bin = launcher.parent.resolve()
     isolated["PATH"] = os.pathsep.join(
         part for part in isolated.get("PATH", "").split(os.pathsep)
@@ -194,7 +193,7 @@ def prove_t3_provider(launcher, settings, env, outside, root, instance_id, expec
             config = rpc.call("1", "server.getConfig", {})
             managed = config["settings"]["providerInstances"][instance_id]
             expected = runtime["providerInstances"][instance_id]
-            for key in (("binaryPath", "homePath") if instance_id == "claudeAgent" else ("binaryPath",)):
+            for key in ("binaryPath",):
                 if managed["config"][key] != expected["config"][key]:
                     raise RuntimeError(f"T3 did not load the managed absolute {instance_id} {key}")
             refreshed = rpc.call("2", "server.refreshProviders", {"instanceId": instance_id, "fresh": True})
@@ -205,6 +204,11 @@ def prove_t3_provider(launcher, settings, env, outside, root, instance_id, expec
                     or provider["auth"]["status"] != "unauthenticated"):
                 raise RuntimeError(f"T3 native {instance_id} initialization was not proven: {provider}")
             if instance_id == "claudeAgent":
+                if (Path(env["HOME"]) / ".claude/.claude.json").exists():
+                    raise RuntimeError("T3 split Claude's native default global state")
+                global_config = json.loads((Path(env["HOME"]) / ".claude.json").read_text(encoding="utf-8"))
+                if global_config.get("ownerScopeFixture") != "native-default":
+                    raise RuntimeError("T3 changed unrelated default Claude global state")
                 names = {item["name"].lstrip("/") for item in provider.get("slashCommands", [])}
                 if "compound-engineering:ce-plan" not in names:
                     raise RuntimeError(f"T3 Claude initialization did not discover pinned CE: {names}")
@@ -244,7 +248,8 @@ def main():
         shutil.copy2(REPO / "home/.chezmoiignore", source / ".chezmoiignore")
         config = root / "chezmoi.toml"
         config.write_text("", encoding="utf-8")
-        env = os.environ.copy()
+        env = {key: value for key, value in os.environ.items()
+               if not key.upper().startswith(("CLAUDE", "ANTHROPIC_"))}
         env.update({
             "HOME": str(home), "USERPROFILE": str(home), "ZDOTDIR": str(home),
             "APPDATA": str(root / "appdata"),
@@ -252,7 +257,6 @@ def main():
             "XDG_DATA_HOME": str(root / "data"), "XDG_CACHE_HOME": str(root / "cache"),
             "XDG_STATE_HOME": str(root / "state"), "T3CODE_HOME": str(home / ".t3"),
             "CODEX_HOME": str(home / ".codex"),
-            "CLAUDE_CONFIG_DIR": str(home / ".claude"),
         })
         # Keep native app-install discovery (LOCALAPPDATA/Applications) separate
         # from the isolated T3/omp runtime state; no registry action is copied.
@@ -289,6 +293,7 @@ def main():
         (codex_home / "config.toml").write_text(
             'check_for_update_on_startup = false\ncli_auth_credentials_store = "file"\n',
             encoding="utf-8")
+        (home / ".claude.json").write_text(json.dumps({"ownerScopeFixture": "native-default"}), encoding="utf-8")
         settings = home / ".t3/userdata/settings.json"
         settings.parent.mkdir(parents=True)
         settings.write_text(json.dumps({"idleCompaction": "onReturn", "providerInstances": {

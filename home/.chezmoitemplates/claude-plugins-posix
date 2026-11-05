@@ -3,8 +3,9 @@
 set -eu
 
 HOME='{{ .chezmoi.destDir | replace "'" "'\\''" }}'
-CLAUDE_CONFIG_DIR="$HOME/.claude"
-export HOME CLAUDE_CONFIG_DIR
+export HOME
+# Even the default directory relocates .claude.json when this variable is set.
+unset CLAUDE_CONFIG_DIR
 claude="$HOME/.local/bin/claude"
 chezmoi='{{ .chezmoi.executable | replace "'" "'\\''" }}'
 checker='{{ $check }}'

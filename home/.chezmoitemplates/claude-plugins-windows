@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Stop'
 $env:HOME = '{{ .chezmoi.destDir | replace "'" "''" }}'
 $env:USERPROFILE = $env:HOME
-$env:CLAUDE_CONFIG_DIR = Join-Path $env:HOME '.claude'
+# Even the default directory relocates .claude.json when this variable is set.
+Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
 $claude = Join-Path $env:HOME '.local/bin/claude.exe'
 
 function Invoke-ClaudePlugin {

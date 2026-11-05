@@ -93,8 +93,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         return {
             "driver": "claudeAgent", "enabled": True,
             "config": {"enabled": True,
-                       "binaryPath": (self.home / ".local/bin" / executable).as_posix(),
-                       "homePath": (self.home / ".claude").as_posix()},
+                       "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
     def render(self, body, os_name, arch, *, existing="", distro="ubuntu"):
@@ -209,7 +208,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)
 
-    def test_native_claude_reconciles_context_and_preserves_unowned_options(self):
+    def test_native_claude_reconciles_executable_and_preserves_custom_scope(self):
         provider = self.expected_claude()
         provider.update(driver="stale", enabled=False, displayName="My Claude", accentColor=None)
         provider["config"].update(enabled=False, binaryPath="old", homePath="/custom/home",
@@ -223,6 +222,10 @@ class T3CodeSettingsTest(unittest.TestCase):
         before = self.settings.read_bytes()
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)
+        provider["config"]["homePath"] = (self.home / ".claude").as_posix()
+        self.write_settings({"providerInstances": {"claudeAgent": provider}})
+        self.apply()
+        self.assertNotIn("homePath", self.read_settings()["providerInstances"]["claudeAgent"]["config"])
 
     def test_invalid_json_and_incompatible_object_boundaries_preserve_bytes(self):
         originals = [b'{ "providerInstances": ', b"{bad json}", b"null", b"[]", b"false", b'"text"', b"42"]
