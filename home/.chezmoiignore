@@ -56,3 +56,17 @@ Library
 {{ if not $t3Posix }}
 .local/bin/t3
 {{ end }}
+{{ $antigravity := get $apps "antigravity" | default dict }}
+{{ $antigravityTargets := get $antigravity "targets" | default dict }}
+{{ $antigravitySupported := hasKey $antigravityTargets $target }}
+{{ if not $antigravitySupported }}
+.gemini
+{{ end }}
+{{ if or (not $antigravitySupported) (ne .chezmoi.os "windows") }}
+.local/bin/agy.cmd
+.local/bin/antigravity-acp.cmd
+{{ end }}
+{{ if or (not $antigravitySupported) (eq .chezmoi.os "windows") }}
+.local/bin/agy
+.local/bin/antigravity-acp
+{{ end }}

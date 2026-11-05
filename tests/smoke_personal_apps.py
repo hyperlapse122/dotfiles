@@ -150,7 +150,8 @@ def fresh_windows_environment(isolated):
 
 
 def check_terminal_path(home, outside, env, name, tag, shells):
-    installed = home / ".local/bin" / (name + ".exe" if os.name == "nt" else name)
+    suffix = ".cmd" if name in ("agy", "antigravity-acp") else ".exe"
+    installed = home / ".local/bin" / (name + suffix if os.name == "nt" else name)
     if os.name == "nt":
         output = run([
             shells["powershell"], "-NoProfile", "-Command",
@@ -252,6 +253,11 @@ def main():
             ".chezmoidata/personal-app-lock.json",
             ".chezmoiexternals/personal-apps.toml.tmpl",
             ".chezmoiexternals/codex-package.toml.tmpl",
+            ".chezmoiignore",
+            "dot_local/bin/executable_agy.tmpl",
+            "dot_local/bin/agy.cmd.tmpl",
+            "dot_local/bin/executable_antigravity-acp.tmpl",
+            "dot_local/bin/antigravity-acp.cmd.tmpl",
             "dot_config/dotfiles/path.sh",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
@@ -271,6 +277,8 @@ def main():
             "XDG_CACHE_HOME": str(root / "cache"),
             "XDG_STATE_HOME": str(root / "state"),
             "CODEX_HOME": str(home / ".codex"),
+            "AGY_CLI_DISABLE_AUTO_UPDATE": "true",
+            "AGY_SKIP_DOWNLOAD": "1",
         })
         command = [
             chezmoi, "--config", str(config), "--source", str(source),
@@ -297,7 +305,7 @@ def main():
                 if target not in application["targets"]:
                     continue
                 tag = lock["personalAppLocks"][name]["tag"]
-                binary = home / ".local/bin" / (application["command"] + ".exe" if os.name == "nt" else application["command"])
+                binary = home / application.get("installDirectory", ".local/bin") / (application["command"] + ".exe" if os.name == "nt" else application["command"])
                 output = run([str(binary), "--version"], env=env, cwd=outside)
                 check_version(output, tag)
                 print(f"Native {target}, {name}, committed {tag}: {output}")
