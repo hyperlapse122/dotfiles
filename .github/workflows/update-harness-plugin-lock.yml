@@ -44,7 +44,6 @@ jobs:
 
   validate:
     needs: resolve
-    # Validate the same immutable CE candidate on every supported native target.
     uses: ./.github/workflows/test.yml
     with:
       base-sha: ${{ needs.resolve.outputs.base-sha }}
