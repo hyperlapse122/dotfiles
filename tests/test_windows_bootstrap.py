@@ -22,6 +22,7 @@ class WindowsBootstrapTest(unittest.TestCase):
         self.checkout.mkdir()
         self.env = os.environ.copy()
         self.env["MISE_CONFIG_DIR"] = str(self.root / "mise config")
+        self.env["BOOTSTRAP_TEST_DEVELOPER_MODE"] = "1"
         self.commands = self.root / "commands"
         self.commands.mkdir()
         (self.commands / "chezmoi.cmd").write_text("@echo off\nexit /b 0\n", encoding="ascii")
@@ -39,11 +40,25 @@ class WindowsBootstrapTest(unittest.TestCase):
     def git_run(self, *args):
         return subprocess.run([self.git, *args], check=True, capture_output=True, text=True)
 
+    def developer_mode_fixture(self):
+        return (
+            "function Get-ItemPropertyValue { [CmdletBinding()] param([string] $LiteralPath, [string] $Name); "
+            "if ($LiteralPath -eq 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AppModelUnlock' "
+            "-and $Name -eq 'AllowDevelopmentWithoutDevLicense') { "
+            "switch ($env:BOOTSTRAP_TEST_DEVELOPER_MODE) { "
+            "'missing-key' { throw [System.Management.Automation.ItemNotFoundException]::new('Key missing') }; "
+            "'missing-value' { throw [System.Management.Automation.PSArgumentException]::new('Value missing') }; "
+            "'denied' { throw [UnauthorizedAccessException]::new('Access denied') }; "
+            "default { return [int]$env:BOOTSTRAP_TEST_DEVELOPER_MODE } } }; "
+            "Microsoft.PowerShell.Management\\Get-ItemPropertyValue @PSBoundParameters }; "
+        )
+
     def run_bootstrap(self, destination=None):
         candidates = ", ".join("'" + str(p).replace("'", "''") + "'" for p in self.native_candidates)
         script = str(self.repo / "bootstrap.ps1").replace("'", "''")
         target = str(destination or self.checkout).replace("'", "''")
         launcher = (
+            self.developer_mode_fixture() +
             "function Get-Command { [CmdletBinding()] param([string[]] $Name, "
             "[switch] $All, [string[]] $CommandType); "
             f"if ($Name.Count -eq 1 -and $Name[0] -eq 'chezmoi') {{ $PSBoundParameters['Name'] = @({candidates}) }}; "
@@ -59,6 +74,25 @@ class WindowsBootstrapTest(unittest.TestCase):
 
     def failing_mise(self, body):
         (self.commands / "mise.cmd").write_text("@echo off\n" + body + "\n", encoding="ascii")
+
+    def test_developer_mode_required_before_installing_or_cloning(self):
+        marker = self.root / "prerequisite invoked"
+        self.env["BOOTSTRAP_TEST_PREREQUISITE_MARKER"] = str(marker)
+        for name in ("git", "mise", "chezmoi", "winget"):
+            (self.commands / f"{name}.cmd").write_text(
+                '@echo off\necho invoked> "%BOOTSTRAP_TEST_PREREQUISITE_MARKER%"\nexit /b 89\n',
+                encoding="ascii",
+            )
+        for state in ("0", "2", "missing-key", "missing-value", "denied"):
+            with self.subTest(state=state):
+                self.env["BOOTSTRAP_TEST_DEVELOPER_MODE"] = state
+                destination = self.root / f"must not clone {state}"
+                result = self.run_bootstrap(destination)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("Developer Mode", result.stderr)
+                self.assertIn("ms-settings:developers", result.stderr)
+                self.assertFalse(marker.exists(), "Bootstrap invoked a prerequisite before preflight")
+                self.assertFalse(destination.exists(), "Bootstrap created the destination before preflight")
 
     def test_repeat_preserves_uncommitted_checkout_files(self):
         sentinel = self.checkout / "local setting.txt"
@@ -78,6 +112,7 @@ class WindowsBootstrapTest(unittest.TestCase):
         script_path = str(self.repo / "bootstrap.ps1").replace("'", "''")
         destination_path = str(destination).replace("'", "''")
         command = (
+            self.developer_mode_fixture() +
             "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); "
             f"& '{script_path}' -Destination '{destination_path}'"
         )

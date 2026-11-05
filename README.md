@@ -10,7 +10,7 @@ Detailed documentation is organized under [docs/](docs/README.md).
 
 ### 1. New Windows PC Bootstrap
 
-On a clean Windows 10/11 machine, open Windows PowerShell (5.1+) and run:
+On a clean Windows 10/11 machine, enable **Developer Mode** in **Settings > For developers** (`start ms-settings:developers`), then open Windows PowerShell (5.1+) and run:
 
 ```powershell
 $bootstrap = Join-Path $env:TEMP 'dotfiles-bootstrap.ps1'
@@ -19,7 +19,7 @@ Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/hyperlapse
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 ```
 
-This installs missing Git, mise, and chezmoi via WinGet, clones this repository to `~/src/github.com/hyperlapse122/dotfiles`, and initializes the worktree.
+This checks Developer Mode before making changes, installs missing Git, mise, and chezmoi via WinGet, clones this repository to `~/src/github.com/hyperlapse122/dotfiles`, and initializes the worktree. Bootstrap stops if Developer Mode is disabled or its enabled state cannot be confirmed; it never enables the setting automatically.
 
 After bootstrap completes, open a fresh PowerShell window and register the permanent checkout:
 

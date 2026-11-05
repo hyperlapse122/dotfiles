@@ -88,6 +88,16 @@ try {
         throw 'This entry point requires Windows. Prepare other worktrees with mise install.'
     }
 
+    $developerMode = try {
+        Get-ItemPropertyValue -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -Name 'AllowDevelopmentWithoutDevLicense' -ErrorAction Stop
+    }
+    catch {
+        $null
+    }
+    if ($developerMode -ne 1) {
+        throw 'Windows Developer Mode must be enabled before bootstrap can continue; its enabled state could not be confirmed. Open Settings > For developers (ms-settings:developers), enable Developer Mode for non-elevated symlink support, and rerun bootstrap.'
+    }
+
     $Destination = [IO.Path]::GetFullPath($Destination)
     Write-Host 'Checking Git, mise, and native chezmoi prerequisites...'
     Update-ProcessPath

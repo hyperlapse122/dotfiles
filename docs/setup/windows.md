@@ -6,6 +6,7 @@ This guide covers initial bootstrap on a new Windows PC, chezmoi source registra
 
 - **Operating System:** Windows 10 version 1809 or newer, including Windows 11.
 - **Shell:** Windows PowerShell 5.1 or newer (preinstalled with Windows). Git, mise, and modern PowerShell (pwsh) do not need to be installed beforehand.
+- **Developer Mode:** Enable Windows Developer Mode before running bootstrap. Open **Settings > For developers** with `start ms-settings:developers` and turn on **Developer Mode** to allow non-elevated symlink creation. Bootstrap checks this setting before installing packages or cloning; disabled, missing, or unreadable state stops the script. Bootstrap does not enable it automatically.
 - **Privileges:** Permission to approve User Account Control (UAC) prompts and package source agreements.
 - **Package Manager:** Windows Package Manager (WinGet), provided by Windows App Installer. If WinGet is missing or unregistered, install or update [App Installer from the Microsoft Store](https://apps.microsoft.com/detail/9nblggh4nns1). The bootstrap script requests registration automatically when App Installer is present.
 - **Network:** Internet access to download the script, Git, mise, and chezmoi packages.
@@ -38,9 +39,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 > **Security Note:** The `-ExecutionPolicy Bypass` flag applies only to that temporary child process; it does not permanently modify your system or user execution policy. Do not bypass organizational policies if prohibited.
 
 The script performs the following steps:
-1. Installs missing Git, mise, and native Windows chezmoi (`twpayne.chezmoi`) using WinGet.
-2. Clones this repository to `$HOME\src\github.com\hyperlapse122\dotfiles` (matching standard ghq layout).
-3. Executes `mise install` to run the project-level `bootstrap` task through the `postinstall` hook.
+1. Verifies that Windows Developer Mode is enabled; otherwise stops with instructions to enable it.
+2. Installs missing Git, mise, and native Windows chezmoi (`twpayne.chezmoi`) using WinGet.
+3. Clones this repository to `$HOME\src\github.com\hyperlapse122\dotfiles` (matching standard ghq layout).
+4. Executes `mise install` to run the project-level `bootstrap` task through the `postinstall` hook.
 
 To clone into a custom directory, pass `-Destination`:
 
