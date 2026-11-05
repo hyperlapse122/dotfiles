@@ -216,6 +216,8 @@ The primary deduplication decision is the read-only admission lookup, not cancel
 
 PR opening is not an atomic handoff: a push can pass admission before the PR exists, and API listing/cancellation can race. Targeted cleanup cancels the replaceable push while the merge suite remains authoritative. Unknown metadata retains coverage rather than guessing; any overlap and actual cancellation evidence belong in the PR validation record.
 
+The first observed handoff is [PR run 41966823335](https://github.com/hyperlapse122/dotfiles/actions/runs/41966823335): its metadata-only controller logged cancellation of [push run 41966778441](https://github.com/hyperlapse122/dotfiles/actions/runs/41966778441) at `2026-11-05T04:17:17Z`, and all PR jobs passed. Canceled push checks can remain visible alongside the successful PR merge run. Check the event and run URL before retrying them; retrying the superseded push would recreate the duplicate suite.
+
 ### Check-name migration and validation records
 
 Combined `Unit and supported-target rendering (...)` and `Native apps, CE, PATH, and credentials (...)` checks are replaced by `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, displayed beneath the `Validate` reusable call for automatic events. Each area's result remains independently visible. No required-check configuration or ruleset was returned for main during this change; repository protection settings are not modified. If protection is enabled, select the new per-area merge-result checks rather than the removed combined names or admission-only checks.
