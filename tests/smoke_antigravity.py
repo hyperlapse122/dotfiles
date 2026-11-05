@@ -5,20 +5,17 @@ Authenticated CE invocation is tracked in https://github.com/hyperlapse122/dotfi
 """
 
 import argparse
-import base64
-import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import signal
 import socket
-import struct
 import subprocess
 import time
 
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
-from smoke_t3_code import provision_desktop
+from smoke_t3_code import T3Rpc, provision_desktop
 
 
 def desktop_command(real_home, environment):
@@ -44,86 +41,6 @@ def desktop_command(real_home, environment):
         if app.is_file():
             return [str(app), str(app.parent / "resources/app.asar/apps/server/dist/bin.mjs")]
     raise RuntimeError("Install the T3 Code desktop application before running this smoke")
-
-
-def rpc(port, token, method, payload):
-    """Call the real T3 WebSocket API using its JSON RPC framing."""
-    deadline = time.monotonic() + 60
-    while True:
-        stream = socket.create_connection(("127.0.0.1", port), timeout=90)
-        try:
-            key = base64.b64encode(os.urandom(16)).decode("ascii")
-            stream.sendall((
-                f"GET /ws?orchestrationProtocol=2 HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
-                "Upgrade: websocket\r\nConnection: Upgrade\r\n"
-                f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n"
-                f"Authorization: Bearer {token}\r\n\r\n"
-            ).encode("ascii"))
-            headers = b""
-            while not headers.endswith(b"\r\n\r\n"):
-                part = stream.recv(1)
-                if not part:
-                    raise RuntimeError("T3 closed the WebSocket upgrade")
-                headers += part
-            status = headers.split(b"\r\n", 1)[0]
-            if b" 503 " in status and time.monotonic() < deadline:
-                stream.close()
-                time.sleep(1)
-                continue
-            expected = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest())
-            if b" 101 " not in status or expected.lower() not in headers.lower():
-                raise RuntimeError("T3 rejected the disposable WebSocket session: " + headers.decode("ascii", errors="replace"))
-            break
-        except BaseException:
-            stream.close()
-            raise
-    with stream:
-
-        def send(message):
-            data = json.dumps(message).encode("utf-8")
-            mask = os.urandom(4)
-            size = len(data)
-            prefix = bytes((0x81, 0x80 | size)) if size < 126 else bytes((0x81, 0xFE)) + struct.pack("!H", size)
-            stream.sendall(prefix + mask + bytes(value ^ mask[index % 4] for index, value in enumerate(data)))
-
-        def read_exact(size):
-            data = b""
-            while len(data) < size:
-                part = stream.recv(size - len(data))
-                if not part:
-                    raise RuntimeError("T3 closed the RPC session before replying")
-                data += part
-            return data
-
-        send({"_tag": "Request", "id": 1, "tag": method, "payload": payload, "headers": []})
-        fragments = b""
-        while True:
-            first, second = read_exact(2)
-            size = second & 127
-            if size == 126:
-                size = struct.unpack("!H", read_exact(2))[0]
-            elif size == 127:
-                size = struct.unpack("!Q", read_exact(8))[0]
-            mask = read_exact(4) if second & 128 else None
-            data = read_exact(size)
-            if mask:
-                data = bytes(value ^ mask[index % 4] for index, value in enumerate(data))
-            opcode = first & 15
-            if opcode == 8:
-                raise RuntimeError("T3 closed the WebSocket before the provider reply")
-            if opcode not in (0, 1):
-                continue
-            fragments += data
-            if not first & 0x80:
-                continue
-            message = json.loads(fragments)
-            fragments = b""
-            if message.get("_tag") == "Ping":
-                send({"_tag": "Pong"})
-            elif message.get("_tag") == "Exit" and message.get("requestId") == 1:
-                if message["exit"]["_tag"] != "Success":
-                    raise RuntimeError("T3 provider RPC failed: " + json.dumps(message["exit"]))
-                return message["exit"]["value"]
 
 
 def main():
@@ -245,6 +162,12 @@ def main():
         plugins = json.loads(run([str(cli), "plugin", "list", "--json"], env=env, cwd=outside))
         if not next(plugin for plugin in plugins if plugin["name"] == "compound-engineering")["enabled"]:
             raise RuntimeError("Reapply did not restore native CE enablement")
+        runtime = json.loads(t3_settings.read_text(encoding="utf-8"))
+        for name, other in runtime["providerInstances"].items():
+            if name != "antigravity":
+                other["enabled"] = False
+                other.setdefault("config", {})["enabled"] = False
+        t3_settings.write_text(json.dumps(runtime), encoding="utf-8")
         env["PATH"] = os.pathsep.join(part for part in env.get("PATH", "").split(os.pathsep)
                                     if part and ".local" + os.sep + "bin" not in os.path.normcase(part)
                                     and ".local/bin" not in part.replace("\\", "/").lower())
@@ -260,19 +183,20 @@ def main():
                                              "--port", str(port), "--base-dir", str(home / ".t3"), "--no-browser"],
                                        env=env, cwd=outside, stdout=log, stderr=subprocess.STDOUT,
                                        start_new_session=os.name != "nt")
+            rpc = None
             try:
                 deadline = time.monotonic() + 60
                 while True:
                     if process.poll() is not None:
                         raise RuntimeError("Fresh T3 server exited: " + (root / "t3.log").read_text(encoding="utf-8"))
                     try:
-                        with socket.create_connection(("127.0.0.1", port), timeout=1):
-                            break
+                        rpc = T3Rpc(port, token)
+                        break
                     except OSError:
                         if time.monotonic() >= deadline:
                             raise RuntimeError("Fresh T3 server did not become ready")
                         time.sleep(0.1)
-                refreshed = rpc(port, token, "server.refreshProviders", {
+                refreshed = rpc.call("1", "server.refreshProviders", {
                     "instanceId": "antigravity", "cwd": str(outside), "fresh": True, "refreshModels": True,
                 })
                 snapshots = refreshed.get("providers", [])
@@ -286,6 +210,8 @@ def main():
                 print((root / "t3.log").read_text(encoding="utf-8", errors="replace"))
                 raise
             finally:
+                if rpc is not None:
+                    rpc.close()
                 if os.name == "nt":
                     subprocess.run([real_environment["SYSTEMROOT"] + "/System32/taskkill.exe", "/PID", str(process.pid), "/T", "/F"],
                                    capture_output=True, timeout=30)
