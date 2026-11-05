@@ -39,7 +39,7 @@ def run(arguments, *, env, cwd):
 
 
 def check_version(output, tag):
-    version = tag.removeprefix("v")
+    version = tag.removeprefix("rust-").removeprefix("v")
     if not re.search(r"(?<![\w.])" + re.escape(version) + r"(?![\w.])", output):
         raise RuntimeError(f"Expected pinned version {tag!r}, got {output!r}")
 
@@ -240,6 +240,7 @@ def main():
             ".chezmoidata/personal-apps.json",
             ".chezmoidata/personal-app-lock.json",
             ".chezmoiexternals/personal-apps.toml.tmpl",
+            ".chezmoiexternals/codex-package.toml.tmpl",
             "dot_config/dotfiles/path.sh",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
@@ -258,6 +259,7 @@ def main():
             "XDG_DATA_HOME": str(root / "data"),
             "XDG_CACHE_HOME": str(root / "cache"),
             "XDG_STATE_HOME": str(root / "state"),
+            "CODEX_HOME": str(home / ".codex"),
         })
         command = [
             chezmoi, "--config", str(config), "--source", str(source),
