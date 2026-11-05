@@ -95,7 +95,7 @@ This check is strictly read-only: it does not enable features, install distribut
 
 ## Windows Host Applications
 
-On Windows, explicit application (`chezmoi apply` or `mise run apply`) installs curated host desktop applications via WinGet.
+On Windows, explicit application (`chezmoi apply` or `mise run apply`) installs curated host applications and Python via WinGet.
 
 Package declarations live in `home/.chezmoidata/windows.yaml`:
 
@@ -107,6 +107,7 @@ Package declarations live in `home/.chezmoidata/windows.yaml`:
 | PowerShell | `Microsoft.PowerShell` | Modern PowerShell 7 (`pwsh`) |
 | Podman Desktop | `RedHat.Podman-Desktop` | Container and Kubernetes GUI |
 | T3 Code | `T3Tools.T3Code` | AI coding assistant desktop app |
+| Python 3.14 | `Python.Python.3.14` | Default Windows Python for use outside this repository, including node-gyp prerequisites |
 
 Key operational rules:
 - WinGet runs with `--no-upgrade`: existing installations (even older versions) are retained. Applications handle their own subsequent updates.
@@ -117,6 +118,18 @@ Key operational rules:
   pwsh --version
   ```
 - Account logins, browser extensions, and GUI preferences remain manual user actions.
+
+The WinGet-installed Python is separate from the mise-managed Python used for repository development. Project-local mise selections still take precedence in mise-activated shells.
+
+After installing Python, open a fresh PowerShell window in a directory outside this repository and check:
+
+```powershell
+Get-Command python
+python --version
+python -c "import sys; print(sys.executable)"
+```
+
+These checks confirm Python discovery and execution, not a complete node-gyp build environment or native addon compatibility.
 
 ## Windows Native Build Environment
 

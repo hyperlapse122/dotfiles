@@ -6,3 +6,4 @@ windows:
     - Microsoft.PowerShell
     - RedHat.Podman-Desktop
     - T3Tools.T3Code
+    - Python.Python.3.14
