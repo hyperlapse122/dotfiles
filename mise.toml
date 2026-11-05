@@ -1,6 +1,15 @@
 [settings]
 lockfile = true
 
+[settings.dotnet]
+isolated = false
+
+[vars]
+windows_vs_bootstrapper = "https://aka.ms/vs/18/stable/vs_buildtools.exe"
+windows_vs_channel = "VisualStudio.18.Release"
+windows_vcpkg_repository = "https://github.com/microsoft/vcpkg.git"
+windows_vcpkg_revision = "2026.10.16"
+
 [tools]
 ast-grep = "latest"
 chezmoi = { version = "latest", libc = "musl" }
@@ -22,3 +31,50 @@ run = 'chezmoi --config "{{config_root}}/.chezmoi-bootstrap.toml" --source "{{co
 [tasks.apply]
 description = "Apply this worktree's chezmoi configuration to the user home"
 run = 'chezmoi --source "{{config_root}}" apply'
+
+[tasks.windows-build]
+description = "Provision the Windows x64 native build environment"
+shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
+run = []
+run_windows = [
+  "if (($env:PROCESSOR_ARCHITEW6432, $env:PROCESSOR_ARCHITECTURE | Where-Object { $_ } | Select-Object -First 1) -ne 'AMD64') { throw 'Windows build provisioning requires an x64 Windows host.' }",
+  { task = "windows-build:visual-studio" },
+  { task = "windows-build:dotnet8" },
+  { task = "windows-build:dotnet10" },
+  { task = "windows-build:rust" },
+  { task = "windows-build:vcpkg" },
+]
+
+[tasks."windows-build:visual-studio"]
+description = "Update stable Visual Studio Build Tools and reconcile native components"
+shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
+run = []
+run_windows = "& ./scripts/windows-visual-studio.ps1 -ConfigurationPath (Join-Path $PWD 'scripts/windows-build-tools.vsconfig') -BootstrapperUri '{{vars.windows_vs_bootstrapper}}' -ChannelId '{{vars.windows_vs_channel}}'"
+
+[tasks."windows-build:dotnet8"]
+description = "Install and publish .NET SDK 8 in the shared user root"
+shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
+tools = { "core:dotnet" = { version = "8", os = ["windows"] } }
+run = []
+run_windows = "& ./scripts/windows-build-environment.ps1 -Phase Dotnet -SdkMajor 8"
+
+[tasks."windows-build:dotnet10"]
+description = "Install and publish .NET SDK 10 in the shared user root"
+shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
+tools = { "core:dotnet" = { version = "10", os = ["windows"] } }
+run = []
+run_windows = "& ./scripts/windows-build-environment.ps1 -Phase Dotnet -SdkMajor 10"
+
+[tasks."windows-build:rust"]
+description = "Install and publish stable Rust with native and ARM64 MSVC targets"
+shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
+tools = { "core:rust" = { version = "stable-x86_64-pc-windows-msvc", profile = "default", targets = ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"], os = ["windows"] } }
+run = []
+run_windows = "& ./scripts/windows-build-environment.ps1 -Phase Rust"
+
+[tasks."windows-build:vcpkg"]
+description = "Bootstrap and integrate the pinned writable vcpkg checkout"
+shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
+tools = { "core:dotnet" = { version = "10", os = ["windows"] }, "core:rust" = { version = "stable-x86_64-pc-windows-msvc", profile = "default", targets = ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"], os = ["windows"] } }
+run = []
+run_windows = "& ./scripts/windows-build-environment.ps1 -Phase Vcpkg -VcpkgRepository '{{vars.windows_vcpkg_repository}}' -VcpkgRevision '{{vars.windows_vcpkg_revision}}' -VcpkgRoot (Join-Path $HOME '.local/share/dotfiles/vcpkg')"

@@ -92,6 +92,16 @@ url = "https://github.com/twpayne/chezmoi/releases/download/v2.74.0/chezmoi_2.74
 url_api = "https://api.github.com/repos/twpayne/chezmoi/releases/assets/698495241"
 provenance = "cosign"
 
+[[tools.dotnet]]
+version = "10.0.403"
+backend = "core:dotnet"
+specifiers = ["10"]
+
+[[tools.dotnet]]
+version = "8.0.427"
+backend = "core:dotnet"
+specifiers = ["8"]
+
 [[tools.gh]]
 version = "2.103.3"
 backend = "aqua:cli/cli"
@@ -314,6 +324,15 @@ provenance = "github-attestations"
 checksum = "sha256:02e532b60e720aa3d77e757c349ae9cc945441c05851fa646336fc9ff0403041"
 url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.15.2+20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"
 provenance = "github-attestations"
+
+[[tools.rust]]
+version = "stable-x86_64-pc-windows-msvc"
+backend = "core:rust"
+specifiers = ["stable-x86_64-pc-windows-msvc"]
+
+[tools.rust.options]
+profile = "default"
+targets = "aarch64-pc-windows-msvc,x86_64-pc-windows-msvc"
 
 [[tools.uv]]
 version = "0.13.7"

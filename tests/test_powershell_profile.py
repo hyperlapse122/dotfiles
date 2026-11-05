@@ -30,7 +30,8 @@ class PowerShellProfileTest(unittest.TestCase):
         self.repo = Path(__file__).resolve().parents[1]
         scratch = tempfile.TemporaryDirectory(prefix="powershell profile ")
         self.addCleanup(scratch.cleanup)
-        self.root = Path(scratch.name)
+        # Match PowerShell's long-path spelling when TEMP contains an 8.3 alias.
+        self.root = Path(scratch.name).resolve()
         self.home = self.root / "user home"
         self.home.mkdir()
         self.project = self.root / "project"
@@ -130,6 +131,71 @@ class PowerShellProfileTest(unittest.TestCase):
                 result = self.install(shell, target, check=False)
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertTrue(target.is_dir())
+
+    @unittest.skipUnless(os.name == "nt", "Windows managed native roots")
+    def test_managed_build_tools_precede_machine_paths_without_duplicates(self):
+        machine = self.root / "machine tools"
+        dotnet = self.root / "한글 dotnet"
+        cargo = self.root / "cargo" / "bin"
+        vcpkg = self.root / "vcpkg"
+        command_root = Path(os.environ["SystemRoot"]) / "System32"
+        expected = {"dotnet": dotnet, "cargo": cargo, "rustc": cargo, "vcpkg": vcpkg}
+        for name, directory in expected.items():
+            directory.mkdir(parents=True, exist_ok=True)
+            machine.mkdir(exist_ok=True)
+            for root in (directory, machine):
+                shutil.copy2(command_root / "cmd.exe", root / (name + ".exe"))
+        self.env.update({
+            "DOTNET_ROOT": str(dotnet), "CARGO_HOME": str(cargo.parent),
+            "VCPKG_ROOT": str(vcpkg),
+            "PATH": os.pathsep.join((str(machine), self.env["PATH"],
+                                     str(vcpkg), str(dotnet).upper() + "\\", str(cargo))),
+        })
+        for index, shell in enumerate(available_shells()):
+            with self.subTest(shell=shell):
+                target = self.home / str(index) / "profile.ps1"
+                self.install(shell, target)
+                result = self.powershell(shell,
+                    "$ErrorActionPreference = 'Stop'; "
+                    ". " + quote(target) + "; . " + quote(target) + "; prompt | Out-Null; "
+                    "$commands = @{}; foreach ($name in @('dotnet', 'cargo', 'rustc', 'vcpkg')) { "
+                    "$commands[$name] = (Get-Command ($name + '.exe') -CommandType Application | Select-Object -First 1).Source }; "
+                    "'BUILD_PROFILE=' + (@{ commands = $commands; path = @($env:PATH -split ';') } "
+                    "| ConvertTo-Json -Depth 3 -Compress)")
+                line = next(line for line in result.stdout.splitlines()
+                            if line.startswith("BUILD_PROFILE="))
+                observed = json.loads(line.split("=", 1)[1])
+                for name, directory in expected.items():
+                    self.assertEqual(Path(observed["commands"][name]),
+                                     directory / (name + ".exe"))
+                entries = [entry.rstrip("\\/").lower() for entry in observed["path"]]
+                for directory in (dotnet, cargo, vcpkg):
+                    normalized = str(directory).lower()
+                    self.assertEqual(entries.count(normalized), 1)
+                    self.assertLess(entries.index(normalized), entries.index(str(machine).lower()))
+
+    @unittest.skipUnless(os.name == "nt", "Windows managed native roots")
+    def test_uninstalled_build_roots_do_not_enter_path(self):
+        missing = self.root / "missing tools"
+        empty = self.root / "empty tools"
+        empty.mkdir()
+        self.env.update({
+            "DOTNET_ROOT": str(missing), "CARGO_HOME": str(empty),
+            "VCPKG_ROOT": str(empty),
+        })
+        for index, shell in enumerate(available_shells()):
+            with self.subTest(shell=shell):
+                target = self.home / str(index) / "profile.ps1"
+                self.install(shell, target)
+                result = self.powershell(shell,
+                    ". " + quote(target) + "; "
+                    "'BUILD_PATH=' + (ConvertTo-Json -InputObject @($env:PATH -split ';') -Compress)")
+                line = next(line for line in result.stdout.splitlines()
+                            if line.startswith("BUILD_PATH="))
+                entries = [entry.rstrip("\\/").lower()
+                           for entry in json.loads(line.split("=", 1)[1])]
+                for directory in (missing, empty, empty / "bin"):
+                    self.assertNotIn(str(directory).lower(), entries)
 
     @unittest.skipIf(os.name == "nt" and not (
         os.environ.get("GITHUB_ACTIONS") == "true" and

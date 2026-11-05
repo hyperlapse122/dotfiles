@@ -36,6 +36,49 @@ The Windows hook invokes both system Windows PowerShell 5.1 and the checkout's m
 Both start profile-free and do not activate mise during application.
 Preparation and script-excluding apply commands do not install these profiles.
 
+## Windows build tools
+
+The Windows x64-only `run_after_25-windows-build-environment.ps1.tmpl` action
+invokes the source checkout's `windows-build` mise task on every explicit apply.
+It is intentionally not onchange-only: the VS 2026 stable channel must be updated
+and the tracked component selection reconciled on each application.
+Bootstrap, dry runs, script-excluding applies, and other host platforms do not
+execute it. Failure or a reboot-required installer result stops dependent setup;
+the action does not reboot Windows.
+
+Keep task-only SDK/Rust declarations, installer inputs, and the immutable vcpkg
+revision in `mise.toml`, with resolved tool versions in `mise.lock`.
+`scripts/windows-build-tools.vsconfig` owns the complete latest/v143/v142
+ATL/MFC architecture matrix and Windows/.NET Framework prerequisites.
+Only Visual Studio machine servicing elevates. .NET SDKs share mise's native
+user-local `dotnet-root`; the writable vcpkg checkout lives in
+`~/.local/share/dotfiles/vcpkg`.
+cargo/rustup respect existing `CARGO_HOME`/`RUSTUP_HOME`, defaulting to
+`~/.cargo`/`~/.rustup`, never the source worktree.
+Use Windows SDK 10.0.22621.0 for v142 ARM64 projects: SDK 26100 headers use an
+intrinsic that the v142 compiler does not provide. Both SDKs are provisioned.
+
+The common managed PowerShell profile prioritizes the existing user-managed
+dotnet, cargo, and vcpkg command directories before mise activation on Windows.
+Apply installs that profile through the existing runtime-specific profile hooks;
+restart the terminal host to inherit updated user environment values.
+The integration changes no machine PATH and persists no `RUSTUP_TOOLCHAIN`.
+User-wide MSBuild integration selects the managed vcpkg root, replacing any
+previous user-wide selection. Projects retain ownership of SDK `global.json`,
+target frameworks, C++ toolsets, Rust overrides, manifests, baselines, and triplets;
+no shared library set is provisioned.
+
+`tests/smoke_windows_build_environment.py --verify-only` uses temporary actual
+projects and an isolated rendering of the managed profile without installing host
+tools or applying personal configuration. Project dependency restores require
+network access. Hosted provisioning and full build-matrix verification are deferred
+in [issue #39](https://github.com/hyperlapse122/dotfiles/issues/39); the dedicated
+Windows build-environment CI job is not enabled. The retained `--provision` mode
+is restricted to disposable GitHub-hosted runners and applies only the aggregate
+build task, twice. Local verification proves native builds and ARM64 cross-built
+PE artifacts, not ARM64 execution. See the root README for the full matrix,
+activation, version-selection, and restart boundaries.
+
 ## Secret source
 
 `.secrets/api-tokens.yaml.asc` is encrypted source data, excluded from destination enumeration by `.chezmoiignore`.
