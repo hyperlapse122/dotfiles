@@ -1,6 +1,6 @@
 # Harness Plugins and AI Agent Configuration
 
-This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Codex, oh-my-pi (omp), and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
+This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, oh-my-pi (omp), and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
 
 ## Compound Engineering Plugin for omp
 
@@ -36,6 +36,24 @@ Apply does not sign in. Run `codex login` yourself, or provision credentials thr
 After signing in, start Codex and select a CE skill through `/skills`, such as `compound-engineering:ce-plan`. Authentication, model access, and billing remain with Codex; dotfiles does not copy credentials into T3 Code.
 
 The managed scope is the default `~/.codex`. Custom `CODEX_HOME` locations remain unmanaged.
+
+## Compound Engineering Plugin for Claude Code
+
+Explicit apply registers, installs, and enables CE at Claude user scope from the shared local directory. Claude uses the same CE release and commit pin as Codex and omp; the initial pin is `compound-engineering-v3.35.1` at `42f9745ea0a4b70f8dde059aa8cf7f974d2991f1`.
+
+The after hook runs the absolute managed Claude executable with `HOME` bound to the destination home; Windows also sets `USERPROFILE`. It clears `CLAUDE_CONFIG_DIR` so native global state remains in `~/.claude.json`, alongside the default `.claude` directory. Setting that variable even to the default directory would relocate the global file. It performs the native lifecycle:
+
+```sh
+claude plugin marketplace add /absolute/path/to/.local/share/dotfiles/harness-plugins/compound-engineering --scope user --json
+claude plugin install compound-engineering@compound-engineering-plugin --scope user --json
+claude plugin enable compound-engineering@compound-engineering-plugin --scope user --json
+```
+
+The pinned CLI returns exit code 1 when the plugin is already enabled. The hook accepts only its structured `already_in_goal_state` result with `alreadyInGoalState=true` as that no-op; genuine errors fail apply. Native marketplace registration repairs a stale source path, and the relative local plugin source loads in place. Reapplication follows the shared archive pin without deleting caches or editing native registry files directly.
+
+The private settings merge owns the CE directory marketplace entry and activation flag, alongside the [Claude preferences](personal-applications.md#claude-code-version-and-preferences). Only CE's marketplace has `autoUpdate=false`; unrelated marketplace policies and plugins are preserved. Malformed settings or incompatible owned containers fail instead of replacing the file.
+
+Close Claude Code and T3 Code before apply, then start a fresh session. Complete `claude auth login` manually and invoke a skill such as `/compound-engineering:ce-plan`. Authentication and billing remain with Claude; dotfiles stores no plaintext secrets.
 
 ## Compound Engineering Plugin for Antigravity
 
@@ -79,7 +97,7 @@ omp plugin enable --scope user compound-engineering@compound-engineering-plugin
 To roll back Compound Engineering to an earlier version:
 1. Revert `home/.chezmoidata/harness-plugin-lock.json` to the target commit in Git.
 2. Run `chezmoi apply` or `mise run apply`.
-3. Dotfiles reconciles the dedicated directory and force-reinstalls the pinned commit.
+3. Dotfiles reconciles the shared directory and refreshes each harness through its native integration. Claude loads its local plugin in place; omp force-reinstalls its pinned plugin.
 
 ## Refreshing Plugin Pins
 
@@ -98,6 +116,7 @@ A GitHub Actions workflow (**Update harness plugin pins**) runs daily at 06:43 U
 Every managed AI harness in this repository wires its native instruction file to a shared template:
 - **Shared Source:** `home/.chezmoitemplates/agent-instructions`
 - **Native omp Target:** `~/.omp/agent/AGENTS.md` (generated via `home/private_dot_omp/private_agent/private_empty_AGENTS.md.tmpl`)
+- **Native Claude Target:** `~/.claude/CLAUDE.md` (generated via `home/private_dot_claude/private_empty_CLAUDE.md.tmpl` with `harness = claude`)
 - **Native Codex Target:** `~/.codex/AGENTS.md` (generated via `home/private_dot_codex/private_empty_AGENTS.md.tmpl`)
 - **Native Antigravity Target:** `~/.gemini/GEMINI.md` (generated via `home/private_dot_gemini/private_empty_GEMINI.md.tmpl` with `harness: antigravity`)
 
@@ -106,6 +125,8 @@ Applying dotfiles replaces those native instruction files with their harness-spe
 > **Scope Note:** In omp, `~/.omp/agent/AGENTS.md` applies to the main interactive session and advisors. Task subagents do not inherit files named `AGENTS.md`.
 
 Codex uses a nonempty `~/.codex/AGENTS.override.md` before `AGENTS.md`. Apply preserves that override; remove or update it manually if it should no longer suppress the managed instructions. Project instructions and native configuration precedence still apply.
+
+Disabling Claude automatic memory does not disable its managed `CLAUDE.md` instructions.
 
 For the technical procedure to onboard a new AI harness, see [Chezmoi Source Maintenance](../maintenance/chezmoi-source.md#shared-user-scope-harness-onboarding).
 
@@ -127,3 +148,11 @@ mise exec -- python tests/smoke_codex.py
 ```
 
 This checks native instruction discovery, the pinned marketplace/cache, reapplication, unrelated state preservation, and explicit CE skill expansion into Codex's outgoing model request. A localhost capture endpoint deliberately rejects that request; the smoke uses no real credentials and does not claim authenticated model completion.
+
+For Claude's isolated native integration:
+
+```sh
+mise exec -- python tests/smoke_claude.py
+```
+
+This verifies native CE discovery, stale-source and enabled-state repair, preservation, common and Claude-specific instructions, the Korean response preference, and explicit expansion of the pinned skill body. It characterizes an automatic-memory fixture while enabled, then confirms the managed disabled state excludes it without deleting the file. The localhost endpoint deliberately rejects model requests with HTTP 400 using inert credentials. This proves request expansion, not authenticated model completion. Windows x64 has been exercised locally; other eligible targets are checked by the native CI lane, and a missing required result remains unverified.

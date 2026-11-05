@@ -129,7 +129,9 @@ To onboard a new harness (e.g. `example-harness`):
    ```gotemplate
    {{- template "agent-instructions" (dict "harness" "example" "chezmoi" .) -}}
    ```
-4. Register, install, and enable the repository-pinned Compound Engineering plugin through the harness's supported native user-scope integration. Codex uses native `plugin marketplace add` and `plugin add`; omp uses its own marketplace/install/enable commands. Reuse the existing release/commit pin, preserve unrelated plugins and settings, and install only during explicit apply.
+4. Register, install, and enable the repository-pinned Compound Engineering plugin through the harness's native user-scope mechanism. Codex uses native `plugin marketplace add` and `plugin add`; Claude uses `plugin marketplace add`, `plugin install`, and `plugin enable` with `--scope user`; omp uses its own marketplace/install/enable commands. Antigravity uses its supported native plugin commands. Reuse the existing release/commit pin, preserve unrelated plugins and settings, and install only during explicit apply.
+
+Claude's adapter is `home/private_dot_claude/private_empty_CLAUDE.md.tmpl`, targeting `~/.claude/CLAUDE.md` with `harness = claude`. Its private settings merge and after hooks preserve unrelated state. The POSIX hook parses native JSON through the invoking chezmoi executable with a hook-free config; it does not assume Python or jq can be resolved outside the worktree.
 
 ### 3. Verification
 

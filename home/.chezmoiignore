@@ -56,6 +56,10 @@ Library
 {{ if not $t3Posix }}
 .local/bin/t3
 {{ end }}
+{{ $claude := get $apps "claude" | default dict }}
+{{ if not (hasKey (get $claude "targets" | default dict) $target) }}
+.claude
+{{ end }}
 {{ $antigravity := get $apps "antigravity" | default dict }}
 {{ $antigravityTargets := get $antigravity "targets" | default dict }}
 {{ $antigravitySupported := hasKey $antigravityTargets $target }}

@@ -94,6 +94,7 @@ class T3CodeSettingsTest(unittest.TestCase):
             "omp": self.expected_provider(os_name),
             "antigravity": self.expected_provider(os_name, "antigravity"),
             "codex": self.expected_codex(os_name),
+            "claudeAgent": self.expected_claude(os_name),
         }
 
     def expected_codex(self, os_name=None):
@@ -103,6 +104,16 @@ class T3CodeSettingsTest(unittest.TestCase):
         return {
             "driver": "codex", "enabled": True,
             "config": {"enabled": True, "setupMode": "existing",
+                       "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
+        }
+
+    def expected_claude(self, os_name=None):
+        if os_name is None:
+            os_name = self.chez("execute-template", "{{ .chezmoi.os }}").stdout
+        executable = "claude.exe" if os_name == "windows" else "claude"
+        return {
+            "driver": "claudeAgent", "enabled": True,
+            "config": {"enabled": True,
                        "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
@@ -176,6 +187,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         codex = expected["providerInstances"]["codex"]
         codex.update(driver="codex", enabled=True)
         codex["config"].update(self.expected_codex()["config"])
+        expected["providerInstances"]["claudeAgent"] = self.expected_claude()
         expected["providerInstances"]["antigravity"] = self.expected_provider(name="antigravity")
         self.assertEqual(self.read_settings(), expected)
         converged = self.settings.read_bytes()
@@ -192,7 +204,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.write_settings(drifted)
         self.apply()
         self.assertEqual(self.read_settings(), expected)
-        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "antigravity", "codex", "unrelated"})
+        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "antigravity", "codex", "claudeAgent", "unrelated"})
 
     def test_existing_presentation_keys_are_not_owned_even_when_null(self):
         self.write_settings({"providerInstances": {"omp": {"displayName": None, "accentColor": ""}}})
@@ -217,6 +229,25 @@ class T3CodeSettingsTest(unittest.TestCase):
         before = self.settings.read_bytes()
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_native_claude_reconciles_executable_and_preserves_custom_scope(self):
+        provider = self.expected_claude()
+        provider.update(driver="stale", enabled=False, displayName="My Claude", accentColor=None)
+        provider["config"].update(enabled=False, binaryPath="old", homePath="/custom/home",
+                                  launchArgs="--max-budget-usd 1", customModels=["owner-model"])
+        self.write_settings({"providerInstances": {"claudeAgent": provider}})
+        self.apply()
+        actual = self.read_settings()["providerInstances"]["claudeAgent"]
+        provider.update(driver="claudeAgent", enabled=True)
+        provider["config"].update(self.expected_claude()["config"])
+        self.assertEqual(actual, provider)
+        before = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), before)
+        provider["config"]["homePath"] = (self.home / ".claude").as_posix()
+        self.write_settings({"providerInstances": {"claudeAgent": provider}})
+        self.apply()
+        self.assertNotIn("homePath", self.read_settings()["providerInstances"]["claudeAgent"]["config"])
 
     def test_antigravity_reconciles_absolute_adapter_path_and_retains_unowned_values(self):
         original = {
@@ -259,6 +290,8 @@ class T3CodeSettingsTest(unittest.TestCase):
                 {"providerInstances": {"omp": {"config": invalid}}},
                 {"providerInstances": {"codex": invalid}},
                 {"providerInstances": {"codex": {"config": invalid}}},
+                {"providerInstances": {"claudeAgent": invalid}},
+                {"providerInstances": {"claudeAgent": {"config": invalid}}},
                 {"providerInstances": {"antigravity": invalid}},
                 {"providerInstances": {"antigravity": {"config": invalid}}},
             ))

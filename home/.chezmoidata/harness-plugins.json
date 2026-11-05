@@ -18,6 +18,10 @@
       "codex": {
         "marketplace": "compound-engineering-plugin",
         "plugin": "compound-engineering"
+      },
+      "claude": {
+        "marketplace": "compound-engineering-plugin",
+        "plugin": "compound-engineering"
       }
     }
   }

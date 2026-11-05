@@ -1,4 +1,4 @@
-"""Exercise managed T3 launchers, omp ACP, and T3-driven Codex initialization.
+"""Exercise managed T3 launchers, omp ACP, and native Codex/Claude initialization.
 
 --install-desktop provisions an official desktop release on disposable CI only.
 It does not test WinGet acquisition; the normal Windows apply uses WinGet.
@@ -239,14 +239,12 @@ def server_process(args, **kwargs):
             process.wait(timeout=30)
 
 
-def prove_t3_codex(launcher, settings, env, outside, root, expected_version):
-    # The managed settings remain intact; only this disposable server's other
-    # providers are disabled so no default driver probes personal installations.
+def prove_t3_provider(launcher, settings, env, outside, root, instance_id, expected_version):
+    # Enable only the selected provider in this disposable server's settings.
     runtime = json.loads(settings.read_text(encoding="utf-8"))
     for name, provider in runtime["providerInstances"].items():
-        if name != "codex":
-            provider["enabled"] = False
-            provider.setdefault("config", {})["enabled"] = False
+        provider["enabled"] = name == instance_id
+        provider.setdefault("config", {})["enabled"] = name == instance_id
     settings.write_text(json.dumps(runtime), encoding="utf-8")
     safe_keys = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP",
                  "LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432"}
@@ -258,14 +256,16 @@ def prove_t3_codex(launcher, settings, env, outside, root, expected_version):
     isolated["PATH"] = os.pathsep.join(
         part for part in isolated.get("PATH", "").split(os.pathsep)
         if part and Path(part).resolve() != managed_bin)
-    if shutil.which("codex", path=isolated["PATH"]):
-        # A globally installed Codex is unnecessary and must not mask a bad path.
+    command_name = "claude" if instance_id == "claudeAgent" else "codex"
+    if shutil.which(command_name, path=isolated["PATH"]):
+        # An ambient harness must not mask an incorrect managed path.
         isolated["PATH"] = os.pathsep.join(
             part for part in isolated["PATH"].split(os.pathsep)
-            if not any((Path(part) / name).is_file() for name in ("codex", "codex.exe", "codex.cmd")))
+            if not any((Path(part) / name).is_file() for name in (command_name, command_name + ".exe", command_name + ".cmd")))
     token = secrets.token_hex(32)
     isolated["T3CODE_DEV_AUTH_TOKEN"] = token
     isolated["DO_NOT_TRACK"] = "1"
+    isolated["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
@@ -275,7 +275,7 @@ def prove_t3_codex(launcher, settings, env, outside, root, expected_version):
     if os.name == "nt":
         args = (subprocess.list2cmdline([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c"])
                 + ' "' + subprocess.list2cmdline(args) + '"')
-    log_path = root / "t3-server.log"
+    log_path = root / ("t3-" + instance_id + "-server.log")
     rpc = None
     with log_path.open("w+", encoding="utf-8", errors="backslashreplace") as log, server_process(
         args, env=isolated, cwd=outside, stdout=log, stderr=subprocess.STDOUT,
@@ -293,18 +293,28 @@ def prove_t3_codex(launcher, settings, env, outside, root, expected_version):
                         raise RuntimeError("T3 server did not start within 90 seconds")
                     time.sleep(0.2)
             config = rpc.call("1", "server.getConfig", {})
-            managed = config["settings"]["providerInstances"]["codex"]
-            if managed["config"]["binaryPath"] != runtime["providerInstances"]["codex"]["config"]["binaryPath"]:
-                raise RuntimeError("T3 did not load the managed absolute Codex path")
-            refreshed = rpc.call("2", "server.refreshProviders", {"instanceId": "codex", "fresh": True})
-            codex = next(provider for provider in refreshed["providers"] if provider["instanceId"] == "codex")
-            # Only a completed app-server initialize + account/read yields this
-            # unauthenticated state; CLI --version fallback reports auth=unknown.
-            if (not codex["enabled"] or not codex["installed"] or codex["driver"] != "codex"
-                    or codex["version"] != expected_version
-                    or codex["auth"]["status"] != "unauthenticated"):
-                raise RuntimeError(f"T3 native Codex handshake was not proven: {codex}")
-            print(f"T3-driven Codex {codex['version']} app-server initialized (isolated, unauthenticated)")
+            managed = config["settings"]["providerInstances"][instance_id]
+            expected = runtime["providerInstances"][instance_id]
+            for key in ("binaryPath",):
+                if managed["config"][key] != expected["config"][key]:
+                    raise RuntimeError(f"T3 did not load the managed absolute {instance_id} {key}")
+            refreshed = rpc.call("2", "server.refreshProviders", {"instanceId": instance_id, "fresh": True})
+            provider = next(item for item in refreshed["providers"] if item["instanceId"] == instance_id)
+            # A native initialization result identifies auth; --version fallback is unknown.
+            if (not provider["enabled"] or not provider["installed"] or provider["driver"] != instance_id
+                    or provider["version"] != expected_version
+                    or provider["auth"]["status"] != "unauthenticated"):
+                raise RuntimeError(f"T3 native {instance_id} initialization was not proven: {provider}")
+            if instance_id == "claudeAgent":
+                if (Path(env["HOME"]) / ".claude/.claude.json").exists():
+                    raise RuntimeError("T3 split Claude's native default global state")
+                global_config = json.loads((Path(env["HOME"]) / ".claude.json").read_text(encoding="utf-8"))
+                if global_config.get("ownerScopeFixture") != "native-default":
+                    raise RuntimeError("T3 changed unrelated default Claude global state")
+                names = {item["name"].lstrip("/") for item in provider.get("slashCommands", [])}
+                if "compound-engineering:ce-plan" not in names:
+                    raise RuntimeError(f"T3 Claude initialization did not discover pinned CE: {names}")
+            print(f"T3-driven {instance_id} {provider['version']} initialized (isolated, unauthenticated)", flush=True)
         except Exception as error:
             log.flush()
             log.seek(0)
@@ -326,12 +336,13 @@ def main():
         home, source, outside = (root / name for name in ("user home", "source", "unrelated cwd"))
         for directory in (home, source, outside):
             directory.mkdir()
-        for relative in (".chezmoidata", ".chezmoitemplates", "private_dot_t3", "dot_local"):
+        for relative in (".chezmoidata", ".chezmoitemplates", "private_dot_t3", "private_dot_claude", "dot_local"):
             shutil.copytree(REPO / "home" / relative, source / relative)
         shutil.copy2(REPO / "home/.chezmoiignore", source / ".chezmoiignore")
         config = root / "chezmoi.toml"
         config.write_text("", encoding="utf-8")
-        env = os.environ.copy()
+        env = {key: value for key, value in os.environ.items()
+               if not key.upper().startswith(("CLAUDE", "ANTHROPIC_"))}
         env.update({
             "HOME": str(home), "USERPROFILE": str(home), "ZDOTDIR": str(home),
             "APPDATA": str(root / "appdata"),
@@ -359,24 +370,29 @@ def main():
             shutil.copy2(existing_omp, destination)
         external = source / ".chezmoiexternals"
         external.mkdir()
-        for name in ("personal-apps.toml.tmpl", "codex-package.toml.tmpl"):
+        for name in ("personal-apps.toml.tmpl", "codex-package.toml.tmpl", "harness-plugins.toml.tmpl"):
             shutil.copy2(REPO / "home/.chezmoiexternals" / name, external / name)
         declaration = source / ".chezmoidata/personal-apps.json"
         data = json.loads(declaration.read_text(encoding="utf-8"))
-        selected = ("codex",) if existing_omp.is_file() else ("omp", "codex")
+        selected = ("codex", "claude") if existing_omp.is_file() else ("omp", "codex", "claude")
         data["personalApps"] = {name: data["personalApps"][name] for name in selected}
         declaration.write_text(json.dumps(data), encoding="utf-8")
+        hooks = source / ".chezmoiscripts"
+        hooks.mkdir()
+        for name in ("run_after_26-claude-plugins.ps1.tmpl", "run_after_26-claude-plugins.sh.tmpl"):
+            shutil.copy2(REPO / "home/.chezmoiscripts" / name, hooks / name)
         codex_home = home / ".codex"
         codex_home.mkdir()
         (codex_home / "config.toml").write_text(
             'check_for_update_on_startup = false\ncli_auth_credentials_store = "file"\n',
             encoding="utf-8")
+        (home / ".claude.json").write_text(json.dumps({"ownerScopeFixture": "native-default"}), encoding="utf-8")
         settings = home / ".t3/userdata/settings.json"
         settings.parent.mkdir(parents=True)
         settings.write_text(json.dumps({"idleCompaction": "onReturn", "providerInstances": {
             "smoke-unrelated": {"driver": "codex", "enabled": False, "displayName": "Unrelated smoke provider", "config": {}}
         }}), encoding="utf-8")
-        run(command + ["apply", "--force", "--exclude=scripts"], env=env, cwd=outside)
+        run(command + ["apply", "--force"], env=env, cwd=outside)
         first = json.loads(settings.read_text(encoding="utf-8"))
         if first["providerInstances"]["smoke-unrelated"]["displayName"] != "Unrelated smoke provider" or first["idleCompaction"] != "onReturn":
             raise RuntimeError("Provider reconciliation changed unrelated settings")
@@ -402,12 +418,14 @@ def main():
         initialized = next((message.get("result") for message in messages if message.get("id") == 1), None)
         if response.returncode or not initialized or initialized.get("agentInfo", {}).get("name") != "omp":
             raise RuntimeError(f"ACP initialization failed: {response.stdout}\n{response.stderr}")
-        run(command + ["apply", "--force", "--exclude=scripts"], env=env, cwd=outside)
+        run(command + ["apply", "--force"], env=env, cwd=outside)
         if json.loads(settings.read_text(encoding="utf-8")) != first:
             raise RuntimeError("Repeated provider reconciliation did not converge")
         lock = json.loads((source / ".chezmoidata/personal-app-lock.json").read_text(encoding="utf-8"))
         expected_version = lock["personalAppLocks"]["codex"]["tag"].removeprefix("rust-v")
-        prove_t3_codex(launcher, settings, env, outside, root, expected_version)
+        prove_t3_provider(launcher, settings, env, outside, root, "codex", expected_version)
+        prove_t3_provider(launcher, settings, env, outside, root, "claudeAgent",
+                          lock["personalAppLocks"]["claude"]["tag"])
         print(f"Native {target}: {version}; managed omp ACP initialize succeeded; unrelated settings and reapply preserved")
 
 
