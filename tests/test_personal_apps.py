@@ -372,6 +372,7 @@ class PersonalAppsTest(unittest.TestCase):
         )
         for name in names:
             shutil.copy2(self.repo / "home/dot_local/bin" / name, launchers / name)
+        shutil.copy2(self.repo / "home/.chezmoiremove", self.source / ".chezmoiremove")
         suffix = ".exe" if os.name == "nt" else ""
         return (
             self.home / ".local/share/dotfiles/antigravity/bin" / ("agy" + suffix),
@@ -408,6 +409,21 @@ class PersonalAppsTest(unittest.TestCase):
         result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(cli.read_bytes(), self.payloads["/antigravity"])
+        self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
+
+    def test_reapply_removes_adjacent_cli_and_retains_unrelated_files(self):
+        _, adapter = self.configure_managed_payloads()
+        self.apply()
+        unrelated = adapter.parent / "retained-state.json"
+        unrelated.write_bytes(b'{"retain": true}\n')
+        adjacent = [adapter.parent / name for name in ("agy", "agy.exe")]
+        for path in adjacent:
+            path.write_bytes(b"#!/bin/sh\nexit 91\n")
+            path.chmod(0o755)
+        self.apply()
+        for path in adjacent:
+            self.assertFalse(path.exists(), f"Adjacent CLI overrides the managed pin: {path}")
+        self.assertEqual(unrelated.read_bytes(), b'{"retain": true}\n')
         self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
 
     def test_sha512_archive_installs_selected_member_in_declared_directory(self):

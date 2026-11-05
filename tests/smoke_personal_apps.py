@@ -254,6 +254,7 @@ def main():
             ".chezmoiexternals/personal-apps.toml.tmpl",
             ".chezmoiexternals/codex-package.toml.tmpl",
             ".chezmoiignore",
+            ".chezmoiremove",
             "dot_local/bin/executable_agy.tmpl",
             "dot_local/bin/agy.cmd.tmpl",
             "dot_local/bin/executable_antigravity-acp.tmpl",

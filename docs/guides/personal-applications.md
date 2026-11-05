@@ -48,6 +48,8 @@ The launchers disable CLI self-update with `AGY_CLI_DISABLE_AUTO_UPDATE=true`.
 The ACP launcher selects the locked CLI with `AGY_BIN` and prevents the adapter from downloading another copy with `AGY_SKIP_DOWNLOAD=1`.
 Reapplying uses the committed lock; it does not resolve a newer release.
 
+Explicit apply removes the reserved `agy` and `agy.exe` paths from `~/.local/share/dotfiles/antigravity-acp/bin`, where the adapter otherwise prefers them over `AGY_BIN`. Other files in that directory and unrelated application directories are preserved.
+
 To roll back, restore the desired `home/.chezmoidata/personal-app-lock.json` revision and explicitly apply again with Antigravity and T3 sessions closed. See [native CE integration](harness-plugins.md) and [T3 configuration and security limits](t3-code.md).
 
 ## PATH Integration

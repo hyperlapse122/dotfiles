@@ -1,6 +1,7 @@
 """Apply locked Antigravity/CE and initialize its adapter through a fresh T3 server.
 
-No model prompt, personal OAuth, real keyring operation, or personal apply is used.
+No external model request, personal OAuth, real keyring operation, or personal apply is used.
+Native instruction discovery uses a localhost capture-only endpoint that rejects requests.
 Authenticated CE invocation is tracked in https://github.com/hyperlapse122/dotfiles/issues/52.
 """
 
@@ -12,9 +13,11 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import time
 
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
+from smoke_codex import capture_requests, strings
 from smoke_t3_code import T3Rpc, provision_desktop
 
 
@@ -60,7 +63,7 @@ def main():
             directory.mkdir()
         for relative in (".chezmoidata", ".chezmoitemplates", "dot_local", "private_dot_gemini", "private_dot_t3"):
             shutil.copytree(REPO / "home" / relative, source / relative)
-        for relative in (".chezmoiignore", ".chezmoiexternals/personal-apps.toml.tmpl",
+        for relative in (".chezmoiignore", ".chezmoiremove", ".chezmoiexternals/personal-apps.toml.tmpl",
                          ".chezmoiexternals/harness-plugins.toml.tmpl",
                          ".chezmoiscripts/run_after_20-antigravity-plugins.sh.tmpl",
                          ".chezmoiscripts/run_after_20-antigravity-plugins.ps1.tmpl"):
@@ -71,6 +74,14 @@ def main():
         apps = json.loads(declaration.read_text(encoding="utf-8"))
         apps["personalApps"] = {name: apps["personalApps"][name] for name in ("antigravity", "antigravity-acp")}
         declaration.write_text(json.dumps(apps), encoding="utf-8")
+        markers = {"common": "DOTFILES_COMMON_NATIVE_RULE_71AE",
+                   "antigravity": "DOTFILES_ANTIGRAVITY_NATIVE_RULE_9F26",
+                   "foreign": "DOTFILES_FOREIGN_NATIVE_RULE_B8C1"}
+        (source / ".chezmoitemplates/agent-instructions").write_text(
+            markers["common"] + "\n"
+            + '{{ if eq .harness "antigravity" }}' + markers["antigravity"] + "{{ end }}\n"
+            + '{{ if ne .harness "antigravity" }}' + markers["foreign"] + "{{ end }}\n",
+            encoding="utf-8")
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":
@@ -113,7 +124,7 @@ def main():
         if args.install_desktop:
             provision_desktop(target, root, real_environment)
         t3 = desktop_command(real_home, real_environment)
-        chez("apply", "--force")
+        chez("apply", "--force", "--exclude=scripts")
         binary_suffix = ".exe" if os.name == "nt" else ""
         cli = home / ".local/share/dotfiles/antigravity/bin" / ("agy" + binary_suffix)
         launcher_suffix = ".cmd" if os.name == "nt" else ""
@@ -130,14 +141,37 @@ def main():
             version = launch(path, "--version")
             check_version(version, app_locks[name]["tag"])
             print(f"Native {target}: {name} {version}")
+        safe_capture_keys = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP",
+                             "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "HOME",
+                             "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME",
+                             "XDG_CONFIG_DIRS", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"}
+        capture_env = {key: value for key, value in env.items() if key.upper() in safe_capture_keys}
+        with capture_requests() as (endpoint, requests):
+            capture_env.update({"GEMINI_API_KEY": "local-capture-not-a-real-key",
+                                "GOOGLE_GEMINI_BASE_URL": endpoint.removesuffix("/v1"),
+                                "AGY_CLI_DISABLE_AUTO_UPDATE": "true", "NO_PROXY": "127.0.0.1,localhost"})
+            captured = subprocess.run(
+                [str(cli), "--print", "Inspect current workspace context without using tools.",
+                 "--print-timeout", "15s", "--output-format", "json"],
+                env=capture_env, cwd=outside, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=45)
+        contexts = ["\n".join(strings(request)) for request in requests]
+        if (captured.returncode == 0
+                or not any(markers["common"] in text and markers["antigravity"] in text for text in contexts)
+                or any(markers["foreign"] in text for text in contexts)):
+            raise RuntimeError("Native instruction discovery was not proven: " + captured.stdout + captured.stderr)
+        print("Native instruction discovery: common and Antigravity rules included, foreign rules excluded; localhost capture rejected model execution")
+        chez("apply", "--force")
         plugins = json.loads(run([str(cli), "plugin", "list", "--json"], env=env, cwd=outside))
         managed = [plugin for plugin in plugins if plugin["name"] == "compound-engineering"]
         if len(managed) != 1 or not managed[0]["enabled"] or "ce-pov" not in managed[0]["skills"]:
             raise RuntimeError("Pinned CE is not enabled and natively discoverable")
         check_version(managed[0]["version"], ce_pin["tag"].removeprefix("compound-engineering-"))
         run([str(cli), "plugin", "validate", managed[0]["path"]], env=env, cwd=outside)
-        if not (home / ".gemini/GEMINI.md").is_file():
-            raise RuntimeError("Native shared-instruction adapter was not created")
+        native_checks_env = {**env, "ANTIGRAVITY_TEST_BINARY": str(cli), "PYTHONPATH": str(REPO / "tests")}
+        run([sys.executable, "-m", "unittest", "test_harness_plugins.NativeAntigravityPluginsTest"],
+            env=native_checks_env, cwd=outside)
+        print("Native plugin preservation, enablement repair, and malformed-state checks passed")
         first = json.loads(t3_settings.read_text(encoding="utf-8"))
         provider = first["providerInstances"]["antigravity"]
         adapter = home / ".local/share/dotfiles/antigravity-acp/bin" / ("antigravity-acp" + binary_suffix)
@@ -151,8 +185,13 @@ def main():
         drifted["providerInstances"]["antigravity"]["enabled"] = False
         drifted["providerInstances"]["antigravity"]["config"]["commandPath"] = "wrong"
         t3_settings.write_text(json.dumps(drifted), encoding="utf-8")
+        adjacent = adapter.parent / cli.name
+        adjacent.write_bytes(b"#!/bin/sh\nexit 91\n")
+        adjacent.chmod(0o755)
         for _ in range(2):
             chez("apply", "--force")
+        if adjacent.exists():
+            raise RuntimeError("Reapply retained the adjacent CLI that overrides AGY_BIN")
         if json.loads(t3_settings.read_text(encoding="utf-8")) != first:
             raise RuntimeError("Repeated provider reconciliation did not converge")
         if json.loads(cli_settings.read_text(encoding="utf-8"))["unrelatedSmokeSetting"] != "retain":

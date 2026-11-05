@@ -118,7 +118,7 @@ mise exec -- python tests/smoke_harness_plugins.py
 mise exec -- python tests/smoke_antigravity.py
 ```
 
-The omp smoke verifies local marketplace cutover, update policy, skill discovery, and preservation of unrelated plugins. The Antigravity smoke verifies the pinned native package, reapply repair, and a fresh T3 ACP session. Both use disposable homes; Antigravity's authenticated CE invocation is outside this change.
+The omp smoke verifies local marketplace cutover, update policy, skill discovery, and preservation of unrelated plugins. The Antigravity smoke additionally proves native global-instruction ingestion through a localhost capture-only endpoint, runs the native preservation/malformed-state checks with its locked CLI, and starts a fresh T3 ACP session. These checks use disposable homes without real credentials or model completion; Antigravity's authenticated CE invocation remains outside this change.
 
 For Codex's isolated native integration:
 

@@ -90,6 +90,17 @@ Run `codex login` manually before authenticated use, then start a fresh T3 Code 
 - The pinned [Antigravity ACP adapter](https://github.com/shubzkothekar/antigravity-acp) passes `--dangerously-skip-permissions` to CLI model requests. Treat model turns as permission-bypassing execution; this integration does not change the CLI's stored security settings.
 - The adapter documents personal OAuth restrictions. Use its supported Gemini API-key or enterprise ADC route for model use; dotfiles does not provision credentials or start a model request.
 
+### Antigravity credentials
+
+For the [Gemini API-key route](https://antigravity.google/docs/install?tab=cli#using-a-gemini-api-key), both steps are required:
+
+1. Merge `"modelProvider": "gemini"` into your user-owned `~/.gemini/antigravity-cli/settings.json`.
+2. Provision `GEMINI_API_KEY` securely in the environment inherited by T3 and its adapter.
+
+The key alone does not select this provider. Fully quit T3 and launch the desktop from that environment; exporting a key in a different shell does not change a running desktop process. Never put real keys in tracked files.
+
+For [enterprise ADC](https://antigravity.google/docs/install?tab=cli#application-default-credentials-adc-1), configure credentials through the native Google Cloud procedure and launch T3 with `AGY_ADC_AUTH=true`. Switch away from Gemini API-key mode when choosing ADC. Dotfiles does not create credentials or change your CLI model/auth settings.
+
 ## Testing and Smoke Verification
 
 With T3 Code already installed, run isolated checks without applying to your personal home:
@@ -101,4 +112,4 @@ mise exec -- python tests/smoke_antigravity.py
 
 The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It also starts a fresh local T3 server, removes the managed binary directory from `PATH`, and requires T3's native Codex driver to complete app-server initialization. The Codex account remains unauthenticated in this smoke; no model completion or personal credential use is claimed.
 
-The Antigravity smoke installs exact locked artifacts and native CE, checks discovery and reapply repair, and starts a fresh real T3 process with managed `.local/bin` absent from PATH. It requests provider refresh to exercise ACP initialization without a paid model turn or personal OAuth/keyring access. Authenticated CE skill invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52), not claimed by this smoke.
+The Antigravity smoke verifies native instruction content through a localhost-only request capture that deliberately rejects model execution. It runs native plugin preservation/malformed-state checks against the locked CLI, repairs adjacent-CLI and provider drift, and initializes a fresh T3 provider with managed `.local/bin` absent from PATH. No real credentials, personal OAuth/keyring access, or model completion are used. Authenticated CE skill invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52).
