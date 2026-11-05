@@ -38,4 +38,24 @@
 {{- $provider = $provider | setValueAtPath "accentColor" "#f84fcc" -}}
 {{- end -}}
 {{- $providers = $providers | setValueAtPath "omp" $provider -}}
+{{- $codex := dict -}}
+{{- if hasKey $providers "codex" -}}
+{{- $codex = get $providers "codex" -}}
+{{- if not (kindIs "map" $codex) -}}
+{{- fail "Invalid T3 Code settings.json: providerInstances.codex must be an object" -}}
+{{- end -}}
+{{- end -}}
+{{- $codexConfig := dict -}}
+{{- if hasKey $codex "config" -}}
+{{- $codexConfig = get $codex "config" -}}
+{{- if not (kindIs "map" $codexConfig) -}}
+{{- fail "Invalid T3 Code settings.json: providerInstances.codex.config must be an object" -}}
+{{- end -}}
+{{- end -}}
+{{- $codexExecutable := "codex" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $codexExecutable = "codex.exe" -}}{{- end -}}
+{{- $codexCommand := joinPath .chezmoi.destDir ".local" "bin" $codexExecutable | replace "\\" "/" -}}
+{{- $codexConfig = $codexConfig | setValueAtPath "enabled" true | setValueAtPath "setupMode" "existing" | setValueAtPath "binaryPath" $codexCommand -}}
+{{- $codex = $codex | setValueAtPath "driver" "codex" | setValueAtPath "enabled" true | setValueAtPath "config" $codexConfig -}}
+{{- $providers = $providers | setValueAtPath "codex" $codex -}}
 {{- $settings | setValueAtPath "providerInstances" $providers | toPrettyJson -}}

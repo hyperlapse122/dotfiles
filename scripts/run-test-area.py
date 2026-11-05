@@ -18,6 +18,7 @@ AREAS = {
     "applications": (
         "test_personal_apps", "test_personal_app_lock", "test_harness_plugins",
         "test_harness_plugin_lock", "test_t3_code_desktop", "test_t3_code_settings",
+        "test_codex",
         "test_native_ca_shell", "test_native_ca_windows", "test_powershell_profile",
     ),
     "security": (

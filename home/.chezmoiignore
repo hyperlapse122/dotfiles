@@ -40,6 +40,10 @@ Library
 .omp/agent/config.yml
 {{ end }}
 {{ end }}
+{{ $codex := get $apps "codex" | default dict }}
+{{ if not (hasKey (get $codex "targets" | default dict) $target) }}
+.codex
+{{ end }}
 {{ $release := get .chezmoi "osRelease" | default dict }}
 {{ $t3Windows := and (eq .chezmoi.os "windows") (has .chezmoi.arch (list "amd64" "arm64")) }}
 {{ $t3Posix := or (and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64")) (and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (has .chezmoi.arch (list "amd64" "arm64"))) }}

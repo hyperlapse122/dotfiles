@@ -159,6 +159,54 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
+    def test_codex_package_preserves_layout_and_unrelated_binaries(self):
+        suffix = ".exe" if os.name == "nt" else ""
+        files = {
+            "bin/codex" + suffix: b"codex",
+            "bin/codex-code-mode-host" + suffix: b"code-mode",
+            "bin/codex-exec-server" + suffix: b"exec-server",
+            "codex-package.json": b'{"layoutVersion": 1}',
+            "codex-path/rg" + suffix: b"ripgrep",
+            "codex-resources/voice/bin/library": b"voice",
+        }
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode="w:gz") as stream:
+            for name, content in files.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(content)
+                info.mode = 0o755
+                stream.addfile(info, io.BytesIO(content))
+        self.payloads["/codex.tar.gz"] = archive.getvalue()
+        targets = self.apps["personalApps"]["omp"]["targets"]
+        self.apps["personalApps"]["codex"] = {
+            "command": "codex", "repository": "openai/codex",
+            "targets": {target: {
+                "asset": "codex.tar.gz", "kind": "archive-file",
+                "format": "tar.gz", "path": "bin/codex" + suffix,
+            } for target in targets},
+        }
+        self.locks["personalAppLocks"]["codex"] = {
+            "tag": "rust-v0.166.0", "targets": {target: {
+                "url": self.base_url + "/codex.tar.gz",
+                "sha256": hashlib.sha256(archive.getvalue()).hexdigest(),
+                "kind": "archive-file", "format": "tar.gz", "path": "bin/codex" + suffix,
+            } for target in targets},
+        }
+        self.write_apps()
+        self.write_locks()
+        self.apply()
+        for name, content in files.items():
+            self.assertEqual((self.home / ".local" / name).read_bytes(), content)
+        unrelated = self.home / ".local/bin/owner-tool"
+        unrelated.write_bytes(b"keep")
+        stale = self.home / ".local/codex-resources/stale"
+        stale.write_bytes(b"remove")
+        (self.home / ".local/bin" / ("codex" + suffix)).write_bytes(b"drift")
+        self.apply()
+        self.assertFalse(stale.exists())
+        self.assertEqual(unrelated.read_bytes(), b"keep")
+        self.assertEqual((self.home / ".local/bin" / ("codex" + suffix)).read_bytes(), b"codex")
+
     def test_install_reapply_and_reconcile_changed_url(self):
         first = self.payloads["/omp"]
         self.apply()

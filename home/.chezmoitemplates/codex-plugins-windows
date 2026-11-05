@@ -1,0 +1,18 @@
+$ErrorActionPreference = 'Stop'
+$env:HOME = '{{ .chezmoi.destDir | replace "'" "''" }}'
+$env:USERPROFILE = $env:HOME
+$env:CODEX_HOME = Join-Path $env:HOME '.codex'
+$codex = Join-Path $env:HOME '.local/bin/codex.exe'
+
+function Invoke-Codex {
+    & $codex @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "codex exited with code $LASTEXITCODE"
+    }
+}
+{{ range $name, $plugin := .harnessPlugins -}}
+{{ if hasKey $plugin "codex" -}}
+Invoke-Codex 'plugin' 'marketplace' 'add' '{{ joinPath $.chezmoi.destDir ".local" "share" "dotfiles" "harness-plugins" $name | replace "'" "''" }}'
+Invoke-Codex 'plugin' 'add' '{{ printf "%s@%s" $plugin.codex.plugin $plugin.codex.marketplace | replace "'" "''" }}'
+{{ end -}}
+{{ end -}}

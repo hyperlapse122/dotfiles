@@ -1,5 +1,16 @@
 {
   "personalApps": {
+    "codex": {
+      "command": "codex",
+      "repository": "openai/codex",
+      "targets": {
+        "darwin-arm64": {"asset": "codex-package-aarch64-apple-darwin.tar.gz", "kind": "archive-file", "format": "tar.gz", "path": "bin/codex"},
+        "linux-amd64": {"asset": "codex-package-x86_64-unknown-linux-musl.tar.gz", "kind": "archive-file", "format": "tar.gz", "path": "bin/codex"},
+        "linux-arm64": {"asset": "codex-package-aarch64-unknown-linux-musl.tar.gz", "kind": "archive-file", "format": "tar.gz", "path": "bin/codex"},
+        "windows-amd64": {"asset": "codex-package-x86_64-pc-windows-msvc.tar.gz", "kind": "archive-file", "format": "tar.gz", "path": "bin/codex.exe"},
+        "windows-arm64": {"asset": "codex-package-aarch64-pc-windows-msvc.tar.gz", "kind": "archive-file", "format": "tar.gz", "path": "bin/codex.exe"}
+      }
+    },
     "ghq": {
       "command": "ghq",
       "repository": "x-motemen/ghq",
