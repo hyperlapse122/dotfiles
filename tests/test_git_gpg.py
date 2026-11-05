@@ -88,6 +88,22 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.run_command("git", "init", str(reconciled))
         self.assertEqual(self.run_command("git", "-C", str(reconciled), "symbolic-ref", "--short", "HEAD").stdout.strip(), "main")
 
+    def test_checkout_keeps_sops_dotenv_lf_despite_system_autocrlf(self):
+        system = self.root / "system.gitconfig"
+        system.write_text("[core]\n    autocrlf = true\n", encoding="utf-8")
+        self.env.pop("GIT_CONFIG_NOSYSTEM")
+        self.env["GIT_CONFIG_SYSTEM"] = str(system)
+        self.chezmoi("apply", "--force", "--exclude=scripts")
+        repository = self.root / "checkout"
+        self.run_command("git", "init", str(repository))
+        dotenv = repository / ".env.development.sops.env"
+        original = b"sops_lastmodified=2026-10-14T09:28:37Z\n"
+        dotenv.write_bytes(original)
+        self.run_command("git", "-C", str(repository), "add", dotenv.name)
+        dotenv.unlink()
+        self.run_command("git", "-C", str(repository), "checkout", "--", dotenv.name)
+        self.assertEqual(dotenv.read_bytes(), original)
+
     def test_pinentry_reconciliation_preserves_unrelated_state(self):
         preserved = b"# pinentry-program commented-out\r\ndefault-cache-ttl 321\r\n"
         self.agent.write_bytes(preserved + b"pinentry-program old\r\n  pinentry-program duplicate\r\nmax-cache-ttl 654")

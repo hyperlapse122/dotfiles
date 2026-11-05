@@ -156,3 +156,23 @@ This writes helper configuration to `~/.local/share/dotfiles/gitlab.gitconfig` a
 If `glab` reports `parsing time "null"` or tries to open a certificate file named `null`, reapply GitLab authentication with the targeted command above. Earlier authentication reconciliation serialized empty YAML settings as JSON `null`; `glab` reads that scalar as the literal text `null`, affecting timestamps, certificate paths, and other optional settings.
 
 Reconciliation now writes these empty global and host settings as empty strings, including settings for other hosts, while retaining their configured values and credentials. It does not disable update checks or TLS verification. A separate `401 Unauthorized` after repair means that host still needs valid credentials; use `glab auth login --hostname <host>` for that account.
+
+## SOPS dotenv Timestamp Errors on Windows
+
+An error such as `parsing time "2026-10-14T09:28:37Z\x0d": extra text: "\x0d"`
+can come from SOPS during a project's `mise install` postinstall hook. Check the
+failing command before treating it as a glab authentication error. SOPS 3.13.3
+retains the CR in a CRLF dotenv file's `sops_lastmodified` value and cannot parse
+the timestamp.
+
+The managed Git configuration sets `core.autocrlf = input`, overriding Git for
+Windows' system default of `true`. New checkouts retain LF; repository attributes
+and local configuration can still override this policy. Projects sharing SOPS
+dotenv files should also declare `*.sops.env text eol=lf` in their own
+`.gitattributes`.
+
+Apply the managed Git configuration explicitly through chezmoi. This does not
+rewrite existing working files. For an affected checkout, convert only the SOPS
+dotenv file's CRLF line endings to LF, preserving its encrypted contents, then
+rerun `mise install`. Avoid a repository-wide reset or checkout that could discard
+local changes.
