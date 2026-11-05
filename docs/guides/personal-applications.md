@@ -87,7 +87,7 @@ If another copy precedes `~/.local/bin`, resolve the conflicting PATH entry in y
 On Apple Silicon macOS, explicit application also publishes native build roots and mise-owned Python/PowerShell/CMake/Ninja links under `~/.local/share/dotfiles/build`.
 The PATH fragment loads these roots so native commands remain available outside a mise task.
 Development tool versions remain declared in `mise.toml`/`mise.lock`; they are not duplicated as Homebrew packages.
-See the [macOS setup guide](../setup/macos.md) for first-device prerequisites, per-project Zsh activation, native build verification and the complete readiness checklist.
+See the [macOS setup guide](../setup/macos.md) for explicit Homebrew prerequisite provisioning, per-project Zsh activation, native build verification and the complete readiness checklist.
 
 ---
 

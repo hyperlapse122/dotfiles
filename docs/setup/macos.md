@@ -2,7 +2,7 @@
 
 This guide configures a native Apple Silicon Mac running macOS 15 or later.
 Intel Macs, Rosetta-based toolchains, iOS SDKs and Windows-target builds are outside this setup.
-Use a normal user account with permission to approve native installers and virtualization requests.
+Use a normal user account with permission to approve native installers.
 
 ## Prepare Native Prerequisites
 
@@ -15,13 +15,26 @@ xcrun --find clang
 xcrun --show-sdk-path
 ```
 
-Install Homebrew using its [official installation instructions](https://docs.brew.sh/Installation).
-The supported Apple Silicon prefix is `/opt/homebrew`; complete the installer's shell setup instructions before continuing.
-The current repository baseline follows Homebrew's macOS 15 minimum.
+Download the explicit device provisioning script, inspect it, then run it from a native terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hyperlapse122/dotfiles/main/provision-macos.sh -o /tmp/dotfiles-provision-macos.sh
+less /tmp/dotfiles-provision-macos.sh
+sh /tmp/dotfiles-provision-macos.sh
+```
+
+This operation needs no existing Git, mise or checkout.
+It installs Homebrew through its [official installer](https://docs.brew.sh/Installation) when absent, then installs missing Git, mise, standalone chezmoi, GnuPG and pinentry-mac formulae.
+The supported Apple Silicon prefix is `/opt/homebrew`; an incompatible existing Homebrew installation requires manual resolution.
+Run as your normal user and complete any installer confirmation or administrator password prompts.
+If a download or installation fails, resolve the reported problem and rerun; already installed packages are retained without requesting upgrades.
+The script does not initialize a checkout, register a chezmoi source, apply personal settings or edit shell startup files.
+It is not part of worktree initialization.
+
+Activate Homebrew in the current terminal before the next step:
 
 ```sh
 eval "$(/opt/homebrew/bin/brew shellenv)"
-brew install git mise chezmoi gnupg pinentry-mac
 ```
 
 These are prerequisites for obtaining and initializing the repository.
@@ -76,14 +89,11 @@ mise run apply
 
 Preview may require GPG key access to render encrypted destinations.
 Explicit application installs missing host apps, configures existing managed files, installs native user-scope CE integrations, and runs `macos-build`.
-Host applications include Chrome, 1Password and its CLI, Podman Desktop and its engine; T3 retains its existing installer.
+Host applications include Chrome, 1Password and its CLI; T3 retains its existing installer.
 Already-installed host packages are retained without an automatic package upgrade policy.
 
-Podman on macOS uses a Linux virtual machine.
-Application reuses existing machines and starts the selected stopped machine; it creates a default machine only when none exists.
-An existing bundled engine under `/opt/podman` is retained instead of installing Homebrew Podman over it.
-A mixed engine installation or several stopped machines without a default requires selecting the intended state manually; the repository never resets or deletes machines.
-See [Podman Desktop's macOS guide](https://podman-desktop.io/docs/installation/macos-install) for native ownership and approval requirements.
+Podman is not managed or required on macOS.
+Application leaves existing Podman installations and VMs untouched, including their running or stopped state.
 
 `macos-build` validates Apple's selected compiler and SDK, installs native .NET 8/10 and Rust through mise, and prepares the pinned writable vcpkg checkout.
 It publishes tool roots and Python/PowerShell/CMake/Ninja links under `~/.local/share/dotfiles/build` for use outside a task.
@@ -104,7 +114,7 @@ PowerShell receives its existing managed mise profile integration.
 Check discovery in a fresh shell outside the dotfiles directory:
 
 ```sh
-command -v claude codex omp agy antigravity-acp gh glab ghq t3 op podman
+command -v claude codex omp agy antigravity-acp gh glab ghq t3 op
 command -v python pwsh dotnet rustc cargo cmake ninja vcpkg
 dotnet --list-sdks
 ```
@@ -136,13 +146,12 @@ A successful installer or a discovered skill alone does not establish full devic
 | AI instructions | Claude Code `~/.claude/CLAUDE.md`, Codex `~/.codex/AGENTS.md`, omp `~/.omp/agent/AGENTS.md`, Antigravity `~/.gemini/GEMINI.md` are discovered natively; shared content includes no foreign harness branch |
 | CE installation and discovery | Each harness lists/enables the pinned user-scope CE plugin and discovers its native skills; existing disposable-home smoke coverage is described in the testing guide |
 | Authenticated CE execution | Sign in through each harness's supported flow and invoke a harmless CE skill; retain the result separately from installation/discovery evidence |
-| T3 and desktop apps | `t3 --version`, `t3 app` in a project, managed preferences/provider initialization, Chrome, 1Password and Podman Desktop launch |
+| T3 and desktop apps | `t3 --version`, `t3 app` in a project, managed preferences/provider initialization, Chrome and 1Password launch |
 | Git and GPG | Make and verify a representative signed commit in a disposable repository with the intended key; no private key is copied by bootstrap |
 | GitHub and GitLab | Verify real intended-account CLI and Git operations after managed Keychain reconciliation; CI fixture credentials prove no real account login |
 | Secrets and CA trust | Encrypted destinations apply with the intended GPG key; organization CA is already trusted; a fresh desktop session has `NODE_USE_SYSTEM_CA=1` |
-| Containers | `podman info` and an explicitly requested representative container such as `podman run --rm quay.io/podman/hello` succeed; this pulls an image and runs a container |
 | Native builds | The explicit smoke command below builds, ARM64-identifies and runs Rust, C++, both .NET SDK outputs and a CMake/vcpkg fmt consumer |
-| Repeat application | A second `mise run apply` preserves unrelated settings/plugins, keeps commands usable, repairs missing apps and reuses the selected Podman machine |
+| Repeat application | A second `mise run apply` preserves unrelated settings/plugins, keeps commands usable and repairs missing apps |
 | New worktree | `mise trust`, `mise install`, and `mise run bootstrap` prepare another worktree without applying personal settings or executing personal chezmoi hooks |
 | SSH identity | Review the existing default key before explicit application restores the repository-managed encrypted SSH identity; the former host name records its origin, not a host restriction |
 | Platform exclusions | Windows MSVC/MFC/WPF/.NET Framework/SDK provisioning and WSL-specific behavior are not copied to Mac |
