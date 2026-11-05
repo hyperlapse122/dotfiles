@@ -29,7 +29,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\src\github.com\hy
 
 For custom destinations, host application lists, and build toolchains, see the [Windows Setup Guide](docs/setup/windows.md).
 
-### 2. Worktree Preparation (Any OS)
+### 2. New Apple Silicon Mac
+
+Follow the [macOS Setup and Readiness Guide](docs/setup/macos.md) to install native prerequisites, prepare the permanent checkout with `bootstrap.sh`, register it separately with `configure-chezmoi.sh`, and explicitly apply the environment.
+The supported baseline is macOS 15 or later on native Apple Silicon.
+The guide covers all managed harnesses, applications, credentials, local containers and native Rust/C++/.NET builds, with separate manual and runtime readiness checks.
+
+### 3. Worktree Preparation (Any OS)
 
 To prepare a fresh git worktree or existing checkout for development without modifying personal settings:
 
@@ -40,7 +46,7 @@ mise install
 
 This installs locked development tools and runs read-only source verification via the project `postinstall` hook.
 
-### 3. Apply Personal Settings
+### 4. Apply Personal Settings
 
 To apply managed configuration and personal applications to your actual user home directory:
 
@@ -63,6 +69,8 @@ mise exec -- chezmoi --source . diff
 | `mise run apply` | Apply settings directly from the current repository worktree |
 | `mise exec -- chezmoi --source . diff` | Inspect rendered file diffs against destination files |
 | `mise run windows-build` | Provision or update Windows native development toolchains (C++, .NET, Rust) |
+| `mise run macos-build` | Explicitly provision native Apple Silicon C++/.NET/Rust build tools |
+| `mise exec -- python scripts/macos-readiness.py` | Inspect macOS local prerequisites and pending manual/runtime checks |
 | `mise exec -- python -m unittest discover -s tests` | Run the repository test suite |
 
 ## Documentation
@@ -70,6 +78,7 @@ mise exec -- chezmoi --source . diff
 Comprehensive guides are organized in [docs/](docs/README.md):
 
 ### Setup
+- **[macOS Setup and Readiness](docs/setup/macos.md):** Native prerequisites, source registration, managed apps/harnesses, Podman, native builds, and a complete readiness checklist.
 - **[Windows Setup and Bootstrap](docs/setup/windows.md):** Automated PC bootstrap, chezmoi source registration, WinGet host applications, virtualization preflight, build environments, and Podman / Kubernetes onboarding.
 
 ### User Guides

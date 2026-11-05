@@ -26,7 +26,7 @@ mise install
 
 The `bootstrap` task runs:
 ```sh
-chezmoi --config-path .chezmoi-bootstrap.toml --source home managed --exclude=scripts
+chezmoi --config .chezmoi-bootstrap.toml --source . managed --exclude=scripts
 ```
 
 - **Hook-Free Config:** Uses `.chezmoi-bootstrap.toml` to guarantee that personal chezmoi hooks from `~/.config/chezmoi/chezmoi.toml` do not run during repository setup.
@@ -185,6 +185,13 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 - **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all six native smoke areas; this is not an ARM64 build-only lane.
 
 ### Native areas and independent setup
+
+The separate **Native macOS ARM64 builds** job explicitly runs `mise run macos-build` with a disposable home and job-owned mise data/cache roots.
+Its provisioning process clears inherited .NET/Rust roots so a runner's preinstalled environment cannot redirect installation into the runner account's tool roots.
+It then runs `tests/smoke_macos_build_environment.py --home` against that provisioned home and retains `native-macos-build.json`.
+This 45-minute job compiles, ARM64-identifies and runs Rust, C++, .NET 8/10 apphosts and a CMake project consuming vcpkg fmt; it also checks the shared PATH fragment from a fresh shell.
+It reuses immutable checkout and candidate-pin selection and does not apply the owner's dotfiles or run real account authentication.
+For an intentionally provisioned local Mac, use the [macOS setup guide](../setup/macos.md) for the explicit smoke command and manual readiness checklist.
 
 Each area/target pair owns a separate hosted runner. All matrices use `fail-fast: false`, so an area's failure cannot suppress unrelated results. Jobs time out after 20 minutes; apps, CE, and Codex steps have 10-minute limits, T3 15 minutes, and credential execution 5 minutes.
 

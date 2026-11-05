@@ -75,5 +75,23 @@ class AreaSelectionTest(unittest.TestCase):
         self.assertTrue(result.wasSuccessful())
 
 
+class MacBuildWorkflowTest(unittest.TestCase):
+    def test_native_builds_keep_candidate_checkout_and_disposable_roots(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/test.yml").read_text(encoding="utf-8")
+        job = workflow.split("\n  macos-build:\n", 1)[1]
+        self.assertIn("runs-on: xcode-27", job)
+        for anchor in ("checkout", "candidate-lock", "select-lock", "download-harness-lock", "select-harness-lock"):
+            self.assertIn("- *" + anchor + "\n", job)
+        self.assertIn("MISE_DATA_DIR: ${{ runner.temp }}/mise-macos-build/data", job)
+        self.assertIn("MISE_CACHE_DIR: ${{ runner.temp }}/mise-macos-build/cache", job)
+        self.assertIn("env -u DOTNET_ROOT -u CARGO_HOME -u RUSTUP_HOME -u RUSTUP_TOOLCHAIN", job)
+        self.assertIn('HOME="$fixture_home" mise run macos-build', job)
+        self.assertLess(job.index("mise run macos-build"), job.index("tests/smoke_macos_build_environment.py"))
+        self.assertIn('--home "$RUNNER_TEMP/macos-build-home"', job)
+        self.assertIn('if: always()', job)
+        self.assertIn("native-macos-build.json", job)
+        self.assertNotIn("mise run apply", job)
+
+
 if __name__ == "__main__":
     unittest.main()
