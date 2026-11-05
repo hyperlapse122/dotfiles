@@ -1,7 +1,8 @@
 {{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
 {{- $omp := get .personalApps "omp" | default dict -}}
 {{- $codex := get .personalApps "codex" | default dict -}}
-{{- if or (hasKey (get $omp "targets" | default dict) $target) (hasKey (get $codex "targets" | default dict) $target) -}}
+{{- $antigravity := get .personalApps "antigravity" | default dict -}}
+{{- if or (hasKey (get $omp "targets" | default dict) $target) (hasKey (get $codex "targets" | default dict) $target) (hasKey (get $antigravity "targets" | default dict) $target) -}}
 {{- range $name, $plugin := .harnessPlugins -}}
 {{- $pin := index $.harnessPluginLocks $name | default dict -}}
 {{- if not (regexMatch "^[0-9a-f]{40}$" (get $pin "commit")) -}}

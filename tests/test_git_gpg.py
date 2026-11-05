@@ -22,6 +22,7 @@ class GitGpgSettingsTest(unittest.TestCase):
             "run_after_45-gitlab-auth.*",
             "run_before_05-check-windows-virtualization.ps1.tmpl",
             "private_dot_t3", "dot_local", "run_onchange_after_30-install-t3-code.sh.tmpl",
+            "private_dot_gemini", "run_after_20-antigravity-plugins.*",
         ))
         self.home = self.root / "user home"
         self.home.mkdir()
