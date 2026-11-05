@@ -199,6 +199,73 @@ class PersonalAppLockTest(unittest.TestCase):
         self.assertEqual(self.lock_path.read_bytes(), self.previous)
 
 
+class ClaudePersonalAppLockTest(unittest.TestCase):
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory(prefix="claude lock ")
+        self.addCleanup(self.scratch.cleanup)
+        self.root = Path(self.scratch.name)
+        self.data_dir = self.root / "home/.chezmoidata"
+        self.data_dir.mkdir(parents=True)
+        self.application = {
+            "command": "claude", "source": "claude", "repository": "anthropics/claude-code",
+            "targets": {
+                "linux-amd64": {"platform": "linux-x64", "asset": "claude", "kind": "file"},
+                "windows-arm64": {"platform": "win32-arm64", "asset": "claude.exe", "kind": "file"},
+            },
+        }
+        self.declaration = self.data_dir / "personal-apps.json"
+        self.declaration.write_text(json.dumps({"personalApps": {"claude": self.application}}), encoding="utf-8")
+        self.lock = self.data_dir / "personal-app-lock.json"
+        self.lock.write_text('{"previous": true}\n', encoding="utf-8")
+        self.previous = self.lock.read_bytes()
+        self.version = "2.1.318"
+        self.manifest = {"version": self.version, "platforms": {
+            "linux-x64": {"binary": "claude", "checksum": "a" * 64, "size": 100},
+            "win32-arm64": {"binary": "claude.exe", "checksum": "b" * 64, "size": 200},
+        }}
+
+    def refresh(self):
+        return UPDATER.update_lock(
+            self.root, lambda _: self.fail("Claude must not use GitHub releases"),
+            fetch_claude_release=lambda: (self.version, self.manifest),
+        )
+
+    def test_native_manifest_resolves_and_reapply_is_unchanged(self):
+        self.assertTrue(self.refresh())
+        pin = json.loads(self.lock.read_text(encoding="utf-8"))["personalAppLocks"]["claude"]
+        self.assertEqual(pin, {"tag": "2.1.318", "targets": {
+            "linux-amd64": {"kind": "file", "sha256": "a" * 64,
+                "url": "https://downloads.claude.ai/claude-code-releases/2.1.318/linux-x64/claude"},
+            "windows-arm64": {"kind": "file", "sha256": "b" * 64,
+                "url": "https://downloads.claude.ai/claude-code-releases/2.1.318/win32-arm64/claude.exe"},
+        }})
+        stamp = self.lock.stat().st_mtime_ns
+        self.assertFalse(self.refresh())
+        self.assertEqual(self.lock.stat().st_mtime_ns, stamp)
+
+    def test_invalid_or_incomplete_manifest_preserves_previous_lock(self):
+        original = copy.deepcopy(self.manifest)
+        invalid = []
+        for field, value in (("binary", "../claude"), ("checksum", "bad")):
+            manifest = copy.deepcopy(original)
+            manifest["platforms"]["linux-x64"][field] = value
+            invalid.append(manifest)
+        missing = copy.deepcopy(original)
+        del missing["platforms"]["win32-arm64"]
+        invalid.extend([missing, {**original, "version": "2.1.0"}])
+        for manifest in invalid:
+            with self.subTest(manifest=manifest):
+                self.manifest = manifest
+                with self.assertRaises(ValueError):
+                    self.refresh()
+                self.assertEqual(self.lock.read_bytes(), self.previous)
+        self.manifest = original
+        self.version = "../latest"
+        with self.assertRaises(ValueError):
+            self.refresh()
+        self.assertEqual(self.lock.read_bytes(), self.previous)
+
+
 class GitLabPersonalAppLockTest(unittest.TestCase):
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory(prefix="gitlab personal app lock ")

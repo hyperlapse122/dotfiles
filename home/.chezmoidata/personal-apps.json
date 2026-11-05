@@ -1,5 +1,37 @@
 {
   "personalApps": {
+    "claude": {
+      "command": "claude",
+      "source": "claude",
+      "repository": "anthropics/claude-code",
+      "targets": {
+        "darwin-arm64": {
+          "platform": "darwin-arm64",
+          "asset": "claude",
+          "kind": "file"
+        },
+        "linux-amd64": {
+          "platform": "linux-x64",
+          "asset": "claude",
+          "kind": "file"
+        },
+        "linux-arm64": {
+          "platform": "linux-arm64",
+          "asset": "claude",
+          "kind": "file"
+        },
+        "windows-amd64": {
+          "platform": "win32-x64",
+          "asset": "claude.exe",
+          "kind": "file"
+        },
+        "windows-arm64": {
+          "platform": "win32-arm64",
+          "asset": "claude.exe",
+          "kind": "file"
+        }
+      }
+    },
     "codex": {
       "command": "codex",
       "repository": "openai/codex",

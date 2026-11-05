@@ -271,6 +271,7 @@ def main():
             "XDG_CACHE_HOME": str(root / "cache"),
             "XDG_STATE_HOME": str(root / "state"),
             "CODEX_HOME": str(home / ".codex"),
+            "CLAUDE_CONFIG_DIR": str(home / ".claude"),
         })
         command = [
             chezmoi, "--config", str(config), "--source", str(source),
