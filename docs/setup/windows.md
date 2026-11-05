@@ -124,7 +124,7 @@ On Windows x64 hosts, explicit application (`chezmoi apply` or `mise run apply`)
 
 ### Installed Components
 
-- **Visual Studio 2026 Build Tools:** Reconciled against `scripts/windows-build-tools.vsconfig` on the stable 2026 channel.
+- **Visual Studio 2026 Build Tools:** Required inventory is tracked in `scripts/windows-build-tools.vsconfig` on the stable 2026 channel. Ready existing installations are reused; maintenance is manual.
 - **C++ Compilers and SDKs:** MSVC v143 and v142 toolsets with ATL/MFC for Win32/x86, x64, and ARM64. Both Windows SDK 10.0.26100.0 and 10.0.22621.0 are installed (v142 ARM64 projects must target SDK 22621 due to header intrinsics).
 - **.NET & WPF:** Side-by-side .NET 8 and .NET 10 SDKs (x64 and ARM64), plus .NET Framework 4.8 and 4.8.1 targeting packs.
 - **Rust:** Stable `rustc` and `cargo` supporting `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc` targets.
@@ -134,19 +134,47 @@ On Windows x64 hosts, explicit application (`chezmoi apply` or `mise run apply`)
 
 Restart your terminal host after apply. The managed PowerShell profile prioritizes `DOTNET_ROOT`, `CARGO_HOME\bin`, and `VCPKG_ROOT` before activating mise, ensuring the native toolchains precede system defaults.
 
-To maintain these build tools independently without running a full dotfiles apply:
+To explicitly prepare these build tools without running a full dotfiles apply:
 
 ```powershell
 mise run windows-build
 ```
 
-To verify the build environment on an existing machine:
+First-time preparation downloads and verifies the Microsoft-signed Build Tools bootstrapper only when stable VS 2026 Build Tools is absent. Its machine-wide installation may request UAC approval; installer failures and reboot-required outcomes stop readiness without an automatic restart.
+
+Ordinary apply discovers an existing installation before downloading anything. If the selected installation is healthy and contains every required component, the Visual Studio step performs no download, installer launch, update, or elevation request, even when a newer release is available. This guarantee applies to the Visual Studio step, not unrelated explicit-apply provisioning.
+
+For updates, missing components, incomplete installation, repair, or pending reboot, use **Visual Studio Installer** manually. Select stable **Build Tools 2026**, import `scripts/windows-build-tools.vsconfig` through **More → Import configuration**, and use **Modify**, **Update**, or **Repair** as appropriate. Complete any requested restart, then rerun verification. Apply reports the affected instance and missing state instead of automatically servicing it. See [Microsoft's maintenance instructions](https://learn.microsoft.com/en-us/visualstudio/install/modify-visual-studio?view=visualstudio).
+
+This manual-maintenance policy replaces the earlier automatic-update decision in the [historical native-build plan](../../.compound-engineering/artifacts/plans/2026-11-05-0919-feat-windows-native-build-environment-plan.md); that plan remains a historical record. Non-Visual-Studio provisioning is unchanged.
+
+### Standard-User Verification
+
+Use an ordinary, **non-elevated** terminal after the machine and intended user's environment have been prepared:
 
 ```powershell
+# Ordinary repository tests: disposable fixtures, no real machine installer
+mise exec -- python -m unittest discover -s tests
+
+# Complete real matrix: existing tools only, never machine provisioning
 mise exec chezmoi python -- python tests/smoke_windows_build_environment.py --verify-only
 ```
 
-This compiles sample C++, MFC, WPF, Rust, and vcpkg projects in temporary workspaces across target architectures.
+The verifier prints the current token's elevation state and rejects elevated execution. Before compiling, it checks stable Build Tools identity/components, native toolsets/MFC and both SDKs, Framework targeting assemblies, .NET 8/10 SDKs, installed Rust targets, and vcpkg integration. Missing prerequisites fail with explicit preparation or manual-maintenance instructions; verification neither repairs the machine nor skips required targets.
+
+The matrix covers latest/v143/v142 MFC on x86/x64/ARM64, .NET 8/10 WPF on x64/ARM64, Framework 4.8/4.8.1 WPF, Rust MSVC on x64/ARM64, vcpkg consumption on x64/ARM64, and fresh-profile command discovery. Native outputs execute; ARM64 outputs are cross-built and PE-inspected, not executed. Project-local NuGet and vcpkg restores require network access and may populate dependency caches.
+
+Worktree preparation (`mise install`) remains read-only for personal and machine configuration. It is neither machine preparation nor proof that these build prerequisites are installed.
+
+### Disposable Privileged Preparation Lane
+
+On a disposable GitHub-hosted Windows x64 preparation runner only:
+
+```powershell
+mise exec chezmoi python -- python tests/prepare_windows_build_environment.py --provision
+```
+
+This explicit opt-in helper runs `mise run windows-build` twice, stops on failure, and reports preparation only. It never runs the representative builds. Run `--verify-only` separately under the prepared user's non-elevated token afterward. Default test jobs do not invoke this helper. Hosted provisioning diagnosis and restoration of a dedicated prepared-runner build job remain tracked in [#39](https://github.com/hyperlapse122/dotfiles/issues/39); local verification is not evidence that hosted preparation succeeded.
 
 ## Container and Kubernetes Setup (Podman Desktop)
 

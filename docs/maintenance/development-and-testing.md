@@ -48,6 +48,8 @@ Run the entire unit test suite with:
 mise exec -- python -m unittest discover -s tests
 ```
 
+On Windows, run this command in a standard-user terminal. Installer tests use disposable native doubles, never a real installer or UAC approval. The production installer's legitimate non-admin `RunAs` selection and cancelled-elevation error propagation are tested separately from ordinary verification.
+
 ### Test Suite Architecture
 
 | Test Module | Coverage and Assertions |
@@ -87,6 +89,22 @@ In addition to unit tests, several standalone smoke scripts test native runtime 
 # Verify compilers, SDKs, and build outputs on a provisioned PC
 mise exec chezmoi python -- python tests/smoke_windows_build_environment.py --verify-only
 ```
+
+Run verification in a non-elevated Windows x64 terminal after preparing the intended user's environment. The command prints the observed token elevation state and refuses an elevated session. Its read-only preflight fails before compilation when required tools, targets, SDKs, or user-wide integration are missing; it never installs them or requests elevation.
+
+Machine preparation is a different operation:
+
+```powershell
+# Explicit preparation of the intended user's environment; first VS install may elevate
+mise run windows-build
+
+# Preparation-only opt-in for a disposable GitHub-hosted Windows x64 runner
+mise exec chezmoi python -- python tests/prepare_windows_build_environment.py --provision
+```
+
+The verifier no longer accepts `--provision`. The separate helper prepares twice and stops on failure without running builds or claiming standard-user readiness. Default CI jobs remain free of privileged preparation. A future dedicated real-build CI lane must use a prepared environment and record a non-elevated verification token; its restoration and hosted preparation diagnosis remain [#39](https://github.com/hyperlapse122/dotfiles/issues/39).
+
+Ready existing VS 2026 Build Tools installations are reused without download or servicing. Existing incomplete/unhealthy installations or missing components require manual Visual Studio Installer maintenance; automatic update/repair/reconciliation is not part of apply. See [Windows build setup](../setup/windows.md#windows-native-build-environment) for the inventory, first-install safeguards, and full matrix.
 
 Compiles sample C++, MFC, WPF, Rust, and vcpkg targets in temporary directories.
 

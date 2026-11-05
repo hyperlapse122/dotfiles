@@ -46,7 +46,7 @@ run_windows = [
 ]
 
 [tasks."windows-build:visual-studio"]
-description = "Update stable Visual Studio Build Tools and reconcile native components"
+description = "Reuse ready stable Build Tools or explicitly install when absent; existing maintenance is manual"
 shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
 run = []
 run_windows = "& ./scripts/windows-visual-studio.ps1 -ConfigurationPath (Join-Path $PWD 'scripts/windows-build-tools.vsconfig') -BootstrapperUri '{{vars.windows_vs_bootstrapper}}' -ChannelId '{{vars.windows_vs_channel}}'"

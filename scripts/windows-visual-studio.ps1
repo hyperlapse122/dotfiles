@@ -62,30 +62,60 @@ function ConvertTo-WindowsCommandLineArgument {
     '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
 }
 
-function Invoke-VisualStudioInstaller {
-    param([string]$Executable, [string]$Operation, [string[]]$Arguments)
-
+function Test-VisualStudioAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     try {
         $principal = New-Object Security.Principal.WindowsPrincipal($identity)
         $isAdministrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     }
     finally { $identity.Dispose() }
+    $isAdministrator
+}
+
+function Invoke-VisualStudioInstaller {
+    param([string]$Executable, [string]$Operation, [string[]]$Arguments)
+
     $parameters = @{
         FilePath = $Executable
         ArgumentList = (($Arguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument $_ }) -join ' ')
         Wait = $true
         PassThru = $true
     }
-    if (-not $isAdministrator) { $parameters.Verb = 'RunAs' }
+    if (-not (Test-VisualStudioAdministrator)) { $parameters.Verb = 'RunAs' }
     try { $process = Start-Process @parameters }
     catch { throw "Visual Studio $Operation could not start: $($_.Exception.Message)" }
-    if ($process.ExitCode -eq 3010) {
-        throw "Visual Studio $Operation returned exit code 3010: reboot required. Restart Windows and apply again; the build environment is not ready."
+    if ($process.ExitCode -in @(1641, 3010)) {
+        throw "Visual Studio $Operation returned exit code $($process.ExitCode): reboot required. Restart Windows and apply again; the build environment is not ready."
     }
     if ($process.ExitCode -ne 0) {
         throw "Visual Studio $Operation failed with exit code $($process.ExitCode). Close any active Visual Studio installer/build processes and inspect the installer logs before applying again."
     }
+}
+
+function Assert-VisualStudioReady {
+    param($Instance, [string[]]$Components, [string]$ConfigPath)
+
+    $problems = @()
+    foreach ($name in @('isComplete', 'isLaunchable')) {
+        if (-not $Instance.PSObject.Properties[$name] -or $Instance.$name -ne $true) {
+            $problems += "$name is false or unknown"
+        }
+    }
+    if ($Instance.PSObject.Properties['isRebootRequired'] -and $Instance.isRebootRequired) {
+        $problems += 'isRebootRequired is true; restart Windows'
+    }
+    $ready = @(Get-VisualStudioInstances -RequiredComponents $Components | Where-Object { $_.instanceId -eq $Instance.instanceId })
+    if ($problems.Count -eq 0 -and $ready.Count -eq 1) { return }
+
+    $missing = @()
+    foreach ($component in $Components) {
+        $present = @(Get-VisualStudioInstances -IncludeIncomplete -RequiredComponents @($component) |
+            Where-Object { $_.instanceId -eq $Instance.instanceId })
+        if ($present.Count -eq 0) { $missing += $component }
+    }
+    if ($missing.Count -gt 0) { $problems += "missing required components: $($missing -join ', ')" }
+    if ($problems.Count -eq 0) { $problems += 'selected instance is not returned by the ready inventory query' }
+    throw "Visual Studio 2026 Build Tools '$($Instance.instanceId)' at '$($Instance.installationPath)' is not ready: $($problems -join '; '). Open Visual Studio Installer and manually Update, Modify (import '$ConfigPath'), or Repair this Build Tools instance as appropriate. Complete any required restart, then apply again. Existing installations are never automatically serviced."
 }
 
 function Invoke-VisualStudioProvisioning {
@@ -104,6 +134,11 @@ function Invoke-VisualStudioProvisioning {
     if ($null -eq $instance -and (Test-Path -LiteralPath $NewInstallPath)) {
         throw "No eligible stable Build Tools instance is registered, but the proposed install path already exists: $NewInstallPath. Resolve the existing installation before applying."
     }
+    if ($null -ne $instance) {
+        Assert-VisualStudioReady -Instance $instance -Components $components -ConfigPath $ConfigPath
+        Write-Output "Visual Studio 2026 Build Tools is ready: $($instance.installationPath)"
+        return
+    }
     $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) ('windows-build-tools-' + [guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $temporaryDirectory
     $bootstrapper = Join-Path $temporaryDirectory 'vs_buildtools.exe'
@@ -116,32 +151,14 @@ function Invoke-VisualStudioProvisioning {
             $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)CN=Microsoft Corporation(?:,|$)') {
             throw 'The Visual Studio bootstrapper must have a valid Microsoft Corporation Authenticode signature; it was not executed.'
         }
-        if ($null -eq $instance) {
-            Invoke-VisualStudioInstaller -Executable $bootstrapper -Operation 'installation' -Arguments @(
-                '--installPath', $NewInstallPath, '--channelId', $StableChannel, '--config', $ConfigPath,
-                '--quiet', '--norestart', '--wait'
-            )
-            $instance = Select-VisualStudioInstance -Instances @(Get-VisualStudioInstances -IncludeIncomplete) -StableChannel $StableChannel
-            if ($null -eq $instance) { throw 'Visual Studio installation returned success but no stable Build Tools 2026 instance was registered.' }
-        }
-        else {
-            Invoke-VisualStudioInstaller -Executable $bootstrapper -Operation 'update' -Arguments @(
-                'update', '--installPath', $instance.installationPath, '--channelId', $StableChannel,
-                '--quiet', '--norestart', '--wait'
-            )
-            $complete = @(Get-VisualStudioInstances -RequiredComponents $components | Where-Object { $_.instanceId -eq $instance.instanceId })
-            if ($complete.Count -eq 0) {
-                Invoke-VisualStudioInstaller -Executable $bootstrapper -Operation 'component reconciliation' -Arguments @(
-                    'modify', '--installPath', $instance.installationPath, '--channelId', $StableChannel, '--config', $ConfigPath,
-                    '--quiet', '--norestart', '--wait'
-                )
-            }
-        }
-        $ready = Select-VisualStudioInstance -Instances @(Get-VisualStudioInstances -RequiredComponents $components) -StableChannel $StableChannel
-        if ($null -eq $ready -or $ready.instanceId -ne $instance.instanceId) {
-            throw 'Visual Studio installation is not ready: the selected stable Build Tools instance is incomplete or missing required components. Inspect installer logs and apply again.'
-        }
-        Write-Output "Visual Studio 2026 Build Tools is ready: $($ready.installationPath)"
+        Invoke-VisualStudioInstaller -Executable $bootstrapper -Operation 'installation' -Arguments @(
+            '--installPath', $NewInstallPath, '--channelId', $StableChannel, '--config', $ConfigPath,
+            '--quiet', '--norestart', '--wait'
+        )
+        $instance = Select-VisualStudioInstance -Instances @(Get-VisualStudioInstances -IncludeIncomplete) -StableChannel $StableChannel
+        if ($null -eq $instance) { throw 'Visual Studio installation returned success but no stable Build Tools 2026 instance was registered.' }
+        Assert-VisualStudioReady -Instance $instance -Components $components -ConfigPath $ConfigPath
+        Write-Output "Visual Studio 2026 Build Tools is ready: $($instance.installationPath)"
     }
     finally {
         Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force
