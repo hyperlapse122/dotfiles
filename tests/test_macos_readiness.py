@@ -34,13 +34,16 @@ class MacReadinessTest(unittest.TestCase):
         pending = {check["name"] for check in result["checks"] if check["status"] == "pending"}
         self.assertIn("Authenticated CE invocation", pending)
         self.assertIn("Native builds and execution", pending)
+        self.assertTrue(any(check["name"] == "Claude instructions" and check["status"] == "failed"
+                            for check in result["checks"]))
         self.assertFalse(result["ready"])
         self.assertEqual(self.module.exit_code(result), 1)  # Missing managed files are failures.
 
     def test_missing_command_fails_without_installer_or_auth_commands(self):
         result, run = self.collect(available=False)
-        self.assertTrue(any(check["name"] == "Command: codex" and check["status"] == "failed"
-                            for check in result["checks"]))
+        for command in ("codex", "claude"):
+            self.assertTrue(any(check["name"] == "Command: " + command and check["status"] == "failed"
+                                for check in result["checks"]))
         run.assert_not_called()
 
     def test_unsupported_host_stops_before_probing_commands(self):

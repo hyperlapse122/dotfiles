@@ -13,12 +13,13 @@ import subprocess
 
 
 COMMANDS = ("brew", "git", "mise", "chezmoi", "gpg", "gpgconf", "pinentry-mac",
-            "codex", "omp", "agy", "antigravity-acp", "gh", "glab", "ghq", "op",
+            "claude", "codex", "omp", "agy", "antigravity-acp", "gh", "glab", "ghq", "op",
             "t3", "podman", "python", "pwsh", "dotnet", "rustc", "cargo", "cmake", "ninja", "vcpkg")
 MANAGED_FILES = {
     "Git configuration": ".gitconfig",
     "GPG agent configuration": ".gnupg/gpg-agent.conf",
     "Shell PATH fragment": ".config/dotfiles/path.sh",
+    "Claude instructions": ".claude/CLAUDE.md",
     "Codex instructions": ".codex/AGENTS.md",
     "omp instructions": ".omp/agent/AGENTS.md",
     "Antigravity instructions": ".gemini/GEMINI.md",
