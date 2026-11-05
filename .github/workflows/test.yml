@@ -1,9 +1,16 @@
 name: Test
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
+    inputs:
+      base-sha:
+        description: Immutable checkout SHA (empty uses the dispatch ref)
+        type: string
+        default: ""
+      lock-artifact:
+        description: Candidate personal-app lock artifact ID
+        type: string
+        default: ""
   workflow_call:
     inputs:
       base-sha:
@@ -18,37 +25,39 @@ permissions:
 
 jobs:
   unit:
-    name: Unit and supported-target rendering (${{ matrix.runner }})
+    name: Unit ${{ matrix.area }} (${{ matrix.runner }})
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        # Two newest Ubuntu LTS releases, latest Xcode on ARM64, unchanged Windows.
         runner: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, windows-2025, xcode-27]
+        area: [applications, security, platform, build-contracts]
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.base-sha || github.sha }}
           persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - &candidate-lock
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: inputs.lock-artifact != ''
         with:
           artifact-ids: ${{ inputs.lock-artifact }}
           path: ${{ runner.temp }}/locked-apps
-      - name: Select the immutable candidate pins
+      - &select-lock
+        name: Select the immutable candidate pins
         if: inputs.lock-artifact != ''
         shell: bash
         run: cp -- "$RUNNER_TEMP/locked-apps/personal-app-lock.json" home/.chezmoidata/personal-app-lock.json
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
       - &native-windows-gpg
         name: Provision native Windows GPG integration-test prerequisite
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && (matrix.area == 'security' || matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
         shell: pwsh
         timeout-minutes: 5
         run: |
           # Git's MSYS GPG interprets Windows GNUPGHOME as a relative POSIX path.
-          # Hosted Windows installers stalled; these tests need only the CLI payload.
-          # Verify and unpack it without executing either installer or package scripts.
           $package = Join-Path $env:RUNNER_TEMP 'gnupg-fixture.zip'
           $packageRoot = Join-Path $env:RUNNER_TEMP 'gnupg-package'
           $gpgRoot = Join-Path $env:RUNNER_TEMP 'native-gnupg'
@@ -67,15 +76,28 @@ jobs:
           }
           Add-Content -LiteralPath $env:GITHUB_PATH -Value $gpgBin -Encoding utf8
           mise exec chezmoi python -- (Join-Path $gpgBin 'gpgconf.exe') --version
-      - name: Run deterministic tests and isolated existing contracts
-        run: mise exec -- python -m unittest discover -s tests
+      - name: Provision macOS unit encryption prerequisite
+        if: runner.os == 'macOS' && matrix.area == 'security'
+        run: brew install gnupg
+      - name: Validate complete ownership and run this area
+        run: mise exec -- python scripts/run-test-area.py --area ${{ matrix.area }} --report "${{ runner.temp }}/unit-results.json"
+      - name: Retain area timing and test-ID evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unit-${{ matrix.runner }}-${{ matrix.area }}
+          path: ${{ runner.temp }}/unit-results.json
+          retention-days: 7
+          if-no-files-found: warn
 
   native:
-    name: Native apps, CE, PATH, and credentials (${{ matrix.runner }}, ${{ matrix.target }})
+    name: Native ${{ matrix.area }} (${{ matrix.platform.runner }}, ${{ matrix.platform.target }})
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        include:
+        area: [apps, t3, ce, github-auth, gitlab-auth]
+        platform:
           - runner: ubuntu-24.04
             target: linux-amd64
           - runner: ubuntu-24.04-arm
@@ -90,62 +112,63 @@ jobs:
             target: windows-arm64
           - runner: xcode-27
             target: darwin-arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.platform.runner }}
     env:
       MISE_AUTO_INSTALL: "false"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.base-sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: inputs.lock-artifact != ''
-        with:
-          artifact-ids: ${{ inputs.lock-artifact }}
-          path: ${{ runner.temp }}/locked-apps
-      - name: Select the immutable candidate pins
-        if: inputs.lock-artifact != ''
-        shell: bash
-        run: cp -- "$RUNNER_TEMP/locked-apps/personal-app-lock.json" home/.chezmoidata/personal-app-lock.json
+      - *checkout
+      - *candidate-lock
+      - *select-lock
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install: false
           env: false
-      # The development lock has no Windows ARM records and ast-grep does not
-      # support that target. Resolve only these existing declarations there;
-      # never change the repository's development-tool declarations or pins.
-      - name: Install only the tools needed for native smoke
-        run: mise install chezmoi python gh glab uv pipx:keyring
+      # Windows ARM has no full development lock or supported ast-grep payload.
+      # Each area installs only its own existing tool declarations.
+      - name: Install native smoke base tools
+        run: mise install chezmoi python
+      - name: Install desktop release acquisition tool
+        if: matrix.area == 't3'
+        run: mise install gh
+      - name: Install native credential runtime
+        if: matrix.area == 'github-auth' || matrix.area == 'gitlab-auth'
+        run: mise install uv pipx:keyring
       - *native-windows-gpg
-      - name: Provision disposable macOS encryption fixture prerequisite
-        if: runner.os == 'macOS'
+      - name: Provision disposable macOS encryption prerequisite
+        if: runner.os == 'macOS' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
         run: brew install gnupg
+      - name: Provision disposable Linux credential service
+        if: runner.os == 'Linux' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
+        run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring gnupg
       - name: Apply real pins and prove discovery in a fresh terminal
-        run: mise exec chezmoi python gh -- python tests/smoke_personal_apps.py --path-integration --expected-target ${{ matrix.target }}
+        if: matrix.area == 'apps'
+        timeout-minutes: 10
+        run: mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target ${{ matrix.platform.target }}
       - name: Prove desktop-bundled T3 command and omp ACP integration
+        if: matrix.area == 't3'
         timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
-        run: mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target ${{ matrix.target }}
+        run: mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target ${{ matrix.platform.target }}
       - name: Apply pinned CE and prove native skill discovery
-        run: mise exec chezmoi python gh -- python tests/smoke_harness_plugins.py --expected-target ${{ matrix.target }}
-      - name: Provision disposable Linux credential service
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring gnupg
-      - name: Prove native GitHub and Gist credential interoperability
-        if: runner.os != 'Linux'
+        if: matrix.area == 'ce'
+        timeout-minutes: 10
+        run: mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target ${{ matrix.platform.target }}
+      - name: Prove native GitHub and Gist credentials
+        if: runner.os != 'Linux' && matrix.area == 'github-auth'
         timeout-minutes: 5
-        run: mise exec chezmoi python gh uv pipx:keyring -- python tests/smoke_github_auth.py
-      - name: Prove native GitLab credential interoperability
-        if: runner.os != 'Linux'
+        run: mise exec chezmoi python uv pipx:keyring -- python tests/smoke_github_auth.py
+      - name: Prove native GitLab credentials
+        if: runner.os != 'Linux' && matrix.area == 'gitlab-auth'
         timeout-minutes: 5
-        run: mise exec chezmoi python gh glab uv pipx:keyring -- python tests/smoke_gitlab_auth.py
-      - name: Prove native credentials in an isolated Linux session
-        if: runner.os == 'Linux'
+        run: mise exec chezmoi python uv pipx:keyring -- python tests/smoke_gitlab_auth.py
+      - name: Prove native credentials in this job's isolated Linux session
+        if: runner.os == 'Linux' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
         timeout-minutes: 5
+        env:
+          SMOKE_SCRIPT: ${{ matrix.area == 'github-auth' && 'tests/smoke_github_auth.py' || 'tests/smoke_gitlab_auth.py' }}
         run: |
           dbus-run-session -- sh -eu -c '
             printf "%s" fixture-keyring-password | gnome-keyring-daemon --unlock --components=secrets
-            mise exec chezmoi python gh uv pipx:keyring -- python tests/smoke_github_auth.py
-            mise exec chezmoi python gh glab uv pipx:keyring -- python tests/smoke_gitlab_auth.py
+            mise exec chezmoi python uv pipx:keyring -- python "$SMOKE_SCRIPT"
           '

@@ -50,22 +50,33 @@ mise exec -- python -m unittest discover -s tests
 
 On Windows, run this command in a standard-user terminal. Installer tests use disposable native doubles, never a real installer or UAC approval. The production installer's legitimate non-admin `RunAs` selection and cancelled-elevation error propagation are tested separately from ordinary verification.
 
-### Test Suite Architecture
+### Independent unit areas
 
-| Test Module | Coverage and Assertions |
-|---|---|
-| `test_bootstrap.py` | Proves `mise install` does not trigger personal chezmoi hooks, mutate personal files, or execute apply scripts. |
-| `test_windows_bootstrap.py` | Exercises Windows PowerShell entry points, destination argument parsing, path quoting, OEM encoding, and error propagation. |
-| `test_global_chezmoi.py` | Tests chezmoi configuration generation, native pull/apply, and conflict preservation using local Git remotes. |
-| `test_git_gpg.py` | Verifies Git configuration rendering, GPG executable detection, and GPG home path safety guards. |
-| `test_secrets.py` | Verifies GPG encryption recipient enforcement, ciphertext roundtrip, and fail-closed decryption errors. |
-| `test_native_ca_windows.py` | Tests Windows registry writes for `NODE_USE_SYSTEM_CA=1` against disposable registry paths. |
-| `test_native_ca_bash.py` | Tests POSIX shell export block appending and idempotent re-application. |
-| `test_powershell_profile.py` | Tests profile replacement and mise activation logic across Windows PowerShell and modern PowerShell. |
-| `test_windows_apps.py` | Validates WinGet package filtering, `--no-upgrade` flags, and pwsh fallback execution. |
-| `test_script_lifecycle.py` | Validates dependency signature invalidation, onchange re-execution, and unchanged-run skipping. |
-| `test_personal_apps.py` | Simulates HTTP release asset downloads, SHA-256 validation, and cache reconciliation. |
-| `test_harness_plugins.py` | Tests local marketplace registration, force-installation, and auto-update configuration. |
+The ownership manifest is `scripts/run-test-area.py`. It validates every discovered test ID before selecting an area. New unassigned modules, duplicate module assignments, duplicate IDs, import errors, or disagreement between discovery and named-module loading fail instead of silently narrowing coverage.
+
+```sh
+mise exec -- python scripts/run-test-area.py --validate-only
+mise exec -- python scripts/run-test-area.py --area applications
+mise exec -- python scripts/run-test-area.py --area security
+mise exec -- python scripts/run-test-area.py --area platform
+mise exec -- python scripts/run-test-area.py --area build-contracts
+mise exec -- python scripts/run-test-area.py --area all --report area-results.json
+```
+
+`--list` prints selected IDs without execution. `--report` records elapsed seconds, selected IDs, skipped IDs/reasons, failures, and errors. Keep reports outside the checkout when they are not needed as local artifacts.
+
+| Area | Modules (`tests/`, `.py` suffix omitted) | Prerequisites |
+|---|---|---|
+| applications | `test_personal_apps`, `test_personal_app_lock`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
+| security | `test_secrets`, `test_git_gpg`, `test_script_lifecycle`, `test_github_auth`, `test_github_auth_import`, `test_gitlab_auth`, `test_gitlab_auth_import` | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
+| platform | `test_bootstrap`, `test_global_chezmoi`, `test_windows_bootstrap`, `test_windows_apply_hook`, `test_windows_apps`, `test_windows_virtualization` | Root mise tools; Windows PowerShell and Git for Windows fixture checks |
+| build-contracts | `test_windows_build_apply`, `test_windows_build_environment`, `test_windows_build_prepare`, `test_windows_build_smoke`, `test_windows_visual_studio`, `test_ci_areas`, `test_ci_event_policy` | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles, never real provisioning |
+
+All areas remain selected on every existing unit runner. Platform guards stay with the tests: Windows-named build-apply/rendering and mocked verifier contracts also run on Unix. The entire tests directory remains importable for credential fixture reuse, but imports do not schedule another area's cases.
+
+The initial three-area candidate put 182 seconds of the measured local baseline in platform contracts, versus about 31 seconds for applications and 63 seconds for security. Four physical areas combine small shell checks with applications and separate build contracts from bootstrap. This reduces the estimated longest local area to about 88 seconds without splitting class fixtures. Hosted setup, queue, and aggregate-runner measurements remain necessary; local estimates do not establish hosted savings.
+
+The first actual selected-area run passed 226 cases with the baseline's 10 platform skips: applications 56.165s, security 63.524s, platform 108.185s, and build-contracts 69.160s. The platform run exceeded the additive estimate, which reinforces the need to measure full jobs rather than infer savings from summed test timings.
 
 ### Windows Test Console Policy
 
@@ -102,7 +113,7 @@ mise run windows-build
 mise exec chezmoi python -- python tests/prepare_windows_build_environment.py --provision
 ```
 
-The verifier no longer accepts `--provision`. The separate helper prepares twice and stops on failure without running builds or claiming standard-user readiness. Default CI jobs remain free of privileged preparation. A future dedicated real-build CI lane must use a prepared environment and record a non-elevated verification token; its restoration and hosted preparation diagnosis remain [#39](https://github.com/hyperlapse122/dotfiles/issues/39).
+The verifier no longer accepts `--provision`. The separate helper prepares twice and stops on failure without running builds or claiming standard-user readiness. Default CI jobs remain free of privileged preparation. [#39](https://github.com/hyperlapse122/dotfiles/issues/39) was closed as not planned; this change does not restore a dedicated real-build CI lane or diagnose hosted provisioning.
 
 Ready existing VS 2026 Build Tools installations are reused without download or servicing. Existing incomplete/unhealthy installations or missing components require manual Visual Studio Installer maintenance; automatic update/repair/reconciliation is not part of apply. See [Windows build setup](../setup/windows.md#windows-native-build-environment) for the inventory, first-install safeguards, and full matrix.
 
@@ -157,10 +168,75 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 | `ubuntu-26.04-arm` | `linux-arm64` | Yes | Yes |
 | `xcode-27` | `darwin-arm64` | Yes | Yes |
 | `windows-2025` | `windows-amd64` | Yes | Yes |
-| `windows-11-arm` | `windows-arm64` | No | Build verification only |
+| `windows-11-arm` | `windows-arm64` | No | All five native smoke areas |
 
 ### Architecture Principles
 
 - **macOS Apple Silicon Only:** macOS CI uses ARM64 (`darwin-arm64`) runners. Intel Macs are not supported.
 - **Ubuntu LTS Coverage:** Tracks the two most recent Ubuntu LTS releases (`24.04` and `26.04`) across both x64 and ARM64.
-- **Windows Unit Tests:** Executed on x64 runners (`windows-2025`). Windows ARM64 validates artifact compilation without executing unit test suites.
+- **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all five native smoke areas; this is not an ARM64 build-only lane.
+
+### Native areas and independent setup
+
+Each area/target pair owns a separate hosted runner. All matrices use `fail-fast: false`, so an area's failure cannot suppress unrelated results. Jobs time out after 20 minutes; apps and CE steps have 10-minute limits, T3 15 minutes, and credential execution 5 minutes.
+
+| Area | Invocation after tool preparation | Job-owned prerequisites |
+|---|---|---|
+| apps | `mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target TARGET` | Pinned apps and disposable PATH/profile fixture |
+| t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned omp acquisition, scoped GitHub token |
+| ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated pinned omp/CE payload and harness state |
+| github-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_github_auth.py` | Native GPG, pinned gh acquired by fixture, OS credential backend |
+| gitlab-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_gitlab_auth.py` | Native GPG, pinned glab acquired by fixture, OS credential backend |
+
+Hosted-only PATH, desktop-installation, and credential-write modes must not run on a personal workstation. Their existing disposable-host guards remain intact. The apps and desktop scripts offer non-installing local modes as described above; CE uses a disposable home.
+
+Windows credential jobs verify and unpack the existing checksummed native GPG fixture; Git's MSYS GPG is not a substitute. Each Linux credential job provisions and starts its own D-Bus/Secret Service session. macOS credential fixtures restore the original default keychain and search list. Windows ARM installs only the tools needed by its area, not the unsupported full development tool set.
+
+Unit jobs retain the root mise tool environment because the bootstrap contract runs ordinary `mise install` twice. Each unit job validates the entire assignment map and uploads its test-ID/skip/timing report, even though it executes only one area.
+
+### Automatic event policy
+
+`test-events.yml` owns push/PR admission and obsolete-run cancellation. `test.yml` remains the read-only reusable and manually dispatchable suite. The personal-lock updater still calls `test.yml` with its immutable `base-sha` and `lock-artifact`; every suite checkout uses `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials.
+
+| Event or state | Validation |
+|---|---|
+| Nondefault branch without a PR | Branch-head suite |
+| PR opens or reopens | Event merge-result suite; eligible in-flight branch suite is canceled |
+| Push updates an open, mergeable PR | PR merge-result suite owns validation once its matching run is scheduled; duplicate push fan-out is omitted |
+| PR conflicts or mergeability/run scheduling is unknown | Branch suite remains as fallback, with the admission reason in logs |
+| Default-branch push | Branch suite, regardless of PR lookup |
+| Tag push | Tag suite, distinct from a branch with the same short name |
+| Fork PR | Read-only merge-result suite; no write-capable cancellation controller |
+| Manual dispatch | Independent suite, with optional `base-sha` and `lock-artifact` inputs |
+| Reusable call | Independent caller-owned suite and input identity; automatic events cannot cancel it |
+
+PR checkout uses the event's immutable merge SHA, never a substituted head SHA. If only the base branch advances before admission, the original merge snapshot still runs: base advancement alone does not schedule a replacement PR event. This policy does not promise continuous revalidation against every later base commit.
+
+The primary deduplication decision is the read-only admission lookup, not cancellation. A metadata-only controller has job-local `actions: write`, no checkout, and no repository-code execution. It targets only older runs of the exact event-entry workflow and verified logical target. Full refs in run titles distinguish branches from tags. Freshness checks and run-number bounds prevent delayed old controllers from selecting newer runs. An exact event/ref/SHA concurrency group cancels duplicate snapshots without making arrival order decide which commit is current.
+
+PR opening is not an atomic handoff: a push can pass admission before the PR exists, and API listing/cancellation can race. Targeted cleanup cancels the replaceable push while the merge suite remains authoritative. Unknown metadata retains coverage rather than guessing; any overlap and actual cancellation evidence belong in the PR validation record.
+
+The first observed handoff is [PR run 41966823335](https://github.com/hyperlapse122/dotfiles/actions/runs/41966823335): its metadata-only controller logged cancellation of [push run 41966778441](https://github.com/hyperlapse122/dotfiles/actions/runs/41966778441) at `2026-11-05T04:17:17Z`, and all PR jobs passed. Canceled push checks can remain visible alongside the successful PR merge run. Check the event and run URL before retrying them; retrying the superseded push would recreate the duplicate suite.
+
+For a current-head push, reconciliation cancels only an already-active duplicate suite, not admission-only work or a completed suite. The push admission can then finish successfully and omit its fan-out, instead of leaving canceled control checks on the current PR. Older-head automatic runs remain eligible for cancellation. If uncertain admission metadata starts fallback work after reconciliation inspected the job list, overlap remains possible; coverage takes precedence.
+
+### Check-name migration and validation records
+
+Combined `Unit and supported-target rendering (...)` and `Native apps, CE, PATH, and credentials (...)` checks are replaced by `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, displayed beneath the `Validate` reusable call for automatic events. Each area's result remains independently visible. No required-check configuration or ruleset was returned for main during this change; repository protection settings are not modified. If protection is enabled, select the new per-area merge-result checks rather than the removed combined names or admission-only checks.
+
+### Hosted measurements
+
+The baseline pair used `86ae6829b0bf1f0f194724196d34cb34f6643040`; the first independent-area run used PR head `c609cbd2fed8f545311aff7491e647ac18926504`. Elapsed time runs from workflow creation to the final job completion. Aggregate runner time sums job start/end durations, including setup and cleanup but excluding queue time and billing rounding.
+
+| Run | Outcome | Jobs | Elapsed | Aggregate runner time |
+|---|---|---:|---:|---:|
+| [Baseline PR](https://github.com/hyperlapse122/dotfiles/actions/runs/41959406936) | Success | 13 | 309s | 1532s |
+| [Baseline push](https://github.com/hyperlapse122/dotfiles/actions/runs/41959146646) | Success | 13 | 283s | 1599s |
+| [Independent-area PR](https://github.com/hyperlapse122/dotfiles/actions/runs/41966823335) | Success | 61 | 197s | 2759s |
+| [PR-open push overlap](https://github.com/hyperlapse122/dotfiles/actions/runs/41966778441) | Canceled by PR controller | 61 | 133s | 2347s |
+
+The independent-area PR passed all 24 unit jobs, 35 native jobs, and two control jobs. The longest job was Windows ARM64 CE at 136s; all five Windows ARM64 native areas passed. The last job started 131s after workflow creation, so the elapsed result includes scheduling and queue effects. Runner timestamps do not isolate queue delay from admission or dependency delay.
+
+The 24 unit-report artifacts select the same 236 IDs on all six platforms, exactly once across each platform's four areas. This is the original 220 cases, 15 new CI contracts, and the Developer Mode bootstrap case merged into main independently. Windows retained nine hosted skips. Linux and macOS have one additional skipped case because that new bootstrap case is Windows-only.
+
+Parallel setup reduced this PR's elapsed time but increased its aggregate runner time. The initial push/PR handoff consumed 5106 runner-seconds including canceled work, versus 3131 for the baseline duplicate pair. Do not claim that the opening race saves runner time. Ordinary PR-update admission must be assessed separately from that race.

@@ -1,0 +1,118 @@
+name: Test events
+run-name: Test ${{ github.event_name }} ${{ github.ref }}
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-events-${{ github.event_name }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  admission:
+    name: Select validation owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      run: ${{ steps.policy.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install: false
+          env: false
+      - name: Install only read-only admission tools
+        run: mise install chezmoi python gh
+      - name: Select branch or merge-result validation
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec chezmoi python gh -- python scripts/ci-event-policy.py
+
+  reconcile:
+    name: Cancel obsolete automatic validations
+    if: github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      # Metadata only: no checkout, repository scripts, artifacts or test code.
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const current = (await github.rest.actions.getWorkflowRun({owner, repo, run_id: context.runId})).data;
+            const event = context.eventName;
+            let ref, head, pull, base;
+            if (event === 'push') {
+              if (!context.ref.startsWith('refs/heads/')) return;
+              ref = context.ref;
+              head = context.payload.after;
+            } else {
+              pull = context.payload.pull_request;
+              if (pull.head.repo.full_name !== `${owner}/${repo}`) return;
+              ref = `refs/heads/${pull.head.ref}`;
+              head = pull.head.sha;
+              base = pull.base.sha;
+            }
+            const fresh = async () => {
+              const branch = (await github.rest.git.getRef({owner, repo, ref: ref.slice(5)})).data;
+              if (branch.object.sha !== head) return false;
+              if (!pull) return true;
+              const latest = (await github.rest.pulls.get({owner, repo, pull_number: pull.number})).data;
+              return latest.state === 'open' && latest.head.sha === head && latest.base.sha === base && latest.mergeable === true;
+            };
+            if (!await fresh()) return;
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner, repo, workflow_id: current.workflow_id, branch: ref.slice('refs/heads/'.length), per_page: 100
+            });
+            const active = new Set(['queued', 'in_progress', 'waiting', 'pending', 'requested']);
+            for (const candidate of runs) {
+              if (candidate.id === context.runId || candidate.run_number >= current.run_number || !active.has(candidate.status)) continue;
+              if (candidate.head_repository?.full_name !== `${owner}/${repo}`) continue;
+              const samePush = candidate.event === 'push' && candidate.display_title === `Test push ${ref}`;
+              const oldPull = pull && candidate.event === 'pull_request' &&
+                candidate.display_title === `Test pull_request refs/pull/${pull.number}/merge` && candidate.head_sha !== head;
+              const replacePush = samePush && (!pull || pull.head.ref !== context.payload.repository.default_branch);
+              if (!oldPull && !replacePush) continue;
+              if (!pull && candidate.head_sha === head) continue;
+              if (pull && samePush && candidate.head_sha === head) {
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                  owner, repo, run_id: candidate.id, per_page: 100
+                });
+                if (!jobs.some(job => job.name.startsWith('Validate / ') && active.has(job.status))) {
+                  core.info(`Preserving same-head push admission ${candidate.id}; no active duplicate suite`);
+                  continue;
+                }
+              }
+              if (!await fresh()) return;
+              try {
+                await github.rest.actions.cancelWorkflowRun({owner, repo, run_id: candidate.id});
+                core.info(`Canceled obsolete ${candidate.event} run ${candidate.id}`);
+              } catch (error) {
+                if (error.status !== 409) throw error;
+                core.info(`Run ${candidate.id} already finished before cancellation`);
+              }
+            }
+
+  test:
+    name: Validate
+    needs: admission
+    if: needs.admission.outputs.run == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
