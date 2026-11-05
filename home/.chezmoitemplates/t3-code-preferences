@@ -1,0 +1,19 @@
+{{- $settings := .settings -}}
+{{- range $key, $value := .desired -}}
+{{- if has $key (list "storageCleanup" "sourceControlWritingStyle") -}}
+{{- $current := dict -}}
+{{- if hasKey $settings $key -}}
+{{- $current = get $settings $key -}}
+{{- if not (kindIs "map" $current) -}}
+{{- fail (printf "Invalid T3 Code %s: %s must be an object" $.file $key) -}}
+{{- end -}}
+{{- end -}}
+{{- range $child, $desired := $value -}}
+{{- $_ := set $current $child $desired -}}
+{{- end -}}
+{{- $_ := set $settings $key $current -}}
+{{- else -}}
+{{- $_ := set $settings $key $value -}}
+{{- end -}}
+{{- end -}}
+{{- $settings | toPrettyJson -}}

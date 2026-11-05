@@ -58,4 +58,5 @@
 {{- $codexConfig = $codexConfig | setValueAtPath "enabled" true | setValueAtPath "setupMode" "existing" | setValueAtPath "binaryPath" $codexCommand -}}
 {{- $codex = $codex | setValueAtPath "driver" "codex" | setValueAtPath "enabled" true | setValueAtPath "config" $codexConfig -}}
 {{- $providers = $providers | setValueAtPath "codex" $codex -}}
-{{- $settings | setValueAtPath "providerInstances" $providers | toPrettyJson -}}
+{{- $settings = $settings | setValueAtPath "providerInstances" $providers -}}
+{{- includeTemplate "t3-code-preferences" (dict "settings" $settings "desired" .t3CodePreferences.server "file" "settings.json") -}}
