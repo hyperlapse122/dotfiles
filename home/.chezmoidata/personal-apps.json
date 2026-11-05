@@ -43,6 +43,45 @@
         "windows-arm64": {"asset": "codex-package-aarch64-pc-windows-msvc.tar.gz", "kind": "archive-file", "format": "tar.gz", "path": "bin/codex.exe"}
       }
     },
+    "antigravity": {
+      "command": "agy",
+      "source": "antigravity",
+      "installDirectory": ".local/share/dotfiles/antigravity/bin",
+      "targets": {
+        "darwin-arm64": {
+          "asset": "darwin-arm/cli_mac_arm64.tar.gz",
+          "kind": "archive-file",
+          "format": "tar.gz",
+          "path": "antigravity"
+        },
+        "linux-amd64": {
+          "asset": "linux-x64/cli_linux_x64.tar.gz",
+          "kind": "archive-file",
+          "format": "tar.gz",
+          "path": "antigravity"
+        },
+        "linux-arm64": {
+          "asset": "linux-arm/cli_linux_arm64.tar.gz",
+          "kind": "archive-file",
+          "format": "tar.gz",
+          "path": "antigravity"
+        },
+        "windows-amd64": {"asset": "windows-x64/cli_windows_x64.exe", "kind": "file"},
+        "windows-arm64": {"asset": "windows-arm/cli_windows_arm64.exe", "kind": "file"}
+      }
+    },
+    "antigravity-acp": {
+      "command": "antigravity-acp",
+      "repository": "shubzkothekar/antigravity-acp",
+      "installDirectory": ".local/share/dotfiles/antigravity-acp/bin",
+      "targets": {
+        "darwin-arm64": {"asset": "agy-acp-darwin-arm64", "kind": "file"},
+        "linux-amd64": {"asset": "agy-acp-linux-x64", "kind": "file"},
+        "linux-arm64": {"asset": "agy-acp-linux-arm64", "kind": "file"},
+        "windows-amd64": {"asset": "agy-acp-windows-x64.exe", "kind": "file"},
+        "windows-arm64": {"asset": "agy-acp-windows-arm64.exe", "kind": "file"}
+      }
+    },
     "ghq": {
       "command": "ghq",
       "repository": "x-motemen/ghq",

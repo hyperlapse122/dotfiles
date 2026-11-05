@@ -1,6 +1,6 @@
 # Harness Plugins and AI Agent Configuration
 
-This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, and oh-my-pi (omp), performs repairs and rollbacks, and wires shared user-scope agent instructions.
+This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, oh-my-pi (omp), and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
 
 ## Compound Engineering Plugin for omp
 
@@ -55,6 +55,18 @@ The private settings merge owns the CE directory marketplace entry and activatio
 
 Close Claude Code and T3 Code before apply, then start a fresh session. Complete `claude auth login` manually and invoke a skill such as `/compound-engineering:ce-plan`. Authentication and billing remain with Claude; dotfiles stores no plaintext secrets.
 
+## Compound Engineering Plugin for Antigravity
+
+On eligible Windows, glibc Linux, and Apple Silicon targets, explicit apply uses the pinned `agy` CLI to validate, install, enable, and list the local CE package through native plugin commands.
+It uses the same `harness-plugin-lock.json` tag and commit as omp, not a separate release.
+The package's root `plugin.json` and `skills/` provide the native integration; no copied omp registry or compatibility alias is needed.
+
+Registration lives in Antigravity's native `~/.gemini/config` state. Apply does not rewrite the registry or unrelated CLI settings and plugins. An apply-always hook restores a missing or disabled managed plugin; malformed native state fails rather than being replaced.
+Bootstrap does not install or enable plugins. Close Antigravity and T3 sessions before explicitly applying.
+
+Native installation, enablement, package validation, and skill discovery are verified without credentials.
+Authenticated CE skill invocation remains deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52); discovery is not evidence of model-backed invocation.
+
 ## Disabling Marketplace Auto-Updates
 
 The repository configures omp's mutable configuration (`~/.omp/agent/config.yml` or `config.yaml`):
@@ -106,8 +118,9 @@ Every managed AI harness in this repository wires its native instruction file to
 - **Native omp Target:** `~/.omp/agent/AGENTS.md` (generated via `home/private_dot_omp/private_agent/private_empty_AGENTS.md.tmpl`)
 - **Native Claude Target:** `~/.claude/CLAUDE.md` (generated via `home/private_dot_claude/private_empty_CLAUDE.md.tmpl` with `harness = claude`)
 - **Native Codex Target:** `~/.codex/AGENTS.md` (generated via `home/private_dot_codex/private_empty_AGENTS.md.tmpl`)
+- **Native Antigravity Target:** `~/.gemini/GEMINI.md` (generated via `home/private_dot_gemini/private_empty_GEMINI.md.tmpl` with `harness: antigravity`)
 
-Applying dotfiles replaces each managed instruction file with its rendered repository version. The source is initially empty of policies, preserving an owner-only empty file until rules are authored.
+Applying dotfiles replaces those native instruction files with their harness-specific render of the shared repository template. The source is initially empty of policies, preserving owner-only empty files until rules are authored.
 
 > **Scope Note:** In omp, `~/.omp/agent/AGENTS.md` applies to the main interactive session and advisors. Task subagents do not inherit files named `AGENTS.md`.
 
@@ -123,9 +136,10 @@ To run isolated plugin integration tests:
 
 ```sh
 mise exec -- python tests/smoke_harness_plugins.py
+mise exec -- python tests/smoke_antigravity.py
 ```
 
-This verifies local marketplace cutover, automatic update policies, skill discovery, and preservation of unrelated plugins in a disposable sandbox.
+The omp smoke verifies local marketplace cutover, update policy, skill discovery, and preservation of unrelated plugins. The Antigravity smoke additionally proves native global-instruction ingestion through a localhost capture-only endpoint, runs the native preservation/malformed-state checks with its locked CLI, and starts a fresh T3 ACP session. These checks use disposable homes without real credentials or model completion; Antigravity's authenticated CE invocation remains outside this change.
 
 For Codex's isolated native integration:
 

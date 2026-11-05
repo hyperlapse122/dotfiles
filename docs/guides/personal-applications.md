@@ -13,10 +13,12 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 | `omp` | [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) | Raw binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `ghq` | [x-motemen/ghq](https://github.com/x-motemen/ghq) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (x64/ARM64) |
+| `agy` | [Google Antigravity](https://antigravity.google/) | Official CLI binary or archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
+| `antigravity-acp` | [shubzkothekar/antigravity-acp](https://github.com/shubzkothekar/antigravity-acp) | Compiled adapter with managed launcher | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 
 > **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
 
-Binaries are installed into `~/.local/bin` (`claude.exe`, `codex.exe`, `omp.exe`, `gh.exe`, `ghq.exe`, and `glab.exe` on Windows). Device application does not require a Bun or Python runtime.
+Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). Antigravity CLI and ACP payloads live separately in `~/.local/share/dotfiles/antigravity/bin` and `~/.local/share/dotfiles/antigravity-acp/bin`; their POSIX launchers or Windows `.cmd` wrappers select those absolute paths. Device application does not require a Bun or Python runtime.
 
 Codex includes its native helper executables, `~/.local/codex-package.json`, `~/.local/codex-path`, and `~/.local/codex-resources`. Keep these together: copying only `codex` is not a complete installation. The Codex-specific resource directories are reconciled exactly; unrelated programs in `~/.local/bin` are preserved. Upstream currently names its Linux packages `unknown-linux-musl`; that artifact name does not expand this repository's supported host policy.
 
@@ -39,6 +41,17 @@ chezmoi apply --refresh-externals
 ```
 
 > **Windows Note:** Close running Claude Code, Codex, and omp sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
+
+### Antigravity version ownership
+
+This manages the official `agy` CLI, not the separate Antigravity GUI application.
+The launchers disable CLI self-update with `AGY_CLI_DISABLE_AUTO_UPDATE=true`.
+The ACP launcher selects the locked CLI with `AGY_BIN` and prevents the adapter from downloading another copy with `AGY_SKIP_DOWNLOAD=1`.
+Reapplying uses the committed lock; it does not resolve a newer release.
+
+Explicit apply removes the reserved `agy` and `agy.exe` paths from `~/.local/share/dotfiles/antigravity-acp/bin`, where the adapter otherwise prefers them over `AGY_BIN`. Other files in that directory and unrelated application directories are preserved.
+
+To roll back, restore the desired `home/.chezmoidata/personal-app-lock.json` revision and explicitly apply again with Antigravity and T3 sessions closed. See [native CE integration](harness-plugins.md) and [T3 configuration and security limits](t3-code.md).
 
 ## PATH Integration
 
@@ -78,7 +91,7 @@ If another copy precedes `~/.local/bin`, resolve the conflicting PATH entry in y
 Personal application versions are strictly pinned and checksum-verified:
 
 1. **Authored Declarations (`home/.chezmoidata/personal-apps.json`):** Defines repository names, command names, asset naming patterns, and archive extraction rules.
-2. **Locked Pins (`home/.chezmoidata/personal-app-lock.json`):** Contains the resolved release tag, release-specific download URLs, and verified SHA-256 digests.
+2. **Locked Pins (`home/.chezmoidata/personal-app-lock.json`):** Contains resolved versions, immutable artifact URLs, and verified SHA-256 digests, or the official SHA-512 digests for Antigravity CLI.
 3. **Externals Template (`home/.chezmoiexternals/personal-apps.toml.tmpl`):** Reads the declarations and lock to configure chezmoi external archives.
 
 ### Refreshing Application Pins
@@ -89,7 +102,7 @@ To resolve the latest releases from each declared source and update the lockfile
 mise exec -- python scripts/update-personal-app-lock.py
 ```
 
-The script queries GitHub using your active `gh` authentication, GitLab through its public release API, and Claude Code through its official release manifest. It writes the lock only after every declared target resolves with a valid checksum. Never edit URLs to point to `latest/download` directly.
+The script queries GitHub using active `gh` authentication, GitLab through its public release API, Claude Code through its official release manifest, and Antigravity CLI through Google's official per-platform manifests. All eligible Antigravity CLI manifests must agree on a stable version. It replaces the lock only after every application's required assets and digests resolve successfully. Never edit URLs to point to `latest/download` directly.
 
 To roll back a personal CLI application, restore its entry in `home/.chezmoidata/personal-app-lock.json` from the desired repository revision and explicitly apply again. For Codex, that one locked archive supplies the CLI and all package companions, so they roll back together.
 

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+HOME='{{ .chezmoi.destDir | replace "'" "'\\''" }}'
+USERPROFILE="$HOME"
+AGY_CLI_DISABLE_AUTO_UPDATE=true
+export HOME USERPROFILE AGY_CLI_DISABLE_AUTO_UPDATE
+agy="$HOME/.local/share/dotfiles/antigravity/bin/agy"
+plugin="$HOME/.local/share/dotfiles/harness-plugins/compound-engineering"
+
+"$agy" plugin validate "$plugin"
+"$agy" plugin install "$plugin"
+"$agy" plugin enable compound-engineering
+"$agy" plugin list --json

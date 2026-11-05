@@ -1,0 +1,10 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- $app := get .personalApps "antigravity" | default dict -}}
+{{- if and (hasKey (get $app "targets" | default dict) $target) (eq .chezmoi.os "windows") -}}
+@echo off
+setlocal EnableExtensions DisableDelayedExpansion
+set "AGY_CLI_DISABLE_AUTO_UPDATE=true"
+for %%I in ("%~dp0..\share\dotfiles\antigravity\bin\agy.exe") do set "agy_bin=%%~fI"
+"%agy_bin%" %*
+exit /b %ERRORLEVEL%
+{{ end -}}

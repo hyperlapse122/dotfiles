@@ -1,6 +1,6 @@
 # T3 Code Desktop and Harness Integration
 
-This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures Claude Code, Codex, and oh-my-pi (omp) as providers.
+This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code and Codex plus oh-my-pi (omp) and Antigravity ACP providers.
 
 ## Platform Support and Installation
 
@@ -65,11 +65,12 @@ Dotfiles reconciles T3 Code's settings file (`~/.t3/userdata/settings.json`) on 
 ### Managed Settings
 
 The modify template (`modify_private_settings.json`):
-- Creates or updates the provider entry for `omp`.
-- Configures command invocation with the fully expanded absolute path to the destination home's `.local/bin/omp` (`omp.exe` on Windows), with the `acp` argument.
-- Reconciles both `enabled` and `config.enabled` flags to `true`.
-- Preserves all other custom providers, appearance options, and unowned configuration.
-- Derives initial display name and color from omp metadata without overwriting user changes.
+- Creates or updates keyed `omp` and `antigravity` entries using the local ACP registry driver.
+- Runs omp through the fully expanded absolute destination `.local/bin/omp` path (`omp.exe` on Windows) with the `acp` argument.
+- Runs Antigravity through its absolute native adapter payload in `~/.local/share/dotfiles/antigravity-acp/bin`, with no arguments. T3 rejects Windows batch wrappers, so this is not the terminal's `.cmd` launcher.
+- Owns three Antigravity provider `environment` entries: absolute managed `AGY_BIN`, `AGY_SKIP_DOWNLOAD=1`, and `AGY_CLI_DISABLE_AUTO_UPDATE=true`. Duplicate or drifted owned entries are replaced; other variables, including secret references, are retained.
+- Reconciles both provider and config `enabled` flags to `true`, while preserving other providers, appearance choices, and unowned configuration.
+- Derives initial omp display name and color without overwriting user changes.
 
 The same template manages a single `codex` provider entry:
 - Uses T3's native `codex` driver with `setupMode = "existing"`, not its separate managed-installation mode.
@@ -93,15 +94,33 @@ Claude uses its native SDK protocol; no ACP argument is added. Run `claude auth 
 ### Security and State Boundaries
 
 - Manages the default `~/.t3` directory (custom `T3CODE_HOME` relocations are unmanaged).
-- Model credentials, API keys, and sessions remain in the respective harness's configuration (`~/.claude/`, `~/.codex/`, or `~/.omp/`) and are never copied into T3 settings.
+- Model credentials, API keys, and sessions remain in each harness's own configuration or environment; dotfiles does not copy them into T3 settings.
 - Automatic background services and remote listener ports are not opened.
+- The pinned [Antigravity ACP adapter](https://github.com/shubzkothekar/antigravity-acp) passes `--dangerously-skip-permissions` to CLI model requests. Treat model turns as permission-bypassing execution; this integration does not change the CLI's stored security settings.
+- The adapter documents personal OAuth restrictions. Use its supported Gemini API-key or enterprise ADC route for model use; dotfiles does not provision credentials or start a model request.
+
+### Antigravity credentials
+
+For the [Gemini API-key route](https://antigravity.google/docs/install?tab=cli#using-a-gemini-api-key), both steps are required:
+
+1. Merge `"modelProvider": "gemini"` into your user-owned `~/.gemini/antigravity-cli/settings.json`.
+2. Provision `GEMINI_API_KEY` securely in the environment inherited by T3 and its adapter.
+
+The key alone does not select this provider. Fully quit T3 and launch the desktop from that environment; exporting a key in a different shell does not change a running desktop process. Never put real keys in tracked files.
+
+For [enterprise ADC](https://antigravity.google/docs/install?tab=cli#application-default-credentials-adc-1), configure credentials through the native Google Cloud procedure and launch T3 with `AGY_ADC_AUTH=true`. Switch away from Gemini API-key mode when choosing ADC. Dotfiles does not create credentials or change your CLI model/auth settings.
 
 ## Testing and Smoke Verification
 
-To test T3 Code CLI discovery, omp ACP initialization, and T3-driven Codex and Claude startup in an isolated environment:
+With T3 Code already installed, run isolated checks without applying to your personal home:
 
 ```sh
 mise exec -- python tests/smoke_t3_code.py
+mise exec -- python tests/smoke_antigravity.py
 ```
 
-This applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It starts fresh local T3 servers with the managed binary directory absent from `PATH`. The native Codex driver must complete app-server initialization, and the native Claude driver must complete SDK initialization and discover the pinned CE slash command. Both accounts remain unauthenticated; the smoke uses no personal credentials and does not claim model completion. Windows x64 has passed locally against T3 Code 0.1.7; other eligible targets rely on their native CI results.
+The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It starts fresh local T3 servers with the managed binary directory absent from `PATH`. The native Codex driver must complete app-server initialization, and the native Claude driver must complete SDK initialization and discover the pinned CE slash command. Both accounts remain unauthenticated; the smoke uses no personal credentials and does not claim model completion. Windows x64 has passed locally against T3 Code 0.1.7; other eligible targets rely on their native CI results.
+
+The Antigravity smoke verifies native instruction content through a localhost-only request capture that deliberately rejects model execution. It runs native plugin preservation/malformed-state checks against the locked CLI, repairs adjacent-CLI and provider drift, and initializes a fresh T3 provider with managed `.local/bin` absent from PATH. No real credentials, personal OAuth/keyring access, or model completion are used. Authenticated CE skill invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52).
+
+T3 can report an initial ready state while its ACP probe is still running. The Antigravity smoke waits for native session capabilities before accepting initialization; terminal errors and a bounded deadline still fail the check.

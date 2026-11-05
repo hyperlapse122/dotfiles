@@ -12,32 +12,63 @@
 {{- fail "Invalid T3 Code settings.json: providerInstances must be an object" -}}
 {{- end -}}
 {{- end -}}
+{{- $cli := "agy" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $cli = "agy.exe" -}}{{- end -}}
+{{- $cliPath := joinPath .chezmoi.destDir ".local" "share" "dotfiles" "antigravity" "bin" $cli | replace "\\" "/" -}}
+{{- $adapterEnvironment := dict "AGY_BIN" $cliPath "AGY_SKIP_DOWNLOAD" "1" "AGY_CLI_DISABLE_AUTO_UPDATE" "true" -}}
+{{- $managed := list (dict "id" "omp" "command" "omp" "directory" ".local/bin" "args" (list "acp") "displayName" "oh-my-pi" "accentColor" "#f84fcc") (dict "id" "antigravity" "command" "antigravity-acp" "directory" ".local/share/dotfiles/antigravity-acp/bin" "args" list "displayName" "Antigravity" "environment" $adapterEnvironment) -}}
+{{- range $entry := $managed -}}
 {{- $provider := dict -}}
-{{- if hasKey $providers "omp" -}}
-{{- $provider = get $providers "omp" -}}
+{{- if hasKey $providers $entry.id -}}
+{{- $provider = get $providers $entry.id -}}
 {{- if not (kindIs "map" $provider) -}}
-{{- fail "Invalid T3 Code settings.json: providerInstances.omp must be an object" -}}
+{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s must be an object" $entry.id) -}}
 {{- end -}}
 {{- end -}}
 {{- $config := dict -}}
 {{- if hasKey $provider "config" -}}
 {{- $config = get $provider "config" -}}
 {{- if not (kindIs "map" $config) -}}
-{{- fail "Invalid T3 Code settings.json: providerInstances.omp.config must be an object" -}}
+{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.config must be an object" $entry.id) -}}
 {{- end -}}
 {{- end -}}
-{{- $executable := "omp" -}}
-{{- if eq .chezmoi.os "windows" -}}{{- $executable = "omp.exe" -}}{{- end -}}
-{{- $command := joinPath .chezmoi.destDir ".local" "bin" $executable | replace "\\" "/" -}}
-{{- $config = $config | setValueAtPath "enabled" true | setValueAtPath "source" "local" | setValueAtPath "commandPath" $command | setValueAtPath "commandArgs" (list "acp") -}}
+{{- $executable := $entry.command -}}
+{{- if eq $.chezmoi.os "windows" -}}{{- $executable = printf "%s.exe" $executable -}}{{- end -}}
+{{- $command := joinPath $.chezmoi.destDir $entry.directory $executable | replace "\\" "/" -}}
+{{- $config = $config | setValueAtPath "enabled" true | setValueAtPath "source" "local" | setValueAtPath "commandPath" $command | setValueAtPath "commandArgs" $entry.args -}}
 {{- $provider = $provider | setValueAtPath "driver" "acpRegistry" | setValueAtPath "enabled" true | setValueAtPath "config" $config -}}
+{{- if hasKey $entry "environment" -}}
+{{- $environment := list -}}
+{{- if hasKey $provider "environment" -}}
+{{- $existing := get $provider "environment" -}}
+{{- if not (kindIs "slice" $existing) -}}
+{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.environment must be an array" $entry.id) -}}
+{{- end -}}
+{{- range $variable := $existing -}}
+{{- if not (kindIs "map" $variable) -}}
+{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.environment entries must be objects" $entry.id) -}}
+{{- end -}}
+{{- if not (and (hasKey $variable "name") (kindIs "string" (get $variable "name"))) -}}
+{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.environment entries require a string name" $entry.id) -}}
+{{- end -}}
+{{- if not (hasKey $entry.environment $variable.name) -}}
+{{- $environment = append $environment $variable -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- range $name, $value := $entry.environment -}}
+{{- $environment = append $environment (dict "name" $name "value" $value "sensitive" false) -}}
+{{- end -}}
+{{- $provider = $provider | setValueAtPath "environment" $environment -}}
+{{- end -}}
 {{- if not (hasKey $provider "displayName") -}}
-{{- $provider = $provider | setValueAtPath "displayName" "oh-my-pi" -}}
+{{- $provider = $provider | setValueAtPath "displayName" $entry.displayName -}}
 {{- end -}}
-{{- if not (hasKey $provider "accentColor") -}}
-{{- $provider = $provider | setValueAtPath "accentColor" "#f84fcc" -}}
+{{- if and (hasKey $entry "accentColor") (not (hasKey $provider "accentColor")) -}}
+{{- $provider = $provider | setValueAtPath "accentColor" $entry.accentColor -}}
 {{- end -}}
-{{- $providers = $providers | setValueAtPath "omp" $provider -}}
+{{- $providers = $providers | setValueAtPath $entry.id $provider -}}
+{{- end -}}
 {{- $codex := dict -}}
 {{- if hasKey $providers "codex" -}}
 {{- $codex = get $providers "codex" -}}

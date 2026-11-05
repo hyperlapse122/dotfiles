@@ -460,6 +460,132 @@ class GitLabPersonalAppLockTest(unittest.TestCase):
             )
 
 
+class AntigravityPersonalAppLockTest(unittest.TestCase):
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory(prefix="official CLI lock ")
+        self.addCleanup(self.scratch.cleanup)
+        self.root = Path(self.scratch.name)
+        self.data_dir = self.root / "home/.chezmoidata"
+        self.data_dir.mkdir(parents=True)
+        self.application = {
+            "command": "agy", "source": "antigravity",
+            "installDirectory": ".local/share/dotfiles/antigravity/bin",
+            "targets": {
+                "linux-amd64": {
+                    "asset": "linux-x64/cli_linux_x64.tar.gz",
+                    "kind": "archive-file", "format": "tar.gz", "path": "antigravity",
+                },
+                "windows-arm64": {"asset": "windows-arm/cli_windows_arm64.exe", "kind": "file"},
+            },
+        }
+        self.manifest = self.data_dir / "personal-apps.json"
+        self.manifest.write_text(json.dumps({"personalApps": {"antigravity": self.application}}), encoding="utf-8")
+        self.lock_path = self.data_dir / "personal-app-lock.json"
+        self.lock_path.write_text('{"keep": "previous pins"}\n', encoding="utf-8")
+        self.previous = self.lock_path.read_bytes()
+        self.metadata = {
+            target: {
+                "version": "1.5.0",
+                "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.0-123456/"
+                       + declaration["asset"],
+                "sha512": format(index + 1, "0128x"),
+            } for index, (target, declaration) in enumerate(self.application["targets"].items())
+        }
+
+    def refresh(self):
+        return UPDATER.update_lock(
+            self.root, fetch_manifest=lambda target: self.metadata[target],
+        )
+
+    def test_official_manifests_publish_exact_integrity_and_noop(self):
+        self.assertTrue(self.refresh())
+        lock = json.loads(self.lock_path.read_text(encoding="utf-8"))["personalAppLocks"]["antigravity"]
+        self.assertEqual(lock, {"tag": "1.5.0", "targets": {
+            "linux-amd64": {
+                "kind": "archive-file", "format": "tar.gz", "path": "antigravity",
+                "url": self.metadata["linux-amd64"]["url"], "sha512": format(1, "0128x"),
+            },
+            "windows-arm64": {
+                "kind": "file", "url": self.metadata["windows-arm64"]["url"],
+                "sha512": format(2, "0128x"),
+            },
+        }})
+        before = self.lock_path.stat().st_mtime_ns
+        self.assertFalse(self.refresh())
+        self.assertEqual(self.lock_path.stat().st_mtime_ns, before)
+
+    def test_invalid_or_inconsistent_official_metadata_preserves_lock(self):
+        original = copy.deepcopy(self.metadata)
+        for field, value in (
+            ("version", ""), ("version", "1.5.0-rc1"), ("version", "1.4.0"),
+            ("sha512", ""), ("sha512", "a" * 64), ("sha512", "g" * 128),
+            ("version", 150), ("sha512", ["a" * 128]), ("url", 123),
+            ("url", "http://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.0-123456/"
+                    "windows-arm/cli_windows_arm64.exe"),
+            ("url", original["windows-arm64"]["url"] + "?unversioned=1"),
+            ("url", original["linux-amd64"]["url"]),
+            ("url", original["windows-arm64"]["url"].replace("1.5.0-", "1.4.0-")),
+            ("url", original["windows-arm64"]["url"].replace("storage.googleapis.com", "evil.invalid")),
+        ):
+            with self.subTest(field=field, value=value):
+                self.metadata = copy.deepcopy(original)
+                self.metadata["windows-arm64"][field] = value
+                with self.assertRaises(ValueError):
+                    self.refresh()
+                self.assertEqual(self.lock_path.read_bytes(), self.previous)
+        self.metadata = copy.deepcopy(original)
+        del self.metadata["windows-arm64"]["sha512"]
+        with self.assertRaises(ValueError):
+            self.refresh()
+        self.assertEqual(self.lock_path.read_bytes(), self.previous)
+        for invalid in (None, [], "not an object"):
+            with self.subTest(manifest=invalid):
+                self.metadata["windows-arm64"] = invalid
+                with self.assertRaises(ValueError):
+                    self.refresh()
+                self.assertEqual(self.lock_path.read_bytes(), self.previous)
+
+    def test_manifest_fetch_failure_does_not_replace_lock(self):
+        def fail(target):
+            raise OSError("official manifest download failed")
+
+        with self.assertRaises(OSError):
+            UPDATER.update_lock(self.root, fetch_manifest=fail)
+        self.assertEqual(self.lock_path.read_bytes(), self.previous)
+
+    def test_mixed_sources_preserve_other_app_and_publish_atomically(self):
+        other = {
+            "command": "example", "repository": "owner/example",
+            "targets": {"linux-amd64": {"asset": "example", "kind": "file"}},
+        }
+        self.manifest.write_text(json.dumps({"personalApps": {
+            "example": other, "antigravity": self.application,
+        }}), encoding="utf-8")
+        release = {"tag_name": "v2.0.0", "assets": [{
+            "name": "example", "state": "uploaded", "digest": "sha256:" + "a" * 64,
+            "browser_download_url": "https://github.com/owner/example/releases/download/v2.0.0/example",
+        }]}
+
+        def refresh():
+            return UPDATER.update_lock(
+                self.root, lambda repository: release, fetch_manifest=lambda target: self.metadata[target],
+            )
+
+        self.assertTrue(refresh())
+        published = self.lock_path.read_bytes()
+        self.assertEqual(json.loads(published)["personalAppLocks"]["example"], {
+            "tag": "v2.0.0", "targets": {"linux-amd64": {
+                "kind": "file", "sha256": "a" * 64,
+                "url": "https://github.com/owner/example/releases/download/v2.0.0/example",
+            }},
+        })
+        release["assets"][0]["digest"] = "sha256:" + "b" * 64
+        self.metadata["windows-arm64"]["sha512"] = ""
+        with self.assertRaises(ValueError):
+            refresh()
+        self.assertEqual(self.lock_path.read_bytes(), published)
+
+
 
 if __name__ == "__main__":
     unittest.main()

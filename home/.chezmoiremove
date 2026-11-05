@@ -1,0 +1,7 @@
+{{- $apps := get . "personalApps" | default dict -}}
+{{- $adapter := get $apps "antigravity-acp" | default dict -}}
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if hasKey (get $adapter "targets" | default dict) $target }}
+.local/share/dotfiles/antigravity-acp/bin/agy
+.local/share/dotfiles/antigravity-acp/bin/agy.exe
+{{- end }}
