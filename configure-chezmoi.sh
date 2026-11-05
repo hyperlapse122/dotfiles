@@ -20,7 +20,6 @@ origin=$(git -C "$source" config --get remote.origin.url)
 chezmoi="$(brew --prefix chezmoi)/bin/chezmoi"
 [ -x "$chezmoi" ] || fail 'Install standalone chezmoi with Homebrew.'
 
-# Preparation has already installed Python. Parse TOML without loading personal hooks.
 mise --cd "$source" exec python -- python - "$source" "$chezmoi" <<'PY'
 import os
 from pathlib import Path

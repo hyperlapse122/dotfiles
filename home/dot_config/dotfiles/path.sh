@@ -4,7 +4,6 @@ case ":${PATH-}:" in
 esac
 export PATH
 
-# Build roots are published by explicit macOS application, not worktree setup.
 if [ "$(uname -s)" = Darwin ]; then
     dotfiles_build="$HOME/.local/share/dotfiles/build"
     if [ -r "$dotfiles_build/DOTNET_ROOT" ]; then

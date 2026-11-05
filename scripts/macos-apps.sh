@@ -10,7 +10,6 @@ case "$major" in ''|*[!0-9]*) fail 'Cannot identify the macOS version.';; esac
 [ "$major" -ge 15 ] || fail 'Requires macOS 15 or later.'
 [ "$(brew --prefix)" = /opt/homebrew ] || fail 'Requires native Homebrew at /opt/homebrew.'
 
-# An external/bundled engine is retained; never layer Homebrew Podman over it.
 podman=$(command -v podman || true)
 if [ -x '/opt/podman/bin/podman' ]; then
     podman='/opt/podman/bin/podman'
@@ -47,21 +46,25 @@ for item in "$@"; do
     fi
 done
 
-machines=$("$podman" machine list --format '{{.Name}}|{{.Running}}|{{.Default}}')
-if [ -z "$machines" ]; then
-    "$podman" machine init
-    "$podman" machine start
-else
-    running=$(printf '%s\n' "$machines" | awk -F '|' '$2 == "true" { print $1; exit }')
-    if [ -z "$running" ]; then
-        selected=$(printf '%s\n' "$machines" | awk -F '|' '$3 == "true" { print $1; exit }')
-        if [ -z "$selected" ]; then
-            count=$(printf '%s\n' "$machines" | wc -l | tr -d ' ')
-            [ "$count" = 1 ] || fail 'Multiple stopped Podman machines have no default. Start the intended machine, then reapply.'
-            selected=${machines%%|*}
-        fi
-        "$podman" machine start "$selected"
+ensure_podman_machine() {
+    machines=$("$podman" machine list --format '{{.Name}}|{{.Running}}|{{.Default}}')
+    if [ -z "$machines" ]; then
+        "$podman" machine init
+        "$podman" machine start
+        return 0
     fi
-fi
+    running=$(printf '%s\n' "$machines" | awk -F '|' '$2 == "true" { print $1; exit }')
+    if [ -n "$running" ]; then
+        return 0
+    fi
+    selected=$(printf '%s\n' "$machines" | awk -F '|' '$3 == "true" { print $1; exit }')
+    if [ -z "$selected" ]; then
+        count=$(printf '%s\n' "$machines" | wc -l | tr -d ' ')
+        [ "$count" = 1 ] || fail 'Multiple stopped Podman machines have no default. Start the intended machine, then reapply.'
+        selected=${machines%%|*}
+    fi
+    "$podman" machine start "$selected"
+}
+ensure_podman_machine
 "$podman" info --format '{{.Host.Arch}}' >/dev/null
 printf '%s\n' 'macOS applications and the existing/default Podman machine are available.'
