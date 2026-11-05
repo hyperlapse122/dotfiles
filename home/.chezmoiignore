@@ -56,3 +56,7 @@ Library
 {{ if not $t3Posix }}
 .local/bin/t3
 {{ end }}
+{{ $claude := get $apps "claude" | default dict }}
+{{ if not (hasKey (get $claude "targets" | default dict) $target) }}
+.claude
+{{ end }}

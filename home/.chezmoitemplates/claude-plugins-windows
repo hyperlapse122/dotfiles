@@ -1,0 +1,27 @@
+$ErrorActionPreference = 'Stop'
+$env:HOME = '{{ .chezmoi.destDir | replace "'" "''" }}'
+$env:USERPROFILE = $env:HOME
+$env:CLAUDE_CONFIG_DIR = Join-Path $env:HOME '.claude'
+$claude = Join-Path $env:HOME '.local/bin/claude.exe'
+
+function Invoke-ClaudePlugin {
+    $ErrorActionPreference = 'Continue'
+    $output = @(& $claude @args '--json' 2>$null)
+    $status = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if (-not $output.Count) { throw 'Claude plugin command returned no JSON result' }
+    $result = $output[-1] | ConvertFrom-Json
+    if ($result -isnot [PSCustomObject]) { throw 'Claude plugin command returned invalid JSON object' }
+    if ($status -eq 0 -and $result.outcome -eq 'ok') { return }
+    if ($status -eq 1 -and $result.outcome -eq 'failed' -and $result.command -eq 'enable' -and
+        $result.failureCode -eq 'already_in_goal_state' -and
+        $result.alreadyInGoalState -is [bool] -and $result.alreadyInGoalState) { return }
+    throw "Claude plugin command failed ($status): $($result.message)"
+}
+{{ range $name, $plugin := .harnessPlugins -}}
+{{ if hasKey $plugin "claude" -}}
+Invoke-ClaudePlugin 'plugin' 'marketplace' 'add' '{{ joinPath $.chezmoi.destDir ".local" "share" "dotfiles" "harness-plugins" $name | replace "'" "''" }}' '--scope' 'user'
+Invoke-ClaudePlugin 'plugin' 'install' '{{ printf "%s@%s" $plugin.claude.plugin $plugin.claude.marketplace | replace "'" "''" }}' '--scope' 'user'
+Invoke-ClaudePlugin 'plugin' 'enable' '{{ printf "%s@%s" $plugin.claude.plugin $plugin.claude.marketplace | replace "'" "''" }}' '--scope' 'user'
+{{ end -}}
+{{ end -}}
