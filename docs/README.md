@@ -18,11 +18,11 @@ Day-to-day operations, application management, and tool configurations:
 - **[Secrets and API Authentication](guides/secrets-and-authentication.md)**
   Chezmoi GPG encryption, GitHub and GitLab token import workflows, native OS keyring provisioning (Windows Credential Manager, macOS Keychain, Linux Secret Service), and Git HTTPS credentials.
 - **[Personal CLI Applications](guides/personal-applications.md)**
-  Management of Codex, `omp`, `gh`, `ghq`, and `glab` under `~/.local/bin`, shell PATH activation across OS families, release pin maintenance, and PowerShell mise activation.
+  Management of Claude Code, Codex, `omp`, `gh`, `ghq`, and `glab` under `~/.local/bin`, shell PATH activation across OS families, release pin maintenance, and PowerShell mise activation.
 - **[T3 Code Desktop and Harness Integration](guides/t3-code.md)**
-  T3 Code desktop app installation, bundled CLI launchers, native Codex and oh-my-pi ACP provider configuration.
+  T3 Code desktop app installation, bundled CLI launchers, native Claude Code and Codex providers, and oh-my-pi ACP configuration.
 - **[Harness Plugins and AI Agent Configuration](guides/harness-plugins.md)**
-  Compound Engineering for Codex and omp, local marketplace cutover, update policies, version rollback, and shared user-scope instruction wiring.
+  Compound Engineering for Claude Code, Codex, and omp, local marketplace cutover, update policies, version rollback, and shared user-scope instruction wiring.
 - **[Native System CA Trust](guides/system-ca.md)**
   Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, OS environment activation, and TLS verification.
 

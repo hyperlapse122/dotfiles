@@ -8,6 +8,7 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 
 | Command | Upstream Repository | Package Kind | Supported Platforms |
 |---|---|---|---|
+| `claude` | [anthropics/claude-code](https://github.com/anthropics/claude-code) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `codex` | [openai/codex](https://github.com/openai/codex) | Canonical CLI package | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `omp` | [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) | Raw binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
@@ -15,7 +16,7 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 
 > **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
 
-Binaries are installed into `~/.local/bin` (`codex.exe`, `omp.exe`, `gh.exe`, `ghq.exe`, and `glab.exe` on Windows). Device application does not require a Bun or Python runtime.
+Binaries are installed into `~/.local/bin` (`claude.exe`, `codex.exe`, `omp.exe`, `gh.exe`, `ghq.exe`, and `glab.exe` on Windows). Device application does not require a Bun or Python runtime.
 
 Codex includes its native helper executables, `~/.local/codex-package.json`, `~/.local/codex-path`, and `~/.local/codex-resources`. Keep these together: copying only `codex` is not a complete installation. The Codex-specific resource directories are reconciled exactly; unrelated programs in `~/.local/bin` are preserved. Upstream currently names its Linux packages `unknown-linux-musl`; that artifact name does not expand this repository's supported host policy.
 
@@ -37,7 +38,7 @@ If a cached archive download is corrupted, force chezmoi to re-download external
 chezmoi apply --refresh-externals
 ```
 
-> **Windows Note:** Close running Codex and omp sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
+> **Windows Note:** Close running Claude Code, Codex, and omp sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
 
 ## PATH Integration
 
@@ -82,15 +83,35 @@ Personal application versions are strictly pinned and checksum-verified:
 
 ### Refreshing Application Pins
 
-To resolve the latest releases from GitHub and update the lockfile:
+To resolve the latest releases from each declared source and update the lockfile:
 
 ```sh
 mise exec -- python scripts/update-personal-app-lock.py
 ```
 
-The script queries the GitHub API using your active `gh` authentication. It writes changes only if all asset downloads and digests resolve successfully. Never edit URLs to point to `latest/download` directly.
+The script queries GitHub using your active `gh` authentication, GitLab through its public release API, and Claude Code through its official release manifest. It writes the lock only after every declared target resolves with a valid checksum. Never edit URLs to point to `latest/download` directly.
 
 To roll back a personal CLI application, restore its entry in `home/.chezmoidata/personal-app-lock.json` from the desired repository revision and explicitly apply again. For Codex, that one locked archive supplies the CLI and all package companions, so they roll back together.
+
+### Claude Code Version and Preferences
+
+Claude Code starts at the committed `2.1.318` pin. Its `source: "claude"` declaration reads the official `downloads.claude.ai/claude-code-releases` version metadata and manifest when refreshing pins. Apply downloads the versioned native binary and checks its committed SHA-256; it does not run the upstream auto-updating installer. The Linux targets use glibc binaries, and macOS coverage remains ARM64 only.
+
+Explicit apply owns these values in private `~/.claude/settings.json`:
+
+```json
+{
+  "language": "korean",
+  "autoMemoryEnabled": false,
+  "env": { "DISABLE_AUTOUPDATER": "1" }
+}
+```
+
+Fresh sessions default to Korean responses and do not read or write automatic memory. Existing memory files, credentials, sessions, and unrelated settings remain intact. Reapply restores these preferences after local edits. Native Claude settings precedence still applies; project settings or session overrides can take precedence over user preferences.
+
+Run `claude auth login` manually before authenticated use, or provision credentials through a supported Claude mechanism. Never commit a plaintext API key or credentials file. The default `~/.claude` is managed; a custom direct-session `CLAUDE_CONFIG_DIR` remains unmanaged. See [Harness Plugins](harness-plugins.md#compound-engineering-plugin-for-claude-code) for CE and shared instructions, and [T3 Code](t3-code.md#managed-settings) for the native provider.
+
+To roll Claude back, restore its entry in `home/.chezmoidata/personal-app-lock.json`, close Claude and T3 Code, and explicitly apply again. A disposable Windows x64 apply check has verified a `2.1.318` to `2.1.317` executable rollback.
 
 ### Automated Updates
 

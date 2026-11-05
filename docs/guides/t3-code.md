@@ -1,6 +1,6 @@
 # T3 Code Desktop and Harness Integration
 
-This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures Codex and oh-my-pi (omp) as providers.
+This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures Claude Code, Codex, and oh-my-pi (omp) as providers.
 
 ## Platform Support and Installation
 
@@ -79,20 +79,29 @@ The same template manages a single `codex` provider entry:
 
 Run `codex login` manually before authenticated use, then start a fresh T3 Code session. T3 uses Codex's own login; dotfiles does not copy credentials. Native-driver compatibility is verified against T3 Code 0.1.7. Existing desktop installations are retained, so update an older incompatible T3 version through its normal updater.
 
+The template also manages a single `claudeAgent` provider entry:
+
+- Uses T3's native `claudeAgent` driver and enables both the provider and its configuration.
+- Sets `binaryPath` to the fully expanded destination `.local/bin/claude` path (`claude.exe` on Windows).
+- Sets `homePath` to the fully expanded destination `.claude` directory so the provider reads managed preferences, instructions, and CE. T3 maps this field to `CLAUDE_CONFIG_DIR` without replacing `HOME`.
+- Preserves unowned options, model choices, presentation, and unrelated providers. A custom path on this managed instance is restored to the managed destination on reapply.
+
+Claude uses its native SDK protocol; no ACP argument is added. Run `claude auth login` manually before authenticated use. Native compatibility is verified against T3 Code 0.1.7; a retained older desktop may need its normal update first.
+
 > **Operational Warning:** **Close T3 Code before running `chezmoi apply` or `mise run apply`.** T3 Code writes to its settings files while running and does not share a cooperative file lock with chezmoi.
 
 ### Security and State Boundaries
 
 - Manages the default `~/.t3` directory (custom `T3CODE_HOME` relocations are unmanaged).
-- Model credentials, API keys, and sessions remain in the respective harness's configuration (`~/.codex/` or `~/.omp/`) and are never copied into T3 settings.
+- Model credentials, API keys, and sessions remain in the respective harness's configuration (`~/.claude/`, `~/.codex/`, or `~/.omp/`) and are never copied into T3 settings.
 - Automatic background services and remote listener ports are not opened.
 
 ## Testing and Smoke Verification
 
-To test T3 Code CLI discovery, omp ACP initialization, and T3-driven Codex startup in an isolated environment:
+To test T3 Code CLI discovery, omp ACP initialization, and T3-driven Codex and Claude startup in an isolated environment:
 
 ```sh
 mise exec -- python tests/smoke_t3_code.py
 ```
 
-This applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It also starts a fresh local T3 server, removes the managed binary directory from `PATH`, and requires T3's native Codex driver to complete app-server initialization. The Codex account remains unauthenticated in this smoke; no model completion or personal credential use is claimed.
+This applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It starts fresh local T3 servers with the managed binary directory absent from `PATH`. The native Codex driver must complete app-server initialization, and the native Claude driver must complete SDK initialization and discover the pinned CE slash command. Both accounts remain unauthenticated; the smoke uses no personal credentials and does not claim model completion. Windows x64 has passed locally against T3 Code 0.1.7; other eligible targets rely on their native CI results.
