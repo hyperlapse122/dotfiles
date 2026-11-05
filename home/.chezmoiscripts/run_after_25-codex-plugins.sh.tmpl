@@ -1,0 +1,4 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if and (ne .chezmoi.os "windows") (hasKey .personalApps.codex.targets $target) -}}
+{{ includeTemplate "codex-plugins-posix" . }}
+{{- end -}}

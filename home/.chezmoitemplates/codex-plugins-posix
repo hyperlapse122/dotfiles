@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+HOME='{{ .chezmoi.destDir | replace "'" "'\\''" }}'
+CODEX_HOME="$HOME/.codex"
+export HOME CODEX_HOME
+codex="$HOME/.local/bin/codex"
+{{ range $name, $plugin := .harnessPlugins -}}
+{{ if hasKey $plugin "codex" -}}
+"$codex" plugin marketplace add '{{ joinPath $.chezmoi.destDir ".local" "share" "dotfiles" "harness-plugins" $name | replace "'" "'\\''" }}'
+"$codex" plugin add '{{ printf "%s@%s" $plugin.codex.plugin $plugin.codex.marketplace | replace "'" "'\\''" }}'
+{{ end -}}
+{{ end -}}

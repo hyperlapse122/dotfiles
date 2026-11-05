@@ -1,0 +1,31 @@
+{{- $settings := dict -}}
+{{- if .chezmoi.stdin | trim -}}
+{{- $settings = .chezmoi.stdin | fromToml -}}
+{{- end -}}
+{{- $ce := index .harnessPlugins "compound-engineering" -}}
+{{- $id := printf "%s@%s" $ce.codex.plugin $ce.codex.marketplace -}}
+{{- range $table, $key := dict "marketplaces" $ce.codex.marketplace "plugins" $id -}}
+{{- $entries := dict -}}
+{{- if hasKey $settings $table -}}
+{{- $entries = get $settings $table -}}
+{{- if not (kindIs "map" $entries) -}}
+{{- fail (printf "Invalid Codex config.toml: %s must be a table" $table) -}}
+{{- end -}}
+{{- end -}}
+{{- $entry := dict -}}
+{{- if hasKey $entries $key -}}
+{{- $entry = get $entries $key -}}
+{{- if not (kindIs "map" $entry) -}}
+{{- fail (printf "Invalid Codex config.toml: %s.%s must be a table" $table $key) -}}
+{{- end -}}
+{{- end -}}
+{{- if eq $table "plugins" -}}
+{{- $entry = $entry | setValueAtPath "enabled" true -}}
+{{- else -}}
+{{- $source := joinPath $.chezmoi.destDir ".local" "share" "dotfiles" "harness-plugins" "compound-engineering" | replace "\\" "/" -}}
+{{- $entry = omit $entry "ref" "sparse_paths" "last_revision" | setValueAtPath "source_type" "local" | setValueAtPath "source" $source -}}
+{{- end -}}
+{{- $entries = $entries | setValueAtPath $key $entry -}}
+{{- $settings = $settings | setValueAtPath $table $entries -}}
+{{- end -}}
+{{- $settings | setValueAtPath "check_for_update_on_startup" false | toToml -}}
