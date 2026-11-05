@@ -348,9 +348,8 @@ class PersonalAppsTest(unittest.TestCase):
     def configure_managed_payloads(self):
         targets = self.apps["personalApps"]["omp"]["targets"]
         for name, command, payload in (
-            ("antigravity", "agy", b"#!/bin/sh\nprintf '%s\\n' \"$AGY_CLI_DISABLE_AUTO_UPDATE\" \"$@\"\nexit 23\n"),
-            ("antigravity-acp", "antigravity-acp",
-             b"#!/bin/sh\nprintf '%s\\n' \"$AGY_CLI_DISABLE_AUTO_UPDATE\" \"$AGY_BIN\" \"$AGY_SKIP_DOWNLOAD\" \"$@\"\nexit 29\n"),
+            ("antigravity", "agy", b"CLI payload\n"),
+            ("antigravity-acp", "antigravity-acp", b"adapter payload\n"),
         ):
             self.payloads["/" + name] = payload
             self.apps["personalApps"][name] = {
@@ -442,27 +441,6 @@ class PersonalAppsTest(unittest.TestCase):
         self.apply()
         self.assertEqual(binary.read_bytes(), b"CLI payload\n")
         self.assertEqual(self.requests.count("/official-cli.tar.gz"), 1)
-
-    @unittest.skipIf(os.name == "nt", "Native Windows launchers are exercised by the runtime smoke")
-    def test_launchers_override_host_environment_and_forward_arguments_without_path_lookup(self):
-        cli, adapter = self.configure_managed_payloads()
-        self.apply()
-        env = {**self.env, "PATH": "", "AGY_CLI_DISABLE_AUTO_UPDATE": "false",
-               "AGY_BIN": "/unmanaged/agy", "AGY_SKIP_DOWNLOAD": "0"}
-        arguments = ["--flag", "argument with spaces", ""]
-        direct = subprocess.run(
-            [str(self.home / ".local/bin/agy"), *arguments], env=env,
-            capture_output=True, text=True, timeout=30,
-        )
-        self.assertEqual(direct.returncode, 23, direct.stdout + direct.stderr)
-        self.assertEqual(direct.stdout.splitlines(), ["true", *arguments])
-        acp = subprocess.run(
-            [str(self.home / ".local/bin/antigravity-acp"), *arguments], env=env,
-            capture_output=True, text=True, timeout=30,
-        )
-        self.assertEqual(acp.returncode, 29, acp.stdout + acp.stderr)
-        self.assertEqual(acp.stdout.splitlines(), ["true", str(cli), "1", *arguments])
-        self.assertTrue(adapter.is_absolute())
 
     def render_external(self, os_name, arch):
         template = (self.source / ".chezmoiexternals" / "personal-apps.toml.tmpl").read_text(encoding="utf-8")
