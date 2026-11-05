@@ -1,0 +1,116 @@
+# Personal CLI Applications
+
+This guide explains how dotfiles installs and manages personal command-line tools under `~/.local/bin`, activates PATH integration across operating systems, maintains immutable release pins, and configures PowerShell mise activation.
+
+## Managed Applications
+
+Chezmoi provisions prebuilt binaries independently of the repository's mise development toolchain:
+
+| Command | Upstream Repository | Package Kind | Supported Platforms |
+|---|---|---|---|
+| `omp` | [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) | Raw binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
+| `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
+| `ghq` | [x-motemen/ghq](https://github.com/x-motemen/ghq) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (x64/ARM64) |
+
+> **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
+
+Binaries are installed into `~/.local/bin` (`omp.exe`, `gh.exe`, `ghq.exe` on Windows). Device application does not require a Bun or Python runtime.
+
+## Installation and Updates
+
+To install or reconcile personal CLI applications to the pinned releases:
+
+```sh
+# Apply personal applications from the registered checkout
+chezmoi apply
+
+# Or check for remote updates and apply
+chezmoi update
+```
+
+If a cached archive download is corrupted, force chezmoi to re-download externals:
+
+```sh
+chezmoi apply --refresh-externals
+```
+
+> **Windows Note:** Close running `omp` sessions before updating `omp.exe` to avoid file-lock errors. Run the update from a standard terminal window.
+
+## PATH Integration
+
+Applying personal settings configures your shell environment to discover commands in `~/.local/bin`.
+
+### Windows PATH Activation
+
+On Windows, the apply script updates the user PATH environment variable in the registry (`HKCU\Environment`).
+- Existing expandable variables (`%USERPROFILE%`, etc.) and variable kinds are preserved.
+- After running apply, close and reopen your terminal host from the desktop or Start menu so new processes inherit the updated registry environment. (Opening a new tab in an existing terminal may retain stale environment state).
+
+### Unix PATH Activation (Linux & macOS)
+
+On Linux and macOS, apply creates `~/.config/dotfiles/path.sh` and appends a source block to your shell startup files:
+- Configures `.bashrc` and the existing Bash login profile (`.bash_profile`, `.bash_login`, or `.profile`).
+- Configures `.zshenv`, respecting an exported `ZDOTDIR` if set.
+- PATH integration runs only on change; an unchanged apply will not overwrite manual removals.
+
+### Checking Command Discovery
+
+Verify that the managed commands take precedence:
+
+```sh
+# Windows PowerShell
+Get-Command omp -All
+
+# POSIX Shells
+command -v omp
+```
+
+If another copy precedes `~/.local/bin`, resolve the conflicting PATH entry in your shell configuration.
+
+---
+
+## Release Pin Architecture
+
+Personal application versions are strictly pinned and checksum-verified:
+
+1. **Authored Declarations (`home/.chezmoidata/personal-apps.json`):** Defines repository names, command names, asset naming patterns, and archive extraction rules.
+2. **Locked Pins (`home/.chezmoidata/personal-app-lock.json`):** Contains the resolved release tag, release-specific download URLs, and verified SHA-256 digests.
+3. **Externals Template (`home/.chezmoiexternals/personal-apps.toml.tmpl`):** Reads the declarations and lock to configure chezmoi external archives.
+
+### Refreshing Application Pins
+
+To resolve the latest releases from GitHub and update the lockfile:
+
+```sh
+mise exec -- python scripts/update-personal-app-lock.py
+```
+
+The script queries the GitHub API using your active `gh` authentication. It writes changes only if all asset downloads and digests resolve successfully. Never edit URLs to point to `latest/download` directly.
+
+### Automated Updates
+
+A GitHub Actions workflow (**Update personal application pins**) runs daily at 06:23 UTC:
+1. Resolves candidate release pins using `secrets.GITHUB_TOKEN`.
+2. Validates new binaries against the native test matrix.
+3. Commits the updated `personal-app-lock.json` directly to `main` if all checks pass.
+
+---
+
+## PowerShell Mise Activation
+
+Applying personal settings installs automatic `mise` activation into each PowerShell runtime's `CurrentUserAllHosts` profile:
+
+```powershell
+(&mise activate pwsh) | Out-String | Invoke-Expression
+```
+
+### Profile Replacement Policy
+
+> **Warning:** Dotfiles completely replaces the selected profile file. Unmanaged local additions in that specific file are overwritten. Put persistent customizations in repository templates or host-specific profiles.
+
+### Scope and Execution
+
+- **Windows:** Updates both Windows PowerShell 5.1 (`Documents\WindowsPowerShell\profile.ps1`) and modern PowerShell 7 (`Documents\PowerShell\profile.ps1`).
+- **macOS & Linux:** Updates modern PowerShell (`~/.config/powershell/profile.ps1`).
+- Mise must already be available on your startup PATH.
+- Sessions started with `-NoProfile` or execution policies that block scripts do not execute profile activation.

@@ -1,0 +1,36 @@
+# Documentation Index
+
+This directory contains task-oriented user guides, setup instructions, and maintenance documentation for this dotfiles repository.
+
+## Setup Guides
+
+Getting started on a new device or configuring platform prerequisites:
+
+- **[Windows Setup and Bootstrap](setup/windows.md)**
+  Automated PC bootstrap, chezmoi source registration, host application provisioning via WinGet, virtualization preflight checks, native C++/.NET/Rust build environments, and Podman / Kubernetes onboarding.
+
+## User Guides
+
+Day-to-day operations, application management, and tool configurations:
+
+- **[Git and GPG Configuration](guides/git-and-gpg.md)**
+  Git author identity, automatic OpenPGP commit signing, pinentry dialog selection, GPG home path safety guards, and repository cloning with `ghq`.
+- **[Secrets and API Authentication](guides/secrets-and-authentication.md)**
+  Chezmoi GPG encryption, GitHub and GitLab token import workflows, native OS keyring provisioning (Windows Credential Manager, macOS Keychain, Linux Secret Service), and Git HTTPS credentials.
+- **[Personal CLI Applications](guides/personal-applications.md)**
+  Management of `omp`, `gh`, and `ghq` under `~/.local/bin`, shell PATH activation across OS families, release pin maintenance, and PowerShell mise activation.
+- **[T3 Code Desktop and ACP Integration](guides/t3-code.md)**
+  T3 Code desktop app installation, bundled CLI launchers, and oh-my-pi (omp) Agent Control Protocol provider configuration.
+- **[Harness Plugins and AI Agent Configuration](guides/harness-plugins.md)**
+  Compound Engineering plugin installation for omp, local marketplace cutover, auto-update policies, version rollback, and shared user-scope instruction wiring.
+- **[Native System CA Trust](guides/system-ca.md)**
+  Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, OS environment activation, and TLS verification.
+
+## Maintenance Guides
+
+Internal architecture, authoring rules, testing, and continuous integration:
+
+- **[Chezmoi Source Maintenance](maintenance/chezmoi-source.md)**
+  Source layout (`./home`), script lifecycles (`run_before_`, `run_onchange_`, `run_after_`), numeric ordering conventions, dependency signatures, modify-template rules, and AI harness onboarding procedures.
+- **[Development, Testing, and CI](maintenance/development-and-testing.md)**
+  Worktree preparation with `mise install`, bootstrap isolation mechanics, unit test suite architecture, standalone smoke tests, and the CI runner support matrix.
