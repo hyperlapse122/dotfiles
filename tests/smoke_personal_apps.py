@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 
@@ -52,7 +53,17 @@ def temporary_destination():
     finally:
         # Chezmoi's HTTP cache encodes presigned URLs into deeply nested paths.
         cleanup_root = "\\\\?\\" + root if os.name == "nt" else root
-        shutil.rmtree(cleanup_root)
+        def remove_readonly(function, path, error):
+            if os.name != "nt" or function is not os.unlink or not isinstance(error, PermissionError):
+                raise error
+            mode = os.lstat(path).st_mode
+            if not stat.S_ISREG(mode) or mode & stat.S_IWRITE:
+                raise error
+            # Git clone caches contain read-only pack files on Windows.
+            os.chmod(path, mode | stat.S_IWRITE)
+            function(path)
+
+        shutil.rmtree(cleanup_root, onexc=remove_readonly)
 
 
 @contextmanager

@@ -2,11 +2,62 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import unittest
 
 from smoke_personal_apps import temporary_destination
+
+
+class TemporaryDestinationTest(unittest.TestCase):
+    def test_removes_ordinary_temporary_files(self):
+        with temporary_destination() as scratch:
+            root = Path(scratch)
+            (root / "sentinel").write_bytes(b"temporary fixture")
+        self.assertFalse(root.exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows open-file deletion semantics required")
+    def test_locked_file_cleanup_still_raises(self):
+        root = None
+        stream = None
+        try:
+            with self.assertRaises(PermissionError):
+                with temporary_destination() as scratch:
+                    root = Path(scratch)
+                    packed = root / "locked.idx"
+                    packed.write_bytes(b"open packed object index fixture")
+                    packed.chmod(stat.S_IREAD)
+                    stream = packed.open("rb")
+        finally:
+            if stream is not None:
+                stream.close()
+            if root is not None and root.exists():
+                packed.chmod(stat.S_IWRITE)
+                shutil.rmtree("\\\\?\\" + str(root))
+
+    @unittest.skipUnless(os.name == "nt", "Windows read-only deletion semantics required")
+    def test_removes_readonly_git_pack_file_under_long_unicode_path(self):
+        root = None
+        packed = None
+        try:
+            with temporary_destination() as scratch:
+                root = Path(scratch)
+                directory = root / ("native 한글 " * 8) / ("deep cache " * 8) / ".git/objects/pack"
+                # Use the same extended-length prefix as the cleanup path.
+                packed = Path("\\\\?\\" + str(directory)) / "pack-fixture.idx"
+                packed.parent.mkdir(parents=True)
+                packed.write_bytes(b"packed object index fixture")
+                packed.chmod(stat.S_IREAD)
+                self.assertGreater(len(str(packed)), 260)
+            self.assertFalse(root.exists())
+        finally:
+            # A failing cleanup must not leave the regression's read-only file behind.
+            if packed is not None and packed.exists():
+                packed.chmod(stat.S_IWRITE)
+                packed.unlink()
+            if root is not None and root.exists():
+                shutil.rmtree("\\\\?\\" + str(root))
 
 
 class BootstrapIsolationTest(unittest.TestCase):
