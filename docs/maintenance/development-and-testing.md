@@ -50,22 +50,31 @@ mise exec -- python -m unittest discover -s tests
 
 On Windows, run this command in a standard-user terminal. Installer tests use disposable native doubles, never a real installer or UAC approval. The production installer's legitimate non-admin `RunAs` selection and cancelled-elevation error propagation are tested separately from ordinary verification.
 
-### Test Suite Architecture
+### Independent unit areas
 
-| Test Module | Coverage and Assertions |
-|---|---|
-| `test_bootstrap.py` | Proves `mise install` does not trigger personal chezmoi hooks, mutate personal files, or execute apply scripts. |
-| `test_windows_bootstrap.py` | Exercises Windows PowerShell entry points, destination argument parsing, path quoting, OEM encoding, and error propagation. |
-| `test_global_chezmoi.py` | Tests chezmoi configuration generation, native pull/apply, and conflict preservation using local Git remotes. |
-| `test_git_gpg.py` | Verifies Git configuration rendering, GPG executable detection, and GPG home path safety guards. |
-| `test_secrets.py` | Verifies GPG encryption recipient enforcement, ciphertext roundtrip, and fail-closed decryption errors. |
-| `test_native_ca_windows.py` | Tests Windows registry writes for `NODE_USE_SYSTEM_CA=1` against disposable registry paths. |
-| `test_native_ca_bash.py` | Tests POSIX shell export block appending and idempotent re-application. |
-| `test_powershell_profile.py` | Tests profile replacement and mise activation logic across Windows PowerShell and modern PowerShell. |
-| `test_windows_apps.py` | Validates WinGet package filtering, `--no-upgrade` flags, and pwsh fallback execution. |
-| `test_script_lifecycle.py` | Validates dependency signature invalidation, onchange re-execution, and unchanged-run skipping. |
-| `test_personal_apps.py` | Simulates HTTP release asset downloads, SHA-256 validation, and cache reconciliation. |
-| `test_harness_plugins.py` | Tests local marketplace registration, force-installation, and auto-update configuration. |
+The ownership manifest is `scripts/run-test-area.py`. It validates every discovered test ID before selecting an area. New unassigned modules, duplicate module assignments, duplicate IDs, import errors, or disagreement between discovery and named-module loading fail instead of silently narrowing coverage.
+
+```sh
+mise exec -- python scripts/run-test-area.py --validate-only
+mise exec -- python scripts/run-test-area.py --area applications
+mise exec -- python scripts/run-test-area.py --area security
+mise exec -- python scripts/run-test-area.py --area platform
+mise exec -- python scripts/run-test-area.py --area build-contracts
+mise exec -- python scripts/run-test-area.py --area all --report area-results.json
+```
+
+`--list` prints selected IDs without execution. `--report` records elapsed seconds, selected IDs, skipped IDs/reasons, failures, and errors. Keep reports outside the checkout when they are not needed as local artifacts.
+
+| Area | Modules (`tests/`, `.py` suffix omitted) | Prerequisites |
+|---|---|---|
+| applications | `test_personal_apps`, `test_personal_app_lock`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
+| security | `test_secrets`, `test_git_gpg`, `test_script_lifecycle`, `test_github_auth`, `test_github_auth_import`, `test_gitlab_auth`, `test_gitlab_auth_import` | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
+| platform | `test_bootstrap`, `test_global_chezmoi`, `test_windows_bootstrap`, `test_windows_apply_hook`, `test_windows_apps`, `test_windows_virtualization` | Root mise tools; Windows PowerShell and Git for Windows fixture checks |
+| build-contracts | `test_windows_build_apply`, `test_windows_build_environment`, `test_windows_build_prepare`, `test_windows_build_smoke`, `test_windows_visual_studio`, `test_ci_areas` | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles, never real provisioning |
+
+All areas remain selected on every existing unit runner. Platform guards stay with the tests: Windows-named build-apply/rendering and mocked verifier contracts also run on Unix. The entire tests directory remains importable for credential fixture reuse, but imports do not schedule another area's cases.
+
+The initial three-area candidate put 182 seconds of the measured local baseline in platform contracts, versus about 31 seconds for applications and 63 seconds for security. Four physical areas combine small shell checks with applications and separate build contracts from bootstrap. This reduces the estimated longest local area to about 88 seconds without splitting class fixtures. Hosted setup, queue, and aggregate-runner measurements remain necessary; local estimates do not establish hosted savings.
 
 ### Windows Test Console Policy
 
