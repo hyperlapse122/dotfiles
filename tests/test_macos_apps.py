@@ -12,6 +12,13 @@ class MacAppsTest(MacFixture):
         super().setUp()
         self.wrapper(self.root/'podman-template','podman')
 
+    def test_unsupported_macos_stops_before_application_changes(self):
+        self.state['version'] = '14.7'
+        result = self.run_script('scripts/macos-apps.sh')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('macOS 15', result.stderr)
+        self.assertFalse(any(name in ('brew', 'podman') for name, args in self.calls()))
+
     def test_fresh_application_installs_once_and_starts_machine(self):
         result=self.run_script('scripts/macos-apps.sh','cask:google-chrome','cask:1password-cli')
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
