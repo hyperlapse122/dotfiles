@@ -129,7 +129,7 @@ To onboard a new harness (e.g. `example-harness`):
    ```gotemplate
    {{- template "agent-instructions" (dict "harness" "example" "chezmoi" .) -}}
    ```
-4. If the harness needs user-scope plugin integration, register the repository-pinned Compound Engineering archive in its configuration per the harness plugin rules in `AGENTS.md`.
+4. Register, install, and enable the repository-pinned Compound Engineering plugin through the harness's native user-scope mechanism. Codex uses native `plugin marketplace add` and `plugin add`; omp uses its own marketplace/install/enable commands.
 
 ### 3. Verification
 
@@ -137,3 +137,6 @@ Verify in a disposable sandbox:
 - The common instructions are included.
 - Foreign harness conditional blocks are excluded.
 - The destination file is created with owner-only permissions.
+- Native CE skill discovery and invocation succeed from the pinned archive.
+- Reapplication restores owned settings and preserves unrelated plugins, credentials, and application state.
+- T3 Code loads the native provider and launches its absolute managed executable without relying on the managed binary directory being on `PATH`.

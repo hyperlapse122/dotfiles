@@ -1,6 +1,6 @@
 # Harness Plugins and AI Agent Configuration
 
-This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for oh-my-pi (omp), controls plugin auto-update policies, performs repairs and rollbacks, and wires shared user-scope agent instructions.
+This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Codex and oh-my-pi (omp), performs repairs and rollbacks, and wires shared user-scope agent instructions.
 
 ## Compound Engineering Plugin for omp
 
@@ -13,6 +13,29 @@ Dotfiles installs Compound Engineering at user scope for the standard omp enviro
 3. **Local Marketplace:** Chezmoi extracts the archive into `~/.local/share/dotfiles/harness-plugins/compound-engineering`, registers it as a local marketplace, and runs `omp plugin install --scope user --force` and `omp plugin enable`.
 
 > **Operational Rule:** **Always apply with omp closed.** Starting a new omp session after apply loads the updated skills.
+
+## Compound Engineering Plugin for Codex
+
+Explicit apply installs Codex's native CE plugin from the same repository-pinned archive used by omp. The native marketplace manifest is `.agents/plugins/marketplace.json`; Codex loads skills through `.codex-plugin/plugin.json`.
+
+On each apply, the Codex hook runs the managed executable with `CODEX_HOME` set to the destination home's `.codex` directory:
+
+```sh
+codex plugin marketplace add /absolute/path/to/.local/share/dotfiles/harness-plugins/compound-engineering
+codex plugin add compound-engineering@compound-engineering-plugin
+```
+
+`plugin add` installs and enables the plugin; Codex has no separate `plugin enable` command in the pinned version. Reapplication repairs the native CE cache and activation even when the pin is unchanged. The local marketplace follows the shared CE lock, not an independent latest release.
+
+The private `~/.codex/config.toml` modify template owns only the CE marketplace source, CE activation, and `check_for_update_on_startup = false`. Other settings, model choices, plugins, and credentials are preserved. Close Codex and T3 Code before applying, then start a fresh session.
+
+### Sign-in and Invocation
+
+Apply does not sign in. Run `codex login` yourself, or provision credentials through a Codex-supported mechanism. Do not add an API key or `auth.json` to tracked plaintext configuration.
+
+After signing in, start Codex and select a CE skill through `/skills`, such as `compound-engineering:ce-plan`. Authentication, model access, and billing remain with Codex; dotfiles does not copy credentials into T3 Code.
+
+The managed scope is the default `~/.codex`. Custom `CODEX_HOME` locations remain unmanaged.
 
 ## Disabling Marketplace Auto-Updates
 
@@ -63,10 +86,13 @@ A GitHub Actions workflow (**Update harness plugin pins**) runs daily at 06:43 U
 Every managed AI harness in this repository wires its native instruction file to a shared template:
 - **Shared Source:** `home/.chezmoitemplates/agent-instructions`
 - **Native omp Target:** `~/.omp/agent/AGENTS.md` (generated via `home/private_dot_omp/private_agent/private_empty_AGENTS.md.tmpl`)
+- **Native Codex Target:** `~/.codex/AGENTS.md` (generated via `home/private_dot_codex/private_empty_AGENTS.md.tmpl`)
 
 Applying dotfiles replaces `~/.omp/agent/AGENTS.md` with the rendered repository version. The source is initially empty of policies, preserving an owner-only empty file until rules are authored.
 
 > **Scope Note:** In omp, `~/.omp/agent/AGENTS.md` applies to the main interactive session and advisors. Task subagents do not inherit files named `AGENTS.md`.
+
+Codex uses a nonempty `~/.codex/AGENTS.override.md` before `AGENTS.md`. Apply preserves that override; remove or update it manually if it should no longer suppress the managed instructions. Project instructions and native configuration precedence still apply.
 
 For the technical procedure to onboard a new AI harness, see [Chezmoi Source Maintenance](../maintenance/chezmoi-source.md#shared-user-scope-harness-onboarding).
 
@@ -79,3 +105,11 @@ mise exec -- python tests/smoke_harness_plugins.py
 ```
 
 This verifies local marketplace cutover, automatic update policies, skill discovery, and preservation of unrelated plugins in a disposable sandbox.
+
+For Codex's isolated native integration:
+
+```sh
+mise exec -- python tests/smoke_codex.py
+```
+
+This checks native instruction discovery, the pinned marketplace/cache, reapplication, unrelated state preservation, and explicit CE skill expansion into Codex's outgoing model request. A localhost capture endpoint deliberately rejects that request; the smoke uses no real credentials and does not claim authenticated model completion.

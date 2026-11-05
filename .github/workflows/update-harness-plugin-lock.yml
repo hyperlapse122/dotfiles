@@ -44,24 +44,11 @@ jobs:
 
   validate:
     needs: resolve
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.resolve.outputs.base-sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          artifact-ids: ${{ needs.resolve.outputs.lock-artifact }}
-          path: ${{ runner.temp }}/locked-plugins
-      - name: Select the exact resolved lock
-        run: cp -- "$RUNNER_TEMP/locked-plugins/harness-plugin-lock.json" home/.chezmoidata/harness-plugin-lock.json
-      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
-      # GITHUB_TOKEN pushes do not start push workflows: validate the new lock here.
-      - name: Validate deterministic lock and installation contracts
-        run: mise exec -- python -m unittest discover -s tests
-      - name: Validate the newly pinned native plugin without write credentials
-        run: mise exec -- python tests/smoke_harness_plugins.py --expected-target linux-amd64
+    # Validate the same immutable CE candidate on every supported native target.
+    uses: ./.github/workflows/test.yml
+    with:
+      base-sha: ${{ needs.resolve.outputs.base-sha }}
+      harness-lock-artifact: ${{ needs.resolve.outputs.lock-artifact }}
 
   publish:
     needs: [resolve, validate]

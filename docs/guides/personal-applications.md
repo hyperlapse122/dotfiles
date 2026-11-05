@@ -8,13 +8,16 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 
 | Command | Upstream Repository | Package Kind | Supported Platforms |
 |---|---|---|---|
+| `codex` | [openai/codex](https://github.com/openai/codex) | Canonical CLI package | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `omp` | [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) | Raw binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `ghq` | [x-motemen/ghq](https://github.com/x-motemen/ghq) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (x64/ARM64) |
 
 > **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
 
-Binaries are installed into `~/.local/bin` (`omp.exe`, `gh.exe`, `ghq.exe` on Windows). Device application does not require a Bun or Python runtime.
+Binaries are installed into `~/.local/bin` (`codex.exe`, `omp.exe`, `gh.exe`, `ghq.exe`, and `glab.exe` on Windows). Device application does not require a Bun or Python runtime.
+
+Codex includes its native helper executables, `~/.local/codex-package.json`, `~/.local/codex-path`, and `~/.local/codex-resources`. Keep these together: copying only `codex` is not a complete installation. The Codex-specific resource directories are reconciled exactly; unrelated programs in `~/.local/bin` are preserved. Upstream currently names its Linux packages `unknown-linux-musl`; that artifact name does not expand this repository's supported host policy.
 
 ## Installation and Updates
 
@@ -34,7 +37,7 @@ If a cached archive download is corrupted, force chezmoi to re-download external
 chezmoi apply --refresh-externals
 ```
 
-> **Windows Note:** Close running `omp` sessions before updating `omp.exe` to avoid file-lock errors. Run the update from a standard terminal window.
+> **Windows Note:** Close running Codex and omp sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
 
 ## PATH Integration
 
@@ -86,6 +89,8 @@ mise exec -- python scripts/update-personal-app-lock.py
 ```
 
 The script queries the GitHub API using your active `gh` authentication. It writes changes only if all asset downloads and digests resolve successfully. Never edit URLs to point to `latest/download` directly.
+
+To roll back a personal CLI application, restore its entry in `home/.chezmoidata/personal-app-lock.json` from the desired repository revision and explicitly apply again. For Codex, that one locked archive supplies the CLI and all package companions, so they roll back together.
 
 ### Automated Updates
 
