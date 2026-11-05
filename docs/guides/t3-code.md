@@ -29,6 +29,35 @@ t3 --version
 
 If another `t3` command precedes `~/.local/bin` on PATH, resolve the conflicting path in your environment.
 
+## Personal Preferences
+
+`home/.chezmoidata/t3-code.json` declares preferences under `t3CodePreferences.server` and `t3CodePreferences.client`.
+Private modify templates reconcile these maps into `~/.t3/userdata/settings.json` and `client-settings.json` on explicit apply.
+
+| Settings page | Owned preferences |
+| --- | --- |
+| General | Thread notifications, in-app notifications, Working section |
+| SnapShots | Enabled only |
+| Threads | New-project base directory; default model and options; fallback model; permissions; workspace; resume and snooze after usage limits; all Auto-settle controls; text generation model |
+| Source Control | Automatic pull; writing style and its custom instructions |
+| Worktrees | Branch-renaming mode; cleanup on thread deletion; inactive cleanup period; unchanged-worktree cleanup |
+
+The initial capture uses explicitly stored current values first and the installed T3 Code 0.1.7 defaults only for absent settings.
+The resolved defaults are recorded in the data file: full-access permissions, a three-day Auto-settle period, settling merged threads, and empty custom writing instructions.
+`capturedVersion` records the source version and is not applied as a preference.
+Applying on another device does not import that device's preferences or recalculate these values from a newer T3 release.
+
+Edit the declared server or client map to change a managed preference, then close T3 Code and run `mise run apply` from the checkout.
+Repeated application restores declared values after GUI edits.
+A value of `false`, zero, an empty string, or a supported `null` is explicit, not an instruction to use a default.
+For example, `sidebarAutoSettleAfterDays = null` disables inactive-thread settling.
+
+Model selections are replaced as complete values, including their options; omitted options remove stale options from the destination.
+Cleanup and writing-style objects merge only their declared children.
+Other settings and nested children remain local, including project overrides, idle compaction, branch prefixes and instructions, `followChangeRequestTemplates`, other SnapShots options, and appearance preferences.
+Existing provider ownership remains as described below; credentials, keybindings, and desktop window state are not captured here.
+Malformed JSON or incompatible managed parent objects cause application to fail without replacing the affected file.
+
 ## Provider Configuration
 
 Dotfiles reconciles T3 Code's settings file (`~/.t3/userdata/settings.json`) on every explicit apply.
@@ -50,7 +79,7 @@ The same template manages a single `codex` provider entry:
 
 Run `codex login` manually before authenticated use, then start a fresh T3 Code session. T3 uses Codex's own login; dotfiles does not copy credentials. Native-driver compatibility is verified against T3 Code 0.1.7. Existing desktop installations are retained, so update an older incompatible T3 version through its normal updater.
 
-> **Operational Warning:** **Close T3 Code before running `chezmoi apply` or `mise run apply`.** T3 Code writes to `settings.json` while running and does not share a cooperative file lock with chezmoi.
+> **Operational Warning:** **Close T3 Code before running `chezmoi apply` or `mise run apply`.** T3 Code writes to its settings files while running and does not share a cooperative file lock with chezmoi.
 
 ### Security and State Boundaries
 

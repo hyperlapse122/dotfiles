@@ -21,8 +21,11 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.source.mkdir()
         shutil.copytree(self.repo / "home/private_dot_t3", self.source / "private_dot_t3")
         (self.source / ".chezmoitemplates").mkdir()
-        shutil.copy2(self.repo / "home/.chezmoitemplates/t3-code-settings",
-                     self.source / ".chezmoitemplates/t3-code-settings")
+        for path in (self.repo / "home/.chezmoitemplates").glob("t3-code-*"):
+            shutil.copy2(path, self.source / ".chezmoitemplates" / path.name)
+        self.preferences = json.loads((self.repo / "home/.chezmoidata/t3-code.json").read_text(
+            encoding="utf-8"))["t3CodePreferences"]
+        self.write_preferences(self.preferences["server"], self.preferences["client"])
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("umask = 0o022\n", encoding="utf-8")
         self.env = {key: value for key, value in os.environ.items()
@@ -84,7 +87,8 @@ class T3CodeSettingsTest(unittest.TestCase):
         }
 
     def render(self, body, os_name, arch, *, existing="", distro="ubuntu"):
-        context = ('(dict "chezmoi" (dict "os" ' + json.dumps(os_name)
+        context = ('(dict "t3CodePreferences" (fromJson ' + json.dumps(json.dumps(self.preferences))
+                   + ') "chezmoi" (dict "os" ' + json.dumps(os_name)
                    + ' "arch" ' + json.dumps(arch)
                    + ' "osRelease" (dict "id" ' + json.dumps(distro) + ')'
                    + ' "destDir" ' + json.dumps(self.home.as_posix())
@@ -100,18 +104,26 @@ class T3CodeSettingsTest(unittest.TestCase):
         for existing in cases:
             with self.subTest(existing=existing):
                 self.settings.parent.mkdir(parents=True, exist_ok=True)
-                self.settings.unlink(missing_ok=True)
-                if existing is not None:
-                    self.settings.write_text(existing, encoding="utf-8")
+                client = self.settings.with_name("client-settings.json")
+                for path in (self.settings, client):
+                    path.unlink(missing_ok=True)
+                    if existing is not None:
+                        path.write_text(existing, encoding="utf-8")
                 self.apply()
-                expected = {"providerInstances": {"omp": self.expected_provider(),
-                                                  "codex": self.expected_codex()}}
+                expected = dict(self.preferences["server"], providerInstances={
+                    "omp": self.expected_provider(), "codex": self.expected_codex()})
                 if existing and "preferences" in existing:
                     expected["preferences"] = {"theme": "dark"}
                 self.assertEqual(self.read_settings(), expected)
-                before = self.settings.read_bytes()
+                expected_client = dict(self.preferences["client"])
+                if existing and "preferences" in existing:
+                    expected_client["preferences"] = {"theme": "dark"}
+                if existing and "providerInstances" in existing:
+                    expected_client.update(json.loads(existing))
+                self.assertEqual(json.loads(client.read_text()), expected_client)
+                before = (self.settings.read_bytes(), client.read_bytes())
                 self.apply()
-                self.assertEqual(self.settings.read_bytes(), before)
+                self.assertEqual((self.settings.read_bytes(), client.read_bytes()), before)
                 self.assertEqual(self.chez("diff", "--exclude=scripts").stdout, "")
 
     def test_owned_drift_converges_and_unowned_nested_values_survive(self):
@@ -137,7 +149,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         }
         self.write_settings(original)
         self.apply()
-        expected = json.loads(json.dumps(original))
+        expected = dict(json.loads(json.dumps(original)), **self.preferences["server"])
         provider = expected["providerInstances"]["omp"]
         desired = self.expected_provider()
         provider.update(driver=desired["driver"], enabled=True)
@@ -167,8 +179,8 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.apply()
         expected = self.expected_provider()
         expected.update(displayName=None, accentColor="")
-        self.assertEqual(self.read_settings(), {"providerInstances": {
-            "omp": expected, "codex": self.expected_codex()}})
+        self.assertEqual(self.read_settings(), dict(self.preferences["server"], providerInstances={
+            "omp": expected, "codex": self.expected_codex()}))
 
     def test_existing_native_codex_options_and_presentation_survive_reapply(self):
         codex = self.expected_codex()
@@ -178,7 +190,8 @@ class T3CodeSettingsTest(unittest.TestCase):
                                homePath="/custom/codex/home", customModels=["custom-model"])
         self.write_settings({"providerInstances": {"codex": codex}})
         self.apply()
-        expected = {"providerInstances": {"codex": codex, "omp": self.expected_provider()}}
+        expected = dict(self.preferences["server"], providerInstances={
+            "codex": codex, "omp": self.expected_provider()})
         self.assertEqual(self.read_settings(), expected)
         before = self.settings.read_bytes()
         self.apply()
@@ -204,24 +217,115 @@ class T3CodeSettingsTest(unittest.TestCase):
 
     def test_supported_platform_wrappers_render_absolute_canonical_paths(self):
         body = (self.repo / "home/private_dot_t3/private_userdata/modify_private_settings.json").read_text(encoding="utf-8")
+        client_body = (self.repo / "home/private_dot_t3/private_userdata/modify_private_client-settings.json").read_text(encoding="utf-8")
         for os_name, arch in (("windows", "amd64"), ("windows", "arm64"),
                               ("linux", "amd64"), ("linux", "arm64"), ("darwin", "arm64")):
             with self.subTest(os=os_name, arch=arch):
                 rendered = json.loads(self.render(body, os_name, arch))
-                self.assertEqual(rendered, {"providerInstances": {
-                    "omp": self.expected_provider(os_name), "codex": self.expected_codex(os_name)}})
+                self.assertEqual(rendered, dict(self.preferences["server"], providerInstances={
+                    "omp": self.expected_provider(os_name), "codex": self.expected_codex(os_name)}))
+                self.assertEqual(json.loads(self.render(client_body, os_name, arch)),
+                                 self.preferences["client"])
                 self.assertTrue(Path(rendered["providerInstances"]["omp"]["config"]["commandPath"]).is_absolute())
                 self.assertTrue(Path(rendered["providerInstances"]["codex"]["config"]["binaryPath"]).is_absolute())
 
     def test_configuration_and_parent_directories_are_private(self):
         for _ in range(2):
             self.apply()
-            result = self.chez("dump", "--format=json", "--parent-dirs", str(self.settings))
+            result = self.chez("dump", "--format=json", "--parent-dirs", str(self.settings.parent))
             state = json.loads(result.stdout)
-            for target, mode in ((".t3", 0o700), (".t3/userdata", 0o700), (".t3/userdata/settings.json", 0o600)):
+            for target, mode in ((".t3", 0o700), (".t3/userdata", 0o700),
+                                 (".t3/userdata/settings.json", 0o600),
+                                 (".t3/userdata/client-settings.json", 0o600)):
                 self.assertEqual(state[target]["perm"], mode)
                 if os.name != "nt":
                     self.assertEqual((self.home / target).stat().st_mode & 0o777, mode)
+
+    def write_preferences(self, server, client):
+        data = self.source / ".chezmoidata/t3-code.json"
+        data.parent.mkdir(exist_ok=True)
+        data.write_text(json.dumps({"t3CodePreferences": {
+            "server": server, "client": client}}), encoding="utf-8")
+
+    def test_capture_keeps_current_models_and_fills_only_absent_defaults(self):
+        desired = self.preferences["server"]
+        self.assertEqual(desired["defaultModelSelection"], {
+            "instanceId": "codex", "model": "gpt-6.1-sol",
+            "options": [{"id": "reasoningEffort", "value": "high"},
+                        {"id": "serviceTier", "value": "default"}],
+        })
+        self.assertEqual(desired["textGenerationModelSelection"],
+                         {"instanceId": "codex", "model": "gpt-6-luna"})
+        self.assertEqual(desired["defaultRuntimeMode"], "full-access")
+        self.assertEqual(desired["sidebarAutoSettleAfterDays"], 3)
+        self.assertIs(desired["sidebarAutoSettleOnMerge"], True)
+        self.assertEqual(desired["storageCleanup"]["worktreeAfterDays"], 5)
+
+    def test_declared_preferences_converge_without_losing_unowned_values(self):
+        server = {
+            "defaultAutoPull": False,
+            "sidebarAutoSettleAfterDays": None,
+            "addProjectBaseDirectory": "",
+            "defaultModelSelection": {"instanceId": "codex", "model": "fixture-model"},
+            "fallbackModelSelection": None,
+            "textGenerationModelSelection": {"instanceId": "codex", "model": "fixture-text"},
+            "storageCleanup": {"worktreeAfterDays": 0, "worktreeOnDelete": False},
+            "sourceControlWritingStyle": {"mode": "custom", "customInstructions": ""},
+        }
+        client = {"notificationMode": "never", "inAppNotificationsEnabled": False,
+                  "sidebarWorkingShelfEnabled": False, "snapShotEnabled": False}
+        self.write_preferences(server, client)
+        original = {
+            "defaultAutoPull": True,
+            "defaultModelSelection": {"instanceId": "codex", "model": "old",
+                                      "options": [{"id": "reasoningEffort", "value": "old"}]},
+            "textGenerationModelSelection": {"instanceId": "codex", "model": "old",
+                                             "options": [{"id": "reasoningEffort", "value": "old"}]},
+            "storageCleanup": {"worktreeAfterDays": 99, "unknown": "keep"},
+            "sourceControlWritingStyle": {"mode": "old", "followChangeRequestTemplates": False},
+            "projectSettingsOverrides": {"local-project": {"defaultAutoPull": True}},
+            "idleCompaction": "onReturn",
+        }
+        self.write_settings(original)
+        client_path = self.settings.with_name("client-settings.json")
+        client_path.write_text(json.dumps({"snapShotEnabled": True, "fontSizeCode": 22,
+                                           "snapShotSound": "keep"}), encoding="utf-8")
+        self.apply()
+        result = self.read_settings()
+        for key, expected in server.items():
+            if key == "storageCleanup":
+                expected = dict(expected, unknown="keep")
+            elif key == "sourceControlWritingStyle":
+                expected = dict(expected, followChangeRequestTemplates=False)
+            self.assertEqual(result[key], expected, key)
+        self.assertEqual(result["projectSettingsOverrides"], original["projectSettingsOverrides"])
+        self.assertEqual(result["idleCompaction"], "onReturn")
+        self.assertEqual(json.loads(client_path.read_text()),
+                         dict(client, fontSizeCode=22, snapShotSound="keep"))
+        before = (self.settings.read_bytes(), client_path.read_bytes())
+        self.apply()
+        self.assertEqual((self.settings.read_bytes(), client_path.read_bytes()), before)
+        self.assertEqual(self.chez("diff", "--exclude=scripts").stdout, "")
+
+    def test_client_and_nested_preference_shape_errors_preserve_original_bytes(self):
+        self.write_preferences({"storageCleanup": {"worktreeAfterDays": 5},
+                                "sourceControlWritingStyle": {"mode": "custom"}},
+                               {"snapShotEnabled": True})
+        self.settings.parent.mkdir(parents=True, exist_ok=True)
+        client = self.settings.with_name("client-settings.json")
+        for original in (b"{bad json}", b"null", b"[]", b"false", b"42", b'"text"'):
+            with self.subTest(client=original):
+                client.write_bytes(original)
+                self.assertNotEqual(self.apply(check=False).returncode, 0)
+                self.assertEqual(client.read_bytes(), original)
+        client.unlink()
+        for key in ("storageCleanup", "sourceControlWritingStyle"):
+            for invalid in (None, [], "text", 42, False):
+                with self.subTest(parent=key, value=invalid):
+                    original = json.dumps({key: invalid}).encode()
+                    self.settings.write_bytes(original)
+                    self.assertNotEqual(self.apply(check=False).returncode, 0)
+                    self.assertEqual(self.settings.read_bytes(), original)
 
     def install_selection_fixture(self):
         shutil.copytree(self.repo / "home/dot_config", self.source / "dot_config")
@@ -247,6 +351,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                     self.render(ignore, os_name, arch, distro=distro), encoding="utf-8")
                 managed = set(self.chez("managed", "--path-style=relative", "--exclude=scripts").stdout.replace("\\", "/").splitlines())
                 self.assertEqual(".t3/userdata/settings.json" in managed, supported)
+                self.assertEqual(".t3/userdata/client-settings.json" in managed, supported)
                 self.assertEqual(".local/bin/t3.cmd" in managed, supported and os_name == "windows")
                 self.assertEqual(".local/bin/t3" in managed, supported and os_name != "windows")
                 self.assertEqual(".config/dotfiles/path.sh" in managed,
