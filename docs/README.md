@@ -7,7 +7,7 @@ This directory contains task-oriented user guides, setup instructions, and maint
 Getting started on a new device or configuring platform prerequisites:
 
 - **[macOS Setup and Readiness](setup/macos.md)**
-  Apple Silicon prerequisites, separate checkout preparation and source registration, explicit application, native builds, managed harnesses/apps, Podman, and manual/runtime readiness evidence.
+  Explicit Homebrew prerequisite provisioning, separate checkout preparation and source registration, explicit application, native builds, managed harnesses/apps, and manual/runtime readiness evidence on Apple Silicon.
 
 - **[Windows Setup and Bootstrap](setup/windows.md)**
   Automated PC bootstrap, chezmoi source registration, host application provisioning via WinGet, virtualization preflight checks, native C++/.NET/Rust build environments, and Podman / Kubernetes onboarding.

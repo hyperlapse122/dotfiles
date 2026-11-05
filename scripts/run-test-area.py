@@ -28,7 +28,7 @@ AREAS = {
     "platform": (
         "test_bootstrap", "test_global_chezmoi", "test_windows_bootstrap",
         "test_windows_apply_hook", "test_windows_apps", "test_windows_virtualization",
-        "test_macos_bootstrap", "test_macos_apps", "test_macos_readiness",
+        "test_macos_bootstrap", "test_macos_provision", "test_macos_apps", "test_macos_readiness",
     ),
     "build-contracts": (
         "test_windows_build_apply", "test_windows_build_environment", "test_windows_build_prepare",

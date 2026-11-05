@@ -22,11 +22,12 @@ class MacReadinessTest(unittest.TestCase):
         with patch.object(self.module.platform, "system", return_value=system), \
              patch.object(self.module.platform, "machine", return_value=machine), \
              patch.object(self.module.platform, "mac_ver", return_value=(version, (), "")), \
-             patch.object(self.module.shutil, "which", return_value="/fixture/tool" if available else None), \
+             patch.object(self.module.shutil, "which", side_effect=lambda command: "/fixture/tool" if available and command != "podman" else None) as which, \
              patch.object(self.module.subprocess, "run") as run:
             run.return_value.returncode = 0
             run.return_value.stdout = "8.0.100 [fixture]\n10.0.100 [fixture]\n"
             result = self.module.collect(self.home)
+            self.command_lookups = [call.args[0] for call in which.call_args_list]
             return result, run
 
     def test_unperformed_authenticated_and_runtime_checks_stay_pending(self):
@@ -60,6 +61,17 @@ class MacReadinessTest(unittest.TestCase):
         self.assertEqual(commands, [["xcrun", "--find", "clang"], ["dotnet", "--list-sdks"]])
         self.assertNotIn("8.0.100", json.dumps(result))
         self.assertNotIn("fixture", json.dumps(result))
+
+    def test_podman_is_not_a_readiness_requirement(self):
+        result, _ = self.collect()
+        self.assertNotIn("podman", self.command_lookups)
+        names = {check["name"] for check in result["checks"]}
+        self.assertNotIn("Command: podman", names)
+        self.assertNotIn("Application: Podman Desktop", names)
+        self.assertNotIn("Container execution", names)
+        self.assertIn("Command: op", names)
+        self.assertIn("Application: Chrome", names)
+        self.assertIn("Native builds and execution", names)
 
     def test_pending_prevents_success_even_without_failed_checks(self):
         result = {"ready": False, "checks": [{"name": "manual", "status": "pending", "detail": "Run manually"}]}
