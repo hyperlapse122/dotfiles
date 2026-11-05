@@ -113,7 +113,7 @@ mise run windows-build
 mise exec chezmoi python -- python tests/prepare_windows_build_environment.py --provision
 ```
 
-The verifier no longer accepts `--provision`. The separate helper prepares twice and stops on failure without running builds or claiming standard-user readiness. Default CI jobs remain free of privileged preparation. A future dedicated real-build CI lane must use a prepared environment and record a non-elevated verification token; its restoration and hosted preparation diagnosis remain [#39](https://github.com/hyperlapse122/dotfiles/issues/39).
+The verifier no longer accepts `--provision`. The separate helper prepares twice and stops on failure without running builds or claiming standard-user readiness. Default CI jobs remain free of privileged preparation. [#39](https://github.com/hyperlapse122/dotfiles/issues/39) was closed as not planned; this change does not restore a dedicated real-build CI lane or diagnose hosted provisioning.
 
 Ready existing VS 2026 Build Tools installations are reused without download or servicing. Existing incomplete/unhealthy installations or missing components require manual Visual Studio Installer maintenance; automatic update/repair/reconciliation is not part of apply. See [Windows build setup](../setup/windows.md#windows-native-build-environment) for the inventory, first-install safeguards, and full matrix.
 
@@ -220,6 +220,19 @@ PR opening is not an atomic handoff: a push can pass admission before the PR exi
 
 Combined `Unit and supported-target rendering (...)` and `Native apps, CE, PATH, and credentials (...)` checks are replaced by `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, displayed beneath the `Validate` reusable call for automatic events. Each area's result remains independently visible. No required-check configuration or ruleset was returned for main during this change; repository protection settings are not modified. If protection is enabled, select the new per-area merge-result checks rather than the removed combined names or admission-only checks.
 
-The comparable baseline is the successful [PR run 41959406936](https://github.com/hyperlapse122/dotfiles/actions/runs/41959406936) and [push run 41959146646](https://github.com/hyperlapse122/dotfiles/actions/runs/41959146646), both at `86ae6829b0bf1f0f194724196d34cb34f6643040`. They used 13 jobs each: PR elapsed 309s / aggregate job time 1532s; push elapsed 283s / aggregate job time 1599s. Together they used 3131 runner-seconds, excluding billing rounding.
+### Hosted measurements
 
-The PR validation record must link the resulting full hosted matrix, event transition runs, and before/after elapsed and aggregate job times. Measure elapsed from run creation through completion and aggregate runner time from each job's start/end timestamps; report queue effects and canceled work separately. More independent jobs repeat setup and can queue longer, so job count alone is not evidence of improvement.
+The baseline pair used `86ae6829b0bf1f0f194724196d34cb34f6643040`; the first independent-area run used PR head `c609cbd2fed8f545311aff7491e647ac18926504`. Elapsed time runs from workflow creation to the final job completion. Aggregate runner time sums job start/end durations, including setup and cleanup but excluding queue time and billing rounding.
+
+| Run | Outcome | Jobs | Elapsed | Aggregate runner time |
+|---|---|---:|---:|---:|
+| [Baseline PR](https://github.com/hyperlapse122/dotfiles/actions/runs/41959406936) | Success | 13 | 309s | 1532s |
+| [Baseline push](https://github.com/hyperlapse122/dotfiles/actions/runs/41959146646) | Success | 13 | 283s | 1599s |
+| [Independent-area PR](https://github.com/hyperlapse122/dotfiles/actions/runs/41966823335) | Success | 61 | 197s | 2759s |
+| [PR-open push overlap](https://github.com/hyperlapse122/dotfiles/actions/runs/41966778441) | Canceled by PR controller | 61 | 133s | 2347s |
+
+The independent-area PR passed all 24 unit jobs, 35 native jobs, and two control jobs. The longest job was Windows ARM64 CE at 136s; all five Windows ARM64 native areas passed. The last job started 131s after workflow creation, so the elapsed result includes scheduling and queue effects. Runner timestamps do not isolate queue delay from admission or dependency delay.
+
+The 24 unit-report artifacts select the same 236 IDs on all six platforms, exactly once across each platform's four areas. This is the original 220 cases, 15 new CI contracts, and the Developer Mode bootstrap case merged into main independently. Windows retained nine hosted skips. Linux and macOS have one additional skipped case because that new bootstrap case is Windows-only.
+
+Parallel setup reduced this PR's elapsed time but increased its aggregate runner time. The initial push/PR handoff consumed 5106 runner-seconds including canceled work, versus 3131 for the baseline duplicate pair. Do not claim that the opening race saves runner time. Ordinary PR-update admission must be assessed separately from that race.
