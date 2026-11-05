@@ -13,7 +13,7 @@ checker='{{ $check }}'
 invoke_claude_plugin() {
     status=0
     output=$("$claude" "$@" --json 2>/dev/null) || status=$?
-    result=$(printf '%s\n' "$output" | tail -n 1 | "$chezmoi" --config /dev/null --source "$HOME" --destination "$HOME" execute-template --with-stdin "$checker")
+    result=$(printf '%s\n' "$output" | tail -n 1 | "$chezmoi" --config /dev/null --config-format toml --source "$HOME" --destination "$HOME" execute-template --with-stdin "$checker")
     if [ "$status" -eq 0 ] && [ "$result" = ok ]; then return; fi
     if [ "$status" -eq 1 ] && [ "$result" = already-enabled ]; then return; fi
     printf 'Claude plugin command failed (exit %s)\n' "$status" >&2
