@@ -218,6 +218,8 @@ PR opening is not an atomic handoff: a push can pass admission before the PR exi
 
 The first observed handoff is [PR run 41966823335](https://github.com/hyperlapse122/dotfiles/actions/runs/41966823335): its metadata-only controller logged cancellation of [push run 41966778441](https://github.com/hyperlapse122/dotfiles/actions/runs/41966778441) at `2026-11-05T04:17:17Z`, and all PR jobs passed. Canceled push checks can remain visible alongside the successful PR merge run. Check the event and run URL before retrying them; retrying the superseded push would recreate the duplicate suite.
 
+For a current-head push, reconciliation cancels only an already-active duplicate suite, not admission-only work or a completed suite. The push admission can then finish successfully and omit its fan-out, instead of leaving canceled control checks on the current PR. Older-head automatic runs remain eligible for cancellation. If uncertain admission metadata starts fallback work after reconciliation inspected the job list, overlap remains possible; coverage takes precedence.
+
 ### Check-name migration and validation records
 
 Combined `Unit and supported-target rendering (...)` and `Native apps, CE, PATH, and credentials (...)` checks are replaced by `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, displayed beneath the `Validate` reusable call for automatic events. Each area's result remains independently visible. No required-check configuration or ruleset was returned for main during this change; repository protection settings are not modified. If protection is enabled, select the new per-area merge-result checks rather than the removed combined names or admission-only checks.

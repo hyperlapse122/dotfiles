@@ -90,6 +90,15 @@ jobs:
               const replacePush = samePush && (!pull || pull.head.ref !== context.payload.repository.default_branch);
               if (!oldPull && !replacePush) continue;
               if (!pull && candidate.head_sha === head) continue;
+              if (pull && samePush && candidate.head_sha === head) {
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                  owner, repo, run_id: candidate.id, per_page: 100
+                });
+                if (!jobs.some(job => job.name.startsWith('Validate / ') && active.has(job.status))) {
+                  core.info(`Preserving same-head push admission ${candidate.id}; no active duplicate suite`);
+                  continue;
+                }
+              }
               if (!await fresh()) return;
               try {
                 await github.rest.actions.cancelWorkflowRun({owner, repo, run_id: candidate.id});
