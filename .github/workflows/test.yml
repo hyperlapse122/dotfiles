@@ -110,7 +110,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [apps, t3, ce, codex, github-auth, gitlab-auth]
+        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth]
         platform:
           - runner: ubuntu-24.04
             target: linux-amd64
@@ -160,7 +160,7 @@ jobs:
         if: matrix.area == 'apps'
         timeout-minutes: 10
         run: mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target ${{ matrix.platform.target }}
-      - name: Prove desktop-bundled T3 and native Codex integration
+      - name: Prove desktop-bundled T3 and native Codex/Claude integration
         if: matrix.area == 't3'
         timeout-minutes: 15
         env:
@@ -178,6 +178,10 @@ jobs:
         if: matrix.area == 'codex'
         timeout-minutes: 10
         run: mise exec chezmoi python -- python tests/smoke_codex.py --expected-target ${{ matrix.platform.target }}
+      - name: Apply pinned Claude and prove native preferences, instructions, and CE
+        if: matrix.area == 'claude'
+        timeout-minutes: 10
+        run: mise exec chezmoi python -- python tests/smoke_claude.py --expected-target ${{ matrix.platform.target }}
       - name: Prove native GitHub and Gist credentials
         if: runner.os != 'Linux' && matrix.area == 'github-auth'
         timeout-minutes: 5

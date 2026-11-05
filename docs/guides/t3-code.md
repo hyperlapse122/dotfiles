@@ -1,6 +1,6 @@
 # T3 Code Desktop and Harness Integration
 
-This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Codex plus oh-my-pi (omp) and Antigravity ACP providers.
+This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code and Codex plus oh-my-pi (omp) and Antigravity ACP providers.
 
 ## Platform Support and Installation
 
@@ -80,6 +80,15 @@ The same template manages a single `codex` provider entry:
 
 Run `codex login` manually before authenticated use, then start a fresh T3 Code session. T3 uses Codex's own login; dotfiles does not copy credentials. Native-driver compatibility is verified against T3 Code 0.1.7. Existing desktop installations are retained, so update an older incompatible T3 version through its normal updater.
 
+The template also manages a single `claudeAgent` provider entry:
+
+- Uses T3's native `claudeAgent` driver and enables both the provider and its configuration.
+- Sets `binaryPath` to the fully expanded destination `.local/bin/claude` path (`claude.exe` on Windows).
+- Uses Claude's native default user context. It does not add `homePath`: forcing that field to `.claude` would set `CLAUDE_CONFIG_DIR` and move the normally separate `~/.claude.json`, bypassing terminal login/MCP/trust metadata. Reapply clears only the previous repository-added absolute default; a different custom scope stays user-owned and unmanaged.
+- Preserves unowned options, model choices, presentation, and unrelated providers. A custom path on this managed instance is restored to the managed destination on reapply.
+
+Claude uses its native SDK protocol; no ACP argument is added. Run `claude auth login` manually before authenticated use. Native compatibility is verified against T3 Code 0.1.7; a retained older desktop may need its normal update first.
+
 > **Operational Warning:** **Close T3 Code before running `chezmoi apply` or `mise run apply`.** T3 Code writes to its settings files while running and does not share a cooperative file lock with chezmoi.
 
 ### Security and State Boundaries
@@ -110,7 +119,7 @@ mise exec -- python tests/smoke_t3_code.py
 mise exec -- python tests/smoke_antigravity.py
 ```
 
-The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It also starts a fresh local T3 server, removes the managed binary directory from `PATH`, and requires T3's native Codex driver to complete app-server initialization. The Codex account remains unauthenticated in this smoke; no model completion or personal credential use is claimed.
+The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It starts fresh local T3 servers with the managed binary directory absent from `PATH`. The native Codex driver must complete app-server initialization, and the native Claude driver must complete SDK initialization and discover the pinned CE slash command. Both accounts remain unauthenticated; the smoke uses no personal credentials and does not claim model completion. Windows x64 has passed locally against T3 Code 0.1.7; other eligible targets rely on their native CI results.
 
 The Antigravity smoke verifies native instruction content through a localhost-only request capture that deliberately rejects model execution. It runs native plugin preservation/malformed-state checks against the locked CLI, repairs adjacent-CLI and provider drift, and initializes a fresh T3 provider with managed `.local/bin` absent from PATH. No real credentials, personal OAuth/keyring access, or model completion are used. Authenticated CE skill invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52).
 

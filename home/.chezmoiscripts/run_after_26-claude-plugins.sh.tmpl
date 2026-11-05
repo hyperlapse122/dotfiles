@@ -1,0 +1,4 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if and (ne .chezmoi.os "windows") (hasKey .personalApps.claude.targets $target) -}}
+{{ includeTemplate "claude-plugins-posix" . }}
+{{- end -}}

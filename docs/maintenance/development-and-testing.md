@@ -67,7 +67,7 @@ mise exec -- python scripts/run-test-area.py --area all --report area-results.js
 
 | Area | Modules (`tests/`, `.py` suffix omitted) | Prerequisites |
 |---|---|---|
-| applications | `test_personal_apps`, `test_personal_app_lock`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_codex`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
+| applications | `test_personal_apps`, `test_personal_app_lock`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_codex`, `test_claude`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
 | security | `test_secrets`, `test_git_gpg`, `test_script_lifecycle`, `test_github_auth`, `test_github_auth_import`, `test_gitlab_auth`, `test_gitlab_auth_import` | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
 | platform | `test_bootstrap`, `test_global_chezmoi`, `test_windows_bootstrap`, `test_windows_apply_hook`, `test_windows_apps`, `test_windows_virtualization` | Root mise tools; Windows PowerShell and Git for Windows fixture checks |
 | build-contracts | `test_windows_build_apply`, `test_windows_build_environment`, `test_windows_build_prepare`, `test_windows_build_smoke`, `test_windows_visual_studio`, `test_ci_areas`, `test_ci_event_policy` | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles, never real provisioning |
@@ -125,7 +125,7 @@ Compiles sample C++, MFC, WPF, Rust, and vcpkg targets in temporary directories.
 mise exec -- python tests/smoke_t3_code.py
 ```
 
-Tests bundled CLI discovery, omp ACP initialization, and a fresh T3 server launching the native Codex app-server with the managed binary directory absent from `PATH`.
+Tests bundled CLI discovery, omp ACP initialization, native Codex app-server initialization, and Claude SDK initialization with pinned CE command discovery. Fresh T3 servers launch the managed binaries with their directory absent from `PATH`.
 
 ### Personal CLI Applications
 
@@ -134,7 +134,7 @@ Tests bundled CLI discovery, omp ACP initialization, and a fresh T3 server launc
 mise exec -- python tests/smoke_personal_apps.py
 ```
 
-Tests actual Codex, `omp`, `gh`, `ghq`, and `glab` binaries. CI runs with `--path-integration` to verify shell PATH inheritance.
+Tests actual Claude Code, Codex, `omp`, `gh`, `ghq`, and `glab` binaries. CI runs with `--path-integration` to verify shell PATH inheritance.
 
 ### Harness Plugins
 
@@ -151,6 +151,14 @@ mise exec -- python tests/smoke_codex.py
 ```
 
 Tests the complete pinned package, private user-scope instructions, native CE installation and reconciliation, and explicit skill expansion into an outgoing model request. A capture-only localhost endpoint rejects the request; the smoke does not use personal credentials or exercise authenticated model completion.
+
+### Claude Native Preferences, Instructions, and CE
+
+```sh
+mise exec -- python tests/smoke_claude.py
+```
+
+Tests the pinned native executable, user-scope CE discovery and repair, private preferences, and shared instructions in a disposable home. Outgoing requests must include the Korean preference and complete explicitly invoked CE skill body, include common and Claude instruction markers, and exclude foreign branches. An enabled automatic-memory characterization first proves that the fixture is readable; the managed disabled state must exclude it while preserving its bytes. A localhost capture endpoint returns HTTP 400; only inert credentials are used, and authenticated inference is outside this smoke.
 
 ### GitLab Authentication
 
@@ -176,13 +184,13 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 | `ubuntu-26.04-arm` | `linux-arm64` | Yes | Yes |
 | `xcode-27` | `darwin-arm64` | Yes | Yes |
 | `windows-2025` | `windows-amd64` | Yes | Yes |
-| `windows-11-arm` | `windows-arm64` | No | All six native smoke areas |
+| `windows-11-arm` | `windows-arm64` | No | All seven native smoke areas |
 
 ### Architecture Principles
 
 - **macOS Apple Silicon Only:** macOS CI uses ARM64 (`darwin-arm64`) runners. Intel Macs are not supported.
 - **Ubuntu LTS Coverage:** Tracks the two most recent Ubuntu LTS releases (`24.04` and `26.04`) across both x64 and ARM64.
-- **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all six native smoke areas; this is not an ARM64 build-only lane.
+- **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all seven native smoke areas; this is not an ARM64 build-only lane.
 
 ### Native areas and independent setup
 
@@ -193,18 +201,19 @@ This 45-minute job compiles, ARM64-identifies and runs Rust, C++, .NET 8/10 apph
 It reuses immutable checkout and candidate-pin selection and does not apply the owner's dotfiles or run real account authentication.
 For an intentionally provisioned local Mac, use the [macOS setup guide](../setup/macos.md) for the explicit smoke command and manual readiness checklist.
 
-Each area/target pair owns a separate hosted runner. All matrices use `fail-fast: false`, so an area's failure cannot suppress unrelated results. Jobs time out after 20 minutes; apps, CE, and Codex steps have 10-minute limits, T3 15 minutes, and credential execution 5 minutes.
+Each area/target pair owns a separate hosted runner. All matrices use `fail-fast: false`, so an area's failure cannot suppress unrelated results. Jobs time out after 20 minutes; apps, CE, Codex, and Claude steps have 10-minute limits, T3 15 minutes, and credential execution 5 minutes.
 
 | Area | Invocation after tool preparation | Job-owned prerequisites |
 |---|---|---|
 | apps | `mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target TARGET` | Pinned apps and disposable PATH/profile fixture |
-| t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned omp/Codex acquisition, scoped GitHub token |
+| t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned omp/Codex/Claude and CE acquisition, scoped GitHub token |
 | ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated pinned omp/CE payload and harness state |
 | codex | `mise exec chezmoi python -- python tests/smoke_codex.py --expected-target TARGET` | Complete pinned Codex package and isolated native CE state |
+| claude | `mise exec chezmoi python -- python tests/smoke_claude.py --expected-target TARGET` | Pinned Claude binary and isolated native CE, instruction, preference, and memory fixtures |
 | github-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_github_auth.py` | Native GPG, pinned gh acquired by fixture, OS credential backend |
 | gitlab-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_gitlab_auth.py` | Native GPG, pinned glab acquired by fixture, OS credential backend |
 
-Hosted-only PATH, desktop-installation, and credential-write modes must not run on a personal workstation. Their existing disposable-host guards remain intact. The apps and desktop scripts offer non-installing local modes as described above; CE uses a disposable home.
+Hosted-only PATH, desktop-installation, and credential-write modes must not run on a personal workstation. Their existing disposable-host guards remain intact. The apps and desktop scripts offer non-installing local modes as described above; CE, Codex, and Claude use disposable homes. Claude and T3 native startup have passed locally on Windows x64. Other eligible platforms require their own CI result; local request capture and initialization do not prove authenticated model completion.
 
 Windows credential jobs verify and unpack the existing checksummed native GPG fixture; Git's MSYS GPG is not a substitute. Each Linux credential job provisions and starts its own D-Bus/Secret Service session. macOS credential fixtures restore the original default keychain and search list. Windows ARM installs only the tools needed by its area, not the unsupported full development tool set.
 

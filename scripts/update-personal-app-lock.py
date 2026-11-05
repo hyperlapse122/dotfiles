@@ -8,6 +8,43 @@ from urllib.parse import quote, unquote, urlsplit
 from urllib.request import urlopen
 
 
+CLAUDE_RELEASES = "https://downloads.claude.ai/claude-code-releases"
+
+
+def claude_release():
+    with urlopen(f"{CLAUDE_RELEASES}/latest", timeout=60) as response:
+        version = response.read().decode("utf-8").strip()
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError("Claude: expected a stable version")
+    with urlopen(f"{CLAUDE_RELEASES}/{version}/manifest.json", timeout=60) as response:
+        return version, json.loads(response.read())
+
+
+def resolve_claude_application(application, version, manifest):
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version or "") or manifest.get("version") != version:
+        raise ValueError("Claude: missing or mismatched stable manifest version")
+    platforms = manifest.get("platforms")
+    if not isinstance(platforms, dict):
+        raise ValueError("Claude: expected a platform manifest")
+    targets = {}
+    for target, declaration in application["targets"].items():
+        platform = declaration["platform"]
+        expected_platform = target.replace("windows-", "win32-").replace("amd64", "x64")
+        binary = "claude.exe" if target.startswith("windows-") else "claude"
+        if (platform != expected_platform or declaration["kind"] != "file"
+                or declaration["asset"] != binary):
+            raise ValueError(f"Claude: unexpected target declaration for {target}")
+        entry = platforms.get(platform)
+        if not isinstance(entry, dict) or entry.get("binary") != binary:
+            raise ValueError(f"Claude: missing platform or unexpected binary for {platform}")
+        digest = entry.get("checksum") or ""
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+            raise ValueError(f"Claude: missing SHA-256 checksum for {platform}")
+        targets[target] = {"kind": "file", "sha256": digest.lower(),
+                           "url": f"{CLAUDE_RELEASES}/{version}/{platform}/{binary}"}
+    return {"tag": version, "targets": targets}
+
+
 def github_release(repository):
     result = subprocess.run(
         ["gh", "api", "--hostname", "github.com", f"repos/{repository}/releases/latest"],
@@ -174,6 +211,7 @@ def resolve_application(application, release):
 def update_lock(
     root, fetch_release=github_release, *, fetch_gitlab_release=gitlab_release,
     fetch_checksums=gitlab_checksums, fetch_manifest=antigravity_manifest,
+    fetch_claude_release=claude_release,
 ):
     data_dir = root / "home" / ".chezmoidata"
     applications = json.loads((data_dir / "personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
@@ -183,11 +221,15 @@ def update_lock(
         if source == "antigravity":
             resolved[name] = resolve_antigravity(application, fetch_manifest)
             continue
-        if source not in ("github", "gitlab"):
+        if source not in ("github", "gitlab", "claude"):
             raise ValueError(f"{name}: unsupported release source {source}")
         repository = application["repository"]
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
             raise ValueError(f"{name}: expected an owner/repository")
+        if source == "claude":
+            version, manifest = fetch_claude_release()
+            resolved[name] = resolve_claude_application(application, version, manifest)
+            continue
         if source == "gitlab":
             release = normalize_gitlab_release(application, fetch_gitlab_release(repository), fetch_checksums)
         else:
