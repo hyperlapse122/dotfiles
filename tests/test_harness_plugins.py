@@ -24,7 +24,7 @@ class HarnessPluginsTest(unittest.TestCase):
         self.home.mkdir()
         self.source = self.root / "source"
         self.source.mkdir()
-        for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_omp"):
+        for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_omp", "private_dot_gemini"):
             shutil.copytree(self.repo / "home" / directory, self.source / directory)
         shutil.copy2(self.repo / "home/.chezmoiignore", self.source / ".chezmoiignore")
         (self.source / ".chezmoiexternals").mkdir()
@@ -306,6 +306,136 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(tomllib.loads(result.stdout), {})
         self.assertEqual(self.requests, [])
+
+    def test_native_instructions_include_common_and_only_selected_harness(self):
+        (self.source / ".chezmoitemplates/agent-instructions").write_text(
+            'common instructions for {{ .chezmoi.destDir }}\n'
+            '{{ if eq .harness "omp" }}omp only{{ end }}'
+            '{{ if eq .harness "antigravity" }}antigravity only{{ end }}'
+            '{{ if eq .harness "foreign" }}foreign only{{ end }}',
+            encoding="utf-8",
+        )
+        self.apply()
+        native = (self.home / ".gemini/GEMINI.md").read_text(encoding="utf-8")
+        omp = (self.home / ".omp/agent/AGENTS.md").read_text(encoding="utf-8")
+        for rendered in (native, omp):
+            self.assertIn("common instructions for " + self.home.as_posix(), rendered.replace("\\", "/"))
+            self.assertNotIn("foreign only", rendered)
+        self.assertIn("antigravity only", native)
+        self.assertNotIn("omp only", native)
+        self.assertIn("omp only", omp)
+        self.assertNotIn("antigravity only", omp)
+
+
+@unittest.skipUnless(os.environ.get("ANTIGRAVITY_TEST_BINARY"), "Set ANTIGRAVITY_TEST_BINARY to the locked native CLI")
+class NativeAntigravityPluginsTest(unittest.TestCase):
+    def setUp(self):
+        self.repo = Path(__file__).resolve().parents[1]
+        self.chezmoi = shutil.which("chezmoi")
+        self.assertIsNotNone(self.chezmoi, "Install chezmoi before running native plugin tests")
+        scratch = tempfile.TemporaryDirectory(prefix="native plugins ' ")
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name).resolve()
+        self.home = self.root / "destination"
+        self.home.mkdir()
+        self.source = self.root / "source"
+        self.source.mkdir()
+        for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_gemini"):
+            shutil.copytree(self.repo / "home" / directory, self.source / directory)
+        scripts = self.source / ".chezmoiscripts"
+        scripts.mkdir()
+        for name in ("run_after_20-antigravity-plugins.sh.tmpl", "run_after_20-antigravity-plugins.ps1.tmpl"):
+            shutil.copy2(self.repo / "home/.chezmoiscripts" / name, scripts / name)
+        self.config = self.root / "chezmoi.toml"
+        config = ""
+        if os.name == "nt":
+            shell = shutil.which("pwsh") or str(
+                Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+            config = ('[interpreters.ps1]\ncommand = ' + json.dumps(shell)
+                      + '\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n')
+        self.config.write_text(config, encoding="utf-8")
+        self.env = os.environ.copy()
+        self.env.update({
+            "HOME": str(self.home), "USERPROFILE": str(self.home),
+            "APPDATA": str(self.root / "config"), "LOCALAPPDATA": str(self.root / "local"),
+            "XDG_CONFIG_HOME": str(self.root / "config"),
+            "XDG_CONFIG_DIRS": str(self.root / "system config"),
+            "XDG_DATA_HOME": str(self.root / "data"), "XDG_CACHE_HOME": str(self.root / "cache"),
+            "XDG_STATE_HOME": str(self.root / "state"), "AGY_CLI_DISABLE_AUTO_UPDATE": "true",
+        })
+        self.binary = self.home / ".local/share/dotfiles/antigravity/bin" / ("agy.exe" if os.name == "nt" else "agy")
+        self.binary.parent.mkdir(parents=True)
+        original = Path(os.environ["ANTIGRAVITY_TEST_BINARY"]).resolve()
+        try:
+            os.link(original, self.binary)
+        except OSError:
+            shutil.copy2(original, self.binary)
+        self.plugin = self.home / ".local/share/dotfiles/harness-plugins/compound-engineering"
+        self.make_plugin(self.plugin, "compound-engineering")
+        self.native_settings = self.home / ".gemini/config/config.json"
+
+    def make_plugin(self, directory, name):
+        skill = directory / "skills" / (name + "-example") / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nname: " + name + "-example\ndescription: Local test skill\n---\nTest skill.\n", encoding="utf-8")
+        (directory / "plugin.json").write_text(json.dumps({
+            "name": name, "version": "1.0.0", "description": "Local native integration fixture",
+        }), encoding="utf-8")
+
+    def native(self, *args):
+        result = subprocess.run([str(self.binary), "plugin", *args], env=self.env,
+                                cwd=self.root, capture_output=True, text=True,
+                                encoding="utf-8", errors="backslashreplace", timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result
+
+    def apply(self, check=True):
+        result = subprocess.run([
+            self.chezmoi, "--config", str(self.config), "--source", str(self.source),
+            "--destination", str(self.home), "--cache", str(self.root / "cache"),
+            "--persistent-state", str(self.root / "chezmoi-state.boltdb"), "--no-tty",
+            "apply", "--force",
+        ], env=self.env, cwd=self.root, capture_output=True, text=True,
+            encoding="utf-8", errors="backslashreplace", timeout=60)
+        if check:
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result
+
+    def test_reapply_repairs_enabled_state_and_preserves_unrelated_plugins_and_settings(self):
+        unrelated = self.root / "unrelated"
+        self.make_plugin(unrelated, "unrelated")
+        self.native("install", str(unrelated))
+        self.native("disable", "unrelated")
+        config = json.loads(self.native_settings.read_text(encoding="utf-8"))
+        config["unrelatedSetting"] = {"nested": [1, "keep", True]}
+        self.native_settings.write_text(json.dumps(config), encoding="utf-8")
+        self.apply()
+        self.native("disable", "compound-engineering")
+        self.apply()
+        self.apply()
+        installed = json.loads(self.native("list", "--json").stdout)
+        managed = [plugin for plugin in installed if plugin["name"] == "compound-engineering"]
+        self.assertEqual(len(managed), 1)
+        self.assertTrue(managed[0]["enabled"])
+        self.assertIn("compound-engineering-example", managed[0]["skills"])
+        sibling = [plugin for plugin in installed if plugin["name"] == "unrelated"]
+        self.assertEqual(len(sibling), 1)
+        self.assertFalse(sibling[0]["enabled"])
+        state = json.loads(self.native_settings.read_text(encoding="utf-8"))
+        self.assertEqual(state["unrelatedSetting"], config["unrelatedSetting"])
+        self.native("validate", managed[0]["path"])
+
+    def test_malformed_native_state_fails_apply_without_replacement(self):
+        self.native_settings.parent.mkdir(parents=True)
+        original = b'{"plugins": [unterminated\n'
+        for name in ("config.json", "import_manifest.json"):
+            with self.subTest(filename=name):
+                path = self.native_settings.with_name(name)
+                path.write_bytes(original)
+                result = self.apply(check=False)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(path.read_bytes(), original)
+                path.unlink()
 
 
 if __name__ == "__main__":

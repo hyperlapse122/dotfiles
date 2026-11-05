@@ -38,6 +38,7 @@ class SecretsTest(unittest.TestCase):
             "run_after_40-github-auth.*",
             "private_dot_t3", "dot_local", "run_onchange_after_30-install-t3-code.sh.tmpl",
             "run_after_45-gitlab-auth.*",
+            "private_dot_gemini", "run_after_20-antigravity-plugins.*",
         ))
         self.config = self.root / "chezmoi.toml"
         self.env = os.environ.copy()

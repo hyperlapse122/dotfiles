@@ -1,0 +1,5 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if and (eq .chezmoi.os "windows") (hasKey .personalApps.antigravity.targets $target) -}}
+{{ "\ufeff" -}}
+{{ includeTemplate "antigravity-plugins-windows" . -}}
+{{- end -}}

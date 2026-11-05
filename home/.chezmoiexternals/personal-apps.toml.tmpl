@@ -3,7 +3,12 @@
 {{- if hasKey $app.targets $target -}}
 {{- $lock := index $.personalAppLocks $name | default dict -}}
 {{- $pin := index (get $lock "targets" | default dict) $target | default dict -}}
-{{- if or (not (get $pin "url")) (not (get $pin "sha256")) (not (get $pin "kind")) -}}
+{{- $algorithm := "sha256" -}}
+{{- if and (not (get $pin "sha256")) (get $pin "sha512") -}}
+{{- $algorithm = "sha512" -}}
+{{- end -}}
+{{- $checksum := get $pin $algorithm -}}
+{{- if or (not (get $pin "url")) (not $checksum) (not (get $pin "kind")) -}}
 {{- fail (printf "Missing personal application pin for %s on %s" $name $target) -}}
 {{- end -}}
 {{- if eq $pin.kind "archive-file" -}}
@@ -13,11 +18,11 @@
 {{- end -}}
 {{- $suffix := "" -}}
 {{- if eq $.chezmoi.os "windows" -}}{{- $suffix = ".exe" -}}{{- end }}
-[{{ printf ".local/bin/%s%s" $app.command $suffix | quote }}]
+[{{ printf "%s/%s%s" (get $app "installDirectory" | default ".local/bin") $app.command $suffix | quote }}]
 type = {{ $pin.kind | quote }}
-url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+url = {{ printf "%s#%s=%s" $pin.url $algorithm $checksum | quote }}
 executable = true
-checksum.sha256 = {{ $pin.sha256 | quote }}
+checksum.{{ $algorithm }} = {{ $checksum | quote }}
 {{ if eq $pin.kind "archive-file" -}}
 format = {{ $pin.format | quote }}
 path = {{ $pin.path | quote }}

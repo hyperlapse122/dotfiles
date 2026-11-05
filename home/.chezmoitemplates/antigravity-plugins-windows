@@ -1,0 +1,18 @@
+$ErrorActionPreference = 'Stop'
+$env:HOME = '{{ .chezmoi.destDir | replace "'" "''" }}'
+$env:USERPROFILE = $env:HOME
+$env:AGY_CLI_DISABLE_AUTO_UPDATE = 'true'
+$agy = Join-Path $env:HOME '.local/share/dotfiles/antigravity/bin/agy.exe'
+$plugin = Join-Path $env:HOME '.local/share/dotfiles/harness-plugins/compound-engineering'
+
+function Invoke-Antigravity {
+    & $agy @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "Antigravity exited with code $LASTEXITCODE"
+    }
+}
+
+Invoke-Antigravity 'plugin' 'validate' $plugin
+Invoke-Antigravity 'plugin' 'install' $plugin
+Invoke-Antigravity 'plugin' 'enable' 'compound-engineering'
+Invoke-Antigravity 'plugin' 'list' '--json'

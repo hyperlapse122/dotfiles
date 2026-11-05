@@ -345,6 +345,103 @@ class PersonalAppsTest(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertEqual(binary.read_bytes(), original)
 
+    def configure_managed_payloads(self):
+        targets = self.apps["personalApps"]["omp"]["targets"]
+        for name, command, payload in (
+            ("antigravity", "agy", b"CLI payload\n"),
+            ("antigravity-acp", "antigravity-acp", b"adapter payload\n"),
+        ):
+            self.payloads["/" + name] = payload
+            self.apps["personalApps"][name] = {
+                "command": command, "installDirectory": ".local/share/dotfiles/" + name + "/bin",
+                "targets": {target: {"asset": name, "kind": "file"} for target in targets},
+            }
+            algorithm = "sha512" if name == "antigravity" else "sha256"
+            digest = hashlib.new(algorithm, payload).hexdigest()
+            self.locks["personalAppLocks"][name] = {"tag": "fixture", "targets": {
+                target: {"kind": "file", "url": self.base_url + "/" + name, algorithm: digest}
+                for target in targets
+            }}
+        self.write_apps()
+        self.write_locks()
+        launchers = self.source / "dot_local/bin"
+        launchers.mkdir(parents=True)
+        names = ("agy.cmd.tmpl", "antigravity-acp.cmd.tmpl") if os.name == "nt" else (
+            "executable_agy.tmpl", "executable_antigravity-acp.tmpl",
+        )
+        for name in names:
+            shutil.copy2(self.repo / "home/dot_local/bin" / name, launchers / name)
+        shutil.copy2(self.repo / "home/.chezmoiremove", self.source / ".chezmoiremove")
+        suffix = ".exe" if os.name == "nt" else ""
+        return (
+            self.home / ".local/share/dotfiles/antigravity/bin" / ("agy" + suffix),
+            self.home / ".local/share/dotfiles/antigravity-acp/bin" / ("antigravity-acp" + suffix),
+        )
+
+    def test_separate_payload_directories_reapply_drift_and_sha512_enforcement(self):
+        cli, adapter = self.configure_managed_payloads()
+        self.apply()
+        for path, payload in ((cli, self.payloads["/antigravity"]), (adapter, self.payloads["/antigravity-acp"])):
+            self.assertEqual(path.read_bytes(), payload)
+            if os.name != "nt":
+                self.assertTrue(os.access(path, os.X_OK))
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+        self.assertFalse((adapter.parent / cli.name).exists())
+        if os.name == "nt":
+            self.assertFalse((self.home / ".local/bin/agy.exe").exists())
+            self.assertFalse((self.home / ".local/bin/antigravity-acp.exe").exists())
+        for command in ("agy", "antigravity-acp"):
+            launcher = self.home / ".local/bin" / (command + ".cmd" if os.name == "nt" else command)
+            self.assertTrue(launcher.is_file())
+        requests = list(self.requests)
+        self.apply()
+        cli.write_bytes(b"CLI drift")
+        adapter.write_bytes(b"adapter drift")
+        self.apply()
+        self.assertEqual(cli.read_bytes(), self.payloads["/antigravity"])
+        self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
+        self.assertEqual(self.requests, requests)
+        self.payloads["/corrupt-cli"] = b"not the official CLI"
+        for pin in self.locks["personalAppLocks"]["antigravity"]["targets"].values():
+            pin["url"] = self.base_url + "/corrupt-cli"
+        self.write_locks()
+        result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(cli.read_bytes(), self.payloads["/antigravity"])
+        self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
+
+    def test_reapply_removes_adjacent_cli_and_retains_unrelated_files(self):
+        _, adapter = self.configure_managed_payloads()
+        self.apply()
+        unrelated = adapter.parent / "retained-state.json"
+        unrelated.write_bytes(b'{"retain": true}\n')
+        adjacent = [adapter.parent / name for name in ("agy", "agy.exe")]
+        for path in adjacent:
+            path.write_bytes(b"#!/bin/sh\nexit 91\n")
+            path.chmod(0o755)
+        self.apply()
+        for path in adjacent:
+            self.assertFalse(path.exists(), f"Adjacent CLI overrides the managed pin: {path}")
+        self.assertEqual(unrelated.read_bytes(), b'{"retain": true}\n')
+        self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
+
+    def test_sha512_archive_installs_selected_member_in_declared_directory(self):
+        self.add_archive("tar.gz", path="/official-cli.tar.gz", member="antigravity", payload=b"CLI payload\n")
+        self.apps["personalApps"]["gh"]["installDirectory"] = ".local/share/dotfiles/fixture/bin"
+        for pin in self.locks["personalAppLocks"]["gh"]["targets"].values():
+            del pin["sha256"]
+            pin["sha512"] = hashlib.sha512(self.payloads["/official-cli.tar.gz"]).hexdigest()
+        self.write_apps()
+        self.write_locks()
+        binary = self.home / ".local/share/dotfiles/fixture/bin" / ("gh.exe" if os.name == "nt" else "gh")
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"CLI payload\n")
+        self.assertFalse((self.home / "antigravity").exists())
+        binary.write_bytes(b"local drift")
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"CLI payload\n")
+        self.assertEqual(self.requests.count("/official-cli.tar.gz"), 1)
+
     def render_external(self, os_name, arch):
         template = (self.source / ".chezmoiexternals" / "personal-apps.toml.tmpl").read_text(encoding="utf-8")
         wrapper = ('{{ template "external" (dict "chezmoi" (dict "os" '

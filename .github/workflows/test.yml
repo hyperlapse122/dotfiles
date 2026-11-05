@@ -166,6 +166,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target ${{ matrix.platform.target }}
+      - name: Prove Antigravity pins, native CE, and fresh T3 ACP initialization
+        if: matrix.area == 't3'
+        timeout-minutes: 15
+        run: mise exec chezmoi python -- python tests/smoke_antigravity.py --expected-target ${{ matrix.platform.target }}
       - name: Apply pinned CE and prove native skill discovery
         if: matrix.area == 'ce'
         timeout-minutes: 10

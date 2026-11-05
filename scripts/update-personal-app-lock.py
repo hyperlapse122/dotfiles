@@ -22,6 +22,49 @@ def gitlab_release(repository):
         return json.loads(response.read())
 
 
+def antigravity_manifest(target):
+    url = (
+        "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/"
+        f"manifests/{target.replace('-', '_')}.json"
+    )
+    with urlopen(url, timeout=60) as response:
+        return json.loads(response.read())
+
+
+def resolve_antigravity(application, fetch_manifest):
+    targets = {}
+    version = None
+    for target, declaration in application["targets"].items():
+        manifest = fetch_manifest(target)
+        if not isinstance(manifest, dict):
+            raise ValueError(f"Antigravity {target}: expected an official manifest object")
+        target_version = manifest.get("version") or ""
+        if not isinstance(target_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", target_version):
+            raise ValueError(f"Antigravity {target}: expected a published stable version")
+        if version is not None and target_version != version:
+            raise ValueError("Antigravity manifests disagree on the stable version")
+        version = target_version
+        url = manifest.get("url") or ""
+        expected_url = (
+            r"https://storage\.googleapis\.com/antigravity-public/antigravity-cli/"
+            + re.escape(version) + r"-\d+/" + re.escape(declaration["asset"])
+        )
+        if not isinstance(url, str) or not re.fullmatch(expected_url, url):
+            raise ValueError(f"Antigravity {target}: unexpected versioned artifact URL")
+        digest = manifest.get("sha512") or ""
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{128}", digest):
+            raise ValueError(f"Antigravity {target}: missing SHA-512 digest")
+        kind = declaration["kind"]
+        if kind not in ("file", "archive-file"):
+            raise ValueError(f"Antigravity {target}: unsupported installation kind {kind}")
+        pin = {"kind": kind, "url": url, "sha512": digest.lower()}
+        if kind == "archive-file":
+            pin["format"] = declaration["format"]
+            pin["path"] = declaration["path"]
+        targets[target] = pin
+    return {"tag": version, "targets": targets}
+
+
 def gitlab_checksums(url):
     with urlopen(url, timeout=60) as response:
         return response.read().decode("utf-8")
@@ -129,13 +172,17 @@ def resolve_application(application, release):
 
 
 def update_lock(
-    root, fetch_release=github_release, *, fetch_gitlab_release=gitlab_release, fetch_checksums=gitlab_checksums,
+    root, fetch_release=github_release, *, fetch_gitlab_release=gitlab_release,
+    fetch_checksums=gitlab_checksums, fetch_manifest=antigravity_manifest,
 ):
     data_dir = root / "home" / ".chezmoidata"
     applications = json.loads((data_dir / "personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
     resolved = {}
     for name, application in applications.items():
         source = application.get("source", "github")
+        if source == "antigravity":
+            resolved[name] = resolve_antigravity(application, fetch_manifest)
+            continue
         if source not in ("github", "gitlab"):
             raise ValueError(f"{name}: unsupported release source {source}")
         repository = application["repository"]

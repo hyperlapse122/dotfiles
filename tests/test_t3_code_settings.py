@@ -64,16 +64,36 @@ class T3CodeSettingsTest(unittest.TestCase):
     def read_settings(self):
         return json.loads(self.settings.read_text(encoding="utf-8"))
 
-    def expected_provider(self, os_name=None):
+    def expected_provider(self, os_name=None, name="omp"):
         if os_name is None:
             os_name = self.chez("execute-template", "{{ .chezmoi.os }}").stdout
-        executable = "omp.exe" if os_name == "windows" else "omp"
-        return {
+        executable = "omp" if name == "omp" else "antigravity-acp"
+        if os_name == "windows":
+            executable += ".exe"
+        directory = ".local/bin" if name == "omp" else ".local/share/dotfiles/antigravity-acp/bin"
+        provider = {
             "driver": "acpRegistry", "enabled": True,
-            "displayName": "oh-my-pi", "accentColor": "#f84fcc",
+            "displayName": "oh-my-pi" if name == "omp" else "Antigravity",
             "config": {"enabled": True, "source": "local",
-                       "commandPath": (self.home / ".local/bin" / executable).as_posix(),
-                       "commandArgs": ["acp"]},
+                       "commandPath": (self.home / directory / executable).as_posix(),
+                       "commandArgs": ["acp"] if name == "omp" else []},
+        }
+        if name == "omp":
+            provider["accentColor"] = "#f84fcc"
+        else:
+            cli = "agy.exe" if os_name == "windows" else "agy"
+            provider["environment"] = [
+                {"name": "AGY_BIN", "value": (self.home / ".local/share/dotfiles/antigravity/bin" / cli).as_posix(), "sensitive": False},
+                {"name": "AGY_CLI_DISABLE_AUTO_UPDATE", "value": "true", "sensitive": False},
+                {"name": "AGY_SKIP_DOWNLOAD", "value": "1", "sensitive": False},
+            ]
+        return provider
+
+    def expected_providers(self, os_name=None):
+        return {
+            "omp": self.expected_provider(os_name),
+            "antigravity": self.expected_provider(os_name, "antigravity"),
+            "codex": self.expected_codex(os_name),
         }
 
     def expected_codex(self, os_name=None):
@@ -110,8 +130,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                     if existing is not None:
                         path.write_text(existing, encoding="utf-8")
                 self.apply()
-                expected = dict(self.preferences["server"], providerInstances={
-                    "omp": self.expected_provider(), "codex": self.expected_codex()})
+                expected = dict(self.preferences["server"], providerInstances=self.expected_providers())
                 if existing and "preferences" in existing:
                     expected["preferences"] = {"theme": "dark"}
                 self.assertEqual(self.read_settings(), expected)
@@ -157,6 +176,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         codex = expected["providerInstances"]["codex"]
         codex.update(driver="codex", enabled=True)
         codex["config"].update(self.expected_codex()["config"])
+        expected["providerInstances"]["antigravity"] = self.expected_provider(name="antigravity")
         self.assertEqual(self.read_settings(), expected)
         converged = self.settings.read_bytes()
         self.apply()
@@ -172,15 +192,16 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.write_settings(drifted)
         self.apply()
         self.assertEqual(self.read_settings(), expected)
-        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "codex", "unrelated"})
+        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "antigravity", "codex", "unrelated"})
 
     def test_existing_presentation_keys_are_not_owned_even_when_null(self):
         self.write_settings({"providerInstances": {"omp": {"displayName": None, "accentColor": ""}}})
         self.apply()
         expected = self.expected_provider()
         expected.update(displayName=None, accentColor="")
-        self.assertEqual(self.read_settings(), dict(self.preferences["server"], providerInstances={
-            "omp": expected, "codex": self.expected_codex()}))
+        providers = self.expected_providers()
+        providers["omp"] = expected
+        self.assertEqual(self.read_settings(), dict(self.preferences["server"], providerInstances=providers))
 
     def test_existing_native_codex_options_and_presentation_survive_reapply(self):
         codex = self.expected_codex()
@@ -190,12 +211,44 @@ class T3CodeSettingsTest(unittest.TestCase):
                                homePath="/custom/codex/home", customModels=["custom-model"])
         self.write_settings({"providerInstances": {"codex": codex}})
         self.apply()
-        expected = dict(self.preferences["server"], providerInstances={
-            "codex": codex, "omp": self.expected_provider()})
+        expected = dict(self.preferences["server"], providerInstances=self.expected_providers())
+        expected["providerInstances"]["codex"] = codex
         self.assertEqual(self.read_settings(), expected)
         before = self.settings.read_bytes()
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_antigravity_reconciles_absolute_adapter_path_and_retains_unowned_values(self):
+        original = {
+            "driver": "antigravity", "enabled": False, "displayName": "My Antigravity",
+            "environment": [
+                {"name": "KEEP_SECRET", "value": "", "sensitive": True, "secret": {"provider": "fixture", "reference": "retain"}},
+                {"name": "AGY_BIN", "value": "~/wrong", "sensitive": True},
+                {"name": "AGY_BIN", "value": "duplicate", "sensitive": False},
+                {"name": "AGY_SKIP_DOWNLOAD", "value": "0", "sensitive": False},
+            ],
+            "config": {"enabled": False, "source": "registry", "commandPath": "~/agy",
+                       "commandArgs": ["acp"], "env": {"EXISTING_SETTING": "retain"}},
+            "unowned": {"nested": [1, None, True]},
+        }
+        self.write_settings({"providerInstances": {"antigravity": original}})
+        self.apply()
+        provider = self.read_settings()["providerInstances"]["antigravity"]
+        self.assertEqual(provider["driver"], "acpRegistry")
+        self.assertTrue(provider["enabled"])
+        self.assertEqual(provider["displayName"], original["displayName"])
+        self.assertEqual(provider["unowned"], original["unowned"])
+        self.assertEqual(provider["config"]["env"], original["config"]["env"])
+        expected = self.expected_provider(name="antigravity")["config"]
+        for key, value in expected.items():
+            self.assertEqual(provider["config"][key], value)
+        self.assertEqual(
+            provider["environment"],
+            [original["environment"][0]] + self.expected_provider(name="antigravity")["environment"],
+        )
+        converged = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), converged)
 
     def test_invalid_json_and_incompatible_object_boundaries_preserve_bytes(self):
         originals = [b'{ "providerInstances": ', b"{bad json}", b"null", b"[]", b"false", b'"text"', b"42"]
@@ -206,7 +259,11 @@ class T3CodeSettingsTest(unittest.TestCase):
                 {"providerInstances": {"omp": {"config": invalid}}},
                 {"providerInstances": {"codex": invalid}},
                 {"providerInstances": {"codex": {"config": invalid}}},
+                {"providerInstances": {"antigravity": invalid}},
+                {"providerInstances": {"antigravity": {"config": invalid}}},
             ))
+        for environment in (None, "text", 42, False, [None], [{}], [{"name": 1}]):
+            originals.append(json.dumps({"providerInstances": {"antigravity": {"environment": environment}}}).encode("utf-8"))
         self.settings.parent.mkdir(parents=True, exist_ok=True)
         for original in originals:
             with self.subTest(original=original):
@@ -222,11 +279,11 @@ class T3CodeSettingsTest(unittest.TestCase):
                               ("linux", "amd64"), ("linux", "arm64"), ("darwin", "arm64")):
             with self.subTest(os=os_name, arch=arch):
                 rendered = json.loads(self.render(body, os_name, arch))
-                self.assertEqual(rendered, dict(self.preferences["server"], providerInstances={
-                    "omp": self.expected_provider(os_name), "codex": self.expected_codex(os_name)}))
+                self.assertEqual(rendered, dict(self.preferences["server"], providerInstances=self.expected_providers(os_name)))
                 self.assertEqual(json.loads(self.render(client_body, os_name, arch)),
                                  self.preferences["client"])
-                self.assertTrue(Path(rendered["providerInstances"]["omp"]["config"]["commandPath"]).is_absolute())
+                for name in ("omp", "antigravity"):
+                    self.assertTrue(Path(rendered["providerInstances"][name]["config"]["commandPath"]).is_absolute())
                 self.assertTrue(Path(rendered["providerInstances"]["codex"]["config"]["binaryPath"]).is_absolute())
 
     def test_configuration_and_parent_directories_are_private(self):
