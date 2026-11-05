@@ -262,6 +262,8 @@ The dedicated `windows-2025` CI job uses `--provision`, restricted to disposable
 GitHub-hosted Windows x64 runners. It invokes only `windows-build`, twice, to check
 reapplication and component reconciliation, not a full personal apply.
 Installation and user-integration changes remain on that disposable runner.
+Provisioning output is streamed to the job log so the active mise task remains
+visible during long installations; build-query output is captured for assertions.
 Generic native/ARM smoke jobs do not acquire this environment; CI cross-builds
 are not evidence of execution on an ARM64 device.
 

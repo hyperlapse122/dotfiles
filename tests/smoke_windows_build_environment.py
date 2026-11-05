@@ -22,9 +22,9 @@ REPO = Path(__file__).resolve().parents[1]
 MACHINES = {"Win32": 0x14C, "x64": 0x8664, "ARM64": 0xAA64}
 
 
-def run(arguments, *, cwd, env, timeout=3600, print_output=True):
+def run(arguments, *, cwd, env, timeout=3600, print_output=True, stream=False):
     print("+ " + subprocess.list2cmdline([str(arg) for arg in arguments]), flush=True)
-    result = subprocess.run(arguments, cwd=cwd, env=env, capture_output=True,
+    result = subprocess.run(arguments, cwd=cwd, env=env, capture_output=not stream,
                             text=True, encoding="utf-8", errors="backslashreplace", timeout=timeout)
     if print_output and result.stdout:
         print(result.stdout, end="" if result.stdout.endswith("\n") else "\n", flush=True)
@@ -32,7 +32,7 @@ def run(arguments, *, cwd, env, timeout=3600, print_output=True):
         print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", flush=True)
     if result.returncode:
         raise RuntimeError(f"Command failed ({result.returncode}): {arguments!r}")
-    return result.stdout.strip()
+    return (result.stdout or "").strip()
 
 
 def executable(name):
@@ -324,7 +324,7 @@ def main():
         # Both invocations must succeed, including component reconciliation.
         for application in (1, 2):
             print(f"Explicit build-environment application {application}/2", flush=True)
-            run([executable("mise"), "run", "windows-build"], cwd=REPO, env=env, timeout=10800)
+            run([executable("mise"), "run", "windows-build"], cwd=REPO, env=env, timeout=10800, stream=True)
             visual_studio(env)
     vs, msbuild = visual_studio(env)
     with tempfile.TemporaryDirectory(prefix="windows-build-smoke-") as scratch:
