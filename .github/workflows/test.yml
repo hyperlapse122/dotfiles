@@ -205,10 +205,6 @@ jobs:
     name: Native macOS ARM64 builds
     runs-on: xcode-27
     timeout-minutes: 45
-    env:
-      MISE_DATA_DIR: ${{ runner.temp }}/mise-macos-build/data
-      MISE_CACHE_DIR: ${{ runner.temp }}/mise-macos-build/cache
-      MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
     steps:
       - *checkout
       - *candidate-lock
@@ -216,8 +212,13 @@ jobs:
       - *download-harness-lock
       - *select-harness-lock
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        env: &macos-build-env
+          MISE_DATA_DIR: ${{ runner.temp }}/mise-macos-build/data
+          MISE_CACHE_DIR: ${{ runner.temp }}/mise-macos-build/cache
+          MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
       - name: Provision native build tools in a disposable home
         shell: bash
+        env: *macos-build-env
         run: |
           set -eu
           fixture_home="$RUNNER_TEMP/macos-build-home"
@@ -226,6 +227,7 @@ jobs:
             HOME="$fixture_home" mise run macos-build
       - name: Compile, identify and run native programs
         shell: bash
+        env: *macos-build-env
         run: |
           set -eu
           mise exec -- python tests/smoke_macos_build_environment.py \

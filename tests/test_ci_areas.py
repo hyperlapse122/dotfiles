@@ -79,6 +79,8 @@ class MacBuildWorkflowTest(unittest.TestCase):
     def test_native_builds_keep_candidate_checkout_and_disposable_roots(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/test.yml").read_text(encoding="utf-8")
         job = workflow.split("\n  macos-build:\n", 1)[1]
+        self.assertNotIn("${{ runner.", job.split("\n    steps:\n", 1)[0],
+                         "GitHub rejects the runner context in job-level env")
         self.assertIn("runs-on: xcode-27", job)
         for anchor in ("checkout", "candidate-lock", "select-lock", "download-harness-lock", "select-harness-lock"):
             self.assertIn("- *" + anchor + "\n", job)
