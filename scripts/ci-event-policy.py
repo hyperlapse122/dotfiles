@@ -1,5 +1,3 @@
-"""Read-only admission for automatic Test events; explicit suite calls bypass it."""
-
 import json
 import os
 from pathlib import Path

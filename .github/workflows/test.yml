@@ -58,7 +58,6 @@ jobs:
         timeout-minutes: 5
         run: |
           # Git's MSYS GPG interprets Windows GNUPGHOME as a relative POSIX path.
-          # Verify and unpack the native CLI payload without running installers.
           $package = Join-Path $env:RUNNER_TEMP 'gnupg-fixture.zip'
           $packageRoot = Join-Path $env:RUNNER_TEMP 'gnupg-package'
           $gpgRoot = Join-Path $env:RUNNER_TEMP 'native-gnupg'

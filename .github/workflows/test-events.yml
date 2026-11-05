@@ -8,8 +8,6 @@ on:
 permissions:
   contents: read
 
-# Only identical event snapshots share a group. Different commits are reconciled
-# by current-target metadata, not the arrival order of workflow executions.
 concurrency:
   group: test-events-${{ github.event_name }}-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
@@ -80,7 +78,7 @@ jobs:
             };
             if (!await fresh()) return;
             const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-              owner, repo, workflow_id: current.workflow_id, per_page: 100
+              owner, repo, workflow_id: current.workflow_id, branch: ref.slice('refs/heads/'.length), per_page: 100
             });
             const active = new Set(['queued', 'in_progress', 'waiting', 'pending', 'requested']);
             for (const candidate of runs) {
