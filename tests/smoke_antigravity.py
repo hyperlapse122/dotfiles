@@ -242,8 +242,20 @@ def main():
                 snapshot = next((item for item in snapshots if item["instanceId"] == "antigravity"), None)
                 if snapshot is None or not snapshot.get("installed") or snapshot.get("status") == "error":
                     raise RuntimeError("Fresh T3 did not initialize managed ACP: " + json.dumps(refreshed))
-                if not snapshot.get("nativeSessions", {}).get("canList"):
-                    raise RuntimeError("T3 did not receive the adapter's ACP session capabilities: " + json.dumps(snapshot))
+                deadline = time.monotonic() + 60
+                request_id = 2
+                while not snapshot.get("nativeSessions", {}).get("canList"):
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError("T3 did not receive the adapter's ACP session capabilities: " + json.dumps(snapshot))
+                    time.sleep(0.1)
+                    refreshed = rpc.call(str(request_id), "server.refreshProviders", {
+                        "instanceId": "antigravity", "cwd": str(outside), "fresh": False, "refreshModels": False,
+                    })
+                    request_id += 1
+                    snapshot = next((item for item in refreshed.get("providers", [])
+                                     if item["instanceId"] == "antigravity"), None)
+                    if snapshot is None or not snapshot.get("installed") or snapshot.get("status") == "error":
+                        raise RuntimeError("Fresh T3 did not initialize managed ACP: " + json.dumps(refreshed))
                 print(f"Fresh T3 {target}: managed Antigravity ACP initialized with .local/bin absent from PATH")
             except Exception:
                 print((root / "t3.log").read_text(encoding="utf-8", errors="replace"))
