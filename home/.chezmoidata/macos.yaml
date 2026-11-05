@@ -4,4 +4,3 @@ macos:
     - google-chrome
     - 1password
     - 1password-cli
-    - podman-desktop

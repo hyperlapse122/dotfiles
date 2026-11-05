@@ -14,7 +14,7 @@ import subprocess
 
 COMMANDS = ("brew", "git", "mise", "chezmoi", "gpg", "gpgconf", "pinentry-mac",
             "claude", "codex", "omp", "agy", "antigravity-acp", "gh", "glab", "ghq", "op",
-            "t3", "podman", "python", "pwsh", "dotnet", "rustc", "cargo", "cmake", "ninja", "vcpkg")
+            "t3", "python", "pwsh", "dotnet", "rustc", "cargo", "cmake", "ninja", "vcpkg")
 MANAGED_FILES = {
     "Git configuration": ".gitconfig",
     "GPG agent configuration": ".gnupg/gpg-agent.conf",
@@ -58,8 +58,7 @@ def collect(home):
     for name, relative in MANAGED_FILES.items():
         record(name, "passed" if (home / relative).is_file() else "failed",
                "Managed file presence only; verify native discovery in the checklist.")
-    for name, bundle in (("Chrome", "Google Chrome.app"), ("1Password", "1Password.app"),
-                         ("Podman Desktop", "Podman Desktop.app")):
+    for name, bundle in (("Chrome", "Google Chrome.app"), ("1Password", "1Password.app")):
         exists = any((root / bundle).is_dir() for root in (Path("/Applications"), home / "Applications"))
         record("Application: " + name, "passed" if exists else "pending",
                "Found application bundle." if exists else "Open the app or verify a custom Homebrew appdir manually.")
@@ -79,7 +78,6 @@ def collect(home):
         ("Authenticated CE invocation", "Sign in and invoke a CE skill through each harness; discovery is not model execution."),
         ("Signing and account authentication", "Verify a signed commit and real GitHub/GitLab operations using the intended key/accounts."),
         ("T3 and desktop runtime", "Open a project in T3 with each configured provider and launch the managed desktop apps."),
-        ("Container execution", "Run a representative container using the selected local Podman machine."),
         ("Native builds and execution", "Run tests/smoke_macos_build_environment.py and inspect its native ARM64 report."),
         ("System CA session", "Verify organization trust and NODE_USE_SYSTEM_CA in a fresh desktop session."),
         ("Reapply and new worktree", "Reapply, then prepare another worktree and confirm personal settings remain unchanged during preparation."),

@@ -8,10 +8,6 @@ from test_native_ca_shell import find_bash
 
 
 class MacAppsTest(MacFixture):
-    def setUp(self):
-        super().setUp()
-        self.wrapper(self.root/'podman-template','podman')
-
     def test_unsupported_macos_stops_before_application_changes(self):
         self.state['version'] = '14.7'
         result = self.run_script('scripts/macos-apps.sh')
@@ -19,60 +15,49 @@ class MacAppsTest(MacFixture):
         self.assertIn('macOS 15', result.stderr)
         self.assertFalse(any(name in ('brew', 'podman') for name, args in self.calls()))
 
-    def test_fresh_application_installs_once_and_starts_machine(self):
-        result=self.run_script('scripts/macos-apps.sh','cask:google-chrome','cask:1password-cli')
-        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        calls=self.calls()
-        self.assertIn(['brew',['install','--formula','podman']],calls)
-        self.assertIn(['brew',['install','--cask','1password-cli']],calls)
-        self.assertIn(['podman',['machine','init']],calls)
-        self.assertIn(['podman',['machine','start']],calls)
-        self.state=json.loads((self.root/'state.json').read_text())
-        before=len(calls)
-        result=self.run_script('scripts/macos-apps.sh','cask:google-chrome','cask:1password-cli')
-        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        repeated=self.calls()[before:]
-        self.assertFalse(any(name=='brew' and args[0]=='install' for name,args in repeated))
-        self.assertFalse(any(name=='podman' and args[:2] in (['machine','init'],['machine','start']) for name,args in repeated))
+    def test_fresh_application_installs_once_without_podman(self):
+        packages = ('cask:google-chrome', 'cask:1password', 'cask:1password-cli')
+        result = self.run_script('scripts/macos-apps.sh', *packages)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = self.calls()
+        installs = [args for name, args in calls if name == 'brew' and args[0] == 'install']
+        self.assertEqual(installs, [['install', '--cask', package.split(':')[1]] for package in packages])
+        self.assertFalse(any(name == 'podman' for name, args in calls))
+        self.state = json.loads((self.root / 'state.json').read_text())
+        before = len(calls)
+        result = self.run_script('scripts/macos-apps.sh', *packages)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        repeated = self.calls()[before:]
+        self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in repeated))
+        self.assertFalse(any(name == 'podman' for name, args in repeated))
 
-    def test_external_engine_and_existing_machine_are_reused(self):
-        self.wrapper(self.bin/'podman','podman')
-        self.state['machines']='personal|false|true\n'
-        result=self.run_script('scripts/macos-apps.sh')
-        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        calls=self.calls()
-        self.assertNotIn(['brew',['install','--formula','podman']],calls)
-        self.assertIn(['podman',['machine','start','personal']],calls)
-        self.assertFalse(any(name=='podman' and ('rm' in args or 'reset' in args or 'init' in args) for name,args in calls))
+    def test_existing_podman_and_stopped_machine_are_untouched(self):
+        self.wrapper(self.bin / 'podman', 'podman')
+        self.wrapper(self.root / 'bundled-podman', 'podman')
+        self.state.update(packages=['podman'], machines='personal|false|true\n', fail='podman')
+        result = self.run_script('scripts/macos-apps.sh', 'cask:google-chrome')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = self.calls()
+        self.assertFalse(any(name == 'podman' or 'podman' in args for name, args in calls))
+        after = json.loads((self.root / 'state.json').read_text())
+        self.assertEqual(after['machines'], self.state['machines'])
+        self.assertIn('podman', after['packages'])
+        self.assertTrue((self.bin / 'podman').is_file())
+        self.assertTrue((self.root / 'bundled-podman').is_file())
+
+    def test_manual_app_bundles_and_cli_are_reused(self):
+        (self.root / 'Applications/Google Chrome.app').mkdir(parents=True)
+        (self.home / 'Applications/1Password.app').mkdir(parents=True)
+        self.wrapper(self.bin / 'op', 'op')
+        result = self.run_script('scripts/macos-apps.sh', 'cask:google-chrome', 'cask:1password', 'cask:1password-cli')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in self.calls()))
 
     def test_command_failure_stops_application(self):
-        self.state['fail']='brew'
-        result=self.run_script('scripts/macos-apps.sh','cask:google-chrome')
-        self.assertNotEqual(result.returncode,0)
-        self.assertFalse(any(name=='podman' for name,args in self.calls()))
-
-    def test_ambiguous_stopped_machines_are_not_modified(self):
-        self.wrapper(self.bin/'podman','podman')
-        self.state['machines']='one|false|false\ntwo|false|false\n'
-        result=self.run_script('scripts/macos-apps.sh')
-        self.assertNotEqual(result.returncode,0)
-        self.assertIn('Multiple stopped',result.stderr)
-        self.assertFalse(any(name=='podman' and args[:2] in (['machine','init'],['machine','start']) for name,args in self.calls()))
-
-    def test_bundled_engine_never_reaches_native_installation(self):
-        self.wrapper(self.root/'bundled-podman','podman')
-        self.state['machines']='personal|true|true\n'
-        result=self.run_script('scripts/macos-apps.sh')
-        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        self.assertFalse(any(name=='brew' and args[0]=='install' for name,args in self.calls()))
-
-    def test_mixed_engine_ownership_fails_without_machine_changes(self):
-        self.wrapper(self.root/'bundled-podman','podman')
-        self.state['packages']=['podman']
-        result=self.run_script('scripts/macos-apps.sh')
-        self.assertNotEqual(result.returncode,0)
-        self.assertIn('Both bundled and Homebrew',result.stderr)
-        self.assertFalse(any(name=='podman' for name,args in self.calls()))
+        self.state['fail'] = 'brew'
+        result = self.run_script('scripts/macos-apps.sh', 'cask:google-chrome')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(name == 'podman' for name, args in self.calls()))
 
     @unittest.skipUnless(shutil.which('chezmoi'), 'Real chezmoi required')
     def test_native_apply_hook_has_platform_guard_and_valid_shell(self):
