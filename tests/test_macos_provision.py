@@ -31,7 +31,7 @@ if name == 'brew':
         print(state.get('brew_prefix', prefix.as_posix()))
     elif args == ['shellenv']:
         import shlex
-        print('export PATH=' + shlex.quote((prefix/'bin').as_posix()) + ':"$PATH"')
+        print('export PATH="$(cd ' + shlex.quote((prefix/'bin').as_posix()) + ' && pwd -P):$PATH"')
     elif args[:1] == ['--prefix']:
         print((root/'tools'/args[1]).as_posix())
     elif args[:1] == ['list']:
@@ -46,6 +46,9 @@ if name == 'brew':
             target = root/'tools'/package/'bin'/executable
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('#!/bin/sh\nexit 0\n'); target.chmod(0o755)
+            public = prefix/'bin'/executable
+            public.parent.mkdir(parents=True, exist_ok=True)
+            public.write_bytes(target.read_bytes()); public.chmod(0o755)
         (root/'state.json').write_text(json.dumps(state))
     else:
         sys.exit('Unexpected brew arguments: ' + repr(args))
@@ -131,6 +134,20 @@ class MacProvisionTest(MacFixture):
         self.assertEqual([args[-1] for name, args in repeated if name == 'brew' and args[0] == 'install'],
                          ['chezmoi', 'gnupg', 'pinentry-mac'])
         self.assertFalse(any(name == 'install-homebrew' for name, args in repeated))
+
+    def test_unlinked_mise_does_not_claim_prerequisites_are_ready(self):
+        first = self.run_provision()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.state = json.loads((self.root/'state.json').read_text())
+        (self.root/'homebrew prefix/bin/mise').unlink()
+        self.assertTrue((self.root/'tools/mise/bin/mise').is_file())
+        before = len(self.calls())
+        result = self.run_provision()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('brew link mise', result.stderr)
+        self.assertNotIn('Prerequisites ready', result.stdout)
+        self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade', 'link')
+                             for name, args in self.calls()[before:]))
 
     def test_host_and_compiler_guards_precede_provisioning(self):
         for override, diagnostic in [({'os': 'Linux'}, 'macOS'), ({'arch': 'x86_64'}, 'Apple Silicon'),

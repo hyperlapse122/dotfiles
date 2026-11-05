@@ -44,6 +44,10 @@ for pair in git:git mise:mise chezmoi:chezmoi gnupg:gpg gnupg:gpgconf pinentry-m
     [ -x "$prefix/bin/$executable" ] || fail "Missing $executable from Homebrew $package; repair the package and rerun."
 done
 
+for command in git mise; do
+    command -v "$command" >/dev/null 2>&1 || fail "Missing $command on PATH after activating Homebrew; inspect brew link $command, then rerun."
+done
+
 printf '%s\n' 'Prerequisites ready. No checkout was initialized and no personal settings were applied.'
 printf '%s\n' 'Activate Homebrew in your shell: eval "$(/opt/homebrew/bin/brew shellenv)"'
 printf '%s\n' 'Continue with the bootstrap.sh download and checkout preparation in docs/setup/macos.md.'
