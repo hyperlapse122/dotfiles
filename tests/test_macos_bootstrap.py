@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,17 @@ class MacFixture(unittest.TestCase):
         self.root = Path(scratch.name).resolve()
         self.bin = self.root/'commands'
         self.bin.mkdir()
+        # Expose only these harmless host utilities. System directories can
+        # contain a real Podman, even when the developer's PATH is excluded.
+        utilities = ('bash', 'awk', 'dirname', 'ls', 'tr', 'wc')
+        resolved = subprocess.run(
+            [find_bash(), '--noprofile', '--norc', '-c',
+             'PATH=/usr/bin:/bin; export PATH; command -v ' + ' '.join(utilities)],
+            capture_output=True, text=True, encoding='utf-8', check=True)
+        for name, executable in zip(utilities, resolved.stdout.splitlines(), strict=True):
+            target = self.bin/name
+            target.write_text('#!/bin/sh\nexec ' + shlex.quote(executable) + ' "$@"\n', encoding='utf-8')
+            target.chmod(0o755)
         self.home = self.root/'home'
         self.home.mkdir()
         self.source = self.root/'source with spaces'
@@ -109,14 +121,33 @@ class MacFixture(unittest.TestCase):
             text=text.replace('/opt/podman/bin/podman',(self.root/'bundled-podman').as_posix())
             text=text.replace('"/Applications/','"'+(self.root/'Applications').as_posix()+'/')
             script.write_text(text,encoding='utf-8')
-        # Let Bash construct its own PATH; Windows PATH separators are not Unix separators.
-        command='PATH="$(cd "$1" && pwd -P):/usr/bin:/bin"; export PATH; shift; exec bash --noprofile --norc "$@"'
+        # Let Bash normalize the fixture path without exposing host commands.
+        command='PATH="$(cd "$1" && pwd -P)"; export PATH; shift; exec bash --noprofile --norc "$@"'
         return subprocess.run([find_bash(),'--noprofile','--norc','-c',command,'fixture',self.bin.as_posix(),script.as_posix(),*map(str,args)],
                               env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=30)
 
     def calls(self):
         path=self.root/'calls.jsonl'
         return [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
+
+
+class MacFixtureIsolationTest(MacFixture):
+    def test_fixture_cannot_discover_host_commands(self):
+        probe = self.root/'probe.sh'
+        probe.write_text('''#!/bin/sh
+case "$PATH" in *:*) printf '%s\\n' 'Host search directories remain on PATH' >&2; exit 1;; esac
+for tool in podman op curl env; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        printf 'Unexpected host command: %s\\n' "$tool" >&2
+        exit 1
+    fi
+done
+for tool in awk dirname ls tr wc; do
+    command -v "$tool" >/dev/null 2>&1 || exit 1
+done
+''', encoding='utf-8')
+        result = self.run_script(str(probe))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class MacBootstrapTest(MacFixture):
