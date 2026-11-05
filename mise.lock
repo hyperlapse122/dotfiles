@@ -92,6 +92,16 @@ url = "https://github.com/twpayne/chezmoi/releases/download/v2.74.0/chezmoi_2.74
 url_api = "https://api.github.com/repos/twpayne/chezmoi/releases/assets/698495241"
 provenance = "cosign"
 
+[[tools.cmake]]
+version = "4.4.5"
+backend = "aqua:Kitware/CMake"
+specifiers = ["latest"]
+
+[tools.cmake."platforms.macos-arm64"]
+checksum = "sha256:679e77a96b9ef9484cc6c1445255fc4f84206b48a65420efbedf16bdab55fbff"
+url = "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-macos-universal.tar.gz"
+url_api = "https://api.github.com/repos/Kitware/CMake/releases/assets/682699600"
+
 [[tools.dotnet]]
 version = "10.0.403"
 backend = "core:dotnet"
@@ -236,6 +246,16 @@ url = "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.
 url_api = "https://api.github.com/repos/jqlang/jq/releases/assets/453012788"
 provenance = "github-attestations"
 
+[[tools.ninja]]
+version = "1.13.2"
+backend = "aqua:ninja-build/ninja"
+specifiers = ["latest"]
+
+[tools.ninja."platforms.macos-arm64"]
+checksum = "sha256:c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b"
+url = "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip"
+url_api = "https://api.github.com/repos/ninja-build/ninja/releases/assets/318863524"
+
 [[tools."pipx:keyring"]]
 version = "25.7.0"
 backend = "pipx:keyring"
@@ -333,6 +353,15 @@ specifiers = ["stable-x86_64-pc-windows-msvc"]
 [tools.rust.options]
 profile = "default"
 targets = "aarch64-pc-windows-msvc,x86_64-pc-windows-msvc"
+
+[[tools.rust]]
+version = "stable-aarch64-apple-darwin"
+backend = "core:rust"
+specifiers = ["stable-aarch64-apple-darwin"]
+
+[tools.rust.options]
+profile = "default"
+targets = "aarch64-apple-darwin"
 
 [[tools.uv]]
 version = "0.13.7"
