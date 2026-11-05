@@ -2,7 +2,7 @@
 
 --verify-only never provisions host tools or changes persistent configuration.
 Project-local restores (NuGet and the manifest-owned fmt dependency) need network.
---provision runs only the explicit windows-build task, twice, on disposable CI.
+Machine preparation is separate: prepare_windows_build_environment.py --provision.
 ARM64 artifacts are inspected, never advertised as executed on this x64 host.
 """
 
@@ -22,9 +22,9 @@ REPO = Path(__file__).resolve().parents[1]
 MACHINES = {"Win32": 0x14C, "x64": 0x8664, "ARM64": 0xAA64}
 
 
-def run(arguments, *, cwd, env, timeout=3600, print_output=True, stream=False):
+def run(arguments, *, cwd, env, timeout=3600, print_output=True):
     print("+ " + subprocess.list2cmdline([str(arg) for arg in arguments]), flush=True)
-    result = subprocess.run(arguments, cwd=cwd, env=env, capture_output=not stream,
+    result = subprocess.run(arguments, cwd=cwd, env=env, capture_output=True,
                             text=True, encoding="utf-8", errors="backslashreplace", timeout=timeout)
     if print_output and result.stdout:
         print(result.stdout, end="" if result.stdout.endswith("\n") else "\n", flush=True)
@@ -402,10 +402,8 @@ def vcpkg_builds(root, msbuild, env):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--verify-only", action="store_true")
-    mode.add_argument("--provision", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--verify-only", action="store_true", required=True)
+    parser.parse_args()
     if os.name != "nt" or platform.machine().lower() not in ("amd64", "x86_64") or os.environ.get("PROCESSOR_ARCHITEW6432"):
         raise RuntimeError("The build smoke requires a native Windows x64 host and Python")
     env = os.environ.copy()
@@ -413,15 +411,6 @@ def main():
     print(f"Windows verification token: IsElevated={elevated}", flush=True)
     if elevated:
         raise RuntimeError("Verification requires a non-elevated session. Open an ordinary terminal; run privileged preparation separately.")
-    if args.provision:
-        if env.get("GITHUB_ACTIONS") != "true" or env.get("RUNNER_ENVIRONMENT") != "github-hosted":
-            raise RuntimeError("--provision is restricted to disposable GitHub-hosted Windows x64 runners")
-        # Installer and integration changes remain only on the disposable host.
-        # Both invocations must succeed, including component reconciliation.
-        for application in (1, 2):
-            print(f"Explicit build-environment application {application}/2", flush=True)
-            run([executable("mise"), "run", "windows-build"], cwd=REPO, env=env, timeout=10800, stream=True)
-            visual_studio(env)
     vs, msbuild = visual_studio(env)
     with tempfile.TemporaryDirectory(prefix="windows-build-smoke-") as scratch:
         root = Path(scratch)
