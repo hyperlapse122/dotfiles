@@ -22,3 +22,9 @@ Write repository documentation in English.
 - Every repository-managed AI harness MUST wire its native user-scope instruction file to `home/.chezmoitemplates/agent-instructions`. Adding a harness is incomplete without this connection.
 - Keep common instructions in that shared template and select harness-specific content with its explicit `harness` identifier at render time. Never copy the common body into an adapter or expose another harness's branch in generated instructions.
 - When onboarding a harness, verify common-content inclusion, foreign-branch exclusion, and native user-scope discovery in a disposable home. Follow the source layout and editing procedure in `home/README.md`.
+
+## Harness plugin integration
+
+- Every repository-managed AI harness MUST register, install, and enable the Compound Engineering plugin at user scope through its supported native integration. Adding a harness is incomplete without both this integration and the shared-instruction connection above.
+- Reuse the repository-owned CE release and commit pin, and perform installation and configuration only through explicit chezmoi application. Keep worktree preparation read-only for personal settings; adapt to the harness's native mechanism rather than copying omp commands.
+- Verify native CE skill discovery and invocation in a disposable home on each eligible platform. Preserve unrelated plugins and settings.

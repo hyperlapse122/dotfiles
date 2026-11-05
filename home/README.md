@@ -115,6 +115,7 @@ Unchanged successful actions are skipped. Native cache/enabled-state drift requi
 Marketplace decisions are rendered at execution time through the current chezmoi executable with a hook-free empty config and a disposable state database, so destination state cannot become an onchange dependency or reopen the parent's database lock.
 Windows uses a BOM-prefixed `.ps1.tmpl`; UTF-8 data/output files avoid PowerShell 5.1 native-argument JSON quoting and stdout decoding.
 Only CE's registration and managed package are reconciled; other plugin records remain native state.
+New harness integrations must reuse the repository-owned CE pin through their supported native mechanism; omp commands are not a cross-harness installation interface.
 
 The `private_dot_omp/private_agent/modify_private_config.yml` and `.yaml` targets share the `omp-config` partial.
 Conditional ignores select the effective existing YAML file, and the partial updates only the owned semantic value.
@@ -143,6 +144,8 @@ Onboard a harness by adding a thin template adapter at its documented native use
 Add a matching conditional region only when that harness needs its own content, and follow the harness's existing platform eligibility.
 Verify common inclusion, foreign-branch exclusion, and native discovery in a disposable home without copying the common body.
 Do not create destinations for unmanaged harnesses.
+Onboarding also requires user-scope Compound Engineering integration under the [harness plugin integration rules](../AGENTS.md#harness-plugin-integration).
+Reuse the plugin declaration and lock above, keep installation within explicit apply, and verify native CE skill discovery and invocation in a disposable home on each eligible platform.
 
 The current deployment covers omp's standard default profile, not relocated agent directories or named profiles.
 In [omp v18.16.0](https://github.com/can1357/oh-my-pi/blob/v18.16.0/docs/context-files.md), a non-empty native user file takes precedence over other user-context conventions.

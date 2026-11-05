@@ -638,6 +638,7 @@ The runtime-resolved files are not entries in `chezmoi managed`; `chezmoi apply 
 
 Explicit apply installs [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) for the standard user-global omp environment on the same declared targets as the omp executable.
 Other harnesses are not installed or configured yet.
+Every managed harness must also integrate CE; see the [harness plugin integration rules](AGENTS.md#harness-plugin-integration).
 
 Plugin declarations live in `home/.chezmoidata/harness-plugins.json`; generated stable-release tags and full commit SHAs live in `home/.chezmoidata/harness-plugin-lock.json`.
 Chezmoi extracts the SHA-addressed archive into `~/.local/share/dotfiles/harness-plugins/compound-engineering`, then registers that directory as omp's local CE marketplace, refreshes its catalog, force-installs CE at user scope, and enables it.
@@ -663,6 +664,7 @@ The `empty_` source attribute keeps the empty file present, while `private_` kee
 This uses normal context discovery rather than replacing omp's system prompt.
 It covers the default user-global profile; omp task subagents do not inherit files named `AGENTS.md`.
 See [the source editing and harness onboarding procedure](home/README.md#shared-user-scope-harness-instructions) before adding content or another managed harness.
+Shared instructions alone do not complete onboarding: the harness must also provide the user-scope CE integration described above.
 
 
 ### Mutable omp settings
