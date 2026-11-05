@@ -65,6 +65,16 @@ mise exec -- python -m unittest discover -s tests
 | `test_personal_apps.py` | Simulates HTTP release asset downloads, SHA-256 validation, and cache reconciliation. |
 | `test_harness_plugins.py` | Tests local marketplace registration, force-installation, and auto-update configuration. |
 
+### Windows Test Console Policy
+
+Run ordinary tests from the invoking terminal; Python subprocesses inherit its console while keeping their existing output capture, timeout, and exit-code handling. Do not add a blanket hidden-window policy to interactive shell checks or native application smoke tests.
+
+The Visual Studio installer tests execute a disposable console executable through a PowerShell `Start-Process` wrapper. That wrapper uses `-NoNewWindow` so nested installer doubles reuse the test console and send stdout/stderr to the captured test diagnostics. A native console-handle assertion checks this inheritance, including installer failure, alongside Unicode output and the existing spaced-path, argument, exit-code, and temporary-download cleanup checks.
+
+This policy applies only to the installer test double. The production installer still selects `RunAs` when required; its UAC/security prompts, cancellation errors, and GUI policy must not be hidden to accommodate tests. Unix/macOS launch behavior is unchanged.
+
+For desktop verification, run the suite from an ordinary Windows terminal and observe extra console windows and focus changes, including nested children. Passing CI tests or inspecting process flags alone does not establish that no window appeared on an interactive desktop.
+
 ---
 
 ## Standalone Smoke Tests

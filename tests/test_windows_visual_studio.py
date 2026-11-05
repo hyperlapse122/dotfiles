@@ -1,3 +1,4 @@
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -15,11 +16,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Web.Script.Serialization;
 
 public static class VisualStudioDouble {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetConsoleWindow();
     static string StatePath { get { return Environment.GetEnvironmentVariable("VS_TEST_STATE"); } }
     static Dictionary<string, object> Read(string path) {
         return (Dictionary<string, object>)Json.DeserializeObject(File.ReadAllText(path, Encoding.UTF8));
@@ -59,10 +63,13 @@ public static class VisualStudioDouble {
         string operation = args.Length > 0 && !args[0].StartsWith("--") ? args[0] : "install";
         var calls = Items(state["calls"]).ToList();
         calls.Add(new Dictionary<string, object> {
-            {"operation", operation}, {"argv", args}, {"executable", executable}
+            {"operation", operation}, {"argv", args}, {"executable", executable},
+            {"console_window", GetConsoleWindow().ToInt64()}
         });
         state["calls"] = calls;
         Save(state);
+        Console.WriteLine("native installer stdout 空白: " + operation);
+        Console.Error.WriteLine("native installer stderr 空白: " + operation);
         var results = (Dictionary<string, object>)state["results"];
         int exit = results.ContainsKey(operation) ? Convert.ToInt32(results[operation]) : 0;
         if (exit != 0) return exit;
@@ -172,8 +179,8 @@ function Start-Process {
     if ($Verb -and $Verb -ne 'RunAs') { throw 'Unexpected installer verb' }
     [pscustomobject]@{ executable = $FilePath; arguments = $ArgumentList; verb = $Verb } |
         ConvertTo-Json -Compress | Add-Content -LiteralPath $env:VS_TEST_LAUNCHES -Encoding UTF8
-    # Keep process creation and Windows argv decoding real, but never request elevation.
-    Microsoft.PowerShell.Management\Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru
+    # Reuse the test console and its output handles; keep real argv/exit handling, never elevation.
+    Microsoft.PowerShell.Management\Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow
 }
 & $Script -ConfigurationPath $Config -BootstrapperUri 'https://aka.ms/vs/18/stable/vs_buildtools.exe' `
     -ChannelId 'VisualStudio.18.Release' -InstallPath $Root
@@ -347,6 +354,24 @@ function Start-Process {
         arguments = self.state["calls"][-1]["argv"]
         self.assertEqual(self.operations(), ["install", "update"])
         self.assertEqual(arguments[arguments.index("--installPath") + 1], str(self.install_path))
+
+    def test_installer_double_reuses_console_and_preserves_output(self):
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetConsoleWindow.restype = ctypes.c_void_p
+        parent_console = kernel32.GetConsoleWindow() or 0
+        result = self.apply()
+        self.assertEqual(self.state["calls"][-1]["console_window"], parent_console,
+                         "The installer test double must not create a separate console")
+        self.assertIn("native installer stdout 空白: install", result.stdout)
+        self.assertIn("native installer stderr 空白: install", result.stderr)
+
+        self.state["results"] = {"update": 23}
+        result = self.apply(check=False)
+        self.assertIn("native installer stdout 空白: update", result.stdout)
+        self.assertIn("native installer stderr 空白: update", result.stderr)
+        self.assertIn("exit code 23", result.stderr)
+        self.assertEqual(self.state["calls"][-1]["console_window"], parent_console,
+                         "A failing installer test double must also reuse the parent console")
 
 
 if __name__ == "__main__":
