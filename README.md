@@ -258,14 +258,13 @@ x64/ARM64, and vcpkg-backed MSBuild x64/ARM64. Native outputs run; ARM64 PE mach
 types are checked without claiming ARM64 execution.
 Missing prerequisites fail rather than skip a required target.
 
-The dedicated `windows-2025` CI job uses `--provision`, restricted to disposable
-GitHub-hosted Windows x64 runners. It invokes only `windows-build`, twice, to check
-reapplication and component reconciliation, not a full personal apply.
-Installation and user-integration changes remain on that disposable runner.
-Provisioning output is streamed to the job log so the active mise task remains
-visible during long installations; build-query output is captured for assertions.
-Generic native/ARM smoke jobs do not acquire this environment; CI cross-builds
-are not evidence of execution on an ARM64 device.
+Hosted provisioning and the full native/cross-build CI matrix are deferred in
+[issue #39](https://github.com/hyperlapse122/dotfiles/issues/39); no dedicated build
+environment job currently runs. The retained `--provision` smoke mode is restricted
+to disposable GitHub-hosted Windows x64 runners. It invokes only `windows-build`,
+twice, with streamed provisioning output and captured build-query assertions.
+Generic native/ARM smoke jobs do not acquire this environment. Cross-built PE
+checks are not evidence of execution on an ARM64 device.
 
 ### T3 Code desktop and omp ACP
 

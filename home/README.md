@@ -71,10 +71,12 @@ no shared library set is provisioned.
 `tests/smoke_windows_build_environment.py --verify-only` uses temporary actual
 projects and an isolated rendering of the managed profile without installing host
 tools or applying personal configuration. Project dependency restores require
-network access. The dedicated Windows x64 job runs `--provision` only on disposable
-GitHub-hosted runners and applies only the aggregate build task, twice.
-It proves all requested native builds and ARM64 cross-built PE artifacts; ARM64
-execution is outside that host's proof. See the root README for the full matrix,
+network access. Hosted provisioning and full build-matrix verification are deferred
+in [issue #39](https://github.com/hyperlapse122/dotfiles/issues/39); the dedicated
+Windows build-environment CI job is not enabled. The retained `--provision` mode
+is restricted to disposable GitHub-hosted runners and applies only the aggregate
+build task, twice. Local verification proves native builds and ARM64 cross-built
+PE artifacts, not ARM64 execution. See the root README for the full matrix,
 activation, version-selection, and restart boundaries.
 
 ## Secret source
