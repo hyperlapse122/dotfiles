@@ -54,7 +54,7 @@ class GitlabAuthApplyTest(unittest.TestCase):
 
         def private(argv, **kwargs):
             if argv[0] == str(self.glab):
-                data = json.loads(self.metadata.read_text(encoding="utf-8"))["hosts"][self.host]
+                data = self.auth.common.read_mapping(REPO, self.config, self.metadata)["hosts"][self.host]
                 value = self.store.get(("glab:" + self.host + ":token", ""), "")
                 return "username=" + data["user"] + "\npassword=" + value + "\n"
             return original_private(argv, **kwargs)
@@ -142,6 +142,35 @@ class GitlabAuthApplyTest(unittest.TestCase):
             self.assertIn(expected, result.stdout)
             if host == self.host:
                 self.assertNotIn("sentinel", result.stdout)
+
+    @unittest.skipUnless(REAL_GLAB, "Real glab required for empty-setting compatibility")
+    def test_empty_yaml_settings_remain_empty_to_glab_after_apply(self):
+        self.metadata.parent.mkdir()
+        self.metadata.write_text(
+            "last_update_check_timestamp:\nhosts:\n"
+            "  other.invalid:\n    ca_cert:\n    subfolder:\n    git_protocol: ssh\n"
+            f"  {self.host}:\n    ca_cert:\n", encoding="utf-8")
+        self.apply()
+        env = self.auth.private_environment()
+        for key, host in (("last_update_check_timestamp", None),
+                          ("ca_cert", "other.invalid"), ("subfolder", "other.invalid"),
+                          ("ca_cert", self.host)):
+            with self.subTest(key=key, host=host):
+                argv = [REAL_GLAB, "config", "get", key]
+                if host:
+                    argv.extend(["--host", host])
+                result = subprocess.run(argv, env=env, cwd=self.home,
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), "")
+        env.pop("GLAB_CHECK_UPDATE", None)
+        result = subprocess.run([REAL_GLAB, "auth"], env=env, cwd=self.home,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('parsing time "null"', result.stderr)
+        self.apply()
+        document = self.auth.common.read_mapping(REPO, self.config, self.metadata)
+        self.assertEqual(document["hosts"]["other.invalid"]["git_protocol"], "ssh")
 
     @unittest.skipUnless(REAL_GLAB, "Real glab required for config-path contract")
     def test_relative_config_is_used_from_verification_working_directory(self):

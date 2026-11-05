@@ -150,3 +150,9 @@ mise exec -- python scripts/gitlab-auth.py apply --destination /path/to/user-hom
 ```
 
 This writes helper configuration to `~/.local/share/dotfiles/gitlab.gitconfig` and sets up the personal `glab` executable as the HTTPS credential helper.
+
+### Troubleshooting `null` Settings
+
+If `glab` reports `parsing time "null"` or tries to open a certificate file named `null`, reapply GitLab authentication with the targeted command above. Earlier authentication reconciliation serialized empty YAML settings as JSON `null`; `glab` reads that scalar as the literal text `null`, affecting timestamps, certificate paths, and other optional settings.
+
+Reconciliation now writes these empty global and host settings as empty strings, including settings for other hosts, while retaining their configured values and credentials. It does not disable update checks or TLS verification. A separate `401 Unauthorized` after repair means that host still needs valid credentials; use `glab auth login --hostname <host>` for that account.

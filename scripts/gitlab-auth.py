@@ -187,6 +187,13 @@ def desired_config(document, host, user):
     hosts = desired.setdefault("hosts", {})
     if not isinstance(hosts, dict):
         raise common.AuthError("GitLab CLI hosts must contain a mapping.")
+    # glab reads scalar node text: serialized null becomes the string "null",
+    # not the empty value represented by an unset YAML setting.
+    for settings in (desired, *hosts.values()):
+        if isinstance(settings, dict):
+            for key, value in settings.items():
+                if value is None:
+                    settings[key] = ""
     record = hosts.setdefault(host, {})
     if not isinstance(record, dict):
         raise common.AuthError("Managed GitLab CLI metadata must contain a mapping.")
