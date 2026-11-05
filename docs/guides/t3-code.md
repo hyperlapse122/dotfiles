@@ -1,6 +1,6 @@
 # T3 Code Desktop and Harness Integration
 
-This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures Codex and oh-my-pi (omp) as providers.
+This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Codex plus oh-my-pi (omp) and Antigravity ACP providers.
 
 ## Platform Support and Installation
 
@@ -65,11 +65,12 @@ Dotfiles reconciles T3 Code's settings file (`~/.t3/userdata/settings.json`) on 
 ### Managed Settings
 
 The modify template (`modify_private_settings.json`):
-- Creates or updates the provider entry for `omp`.
-- Configures command invocation with the fully expanded absolute path to the destination home's `.local/bin/omp` (`omp.exe` on Windows), with the `acp` argument.
-- Reconciles both `enabled` and `config.enabled` flags to `true`.
-- Preserves all other custom providers, appearance options, and unowned configuration.
-- Derives initial display name and color from omp metadata without overwriting user changes.
+- Creates or updates keyed `omp` and `antigravity` entries using the local ACP registry driver.
+- Runs omp through the fully expanded absolute destination `.local/bin/omp` path (`omp.exe` on Windows) with the `acp` argument.
+- Runs Antigravity through its absolute native adapter payload in `~/.local/share/dotfiles/antigravity-acp/bin`, with no arguments. T3 rejects Windows batch wrappers, so this is not the terminal's `.cmd` launcher.
+- Owns three Antigravity provider `environment` entries: absolute managed `AGY_BIN`, `AGY_SKIP_DOWNLOAD=1`, and `AGY_CLI_DISABLE_AUTO_UPDATE=true`. Duplicate or drifted owned entries are replaced; other variables, including secret references, are retained.
+- Reconciles both provider and config `enabled` flags to `true`, while preserving other providers, appearance choices, and unowned configuration.
+- Derives initial omp display name and color without overwriting user changes.
 
 The same template manages a single `codex` provider entry:
 - Uses T3's native `codex` driver with `setupMode = "existing"`, not its separate managed-installation mode.
@@ -84,15 +85,20 @@ Run `codex login` manually before authenticated use, then start a fresh T3 Code 
 ### Security and State Boundaries
 
 - Manages the default `~/.t3` directory (custom `T3CODE_HOME` relocations are unmanaged).
-- Model credentials, API keys, and sessions remain in the respective harness's configuration (`~/.codex/` or `~/.omp/`) and are never copied into T3 settings.
+- Model credentials, API keys, and sessions remain in each harness's own configuration or environment; dotfiles does not copy them into T3 settings.
 - Automatic background services and remote listener ports are not opened.
+- The pinned [Antigravity ACP adapter](https://github.com/shubzkothekar/antigravity-acp) passes `--dangerously-skip-permissions` to CLI model requests. Treat model turns as permission-bypassing execution; this integration does not change the CLI's stored security settings.
+- The adapter documents personal OAuth restrictions. Use its supported Gemini API-key or enterprise ADC route for model use; dotfiles does not provision credentials or start a model request.
 
 ## Testing and Smoke Verification
 
-To test T3 Code CLI discovery, omp ACP initialization, and T3-driven Codex startup in an isolated environment:
+With T3 Code already installed, run isolated checks without applying to your personal home:
 
 ```sh
 mise exec -- python tests/smoke_t3_code.py
+mise exec -- python tests/smoke_antigravity.py
 ```
 
-This applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It also starts a fresh local T3 server, removes the managed binary directory from `PATH`, and requires T3's native Codex driver to complete app-server initialization. The Codex account remains unauthenticated in this smoke; no model completion or personal credential use is claimed.
+The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It also starts a fresh local T3 server, removes the managed binary directory from `PATH`, and requires T3's native Codex driver to complete app-server initialization. The Codex account remains unauthenticated in this smoke; no model completion or personal credential use is claimed.
+
+The Antigravity smoke installs exact locked artifacts and native CE, checks discovery and reapply repair, and starts a fresh real T3 process with managed `.local/bin` absent from PATH. It requests provider refresh to exercise ACP initialization without a paid model turn or personal OAuth/keyring access. Authenticated CE skill invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52), not claimed by this smoke.

@@ -141,7 +141,7 @@ Product Contract changed: R17 and AE4 defer authenticated invocation to issue #5
 
 - KTD1. **Use the official Antigravity CLI (`agy`) as the managed harness.** The required adapter launches CLI commands, while official Antigravity documentation treats terminal use as a first-class surface. This implements R2 and R10–R13 without introducing a separate GUI dependency.
 - KTD2. **Install CE from the existing repository-pinned root package.** The pinned root contains the supported Antigravity `plugin.json` and `skills/`; the excluded `.agy/` compatibility entry point is not required. Native local installation supplies registration, followed by explicit enablement, for R8 and R9.
-- KTD3. **Separate the adapter payload from its managed launcher.** Adapter 1.2.0 prefers an adjacent `agy` over `AGY_BIN`, so place its compiled payload in a dedicated directory without an adjacent CLI and launch it through destination `.local/bin`. The launcher must select the managed CLI by absolute `AGY_BIN`, suppress adapter auto-download with `AGY_SKIP_DOWNLOAD=1`, and disable CLI self-update with `AGY_CLI_DISABLE_AUTO_UPDATE=true`, per R2–R4 and R10–R13.
+- KTD3. **Keep payloads separate and bind the CLI explicitly.** Adapter 1.2.0 prefers an adjacent `agy` over `AGY_BIN`, so place its compiled payload in a dedicated directory without an adjacent CLI. Terminal launchers remain under `.local/bin`. T3 launches the native payload directly because its local ACP validation rejects Windows batch wrappers; its provider `environment` entries select absolute `AGY_BIN`, suppress adapter auto-download with `AGY_SKIP_DOWNLOAD=1`, and disable CLI self-update with `AGY_CLI_DISABLE_AUTO_UPDATE=true`, per R2–R4 and R10–R13.
 - KTD4. **Reuse the personal-app declaration and lock pipeline.** Add official Google manifest resolution and an optional declared installation directory so the two payloads live separately under `.local/share/dotfiles/`, while managed shell/batch launchers remain under `.local/bin`. Existing apps retain their default destination and lock entries.
 - KTD5. **Keep settings ownership minimal.** Render `~/.gemini/GEMINI.md` through the shared instruction template, reconcile only plugin registration/enablement and the Antigravity T3 provider's owned fields, and do not change security presets or the user's chosen model/auth settings.
 
@@ -153,6 +153,7 @@ Product Contract changed: R17 and AE4 defer authenticated invocation to issue #5
 - CE's pinned installation guide names `~/.gemini/antigravity-cli/plugins/`, whereas current Antigravity documentation names `~/.gemini/config/plugins/`; runtime discovery must establish the selected CLI's actual state locations rather than hard-code the older guide.
 - The adapter's `initialize`, `authenticate`, and `session/new` paths do not validate model credentials. Their success is credential-free ACP evidence, not the authenticated CE invocation deferred under R17.
 - Adapter 1.2.0 unconditionally passes `--dangerously-skip-permissions` to prompt subprocesses. Document this upstream behavior before enabling everyday ACP use.
+- A real fresh T3 0.1.7 session rejected the Windows `.cmd` wrapper before ACP initialization. A generic Windows spawn helper supporting batch files does not imply local ACP accepts them. T3's supported environment overrides are provider-level `environment` rows, not `config.env`; use them with the native adapter payload.
 - Existing T3 smoke directly launches the adapter and prepends managed bin to `PATH`; it does not provide R18 evidence.
 - Existing harness-plugin smoke reads skill content through native discovery; authenticated invocation remains explicitly deferred under R17.
 
@@ -175,12 +176,13 @@ flowchart TB
   A --> D
   P[Repository CE pin] --> E[Native user-scope CE installation]
   C --> E
-  T[T3 provider configuration] --> D
+  T[T3 provider configuration] --> B
+  A --> T
 ```
 
 The existing personal-app lock remains the artifact authority.
 The native plugin commands own runtime registration and enablement.
-T3 launches the adapter wrapper directly, including its supported Windows batch-launcher handling.
+T3 launches the native adapter directly and supplies its absolute CLI path through provider-level environment entries.
 
 ### Sources
 
@@ -201,7 +203,7 @@ T3 launches the adapter wrapper directly, including its supported Windows batch-
 - **Requirements:** R1–R5, R10, R12–R15; F3; AE1, AE2, AE6.
 - **Dependencies:** None.
 - **Files:** `home/.chezmoidata/personal-apps.json`, `home/.chezmoidata/personal-app-lock.json`, `home/.chezmoiexternals/personal-apps.toml.tmpl`, `scripts/update-personal-app-lock.py`, new launchers under `home/dot_local/bin/`, `tests/test_personal_app_lock.py`, `tests/test_personal_apps.py`.
-- **Approach:** Extend existing source resolution for official Google CLI manifests, verify upstream integrity before committing SHA-256 artifact pins, and retain atomic lock replacement. Declare payload directories `.local/share/dotfiles/antigravity/bin` and `.local/share/dotfiles/antigravity-acp/bin`. Add POSIX and Windows launchers with the environment selection owned by KTD3. Resolve the latest stable adapter release during this unit without upgrading unrelated committed apps.
+- **Approach:** Extend existing source resolution for official Google CLI manifests, retain their published SHA-512 artifact digests, and retain atomic lock replacement. Declare payload directories `.local/share/dotfiles/antigravity/bin` and `.local/share/dotfiles/antigravity-acp/bin`. Add POSIX and Windows terminal launchers with the environment selection owned by KTD3. Resolve the latest stable adapter release during this unit without upgrading unrelated committed apps.
 - **Patterns:** Existing GitHub/GitLab lock resolver, archive-file external, and `t3` shell/batch launchers.
 - **Test scenarios:** Reject incomplete or invalid official manifests without replacing the lock; preserve unrelated app entries; install payloads into declared locations; exercise reapply and drift reconciliation with checksum enforcement.
 - **Execution note:** Packaging needs real disposable-home runtime smoke rather than tests of copied declarations.
@@ -224,9 +226,9 @@ T3 launches the adapter wrapper directly, including its supported Windows batch-
 - **Requirements:** R6, R11–R19; F1, F2; AE1–AE7.
 - **Dependencies:** U1 and U2.
 - **Files:** `home/.chezmoitemplates/t3-code-settings`, `home/.chezmoiignore`, `tests/test_t3_code_settings.py`, `tests/smoke_t3_code.py` or a dedicated Antigravity smoke entry point, `.github/workflows/test.yml`, affected full-source test fixtures, existing user and maintenance guides.
-- **Approach:** Add one keyed `antigravity` provider using the existing local ACP registry driver and the fully expanded managed launcher path. Preserve unknown settings and other providers. Add real fresh-T3-session probing in isolated state without model prompts or owner keyring access; keep direct handshake diagnostics separate. Include native CLI/plugin validation, reapply/drift checks, and platform-appropriate launch in the native CI matrix. Update usage/version/rollback and security limitations after runtime proof.
+- **Approach:** Add one keyed `antigravity` provider using the existing local ACP registry driver, the fully expanded native adapter payload path, and three owned provider-level environment entries. Preserve unknown settings, unrelated environment rows, and other providers. Add real fresh-T3-session probing in isolated state without model prompts or owner keyring access; keep direct handshake diagnostics separate. Include native CLI/plugin validation, reapply/drift checks, and platform-appropriate launch in the native CI matrix. Update usage/version/rollback and security limitations after runtime proof.
 - **Patterns:** Existing T3 provider merging, disposable-home smoke helpers, and supported-target CI matrix.
-- **Test scenarios:** Convergent provider repair preserving unrelated nested settings; invalid provider object fails without replacement; Windows and POSIX absolute launcher paths; real native T3 ACP initialization with managed bin absent from PATH; stable locked versions over repeated apply.
+- **Test scenarios:** Convergent provider repair preserving unrelated nested settings and environment/secret references; invalid provider boundaries fail without replacement; Windows and POSIX absolute native executable paths; real native T3 ACP initialization with managed bin absent from PATH; stable locked versions over repeated apply.
 - **Verification:** Local deterministic suite passes, real Windows runtime smoke passes, and native CI supplies eligible-platform evidence. Deferred authenticated CE verification is linked rather than claimed.
 
 ---
