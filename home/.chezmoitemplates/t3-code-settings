@@ -58,5 +58,26 @@
 {{- $codexConfig = $codexConfig | setValueAtPath "enabled" true | setValueAtPath "setupMode" "existing" | setValueAtPath "binaryPath" $codexCommand -}}
 {{- $codex = $codex | setValueAtPath "driver" "codex" | setValueAtPath "enabled" true | setValueAtPath "config" $codexConfig -}}
 {{- $providers = $providers | setValueAtPath "codex" $codex -}}
+{{- $claude := dict -}}
+{{- if hasKey $providers "claudeAgent" -}}
+{{- $claude = get $providers "claudeAgent" -}}
+{{- if not (kindIs "map" $claude) -}}
+{{- fail "Invalid T3 Code settings.json: providerInstances.claudeAgent must be an object" -}}
+{{- end -}}
+{{- end -}}
+{{- $claudeConfig := dict -}}
+{{- if hasKey $claude "config" -}}
+{{- $claudeConfig = get $claude "config" -}}
+{{- if not (kindIs "map" $claudeConfig) -}}
+{{- fail "Invalid T3 Code settings.json: providerInstances.claudeAgent.config must be an object" -}}
+{{- end -}}
+{{- end -}}
+{{- $claudeExecutable := "claude" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $claudeExecutable = "claude.exe" -}}{{- end -}}
+{{- $claudeCommand := joinPath .chezmoi.destDir ".local" "bin" $claudeExecutable | replace "\\" "/" -}}
+{{- $claudeHome := joinPath .chezmoi.destDir ".claude" | replace "\\" "/" -}}
+{{- $claudeConfig = $claudeConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $claudeCommand | setValueAtPath "homePath" $claudeHome -}}
+{{- $claude = $claude | setValueAtPath "driver" "claudeAgent" | setValueAtPath "enabled" true | setValueAtPath "config" $claudeConfig -}}
+{{- $providers = $providers | setValueAtPath "claudeAgent" $claude -}}
 {{- $settings = $settings | setValueAtPath "providerInstances" $providers -}}
 {{- includeTemplate "t3-code-preferences" (dict "settings" $settings "desired" .t3CodePreferences.server "file" "settings.json") -}}

@@ -86,6 +86,17 @@ class T3CodeSettingsTest(unittest.TestCase):
                        "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
+    def expected_claude(self, os_name=None):
+        if os_name is None:
+            os_name = self.chez("execute-template", "{{ .chezmoi.os }}").stdout
+        executable = "claude.exe" if os_name == "windows" else "claude"
+        return {
+            "driver": "claudeAgent", "enabled": True,
+            "config": {"enabled": True,
+                       "binaryPath": (self.home / ".local/bin" / executable).as_posix(),
+                       "homePath": (self.home / ".claude").as_posix()},
+        }
+
     def render(self, body, os_name, arch, *, existing="", distro="ubuntu"):
         context = ('(dict "t3CodePreferences" (fromJson ' + json.dumps(json.dumps(self.preferences))
                    + ') "chezmoi" (dict "os" ' + json.dumps(os_name)
@@ -111,7 +122,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                         path.write_text(existing, encoding="utf-8")
                 self.apply()
                 expected = dict(self.preferences["server"], providerInstances={
-                    "omp": self.expected_provider(), "codex": self.expected_codex()})
+                    "omp": self.expected_provider(), "codex": self.expected_codex(), "claudeAgent": self.expected_claude()})
                 if existing and "preferences" in existing:
                     expected["preferences"] = {"theme": "dark"}
                 self.assertEqual(self.read_settings(), expected)
@@ -157,6 +168,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         codex = expected["providerInstances"]["codex"]
         codex.update(driver="codex", enabled=True)
         codex["config"].update(self.expected_codex()["config"])
+        expected["providerInstances"]["claudeAgent"] = self.expected_claude()
         self.assertEqual(self.read_settings(), expected)
         converged = self.settings.read_bytes()
         self.apply()
@@ -172,7 +184,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.write_settings(drifted)
         self.apply()
         self.assertEqual(self.read_settings(), expected)
-        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "codex", "unrelated"})
+        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "codex", "claudeAgent", "unrelated"})
 
     def test_existing_presentation_keys_are_not_owned_even_when_null(self):
         self.write_settings({"providerInstances": {"omp": {"displayName": None, "accentColor": ""}}})
@@ -180,7 +192,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         expected = self.expected_provider()
         expected.update(displayName=None, accentColor="")
         self.assertEqual(self.read_settings(), dict(self.preferences["server"], providerInstances={
-            "omp": expected, "codex": self.expected_codex()}))
+            "omp": expected, "codex": self.expected_codex(), "claudeAgent": self.expected_claude()}))
 
     def test_existing_native_codex_options_and_presentation_survive_reapply(self):
         codex = self.expected_codex()
@@ -191,8 +203,23 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.write_settings({"providerInstances": {"codex": codex}})
         self.apply()
         expected = dict(self.preferences["server"], providerInstances={
-            "codex": codex, "omp": self.expected_provider()})
+            "codex": codex, "omp": self.expected_provider(), "claudeAgent": self.expected_claude()})
         self.assertEqual(self.read_settings(), expected)
+        before = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_native_claude_reconciles_context_and_preserves_unowned_options(self):
+        provider = self.expected_claude()
+        provider.update(driver="stale", enabled=False, displayName="My Claude", accentColor=None)
+        provider["config"].update(enabled=False, binaryPath="old", homePath="/custom/home",
+                                  launchArgs="--max-budget-usd 1", customModels=["owner-model"])
+        self.write_settings({"providerInstances": {"claudeAgent": provider}})
+        self.apply()
+        actual = self.read_settings()["providerInstances"]["claudeAgent"]
+        provider.update(driver="claudeAgent", enabled=True)
+        provider["config"].update(self.expected_claude()["config"])
+        self.assertEqual(actual, provider)
         before = self.settings.read_bytes()
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)
@@ -206,6 +233,8 @@ class T3CodeSettingsTest(unittest.TestCase):
                 {"providerInstances": {"omp": {"config": invalid}}},
                 {"providerInstances": {"codex": invalid}},
                 {"providerInstances": {"codex": {"config": invalid}}},
+                {"providerInstances": {"claudeAgent": invalid}},
+                {"providerInstances": {"claudeAgent": {"config": invalid}}},
             ))
         self.settings.parent.mkdir(parents=True, exist_ok=True)
         for original in originals:
@@ -223,7 +252,8 @@ class T3CodeSettingsTest(unittest.TestCase):
             with self.subTest(os=os_name, arch=arch):
                 rendered = json.loads(self.render(body, os_name, arch))
                 self.assertEqual(rendered, dict(self.preferences["server"], providerInstances={
-                    "omp": self.expected_provider(os_name), "codex": self.expected_codex(os_name)}))
+                    "omp": self.expected_provider(os_name), "codex": self.expected_codex(os_name),
+                    "claudeAgent": self.expected_claude(os_name)}))
                 self.assertEqual(json.loads(self.render(client_body, os_name, arch)),
                                  self.preferences["client"])
                 self.assertTrue(Path(rendered["providerInstances"]["omp"]["config"]["commandPath"]).is_absolute())
