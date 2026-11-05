@@ -166,10 +166,28 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 | `ubuntu-26.04-arm` | `linux-arm64` | Yes | Yes |
 | `xcode-27` | `darwin-arm64` | Yes | Yes |
 | `windows-2025` | `windows-amd64` | Yes | Yes |
-| `windows-11-arm` | `windows-arm64` | No | Build verification only |
+| `windows-11-arm` | `windows-arm64` | No | All five native smoke areas |
 
 ### Architecture Principles
 
 - **macOS Apple Silicon Only:** macOS CI uses ARM64 (`darwin-arm64`) runners. Intel Macs are not supported.
 - **Ubuntu LTS Coverage:** Tracks the two most recent Ubuntu LTS releases (`24.04` and `26.04`) across both x64 and ARM64.
-- **Windows Unit Tests:** Executed on x64 runners (`windows-2025`). Windows ARM64 validates artifact compilation without executing unit test suites.
+- **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all five native smoke areas; this is not an ARM64 build-only lane.
+
+### Native areas and independent setup
+
+Each area/target pair owns a separate hosted runner. All matrices use `fail-fast: false`, so an area's failure cannot suppress unrelated results. Jobs time out after 20 minutes; apps and CE steps have 10-minute limits, T3 15 minutes, and credential execution 5 minutes.
+
+| Area | Invocation after tool preparation | Job-owned prerequisites |
+|---|---|---|
+| apps | `mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target TARGET` | Pinned apps and disposable PATH/profile fixture |
+| t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned omp acquisition, scoped GitHub token |
+| ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated pinned omp/CE payload and harness state |
+| github-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_github_auth.py` | Native GPG, pinned gh acquired by fixture, OS credential backend |
+| gitlab-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_gitlab_auth.py` | Native GPG, pinned glab acquired by fixture, OS credential backend |
+
+Hosted-only PATH, desktop-installation, and credential-write modes must not run on a personal workstation. Their existing disposable-host guards remain intact. The apps and desktop scripts offer non-installing local modes as described above; CE uses a disposable home.
+
+Windows credential jobs verify and unpack the existing checksummed native GPG fixture; Git's MSYS GPG is not a substitute. Each Linux credential job provisions and starts its own D-Bus/Secret Service session. macOS credential fixtures restore the original default keychain and search list. Windows ARM installs only the tools needed by its area, not the unsupported full development tool set.
+
+Unit jobs retain the root mise tool environment because the bootstrap contract runs ordinary `mise install` twice. Each unit job validates the entire assignment map and uploads its test-ID/skip/timing report, even though it executes only one area.
