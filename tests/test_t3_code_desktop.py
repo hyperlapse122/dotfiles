@@ -3,9 +3,13 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
+import time
 import tomllib
 import unittest
+
+from smoke_t3_code import server_process
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "Chezmoi required")
@@ -133,6 +137,42 @@ class T3CodeDesktopTest(unittest.TestCase):
                                  env=env, capture_output=True, text=True, timeout=30)
         self.assertEqual(applied.returncode, 127, applied.stdout + applied.stderr)
         self.assertIn("chezmoi apply", applied.stderr)
+
+
+@unittest.skipUnless(os.name == "nt", "Windows descendant lifetime and directory locks")
+class T3ServerLifetimeTest(unittest.TestCase):
+    def test_descendant_releases_working_directory_after_launcher_exits(self):
+        with tempfile.TemporaryDirectory(prefix="t3 process lifetime ") as scratch:
+            directory = Path(scratch) / "working directory"
+            directory.mkdir()
+            marker = directory / "ready"
+            child = ("from pathlib import Path; import time; "
+                     "Path('ready').write_text('ready'); time.sleep(120)")
+            parent = ("import subprocess, sys; sys.stdin.read(1); "
+                      "p = subprocess.Popen([sys.executable, '-c', sys.argv[1]], "
+                      "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); print(p.pid, flush=True)")
+            child_pid = None
+            try:
+                with server_process([sys.executable, "-c", parent, child], cwd=directory,
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True) as process:
+                    process.stdin.write("x")
+                    process.stdin.close()
+                    child_pid = int(process.stdout.readline())
+                    process.wait(timeout=10)
+                    deadline = time.monotonic() + 10
+                    while not marker.exists():
+                        if time.monotonic() >= deadline:
+                            self.fail("Descendant did not start")
+                        time.sleep(0.02)
+                marker.unlink()
+                directory.rmdir()
+            finally:
+                if child_pid:
+                    subprocess.run(["taskkill", "/PID", str(child_pid), "/T", "/F"],
+                                   capture_output=True, check=False)
+                for stream in (process.stdout, process.stderr):
+                    stream.close()
 
 
 if __name__ == "__main__":

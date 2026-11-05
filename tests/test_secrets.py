@@ -55,6 +55,12 @@ class SecretsTest(unittest.TestCase):
         self.addCleanup(self.stop_agent)
         self.owner = self.make_key("Fixture Owner <owner@example.invalid>")
         self.other = self.make_key("Other Recipient <other@example.invalid>")
+        self.ssh_plaintext = "fixture-ssh-private-key\n"
+        ssh_source = self.source / "home/private_dot_ssh/encrypted_private_id_ed25519.asc"
+        ssh_source.write_text(self.command(
+            GPG, "--no-options", "--batch", "--armor", "--encrypt", "--recipient", self.owner,
+            input=self.ssh_plaintext,
+        ).stdout, encoding="utf-8")
         data = self.source / "home/.chezmoidata/gpg.yaml"
         data.write_text(data.read_text(encoding="utf-8").replace(OWNER, self.owner), encoding="utf-8")
         self.config.write_text(
@@ -131,6 +137,21 @@ class SecretsTest(unittest.TestCase):
         self.target.write_text("local drift", encoding="utf-8")
         self.chezmoi("apply", "--force", "--exclude=scripts")
         self.assertEqual(self.target.read_text(encoding="utf-8"), "dummy-api-token-b")
+
+    def test_ssh_identity_applies_without_decrypting_api_tokens(self):
+        self.initialize()
+        self.ciphertext.write_text("deliberately invalid ciphertext", encoding="utf-8")
+        private = self.home / ".ssh/id_ed25519"
+        public = self.home / ".ssh/id_ed25519.pub"
+        for _ in range(2):
+            self.chezmoi("apply", "--force", "--exclude=scripts", str(private.parent))
+            self.assertEqual(private.read_text(encoding="utf-8"), self.ssh_plaintext)
+            self.assertEqual(public.read_bytes(),
+                             (self.source / "home/private_dot_ssh/id_ed25519.pub").read_bytes())
+        if os.name != "nt":
+            self.assertEqual(private.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(private.parent.stat().st_mode & 0o777, 0o700)
+        self.assertFalse((self.home / ".gitconfig").exists())
 
     def test_missing_private_key_preserves_existing_destination(self):
         self.initialize()
