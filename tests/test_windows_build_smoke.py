@@ -1,4 +1,6 @@
 import importlib.util
+from contextlib import ExitStack
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -47,6 +49,53 @@ class WindowsBuildSmokeTest(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, "stable|Multiple|ambiguous"):
                         smoke.visual_studio({"PROGRAMFILES(X86)": scratch})
 
+    def test_discovery_rejects_second_identity_before_readiness_filter(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            discovery = root / "Microsoft Visual Studio/Installer/vswhere.exe"
+            discovery.parent.mkdir(parents=True)
+            discovery.touch()
+            ready = {"instanceId": "one", "productId": "Microsoft.VisualStudio.Product.BuildTools",
+                     "channelId": "VisualStudio.18.Release", "installationVersion": "18.1.0",
+                     "installationPath": str(root), "isComplete": True, "isLaunchable": True,
+                     "isPrerelease": False}
+            for second in ({**ready, "instanceId": "two", "isComplete": False},
+                           {**ready, "instanceId": "two", "missing_component": True}):
+                def discover(arguments, **kwargs):
+                    instances = [ready, second]
+                    if "-all" not in arguments:
+                        instances = [item for item in instances if item["isComplete"]]
+                    if "-requires" in arguments:
+                        instances = [item for item in instances if not item.get("missing_component")]
+                    return json.dumps(instances)
+
+                with self.subTest(second=second), patch.object(smoke, "run", side_effect=discover):
+                    with self.assertRaisesRegex(RuntimeError, "ambiguous"):
+                        smoke.visual_studio({"PROGRAMFILES(X86)": scratch})
+
+    @unittest.skipUnless(os.name == "nt", "Native Windows verifier orchestration")
+    def test_nonadmin_preflight_failures_prevent_every_build_family(self):
+        for stage in ("prepare_mfc_projects", "preflight_languages", "preflight_vcpkg"):
+            for failure in (RuntimeError("missing prerequisite fixture"), OSError("unreadable prerequisite fixture")):
+                with self.subTest(stage=stage, failure=type(failure).__name__), tempfile.TemporaryDirectory() as scratch, ExitStack() as stack:
+                    root = Path(scratch)
+                    stack.enter_context(patch.object(smoke, "is_administrator", return_value=False))
+                    stack.enter_context(patch.object(smoke.platform, "machine", return_value="AMD64"))
+                    stack.enter_context(patch.dict(os.environ, {"PROCESSOR_ARCHITEW6432": ""}))
+                    stack.enter_context(patch("sys.argv", ["smoke", "--verify-only"]))
+                    stack.enter_context(patch.object(smoke, "visual_studio", return_value=(root, root / "MSBuild.exe")))
+                    stack.enter_context(patch.object(smoke, "fresh_environment", return_value={}))
+                    for preflight in ("prepare_mfc_projects", "preflight_languages", "preflight_vcpkg"):
+                        stack.enter_context(patch.object(smoke, preflight, side_effect=failure if stage == preflight else None))
+                    builders = [stack.enter_context(patch.object(smoke, name)) for name in
+                                ("mfc_builds", "dotnet_builds", "rust_builds", "vcpkg_builds")]
+                    stack.enter_context(patch.object(smoke, "run", side_effect=AssertionError("Verification attempted an unexpected process")))
+                    with self.assertRaisesRegex(RuntimeError, "mise run windows-build") as caught:
+                        smoke.main()
+                    self.assertIn(str(failure), str(caught.exception))
+                    for builder in builders:
+                        builder.assert_not_called()
+
     def test_language_preflight_requires_both_sdks_frameworks_and_rust_targets(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
@@ -61,6 +110,7 @@ class WindowsBuildSmokeTest(unittest.TestCase):
                     assemblies.append(path)
             sdks = f"8.0.100 [{root / 'dotnet/sdk'}]\n10.0.100 [{root / 'dotnet/sdk'}]"
             targets = "x86_64-pc-windows-msvc\naarch64-pc-windows-msvc"
+            cargo_available = True
 
             def query(arguments, **kwargs):
                 if "--list-sdks" in arguments:
@@ -69,6 +119,12 @@ class WindowsBuildSmokeTest(unittest.TestCase):
                     return ""
                 if arguments[1:] == ["target", "list", "--installed", "--toolchain", "stable-x86_64-pc-windows-msvc"]:
                     return targets
+                if arguments[-3:] == ["rustc", "--version", "--verbose"]:
+                    return "host: x86_64-pc-windows-msvc\nrelease: 1.90.0"
+                if arguments[-2:] == ["cargo", "--version"]:
+                    if not cargo_available:
+                        raise RuntimeError("cargo component missing")
+                    return "cargo 1.90.0"
                 self.fail(f"Unexpected or mutating prerequisite command: {arguments}")
 
             with patch.object(smoke, "run", side_effect=query):
@@ -91,6 +147,9 @@ class WindowsBuildSmokeTest(unittest.TestCase):
                     with self.subTest(missing=target), self.assertRaisesRegex(RuntimeError, target):
                         smoke.preflight_languages(root, env)
                     targets = original
+                cargo_available = False
+                with self.assertRaisesRegex(RuntimeError, "cargo component missing"):
+                    smoke.preflight_languages(root, env)
 
     def test_vcpkg_preflight_rejects_wrong_user_integration(self):
         with tempfile.TemporaryDirectory() as scratch:

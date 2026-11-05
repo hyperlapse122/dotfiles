@@ -100,13 +100,10 @@ def visual_studio(env):
     if not vswhere.is_file():
         raise RuntimeError("Missing vswhere: prepare Build Tools explicitly with mise run windows-build; verification never installs tools.")
     config = json.loads((REPO / "scripts/windows-build-tools.vsconfig").read_text(encoding="utf-8-sig"))
-    output = run([str(vswhere), "-products", "Microsoft.VisualStudio.Product.BuildTools",
-                  "-version", "[18.0,19.0)", "-requires", *config["components"],
-                  "-format", "json", "-utf8"], cwd=REPO, env=env)
-    instances = json.loads(output)
-    instances = [item for item in instances if item.get("isComplete") and
-                 item.get("isLaunchable") and not item.get("isPrerelease") and
-                 not item.get("isRebootRequired", False) and
+    discovery = [str(vswhere), "-products", "Microsoft.VisualStudio.Product.BuildTools",
+                 "-version", "[18.0,19.0)", "-format", "json", "-utf8"]
+    output = run(discovery + ["-all"], cwd=REPO, env=env)
+    instances = [item for item in json.loads(output) if not item.get("isPrerelease") and
                  item.get("productId") == "Microsoft.VisualStudio.Product.BuildTools" and
                  item.get("channelId") == "VisualStudio.18.Release" and
                  18 <= int(item["installationVersion"].split(".")[0]) < 19]
@@ -115,6 +112,12 @@ def visual_studio(env):
                            "Use Visual Studio Installer to maintain Build Tools with scripts/windows-build-tools.vsconfig; "
                            "resolve missing components, unhealthy state, or ambiguous instances before verification.")
     instance = instances[0]
+    ready = json.loads(run(discovery + ["-requires", *config["components"]], cwd=REPO, env=env))
+    if (not instance.get("isComplete") or not instance.get("isLaunchable") or
+            instance.get("isRebootRequired", False) or
+            not any(item["instanceId"] == instance["instanceId"] for item in ready)):
+        raise RuntimeError("Selected stable VS 2026 Build Tools is not ready. Use Visual Studio Installer with "
+                           "scripts/windows-build-tools.vsconfig for missing components, repair, or required restart.")
     root = Path(instance["installationPath"])
     print(f"VS 2026: {instance['installationVersion']} at {root}")
     return root, root / "MSBuild/Current/Bin/MSBuild.exe"
@@ -286,10 +289,15 @@ def preflight_languages(root, env):
     for target in ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"):
         if target not in installed:
             raise RuntimeError(f"Missing installed stable MSVC Rust target: {target}")
+    selected = [str(rustup), "run", "stable-x86_64-pc-windows-msvc"]
+    version = run(selected + ["rustc", "--version", "--verbose"], cwd=root, env=env)
+    if "host: x86_64-pc-windows-msvc" not in version or not re.search(r"^release: \d+\.\d+\.\d+$", version, re.MULTILINE):
+        raise RuntimeError("The managed toolchain is not stable native x64 MSVC Rust")
+    run(selected + ["cargo", "--version"], cwd=root, env=env)
     return versions
 
 
-def preflight_vcpkg(root, msbuild, env):
+def vcpkg_projects(root, msbuild, env):
     vcpkg_root = Path(env["VCPKG_ROOT"])
     run([str(vcpkg_root / "vcpkg.exe"), "version"], cwd=root, env=env)
     revision = run([executable("git"), "-C", str(vcpkg_root), "rev-parse", "HEAD"], cwd=root, env=env)
@@ -302,6 +310,12 @@ def preflight_vcpkg(root, msbuild, env):
         selected = run(args + ["-getProperty:VcpkgRoot"], cwd=directory, env=env)
         if not selected or Path(selected).resolve() != vcpkg_root.resolve():
             raise RuntimeError(f"User-wide MSBuild integration selected {selected!r}, expected {vcpkg_root}")
+        yield directory, args, target
+
+
+def preflight_vcpkg(root, msbuild, env):
+    for _ in vcpkg_projects(root, msbuild, env):
+        pass
 
 
 def dotnet_sdks(root, env):
@@ -369,10 +383,6 @@ def rust_builds(root, vs, env):
     # Select the managed toolchain for this project without replacing a user's
     # existing default or project override. rustup run never installs a toolchain.
     selected = [rustup, "run", "stable-x86_64-pc-windows-msvc"]
-    version = run(selected + ["rustc", "--version", "--verbose"], cwd=root, env=env)
-    if "host: x86_64-pc-windows-msvc" not in version or not re.search(r"^release: \d+\.\d+\.\d+$", version, re.MULTILINE):
-        raise RuntimeError("The managed toolchain is not stable native x64 MSVC Rust")
-    run(selected + ["cargo", "--version"], cwd=root, env=env)
     directory = root / "rust"
     write(directory / "Cargo.toml", '[package]\nname = "smoke"\nversion = "0.1.0"\nedition = "2021"\n')
     write(directory / "src/main.rs", 'fn main() { println!("rust-smoke"); }\n')
@@ -383,18 +393,7 @@ def rust_builds(root, vs, env):
 
 
 def vcpkg_builds(root, msbuild, env):
-    vcpkg_root = Path(env["VCPKG_ROOT"])
-    run([str(vcpkg_root / "vcpkg.exe"), "version"], cwd=root, env=env)
-    revision = run([executable("git"), "-C", str(vcpkg_root), "rev-parse", "HEAD"], cwd=root, env=env)
-    for target in ("x64", "ARM64"):
-        directory = root / f"vcpkg-{target}"
-        write(directory / "main.cpp", '#include <fmt/core.h>\nint main() { fmt::print("vcpkg-smoke\\n"); }\n')
-        write(directory / "vcpkg.json", json.dumps({"name": "dotfiles-build-smoke", "version-string": "1", "builtin-baseline": revision, "dependencies": ["fmt"]}))
-        project = vc_project(directory, latest_toolset(msbuild, target), target, dependency=True)
-        args = [str(msbuild), str(project), "/nologo", "/p:Configuration=Release", f"/p:Platform={target}"]
-        selected = run(args + ["-getProperty:VcpkgRoot"], cwd=directory, env=env)
-        if not selected or Path(selected).resolve() != vcpkg_root.resolve():
-            raise RuntimeError(f"User-wide MSBuild integration selected {selected!r}, expected {vcpkg_root}")
+    for directory, args, target in vcpkg_projects(root, msbuild, env):
         # No explicit import or /p:VcpkgRoot: this must consume user-wide integration.
         run(args + ["/t:Build"], cwd=directory, env=env)
         check_output(directory / "out/smoke.exe", target, "vcpkg-smoke", cwd=directory, env=env)
