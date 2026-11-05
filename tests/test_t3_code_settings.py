@@ -104,18 +104,26 @@ class T3CodeSettingsTest(unittest.TestCase):
         for existing in cases:
             with self.subTest(existing=existing):
                 self.settings.parent.mkdir(parents=True, exist_ok=True)
-                self.settings.unlink(missing_ok=True)
-                if existing is not None:
-                    self.settings.write_text(existing, encoding="utf-8")
+                client = self.settings.with_name("client-settings.json")
+                for path in (self.settings, client):
+                    path.unlink(missing_ok=True)
+                    if existing is not None:
+                        path.write_text(existing, encoding="utf-8")
                 self.apply()
                 expected = dict(self.preferences["server"], providerInstances={
                     "omp": self.expected_provider(), "codex": self.expected_codex()})
                 if existing and "preferences" in existing:
                     expected["preferences"] = {"theme": "dark"}
                 self.assertEqual(self.read_settings(), expected)
-                before = self.settings.read_bytes()
+                expected_client = dict(self.preferences["client"])
+                if existing and "preferences" in existing:
+                    expected_client["preferences"] = {"theme": "dark"}
+                if existing and "providerInstances" in existing:
+                    expected_client.update(json.loads(existing))
+                self.assertEqual(json.loads(client.read_text()), expected_client)
+                before = (self.settings.read_bytes(), client.read_bytes())
                 self.apply()
-                self.assertEqual(self.settings.read_bytes(), before)
+                self.assertEqual((self.settings.read_bytes(), client.read_bytes()), before)
                 self.assertEqual(self.chez("diff", "--exclude=scripts").stdout, "")
 
     def test_owned_drift_converges_and_unowned_nested_values_survive(self):
@@ -209,21 +217,26 @@ class T3CodeSettingsTest(unittest.TestCase):
 
     def test_supported_platform_wrappers_render_absolute_canonical_paths(self):
         body = (self.repo / "home/private_dot_t3/private_userdata/modify_private_settings.json").read_text(encoding="utf-8")
+        client_body = (self.repo / "home/private_dot_t3/private_userdata/modify_private_client-settings.json").read_text(encoding="utf-8")
         for os_name, arch in (("windows", "amd64"), ("windows", "arm64"),
                               ("linux", "amd64"), ("linux", "arm64"), ("darwin", "arm64")):
             with self.subTest(os=os_name, arch=arch):
                 rendered = json.loads(self.render(body, os_name, arch))
                 self.assertEqual(rendered, dict(self.preferences["server"], providerInstances={
                     "omp": self.expected_provider(os_name), "codex": self.expected_codex(os_name)}))
+                self.assertEqual(json.loads(self.render(client_body, os_name, arch)),
+                                 self.preferences["client"])
                 self.assertTrue(Path(rendered["providerInstances"]["omp"]["config"]["commandPath"]).is_absolute())
                 self.assertTrue(Path(rendered["providerInstances"]["codex"]["config"]["binaryPath"]).is_absolute())
 
     def test_configuration_and_parent_directories_are_private(self):
         for _ in range(2):
             self.apply()
-            result = self.chez("dump", "--format=json", "--parent-dirs", str(self.settings))
+            result = self.chez("dump", "--format=json", "--parent-dirs", str(self.settings.parent))
             state = json.loads(result.stdout)
-            for target, mode in ((".t3", 0o700), (".t3/userdata", 0o700), (".t3/userdata/settings.json", 0o600)):
+            for target, mode in ((".t3", 0o700), (".t3/userdata", 0o700),
+                                 (".t3/userdata/settings.json", 0o600),
+                                 (".t3/userdata/client-settings.json", 0o600)):
                 self.assertEqual(state[target]["perm"], mode)
                 if os.name != "nt":
                     self.assertEqual((self.home / target).stat().st_mode & 0o777, mode)
@@ -338,6 +351,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                     self.render(ignore, os_name, arch, distro=distro), encoding="utf-8")
                 managed = set(self.chez("managed", "--path-style=relative", "--exclude=scripts").stdout.replace("\\", "/").splitlines())
                 self.assertEqual(".t3/userdata/settings.json" in managed, supported)
+                self.assertEqual(".t3/userdata/client-settings.json" in managed, supported)
                 self.assertEqual(".local/bin/t3.cmd" in managed, supported and os_name == "windows")
                 self.assertEqual(".local/bin/t3" in managed, supported and os_name != "windows")
                 self.assertEqual(".config/dotfiles/path.sh" in managed,
