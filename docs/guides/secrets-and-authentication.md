@@ -57,6 +57,25 @@ Decryption occurs only during explicit `mise run apply` when a template calls th
 
 ---
 
+## SSH Identity
+
+The former `MS-7D91` SSH identity from `hyperlapse122/nix-config` is managed as
+`~/.ssh/id_ed25519` and `~/.ssh/id_ed25519.pub`. OpenSSH discovers this default
+identity without an additional SSH configuration file.
+
+- **Encrypted source:** `home/private_dot_ssh/encrypted_private_id_ed25519.asc`
+- **Public source:** `home/private_dot_ssh/id_ed25519.pub`
+- **Fingerprint:** `SHA256:skScV2Jt3VhRMrzcNAO+qmftolV4EXWuS1Ix65pfk14` (Ed25519)
+- **Origin:** [`secrets/hosts/MS-7D91/ssh.yaml` at `c71756ab76eca6031118973726f4139a86e6b4db`](https://github.com/hyperlapse122/nix-config/blob/c71756ab76eca6031118973726f4139a86e6b4db/secrets/hosts/MS-7D91/ssh.yaml),
+  before the host was replaced by `MS-7D91-VM`, which has a different identity.
+
+The imported private key was decrypted from SOPS, checked against the original
+public key, and re-encrypted to this repository's GPG recipient. Chezmoi decrypts
+it during explicit application; SOPS and the old host's age identity are not
+needed to apply it. The source uses chezmoi's private file and directory
+attributes (0600 and 0700 on POSIX). Apply personal configuration with
+`mise run apply` after reviewing any existing default SSH identity.
+
 ## GitHub Authentication
 
 The repository manages GitHub CLI authentication and Git HTTPS credentials for `github.com` and `gist.github.com`.
