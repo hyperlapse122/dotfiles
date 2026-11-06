@@ -103,12 +103,9 @@ The same provisioning can be requested explicitly with `mise run macos-build`; o
 ## Open a Fresh Shell
 
 Restart the terminal after application.
-The managed PATH fragment is sourced by Bash startup files and Zsh's `.zprofile`/`.zshrc`, honoring `ZDOTDIR`.
-For per-project mise activation in Zsh, follow the [mise shell setup instructions](https://mise.jdx.dev/installing-mise.html) and place this line once in the active `.zshrc` if absent:
-
-```sh
-eval "$(mise activate zsh)"
-```
+The managed PATH fragment is sourced by Bash startup files and the managed XDG Zsh startup files.
+Zsh loads Prezto and activates mise automatically; no manual `.zshrc` edit is needed.
+See [Zsh and Prezto](../guides/zsh.md) for paths, modules, completion providers, and updates.
 
 PowerShell receives its existing managed mise profile integration.
 Check discovery in a fresh shell outside the dotfiles directory:

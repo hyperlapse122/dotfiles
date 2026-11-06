@@ -262,6 +262,7 @@ def main():
             "dot_config/dotfiles/path.sh",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
+            ".chezmoitemplates/zsh-settings",
         ):
             destination = source / relative
             destination.parent.mkdir(parents=True, exist_ok=True)

@@ -67,7 +67,7 @@ On Windows, the apply script updates the user PATH environment variable in the r
 
 On Linux and macOS, apply creates `~/.config/dotfiles/path.sh` and appends a source block to your shell startup files:
 - Configures `.bashrc` and the existing Bash login profile (`.bash_profile`, `.bash_login`, or `.profile`).
-- Configures `.zprofile` and `.zshrc`, respecting an exported `ZDOTDIR` if set.
+- Configures `.zprofile` and `.zshrc` in the [managed XDG Zsh directory](zsh.md) on eligible hosts; otherwise respects an exported `ZDOTDIR`.
 - PATH integration runs only on change; an unchanged apply will not overwrite manual removals.
 
 ### Checking Command Discovery
