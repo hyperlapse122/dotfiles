@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shutil
@@ -36,10 +37,10 @@ class ZshStartupTest(unittest.TestCase):
         self.bin = self.root / "tools"
         self.bin.mkdir()
         self.usage = self.bin / "usage"
-        self.usage.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        self.usage.write_text("#!/bin/sh\nprintf '#compdef usage\\n_arguments \\\"--version[version]\\\"\\n'\n", encoding="utf-8")
         self.usage.chmod(0o755)
         self.mise = self.bin / "mise"
-        self.mise.write_text("#!/bin/sh\ncase \"$*\" in\n *'which usage') printf '%s\\n' \"" + str(self.usage).replace('"', '\\"') + "\";;\n *'activate zsh') printf '%s\\n' 'export MISE_ACTIVATED=yes';;\n *) exit 2;;\nesac\n", encoding="utf-8")
+        self.mise.write_text("#!/bin/sh\ncase \"$*\" in\n *'which usage') printf '%s\\n' \"" + str(self.usage).replace('"', '\\"') + "\";;\n *'activate zsh') printf '%s\\n' 'export MISE_ACTIVATED=yes';;\n 'completion zsh') printf '#compdef mise\\n_arguments \\\"--version[version]\\\"\\n';;\n *) exit 2;;\nesac\n", encoding="utf-8")
         self.mise.chmod(0o755)
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("", encoding="utf-8")
@@ -149,3 +150,47 @@ class ZshStartupTest(unittest.TestCase):
         result = self.shell("-i")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("|ca=1|prezto=yes|mise=yes|", result.stdout)
+
+    def test_completion_refresh_repair_and_failed_generation_preserve_published_output(self):
+        data = self.source / ".chezmoidata/personal-apps.json"
+        data.write_text(json.dumps({"personalApps": {"codex": {
+            "command": "codex", "targets": {"linux-amd64": {}, "linux-arm64": {}, "darwin-arm64": {}},
+        }}}), encoding="utf-8")
+        binary = self.home / ".local/bin/codex"
+        binary.parent.mkdir(parents=True)
+        calls = self.root / "completion-calls"
+        binary.write_text('''#!/bin/sh
+printf 'call\\n' >> "$COMPLETION_CALLS"
+[ "${FAIL_COMPLETION:-}" != yes ] || exit 3
+[ "${EMPTY_COMPLETION:-}" != yes ] || exit 0
+printf '#compdef codex\\n# version %s\\n_arguments "--version[version]"\\n' "${COMPLETION_VERSION:-one}"
+''', encoding="utf-8")
+        binary.chmod(0o755)
+        self.env["COMPLETION_CALLS"] = str(calls)
+        self.apply()
+        output = self.stage / "completions/_codex"
+        self.assertIn("version one", output.read_text())
+        before = output.read_bytes(), output.stat().st_mtime_ns
+        self.apply()
+        self.assertEqual((output.read_bytes(), output.stat().st_mtime_ns), before)
+        self.env["COMPLETION_VERSION"] = "two"
+        self.apply()
+        self.assertIn("version two", output.read_text())
+        output.unlink()
+        self.apply()
+        self.assertIn("version two", output.read_text())
+        before = output.read_bytes()
+        for variable in ("FAIL_COMPLETION", "EMPTY_COMPLETION"):
+            self.env[variable] = "yes"
+            result = self.apply(check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("codex", result.stderr)
+            self.assertEqual(output.read_bytes(), before)
+            del self.env[variable]
+        count = calls.read_text()
+        result = subprocess.run(["zsh", "-d", "-i", "-c",
+                                 'autoload -Uz compinit; compinit -i; print -r -- "${_comps[codex]}"'],
+                                env=self.env, cwd=self.root, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("_codex", result.stdout)
+        self.assertEqual(calls.read_text(), count)

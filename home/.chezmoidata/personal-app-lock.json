@@ -177,6 +177,12 @@
       }
     },
     "ghq": {
+      "completions": {
+        "zsh": {
+          "sha256": "0e312cae83f75de994e0e1a4b3ef56b327326bbb5c85cf94f7ef29778a596973",
+          "url": "https://raw.githubusercontent.com/x-motemen/ghq/v1.12.0/misc/zsh/_ghq"
+        }
+      },
       "tag": "v1.12.0",
       "targets": {
         "darwin-amd64": {

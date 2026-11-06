@@ -22,4 +22,20 @@ checksum.sha256 = {{ $pin.sha256 | quote }}
 stripComponents = 1
 exact = true
 {{ end -}}
+{{- $apps := get . "personalApps" | default dict -}}
+{{- $locks := get . "personalAppLocks" | default dict -}}
+{{- range $name, $provider := get $zsh "completions" | default dict -}}
+{{- $app := get $apps $name | default dict -}}
+{{- if and (hasKey $provider "source") (hasKey (get $app "targets" | default dict) $target) -}}
+{{- $appLock := get $locks $name | default dict -}}
+{{- $pin := get (get $appLock "completions" | default dict) "zsh" | default dict -}}
+{{- if or (not (get $pin "url")) (not (regexMatch "^[0-9a-f]{64}$" (get $pin "sha256" | default ""))) -}}
+{{- fail (printf "Missing official zsh completion pin for %s" $name) -}}
+{{- end }}
+[{{ printf ".local/share/dotfiles/zsh/completion-sources/_%s" $name | quote }}]
+type = "file"
+url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+checksum.sha256 = {{ $pin.sha256 | quote }}
+{{ end -}}
+{{- end -}}
 {{- end -}}

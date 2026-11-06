@@ -1,0 +1,33 @@
+publish_completion() {
+    command=$1
+    shift
+    destination="$stage/completions/_$command"
+    temporary=$(mktemp "$destination.XXXXXX")
+    if ! "$@" > "$temporary" || [ ! -s "$temporary" ]; then
+        rm -f "$temporary"
+        printf 'Failed to generate nonempty official zsh completion for %s\n' "$command" >&2
+        exit 1
+    fi
+    if [ -f "$destination" ] && cmp -s "$temporary" "$destination"; then
+        rm -f "$temporary"
+    else
+        mv -f "$temporary" "$destination"
+    fi
+}
+
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- $apps := get . "personalApps" | default dict -}}
+{{ range $name, $provider := .zsh.completions -}}
+{{- $app := get $apps $name | default dict -}}
+{{- if or (has $name (list "mise" "usage")) (hasKey (get $app "targets" | default dict) $target) -}}
+{{- if eq $name "mise" }}
+publish_completion mise "$mise_path"{{ range $provider.args }} {{ . | quote }}{{ end }}
+{{- else if eq $name "usage" }}
+publish_completion usage "$usage_path"{{ range $provider.args }} {{ . | quote }}{{ end }}
+{{- else if hasKey $provider "source" }}
+publish_completion {{ $name | quote }} cat "$stage/completion-sources/_{{ $name }}"
+{{- else }}
+publish_completion {{ $name | quote }} "$home/{{ get $app "installDirectory" | default ".local/bin" }}/{{ $app.command }}"{{ range $provider.args }} {{ . | quote }}{{ end }}
+{{- end -}}
+{{- end -}}
+{{ end }}
