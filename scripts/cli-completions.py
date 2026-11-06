@@ -73,8 +73,6 @@ def generate(destination, usage=None):
         else:
             publish(spec_path, previous_spec.decode('utf-8'))
         raise
-    # Completion never starts pinentry: its snapshot is updated with the binary
-    # by explicit apply, and the scripts only invoke Usage against this file.
     for name, content in pending.items():
         publish(directory / name, content)
 
