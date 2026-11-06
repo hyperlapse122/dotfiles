@@ -104,7 +104,9 @@ This is automation for trusted programs running as the OS user. Prompt matching 
 
 ## Development Verification
 
-`mise run pinentry:test` runs formatting, lint and protocol/CLI tests with synthetic secrets and fake frontends; it never opens the owner's keyring. The Git/GPG test suite also checks the ordinary cache policy using an isolated software key and agent, without a card.
+The root Cargo workspace owns `crates/pinentry/` and its shared `Cargo.lock`; build output lives under the repository-root `target/`. `mise run pinentry:build` selects the `dotfiles-pinentry` package for installation.
+
+`mise run pinentry:test` runs workspace-wide formatting, lint and protocol/CLI tests with synthetic secrets and fake frontends; it never opens the owner's keyring. The Git/GPG test suite also checks the ordinary cache policy using an isolated software key and agent, without a card.
 Successful native-store smoke tests are restricted to disposable GitHub-hosted runners. They use an isolated Linux session bus, a disposable macOS Keychain, or the hosted Windows account. Changing `HOME` alone does not isolate a real OS keyring.
 
 ## Verifying Commit Signing
