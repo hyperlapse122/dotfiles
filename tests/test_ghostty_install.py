@@ -157,4 +157,3 @@ class GhosttyInstallTest(unittest.TestCase):
                 if supported:
                     syntax = subprocess.run([find_bash(), '-n'], input=result.stdout, capture_output=True, text=True)
                     self.assertEqual(syntax.returncode, 0, syntax.stderr)
-
