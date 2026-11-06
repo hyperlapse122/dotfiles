@@ -1,0 +1,25 @@
+{{- $zsh := get . "zsh" | default dict -}}
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- if has $target (get $zsh "targets" | default list) -}}
+{{- $lock := get . "zshLock" | default dict -}}
+{{- $archives := get $lock "archives" | default list -}}
+{{- if not $archives -}}{{- fail "Missing zsh archive pins" -}}{{- end -}}
+{{- $paths := list -}}
+{{- range $pin := $archives -}}{{- $paths = append $paths $pin.path -}}{{- end -}}
+{{- range $path := prepend (get $zsh "submodules" | default list) "" -}}
+{{- if not (has $path $paths) -}}{{- fail (printf "Missing required zsh archive pin: %s" $path) -}}{{- end -}}
+{{- end -}}
+{{- range $pin := $archives -}}
+{{- if or (not (regexMatch "^[0-9a-f]{40}$" (get $pin "commit" | default ""))) (not (regexMatch "^[0-9a-f]{64}$" (get $pin "sha256" | default ""))) (not (get $pin "url")) -}}
+{{- fail "Missing complete zsh archive pin" -}}
+{{- end -}}
+{{- $path := ".local/share/dotfiles/zsh/prezto" -}}
+{{- if $pin.path -}}{{- $path = printf "%s/%s" $path $pin.path -}}{{- end }}
+[{{ $path | quote }}]
+type = "archive"
+url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+checksum.sha256 = {{ $pin.sha256 | quote }}
+stripComponents = 1
+exact = true
+{{ end -}}
+{{- end -}}

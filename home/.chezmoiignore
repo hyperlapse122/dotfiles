@@ -10,6 +10,10 @@ README.md
 {{ else }}
 AppData
 {{ end }}
+{{ $zsh := get . "zsh" | default dict }}
+{{ if not (has (printf "%s-%s" .chezmoi.os .chezmoi.arch) (get $zsh "targets" | default list)) }}
+.local/share/dotfiles/zsh
+{{ end }}
 {{ if ne .chezmoi.os "linux" }}
 {{ if and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") }}
 .config/environment.d

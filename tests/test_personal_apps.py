@@ -33,7 +33,7 @@ class PersonalAppsTest(unittest.TestCase):
         for directory in (".chezmoidata", ".chezmoiexternals", "dot_config"):
             shutil.copytree(
                 self.repo / "home" / directory, self.source / directory,
-                ignore=shutil.ignore_patterns("harness-plugins.toml.tmpl", "t3-code.toml.tmpl", "fonts.toml.tmpl"),
+                ignore=shutil.ignore_patterns("harness-plugins.toml.tmpl", "t3-code.toml.tmpl", "fonts.toml.tmpl", "zsh.toml.tmpl"),
             )
         for name in (".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
                      ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl"):

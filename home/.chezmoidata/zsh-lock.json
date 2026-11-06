@@ -1,0 +1,41 @@
+{
+  "zshLock": {
+    "archives": [
+      {
+        "path": "",
+        "repository": "sorin-ionescu/prezto",
+        "commit": "cff2d01871425b1b80710f8ec6a475c5a53145b4",
+        "url": "https://codeload.github.com/sorin-ionescu/prezto/tar.gz/cff2d01871425b1b80710f8ec6a475c5a53145b4",
+        "sha256": "dfff3d7cb71aaaa07566b253dbe446eeec65e76cf0fd0e7a6141ec50e45deb15"
+      },
+      {
+        "path": "modules/autosuggestions/external",
+        "repository": "zsh-users/zsh-autosuggestions",
+        "commit": "e52ee8ca55bcc56a17c828767a3f98f22a68d4eb",
+        "url": "https://codeload.github.com/zsh-users/zsh-autosuggestions/tar.gz/e52ee8ca55bcc56a17c828767a3f98f22a68d4eb",
+        "sha256": "166fad9326c99904fd3b16b5d770efb4f5df39a674599e72bba8fc41636ab065"
+      },
+      {
+        "path": "modules/completion/external",
+        "repository": "zsh-users/zsh-completions",
+        "commit": "e461417f4e20b20f84b9d48a7acd582145723929",
+        "url": "https://codeload.github.com/zsh-users/zsh-completions/tar.gz/e461417f4e20b20f84b9d48a7acd582145723929",
+        "sha256": "82da9d61c594fb5dd32710a4d7a2d0519845acfe663e76d6ff88e3c85ec8941c"
+      },
+      {
+        "path": "modules/history-substring-search/external",
+        "repository": "zsh-users/zsh-history-substring-search",
+        "commit": "14c8d2e0ffaee98f2df9850b19944f32546fdea5",
+        "url": "https://codeload.github.com/zsh-users/zsh-history-substring-search/tar.gz/14c8d2e0ffaee98f2df9850b19944f32546fdea5",
+        "sha256": "823ea186446669fb024b839b117122d03ee0b3b20e199c95e09e85695bd30b0f"
+      },
+      {
+        "path": "modules/syntax-highlighting/external",
+        "repository": "zsh-users/zsh-syntax-highlighting",
+        "commit": "1d85c692615a25fe2293bdd44b34c217d5d2bf04",
+        "url": "https://codeload.github.com/zsh-users/zsh-syntax-highlighting/tar.gz/1d85c692615a25fe2293bdd44b34c217d5d2bf04",
+        "sha256": "e4a95feb737d78efa4052e23c4880e6936a3133ea58f390458fc80ea4033483e"
+      }
+    ]
+  }
+}
