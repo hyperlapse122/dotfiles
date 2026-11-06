@@ -70,12 +70,14 @@ mise exec -- python scripts/run-test-area.py --area all --report area-results.js
 
 `--list` prints selected IDs without execution. `--report` records elapsed seconds, selected IDs, skipped IDs/reasons, failures, and errors. Keep reports outside the checkout when they are not needed as local artifacts.
 
-| Area | Modules (`tests/`, `.py` suffix omitted) | Prerequisites |
+| Area | Coverage | Prerequisites |
 |---|---|---|
-| applications | `test_personal_apps`, `test_personal_app_lock`, `test_font_lock`, `test_fonts`, `test_fonts_posix`, `test_fonts_windows`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_codex`, `test_claude`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
-| security | `test_secrets`, `test_git_gpg`, `test_script_lifecycle`, `test_github_auth`, `test_github_auth_import`, `test_gitlab_auth`, `test_gitlab_auth_import` | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
-| platform | `test_bootstrap`, `test_global_chezmoi`, `test_windows_bootstrap`, `test_windows_apply_hook`, `test_windows_apps`, `test_windows_virtualization`, `test_windows_long_paths`, `test_macos_bootstrap`, `test_macos_provision`, `test_macos_apps`, `test_macos_readiness` | Root mise tools; Windows PowerShell and Git for Windows fixture checks; Bash for isolated macOS command doubles |
-| build-contracts | `test_windows_build_apply`, `test_windows_build_environment`, `test_windows_build_prepare`, `test_windows_build_smoke`, `test_windows_visual_studio`, `test_ci_areas`, `test_ci_event_policy` | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles, never real provisioning |
+| applications | Application/model pins, shared asset preparation, fonts, harnesses, T3 settings, shell profiles and completions | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
+| security | Encrypted inputs, Git/GPG, pinentry application, SSH identities, scoped CA files, GitHub/GitLab and registry authentication | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
+| platform | Worktree/bootstrap guards, OS provisioning/readiness, Ghostty and terminal integration | Root mise tools; Windows PowerShell and Git for Windows fixture checks; Bash for isolated macOS command doubles |
+| build-contracts | Windows/macOS build contracts, exact test ownership and CI event policy | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles |
+
+The manifest contains the complete module assignment. `--list` exposes the current test IDs for each area.
 
 All areas remain selected on every existing unit runner. Platform guards stay with the tests: Windows-named build-apply/rendering and mocked verifier contracts also run on Unix. The entire tests directory remains importable for credential fixture reuse, but imports do not schedule another area's cases.
 
@@ -181,6 +183,25 @@ mise exec -- python tests/smoke_claude.py
 
 Tests the pinned native executable, user-scope CE discovery and repair, private preferences, and shared instructions in a disposable home. Outgoing requests must include the Korean preference and complete explicitly invoked CE skill body, include common and Claude instruction markers, and exclude foreign branches. An enabled automatic-memory characterization first proves that the fixture is readable; the managed disabled state must exclude it while preserving its bytes. A localhost capture endpoint returns HTTP 400; only inert credentials are used, and authenticated inference is outside this smoke.
 
+### Pi and Grok Native Integration
+
+```sh
+mise exec chezmoi python -- python tests/smoke_pi.py --t3
+mise exec chezmoi python -- python tests/smoke_grok.py --t3
+```
+
+Both smokes prepare official pinned artifacts in disposable homes, repair native CE registration, capture expanded skill requests, and initialize their native T3 drivers with managed binary directories absent from `PATH`. Pi additionally verifies the exact locked Synthetic catalog, foreign-provider blocking, reload, removed saved selections, and missing credentials/policy. T3 checks require native discovery metadata so a version-only fallback cannot pass.
+
+Inference requests use inert credentials and rejecting loopback endpoints. Native validation jobs receive no Synthetic secret; only the model-discovery resolver step uses the repository Actions secret. Hosted CI uses `--install-desktop` to provision its own T3 prerequisite.
+
+### Registry Credentials
+
+```sh
+mise run container-auth:smoke
+```
+
+This hosted-only smoke exercises official native credential helpers and the declared Podman client. The Podman connection fixture answers only the startup ping; credential lookup uses the actual host-side client and native store. It creates no container engine or VM. Each supported runner owns its credential fixture and cleanup.
+
 ### GitLab Authentication
 
 ```sh
@@ -231,8 +252,16 @@ Each area/target pair owns a separate hosted runner. All matrices use `fail-fast
 | ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated pinned omp/CE payload and harness state |
 | codex | `mise exec chezmoi python -- python tests/smoke_codex.py --expected-target TARGET` | Complete pinned Codex package and isolated native CE state |
 | claude | `mise exec chezmoi python -- python tests/smoke_claude.py --expected-target TARGET` | Pinned Claude binary and isolated native CE, instruction, preference, and memory fixtures |
+| pi | `mise exec chezmoi python gh -- python tests/smoke_pi.py --install-desktop --expected-target TARGET` | Complete pinned Pi distribution, committed Synthetic model lock, native CE and disposable T3 server |
+| grok | `mise exec chezmoi python gh -- python tests/smoke_grok.py --install-desktop --expected-target TARGET` | Pinned Grok, native CE and disposable T3 ACP server |
 | github-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_github_auth.py` | Native GPG, pinned gh acquired by fixture, OS credential backend |
 | gitlab-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_gitlab_auth.py` | Native GPG, pinned glab acquired by fixture, OS credential backend |
+| container-auth | `mise exec chezmoi python podman@6.1.4 -- python tests/smoke_container_auth.py --require-podman` | Official credential helper, declared host-side Podman client and isolated native credential store |
+| fonts | `mise exec chezmoi python -- python tests/smoke_fonts.py` | Pinned font assets and native OS font discovery |
+
+The independent pinentry job runs workspace formatting, clippy, locked Rust tests, a native release build, generated shell completion checks, and hosted native PIN-store verification. Its tool preparation includes Usage and PowerShell for completion generation.
+
+Application-lock candidates contain both `personal-app-lock.json` and `synthetic-model-lock.json`. Every candidate consumer selects that immutable pair before validation. The Pi native job exercises the candidate binary against the candidate catalog; publication waits for the complete validation suite. Synthetic discovery failure retains the previous pair and fails the update job.
 
 Hosted-only PATH, desktop-installation, and credential-write modes must not run on a personal workstation. Their existing disposable-host guards remain intact. The apps and desktop scripts offer non-installing local modes as described above; CE, Codex, and Claude use disposable homes. Claude and T3 native startup have passed locally on Windows x64. Other eligible platforms require their own CI result; local request capture and initialization do not prove authenticated model completion.
 

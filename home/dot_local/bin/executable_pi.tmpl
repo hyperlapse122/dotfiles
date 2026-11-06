@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+binary='{{ joinPath .chezmoi.destDir ".local" "bin" "pi-native" "pi" | replace "'" "'\\''" }}'
+if [ "$#" -eq 1 ] && { [ "$1" = --version ] || [ "$1" = --help ]; }; then
+    exec "$binary" "$@"
+fi
+policy='{{ joinPath .chezmoi.destDir ".pi" "agent" "dotfiles-policy.ts" | replace "'" "'\\''" }}'
+catalog='{{ joinPath .chezmoi.destDir ".pi" "agent" "dotfiles-model-lock.json" | replace "'" "'\\''" }}'
+test -s "$policy" && test -s "$catalog" || { printf 'Apply the managed Pi policy and model lock first.\n' >&2; exit 1; }
+exec "$binary" --extension "$policy" "$@"

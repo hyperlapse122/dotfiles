@@ -1,0 +1,6 @@
+{{- $pi := get (get . "personalApps" | default dict) "pi" | default dict -}}
+{{- if and (ne .chezmoi.os "windows") (hasKey (get $pi "targets" | default dict) (printf "%s-%s" .chezmoi.os .chezmoi.arch)) -}}
+#!/bin/sh
+set -eu
+mise --cd '{{ .chezmoi.workingTree | replace "'" "'\\''" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "pi-settings.py" | replace "'" "'\\''" }}' --source '{{ .chezmoi.workingTree | replace "'" "'\\''" }}' --config '{{ .chezmoi.configFile | replace "'" "'\\''" }}' --destination '{{ .chezmoi.destDir | replace "'" "'\\''" }}'
+{{ end -}}

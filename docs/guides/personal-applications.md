@@ -11,8 +11,10 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 | `claude` | [anthropics/claude-code](https://github.com/anthropics/claude-code) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `codex` | [openai/codex](https://github.com/openai/codex) | Canonical CLI package | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `omp` | [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) | Raw binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
+| `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | Complete native distribution | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
+| `grok` | [Grok Build](https://docs.x.ai/build/overview) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
-| `ghq` | [x-motemen/ghq](https://github.com/x-motemen/ghq) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (x64/ARM64) |
+| `ghq` | [x-motemen/ghq](https://github.com/x-motemen/ghq) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `agy` | [Google Antigravity](https://antigravity.google/) | Official CLI binary or archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 
 > **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.

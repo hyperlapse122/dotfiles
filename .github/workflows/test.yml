@@ -59,7 +59,12 @@ jobs:
         name: Select the immutable candidate pins
         if: inputs.lock-artifact != ''
         shell: bash
-        run: cp -- "$RUNNER_TEMP/locked-apps/personal-app-lock.json" home/.chezmoidata/personal-app-lock.json
+        run: |
+          set -euo pipefail
+          test -f "$RUNNER_TEMP/locked-apps/personal-app-lock.json"
+          test -f "$RUNNER_TEMP/locked-apps/synthetic-model-lock.json"
+          cp -- "$RUNNER_TEMP/locked-apps/personal-app-lock.json" home/.chezmoidata/personal-app-lock.json
+          cp -- "$RUNNER_TEMP/locked-apps/synthetic-model-lock.json" home/.chezmoidata/synthetic-model-lock.json
       - &download-harness-lock
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: inputs.harness-lock-artifact != ''
@@ -131,7 +136,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth, container-auth, fonts, ghostty]
+        area: [apps, t3, ce, codex, claude, pi, grok, github-auth, gitlab-auth, container-auth, fonts, ghostty]
         platform:
           - runner: ubuntu-24.04
             target: linux-amd64
@@ -180,7 +185,7 @@ jobs:
         if: matrix.area == 'apps' && runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh libsecret-1-0
       - name: Install desktop release acquisition tool
-        if: matrix.area == 't3'
+        if: matrix.area == 't3' || matrix.area == 'pi' || matrix.area == 'grok'
         run: mise install gh
       - name: Install the declared host-side registry client fixture
         if: matrix.area == 'container-auth'
@@ -236,6 +241,18 @@ jobs:
         if: matrix.area == 'claude'
         timeout-minutes: 10
         run: mise exec chezmoi python -- python tests/smoke_claude.py --expected-target ${{ matrix.platform.target }}
+      - name: Prove pinned Pi policy, native CE, and fresh T3 discovery
+        if: matrix.area == 'pi'
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec chezmoi python gh -- python tests/smoke_pi.py --expected-target ${{ matrix.platform.target }} --install-desktop
+      - name: Prove pinned Grok instructions, native CE, and fresh T3 ACP discovery
+        if: matrix.area == 'grok'
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec chezmoi python gh -- python tests/smoke_grok.py --expected-target ${{ matrix.platform.target }} --install-desktop
       - name: Prove native GitHub and Gist credentials
         if: runner.os != 'Linux' && matrix.area == 'github-auth'
         timeout-minutes: 5

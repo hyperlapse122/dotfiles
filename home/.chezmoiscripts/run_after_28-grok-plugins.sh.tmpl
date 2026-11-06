@@ -1,0 +1,6 @@
+{{- $grok := get (get . "personalApps" | default dict) "grok" | default dict -}}
+{{- if and (ne .chezmoi.os "windows") (hasKey (get $grok "targets" | default dict) (printf "%s-%s" .chezmoi.os .chezmoi.arch)) -}}
+#!/bin/sh
+set -eu
+exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "grok-plugins.py" | replace "'" "'\"'\"'" }}' --destination '{{ .chezmoi.destDir | replace "'" "'\"'\"'" }}'
+{{ end -}}

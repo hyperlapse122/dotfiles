@@ -40,6 +40,21 @@ Library
 {{ end }}
 {{ $target := printf "%s-%s" .chezmoi.os .chezmoi.arch }}
 {{ $apps := get . "personalApps" | default dict }}
+{{ $grok := get $apps "grok" | default dict }}
+{{ if not (hasKey (get $grok "targets" | default dict) $target) }}
+.grok
+{{ end }}
+{{ $pi := get $apps "pi" | default dict }}
+{{ $piSupported := hasKey (get $pi "targets" | default dict) $target }}
+{{ if not $piSupported }}
+.pi
+{{ end }}
+{{ if or (not $piSupported) (ne .chezmoi.os "windows") }}
+.local/bin/pi.ps1
+{{ end }}
+{{ if or (not $piSupported) (eq .chezmoi.os "windows") }}
+.local/bin/pi
+{{ end }}
 {{ $omp := get $apps "omp" | default dict }}
 {{ $targets := get $omp "targets" | default dict }}
 {{ if not (hasKey $targets $target) }}

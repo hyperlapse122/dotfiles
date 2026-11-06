@@ -222,6 +222,43 @@
         }
       }
     },
+    "pi": {
+      "command": "pi",
+      "repository": "earendil-works/pi",
+      "installDirectory": ".local/bin/pi-native",
+      "targets": {
+        "darwin-arm64": {
+          "asset": "pi-darwin-arm64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "linux-amd64": {
+          "asset": "pi-linux-x64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "linux-arm64": {
+          "asset": "pi-linux-arm64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "windows-amd64": {
+          "asset": "pi-windows-x64.zip",
+          "kind": "archive",
+          "format": "zip",
+          "stripComponents": 0
+        },
+        "windows-arm64": {
+          "asset": "pi-windows-arm64.zip",
+          "kind": "archive",
+          "format": "zip",
+          "stripComponents": 0
+        }
+      }
+    },
     "omp": {
       "command": "omp",
       "repository": "can1357/oh-my-pi",
@@ -231,6 +268,37 @@
         "linux-arm64": {"asset": "omp-linux-arm64", "kind": "file"},
         "windows-amd64": {"asset": "omp-windows-x64.exe", "kind": "file"},
         "windows-arm64": {"asset": "omp-windows-arm64.exe", "kind": "file"}
+      }
+    },
+    "grok": {
+      "command": "grok",
+      "source": "grok",
+      "targets": {
+        "darwin-arm64": {
+          "platform": "macos-aarch64",
+          "asset": "grok-{version}-macos-aarch64",
+          "kind": "file"
+        },
+        "linux-amd64": {
+          "platform": "linux-x86_64",
+          "asset": "grok-{version}-linux-x86_64",
+          "kind": "file"
+        },
+        "linux-arm64": {
+          "platform": "linux-aarch64",
+          "asset": "grok-{version}-linux-aarch64",
+          "kind": "file"
+        },
+        "windows-amd64": {
+          "platform": "windows-x86_64",
+          "asset": "grok-{version}-windows-x86_64.exe",
+          "kind": "file"
+        },
+        "windows-arm64": {
+          "platform": "windows-aarch64",
+          "asset": "grok-{version}-windows-aarch64.exe",
+          "kind": "file"
+        }
       }
     }
   }
