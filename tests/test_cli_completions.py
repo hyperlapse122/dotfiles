@@ -197,7 +197,7 @@ class CompletionProfileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='completion-assets-') as temporary:
             config = Path(temporary) / 'chezmoi.toml'
             config.write_text('')
-            template = (REPO / 'home/.chezmoiexternals/cli-completions.toml.tmpl').read_text(encoding='utf-8')
+            template = (REPO / 'home/.chezmoitemplates/external-assets/cli-completions.toml.tmpl').read_text(encoding='utf-8')
             wrapper = ('{{ template "assets" (dict "chezmoi" (dict "os" "linux") '
                        '"cliCompletionAssets" .cliCompletionAssets) }}{{ define "assets" }}' + template + '{{ end }}')
             rendered = subprocess.run(['chezmoi', '--source', str(REPO), '--config', str(config), 'execute-template'],
@@ -205,9 +205,11 @@ class CompletionProfileTest(unittest.TestCase):
             self.assertEqual(rendered.returncode, 0, rendered.stderr)
             import tomllib
             assets = tomllib.loads(rendered.stdout)
-            self.assertEqual(len(assets), 3)
-            self.assertTrue(any('startup-core' in name for name in assets))
-            self.assertTrue(any(name.endswith('/COPYING') for name in assets))
+            self.assertEqual(len(assets), 1)
+            library = assets['.local/share/dotfiles/bash-completion']
+            self.assertEqual(library['type'], 'archive')
+            self.assertIn('bash-completion-2.18.0/startup-core/000_bash_completion_compat.bash', library['include'])
+            self.assertIn('bash-completion-2.18.0/COPYING', library['include'])
             for item in assets.values():
                 self.assertEqual(item['checksum']['sha256'], '88bcf85124f77f74f2f2f8bcd16ac4382d807a827ede742a64940c7116aea33f')
 

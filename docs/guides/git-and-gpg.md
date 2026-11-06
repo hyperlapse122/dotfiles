@@ -117,6 +117,8 @@ Explicit `mise run apply` installs the pinentry binary and then generates Bash, 
 
 Managed interactive Bash and Zsh profiles load the generated scripts. PowerShell 7's managed profile loads its `.ps1` script after mise activation; Windows PowerShell 5.1 leaves native completion unloaded. Bash requires version 4.2 or newer and bash-completion 2.11 or newer; apply installs a checksummed bash-completion 2.18.0 library, compatibility definitions, and license on Unix. macOS system Bash 3.2 is unsupported; use the managed Zsh integration. Windows supports PowerShell 7 completion; its Bash profiles are not managed. Fish and Nushell startup integration is not managed by this repository.
 
+The library, compatibility definitions, and license are selected together from one archive through shared external-asset preparation. Unchanged applies reuse that prepared tree, and missing installed files are restored from the cache. `mise run assets:verify` checks cached content fully and reconciles the installed files.
+
 The public completion surface is help, version, specification output, and `forget <card-id>`. Completion does not enumerate stored credentials, connected cards, or PINs. New repository CLIs should export a side-effect-free `--usage-spec` and add an entry to the same explicit-apply generator, keeping their canonical spec beside the crate and testing both exported commands and fresh-shell registration.
 
 The Usage 7.3.0 PowerShell generator includes the partial token twice; the source-bound generator corrects that pinned behavior before publication. Paths are quoted for each shell, and PowerShell scripts use the native `.ps1` extension.
