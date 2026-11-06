@@ -1,0 +1,42 @@
+{{- $settings := includeTemplate "zsh-settings" . | fromJson -}}
+{{- if $settings.enabled -}}
+#!/bin/sh
+set -eu
+home='{{ .chezmoi.destDir | replace "'" "'\\''" }}'
+zsh_root='{{ $settings.root | replace "'" "'\\''" }}'
+stage='{{ $settings.stage | replace "'" "'\\''" }}'
+worktree='{{ .chezmoi.workingTree | replace "'" "'\\''" }}'
+{{ includeTemplate "zsh-publish" . }}
+
+mkdir -p "$zsh_root" "$stage/bin" "$stage/completions"
+publish_link "$stage/prezto" "$zsh_root/.zprezto"
+mise_path=$(command -v mise) || { printf 'mise is required to publish the zsh tool environment\n' >&2; exit 1; }
+while [ -L "$mise_path" ]; do
+    resolved=$(readlink "$mise_path")
+    case "$resolved" in
+        /*) mise_path=$resolved ;;
+        *) mise_path="$(dirname "$mise_path")/$resolved" ;;
+    esac
+done
+usage_path=$("$mise_path" --cd "$worktree" which usage)
+[ -x "$usage_path" ] || { printf 'Run mise install before applying zsh settings: Usage is unavailable\n' >&2; exit 1; }
+publish_link "$usage_path" "$stage/bin/usage"
+publish_link "$mise_path" "$stage/bin/mise"
+
+{{ includeTemplate "zsh-completions" . }}
+
+# Existing dumps can predate the managed fpath even when provider output is unchanged.
+completion_dump="${XDG_CACHE_HOME:-$home/.cache}/prezto/zcompdump"
+rm -f "$completion_dump" "$completion_dump.zwc"
+
+replace_block "$zsh_root/.zshenv" 'zsh environment' 'source "$HOME/.local/share/dotfiles/zsh/env.zsh"'
+replace_block "$zsh_root/.zshrc" 'zsh interactive' 'source "$HOME/.local/share/dotfiles/zsh/interactive.zsh"'
+replace_block "$zsh_root/.zpreztorc" 'zsh modules' 'source "$HOME/.local/share/dotfiles/zsh/preztorc.zsh"'
+
+legacy_root=${ZDOTDIR:-$home}
+if [ "$legacy_root" != "$home" ] && [ "$legacy_root" != "$zsh_root" ] && [ ! "$legacy_root" -ef "$zsh_root" ]; then
+    replace_block "$legacy_root/.zshenv" 'zsh discovery' 'export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export ZDOTDIR="$XDG_CONFIG_HOME/zsh"
+[[ ! -r "$ZDOTDIR/.zshenv" ]] || source "$ZDOTDIR/.zshenv"'
+fi
+{{ end -}}

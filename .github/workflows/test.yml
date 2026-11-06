@@ -111,6 +111,9 @@ jobs:
       - name: Provision macOS unit encryption prerequisite
         if: runner.os == 'macOS' && matrix.area == 'security'
         run: brew install gnupg
+      - name: Provision native zsh unit prerequisite
+        if: runner.os == 'Linux' && matrix.area == 'applications'
+        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: Validate complete ownership and run this area
         run: mise exec -- python scripts/run-test-area.py --area ${{ matrix.area }} --report "${{ runner.temp }}/unit-results.json"
       - name: Retain area timing and test-ID evidence
@@ -172,6 +175,12 @@ jobs:
       # Each area installs only its own existing tool declarations.
       - name: Install native smoke base tools
         run: mise install chezmoi python
+      - name: Install native zsh completion runtime
+        if: matrix.area == 'apps' && runner.os != 'Windows'
+        run: mise install usage
+      - name: Provision native Linux zsh prerequisite
+        if: matrix.area == 'apps' && runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh
       - name: Install desktop release acquisition tool
         if: matrix.area == 't3'
         run: mise install gh
@@ -200,6 +209,10 @@ jobs:
         if: matrix.area == 'apps'
         timeout-minutes: 10
         run: mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target ${{ matrix.platform.target }}
+      - name: Prove pinned Prezto and official zsh completions
+        if: matrix.area == 'apps' && runner.os != 'Windows'
+        timeout-minutes: 10
+        run: mise exec chezmoi python usage -- python tests/smoke_zsh.py --expected-target ${{ matrix.platform.target }}
       - name: Prove desktop-bundled T3 and native Codex/Claude integration
         if: matrix.area == 't3'
         timeout-minutes: 15

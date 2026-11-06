@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -119,6 +120,21 @@ def release_asset_url(source, repository, tag, name):
     )
 
 
+def completion_bytes(url):
+    with urlopen(url, timeout=60) as response:
+        return response.read()
+
+
+def resolve_completion(application, tag, source, fetch=completion_bytes):
+    if not re.fullmatch(r"[A-Za-z0-9_./-]+", source) or any(part in ("", ".", "..") for part in source.split("/")):
+        raise ValueError("Expected a repository-relative completion source")
+    url = f"https://raw.githubusercontent.com/{application['repository']}/{quote(tag, safe='')}/{source}"
+    payload = fetch(url)
+    if not payload:
+        raise ValueError(f"Empty official completion: {application['command']}")
+    return {"url": url, "sha256": hashlib.sha256(payload).hexdigest()}
+
+
 def normalize_gitlab_release(application, release, fetch_checksums):
     repository = application["repository"]
     tag = release["tag_name"]
@@ -211,10 +227,12 @@ def resolve_application(application, release):
 def update_lock(
     root, fetch_release=github_release, *, fetch_gitlab_release=gitlab_release,
     fetch_checksums=gitlab_checksums, fetch_manifest=antigravity_manifest,
-    fetch_claude_release=claude_release,
+    fetch_claude_release=claude_release, fetch_completion=completion_bytes,
 ):
     data_dir = root / "home" / ".chezmoidata"
     applications = json.loads((data_dir / "personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
+    zsh_manifest = data_dir / "zsh.json"
+    completions = json.loads(zsh_manifest.read_text(encoding="utf-8"))["zsh"].get("completions", {}) if zsh_manifest.exists() else {}
     resolved = {}
     for name, application in applications.items():
         source = application.get("source", "github")
@@ -235,6 +253,11 @@ def update_lock(
         else:
             release = fetch_release(repository)
         resolved[name] = resolve_application(application, release)
+        completion = completions.get(name, {})
+        if "source" in completion:
+            resolved[name]["completions"] = {"zsh": resolve_completion(
+                application, resolved[name]["tag"], completion["source"], fetch_completion,
+            )}
     lock = {"personalAppLocks": resolved}
     lock_path = data_dir / "personal-app-lock.json"
     if lock_path.exists() and json.loads(lock_path.read_text(encoding="utf-8")) == lock:

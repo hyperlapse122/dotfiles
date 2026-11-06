@@ -20,6 +20,7 @@ jq = "latest"
 powershell = "latest"
 python = "latest"
 uv = "latest"
+usage = { version = "latest", os = ["linux", "macos"] }
 
 [hooks]
 postinstall = { task = "bootstrap" }

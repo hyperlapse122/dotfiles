@@ -21,6 +21,7 @@ AREAS = {
         "test_codex", "test_claude",
         "test_font_lock", "test_fonts", "test_fonts_posix", "test_fonts_windows",
         "test_native_ca_shell", "test_native_ca_windows", "test_powershell_profile",
+        "test_zsh_lock", "test_zsh",
     ),
     "security": (
         "test_pinentry_apply",

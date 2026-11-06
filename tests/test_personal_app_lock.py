@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -57,6 +58,36 @@ class PersonalAppLockTest(unittest.TestCase):
         before = self.lock_path.stat().st_mtime_ns
         self.assertFalse(self.refresh())
         self.assertEqual(self.lock_path.stat().st_mtime_ns, before)
+
+    def test_official_completion_follows_selected_tag_and_failure_preserves_lock(self):
+        (self.data_dir / "zsh.json").write_text(json.dumps({"zsh": {"completions": {
+            "example": {"source": "misc/zsh/_example"},
+        }}}), encoding="utf-8")
+        payload = b"#compdef example\n_arguments '--version[version]'\n"
+        requests = []
+
+        def fetch(url):
+            requests.append(url)
+            return payload
+
+        self.assertTrue(UPDATER.update_lock(self.root, lambda _: self.release, fetch_completion=fetch))
+        pin = json.loads(self.lock_path.read_text(encoding="utf-8"))["personalAppLocks"]["example"]
+        url = "https://raw.githubusercontent.com/owner/example/v1.2.3/misc/zsh/_example"
+        self.assertEqual(requests, [url])
+        self.assertEqual(pin["completions"]["zsh"], {"url": url, "sha256": hashlib.sha256(payload).hexdigest()})
+        previous = self.lock_path.read_bytes()
+
+        def fail(_url):
+            raise OSError("official completion unavailable")
+
+        with self.assertRaises(OSError):
+            UPDATER.update_lock(self.root, lambda _: self.release, fetch_completion=fail)
+        self.assertEqual(self.lock_path.read_bytes(), previous)
+        self.release["tag_name"] = "v2.0.0"
+        for asset in self.release["assets"]:
+            asset["browser_download_url"] = asset["browser_download_url"].replace("v1.2.3", "v2.0.0")
+        self.assertTrue(UPDATER.update_lock(self.root, lambda _: self.release, fetch_completion=fetch))
+        self.assertEqual(requests[-1], url.replace("v1.2.3", "v2.0.0"))
 
     def test_versioned_archive_asset_and_member_follow_release(self):
         archive = {

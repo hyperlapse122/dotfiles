@@ -41,6 +41,11 @@ class PersonalAppsTest(unittest.TestCase):
             target = self.source / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(self.repo / "home" / name, target)
+        (self.source / ".chezmoitemplates").mkdir(exist_ok=True)
+        shutil.copy2(self.repo / "home/.chezmoitemplates/zsh-settings",
+                     self.source / ".chezmoitemplates/zsh-settings")
+        # This fixture exercises the standalone PATH action, not XDG zsh setup.
+        (self.source / ".chezmoidata/zsh.json").unlink()
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("", encoding="utf-8")
         self.env = os.environ.copy()
@@ -684,6 +689,7 @@ class PersonalAppPathTest(unittest.TestCase):
         self.home.mkdir()
         self.source = self.root / "source"
         for relative in (
+            ".chezmoitemplates/zsh-settings",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
             "dot_config/dotfiles/path.sh",
