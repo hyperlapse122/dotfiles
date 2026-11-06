@@ -355,7 +355,6 @@ class PersonalAppsTest(unittest.TestCase):
         targets = self.apps["personalApps"]["omp"]["targets"]
         for name, command, payload in (
             ("antigravity", "agy", b"CLI payload\n"),
-            ("antigravity-acp", "antigravity-acp", b"adapter payload\n"),
         ):
             self.payloads["/" + name] = payload
             self.apps["personalApps"][name] = {
@@ -372,9 +371,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.write_locks()
         launchers = self.source / "dot_local/bin"
         launchers.mkdir(parents=True)
-        names = ("agy.ps1.tmpl", "antigravity-acp.ps1.tmpl") if os.name == "nt" else (
-            "executable_agy.tmpl", "executable_antigravity-acp.tmpl",
-        )
+        names = ("agy.ps1.tmpl",) if os.name == "nt" else ("executable_agy.tmpl",)
         for name in names:
             shutil.copy2(self.repo / "home/dot_local/bin" / name, launchers / name)
         shutil.copy2(self.repo / "home/.chezmoiremove", self.source / ".chezmoiremove")
@@ -411,13 +408,13 @@ class PersonalAppsTest(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "nt", "Windows PowerShell launchers")
     def test_powershell_launchers_forward_exit_codes_and_restore_environment(self):
-        cli, adapter = self.configure_managed_payloads()
+        cli, _ = self.configure_managed_payloads()
         self.apply()
         native = Path(os.environ["SystemRoot"]) / "System32/cmd.exe"
-        for payload in (cli, adapter):
+        for payload in (cli,):
             shutil.copy2(native, payload)
         shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
-        for name in ("agy", "antigravity-acp"):
+        for name in ("agy",):
             with self.subTest(name=name):
                 launcher = str(self.home / ".local/bin" / (name + ".ps1")).replace("'", "''")
                 result = subprocess.run([
@@ -434,7 +431,7 @@ class PersonalAppsTest(unittest.TestCase):
                 self.assertIn("RESTORED=original|original-bin|original-skip", result.stdout)
 
     def test_separate_payload_directories_reapply_drift_and_sha512_enforcement(self):
-        cli, adapter = self.configure_managed_payloads()
+        cli, _ = self.configure_managed_payloads()
         legacy = [self.home / ".local/bin" / (name + ".cmd")
                   for name in ("agy", "antigravity-acp", "t3")] if os.name == "nt" else []
         for path in legacy:
@@ -443,25 +440,22 @@ class PersonalAppsTest(unittest.TestCase):
         self.apply()
         for path in legacy:
             self.assertFalse(path.exists(), f"Obsolete batch launcher retained: {path}")
-        for path, payload in ((cli, self.payloads["/antigravity"]), (adapter, self.payloads["/antigravity-acp"])):
+        for path, payload in ((cli, self.payloads["/antigravity"]),):
             self.assertEqual(path.read_bytes(), payload)
             if os.name != "nt":
                 self.assertTrue(os.access(path, os.X_OK))
         self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
-        self.assertFalse((adapter.parent / cli.name).exists())
         if os.name == "nt":
             self.assertFalse((self.home / ".local/bin/agy.exe").exists())
             self.assertFalse((self.home / ".local/bin/antigravity-acp.exe").exists())
-        for command in ("agy", "antigravity-acp"):
+        for command in ("agy",):
             launcher = self.home / ".local/bin" / (command + ".ps1" if os.name == "nt" else command)
             self.assertTrue(launcher.is_file())
         requests = list(self.requests)
         self.apply()
         cli.write_bytes(b"CLI drift")
-        adapter.write_bytes(b"adapter drift")
         self.apply()
         self.assertEqual(cli.read_bytes(), self.payloads["/antigravity"])
-        self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
         self.assertEqual(self.requests, requests)
         self.payloads["/corrupt-cli"] = b"not the official CLI"
         for pin in self.locks["personalAppLocks"]["antigravity"]["targets"].values():
@@ -470,22 +464,23 @@ class PersonalAppsTest(unittest.TestCase):
         result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(cli.read_bytes(), self.payloads["/antigravity"])
-        self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
 
-    def test_reapply_removes_adjacent_cli_and_retains_unrelated_files(self):
+    def test_reapply_removes_retired_adapter_and_retains_unrelated_files(self):
         _, adapter = self.configure_managed_payloads()
-        self.apply()
+        adapter.parent.mkdir(parents=True)
         unrelated = adapter.parent / "retained-state.json"
         unrelated.write_bytes(b'{"retain": true}\n')
-        adjacent = [adapter.parent / name for name in ("agy", "agy.exe")]
-        for path in adjacent:
-            path.write_bytes(b"#!/bin/sh\nexit 91\n")
-            path.chmod(0o755)
-        self.apply()
-        for path in adjacent:
-            self.assertFalse(path.exists(), f"Adjacent CLI overrides the managed pin: {path}")
+        retired = [adapter, adapter.parent / "agy", adapter.parent / "agy.exe",
+                   self.home / ".local/bin/antigravity-acp",
+                   self.home / ".local/bin/antigravity-acp.ps1"]
+        for path in retired:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"obsolete adapter")
+        for _ in range(2):
+            self.apply()
+        for path in retired:
+            self.assertFalse(path.exists(), f"Retired adapter retained: {path}")
         self.assertEqual(unrelated.read_bytes(), b'{"retain": true}\n')
-        self.assertEqual(adapter.read_bytes(), self.payloads["/antigravity-acp"])
 
     def test_sha512_archive_installs_selected_member_in_declared_directory(self):
         self.add_archive("tar.gz", path="/official-cli.tar.gz", member="antigravity", payload=b"CLI payload\n")

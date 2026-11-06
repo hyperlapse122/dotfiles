@@ -13,7 +13,7 @@ import subprocess
 
 
 COMMANDS = ("brew", "git", "mise", "chezmoi", "gpg", "gpgconf", "pinentry-mac",
-            "claude", "codex", "omp", "agy", "antigravity-acp", "gh", "glab", "ghq", "op",
+            "claude", "codex", "omp", "agy", "gh", "glab", "ghq", "op",
             "t3", "python", "pwsh", "dotnet", "rustc", "cargo", "cmake", "ninja", "vcpkg")
 MANAGED_FILES = {
     "Git configuration": ".gitconfig",

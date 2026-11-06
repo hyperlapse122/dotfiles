@@ -92,7 +92,6 @@ class T3CodeSettingsTest(unittest.TestCase):
     def expected_providers(self, os_name=None):
         return {
             "omp": self.expected_provider(os_name),
-            "antigravity": self.expected_provider(os_name, "antigravity"),
             "codex": self.expected_codex(os_name),
             "claudeAgent": self.expected_claude(os_name),
         }
@@ -188,7 +187,6 @@ class T3CodeSettingsTest(unittest.TestCase):
         codex.update(driver="codex", enabled=True)
         codex["config"].update(self.expected_codex()["config"])
         expected["providerInstances"]["claudeAgent"] = self.expected_claude()
-        expected["providerInstances"]["antigravity"] = self.expected_provider(name="antigravity")
         self.assertEqual(self.read_settings(), expected)
         converged = self.settings.read_bytes()
         self.apply()
@@ -204,7 +202,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.write_settings(drifted)
         self.apply()
         self.assertEqual(self.read_settings(), expected)
-        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "antigravity", "codex", "claudeAgent", "unrelated"})
+        self.assertEqual(set(self.read_settings()["providerInstances"]), {"omp", "codex", "claudeAgent", "unrelated"})
 
     def test_existing_presentation_keys_are_not_owned_even_when_null(self):
         self.write_settings({"providerInstances": {"omp": {"displayName": None, "accentColor": ""}}})
@@ -249,37 +247,35 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.apply()
         self.assertNotIn("homePath", self.read_settings()["providerInstances"]["claudeAgent"]["config"])
 
-    def test_antigravity_reconciles_absolute_adapter_path_and_retains_unowned_values(self):
-        original = {
-            "driver": "antigravity", "enabled": False, "displayName": "My Antigravity",
-            "environment": [
-                {"name": "KEEP_SECRET", "value": "", "sensitive": True, "secret": {"provider": "fixture", "reference": "retain"}},
-                {"name": "AGY_BIN", "value": "~/wrong", "sensitive": True},
-                {"name": "AGY_BIN", "value": "duplicate", "sensitive": False},
-                {"name": "AGY_SKIP_DOWNLOAD", "value": "0", "sensitive": False},
-            ],
-            "config": {"enabled": False, "source": "registry", "commandPath": "~/agy",
-                       "commandArgs": ["acp"], "env": {"EXISTING_SETTING": "retain"}},
-            "unowned": {"nested": [1, None, True]},
+    def test_native_antigravity_survives_apply_without_cli_overrides(self):
+        native = {
+            "driver": "antigravity", "enabled": False, "displayName": "Google account",
+            "config": {"enabled": False, "authMethod": "oauth-personal", "binaryPath": "/official/acp",
+                       "apiKey": {"provider": "fixture", "reference": "native-key"}},
+            "environment": [{"name": "EXAMPLE", "value": "keep", "sensitive": False}],
         }
-        self.write_settings({"providerInstances": {"antigravity": original}})
+        self.write_settings({"providerInstances": {"antigravity": native}})
         self.apply()
-        provider = self.read_settings()["providerInstances"]["antigravity"]
-        self.assertEqual(provider["driver"], "acpRegistry")
-        self.assertTrue(provider["enabled"])
-        self.assertEqual(provider["displayName"], original["displayName"])
-        self.assertEqual(provider["unowned"], original["unowned"])
-        self.assertEqual(provider["config"]["env"], original["config"]["env"])
-        expected = self.expected_provider(name="antigravity")["config"]
-        for key, value in expected.items():
-            self.assertEqual(provider["config"][key], value)
-        self.assertEqual(
-            provider["environment"],
-            [original["environment"][0]] + self.expected_provider(name="antigravity")["environment"],
-        )
-        converged = self.settings.read_bytes()
+        self.assertEqual(self.read_settings()["providerInstances"]["antigravity"], native)
+        before = self.settings.read_bytes()
         self.apply()
-        self.assertEqual(self.settings.read_bytes(), converged)
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_managed_cli_adapter_is_removed_without_claiming_native_id(self):
+        self.write_settings({"providerInstances": {"antigravity": self.expected_provider(name="antigravity")}})
+        self.apply()
+        self.assertNotIn("antigravity", self.read_settings()["providerInstances"])
+        before = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_custom_acp_is_not_overwritten_or_deleted(self):
+        custom = self.expected_provider(name="antigravity")
+        custom["config"]["commandPath"] = "/custom/adapter"
+        self.write_settings({"providerInstances": {"antigravity": custom}})
+        before = self.settings.read_bytes()
+        self.assertNotEqual(self.apply(check=False).returncode, 0)
+        self.assertEqual(self.settings.read_bytes(), before)
 
     def test_invalid_json_and_incompatible_object_boundaries_preserve_bytes(self):
         originals = [b'{ "providerInstances": ', b"{bad json}", b"null", b"[]", b"false", b'"text"', b"42"]
@@ -295,8 +291,6 @@ class T3CodeSettingsTest(unittest.TestCase):
                 {"providerInstances": {"antigravity": invalid}},
                 {"providerInstances": {"antigravity": {"config": invalid}}},
             ))
-        for environment in (None, "text", 42, False, [None], [{}], [{"name": 1}]):
-            originals.append(json.dumps({"providerInstances": {"antigravity": {"environment": environment}}}).encode("utf-8"))
         self.settings.parent.mkdir(parents=True, exist_ok=True)
         for original in originals:
             with self.subTest(original=original):
@@ -315,9 +309,24 @@ class T3CodeSettingsTest(unittest.TestCase):
                 self.assertEqual(rendered, dict(self.preferences["server"], providerInstances=self.expected_providers(os_name)))
                 self.assertEqual(json.loads(self.render(client_body, os_name, arch)),
                                  self.preferences["client"])
-                for name in ("omp", "antigravity"):
+                for name in ("omp",):
                     self.assertTrue(Path(rendered["providerInstances"][name]["config"]["commandPath"]).is_absolute())
                 self.assertTrue(Path(rendered["providerInstances"]["codex"]["config"]["binaryPath"]).is_absolute())
+
+    def test_native_preservation_and_managed_adapter_removal_on_each_platform(self):
+        body = (self.repo / "home/private_dot_t3/private_userdata/modify_private_settings.json").read_text(encoding="utf-8")
+        for os_name, arch in (("windows", "amd64"), ("windows", "arm64"),
+                              ("linux", "amd64"), ("linux", "arm64"), ("darwin", "arm64")):
+            with self.subTest(os=os_name, arch=arch):
+                native = {"driver": "antigravity", "enabled": True,
+                          "config": {"authMethod": "oauth-personal", "binaryPath": "/official/acp"}}
+                existing = json.dumps({"providerInstances": {"antigravity": native, "other-google": native}})
+                rendered = json.loads(self.render(body, os_name, arch, existing=existing))
+                self.assertEqual(rendered["providerInstances"]["antigravity"], native)
+                self.assertEqual(rendered["providerInstances"]["other-google"], native)
+                existing = json.dumps({"providerInstances": {"antigravity": self.expected_provider(os_name, "antigravity")}})
+                rendered = json.loads(self.render(body, os_name, arch, existing=existing))
+                self.assertNotIn("antigravity", rendered["providerInstances"])
 
     def test_configuration_and_parent_directories_are_private(self):
         for _ in range(2):

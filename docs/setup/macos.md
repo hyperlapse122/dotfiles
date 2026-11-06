@@ -117,7 +117,7 @@ PowerShell receives its existing managed mise profile integration.
 Check discovery in a fresh shell outside the dotfiles directory:
 
 ```sh
-command -v claude codex omp agy antigravity-acp gh glab ghq t3 op
+command -v claude codex omp agy gh glab ghq t3 op
 command -v python pwsh dotnet rustc cargo cmake ninja vcpkg
 dotnet --list-sdks
 ```

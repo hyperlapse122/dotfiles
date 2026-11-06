@@ -1,6 +1,6 @@
 # T3 Code Desktop and Harness Integration
 
-This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code and Codex plus oh-my-pi (omp) and Antigravity ACP providers.
+This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code and Codex plus the oh-my-pi (omp) ACP provider, while preserving native Antigravity settings.
 
 ## Platform Support and Installation
 
@@ -70,12 +70,12 @@ Dotfiles reconciles T3 Code's settings file (`~/.t3/userdata/settings.json`) on 
 ### Managed Settings
 
 The modify template (`modify_private_settings.json`):
-- Creates or updates keyed `omp` and `antigravity` entries using the local ACP registry driver.
-- Runs omp through the fully expanded absolute destination `.local/bin/omp` path (`omp.exe` on Windows) with the `acp` argument.
-- Runs Antigravity through its absolute native adapter payload in `~/.local/share/dotfiles/antigravity-acp/bin`, with no arguments. The terminal's `.ps1` launcher requires PowerShell; T3 invokes the native adapter directly.
-- Owns three Antigravity provider `environment` entries: absolute managed `AGY_BIN`, `AGY_SKIP_DOWNLOAD=1`, and `AGY_CLI_DISABLE_AUTO_UPDATE=true`. Duplicate or drifted owned entries are replaced; other variables, including secret references, are retained.
-- Reconciles both provider and config `enabled` flags to `true`, while preserving other providers, appearance choices, and unowned configuration.
-- Derives initial omp display name and color without overwriting user changes.
+- Creates or updates the keyed `omp` entry using the local ACP registry driver.
+- Runs omp through the absolute destination `.local/bin/omp` path (`omp.exe` on Windows) with the `acp` argument.
+- Enables omp while preserving its presentation and unowned configuration.
+- Leaves T3's native `antigravity` provider unchanged, including enablement, authentication, custom executable paths, model choices, and environment variables.
+- Removes the former repository-managed CLI adapter entry only when its driver is `acpRegistry` and its command matches the old absolute managed adapter path. A custom ACP provider occupying `antigravity` fails apply without changing the file; move it to another ID first.
+- Removes the retired third-party adapter payload and launchers on explicit apply. Unrelated files in its directory remain intact.
 
 The same template manages a single `codex` provider entry:
 - Uses T3's native `codex` driver with `setupMode = "existing"`, not its separate managed-installation mode.
@@ -101,19 +101,13 @@ Claude uses its native SDK protocol; no ACP argument is added. Run `claude auth 
 - Manages the default `~/.t3` directory (custom `T3CODE_HOME` relocations are unmanaged).
 - Model credentials, API keys, and sessions remain in each harness's own configuration or environment; dotfiles does not copy them into T3 settings.
 - Automatic background services and remote listener ports are not opened.
-- The pinned [Antigravity ACP adapter](https://github.com/shubzkothekar/antigravity-acp) passes `--dangerously-skip-permissions` to CLI model requests. Treat model turns as permission-bypassing execution; this integration does not change the CLI's stored security settings.
-- The adapter documents personal OAuth restrictions. Use its supported Gemini API-key or enterprise ADC route for model use; dotfiles does not provision credentials or start a model request.
+### Native Antigravity setup
 
-### Antigravity credentials
+In T3 Settings > Providers, enable the native Antigravity provider, install its official runtime, and choose its native sign-in method. T3 manages this runtime separately from the `agy` CLI. A custom native executable requires the compatible `localharness_external` sibling; the former third-party CLI adapter cannot substitute for it.
 
-For the [Gemini API-key route](https://antigravity.google/docs/install?tab=cli#using-a-gemini-api-key), both steps are required:
+Dotfiles does not select an Antigravity account, provision credentials, or overwrite native provider settings. Existing native providers with other instance IDs are preserved. It does not automatically merge or delete similarly named user-created providers.
 
-1. Merge `"modelProvider": "gemini"` into your user-owned `~/.gemini/antigravity-cli/settings.json`.
-2. Provision `GEMINI_API_KEY` securely in the environment inherited by T3 and its adapter.
-
-The key alone does not select this provider. Fully quit T3 and launch the desktop from that environment; exporting a key in a different shell does not change a running desktop process. Never put real keys in tracked files.
-
-For [enterprise ADC](https://antigravity.google/docs/install?tab=cli#application-default-credentials-adc-1), configure credentials through the native Google Cloud procedure and launch T3 with `AGY_ADC_AUTH=true`. Switch away from Gemini API-key mode when choosing ADC. Dotfiles does not create credentials or change your CLI model/auth settings.
+The `agy` CLI remains repository-managed for terminal use and native CE plugin installation. Its settings and authentication are separate from the T3 native runtime. Installing the CLI does not install T3's official ACP runtime.
 
 ## Testing and Smoke Verification
 
@@ -126,6 +120,4 @@ mise exec -- python tests/smoke_antigravity.py
 
 The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It starts fresh local T3 servers with the managed binary directory absent from `PATH`. The native Codex driver must complete app-server initialization, and the native Claude driver must complete SDK initialization and discover the pinned CE slash command. Both accounts remain unauthenticated; the smoke uses no personal credentials and does not claim model completion. Windows x64 has passed locally against T3 Code 0.1.7; other eligible targets rely on their native CI results.
 
-The Antigravity smoke verifies native instruction content through a localhost-only request capture that deliberately rejects model execution. It runs native plugin preservation/malformed-state checks against the locked CLI, repairs adjacent-CLI and provider drift, and initializes a fresh T3 provider with managed `.local/bin` absent from PATH. No real credentials, personal OAuth/keyring access, or model completion are used. Authenticated CE skill invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52).
-
-T3 can report an initial ready state while its ACP probe is still running. The Antigravity smoke waits for native session capabilities before accepting initialization; terminal errors and a bounded deadline still fail the check.
+The Antigravity smoke verifies the locked CLI and native instruction content through a localhost-only request capture that rejects model execution. It checks native CE discovery, plugin preservation and repair, and repeated apply without claiming T3's native provider ID. It does not prove T3 native runtime authentication or model completion. Authenticated CLI CE invocation remains tracked in [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52).

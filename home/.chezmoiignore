@@ -72,9 +72,7 @@ Library
 {{ end }}
 {{ if or (not $antigravitySupported) (ne .chezmoi.os "windows") }}
 .local/bin/agy.ps1
-.local/bin/antigravity-acp.ps1
 {{ end }}
 {{ if or (not $antigravitySupported) (eq .chezmoi.os "windows") }}
 .local/bin/agy
-.local/bin/antigravity-acp
 {{ end }}
