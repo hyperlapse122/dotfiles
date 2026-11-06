@@ -379,6 +379,31 @@ class PersonalAppsTest(unittest.TestCase):
         )
 
     @unittest.skipUnless(os.name == "nt", "Windows PowerShell launchers")
+    def test_terminal_discovery_compares_file_identity_and_rejects_other_launchers(self):
+        from unittest.mock import patch
+        from smoke_personal_apps import check_terminal_path
+
+        installed = self.home / ".local/bin/agy.ps1"
+        installed.parent.mkdir(parents=True)
+        installed.write_text("fixture", encoding="utf-8")
+        alias = self.root / "same launcher.ps1"
+        os.link(installed, alias)
+        other = self.root / "unrelated launcher.ps1"
+        other.write_text("fixture", encoding="utf-8")
+        with patch("smoke_personal_apps.fresh_windows_environment", return_value=self.env):
+            for discovered, accepted in ((alias, True), (other, False)):
+                with self.subTest(discovered=discovered), patch(
+                    "smoke_personal_apps.run", return_value=str(discovered) + "\n1.5.1\n"
+                ):
+                    if accepted:
+                        check_terminal_path(self.home, self.root, self.env, "agy", "1.5.1",
+                                            {"powershell": "unused"})
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "did not discover"):
+                            check_terminal_path(self.home, self.root, self.env, "agy", "1.5.1",
+                                                {"powershell": "unused"})
+
+    @unittest.skipUnless(os.name == "nt", "Windows PowerShell launchers")
     def test_powershell_launchers_forward_exit_codes_and_restore_environment(self):
         cli, adapter = self.configure_managed_payloads()
         self.apply()

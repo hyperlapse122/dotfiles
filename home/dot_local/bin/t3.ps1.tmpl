@@ -19,8 +19,12 @@ try {
         $app = Join-Path $root $relative
         if (Test-Path -LiteralPath $app -PathType Leaf) {
             $entry = Join-Path (Split-Path $app) 'resources/server.asar/apps/server/dist/bin.mjs'
-            & $app $entry @args
-            exit $LASTEXITCODE
+            # Electron is a GUI executable; explicitly wait and quote its native argv.
+            $arguments = @($entry) + $args | ForEach-Object {
+                '"' + (($_ -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1') + '"'
+            }
+            $process = Start-Process -FilePath $app -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+            exit $process.ExitCode
         }
     }
     [Console]::Error.WriteLine('T3 Code desktop is missing. Run chezmoi apply to install it, then retry t3.')

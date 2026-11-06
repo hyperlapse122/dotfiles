@@ -159,7 +159,7 @@ def check_terminal_path(home, outside, env, name, tag, shells):
             f"& {name} --version; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}",
         ], env=fresh_windows_environment(env), cwd=outside)
         lines = output.splitlines()
-        if not lines or os.path.normcase(lines[0]) != os.path.normcase(str(installed)):
+        if not lines or not installed.samefile(lines[0]):
             raise RuntimeError(f"Fresh Windows child did not discover {installed}: {output}")
         check_version("\n".join(lines[1:]), tag)
         print("Fresh Windows child: " + output)
