@@ -397,6 +397,26 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.assertEqual((self.settings.read_bytes(), client_path.read_bytes()), before)
         self.assertEqual(self.chez("diff", "--exclude=scripts").stdout, "")
 
+    def test_font_choices_converge_without_resetting_other_typography(self):
+        client_path = self.settings.with_name("client-settings.json")
+        client_path.parent.mkdir(parents=True, exist_ok=True)
+        local = {"fontFamilySans": "Old Sans", "fontFamilyCode": "Old Mono",
+                 "fontFamilyTerminal": "Other Mono", "fontFamilyComposer": "Custom Composer",
+                 "fontSizeCode": 22, "fontSizeInterface": 16, "fontSizeTerminal": 18,
+                 "theme": "local-theme"}
+        client_path.write_text(json.dumps(local), encoding="utf-8")
+        self.apply()
+        result = json.loads(client_path.read_text())
+        self.assertEqual(result["fontFamilySans"], "Pretendard Variable")
+        self.assertEqual(result["fontFamilyCode"], "Jetendard")
+        self.assertEqual(result["fontFamilyTerminal"], "Jetendard")
+        for key in ("fontFamilyComposer", "fontSizeCode", "fontSizeInterface", "fontSizeTerminal", "theme"):
+            self.assertEqual(result[key], local[key])
+        before = client_path.read_bytes()
+        self.apply()
+        self.assertEqual(client_path.read_bytes(), before)
+        self.assertEqual(self.chez("diff", "--exclude=scripts").stdout, "")
+
     def test_client_and_nested_preference_shape_errors_preserve_original_bytes(self):
         self.write_preferences({"storageCleanup": {"worktreeAfterDays": 5},
                                 "sourceControlWritingStyle": {"mode": "custom"}},

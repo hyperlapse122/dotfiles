@@ -45,6 +45,9 @@
       }
     },
     "client": {
+      "fontFamilySans": "Pretendard Variable",
+      "fontFamilyCode": "Jetendard",
+      "fontFamilyTerminal": "Jetendard",
       "notificationMode": "notifications",
       "inAppNotificationsEnabled": true,
       "sidebarWorkingShelfEnabled": true,
