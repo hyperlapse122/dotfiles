@@ -1,0 +1,8 @@
+[package]
+name = "dotfiles-pinentry"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+
+[dependencies]
+zeroize = "=1.9.1"
