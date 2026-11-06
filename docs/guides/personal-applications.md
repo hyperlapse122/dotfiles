@@ -14,11 +14,10 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 | `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `ghq` | [x-motemen/ghq](https://github.com/x-motemen/ghq) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (x64/ARM64) |
 | `agy` | [Google Antigravity](https://antigravity.google/) | Official CLI binary or archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
-| `antigravity-acp` | [shubzkothekar/antigravity-acp](https://github.com/shubzkothekar/antigravity-acp) | Compiled adapter with managed launcher | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 
 > **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
 
-Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). Antigravity CLI and ACP payloads live separately in `~/.local/share/dotfiles/antigravity/bin` and `~/.local/share/dotfiles/antigravity-acp/bin`; their POSIX launchers or Windows `.ps1` launchers select those absolute paths. Run Windows launchers from PowerShell. Device application does not require a Bun or Python runtime.
+Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). The Antigravity CLI payload lives in `~/.local/share/dotfiles/antigravity/bin`; its POSIX or Windows `.ps1` launcher selects that absolute path. Run Windows launchers from PowerShell. Device application does not require a Bun or Python runtime.
 
 Codex includes its native helper executables, `~/.local/codex-package.json`, `~/.local/codex-path`, and `~/.local/codex-resources`. Keep these together: copying only `codex` is not a complete installation. The Codex-specific resource directories are reconciled exactly; unrelated programs in `~/.local/bin` are preserved. Upstream currently names its Linux packages `unknown-linux-musl`; that artifact name does not expand this repository's supported host policy.
 
@@ -56,10 +55,9 @@ Normal application can miss modifications that preserve file size and modificati
 
 This manages the official `agy` CLI, not the separate Antigravity GUI application.
 The launchers disable CLI self-update with `AGY_CLI_DISABLE_AUTO_UPDATE=true`.
-The ACP launcher selects the locked CLI with `AGY_BIN` and prevents the adapter from downloading another copy with `AGY_SKIP_DOWNLOAD=1`.
-Reapplying uses the committed lock; it does not resolve a newer release.
+T3's native Antigravity provider uses a separate official ACP runtime installed through T3 provider settings. Dotfiles leaves that provider's configuration and authentication unchanged.
 
-Explicit apply removes the reserved `agy` and `agy.exe` paths from `~/.local/share/dotfiles/antigravity-acp/bin`, where the adapter otherwise prefers them over `AGY_BIN`. Other files in that directory and unrelated application directories are preserved.
+The old third-party `antigravity-acp` payload and launchers are no longer installed. Explicit apply removes their known executable paths and the old managed provider entry, while preserving unrelated files and native T3 providers.
 
 To roll back, restore the desired `home/.chezmoidata/personal-app-lock.json` revision and explicitly apply again with Antigravity and T3 sessions closed. See [native CE integration](harness-plugins.md) and [T3 configuration and security limits](t3-code.md).
 

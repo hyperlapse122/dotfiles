@@ -12,11 +12,21 @@
 {{- fail "Invalid T3 Code settings.json: providerInstances must be an object" -}}
 {{- end -}}
 {{- end -}}
-{{- $cli := "agy" -}}
-{{- if eq .chezmoi.os "windows" -}}{{- $cli = "agy.exe" -}}{{- end -}}
-{{- $cliPath := joinPath .chezmoi.destDir ".local" "share" "dotfiles" "antigravity" "bin" $cli | replace "\\" "/" -}}
-{{- $adapterEnvironment := dict "AGY_BIN" $cliPath "AGY_SKIP_DOWNLOAD" "1" "AGY_CLI_DISABLE_AUTO_UPDATE" "true" -}}
-{{- $managed := list (dict "id" "omp" "command" "omp" "directory" ".local/bin" "args" (list "acp") "displayName" "oh-my-pi" "accentColor" "#f84fcc") (dict "id" "antigravity" "command" "antigravity-acp" "directory" ".local/share/dotfiles/antigravity-acp/bin" "args" list "displayName" "Antigravity" "environment" $adapterEnvironment) -}}
+{{- /* The native Google ACP driver owns the antigravity ID. Remove only our old CLI adapter. */ -}}
+{{- if hasKey $providers "antigravity" -}}
+{{- $native := get $providers "antigravity" -}}
+{{- if not (kindIs "map" $native) -}}{{- fail "Invalid T3 Code settings.json: providerInstances.antigravity must be an object" -}}{{- end -}}
+{{- if and (hasKey $native "config") (not (kindIs "map" $native.config)) -}}{{- fail "Invalid T3 Code settings.json: providerInstances.antigravity.config must be an object" -}}{{- end -}}
+{{- if eq (get $native "driver") "acpRegistry" -}}
+{{- $legacyPath := joinPath .chezmoi.destDir ".local/share/dotfiles/antigravity-acp/bin/antigravity-acp" | replace "\\" "/" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $legacyPath = printf "%s.exe" $legacyPath -}}{{- end -}}
+{{- if ne (get (get $native "config" | default dict) "commandPath") $legacyPath -}}
+{{- fail "The antigravity ID contains a custom ACP Registry provider; move it to another ID before applying" -}}
+{{- end -}}
+{{- $providers = omit $providers "antigravity" -}}
+{{- end -}}
+{{- end -}}
+{{- $managed := list (dict "id" "omp" "command" "omp" "directory" ".local/bin" "args" (list "acp") "displayName" "oh-my-pi" "accentColor" "#f84fcc") -}}
 {{- range $entry := $managed -}}
 {{- $provider := dict -}}
 {{- if hasKey $providers $entry.id -}}
@@ -37,30 +47,6 @@
 {{- $command := joinPath $.chezmoi.destDir $entry.directory $executable | replace "\\" "/" -}}
 {{- $config = $config | setValueAtPath "enabled" true | setValueAtPath "source" "local" | setValueAtPath "commandPath" $command | setValueAtPath "commandArgs" $entry.args -}}
 {{- $provider = $provider | setValueAtPath "driver" "acpRegistry" | setValueAtPath "enabled" true | setValueAtPath "config" $config -}}
-{{- if hasKey $entry "environment" -}}
-{{- $environment := list -}}
-{{- if hasKey $provider "environment" -}}
-{{- $existing := get $provider "environment" -}}
-{{- if not (kindIs "slice" $existing) -}}
-{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.environment must be an array" $entry.id) -}}
-{{- end -}}
-{{- range $variable := $existing -}}
-{{- if not (kindIs "map" $variable) -}}
-{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.environment entries must be objects" $entry.id) -}}
-{{- end -}}
-{{- if not (and (hasKey $variable "name") (kindIs "string" (get $variable "name"))) -}}
-{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.environment entries require a string name" $entry.id) -}}
-{{- end -}}
-{{- if not (hasKey $entry.environment $variable.name) -}}
-{{- $environment = append $environment $variable -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-{{- range $name, $value := $entry.environment -}}
-{{- $environment = append $environment (dict "name" $name "value" $value "sensitive" false) -}}
-{{- end -}}
-{{- $provider = $provider | setValueAtPath "environment" $environment -}}
-{{- end -}}
 {{- if not (hasKey $provider "displayName") -}}
 {{- $provider = $provider | setValueAtPath "displayName" $entry.displayName -}}
 {{- end -}}

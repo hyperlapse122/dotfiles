@@ -36,36 +36,6 @@
         }
       }
     },
-    "antigravity-acp": {
-      "tag": "v1.2.0",
-      "targets": {
-        "darwin-arm64": {
-          "kind": "file",
-          "sha256": "a668b8025ee5a7e891a52fc5f7616883e1d295e207be834b9ef6e3b5bc4dfd41",
-          "url": "https://github.com/shubzkothekar/antigravity-acp/releases/download/v1.2.0/agy-acp-darwin-arm64"
-        },
-        "linux-amd64": {
-          "kind": "file",
-          "sha256": "9b3eb4f253efb90495fbb9d5d32d549cbe6dcb5cf524db7306b0574b1094d5d4",
-          "url": "https://github.com/shubzkothekar/antigravity-acp/releases/download/v1.2.0/agy-acp-linux-x64"
-        },
-        "linux-arm64": {
-          "kind": "file",
-          "sha256": "7ef93f6e002f9cfa928ef2dc42a347cddde5e5cc0ac85f218e92c859d1740fad",
-          "url": "https://github.com/shubzkothekar/antigravity-acp/releases/download/v1.2.0/agy-acp-linux-arm64"
-        },
-        "windows-amd64": {
-          "kind": "file",
-          "sha256": "fe7515f0e7de51e09f9c8b2c70c6c4ec2a9bd9f08850c21ba86a1fcbe8ff7074",
-          "url": "https://github.com/shubzkothekar/antigravity-acp/releases/download/v1.2.0/agy-acp-windows-x64.exe"
-        },
-        "windows-arm64": {
-          "kind": "file",
-          "sha256": "3301b56836979e6c72bda1b95c8deea4225a79f044cc6c1641a81e641a24755a",
-          "url": "https://github.com/shubzkothekar/antigravity-acp/releases/download/v1.2.0/agy-acp-windows-arm64.exe"
-        }
-      }
-    },
     "claude": {
       "tag": "2.1.318",
       "targets": {

@@ -1,4 +1,4 @@
-"""Apply locked Antigravity/CE and initialize its adapter through a fresh T3 server.
+"""Apply locked Antigravity CLI/CE without claiming T3’s native provider ID.
 
 No external model request, personal OAuth, real keyring operation, or personal apply is used.
 Native instruction discovery uses a localhost capture-only endpoint that rejects requests.
@@ -10,50 +10,19 @@ import json
 import os
 from pathlib import Path
 import shutil
-import signal
-import socket
 import subprocess
 import sys
-import time
 
 from asset_fixtures import copy_asset_templates
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 from smoke_codex import capture_requests, strings
-from smoke_t3_code import T3Rpc, provision_desktop
-
-
-def desktop_command(real_home, environment):
-    if os.name == "nt":
-        candidates = [Path(environment["LOCALAPPDATA"]) / "Programs/t3code/T3 Code (Beta).exe"]
-        candidates.extend(Path(environment[key]) / "t3code/T3 Code (Beta).exe"
-                          for key in ("PROGRAMW6432", "PROGRAMFILES", "PROGRAMFILES(X86)")
-                          if environment.get(key))
-        for app in candidates:
-            if app.is_file():
-                return [str(app), str(app.parent / "resources/server.asar/apps/server/dist/bin.mjs")]
-    elif os.uname().sysname == "Darwin":
-        bundles = [real_home / "Applications/T3 Code (Beta).app", Path("/Applications/T3 Code (Beta).app")]
-        cask = Path("/opt/homebrew/Caskroom/t3-code")
-        if cask.is_dir():
-            bundles.extend(cask.glob("*/T3 Code (Beta).app"))
-        for bundle in bundles:
-            app = bundle / "Contents/MacOS/T3 Code (Beta)"
-            if app.is_file():
-                return [str(app), str(bundle / "Contents/Resources/app.asar/apps/server/dist/bin.mjs")]
-    else:
-        app = Path("/opt/T3 Code (Beta)/t3code")
-        if app.is_file():
-            return [str(app), str(app.parent / "resources/app.asar/apps/server/dist/bin.mjs")]
-    raise RuntimeError("Install the T3 Code desktop application before running this smoke")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-target")
-    parser.add_argument("--install-desktop", action="store_true")
     args = parser.parse_args()
     chezmoi = executable("chezmoi")
-    real_home = Path.home()
     real_environment = os.environ.copy()
     app_locks = json.loads((REPO / "home/.chezmoidata/personal-app-lock.json").read_text(encoding="utf-8"))["personalAppLocks"]
     ce_pin = json.loads((REPO / "home/.chezmoidata/harness-plugin-lock.json").read_text(encoding="utf-8"))["harnessPluginLocks"]["compound-engineering"]
@@ -71,7 +40,7 @@ def main():
             shutil.copy2(REPO / "home" / relative, destination)
         declaration = source / ".chezmoidata/personal-apps.json"
         apps = json.loads(declaration.read_text(encoding="utf-8"))
-        apps["personalApps"] = {name: apps["personalApps"][name] for name in ("antigravity", "antigravity-acp")}
+        apps["personalApps"] = {name: apps["personalApps"][name] for name in ("antigravity",)}
         declaration.write_text(json.dumps(apps), encoding="utf-8")
         markers = {"common": "DOTFILES_COMMON_NATIVE_RULE_71AE",
                    "antigravity": "DOTFILES_ANTIGRAVITY_NATIVE_RULE_9F26",
@@ -121,14 +90,10 @@ def main():
             raise RuntimeError(f"Expected {args.expected_target}, got {target}")
         if target not in app_locks["antigravity"]["targets"]:
             raise RuntimeError(f"No locked Antigravity target: {target}")
-        if args.install_desktop:
-            provision_desktop(target, root, real_environment)
-        t3 = desktop_command(real_home, real_environment)
         chez("apply", "--force", "--exclude=scripts")
         binary_suffix = ".exe" if os.name == "nt" else ""
         cli = home / ".local/share/dotfiles/antigravity/bin" / ("agy" + binary_suffix)
         launcher_suffix = ".ps1" if os.name == "nt" else ""
-        launcher = home / ".local/bin" / ("antigravity-acp" + launcher_suffix)
         agy_launcher = home / ".local/bin" / ("agy" + launcher_suffix)
 
         def launch(path, *arguments):
@@ -138,7 +103,7 @@ def main():
                 invocation = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", *invocation]
             return run(invocation, env=env, cwd=outside)
 
-        for name, path in (("antigravity", agy_launcher), ("antigravity-acp", launcher)):
+        for name, path in (("antigravity", agy_launcher),):
             version = launch(path, "--version")
             check_version(version, app_locks[name]["tag"])
             print(f"Native {target}: {name} {version}")
@@ -174,104 +139,18 @@ def main():
             env=native_checks_env, cwd=outside)
         print("Native plugin preservation, enablement repair, and malformed-state checks passed")
         first = json.loads(t3_settings.read_text(encoding="utf-8"))
-        provider = first["providerInstances"]["antigravity"]
-        adapter = home / ".local/share/dotfiles/antigravity-acp/bin" / ("antigravity-acp" + binary_suffix)
-        if provider["config"]["commandPath"] != adapter.as_posix() or provider["config"]["commandArgs"] != []:
-            raise RuntimeError("T3 does not use the absolute native adapter executable")
-        environment = {item["name"]: item["value"] for item in provider["environment"]}
-        if environment.get("AGY_BIN") != cli.as_posix() or environment.get("AGY_SKIP_DOWNLOAD") != "1":
-            raise RuntimeError("T3 does not select the pinned CLI without adapter auto-download")
+        if "antigravity" in first["providerInstances"]:
+            raise RuntimeError("Apply claimed T3's native Antigravity provider ID")
         run([str(cli), "plugin", "disable", "compound-engineering"], env=env, cwd=outside)
-        drifted = json.loads(json.dumps(first))
-        drifted["providerInstances"]["antigravity"]["enabled"] = False
-        drifted["providerInstances"]["antigravity"]["config"]["commandPath"] = "wrong"
-        t3_settings.write_text(json.dumps(drifted), encoding="utf-8")
-        adjacent = adapter.parent / cli.name
-        adjacent.write_bytes(b"#!/bin/sh\nexit 91\n")
-        adjacent.chmod(0o755)
         for _ in range(2):
             chez("apply", "--force")
-        if adjacent.exists():
-            raise RuntimeError("Reapply retained the adjacent CLI that overrides AGY_BIN")
         if json.loads(t3_settings.read_text(encoding="utf-8")) != first:
             raise RuntimeError("Repeated provider reconciliation did not converge")
-        if json.loads(cli_settings.read_text(encoding="utf-8"))["unrelatedSmokeSetting"] != "retain":
-            raise RuntimeError("Apply changed unrelated Antigravity settings")
-        for name, path in (("antigravity", agy_launcher), ("antigravity-acp", launcher)):
-            check_version(launch(path, "--version"), app_locks[name]["tag"])
         plugins = json.loads(run([str(cli), "plugin", "list", "--json"], env=env, cwd=outside))
         if not next(plugin for plugin in plugins if plugin["name"] == "compound-engineering")["enabled"]:
             raise RuntimeError("Reapply did not restore native CE enablement")
-        runtime = json.loads(t3_settings.read_text(encoding="utf-8"))
-        for name, other in runtime["providerInstances"].items():
-            if name != "antigravity":
-                other["enabled"] = False
-                other.setdefault("config", {})["enabled"] = False
-        t3_settings.write_text(json.dumps(runtime), encoding="utf-8")
-        env["PATH"] = os.pathsep.join(part for part in env.get("PATH", "").split(os.pathsep)
-                                    if part and ".local" + os.sep + "bin" not in os.path.normcase(part)
-                                    and ".local/bin" not in part.replace("\\", "/").lower())
-        env.update({"ELECTRON_RUN_AS_NODE": "1", "T3CODE_DESKTOP_CLI_LAUNCHER": "1"})
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            port = listener.getsockname()[1]
-        token = run(t3 + ["auth", "session", "issue", "--base-dir", str(home / ".t3"),
-                         "--scope", "providers:manage", "--scope", "orchestration:read",
-                         "--ttl", "5m", "--token-only"], env=env, cwd=outside)
-        with (root / "t3.log").open("w", encoding="utf-8") as log:
-            process = subprocess.Popen(t3 + ["serve", "--mode", "desktop", "--host", "127.0.0.1",
-                                             "--port", str(port), "--base-dir", str(home / ".t3"), "--no-browser"],
-                                       env=env, cwd=outside, stdout=log, stderr=subprocess.STDOUT,
-                                       start_new_session=os.name != "nt")
-            rpc = None
-            try:
-                deadline = time.monotonic() + 60
-                while True:
-                    if process.poll() is not None:
-                        raise RuntimeError("Fresh T3 server exited: " + (root / "t3.log").read_text(encoding="utf-8"))
-                    try:
-                        rpc = T3Rpc(port, token)
-                        break
-                    except OSError:
-                        if time.monotonic() >= deadline:
-                            raise RuntimeError("Fresh T3 server did not become ready")
-                        time.sleep(0.1)
-                refreshed = rpc.call("1", "server.refreshProviders", {
-                    "instanceId": "antigravity", "cwd": str(outside), "fresh": True, "refreshModels": True,
-                })
-                snapshots = refreshed.get("providers", [])
-                snapshot = next((item for item in snapshots if item["instanceId"] == "antigravity"), None)
-                if snapshot is None or not snapshot.get("installed") or snapshot.get("status") == "error":
-                    raise RuntimeError("Fresh T3 did not initialize managed ACP: " + json.dumps(refreshed))
-                deadline = time.monotonic() + 60
-                request_id = 2
-                while not snapshot.get("nativeSessions", {}).get("canList"):
-                    if time.monotonic() >= deadline:
-                        raise RuntimeError("T3 did not receive the adapter's ACP session capabilities: " + json.dumps(snapshot))
-                    time.sleep(0.1)
-                    refreshed = rpc.call(str(request_id), "server.refreshProviders", {
-                        "instanceId": "antigravity", "cwd": str(outside), "fresh": False, "refreshModels": False,
-                    })
-                    request_id += 1
-                    snapshot = next((item for item in refreshed.get("providers", [])
-                                     if item["instanceId"] == "antigravity"), None)
-                    if snapshot is None or not snapshot.get("installed") or snapshot.get("status") == "error":
-                        raise RuntimeError("Fresh T3 did not initialize managed ACP: " + json.dumps(refreshed))
-                print(f"Fresh T3 {target}: managed Antigravity ACP initialized with .local/bin absent from PATH")
-            except Exception:
-                print((root / "t3.log").read_text(encoding="utf-8", errors="replace"))
-                raise
-            finally:
-                if rpc is not None:
-                    rpc.close()
-                if os.name == "nt":
-                    subprocess.run([real_environment["SYSTEMROOT"] + "/System32/taskkill.exe", "/PID", str(process.pid), "/T", "/F"],
-                                   capture_output=True, timeout=30)
-                else:
-                    os.killpg(process.pid, signal.SIGTERM)
-                process.wait(timeout=30)
-        print("Verified: pinned versions, native CE discovery/validation, enabled-state repair, unrelated settings, and real T3 ACP initialization")
-        print("Authenticated CE skill invocation remains deferred to issue #52")
+        print("Verified: pinned CLI, native instructions/CE discovery, plugin repair, and native T3 provider ID left untouched")
+        print("T3's official ACP runtime and authenticated CE invocation are separate; invocation remains tracked in issue #52")
 
 
 if __name__ == "__main__":

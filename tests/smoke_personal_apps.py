@@ -151,7 +151,7 @@ def fresh_windows_environment(isolated):
 
 
 def check_terminal_path(home, outside, env, name, tag, shells):
-    suffix = ".ps1" if name in ("agy", "antigravity-acp") else ".exe"
+    suffix = ".ps1" if name == "agy" else ".exe"
     installed = home / ".local/bin" / (name + suffix if os.name == "nt" else name)
     if os.name == "nt":
         output = run([
@@ -256,8 +256,6 @@ def main():
             ".chezmoiremove",
             "dot_local/bin/executable_agy.tmpl",
             "dot_local/bin/agy.ps1.tmpl",
-            "dot_local/bin/executable_antigravity-acp.tmpl",
-            "dot_local/bin/antigravity-acp.ps1.tmpl",
             "dot_config/dotfiles/path.sh",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",

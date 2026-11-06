@@ -1,9 +1,0 @@
-{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
-{{- $app := get .personalApps "antigravity-acp" | default dict -}}
-{{- if and (hasKey (get $app "targets" | default dict) $target) (ne .chezmoi.os "windows") -}}
-#!/bin/sh
-export AGY_CLI_DISABLE_AUTO_UPDATE=true
-export AGY_BIN='{{ joinPath .chezmoi.destDir ".local" "share" "dotfiles" "antigravity" "bin" "agy" | replace "'" "'\\''" }}'
-export AGY_SKIP_DOWNLOAD=1
-exec '{{ joinPath .chezmoi.destDir ".local" "share" "dotfiles" "antigravity-acp" "bin" "antigravity-acp" | replace "'" "'\\''" }}' "$@"
-{{ end -}}

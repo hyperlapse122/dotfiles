@@ -1,10 +1,10 @@
-{{- $apps := get . "personalApps" | default dict -}}
-{{- $adapter := get $apps "antigravity-acp" | default dict -}}
-{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
-{{- if hasKey (get $adapter "targets" | default dict) $target }}
+.local/bin/antigravity-acp
+.local/bin/antigravity-acp.ps1
+.local/bin/antigravity-acp.exe
+.local/share/dotfiles/antigravity-acp/bin/antigravity-acp
+.local/share/dotfiles/antigravity-acp/bin/antigravity-acp.exe
 .local/share/dotfiles/antigravity-acp/bin/agy
 .local/share/dotfiles/antigravity-acp/bin/agy.exe
-{{- end }}
 
 {{ if eq .chezmoi.os "windows" }}
 .local/bin/t3.cmd
