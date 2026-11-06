@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+if [ "$#" -eq 0 ]; then
+    echo 'Select requests or curl managed trust.' >&2
+    exit 1
+fi
+profile=$1
+shift
+exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "ca-files.py" | replace "'" "'\"'\"'" }}' "$profile" --destination '{{ .chezmoi.destDir | replace "'" "'\"'\"'" }}' "$@"
