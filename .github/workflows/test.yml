@@ -271,11 +271,13 @@ jobs:
           install: false
           env: false
       - name: Install declared pinentry build and smoke tools
-        run: mise install chezmoi python 'rust[profile=default]@1.99.1'
+        run: mise install chezmoi python usage powershell 'rust[profile=default]@1.99.1'
       - name: Check Rust formatting, lint, and isolated tests
         run: mise run pinentry:test
       - name: Build the native release binary
         run: mise run pinentry:build
+      - name: Prove generated CLI completions in native shells
+        run: mise exec chezmoi python usage powershell -- python -B -m unittest discover -s tests -p test_cli_completions.py
       - name: Provision disposable Linux credential service
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring

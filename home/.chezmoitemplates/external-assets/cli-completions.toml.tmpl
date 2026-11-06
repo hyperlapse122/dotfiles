@@ -1,0 +1,20 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $pin := .cliCompletionAssets.bashCompletion -}}
+[".local/share/dotfiles/bash-completion/bash_completion"]
+type = "archive-file"
+url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+checksum.sha256 = {{ $pin.sha256 | quote }}
+path = "bash-completion-2.18.0/bash_completion"
+
+[".local/share/dotfiles/bash-completion/startup-core/000_bash_completion_compat.bash"]
+type = "archive-file"
+url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+checksum.sha256 = {{ $pin.sha256 | quote }}
+path = "bash-completion-2.18.0/startup-core/000_bash_completion_compat.bash"
+
+[".local/share/dotfiles/bash-completion/COPYING"]
+type = "archive-file"
+url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+checksum.sha256 = {{ $pin.sha256 | quote }}
+path = "bash-completion-2.18.0/COPYING"
+{{- end }}

@@ -67,6 +67,19 @@ fn help_and_version_work_without_configuration() {
 }
 
 #[test]
+fn usage_spec_works_without_frontend_or_store_configuration() {
+    let install = Installation::new();
+    install.config("{invalid frontend configuration");
+    let result = install.run(&["--usage-spec"], b"");
+    assert!(result.status.success());
+    assert!(result.stderr.is_empty());
+    let spec = String::from_utf8(result.stdout).unwrap();
+    assert!(spec.contains("bin \"dotfiles-pinentry\""));
+    assert!(spec.contains("forget"));
+    assert!(spec.contains("card-id"));
+}
+
+#[test]
 fn malformed_forget_is_rejected_before_configuration_or_storage() {
     let install = Installation::new();
     for arguments in [
