@@ -69,7 +69,6 @@ def secure(path):
     if os.name != 'nt':
         path.chmod(0o600)
         return
-    # No secret content is passed to PowerShell; only the private file path.
     script = '''$ErrorActionPreference = 'Stop'
 $path = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
@@ -94,7 +93,6 @@ def install_credential(agent, plaintext):
     if not isinstance(auth, dict):
         raise ValueError('Pi auth must be an object.')
     auth['synthetic'] = {'type': 'api_key', 'key': token}
-    # Secure a new same-directory file before its secret content is written.
     import tempfile
     descriptor, temporary = tempfile.mkstemp(dir=agent, prefix='.auth-')
     os.close(descriptor)
