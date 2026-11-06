@@ -101,13 +101,14 @@ else
     ghostty=$(command -v ghostty) || fail 'Ghostty is not installed.'
     ghostty --version >/dev/null 2>&1 || fail 'Ghostty executable is not usable.'
     if [ "$release" = 24.04 ]; then
+        ghostty=$(readlink -f "$ghostty") || fail 'Cannot resolve the installed Ghostty executable.'
         alternatives=$(update-alternatives --query x-terminal-emulator) || fail 'Cannot inspect the native terminal alternatives.'
         active=$(printf '%s\n' "$alternatives" | sed -n 's/^Value: //p')
-        if [ "$active" != "$ghostty" ]; then
+        if ! dpkg-query -S "$ghostty" >/dev/null 2>&1 ||
+           ! printf '%s\n' "$alternatives" | grep -Fqx "Alternative: $ghostty"; then
+            note_pending 'Ghostty is not a package-registered system terminal alternative; install the supported system package before selecting it.'
+        elif [ "$active" != "$ghostty" ]; then
             if [ "$mode" = apply ]; then
-                if ! printf '%s\n' "$alternatives" | grep -Fqx "Alternative: $ghostty"; then
-                    sudo update-alternatives --install /usr/bin/x-terminal-emulator x-terminal-emulator "$ghostty" 50 || fail 'Cannot register Ghostty.'
-                fi
                 sudo update-alternatives --set x-terminal-emulator "$ghostty" || fail 'Cannot select Ghostty.'
                 active=$(update-alternatives --query x-terminal-emulator | sed -n 's/^Value: //p')
                 [ "$active" = "$ghostty" ] || fail 'Ghostty is not the effective native terminal alternative.'
@@ -117,17 +118,22 @@ else
         fi
     else
         command -v xdg-terminal-exec >/dev/null 2>&1 || fail 'Ubuntu default-terminal dispatcher xdg-terminal-exec is missing.'
+        desktop_id=com.mitchellh.ghostty.desktop
+        if [ "$ghostty" = '/snap/bin/ghostty' ]; then
+            [ -r '/var/lib/snapd/desktop/applications/ghostty_ghostty.desktop' ] || fail 'The installed Ghostty Snap desktop entry is missing.'
+            desktop_id=ghostty_ghostty.desktop
+        fi
         list="$config_home/ubuntu-xdg-terminals.list"
         if [ "$mode" = apply ]; then
             mkdir -p "$config_home"
             temporary=$(mktemp "$config_home/.ghostty-terminals.XXXXXXXX")
-            { printf '%s\n' com.mitchellh.ghostty.desktop
-              if [ -f "$list" ]; then grep -Fvx com.mitchellh.ghostty.desktop "$list" || [ "$?" -eq 1 ]; fi
+            { printf '%s\n' "$desktop_id"
+              if [ -f "$list" ]; then grep -Fvx "$desktop_id" "$list" || [ "$?" -eq 1 ]; fi
             } > "$temporary"
             if cmp -s "$temporary" "$list"; then rm -f "$temporary"; else mv "$temporary" "$list"; fi
         fi
         selected_id=$(XTE_CACHE_ENABLED=0 xdg-terminal-exec --print-id) || fail 'Cannot inspect the effective desktop terminal.'
-        [ "$selected_id" = com.mitchellh.ghostty.desktop ] || note_pending 'The desktop dispatcher does not select Ghostty; check the Ubuntu GNOME session and apply again.'
+        [ "$selected_id" = "$desktop_id" ] || note_pending 'The desktop dispatcher does not select Ghostty; check the Ubuntu GNOME session and apply again.'
     fi
     manager_available=1
     manager_environment=$(systemctl --user show-environment 2>/dev/null) || manager_available=0

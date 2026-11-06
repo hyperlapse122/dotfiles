@@ -28,6 +28,7 @@ elif name == 'dscl':
     key=args[-1]; print(key+': '+(state['shell'] if key=='UserShell' else shellpath(root/'home')))
 elif name == 'sw_vers': print('26.0')
 elif name == 'dpkg': print(state.get('arch','amd64'))
+elif name == 'dpkg-query': sys.exit(1 if state.get('private_ghostty') else 0)
 elif name == 'zsh': sys.exit(0)
 elif name == 'ghostty': print('Ghostty 1.3.1')
 elif name == 'chsh':
@@ -37,7 +38,8 @@ elif name == 'systemctl':
     print(state.get('manager_environment','SHELL='+state.get('manager_shell',state['shell'])))
 elif name == 'update-alternatives':
     print('Name: x-terminal-emulator\nValue: '+state.get('alternative','/old/terminal'))
-    print('Alternative: '+shellpath(root/'commands'/'ghostty'))
+    if not state.get('unregistered_ghostty'):
+        print('Alternative: '+shellpath(root/'commands'/'ghostty'))
 elif name == 'sudo':
     if args[:3] == ['update-alternatives','--set','x-terminal-emulator']:
         state['alternative']=args[3]; (root/'state.json').write_text(json.dumps(state))
@@ -63,13 +65,13 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.bin.mkdir()
         self.fixture = self.root/'fixture.py'
         self.fixture.write_text(FIXTURE, encoding='utf-8')
-        for name in ('uname','id','getent','dscl','sw_vers','dpkg','zsh','ghostty',
+        for name in ('uname','id','getent','dscl','sw_vers','dpkg','dpkg-query','zsh','ghostty',
                      'chsh','systemctl','update-alternatives','sudo','xdg-terminal-exec','swift'):
             p=self.bin/name
             p.write_text('#!/bin/sh\nexport MSYS2_ARG_CONV_EXCL="*"\nexec '+shlex.quote(Path(sys.executable).as_posix())+' '+
                          shlex.quote(self.fixture.as_posix())+' '+shlex.quote(name)+' "$@"\n',encoding='utf-8')
             p.chmod(0o755)
-        utilities=('bash','awk','cat','cmp','cp','dirname','grep','mkdir','mktemp','mv','rm','sed')
+        utilities=('bash','awk','cat','cmp','cp','dirname','grep','mkdir','mktemp','mv','readlink','rm','sed')
         resolved=subprocess.run([find_bash(),'--noprofile','--norc','-c',
                                  'PATH=/usr/bin:/bin; command -v '+' '.join(utilities)],
                                 capture_output=True,text=True,check=True)
@@ -98,6 +100,8 @@ class TerminalEnvironmentTest(unittest.TestCase):
         script=self.root/'terminal.sh'
         text=(self.repo/'scripts/terminal-environment.sh').read_text(encoding='utf-8')
         for native, replacement in [("'/etc/os-release'",os_release),("'/etc/shells'",shells),
+                                    ("'/snap/bin/ghostty'",self.bin/'ghostty' if self.state.get('snap') else self.root/'no-snap'),
+                                    ("'/var/lib/snapd/desktop/applications/ghostty_ghostty.desktop'",self.root/'snap.desktop'),
                                     ("'/bin/zsh'",self.bin/'zsh'),("'/usr/bin/zsh'",self.bin/'zsh')]:
             text=text.replace(native,shlex.quote(self.shellpath(replacement)))
         script.write_text(text,encoding='utf-8')
@@ -161,6 +165,27 @@ class TerminalEnvironmentTest(unittest.TestCase):
         result=self.run_terminal(release='24.04')
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertEqual(self.state['alternative'],self.shellpath(self.bin/'ghostty'))
+
+    def test_private_or_unregistered_ghostty_is_never_promoted_system_wide(self):
+        for condition in ('private_ghostty','unregistered_ghostty'):
+            with self.subTest(condition=condition):
+                self.state.update(alternative='/old/terminal', **{condition:True})
+                result=self.run_terminal(release='24.04')
+                self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+                self.assertIn('package-registered',result.stderr)
+                self.assertFalse(any(name=='sudo' for name,args in self.calls()))
+                self.assertEqual(self.state['alternative'],'/old/terminal')
+                self.state.pop(condition)
+
+    def test_retained_snap_uses_its_native_desktop_entry(self):
+        self.state.update(snap=True,desktop_id='ghostty_ghostty.desktop')
+        (self.root/'snap.desktop').write_text('[Desktop Entry]\nType=Application\n')
+        result=self.run_terminal()
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertNotIn('PENDING',result.stderr)
+        self.assertEqual((self.home/'xdg/ubuntu-xdg-terminals.list').read_text(),
+                         'ghostty_ghostty.desktop\n')
+        self.assertEqual(self.run_terminal('status').returncode,0)
 
     def test_stale_manager_environment_and_missing_session_are_pending(self):
         self.run_terminal()

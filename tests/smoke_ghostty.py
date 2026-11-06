@@ -65,6 +65,14 @@ def as_account(username, home, arguments):
             "XDG_CURRENT_DESKTOP=ubuntu:GNOME", "XTE_CACHE_ENABLED=0", *arguments]
 
 
+def verify_terminal_status(status):
+    pending = [line for line in status.stderr.splitlines()
+               if line.startswith("Terminal environment PENDING:")]
+    expected = "Terminal environment PENDING: The systemd user-manager environment is unavailable; verify in a desktop session."
+    if status.returncode == 2 and pending != [expected]:
+        raise RuntimeError("Unexpected incomplete native terminal state:\n" + status.stdout + status.stderr)
+
+
 def ubuntu_smoke(selected, root):
     release = platform.freedesktop_os_release()
     if release.get("ID") != "ubuntu" or release.get("VERSION_ID") not in ("24.04", "26.04"):
@@ -114,8 +122,7 @@ def ubuntu_smoke(selected, root):
         print(applied.stdout.strip())
         status = run(as_account(username, home, [*arguments[:2], "status", *arguments[3:]]),
                      accepted=(0, 2))
-        if status.returncode == 2 and "systemd user-manager environment is unavailable" not in status.stderr:
-            raise RuntimeError("Unexpected incomplete native terminal state:\n" + status.stdout + status.stderr)
+        verify_terminal_status(status)
         if version == "26.04":
             desktop_id = run(as_account(username, home, ["xdg-terminal-exec", "--print-id"])).stdout.strip()
             if desktop_id != DESKTOP_ID:

@@ -118,6 +118,18 @@ class MacBuildWorkflowTest(unittest.TestCase):
 
 
 class GhosttyWorkflowTest(unittest.TestCase):
+    def test_native_status_accepts_only_the_expected_missing_manager(self):
+        spec = importlib.util.spec_from_file_location("ghostty_smoke", Path(__file__).with_name("smoke_ghostty.py"))
+        smoke = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(smoke)
+        expected = "Terminal environment PENDING: The systemd user-manager environment is unavailable; verify in a desktop session.\n"
+        smoke.verify_terminal_status(subprocess.CompletedProcess([], 2, "", expected))
+        smoke.verify_terminal_status(subprocess.CompletedProcess([], 0, "READY", ""))
+        for unexpected in ("Managed Ghostty configuration differs", "Account login shell is not zsh"):
+            with self.subTest(unexpected=unexpected), self.assertRaises(RuntimeError):
+                smoke.verify_terminal_status(subprocess.CompletedProcess(
+                    [], 2, "", expected + "Terminal environment PENDING: " + unexpected + "\n"))
+
     def test_native_smoke_refuses_a_personal_workstation(self):
         repo = Path(__file__).resolve().parents[1]
         environment = {**os.environ, "GITHUB_ACTIONS": "false", "RUNNER_ENVIRONMENT": "personal"}

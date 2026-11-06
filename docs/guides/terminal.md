@@ -50,7 +50,9 @@ Existing Bash/zsh PATH integration remains in place and honors exported `ZDOTDIR
 Unchanged PATH hooks retain their existing change-driven behavior; terminal reconciliation runs on every explicit apply.
 
 Ubuntu 24.04's alternatives choice affects the machine, including other users of `x-terminal-emulator`.
-Ubuntu 26.04 places `com.mitchellh.ghostty.desktop` first in the effective XDG configuration directory's `ubuntu-xdg-terminals.list`, preserving other entries.
+Only a package-owned Ghostty executable already registered by its package is selected; a retained private build remains pending and is never registered system-wide.
+Ubuntu 26.04 places the installed Ghostty desktop entry first in the effective XDG configuration directory's `ubuntu-xdg-terminals.list`, preserving other entries.
+The APT package uses `com.mitchellh.ghostty.desktop`; a retained `/snap/bin/ghostty` installation uses `ghostty_ghostty.desktop`.
 Native launchers using those mechanisms should select Ghostty, including the corresponding GNOME terminal shortcut.
 Ubuntu 24.04's GNOME-terminal-specific Nautilus extension is not replaced.
 
