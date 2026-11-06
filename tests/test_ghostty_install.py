@@ -13,7 +13,7 @@ from test_native_ca_shell import find_bash
 
 
 FIXTURE = r'''
-import json, os, pathlib, sys
+import hashlib, json, os, pathlib, sys
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['GHOSTTY_TEST_ROOT'])
 state = json.loads((root/'state.json').read_text())
@@ -22,6 +22,11 @@ if state.get('fail') == name: sys.exit(23)
 if name == 'uname': print(state.get('os', 'Linux'))
 elif name == 'dpkg': print(state.get('arch', 'amd64'))
 elif name in ('ghostty', 'zsh'): sys.exit(0 if state.get(name, False) else 1)
+elif name == 'sha256sum':
+    source = args[0]
+    if os.name == 'nt' and len(source) > 3 and source[0] == '/' and source[2] == '/':
+        source = source[1] + ':' + source[2:]
+    print(hashlib.sha256(pathlib.Path(source).read_bytes()).hexdigest()+'  '+args[0])
 elif name == 'curl':
     output = args[args.index('--output')+1]
     if os.name == 'nt' and len(output) > 3 and output[0] == '/' and output[2] == '/':
@@ -50,9 +55,9 @@ class GhosttyInstallTest(unittest.TestCase):
         self.state = {'zsh': True}
         self.fixture = self.root/'fixture.py'
         self.fixture.write_text(FIXTURE, encoding='utf-8')
-        for name in ('uname', 'dpkg', 'ghostty', 'zsh', 'curl', 'sudo'):
+        for name in ('uname', 'dpkg', 'ghostty', 'zsh', 'curl', 'sudo', 'sha256sum'):
             self.wrapper(name)
-        utilities = ('bash', 'mktemp', 'rm', 'sha256sum', 'awk')
+        utilities = ('bash', 'mktemp', 'rm', 'awk')
         resolved = subprocess.run([find_bash(), '--noprofile', '--norc', '-c',
                                    'PATH=/usr/bin:/bin; command -v ' + ' '.join(utilities)],
                                   capture_output=True, text=True, check=True)
