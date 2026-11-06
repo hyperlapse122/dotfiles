@@ -12,6 +12,17 @@ from test_native_ca_shell import find_bash
 REPO = Path(__file__).resolve().parents[1]
 
 
+def find_hash_command(shell, search_directory=""):
+    result = subprocess.run([
+        shell, "--noprofile", "--norc", "-c",
+        'if [ -n "$1" ]; then PATH="$(cd "$1" && pwd -P)" || exit; '
+        'else PATH=/usr/bin:/bin; fi; export PATH; command -v sha256sum || command -v shasum',
+        "fixture", search_directory,
+    ], capture_output=True, text=True, check=True)
+    command = result.stdout.strip()
+    return [command, "-a", "256"] if Path(command).name == "shasum" else [command]
+
+
 @unittest.skipUnless(find_bash(), "Native Bash or Git Bash required")
 class PosixFontsTest(unittest.TestCase):
     def setUp(self):
@@ -25,12 +36,14 @@ class PosixFontsTest(unittest.TestCase):
         self.bin = self.root / "commands"
         self.bin.mkdir()
         utilities = ("bash", "sh", "awk", "dirname", "mkdir", "mktemp", "cp", "mv", "rm",
-                     "cmp", "cat", "grep", "sort", "sha256sum", "chmod")
+                     "cmp", "cat", "grep", "sort", "chmod")
         result = subprocess.run([find_bash(), "--noprofile", "--norc", "-c",
-                                 "PATH=/usr/bin:/bin; command -v " + " ".join(utilities)],
+                                 'PATH=/usr/bin:/bin; for tool; do command -v "$tool" || exit; done',
+                                 "fixture", *utilities],
                                 capture_output=True, text=True, check=True)
         for name, command in zip(utilities, result.stdout.splitlines(), strict=True):
             self.wrapper(name, "exec " + shlex.quote(command) + ' "$@"')
+        self.wrapper("sha256sum", "exec " + shlex.join(find_hash_command(find_bash())) + ' "$@"')
         self.wrapper("uname", 'printf "%s\\n" "${FONT_TEST_OS:-Linux}"')
         self.wrapper("fc-cache", 'printf "refresh\\n" >> "$FONT_TEST_LOG"; exit "${FONT_TEST_CACHE_EXIT:-0}"')
         self.wrapper("shasum", 'shift 2; exec sha256sum "$@"')
@@ -123,6 +136,21 @@ class PosixFontsTest(unittest.TestCase):
         self.run_installer()
         self.assertTrue((self.fonts / "dotfiles-example-Example.ttf").exists())
         self.assertFalse((self.root / "refresh.log").exists())
+
+    def test_hash_provider_discovery_with_only_native_shasum(self):
+        native = self.root / "native commands"
+        native.mkdir()
+        provider = native / "shasum"
+        provider.write_text(
+            '#!/bin/sh\nshift 2\nexec ' + shlex.quote((self.bin / "sha256sum").as_posix()) + ' "$@"\n',
+            encoding="utf-8", newline="\n")
+        provider.chmod(0o755)
+        command = find_hash_command(find_bash(), native.as_posix())
+        result = subprocess.run([find_bash(), "--noprofile", "--norc", "-c",
+                                 'exec "$@"', "fixture", *command,
+                                 (self.assets / "example/nested/Example.ttf").as_posix()],
+                                capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout.split()[0], hashlib.sha256(b"font original").hexdigest())
 
 
 if __name__ == "__main__":
