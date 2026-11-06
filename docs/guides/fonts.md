@@ -63,6 +63,7 @@ They preserve unrelated fonts, including manually installed copies of the same f
 ## Release Updates
 
 `home/.chezmoidata/fonts.json` declares repositories and desktop archive selections.
+The shared `home/.chezmoitemplates/external-assets/fonts.toml.tmpl` renders those declarations, including Jetendard, into the external-assets preparation manifest.
 The generated `home/.chezmoidata/font-lock.json` records exact release tags, URLs, archive SHA-256 values, and the selected members' SHA-256 values.
 When GitHub supplies no archive digest, the refresh downloads the archive and calculates one.
 Installation follows the committed lock and does not resolve the latest release during apply.
