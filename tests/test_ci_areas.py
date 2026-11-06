@@ -1,6 +1,9 @@
 import importlib.util
 import io
+import os
 from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 
@@ -112,6 +115,25 @@ class MacBuildWorkflowTest(unittest.TestCase):
         self.assertIn('if: always()', job)
         self.assertIn("native-macos-build.json", job)
         self.assertNotIn("mise run apply", job)
+
+
+class GhosttyWorkflowTest(unittest.TestCase):
+    def test_native_smoke_refuses_a_personal_workstation(self):
+        repo = Path(__file__).resolve().parents[1]
+        environment = {**os.environ, "GITHUB_ACTIONS": "false", "RUNNER_ENVIRONMENT": "personal"}
+        result = subprocess.run([sys.executable, str(repo / "tests/smoke_ghostty.py")],
+                                env=environment, capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("restricted to disposable GitHub-hosted runners", result.stdout + result.stderr)
+
+    def test_native_matrix_excludes_ghostty_on_both_windows_targets(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/test.yml").read_text()
+        native = workflow.split("\n  native:\n", 1)[1].split("\n  macos-build:\n", 1)[0]
+        self.assertIn("gitlab-auth, fonts, ghostty]", native)
+        for runner_name, target in (("windows-2025", "windows-amd64"),
+                                    ("windows-11-arm", "windows-arm64")):
+            self.assertIn(f"- area: ghostty\n            platform:\n              runner: {runner_name}\n              target: {target}", native)
+        self.assertIn("python tests/smoke_ghostty.py --expected-target ${{ matrix.platform.target }}", native)
 
 
 if __name__ == "__main__":
