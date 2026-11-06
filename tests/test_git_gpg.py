@@ -106,8 +106,8 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.assertEqual(dotenv.read_bytes(), original)
 
     def test_pinentry_reconciliation_preserves_unrelated_state(self):
-        preserved = b"# pinentry-program commented-out\r\ndefault-cache-ttl 321\r\n"
-        self.agent.write_bytes(preserved + b"pinentry-program old\r\n  pinentry-program duplicate\r\nmax-cache-ttl 654")
+        preserved = b"# pinentry-program commented-out\r\n# default-cache-ttl 321\r\ndefault-cache-ttl-ssh 987\r\n"
+        self.agent.write_bytes(preserved + b"pinentry-program old\r\n  pinentry-program duplicate\r\ndefault-cache-ttl 321\r\n default-cache-ttl=654\r\nmax-cache-ttl 654")
         key_store = self.gpg_home / "private-keys-v1.d"
         key_store.mkdir()
         sentinel = key_store / "untouched.key"
@@ -117,7 +117,11 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.chezmoi("apply", "--force", "--exclude=scripts")
         expected = self.agent.read_bytes()
         self.assertTrue(expected.startswith(preserved), expected)
-        self.assertIn(b"max-cache-ttl 654\n", expected)
+        self.assertEqual(expected.splitlines().count(b"default-cache-ttl 0"), 1)
+        self.assertEqual(expected.splitlines().count(b"max-cache-ttl 0"), 1)
+        self.assertNotIn(b"default-cache-ttl 321\n", expected)
+        self.assertNotIn(b"default-cache-ttl=654", expected)
+        self.assertNotIn(b"max-cache-ttl 654", expected)
         active = [line for line in expected.splitlines() if line.lstrip().startswith(b"pinentry-program ")]
         self.assertEqual(len(active), 1, expected)
         self.assertNotIn(b" old", active[0])
@@ -142,6 +146,55 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(gitconfig.read_bytes(), b"# existing Git settings\n")
         self.assertEqual(self.agent.read_bytes(), b"# existing agent settings\n")
+
+    @unittest.skipUnless(shutil.which("gpg") and shutil.which("gpgconf"), "Native GnuPG required")
+    def test_ordinary_agent_cache_does_not_unlock_a_second_signature(self):
+        gpg = shutil.which("gpg")
+        gpgconf = str(Path(gpg).with_name("gpgconf.exe" if os.name == "nt" else "gpgconf"))
+        scratch = tempfile.TemporaryDirectory(prefix="cpc-")
+        self.addCleanup(scratch.cleanup)
+        runtime = Path(scratch.name)
+        profile = runtime / "h"
+        profile.mkdir()
+        # POSIX must avoid the default per-user socket; Windows needs short paths.
+        keyring = profile / "AppData/Roaming/gnupg" if os.name == "nt" else runtime / "k"
+        keyring.mkdir(parents=True, mode=0o700)
+        env = self.env | {"HOME": str(profile), "USERPROFILE": str(profile),
+                          "APPDATA": str(profile / "AppData/Roaming"),
+                          "LOCALAPPDATA": str(runtime / "l"), "GNUPGHOME": str(keyring)}
+        args = [gpg, "--no-options", "--homedir", str(keyring), "--batch", "--yes",
+                "--pinentry-mode", "loopback", "--passphrase-fd", "0"]
+
+        def invoke(arguments, passphrase):
+            return subprocess.run(args + arguments, input=passphrase + b"\n", env=env,
+                                  capture_output=True, timeout=60)
+
+        def stop_agent():
+            result = subprocess.run([gpgconf, "--homedir", str(keyring), "--kill", "gpg-agent"],
+                                    env=env, capture_output=True, timeout=30)
+            self.assertEqual(result.returncode, 0)
+
+        self.addCleanup(stop_agent)
+        identity = "Pinentry cache fixture <pinentry-cache@example.invalid>"
+        correct = b"synthetic-cache-fixture"
+        wrong = b"incorrect-cache-fixture"
+        generated = invoke(["--quick-generate-key", identity, "ed25519", "sign", "0"], correct)
+        self.assertEqual(generated.returncode, 0, generated.stderr)
+        payload = self.root / "payload.txt"
+        payload.write_bytes(b"isolated ordinary-agent cache proof\n")
+        signing = ["--local-user", identity, "--output", str(self.root / "signature.asc"),
+                   "--detach-sign", str(payload)]
+
+        # The control proves that the second signature can use an agent cache.
+        stop_agent()
+        self.assertEqual(invoke(signing, correct).returncode, 0)
+        self.assertEqual(invoke(signing, wrong).returncode, 0)
+
+        self.chezmoi("apply", "--force", "--exclude=scripts")
+        (keyring / "gpg-agent.conf").write_bytes(self.agent.read_bytes())
+        stop_agent()
+        self.assertEqual(invoke(signing, correct).returncode, 0)
+        self.assertNotEqual(invoke(signing, wrong).returncode, 0)
 
     @unittest.skipUnless(shutil.which("gpgconf"), "GPG installation required for home detection")
     def test_linked_gpg_home_is_preserved(self):
