@@ -38,6 +38,7 @@ Private modify templates reconcile these maps into `~/.t3/userdata/settings.json
 | --- | --- |
 | General | Thread notifications, in-app notifications, Working section |
 | SnapShots | Enabled only |
+| Appearance | Main interface and ordinary conversation font: Pretendard Variable; code blocks, diffs, file previews, and terminal font: Jetendard |
 | Threads | New-project base directory; default model and options; fallback model; permissions; workspace; resume and snooze after usage limits; all Auto-settle controls; text generation model |
 | Source Control | Automatic pull; writing style and its custom instructions |
 | Worktrees | Branch-renaming mode; cleanup on thread deletion; inactive cleanup period; unchanged-worktree cleanup |
@@ -54,7 +55,11 @@ For example, `sidebarAutoSettleAfterDays = null` disables inactive-thread settli
 
 Model selections are replaced as complete values, including their options; omitted options remove stale options from the destination.
 Cleanup and writing-style objects merge only their declared children.
-Other settings and nested children remain local, including project overrides, idle compaction, branch prefixes and instructions, `followChangeRequestTemplates`, other SnapShots options, and appearance preferences.
+Other settings and nested children remain local, including project overrides, idle compaction, branch prefixes and instructions, `followChangeRequestTemplates`, other SnapShots options, and appearance preferences beyond the three managed font families.
+The client map owns `fontFamilySans = "Pretendard Variable"`, `fontFamilyCode = "Jetendard"`, and `fontFamilyTerminal = "Jetendard"`.
+Both coding preferences are set so the terminal uses Jetendard in either unified or separate-font mode; the local mode flag is preserved.
+Sizes, line spacing, themes, and `fontFamilyComposer` remain local; the prompt input uses T3's native inheritance unless a separate composer preference overrides it.
+The existing [user-font collection](fonts.md) supplies both families through explicit application.
 Existing provider ownership remains as described below; credentials, keybindings, and desktop window state are not captured here.
 Malformed JSON or incompatible managed parent objects cause application to fail without replacing the affected file.
 

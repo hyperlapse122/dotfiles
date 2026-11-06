@@ -39,11 +39,11 @@ Use the separate status command below to distinguish pending configuration from 
 
 ## Managed Configuration and Native Boundaries
 
-Application replaces Ghostty's primary configuration with the repository's default-only content.
+Application replaces Ghostty's primary configuration with the repository's shared content, selecting `font-family = Jetendard`.
 It writes `config.ghostty` under `${XDG_CONFIG_HOME:-$HOME/.config}/ghostty` and, on macOS, `~/Library/Application Support/com.mitchellh.ghostty`.
 An existing legacy `config` in either location is reset to the same content, so its later load cannot restore a shell command or included configuration.
 This intentionally replaces personal Ghostty themes, key bindings, and command overrides; save any customization you want to retain before application.
-The repository adds no appearance overrides, zsh framework, or shell plugins.
+Other Ghostty appearance settings use its defaults; the repository adds no zsh framework or shell plugins.
 
 Ghostty discovers the default shell from the system rather than a managed `command = zsh` override.
 Existing Bash/zsh PATH integration remains in place and honors exported `ZDOTDIR`.
