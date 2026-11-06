@@ -16,7 +16,7 @@ import unittest
 REPO = Path(__file__).resolve().parents[1]
 AREAS = {
     "applications": (
-        "test_personal_apps", "test_personal_app_lock", "test_harness_plugins",
+        "test_personal_apps", "test_personal_app_lock", "test_harness_plugins", "test_external_assets",
         "test_harness_plugin_lock", "test_t3_code_desktop", "test_t3_code_settings",
         "test_codex", "test_claude",
         "test_font_lock", "test_fonts", "test_fonts_posix", "test_fonts_windows",

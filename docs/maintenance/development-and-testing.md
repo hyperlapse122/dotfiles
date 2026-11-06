@@ -31,6 +31,7 @@ chezmoi --config .chezmoi-bootstrap.toml --source . managed --exclude=scripts
 
 - **Hook-Free Config:** Uses `.chezmoi-bootstrap.toml` to guarantee that personal chezmoi hooks from `~/.config/chezmoi/chezmoi.toml` do not run during repository setup.
 - **Read-Only:** Enumerates managed files without applying them or executing lifecycle scripts.
+- **Asset Isolation:** Archive declarations are preparation templates, so bootstrap does not download or extract personal assets. Explicit apply prepares them before native consumers; see [external asset preparation](chezmoi-source.md#external-asset-preparation).
 - **Diagnostics:** Mise reports hook failures as warnings and may still exit with code 0. To inspect hook failures with standard exit codes, run:
   ```sh
   mise run bootstrap
@@ -41,6 +42,10 @@ chezmoi --config .chezmoi-bootstrap.toml --source . managed --exclude=scripts
 ## Running Unit Tests
 
 The test suite validates isolation, chezmoi template rendering, script execution guards, and platform integrations using disposable file sandboxes.
+
+External-asset fixtures use local HTTP archives and the real native chezmoi preparation command.
+They cover cold and unchanged runs, missing-file repair, changed pins, checksum failures, exact owned-directory cleanup, and explicit full verification.
+Selective application fixtures prepare assets separately while keeping unrelated scripts excluded, so a Windows fixture does not enable persistent PATH or registry configuration.
 
 Run the entire unit test suite with:
 

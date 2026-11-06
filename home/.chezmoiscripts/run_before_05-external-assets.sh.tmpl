@@ -1,0 +1,19 @@
+{{- if has .chezmoi.os (list "linux" "darwin") -}}
+#!/bin/sh
+set -eu
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-assets.XXXXXX")
+cleanup() { rm -f "$temporary/externals.toml" "$temporary/roots.tsv"; rmdir "$temporary"; }
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+cat > "$temporary/externals.toml" <<'DOTFILES_EXTERNAL_MANIFEST'
+{{ includeTemplate "external-assets-manifest" . }}
+DOTFILES_EXTERNAL_MANIFEST
+cat > "$temporary/roots.tsv" <<'DOTFILES_EXTERNAL_ROOTS'
+{{ includeTemplate "external-asset-roots" . }}
+DOTFILES_EXTERNAL_ROOTS
+/bin/sh '{{ joinPath .chezmoi.workingTree "scripts/prepare-external-assets.sh" | replace "'" "'\\''" }}' \
+    "$temporary/externals.toml" "$temporary/roots.tsv" \
+    '{{ .chezmoi.destDir | replace "'" "'\\''" }}' \
+    '{{ joinPath .chezmoi.destDir ".cache/dotfiles/external-assets" | replace "'" "'\\''" }}' \
+    '{{ .chezmoi.executable | replace "'" "'\\''" }}' "${DOTFILES_ASSET_MODE:-normal}"
+{{ end -}}

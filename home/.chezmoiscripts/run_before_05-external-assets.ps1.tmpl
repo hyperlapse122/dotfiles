@@ -1,0 +1,27 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{ "\ufeff" -}}
+$ErrorActionPreference = 'Stop'
+$temporary = Join-Path ([IO.Path]::GetTempPath()) ('dotfiles-assets-' + [Guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($temporary) | Out-Null
+try {
+    $manifest = @'
+{{ includeTemplate "external-assets-manifest" . }}
+'@
+    $roots = @'
+{{ includeTemplate "external-asset-roots" . }}
+'@
+    $manifestPath = Join-Path $temporary 'externals.toml'
+    $rootsPath = Join-Path $temporary 'roots.tsv'
+    [IO.File]::WriteAllText($manifestPath, $manifest + "`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($rootsPath, $roots + "`n", [Text.UTF8Encoding]::new($false))
+    $mode = if ($env:DOTFILES_ASSET_MODE) { $env:DOTFILES_ASSET_MODE } else { 'normal' }
+    & '{{ joinPath .chezmoi.workingTree "scripts/prepare-external-assets.ps1" | replace "'" "''" }}' `
+        -ManifestPath $manifestPath -RootsPath $rootsPath `
+        -Destination '{{ .chezmoi.destDir | replace "'" "''" }}' `
+        -CacheDirectory '{{ joinPath .chezmoi.destDir ".cache/dotfiles/external-assets" | replace "'" "''" }}' `
+        -Chezmoi '{{ .chezmoi.executable | replace "'" "''" }}' -Mode $mode
+} finally {
+    foreach ($name in @('externals.toml', 'roots.tsv')) { [IO.File]::Delete((Join-Path $temporary $name)) }
+    [IO.Directory]::Delete($temporary)
+}
+{{ end -}}

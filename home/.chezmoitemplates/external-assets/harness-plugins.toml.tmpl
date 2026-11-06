@@ -11,6 +11,7 @@
 {{- end }}
 [{{ printf ".local/share/dotfiles/harness-plugins/%s" $name | quote }}]
 type = "archive"
+refreshPeriod = "0"
 url = {{ printf "https://github.com/%s/archive/%s.tar.gz" $plugin.repository $pin.commit | quote }}
 stripComponents = 1
 exact = true

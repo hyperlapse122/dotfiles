@@ -36,14 +36,14 @@ class PosixFontsTest(unittest.TestCase):
         self.bin = self.root / "commands"
         self.bin.mkdir()
         utilities = ("bash", "sh", "awk", "dirname", "mkdir", "mktemp", "cp", "mv", "rm",
-                     "cmp", "cat", "grep", "sort", "chmod")
+                     "cmp", "cat", "grep", "sort", "chmod", "stat", "find")
         result = subprocess.run([find_bash(), "--noprofile", "--norc", "-c",
                                  'PATH=/usr/bin:/bin; for tool; do command -v "$tool" || exit; done',
                                  "fixture", *utilities],
                                 capture_output=True, text=True, check=True)
         for name, command in zip(utilities, result.stdout.splitlines(), strict=True):
             self.wrapper(name, "exec " + shlex.quote(command) + ' "$@"')
-        self.wrapper("sha256sum", "exec " + shlex.join(find_hash_command(find_bash())) + ' "$@"')
+        self.wrapper("sha256sum", 'if [ -n "${FONT_TEST_HASH_LOG:-}" ]; then printf "%s\\n" "$*" >> "$FONT_TEST_HASH_LOG"; fi; exec ' + shlex.join(find_hash_command(find_bash())) + ' "$@"')
         self.wrapper("uname", 'printf "%s\\n" "${FONT_TEST_OS:-Linux}"')
         self.wrapper("fc-cache", 'printf "refresh\\n" >> "$FONT_TEST_LOG"; exit "${FONT_TEST_CACHE_EXIT:-0}"')
         self.wrapper("shasum", 'shift 2; exec sha256sum "$@"')
@@ -105,6 +105,30 @@ class PosixFontsTest(unittest.TestCase):
         self.assertIn("checksum", result.stderr.lower())
         self.assertEqual(installed.read_bytes(), b"font original")
         self.assertFalse((self.fonts / "dotfiles-example-Later.ttf").exists())
+
+    def test_unchanged_run_skips_payload_hashes_and_explicit_verify_checks_them(self):
+        log = self.root / "hashes.log"
+        self.env["FONT_TEST_HASH_LOG"] = log.as_posix()
+        self.run_installer()
+        self.assertTrue(log.read_text())
+        log.write_text("")
+        self.run_installer()
+        self.assertEqual(log.read_text(), "")
+        self.env["DOTFILES_ASSET_MODE"] = "verify"
+        self.run_installer()
+        self.assertTrue(log.read_text())
+
+    def test_explicit_verify_repairs_installed_corruption_with_preserved_metadata(self):
+        self.run_installer()
+        installed = self.fonts / "dotfiles-example-Example.ttf"
+        stamp = installed.stat()
+        installed.write_bytes(b"font tampered")
+        os.utime(installed, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        self.run_installer()
+        self.assertEqual(installed.read_bytes(), b"font tampered")
+        self.env["DOTFILES_ASSET_MODE"] = "verify"
+        self.run_installer()
+        self.assertEqual(installed.read_bytes(), b"font original")
 
     def test_bad_manifest_cannot_remove_unowned_files(self):
         self.run_installer()

@@ -24,6 +24,16 @@ function Get-FontHash([string] $Path) {
     finally { $hash.Dispose(); $stream.Dispose() }
 }
 
+function Get-FontMetadata([string] $Path) {
+    $file = Get-Item -LiteralPath $Path
+    return "$($file.Length):$($file.LastWriteTimeUtc.Ticks):$([int]$file.Attributes)"
+}
+
+$mode = $env:DOTFILES_ASSET_MODE
+if (-not $mode) { $mode = 'normal' }
+if ($mode -notin @('normal', 'verify', 'refresh')) { throw 'Invalid external asset mode.' }
+$forceCheck = $mode -ne 'normal'
+
 $AssetRoot = [IO.Path]::GetFullPath($AssetRoot)
 $FontDirectory = [IO.Path]::GetFullPath($FontDirectory)
 $StatePath = [IO.Path]::GetFullPath($StatePath)
@@ -36,7 +46,7 @@ if (Test-Path -LiteralPath $StatePath) {
         if ($entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or $previous.ContainsKey($entry.name)) {
             throw 'Invalid font manifest entry.'
         }
-        $previous[$entry.name] = $entry.sha256
+        $previous[$entry.name] = $entry
     }
 }
 
@@ -57,11 +67,17 @@ foreach ($line in [IO.File]::ReadAllLines($IndexPath)) {
     Assert-OwnedName $name
     if ($desired.ContainsKey($name)) { throw "Duplicate font destination: $name" }
     $source = Join-Path (Join-Path $AssetRoot $package) $member
-    if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
-        (Get-FontHash $source) -cne $checksum) {
-        throw "Staged font checksum mismatch: $source. Refresh externals and reapply."
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        throw "Missing staged font: $source. Verify external assets and reapply."
     }
-    $desired[$name] = @{ source = $source; sha256 = $checksum }
+    $sourceMetadata = Get-FontMetadata $source
+    $old = $previous[$name]
+    $sourceKnown = $old -and $old.sha256 -ceq $checksum -and
+        $old.PSObject.Properties['sourceMetadata'] -and $old.sourceMetadata -ceq $sourceMetadata
+    if (($forceCheck -or -not $sourceKnown) -and (Get-FontHash $source) -cne $checksum) {
+        throw "Staged font checksum mismatch: $source. Run mise run assets:verify, then reapply."
+    }
+    $desired[$name] = @{ source = $source; sha256 = $checksum; sourceMetadata = $sourceMetadata }
 }
 
 Add-Type -TypeDefinition @'
@@ -107,8 +123,15 @@ try {
         $entry = $desired[$name]
         $target = Join-Path $FontDirectory $name
         $label = Get-FontLabel $name
-        $same = (Test-Path -LiteralPath $target -PathType Leaf) -and
-            (Get-FontHash $target) -ceq $entry.sha256
+        $old = $previous[$name]
+        $same = $false
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            $targetKnown = $old -and $old.sha256 -ceq $entry.sha256 -and
+                $old.PSObject.Properties['targetMetadata'] -and
+                $old.targetMetadata -ceq (Get-FontMetadata $target)
+            $same = (-not $forceCheck -and $targetKnown) -or
+                (Get-FontHash $target) -ceq $entry.sha256
+        }
         if (-not $same) {
             $temporary = Join-Path $FontDirectory ('.dotfiles-font-' + [Guid]::NewGuid().ToString('N') + '.tmp')
             try {
@@ -164,7 +187,8 @@ if ($changed) {
     Send-FontChange
 }
 $entries = @($desired.Keys | Sort-Object | ForEach-Object {
-    @{ name = $_; sha256 = $desired[$_].sha256 }
+    @{ name = $_; sha256 = $desired[$_].sha256; sourceMetadata = $desired[$_].sourceMetadata;
+       targetMetadata = Get-FontMetadata (Join-Path $FontDirectory $_) }
 })
 $manifest = @{ version = 1; fonts = $entries } | ConvertTo-Json -Depth 4
 if (-not (Test-Path -LiteralPath $StatePath) -or

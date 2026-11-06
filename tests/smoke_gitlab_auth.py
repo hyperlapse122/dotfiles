@@ -9,6 +9,7 @@ import tempfile
 import uuid
 from unittest import mock
 
+from asset_fixtures import copy_asset_templates
 from smoke_github_auth import failure_summary, native_keychain, run
 from smoke_personal_apps import temporary_destination
 
@@ -35,8 +36,7 @@ def main():
         shutil.copy2(REPO / ".chezmoiroot", repository)
         for relative in (".chezmoidata", ".chezmoitemplates"):
             shutil.copytree(REPO / "home" / relative, source / relative)
-        (source / ".chezmoiexternals").mkdir()
-        shutil.copy2(REPO / "home/.chezmoiexternals/personal-apps.toml.tmpl", source / ".chezmoiexternals")
+        copy_asset_templates(source, ("personal-apps",))
         for name in ("dot_gitconfig.tmpl", ".chezmoi.toml.tmpl"):
             shutil.copy2(REPO / "home" / name, source)
         (repository / "scripts").mkdir()

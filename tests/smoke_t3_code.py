@@ -19,6 +19,7 @@ import socket
 import struct
 import time
 
+from asset_fixtures import copy_asset_templates
 from smoke_personal_apps import executable, run, temporary_destination
 
 
@@ -368,10 +369,7 @@ def main():
             destination = home / ".local/bin" / binary_name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(existing_omp, destination)
-        external = source / ".chezmoiexternals"
-        external.mkdir()
-        for name in ("personal-apps.toml.tmpl", "codex-package.toml.tmpl", "harness-plugins.toml.tmpl"):
-            shutil.copy2(REPO / "home/.chezmoiexternals" / name, external / name)
+        copy_asset_templates(source, ("personal-apps", "codex-package", "harness-plugins"))
         declaration = source / ".chezmoidata/personal-apps.json"
         data = json.loads(declaration.read_text(encoding="utf-8"))
         selected = ("codex", "claude") if existing_omp.is_file() else ("omp", "codex", "claude")

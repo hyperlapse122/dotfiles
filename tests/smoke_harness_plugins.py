@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 
+from asset_fixtures import copy_asset_templates
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 
 
@@ -38,8 +39,6 @@ def main():
             ".chezmoidata/personal-app-lock.json",
             ".chezmoidata/harness-plugins.json",
             ".chezmoidata/harness-plugin-lock.json",
-            ".chezmoiexternals/personal-apps.toml.tmpl",
-            ".chezmoiexternals/harness-plugins.toml.tmpl",
             ".chezmoitemplates",
             "private_dot_omp",
             ".chezmoiscripts/run_onchange_after_20-harness-plugins.ps1.tmpl",
@@ -54,6 +53,7 @@ def main():
         # Keep only this feature's conditional ignores, rather than enabling
         # unrelated personal app/PATH/GPG scripts in the smoke source.
         shutil.copy2(REPO / "home/.chezmoiignore", source / ".chezmoiignore")
+        copy_asset_templates(source, ('personal-apps', 'harness-plugins'))
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":

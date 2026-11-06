@@ -14,6 +14,9 @@ import unittest
 import uuid
 import zipfile
 
+from asset_fixtures import copy_asset_templates, run_with_assets
+
+
 if os.name == "nt":
     import winreg
 
@@ -30,11 +33,9 @@ class PersonalAppsTest(unittest.TestCase):
         self.home.mkdir()
         self.source = self.root / "source"
         self.source.mkdir()
-        for directory in (".chezmoidata", ".chezmoiexternals", "dot_config"):
-            shutil.copytree(
-                self.repo / "home" / directory, self.source / directory,
-                ignore=shutil.ignore_patterns("harness-plugins.toml.tmpl", "t3-code.toml.tmpl", "fonts.toml.tmpl"),
-            )
+        for directory in (".chezmoidata", "dot_config"):
+            shutil.copytree(self.repo / "home" / directory, self.source / directory)
+        copy_asset_templates(self.source, ("personal-apps", "codex-package"))
         for name in (".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
                      ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl"):
             target = self.source / name
@@ -142,7 +143,7 @@ class PersonalAppsTest(unittest.TestCase):
             json.dumps(self.locks), encoding="utf-8")
 
     def run_chezmoi(self, *args, input=None):
-        return subprocess.run(
+        return run_with_assets(
             [self.chezmoi, "--config", str(self.config), "--source", str(self.source),
              "--destination", str(self.home), "--cache", str(self.root / "chezmoi-cache"),
              "--persistent-state", str(self.root / "chezmoi-state.boltdb"), *args],
@@ -499,7 +500,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(self.requests.count("/official-cli.tar.gz"), 1)
 
     def render_external(self, os_name, arch):
-        template = (self.source / ".chezmoiexternals" / "personal-apps.toml.tmpl").read_text(encoding="utf-8")
+        template = (self.source / ".chezmoitemplates/external-assets/personal-apps.toml.tmpl").read_text(encoding="utf-8")
         wrapper = ('{{ template "external" (dict "chezmoi" (dict "os" '
                    + json.dumps(os_name) + ' "arch" ' + json.dumps(arch)
                    + ') "personalApps" .personalApps "personalAppLocks" .personalAppLocks) }}'
@@ -602,7 +603,7 @@ class PersonalAppsTest(unittest.TestCase):
         shutil.copy2(self.repo / ".chezmoi-bootstrap.toml", self.config)
         result = self.run_chezmoi("managed", "--exclude=scripts")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(".local/bin/omp", result.stdout.replace("\\", "/"))
+        self.assertNotIn(".local/bin/omp", result.stdout.replace("\\", "/"))
         self.assertEqual(self.requests, [])
         self.assertFalse(self.binary.exists())
         self.assertEqual(list(self.home.iterdir()), [])
