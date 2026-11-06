@@ -106,7 +106,18 @@ def main():
                     document = json.loads(path.read_text())
                     if document['credHelpers'][registry] != suffix or document.get('auths'):
                         raise RuntimeError('Native registry configuration did not use a helper')
-                podman = shutil.which('podman') or shutil.which('podman-remote')
+                podman = None
+                for command_name in ('podman-remote', 'podman'):
+                    candidate = shutil.which(command_name, path=env.get('PATH'))
+                    if candidate:
+                        try:
+                            version = auth.common.run_private([candidate, '--version'], env=env,
+                                operation='Cannot identify the native Podman fixture.').strip()
+                            if version == 'podman version 6.1.4':
+                                podman = candidate
+                                break
+                        except auth.common.AuthError:
+                            continue
                 if args.require_podman and not podman:
                     raise RuntimeError('Native Podman client fixture is required')
                 if podman:
