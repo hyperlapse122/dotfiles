@@ -174,8 +174,7 @@ def codex_turn(binary, arguments, env, cwd, log, records, *, addition):
 
 
 def t3_turns(root, home, cwd, env, target, install_desktop, records):
-    from smoke_antigravity import desktop_command
-    from smoke_t3_code import T3Rpc, WindowsProcessJob, provision_desktop
+    from smoke_t3_code import T3Rpc, WindowsProcessJob, desktop_command, provision_desktop
     real_env = os.environ.copy()
     if install_desktop:
         provision_desktop(target, root, real_env)
