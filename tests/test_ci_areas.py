@@ -81,7 +81,7 @@ class MacBuildWorkflowTest(unittest.TestCase):
         job = workflow.split("\n  macos-build:\n", 1)[1]
         self.assertNotIn("${{ runner.", job.split("\n    steps:\n", 1)[0],
                          "GitHub rejects the runner context in job-level env")
-        self.assertIn("runs-on: xcode-27", job)
+        self.assertIn("runs-on: macos-26", job)
         for anchor in ("checkout", "candidate-lock", "select-lock", "download-harness-lock", "select-harness-lock"):
             self.assertIn("- *" + anchor + "\n", job)
         self.assertIn("MISE_DATA_DIR: ${{ runner.temp }}/mise-macos-build/data", job)

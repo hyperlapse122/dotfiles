@@ -7,7 +7,7 @@ fail() { printf '%s\n' "macOS source registration: $*" >&2; exit 1; }
 translated=$(sysctl -in sysctl.proc_translated 2>/dev/null || printf '0')
 [ "$translated" != 1 ] || fail 'Run from a native terminal, not Rosetta.'
 version=$(sw_vers -productVersion)
-[ "${version%%.*}" -ge 15 ] || fail 'Requires macOS 15 or later.'
+[ "${version%%.*}" -ge 26 ] || fail 'Requires macOS 26 or later.'
 [ "$#" -le 1 ] || fail 'Usage: configure-chezmoi.sh [permanent-checkout]'
 source=${1:-"$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"}
 [ -d "$source/.git" ] || fail 'Source must be a permanent standalone checkout, not a linked worktree.'

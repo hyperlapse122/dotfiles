@@ -9,10 +9,10 @@ from test_native_ca_shell import find_bash
 
 class MacAppsTest(MacFixture):
     def test_unsupported_macos_stops_before_application_changes(self):
-        self.state['version'] = '14.7'
+        self.state['version'] = '25.9'
         result = self.run_script('scripts/macos-apps.sh')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('macOS 15', result.stderr)
+        self.assertIn('macOS 26', result.stderr)
         self.assertFalse(any(name in ('brew', 'podman') for name, args in self.calls()))
 
     def test_fresh_application_installs_once_without_podman(self):

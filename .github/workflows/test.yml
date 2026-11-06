@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, windows-2025, xcode-27]
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, windows-2025, macos-26]
         area: [applications, security, platform, build-contracts]
     runs-on: ${{ matrix.runner }}
     steps:
@@ -124,7 +124,7 @@ jobs:
             target: windows-amd64
           - runner: windows-11-arm
             target: windows-arm64
-          - runner: xcode-27
+          - runner: macos-26
             target: darwin-arm64
     runs-on: ${{ matrix.platform.runner }}
     env:
@@ -203,7 +203,7 @@ jobs:
 
   macos-build:
     name: Native macOS ARM64 builds
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - *checkout

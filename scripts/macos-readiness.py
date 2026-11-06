@@ -46,8 +46,8 @@ def collect(home):
 
     version = platform.mac_ver()[0].split(".")[0]
     supported = (platform.system() == "Darwin" and platform.machine() == "arm64"
-                 and version.isdigit() and int(version) >= 15)
-    record("Supported host", "passed" if supported else "failed", "Requires native Apple Silicon macOS 15 or later.")
+                 and version.isdigit() and int(version) >= 26)
+    record("Supported host", "passed" if supported else "failed", "Requires native Apple Silicon macOS 26 or later.")
     if not supported:
         return {"ready": False, "checks": checks}
 

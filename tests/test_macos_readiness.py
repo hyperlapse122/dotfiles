@@ -18,7 +18,7 @@ class MacReadinessTest(unittest.TestCase):
         self.addCleanup(scratch.cleanup)
         self.home = Path(scratch.name)
 
-    def collect(self, *, available=True, system="Darwin", machine="arm64", version="15.0"):
+    def collect(self, *, available=True, system="Darwin", machine="arm64", version="26.0"):
         with patch.object(self.module.platform, "system", return_value=system), \
              patch.object(self.module.platform, "machine", return_value=machine), \
              patch.object(self.module.platform, "mac_ver", return_value=(version, (), "")), \
@@ -48,12 +48,18 @@ class MacReadinessTest(unittest.TestCase):
         run.assert_not_called()
 
     def test_unsupported_host_stops_before_probing_commands(self):
-        for override in ({"system": "Windows"}, {"machine": "x86_64"}, {"version": "14.7"}):
+        for override in ({"system": "Windows"}, {"machine": "x86_64"}, {"version": "15.7"}, {"version": "25.9"}):
             with self.subTest(override=override):
                 result, run = self.collect(**override)
                 self.assertEqual(self.module.exit_code(result), 1)
                 self.assertEqual(len(result["checks"]), 1)
                 run.assert_not_called()
+
+    def test_supported_version_boundary(self):
+        for version in ("26.0", "26.1", "27.0"):
+            with self.subTest(version=version):
+                result, _ = self.collect(version=version)
+                self.assertEqual(result["checks"][0]["status"], "passed")
 
     def test_only_read_only_probes_execute_and_output_is_not_disclosed(self):
         result, run = self.collect()
