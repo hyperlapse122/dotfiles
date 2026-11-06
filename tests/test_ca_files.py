@@ -207,7 +207,7 @@ class CaTemplateTest(unittest.TestCase):
             (source/'.chezmoitemplates').mkdir()
             (source/'.secrets').mkdir()
             shutil.copy2(REPO/'home/.chezmoidata/ca-files.json', source/'.chezmoidata/ca-files.json')
-            for name, path in (('external', 'home/.chezmoiexternals/ca-files.toml.tmpl'),
+            for name, path in (('external', 'home/.chezmoitemplates/external-assets/ca-files.toml.tmpl'),
                                ('hook', 'home/.chezmoiscripts/run_after_35-ca-files.sh.tmpl')):
                 shutil.copy2(REPO/path, source/'.chezmoitemplates'/name)
             config = root/'chezmoi.toml'

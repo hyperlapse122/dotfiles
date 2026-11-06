@@ -15,6 +15,7 @@ import threading
 import uuid
 
 from smoke_github_auth import failure_summary, native_keychain
+from asset_fixtures import copy_asset_templates, run_with_assets
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'scripts'))
@@ -72,7 +73,6 @@ def main():
         root = Path(temporary)
         source, home = root / 'source', root / 'home'
         source.mkdir()
-        (source / '.chezmoiexternals').mkdir()
         (source / '.chezmoidata').mkdir()
         for filename in ('personal-apps.json', 'personal-app-lock.json'):
             shutil.copy2(REPO / 'home/.chezmoidata' / filename, source / '.chezmoidata' / filename)
@@ -80,18 +80,21 @@ def main():
         apps = json.loads(apps_path.read_text())
         apps['personalApps'] = {name: apps['personalApps'][name]}
         apps_path.write_text(json.dumps(apps))
-        shutil.copy2(REPO / 'home/.chezmoiexternals/personal-apps.toml.tmpl', source / '.chezmoiexternals')
+        copy_asset_templates(source, ('personal-apps',))
         config = root / 'chezmoi.toml'
         config.write_text('')
         env = os.environ.copy()
         env.update({'HOME': str(home), 'USERPROFILE': str(home), 'XDG_CONFIG_HOME': str(home / '.config'),
+                    'PSModuleAnalysisCachePath': str(root / 'module-analysis-cache'),
                     'DOCKER_CONFIG': str(home / '.docker'), 'REGISTRY_AUTH_FILE': str(home / '.config/containers/auth.json')})
         if sys.platform == 'darwin':
             env['HOME'] = os.environ['HOME']
         command = [chezmoi, '--source', str(source), '--destination', str(home), '--config', str(config),
                    '--cache', str(root / 'cache'), '--persistent-state', str(root / 'state'),
                    'apply', '--force', '--exclude=scripts']
-        auth.common.run_private(command, env=env, operation='Cannot install the pinned native registry helper.')
+        installed = run_with_assets(command, env=env, capture_output=True, timeout=300)
+        if installed.returncode:
+            raise auth.common.AuthError('Cannot install the pinned native registry helper.')
         helper = home / '.local/bin' / (name + ('.exe' if os.name == 'nt' else ''))
         env['PATH'] = str(helper.parent) + os.pathsep + env.get('PATH', '')
         registry = 'dotfiles-fixture-' + uuid.uuid4().hex + '.invalid'

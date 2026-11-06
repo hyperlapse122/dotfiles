@@ -2,6 +2,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import unittest
@@ -141,7 +142,8 @@ class GhosttyWorkflowTest(unittest.TestCase):
     def test_native_matrix_excludes_ghostty_on_both_windows_targets(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/test.yml").read_text()
         native = workflow.split("\n  native:\n", 1)[1].split("\n  macos-build:\n", 1)[0]
-        self.assertIn("gitlab-auth, fonts, ghostty]", native)
+        areas = re.search(r"\barea:\s*\[([^]]+)\]", native).group(1)
+        self.assertIn("ghostty", [area.strip().strip("\"'") for area in areas.split(",")])
         for runner_name, target in (("windows-2025", "windows-amd64"),
                                     ("windows-11-arm", "windows-arm64")):
             self.assertIn(f"- area: ghostty\n            platform:\n              runner: {runner_name}\n              target: {target}", native)
