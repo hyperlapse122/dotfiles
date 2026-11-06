@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-11-06T03:48:39Z"
+    cursor: "2026-11-06T04:10:27Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#10":
     source: "gh-issues"
@@ -9,9 +9,11 @@ items:
     sensitive: false
     body: "Support CA-file trust fallback and encrypted CA provisioning on macOS/Linux — add CA-file integration for tools that cannot use OS trust, without disabling TLS verification."
     author_class: "teammate"
-    cursor: "2026-11-04T07:08:27Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:09:56Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#10"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/10"
@@ -21,9 +23,11 @@ items:
     sensitive: false
     body: "Integrate GitHub CLI authentication and Docker Hub keyring-backed token authentication — follow-up auth work deferred from the Windows Kubernetes environment change."
     author_class: "teammate"
-    cursor: "2026-11-04T12:10:03Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:09:59Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#21"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/21"
@@ -33,9 +37,11 @@ items:
     sensitive: false
     body: "Add keyring-backed GitLab registry login for Docker and Podman — authenticate to the private GitLab registry without plaintext tokens in client config."
     author_class: "teammate"
-    cursor: "2026-11-04T15:25:06Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:02Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#25"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/25"
@@ -45,9 +51,11 @@ items:
     sensitive: false
     body: "Drop remaining Intel Mac support repository-wide — macOS support should be Apple Silicon only; darwin-amd64 entries remain in personal-apps data."
     author_class: "teammate"
-    cursor: "2026-11-04T16:12:24Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:04Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#29"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/29"
@@ -57,9 +65,11 @@ items:
     sensitive: false
     body: "Add pi as a managed harness with synthetic.new as its only provider — managed install, pinning, and repo-owned settings for pi."
     author_class: "teammate"
-    cursor: "2026-11-05T00:26:37Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:07Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#33"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/33"
@@ -69,9 +79,11 @@ items:
     sensitive: false
     body: "Add Grok Build as a managed harness — managed install, pinning, and repo-owned settings under home/."
     author_class: "teammate"
-    cursor: "2026-11-05T00:26:38Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:09Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#34"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/34"
@@ -81,9 +93,11 @@ items:
     sensitive: false
     body: "ci: split test areas into parallel GitHub Actions jobs — run each independently runnable test area as its own job while keeping coverage."
     author_class: "teammate"
-    cursor: "2026-11-05T01:48:27Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:14Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#41"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/41"
@@ -93,9 +107,11 @@ items:
     sensitive: false
     body: "ci: avoid duplicate push and pull request workflow runs — Test workflow runs on both push and PR events for the same branch."
     author_class: "teammate"
-    cursor: "2026-11-05T01:48:19Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:12Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#42"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/42"
@@ -105,9 +121,11 @@ items:
     sensitive: false
     body: "Verify authenticated native CE invocation for Antigravity — deferred verification from the Antigravity onboarding in #32."
     author_class: "teammate"
-    cursor: "2026-11-05T04:47:18Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:17Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#52"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/52"
@@ -117,9 +135,11 @@ items:
     sensitive: false
     body: "Append T3-only instructions through native harness launch options — same baseline for CLI and T3 launches, extra T3 instructions only via per-launch mechanism."
     author_class: "teammate"
-    cursor: "2026-11-05T07:31:49Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:19Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#54"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/54"
@@ -129,9 +149,11 @@ items:
     sensitive: false
     body: "Support protected SSH key storage and 1Password identities — keep local private keys in protected storage and allow 1Password-managed identities."
     author_class: "teammate"
-    cursor: "2026-11-05T08:03:57Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:22Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#58"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/58"
@@ -141,9 +163,11 @@ items:
     sensitive: false
     body: "Organize Rust crates under crates/ in a Cargo workspace — move dotfiles-pinentry under crates/ with a root workspace."
     author_class: "teammate"
-    cursor: "2026-11-06T03:01:31Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:24Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#68"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/68"
@@ -153,19 +177,25 @@ items:
     sensitive: false
     body: "Provide jdx/usage-based shell completions for repository CLIs — completions starting with dotfiles-pinentry, as a reusable convention."
     author_class: "teammate"
-    cursor: "2026-11-06T03:48:39Z"
-    existing_ack: false
+    cursor: "2026-11-06T04:10:27Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
     existing_closeout: false
+    existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#70"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/70"
 last_run:
-  timestamp: "2026-11-06T04:10:49Z"
+  timestamp: "2026-11-06T04:32:08.715116+00:00"
   outcome: "completed"
-  writer: "sweep-claude-t3-07a63bd2-2026-11-06"
+  writer: "sweep-codex-t3-8367affa-20261106"
   counts:
     gh-issues:
       ack_deferred: 0
-      acknowledged: 13
+      acknowledged: 0
       closed: 0
-      ingested: 13
+      existing_ack_confirmed: 13
+      ingested: 0
+      manual_stuck: 0
+      new: 0
+      recordings_analyzed: 0

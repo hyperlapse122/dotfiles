@@ -20,7 +20,7 @@ Triage and drive to resolution the open feedback items captured below: acknowled
 
 ### Summary
 
-13 open items from `gh-issues`, all acknowledged this run. None closed this run. No item needs a product decision yet.
+13 open items from `gh-issues`; no new items this run. Existing acknowledgments were confirmed for all 13. None closed this run. No item needs a product decision yet.
 
 ### Requirements
 
