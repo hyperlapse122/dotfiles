@@ -551,7 +551,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.write_apps()
         self.write_locks()
         targets = {target for app in self.apps["personalApps"].values() for target in app["targets"]}
-        for target in sorted(targets | {"freebsd-amd64", "linux-386"}):
+        for target in sorted(targets | {"darwin-amd64", "freebsd-amd64", "linux-386"}):
             with self.subTest(target=target):
                 os_name, arch = target.split("-")
                 result = self.render_external(os_name, arch)

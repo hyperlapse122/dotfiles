@@ -155,14 +155,6 @@
       },
       "tag": "v1.12.0",
       "targets": {
-        "darwin-amd64": {
-          "format": "zip",
-          "kind": "archive-file",
-          "path": "ghq",
-          "sha256": "e5dc9f2173e32c0fddc0ffffa67f770492e0f93f734a9bd898f63a21a64cc34d",
-          "stripComponents": 1,
-          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_darwin_amd64.zip"
-        },
         "darwin-arm64": {
           "format": "zip",
           "kind": "archive-file",

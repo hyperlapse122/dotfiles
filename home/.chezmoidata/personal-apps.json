@@ -74,13 +74,6 @@
       "command": "ghq",
       "repository": "x-motemen/ghq",
       "targets": {
-        "darwin-amd64": {
-          "asset": "ghq_darwin_amd64.zip",
-          "kind": "archive-file",
-          "format": "zip",
-          "path": "ghq",
-          "stripComponents": 1
-        },
         "darwin-arm64": {
           "asset": "ghq_darwin_arm64.zip",
           "kind": "archive-file",

@@ -16,6 +16,15 @@ SPEC.loader.exec_module(UPDATER)
 
 
 class PersonalAppLockTest(unittest.TestCase):
+    def test_repository_targets_exclude_intel_macos_and_match_generated_pins(self):
+        data_dir = REPO / "home/.chezmoidata"
+        applications = json.loads((data_dir / "personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
+        locks = json.loads((data_dir / "personal-app-lock.json").read_text(encoding="utf-8"))["personalAppLocks"]
+        for name, application in applications.items():
+            with self.subTest(application=name):
+                self.assertNotIn("darwin-amd64", application["targets"])
+                self.assertEqual(set(locks[name]["targets"]), set(application["targets"]))
+
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory(prefix="personal app lock ")
         self.addCleanup(self.scratch.cleanup)
@@ -117,7 +126,7 @@ class PersonalAppLockTest(unittest.TestCase):
 
     def test_unversioned_zip_archives_retain_platform_member_and_strip_components(self):
         members = {
-            "darwin-amd64": "ghq", "darwin-arm64": "ghq",
+            "darwin-arm64": "ghq",
             "linux-amd64": "ghq", "linux-arm64": "ghq",
             "windows-amd64": "ghq.exe", "windows-arm64": "ghq.exe",
         }
