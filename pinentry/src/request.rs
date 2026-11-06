@@ -68,7 +68,6 @@ impl Request {
                 .ok()
                 .and_then(|v| String::from_utf8(v.to_vec()).ok());
         } else if command.starts_with(b"SETREPEAT") || command == b"SETERROR" {
-            // Error/repeat flows can require additional caller validation.
             self.uncertain = true;
         }
     }

@@ -6,8 +6,6 @@ compile_error!("native PIN storage is supported only on Windows, macOS, and Linu
 
 const SERVICE: &str = "dotfiles.pinentry.openpgp";
 
-// Construction does not initialize the backend. Delegated dialogs never need
-// native-store access; only an actual get, set, or delete creates an entry.
 pub struct NativeStore;
 
 fn username(card: &CardId) -> String {

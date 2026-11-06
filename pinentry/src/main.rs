@@ -41,9 +41,7 @@ fn run(arguments: &[OsString]) -> Result<(), String> {
                 _ => None,
             }
             .ok_or(FORGET_USAGE)?;
-            NativeStore
-                .delete(&card)
-                .map_err(|_| "native PIN store failed".to_owned())
+            NativeStore.delete(&card).map_err(|error| error.to_string())
         }
         _ => {
             let fallback = fallback()?;

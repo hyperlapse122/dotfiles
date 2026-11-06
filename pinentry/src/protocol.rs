@@ -156,12 +156,13 @@ fn response(
     capture: bool,
 ) -> Result<Response, ProxyError> {
     let mut reply = Response {
-        frames: Secret::new(Vec::with_capacity(RESPONSE_LIMIT)),
-        data: Secret::new(Vec::with_capacity(SECRET_LIMIT)),
+        frames: Secret::new(Vec::with_capacity(if capture { RESPONSE_LIMIT } else { 0 })),
+        data: Secret::new(Vec::with_capacity(if capture { SECRET_LIMIT } else { 0 })),
         success: false,
         cached: false,
         has_data: false,
     };
+    let mut data_length = 0;
     loop {
         let line = read_line(frontend)?.ok_or(ProxyError::Protocol)?;
         let (cmd, argument) = command(&line);
@@ -180,15 +181,12 @@ fn response(
         }
         if cmd == b"D" {
             let data = decode(argument)?;
-            if reply.data.len() + data.len() > SECRET_LIMIT {
+            data_length += data.len();
+            if data_length > SECRET_LIMIT {
                 return Err(ProxyError::Protocol);
             }
-            // Even delegated streams are bounded, without retaining their PIN.
             if capture {
                 reply.data.extend_from_slice(&data);
-            } else {
-                let size = reply.data.len() + data.len();
-                reply.data.resize(size, 0);
             }
             reply.has_data = true;
         } else if cmd == b"S" {
@@ -280,8 +278,6 @@ fn session(
             } else {
                 None
             };
-            // A subsequent interaction must receive fresh descriptor and prompt
-            // context. In particular a failed dialog cannot reuse an old card.
             request = Request::default();
             if let Some((card, warning)) = qualified {
                 if warning {
@@ -311,8 +307,6 @@ fn session(
                         .and_then(|_| output.flush())
                         .map_err(|_| ProxyError::Io)?;
                 } else {
-                    // Native errors/statuses remain exact; partial PIN data on
-                    // a failed transaction is never released or enrolled.
                     for frame in reply
                         .frames
                         .split(|b| *b == b'\n')
@@ -326,8 +320,6 @@ fn session(
                 continue;
             }
         }
-        // Clear before forwarding context changes, even when the frontend
-        // rejects one: a failed update must not retain a previous identity.
         request.update(cmd, argument);
         send(frontend_input, &line)?;
         let reply = response(upstream, output, frontend, frontend_input, false)?;
