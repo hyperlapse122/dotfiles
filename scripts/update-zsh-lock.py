@@ -1,5 +1,3 @@
-"""Pin Prezto and the gitlink archives required by its enabled modules."""
-
 import base64
 import configparser
 import hashlib
