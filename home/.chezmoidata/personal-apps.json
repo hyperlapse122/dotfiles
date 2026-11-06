@@ -184,6 +184,44 @@
         }
       }
     },
+    "docker-credential-wincred": {
+      "command": "docker-credential-wincred",
+      "repository": "docker/docker-credential-helpers",
+      "targets": {
+        "windows-amd64": {
+          "asset": "docker-credential-wincred-v{version}.windows-amd64.exe",
+          "kind": "file"
+        },
+        "windows-arm64": {
+          "asset": "docker-credential-wincred-v{version}.windows-arm64.exe",
+          "kind": "file"
+        }
+      }
+    },
+    "docker-credential-osxkeychain": {
+      "command": "docker-credential-osxkeychain",
+      "repository": "docker/docker-credential-helpers",
+      "targets": {
+        "darwin-arm64": {
+          "asset": "docker-credential-osxkeychain-v{version}.darwin-arm64",
+          "kind": "file"
+        }
+      }
+    },
+    "docker-credential-secretservice": {
+      "command": "docker-credential-secretservice",
+      "repository": "docker/docker-credential-helpers",
+      "targets": {
+        "linux-amd64": {
+          "asset": "docker-credential-secretservice-v{version}.linux-amd64",
+          "kind": "file"
+        },
+        "linux-arm64": {
+          "asset": "docker-credential-secretservice-v{version}.linux-arm64",
+          "kind": "file"
+        }
+      }
+    },
     "omp": {
       "command": "omp",
       "repository": "can1357/oh-my-pi",

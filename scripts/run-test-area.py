@@ -27,7 +27,7 @@ AREAS = {
     "security": (
         "test_pinentry_apply",
         "test_ssh_identities",
-        "test_ca_files",
+        "test_ca_files", "test_container_auth",
         "test_secrets", "test_git_gpg", "test_script_lifecycle", "test_github_auth",
         "test_github_auth_import", "test_gitlab_auth", "test_gitlab_auth_import",
     ),

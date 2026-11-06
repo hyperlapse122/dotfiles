@@ -231,3 +231,35 @@ rewrite existing working files. For an affected checkout, convert only the SOPS
 dotenv file's CRLF line endings to LF, preserving its encrypted contents, then
 rerun `mise install`. Avoid a repository-wide reset or checkout that could discard
 local changes.
+
+## Docker Hub and GitLab Container Registries
+
+Registry enrollment is optional and separate from GitHub/GitLab API authentication. A GitLab API token must have the registry permissions needed for the intended pull or push; enroll a separate registry token when it does not. Host CLI credentials do not provision Kubernetes image-pull secrets or credentials inside containers.
+
+The repository pins the official Docker credential helpers (`wincred`, `osxkeychain`, and `secretservice`) for supported targets. An enrolled registry is stored in Windows Credential Manager, macOS Keychain, or Linux Secret Service. The helper must be installed on the client host and discoverable on `PATH`; a configured Docker or Podman client is required. No engine, VM, WSL machine, or cluster is installed or started by this feature.
+
+Import a Docker Hub account using a plaintext token file outside the repository:
+
+```sh
+mise exec -- python scripts/container-auth.py import --registry docker.io --user ACCOUNT --token-file /path/outside-repo/registry-token.txt
+```
+
+For a private GitLab registry, replace `docker.io` with its registry hostname and use the registry account. To opt in the already imported GitLab registry/user/token record:
+
+```sh
+mise exec -- python scripts/container-auth.py import-gitlab
+```
+
+The importer writes `home/.secrets/container-auth.json.asc` using the initialized repository GPG policy and verifies decryption. External token inputs are retained. Do not commit them. A missing enrollment is a no-op and does not decrypt the API token document.
+
+Run explicit `mise run apply`, or reconcile only this capability:
+
+```sh
+mise exec -- python scripts/container-auth.py apply --destination /path/to/user-home
+```
+
+Reconciliation verifies native helper readback before removing owned plaintext authentication from Docker and Podman client files. It preserves unrelated registries, helper choices, and configuration. Docker Hub aliases share the intended account. Namespace-specific plaintext entries below an enrolled registry are owned by that registry and are removed after secure-store verification.
+
+The effective `DOCKER_CONFIG` and `REGISTRY_AUTH_FILE` overrides are reconciled alongside the default files. Linux's `XDG_RUNTIME_DIR/containers/auth.json` and persistent `XDG_CONFIG_HOME/containers/auth.json` are both covered so an earlier Podman plaintext entry cannot shadow the managed helper. Use absolute override paths. When Linux has no `XDG_RUNTIME_DIR`, the existing `/run/user/UID` location is covered; otherwise set `REGISTRY_AUTH_FILE` explicitly for nonstandard runtime locations.
+
+Locked or unavailable native storage fails without a plaintext fallback. Rotate credentials by importing the replacement and applying again. No real registry push is part of the smoke tests. `tests/smoke_container_auth.py` writes only synthetic records on disposable GitHub-hosted runners, restoring macOS Keychain selection and erasing its record. CI supplies the mise-pinned Podman 6.1.4 client and requires a real host-side `podman login --get-login` lookup. Remote Podman initializes a connection before this local lookup; a ping-only loopback fixture satisfies that handshake without returning credentials or starting an engine. The account must still come from the official helper and native credential store.

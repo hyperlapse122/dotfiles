@@ -131,7 +131,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth, fonts, ghostty]
+        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth, container-auth, fonts, ghostty]
         platform:
           - runner: ubuntu-24.04
             target: linux-amd64
@@ -171,7 +171,6 @@ jobs:
         with:
           install: false
           env: false
-      # Each native smoke area installs only its own existing tool declarations.
       - name: Install native smoke base tools
         run: mise install chezmoi python
       - name: Install native zsh completion runtime
@@ -183,6 +182,9 @@ jobs:
       - name: Install desktop release acquisition tool
         if: matrix.area == 't3'
         run: mise install gh
+      - name: Install the declared host-side registry client fixture
+        if: matrix.area == 'container-auth'
+        run: mise install podman@6.1.4
       - name: Install native credential runtime
         if: matrix.area == 'github-auth' || matrix.area == 'gitlab-auth'
         run: mise install uv pipx:keyring
@@ -191,7 +193,7 @@ jobs:
         if: runner.os == 'macOS' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
         run: brew install gnupg
       - name: Provision disposable Linux credential service
-        if: runner.os == 'Linux' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
+        if: runner.os == 'Linux' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth' || matrix.area == 'container-auth')
         run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring gnupg
       - name: Provision disposable Linux font discovery prerequisite
         if: runner.os == 'Linux' && matrix.area == 'fonts'
@@ -242,6 +244,18 @@ jobs:
         if: runner.os != 'Linux' && matrix.area == 'gitlab-auth'
         timeout-minutes: 5
         run: mise exec chezmoi python uv pipx:keyring -- python tests/smoke_gitlab_auth.py
+      - name: Prove native Docker and Podman registry credential lookup
+        if: runner.os != 'Linux' && matrix.area == 'container-auth'
+        timeout-minutes: 5
+        run: mise exec chezmoi python podman@6.1.4 -- python tests/smoke_container_auth.py --require-podman
+      - name: Prove native registry lookup in an isolated Linux session
+        if: runner.os == 'Linux' && matrix.area == 'container-auth'
+        timeout-minutes: 5
+        run: |
+          dbus-run-session -- sh -eu -c '
+            printf "%s" fixture-keyring-password | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+            mise exec chezmoi python podman@6.1.4 -- python tests/smoke_container_auth.py --require-podman
+          '
       - name: Prove native credentials in this job's isolated Linux session
         if: runner.os == 'Linux' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
         timeout-minutes: 5

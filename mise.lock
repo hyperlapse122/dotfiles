@@ -306,6 +306,36 @@ uv = { path = ".mise/locks/pipx-keyring/25.7.0~12237102", digest = "sha256:832c7
 [tools."pipx:keyring".options]
 uvx = "true"
 
+[[tools.podman]]
+version = "6.1.4"
+backend = "github:podman-container-tools/podman"
+specifiers = ["6.1.4"]
+
+[tools.podman."platforms.linux-arm64"]
+checksum = "sha256:1d7c2a3241b56effa68c724359fb30e603a802699b2b7b20fe2fae5ff6819601"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977468"
+
+[tools.podman."platforms.linux-x64"]
+checksum = "sha256:af1f85c22214088a0a9986b9c82b4c9b5b74eda8ecaa6c8cca82b1a63f339b4a"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977464"
+
+[tools.podman."platforms.macos-arm64"]
+checksum = "sha256:dadcb94999dcb7f19f8269e292fc56d2bfbe2bfab5826981a568a466bff26843"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-release-darwin_arm64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977395"
+
+[tools.podman."platforms.windows-arm64"]
+checksum = "sha256:7987844d58b8d0320de94260d5b3cb414ef7f92db93986f6819f7e36fac125d6"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-release-windows_arm64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977463"
+
+[tools.podman."platforms.windows-x64"]
+checksum = "sha256:8b70cd2511bfac9b65e58858d8fe54eeb68e3420eeb600e3f869b9a4b8576572"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-release-windows_amd64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977390"
+
 [[tools.powershell]]
 version = "7.6.9"
 backend = "aqua:PowerShell/PowerShell"

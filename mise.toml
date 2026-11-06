@@ -57,6 +57,11 @@ run = [
   'cargo test --manifest-path "{{config_root}}/Cargo.toml" --workspace --locked',
 ]
 
+[tasks."container-auth:smoke"]
+description = "Verify native registry helpers on a disposable hosted account"
+tools = { podman = "6.1.4" }
+run = "python tests/smoke_container_auth.py --require-podman"
+
 [tasks.windows-build]
 description = "Provision the Windows x64 native build environment"
 shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
