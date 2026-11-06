@@ -1,5 +1,4 @@
 #requires -Version 5.1
-# Enables Win32 long path support so long-path-aware tools can exceed MAX_PATH.
 param(
     [string] $RegistryPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem',
     [switch] $NoElevation

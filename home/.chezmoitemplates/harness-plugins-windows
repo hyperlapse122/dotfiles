@@ -4,6 +4,12 @@ $env:HOME = '{{ .chezmoi.destDir | replace "'" "''" }}'
 $env:USERPROFILE = $env:HOME
 $omp = Join-Path $env:HOME '.local/bin/omp.exe'
 
+# Windows Search opens files omp has just copied into its plugin cache, and omp renames
+# that staging copy without retrying, so the install fails with EPERM. Entries created
+# under a directory excluded from indexing inherit the exclusion.
+$pluginCache = New-Item -ItemType Directory -Force -Path (Join-Path $env:HOME '.omp/plugins/cache/plugins')
+$pluginCache.Attributes = $pluginCache.Attributes -bor [IO.FileAttributes]::NotContentIndexed
+
 function Invoke-Omp {
     & $omp @args
     if ($LASTEXITCODE -ne 0) {
