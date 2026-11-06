@@ -85,6 +85,9 @@ Unknown layouts or languages, administrator PINs, PIN changes/repeats, and ordin
 On a qualifying miss, the native frontend collects the PIN and the wrapper saves it before returning it to GnuPG. Cancellation saves nothing. Saving an entered value does not prove that the card accepted it.
 
 A recognized `Remaining attempts: 0`, `1`, or `2` warning invalidates the matching record and forces manual entry for that request. GnuPG does not deliver every card rejection back to standalone pinentry. With configured retry counts above three, earlier failed attempts can remain invisible to this heuristic.
+
+After changing, resetting, or unblocking the user PIN, run `dotfiles-pinentry forget <serial>` on every host that saved that card's PIN before the next card operation. Change-PIN dialogs do not update the saved entry. Otherwise the old saved PIN can be submitted automatically and consume a retry attempt.
+
 To remove one saved PIN explicitly and force manual entry on its next qualifying request, use the printed decimal YubiKey serial:
 
 ```sh
