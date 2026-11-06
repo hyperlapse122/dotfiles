@@ -51,7 +51,7 @@ Library
 .t3
 {{ end }}
 {{ if not $t3Windows }}
-.local/bin/t3.cmd
+.local/bin/t3.ps1
 {{ end }}
 {{ if not $t3Posix }}
 .local/bin/t3
@@ -67,8 +67,8 @@ Library
 .gemini
 {{ end }}
 {{ if or (not $antigravitySupported) (ne .chezmoi.os "windows") }}
-.local/bin/agy.cmd
-.local/bin/antigravity-acp.cmd
+.local/bin/agy.ps1
+.local/bin/antigravity-acp.ps1
 {{ end }}
 {{ if or (not $antigravitySupported) (eq .chezmoi.os "windows") }}
 .local/bin/agy

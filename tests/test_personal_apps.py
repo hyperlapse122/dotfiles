@@ -366,7 +366,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.write_locks()
         launchers = self.source / "dot_local/bin"
         launchers.mkdir(parents=True)
-        names = ("agy.cmd.tmpl", "antigravity-acp.cmd.tmpl") if os.name == "nt" else (
+        names = ("agy.ps1.tmpl", "antigravity-acp.ps1.tmpl") if os.name == "nt" else (
             "executable_agy.tmpl", "executable_antigravity-acp.tmpl",
         )
         for name in names:
@@ -391,7 +391,7 @@ class PersonalAppsTest(unittest.TestCase):
             self.assertFalse((self.home / ".local/bin/agy.exe").exists())
             self.assertFalse((self.home / ".local/bin/antigravity-acp.exe").exists())
         for command in ("agy", "antigravity-acp"):
-            launcher = self.home / ".local/bin" / (command + ".cmd" if os.name == "nt" else command)
+            launcher = self.home / ".local/bin" / (command + ".ps1" if os.name == "nt" else command)
             self.assertTrue(launcher.is_file())
         requests = list(self.requests)
         self.apply()

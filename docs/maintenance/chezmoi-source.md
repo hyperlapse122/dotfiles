@@ -54,7 +54,7 @@ Maintain strict ordering within phases using zero-padded two-digit numbers:
 
 ```
 run_before_05-check-windows-prerequisites.ps1.tmpl
-run_before_10-check-gpg-home.cmd.tmpl
+run_before_10-check-gpg-home.ps1.tmpl
 run_onchange_after_10-personal-app-path.sh.tmpl
 run_onchange_after_20-harness-plugins.sh.tmpl
 run_after_25-windows-build-environment.ps1.tmpl

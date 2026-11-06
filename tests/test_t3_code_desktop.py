@@ -122,18 +122,19 @@ class T3CodeDesktopTest(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "nt", "Native Windows missing desktop launcher")
     def test_missing_desktop_fails_without_using_another_t3(self):
-        result = self.render("dot_local/bin/t3.cmd.tmpl", "windows", "amd64")
+        result = self.render("dot_local/bin/t3.ps1.tmpl", "windows", "amd64")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        launcher = self.home / ".local/bin/t3.cmd"
+        launcher = self.home / ".local/bin/t3.ps1"
         launcher.parent.mkdir(parents=True)
         launcher.write_text(result.stdout, encoding="utf-8")
         commands = self.root / "commands"
         commands.mkdir()
-        (commands / "t3.cmd").write_text("@exit /b 39\n", encoding="utf-8")
+        (commands / "t3.ps1").write_text("exit 39\n", encoding="utf-8")
         env = dict(self.env, PATH=str(commands), ProgramFiles=str(self.root / "program files"),
                    **{"ProgramFiles(x86)": str(self.root / "program files x86"),
                       "ProgramW6432": str(self.root / "native program files")})
-        applied = subprocess.run([os.environ["COMSPEC"], "/d", "/c", str(launcher)],
+        shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+        applied = subprocess.run([shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(launcher)],
                                  env=env, capture_output=True, text=True, timeout=30)
         self.assertEqual(applied.returncode, 127, applied.stdout + applied.stderr)
         self.assertIn("chezmoi apply", applied.stderr)

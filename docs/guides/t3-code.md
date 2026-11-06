@@ -16,7 +16,7 @@ Existing desktop installations are retained; use the app's internal updater for 
 ## Command-Line Launchers
 
 Applying personal settings installs desktop-dependent launchers into `~/.local/bin`:
-- `t3` (and `t3.cmd` on Windows) wraps the desktop application's bundled CLI without requiring manual symlinks or GUI startup.
+- `t3` (and `t3.ps1` on Windows) wraps the desktop application's bundled CLI without requiring manual symlinks or GUI startup.
 - `t3 app` opens the current working directory inside the running T3 Code desktop editor.
 
 ### Verification
@@ -67,7 +67,7 @@ Dotfiles reconciles T3 Code's settings file (`~/.t3/userdata/settings.json`) on 
 The modify template (`modify_private_settings.json`):
 - Creates or updates keyed `omp` and `antigravity` entries using the local ACP registry driver.
 - Runs omp through the fully expanded absolute destination `.local/bin/omp` path (`omp.exe` on Windows) with the `acp` argument.
-- Runs Antigravity through its absolute native adapter payload in `~/.local/share/dotfiles/antigravity-acp/bin`, with no arguments. T3 rejects Windows batch wrappers, so this is not the terminal's `.cmd` launcher.
+- Runs Antigravity through its absolute native adapter payload in `~/.local/share/dotfiles/antigravity-acp/bin`, with no arguments. The terminal's `.ps1` launcher requires PowerShell; T3 invokes the native adapter directly.
 - Owns three Antigravity provider `environment` entries: absolute managed `AGY_BIN`, `AGY_SKIP_DOWNLOAD=1`, and `AGY_CLI_DISABLE_AUTO_UPDATE=true`. Duplicate or drifted owned entries are replaced; other variables, including secret references, are retained.
 - Reconciles both provider and config `enabled` flags to `true`, while preserving other providers, appearance choices, and unowned configuration.
 - Derives initial omp display name and color without overwriting user changes.

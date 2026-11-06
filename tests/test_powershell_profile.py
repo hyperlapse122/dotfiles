@@ -108,6 +108,32 @@ class PowerShellProfileTest(unittest.TestCase):
                 self.install(shell, target)
                 self.probe(shell, target)
 
+    @unittest.skipUnless(os.name == "nt", "Windows profile installer entry point")
+    def test_profile_entry_point_installs_both_runtimes_without_cmd_length_limit(self):
+        source = self.repo / "home/run_after_30-powershell-mise-profile.ps1.tmpl"
+        if not source.exists():
+            source = source.with_name("run_after_30-powershell-mise-profile.cmd.tmpl")
+        rendered = self.run_command(
+            "chezmoi", "--source", str(self.repo), "--config", str(self.config),
+            "execute-template", source.read_text(encoding="utf-8"),
+        ).stdout
+        body = self.render("powershell-mise-profile-install")
+        target = self.home / "설정" / "profile-$($PSVersionTable.PSVersion.Major).ps1"
+        redirected = ("$PROFILE = 'fixture' | Add-Member -NotePropertyName CurrentUserAllHosts "
+                      "-PassThru -NotePropertyValue \"" + str(target) + "\"\n" + body)
+        rendered = rendered.replace(base64.b64encode(body.encode()).decode(),
+                                    base64.b64encode(redirected.encode()).decode())
+        entry = self.root / ("entry.ps1" if source.name.endswith("ps1.tmpl") else "entry.cmd")
+        entry.write_text(rendered, encoding="utf-8-sig" if entry.suffix == ".ps1" else "utf-8")
+        if entry.suffix == ".cmd":
+            self.run_command(os.environ["COMSPEC"], "/d", "/c", str(entry))
+        else:
+            self.run_command(available_shells()[-1], "-NoProfile", "-ExecutionPolicy", "Bypass",
+                             "-File", str(entry))
+        for major in (5, 7):
+            self.assertEqual((target.parent / f"profile-{major}.ps1").read_text(encoding="utf-8"),
+                             self.render("powershell-mise-profile"))
+
     def test_existing_profile_is_replaced_and_local_edits_are_repaired(self):
         for index, shell in enumerate(available_shells()):
             with self.subTest(shell=shell):
