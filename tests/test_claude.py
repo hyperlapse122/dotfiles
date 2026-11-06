@@ -50,6 +50,7 @@ class ClaudeTest(unittest.TestCase):
         self.assertEqual(data["language"], "korean")
         self.assertIs(data["autoMemoryEnabled"], False)
         self.assertEqual(data["env"]["DISABLE_AUTOUPDATER"], "1")
+        self.assertEqual(data["env"]["CLAUDE_CODE_USE_POWERSHELL_TOOL"], "1")
         self.assertIs(data["enabledPlugins"][PLUGIN_ID], True)
         marketplace = data["extraKnownMarketplaces"]["compound-engineering-plugin"]
         self.assertIs(marketplace["autoUpdate"], False)
