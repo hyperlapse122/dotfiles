@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,13 @@ from asset_fixtures import copy_asset_templates, run_with_assets
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / 'scripts'))
 SPEC = importlib.util.spec_from_file_location('container_auth', REPO / 'scripts/container-auth.py')
+
+
+def is_pinned_podman(version):
+    return re.fullmatch(
+        r'podman(?:-remote(?:-static-linux_(?:amd64|arm64))?)?(?:\.exe)? version 6\.1\.4',
+        version, flags=re.IGNORECASE,
+    ) is not None
 
 
 @contextmanager
@@ -116,7 +124,7 @@ def main():
                         try:
                             version = auth.common.run_private([candidate, '--version'], env=env,
                                 operation='Cannot identify the native Podman fixture.').strip()
-                            if version == 'podman version 6.1.4':
+                            if is_pinned_podman(version):
                                 podman = candidate
                                 break
                         except auth.common.AuthError:

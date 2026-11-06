@@ -195,6 +195,18 @@ elif a=='erase':
                 self.assertEqual(pin['kind'], 'file')
                 self.assertRegex(pin['sha256'], r'^[0-9a-f]{64}$')
 
+    def test_native_podman_version_accepts_official_binary_names_only_at_pinned_version(self):
+        from smoke_container_auth import is_pinned_podman
+
+        for name in ('podman', 'podman.EXE', 'podman-remote', 'podman-remote.exe',
+                     'podman-remote-static-linux_amd64', 'podman-remote-static-linux_arm64'):
+            with self.subTest(name=name):
+                self.assertTrue(is_pinned_podman(name + ' version 6.1.4'))
+        for banner in ('podman version 6.1.40', 'podman version 5.7.0',
+                       'other version 6.1.4', 'podman version 6.1.4-dev'):
+            with self.subTest(banner=banner):
+                self.assertFalse(is_pinned_podman(banner))
+
     def test_encrypted_enrollment_roundtrip_preserves_external_input(self):
         gpg = shutil.which('gpg')
         if not gpg:
