@@ -16,6 +16,7 @@ import tempfile
 import threading
 from urllib.parse import quote, unquote, urlparse
 
+from asset_fixtures import copy_asset_templates, run_with_assets
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -40,7 +41,7 @@ def cached_assets(lock, directory):
 
 
 def run(command, env):
-    result = subprocess.run(command, env=env, capture_output=True, text=True,
+    result = run_with_assets(command, env=env, capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=600)
     if result.returncode:
         raise RuntimeError(f"{command[0]} failed:\n{result.stdout}\n{result.stderr}")
@@ -81,10 +82,11 @@ def main():
         home, source = root / "home", root / "source"
         home.mkdir()
         source.mkdir()
-        for relative in (".chezmoiexternals/fonts.toml.tmpl", "dot_local/share/dotfiles/font-index.tsv.tmpl"):
+        for relative in ("dot_local/share/dotfiles/font-index.tsv.tmpl",):
             target = source / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO / "home" / relative, target)
+        copy_asset_templates(source, ("fonts",))
         data = source / ".chezmoidata"
         data.mkdir()
         (data / "fonts.json").write_text(json.dumps({"fonts": dict.fromkeys(lock, {})}))

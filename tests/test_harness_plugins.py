@@ -12,6 +12,8 @@ import tomllib
 import unittest
 
 
+from asset_fixtures import copy_asset_templates, run_with_assets
+
 class HarnessPluginsTest(unittest.TestCase):
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
@@ -27,9 +29,8 @@ class HarnessPluginsTest(unittest.TestCase):
         for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_omp", "private_dot_gemini"):
             shutil.copytree(self.repo / "home" / directory, self.source / directory)
         shutil.copy2(self.repo / "home/.chezmoiignore", self.source / ".chezmoiignore")
-        (self.source / ".chezmoiexternals").mkdir()
-        self.external = self.source / ".chezmoiexternals/harness-plugins.toml.tmpl"
-        shutil.copy2(self.repo / "home/.chezmoiexternals/harness-plugins.toml.tmpl", self.external)
+        copy_asset_templates(self.source, ("harness-plugins",))
+        self.external = self.source / ".chezmoitemplates/external-assets/harness-plugins.toml.tmpl"
         (self.source / ".chezmoiscripts").mkdir()
         for name in ("run_onchange_after_20-harness-plugins.ps1.tmpl", "run_onchange_after_20-harness-plugins.sh.tmpl"):
             shutil.copy2(self.repo / "home/.chezmoiscripts" / name, self.source / ".chezmoiscripts" / name)
@@ -106,7 +107,7 @@ class HarnessPluginsTest(unittest.TestCase):
         }), encoding="utf-8")
 
     def run_chezmoi(self, *args, input=None):
-        return subprocess.run(
+        return run_with_assets(
             [self.chezmoi, "--config", str(self.config), "--source", str(self.source),
              "--destination", str(self.home), "--cache", str(self.root / "chezmoi-cache"),
              "--persistent-state", str(self.root / "chezmoi-state.boltdb"), *args],
@@ -277,7 +278,7 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertEqual(list(self.home.iterdir()), [])
 
     def render_external(self, os_name, arch):
-        template = (self.repo / "home/.chezmoiexternals/harness-plugins.toml.tmpl").read_text(encoding="utf-8")
+        template = (self.repo / "home/.chezmoitemplates/external-assets/harness-plugins.toml.tmpl").read_text(encoding="utf-8")
         wrapper = ('{{ template "external" (dict "chezmoi" (dict "os" '
                    + json.dumps(os_name) + ' "arch" ' + json.dumps(arch)
                    + ') "personalApps" .personalApps "harnessPlugins" .harnessPlugins "harnessPluginLocks" .harnessPluginLocks) }}'

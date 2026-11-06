@@ -31,6 +31,7 @@
 {{- $sha256 := trimPrefix "sha256:" $digest -}}
 [".cache/t3-code/t3code.deb"]
 type = "file"
+refreshPeriod = "0"
 url = {{ printf "%s#sha256=%s" (get $asset "browser_download_url" | toString) $sha256 | quote }}
 checksum.sha256 = {{ $sha256 | quote }}
 {{ end -}}

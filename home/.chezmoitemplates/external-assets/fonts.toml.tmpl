@@ -5,12 +5,20 @@
 {{- if or (not (get $pin "url")) (not (regexMatch "^[0-9a-f]{64}$" (get $pin "sha256"))) (not (get $pin "files")) -}}
 {{- fail (printf "Missing font lock for %s" $name) -}}
 {{- end -}}
-{{- range $file := $pin.files }}
-[{{ printf ".local/share/dotfiles/font-assets/%s/%s" $name $file.path | quote }}]
-type = "archive-file"
+{{- $members := list -}}
+{{- range $file := $pin.files -}}
+{{- $member := "" -}}
+{{- range $component := splitList "/" $file.path -}}
+{{- $member = printf "%s/%s" $member $component | trimPrefix "/" -}}
+{{- $members = append $members $member -}}
+{{- end -}}
+{{- end }}
+[{{ printf ".local/share/dotfiles/font-assets/%s" $name | quote }}]
+type = "archive"
 url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
 checksum.sha256 = {{ $pin.sha256 | quote }}
-path = {{ $file.path | quote }}
-{{ end -}}
+refreshPeriod = "0"
+include = {{ $members | uniq | toJson }}
+exact = true
 {{ end -}}
 {{- end -}}

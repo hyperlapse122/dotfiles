@@ -17,6 +17,7 @@ import threading
 import time
 import tomllib
 
+from asset_fixtures import copy_asset_templates
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 
 
@@ -143,9 +144,6 @@ def main():
         (outside / ".git").mkdir()
         for relative in (
             ".chezmoidata", ".chezmoitemplates", ".chezmoiignore", "private_dot_codex",
-            ".chezmoiexternals/personal-apps.toml.tmpl",
-            ".chezmoiexternals/codex-package.toml.tmpl",
-            ".chezmoiexternals/harness-plugins.toml.tmpl",
             ".chezmoiscripts/run_after_25-codex-plugins.sh.tmpl",
             ".chezmoiscripts/run_after_25-codex-plugins.ps1.tmpl",
         ):
@@ -163,6 +161,7 @@ def main():
             'codex-smoke-common-instructions\n'
             '{{ if eq .harness "codex" }}codex-smoke-native-instructions{{ end }}\n'
             '{{ if eq .harness "omp" }}codex-smoke-foreign-instructions{{ end }}\n', encoding="utf-8")
+        copy_asset_templates(source, ('personal-apps', 'codex-package', 'harness-plugins'))
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":

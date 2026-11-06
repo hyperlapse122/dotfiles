@@ -39,14 +39,15 @@ class WindowsFontsTest(unittest.TestCase):
         return (self.package + "\tdesktop/Example.ttf\tExample.ttf\t" +
                 hashlib.sha256(self.source.read_bytes()).hexdigest() + "\n")
 
-    def run_installer(self, check=True):
+    def run_installer(self, check=True, mode="normal"):
         command = shutil.which("powershell.exe")
         result = subprocess.run([
             command, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
             str(REPO / "scripts/install-fonts.ps1"), "-AssetRoot", str(self.assets),
             "-IndexPath", str(self.index), "-FontDirectory", str(self.fonts),
             "-StatePath", str(self.state),
-        ], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+        ], env=dict(os.environ, DOTFILES_ASSET_MODE=mode), capture_output=True,
+            text=True, encoding="utf-8", errors="replace", timeout=60)
         if check:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
@@ -95,6 +96,25 @@ class WindowsFontsTest(unittest.TestCase):
         self.assertEqual(sentinel.read_bytes(), b"keep")
         with self.assertRaises(FileNotFoundError):
             self.registry_value()
+
+    def test_explicit_verify_repairs_preserved_metadata_corruption(self):
+        self.run_installer()
+        installed = self.fonts / self.name
+        original = installed.read_bytes()
+        stamp = installed.stat()
+        # Unload this fixture's font before modifying its otherwise locked bytes.
+        import ctypes
+        remove = ctypes.windll.gdi32.RemoveFontResourceExW
+        while remove(str(installed), 0, None):
+            pass
+        corrupt = bytearray(original)
+        corrupt[-1] ^= 1
+        installed.write_bytes(corrupt)
+        os.utime(installed, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        self.run_installer()
+        self.assertEqual(installed.read_bytes(), corrupt)
+        self.run_installer(mode="verify")
+        self.assertEqual(installed.read_bytes(), original)
 
     def test_hash_failure_happens_before_mutation(self):
         self.run_installer()

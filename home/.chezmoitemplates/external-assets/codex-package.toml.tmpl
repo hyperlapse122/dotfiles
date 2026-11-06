@@ -1,0 +1,22 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- $codex := get .personalApps "codex" | default dict -}}
+{{- if hasKey (get $codex "targets" | default dict) $target -}}
+{{- $pin := index .personalAppLocks.codex.targets $target -}}
+{{- if or (not (get $pin "url")) (not (regexMatch "^[0-9a-f]{64}$" (get $pin "sha256"))) -}}
+{{- fail (printf "Missing Codex package pin for %s" $target) -}}
+{{- end -}}
+{{- $suffix := "" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $suffix = ".exe" -}}{{- end -}}
+{{- $members := list "bin" "codex-package.json" "codex-path" "codex-path/**" "codex-resources" "codex-resources/**" -}}
+{{- range $name := list "codex" "codex-code-mode-host" "codex-exec-server" -}}
+{{- $members = append $members (printf "bin/%s%s" $name $suffix) -}}
+{{- end }}
+[".local"]
+type = "archive"
+url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+checksum.sha256 = {{ $pin.sha256 | quote }}
+refreshPeriod = "0"
+format = "tar.gz"
+include = {{ $members | toJson }}
+exact = false
+{{- end -}}

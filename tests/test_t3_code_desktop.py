@@ -49,7 +49,7 @@ class T3CodeDesktopTest(unittest.TestCase):
                               "destDir": self.home.as_posix(), "workingTree": self.repo.as_posix()},
                    "t3CodeRelease": self.release if release is None else release}
         template = (self.repo / "home" / relative).read_text(encoding="utf-8")
-        if relative == ".chezmoiexternals/t3-code.toml.tmpl":
+        if relative == ".chezmoitemplates/external-assets/t3-code.toml.tmpl":
             for native, isolated in (
                 ("/opt/T3 Code (Beta)/t3code", self.root / "installed-desktop"),
                 ("/var/lib/dpkg/status", self.root / "dpkg-status"),
@@ -69,7 +69,7 @@ class T3CodeDesktopTest(unittest.TestCase):
     def test_ubuntu_selects_architecture_and_enforces_release_integrity(self):
         for arch, digest in (("amd64", "a"), ("arm64", "b")):
             with self.subTest(arch=arch):
-                result = self.render(".chezmoiexternals/t3-code.toml.tmpl", "linux", arch)
+                result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", "linux", arch)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 staged = tomllib.loads(result.stdout)
                 self.assertEqual(len(staged), 1)
@@ -81,14 +81,14 @@ class T3CodeDesktopTest(unittest.TestCase):
                 self.assertEqual(entry["checksum"]["sha256"], digest * 64)
         release = json.loads(json.dumps(self.release))
         del release["assets"][0]["digest"]
-        result = self.render(".chezmoiexternals/t3-code.toml.tmpl", "linux", "amd64", release)
+        result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", "linux", "amd64", release)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SHA-256", result.stdout + result.stderr)
 
     def test_installed_ubuntu_package_skips_release_lookup_and_download(self):
         (self.root / "dpkg-status").write_bytes(
             b"Package: t3code\nStatus: install ok installed\n\n")
-        result = self.render(".chezmoiexternals/t3-code.toml.tmpl", "linux", "amd64",
+        result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", "linux", "amd64",
                              {"invalid": "must not be examined"})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(tomllib.loads(result.stdout), {})
@@ -97,7 +97,7 @@ class T3CodeDesktopTest(unittest.TestCase):
         for os_name, arch in (("windows", "amd64"), ("windows", "arm64"),
                               ("darwin", "arm64"), ("darwin", "amd64"), ("linux", "386")):
             with self.subTest(os=os_name, arch=arch):
-                result = self.render(".chezmoiexternals/t3-code.toml.tmpl", os_name, arch,
+                result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", os_name, arch,
                                      {"invalid": "must not be examined"})
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(tomllib.loads(result.stdout), {})

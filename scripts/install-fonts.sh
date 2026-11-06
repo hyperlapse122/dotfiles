@@ -38,6 +38,31 @@ if [ -f "$state" ]; then
 fi
 
 tab=$(printf '\t')
+metadata=$state.metadata
+case "${DOTFILES_ASSET_MODE:-normal}" in
+    normal) force_check=false ;;
+    verify|refresh) force_check=true ;;
+    *) fail 'Invalid external asset mode.' ;;
+esac
+if stat -c '%s' "$index" >/dev/null 2>&1; then
+    snapshot_files() { find "$1" -type f -exec stat -c '%n|%s|%y|%a' {} +; }
+else
+    snapshot_files() { find "$1" -type f -exec stat -f '%N|%z|%.9Fm|%p' {} +; }
+fi
+snapshot() {
+    {
+        cat "$index"
+        [ ! -f "$state" ] || cat "$state"
+        [ ! -d "$asset_root" ] || snapshot_files "$asset_root"
+        [ ! -d "$font_dir" ] || snapshot_files "$font_dir"
+    } | LC_ALL=C sort
+}
+if ! $force_check && [ -f "$state" ] && [ -f "$metadata" ] &&
+    [ "$(snapshot)" = "$(cat "$metadata")" ]; then
+    refresh || fail 'Font discovery refresh failed; run chezmoi apply again.'
+    printf '%s\n' 'User fonts are available.'
+    exit 0
+fi
 while IFS="$tab" read -r package member name expected || [ -n "$package" ]; do
     source=$asset_root/$package/$member
     [ -f "$source" ] || fail "Missing staged font: $package/$member"
@@ -47,9 +72,11 @@ done < "$index"
 mkdir -p "$font_dir" "$(dirname "$state")"
 state_temp=$(mktemp "$(dirname "$state")/.dotfiles-fonts.XXXXXX")
 copy_temp=
+metadata_temp=$(mktemp "$(dirname "$state")/.dotfiles-font-metadata.XXXXXX")
 cleanup() {
     [ -z "$copy_temp" ] || rm -f "$copy_temp"
     [ -z "$state_temp" ] || rm -f "$state_temp"
+    [ -z "$metadata_temp" ] || rm -f "$metadata_temp"
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -79,4 +106,7 @@ if [ ! -f "$state" ] || ! cmp -s "$state_temp" "$state"; then
     mv -f "$state_temp" "$state"
     state_temp=
 fi
+snapshot > "$metadata_temp"
+mv -f "$metadata_temp" "$metadata"
+metadata_temp=
 printf '%s\n' 'User fonts are available.'

@@ -6,6 +6,11 @@ This guide explains how dotfiles installs and manages the [Compound Engineering]
 
 Dotfiles installs Compound Engineering at user scope for the standard omp environment across Windows, Linux, and macOS.
 
+The archive is prepared before native plugin reconciliation through the shared [asset cache](../maintenance/chezmoi-source.md#external-asset-preparation).
+Unchanged archive and extracted-file metadata reuse the completed preparation; native plugin registration and repair still run according to each harness's existing lifecycle.
+Use `mise run assets:verify` for full asset integrity verification and repair, or `mise run assets:refresh` to force fresh downloads as well.
+These tasks explicitly apply this worktree's personal configuration; close the affected harnesses first.
+
 ### Architecture
 
 1. **Declarations (`home/.chezmoidata/harness-plugins.json`):** Tracks upstream repository, tag prefixes, and marketplace metadata. Alternate-host symlinks are excluded to ensure smooth installation on Windows without elevated privileges.
