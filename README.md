@@ -54,6 +54,9 @@ To apply managed configuration, personal applications, and user fonts to your ac
 mise run apply
 ```
 
+On supported Ubuntu GNOME desktops and Apple Silicon macOS, application also installs Ghostty and reconciles the account's zsh login shell and native terminal defaults.
+See [Ghostty and the Login Shell](docs/guides/terminal.md) for configuration ownership, session renewal, status checks, and the OS-specific default-terminal boundaries.
+
 To preview pending changes before applying:
 
 ```sh
@@ -87,6 +90,7 @@ Comprehensive guides are organized in [docs/](docs/README.md):
 - **[Secrets and API Authentication](docs/guides/secrets-and-authentication.md):** Encrypted token source, GitHub and GitLab PAT imports, native OS keyrings, and Git HTTPS credentials.
 - **[Personal CLI Applications](docs/guides/personal-applications.md):** Installation of Claude Code, Codex, `omp`, `gh`, `ghq`, and `glab` under `~/.local/bin`, shell PATH activation, pin updates, and PowerShell mise activation.
 - **[User Fonts](docs/guides/fonts.md):** Pinned JetBrains Mono, Pretendard, D2Coding, and Nerd Font installation, user-scope discovery, updates, and Windows loaded-file recovery.
+- **[Ghostty and the Login Shell](docs/guides/terminal.md):** Supported Ubuntu/macOS installation, default-terminal selection, zsh account shell, pending actions, and manual package updates.
 - **[T3 Code Desktop and Harness Integration](docs/guides/t3-code.md):** Desktop editor installation, command-line launchers, native Claude Code and Codex integration, and oh-my-pi Agent Control Protocol configuration.
 - **[Harness Plugins](docs/guides/harness-plugins.md):** Compound Engineering for Claude Code, Codex, and omp, pinned local marketplaces, update controls, and shared agent instructions.
 - **[Native System CA Trust](docs/guides/system-ca.md):** Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, and platform activation.
