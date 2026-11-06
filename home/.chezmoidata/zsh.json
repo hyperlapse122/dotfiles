@@ -16,7 +16,12 @@
       "modules/autosuggestions/external",
       "modules/completion/external",
       "modules/history-substring-search/external",
-      "modules/syntax-highlighting/external"
+      "modules/syntax-highlighting/external",
+      "modules/prompt/external/powerline",
+      "modules/prompt/external/agnoster",
+      "modules/prompt/external/pure",
+      "modules/prompt/external/async",
+      "modules/prompt/external/powerlevel10k"
     ]
   }
 }

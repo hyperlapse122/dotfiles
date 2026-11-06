@@ -35,6 +35,41 @@
         "commit": "1d85c692615a25fe2293bdd44b34c217d5d2bf04",
         "url": "https://codeload.github.com/zsh-users/zsh-syntax-highlighting/tar.gz/1d85c692615a25fe2293bdd44b34c217d5d2bf04",
         "sha256": "e4a95feb737d78efa4052e23c4880e6936a3133ea58f390458fc80ea4033483e"
+      },
+      {
+        "path": "modules/prompt/external/powerline",
+        "repository": "davidjrice/prezto_powerline",
+        "commit": "c48e4c69ef5c368ea7cda961ed9d0e298a5ae1fc",
+        "url": "https://codeload.github.com/davidjrice/prezto_powerline/tar.gz/c48e4c69ef5c368ea7cda961ed9d0e298a5ae1fc",
+        "sha256": "00346e8f456c631853932b6dc2dea7fe65cedee820ee985830f2384c14a95e28"
+      },
+      {
+        "path": "modules/prompt/external/agnoster",
+        "repository": "agnoster/agnoster-zsh-theme",
+        "commit": "6bba672c7812a76defc3efed9b6369eeee2425dc",
+        "url": "https://codeload.github.com/agnoster/agnoster-zsh-theme/tar.gz/6bba672c7812a76defc3efed9b6369eeee2425dc",
+        "sha256": "3ff3fa1c4c9f139297c4823812ca047905a5091c3f8b0c3b045f4d141c2c211b"
+      },
+      {
+        "path": "modules/prompt/external/pure",
+        "repository": "sindresorhus/pure",
+        "commit": "dbefd0dcafaa3ac7d7222ca50890d9d0c97f7ca2",
+        "url": "https://codeload.github.com/sindresorhus/pure/tar.gz/dbefd0dcafaa3ac7d7222ca50890d9d0c97f7ca2",
+        "sha256": "7e95a775ae6d039d1a6126d7c9d3fd9decfad20ece91271ce4350fa5483d8d00"
+      },
+      {
+        "path": "modules/prompt/external/async",
+        "repository": "mafredri/zsh-async",
+        "commit": "ee1d11b68c38dec24c22b1c51a45e8a815a79756",
+        "url": "https://codeload.github.com/mafredri/zsh-async/tar.gz/ee1d11b68c38dec24c22b1c51a45e8a815a79756",
+        "sha256": "a501732dcaa6b5606a7e90b70cf3e7e414a3dd9617549af064d665e054d2e7cb"
+      },
+      {
+        "path": "modules/prompt/external/powerlevel10k",
+        "repository": "romkatv/powerlevel10k",
+        "commit": "35833ea15f14b71dbcebc7e54c104d8d56ca5268",
+        "url": "https://codeload.github.com/romkatv/powerlevel10k/tar.gz/35833ea15f14b71dbcebc7e54c104d8d56ca5268",
+        "sha256": "c1316f3b812baa45c0f28feef8856f3e68f5f3d174c4d7253094761926208a64"
       }
     ]
   }
