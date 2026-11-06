@@ -126,15 +126,27 @@ class CompletionContractTest(unittest.TestCase):
                          'Managed Unix Bash >=4.2 and bash-completion fixture required')
     def test_fresh_bash_session_resolves_registered_command(self):
         self.generate()
+        library = bash_library()
+        compatibility = self.root / 'bash-compatibility'
+        compatibility.mkdir()
+        # Distributions before bash-completion 2.18 keep the legacy API in
+        # their system compat directory. Isolate that required upstream file
+        # without loading unrelated system completions or personal startup.
+        for candidate in (library.parent / 'startup-core/000_bash_completion_compat.bash',
+                          Path('/etc/bash_completion.d/000_bash_completion_compat.bash'),
+                          Path('/opt/homebrew/etc/bash_completion.d/000_bash_completion_compat.bash')):
+            if candidate.is_file():
+                shutil.copy2(candidate, compatibility / candidate.name)
+                break
         script = ('source "$1"; source "$2"; '
                   'COMP_WORDS=(dotfiles-pinentry f); COMP_CWORD=1; '
                   'COMP_LINE="dotfiles-pinentry f"; COMP_POINT=${#COMP_LINE}; '
                   '_dotfiles_pinentry; printf "%s\\n" "${COMPREPLY[@]}"')
         environment = os.environ.copy()
         environment.update(HOME=bash_path(self.home), BASH_COMPLETION_USER_FILE=bash_path(self.root / 'absent'),
-                           BASH_COMPLETION_COMPAT_DIR=bash_path(self.root / 'absent'))
+                           BASH_COMPLETION_COMPAT_DIR=bash_path(compatibility))
         result = self.real_run([bash_command(), '--noprofile', '--norc', '-i', '-c', script, 'fixture',
-                               bash_path(bash_library()), bash_path(self.output / 'dotfiles-pinentry.bash')],
+                               bash_path(library), bash_path(self.output / 'dotfiles-pinentry.bash')],
                                capture_output=True, text=True, env=environment, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('forget', result.stdout.splitlines())
@@ -144,7 +156,7 @@ class CompletionContractTest(unittest.TestCase):
         self.generate()
         environment = os.environ.copy()
         environment.update(HOME=str(self.home), ZDOTDIR=str(self.home))
-        command = ('autoload -Uz compinit; compinit -D; source "$1"; '
+        command = ('autoload -Uz compinit; compinit -i -D; source "$1"; '
                    'print -r -- "${_comps[dotfiles-pinentry]}"')
         result = self.real_run([shutil.which('zsh'), '-f', '-i', '-c', command, 'fixture',
                                str(self.output / 'dotfiles-pinentry.zsh')],
@@ -211,7 +223,7 @@ class CompletionProfileTest(unittest.TestCase):
             self.assertIn('bash-completion-2.18.0/startup-core/000_bash_completion_compat.bash', library['include'])
             self.assertIn('bash-completion-2.18.0/COPYING', library['include'])
             for item in assets.values():
-                self.assertEqual(item['checksum']['sha256'], '88bcf85124f77f74f2f2f8bcd16ac4382d807a827ede742a64940c7116aea33f')
+                self.assertEqual(item['checksum']['sha256'], '5c0c8061d993fb94082aa0f89c5a9cf06fc5dbaee26ccad1c801d0efb75479bb')
 
 
 if __name__ == '__main__':

@@ -171,8 +171,7 @@ jobs:
         with:
           install: false
           env: false
-      # Windows ARM has no full development lock or supported ast-grep payload.
-      # Each area installs only its own existing tool declarations.
+      # Each native smoke area installs only its own existing tool declarations.
       - name: Install native smoke base tools
         run: mise install chezmoi python
       - name: Install native zsh completion runtime
@@ -276,6 +275,9 @@ jobs:
         run: mise run pinentry:test
       - name: Build the native release binary
         run: mise run pinentry:build
+      - name: Prove pinned Bash preparation and managed native CLI startup
+        if: runner.os == 'Linux'
+        run: mise exec chezmoi python usage -- python tests/smoke_cli_completions.py
       - name: Prove generated CLI completions in native shells
         run: mise exec chezmoi python usage powershell -- python -B -m unittest discover -s tests -p test_cli_completions.py
       - name: Provision disposable Linux credential service
