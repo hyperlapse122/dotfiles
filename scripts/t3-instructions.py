@@ -186,7 +186,6 @@ def apply(destination, environment=None):
         else:
             base = join_args(clean_owned(tokenize(current), addition_file))
             had_args = 'launchArgs' in config
-            # Preserve the original formatting when there was no owned suffix.
             if tokenize(base) == tokenize(current):
                 base = current
         had_environment = 'environment' in provider
@@ -199,8 +198,6 @@ def apply(destination, environment=None):
                         and environment_key(str(entry.get('name', ''))) == OVERRIDE]
             previous = [entry for entry in old.get('lastEnvironment', []) if environment_key(entry['name']) == OVERRIDE]
             if reserved == previous:
-                # Keep edits to unrelated environment entries without promoting
-                # our temporary empty override into the user's original state.
                 base_environment = [entry for entry in base_environment if environment_key(str(entry.get('name', ''))) != OVERRIDE]
                 for index, entry in enumerate(old['baseEnvironment']):
                     if environment_key(entry['name']) == OVERRIDE:
@@ -260,15 +257,12 @@ def apply(destination, environment=None):
                               'baseEnvironment': base_environment, 'hadEnvironment': had_environment,
                               'lastEnvironment': copy.deepcopy(provider.get('environment', []))}
         changed = True
-    # Validate every provider before publishing either file.
     if changed:
         had_state = state_path.is_file()
         publish(state_path, {'schema': 1, 'providers': next_records})
         try:
             publish(settings_path, settings)
         except OSError:
-            # Keep restoration metadata aligned if settings publication fails,
-            # especially when an empty addition is removing its owned options.
             if had_state:
                 publish(state_path, state)
             else:
