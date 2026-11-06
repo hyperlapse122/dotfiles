@@ -200,13 +200,13 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 | `ubuntu-26.04-arm` | `linux-arm64` | Yes | Yes |
 | `macos-26` | `darwin-arm64` | Yes | Yes |
 | `windows-2025` | `windows-amd64` | Yes | Yes |
-| `windows-11-arm` | `windows-arm64` | No | All seven native smoke areas |
+| `windows-11-arm` | `windows-arm64` | No | All Windows-eligible native smoke areas |
 
 ### Architecture Principles
 
 - **macOS Apple Silicon Only:** macOS CI uses ARM64 (`darwin-arm64`) runners. Intel Macs are not supported.
 - **Ubuntu LTS Coverage:** Tracks the two most recent Ubuntu LTS releases (`24.04` and `26.04`) across both x64 and ARM64.
-- **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all seven native smoke areas; this is not an ARM64 build-only lane.
+- **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all Windows-eligible native smoke areas; this is not an ARM64 build-only lane.
 
 ### Native areas and independent setup
 
@@ -234,6 +234,21 @@ Hosted-only PATH, desktop-installation, and credential-write modes must not run 
 Windows credential jobs verify and unpack the existing checksummed native GPG fixture; Git's MSYS GPG is not a substitute. Each Linux credential job provisions and starts its own D-Bus/Secret Service session. macOS credential fixtures restore the original default keychain and search list. Windows ARM installs only the tools needed by its area, not the unsupported full development tool set.
 
 Unit jobs retain the root mise tool environment because the bootstrap contract runs ordinary `mise install` twice. Each unit job validates the entire assignment map and uploads its test-ID/skip/timing report, even though it executes only one area.
+
+### Ghostty native verification
+
+The `ghostty` native area runs on the four supported Ubuntu release/architecture runners and the Apple Silicon macOS runner; it is excluded from Windows.
+It executes `mise exec chezmoi python -- python tests/smoke_ghostty.py` on disposable hosted machines.
+The smoke verifies actual package installation and version discovery, the Ubuntu native terminal selection interfaces and desktop metadata, a disposable Ubuntu account's shell change, and macOS helper compilation and read-only association lookup.
+It does not change the runner owner's login shell or macOS default-app association.
+
+The platform unit area owns `test_ghostty_install` and `test_terminal_environment`.
+Those fixtures use isolated command doubles for account, package, and default-app operations: changing HOME alone cannot isolate `chsh`, alternatives, dconf, or LaunchServices.
+Use focused unittest discovery for these modules before the broader platform area.
+Native smoke evidence supplements those fixtures; mocked Swift or shell commands do not prove native API compatibility.
+
+Actual desktop launch, macOS approval, and current-directory forwarding with an existing Ghostty instance remain the [terminal guide's desktop checklist](../guides/terminal.md#desktop-acceptance-checklist).
+Do not describe a passing headless smoke or a selected desktop ID as proof that those GUI checks passed.
 
 ### Automatic event policy
 

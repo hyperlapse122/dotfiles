@@ -20,6 +20,11 @@ for item in "$@"; do
             google-chrome) bundle='Google Chrome.app' ;;
             1password) bundle='1Password.app' ;;
             1password-cli) command -v op >/dev/null 2>&1 && continue ;;
+            ghostty)
+                if [ -x "/Applications/Ghostty.app/Contents/MacOS/ghostty" ] || [ -x "$HOME/Applications/Ghostty.app/Contents/MacOS/ghostty" ]; then
+                    continue
+                fi
+                ;;
         esac
         if [ -n "$bundle" ] && { [ -d "/Applications/$bundle" ] || [ -d "$HOME/Applications/$bundle" ]; }; then
             continue
