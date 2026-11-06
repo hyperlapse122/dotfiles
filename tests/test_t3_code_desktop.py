@@ -8,8 +8,26 @@ import tempfile
 import time
 import tomllib
 import unittest
+from unittest import mock
 
 from smoke_t3_code import server_process
+
+
+class NativeT3SmokeDiscoveryTest(unittest.TestCase):
+    def test_native_consumers_reach_missing_desktop_guard_without_antigravity_helpers(self):
+        import importlib
+
+        cases = [('smoke_pi', 't3_startup'), ('smoke_grok', 't3_startup')]
+        if Path(__file__).with_name('smoke_t3_instructions.py').is_file():
+            cases.append(('smoke_t3_instructions', 't3_turns'))
+        for name, entrypoint in cases:
+            smoke = importlib.import_module(name)
+            with self.subTest(smoke=name), mock.patch.object(Path, 'is_file', return_value=False):
+                with self.assertRaisesRegex(RuntimeError, 'Install the T3 Code desktop application'):
+                    if entrypoint == 't3_turns':
+                        smoke.t3_turns(None, None, None, {}, 'fixture', False, [])
+                    else:
+                        smoke.t3_startup(None, None, None, None, {}, 'fixture', False)
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "Chezmoi required")

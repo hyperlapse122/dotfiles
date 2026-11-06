@@ -86,8 +86,7 @@ def capture_requests():
 
 
 def t3_startup(binary, root, home, outside, env, target, install_desktop):
-    from smoke_antigravity import desktop_command
-    from smoke_t3_code import T3Rpc, provision_desktop
+    from smoke_t3_code import T3Rpc, desktop_command, provision_desktop
     real_env = os.environ.copy()
     if install_desktop:
         provision_desktop(target, root, real_env)
