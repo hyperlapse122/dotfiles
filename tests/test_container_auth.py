@@ -202,8 +202,10 @@ elif a=='erase':
         source = self.root / 'source'
         (source / 'home/.secrets').mkdir(parents=True)
         (source / '.chezmoiroot').write_text('home\n')
-        gpg_home = self.root / 'isolated-gpg'
-        gpg_home.mkdir(mode=0o700)
+        # macOS limits Unix socket paths; keep the agent home outside the long fixture path.
+        gpg_scratch = tempfile.TemporaryDirectory(prefix='cg-')
+        self.addCleanup(gpg_scratch.cleanup)
+        gpg_home = Path(gpg_scratch.name)
         args = ['--homedir', str(gpg_home), '--no-options', '--batch']
         def command(*extra):
             result = subprocess.run([gpg, *args, *extra], capture_output=True, text=True, timeout=60)

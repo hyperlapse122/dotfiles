@@ -42,7 +42,7 @@ def run(arguments, *, env, cwd):
 
 def check_version(output, tag):
     version = tag.removeprefix("rust-").removeprefix("v")
-    if not re.search(r"(?<![\w.])" + re.escape(version) + r"(?![\w.])", output):
+    if not re.search(r"(?<![\w.])v?" + re.escape(version) + r"(?![\w.])", output):
         raise RuntimeError(f"Expected pinned version {tag!r}, got {output!r}")
 
 

@@ -176,9 +176,9 @@ jobs:
       - name: Install native zsh completion runtime
         if: matrix.area == 'apps' && runner.os != 'Windows'
         run: mise install usage
-      - name: Provision native Linux zsh prerequisite
+      - name: Provision native Linux application prerequisites
         if: matrix.area == 'apps' && runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh libsecret-1-0
       - name: Install desktop release acquisition tool
         if: matrix.area == 't3'
         run: mise install gh

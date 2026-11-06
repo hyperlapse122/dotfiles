@@ -90,7 +90,11 @@ class CaFilesTest(unittest.TestCase):
         self.module.install_bundle(self.inventory(), self.home, self.public)
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
-                self.send_response(200); self.end_headers(); self.wfile.write(b'fixture-ok')
+                body = b'fixture-ok'
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             def log_message(self, *args):
                 pass
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
@@ -208,6 +212,9 @@ class CaTemplateTest(unittest.TestCase):
             project, tools, home = (root / name for name in ('project', 'tools', 'home'))
             for directory in (project, tools, home):
                 directory.mkdir()
+            project_link = root / 'project-link'
+            project_link.symlink_to(project, target_is_directory=True)
+            project = project_link
             bundle = home / '.local/share/dotfiles/ca/bundle.pem'
             bundle.parent.mkdir(parents=True)
             bundle.write_text('inert bundle; this fixture launches no TLS request\n')
@@ -232,7 +239,7 @@ class CaTemplateTest(unittest.TestCase):
                                     cwd=project, env=environment, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             observed = json.loads((project / 'relative-output.json').read_text())
-            self.assertEqual(observed, {'cwd': str(project), 'interpreter': 'selected', 'path': environment['PATH']})
+            self.assertEqual(observed, {'cwd': str(project.resolve()), 'interpreter': 'selected', 'path': environment['PATH']})
 
     @unittest.skipUnless(shutil.which('chezmoi'), 'chezmoi required')
     def test_public_roots_and_apply_hook_are_optional_and_platform_scoped(self):

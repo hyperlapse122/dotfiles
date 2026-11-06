@@ -240,6 +240,8 @@ Registry enrollment is optional and separate from GitHub/GitLab API authenticati
 
 The repository pins the official Docker credential helpers (`wincred`, `osxkeychain`, and `secretservice`) for supported targets. An enrolled registry is stored in Windows Credential Manager, macOS Keychain, or Linux Secret Service. The helper must be installed on the client host and discoverable on `PATH`; a configured Docker or Podman client is required. No engine, VM, WSL machine, or cluster is installed or started by this feature.
 
+On Linux, the official helper also requires the `libsecret-1` runtime library (`libsecret-1-0` on Ubuntu) and an available Secret Service provider for credential operations.
+
 Import a Docker Hub account using a plaintext token file outside the repository:
 
 ```sh
