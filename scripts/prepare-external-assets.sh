@@ -10,6 +10,12 @@ cache=$4
 chezmoi=$5
 mode=${6:-normal}
 case "$mode" in normal|verify|refresh) ;; *) fail "Invalid mode: $mode" ;; esac
+temporary=$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-asset-check.XXXXXX")
+cleanup() { rm -rf "$temporary"; }
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+awk 'NF' "$roots" > "$temporary/roots.tsv"
+roots=$temporary/roots.tsv
 [ -s "$roots" ] || exit 0
 [ -f "$manifest" ] || fail 'External manifest is missing.'
 case "$(uname -s)" in
@@ -39,12 +45,6 @@ config=$cache/config.toml
 [ ! -L "$config" ] || fail 'Cache configuration is a symlink.'
 : > "$config"
 cp "$manifest" "$generation/source/.chezmoiexternal.toml"
-temporary=$(mktemp -d "$generation/check.XXXXXX")
-cleanup() { rm -rf "$temporary"; }
-trap cleanup EXIT
-trap 'exit 1' HUP INT TERM
-
-# Reject links in installed parent components before reading, copying, or pruning.
 assert_parent() {
     base=$1
     relative=$2
@@ -92,13 +92,11 @@ snapshot() {
         if [ "$kind" = directory ] && [ -d "$snapshot_root/$relative" ] &&
             [ ! -L "$snapshot_root/$relative" ] &&
             { [ "$snapshot_destination" = false ] || [ "$exact" = true ]; }; then
-            # A single stat process covers a directory batch without payload reads.
             find "$snapshot_root/$relative" -exec stat "$stat_style" "$stat_format" {} + | LC_ALL=C sort
         else
             record "$snapshot_root" "$relative"
         fi
         if [ "$kind" = directory ] && [ "$snapshot_destination" = true ] && [ "$exact" = false ]; then
-            # Non-exact directories only own members present in prepared assets.
             enumerate=$tree/$relative
             if [ -d "$enumerate" ] && [ ! -L "$enumerate" ]; then
                 find "$enumerate" -mindepth 1 -print | LC_ALL=C sort |
@@ -120,21 +118,16 @@ if [ "$mode" != normal ] || [ ! -f "$generation/prepared" ] ||
 fi
 if "$prepare"; then
     printf '%s\n' 'Preparing external assets.'
-    # The generated tree is disposable and cannot be the destination or cache root.
     case "$tree" in "$cache"/generations/*/tree) ;; *) fail 'Unsafe cache tree.' ;; esac
     [ ! -L "$tree" ] || fail 'Cache tree is a symlink.'
     rm -f "$generation/prepared"
     rm -rf "$tree"
     mkdir -p "$tree"
-    if [ "$mode" = refresh ]; then
-        "$chezmoi" --config "$config" --config-format toml --source "$generation/source" \
-            --destination "$tree" --cache "$cache/downloads" --persistent-state "$cache/state.boltdb" \
-            --no-tty --refresh-externals=always apply --force --exclude=scripts
-    else
-        "$chezmoi" --config "$config" --config-format toml --source "$generation/source" \
-            --destination "$tree" --cache "$cache/downloads" --persistent-state "$cache/state.boltdb" \
-            --no-tty apply --force --exclude=scripts
-    fi
+    set -- "$chezmoi" --config "$config" --config-format toml --source "$generation/source" \
+        --destination "$tree" --cache "$cache/downloads" --persistent-state "$cache/state.boltdb" \
+        --no-tty
+    if [ "$mode" = refresh ]; then set -- "$@" --refresh-externals=always; fi
+    "$@" apply --force --exclude=scripts
     while IFS="$tab" read -r relative kind exact || [ -n "$relative" ]; do
         if [ "$kind" = directory ]; then
             [ -d "$tree/$relative" ] && [ ! -L "$tree/$relative" ] ||
@@ -186,7 +179,6 @@ while IFS="$tab" read -r relative kind exact || [ -n "$relative" ]; do
             rm -rf "$replacement"
             fail "Cannot stage directory $relative"
         fi
-        # Only an explicitly declared exact root can be replaced recursively.
         case "$target_path" in "$destination"/*) ;; *) fail 'Unsafe managed directory.' ;; esac
         if [ -L "$target_path" ]; then rm -f "$target_path"; else rm -rf "$target_path"; fi
         mv "$replacement" "$target_path"

@@ -106,6 +106,7 @@ class ExternalAssetsTest(unittest.TestCase):
         return generations[0]
 
     def test_cold_then_unchanged_run_reuses_assets(self):
+        self.roots.write_text(self.roots.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         self.prepare()
         target = self.home / ".local/bin/tool"
         self.assertEqual(target.read_bytes(), b"first asset\n")
@@ -236,8 +237,10 @@ class ExternalAssetsTest(unittest.TestCase):
 
     def test_empty_manifest_is_noop(self):
         self.manifest.write_text("", encoding="utf-8")
-        self.roots.write_text("", encoding="utf-8")
-        self.prepare()
+        for content in ("", "\n", "\n\n"):
+            with self.subTest(roots=repr(content)):
+                self.roots.write_text(content, encoding="utf-8")
+                self.prepare()
         self.assertEqual(self.requests, [])
         self.assertFalse((self.home / ".local").exists())
 

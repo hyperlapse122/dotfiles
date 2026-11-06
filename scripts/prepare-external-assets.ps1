@@ -55,7 +55,6 @@ function Remove-OwnedPath([string] $Path, [string] $Boundary) {
     $full = Assert-ContainedPath $Path $Boundary
     if (Test-Path -LiteralPath $full) {
         Assert-OrdinaryPath $full
-        # Check descendants before recursive removal; never traverse an installed junction.
         if (Test-Path -LiteralPath $full -PathType Container) {
             foreach ($item in Get-ChildItem -LiteralPath $full -Force -Recurse) {
                 if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
