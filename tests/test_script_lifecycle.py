@@ -21,6 +21,9 @@ class ScriptLifecycleTest(unittest.TestCase):
         for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_gnupg", "AppData"):
             shutil.copytree(self.repo / "home" / directory, self.source / directory)
         shutil.copy2(self.repo / "home/.chezmoiignore", self.source / ".chezmoiignore")
+        sidecar = self.source / "dot_local/bin/private_dotfiles-pinentry.json.tmpl"
+        sidecar.parent.mkdir(parents=True)
+        shutil.copy2(self.repo / "home/dot_local/bin/private_dotfiles-pinentry.json.tmpl", sidecar)
         scripts = self.source / ".chezmoiscripts"
         scripts.mkdir()
         # Deliberately omit app/registry scripts: temporary HOME does not isolate HKCU.
@@ -93,7 +96,9 @@ class ScriptLifecycleTest(unittest.TestCase):
         self.assertTrue(self.reload_pending())
         self.chezmoi("apply", "--force")
         self.assertFalse(self.reload_pending())
-        self.assertIn("changed", (self.gpg_home / "gpg-agent.conf").read_text(encoding="utf-8"))
+        self.assertIn("dotfiles-pinentry", (self.gpg_home / "gpg-agent.conf").read_text(encoding="utf-8"))
+        sidecar = self.home / ".local/bin/dotfiles-pinentry.json"
+        self.assertIn("changed", json.loads(sidecar.read_text(encoding="utf-8"))["fallback"])
 
     def test_unrelated_data_and_yaml_formatting_do_not_schedule_reload(self):
         self.chezmoi("apply", "--force")

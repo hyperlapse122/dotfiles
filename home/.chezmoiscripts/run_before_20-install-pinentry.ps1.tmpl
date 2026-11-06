@@ -1,0 +1,25 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+{{ "\ufeff" -}}
+$ErrorActionPreference = 'Stop'
+$source = '{{ .chezmoi.workingTree | replace "'" "''" }}'
+$target = '{{ $gpg.pinentry | replace "'" "''" }}'
+& mise --cd $source run windows-build:visual-studio
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& mise --cd $source run pinentry:build
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$binary = Join-Path $source 'pinentry/target/release/dotfiles-pinentry.exe'
+# Windows PowerShell can inherit PS7-only module paths from mise.
+# Hash without module auto-loading.
+function Get-PinentryHash([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $hash = [Security.Cryptography.SHA256]::Create()
+    try { [BitConverter]::ToString($hash.ComputeHash($stream)) }
+    finally { $stream.Dispose(); $hash.Dispose() }
+}
+$null = New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force
+if (-not (Test-Path -LiteralPath $target) -or
+    (Get-PinentryHash $binary) -ne (Get-PinentryHash $target)) {
+    Copy-Item -LiteralPath $binary -Destination $target -Force
+}
+{{ end -}}

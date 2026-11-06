@@ -35,7 +35,7 @@ run = 'chezmoi --source "{{config_root}}" apply'
 [tasks."pinentry:build"]
 description = "Build the native keyring pinentry without applying personal settings"
 tools = { "core:rust" = { version = "1.99.1", profile = "default" } }
-run = 'cargo build --manifest-path "{{config_root}}/pinentry/Cargo.toml" --release --locked'
+run = 'cargo build --manifest-path "{{config_root}}/pinentry/Cargo.toml" --target-dir "{{config_root}}/pinentry/target" --release --locked'
 
 [tasks."pinentry:test"]
 description = "Check the keyring pinentry with isolated protocol tests"

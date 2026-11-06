@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 from pathlib import Path
 import shutil
@@ -24,6 +25,9 @@ class GitGpgSettingsTest(unittest.TestCase):
             "private_dot_t3", "dot_local", "run_onchange_after_30-install-t3-code.sh.tmpl",
             "private_dot_gemini", "run_after_20-antigravity-plugins.*",
         ))
+        sidecar = self.source / "dot_local/bin/private_dotfiles-pinentry.json.tmpl"
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.repo / "home/dot_local/bin/private_dotfiles-pinentry.json.tmpl", sidecar)
         self.home = self.root / "user home"
         self.home.mkdir()
         self.gpg_home = self.home / ("AppData/Roaming/gnupg" if os.name == "nt" else ".gnupg")
@@ -126,6 +130,7 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.assertEqual(len(active), 1, expected)
         self.assertNotIn(b" old", active[0])
         self.assertNotIn(b" duplicate", active[0])
+        self.assertIn(b"/.local/bin/dotfiles-pinentry", active[0].replace(b"\\", b"/"))
         self.chezmoi("apply", "--force", "--exclude=scripts")
         self.assertEqual(self.agent.read_bytes(), expected)
         self.assertEqual(self.chezmoi("diff", "--exclude=scripts").stdout, "")
@@ -134,6 +139,18 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.agent.write_bytes(expected + b"pinentry-program local-edit\n")
         self.chezmoi("apply", "--force", "--exclude=scripts")
         self.assertEqual(self.agent.read_bytes(), expected)
+
+    def test_native_pinentry_override_is_retained_in_private_sidecar(self):
+        fallback = "C:/custom native/pinentry.exe" if os.name == "nt" else "/custom native/pinentry"
+        with self.config.open("a", encoding="utf-8") as stream:
+            stream.write("\n[data]\npinentryProgram = " + json.dumps(fallback) + "\n")
+        self.chezmoi("apply", "--force", "--exclude=scripts")
+        sidecar = self.home / ".local/bin/dotfiles-pinentry.json"
+        self.assertTrue(sidecar.is_file())
+        self.assertEqual(json.loads(sidecar.read_text(encoding="utf-8")), {"fallback": fallback})
+        self.assertNotIn(fallback, self.agent.read_text(encoding="utf-8"))
+        if os.name != "nt":
+            self.assertEqual(sidecar.stat().st_mode & 0o777, 0o600)
 
     @unittest.skipUnless(shutil.which("gpgconf"), "GPG installation required for home detection")
     def test_custom_gpg_home_stops_before_personal_files_change(self):
