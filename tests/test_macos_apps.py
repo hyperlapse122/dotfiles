@@ -8,6 +8,21 @@ from test_native_ca_shell import find_bash
 
 
 class MacAppsTest(MacFixture):
+    def test_usable_manual_ghostty_bundle_is_reused(self):
+        executable = self.home / 'Applications/Ghostty.app/Contents/MacOS/ghostty'
+        executable.parent.mkdir(parents=True)
+        executable.write_text('#!/bin/sh\nexit 0\n')
+        executable.chmod(0o755)
+        result = self.run_script('scripts/macos-apps.sh', 'cask:ghostty')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in self.calls()))
+
+    def test_incomplete_ghostty_bundle_does_not_count_as_installed(self):
+        (self.home / 'Applications/Ghostty.app').mkdir(parents=True)
+        result = self.run_script('scripts/macos-apps.sh', 'cask:ghostty')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(['brew', ['install', '--cask', 'ghostty']], self.calls())
+
     def test_unsupported_macos_stops_before_application_changes(self):
         self.state['version'] = '25.9'
         result = self.run_script('scripts/macos-apps.sh')

@@ -131,7 +131,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth, fonts]
+        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth, fonts, ghostty]
         platform:
           - runner: ubuntu-24.04
             target: linux-amd64
@@ -147,6 +147,15 @@ jobs:
             target: windows-arm64
           - runner: macos-26
             target: darwin-arm64
+        exclude:
+          - area: ghostty
+            platform:
+              runner: windows-2025
+              target: windows-amd64
+          - area: ghostty
+            platform:
+              runner: windows-11-arm
+              target: windows-arm64
     runs-on: ${{ matrix.platform.runner }}
     env:
       MISE_AUTO_INSTALL: "false"
@@ -192,6 +201,10 @@ jobs:
         if: matrix.area == 'fonts'
         timeout-minutes: 10
         run: mise exec chezmoi python -- python tests/smoke_fonts.py
+      - name: Prove native Ghostty installation, account shell, and desktop interfaces
+        if: matrix.area == 'ghostty'
+        timeout-minutes: 15
+        run: mise exec chezmoi python -- python tests/smoke_ghostty.py --expected-target ${{ matrix.platform.target }}
       - name: Apply real pins and prove discovery in a fresh terminal
         if: matrix.area == 'apps'
         timeout-minutes: 10

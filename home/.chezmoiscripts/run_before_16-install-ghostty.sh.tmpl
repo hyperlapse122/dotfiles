@@ -1,0 +1,13 @@
+{{- $release := get .chezmoi "osRelease" | default dict -}}
+{{- $version := get $release "versionID" | default "" -}}
+{{- if and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (has .chezmoi.arch (list "amd64" "arm64")) (has $version (list "24.04" "26.04")) -}}
+#!/bin/sh
+# file install-ghostty sha256: {{ include (joinPath .chezmoi.workingTree "scripts" "install-ghostty.sh") | sha256sum }}
+set -eu
+{{ if eq $version "24.04" -}}
+{{ $pin := index .ghostty.ubuntu2404 .chezmoi.arch -}}
+exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "install-ghostty.sh" | replace "'" "'\\''" }}' '{{ $version }}' '{{ .chezmoi.arch }}' '{{ $pin.url | replace "'" "'\\''" }}' '{{ $pin.sha256 }}'
+{{ else -}}
+exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "install-ghostty.sh" | replace "'" "'\\''" }}' '{{ $version }}' '{{ .chezmoi.arch }}' '' ''
+{{ end -}}
+{{ end -}}

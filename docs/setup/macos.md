@@ -89,8 +89,13 @@ mise run apply
 
 Preview may require GPG key access to render encrypted destinations.
 Explicit application installs missing host apps, configures existing managed files, installs native user-scope CE integrations, and runs `macos-build`.
-Host applications include Chrome, 1Password and its CLI; T3 retains its existing installer.
+Host applications include Chrome, 1Password and its CLI, and Ghostty; T3 retains its existing installer.
 Already-installed host packages are retained without an automatic package upgrade policy.
+
+Application also reconciles the account's zsh login shell and Ghostty's native Unix-executable association.
+It replaces primary and legacy Ghostty configuration with default-only repository content, including the macOS Application Support location.
+Complete any login-shell authentication or native default-app approval, then use the [terminal guide](../guides/terminal.md) to check status and the association's boundaries.
+Pending session renewal or approval does not prevent later authentication hooks from running, but it does not mean the terminal environment is ready.
 
 Podman is not managed or required on macOS.
 Application leaves existing Podman installations and VMs untouched, including their running or stopped state.
@@ -102,7 +107,8 @@ The same provisioning can be requested explicitly with `mise run macos-build`; o
 
 ## Open a Fresh Shell
 
-Restart the terminal after application.
+If application changed the login shell, log out of all desktop sessions and log in again, then fully quit and reopen Ghostty.
+Otherwise, restart the terminal after application.
 The managed PATH fragment is sourced by Bash startup files and the managed XDG Zsh startup files.
 Zsh loads Prezto and activates mise automatically; no manual `.zshrc` edit is needed.
 See [Zsh and Prezto](../guides/zsh.md) for paths, modules, completion providers, and updates.
@@ -140,6 +146,7 @@ A successful installer or a discovered skill alone does not establish full devic
 | --- | --- |
 | Native prerequisites | macOS 26+, native `arm64`, Homebrew `/opt/homebrew`, selected clang and macOS SDK |
 | CLI and shells | Commands above resolve in fresh Zsh/Bash and PowerShell sessions outside the repository |
+| Ghostty and login shell | The [terminal status check](../guides/terminal.md#renew-the-session-and-check-status) returns ready; native Unix-executable opening selects Ghostty, and a new Ghostty shell uses the account's zsh |
 | AI instructions | Claude Code `~/.claude/CLAUDE.md`, Codex `~/.codex/AGENTS.md`, omp `~/.omp/agent/AGENTS.md`, Antigravity `~/.gemini/GEMINI.md` are discovered natively; shared content includes no foreign harness branch |
 | CE installation and discovery | Each harness lists/enables the pinned user-scope CE plugin and discovers its native skills; existing disposable-home smoke coverage is described in the testing guide |
 | Authenticated CE execution | Sign in through each harness's supported flow and invoke a harmless CE skill; retain the result separately from installation/discovery evidence |
