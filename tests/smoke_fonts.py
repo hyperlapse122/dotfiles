@@ -133,9 +133,11 @@ def main():
                 listing = root / "list-fonts.ps1"
                 # GDI truncates family names to 31 characters; WPF retains the
                 # full D2Koding Propo name through native DirectWrite discovery.
-                listing.write_text("Add-Type -AssemblyName PresentationCore\n"
-                                   "[Windows.Media.Fonts]::SystemFontFamilies | "
-                                   "ForEach-Object { $_.Source } | ConvertTo-Json\n")
+                listing.write_text("$ErrorActionPreference = 'Stop'\nAdd-Type -AssemblyName PresentationCore\n"
+                                   "$names = foreach ($face in [Windows.Media.Fonts]::SystemTypefaces) {\n"
+                                   "  [Windows.Media.GlyphTypeface]$glyph = $null\n"
+                                   "  if ($face.TryGetGlyphTypeface([ref]$glyph)) { $glyph.Win32FamilyNames.Values }\n"
+                                   "}\n$names | Sort-Object -Unique | ConvertTo-Json\n")
                 available = set(json.loads(run(["powershell.exe", "-NoProfile", "-File", str(listing)], env)))
                 expected = {font_name(path, 1) for path in installed}
             elif platform.system() == "Darwin":

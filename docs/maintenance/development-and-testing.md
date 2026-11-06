@@ -67,7 +67,7 @@ mise exec -- python scripts/run-test-area.py --area all --report area-results.js
 
 | Area | Modules (`tests/`, `.py` suffix omitted) | Prerequisites |
 |---|---|---|
-| applications | `test_personal_apps`, `test_personal_app_lock`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_codex`, `test_claude`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
+| applications | `test_personal_apps`, `test_personal_app_lock`, `test_font_lock`, `test_fonts`, `test_fonts_posix`, `test_fonts_windows`, `test_harness_plugins`, `test_harness_plugin_lock`, `test_t3_code_desktop`, `test_t3_code_settings`, `test_codex`, `test_claude`, `test_native_ca_shell`, `test_native_ca_windows`, `test_powershell_profile` | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
 | security | `test_secrets`, `test_git_gpg`, `test_script_lifecycle`, `test_github_auth`, `test_github_auth_import`, `test_gitlab_auth`, `test_gitlab_auth_import` | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
 | platform | `test_bootstrap`, `test_global_chezmoi`, `test_windows_bootstrap`, `test_windows_apply_hook`, `test_windows_apps`, `test_windows_virtualization`, `test_macos_bootstrap`, `test_macos_provision`, `test_macos_apps`, `test_macos_readiness` | Root mise tools; Windows PowerShell and Git for Windows fixture checks; Bash for isolated macOS command doubles |
 | build-contracts | `test_windows_build_apply`, `test_windows_build_environment`, `test_windows_build_prepare`, `test_windows_build_smoke`, `test_windows_visual_studio`, `test_ci_areas`, `test_ci_event_policy` | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles, never real provisioning |
@@ -135,6 +135,22 @@ mise exec -- python tests/smoke_personal_apps.py
 ```
 
 Tests actual Claude Code, Codex, `omp`, `gh`, `ghq`, and `glab` binaries. CI runs with `--path-integration` to verify shell PATH inheritance.
+
+### User Fonts
+
+```sh
+mise exec -- python -m unittest discover -s tests -p 'test_font*.py'
+mise exec -- python tests/smoke_fonts.py
+```
+
+Unit tests use local archive fixtures to verify lock generation and real chezmoi staging, then exercise native repair and owned-file cleanup in disposable paths.
+The smoke downloads the pinned collection, gives each package a unique test prefix, and verifies repeat application and actual OS discovery: fontconfig on Linux, CoreText on macOS, and fresh-process WPF enumeration plus HKCU persistence on Windows.
+It never applies the personal source.
+
+Windows cleanup removes the smoke's registry entries and session resources before deleting its files.
+If another Windows session keeps a temporary font file locked, the smoke reports its location; the file can remain until that session releases it.
+No service stop, elevation, or reboot is automated.
+Use `--asset-cache <directory>` to serve already-downloaded official archives from a local HTTP fixture while retaining checksum verification.
 
 ### Harness Plugins
 

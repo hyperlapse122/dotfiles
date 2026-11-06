@@ -11,6 +11,10 @@ on:
         description: Candidate personal-app lock artifact ID
         type: string
         default: ""
+      font-lock-artifact:
+        description: Candidate font lock artifact ID
+        type: string
+        default: ""
   workflow_call:
     inputs:
       base-sha:
@@ -20,6 +24,9 @@ on:
         type: string
         default: ""
       harness-lock-artifact:
+        type: string
+        default: ""
+      font-lock-artifact:
         type: string
         default: ""
 
@@ -64,6 +71,17 @@ jobs:
         if: inputs.harness-lock-artifact != ''
         shell: bash
         run: cp -- "$RUNNER_TEMP/locked-plugins/harness-plugin-lock.json" home/.chezmoidata/harness-plugin-lock.json
+      - &download-font-lock
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: inputs.font-lock-artifact != ''
+        with:
+          artifact-ids: ${{ inputs.font-lock-artifact }}
+          path: ${{ runner.temp }}/locked-fonts
+      - &select-font-lock
+        name: Select the immutable candidate font pins
+        if: inputs.font-lock-artifact != ''
+        shell: bash
+        run: cp -- "$RUNNER_TEMP/locked-fonts/font-lock.json" home/.chezmoidata/font-lock.json
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
       - &native-windows-gpg
         name: Provision native Windows GPG integration-test prerequisite
@@ -110,7 +128,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth]
+        area: [apps, t3, ce, codex, claude, github-auth, gitlab-auth, fonts]
         platform:
           - runner: ubuntu-24.04
             target: linux-amd64
@@ -135,6 +153,8 @@ jobs:
       - *select-lock
       - *download-harness-lock
       - *select-harness-lock
+      - *download-font-lock
+      - *select-font-lock
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           install: false
@@ -156,6 +176,13 @@ jobs:
       - name: Provision disposable Linux credential service
         if: runner.os == 'Linux' && (matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
         run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring gnupg
+      - name: Provision disposable Linux font discovery prerequisite
+        if: runner.os == 'Linux' && matrix.area == 'fonts'
+        run: sudo apt-get update && sudo apt-get install -y fontconfig
+      - name: Apply real font pins and prove native discovery
+        if: matrix.area == 'fonts'
+        timeout-minutes: 10
+        run: mise exec chezmoi python -- python tests/smoke_fonts.py
       - name: Apply real pins and prove discovery in a fresh terminal
         if: matrix.area == 'apps'
         timeout-minutes: 10
@@ -211,6 +238,8 @@ jobs:
       - *select-lock
       - *download-harness-lock
       - *select-harness-lock
+      - *download-font-lock
+      - *select-font-lock
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         env: &macos-build-env
           MISE_DATA_DIR: ${{ runner.temp }}/mise-macos-build/data
