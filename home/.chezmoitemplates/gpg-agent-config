@@ -1,7 +1,9 @@
 {{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
-{{- $existing := .chezmoi.stdin | replaceAllRegex "(?m)^[\\t ]*pinentry-program(?:[\\t =][^\\r\\n]*)?(?:\\r?\\n|$)" "" -}}
+{{- $existing := .chezmoi.stdin | replaceAllRegex "(?m)^[\\t ]*(?:pinentry-program|default-cache-ttl|max-cache-ttl)(?:[\\t =][^\\r\\n]*)?(?:\\r?\\n|$)" "" -}}
 {{- if $existing -}}
 {{- $existing -}}
 {{- if not (hasSuffix "\n" $existing) }}{{ "\n" }}{{ end -}}
 {{- end -}}
 pinentry-program {{ $gpg.pinentry | replace "\\" "/" }}
+default-cache-ttl 0
+max-cache-ttl 0

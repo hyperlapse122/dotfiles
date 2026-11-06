@@ -1,0 +1,2 @@
+{{- $gpg := includeTemplate "gpg-settings" . | fromJson -}}
+{{ dict "fallback" $gpg.fallback | toPrettyJson }}

@@ -1,2 +1,4 @@
 {{- $defaults := index .gpgPlatforms .chezmoi.os -}}
-{{- dict "program" (get . "gpgProgram" | default $defaults.program) "pinentry" (get . "pinentryProgram" | default $defaults.pinentry) | toJson -}}
+{{- $name := "dotfiles-pinentry" -}}
+{{- if eq .chezmoi.os "windows" }}{{ $name = printf "%s.exe" $name }}{{ end -}}
+{{- dict "program" (get . "gpgProgram" | default $defaults.program) "pinentry" (joinPath .chezmoi.homeDir ".local" "bin" $name) "fallback" (get . "pinentryProgram" | default $defaults.pinentry) | toJson -}}
