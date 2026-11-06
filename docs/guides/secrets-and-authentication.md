@@ -76,6 +76,42 @@ needed to apply it. The source uses chezmoi's private file and directory
 attributes (0600 and 0700 on POSIX). Apply personal configuration with
 `mise run apply` after reviewing any existing default SSH identity.
 
+### Opt-in protected identities
+
+The existing default identity above remains a legacy file-based identity until explicitly migrated. Its GPG source encryption protects version control; it does not add a local OpenSSH passphrase to the generated private key.
+
+For new local enrollment, use a passphrase-protected OpenSSH-format key. Generate one with `ssh-keygen`, or use `ssh-keygen -p -o -f /path/to/key` to protect a deliberate external copy. These native commands prompt for the passphrase; do not put it in a shell command or configuration file. Check the key can be unlocked and keep a recovery copy before enrollment.
+
+```sh
+mise exec -- python scripts/ssh-identities.py enroll-local   --private-key /path/outside-repo/work_key   --public-key /path/outside-repo/work_key.pub   --id work --host github-work --hostname github.com --user git
+```
+
+The importer rejects unencrypted keys and mismatched public-key envelopes. It encrypts the inventory to the repository GPG recipient, decrypts it in memory to verify publication, and retains the external input files. No OpenSSH passphrase is stored. The encrypted inventory is `home/.secrets/ssh-identities.json.asc`, excluded from destination files by the existing `.secrets` rule.
+
+Explicit `mise run apply` installs the still-passphrase-protected key under `~/.ssh/dotfiles/keys/`, with private permissions and native Windows ACLs. An owned Include block at the beginning of `~/.ssh/config` selects the enrolled host aliases and preserves unrelated configuration. Local aliases use `IdentityAgent none`, a single `IdentityFile`, `IdentitiesOnly yes`, and public-key authentication. OpenSSH prompts to unlock the selected file during normal authentication; it does not try a different agent or unrelated default key when that selection fails.
+
+Enrollment is optional. Without the encrypted inventory, bootstrap and apply do not decrypt SSH enrollment or install its routing. Invalid enrolled data fails before replacing configuration. Reapplying the same inventory leaves identical file bytes untouched.
+
+To deliberately migrate the legacy default identity, first verify recovery and the protected replacement's public fingerprint, then repeat local enrollment with `--replace-default`. That explicit option enrolls a value-free source-membership marker so subsequent chezmoi application stops regenerating the old default key. Apply then writes the protected replacement to `~/.ssh/id_ed25519` and its public companion. Enrollment without that option does not change either existing default file. This repository does not automatically transform or delete the owner's current key.
+
+A lost OpenSSH passphrase cannot be recovered by GPG decryption: GPG restores the same passphrase-protected bytes. Recover from a separately secured backup or rotate the authorized key on the affected servers. Keep the previous working enrollment until its replacement has been validated.
+
+### 1Password identity selection
+
+Enable the SSH agent in 1Password Desktop and copy the selected item's **public** key to an external file. Sign-in, key import, unlock, and authorization remain native user actions. Enroll its public identity and explicit host alias:
+
+```sh
+mise exec -- python scripts/ssh-identities.py enroll-1password   --public-key /path/outside-repo/vault_key.pub   --id vault --host github-vault --hostname github.com --user git
+```
+
+This stores only the public identity for that entry. Routing uses its public `IdentityFile` and `IdentitiesOnly yes`, so the selected agent cannot offer every available key. On Linux the default socket is `~/.1password/agent.sock`; on macOS it is `~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock`. Supply `--agent-socket` when the native installation uses another socket. No global `SSH_AUTH_SOCK` is changed.
+
+Windows Microsoft OpenSSH uses one fixed agent pipe. When 1Password owns it, all agent-backed identities use that agent; the repository does not start a competing agent or claim two simultaneous Windows agents. Protected local aliases sign directly from their encrypted files with `IdentityAgent none`. The 1Password alias uses its public identity and the native fixed pipe. An unavailable or locked selected provider fails public-key authentication; it does not fall back to another identity source.
+
+Use `ssh -G github-work` and `ssh -G github-vault` to inspect effective selection without connecting. Synthetic-key tests cover encryption, host routing, native OpenSSH config parsing, repeat application, and failure preservation. They do not prove a real 1Password account was unlocked or authenticated. Complete that check in a disposable authorized account before relying on a new deployment.
+
+See [OpenSSH identity configuration](https://man.openbsd.org/ssh_config) and [1Password agent coexistence](https://developer.1password.com/docs/ssh/agent/advanced/) for client and platform constraints.
+
 ## GitHub Authentication
 
 The repository manages GitHub CLI authentication and Git HTTPS credentials for `github.com` and `gist.github.com`.

@@ -1,5 +1,9 @@
 README.md
 .secrets
+{{ if stat (joinPath .chezmoi.sourceDir ".secrets" "ssh-replace-default") }}
+.ssh/id_ed25519
+.ssh/id_ed25519.pub
+{{ end }}
 {{ if eq .chezmoi.os "windows" }}
 .gnupg
 .profile
