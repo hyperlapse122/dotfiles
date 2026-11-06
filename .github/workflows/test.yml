@@ -241,6 +241,51 @@ jobs:
             mise exec chezmoi python uv pipx:keyring -- python "$SMOKE_SCRIPT"
           '
 
+  pinentry:
+    name: Native pinentry (${{ matrix.runner }})
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-26]
+    runs-on: ${{ matrix.runner }}
+    env:
+      MISE_AUTO_INSTALL: "false"
+    steps:
+      - *checkout
+      - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install: false
+          env: false
+      - name: Install declared pinentry build and smoke tools
+        run: mise install chezmoi python 'rust[profile=default]@1.99.1'
+      - name: Check Rust formatting, lint, and isolated tests
+        run: mise run pinentry:test
+      - name: Build the native release binary
+        run: mise run pinentry:build
+      - name: Provision disposable Linux credential service
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y dbus-x11 gnome-keyring
+      - name: Prove native PIN storage on the disposable hosted account
+        if: runner.os != 'Linux'
+        timeout-minutes: 5
+        run: mise exec rust@1.99.1 python -- python tests/smoke_pinentry.py
+      - name: Prove native PIN storage in an isolated Linux session
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -eu
+          export XDG_DATA_HOME="$RUNNER_TEMP/pinentry-keyring/data"
+          export XDG_CONFIG_HOME="$RUNNER_TEMP/pinentry-keyring/config"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/pinentry-keyring/runtime"
+          mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          dbus-run-session -- sh -eu -c '
+            printf "%s" fixture-keyring-password | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+            mise exec rust@1.99.1 python -- python tests/smoke_pinentry.py
+          '
+
   macos-build:
     name: Native macOS ARM64 builds
     runs-on: macos-26

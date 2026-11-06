@@ -1,0 +1,10 @@
+[package]
+name = "dotfiles-pinentry"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+
+[dependencies]
+keyring = { version = "=4.2.0", default-features = false, features = ["v1"] }
+serde_json = "=1.0.145"
+zeroize = "=1.9.1"

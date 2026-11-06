@@ -24,6 +24,7 @@ AREAS = {
         "test_zsh_lock", "test_zsh",
     ),
     "security": (
+        "test_pinentry_apply",
         "test_secrets", "test_git_gpg", "test_script_lifecycle", "test_github_auth",
         "test_github_auth_import", "test_gitlab_auth", "test_gitlab_auth_import",
     ),

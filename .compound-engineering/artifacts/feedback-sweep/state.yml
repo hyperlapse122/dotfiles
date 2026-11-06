@@ -1,0 +1,171 @@
+schema_version: 1
+sources:
+  gh-issues:
+    cursor: "2026-11-06T03:48:39Z"
+items:
+  "gh-issues:hyperlapse122/dotfiles#10":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Support CA-file trust fallback and encrypted CA provisioning on macOS/Linux — add CA-file integration for tools that cannot use OS trust, without disabling TLS verification."
+    author_class: "teammate"
+    cursor: "2026-11-04T07:08:27Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#10"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/10"
+  "gh-issues:hyperlapse122/dotfiles#21":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Integrate GitHub CLI authentication and Docker Hub keyring-backed token authentication — follow-up auth work deferred from the Windows Kubernetes environment change."
+    author_class: "teammate"
+    cursor: "2026-11-04T12:10:03Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#21"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/21"
+  "gh-issues:hyperlapse122/dotfiles#25":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Add keyring-backed GitLab registry login for Docker and Podman — authenticate to the private GitLab registry without plaintext tokens in client config."
+    author_class: "teammate"
+    cursor: "2026-11-04T15:25:06Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#25"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/25"
+  "gh-issues:hyperlapse122/dotfiles#29":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Drop remaining Intel Mac support repository-wide — macOS support should be Apple Silicon only; darwin-amd64 entries remain in personal-apps data."
+    author_class: "teammate"
+    cursor: "2026-11-04T16:12:24Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#29"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/29"
+  "gh-issues:hyperlapse122/dotfiles#33":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Add pi as a managed harness with synthetic.new as its only provider — managed install, pinning, and repo-owned settings for pi."
+    author_class: "teammate"
+    cursor: "2026-11-05T00:26:37Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#33"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/33"
+  "gh-issues:hyperlapse122/dotfiles#34":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Add Grok Build as a managed harness — managed install, pinning, and repo-owned settings under home/."
+    author_class: "teammate"
+    cursor: "2026-11-05T00:26:38Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#34"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/34"
+  "gh-issues:hyperlapse122/dotfiles#41":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "ci: split test areas into parallel GitHub Actions jobs — run each independently runnable test area as its own job while keeping coverage."
+    author_class: "teammate"
+    cursor: "2026-11-05T01:48:27Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#41"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/41"
+  "gh-issues:hyperlapse122/dotfiles#42":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "ci: avoid duplicate push and pull request workflow runs — Test workflow runs on both push and PR events for the same branch."
+    author_class: "teammate"
+    cursor: "2026-11-05T01:48:19Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#42"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/42"
+  "gh-issues:hyperlapse122/dotfiles#52":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Verify authenticated native CE invocation for Antigravity — deferred verification from the Antigravity onboarding in #32."
+    author_class: "teammate"
+    cursor: "2026-11-05T04:47:18Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#52"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/52"
+  "gh-issues:hyperlapse122/dotfiles#54":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Append T3-only instructions through native harness launch options — same baseline for CLI and T3 launches, extra T3 instructions only via per-launch mechanism."
+    author_class: "teammate"
+    cursor: "2026-11-05T07:31:49Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#54"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/54"
+  "gh-issues:hyperlapse122/dotfiles#58":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Support protected SSH key storage and 1Password identities — keep local private keys in protected storage and allow 1Password-managed identities."
+    author_class: "teammate"
+    cursor: "2026-11-05T08:03:57Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#58"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/58"
+  "gh-issues:hyperlapse122/dotfiles#68":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Organize Rust crates under crates/ in a Cargo workspace — move dotfiles-pinentry under crates/ with a root workspace."
+    author_class: "teammate"
+    cursor: "2026-11-06T03:01:31Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#68"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/68"
+  "gh-issues:hyperlapse122/dotfiles#70":
+    source: "gh-issues"
+    status: "acknowledged"
+    sensitive: false
+    body: "Provide jdx/usage-based shell completions for repository CLIs — completions starting with dotfiles-pinentry, as a reusable convention."
+    author_class: "teammate"
+    cursor: "2026-11-06T03:48:39Z"
+    existing_ack: false
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#70"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/70"
+last_run:
+  timestamp: "2026-11-06T04:10:49Z"
+  outcome: "completed"
+  writer: "sweep-claude-t3-07a63bd2-2026-11-06"
+  counts:
+    gh-issues:
+      ack_deferred: 0
+      acknowledged: 13
+      closed: 0
+      ingested: 13

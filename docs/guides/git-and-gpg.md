@@ -15,7 +15,9 @@ The repository manages global Git configuration (`~/.gitconfig`) and GPG agent p
 
 ## Prerequisites
 
-Before applying dotfiles, verify that Git, GnuPG (including `gpgconf`), and a compatible pinentry program are installed.
+Before applying dotfiles, verify that Git, mise, GnuPG (including `gpgconf`), and a compatible pinentry program are installed.
+Explicit application builds the repository's Rust pinentry using the mise-pinned Rust toolchain. Windows application first runs the existing Visual Studio Build Tools readiness/provisioning task; Linux needs a native linker, and macOS needs its Command Line Tools.
+Worktree preparation (`mise install`) validates source state without building or installing the personal pinentry.
 
 Your signing key (and physical hardware token/YubiKey, if applicable) must already be configured on the host. This repository does not create, import, or distribute private keys or modify trust databases.
 
@@ -23,7 +25,7 @@ Your signing key (and physical hardware token/YubiKey, if applicable) must alrea
 
 Platform paths are declared in `home/.chezmoidata/gpg.yaml`:
 
-| Platform | GPG Executable | Pinentry Executable |
+| Platform | GPG Executable | Native Fallback Pinentry |
 |---|---|---|
 | Windows / Gpg4win | `C:/Program Files/GnuPG/bin/gpg.exe` | `C:/Program Files/Gpg4win/bin/pinentry.exe` |
 | Linux | `/usr/bin/gpg` | `/usr/bin/pinentry` |
@@ -40,6 +42,8 @@ If GnuPG or pinentry is installed in a non-standard location, set absolute paths
 gpgProgram = "D:/Tools/GnuPG/bin/gpg.exe"
 pinentryProgram = "D:/Tools/Gpg4win/bin/pinentry.exe"
 ```
+
+`pinentryProgram` selects the native fallback. The agent uses `~/.local/bin/dotfiles-pinentry` (`dotfiles-pinentry.exe` on Windows), with a private `dotfiles-pinentry.json` sidecar holding the absolute fallback path. The sidecar contains no PIN.
 
 ## GPG Home Directory Safety
 
@@ -58,15 +62,50 @@ Before writing personal files, an explicit apply checks the effective GPG home r
 
 ## GPG Agent Configuration and Reloading
 
-The template modifies `gpg-agent.conf`, replacing only active `pinentry-program` lines. Comments, cache TTL settings, and extra agent options remain untouched.
+The template reconciles `pinentry-program`, `default-cache-ttl 0`, and `max-cache-ttl 0` in `gpg-agent.conf`. Comments, SSH-specific cache directives, and unrelated agent options remain intact.
+These TTLs disable the agent's ordinary passphrase memory cache. GnuPG's separate smartcard PIN cache remains permitted; the card's authentication state, touch policy, and retry settings are unchanged. An operation satisfied by the card or smartcard cache may never invoke pinentry.
+The platform frontend's external-cache policy is retained separately from the agent's ordinary memory cache.
 
-Application triggers a reload of `gpg-agent` only when the underlying template or effective executable paths change. An unchanged apply checks GPG home safety but skips agent reload.
+Explicit application installs the built wrapper before applying agent settings. A byte-identical binary is retained on subsequent applies. Application reloads `gpg-agent` when consumed templates or effective wrapper/fallback settings change; an unchanged apply skips reload.
 
 To inspect template drift without executing apply scripts, run:
 
 ```sh
 chezmoi diff --exclude=scripts
 ```
+
+## Card PIN Storage and Recovery
+
+The wrapper uses Windows Credential Manager, macOS Keychain, or Linux Secret Service. Each card has its own OpenPGP user-PIN entry under service `dotfiles.pinentry.openpgp`, with account `yubikey:<decimal-serial>:user`.
+Native-store authorization and persistence follow OS policy. A locked or inaccessible store produces an error; it is not treated as an empty store, and no plaintext substitute is created. macOS may request renewed Keychain access approval after the executable changes.
+
+Automatic lookup requires the agent's `allow-external-password-cache` option and a recognized English OpenPGP unlock request with the exact `PIN` prompt and an unambiguous YubiKey serial. The parser follows the inspected GnuPG 2.4.8/2.5.24 prompt layout, including grouped decimal serials such as `12 345 678`.
+Unknown layouts or languages, administrator PINs, PIN changes/repeats, and ordinary key passphrases use the native frontend without custom keyring access. Existing `no-allow-external-cache` configuration prevents automatic enrollment and lookup.
+
+On a qualifying miss, the native frontend collects the PIN and the wrapper saves it before returning it to GnuPG. Cancellation saves nothing. Saving an entered value does not prove that the card accepted it.
+
+A recognized `Remaining attempts: 0`, `1`, or `2` warning invalidates the matching record and forces manual entry for that request. GnuPG does not deliver every card rejection back to standalone pinentry. With configured retry counts above three, earlier failed attempts can remain invisible to this heuristic.
+
+After changing, resetting, or unblocking the user PIN, run `dotfiles-pinentry forget <serial>` on every host that saved that card's PIN before the next card operation. Change-PIN dialogs do not update the saved entry. Otherwise the old saved PIN can be submitted automatically and consume a retry attempt.
+
+To remove one saved PIN explicitly and force manual entry on its next qualifying request, use the printed decimal YubiKey serial:
+
+```sh
+~/.local/bin/dotfiles-pinentry forget 12345678
+```
+
+```powershell
+& "$HOME/.local/bin/dotfiles-pinentry.exe" forget 12345678
+```
+
+Deletion is idempotent and never displays the PIN. Native keyring errors still fail the command.
+
+This is automation for trusted programs running as the OS user. Prompt matching is a compatibility classifier and does not attest hardware identity. Same-user programs can invoke the helper or synthesize agent requests to obtain an enrolled PIN; protection against compromised same-user code and per-process authorization are outside this feature's boundary.
+
+## Development Verification
+
+`mise run pinentry:test` runs formatting, lint and protocol/CLI tests with synthetic secrets and fake frontends; it never opens the owner's keyring. The Git/GPG test suite also checks the ordinary cache policy using an isolated software key and agent, without a card.
+Successful native-store smoke tests are restricted to disposable GitHub-hosted runners. They use an isolated Linux session bus, a disposable macOS Keychain, or the hosted Windows account. Changing `HOME` alone does not isolate a real OS keyring.
 
 ## Verifying Commit Signing
 

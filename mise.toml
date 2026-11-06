@@ -33,6 +33,20 @@ run = 'chezmoi --config "{{config_root}}/.chezmoi-bootstrap.toml" --source "{{co
 description = "Apply this worktree's chezmoi configuration to the user home"
 run = 'chezmoi --source "{{config_root}}" apply'
 
+[tasks."pinentry:build"]
+description = "Build the native keyring pinentry without applying personal settings"
+tools = { "core:rust" = { version = "1.99.1", profile = "default" } }
+run = 'cargo build --manifest-path "{{config_root}}/pinentry/Cargo.toml" --target-dir "{{config_root}}/pinentry/target" --release --locked'
+
+[tasks."pinentry:test"]
+description = "Check the keyring pinentry with isolated protocol tests"
+tools = { "core:rust" = { version = "1.99.1", profile = "default" } }
+run = [
+  'cargo fmt --manifest-path "{{config_root}}/pinentry/Cargo.toml" -- --check',
+  'cargo clippy --manifest-path "{{config_root}}/pinentry/Cargo.toml" --all-targets -- -D warnings',
+  'cargo test --manifest-path "{{config_root}}/pinentry/Cargo.toml" --locked',
+]
+
 [tasks.windows-build]
 description = "Provision the Windows x64 native build environment"
 shell = "powershell -NoProfile -ExecutionPolicy Bypass -Command"
