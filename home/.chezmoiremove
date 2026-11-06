@@ -5,3 +5,9 @@
 .local/share/dotfiles/antigravity-acp/bin/agy
 .local/share/dotfiles/antigravity-acp/bin/agy.exe
 {{- end }}
+
+{{ if eq .chezmoi.os "windows" }}
+.local/bin/t3.cmd
+.local/bin/agy.cmd
+.local/bin/antigravity-acp.cmd
+{{ end }}

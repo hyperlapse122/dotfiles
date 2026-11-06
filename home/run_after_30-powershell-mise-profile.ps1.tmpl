@@ -1,0 +1,10 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{ "\ufeff" -}}
+$ErrorActionPreference = 'Stop'
+$body = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{ includeTemplate "powershell-mise-profile-install" . | b64enc }}'))
+& ([scriptblock]::Create($body))
+$checkout = '{{ .chezmoi.workingTree | replace "'" "''" }}'
+$command = '& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(''' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body)) + '''))))'
+& mise --cd $checkout exec -- pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $command
+exit $LASTEXITCODE
+{{ end -}}

@@ -273,8 +273,8 @@ def prove_t3_provider(launcher, settings, env, outside, root, instance_id, expec
     args = [str(launcher), "--mode", "web", "--host", "127.0.0.1", "--port", str(port),
             "--no-browser", "--dev-url", f"http://127.0.0.1:{port}"]
     if os.name == "nt":
-        args = (subprocess.list2cmdline([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c"])
-                + ' "' + subprocess.list2cmdline(args) + '"')
+        shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+        args = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", *args]
     log_path = root / ("t3-" + instance_id + "-server.log")
     rpc = None
     with log_path.open("w+", encoding="utf-8", errors="backslashreplace") as log, server_process(
@@ -396,13 +396,14 @@ def main():
         first = json.loads(settings.read_text(encoding="utf-8"))
         if first["providerInstances"]["smoke-unrelated"]["displayName"] != "Unrelated smoke provider" or first["idleCompaction"] != "onReturn":
             raise RuntimeError("Provider reconciliation changed unrelated settings")
-        launcher = home / ".local/bin" / ("t3.cmd" if os.name == "nt" else "t3")
+        launcher = home / ".local/bin" / ("t3.ps1" if os.name == "nt" else "t3")
         if (home / ".t3/bin" / launcher.name).exists():
             raise RuntimeError("Smoke must not depend on an app-generated CLI shim")
         child = env.copy()
         child["PATH"] = str(launcher.parent) + os.pathsep + env.get("PATH", "")
         if os.name == "nt":
-            version = run([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "t3 --version"], env=child, cwd=outside)
+            shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+            version = run([shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "t3 --version; exit $LASTEXITCODE"], env=child, cwd=outside)
         else:
             version = run(["/bin/sh", "-c", "command -v t3; t3 --version"], env=child, cwd=outside)
         if "t3 v" not in version:

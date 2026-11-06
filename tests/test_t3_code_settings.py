@@ -421,7 +421,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         shutil.copytree(self.repo / "home/dot_config", self.source / "dot_config")
         (self.source / "dot_local/bin").mkdir(parents=True)
         # Materialization and selection are tested independently of native launch.
-        for name in ("executable_t3.tmpl", "t3.cmd.tmpl"):
+        for name in ("executable_t3.tmpl", "t3.ps1.tmpl"):
             shutil.copy2(self.repo / "home/dot_local/bin" / name, self.source / "dot_local/bin" / name)
         for path in (self.repo / "home/.chezmoitemplates").iterdir():
             if path.is_file() and path.name.startswith("t3-code-"):
@@ -442,7 +442,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                 managed = set(self.chez("managed", "--path-style=relative", "--exclude=scripts").stdout.replace("\\", "/").splitlines())
                 self.assertEqual(".t3/userdata/settings.json" in managed, supported)
                 self.assertEqual(".t3/userdata/client-settings.json" in managed, supported)
-                self.assertEqual(".local/bin/t3.cmd" in managed, supported and os_name == "windows")
+                self.assertEqual(".local/bin/t3.ps1" in managed, supported and os_name == "windows")
                 self.assertEqual(".local/bin/t3" in managed, supported and os_name != "windows")
                 self.assertEqual(".config/dotfiles/path.sh" in managed,
                                  os_name == "linux" or (os_name == "darwin" and arch == "arm64"))

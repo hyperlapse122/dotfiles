@@ -121,19 +121,50 @@ class T3CodeDesktopTest(unittest.TestCase):
         self.assertEqual(app.read_bytes(), before)
 
     @unittest.skipUnless(os.name == "nt", "Native Windows missing desktop launcher")
+    def test_launcher_waits_for_gui_cli_and_preserves_arguments_and_exit_code(self):
+        compiler = Path(os.environ["SystemRoot"]) / "Microsoft.NET/Framework64/v4.0.30319/csc.exe"
+        if not compiler.is_file():
+            self.skipTest(".NET Framework C# compiler required for native GUI fixture")
+        app = Path(self.env["LOCALAPPDATA"]) / "Programs/t3code/T3 Code (Beta).exe"
+        app.parent.mkdir(parents=True)
+        source = self.root / "GuiCli.cs"
+        source.write_text(
+            'class GuiCli { static int Main(string[] args) { '
+            'System.Threading.Thread.Sleep(1000); '
+            'System.IO.File.WriteAllLines(args[1], args); return 37; } }', encoding="utf-8")
+        compiled = subprocess.run([str(compiler), "/nologo", "/target:winexe", "/out:" + str(app),
+                                   str(source)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
+        rendered = self.render("dot_local/bin/t3.ps1.tmpl", "windows", "amd64")
+        self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+        launcher = self.home / ".local/bin/t3.ps1"
+        launcher.parent.mkdir(parents=True)
+        launcher.write_text(rendered.stdout, encoding="utf-8")
+        marker = self.root / "GUI CLI arguments.txt"
+        shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+        command = "& '" + str(launcher).replace("'", "''") + "' '" + str(marker).replace("'", "''")
+        command += "' 'space value' 'quote\"value' 'trailing\\'; exit $LASTEXITCODE"
+        applied = subprocess.run([shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+                                 env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(applied.returncode, 37, applied.stdout + applied.stderr)
+        arguments = marker.read_text(encoding="utf-8-sig").splitlines()
+        self.assertEqual(arguments[1:], [str(marker), "space value", 'quote"value', "trailing\\"])
+
+    @unittest.skipUnless(os.name == "nt", "Native Windows missing desktop launcher")
     def test_missing_desktop_fails_without_using_another_t3(self):
-        result = self.render("dot_local/bin/t3.cmd.tmpl", "windows", "amd64")
+        result = self.render("dot_local/bin/t3.ps1.tmpl", "windows", "amd64")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        launcher = self.home / ".local/bin/t3.cmd"
+        launcher = self.home / ".local/bin/t3.ps1"
         launcher.parent.mkdir(parents=True)
         launcher.write_text(result.stdout, encoding="utf-8")
         commands = self.root / "commands"
         commands.mkdir()
-        (commands / "t3.cmd").write_text("@exit /b 39\n", encoding="utf-8")
+        (commands / "t3.ps1").write_text("exit 39\n", encoding="utf-8")
         env = dict(self.env, PATH=str(commands), ProgramFiles=str(self.root / "program files"),
                    **{"ProgramFiles(x86)": str(self.root / "program files x86"),
                       "ProgramW6432": str(self.root / "native program files")})
-        applied = subprocess.run([os.environ["COMSPEC"], "/d", "/c", str(launcher)],
+        shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+        applied = subprocess.run([shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(launcher)],
                                  env=env, capture_output=True, text=True, timeout=30)
         self.assertEqual(applied.returncode, 127, applied.stdout + applied.stderr)
         self.assertIn("chezmoi apply", applied.stderr)

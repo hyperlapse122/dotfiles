@@ -150,16 +150,16 @@ def fresh_windows_environment(isolated):
 
 
 def check_terminal_path(home, outside, env, name, tag, shells):
-    suffix = ".cmd" if name in ("agy", "antigravity-acp") else ".exe"
+    suffix = ".ps1" if name in ("agy", "antigravity-acp") else ".exe"
     installed = home / ".local/bin" / (name + suffix if os.name == "nt" else name)
     if os.name == "nt":
         output = run([
             shells["powershell"], "-NoProfile", "-Command",
-            f"(Get-Command {name} -CommandType Application -ErrorAction Stop).Source; "
+            f"(Get-Command {name} -ErrorAction Stop).Source; "
             f"& {name} --version; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}",
         ], env=fresh_windows_environment(env), cwd=outside)
         lines = output.splitlines()
-        if not lines or os.path.normcase(lines[0]) != os.path.normcase(str(installed)):
+        if not lines or not installed.samefile(lines[0]):
             raise RuntimeError(f"Fresh Windows child did not discover {installed}: {output}")
         check_version("\n".join(lines[1:]), tag)
         print("Fresh Windows child: " + output)
@@ -256,9 +256,9 @@ def main():
             ".chezmoiignore",
             ".chezmoiremove",
             "dot_local/bin/executable_agy.tmpl",
-            "dot_local/bin/agy.cmd.tmpl",
+            "dot_local/bin/agy.ps1.tmpl",
             "dot_local/bin/executable_antigravity-acp.tmpl",
-            "dot_local/bin/antigravity-acp.cmd.tmpl",
+            "dot_local/bin/antigravity-acp.ps1.tmpl",
             "dot_config/dotfiles/path.sh",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",

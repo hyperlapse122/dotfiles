@@ -127,14 +127,15 @@ def main():
         chez("apply", "--force", "--exclude=scripts")
         binary_suffix = ".exe" if os.name == "nt" else ""
         cli = home / ".local/share/dotfiles/antigravity/bin" / ("agy" + binary_suffix)
-        launcher_suffix = ".cmd" if os.name == "nt" else ""
+        launcher_suffix = ".ps1" if os.name == "nt" else ""
         launcher = home / ".local/bin" / ("antigravity-acp" + launcher_suffix)
         agy_launcher = home / ".local/bin" / ("agy" + launcher_suffix)
 
         def launch(path, *arguments):
             invocation = [str(path), *arguments]
             if os.name == "nt":
-                invocation = [real_environment["COMSPEC"], "/d", "/c", *invocation]
+                shell = str(Path(real_environment["SYSTEMROOT"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+                invocation = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", *invocation]
             return run(invocation, env=env, cwd=outside)
 
         for name, path in (("antigravity", agy_launcher), ("antigravity-acp", launcher)):

@@ -18,7 +18,7 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 
 > **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
 
-Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). Antigravity CLI and ACP payloads live separately in `~/.local/share/dotfiles/antigravity/bin` and `~/.local/share/dotfiles/antigravity-acp/bin`; their POSIX launchers or Windows `.cmd` wrappers select those absolute paths. Device application does not require a Bun or Python runtime.
+Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). Antigravity CLI and ACP payloads live separately in `~/.local/share/dotfiles/antigravity/bin` and `~/.local/share/dotfiles/antigravity-acp/bin`; their POSIX launchers or Windows `.ps1` launchers select those absolute paths. Run Windows launchers from PowerShell. Device application does not require a Bun or Python runtime.
 
 Codex includes its native helper executables, `~/.local/codex-package.json`, `~/.local/codex-path`, and `~/.local/codex-resources`. Keep these together: copying only `codex` is not a complete installation. The Codex-specific resource directories are reconciled exactly; unrelated programs in `~/.local/bin` are preserved. Upstream currently names its Linux packages `unknown-linux-musl`; that artifact name does not expand this repository's supported host policy.
 
