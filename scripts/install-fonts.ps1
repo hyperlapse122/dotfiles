@@ -124,7 +124,7 @@ try {
             } catch {
                 throw "Cannot replace font $target. Close applications using it; if needed sign out or restart, then reapply. $($_.Exception.Message)"
             } finally {
-                if (Test-Path -LiteralPath $temporary) { [IO.File]::Delete($temporary) }
+                [IO.File]::Delete($temporary)
             }
         }
         $registered = $key.GetValue($label)
@@ -176,6 +176,6 @@ if (-not (Test-Path -LiteralPath $StatePath) -or
         if (Test-Path -LiteralPath $StatePath) { Move-FontFile $temporary $StatePath }
         else { [IO.File]::Move($temporary, $StatePath) }
     } finally {
-        if (Test-Path -LiteralPath $temporary) { [IO.File]::Delete($temporary) }
+        [IO.File]::Delete($temporary)
     }
 }

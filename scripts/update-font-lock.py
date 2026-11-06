@@ -1,5 +1,3 @@
-"""Resolve desktop font releases and archive members without installing them."""
-
 import fnmatch
 import hashlib
 import io
