@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 
+from asset_fixtures import copy_asset_templates
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 from smoke_codex import capture_requests, strings
 from smoke_t3_code import T3Rpc, provision_desktop
@@ -63,9 +64,7 @@ def main():
             directory.mkdir()
         for relative in (".chezmoidata", ".chezmoitemplates", "dot_local", "private_dot_gemini", "private_dot_t3"):
             shutil.copytree(REPO / "home" / relative, source / relative)
-        for relative in (".chezmoiignore", ".chezmoiremove", ".chezmoiexternals/personal-apps.toml.tmpl",
-                         ".chezmoiexternals/harness-plugins.toml.tmpl",
-                         ".chezmoiscripts/run_after_20-antigravity-plugins.sh.tmpl",
+        for relative in (".chezmoiignore", ".chezmoiremove", ".chezmoiscripts/run_after_20-antigravity-plugins.sh.tmpl",
                          ".chezmoiscripts/run_after_20-antigravity-plugins.ps1.tmpl"):
             destination = source / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -82,6 +81,7 @@ def main():
             + '{{ if eq .harness "antigravity" }}' + markers["antigravity"] + "{{ end }}\n"
             + '{{ if ne .harness "antigravity" }}' + markers["foreign"] + "{{ end }}\n",
             encoding="utf-8")
+        copy_asset_templates(source, ('personal-apps', 'harness-plugins'))
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":

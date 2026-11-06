@@ -15,6 +15,7 @@ import stat
 import subprocess
 import tempfile
 
+from asset_fixtures import copy_asset_templates, run_with_assets
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -27,7 +28,7 @@ def executable(name):
 
 
 def run(arguments, *, env, cwd):
-    result = subprocess.run(
+    result = run_with_assets(
         arguments, env=env, cwd=cwd, capture_output=True, text=True,
         encoding="utf-8", errors="backslashreplace", timeout=300,
     )
@@ -251,8 +252,6 @@ def main():
         for relative in (
             ".chezmoidata/personal-apps.json",
             ".chezmoidata/personal-app-lock.json",
-            ".chezmoiexternals/personal-apps.toml.tmpl",
-            ".chezmoiexternals/codex-package.toml.tmpl",
             ".chezmoiignore",
             ".chezmoiremove",
             "dot_local/bin/executable_agy.tmpl",
@@ -267,6 +266,7 @@ def main():
             destination = source / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO / "home" / relative, destination)
+        copy_asset_templates(source, ('personal-apps', 'codex-package'))
         config = root / "config/chezmoi.toml"
         config.write_text("", encoding="utf-8")
         env = os.environ.copy()

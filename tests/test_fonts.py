@@ -12,6 +12,8 @@ import unittest
 import zipfile
 
 
+from asset_fixtures import copy_asset_templates, run_with_assets
+
 REPO = Path(__file__).resolve().parents[1]
 
 
@@ -24,8 +26,8 @@ class FontStagingTest(unittest.TestCase):
         self.home.mkdir()
         self.source = self.root / "source"
         self.source.mkdir()
-        for name in (".chezmoiexternals/fonts.toml.tmpl",
-                     "dot_local/share/dotfiles/font-index.tsv.tmpl"):
+        copy_asset_templates(self.source, ("fonts",))
+        for name in ("dot_local/share/dotfiles/font-index.tsv.tmpl",):
             dest = self.source / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO / "home" / name, dest)
@@ -77,7 +79,7 @@ class FontStagingTest(unittest.TestCase):
         (self.data / "font-lock.json").write_text(json.dumps({"fontLocks": {"example": self.pin}}))
 
     def apply(self, *args, check=True):
-        result = subprocess.run([
+        result = run_with_assets([
             "chezmoi", "--source", str(self.source), "--destination", str(self.home),
             "--config", str(self.config), "--cache", str(self.root / "cache"),
             "--persistent-state", str(self.root / "state.boltdb"), "--no-tty", "--force",
@@ -137,7 +139,7 @@ class FontStagingTest(unittest.TestCase):
 
     def test_platform_gates_match_staging_and_after_scripts(self):
         for os_name, arch in (("darwin", "amd64"), ("linux", "386"), ("freebsd", "amd64")):
-            for path in (".chezmoiexternals/fonts.toml.tmpl",
+            for path in (".chezmoitemplates/external-assets/fonts.toml.tmpl",
                          "dot_local/share/dotfiles/font-index.tsv.tmpl",
                          ".chezmoiscripts/run_after_30-install-fonts.ps1.tmpl",
                          ".chezmoiscripts/run_after_30-install-fonts.sh.tmpl"):

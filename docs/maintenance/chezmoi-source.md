@@ -16,7 +16,6 @@ dotfiles/
     ├── .chezmoiignore      # Ignored files (README.md, .secrets, OS-specific files)
     ├── .chezmoi.toml.tmpl  # Chezmoi persistent configuration template
     ├── .chezmoidata/       # Structured YAML and JSON data dictionaries
-    ├── .chezmoiexternals/  # Declarative external archives and downloads
     ├── .chezmoiscripts/    # Ordered lifecycle scripts (pre-apply, post-apply)
     ├── .chezmoitemplates/  # Reusable template snippets and modify partials
     ├── .secrets/           # Encrypted GPG secret source
@@ -36,6 +35,29 @@ Chezmoi automatically merges all files in `.chezmoidata/` into a single global d
 > **Note:** Filenames in `.chezmoidata/` do not create namespaces in chezmoi. Ensure top-level dictionary keys remain unique across files.
 
 ---
+
+## External Asset Preparation
+
+`home/.chezmoitemplates/external-assets/` declares immutable downloads and archive selections.
+The `external-assets-manifest` and `external-asset-roots` templates render the isolated preparation source and its owned destinations.
+The `run_before_05-external-assets.*` scripts run before native asset consumers during explicit application.
+
+The native PowerShell or POSIX preparation script uses a separate, hook-free chezmoi invocation to download, verify, and extract changed assets under `~/.cache/dotfiles/external-assets`.
+Fonts are selected together per archive; Codex binaries and package resources are selected together per package.
+Only the declared roots are copied to their existing home locations; exact cleanup is limited to owned resource directories.
+
+Completed preparation is reused while the rendered declarations and cached file metadata match.
+An unchanged run checks file metadata instead of reading full archives or payload contents.
+Missing or changed installed files are restored from the prepared cache.
+This can miss modifications that retain size and modification time.
+
+Run `mise run assets:verify` to fully verify cached content and reconcile installed assets, or `mise run assets:refresh` to additionally force downloads.
+Both tasks explicitly apply personal configuration from the current worktree.
+An outer chezmoi `--refresh-externals` flag does not propagate to the isolated preparation command.
+
+These script-managed assets are outside the ordinary `chezmoi managed`, `diff`, and `verify` inventory.
+Use the explicit asset verification task for their integrity checks.
+Worktree bootstrap skips scripts and therefore does not download, extract, or install these assets.
 
 ## Script Lifecycle and Ordering
 
@@ -67,7 +89,7 @@ run_after_45-gitlab-auth.py.tmpl
 Keep scripts idempotent and fail-safe: an error in any script must return a non-zero exit code to stop subsequent execution and preserve the environment.
 
 The OS-conditional `run_after_30-install-fonts.*` hooks reconcile fonts on every explicit apply so missing files and Windows registrations can be repaired without changing the lock.
-`home/.chezmoiexternals/fonts.toml.tmpl` stages only selected archive members; `font-index.tsv` supplies their member hashes to the native installers.
+`home/.chezmoitemplates/external-assets/fonts.toml.tmpl` selects archive members; `font-index.tsv` supplies their member hashes to the native installers.
 Native installation owns prefixed filenames and an installation manifest, never the entire user font directory.
 See [User Fonts](../guides/fonts.md) for paths and recovery.
 

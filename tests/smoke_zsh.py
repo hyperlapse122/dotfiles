@@ -10,12 +10,14 @@ import shutil
 import subprocess
 import tempfile
 
+from asset_fixtures import copy_asset_templates, run_with_assets
+
 
 REPO = Path(__file__).resolve().parents[1]
 
 
 def run(arguments, *, env=None, cwd=REPO, startup=False):
-    result = subprocess.run(arguments, env=env, cwd=cwd, capture_output=True, text=True,
+    result = run_with_assets(arguments, env=env, cwd=cwd, capture_output=True, text=True,
                             encoding="utf-8", errors="backslashreplace", timeout=300)
     startup_error = startup and any(message in result.stdout + result.stderr for message in (
         "Couldn't read file", "function definition file not found", "Module not loaded:",
@@ -124,14 +126,14 @@ def main():
             shutil.copytree(REPO / "home" / relative, source / relative)
         for relative in (
             ".chezmoidata/zsh.json", ".chezmoidata/zsh-lock.json", ".chezmoidata/personal-app-lock.json",
-            ".chezmoiexternals/zsh.toml.tmpl", ".chezmoiexternals/personal-apps.toml.tmpl",
-            ".chezmoiexternals/codex-package.toml.tmpl", "modify_dot_zshenv",
+            "modify_dot_zshenv",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
             ".chezmoiscripts/run_after_40-zsh.sh.tmpl", "dot_config/dotfiles/path.sh",
         ):
             destination = source / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO / "home" / relative, destination)
+        copy_asset_templates(source, ("personal-apps", "codex-package", "zsh"))
         (source / ".chezmoidata/personal-apps.json").write_text(json.dumps({"personalApps": supported_apps}))
         config = root / "chezmoi.toml"
         config.write_text(f"workingTree = {json.dumps(str(REPO))}\n", encoding="utf-8")

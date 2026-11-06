@@ -47,7 +47,9 @@ The installer reports a missing prerequisite without installing OS packages or r
 macOS follows the repository's native Apple Silicon support baseline in the [macOS setup guide](../setup/macos.md).
 The baseline is maintained independently of font installation; [issue #65](https://github.com/hyperlapse122/dotfiles/issues/65) records the separate macOS 26 update.
 
-Each apply verifies the staged files before changing installed fonts, repairs missing files or Windows registry entries, and leaves unchanged files in place.
+Each apply checks staged and installed file metadata, repairs missing files or Windows registry entries, and leaves unchanged files in place.
+Changed metadata triggers checksum verification; unchanged files reuse the prior successful verification.
+Changes that preserve file size and modification time may remain undetected until full verification is requested.
 Managed filenames start with `dotfiles-<package>-`.
 The installers remove obsolete files recorded in `~/.local/share/dotfiles/installed-fonts.txt` on POSIX or `installed-fonts.json` on Windows.
 They preserve unrelated fonts, including manually installed copies of the same family; such copies can still produce duplicate-family choices in applications.
@@ -70,11 +72,15 @@ It validates the candidate lock before publishing changed pins.
 Font refreshes do not change the executable application lock.
 
 Apply the resulting repository changes explicitly to install an updated collection.
-For a corrupted cached download, refresh externals from the current worktree:
+For a full integrity check and repair, run this explicit application from the current worktree:
 
 ```sh
-chezmoi --source . apply --refresh-externals
+mise run assets:verify
 ```
+
+If the downloaded archive itself is corrupted, force a new download and application with `mise run assets:refresh`.
+Both tasks apply this worktree's personal configuration, including native font and plugin reconciliation.
+The outer chezmoi `--refresh-externals` flag does not refresh assets managed by the preparation script.
 
 ## Windows Loaded-File Recovery
 

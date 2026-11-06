@@ -18,6 +18,8 @@ Its `.zprezto` link points to the checksum-pinned payload under `~/.local/share/
 Bundled theme dependencies are pinned because upstream prompt initialization registers those themes, and `sorin` needs the bundled async library.
 `sorin` remains the selected theme.
 Chezmoi manages staging beneath the home directory, and an apply hook publishes the startup blocks at the selected XDG path, including absolute paths outside home.
+The shared external asset preparation hook stages Prezto and the locked ghq completion before zsh publication.
+An unchanged apply reuses verified prepared assets; `mise run assets:verify` checks their full contents and repairs installed payloads.
 Set `XDG_CONFIG_HOME` before applying when using a custom location; apply again after changing it.
 
 The root `~/.zshenv` connects zsh discovery to that directory.

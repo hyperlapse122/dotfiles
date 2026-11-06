@@ -14,6 +14,7 @@ import traceback
 import uuid
 from unittest import mock
 
+from asset_fixtures import copy_asset_templates, run_with_assets
 from smoke_personal_apps import temporary_destination
 
 
@@ -23,7 +24,7 @@ HOSTS = ("github.com", "gist.github.com")
 
 
 def run(arguments, env, *, input=None, operation="Native authentication smoke"):
-    result = subprocess.run(arguments, env=env, input=input, stdout=subprocess.PIPE,
+    result = run_with_assets(arguments, env=env, input=input, stdout=subprocess.PIPE,
                             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", timeout=120)
     if result.returncode:
         raise RuntimeError(operation + " failed")
@@ -86,9 +87,7 @@ def main():
         # Copy only public fixture inputs, not owner ciphertext or unrelated installers.
         for relative in (".chezmoidata", ".chezmoitemplates"):
             shutil.copytree(REPO / "home" / relative, source / relative)
-        (source / ".chezmoiexternals").mkdir()
-        shutil.copy2(REPO / "home/.chezmoiexternals/personal-apps.toml.tmpl",
-                     source / ".chezmoiexternals")
+        copy_asset_templates(source, ("personal-apps",))
         for name in ("dot_gitconfig.tmpl", ".chezmoi.toml.tmpl"):
             shutil.copy2(REPO / "home" / name, source)
         (repository / "scripts").mkdir()

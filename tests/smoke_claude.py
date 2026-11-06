@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import threading
 
+from asset_fixtures import copy_asset_templates
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 
 PLUGIN_ID = "compound-engineering@compound-engineering-plugin"
@@ -72,7 +73,6 @@ def main():
             directory.mkdir()
         (outside / ".git").mkdir()
         for relative in (".chezmoidata", ".chezmoitemplates", ".chezmoiignore", "private_dot_claude",
-                ".chezmoiexternals/personal-apps.toml.tmpl", ".chezmoiexternals/harness-plugins.toml.tmpl",
                 ".chezmoiscripts/run_after_26-claude-plugins.sh.tmpl", ".chezmoiscripts/run_after_26-claude-plugins.ps1.tmpl"):
             origin, destination = REPO / "home" / relative, source / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +89,7 @@ def main():
             '{{ if eq .harness "claude" }}claude-smoke-native-instructions{{ end }}\n'
             '{{ if eq .harness "codex" }}claude-smoke-foreign-instructions{{ end }}\n'
             '{{ if eq .harness "omp" }}claude-smoke-foreign-instructions{{ end }}\n', encoding="utf-8")
+        copy_asset_templates(source, ('personal-apps', 'harness-plugins'))
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":

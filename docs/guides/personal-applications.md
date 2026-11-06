@@ -34,11 +34,21 @@ chezmoi apply
 chezmoi update
 ```
 
-If a cached archive download is corrupted, force chezmoi to re-download externals:
+Downloads and extracted files are cached by the rendered asset declarations.
+An unchanged application checks file metadata and reuses the prepared files; missing files are restored from the cache.
+New URLs or checksum pins prepare a new cache generation.
+Unchanged URLs have no automatic download expiry.
+
+For full verification and repair, explicitly apply from the current worktree:
 
 ```sh
-chezmoi apply --refresh-externals
+mise run assets:verify
 ```
+
+Use `mise run assets:refresh` to additionally force fresh downloads.
+Both tasks apply personal configuration, including font and plugin reconciliation.
+The outer `--refresh-externals` flag no longer controls these script-managed assets.
+Normal application can miss modifications that preserve file size and modification time; full verification restores the declared content.
 
 > **Windows Note:** Close running Claude Code, Codex, and omp sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
 
@@ -97,7 +107,7 @@ Personal application versions are strictly pinned and checksum-verified:
 
 1. **Authored Declarations (`home/.chezmoidata/personal-apps.json`):** Defines repository names, command names, asset naming patterns, and archive extraction rules.
 2. **Locked Pins (`home/.chezmoidata/personal-app-lock.json`):** Contains resolved versions, immutable artifact URLs, and verified SHA-256 digests, or the official SHA-512 digests for Antigravity CLI.
-3. **Externals Template (`home/.chezmoiexternals/personal-apps.toml.tmpl`):** Reads the declarations and lock to configure chezmoi external archives.
+3. **Asset Templates (`home/.chezmoitemplates/external-assets/`):** Read the declarations and lock to configure the isolated native chezmoi preparation source.
 
 ### Refreshing Application Pins
 

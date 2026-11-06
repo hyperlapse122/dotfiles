@@ -93,7 +93,7 @@ class ZshLockTest(unittest.TestCase):
 @unittest.skipUnless(shutil.which("chezmoi"), "Real chezmoi executable required")
 class ZshExternalTest(unittest.TestCase):
     def render(self, os_name, arch="amd64", mutate=None):
-        template = (REPO / "home/.chezmoiexternals/zsh.toml.tmpl").read_text(encoding="utf-8")
+        template = (REPO / "home/.chezmoitemplates/external-assets/zsh.toml.tmpl").read_text(encoding="utf-8")
         data = {}
         for name in ("zsh.json", "zsh-lock.json"):
             data.update(json.loads((REPO / "home/.chezmoidata" / name).read_text(encoding="utf-8")))

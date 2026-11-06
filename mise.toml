@@ -33,6 +33,16 @@ run = 'chezmoi --config "{{config_root}}/.chezmoi-bootstrap.toml" --source "{{co
 description = "Apply this worktree's chezmoi configuration to the user home"
 run = 'chezmoi --source "{{config_root}}" apply'
 
+[tasks."assets:verify"]
+description = "Fully verify cached assets and reconcile personal configuration from this worktree"
+env = { DOTFILES_ASSET_MODE = "verify" }
+run = 'chezmoi --source "{{config_root}}" apply'
+
+[tasks."assets:refresh"]
+description = "Download fresh assets, verify them, and reconcile personal configuration from this worktree"
+env = { DOTFILES_ASSET_MODE = "refresh" }
+run = 'chezmoi --source "{{config_root}}" apply'
+
 [tasks."pinentry:build"]
 description = "Build the native keyring pinentry without applying personal settings"
 tools = { "core:rust" = { version = "1.99.1", profile = "default" } }

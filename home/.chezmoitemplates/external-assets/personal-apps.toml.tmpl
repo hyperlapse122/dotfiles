@@ -1,6 +1,6 @@
 {{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
 {{- range $name, $app := .personalApps -}}
-{{- if hasKey $app.targets $target -}}
+{{- if and (ne $name "codex") (hasKey $app.targets $target) -}}
 {{- $lock := index $.personalAppLocks $name | default dict -}}
 {{- $pin := index (get $lock "targets" | default dict) $target | default dict -}}
 {{- $algorithm := "sha256" -}}
@@ -22,6 +22,7 @@
 type = {{ $pin.kind | quote }}
 url = {{ printf "%s#%s=%s" $pin.url $algorithm $checksum | quote }}
 executable = true
+refreshPeriod = "0"
 checksum.{{ $algorithm }} = {{ $checksum | quote }}
 {{ if eq $pin.kind "archive-file" -}}
 format = {{ $pin.format | quote }}
