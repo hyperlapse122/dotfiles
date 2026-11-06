@@ -24,6 +24,50 @@ function Move-AtomicFile([string] $Source, [string] $Target) {
     }
 }
 
+# Windows refuses to replace a running executable but allows renaming it within its volume.
+# The retired copy leaves the owned roots and is deleted once nothing holds it.
+function Install-PreparedFile([string] $Source, [string] $Target) {
+    if ([DotfilesAssetFiles]::MoveFileEx($Source, $Target, 1)) { return }
+    $code = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    if ($code -ne 5 -or -not [IO.File]::Exists($Target)) { throw [ComponentModel.Win32Exception]::new($code) }
+    [IO.Directory]::CreateDirectory($retired) | Out-Null
+    $aside = Join-AssetPath $retired ([Guid]::NewGuid().ToString('N'))
+    if (-not [DotfilesAssetFiles]::MoveFileEx($Target, $aside, 0)) { throw [ComponentModel.Win32Exception]::new($code) }
+    if (-not [DotfilesAssetFiles]::MoveFileEx($Source, $Target, 0)) {
+        $code = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        $null = [DotfilesAssetFiles]::MoveFileEx($aside, $Target, 0)
+        throw [ComponentModel.Win32Exception]::new($code)
+    }
+    try { [IO.File]::Delete($aside) } catch { }
+}
+
+function Clear-RetiredFiles {
+    if (-not [IO.Directory]::Exists($retired)) { return }
+    foreach ($file in [IO.Directory]::GetFiles($retired)) {
+        try { [IO.File]::Delete($file) } catch { }
+    }
+}
+
+# Windows PowerShell 5.1 is not long-path aware, even with LongPathsEnabled, and the
+# generation tree prefix pushes deep plugin files past MAX_PATH. Extended-length paths
+# bypass that limit; chezmoi receives the ordinary spelling.
+function ConvertTo-ExtendedPath([string] $Path) {
+    if ([IO.Path]::DirectorySeparatorChar -ne '\' -or $Path.StartsWith('\\?\')) { return $Path }
+    if ($Path.StartsWith('\\')) { return '\\?\UNC\' + $Path.Substring(2) }
+    return '\\?\' + $Path
+}
+
+function ConvertFrom-ExtendedPath([string] $Path) {
+    if ($Path.StartsWith('\\?\UNC\')) { return '\\' + $Path.Substring(8) }
+    if ($Path.StartsWith('\\?\')) { return $Path.Substring(4) }
+    return $Path
+}
+
+# Join-Path rejects extended-length paths, which also skip separator normalization.
+function Join-AssetPath([string] $Base, [string] $Child) {
+    return [IO.Path]::Combine($Base, $Child.Replace('/', [IO.Path]::DirectorySeparatorChar))
+}
+
 function Get-TextHash([string] $Text) {
     $hash = [Security.Cryptography.SHA256]::Create()
     try { return [BitConverter]::ToString($hash.ComputeHash($utf8.GetBytes($Text))).Replace('-', '').ToLowerInvariant() }
@@ -71,7 +115,7 @@ function Get-RelativePath([string] $Base, [string] $Path) {
 }
 
 function Get-RootEntries([string] $Base, $Root) {
-    $path = Join-Path $Base $Root.path
+    $path = Join-AssetPath $Base $Root.path
     $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
     if (-not $item) { return }
     Assert-OrdinaryPath $path
@@ -89,17 +133,17 @@ function Get-RootEntries([string] $Base, $Root) {
 function Get-Snapshot([string] $Base, [bool] $Installed = $false) {
     $items = @{}
     foreach ($root in $roots) {
-        $items[$root.path] = Get-Item -LiteralPath (Join-Path $Base $root.path) -Force -ErrorAction SilentlyContinue
+        $items[$root.path] = Get-Item -LiteralPath (Join-AssetPath $Base $root.path) -Force -ErrorAction SilentlyContinue
         $enumerationBase = $Base
         if ($Installed -and -not $root.exact) { $enumerationBase = $tree }
         foreach ($item in @(Get-RootEntries $enumerationBase $root)) {
             $relative = Get-RelativePath $enumerationBase $item.FullName
             if ($enumerationBase -eq $Base) { $items[$relative] = $item }
-            else { $items[$relative] = Get-Item -LiteralPath (Join-Path $Base $relative) -Force -ErrorAction SilentlyContinue }
+            else { $items[$relative] = Get-Item -LiteralPath (Join-AssetPath $Base $relative) -Force -ErrorAction SilentlyContinue }
         }
     }
     $rows = foreach ($relative in @($items.Keys | Sort-Object)) {
-        $path = Join-Path $Base $relative
+        $path = Join-AssetPath $Base $relative
         $item = $items[$relative]
         if (-not $item) { "missing`t$relative"; continue }
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
@@ -136,12 +180,12 @@ function Copy-PreparedFile([string] $Source, [string] $Target) {
     $temporary = $Target + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
     try {
         [IO.File]::Copy($Source, $temporary)
-        Move-AtomicFile $temporary $Target
+        Install-PreparedFile $temporary $Target
     } finally { [IO.File]::Delete($temporary) }
 }
 
-$Destination = [IO.Path]::GetFullPath($Destination)
-$CacheDirectory = [IO.Path]::GetFullPath($CacheDirectory)
+$Destination = ConvertTo-ExtendedPath ([IO.Path]::GetFullPath($Destination))
+$CacheDirectory = ConvertTo-ExtendedPath ([IO.Path]::GetFullPath($CacheDirectory))
 $manifest = [IO.File]::ReadAllText($ManifestPath)
 $rootText = [IO.File]::ReadAllText($RootsPath)
 $roots = @()
@@ -154,7 +198,7 @@ foreach ($line in ($rootText -split "`n")) {
         $fields[0].StartsWith('/') -or @($fields[0].Split('/') | Where-Object { $_ -in @('', '.', '..') }).Count) {
         throw "Invalid managed asset root: $line"
     }
-    $null = Assert-ContainedPath (Join-Path $Destination $fields[0]) $Destination
+    $null = Assert-ContainedPath (Join-AssetPath $Destination $fields[0]) $Destination
     $roots += @{ path = $fields[0]; kind = $fields[1]; exact = ($fields[2] -eq 'true') }
 }
 if (-not $roots.Count) {
@@ -162,17 +206,20 @@ if (-not $roots.Count) {
     return
 }
 
-$generation = Join-Path (Join-Path $CacheDirectory 'generations') (Get-TextHash ($manifest + "`n" + $rootText))
-$tree = Join-Path $generation 'tree'
-$source = Join-Path $generation 'source'
-$prepared = Join-Path $generation 'prepared'
-$cacheSnapshot = Join-Path $generation 'cache.snapshot'
-$destinationSnapshot = Join-Path $generation 'destination.snapshot'
+$generation = Join-AssetPath (Join-AssetPath $CacheDirectory 'generations') (Get-TextHash ($manifest + "`n" + $rootText))
+$tree = Join-AssetPath $generation 'tree'
+$source = Join-AssetPath $generation 'source'
+$prepared = Join-AssetPath $generation 'prepared'
+$cacheSnapshot = Join-AssetPath $generation 'cache.snapshot'
+$destinationSnapshot = Join-AssetPath $generation 'destination.snapshot'
+$retired = Join-AssetPath $CacheDirectory 'retired'
 Assert-OrdinaryPath $CacheDirectory
 Assert-OrdinaryPath $generation
 Assert-OrdinaryPath $tree
+Assert-OrdinaryPath $retired
+Clear-RetiredFiles
 [IO.Directory]::CreateDirectory($source) | Out-Null
-$config = Join-Path $CacheDirectory 'config.toml'
+$config = Join-AssetPath $CacheDirectory 'config.toml'
 [IO.File]::WriteAllText($config, '', $utf8)
 $cacheIntact = [IO.File]::Exists($prepared) -and [IO.File]::Exists($cacheSnapshot) -and
     ([IO.File]::ReadAllText($cacheSnapshot) -ceq (Get-Snapshot $tree))
@@ -182,16 +229,17 @@ if ($Mode -ne 'normal' -or -not $cacheIntact) {
     [IO.File]::Delete($prepared)
     Remove-OwnedPath $tree $generation
     [IO.Directory]::CreateDirectory($tree) | Out-Null
-    [IO.File]::WriteAllText((Join-Path $source '.chezmoiexternal.toml'), $manifest, $utf8)
+    [IO.File]::WriteAllText((Join-AssetPath $source '.chezmoiexternal.toml'), $manifest, $utf8)
     $arguments = @('--config', $config, '--source', $source, '--destination', $tree,
-        '--cache', (Join-Path $CacheDirectory 'downloads'),
-        '--persistent-state', (Join-Path $CacheDirectory 'state.boltdb'),
-        '--no-tty', 'apply', '--force', '--exclude=scripts')
+        '--cache', (Join-AssetPath $CacheDirectory 'downloads'),
+        '--persistent-state', (Join-AssetPath $CacheDirectory 'state.boltdb')) |
+        ForEach-Object { ConvertFrom-ExtendedPath $_ }
+    $arguments += @('--no-tty', 'apply', '--force', '--exclude=scripts')
     if ($Mode -eq 'refresh') { $arguments += '--refresh-externals=always' }
     & $Chezmoi @arguments
     if ($LASTEXITCODE -ne 0) { throw "External asset preparation failed: chezmoi exited with code $LASTEXITCODE" }
     foreach ($root in $roots) {
-        $path = Join-Path $tree $root.path
+        $path = Join-AssetPath $tree $root.path
         $expectedType = if ($root.kind -eq 'directory') { 'Container' } else { 'Leaf' }
         if (-not (Test-Path -LiteralPath $path -PathType $expectedType)) {
             throw "Prepared asset is missing: $($root.path)"
@@ -210,8 +258,8 @@ if ($cacheIntact -and $installedIntact -and $Mode -eq 'normal') {
 }
 
 foreach ($root in $roots) {
-    $sourceRoot = Join-Path $tree $root.path
-    $targetRoot = Join-Path $Destination $root.path
+    $sourceRoot = Join-AssetPath $tree $root.path
+    $targetRoot = Join-AssetPath $Destination $root.path
     $null = Assert-ContainedPath $targetRoot $Destination
     Assert-OrdinaryPath $targetRoot
     if ($root.kind -eq 'file') {
@@ -233,7 +281,7 @@ foreach ($root in $roots) {
         }
     }
     foreach ($entry in $entries) {
-        $target = Join-Path $Destination (Get-RelativePath $tree $entry.FullName)
+        $target = Join-AssetPath $Destination (Get-RelativePath $tree $entry.FullName)
         Assert-OrdinaryPath $target
         if ($entry.PSIsContainer) {
             if (Test-Path -LiteralPath $target -PathType Leaf) { Remove-OwnedPath $target $targetRoot }

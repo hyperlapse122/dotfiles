@@ -16,6 +16,11 @@ import zipfile
 REPO = Path(__file__).resolve().parents[1]
 
 
+def native(path):
+    """Reach paths past MAX_PATH on Windows hosts without LongPathsEnabled."""
+    return Path("\\\\?\\" + str(path)) if os.name == "nt" else path
+
+
 class ExternalAssetsTest(unittest.TestCase):
     def setUp(self):
         scratch = tempfile.TemporaryDirectory(prefix="external assets ' ")
@@ -195,6 +200,25 @@ class ExternalAssetsTest(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertEqual(unrelated.read_bytes(), b"keep")
 
+    def test_paths_beyond_windows_max_path_are_prepared_and_pruned(self):
+        # Windows PowerShell 5.1 is not long-path aware even with LongPathsEnabled set.
+        deep = "/".join(["nested-directory-segment"] * 9) + "/payload.txt"
+        for owned in (self.cache, self.home / ".local"):
+            self.addCleanup(shutil.rmtree, native(owned), True)
+        self.set_archive({deep: b"deep"})
+        self.prepare()
+        staged = self.stage() / ".local/resources" / deep
+        self.assertGreater(len(str(staged)), 260)
+        target = self.home / ".local/resources" / deep
+        self.assertEqual(native(target).read_bytes(), b"deep")
+        (self.stage().parent / "prepared").unlink()
+        stale = target.with_name("stale.txt")
+        native(stale).write_bytes(b"remove")
+        self.prepare()
+        self.assertFalse(native(stale).exists())
+        self.assertEqual(native(target).read_bytes(), b"deep")
+        self.assertEqual(self.requests, ["/bundle.zip"])
+
     def test_verify_repairs_preserved_metadata_corruption(self):
         self.prepare()
         target = self.home / ".local/bin/tool"
@@ -248,6 +272,30 @@ class ExternalAssetsTest(unittest.TestCase):
         self.roots.write_text("../owner\tfile\tfalse\n", encoding="utf-8")
         self.assertNotEqual(self.prepare(check=False).returncode, 0)
         self.assertFalse((self.root / "owner").exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows refuses to replace running executables")
+    def test_in_use_installed_file_is_replaced(self):
+        self.prepare()
+        target = self.home / ".local/bin/tool"
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateFileW.restype = ctypes.c_void_p
+        kernel.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_ulong, ctypes.c_ulong,
+                                      ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p]
+        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+        # Read and delete sharing matches a mapped executable: rename works, replacement does not.
+        handle = kernel.CreateFileW(str(target), 0x80000000, 0x1 | 0x4, None, 3, 0, None)
+        self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+        try:
+            self.payloads["/tool"] = b"replacement\n"
+            self.set_file()
+            self.prepare()
+            self.assertEqual(target.read_bytes(), b"replacement\n")
+        finally:
+            kernel.CloseHandle(handle)
+        self.payloads["/tool"] = b"third\n"
+        self.set_file()
+        self.prepare()
+        self.assertEqual(list((self.cache / "retired").iterdir()), [])
 
     @unittest.skipUnless(os.name == "nt", "Windows file sharing proves metadata-only warm path")
     def test_warm_run_never_opens_payload_bytes(self):
