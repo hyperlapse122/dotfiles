@@ -182,7 +182,7 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 | `ubuntu-24.04-arm` | `linux-arm64` | Yes | Yes |
 | `ubuntu-26.04` | `linux-amd64` | Yes | Yes |
 | `ubuntu-26.04-arm` | `linux-arm64` | Yes | Yes |
-| `xcode-27` | `darwin-arm64` | Yes | Yes |
+| `macos-26` | `darwin-arm64` | Yes | Yes |
 | `windows-2025` | `windows-amd64` | Yes | Yes |
 | `windows-11-arm` | `windows-arm64` | No | All seven native smoke areas |
 

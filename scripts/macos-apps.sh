@@ -7,7 +7,7 @@ fail() { printf '%s\n' "macOS applications: $*" >&2; exit 1; }
 version=$(sw_vers -productVersion)
 major=${version%%.*}
 case "$major" in ''|*[!0-9]*) fail 'Cannot identify the macOS version.';; esac
-[ "$major" -ge 15 ] || fail 'Requires macOS 15 or later.'
+[ "$major" -ge 26 ] || fail 'Requires macOS 26 or later.'
 [ "$(brew --prefix)" = /opt/homebrew ] || fail 'Requires native Homebrew at /opt/homebrew.'
 
 for item in "$@"; do

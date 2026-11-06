@@ -151,7 +151,7 @@ class MacProvisionTest(MacFixture):
 
     def test_host_and_compiler_guards_precede_provisioning(self):
         for override, diagnostic in [({'os': 'Linux'}, 'macOS'), ({'arch': 'x86_64'}, 'Apple Silicon'),
-                                     ({'version': '14.7'}, 'macOS 15'), ({'translated': '1'}, 'Rosetta'),
+                                     ({'version': '25.9'}, 'macOS 26'), ({'translated': '1'}, 'Rosetta'),
                                      ({'uid': '0'}, 'normal user'), ({'fail': 'xcode-select'}, 'xcode-select --install'),
                                      ({'fail': 'xcrun'}, 'compiler')]:
             with self.subTest(override=override):

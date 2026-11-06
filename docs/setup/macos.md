@@ -1,6 +1,6 @@
 # macOS Setup and Readiness
 
-This guide configures a native Apple Silicon Mac running macOS 15 or later.
+This guide configures a native Apple Silicon Mac running macOS 26 or later.
 Intel Macs, Rosetta-based toolchains, iOS SDKs and Windows-target builds are outside this setup.
 Use a normal user account with permission to approve native installers.
 
@@ -141,7 +141,7 @@ A successful installer or a discovered skill alone does not establish full devic
 
 | Capability | Required evidence on this Mac |
 | --- | --- |
-| Native prerequisites | macOS 15+, native `arm64`, Homebrew `/opt/homebrew`, selected clang and macOS SDK |
+| Native prerequisites | macOS 26+, native `arm64`, Homebrew `/opt/homebrew`, selected clang and macOS SDK |
 | CLI and shells | Commands above resolve in fresh Zsh/Bash and PowerShell sessions outside the repository |
 | AI instructions | Claude Code `~/.claude/CLAUDE.md`, Codex `~/.codex/AGENTS.md`, omp `~/.omp/agent/AGENTS.md`, Antigravity `~/.gemini/GEMINI.md` are discovered natively; shared content includes no foreign harness branch |
 | CE installation and discovery | Each harness lists/enables the pinned user-scope CE plugin and discovers its native skills; existing disposable-home smoke coverage is described in the testing guide |
@@ -164,7 +164,7 @@ python tests/smoke_macos_build_environment.py --report /tmp/dotfiles-native-maco
 
 The smoke builds in temporary project directories and needs network access for project restores and vcpkg dependencies.
 It does not install host toolchains.
-CI runs the same smoke with a disposable provisioned home on the `xcode-27` ARM64 runner and retains its JSON evidence.
+CI runs the same smoke with a disposable provisioned home on the `macos-26` ARM64 runner and retains its JSON evidence.
 CI does not prove physical key access, GUI approvals, real account login, or authenticated model-backed CE invocation on the owner's Mac.
 Do not mark the device fully ready while any required checklist item is failed or pending.
 

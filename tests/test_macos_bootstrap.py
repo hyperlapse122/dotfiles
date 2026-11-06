@@ -20,7 +20,7 @@ state = json.loads((root/'state.json').read_text())
 with (root/'calls.jsonl').open('a') as f: f.write(json.dumps([name, args])+'\n')
 if state.get('fail') == name: sys.exit(23)
 if name == 'uname': print(state.get('os','Darwin') if args == ['-s'] else state.get('arch','arm64'))
-elif name == 'sw_vers': print(state.get('version','15.0'))
+elif name == 'sw_vers': print(state.get('version','26.0'))
 elif name == 'sysctl': print(state.get('translated','0'))
 elif name == 'xcode-select': print('/Library/Developer/CommandLineTools')
 elif name == 'xcrun': print('/usr/bin/clang')
@@ -152,7 +152,7 @@ done
 
 class MacBootstrapTest(MacFixture):
     def test_rejects_unsupported_host_before_mutation(self):
-        for override,diagnostic in [({'os':'Linux'},'Requires macOS'),({'arch':'x86_64'},'native Apple Silicon'),({'version':'14.7'},'macOS 15'),({'translated':'1'},'Rosetta')]:
+        for override,diagnostic in [({'os':'Linux'},'Requires macOS'),({'arch':'x86_64'},'native Apple Silicon'),({'version':'15.7'},'macOS 26'),({'version':'25.9'},'macOS 26'),({'translated':'1'},'Rosetta')]:
             with self.subTest(override=override):
                 self.state={'source':str(self.source),**override}
                 result=self.run_script('bootstrap.sh', self.source)
@@ -187,6 +187,13 @@ class MacBootstrapTest(MacFixture):
         result=self.run_script('bootstrap.sh',self.source)
         self.assertEqual(result.returncode,23,result.stdout+result.stderr)
         self.assertNotIn('Prepared:',result.stdout)
+
+    def test_registration_rejects_unsupported_version_before_mutation(self):
+        self.state['version'] = '25.9'
+        result = self.run_script('configure-chezmoi.sh', self.source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('macOS 26 or later', result.stderr)
+        self.assertFalse(any(name in ('git', 'chezmoi', 'brew') for name, args in self.calls()))
 
     def test_registration_rejects_linked_worktree(self):
         (self.source/'.git').rmdir()

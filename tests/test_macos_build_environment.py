@@ -29,7 +29,7 @@ class MacosBuildEnvironmentTest(unittest.TestCase):
         self.env = os.environ.copy()
         self.env.update(HOME=shell_path(self.home), PATH=shell_path(self.bin) + ":/usr/bin:/bin")
         self.command("uname", "echo Darwin")
-        self.command("sw_vers", "echo 15.0")
+        self.command("sw_vers", "echo 26.0")
 
     def command(self, name, body):
         path = self.bin / name
@@ -154,10 +154,10 @@ esac''')
 
     def test_unsupported_macos_stops_before_compiler_and_publication(self):
         self.command("uname", 'case "$1" in -m) echo arm64;; *) echo Darwin;; esac')
-        self.command("sw_vers", "echo 14.7")
+        self.command("sw_vers", "echo 25.9")
         self.command("xcode-select", "echo should-not-run")
         result = self.run_phase("preflight")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("macOS 15", result.stderr)
+        self.assertIn("macOS 26", result.stderr)
         self.assertNotIn("should-not-run", result.stdout)
         self.assertEqual(list(self.home.iterdir()), [])

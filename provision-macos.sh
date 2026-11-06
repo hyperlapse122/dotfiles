@@ -10,7 +10,7 @@ translated=$(sysctl -in sysctl.proc_translated 2>/dev/null || printf '0')
 version=$(sw_vers -productVersion)
 major=${version%%.*}
 case "$major" in ''|*[!0-9]*) fail 'Cannot identify the macOS version.' ;; esac
-[ "$major" -ge 15 ] || fail 'Requires macOS 15 or later.'
+[ "$major" -ge 26 ] || fail 'Requires macOS 26 or later.'
 [ "$(id -u)" -ne 0 ] || fail 'Run as a normal user, not root; approve installer prompts when requested.'
 xcode-select -p >/dev/null 2>&1 || fail 'Install Command Line Tools with xcode-select --install, then rerun.'
 xcrun --find clang >/dev/null 2>&1 || fail 'Select a usable Apple compiler with xcode-select.'

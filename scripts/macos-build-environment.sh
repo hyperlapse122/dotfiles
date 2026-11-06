@@ -16,7 +16,7 @@ preflight)
     version=$(sw_vers -productVersion)
     major=${version%%.*}
     case "$major" in ''|*[!0-9]*) fail 'Cannot identify the macOS version.';; esac
-    [ "$major" -ge 15 ] || fail 'macos-build requires macOS 15 or later.'
+    [ "$major" -ge 26 ] || fail 'macos-build requires macOS 26 or later.'
     xcode-select -p >/dev/null || fail 'Install and select Apple Command Line Tools before applying.'
     xcrun --find clang >/dev/null || fail 'The selected Apple developer tools have no clang.'
     xcrun --show-sdk-path >/dev/null || fail 'The selected Apple developer tools have no macOS SDK.'

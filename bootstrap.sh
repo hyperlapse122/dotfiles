@@ -7,7 +7,7 @@ fail() { printf '%s\n' "macOS bootstrap: $*" >&2; exit 1; }
 translated=$(sysctl -in sysctl.proc_translated 2>/dev/null || printf '0')
 [ "$translated" != 1 ] || fail 'Run from a native terminal, not Rosetta.'
 version=$(sw_vers -productVersion)
-[ "${version%%.*}" -ge 15 ] || fail 'Requires macOS 15 or later.'
+[ "${version%%.*}" -ge 26 ] || fail 'Requires macOS 26 or later.'
 xcode-select -p >/dev/null 2>&1 || fail 'Install Command Line Tools with xcode-select --install.'
 xcrun --find clang >/dev/null 2>&1 || fail 'Select a usable Apple compiler with xcode-select.'
 for command in brew git mise; do

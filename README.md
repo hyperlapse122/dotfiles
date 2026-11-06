@@ -32,7 +32,7 @@ For custom destinations, host application lists, and build toolchains, see the [
 ### 2. New Apple Silicon Mac
 
 Follow the [macOS Setup and Readiness Guide](docs/setup/macos.md) to install native prerequisites, prepare the permanent checkout with `bootstrap.sh`, register it separately with `configure-chezmoi.sh`, and explicitly apply the environment.
-The supported baseline is macOS 15 or later on native Apple Silicon.
+The supported baseline is macOS 26 or later on native Apple Silicon.
 The guide covers all managed harnesses, applications, credentials, local containers and native Rust/C++/.NET builds, with separate manual and runtime readiness checks.
 
 ### 3. Worktree Preparation (Any OS)
