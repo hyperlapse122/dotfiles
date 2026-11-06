@@ -218,7 +218,7 @@ jobs:
           install: false
           env: false
       - name: Install declared pinentry build and smoke tools
-        run: mise install chezmoi python rust@1.99.1
+        run: mise install chezmoi python 'rust[profile=default]@1.99.1'
       - name: Check Rust formatting, lint, and isolated tests
         run: mise run pinentry:test
       - name: Build the native release binary
