@@ -308,6 +308,44 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertEqual(tomllib.loads(result.stdout), {})
         self.assertEqual(self.requests, [])
 
+    @unittest.skipUnless(os.name == "nt", "Windows Search indexing applies only to Windows")
+    def test_windows_plugin_cache_is_excluded_from_indexing_before_install(self):
+        # Indexing a just-copied plugin tree makes omp's immediate staging rename fail with EPERM.
+        log = self.root / "omp-calls.txt"
+        fake = self.home / ".local/bin/omp.exe"
+        fake.parent.mkdir(parents=True)
+        program = (
+            "using System; using System.IO;\n"
+            "public static class FakeOmp { public static int Main(string[] a) {\n"
+            "  string home = Environment.GetEnvironmentVariable(\"HOME\");\n"
+            "  string cache = Path.Combine(home, \".omp\", \"plugins\", \"cache\", \"plugins\");\n"
+            "  bool excluded = Directory.Exists(cache) &&\n"
+            "    (File.GetAttributes(cache) & FileAttributes.NotContentIndexed) != 0;\n"
+            "  File.AppendAllText(Environment.GetEnvironmentVariable(\"FAKE_OMP_LOG\"),\n"
+            "    string.Join(\" \", a) + \" excluded=\" + excluded + Environment.NewLine);\n"
+            "  return 0; } }\n")
+        build = subprocess.run(
+            [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"),
+             "-NoProfile", "-NonInteractive", "-Command",
+             "Add-Type -TypeDefinition $env:FAKE_OMP_SOURCE -OutputAssembly $env:FAKE_OMP_EXE "
+             "-OutputType ConsoleApplication"],
+            env=dict(self.env, FAKE_OMP_SOURCE=program, FAKE_OMP_EXE=str(fake)),
+            capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=120)
+        self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+        rendered = self.run_chezmoi("execute-template", '{{ includeTemplate "harness-plugins-windows" . }}')
+        self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+        script = self.root / "reconcile.ps1"
+        script.write_text(rendered.stdout, encoding="utf-8-sig")
+        result = subprocess.run(
+            [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"),
+             "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+            env=dict(self.env, FAKE_OMP_LOG=str(log)), capture_output=True, text=True,
+            encoding="utf-8", errors="backslashreplace", timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        installs = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("plugin install ")]
+        self.assertEqual(len(installs), 1, log.read_text(encoding="utf-8"))
+        self.assertTrue(installs[0].endswith("excluded=True"), installs[0])
+
     def test_native_instructions_include_common_and_only_selected_harness(self):
         (self.source / ".chezmoitemplates/agent-instructions").write_text(
             'common instructions for {{ .chezmoi.destDir }}\n'
