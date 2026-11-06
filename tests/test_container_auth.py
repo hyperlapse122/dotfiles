@@ -88,6 +88,22 @@ elif a=='erase':
         self.assertNotIn('fixture-secret-must-not-leak', str(raised.exception))
         self.assertEqual(path.read_bytes(), before)
 
+    def test_legacy_url_credentials_are_removed_only_after_verified_readback(self):
+        records = [dict(registry='registry.example.invalid:5443', user='fixture', token='fixture-token')]
+        owned = ('https://REGISTRY.EXAMPLE.INVALID:5443/v1/',
+                 'http://registry.example.invalid:5443/team', 'registry.example.invalid:5443/team')
+        unrelated = ('https://registry.example.invalid:5444/v1/',
+                     'https://registry.example.invalid.evil:5443/v1/', 'https://other.invalid/v1/')
+        path = self.root / 'client.json'
+        self.write_config(path, {'auths': {name: {'auth': 'prior'} for name in (*owned, *unrelated)}})
+        before = path.read_bytes()
+        with self.assertRaises(self.auth.common.AuthError):
+            self.auth.reconcile(records, [path], self.command, 'fixture',
+                                {**self.env, 'FIXTURE_WRONG_READBACK': '1'})
+        self.assertEqual(path.read_bytes(), before)
+        self.auth.reconcile(records, [path], self.command, 'fixture', self.env)
+        self.assertEqual(set(json.loads(path.read_text())['auths']), set(unrelated))
+
     def test_malformed_second_config_is_rejected_before_native_store_changes(self):
         first, second = self.root / 'first.json', self.root / 'second.json'
         self.write_config(first, {'auths': {'docker.io': {'auth': 'old'}}})

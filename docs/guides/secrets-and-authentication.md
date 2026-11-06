@@ -92,6 +92,8 @@ Explicit `mise run apply` installs the still-passphrase-protected key under `~/.
 
 Enrollment is optional. Without the encrypted inventory, bootstrap and apply do not decrypt SSH enrollment or install its routing. Invalid enrolled data fails before replacing configuration. Reapplying the same inventory leaves identical file bytes untouched.
 
+Before publishing destination files, apply runs native `ssh -G` against the composed configuration for each enrolled alias. Matching preserved `IdentityFile` or `CertificateFile` rules must not allow another identity. A conflict leaves destination files unchanged; exclude the managed alias from that rule before reapplying. Native configuration expansion follows preserved Includes and evaluates `Match exec` commands.
+
 To deliberately migrate the legacy default identity, first verify recovery and the protected replacement's public fingerprint, then repeat local enrollment with `--replace-default`. That explicit option enrolls a value-free source-membership marker so subsequent chezmoi application stops regenerating the old default key. Apply then writes the protected replacement to `~/.ssh/id_ed25519` and its public companion. Enrollment without that option does not change either existing default file. This repository does not automatically transform or delete the owner's current key.
 
 A lost OpenSSH passphrase cannot be recovered by GPG decryption: GPG restores the same passphrase-protected bytes. Recover from a separately secured backup or rotate the authorized key on the affected servers. Keep the previous working enrollment until its replacement has been validated.
@@ -259,6 +261,8 @@ mise exec -- python scripts/container-auth.py apply --destination /path/to/user-
 ```
 
 Reconciliation verifies native helper readback before removing owned plaintext authentication from Docker and Podman client files. It preserves unrelated registries, helper choices, and configuration. Docker Hub aliases share the intended account. Namespace-specific plaintext entries below an enrolled registry are owned by that registry and are removed after secure-store verification.
+
+Legacy HTTP/HTTPS authentication keys are matched by registry hostname and explicit port, so a URL-form copy of an enrolled credential is removed after verification as well.
 
 The effective `DOCKER_CONFIG` and `REGISTRY_AUTH_FILE` overrides are reconciled alongside the default files. Linux's `XDG_RUNTIME_DIR/containers/auth.json` and persistent `XDG_CONFIG_HOME/containers/auth.json` are both covered so an earlier Podman plaintext entry cannot shadow the managed helper. Use absolute override paths. When Linux has no `XDG_RUNTIME_DIR`, the existing `/run/user/UID` location is covered; otherwise set `REGISTRY_AUTH_FILE` explicitly for nonstandard runtime locations.
 

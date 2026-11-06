@@ -8,8 +8,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import struct
 import sys
+import tempfile
 
 import auth_common as common
 
@@ -116,15 +118,11 @@ def validate_document(document):
     return document
 
 
-def _policy(source, config):
-    return common.require_encryption_policy(source, config)
-
-
 def read_inventory(source, config):
     target = common.source_directory(source) / INVENTORY
     if not target.exists():
         return {'identities': []}
-    policy = _policy(source, config)
+    policy = common.require_encryption_policy(source, config)
     try:
         plaintext = common.run_private([policy['command'], *policy['args'], '--decrypt'],
                                        input=target.read_text(encoding='utf-8'), operation='Cannot decrypt SSH enrollment.')
@@ -135,7 +133,7 @@ def read_inventory(source, config):
 
 def publish_inventory(source, config, document):
     validate_document(document)
-    policy = _policy(source, config)
+    policy = common.require_encryption_policy(source, config)
     text = json.dumps(document, ensure_ascii=False, allow_nan=False)
     encrypted = common.run_private([policy['command'], *policy['args'], '--armor', '--recipient', policy['recipient'], '--encrypt'],
                                    input=text, operation='SSH enrollment encryption failed.')
@@ -151,8 +149,6 @@ def publish_inventory(source, config, document):
     directory = common.source_directory(source)
     marker = directory / REPLACE_MARKER
     replacement = any(r.get('replace_default') for r in document['identities'])
-    # The marker is deliberately value-free: inventory/bootstrap can select
-    # source membership without decrypting key material.
     target = directory / INVENTORY
     previous = {path: path.read_text(encoding='utf-8') if path.exists() else None
                 for path in (target, marker)}
@@ -226,6 +222,33 @@ else { [IO.File]::SetAccessControl($path, $acl) }
                        input=json.dumps(str(path)), operation='Cannot secure managed SSH files.')
 
 
+def preflight_identities(document, ssh_directory, route, original):
+    if not document['identities']:
+        return
+    executable = shutil.which('ssh')
+    if not executable:
+        raise common.AuthError('OpenSSH is required to verify enrolled identity selection.')
+    def normalized(value):
+        return os.path.normcase(os.path.normpath(value))
+    with tempfile.TemporaryDirectory(prefix='dotfiles-ssh-preflight-') as temporary:
+        candidate = Path(temporary) / 'config'
+        candidate.write_text(route + original, encoding='utf-8')
+        for record in document['identities']:
+            key = ssh_directory / 'dotfiles/keys' / record['id']
+            if record['kind'] == '1password':
+                key = Path(str(key) + '.pub')
+            for alias in record['hosts']:
+                output = common.run_private([executable, '-G', '-F', str(candidate), alias],
+                                            operation='Cannot verify composed SSH identity selection.')
+                for line in output.splitlines():
+                    option, _, value = line.partition(' ')
+                    if option not in ('identityfile', 'certificatefile') or value.lower() == 'none':
+                        continue
+                    if option == 'certificatefile' or normalized(value) != normalized(str(key)):
+                        raise common.AuthError('Conflicting SSH identities for enrolled alias ' + alias
+                            + '. Exclude this alias from the preserved identity or certificate rules.')
+
+
 def install_document(document, destination, *, platform):
     validate_document(document)
     ssh = Path(destination) / '.ssh'
@@ -262,6 +285,7 @@ def install_document(document, destination, *, platform):
                 socket = record.get('agent_socket') or ('~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock' if platform == 'darwin' else '~/.1password/agent.sock')
                 route += '    IdentityAgent ' + _quote(socket) + '\n'
     route += 'Host *\n'
+    preflight_identities(document, ssh, route, original)
     writes[ssh / 'dotfiles/config'] = route
     writes[config] = desired
     for directory in (ssh, ssh / 'dotfiles', ssh / 'dotfiles/keys'):

@@ -198,6 +198,42 @@ class CaFilesTest(unittest.TestCase):
 
 
 class CaTemplateTest(unittest.TestCase):
+    @unittest.skipUnless(os.name != 'nt' and shutil.which('chezmoi') and shutil.which('mise'),
+                         'Native Unix wrapper, chezmoi and mise required')
+    def test_rendered_wrapper_preserves_project_directory_and_interpreter(self):
+        import json
+        import shlex
+        with tempfile.TemporaryDirectory(prefix="ca-wrapper ' ") as temporary:
+            root = Path(temporary)
+            project, tools, home = (root / name for name in ('project', 'tools', 'home'))
+            for directory in (project, tools, home):
+                directory.mkdir()
+            bundle = home / '.local/share/dotfiles/ca/bundle.pem'
+            bundle.parent.mkdir(parents=True)
+            bundle.write_text('inert bundle; this fixture launches no TLS request\n')
+            interpreter = tools / 'python'
+            interpreter.write_text('#!/bin/sh\nexport PROJECT_INTERPRETER=selected\nexec '
+                                   + shlex.quote(sys.executable) + ' "$@"\n')
+            interpreter.chmod(0o755)
+            (project / 'client.py').write_text('import json,os,pathlib\n'
+                'pathlib.Path("relative-output.json").write_text(json.dumps({"cwd":os.getcwd(),'
+                '"interpreter":os.environ.get("PROJECT_INTERPRETER"),"path":os.environ["PATH"]}))\n')
+            config = root / 'chezmoi.toml'
+            config.write_text('workingTree = ' + json.dumps(str(REPO)) + '\n')
+            rendered = subprocess.run(['chezmoi', '--source', str(REPO), '--destination', str(home),
+                '--config', str(config), 'execute-template'],
+                input=(REPO / 'home/dot_local/bin/executable_dotfiles-ca.tmpl').read_text(),
+                capture_output=True, text=True, timeout=30)
+            self.assertEqual(rendered.returncode, 0, rendered.stderr)
+            wrapper = root / 'dotfiles-ca'
+            wrapper.write_text(rendered.stdout)
+            environment = {**os.environ, 'PATH': str(tools) + os.pathsep + os.environ['PATH']}
+            result = subprocess.run(['/bin/sh', str(wrapper), 'requests', '--', 'python', 'client.py'],
+                                    cwd=project, env=environment, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            observed = json.loads((project / 'relative-output.json').read_text())
+            self.assertEqual(observed, {'cwd': str(project), 'interpreter': 'selected', 'path': environment['PATH']})
+
     @unittest.skipUnless(shutil.which('chezmoi'), 'chezmoi required')
     def test_public_roots_and_apply_hook_are_optional_and_platform_scoped(self):
         with tempfile.TemporaryDirectory(prefix='ca-render-') as temporary:

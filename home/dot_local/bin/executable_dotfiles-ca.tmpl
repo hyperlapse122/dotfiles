@@ -6,4 +6,5 @@ if [ "$#" -eq 0 ]; then
 fi
 profile=$1
 shift
-exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "ca-files.py" | replace "'" "'\"'\"'" }}' "$profile" --destination '{{ .chezmoi.destDir | replace "'" "'\"'\"'" }}' "$@"
+python=$(mise --cd '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' which python)
+exec "$python" '{{ joinPath .chezmoi.workingTree "scripts" "ca-files.py" | replace "'" "'\"'\"'" }}' "$profile" --destination '{{ .chezmoi.destDir | replace "'" "'\"'\"'" }}' "$@"

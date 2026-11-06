@@ -128,6 +128,39 @@ class SshIdentitiesTest(unittest.TestCase):
             self.module.install_document({'identities': [self.identity(), {**self.identity('broken'), 'hosts': ['bad\nHost *']}]}, self.destination, platform='linux')
         self.assertEqual(files, {str(p): p.read_bytes() for p in self.destination.rglob('*') if p.is_file()})
 
+    def test_preserved_wildcard_and_included_identity_conflicts_fail_before_writes(self):
+        ssh = self.destination / '.ssh'
+        ssh.mkdir()
+        config = ssh / 'config'
+        included = ssh / 'user-identities.conf'
+        vault = {'id': 'vault', 'hosts': ['vault.invalid'], 'kind': '1password',
+                 'public_key': self.encrypted.with_suffix('.pub').read_text()}
+        for record in (self.identity(), vault):
+            for directive in ('IdentityFile', 'CertificateFile'):
+                for indirect in (False, True):
+                    with self.subTest(kind=record['kind'], directive=directive, indirect=indirect):
+                        stanza = 'Host *\n    ' + directive + ' ' + self.module._quote(ssh / 'unrelated') + '\n'
+                        included.write_text(stanza)
+                        config.write_text('Include ' + self.module._quote(included) + '\n' if indirect else stanza)
+                        before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in ssh.rglob('*') if p.is_file()}
+                        with self.assertRaises(self.module.common.AuthError):
+                            self.module.install_document({'identities': [record]}, self.destination, platform='linux')
+                        self.assertEqual(before, {p: (p.read_bytes(), p.stat().st_mtime_ns)
+                                                  for p in ssh.rglob('*') if p.is_file()})
+                        self.assertFalse((ssh / 'dotfiles').exists())
+
+    def test_other_hosts_and_none_identity_sentinels_do_not_block_enrollment(self):
+        ssh = self.destination / '.ssh'
+        ssh.mkdir()
+        (ssh / 'config').write_text('Host other.invalid\n    IdentityFile "unrelated"\n'
+                                    'Host *\n    IdentityFile none\n    CertificateFile none\n')
+        self.module.install_document({'identities': [self.identity()]}, self.destination, platform='linux')
+        result = subprocess.run([SSH, '-G', '-F', str(ssh / 'config'), 'work.invalid'],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('identityfile unrelated', result.stdout)
+        self.assertIn('dotfiles/keys/work', result.stdout.replace('\\', '/'))
+
     def test_real_gpg_enrollment_roundtrip_and_failed_replacement_rollback(self):
         gpg = shutil.which('gpg')
         if not gpg:

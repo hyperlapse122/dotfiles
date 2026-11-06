@@ -121,12 +121,12 @@ def install_bundle(document, destination, public_roots):
     if additions:
         combined += ('' if combined.endswith('\n') else '\n') + ''.join(additions)
     target = Path(destination) / BUNDLE
-    for directory in (target.parent,):
-        if directory.is_symlink():
-            raise common.AuthError('Managed CA directory must not be a symbolic link.')
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if os.name != 'nt':
-            directory.chmod(0o700)
+    directory = target.parent
+    if directory.is_symlink():
+        raise common.AuthError('Managed CA directory must not be a symbolic link.')
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != 'nt':
+        directory.chmod(0o700)
     common.publish_text(target, combined)
     if os.name != 'nt':
         target.chmod(0o600)

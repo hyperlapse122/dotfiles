@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
+from urllib.parse import urlsplit
 
 import auth_common as common
 
@@ -153,6 +154,11 @@ def read_config(path):
 
 
 def owned_server(key, records):
+    if isinstance(key, str) and key.lower().startswith(('http://', 'https://')):
+        try:
+            key = urlsplit(key).netloc
+        except ValueError:
+            return False
     return isinstance(key, str) and any(key.lower() == alias or key.lower().startswith(alias.rstrip('/') + '/')
         for record in records for alias in registry_aliases(record['registry']))
 
@@ -160,8 +166,6 @@ def owned_server(key, records):
 def reconcile(records, paths, command, suffix, env):
     records = validate_records(records)
     documents = [(Path(path), read_config(Path(path))) for path in paths]
-    # All client config is parsed before touching a native store. No plaintext
-    # entry is removed until every requested credential has passed readback.
     for record in records:
         expected = {'Username': record['user'], 'Secret': record['token']}
         for server in registry_aliases(record['registry']):
