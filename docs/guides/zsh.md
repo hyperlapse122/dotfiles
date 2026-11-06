@@ -47,6 +47,7 @@ Application publishes these supported completion definitions before Prezto initi
 Definitions are generated during each explicit application, with only changed successful output replacing existing files.
 An empty or failed generator fails application and preserves the previous complete file.
 Reapplying repairs missing completion files.
+Successful application clears Prezto's completion dump so an existing cache cannot hide installed definitions.
 Shell startup does not download or regenerate definitions.
 
 Usage is declared and locked in mise, then exposed through a persistent executable link alongside the managed zsh environment.

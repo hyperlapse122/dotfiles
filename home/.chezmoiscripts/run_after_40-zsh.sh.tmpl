@@ -25,6 +25,10 @@ publish_link "$mise_path" "$stage/bin/mise"
 
 {{ includeTemplate "zsh-completions" . }}
 
+# Existing dumps can predate the managed fpath even when provider output is unchanged.
+completion_dump="${XDG_CACHE_HOME:-$home/.cache}/prezto/zcompdump"
+rm -f "$completion_dump" "$completion_dump.zwc"
+
 replace_block "$zsh_root/.zshenv" 'zsh environment' 'source "$HOME/.local/share/dotfiles/zsh/env.zsh"'
 replace_block "$zsh_root/.zshrc" 'zsh interactive' 'source "$HOME/.local/share/dotfiles/zsh/interactive.zsh"'
 replace_block "$zsh_root/.zpreztorc" 'zsh modules' 'source "$HOME/.local/share/dotfiles/zsh/preztorc.zsh"'

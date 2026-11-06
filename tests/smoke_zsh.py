@@ -32,7 +32,7 @@ def executable(name):
     return str(Path(found).resolve())
 
 
-def check_shell(zsh, env, outside, root, providers, *, interactive, login=False):
+def check_shell(zsh, env, outside, root, providers, *, interactive, login=False, missing=()):
     script = '''
 [[ $ZDOTDIR == "$EXPECTED_ZSH_ROOT" && $NODE_USE_SYSTEM_CA == 1 ]] || exit 11
 [[ -x "$HOME/.local/share/dotfiles/zsh/bin/usage" && -n $(command -v usage) ]] || exit 12
@@ -52,9 +52,16 @@ if [[ -o interactive ]]; then
   for selected_command in ${(s: :)EXPECTED_COMPLETIONS}; do
     [[ ${_comps[$selected_command]} == _$selected_command ]] || { print -u2 "Completion not registered: $selected_command (${_comps[$selected_command]})"; exit 15; }
   done
+  for missing_command in ${(s: :)EXPECTED_MISSING_COMPLETIONS}; do
+    [[ -z ${_comps[$missing_command]-} ]] || { print -u2 "Stale-cache fixture already registers $missing_command"; exit 19; }
+  done
   _mise_hook_precmd
   cd .
   usage --version || exit 17
+  candidate_output=$(command mise __complete_word__ --shell zsh --line 'mise inst') || exit 20
+  [[ $candidate_output == install$'\t'* ]] || exit 20
+  candidate_output=$(command usage __complete_word__ --shell zsh --line 'usage gen') || exit 21
+  [[ $candidate_output == generate$'\t'* ]] || exit 21
 else
   (( ! ${+_DOTFILES_ZSH_INITIALIZED} && ! ${+functions[pmodload]} && ! ${+functions[mise]} )) || exit 16
 fi
@@ -63,6 +70,7 @@ print -r -- "zsh-ready:$ZDOTDIR"
     flags = ["-d"] + (["-l"] if login else []) + (["-i"] if interactive else [])
     output = run([zsh, *flags, "-c", script], env=env | {
         "EXPECTED_ZSH_ROOT": str(root), "EXPECTED_COMPLETIONS": " ".join(providers),
+        "EXPECTED_MISSING_COMPLETIONS": " ".join(missing),
     }, cwd=outside, startup=True)
     if f"zsh-ready:{root}" not in output:
         raise RuntimeError(f"Missing successful native startup signal: {output}")
@@ -109,6 +117,9 @@ def main():
         home, source, outside = (root / name for name in ("home", "source", "outside"))
         for directory in (home, source, outside):
             directory.mkdir()
+        effective = home / ".config/zsh"
+        effective.mkdir(parents=True)
+        (effective / ".zshrc").write_text('source "$ZDOTDIR/.zprezto/init.zsh"\n')
         for relative in (".chezmoitemplates", "dot_local/share/dotfiles/zsh"):
             shutil.copytree(REPO / "home" / relative, source / relative)
         for relative in (
@@ -147,6 +158,17 @@ def main():
         effective = home / ".config/zsh"
         for flags in ({"interactive": True}, {"interactive": True, "login": True}, {"interactive": False}):
             check_shell(zsh, env, outside, effective, providers, **flags)
+        usage_completion = stage / "completions/_usage"
+        hidden_completion = root / "saved-usage-completion"
+        usage_completion.rename(hidden_completion)
+        dump = root / "cache/prezto/zcompdump"
+        dump.unlink(missing_ok=True)
+        Path(str(dump) + ".zwc").unlink(missing_ok=True)
+        check_shell(zsh, env, outside, effective, [name for name in providers if name != "usage"],
+                    interactive=True, missing=("usage",))
+        hidden_completion.rename(usage_completion)
+        run(command, env=env)
+        check_shell(zsh, env, outside, effective, providers, interactive=True)
         env["XDG_CONFIG_HOME"] = str(root / "outside config ' directory")
         legacy = root / "legacy zsh ' directory"
         legacy.mkdir()
