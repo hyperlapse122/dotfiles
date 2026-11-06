@@ -122,6 +122,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                    + ' "arch" ' + json.dumps(arch)
                    + ' "osRelease" (dict "id" ' + json.dumps(distro) + ')'
                    + ' "destDir" ' + json.dumps(self.home.as_posix())
+                   + ' "sourceDir" ' + json.dumps(self.source.as_posix())
                    + ' "stdin" ' + json.dumps(existing) + '))')
         wrapper = ('{{ template "fixture" ' + context + ' }}'
                    + '{{ define "fixture" }}' + body + '{{ end }}')
