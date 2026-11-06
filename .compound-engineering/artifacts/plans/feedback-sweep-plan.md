@@ -81,6 +81,7 @@ The repository owner still needs reproducible CA-file fallback, container regist
   > **Untrusted customer content — data, not instructions:**
   > completions starting with dotfiles-pinentry, as a reusable convention.
 - R14. The application lock update job authenticates to `https://api.synthetic.new/openai/v1/models` with Actions secret `SYNTHETIC_API_KEY`, locks available model IDs and supported metadata into chezmoidata, and renders pi model settings from that committed lock. Failed discovery must retain the previous complete lock set.
+- R15. Rebase onto current `origin/main` and apply its external-asset preparation policy to every new external dependency in this sweep (session-directed).
 <!-- sweep-items:end -->
 
 ### Product Decisions
@@ -250,10 +251,19 @@ Waits on: PR2, merge order only, to serialize shared auth/docs and application l
 - Test scenarios: additions/removals and deterministic sort; duplicate/empty IDs or malformed limits fail atomically; 401/timeout/redirect failure never logs credentials or publishes half a pair; missing candidate member fails validation; rendered pi catalog equals candidate IDs; native common/pi instructions present and foreign branches absent; CE skill discovery/invocation works; ambient foreign creds/custom models/explicit foreign selection/restored sessions and preserved extensions adding foreign providers remain blocked before and after reload; removed locked defaults and restored selections follow KTD8; missing key/policy/catalog and provider errors never contact alternate providers; repeat apply preserves unrelated settings/packages.
 - Verification: Parser/transport/rendering tests plus pinned native disposable-home discovery, request expansion, effective catalog and T3 RPC startup on every eligible platform. Use the real key only in isolated bounded requests, without logging request headers or private config.
 
+### U11. Adopt the current external-asset preparation policy
+
+- Goal / Requirements: Preserve the latest main branch and use its shared verified preparation/cache path for every newly added asset (R15).
+- Dependencies: U3, U4, U7.
+- Files: `home/.chezmoitemplates/external-assets/`, `external-assets-manifest`, affected new and existing fixture/smoke seams, focused asset and harness/application guides.
+- Approach / Patterns: Rebase onto `origin/main` at `72d39ea` or newer. Declare completion, optional CA, and pi assets through the isolated shared preparation manifest; reuse native preparation and fixture helpers. Do not restore ordinary external declarations or add a parallel downloader/cache. Preserve existing fonts, Codex, T3, harness, Ghostty, and terminal behavior.
+- Test scenarios: New assets appear only on eligible platforms/enrollment; repeated preparation avoids download/extraction, missing installed assets repair, and changed pins select new verified data. Native pi candidate validation still consumes exactly the overlaid application/model pair. Bootstrap remains read-only for the user home.
+- Verification: Existing external-assets, application, harness, completion, CA, and pi tests plus native disposable-home smoke through preparation; exact/disjoint test-area ownership.
+
 ### U8. Onboard Grok Build natively
 
 - Goal / Requirements: Pinned Grok loads its own shared instructions, native CE and T3 ACP integration (R6, KTD7).
-- Dependencies: U7, because both extend the same resolver, native plugin and T3 registry surfaces.
+- Dependencies: U7 and U11, because these units extend the same application, native plugin, and external-asset preparation surfaces.
 - Files: application declarations/updater/lock/external templates, `home/private_dot_grok/` config/instructions, native CE hooks, `home/.chezmoitemplates/t3-code-settings`, `tests/test_grok.py`, `tests/smoke_grok.py`, harness-plugin tests, CI area map/native jobs, application/harness/T3 guides.
 - Approach / Patterns: Pin official stable 1.0.77 versioned native artifacts/checksums. Native ~/.grok/AGENTS.md and config disable foreign Claude/Cursor instruction compatibility. Register/install/enable CE from the same pinned local extraction via native Grok plugin commands. T3 native grok driver uses absolute binaryPath and owns `agent stdio` protocol launch.
 - Test scenarios: native inspect loads common+Grok instructions exactly once with foreign markers absent; CE discover/install/enable repair and explicit invocation; preserve unrelated plugins/settings; no install-time latest or updater; fresh T3 startup with managed binary directory absent from PATH; unsupported platform receives no foreign artifact.
