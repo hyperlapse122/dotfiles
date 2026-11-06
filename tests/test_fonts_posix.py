@@ -1,0 +1,129 @@
+import hashlib
+import os
+from pathlib import Path
+import shlex
+import subprocess
+import tempfile
+import unittest
+
+from test_native_ca_shell import find_bash
+
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+@unittest.skipUnless(find_bash(), "Native Bash or Git Bash required")
+class PosixFontsTest(unittest.TestCase):
+    def setUp(self):
+        scratch = tempfile.TemporaryDirectory(prefix="font native ' ")
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name).resolve()
+        self.assets = self.root / "assets"
+        self.index = self.root / "index.tsv"
+        self.fonts = self.root / "fonts"
+        self.state = self.root / "state" / "installed.txt"
+        self.bin = self.root / "commands"
+        self.bin.mkdir()
+        utilities = ("bash", "sh", "awk", "dirname", "mkdir", "mktemp", "cp", "mv", "rm",
+                     "cmp", "cat", "grep", "sort", "sha256sum", "chmod")
+        result = subprocess.run([find_bash(), "--noprofile", "--norc", "-c",
+                                 "PATH=/usr/bin:/bin; command -v " + " ".join(utilities)],
+                                capture_output=True, text=True, check=True)
+        for name, command in zip(utilities, result.stdout.splitlines(), strict=True):
+            self.wrapper(name, "exec " + shlex.quote(command) + ' "$@"')
+        self.wrapper("uname", 'printf "%s\\n" "${FONT_TEST_OS:-Linux}"')
+        self.wrapper("fc-cache", 'printf "refresh\\n" >> "$FONT_TEST_LOG"; exit "${FONT_TEST_CACHE_EXIT:-0}"')
+        self.wrapper("shasum", 'shift 2; exec sha256sum "$@"')
+        self.env = os.environ.copy()
+        self.env.update(FONT_TEST_LOG=(self.root / "refresh.log").as_posix())
+        self.write_fonts({"Example.ttf": b"font original"})
+
+    def wrapper(self, name, body):
+        path = self.bin / name
+        path.write_text("#!/bin/sh\n" + body + "\n", encoding="utf-8", newline="\n")
+        path.chmod(0o755)
+
+    def write_fonts(self, fonts):
+        rows = []
+        for name, content in fonts.items():
+            path = self.assets / "example" / "nested" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+            rows.append("\t".join(("example", "nested/" + name, name, hashlib.sha256(content).hexdigest())))
+        self.index.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8", newline="\n")
+
+    def run_installer(self, check=True):
+        command = 'PATH="$(cd "$1" && pwd -P)"; export PATH; shift; exec bash --noprofile --norc "$@"'
+        result = subprocess.run([
+            find_bash(), "--noprofile", "--norc", "-c", command, "fixture", self.bin.as_posix(),
+            (REPO / "scripts/install-fonts.sh").as_posix(), self.assets.as_posix(), self.index.as_posix(),
+            self.fonts.as_posix(), self.state.as_posix(),
+        ], env=self.env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        if check:
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result
+
+    def test_install_repeat_repair_and_owned_cleanup(self):
+        self.run_installer()
+        installed = self.fonts / "dotfiles-example-Example.ttf"
+        self.assertEqual(installed.read_bytes(), b"font original")
+        original_time = installed.stat().st_mtime_ns
+        unrelated = self.fonts / "personal.ttf"
+        unrelated.write_bytes(b"keep")
+        self.run_installer()
+        self.assertEqual(installed.stat().st_mtime_ns, original_time)
+        installed.unlink()
+        self.run_installer()
+        self.assertEqual(installed.read_bytes(), b"font original")
+        self.write_fonts({"New.ttf": b"replacement"})
+        self.run_installer()
+        self.assertFalse(installed.exists())
+        self.assertEqual((self.fonts / "dotfiles-example-New.ttf").read_bytes(), b"replacement")
+        self.assertEqual(unrelated.read_bytes(), b"keep")
+        self.assertEqual(self.state.read_text(), "dotfiles-example-New.ttf\n")
+
+    def test_all_staged_hashes_checked_before_mutation(self):
+        self.run_installer()
+        installed = self.fonts / "dotfiles-example-Example.ttf"
+        self.write_fonts({"Example.ttf": b"changed", "Later.ttf": b"valid"})
+        (self.assets / "example/nested/Later.ttf").write_bytes(b"corrupt")
+        result = self.run_installer(check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("checksum", result.stderr.lower())
+        self.assertEqual(installed.read_bytes(), b"font original")
+        self.assertFalse((self.fonts / "dotfiles-example-Later.ttf").exists())
+
+    def test_bad_manifest_cannot_remove_unowned_files(self):
+        self.run_installer()
+        outside = self.root / "outside.ttf"
+        outside.write_bytes(b"keep")
+        for entry in ("../outside.ttf", "personal.ttf", "dotfiles-../outside.ttf"):
+            self.state.write_text(entry + "\n")
+            self.assertNotEqual(self.run_installer(check=False).returncode, 0)
+            self.assertEqual(outside.read_bytes(), b"keep")
+
+    def test_refresh_failure_does_not_write_success_state(self):
+        self.env["FONT_TEST_CACHE_EXIT"] = "17"
+        self.assertNotEqual(self.run_installer(check=False).returncode, 0)
+        self.assertFalse(self.state.exists())
+        self.env.pop("FONT_TEST_CACHE_EXIT")
+        self.run_installer()
+        self.assertTrue(self.state.exists())
+
+    def test_missing_fontconfig_fails_before_installing(self):
+        (self.bin / "fc-cache").unlink()
+        result = self.run_installer(check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("fontconfig", result.stderr.lower())
+        self.assertFalse(self.fonts.exists())
+
+    def test_darwin_uses_native_hashing_without_fontconfig(self):
+        self.env["FONT_TEST_OS"] = "Darwin"
+        (self.bin / "fc-cache").unlink()
+        self.run_installer()
+        self.assertTrue((self.fonts / "dotfiles-example-Example.ttf").exists())
+        self.assertFalse((self.root / "refresh.log").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

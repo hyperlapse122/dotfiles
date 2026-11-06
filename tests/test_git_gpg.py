@@ -19,7 +19,7 @@ class GitGpgSettingsTest(unittest.TestCase):
             ".chezmoiexternals", "personal-app*.json", "dot_config",
             "run_onchange_after_10-personal-app-path.*", "run_onchange_after_20-harness-plugins.*",
             "harness-plugin*.json", "private_dot_omp", "run_after_40-github-auth.*",
-            "run_after_45-gitlab-auth.*", "private_dot_ssh",
+            "run_after_45-gitlab-auth.*", "run_after_30-install-fonts.*", "private_dot_ssh",
             "run_before_05-check-windows-virtualization.ps1.tmpl",
             "private_dot_t3", "dot_local", "run_onchange_after_30-install-t3-code.sh.tmpl",
             "private_dot_gemini", "run_after_20-antigravity-plugins.*",

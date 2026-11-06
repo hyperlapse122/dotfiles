@@ -121,6 +121,71 @@ class FontStagingTest(unittest.TestCase):
         (self.data / "font-lock.json").write_text('{"fontLocks": {}}')
         self.assertNotEqual(self.apply(check=False).returncode, 0)
 
+    def render(self, relative, os_name, arch):
+        context = {"chezmoi": {"os": os_name, "arch": arch,
+                              "destDir": self.home.as_posix(), "workingTree": self.source.as_posix()},
+                   "fonts": {"example": {}}, "fontLocks": {"example": self.pin}}
+        template = (REPO / "home" / relative).read_text(encoding="utf-8")
+        wrapper = ('{{ template "subject" (' + json.dumps(json.dumps(context)) + ' | fromJson) }}'
+                   '{{ define "subject" }}' + template + '{{ end }}')
+        result = subprocess.run(["chezmoi", "--source", str(self.source),
+                                 "--destination", str(self.home), "--config", str(self.config),
+                                 "execute-template"], input=wrapper, env=self.env,
+                                capture_output=True, text=True, encoding="utf-8", timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def test_platform_gates_match_staging_and_after_scripts(self):
+        for os_name, arch in (("darwin", "amd64"), ("linux", "386"), ("freebsd", "amd64")):
+            for path in (".chezmoiexternals/fonts.toml.tmpl",
+                         "dot_local/share/dotfiles/font-index.tsv.tmpl",
+                         ".chezmoiscripts/run_after_30-install-fonts.ps1.tmpl",
+                         ".chezmoiscripts/run_after_30-install-fonts.sh.tmpl"):
+                self.assertFalse(self.render(path, os_name, arch).strip(), (path, os_name, arch))
+
+    @unittest.skipUnless(os.name == "nt", "Windows PowerShell wrapper")
+    def test_windows_wrapper_preserves_apostrophes_and_spaces(self):
+        scripts = self.source / "scripts"
+        scripts.mkdir()
+        (scripts / "install-fonts.ps1").write_text(
+            "param($AssetRoot, $IndexPath, $FontDirectory, $StatePath)\n"
+            "@($AssetRoot, $IndexPath, $FontDirectory, $StatePath) | ConvertTo-Json | "
+            "Set-Content -LiteralPath $env:FONT_TRACE\n")
+        launcher = self.root / "apply-fonts.ps1"
+        launcher.write_text(self.render(".chezmoiscripts/run_after_30-install-fonts.ps1.tmpl", "windows", "amd64"),
+                            encoding="utf-8-sig")
+        trace = self.root / "args.json"
+        env = dict(self.env, FONT_TRACE=str(trace), LOCALAPPDATA=str(self.root / "local data"))
+        result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                                 "-File", str(launcher)], env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = json.loads(trace.read_text(encoding="utf-8-sig"))
+        self.assertEqual(Path(args[0]), self.home / ".local/share/dotfiles/font-assets")
+        self.assertEqual(Path(args[2]), self.root / "local data/Microsoft/Windows/Fonts")
+
+    def test_shell_wrapper_preserves_paths_and_xdg_override(self):
+        shell = shutil.which("sh")
+        if not shell and os.name == "nt":
+            candidate = Path("C:/Program Files/Git/bin/sh.exe")
+            shell = str(candidate) if candidate.exists() else None
+        if not shell:
+            self.skipTest("POSIX shell unavailable")
+        scripts = self.source / "scripts"
+        scripts.mkdir()
+        (scripts / "install-fonts.sh").write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$FONT_TRACE"\n')
+        for os_name in ("linux", "darwin"):
+            launcher = self.root / "apply-fonts.sh"
+            launcher.write_text(self.render(".chezmoiscripts/run_after_30-install-fonts.sh.tmpl", os_name, "arm64"))
+            trace = self.root / "args.txt"
+            data = (self.root / "custom data").as_posix()
+            env = dict(self.env, FONT_TRACE=trace.as_posix(), XDG_DATA_HOME=data)
+            result = subprocess.run([shell, str(launcher)], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            args = trace.read_text().splitlines()
+            self.assertEqual(Path(args[0]), self.home / ".local/share/dotfiles/font-assets")
+            expected = Path(data) / "fonts/dotfiles" if os_name == "linux" else self.home / "Library/Fonts"
+            self.assertEqual(Path(args[2]), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

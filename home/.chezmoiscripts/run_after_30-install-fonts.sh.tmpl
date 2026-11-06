@@ -1,0 +1,12 @@
+{{- if or (and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64")) (and (eq .chezmoi.os "linux") (has .chezmoi.arch (list "amd64" "arm64"))) -}}
+#!/bin/sh
+set -eu
+font_home='{{ .chezmoi.destDir | replace "'" "'\\''" }}'
+root="$font_home/.local/share/dotfiles"
+{{ if eq .chezmoi.os "darwin" -}}
+fonts="$font_home/Library/Fonts"
+{{ else -}}
+fonts="${XDG_DATA_HOME:-$font_home/.local/share}/fonts/dotfiles"
+{{ end -}}
+exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "install-fonts.sh" | replace "'" "'\\''" }}' "$root/font-assets" "$root/font-index.tsv" "$fonts" "$root/installed-fonts.txt"
+{{ end -}}
