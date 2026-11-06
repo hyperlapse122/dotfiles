@@ -1,5 +1,11 @@
 {
   "fonts": {
+    "jetendard": {
+      "repository": "kuskhan/jetendard",
+      "assetPattern": "Jetendard-TTF\\.zip",
+      "format": "zip",
+      "selections": [{"pattern": "ttf/Jetendard-*.ttf", "minimum": 16}]
+    },
     "jetbrains-mono": {
       "repository": "JetBrains/JetBrainsMono",
       "assetPattern": "JetBrainsMono-{version}\\.zip",

@@ -5,10 +5,11 @@ Worktree preparation with `mise install` does not install fonts or change font r
 
 ## Collection
 
-The initial lock selects 178 font files from eight official GitHub Release archives:
+The lock selects 194 font files from nine official GitHub Release archives:
 
 | Collection | Installed forms |
 |---|---|
+| Jetendard | All 16 static TTF weights and styles, with JetBrains Mono Nerd Font Mono Latin and Pretendard Korean glyphs |
 | JetBrains Mono | Static TTF weights and styles, including NL faces without ligatures |
 | Pretendard | Static TTF weights and the canonical variable TTF |
 | Pretendard JP, Std, and GOV | Static TTF weights and the canonical variable TTF for each family |
@@ -18,7 +19,12 @@ The initial lock selects 178 font files from eight official GitHub Release archi
 
 Webfonts, OTF copies of the selected static TTFs, TTC collections, and JetBrains Mono variable fonts are excluded.
 The selected font count can change with later releases; the lock records the exact files for each version.
-Installation makes the fonts available to applications without changing an application's selected font.
+Installation makes the fonts available to applications.
+Managed application settings select `Jetendard` for Ghostty and T3 Code coding surfaces, and `Pretendard Variable` for T3 Code's main interface and ordinary conversation text.
+The variable family's selectable name is `Pretendard Variable`, not `Pretendard` or the filename `PretendardVariable.ttf`.
+Sizes, line spacing, themes, and separate T3 composer preferences remain local.
+See [Ghostty](terminal.md#managed-configuration-and-native-boundaries) and [T3 Code](t3-code.md#personal-preferences) for ownership and platform scope.
+Terminal-rendered Claude Code, Codex, omp, and Antigravity tools inherit their host's font; dotfiles does not add independent font settings to those CLIs or manage Windows Terminal.
 
 ## Install or Reconcile
 
@@ -57,6 +63,7 @@ They preserve unrelated fonts, including manually installed copies of the same f
 ## Release Updates
 
 `home/.chezmoidata/fonts.json` declares repositories and desktop archive selections.
+The shared `home/.chezmoitemplates/external-assets/fonts.toml.tmpl` renders those declarations, including Jetendard, into the external-assets preparation manifest.
 The generated `home/.chezmoidata/font-lock.json` records exact release tags, URLs, archive SHA-256 values, and the selected members' SHA-256 values.
 When GitHub supplies no archive digest, the refresh downloads the archive and calculates one.
 Installation follows the committed lock and does not resolve the latest release during apply.

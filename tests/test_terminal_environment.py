@@ -129,6 +129,8 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertNotIn('command = bash',(config/'config').read_text())
         self.assertNotIn('config-file',(config/'config').read_text())
+        for name in ('config', 'config.ghostty'):
+            self.assertIn('font-family = Jetendard', (config/name).read_text().splitlines())
         self.assertEqual(terminals.read_text().splitlines(),['com.mitchellh.ghostty.desktop','other.desktop'])
         before={p:p.read_bytes() for p in self.home.rglob('*') if p.is_file()}
         result=self.run_terminal('status')
