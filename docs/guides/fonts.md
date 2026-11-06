@@ -44,8 +44,8 @@ The installer reports a missing prerequisite without installing OS packages or r
 | Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/fonts/dotfiles` | fontconfig cache refresh |
 | macOS | `~/Library/Fonts` | Native user-font discovery |
 
-macOS support remains native Apple Silicon on macOS 15 or later.
-[Issue #65](https://github.com/hyperlapse122/dotfiles/issues/65) tracks raising the baseline to macOS 26 separately.
+macOS follows the repository's native Apple Silicon support baseline in the [macOS setup guide](../setup/macos.md).
+The baseline is maintained independently of font installation; [issue #65](https://github.com/hyperlapse122/dotfiles/issues/65) records the separate macOS 26 update.
 
 Each apply verifies the staged files before changing installed fonts, repairs missing files or Windows registry entries, and leaves unchanged files in place.
 Managed filenames start with `dotfiles-<package>-`.
