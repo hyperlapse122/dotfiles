@@ -106,6 +106,46 @@
         }
       }
     },
+    "docker-credential-osxkeychain": {
+      "tag": "v0.9.12",
+      "targets": {
+        "darwin-arm64": {
+          "kind": "file",
+          "sha256": "0e43ec22d3fd186b2d69a3c76fd9ac0a1ae4ec4f2c2b2e4ee156e048c8258cb0",
+          "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-osxkeychain-v0.9.12.darwin-arm64"
+        }
+      }
+    },
+    "docker-credential-secretservice": {
+      "tag": "v0.9.12",
+      "targets": {
+        "linux-amd64": {
+          "kind": "file",
+          "sha256": "a7031335bebc9a8573fbacae6e56fe7848a360d6746c62a7680849012dac0068",
+          "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-secretservice-v0.9.12.linux-amd64"
+        },
+        "linux-arm64": {
+          "kind": "file",
+          "sha256": "8075d247efcb133805d63bebc797833e108c5dca36351d501f87c031c683823f",
+          "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-secretservice-v0.9.12.linux-arm64"
+        }
+      }
+    },
+    "docker-credential-wincred": {
+      "tag": "v0.9.12",
+      "targets": {
+        "windows-amd64": {
+          "kind": "file",
+          "sha256": "5675c7f677f48beb66713cdfdf67503332f0ce4cf19220022c128634f49625f0",
+          "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-wincred-v0.9.12.windows-amd64.exe"
+        },
+        "windows-arm64": {
+          "kind": "file",
+          "sha256": "b5fce98cc24108fe4207761133df2fa887c1cea5054daec1ac5e220300d94d43",
+          "url": "https://github.com/docker/docker-credential-helpers/releases/download/v0.9.12/docker-credential-wincred-v0.9.12.windows-arm64.exe"
+        }
+      }
+    },
     "gh": {
       "tag": "v2.103.3",
       "targets": {
@@ -155,14 +195,6 @@
       },
       "tag": "v1.12.0",
       "targets": {
-        "darwin-amd64": {
-          "format": "zip",
-          "kind": "archive-file",
-          "path": "ghq",
-          "sha256": "e5dc9f2173e32c0fddc0ffffa67f770492e0f93f734a9bd898f63a21a64cc34d",
-          "stripComponents": 1,
-          "url": "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_darwin_amd64.zip"
-        },
         "darwin-arm64": {
           "format": "zip",
           "kind": "archive-file",
@@ -245,6 +277,36 @@
         }
       }
     },
+    "grok": {
+      "tag": "1.0.77",
+      "targets": {
+        "darwin-arm64": {
+          "kind": "file",
+          "sha256": "197c66a63e5ac46e07450b0ca21d141ce665050a412180f185dadfae1c7a5b2a",
+          "url": "https://x.ai/cli/grok-1.0.77-macos-aarch64"
+        },
+        "linux-amd64": {
+          "kind": "file",
+          "sha256": "b702950aa5827d855e493278ab6215a4e0f5bceb5bba6c6243a9f55cdd143b0a",
+          "url": "https://x.ai/cli/grok-1.0.77-linux-x86_64"
+        },
+        "linux-arm64": {
+          "kind": "file",
+          "sha256": "b30eee14a656124ef3c9da8577b5e783ef2cffabeb2b679c5c49633e77eed574",
+          "url": "https://x.ai/cli/grok-1.0.77-linux-aarch64"
+        },
+        "windows-amd64": {
+          "kind": "file",
+          "sha256": "6b757512d240a6439535ca75aad039e581d00f17ba8e937112fd0dbaadf1bc81",
+          "url": "https://x.ai/cli/grok-1.0.77-windows-x86_64.exe"
+        },
+        "windows-arm64": {
+          "kind": "file",
+          "sha256": "ab4e5fddcd9f189fb379405a8fbfda43edf38dbbe893d302c0df697d180a6034",
+          "url": "https://x.ai/cli/grok-1.0.77-windows-aarch64.exe"
+        }
+      }
+    },
     "omp": {
       "tag": "v18.16.0",
       "targets": {
@@ -272,6 +334,46 @@
           "kind": "file",
           "sha256": "3de50c05b84851089c962aaff4d39d1622bfa079334a5a295bf70028cfdcbc6d",
           "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-windows-arm64.exe"
+        }
+      }
+    },
+    "pi": {
+      "tag": "v1.5.0",
+      "targets": {
+        "darwin-arm64": {
+          "format": "tar.gz",
+          "kind": "archive",
+          "sha256": "a9bf0d82d58d2a7d337f4ae4171b5fc9ebffe42509527a831364c4b65adf2cdf",
+          "stripComponents": 1,
+          "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-darwin-arm64.tar.gz"
+        },
+        "linux-amd64": {
+          "format": "tar.gz",
+          "kind": "archive",
+          "sha256": "df870ba0e344cb7b3358d8d8f19397b8b8d225a8669784736ad68a5c2169d53b",
+          "stripComponents": 1,
+          "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-linux-x64.tar.gz"
+        },
+        "linux-arm64": {
+          "format": "tar.gz",
+          "kind": "archive",
+          "sha256": "5d5711b48600756473682e86360b026b11abf7591e5d112eb411d4da2c100d9a",
+          "stripComponents": 1,
+          "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-linux-arm64.tar.gz"
+        },
+        "windows-amd64": {
+          "format": "zip",
+          "kind": "archive",
+          "sha256": "12d58a70e80b16ba9f764950b7a42bdeb07959495c0db68396cf2988c0b71af3",
+          "stripComponents": 0,
+          "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-windows-x64.zip"
+        },
+        "windows-arm64": {
+          "format": "zip",
+          "kind": "archive",
+          "sha256": "9843e4241b6935a85d49b704562cdcb6fdc78a8ec643410f32b3876a87414283",
+          "stripComponents": 0,
+          "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-windows-arm64.zip"
         }
       }
     }

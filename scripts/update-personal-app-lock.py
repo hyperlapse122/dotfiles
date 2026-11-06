@@ -10,6 +10,43 @@ from urllib.request import urlopen
 
 
 CLAUDE_RELEASES = "https://downloads.claude.ai/claude-code-releases"
+GROK_RELEASES = "https://x.ai/cli"
+
+
+def grok_release():
+    with urlopen(f"{GROK_RELEASES}/stable", timeout=60) as response:
+        return response.read().decode("utf-8").strip()
+
+
+def download_sha256(url):
+    # Grok publishes immutable versioned binaries without SHA-256 sidecars.
+    digest = hashlib.sha256()
+    with urlopen(url, timeout=60) as response:
+        for block in iter(lambda: response.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def resolve_grok(application, version, fetch_digest):
+    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError("Grok: expected a published stable version")
+    platforms = {"darwin-arm64": "macos-aarch64", "linux-amd64": "linux-x86_64",
+                 "linux-arm64": "linux-aarch64", "windows-amd64": "windows-x86_64",
+                 "windows-arm64": "windows-aarch64"}
+    targets = {}
+    for target, declaration in application["targets"].items():
+        platform = platforms.get(target)
+        asset = f"grok-{version}-{platform}" + (".exe" if target.startswith("windows-") else "")
+        if (platform is None or declaration.get("platform") != platform
+                or declaration.get("kind") != "file"
+                or expand_version(declaration["asset"], version) != asset):
+            raise ValueError(f"Grok: unexpected target declaration for {target}")
+        url = f"{GROK_RELEASES}/{asset}"
+        digest = fetch_digest(url)
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+            raise ValueError(f"Grok: missing SHA-256 digest for {target}")
+        targets[target] = {"kind": "file", "url": url, "sha256": digest.lower()}
+    return {"tag": version, "targets": targets}
 
 
 def claude_release():
@@ -200,7 +237,7 @@ def resolve_application(application, release):
     for target, declaration in application["targets"].items():
         name = expand_version(declaration["asset"], version)
         kind = declaration["kind"]
-        if kind not in ("file", "archive-file"):
+        if kind not in ("file", "archive-file", "archive"):
             raise ValueError(f"{repository}: unsupported installation kind {kind}")
         pin = {"kind": kind}
         if kind == "archive-file":
@@ -208,6 +245,9 @@ def resolve_application(application, release):
             pin["path"] = expand_version(declaration["path"], version)
             if "stripComponents" in declaration:
                 pin["stripComponents"] = declaration["stripComponents"]
+        if kind == "archive":
+            pin["format"] = declaration["format"]
+            pin["stripComponents"] = declaration.get("stripComponents", 0)
         matches = [asset for asset in release["assets"] if asset["name"] == name]
         if len(matches) != 1:
             raise ValueError(f"{repository} {tag}: expected one asset named {name}")
@@ -224,10 +264,35 @@ def resolve_application(application, release):
     return {"tag": tag, "targets": targets}
 
 
+def resolve_pi(application, release, fetch_checksums):
+    """Keep Pi's complete distribution and verify the official checksum manifest."""
+    resolved = resolve_application(application, release)
+    tag = release['tag_name']
+    manifest_url = release_asset_url('github', application['repository'], tag, 'SHA256SUMS')
+    manifests = [asset for asset in release['assets'] if asset['name'] == 'SHA256SUMS']
+    if (len(manifests) != 1 or manifests[0].get('browser_download_url') != manifest_url
+            or manifests[0].get('state') != 'uploaded'):
+        raise ValueError('Pi: missing official SHA256SUMS manifest')
+    checksums = {}
+    for line in fetch_checksums(manifest_url).splitlines():
+        if not line.strip():
+            continue
+        match = re.fullmatch(r'([0-9a-fA-F]{64}) [ *](\S+)', line)
+        if not match or match[2] in checksums:
+            raise ValueError('Pi: malformed SHA256SUMS manifest')
+        checksums[match[2]] = match[1].lower()
+    for target, declaration in application['targets'].items():
+        name = expand_version(declaration['asset'], tag.removeprefix('v'))
+        if checksums.get(name) != resolved['targets'][target]['sha256']:
+            raise ValueError('Pi: release digest does not match SHA256SUMS')
+    return resolved
+
+
 def update_lock(
     root, fetch_release=github_release, *, fetch_gitlab_release=gitlab_release,
     fetch_checksums=gitlab_checksums, fetch_manifest=antigravity_manifest,
     fetch_claude_release=claude_release, fetch_completion=completion_bytes,
+    fetch_grok_release=grok_release, fetch_digest=download_sha256,
 ):
     data_dir = root / "home" / ".chezmoidata"
     applications = json.loads((data_dir / "personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
@@ -238,6 +303,9 @@ def update_lock(
         source = application.get("source", "github")
         if source == "antigravity":
             resolved[name] = resolve_antigravity(application, fetch_manifest)
+            continue
+        if source == "grok":
+            resolved[name] = resolve_grok(application, fetch_grok_release(), fetch_digest)
             continue
         if source not in ("github", "gitlab", "claude"):
             raise ValueError(f"{name}: unsupported release source {source}")
@@ -252,7 +320,8 @@ def update_lock(
             release = normalize_gitlab_release(application, fetch_gitlab_release(repository), fetch_checksums)
         else:
             release = fetch_release(repository)
-        resolved[name] = resolve_application(application, release)
+        resolved[name] = (resolve_pi(application, release, fetch_checksums)
+                          if name == 'pi' else resolve_application(application, release))
         completion = completions.get(name, {})
         if "source" in completion:
             resolved[name]["completions"] = {"zsh": resolve_completion(

@@ -99,5 +99,46 @@
 {{- $claudeConfig = $claudeConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $claudeCommand -}}
 {{- $claude = $claude | setValueAtPath "driver" "claudeAgent" | setValueAtPath "enabled" true | setValueAtPath "config" $claudeConfig -}}
 {{- $providers = $providers | setValueAtPath "claudeAgent" $claude -}}
+{{- $piApp := get (get . "personalApps" | default dict) "pi" | default dict -}}
+{{- if hasKey (get $piApp "targets" | default dict) (printf "%s-%s" .chezmoi.os .chezmoi.arch) -}}
+{{- $pi := dict -}}
+{{- if hasKey $providers "pi" -}}{{- $pi = get $providers "pi" -}}{{- end -}}
+{{- if not (kindIs "map" $pi) -}}{{- fail "Invalid T3 Code settings.json: pi must be an object" -}}{{- end -}}
+{{- $piConfig := dict -}}
+{{- if hasKey $pi "config" -}}{{- $piConfig = get $pi "config" -}}{{- end -}}
+{{- if not (kindIs "map" $piConfig) -}}{{- fail "Invalid T3 Code settings.json: pi.config must be an object" -}}{{- end -}}
+{{- $piExecutable := "pi" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $piExecutable = "pi.exe" -}}{{- end -}}
+{{- $piCommand := joinPath .chezmoi.destDir ".local" "bin" "pi-native" $piExecutable | replace "\\" "/" -}}
+{{- $piConfig = $piConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $piCommand -}}
+{{- $pi = $pi | setValueAtPath "driver" "pi" | setValueAtPath "enabled" true | setValueAtPath "config" $piConfig -}}
+{{- $providers = $providers | setValueAtPath "pi" $pi -}}
+{{- end -}}
+{{- $grokApp := get (get . "personalApps" | default dict) "grok" | default dict -}}
+{{- if hasKey (get $grokApp "targets" | default dict) (printf "%s-%s" .chezmoi.os .chezmoi.arch) -}}
+{{- $grok := dict -}}
+{{- if hasKey $providers "grok" -}}{{- $grok = get $providers "grok" -}}{{- end -}}
+{{- if not (kindIs "map" $grok) -}}{{- fail "Invalid T3 Code settings.json: grok must be an object" -}}{{- end -}}
+{{- $grokConfig := dict -}}
+{{- if hasKey $grok "config" -}}{{- $grokConfig = get $grok "config" -}}{{- end -}}
+{{- if not (kindIs "map" $grokConfig) -}}{{- fail "Invalid T3 Code settings.json: grok.config must be an object" -}}{{- end -}}
+{{- $grokExecutable := "grok" -}}
+{{- if eq .chezmoi.os "windows" -}}{{- $grokExecutable = "grok.exe" -}}{{- end -}}
+{{- $grokCommand := joinPath .chezmoi.destDir ".local" "bin" $grokExecutable | replace "\\" "/" -}}
+{{- $grokConfig = $grokConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $grokCommand -}}
+{{- $environment := list -}}
+{{- if hasKey $grok "environment" -}}
+{{- if not (kindIs "slice" $grok.environment) -}}{{- fail "Invalid T3 Code settings.json: grok.environment must be an array" -}}{{- end -}}
+{{- range $variable := $grok.environment -}}
+{{- if not (and (kindIs "map" $variable) (kindIs "string" (get $variable "name"))) -}}
+{{- fail "Invalid T3 Code settings.json: grok.environment entries require string names" -}}
+{{- end -}}
+{{- if ne $variable.name "GROK_DISABLE_AUTOUPDATER" -}}{{- $environment = append $environment $variable -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $environment = append $environment (dict "name" "GROK_DISABLE_AUTOUPDATER" "value" "1" "sensitive" false) -}}
+{{- $grok = $grok | setValueAtPath "driver" "grok" | setValueAtPath "enabled" true | setValueAtPath "config" $grokConfig | setValueAtPath "environment" $environment -}}
+{{- $providers = $providers | setValueAtPath "grok" $grok -}}
+{{- end -}}
 {{- $settings = $settings | setValueAtPath "providerInstances" $providers -}}
 {{- includeTemplate "t3-code-preferences" (dict "settings" $settings "desired" .t3CodePreferences.server "file" "settings.json") -}}

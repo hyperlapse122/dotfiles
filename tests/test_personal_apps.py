@@ -21,6 +21,20 @@ if os.name == "nt":
     import winreg
 
 
+class NativeAppVersionTest(unittest.TestCase):
+    def test_version_banner_accepts_v_prefix_and_rejects_partial_versions(self):
+        from smoke_personal_apps import check_version
+
+        for banner in ('docker-credential-wincred (github.com/docker/docker-credential-helpers) v0.9.12',
+                       'docker-credential-secretservice v0.9.12', 'helper 0.9.12'):
+            with self.subTest(banner=banner):
+                check_version(banner, 'v0.9.12')
+        for banner in ('helper v0.9.120', 'helper 10.9.12', 'prefixv0.9.12',
+                       'helper v0.9.12suffix', 'helper 0.9.12.1'):
+            with self.subTest(banner=banner), self.assertRaises(RuntimeError):
+                check_version(banner, 'v0.9.12')
+
+
 class PersonalAppsTest(unittest.TestCase):
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
@@ -551,7 +565,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.write_apps()
         self.write_locks()
         targets = {target for app in self.apps["personalApps"].values() for target in app["targets"]}
-        for target in sorted(targets | {"freebsd-amd64", "linux-386"}):
+        for target in sorted(targets | {"darwin-amd64", "freebsd-amd64", "linux-386"}):
             with self.subTest(target=target):
                 os_name, arch = target.split("-")
                 result = self.render_external(os_name, arch)

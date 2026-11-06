@@ -75,3 +75,40 @@ If TLS connections continue to fail despite OS trust:
 2. Some tools (such as Go) switch from OS CryptoAPI to file-based lookups when `SSL_CERT_FILE` or `SSL_CERT_DIR` is set.
 3. In `omp`, explicit request-level CA configurations may conflict if `NODE_EXTRA_CA_CERTS` points to a missing or invalid bundle.
 4. **Never resolve certificate issues by disabling TLS verification (`NODE_TLS_REJECT_UNAUTHORIZED=0`).** Ensure the issuing enterprise root CA is installed in your operating system's root store.
+
+## Opt-in CA-file Fallback
+
+On macOS and Linux, explicit enrollment can add CA certificates for Requests-based clients and file-based curl. This path uses an application PEM bundle; it does not install certificates into OS trust stores or change Java, Node, Bun, Go, or Windows native trust behavior.
+
+The public-root input is the unchanged `certifi` 2026.10.23 Mozilla bundle, installed from its checksummed official wheel. Managed CA certificates are appended after DER deduplication. The original certifi installation is never edited. The generated bundle is private at `~/.local/share/dotfiles/ca/bundle.pem`.
+
+Enroll a PEM file containing only CA certificates using the initialized repository GPG configuration:
+
+```sh
+mise exec -- python scripts/ca-files.py import --id corporate --pem-file /outside/repo/corporate-ca.pem
+mise run apply
+```
+
+The importer validates complete certificates and their CA status, encrypts them to the repository recipient, then decrypt-verifies the result before publication. Only `home/.secrets/ca-certificates.json.asc` belongs in Git. Certificate names and PEM content remain inside that ciphertext, and the external input is retained. Never import a private key or rely on this operation to verify that an organization is authorized to issue certificates for your traffic.
+
+Select the bundle for one child process:
+
+```sh
+dotfiles-ca requests -- python your_requests_client.py
+dotfiles-ca curl -- https://your-private-endpoint.example
+```
+
+Requests mode sets `REQUESTS_CA_BUNDLE` only for the child. This is an explicit choice to replace an inherited Requests bundle for that invocation; a client's explicit `verify=` setting still controls its own request. Curl mode supplies `--cacert` and removes inherited file/directory CA overrides only from that child. Explicit later curl flags can override the wrapper's selection. Neither mode exports `SSL_CERT_FILE`, `SSL_CERT_DIR`, `CURL_CA_BUNDLE`, or Requests settings into the parent shell, and neither adds an insecure option. Normal native-trust commands outside the wrapper keep their existing behavior. When a bundle is missing, selection fails instead of bypassing verification.
+
+Re-enroll an existing ID to rotate its CA. Remove an ID, then apply, to rebuild from current public roots and the remaining enrolled certificates:
+
+```sh
+mise exec -- python scripts/ca-files.py remove --id corporate
+mise run apply
+```
+
+An empty enrollment produces the public-only bundle. Unrelated files in the managed directory survive. Invalid certificates, missing public input, or decryption failure leave the last valid bundle unchanged. Without an enrollment file, bootstrap and apply do not decrypt CA data or provision fallback files. The public-root pin is repository-owned; update its version, official wheel URL, and SHA-256 together in `home/.chezmoidata/ca-files.json` and verify the selected `certifi/cacert.pem` member.
+
+Enrolled Unix hosts prepare that public-root member through the shared external-asset cache before CA reconciliation. The preparation owns only `public-roots.pem`; the generated private bundle and unrelated CA files are preserved. Unchanged applies reuse preparation, and missing public-root files are repaired from the cache. See [external asset preparation](../maintenance/chezmoi-source.md#external-asset-preparation) for full verification and refresh commands.
+
+Synthetic local TLS tests verify that the combined bundle accepts an enrolled CA while the public-only bundle rejects it. They also check public-root preservation, rejection of leaf/private-key/partial PEM input, repeated apply, certificate removal, and child-only environment selection. These tests do not install an organization's CA or prove that a real enterprise endpoint has the expected chain.

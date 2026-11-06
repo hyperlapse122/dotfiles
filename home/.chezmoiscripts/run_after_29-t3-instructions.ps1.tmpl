@@ -1,0 +1,6 @@
+{{ if eq .chezmoi.os "windows" -}}
+{{ "\ufeff" -}}
+$ErrorActionPreference = 'Stop'
+& mise --cd '{{ .chezmoi.workingTree | replace "'" "''" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "t3-instructions.py" | replace "'" "''" }}' --destination '{{ .chezmoi.destDir | replace "'" "''" }}'
+exit $LASTEXITCODE
+{{ end -}}

@@ -20,7 +20,7 @@ jq = "latest"
 powershell = "latest"
 python = "latest"
 uv = "latest"
-usage = { version = "latest", os = ["linux", "macos"] }
+usage = "7.3.0"
 
 [hooks]
 postinstall = { task = "bootstrap" }
@@ -46,16 +46,21 @@ run = 'chezmoi --source "{{config_root}}" apply'
 [tasks."pinentry:build"]
 description = "Build the native keyring pinentry without applying personal settings"
 tools = { "core:rust" = { version = "1.99.1", profile = "default" } }
-run = 'cargo build --manifest-path "{{config_root}}/pinentry/Cargo.toml" --target-dir "{{config_root}}/pinentry/target" --release --locked'
+run = 'cargo build --manifest-path "{{config_root}}/Cargo.toml" --package dotfiles-pinentry --target-dir "{{config_root}}/target" --release --locked'
 
 [tasks."pinentry:test"]
 description = "Check the keyring pinentry with isolated protocol tests"
 tools = { "core:rust" = { version = "1.99.1", profile = "default" } }
 run = [
-  'cargo fmt --manifest-path "{{config_root}}/pinentry/Cargo.toml" -- --check',
-  'cargo clippy --manifest-path "{{config_root}}/pinentry/Cargo.toml" --all-targets -- -D warnings',
-  'cargo test --manifest-path "{{config_root}}/pinentry/Cargo.toml" --locked',
+  'cargo fmt --manifest-path "{{config_root}}/Cargo.toml" --all -- --check',
+  'cargo clippy --manifest-path "{{config_root}}/Cargo.toml" --workspace --all-targets --locked -- -D warnings',
+  'cargo test --manifest-path "{{config_root}}/Cargo.toml" --workspace --locked',
 ]
+
+[tasks."container-auth:smoke"]
+description = "Verify native registry helpers on a disposable hosted account"
+tools = { podman = "6.1.4" }
+run = "python tests/smoke_container_auth.py --require-podman"
 
 [tasks.windows-build]
 description = "Provision the Windows x64 native build environment"

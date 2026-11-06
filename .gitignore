@@ -1,4 +1,4 @@
 .context/compound-engineering/
 __pycache__/
-/pinentry/target/
+/target/
 .compound-engineering/config.local.yaml

@@ -1,6 +1,6 @@
 # Harness Plugins and AI Agent Configuration
 
-This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, oh-my-pi (omp), and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
+This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, pi, Grok, oh-my-pi (omp), and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
 
 ## Compound Engineering Plugin for omp
 
@@ -59,6 +59,20 @@ The pinned CLI returns exit code 1 when the plugin is already enabled. The hook 
 The private settings merge owns the CE directory marketplace entry and activation flag, alongside the [Claude preferences](personal-applications.md#claude-code-version-and-preferences). Only CE's marketplace has `autoUpdate=false`; unrelated marketplace policies and plugins are preserved. Malformed settings or incompatible owned containers fail instead of replacing the file.
 
 Close Claude Code and T3 Code before apply, then start a fresh session. Complete `claude auth login` manually and invoke a skill such as `/compound-engineering:ce-plan`. Authentication and billing remain with Claude; dotfiles stores no plaintext secrets.
+
+## Compound Engineering Plugin for Pi
+
+Explicit apply runs the pinned native `pi install` command against the shared local CE extraction. Pi reads that directory's native `package.json`, `.pi/extensions/compound-engineering.ts`, and `skills/`; no second skill tree is copied. Reapplication repairs disabled CE resource filters while preserving unrelated native packages, extensions, settings, and credentials. Pi rewrites local package sources relative to `~/.pi/agent`; reconciliation recognizes both those paths and absolute declarations.
+
+The thin `~/.pi/agent/AGENTS.md` adapter selects `harness=pi` from the shared instruction template. Start a fresh session after apply and invoke `/skill:ce-plan` or another native CE skill. The native smoke checks skill discovery exactly once and captures explicit CE expansion together with common/Pi instructions. The loopback endpoint rejects execution, so this evidence does not claim authenticated model completion.
+
+The mandatory `~/.pi/agent/dotfiles-policy.ts` extension replaces foreign provider models with empty catalogs and replaces Synthetic's catalog with the committed model lock. It repeats enforcement after preserved extensions' startup hooks and native reload. Foreign explicit selections and unavailable saved selections fail; new sessions use the first sorted locked ID when their previous default was removed. The `enabledModels` setting also narrows the picker, but the effective registry provides enforcement.
+
+The managed shell launchers check policy and catalog presence before model discovery and add the native policy path explicitly. Exact `--version` and `--help` requests report public metadata without requiring private configuration. T3's native Pi driver uses normal RPC initialization, which rejects policy-load errors before requests. Running the distribution binary with `--no-extensions`, bypassing managed files, or loading hostile arbitrary code is outside this configuration contract.
+
+## Compound Engineering Plugin for Grok
+
+Explicit apply registers the shared pinned extraction as a native local marketplace and installs/enables its `.grok-plugin/plugin.json` package. Grok discovers the package's `skills/` directory directly. Reapplication repairs owned registration, enablement, and Windows local-copy caches while preserving unrelated native plugins. The thin `~/.grok/AGENTS.md` adapter selects `harness=grok`; compatibility scanning of Claude/Cursor instructions and skills is disabled to prevent foreign content and duplicate CE discovery. See [Grok Build](grok.md) for authentication and native-copy repair details.
 
 ## Compound Engineering Plugin for Antigravity
 
@@ -161,3 +175,5 @@ mise exec -- python tests/smoke_claude.py
 ```
 
 This verifies native CE discovery, stale-source and enabled-state repair, preservation, common and Claude-specific instructions, the Korean response preference, and explicit expansion of the pinned skill body. It characterizes an automatic-memory fixture while enabled, then confirms the managed disabled state excludes it without deleting the file. The localhost endpoint deliberately rejects model requests with HTTP 400 using inert credentials. This proves request expansion, not authenticated model completion. Windows x64 has been exercised locally; other eligible targets are checked by the native CI lane, and a missing required result remains unverified.
+
+For Grok's isolated native integration, run `python tests/smoke_grok.py` with the repository tools on PATH. This verifies the native local marketplace, pinned installation and enablement, shared instructions, foreign-content exclusion, unrelated-plugin preservation, and explicit expansion of the complete CE skill body. Add `--t3` for the fresh native ACP driver check. See [Grok Build](grok.md) for native-copy repair and authentication boundaries.

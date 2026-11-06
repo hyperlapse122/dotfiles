@@ -8,7 +8,7 @@ $target = '{{ $gpg.pinentry | replace "'" "''" }}'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & mise --cd $source run pinentry:build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$binary = Join-Path $source 'pinentry/target/release/dotfiles-pinentry.exe'
+$binary = Join-Path $source 'target/release/dotfiles-pinentry.exe'
 # Windows PowerShell can inherit PS7-only module paths from mise.
 # Hash without module auto-loading.
 function Get-PinentryHash([string]$Path) {

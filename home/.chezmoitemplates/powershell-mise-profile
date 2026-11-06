@@ -38,3 +38,9 @@ if ($IsMacOS) {
     }
 }
 (&mise activate pwsh) | Out-String | Invoke-Expression
+& {
+    $completionFile = Join-Path $HOME '.local/share/dotfiles/completions/dotfiles-pinentry.ps1'
+    if ($PSVersionTable.PSVersion.Major -ge 7 -and (Test-Path -LiteralPath $completionFile -PathType Leaf)) {
+        . $completionFile
+    }
+}

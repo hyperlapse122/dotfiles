@@ -1,0 +1,5 @@
+{{ if and (has .chezmoi.os (list "darwin" "linux")) (stat (joinPath .chezmoi.sourceDir ".secrets" "ca-certificates.json.asc")) -}}
+#!/bin/sh
+set -eu
+exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "ca-files.py" | replace "'" "'\"'\"'" }}' apply --source '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' --config '{{ .chezmoi.configFile | replace "'" "'\"'\"'" }}' --destination '{{ .chezmoi.destDir | replace "'" "'\"'\"'" }}'
+{{ end -}}

@@ -159,6 +159,7 @@ To onboard a new harness (e.g. `example-harness`):
    {{- template "agent-instructions" (dict "harness" "example" "chezmoi" .) -}}
    ```
 4. Register, install, and enable the repository-pinned Compound Engineering plugin through the harness's native user-scope mechanism. Codex uses native `plugin marketplace add` and `plugin add`; Claude uses `plugin marketplace add`, `plugin install`, and `plugin enable` with `--scope user`; omp uses its own marketplace/install/enable commands. Antigravity uses its supported native plugin commands. Reuse the existing release/commit pin, preserve unrelated plugins and settings, and install only during explicit apply.
+5. For T3 integration, select `context = t3` from the same shared template with the explicit native `harness` identifier. The resulting private addition file must omit the common baseline. Pass it through the supported native launch option or SDK equivalent while retaining native user/repository discovery and the normal account home. `scripts/t3-instructions.py` reconciles the current Codex, Claude, and pi launch options during explicit application; its private state preserves original options for reapplication and removal. Document unsupported adapters instead of creating a shadow profile or substituting untrusted application context.
 
 Claude's adapter is `home/private_dot_claude/private_empty_CLAUDE.md.tmpl`, targeting `~/.claude/CLAUDE.md` with `harness = claude`. Its private settings merge and after hooks preserve unrelated state. The POSIX hook parses native JSON through the invoking chezmoi executable with a hook-free config; it does not assume Python or jq can be resolved outside the worktree.
 
@@ -171,5 +172,6 @@ Verify in a disposable sandbox:
 - Native CE skill discovery and invocation succeed from the pinned archive. Antigravity's authenticated invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52); its installation, enablement, validation, and discovery remain required.
 - Reapplication restores owned settings and preserves unrelated plugins, credentials, and application state.
 - T3 Code loads the native provider and launches its absolute managed executable without relying on the managed binary directory being on `PATH`.
+- Direct, concurrent T3, and later direct launches load the same baseline exactly once; only T3 receives its addition. Verify existing instruction settings, quoting, environment precedence, resume, compaction, and mode transitions through native request capture. Keep source inspection, controlled model transports, and authenticated model completion evidence distinct.
 
 Antigravity uses `home/private_dot_gemini/private_empty_GEMINI.md.tmpl` with the explicit `antigravity` identifier. Its apply-always native plugin hooks are `run_after_20-antigravity-plugins.*`; they do not edit native registry files directly.

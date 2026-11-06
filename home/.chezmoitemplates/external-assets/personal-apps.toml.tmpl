@@ -18,10 +18,12 @@
 {{- end -}}
 {{- $suffix := "" -}}
 {{- if eq $.chezmoi.os "windows" -}}{{- $suffix = ".exe" -}}{{- end }}
-[{{ printf "%s/%s%s" (get $app "installDirectory" | default ".local/bin") $app.command $suffix | quote }}]
+{{- $destination := printf "%s/%s%s" (get $app "installDirectory" | default ".local/bin") $app.command $suffix -}}
+{{- if eq $pin.kind "archive" -}}{{- $destination = $app.installDirectory -}}{{- end }}
+[{{ $destination | quote }}]
 type = {{ $pin.kind | quote }}
 url = {{ printf "%s#%s=%s" $pin.url $algorithm $checksum | quote }}
-executable = true
+{{ if ne $pin.kind "archive" }}executable = true{{ end }}
 refreshPeriod = "0"
 checksum.{{ $algorithm }} = {{ $checksum | quote }}
 {{ if eq $pin.kind "archive-file" -}}
@@ -30,6 +32,11 @@ path = {{ $pin.path | quote }}
 {{ if hasKey $pin "stripComponents" -}}
 stripComponents = {{ $pin.stripComponents }}
 {{ end -}}
+{{ end -}}
+{{ if eq $pin.kind "archive" -}}
+format = {{ $pin.format | quote }}
+stripComponents = {{ $pin.stripComponents }}
+exact = true
 {{ end -}}
 {{ end -}}
 {{- end -}}

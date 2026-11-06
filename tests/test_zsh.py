@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -85,6 +86,30 @@ class ZshStartupTest(unittest.TestCase):
         self.assertIn("|ca=1|prezto=no|mise=no|", result.stdout)
         nested = self.env | {"ZDOTDIR": str(target)}
         self.assertIn("|ca=1|", self.shell(env=nested).stdout)
+
+    def test_xdg_startup_registers_cli_completion_without_loading_legacy_zshrc(self):
+        insecure = self.root / "insecure completions"
+        insecure.mkdir()
+        insecure.chmod(0o777)
+        (insecure / "_untrusted_fixture").write_text(
+            '#compdef untrusted-fixture\n', encoding="utf-8")
+        (self.home / ".zshenv").write_text(
+            f'fpath=({shlex.quote(str(insecure))} $fpath)\n', encoding="utf-8")
+        completions = self.home / ".local/share/dotfiles/completions"
+        completions.mkdir(parents=True)
+        (completions / "dotfiles-pinentry.zsh").write_text(
+            'typeset -gi PINENTRY_COMPLETION_LOADS=$(( ${PINENTRY_COMPLETION_LOADS:-0} + 1 ))\n'
+            'compdef _dotfiles_pinentry dotfiles-pinentry\n', encoding="utf-8")
+        (self.home / ".zshrc").write_text('return 81\n', encoding="utf-8")
+        self.apply()
+        self.apply()
+        script = ('[[ ${_comps[dotfiles-pinentry]} == _dotfiles_pinentry '
+                  '&& $PINENTRY_COMPLETION_LOADS == 1 '
+                  '&& ${_comps[untrusted-fixture]-absent} == absent ]]')
+        for flags in (("-i",), ("-l", "-i")):
+            result = subprocess.run(["zsh", "-d", *flags, "-c", script], cwd=self.root,
+                                    env=self.env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_custom_xdg_and_legacy_bridge_preserve_unmanaged_contents(self):
         self.env["XDG_CONFIG_HOME"] = str(self.root / "outside config ' directory")

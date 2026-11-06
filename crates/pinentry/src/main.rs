@@ -25,9 +25,13 @@ fn fallback() -> Result<PathBuf, &'static str> {
 
 fn run(arguments: &[OsString]) -> Result<(), String> {
     match arguments {
+        [argument] if argument == "--usage-spec" => {
+            print!("{}", include_str!("../dotfiles-pinentry.usage.kdl"));
+            Ok(())
+        }
         [argument] if argument == "--help" || argument == "-h" => {
             println!(
-                "dotfiles-pinentry\n\nUsage: dotfiles-pinentry [pinentry options]\n       dotfiles-pinentry forget <card-id>\n\nWith no command, serve GnuPG through the configured platform pinentry.\nForget deletes only the OpenPGP user PIN for a YubiKey serial.\nUse decimal digits or a quoted grouped serial such as \"12 345 678\"."
+                "dotfiles-pinentry\n\nUsage: dotfiles-pinentry [pinentry options]\n       dotfiles-pinentry forget <card-id>\n       dotfiles-pinentry --usage-spec\n\nWith no command, serve GnuPG through the configured platform pinentry.\nForget deletes only the OpenPGP user PIN for a YubiKey serial.\nUse decimal digits or a quoted grouped serial such as \"12 345 678\"."
             );
             Ok(())
         }

@@ -1,5 +1,9 @@
 README.md
 .secrets
+{{ if stat (joinPath .chezmoi.sourceDir ".secrets" "ssh-replace-default") }}
+.ssh/id_ed25519
+.ssh/id_ed25519.pub
+{{ end }}
 {{ if eq .chezmoi.os "windows" }}
 .gnupg
 .profile
@@ -7,12 +11,16 @@ README.md
 .bash_profile
 .bash_login
 .zshenv
+.zshrc
 {{ else }}
 AppData
 {{ end }}
 {{ $zsh := get . "zsh" | default dict }}
 {{ if not (has (printf "%s-%s" .chezmoi.os .chezmoi.arch) (get $zsh "targets" | default list)) }}
 .local/share/dotfiles/zsh
+{{ end }}
+{{ if not (and (has .chezmoi.os (list "darwin" "linux")) (stat (joinPath .chezmoi.sourceDir ".secrets" "ca-certificates.json.asc"))) }}
+.local/bin/dotfiles-ca
 {{ end }}
 {{ if ne .chezmoi.os "linux" }}
 {{ if and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") }}
@@ -32,6 +40,21 @@ Library
 {{ end }}
 {{ $target := printf "%s-%s" .chezmoi.os .chezmoi.arch }}
 {{ $apps := get . "personalApps" | default dict }}
+{{ $grok := get $apps "grok" | default dict }}
+{{ if not (hasKey (get $grok "targets" | default dict) $target) }}
+.grok
+{{ end }}
+{{ $pi := get $apps "pi" | default dict }}
+{{ $piSupported := hasKey (get $pi "targets" | default dict) $target }}
+{{ if not $piSupported }}
+.pi
+{{ end }}
+{{ if or (not $piSupported) (ne .chezmoi.os "windows") }}
+.local/bin/pi.ps1
+{{ end }}
+{{ if or (not $piSupported) (eq .chezmoi.os "windows") }}
+.local/bin/pi
+{{ end }}
 {{ $omp := get $apps "omp" | default dict }}
 {{ $targets := get $omp "targets" | default dict }}
 {{ if not (hasKey $targets $target) }}

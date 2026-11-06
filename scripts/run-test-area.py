@@ -17,14 +17,17 @@ REPO = Path(__file__).resolve().parents[1]
 AREAS = {
     "applications": (
         "test_personal_apps", "test_personal_app_lock", "test_harness_plugins", "test_external_assets",
-        "test_harness_plugin_lock", "test_t3_code_desktop", "test_t3_code_settings",
-        "test_codex", "test_claude",
+        "test_harness_plugin_lock", "test_t3_code_desktop", "test_t3_code_settings", "test_t3_instructions",
+        "test_codex", "test_claude", "test_pi", "test_grok",
         "test_font_lock", "test_fonts", "test_fonts_posix", "test_fonts_windows",
         "test_native_ca_shell", "test_native_ca_windows", "test_powershell_profile",
         "test_zsh_lock", "test_zsh",
+        "test_cli_completions", "test_synthetic_model_lock",
     ),
     "security": (
         "test_pinentry_apply",
+        "test_ssh_identities",
+        "test_ca_files", "test_container_auth",
         "test_secrets", "test_git_gpg", "test_script_lifecycle", "test_github_auth",
         "test_github_auth_import", "test_gitlab_auth", "test_gitlab_auth_import",
     ),

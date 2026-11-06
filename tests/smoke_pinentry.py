@@ -184,7 +184,7 @@ def main():
     # This gate precedes native-store initialization, compilation, and fixture writes.
     require_disposable_runner()
     suffix = ".exe" if os.name == "nt" else ""
-    release = REPO / "pinentry/target/release" / ("dotfiles-pinentry" + suffix)
+    release = REPO / "target/release" / ("dotfiles-pinentry" + suffix)
     rustc = shutil.which("rustc")
     check(release.is_file() and rustc is not None, "Release binary or Rust compiler is missing")
     with tempfile.TemporaryDirectory(prefix="native-pinentry-", dir=os.environ["RUNNER_TEMP"]) as scratch:

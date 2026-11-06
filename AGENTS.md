@@ -22,6 +22,8 @@ Write repository documentation in English.
 - Every repository-managed AI harness MUST wire its native user-scope instruction file to `home/.chezmoitemplates/agent-instructions`. Adding a harness is incomplete without this connection.
 - Keep common instructions in that shared template and select harness-specific content with its explicit `harness` identifier at render time. Never copy the common body into an adapter or expose another harness's branch in generated instructions.
 - When onboarding a harness, verify common-content inclusion, foreign-branch exclusion, and native user-scope discovery in a disposable home. Follow the source layout and editing procedure in [docs/maintenance/chezmoi-source.md](docs/maintenance/chezmoi-source.md#shared-user-scope-harness-onboarding).
+- T3-launched instances must receive only the separately selected T3 additions through a supported native per-launch option or SDK equivalent. Keep the normal instruction baseline, homes, credentials, plugins, and configuration shared; never add a shadow home or duplicate the baseline to select T3 context.
+- Verify native CLI/T3 baseline equality, addition isolation, existing instruction-setting composition, option precedence, and native CE in disposable homes on eligible platforms. Document an exact harness/adapter limitation when no additive mechanism exists; untrusted application context does not replace that mechanism.
 
 ## Harness plugin integration
 

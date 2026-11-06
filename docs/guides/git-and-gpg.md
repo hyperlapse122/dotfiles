@@ -104,8 +104,24 @@ This is automation for trusted programs running as the OS user. Prompt matching 
 
 ## Development Verification
 
-`mise run pinentry:test` runs formatting, lint and protocol/CLI tests with synthetic secrets and fake frontends; it never opens the owner's keyring. The Git/GPG test suite also checks the ordinary cache policy using an isolated software key and agent, without a card.
+The root Cargo workspace owns `crates/pinentry/` and its shared `Cargo.lock`; build output lives under the repository-root `target/`. `mise run pinentry:build` selects the `dotfiles-pinentry` package for installation.
+
+`mise run pinentry:test` runs workspace-wide formatting, lint and protocol/CLI tests with synthetic secrets and fake frontends; it never opens the owner's keyring. The Git/GPG test suite also checks the ordinary cache policy using an isolated software key and agent, without a card.
 Successful native-store smoke tests are restricted to disposable GitHub-hosted runners. They use an isolated Linux session bus, a disposable macOS Keychain, or the hosted Windows account. Changing `HOME` alone does not isolate a real OS keyring.
+
+## CLI Completions
+
+`dotfiles-pinentry --usage-spec` prints the canonical public Usage specification without loading frontend configuration, accessing a credential store, or starting the Assuan server. Help and version requests have the same independence. Native pinentry startup arguments continue to pass through unchanged.
+
+Explicit `mise run apply` installs the pinentry binary and then generates Bash, Zsh, and PowerShell completion scripts with the mise-pinned Usage 7.3.0 tool. Each script reads a snapshot of the installed binary's specification; Tab completion invokes Usage only, never pinentry or a card/keyring lookup. Reapply refreshes the specification and scripts when the CLI changes and leaves identical files untouched.
+
+Managed interactive Bash and Zsh profiles load the generated scripts. PowerShell 7's managed profile loads its `.ps1` script after mise activation; Windows PowerShell 5.1 leaves native completion unloaded. Bash requires version 4.2 or newer and bash-completion 2.11 or newer; apply installs a checksummed bash-completion 2.18.0 library, compatibility definitions, and license on Unix. macOS system Bash 3.2 is unsupported; use the managed Zsh integration. Windows supports PowerShell 7 completion; its Bash profiles are not managed. Fish and Nushell startup integration is not managed by this repository.
+
+The library, compatibility definitions, and license are selected together from one archive through shared external-asset preparation. Unchanged applies reuse that prepared tree, and missing installed files are restored from the cache. `mise run assets:verify` checks cached content fully and reconciles the installed files.
+
+The public completion surface is help, version, specification output, and `forget <card-id>`. Completion does not enumerate stored credentials, connected cards, or PINs. New repository CLIs should export a side-effect-free `--usage-spec` and add an entry to the same explicit-apply generator, keeping their canonical spec beside the crate and testing both exported commands and fresh-shell registration.
+
+The Usage 7.3.0 PowerShell generator includes the partial token twice; the source-bound generator corrects that pinned behavior before publication. Paths are quoted for each shell, and PowerShell scripts use the native `.ps1` extension.
 
 ## Verifying Commit Signing
 

@@ -23,6 +23,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         (self.source / ".chezmoitemplates").mkdir()
         for path in (self.repo / "home/.chezmoitemplates").glob("t3-code-*"):
             shutil.copy2(path, self.source / ".chezmoitemplates" / path.name)
+        shutil.copy2(self.repo / 'home/.chezmoitemplates/agent-instructions', self.source / '.chezmoitemplates')
         self.preferences = json.loads((self.repo / "home/.chezmoidata/t3-code.json").read_text(
             encoding="utf-8"))["t3CodePreferences"]
         self.write_preferences(self.preferences["server"], self.preferences["client"])
@@ -63,6 +64,21 @@ class T3CodeSettingsTest(unittest.TestCase):
 
     def read_settings(self):
         return json.loads(self.settings.read_text(encoding="utf-8"))
+
+    def test_t3_instruction_adapters_select_only_the_addition(self):
+        shared = self.source / '.chezmoitemplates/agent-instructions'
+        shared.write_text(shared.read_text().replace(
+            '{{/* T3-only additions go here. Native user-scope files supply the baseline. */ -}}',
+            'T3_COMMON\n{{ if eq .harness "codex" }}T3_CODEX{{ else if eq .harness "claude" }}T3_CLAUDE{{ else if eq .harness "pi" }}T3_PI{{ end }}')
+            .replace('{{/* Common instructions for every managed harness go here. */ -}}', 'BASELINE_COMMON'))
+        self.apply()
+        for harness in ('codex', 'claude', 'pi'):
+            path = self.home / '.t3/userdata/instructions' / (harness + '.md')
+            self.assertEqual(path.read_text().split(), ['T3_COMMON', 'T3_' + harness.upper()])
+            self.assertNotIn('BASELINE_COMMON', path.read_text())
+        baseline = self.chez('execute-template', '{{ template "agent-instructions" (dict "harness" "codex") }}').stdout
+        self.assertIn('BASELINE_COMMON', baseline)
+        self.assertNotIn('T3_COMMON', baseline)
 
     def expected_provider(self, os_name=None, name="omp"):
         if os_name is None:
@@ -122,6 +138,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                    + ' "arch" ' + json.dumps(arch)
                    + ' "osRelease" (dict "id" ' + json.dumps(distro) + ')'
                    + ' "destDir" ' + json.dumps(self.home.as_posix())
+                   + ' "sourceDir" ' + json.dumps(self.source.as_posix())
                    + ' "stdin" ' + json.dumps(existing) + '))')
         wrapper = ('{{ template "fixture" ' + context + ' }}'
                    + '{{ define "fixture" }}' + body + '{{ end }}')

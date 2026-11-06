@@ -1,0 +1,9 @@
+{
+  "cliCompletionAssets": {
+    "bashCompletion": {
+      "version": "2.18.0",
+      "url": "https://github.com/scop/bash-completion/archive/refs/tags/2.18.0.tar.gz",
+      "sha256": "5c0c8061d993fb94082aa0f89c5a9cf06fc5dbaee26ccad1c801d0efb75479bb"
+    }
+  }
+}

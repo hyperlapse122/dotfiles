@@ -46,6 +46,8 @@ class NativeCaShellTest(unittest.TestCase):
         for name in ("zsh-settings", "zsh-redirect"):
             shutil.copy2(self.repo / "home/.chezmoitemplates" / name,
                          self.source / ".chezmoitemplates" / name)
+        shutil.copy2(self.repo / "home/.chezmoitemplates/cli-completions-shell",
+                     self.source / ".chezmoitemplates/cli-completions-shell")
         for name in STARTUP_FILES:
             source_name = "modify_dot_" + name[1:]
             shutil.copy2(self.repo / "home" / source_name, self.source / source_name)

@@ -26,6 +26,31 @@ from smoke_personal_apps import executable, run, temporary_destination
 REPO = Path(__file__).resolve().parents[1]
 
 
+def desktop_command(real_home, environment):
+    if os.name == "nt":
+        candidates = [Path(environment["LOCALAPPDATA"]) / "Programs/t3code/T3 Code (Beta).exe"]
+        candidates.extend(Path(environment[key]) / "t3code/T3 Code (Beta).exe"
+                          for key in ("PROGRAMW6432", "PROGRAMFILES", "PROGRAMFILES(X86)")
+                          if environment.get(key))
+        for app in candidates:
+            if app.is_file():
+                return [str(app), str(app.parent / "resources/server.asar/apps/server/dist/bin.mjs")]
+    elif os.uname().sysname == "Darwin":
+        bundles = [real_home / "Applications/T3 Code (Beta).app", Path("/Applications/T3 Code (Beta).app")]
+        cask = Path("/opt/homebrew/Caskroom/t3-code")
+        if cask.is_dir():
+            bundles.extend(cask.glob("*/T3 Code (Beta).app"))
+        for bundle in bundles:
+            app = bundle / "Contents/MacOS/T3 Code (Beta)"
+            if app.is_file():
+                return [str(app), str(bundle / "Contents/Resources/app.asar/apps/server/dist/bin.mjs")]
+    else:
+        app = Path("/opt/T3 Code (Beta)/t3code")
+        if app.is_file():
+            return [str(app), str(app.parent / "resources/app.asar/apps/server/dist/bin.mjs")]
+    raise RuntimeError("Install the T3 Code desktop application before running this smoke")
+
+
 def provision_desktop(target, root, env):
     if not (env.get("GITHUB_ACTIONS") == "true" and env.get("RUNNER_ENVIRONMENT") == "github-hosted"):
         raise RuntimeError("Desktop provisioning is restricted to disposable GitHub-hosted runners")

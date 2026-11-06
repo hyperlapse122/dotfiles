@@ -74,13 +74,6 @@
       "command": "ghq",
       "repository": "x-motemen/ghq",
       "targets": {
-        "darwin-amd64": {
-          "asset": "ghq_darwin_amd64.zip",
-          "kind": "archive-file",
-          "format": "zip",
-          "path": "ghq",
-          "stripComponents": 1
-        },
         "darwin-arm64": {
           "asset": "ghq_darwin_arm64.zip",
           "kind": "archive-file",
@@ -191,6 +184,81 @@
         }
       }
     },
+    "docker-credential-wincred": {
+      "command": "docker-credential-wincred",
+      "repository": "docker/docker-credential-helpers",
+      "targets": {
+        "windows-amd64": {
+          "asset": "docker-credential-wincred-v{version}.windows-amd64.exe",
+          "kind": "file"
+        },
+        "windows-arm64": {
+          "asset": "docker-credential-wincred-v{version}.windows-arm64.exe",
+          "kind": "file"
+        }
+      }
+    },
+    "docker-credential-osxkeychain": {
+      "command": "docker-credential-osxkeychain",
+      "repository": "docker/docker-credential-helpers",
+      "targets": {
+        "darwin-arm64": {
+          "asset": "docker-credential-osxkeychain-v{version}.darwin-arm64",
+          "kind": "file"
+        }
+      }
+    },
+    "docker-credential-secretservice": {
+      "command": "docker-credential-secretservice",
+      "repository": "docker/docker-credential-helpers",
+      "targets": {
+        "linux-amd64": {
+          "asset": "docker-credential-secretservice-v{version}.linux-amd64",
+          "kind": "file"
+        },
+        "linux-arm64": {
+          "asset": "docker-credential-secretservice-v{version}.linux-arm64",
+          "kind": "file"
+        }
+      }
+    },
+    "pi": {
+      "command": "pi",
+      "repository": "earendil-works/pi",
+      "installDirectory": ".local/bin/pi-native",
+      "targets": {
+        "darwin-arm64": {
+          "asset": "pi-darwin-arm64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "linux-amd64": {
+          "asset": "pi-linux-x64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "linux-arm64": {
+          "asset": "pi-linux-arm64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "windows-amd64": {
+          "asset": "pi-windows-x64.zip",
+          "kind": "archive",
+          "format": "zip",
+          "stripComponents": 0
+        },
+        "windows-arm64": {
+          "asset": "pi-windows-arm64.zip",
+          "kind": "archive",
+          "format": "zip",
+          "stripComponents": 0
+        }
+      }
+    },
     "omp": {
       "command": "omp",
       "repository": "can1357/oh-my-pi",
@@ -200,6 +268,37 @@
         "linux-arm64": {"asset": "omp-linux-arm64", "kind": "file"},
         "windows-amd64": {"asset": "omp-windows-x64.exe", "kind": "file"},
         "windows-arm64": {"asset": "omp-windows-arm64.exe", "kind": "file"}
+      }
+    },
+    "grok": {
+      "command": "grok",
+      "source": "grok",
+      "targets": {
+        "darwin-arm64": {
+          "platform": "macos-aarch64",
+          "asset": "grok-{version}-macos-aarch64",
+          "kind": "file"
+        },
+        "linux-amd64": {
+          "platform": "linux-x86_64",
+          "asset": "grok-{version}-linux-x86_64",
+          "kind": "file"
+        },
+        "linux-arm64": {
+          "platform": "linux-aarch64",
+          "asset": "grok-{version}-linux-aarch64",
+          "kind": "file"
+        },
+        "windows-amd64": {
+          "platform": "windows-x86_64",
+          "asset": "grok-{version}-windows-x86_64.exe",
+          "kind": "file"
+        },
+        "windows-arm64": {
+          "platform": "windows-aarch64",
+          "asset": "grok-{version}-windows-aarch64.exe",
+          "kind": "file"
+        }
       }
     }
   }

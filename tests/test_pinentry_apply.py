@@ -101,7 +101,7 @@ class PinentryApplyTest(unittest.TestCase):
             "if os.environ.get('PINENTRY_FIXTURE_FAIL') == action:\n"
             "    raise SystemExit('Disposable ' + action + ' failed')\n"
             "if action == 'build':\n"
-            "    target = Path('pinentry/target/release')\n"
+            "    target = Path('target/release')\n"
             "    target.mkdir(parents=True, exist_ok=True)\n"
             "    (target / ('dotfiles-pinentry.exe' if os.name == 'nt' else 'dotfiles-pinentry')).write_bytes(b'compiled fixture\\n')\n"
             "elif action == 'after':\n"

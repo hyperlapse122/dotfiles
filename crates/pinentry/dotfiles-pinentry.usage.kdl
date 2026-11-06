@@ -1,0 +1,10 @@
+min_usage_version "7.3"
+name "dotfiles-pinentry"
+bin "dotfiles-pinentry"
+about "GnuPG pinentry with native keyring-backed OpenPGP user PIN storage"
+flag "-h --help" help="Print help without starting pinentry"
+flag "--version" help="Print version without starting pinentry"
+flag "--usage-spec" help="Print the public Usage specification"
+cmd "forget" help="Delete the OpenPGP user PIN for a YubiKey serial" {
+    arg "<card-id>" help="YubiKey serial; no credential or card discovery is performed"
+}

@@ -31,15 +31,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: mise exec -- python scripts/update-personal-app-lock.py
+      - name: Refresh Synthetic model pins
+        env:
+          SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
+        run: mise exec -- python scripts/update-synthetic-model-lock.py
       - name: Stage the immutable publication input
         run: |
           mkdir -p "$RUNNER_TEMP/locked-apps"
           cp -- home/.chezmoidata/personal-app-lock.json "$RUNNER_TEMP/locked-apps/personal-app-lock.json"
+          cp -- home/.chezmoidata/synthetic-model-lock.json "$RUNNER_TEMP/locked-apps/synthetic-model-lock.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: lock
         with:
           name: personal-app-lock
-          path: ${{ runner.temp }}/locked-apps/personal-app-lock.json
+          path: |
+            ${{ runner.temp }}/locked-apps/personal-app-lock.json
+            ${{ runner.temp }}/locked-apps/synthetic-model-lock.json
           if-no-files-found: error
 
   validate:
@@ -70,13 +77,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          lock=home/.chezmoidata/personal-app-lock.json
-          cp -- "$RUNNER_TEMP/locked-apps/personal-app-lock.json" "$lock"
-          if git diff --quiet -- "$lock"; then
-            echo "Personal application pins are unchanged; no commit needed."
+          apps=home/.chezmoidata/personal-app-lock.json
+          models=home/.chezmoidata/synthetic-model-lock.json
+          test -f "$RUNNER_TEMP/locked-apps/personal-app-lock.json"
+          test -f "$RUNNER_TEMP/locked-apps/synthetic-model-lock.json"
+          cp -- "$RUNNER_TEMP/locked-apps/personal-app-lock.json" "$apps"
+          cp -- "$RUNNER_TEMP/locked-apps/synthetic-model-lock.json" "$models"
+          if git diff --quiet -- "$apps" "$models"; then
+            echo "Application and Synthetic model pins are unchanged; no commit needed."
             exit 0
           fi
-          git add -- "$lock"
+          git add -- "$apps" "$models"
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m 'chore: refresh personal application pins' -- "$lock"
+            commit -m 'chore: refresh application and Synthetic model pins' -- "$apps" "$models"
           git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"

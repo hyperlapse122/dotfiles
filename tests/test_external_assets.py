@@ -7,11 +7,12 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import tempfile
 import threading
+import tomllib
 import unittest
 import zipfile
 
+from smoke_personal_apps import temporary_destination
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -23,9 +24,9 @@ def native(path):
 
 class ExternalAssetsTest(unittest.TestCase):
     def setUp(self):
-        scratch = tempfile.TemporaryDirectory(prefix="external assets ' ")
-        self.addCleanup(scratch.cleanup)
-        self.root = Path(scratch.name).resolve()
+        scratch = temporary_destination()
+        self.root = Path(scratch.__enter__()).resolve()
+        self.addCleanup(scratch.__exit__, None, None, None)
         self.home = self.root / "user home"
         self.home.mkdir()
         self.cache = self.root / "cache"
@@ -61,6 +62,8 @@ class ExternalAssetsTest(unittest.TestCase):
                         XDG_CONFIG_HOME=str(self.root / "config"),
                         XDG_CACHE_HOME=str(self.root / "xdg-cache"),
                         APPDATA=str(self.root / "config"),
+                        LOCALAPPDATA=str(self.root / "local"),
+                        PSModuleAnalysisCachePath=str(self.root / "module-analysis-cache"),
                         XDG_STATE_HOME=str(self.root / "state"))
         self.set_file()
 
@@ -171,6 +174,75 @@ class ExternalAssetsTest(unittest.TestCase):
         self.assertEqual(target.read_bytes(), b"configuration")
         self.assertEqual(self.requests, ["/bundle.zip"])
 
+    def test_completion_and_enrolled_ca_assets_share_preparation_and_repair(self):
+        bash_files = {
+            "bash_completion": b"completion library\n",
+            "startup-core/000_bash_completion_compat.bash": b"compatibility definitions\n",
+            "COPYING": b"license\n",
+        }
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as stream:
+            for name, content in bash_files.items():
+                stream.writestr("bash-completion-2.18.0/" + name, content)
+            stream.writestr("bash-completion-2.18.0/not-selected", b"unneeded")
+        self.payloads["/completion.zip"] = archive.getvalue()
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as stream:
+            stream.writestr("certifi/cacert.pem", b"public root fixture\n")
+        self.payloads["/roots.whl"] = archive.getvalue()
+        source = self.root / "enrollment source"
+        (source / ".secrets").mkdir(parents=True)
+        # Membership selects the asset; rendering must never decrypt this file.
+        (source / ".secrets/ca-certificates.json.asc").write_text("inert enrollment marker")
+        bash_pin = {"url": self.url + "/completion.zip",
+                    "sha256": hashlib.sha256(self.payloads["/completion.zip"]).hexdigest()}
+        ca_pin = {"url": self.url + "/roots.whl",
+                  "sha256": hashlib.sha256(self.payloads["/roots.whl"]).hexdigest()}
+        context = ('{{ $ctx := . | setValueAtPath "chezmoi.os" "linux" '
+                   '| setValueAtPath "chezmoi.arch" "amd64" '
+                   '| setValueAtPath "chezmoi.sourceDir" ' + json.dumps(str(source))
+                   + ' | setValueAtPath "cliCompletionAssets.bashCompletion" (fromJson '
+                   + json.dumps(json.dumps(bash_pin)) + ') '
+                   + '| setValueAtPath "caFilesPublicRoots" (fromJson '
+                   + json.dumps(json.dumps(ca_pin)) + ') }}'
+                   + '{{ includeTemplate "external-assets-manifest" $ctx }}')
+        config = self.root / "render.toml"
+        config.write_text("")
+        rendered = subprocess.run([self.chezmoi, "--source", str(REPO), "--config", str(config),
+                                   "execute-template", context], env=self.env,
+                                  capture_output=True, text=True, timeout=30)
+        self.assertEqual(rendered.returncode, 0, rendered.stderr)
+        assets = tomllib.loads(rendered.stdout)
+        bash_root = ".local/share/dotfiles/bash-completion"
+        ca_root = ".local/share/dotfiles/ca/public-roots.pem"
+        self.assertIn(bash_root, assets.keys())
+        self.assertIn(ca_root, assets.keys())
+        selected = {path: assets[path] for path in (bash_root, ca_root)}
+        # The zip is the transport fixture; the selected members and ownership
+        # come from the real shared declaration, including its single Bash root.
+        selected[bash_root]["format"] = "zip"
+        lines = []
+        for path, declaration in selected.items():
+            lines.append("[" + json.dumps(path) + "]")
+            for key, value in declaration.items():
+                if isinstance(value, dict):
+                    lines.extend(f"{key}.{field} = {json.dumps(item)}" for field, item in value.items())
+                else:
+                    lines.append(f"{key} = {json.dumps(value)}")
+        self.manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.roots.write_text(f"{bash_root}\tdirectory\ttrue\n{ca_root}\tfile\tfalse\n")
+        self.prepare()
+        for name, content in bash_files.items():
+            self.assertEqual((self.home / bash_root / name).read_bytes(), content)
+        self.assertFalse((self.home / bash_root / "not-selected").exists())
+        self.assertEqual((self.home / ca_root).read_bytes(), b"public root fixture\n")
+        (self.home / bash_root / "bash_completion").unlink()
+        (self.home / ca_root).unlink()
+        self.prepare()
+        self.assertEqual((self.home / bash_root / "bash_completion").read_bytes(), bash_files["bash_completion"])
+        self.assertEqual((self.home / ca_root).read_bytes(), b"public root fixture\n")
+        self.assertCountEqual(self.requests, ["/completion.zip", "/roots.whl"])
+
     def test_changed_pin_at_same_url_prepares_new_content(self):
         self.prepare()
         self.payloads["/tool"] = b"replacement\n"
@@ -178,6 +250,22 @@ class ExternalAssetsTest(unittest.TestCase):
         self.prepare()
         self.assertEqual((self.home / ".local/bin/tool").read_bytes(), b"replacement\n")
         self.assertEqual(self.requests, ["/tool", "/tool"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows native preparation long-path boundary")
+    def test_long_archive_members_prepare_reuse_and_repair(self):
+        member = "skills/ce-work/references/" + "/".join(["nested-resource"] * 5) + "/details.txt"
+        self.set_archive({member: b"long native resource\n"})
+        self.prepare()
+        staged = self.stage() / ".local/resources" / member
+        self.assertGreater(len(str(staged)), 260)
+        self.assertEqual(Path("\\\\?\\" + str(staged)).read_bytes(), b"long native resource\n")
+        target = self.home / ".local/resources" / member
+        self.assertEqual(target.read_bytes(), b"long native resource\n")
+        target.unlink()
+        self.prepare()
+        self.assertEqual(target.read_bytes(), b"long native resource\n")
+        self.assertIn("Reusing prepared external assets", self.prepare().stdout)
+        self.assertEqual(self.requests, ["/bundle.zip"])
 
     def test_bad_checksum_does_not_replace_installed_asset(self):
         self.prepare()

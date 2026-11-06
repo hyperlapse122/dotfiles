@@ -1,0 +1,6 @@
+{{ if and (eq .chezmoi.os "windows") (stat (joinPath .chezmoi.sourceDir ".secrets" "ssh-identities.json.asc")) -}}
+{{ "\ufeff" -}}
+$ErrorActionPreference = 'Stop'
+& mise --cd '{{ .chezmoi.workingTree | replace "'" "''" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "ssh-identities.py" | replace "'" "''" }}' apply --source '{{ .chezmoi.workingTree | replace "'" "''" }}' --config '{{ .chezmoi.configFile | replace "'" "''" }}' --destination '{{ .chezmoi.destDir | replace "'" "''" }}'
+exit $LASTEXITCODE
+{{ end -}}

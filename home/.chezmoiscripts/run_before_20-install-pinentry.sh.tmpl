@@ -5,7 +5,7 @@ set -eu
 source='{{ .chezmoi.workingTree | replace "'" "'\\''" }}'
 target='{{ $gpg.pinentry | replace "'" "'\\''" }}'
 mise --cd "$source" run pinentry:build
-binary="$source/pinentry/target/release/dotfiles-pinentry"
+binary="$source/target/release/dotfiles-pinentry"
 mkdir -p "$(dirname "$target")"
 if ! cmp -s "$binary" "$target"; then
     install -m 755 "$binary" "$target"

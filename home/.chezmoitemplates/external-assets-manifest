@@ -1,3 +1,3 @@
-{{- range $name := list "personal-apps" "codex-package" "fonts" "harness-plugins" "t3-code" "zsh" -}}
+{{- range $name := list "personal-apps" "codex-package" "fonts" "harness-plugins" "t3-code" "zsh" "cli-completions" "ca-files" -}}
 {{ includeTemplate (printf "external-assets/%s.toml.tmpl" $name) $ }}
 {{ end -}}
