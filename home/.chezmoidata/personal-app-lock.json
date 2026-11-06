@@ -1,38 +1,38 @@
 {
   "personalAppLocks": {
     "antigravity": {
-      "tag": "1.5.1",
+      "tag": "1.5.2",
       "targets": {
         "darwin-arm64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "antigravity",
-          "sha512": "078399b392c3bfce70bc5d9fb1a447a4b0a2a26bd40c36148f4944028b8f21e358890d5b9bedcde69296677b1da2c026b4e283ae918823429c13b91ddcb913ce",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.1-4523430503120896/darwin-arm/cli_mac_arm64.tar.gz"
+          "sha512": "89c9080f26d99bb94c2aed1bf67e0612dc7803a77fc64963e6c95377de6dd0d6269931f413a21ab2ba885c3f4ee8343727520c5ff94740345ac06b4b73085d67",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/darwin-arm/cli_mac_arm64.tar.gz"
         },
         "linux-amd64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "antigravity",
-          "sha512": "f70406654ebd966f211424338259e2d38d099c48734e901dc06975063e5a0137d55b6eb9366b75983c6908bbc20ae92a2617656bb191d8ed6fe429d654bca4f5",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.1-4523430503120896/linux-x64/cli_linux_x64.tar.gz"
+          "sha512": "aa876c0813572efaf85ed47983cc937414705d40490cbdb54f6e255656a4f8744ae38e457823e924fa8270b348124e0521d3cda3fec6824bb2d14b98a7a05baa",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/linux-x64/cli_linux_x64.tar.gz"
         },
         "linux-arm64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "antigravity",
-          "sha512": "fdf8a463e5bf4ecd8a01b68a53e006e7ae0256e7ae351a39e39c66e04e275c6d08b4b93f423cc572d234871f7bf852c4523e017156a4ef9ea7dea1aaffb0a2c6",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.1-4523430503120896/linux-arm/cli_linux_arm64.tar.gz"
+          "sha512": "9a141da7b218c640a962188b388905f065cc307425bbeff6e74c07f95266f93526f6d0dee9bad876b79431403f5b30ef4e6514f5f44fbf06dca2a077f54f6175",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/linux-arm/cli_linux_arm64.tar.gz"
         },
         "windows-amd64": {
           "kind": "file",
-          "sha512": "218d2751189e25a275122519a2afc6a3d0af5ff68306cebc68a5da3127bca69a497760988bfd40a884a619d4fa58ccafcb2fba1289dc1fc56e3d7d7b565f4cec",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.1-4523430503120896/windows-x64/cli_windows_x64.exe"
+          "sha512": "d0b00af82e3fd882f83efbe97905222c80afc4283d74fbfbe362b4e5bb6cab6fa0d3188d3851b2b31d45fbd6312feb54f22321e146f0972ed9583fb38efb7276",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/windows-x64/cli_windows_x64.exe"
         },
         "windows-arm64": {
           "kind": "file",
-          "sha512": "f23080f15cfc91e798458d560378afe49e7f8a27df57d8cdca08b5cb0367a27c97bdf4aaec2ee0425ab71c87eb46fa6bdbeed99b2ae30fb19daebe08873a97ad",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.1-4523430503120896/windows-arm/cli_windows_arm64.exe"
+          "sha512": "652b2fd876d248c41eaf65414e32f719eaab8ac35b26deef213fe240c04a1aec3d16f9e513fd47fb4ad8bd12b32c45c35518dce7fdb1fc1af996cb550be69323",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/windows-arm/cli_windows_arm64.exe"
         }
       }
     },
@@ -67,42 +67,42 @@
       }
     },
     "codex": {
-      "tag": "rust-v0.166.0",
+      "tag": "rust-v0.167.0",
       "targets": {
         "darwin-arm64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "bin/codex",
-          "sha256": "55a440cb579f970abe7c79ab181e54b0ea4c419be99f333bbd868eebac9c21f0",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-package-aarch64-apple-darwin.tar.gz"
+          "sha256": "af45ed45d940d7998809622c1c0296d3098ed7d7fad695284422c228bd454517",
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.167.0/codex-package-aarch64-apple-darwin.tar.gz"
         },
         "linux-amd64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "bin/codex",
-          "sha256": "1d44b28bc4ac9937d7d3532264baa68a507ce364956a0d4ebb856f331cdee254",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-package-x86_64-unknown-linux-musl.tar.gz"
+          "sha256": "3bbf75e83de6b58aed28f2cf6e33ad423ec31fd4700a1457b94be557ea5a7c6e",
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.167.0/codex-package-x86_64-unknown-linux-musl.tar.gz"
         },
         "linux-arm64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "bin/codex",
-          "sha256": "7821b77dda2e6283fb1f63f3165177a271da8833e857cf673c6ca1c9db3bfcc6",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-package-aarch64-unknown-linux-musl.tar.gz"
+          "sha256": "0de261ecf1e7f3028a7952f03fca2093f749277d38590b78bb32f8567756bbb7",
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.167.0/codex-package-aarch64-unknown-linux-musl.tar.gz"
         },
         "windows-amd64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "bin/codex.exe",
-          "sha256": "d559bb88e74d471265857b93b7f19bc250dae527673b9191b33534478093f6bc",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-package-x86_64-pc-windows-msvc.tar.gz"
+          "sha256": "60567ca940bbaf6c10501805d9909d1328179231e2d47a0deec7a1368bb21641",
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.167.0/codex-package-x86_64-pc-windows-msvc.tar.gz"
         },
         "windows-arm64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "bin/codex.exe",
-          "sha256": "9383152a72f97bb5dd148493c8214e4fed38d805aa2c3297cb3739f7f130becf",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-package-aarch64-pc-windows-msvc.tar.gz"
+          "sha256": "ba082050263022f460e065c061b2ee79682fb7f164fee8749e4420eb675a0932",
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.167.0/codex-package-aarch64-pc-windows-msvc.tar.gz"
         }
       }
     },
@@ -308,32 +308,32 @@
       }
     },
     "omp": {
-      "tag": "v18.16.0",
+      "tag": "v18.17.0",
       "targets": {
         "darwin-arm64": {
           "kind": "file",
-          "sha256": "d4a10d97488d6054d2b18198bd24f461079952c7e0fb75ba66336ca0df0cb99e",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-darwin-arm64"
+          "sha256": "51f2836f267a8ba6c12cfb50f80e75f0301ccfb1bd53535fc6f9df03199da364",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-darwin-arm64"
         },
         "linux-amd64": {
           "kind": "file",
-          "sha256": "6498ed785bab00d2926e0387e0ec02362d6d45f1c3d0d1b57c1618b7f95c9264",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-linux-x64"
+          "sha256": "a4ce6001ab1012ca835f4184d675437531bd1ac477a7ba8424ed0b5476e9e4cb",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-linux-x64"
         },
         "linux-arm64": {
           "kind": "file",
-          "sha256": "c2be1ea85ce17c4270854b57efff2a7ea1d5a03c7557fd08721f2b9bb32698de",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-linux-arm64"
+          "sha256": "a9423fd7a69d869bf514931226b21d4ff55474225f574e2911fec457fc470e68",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-linux-arm64"
         },
         "windows-amd64": {
           "kind": "file",
-          "sha256": "c249a9ed0a57c748fb1247d8ee9e2d0fe1b13229266ce74d8810a76a591e21fc",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-windows-x64.exe"
+          "sha256": "7cc6960d173dcb021843b3b073c2443f6544672ca98803f96f2682bebcc5acef",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-windows-x64.exe"
         },
         "windows-arm64": {
           "kind": "file",
-          "sha256": "3de50c05b84851089c962aaff4d39d1622bfa079334a5a295bf70028cfdcbc6d",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.16.0/omp-windows-arm64.exe"
+          "sha256": "bd600af2ea9098c93fbf8541104817edb25cb3eb32267a4ac803d599bc25d521",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-windows-arm64.exe"
         }
       }
     },
