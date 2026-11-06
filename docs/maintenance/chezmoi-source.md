@@ -30,6 +30,7 @@ Chezmoi automatically merges all files in `.chezmoidata/` into a single global d
 - `gpg.yaml`: GPG encryption recipient key and OS-specific executable paths.
 - `windows.yaml`: Windows host application WinGet package list.
 - `personal-apps.json` / `personal-app-lock.json`: Personal CLI declarations and locked SHA-256 release pins.
+- `fonts.json` / `font-lock.json`: Desktop font selections and generated release/archive-member SHA-256 pins, exposed as `fonts` and `fontLocks`.
 - `harness-plugins.json` / `harness-plugin-lock.json`: AI harness plugin declarations and release pins.
 
 > **Note:** Filenames in `.chezmoidata/` do not create namespaces in chezmoi. Ensure top-level dictionary keys remain unique across files.
@@ -58,11 +59,17 @@ run_before_10-check-gpg-home.ps1.tmpl
 run_onchange_after_10-personal-app-path.sh.tmpl
 run_onchange_after_20-harness-plugins.sh.tmpl
 run_after_25-windows-build-environment.ps1.tmpl
+run_after_30-install-fonts.sh.tmpl
 run_after_40-github-auth.py.tmpl
 run_after_45-gitlab-auth.py.tmpl
 ```
 
 Keep scripts idempotent and fail-safe: an error in any script must return a non-zero exit code to stop subsequent execution and preserve the environment.
+
+The OS-conditional `run_after_30-install-fonts.*` hooks reconcile fonts on every explicit apply so missing files and Windows registrations can be repaired without changing the lock.
+`home/.chezmoiexternals/fonts.toml.tmpl` stages only selected archive members; `font-index.tsv` supplies their member hashes to the native installers.
+Native installation owns prefixed filenames and an installation manifest, never the entire user font directory.
+See [User Fonts](../guides/fonts.md) for paths and recovery.
 
 ### Dependency Signatures
 

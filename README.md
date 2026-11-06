@@ -48,7 +48,7 @@ This installs locked development tools and runs read-only source verification vi
 
 ### 4. Apply Personal Settings
 
-To apply managed configuration and personal applications to your actual user home directory:
+To apply managed configuration, personal applications, and user fonts to your actual user home directory:
 
 ```sh
 mise run apply
@@ -86,6 +86,7 @@ Comprehensive guides are organized in [docs/](docs/README.md):
 - **[Git and GPG Configuration](docs/guides/git-and-gpg.md):** Identity, automatic commit signing, pinentry selection, GPG home safety guards, and `ghq` repository cloning.
 - **[Secrets and API Authentication](docs/guides/secrets-and-authentication.md):** Encrypted token source, GitHub and GitLab PAT imports, native OS keyrings, and Git HTTPS credentials.
 - **[Personal CLI Applications](docs/guides/personal-applications.md):** Installation of Claude Code, Codex, `omp`, `gh`, `ghq`, and `glab` under `~/.local/bin`, shell PATH activation, pin updates, and PowerShell mise activation.
+- **[User Fonts](docs/guides/fonts.md):** Pinned JetBrains Mono, Pretendard, D2Coding, and Nerd Font installation, user-scope discovery, updates, and Windows loaded-file recovery.
 - **[T3 Code Desktop and Harness Integration](docs/guides/t3-code.md):** Desktop editor installation, command-line launchers, native Claude Code and Codex integration, and oh-my-pi Agent Control Protocol configuration.
 - **[Harness Plugins](docs/guides/harness-plugins.md):** Compound Engineering for Claude Code, Codex, and omp, pinned local marketplaces, update controls, and shared agent instructions.
 - **[Native System CA Trust](docs/guides/system-ca.md):** Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, and platform activation.

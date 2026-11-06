@@ -1,0 +1,966 @@
+{
+  "fontLocks": {
+    "d2coding": {
+      "files": [
+        {
+          "name": "D2Coding-Ver1.4.0-20261003.ttf",
+          "path": "D2Coding/D2Coding-Ver1.4.0-20261003.ttf",
+          "sha256": "d5f2b6bf5b1826cfbf3734c70582f0cd42ea2e1d6c2636ae681b612bc9c5682f"
+        },
+        {
+          "name": "D2CodingBold-Ver1.4.0-20261003.ttf",
+          "path": "D2Coding/D2CodingBold-Ver1.4.0-20261003.ttf",
+          "sha256": "14a0cfa4d96fbd976bc4b1a6ef81e51df353a1689d5273ebcd908c857a4f2752"
+        },
+        {
+          "name": "D2Coding-Ver1.4.0-20261003-ligature.ttf",
+          "path": "D2CodingLigature/D2Coding-Ver1.4.0-20261003-ligature.ttf",
+          "sha256": "a37e25b0a75fdb5a359d8a0702d064732f07c8166cab9cccf7a5d42599de9547"
+        },
+        {
+          "name": "D2CodingBold-Ver1.4.0-20261003-ligature.ttf",
+          "path": "D2CodingLigature/D2CodingBold-Ver1.4.0-20261003-ligature.ttf",
+          "sha256": "4e70c8b140a89b56b879f1b69276ecb9f970b11a1d56f0990485b8296cb7aba9"
+        }
+      ],
+      "format": "zip",
+      "repository": "naver/d2-coding-font",
+      "sha256": "17e2da5e2879006eb725b87943f7988736ef8b6c9f8b84bc8e3bdbcb8dd46744",
+      "tag": "VER1.4.0",
+      "url": "https://github.com/naver/d2-coding-font/releases/download/VER1.4.0/D2Coding-Ver1.4.0-20261003.zip"
+    },
+    "d2coding-nerd": {
+      "files": [
+        {
+          "name": "D2KodingLigatureNerdFont-Bold.ttf",
+          "path": "D2KodingLigatureNerdFont-Bold.ttf",
+          "sha256": "ceece622ccbadb8df7be47d280f84dfade6a1069993e4753af8a9455f4e97072"
+        },
+        {
+          "name": "D2KodingLigatureNerdFont-Regular.ttf",
+          "path": "D2KodingLigatureNerdFont-Regular.ttf",
+          "sha256": "d48bfd5f0ff167f28544c722bdf769117b56f923e1cbdd89430bbf3a742c35d3"
+        },
+        {
+          "name": "D2KodingLigatureNerdFontMono-Bold.ttf",
+          "path": "D2KodingLigatureNerdFontMono-Bold.ttf",
+          "sha256": "a6635d892bed813bda81427c1859dd766c502894baf82113dae6454deb8735d5"
+        },
+        {
+          "name": "D2KodingLigatureNerdFontMono-Regular.ttf",
+          "path": "D2KodingLigatureNerdFontMono-Regular.ttf",
+          "sha256": "7cb0d9ff115ce2de495cfc42768781268652d99548be26f43a9c14f9e566c485"
+        },
+        {
+          "name": "D2KodingLigatureNerdFontPropo-Bold.ttf",
+          "path": "D2KodingLigatureNerdFontPropo-Bold.ttf",
+          "sha256": "c5fbc0553cf38a851ebb7d0415b56a17d68398bb85732be763cceeb9aa0d3a22"
+        },
+        {
+          "name": "D2KodingLigatureNerdFontPropo-Regular.ttf",
+          "path": "D2KodingLigatureNerdFontPropo-Regular.ttf",
+          "sha256": "9eccfdc747249262e256c229c638df96fbccf9634c530e1bf82241773d0cfa95"
+        }
+      ],
+      "format": "tar.xz",
+      "repository": "ryanoasis/nerd-fonts",
+      "sha256": "acdc66f5df6e64a7e1d41f89930b163da5345cf45f7dd08e41a98da255002c95",
+      "tag": "v3.5.1",
+      "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/D2Coding.tar.xz"
+    },
+    "jetbrains-mono": {
+      "files": [
+        {
+          "name": "JetBrainsMono-Bold.ttf",
+          "path": "fonts/ttf/JetBrainsMono-Bold.ttf",
+          "sha256": "5590990c82e097397517f275f430af4546e1c45cff408bde4255dad142479dcb"
+        },
+        {
+          "name": "JetBrainsMono-BoldItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-BoldItalic.ttf",
+          "sha256": "4039d5ce0ed225bf9c8b2c8c6436290ae2f356b7e90d70fa666227238324aa3b"
+        },
+        {
+          "name": "JetBrainsMono-ExtraBold.ttf",
+          "path": "fonts/ttf/JetBrainsMono-ExtraBold.ttf",
+          "sha256": "8e501d3a6a883e83ea4f7852804fb0894cebdd67751bb1006b37a476cef34cd6"
+        },
+        {
+          "name": "JetBrainsMono-ExtraBoldItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-ExtraBoldItalic.ttf",
+          "sha256": "ec3a860fa87d0a3b1451277d1c2f3072f5ba19d2367aec54f7169d5710872610"
+        },
+        {
+          "name": "JetBrainsMono-ExtraLight.ttf",
+          "path": "fonts/ttf/JetBrainsMono-ExtraLight.ttf",
+          "sha256": "8391e7ec13e8ba758c1838f56bccd973228ccf4dc74aa5bffe9525b9147b12f8"
+        },
+        {
+          "name": "JetBrainsMono-ExtraLightItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-ExtraLightItalic.ttf",
+          "sha256": "3c7fee57538f18b61cc5f0784a8133fe5ee95feb41f633e8f6f7ef609e6207ec"
+        },
+        {
+          "name": "JetBrainsMono-Italic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-Italic.ttf",
+          "sha256": "9d0a1f7a708e6af183f1193b7e81d40da294f5c67682c085d8401c60aac8ded4"
+        },
+        {
+          "name": "JetBrainsMono-Light.ttf",
+          "path": "fonts/ttf/JetBrainsMono-Light.ttf",
+          "sha256": "60c18d7dd58d81b3bbd12e8ce32744a8771bfe2b5280574082b0eaed46c60d24"
+        },
+        {
+          "name": "JetBrainsMono-LightItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-LightItalic.ttf",
+          "sha256": "18ffadb91fa711b45feae027ddfd561e7f97ace805ec4baf9905046cf450befb"
+        },
+        {
+          "name": "JetBrainsMono-Medium.ttf",
+          "path": "fonts/ttf/JetBrainsMono-Medium.ttf",
+          "sha256": "31c92d01a8a08528b718a43addf0ad3df0af2ca4b7b3290a452f70f358e14d3d"
+        },
+        {
+          "name": "JetBrainsMono-MediumItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-MediumItalic.ttf",
+          "sha256": "4477fda6bd472ef96b11bc1083370f7fc3ff427bdc807e682ced5819e3dee9df"
+        },
+        {
+          "name": "JetBrainsMono-Regular.ttf",
+          "path": "fonts/ttf/JetBrainsMono-Regular.ttf",
+          "sha256": "a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f"
+        },
+        {
+          "name": "JetBrainsMono-SemiBold.ttf",
+          "path": "fonts/ttf/JetBrainsMono-SemiBold.ttf",
+          "sha256": "1b3bfa1ed5665a4ce3f9feb68d2d4e40e70bf8b4b7d9a3edd418f321b4e166a0"
+        },
+        {
+          "name": "JetBrainsMono-SemiBoldItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-SemiBoldItalic.ttf",
+          "sha256": "3b3000507a7285872395ddbb4e53a28f07910dbf494fb0d5e1421dd60b5d8436"
+        },
+        {
+          "name": "JetBrainsMono-Thin.ttf",
+          "path": "fonts/ttf/JetBrainsMono-Thin.ttf",
+          "sha256": "0756e8e8cf1d65fa7519776764479b3973efb15af4f419d5d7274dc27ae1b702"
+        },
+        {
+          "name": "JetBrainsMono-ThinItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMono-ThinItalic.ttf",
+          "sha256": "ebcdd13119b6beb7457e2f76b31094cb8cf1108e567030f8402b24dde018e76a"
+        },
+        {
+          "name": "JetBrainsMonoNL-Bold.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-Bold.ttf",
+          "sha256": "0198e841824025f8876e5c297f0b9b497ee8d6eb9969710a3328e1303f996ec3"
+        },
+        {
+          "name": "JetBrainsMonoNL-BoldItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-BoldItalic.ttf",
+          "sha256": "6c2716f2e85101f4109a8c16916061eb38176b3b10342834858d6221ec2fda1b"
+        },
+        {
+          "name": "JetBrainsMonoNL-ExtraBold.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraBold.ttf",
+          "sha256": "673f0209e5428e5f73a159df85806f8a5bf7f83316bb9554427a3eb877ee0cb7"
+        },
+        {
+          "name": "JetBrainsMonoNL-ExtraBoldItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraBoldItalic.ttf",
+          "sha256": "0f386a0bd99bb2d41079fe438725b471b49a48e355b8d57399b7a6e8e1c63da6"
+        },
+        {
+          "name": "JetBrainsMonoNL-ExtraLight.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraLight.ttf",
+          "sha256": "4ffddcd8bbebbdd8c066bd66ea32aa7995fdb7bc626777b1a8948074c85a2e9f"
+        },
+        {
+          "name": "JetBrainsMonoNL-ExtraLightItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-ExtraLightItalic.ttf",
+          "sha256": "7d5c8b4d42d7a4c268398c066f71b606f7f071864e73740c99a58838c55efde5"
+        },
+        {
+          "name": "JetBrainsMonoNL-Italic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-Italic.ttf",
+          "sha256": "c7392a134293e1af1d36fbf04940dd844f632afbf97f8325d1591d3af5096cb8"
+        },
+        {
+          "name": "JetBrainsMonoNL-Light.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-Light.ttf",
+          "sha256": "8bf1b1733d0a32c4ada2451deb1bd36e6945be3bf2bf2ba80c2be7c95e57f230"
+        },
+        {
+          "name": "JetBrainsMonoNL-LightItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-LightItalic.ttf",
+          "sha256": "edbf41bed6eea37ae5d6ccd4353158d5bef140f1d078408ea20e4e599622b895"
+        },
+        {
+          "name": "JetBrainsMonoNL-Medium.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-Medium.ttf",
+          "sha256": "44099e1efefba55637e0abbbf8dd3f526e59523345888a257bb01d39df4af74c"
+        },
+        {
+          "name": "JetBrainsMonoNL-MediumItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-MediumItalic.ttf",
+          "sha256": "2a5c56075d7bec1d54fa9761d5eeef7d4267e134d86962011425503b27e61ddd"
+        },
+        {
+          "name": "JetBrainsMonoNL-Regular.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-Regular.ttf",
+          "sha256": "fb3b2575d7b0657359707993288f12a7360344d39387bb26050e276d61f6bd2a"
+        },
+        {
+          "name": "JetBrainsMonoNL-SemiBold.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-SemiBold.ttf",
+          "sha256": "2c5dc6725fdbb0dccf65adceb38fdcd95e5fc8a5b74d5c150e38a5faa02a8945"
+        },
+        {
+          "name": "JetBrainsMonoNL-SemiBoldItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-SemiBoldItalic.ttf",
+          "sha256": "f813544badbdab235b1f2f9933bb978be0a87cbde0133aaa05b80a84a7d94c22"
+        },
+        {
+          "name": "JetBrainsMonoNL-Thin.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-Thin.ttf",
+          "sha256": "1acb532f18726155022a1e8b717bf7bde3eb30e9e064ccc6d17b3d91e95204b0"
+        },
+        {
+          "name": "JetBrainsMonoNL-ThinItalic.ttf",
+          "path": "fonts/ttf/JetBrainsMonoNL-ThinItalic.ttf",
+          "sha256": "58812240c633523eb930ac6ce86f392f4e2b5ad920549278d1758d70af972ad7"
+        }
+      ],
+      "format": "zip",
+      "repository": "JetBrains/JetBrainsMono",
+      "sha256": "6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf",
+      "tag": "v2.304",
+      "url": "https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip"
+    },
+    "jetbrains-mono-nerd": {
+      "files": [
+        {
+          "name": "JetBrainsMonoNLNerdFont-Bold.ttf",
+          "path": "JetBrainsMonoNLNerdFont-Bold.ttf",
+          "sha256": "104897b8ff7f74674c8d6d81b6dbe9138e5c249b54d6c08c8b21600f75d3c5c1"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-BoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-BoldItalic.ttf",
+          "sha256": "8d5892b455cc166f8aac459182aa7a0d7df6cf2d70d61047deb8783fbd2b5d67"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-ExtraBold.ttf",
+          "path": "JetBrainsMonoNLNerdFont-ExtraBold.ttf",
+          "sha256": "a30da5101038f9efa128c87c7508e262d79d9709feadf43cf69a201cfc13ac2f"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-ExtraBoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-ExtraBoldItalic.ttf",
+          "sha256": "4d79abe68d10d5013f15e3bf69efd643d8a163c4d7824d1e1d473c13f7ae56b5"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-ExtraLight.ttf",
+          "path": "JetBrainsMonoNLNerdFont-ExtraLight.ttf",
+          "sha256": "cff82d2ede085403fbe6cef49848291b884559a329af6dd5c62b5a894c9e91d9"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-ExtraLightItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-ExtraLightItalic.ttf",
+          "sha256": "54340639d79d1bd21132cda67ef092dd206f3a783f5168f8184b18b496db7cc8"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-Italic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-Italic.ttf",
+          "sha256": "dd76e7fe83fd2b1ae8e416efb3af8348d975b004648eb28e9a836e1fc4dd72a0"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-Light.ttf",
+          "path": "JetBrainsMonoNLNerdFont-Light.ttf",
+          "sha256": "f19b9cc0516482aea93ff3f526aead1cbf4376cf0835cad5824ee6ed97f2583c"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-LightItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-LightItalic.ttf",
+          "sha256": "16386351d580fc3dd3e6b94d341e77cc8c04ed29821b5c4206c3f8396fb5a73a"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-Medium.ttf",
+          "path": "JetBrainsMonoNLNerdFont-Medium.ttf",
+          "sha256": "158ff61f4229aa13048715789222048dd54c25e2ccd9d0d860c96ab68f9baba9"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-MediumItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-MediumItalic.ttf",
+          "sha256": "3c58ca4df4cdfc2276b4090d99e98cc19af37a089634859a4a36c7b41484a705"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-Regular.ttf",
+          "path": "JetBrainsMonoNLNerdFont-Regular.ttf",
+          "sha256": "f726c0fb0db90a00920e8fa9ef281ccf9f5f848785ebcaca09bade9d15d38b58"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-SemiBold.ttf",
+          "path": "JetBrainsMonoNLNerdFont-SemiBold.ttf",
+          "sha256": "c6c436277646003b578a6c9ac2f4377dfb72f12cd24af9f760787ec241571bf9"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-SemiBoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-SemiBoldItalic.ttf",
+          "sha256": "fd3271efe445c6b5e801a38ede34fd7b143c4668f8b9d63fb7263291e75e2e74"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-Thin.ttf",
+          "path": "JetBrainsMonoNLNerdFont-Thin.ttf",
+          "sha256": "4eb3d68ab21744deaa6cff1353b6df67013a83e04437d1fdf6ce90c1b4c7afa5"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFont-ThinItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFont-ThinItalic.ttf",
+          "sha256": "68620b30c95256b3a81dcd6ebad3545cc222ee146575175e7116b53520bb1548"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-Bold.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-Bold.ttf",
+          "sha256": "f799fc4b215c7b7254bf6cee51c0bce122ac684b53b46fd3cb83d408a0ccf385"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-BoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-BoldItalic.ttf",
+          "sha256": "28ce03bcaf808f7fa64dcce6facb00319083bdb04cc4f61d41b9f6ad8f20c3e8"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-ExtraBold.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraBold.ttf",
+          "sha256": "7027b92cbe1536d4bbe56eca416e64baa64b32fea4497fd4673cf1715cf7ae85"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-ExtraBoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraBoldItalic.ttf",
+          "sha256": "844e2f7cf51d433fb44be420ecdf4d4ecf9fb4400fe8263db135708d034df526"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-ExtraLight.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraLight.ttf",
+          "sha256": "3f1abb0ab790ec72fcd25f340bfcc246357638b9d95f717293e634d6cb2ea405"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-ExtraLightItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-ExtraLightItalic.ttf",
+          "sha256": "0f814da728de434928b1acaf8144ee413c401224605ad4dfe0e4ce1c5cf6fac8"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-Italic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-Italic.ttf",
+          "sha256": "336a3cef8770dab01c0fc9c6bb0c0473bfa82f90a4033fde2cc52d8aa410528c"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-Light.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-Light.ttf",
+          "sha256": "17c9522cf593213aa99c3eb0fb706df2fe84332eea99e943c0df267a84274350"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-LightItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-LightItalic.ttf",
+          "sha256": "dd023898a54265068c77fff5aa71d9835ea394349c7c9a3e9ca381d5f704f02e"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-Medium.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-Medium.ttf",
+          "sha256": "609259fa79a9e08721a2af1e71f7fa3009d374f890372c9d2816994cef683283"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-MediumItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-MediumItalic.ttf",
+          "sha256": "7bc728ba1152a5f420055fc44ae286b51c39c89d74f96dfb017b00f46952979f"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-Regular.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-Regular.ttf",
+          "sha256": "d9a80146bbf2ff23b187316a3e82ee2a2ceab8220267fe09ac150ca46ab2c3bd"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-SemiBold.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-SemiBold.ttf",
+          "sha256": "1aa9684d0157dfad4bcfdcff6cde8f4c86b0929437502892dfa643901f8b878c"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-SemiBoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-SemiBoldItalic.ttf",
+          "sha256": "6326e5f936bc5aa5e7146007123a9d794fc72cd99cd2cb7c907f0b008b28f4c8"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-Thin.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-Thin.ttf",
+          "sha256": "7fd38e32651ee24659497203f6912b4d7912488b760bb577d9142339e7e86ff0"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontMono-ThinItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontMono-ThinItalic.ttf",
+          "sha256": "6133bfcb4e514e55437715e4b7ac750130d8f1c66a5308677115a9bdb4c78ae4"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-Bold.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-Bold.ttf",
+          "sha256": "f9480ead3e45a21f61a9a0bc25f7e20a7ac4782644414b91375e9fdb76fd2095"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-BoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-BoldItalic.ttf",
+          "sha256": "7ffde5e1dbb5b6b8484c6b129caf71959a6fca070612b215fdd54055d2c3889c"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-ExtraBold.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraBold.ttf",
+          "sha256": "f059818f3fdd78e03af6a6070279ac19bf9fef348353b425cf8fd0300fbf9eb6"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-ExtraBoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraBoldItalic.ttf",
+          "sha256": "e11dbf74b5bcab87451550b5bec9395ce00da62e2ce0690853b4621ad64736e4"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-ExtraLight.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraLight.ttf",
+          "sha256": "d217c1bd022c9755d8e7759d790e98f255669d17202c77a2bafc9d721db4b9ec"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-ExtraLightItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-ExtraLightItalic.ttf",
+          "sha256": "41eccbbdd380c01ad418d105112f83b986ab84d399a21efee94bb1f7df984f42"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-Italic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-Italic.ttf",
+          "sha256": "a75147d8354b7fc1a0b0c8dede8f8169014c8fc7263505d085419975e8e21404"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-Light.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-Light.ttf",
+          "sha256": "fb9bf3749444db1da314af2f3ecefeb5d95cf09c5389f3be6a1aeb66659a81d7"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-LightItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-LightItalic.ttf",
+          "sha256": "c91128f49e7a6f5cb8636e9834f2fcadb15a21bb1b2b82044cb10e6cb592ece4"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-Medium.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-Medium.ttf",
+          "sha256": "711599c10ccd331cc3f012a2b3978bf330ff64e2986195894c3e00437f0c373f"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-MediumItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-MediumItalic.ttf",
+          "sha256": "90c630b04b2042db73176918e2231176de03f3b96f2e077bd714ceeb45daef98"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-Regular.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-Regular.ttf",
+          "sha256": "a4588a46f132fbfd5c43a5f1e4184bda0101dfea7d86c2a0f8a0feb4b47f18da"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-SemiBold.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-SemiBold.ttf",
+          "sha256": "bcf68d438b7d99181bd67f94357fabf4405603dc03f4ad2f2d2e20a5b0c2b70a"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-SemiBoldItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-SemiBoldItalic.ttf",
+          "sha256": "0255c14137cb95899dc44048f2b2c2324932b3d1a94020d88e505820e0878f6a"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-Thin.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-Thin.ttf",
+          "sha256": "4bf9ad031a77226d1e0fee0d6e1b035ba179105ad302f95d2b087e7391fd76f2"
+        },
+        {
+          "name": "JetBrainsMonoNLNerdFontPropo-ThinItalic.ttf",
+          "path": "JetBrainsMonoNLNerdFontPropo-ThinItalic.ttf",
+          "sha256": "c1cad1d83247a48a4bf759f23a2628613af8bbaaf0b5359a8ffad2c5c3f50e71"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-Bold.ttf",
+          "path": "JetBrainsMonoNerdFont-Bold.ttf",
+          "sha256": "e490660ad75e0b152c93b1604c2ea1a4ea675f1b8a3fe0d005b1998568f99f1f"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-BoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFont-BoldItalic.ttf",
+          "sha256": "19a2e3af8ccf99954941ea07e0a29df27574500f12016d86d6c4c059b825ffe1"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-ExtraBold.ttf",
+          "path": "JetBrainsMonoNerdFont-ExtraBold.ttf",
+          "sha256": "8af99acce860533a64926ebff131aa9f37806ffef9636798f36c3a4a526f9e32"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-ExtraBoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFont-ExtraBoldItalic.ttf",
+          "sha256": "75971b5b5eebb295298c4d1872e2a8906c3023cb98480c42ed4a9496ad16fd79"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-ExtraLight.ttf",
+          "path": "JetBrainsMonoNerdFont-ExtraLight.ttf",
+          "sha256": "e5a2b97faa48e7597022f61da03d754f1f8be0cac290942781b27a4525307d75"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-ExtraLightItalic.ttf",
+          "path": "JetBrainsMonoNerdFont-ExtraLightItalic.ttf",
+          "sha256": "2789601fa34509d4d5991a3c8ae5afc8e28ac09147e8769d9578662a39dcf20f"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-Italic.ttf",
+          "path": "JetBrainsMonoNerdFont-Italic.ttf",
+          "sha256": "71d5466cc3ab31bee38b4e2c5cc99c2b41a749c4973ed4579b814ec992b0738e"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-Light.ttf",
+          "path": "JetBrainsMonoNerdFont-Light.ttf",
+          "sha256": "c9f9fc2d79825d3cee9817e29b1a79ddcb30bfef5d8061120ee024d1f4a96228"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-LightItalic.ttf",
+          "path": "JetBrainsMonoNerdFont-LightItalic.ttf",
+          "sha256": "96d97618018ed4d7b27321904c0bed37c2df7b746c772a2a0515124c582e39c6"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-Medium.ttf",
+          "path": "JetBrainsMonoNerdFont-Medium.ttf",
+          "sha256": "c9405e11b36d071176e318263e7251e96e60f3804dfc5ac8b2806f1f8085b066"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-MediumItalic.ttf",
+          "path": "JetBrainsMonoNerdFont-MediumItalic.ttf",
+          "sha256": "27693c0aa1c56ea46a8978d042772a81da184d3aae7fe7b6a2394b5dc51cd296"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-Regular.ttf",
+          "path": "JetBrainsMonoNerdFont-Regular.ttf",
+          "sha256": "1c680e8cde9fcf8b88a5605ce8d1fb94dd3fb15841f7ca7bf4c55664855e5611"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-SemiBold.ttf",
+          "path": "JetBrainsMonoNerdFont-SemiBold.ttf",
+          "sha256": "d987f2994fa3000512ea6442e4b3fa8c96e0724262e2c5c9646f1ee02cae675e"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-SemiBoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFont-SemiBoldItalic.ttf",
+          "sha256": "60571c34def77959bff1b8661e1cbce1bc0dee8e006ea78358b2af9990fd8587"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-Thin.ttf",
+          "path": "JetBrainsMonoNerdFont-Thin.ttf",
+          "sha256": "87a846220f9470d78b66d3fdf2e108156c68ac89a2fa5f058a90ef5be9f0e322"
+        },
+        {
+          "name": "JetBrainsMonoNerdFont-ThinItalic.ttf",
+          "path": "JetBrainsMonoNerdFont-ThinItalic.ttf",
+          "sha256": "5c5935377631c86646e6fef3b0a739d4ff3771f632dc48f6963a727ad1b21063"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-Bold.ttf",
+          "path": "JetBrainsMonoNerdFontMono-Bold.ttf",
+          "sha256": "bfcf9a917276ffc058867d87cbc8a5b2f1ab0f4b710e9170dc02763ccb80bd4b"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-BoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-BoldItalic.ttf",
+          "sha256": "9dba502e00e35209f6ed2a151c7376c051657b067cdebbc6e52d06cb9002cf31"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-ExtraBold.ttf",
+          "path": "JetBrainsMonoNerdFontMono-ExtraBold.ttf",
+          "sha256": "1c4ccf0d5fb2d45f04d3efd50f60951fb63281b0375ede992d2b4beb694d2daa"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-ExtraBoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-ExtraBoldItalic.ttf",
+          "sha256": "0315f5729d19d7c4846ea06503850b0fed785263fc0d7f5bc636563782cbde42"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-ExtraLight.ttf",
+          "path": "JetBrainsMonoNerdFontMono-ExtraLight.ttf",
+          "sha256": "2ed4462e0332123bccd6d0e3ecfb92e9a9d9c02d7e7cacf2d272d5e4bae85e25"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-ExtraLightItalic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-ExtraLightItalic.ttf",
+          "sha256": "5a7bc5b7fa3005977be87a7171361e41ff999d65e79b2f47796e4f062dccd56a"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-Italic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-Italic.ttf",
+          "sha256": "31efd6ead98746f5b0afa1ee6dba60267ad48db36428360bee327bec10621f97"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-Light.ttf",
+          "path": "JetBrainsMonoNerdFontMono-Light.ttf",
+          "sha256": "d34f186f256c853a651d222bfad3afa942d4755b47eff70c13660cf94c24b20e"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-LightItalic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-LightItalic.ttf",
+          "sha256": "8711d3a15e10e7552bc62dfb8d99dac681eca80c9f4dd59142b27785117c9250"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-Medium.ttf",
+          "path": "JetBrainsMonoNerdFontMono-Medium.ttf",
+          "sha256": "a736c04959f32b69487956c9ccffa90e71903d3c85952886d42ecead0ca6cb1d"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-MediumItalic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-MediumItalic.ttf",
+          "sha256": "f21eb76516348ffa152a9727fe4e99fe8baedbb7359c38aeefd1f123d5f6d0fe"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-Regular.ttf",
+          "path": "JetBrainsMonoNerdFontMono-Regular.ttf",
+          "sha256": "f2a5ea6cfab397445ffab00c0370927b66d61e560a05db5db271b42006381c1a"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-SemiBold.ttf",
+          "path": "JetBrainsMonoNerdFontMono-SemiBold.ttf",
+          "sha256": "d3955c56fca699f37ebc153d0a6e331b8784f66fd8a3af5e20c30b90869201c4"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-SemiBoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-SemiBoldItalic.ttf",
+          "sha256": "0d2aa4c3955f612986e22d08f08b9c255b75107c07a6128ac24dc80281cc9d9c"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-Thin.ttf",
+          "path": "JetBrainsMonoNerdFontMono-Thin.ttf",
+          "sha256": "734de2d7f2c70d2a02006ee219fbbe897b09fe83b15861f0f887c717a02695cf"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontMono-ThinItalic.ttf",
+          "path": "JetBrainsMonoNerdFontMono-ThinItalic.ttf",
+          "sha256": "2c4e01f8eba50c6293a6c1084e807f5d33ef8b17e55e5d2c9bb677475c41da83"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-Bold.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-Bold.ttf",
+          "sha256": "a391d2887d63add54d87a715fe257e522120eb4f1df52d104fa17984fcb68021"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-BoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-BoldItalic.ttf",
+          "sha256": "2118f3a6119e8967b20b71b6b8a6072711ef76ae0d10c4522a06323ac8935d5d"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-ExtraBold.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraBold.ttf",
+          "sha256": "80200df33ea31cd6185bde7c970fb86190b6670060475c1a1f069d0b2d8f0bb3"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-ExtraBoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraBoldItalic.ttf",
+          "sha256": "df117705e411fbe80bb7c2e4f25e350328aa255e65d8368fb04016afaeeca853"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-ExtraLight.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraLight.ttf",
+          "sha256": "8cc4e91cb99b5e3bc96e5ffaecc38fc18232ed7687962644f212da2cf661f484"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-ExtraLightItalic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-ExtraLightItalic.ttf",
+          "sha256": "4a03c9b8eb41004a164e668483edf08081b818f76f24f889b6b2c35f73f05b86"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-Italic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-Italic.ttf",
+          "sha256": "904c69ce413b3c678b7762a94328b14077461db16b5d63b82c8370b9907387ff"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-Light.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-Light.ttf",
+          "sha256": "134069560904365335981ab7332e655db816fb5298849bb0dbe9ed61e3f00610"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-LightItalic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-LightItalic.ttf",
+          "sha256": "1e7070062baaa9327d666b7217bad601c2bc42b638b81e12f2e95baa81c78f30"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-Medium.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-Medium.ttf",
+          "sha256": "d60c8788140e939247f7af54a1ddc197d3099eecca77fff51880d678c029d98c"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-MediumItalic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-MediumItalic.ttf",
+          "sha256": "3b4fa1bc30e72a30fd7b2f6921d67f7c864b1d15be72ebec04821ad2709e8778"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-Regular.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-Regular.ttf",
+          "sha256": "8a2803de76ad18ed82f465dfd17130032c34c031b263179d3047a547c7caa460"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-SemiBold.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-SemiBold.ttf",
+          "sha256": "b0c766130c81e328e1b31c7d1036574d7ce91f503c9856a4ec73565a44a32899"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-SemiBoldItalic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-SemiBoldItalic.ttf",
+          "sha256": "97d0da5da9a227398a1da7aa16214cf7146696b3b56fcb63ea7385e853fa45ba"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-Thin.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-Thin.ttf",
+          "sha256": "bb093be10f5406765ccea2a25d7adb4ce43840268e034e21dcd9d39c0bf76059"
+        },
+        {
+          "name": "JetBrainsMonoNerdFontPropo-ThinItalic.ttf",
+          "path": "JetBrainsMonoNerdFontPropo-ThinItalic.ttf",
+          "sha256": "8889eb97cf2a4f39159a99a07ddcc38c7d2f60eb678fa9d4e99e72185ededf82"
+        }
+      ],
+      "format": "tar.xz",
+      "repository": "ryanoasis/nerd-fonts",
+      "sha256": "04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf",
+      "tag": "v3.5.1",
+      "url": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/JetBrainsMono.tar.xz"
+    },
+    "pretendard": {
+      "files": [
+        {
+          "name": "Pretendard-Black.ttf",
+          "path": "public/static/alternative/Pretendard-Black.ttf",
+          "sha256": "0a7c1fd65a599f9d25de860cc832ea9ac40c207775e33eb4344a4647392a2b5d"
+        },
+        {
+          "name": "Pretendard-Bold.ttf",
+          "path": "public/static/alternative/Pretendard-Bold.ttf",
+          "sha256": "c16b88c670d23e83fa1170c954cbc4822d3b8dad3c3cde15d798a94b43d97985"
+        },
+        {
+          "name": "Pretendard-ExtraBold.ttf",
+          "path": "public/static/alternative/Pretendard-ExtraBold.ttf",
+          "sha256": "eedbd2877218242323bdff816684f7f5c325e54ae820d5b78eec9a5e5c7edef6"
+        },
+        {
+          "name": "Pretendard-ExtraLight.ttf",
+          "path": "public/static/alternative/Pretendard-ExtraLight.ttf",
+          "sha256": "041fad1c6a532208d52def16576f0d1dd7f1b77b9306c657f69bf619f2b638cc"
+        },
+        {
+          "name": "Pretendard-Light.ttf",
+          "path": "public/static/alternative/Pretendard-Light.ttf",
+          "sha256": "1ba73b22955754bb9ed6bbf7678416af647f90704e9064661f7924da578dad3e"
+        },
+        {
+          "name": "Pretendard-Medium.ttf",
+          "path": "public/static/alternative/Pretendard-Medium.ttf",
+          "sha256": "3bae579377eb8e9ac412cb4809ebc3de1d956ed75995c1e346f0c1311053f4e2"
+        },
+        {
+          "name": "Pretendard-Regular.ttf",
+          "path": "public/static/alternative/Pretendard-Regular.ttf",
+          "sha256": "6d0af5258997aec7354a6e340fc2325ba321c410ca48b3af858c8c3d6e92a324"
+        },
+        {
+          "name": "Pretendard-SemiBold.ttf",
+          "path": "public/static/alternative/Pretendard-SemiBold.ttf",
+          "sha256": "5e1c548732af70873103066c16e1369b9a8a871f0b38c321a1d5bc73e43cea2d"
+        },
+        {
+          "name": "Pretendard-Thin.ttf",
+          "path": "public/static/alternative/Pretendard-Thin.ttf",
+          "sha256": "5f65cfe7d99934ee73de983df26154666c65418d73a62f634110945f2ddc0caf"
+        },
+        {
+          "name": "PretendardVariable.ttf",
+          "path": "public/variable/PretendardVariable.ttf",
+          "sha256": "3090ccde0442bb347aa7685d9ba8b17436a60682df6e8f92a9a670de14056e22"
+        }
+      ],
+      "format": "zip",
+      "repository": "orioncactus/pretendard",
+      "sha256": "04be351a74d6bf7d60c480a3087e51d185485d35a52023142af1df19eb8c428a",
+      "tag": "v1.3.9",
+      "url": "https://github.com/orioncactus/pretendard/releases/download/v1.3.9/Pretendard-1.3.9.zip"
+    },
+    "pretendard-gov": {
+      "files": [
+        {
+          "name": "PretendardGOV-Black.ttf",
+          "path": "public/static/alternative/PretendardGOV-Black.ttf",
+          "sha256": "b3ef3ef836b0862c7540dbe0fb946340b3c3fc17ac7c9c944c9fe7000b52779a"
+        },
+        {
+          "name": "PretendardGOV-Bold.ttf",
+          "path": "public/static/alternative/PretendardGOV-Bold.ttf",
+          "sha256": "4a72e78753b42a16308597b597f050ecd1d4baad92cbae8cdf4bcf0d28828da7"
+        },
+        {
+          "name": "PretendardGOV-ExtraBold.ttf",
+          "path": "public/static/alternative/PretendardGOV-ExtraBold.ttf",
+          "sha256": "d24e79fb99aa652360619ea553f5bd2ddab56be81947556e095daa2333373df1"
+        },
+        {
+          "name": "PretendardGOV-ExtraLight.ttf",
+          "path": "public/static/alternative/PretendardGOV-ExtraLight.ttf",
+          "sha256": "3d26985f214225759f4c26ea7b0cba99973b90a8ed34802aa2a08595210844a0"
+        },
+        {
+          "name": "PretendardGOV-Light.ttf",
+          "path": "public/static/alternative/PretendardGOV-Light.ttf",
+          "sha256": "532ea06823f804026bdcf0b7141cd27b67c4879a722d3a9bbc64f4559bb42b30"
+        },
+        {
+          "name": "PretendardGOV-Medium.ttf",
+          "path": "public/static/alternative/PretendardGOV-Medium.ttf",
+          "sha256": "6a448170a076ea52a947f34e87900f8a47807fef05a7c2fdcb424946e8846a9e"
+        },
+        {
+          "name": "PretendardGOV-Regular.ttf",
+          "path": "public/static/alternative/PretendardGOV-Regular.ttf",
+          "sha256": "b288cb28b28b7763c8264cc3cf477e09fc9c4a29d7bf29f63580871ef3c89e06"
+        },
+        {
+          "name": "PretendardGOV-SemiBold.ttf",
+          "path": "public/static/alternative/PretendardGOV-SemiBold.ttf",
+          "sha256": "a9e9eb4a737524f08ee444c455dd55c9bda547e150ffd855cbddfd7bc20dbbe5"
+        },
+        {
+          "name": "PretendardGOV-Thin.ttf",
+          "path": "public/static/alternative/PretendardGOV-Thin.ttf",
+          "sha256": "daa89a3b34339711d9d4f255d904072eb870aed423de5cc82c92a4522f6fe304"
+        },
+        {
+          "name": "PretendardGOVVariable.ttf",
+          "path": "public/variable/PretendardGOVVariable.ttf",
+          "sha256": "4fd4391c698344496a13dadb3792e3b4cba592425f387e41ce59d68f904ae854"
+        }
+      ],
+      "format": "zip",
+      "repository": "orioncactus/pretendard",
+      "sha256": "080266d2faa8911b0e239b367405fdbcb2b4e17b22067e40aeb34a6c3fca0ac4",
+      "tag": "v1.3.9",
+      "url": "https://github.com/orioncactus/pretendard/releases/download/v1.3.9/PretendardGOV-1.3.9.zip"
+    },
+    "pretendard-jp": {
+      "files": [
+        {
+          "name": "PretendardJP-Black.ttf",
+          "path": "public/static/alternative/PretendardJP-Black.ttf",
+          "sha256": "1356798e117b6f2ec2e547eaafaa2b1a11f154247b86f1f8a8d3107bcb62ee78"
+        },
+        {
+          "name": "PretendardJP-Bold.ttf",
+          "path": "public/static/alternative/PretendardJP-Bold.ttf",
+          "sha256": "b6f14d5848f95bc50f28c323234574a8357fdd992582cd98acbfc3b33da44255"
+        },
+        {
+          "name": "PretendardJP-ExtraBold.ttf",
+          "path": "public/static/alternative/PretendardJP-ExtraBold.ttf",
+          "sha256": "2e190467caa35ced53efbf1f1f7b87dadf903b518255337d14057ced7d7b9ccf"
+        },
+        {
+          "name": "PretendardJP-ExtraLight.ttf",
+          "path": "public/static/alternative/PretendardJP-ExtraLight.ttf",
+          "sha256": "051e6ec1c8e9c74eeeb09706a4d3d3955f93999745aadcd4acb68339b1c212d5"
+        },
+        {
+          "name": "PretendardJP-Light.ttf",
+          "path": "public/static/alternative/PretendardJP-Light.ttf",
+          "sha256": "bb9741fd88b90c688964af67201ecc8b3274afb8957db728d1a3db6ce1f374f3"
+        },
+        {
+          "name": "PretendardJP-Medium.ttf",
+          "path": "public/static/alternative/PretendardJP-Medium.ttf",
+          "sha256": "235c6f1adc15db2d16772052c159fdb7e01bb746ad81850c5bc629d645b4b571"
+        },
+        {
+          "name": "PretendardJP-Regular.ttf",
+          "path": "public/static/alternative/PretendardJP-Regular.ttf",
+          "sha256": "b14698ed6d82737f45e918d079bca6fc498a107bcb094b56c5229dbddf3246d3"
+        },
+        {
+          "name": "PretendardJP-SemiBold.ttf",
+          "path": "public/static/alternative/PretendardJP-SemiBold.ttf",
+          "sha256": "3d5876966f063d6dea569ed843ff328557ffab56fedfef9327106c5ea638882f"
+        },
+        {
+          "name": "PretendardJP-Thin.ttf",
+          "path": "public/static/alternative/PretendardJP-Thin.ttf",
+          "sha256": "84117181eb49ec4f12f8d3ee285b3466be0daebb11c2f1246ea2b1163dea920c"
+        },
+        {
+          "name": "PretendardJPVariable.ttf",
+          "path": "public/variable/PretendardJPVariable.ttf",
+          "sha256": "bc1d77db0f3cb9c20986b8939aa8a28d5216552d777d082955da22f420535cbb"
+        }
+      ],
+      "format": "zip",
+      "repository": "orioncactus/pretendard",
+      "sha256": "8dab678c371a1530106ca643b76b2b80d47653d5ba670b01265b48e4c6615d63",
+      "tag": "v1.3.9",
+      "url": "https://github.com/orioncactus/pretendard/releases/download/v1.3.9/PretendardJP-1.3.9.zip"
+    },
+    "pretendard-std": {
+      "files": [
+        {
+          "name": "PretendardStd-Black.ttf",
+          "path": "public/static/alternative/PretendardStd-Black.ttf",
+          "sha256": "abe2ea6119780a829dca1a5570935e7e39a678a12ef1f581131b85450c2ad0d0"
+        },
+        {
+          "name": "PretendardStd-Bold.ttf",
+          "path": "public/static/alternative/PretendardStd-Bold.ttf",
+          "sha256": "d19618a699fa0ebb3e32a0b6a520813a999094ae7aba938e8a0add8df6954b75"
+        },
+        {
+          "name": "PretendardStd-ExtraBold.ttf",
+          "path": "public/static/alternative/PretendardStd-ExtraBold.ttf",
+          "sha256": "693ac31cde2417ab54caf6d05039ec50f1c7ce537e74e2fafc4faed4fae8a161"
+        },
+        {
+          "name": "PretendardStd-ExtraLight.ttf",
+          "path": "public/static/alternative/PretendardStd-ExtraLight.ttf",
+          "sha256": "5598be7864ca91685159e74ceae4f44c1a7f1f4833588fa95d25b6581c4096ca"
+        },
+        {
+          "name": "PretendardStd-Light.ttf",
+          "path": "public/static/alternative/PretendardStd-Light.ttf",
+          "sha256": "489606d0297d07bf5c8eefdb5694e14892f3fb3a680aea2b1ed7b33aeccdc411"
+        },
+        {
+          "name": "PretendardStd-Medium.ttf",
+          "path": "public/static/alternative/PretendardStd-Medium.ttf",
+          "sha256": "50d446265d3ee474a4d41dde1a6e537a7b0c9bc3897899bae3fa73163bf2ab03"
+        },
+        {
+          "name": "PretendardStd-Regular.ttf",
+          "path": "public/static/alternative/PretendardStd-Regular.ttf",
+          "sha256": "1ad55c52b41152d9a24b4da0dded8fdbbe5875a4ac5259e012a67af5f0d73bfc"
+        },
+        {
+          "name": "PretendardStd-SemiBold.ttf",
+          "path": "public/static/alternative/PretendardStd-SemiBold.ttf",
+          "sha256": "30d0562593bcbc52b0226eeaa085a9c360246974e0b9870b8b3360dedcdb4f41"
+        },
+        {
+          "name": "PretendardStd-Thin.ttf",
+          "path": "public/static/alternative/PretendardStd-Thin.ttf",
+          "sha256": "311797a2f7c872b3e03298aa31e31a816a06338e91b8dac67f69d5b4b32ae6ac"
+        },
+        {
+          "name": "PretendardStdVariable.ttf",
+          "path": "public/variable/PretendardStdVariable.ttf",
+          "sha256": "499ff7e76f905bd909b4640fe333022fb0f241e292b84e1b6986c7b46eb57a80"
+        }
+      ],
+      "format": "zip",
+      "repository": "orioncactus/pretendard",
+      "sha256": "bde2ecb6aa27fb1d36b729b47b1cad5a890dca8e8a06aebe0727b4c27624ad42",
+      "tag": "v1.3.9",
+      "url": "https://github.com/orioncactus/pretendard/releases/download/v1.3.9/PretendardStd-1.3.9.zip"
+    }
+  }
+}

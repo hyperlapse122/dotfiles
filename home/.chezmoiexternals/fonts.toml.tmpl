@@ -1,0 +1,16 @@
+{{- $eligible := or (and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64")) (and (has .chezmoi.os (list "windows" "linux")) (has .chezmoi.arch (list "amd64" "arm64"))) -}}
+{{- if $eligible -}}
+{{- range $name, $_ := .fonts -}}
+{{- $pin := get $.fontLocks $name | default dict -}}
+{{- if or (not (get $pin "url")) (not (regexMatch "^[0-9a-f]{64}$" (get $pin "sha256"))) (not (get $pin "files")) -}}
+{{- fail (printf "Missing font lock for %s" $name) -}}
+{{- end -}}
+{{- range $file := $pin.files }}
+[{{ printf ".local/share/dotfiles/font-assets/%s/%s" $name $file.path | quote }}]
+type = "archive-file"
+url = {{ printf "%s#sha256=%s" $pin.url $pin.sha256 | quote }}
+checksum.sha256 = {{ $pin.sha256 | quote }}
+path = {{ $file.path | quote }}
+{{ end -}}
+{{ end -}}
+{{- end -}}
