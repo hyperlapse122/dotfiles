@@ -378,9 +378,40 @@ class PersonalAppsTest(unittest.TestCase):
             self.home / ".local/share/dotfiles/antigravity-acp/bin" / ("antigravity-acp" + suffix),
         )
 
-    def test_separate_payload_directories_reapply_drift_and_sha512_enforcement(self):
+    @unittest.skipUnless(os.name == "nt", "Windows PowerShell launchers")
+    def test_powershell_launchers_forward_exit_codes_and_restore_environment(self):
         cli, adapter = self.configure_managed_payloads()
         self.apply()
+        native = Path(os.environ["SystemRoot"]) / "System32/cmd.exe"
+        for payload in (cli, adapter):
+            shutil.copy2(native, payload)
+        shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+        for name in ("agy", "antigravity-acp"):
+            with self.subTest(name=name):
+                launcher = str(self.home / ".local/bin" / (name + ".ps1")).replace("'", "''")
+                result = subprocess.run([
+                    shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                    "$env:AGY_CLI_DISABLE_AUTO_UPDATE = 'original'; "
+                    "$env:AGY_BIN = 'original-bin'; $env:AGY_SKIP_DOWNLOAD = 'original-skip'; "
+                    f"& '{launcher}' /d /c 'echo %AGY_CLI_DISABLE_AUTO_UPDATE% & exit /b 37'; "
+                    "$code = $LASTEXITCODE; "
+                    "Write-Output ('RESTORED=' + $env:AGY_CLI_DISABLE_AUTO_UPDATE + '|' + "
+                    "$env:AGY_BIN + '|' + $env:AGY_SKIP_DOWNLOAD); exit $code",
+                ], env=self.env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 37, result.stdout + result.stderr)
+                self.assertIn("true", result.stdout)
+                self.assertIn("RESTORED=original|original-bin|original-skip", result.stdout)
+
+    def test_separate_payload_directories_reapply_drift_and_sha512_enforcement(self):
+        cli, adapter = self.configure_managed_payloads()
+        legacy = [self.home / ".local/bin" / (name + ".cmd")
+                  for name in ("agy", "antigravity-acp", "t3")] if os.name == "nt" else []
+        for path in legacy:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("obsolete launcher", encoding="utf-8")
+        self.apply()
+        for path in legacy:
+            self.assertFalse(path.exists(), f"Obsolete batch launcher retained: {path}")
         for path, payload in ((cli, self.payloads["/antigravity"]), (adapter, self.payloads["/antigravity-acp"])):
             self.assertEqual(path.read_bytes(), payload)
             if os.name != "nt":

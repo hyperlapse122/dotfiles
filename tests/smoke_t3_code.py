@@ -273,8 +273,8 @@ def prove_t3_provider(launcher, settings, env, outside, root, instance_id, expec
     args = [str(launcher), "--mode", "web", "--host", "127.0.0.1", "--port", str(port),
             "--no-browser", "--dev-url", f"http://127.0.0.1:{port}"]
     if os.name == "nt":
-        args = (subprocess.list2cmdline([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c"])
-                + ' "' + subprocess.list2cmdline(args) + '"')
+        shell = str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+        args = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", *args]
     log_path = root / ("t3-" + instance_id + "-server.log")
     rpc = None
     with log_path.open("w+", encoding="utf-8", errors="backslashreplace") as log, server_process(
