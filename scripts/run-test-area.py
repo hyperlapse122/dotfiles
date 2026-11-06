@@ -17,7 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 AREAS = {
     "applications": (
         "test_personal_apps", "test_personal_app_lock", "test_harness_plugins", "test_external_assets",
-        "test_harness_plugin_lock", "test_t3_code_desktop", "test_t3_code_settings",
+        "test_harness_plugin_lock", "test_t3_code_desktop", "test_t3_code_settings", "test_t3_instructions",
         "test_codex", "test_claude", "test_pi", "test_grok",
         "test_font_lock", "test_fonts", "test_fonts_posix", "test_fonts_windows",
         "test_native_ca_shell", "test_native_ca_windows", "test_powershell_profile",

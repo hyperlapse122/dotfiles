@@ -192,7 +192,13 @@ mise exec chezmoi python -- python tests/smoke_grok.py --t3
 
 Both smokes prepare official pinned artifacts in disposable homes, repair native CE registration, capture expanded skill requests, and initialize their native T3 drivers with managed binary directories absent from `PATH`. Pi additionally verifies the exact locked Synthetic catalog, foreign-provider blocking, reload, removed saved selections, and missing credentials/policy. T3 checks require native discovery metadata so a version-only fallback cannot pass.
 
-Inference requests use inert credentials and rejecting loopback endpoints. Native validation jobs receive no Synthetic secret; only the model-discovery resolver step uses the repository Actions secret. Hosted CI uses `--install-desktop` to provision its own T3 prerequisite.
+These inference requests use inert credentials and rejecting loopback endpoints. Native validation jobs receive no Synthetic secret; only the model-discovery resolver step uses the repository Actions secret. Hosted CI uses `--install-desktop` to provision its own T3 prerequisite.
+
+The separate T3 instruction smoke uses controlled local model replies to exercise native context selection, resume, compaction and mode transitions. It checks existing instruction settings, per-provider environment precedence, CE invocation, and isolation from concurrent or later direct CLI processes.
+
+```sh
+mise exec chezmoi python -- python tests/smoke_t3_instructions.py
+```
 
 ### Registry Credentials
 
@@ -249,6 +255,7 @@ Each area/target pair owns a separate hosted runner. All matrices use `fail-fast
 |---|---|---|
 | apps | `mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target TARGET` | Pinned apps and disposable PATH/profile fixture |
 | t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned omp/Codex/Claude and CE acquisition, scoped GitHub token |
+| t3-instructions | `mise exec chezmoi python gh -- python tests/smoke_t3_instructions.py --install-desktop --expected-target TARGET` | Pinned Codex/Claude/Pi, native CE, controlled local model transport and disposable T3 lifecycle fixtures |
 | ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated pinned omp/CE payload and harness state |
 | codex | `mise exec chezmoi python -- python tests/smoke_codex.py --expected-target TARGET` | Complete pinned Codex package and isolated native CE state |
 | claude | `mise exec chezmoi python -- python tests/smoke_claude.py --expected-target TARGET` | Pinned Claude binary and isolated native CE, instruction, preference, and memory fixtures |

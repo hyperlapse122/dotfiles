@@ -136,7 +136,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [apps, t3, ce, codex, claude, pi, grok, github-auth, gitlab-auth, container-auth, fonts, ghostty]
+        area: [apps, t3, t3-instructions, ce, codex, claude, pi, grok, github-auth, gitlab-auth, container-auth, fonts, ghostty]
         platform:
           - runner: ubuntu-24.04
             target: linux-amd64
@@ -185,7 +185,7 @@ jobs:
         if: matrix.area == 'apps' && runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh libsecret-1-0
       - name: Install desktop release acquisition tool
-        if: matrix.area == 't3' || matrix.area == 'pi' || matrix.area == 'grok'
+        if: matrix.area == 't3' || matrix.area == 't3-instructions' || matrix.area == 'pi' || matrix.area == 'grok'
         run: mise install gh
       - name: Install the declared host-side registry client fixture
         if: matrix.area == 'container-auth'
@@ -253,6 +253,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: mise exec chezmoi python gh -- python tests/smoke_grok.py --expected-target ${{ matrix.platform.target }} --install-desktop
+      - name: Prove native T3 instruction composition and lifecycle isolation
+        if: matrix.area == 't3-instructions'
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec chezmoi python gh -- python tests/smoke_t3_instructions.py --expected-target ${{ matrix.platform.target }} --install-desktop
       - name: Prove native GitHub and Gist credentials
         if: runner.os != 'Linux' && matrix.area == 'github-auth'
         timeout-minutes: 5

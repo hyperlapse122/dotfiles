@@ -1,6 +1,6 @@
 # T3 Code Desktop and Harness Integration
 
-This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code and Codex plus the oh-my-pi (omp) ACP provider, while preserving native Antigravity settings.
+This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code, Codex, pi, and Grok plus the oh-my-pi (omp) ACP provider, while preserving native Antigravity settings.
 
 ## Platform Support and Installation
 
@@ -64,6 +64,22 @@ Existing provider ownership remains as described below; credentials, keybindings
 Malformed JSON or incompatible managed parent objects cause application to fail without replacing the affected file.
 
 ## Provider Configuration
+
+### Instructions shared with the terminal
+
+The native user instruction files select their harness branch from `home/.chezmoitemplates/agent-instructions`. T3 uses those same files and account homes. Edit the template's `context = t3` branch to add instructions only for T3; this branch is empty by default. Select a harness inside that branch when an addition should apply to one provider. The thin adapters render private files under `~/.t3/userdata/instructions/`, containing only the T3 addition. Close T3 and run `mise run apply` to reconcile launch settings after editing.
+
+`scripts/t3-instructions.py` composes additions with existing native options:
+
+- Codex receives inline `-c developer_instructions=...`, preserving the effective config/profile or launch override. A nonempty `T3CODE_CODEX_LAUNCH_ARGS` is folded into those launch arguments, and an empty provider-scoped environment override prevents the inherited variable from hiding the addition. Native `AGENTS.md`, repository instructions, and T3's own per-turn application context remain separate. Custom Codex account homes remain selected.
+- Claude receives an absolute `--append-system-prompt-file` pointing to its private addition. Existing effective append-file and inline append content is preserved together in an additional inline option because native duplicate flags use the last value. An existing absolute append file is read at apply time; reapply after changing it. Relative existing append files depend on each turn's working directory and cannot be composed at apply time. Application reports this unsupported case before changing launch settings; make that existing path absolute or leave the T3 addition empty. Native `CLAUDE.md` and repository discovery continue normally.
+- pi receives an additional `--append-system-prompt` file option. Its native repeated options accumulate, preserving existing file or inline additions and the managed provider policy extension.
+
+The private `~/.t3/userdata/dotfiles-launch-state.json` records original launch options for idempotent reapplication and restoration when an addition becomes empty. Subsequent edits to unrelated arguments and environment entries survive. It contains existing instruction text and environment metadata, so retain its owner-only permissions. The composer leaves native harness instruction/config files, the machine-wide environment, account directories, and terminal launch settings unchanged.
+
+The T3 Code 0.1.7 Grok driver does not support `launchArgs`; a T3-only native prompt addition is unsupported there. Its native user-scope baseline still loads. Do not replace this limitation with another account home or untrusted application context. The supported mechanisms were checked against Codex 0.166.0, Claude Code 2.1.318, and pi 1.5.0; native driver changes require repeating request/context verification.
+
+`tests/smoke_t3_instructions.py` captures real native provider requests against a controlled local model transport in disposable homes. The transport returns generic fixture text to drive lifecycle transitions; it does not establish authenticated Codex or Claude model completion. For Codex, Claude, and pi, the test checks baseline and repository inclusion, branch exclusion, native CE invocation, existing options, multiline quoting, concurrent/later CLI isolation, fresh T3 turns, Plan and mode changes, native conversation resume, completed native compaction, and postcompaction context. The pi fixture lowers its documented recent-token retention so short fixture conversations actually compact. Run it on the platform being validated, with an installed T3 desktop or `--install-desktop` on a disposable GitHub-hosted runner.
 
 Dotfiles reconciles T3 Code's settings file (`~/.t3/userdata/settings.json`) on every explicit apply.
 

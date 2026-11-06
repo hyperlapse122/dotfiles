@@ -1,5 +1,9 @@
+{{ if eq (get . "context" | default "baseline") "t3" -}}
+{{/* T3-only additions go here. Native user-scope files supply the baseline. */ -}}
+{{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}
 
 {{ if eq .harness "omp" -}}
 {{/* omp-only instructions go here. */ -}}
+{{ end -}}
 {{ end -}}
