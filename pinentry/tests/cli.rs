@@ -12,14 +12,17 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Installation(PathBuf);
 impl Installation {
     fn new() -> Self {
-        let directory = std::env::temp_dir().join(format!(
+        let executable = PathBuf::from(env!("CARGO_BIN_EXE_dotfiles-pinentry"));
+        let directory = executable.parent().unwrap().join(format!(
             "dotfiles-pinentry-cli-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&directory).unwrap();
         let this = Self(directory);
-        fs::copy(env!("CARGO_BIN_EXE_dotfiles-pinentry"), this.binary()).unwrap();
+        // Hardlink on the same filesystem: a writable copy can be inherited by a
+        // concurrently spawned child and make exec fail with ETXTBSY on Linux.
+        fs::hard_link(&executable, this.binary()).unwrap();
         this
     }
 
