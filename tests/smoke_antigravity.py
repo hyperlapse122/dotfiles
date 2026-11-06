@@ -134,7 +134,7 @@ def main():
         def launch(path, *arguments):
             invocation = [str(path), *arguments]
             if os.name == "nt":
-                shell = str(Path(real_environment["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
+                shell = str(Path(real_environment["SYSTEMROOT"]) / "System32/WindowsPowerShell/v1.0/powershell.exe")
                 invocation = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", *invocation]
             return run(invocation, env=env, cwd=outside)
 
