@@ -1,0 +1,9 @@
+{{- $release := get .chezmoi "osRelease" | default dict -}}
+{{- $version := get $release "versionID" | default "" -}}
+{{- $ubuntu := and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (has .chezmoi.arch (list "amd64" "arm64")) (has $version (list "24.04" "26.04")) -}}
+{{- $mac := and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") -}}
+{{- if or $ubuntu $mac -}}
+#!/bin/sh
+set -eu
+exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "terminal-environment.sh" | replace "'" "'\\''" }}' apply '{{ .chezmoi.os }}' '{{ .chezmoi.arch }}' '{{ if $mac }}26{{ else }}{{ $version }}{{ end }}' '{{ .chezmoi.destDir | replace "'" "'\\''" }}' '{{ joinPath .chezmoi.workingTree "scripts" "ghostty-default-terminal.swift" | replace "'" "'\\''" }}' '{{ joinPath .chezmoi.workingTree "home" ".chezmoitemplates" "ghostty-config" | replace "'" "'\\''" }}'
+{{ end -}}
