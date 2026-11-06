@@ -84,6 +84,12 @@ Run `chezmoi init` whenever configuration templates (`.chezmoi.toml.tmpl`) chang
 
 > **Native vs. Mise Chezmoi:** The WinGet-installed Windows executable (`chezmoi.exe`) is for everyday system management. The mise-managed chezmoi copy is isolated for repository development and testing. Outside a mise-activated shell, `Get-Command chezmoi` should point to the native Windows installation.
 
+## Long Path Support
+
+Applying personal settings on Windows first runs `.chezmoiscripts/run_before_03-windows-long-paths.ps1.tmpl`, which sets `HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled` to `1` so long-path-aware tools such as `pwsh`, Python, and Git can use paths beyond `MAX_PATH` (260 characters). When the value is already `1`, the script changes nothing. Otherwise it asks for administrator approval through UAC; declining stops apply with instructions.
+
+The setting only affects processes started afterward, and it does not lift the limit for Windows PowerShell 5.1, which is not long-path aware. Repository scripts that run under Windows PowerShell 5.1, such as `scripts/prepare-external-assets.ps1`, use extended-length (`\\?\`) paths instead, so harness plugins with deep test fixtures install even before this setting takes effect.
+
 ## Virtualization and Hypervisor Verification
 
 Applying personal settings on Windows executes a pre-apply guard (`.chezmoiscripts/run_before_05-check-windows-prerequisites.ps1.tmpl`) that validates required virtualization features before any files are modified.
