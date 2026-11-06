@@ -9,11 +9,15 @@ unset CLAUDE_CONFIG_DIR
 claude="$HOME/.local/bin/claude"
 chezmoi='{{ .chezmoi.executable | replace "'" "'\\''" }}'
 checker='{{ $check }}'
+# An empty source keeps execute-template from reading $HOME as source state,
+# which fails on macOS where TCC blocks ~/.Trash.
+checker_source=$(mktemp -d)
+trap 'rmdir "$checker_source"' EXIT
 
 invoke_claude_plugin() {
     status=0
     output=$("$claude" "$@" --json 2>/dev/null) || status=$?
-    result=$(printf '%s\n' "$output" | tail -n 1 | "$chezmoi" --config /dev/null --config-format toml --source "$HOME" --destination "$HOME" execute-template --with-stdin "$checker")
+    result=$(printf '%s\n' "$output" | tail -n 1 | "$chezmoi" --config /dev/null --config-format toml --source "$checker_source" --destination "$HOME" execute-template --with-stdin "$checker")
     if [ "$status" -eq 0 ] && [ "$result" = ok ]; then return; fi
     if [ "$status" -eq 1 ] && [ "$result" = already-enabled ]; then return; fi
     printf 'Claude plugin command failed (exit %s)\n' "$status" >&2
