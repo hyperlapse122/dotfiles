@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -167,6 +168,25 @@ class T3CodeDesktopTest(unittest.TestCase):
         self.assertEqual(applied.returncode, 37, applied.stdout + applied.stderr)
         arguments = marker.read_text(encoding="utf-8-sig").splitlines()
         self.assertEqual(arguments[1:], [str(marker), "space value", 'quote"value', "trailing\\"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX Homebrew installation")
+    def test_macos_install_accepts_confirmation_without_input(self):
+        result = self.render(".chezmoiscripts/run_onchange_after_30-install-t3-code.sh.tmpl",
+                             "darwin", "arm64")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        brew = self.root / "brew"
+        brew.write_text('#!/bin/sh\ncase "$1" in\n'
+                        'list) exit 1 ;;\n'
+                        'install) [ "$*" = "install --yes --cask t3-code" ] ;;\n'
+                        '*) exit 92 ;;\nesac\n', encoding="utf-8")
+        brew.chmod(0o755)
+        script = self.root / "install.sh"
+        script.write_text(result.stdout.replace("/opt/homebrew/bin/brew", shlex.quote(brew.as_posix()))
+                          .replace("/Applications/T3 Code (Beta).app", "/missing-t3-test.app"),
+                          encoding="utf-8")
+        applied = subprocess.run(["/bin/sh", str(script)], env=self.env,
+                                 stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
 
     @unittest.skipUnless(os.name == "nt", "Native Windows missing desktop launcher")
     def test_missing_desktop_fails_without_using_another_t3(self):

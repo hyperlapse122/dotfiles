@@ -26,7 +26,8 @@ sh /tmp/dotfiles-provision-macos.sh
 This operation needs no existing Git, mise or checkout.
 It installs Homebrew through its [official installer](https://docs.brew.sh/Installation) when absent, then installs missing Git, mise, standalone chezmoi, GnuPG and pinentry-mac formulae.
 The supported Apple Silicon prefix is `/opt/homebrew`; an incompatible existing Homebrew installation requires manual resolution.
-Run as your normal user and complete any installer confirmation or administrator password prompts.
+Run as your normal user. The Homebrew installer runs with `NONINTERACTIVE=1`, and formula installation uses `--yes` to skip confirmation questions.
+If initial installation needs administrator access, authorize it beforehand with `sudo -v`; the unattended installer fails if it cannot obtain the required privileges.
 If a download or installation fails, resolve the reported problem and rerun; already installed packages are retained without requesting upgrades.
 The script does not initialize a checkout, register a chezmoi source, apply personal settings or edit shell startup files.
 It is not part of worktree initialization.
@@ -91,6 +92,8 @@ Preview may require GPG key access to render encrypted destinations.
 Explicit application installs missing host apps, configures existing managed files, installs native user-scope CE integrations, and runs `macos-build`.
 Host applications include Chrome, 1Password and its CLI, and Ghostty; T3 retains its existing installer.
 Every full `chezmoi apply`, including `mise run apply`, runs `brew update` followed by `brew upgrade` after ensuring the declared host apps are installed.
+Package installation and `brew upgrade` use `--yes` to skip Homebrew confirmation questions.
+Casks that require administrator access may still request a sudo password.
 This upgrades all eligible Homebrew packages, including packages installed outside this repository, using Homebrew's default pin and cask policies.
 No lockfile, scheduled updater, forced upgrades, or explicit cleanup is added.
 An update failure stops before upgrade; either command failing fails application.

@@ -11,7 +11,7 @@ version=$(sw_vers -productVersion)
 major=${version%%.*}
 case "$major" in ''|*[!0-9]*) fail 'Cannot identify the macOS version.' ;; esac
 [ "$major" -ge 26 ] || fail 'Requires macOS 26 or later.'
-[ "$(id -u)" -ne 0 ] || fail 'Run as a normal user, not root; approve installer prompts when requested.'
+[ "$(id -u)" -ne 0 ] || fail 'Run as a normal user, not root; pre-authorize sudo if the Homebrew installer needs it.'
 xcode-select -p >/dev/null 2>&1 || fail 'Install Command Line Tools with xcode-select --install, then rerun.'
 xcrun --find clang >/dev/null 2>&1 || fail 'Select a usable Apple compiler with xcode-select.'
 
@@ -25,7 +25,7 @@ if [ ! -x "$brew" ]; then
     trap 'rm -f "$installer"' 0
     trap 'exit 1' 1 2 15
     curl -fsSL --output "$installer" https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
-    /bin/bash "$installer"
+    NONINTERACTIVE=1 /bin/bash "$installer"
 fi
 [ -x "$brew" ] || fail 'The Homebrew installer did not provide /opt/homebrew/bin/brew.'
 [ "$("$brew" --prefix)" = '/opt/homebrew' ] || fail 'Requires native Homebrew at /opt/homebrew.'
@@ -34,7 +34,7 @@ eval "$shellenv"
 
 for package in git mise chezmoi gnupg pinentry-mac; do
     if ! "$brew" list --formula --versions "$package" >/dev/null 2>&1; then
-        "$brew" install --formula "$package"
+        "$brew" install --yes --formula "$package"
     fi
 done
 for pair in git:git mise:mise chezmoi:chezmoi gnupg:gpg gnupg:gpgconf pinentry-mac:pinentry-mac; do
