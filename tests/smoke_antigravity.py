@@ -1,8 +1,8 @@
 """Apply locked Antigravity CLI/CE without claiming T3’s native provider ID.
 
-No external model request, personal OAuth, real keyring operation, or personal apply is used.
+The default run uses no external model request, personal OAuth, real keyring operation, or personal apply.
 Native instruction discovery uses a localhost capture-only endpoint that rejects requests.
-Authenticated CE invocation is tracked in https://github.com/hyperlapse122/dotfiles/issues/52.
+An explicit --authenticated run uses GEMINI_API_KEY for a real native CE invocation.
 """
 
 import argparse
@@ -18,10 +18,25 @@ from smoke_personal_apps import REPO, check_version, executable, run, temporary_
 from smoke_codex import capture_requests, strings
 
 
+def authenticated_environment(original, isolated):
+    key = original.get("GEMINI_API_KEY")
+    if not key:
+        raise RuntimeError("--authenticated requires an explicitly provisioned GEMINI_API_KEY")
+    result = isolated.copy()
+    result["GEMINI_API_KEY"] = key
+    # A capture/custom endpoint cannot count as authenticated provider evidence.
+    result.pop("GOOGLE_GEMINI_BASE_URL", None)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-target")
+    parser.add_argument("--authenticated", action="store_true",
+                        help="Use GEMINI_API_KEY for a real CE invocation in the disposable home")
     args = parser.parse_args()
+    if args.authenticated:
+        authenticated_environment(os.environ, {})
     chezmoi = executable("chezmoi")
     real_environment = os.environ.copy()
     app_locks = json.loads((REPO / "home/.chezmoidata/personal-app-lock.json").read_text(encoding="utf-8"))["personalAppLocks"]
@@ -150,7 +165,26 @@ def main():
         if not next(plugin for plugin in plugins if plugin["name"] == "compound-engineering")["enabled"]:
             raise RuntimeError("Reapply did not restore native CE enablement")
         print("Verified: pinned CLI, native instructions/CE discovery, plugin repair, and native T3 provider ID left untouched")
-        print("T3's official ACP runtime and authenticated CE invocation are separate; invocation remains tracked in issue #52")
+        if args.authenticated:
+            auth_env = authenticated_environment(real_environment, env)
+            prompt = ("/ce-noslop mode:edit Rewrite only this supplied sentence and return only the rewritten sentence: "
+                      "The dotfiles verification returned AGY_CE_NATIVE_OK.")
+            completed = subprocess.run(
+                [str(cli), "--print", prompt, "--mode", "plan", "--print-timeout", "60s",
+                 "--output-format", "json"], env=auth_env, cwd=outside,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90)
+            try:
+                result = json.loads(completed.stdout)
+            except ValueError:
+                result = {}
+            if (completed.returncode or result.get("status") != "SUCCESS"
+                    or result.get("response", "").strip() != "The dotfiles verification returned AGY_CE_NATIVE_OK."):
+                raise RuntimeError("Authenticated native CE invocation did not complete with the expected response")
+            print(f"Authenticated {target}: native /ce-noslop completed with pinned CE {managed[0]['version']}; "
+                  "common/Antigravity instruction inclusion and foreign exclusion verified by the independent capture above")
+        else:
+            print("Authenticated CE invocation not attempted; use --authenticated with an authorized GEMINI_API_KEY")
+        print("T3's official ACP runtime remains separate from this CLI verification")
 
 
 if __name__ == "__main__":

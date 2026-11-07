@@ -14,6 +14,21 @@ import unittest
 
 from asset_fixtures import copy_asset_templates, run_with_assets
 
+class AntigravityAuthenticationTest(unittest.TestCase):
+    def test_authenticated_smoke_requires_explicit_api_key(self):
+        from smoke_antigravity import authenticated_environment
+        with self.assertRaisesRegex(RuntimeError, "GEMINI_API_KEY"):
+            authenticated_environment({}, {"HOME": "/disposable"})
+
+    def test_authenticated_smoke_keeps_disposable_home_and_official_endpoint(self):
+        from smoke_antigravity import authenticated_environment
+        result = authenticated_environment(
+            {"GEMINI_API_KEY": "inert-test-key", "GOOGLE_GEMINI_BASE_URL": "http://example.invalid"},
+            {"HOME": "/disposable", "GOOGLE_GEMINI_BASE_URL": "http://capture.invalid"})
+        self.assertEqual(result["HOME"], "/disposable")
+        self.assertEqual(result["GEMINI_API_KEY"], "inert-test-key")
+        self.assertNotIn("GOOGLE_GEMINI_BASE_URL", result)
+
 class HarnessPluginsTest(unittest.TestCase):
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
