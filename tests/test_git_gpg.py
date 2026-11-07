@@ -336,7 +336,8 @@ class GpgRecipientApplyTest(unittest.TestCase):
 
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
-        scratch = tempfile.TemporaryDirectory(prefix="gpg-import-", dir=None if os.name == "nt" else "/tmp")
+        # GnuPG's native agent socket names also have a short path limit on Windows.
+        scratch = tempfile.TemporaryDirectory(prefix="cgi-", dir=None if os.name == "nt" else "/tmp")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         self.source = self.root / "source"
@@ -353,16 +354,18 @@ class GpgRecipientApplyTest(unittest.TestCase):
             original = self.repo / "home" / relative
             if original.exists():
                 shutil.copy2(original, self.source / relative)
-        self.home = self.root / "home"
+        self.home = self.root / "h"
         self.home.mkdir()
         self.gpg_home = self.home / ("AppData/Roaming/gnupg" if os.name == "nt" else ".gnupg")
         self.gpg_home.mkdir(parents=True, mode=0o700)
         self.config = self.root / "chezmoi.toml"
         gpg = Path(shutil.which("gpg")).resolve()
-        self.config.write_text(
-            '[interpreters.ps1]\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n'
-            + "[data]\ngpgProgram = " + json.dumps(gpg.as_posix()) + "\n", encoding="utf-8",
-        )
+        config = ""
+        if os.name == "nt":
+            shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+            config += ('[interpreters.ps1]\ncommand = ' + json.dumps(str(shell)) +
+                       '\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n')
+        self.config.write_text(config + "[data]\ngpgProgram = " + json.dumps(gpg.as_posix()) + "\n", encoding="utf-8")
         self.env = os.environ | {
             "HOME": str(self.home), "USERPROFILE": str(self.home),
             "APPDATA": str(self.home / "AppData/Roaming"),

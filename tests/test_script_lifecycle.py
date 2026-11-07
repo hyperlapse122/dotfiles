@@ -11,11 +11,11 @@ import unittest
 class ScriptLifecycleTest(unittest.TestCase):
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
-        # GnuPG's Unix agent socket must fit the platform socket-path limit.
-        scratch = tempfile.TemporaryDirectory(prefix="script lifecycle ", dir=None if os.name == "nt" else "/tmp")
+        # GnuPG's native agent socket names must fit the platform path limit.
+        scratch = tempfile.TemporaryDirectory(prefix="csl-", dir=None if os.name == "nt" else "/tmp")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
-        self.home = self.root / "user home"
+        self.home = self.root / "h"
         self.home.mkdir()
         self.source = self.root / "source"
         self.source.mkdir()
