@@ -28,4 +28,29 @@
 {{- $entries = $entries | setValueAtPath $key $entry -}}
 {{- $settings = $settings | setValueAtPath $table $entries -}}
 {{- end -}}
+{{- /* Account-synced plugins have no entry, so _default turns them off. Existing entries stay on only from configured or bundled marketplaces. */ -}}
+{{- $plugins := get $settings "plugins" -}}
+{{- $localMarketplaces := concat (keys (get $settings "marketplaces")) (list "openai-bundled" "openai-primary-runtime") -}}
+{{- if not (hasKey $plugins "_default") -}}
+{{- $_ := set $plugins "_default" (dict) -}}
+{{- end -}}
+{{- range $plugin, $entry := $plugins -}}
+{{- if not (kindIs "map" $entry) -}}
+{{- fail (printf "Invalid Codex config.toml: plugins.%s must be a table" $plugin) -}}
+{{- end -}}
+{{- if or (eq $plugin "_default") (not (has (regexReplaceAll "^.*@" $plugin "") $localMarketplaces)) -}}
+{{- $_ := set $entry "enabled" false -}}
+{{- else if not (hasKey $entry "enabled") -}}
+{{- $_ := set $entry "enabled" true -}}
+{{- end -}}
+{{- end -}}
+{{- $features := dict -}}
+{{- if hasKey $settings "features" -}}
+{{- $features = get $settings "features" -}}
+{{- if not (kindIs "map" $features) -}}
+{{- fail "Invalid Codex config.toml: features must be a table" -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := set $features "apps" false -}}
+{{- $_ := set $settings "features" $features -}}
 {{- $settings | setValueAtPath "check_for_update_on_startup" false | toToml -}}
