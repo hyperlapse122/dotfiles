@@ -11,7 +11,8 @@ import unittest
 class ScriptLifecycleTest(unittest.TestCase):
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
-        scratch = tempfile.TemporaryDirectory(prefix="script lifecycle ")
+        # GnuPG's Unix agent socket must fit the platform socket-path limit.
+        scratch = tempfile.TemporaryDirectory(prefix="script lifecycle ", dir=None if os.name == "nt" else "/tmp")
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
         self.home = self.root / "user home"
