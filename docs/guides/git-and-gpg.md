@@ -19,7 +19,19 @@ Before applying dotfiles, verify that Git, mise, GnuPG (including `gpgconf`), an
 Explicit application builds the repository's Rust pinentry using the mise-pinned Rust toolchain. Windows application first runs the existing Visual Studio Build Tools readiness/provisioning task; Linux needs a native linker, and macOS needs its Command Line Tools.
 Worktree preparation (`mise install`) validates source state without building or installing the personal pinentry.
 
-Your signing key (and physical hardware token/YubiKey, if applicable) must already be configured on the host. This repository does not create, import, or distribute private keys or modify trust databases.
+Your private signing key (and physical hardware token/YubiKey, if applicable) must already be configured on the host. Explicit application provisions the configured recipient's public key; private keys and ownertrust remain the user's responsibility.
+
+## Public Recipient Provisioning
+
+During explicit application, `run_before_15-import-gpg-recipient` runs after the GPG home guard and before later apply scripts and ordinary target-template rendering. It uses the selected native `gpgProgram`, so the public recipient is available to subsequent encryption operations. The disposable-home lifecycle test checks both encryption in a later before-script and key lookup from a target template. GnuPG and its sibling `gpgconf` must already be installed when the home guard runs.
+
+The reviewed public key is stored as ASCII armor in `home/.chezmoidata/gpg-recipient.yaml`. Application first inspects a temporary copy in a disposable GPG home and requires exactly one public primary key matching `gpgRecipient`. This avoids changing the managed keyring during artifact verification. If the exact primary key is already present, import is skipped. Otherwise the script imports it and reads back its primary fingerprint. Unrelated keys and assigned ownertrust are preserved; fresh application does not need a keyserver connection.
+
+Worktree bootstrap (`mise install`), source inspection, and dry-run application do not import the key. The script does not run for standalone encryption commands or configuration initialization; apply first when preparing a fresh keyring.
+
+Public-key presence does not establish recipient validity or authorize private-key access. An unknown-validity recipient can still trigger GPG's trust prompt during encryption, including a failure in a shell without a TTY. Make any personal trust decision separately; application does not assign ownertrust or disable encryption trust checks.
+
+To refresh the public artifact, retrieve it from the [keys.openpgp.org fingerprint endpoint](https://keys.openpgp.org/vks/v1/by-fingerprint/621512777E6933FEB4458FDC4945855D4F283F05), inspect it with the native GPG `--import-options show-only --with-colons --import` in a disposable GPG home, and compare the primary `fpr` record with `gpgRecipient`. Review identities, subkeys, and revocations, then replace the armored YAML field and update its retrieval date. Do not inspect an unverified replacement in the personal keyring: even show-only inspection can create keyring and trust-database files.
 
 ### Platform Executable Defaults
 
