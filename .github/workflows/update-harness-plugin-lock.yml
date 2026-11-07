@@ -18,6 +18,7 @@ jobs:
     outputs:
       base-sha: ${{ steps.base.outputs.sha }}
       lock-artifact: ${{ steps.lock.outputs.artifact-id }}
+      skill-drift: ${{ steps.refresh.outputs.skill-drift }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,9 +29,21 @@ jobs:
         id: base
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Refresh the complete pin set
+        id: refresh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mise exec -- python scripts/update-harness-plugin-lock.py
+        shell: bash
+        run: |
+          # Exit 3 means plugin pins were written but a skill pack kept its reviewed pin.
+          set +e
+          mise exec -- python scripts/update-harness-plugin-lock.py
+          status=$?
+          set -e
+          if [ "$status" -eq 3 ]; then
+            echo "skill-drift=true" >> "$GITHUB_OUTPUT"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
       - name: Stage the immutable publication input
         run: |
           mkdir -p "$RUNNER_TEMP/locked-plugins"
@@ -78,3 +91,13 @@ jobs:
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -m 'chore: refresh harness plugin pins' -- "$lock"
           git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
+
+  report-skill-drift:
+    needs: [resolve, publish]
+    if: ${{ always() && needs.resolve.outputs.skill-drift == 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail until the shared skill change is reviewed
+        run: |
+          echo "::error::A shared skill pack kept its previous pin because upstream changed or could not be checked. The resolve job log names the difference; review it and update home/.chezmoidata/harness-skills.json."
+          exit 1

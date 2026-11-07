@@ -60,7 +60,8 @@ class CodexTest(unittest.TestCase):
         self.apply()
         settings = tomllib.loads(self.settings.read_text(encoding="utf-8"))
         self.assertIs(settings["check_for_update_on_startup"], False)
-        self.assertIs(settings["plugins"][PLUGIN_ID]["enabled"], True)
+        self.assertEqual(settings["plugins"], {"_default": {"enabled": False}, PLUGIN_ID: {"enabled": True}})
+        self.assertEqual(settings["features"], {"apps": False})
         marketplace = settings["marketplaces"]["compound-engineering-plugin"]
         self.assertEqual(marketplace["source_type"], "local")
         self.assertEqual(Path(marketplace["source"]), self.home / ".local/share/dotfiles/harness-plugins/compound-engineering")
@@ -87,7 +88,7 @@ class CodexTest(unittest.TestCase):
 model = "user-model"
 [history]
 max_bytes = 12345
-[plugins."unrelated@local"]
+[plugins."unrelated@unrelated"]
 enabled = false
 [plugins."compound-engineering@compound-engineering-plugin"]
 enabled = false
@@ -109,7 +110,7 @@ sparse_paths = ["old"]
             self.assertIs(parsed["check_for_update_on_startup"], False)
             self.assertEqual(parsed["model"], "user-model")
             self.assertEqual(parsed["history"], {"max_bytes": 12345})
-            self.assertEqual(parsed["plugins"]["unrelated@local"], {"enabled": False})
+            self.assertEqual(parsed["plugins"]["unrelated@unrelated"], {"enabled": False})
             self.assertEqual(parsed["plugins"][PLUGIN_ID], {"enabled": True, "mcp_servers": {"example": {"enabled": False}}})
             self.assertEqual(parsed["marketplaces"]["unrelated"], {"source_type": "local", "source": "/keep"})
             self.assertNotIn("ref", parsed["marketplaces"]["compound-engineering-plugin"])
@@ -120,9 +121,81 @@ sparse_paths = ["old"]
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)
 
+    def test_reapply_turns_off_account_plugin_sources(self):
+        self.codex.mkdir()
+        self.settings.write_text('''[features]
+unified_exec = true
+apps = true
+[plugins._default]
+enabled = true
+[plugins."github@openai-curated-remote"]
+enabled = true
+[plugins."github@openai-curated-remote".mcp_servers.github]
+enabled = true
+[plugins."docs@workspace-directory"]
+enabled = true
+[plugins."x@future-remote"]
+enabled = true
+[plugins."notes.v2@openai-curated-remote"]
+enabled = true
+[plugins."browser@openai-bundled"]
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = false
+[plugins."mine@local-market".mcp_servers.helper]
+enabled = false
+[marketplaces.local-market]
+source_type = "local"
+source = "/local-market"
+''', encoding="utf-8")
+        self.apply()
+        parsed = tomllib.loads(self.settings.read_text(encoding="utf-8"))
+        self.assertEqual(parsed["plugins"], {
+            "_default": {"enabled": False},
+            PLUGIN_ID: {"enabled": True},
+            "github@openai-curated-remote": {"enabled": False, "mcp_servers": {"github": {"enabled": True}}},
+            "docs@workspace-directory": {"enabled": False},
+            "x@future-remote": {"enabled": False},
+            "notes.v2@openai-curated-remote": {"enabled": False},
+            "browser@openai-bundled": {"enabled": True},
+            "spreadsheets@openai-primary-runtime": {"enabled": False},
+            "mine@local-market": {"enabled": True, "mcp_servers": {"helper": {"enabled": False}}},
+        })
+        self.assertEqual(parsed["features"], {"unified_exec": True, "apps": False})
+        before = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_personal_marketplace_plugins_count_as_local(self):
+        manifest = self.home / ".agents/plugins/marketplace.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({"name": "personal-market", "plugins": []}), encoding="utf-8")
+        # A lower-priority manifest must not add a second local name.
+        claude_manifest = self.home / ".claude-plugin/marketplace.json"
+        claude_manifest.parent.mkdir(parents=True)
+        claude_manifest.write_text(json.dumps({"name": "shadow-market", "plugins": []}), encoding="utf-8")
+        self.codex.mkdir()
+        self.settings.write_text('''[plugins."mine@personal-market"]
+[plugins."off@personal-market"]
+enabled = false
+[plugins."shadow@shadow-market"]
+enabled = true
+[plugins."repo@unregistered-repo-market"]
+enabled = true
+''', encoding="utf-8")
+        self.apply()
+        plugins = tomllib.loads(self.settings.read_text(encoding="utf-8"))["plugins"]
+        self.assertEqual(plugins["mine@personal-market"], {"enabled": True})
+        self.assertEqual(plugins["off@personal-market"], {"enabled": False})
+        self.assertEqual(plugins["shadow@shadow-market"], {"enabled": False})
+        self.assertEqual(plugins["repo@unregistered-repo-market"], {"enabled": False})
+        before = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), before)
+
     def test_invalid_toml_and_owned_table_shapes_fail_without_replacement(self):
         self.codex.mkdir()
         for text in ('model = [unterminated\n', 'plugins = []\n', 'marketplaces = false\n',
+                     'features = false\n', '[plugins]\n_default = false\n',
                      '[plugins]\n"' + PLUGIN_ID + '" = false\n',
                      '[marketplaces]\ncompound-engineering-plugin = "invalid"\n'):
             with self.subTest(text=text):

@@ -92,7 +92,7 @@ Comprehensive guides are organized in [docs/](docs/README.md):
 - **[User Fonts](docs/guides/fonts.md):** Pinned JetBrains Mono, Pretendard, D2Coding, and Nerd Font installation, user-scope discovery, updates, and Windows loaded-file recovery.
 - **[Ghostty and the Login Shell](docs/guides/terminal.md):** Supported Ubuntu/macOS installation, default-terminal selection, zsh account shell, pending actions, and manual package updates.
 - **[T3 Code Desktop and Harness Integration](docs/guides/t3-code.md):** Desktop editor installation, command-line launchers, native Claude Code and Codex integration, and oh-my-pi Agent Control Protocol configuration.
-- **[Harness Plugins](docs/guides/harness-plugins.md):** Compound Engineering for Claude Code, Codex, and omp, pinned local marketplaces, update controls, and shared agent instructions.
+- **[Harness Plugins](docs/guides/harness-plugins.md):** Compound Engineering and the korean-skills writing skills for every managed harness, pinned local marketplaces, update controls, shared agent instructions, and account source isolation for Claude Code and Codex.
 - **[Native System CA Trust](docs/guides/system-ca.md):** Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, and platform activation.
 
 ### Maintenance

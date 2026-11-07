@@ -49,6 +49,9 @@ class ClaudeTest(unittest.TestCase):
         data = json.loads(self.settings.read_text(encoding="utf-8"))
         self.assertEqual(data["language"], "korean")
         self.assertIs(data["autoMemoryEnabled"], False)
+        self.assertIs(data["syncClaudeAiSkills"], False)
+        self.assertIs(data["syncClaudeAiPlugins"], False)
+        self.assertIs(data["disableClaudeAiConnectors"], True)
         self.assertEqual(data["env"]["DISABLE_AUTOUPDATER"], "1")
         self.assertEqual(data["env"]["CLAUDE_CODE_USE_POWERSHELL_TOOL"], "1")
         self.assertIs(data["enabledPlugins"][PLUGIN_ID], True)
@@ -82,6 +85,7 @@ class ClaudeTest(unittest.TestCase):
     def test_reapply_preserves_unowned_state_and_existing_memory(self):
         self.claude.mkdir()
         original = {"language": "english", "autoMemoryEnabled": True, "model": "owner-model",
+            "syncClaudeAiSkills": True, "syncClaudeAiPlugins": True, "disableClaudeAiConnectors": False,
             "env": {"DISABLE_AUTOUPDATER": "0", "OWNER_SETTING": "keep"},
             "enabledPlugins": {PLUGIN_ID: False, "unrelated@local": False},
             "extraKnownMarketplaces": {"other": {"source": {"source": "directory", "path": "/keep"}},

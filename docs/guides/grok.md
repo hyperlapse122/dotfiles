@@ -2,11 +2,11 @@
 
 Grok is installed as a native executable at `~/.local/bin/grok` (`grok.exe` on Windows). Supported targets are Windows x64/ARM64, Linux x64/ARM64, and Apple Silicon. The committed application lock pins the complete official versioned URL and SHA-256 checksum. The resolver reads the official stable pointer and hashes the published binaries; upstream does not publish SHA-256 sidecars for these artifacts. Explicit apply uses shared external-asset preparation and never runs the upstream installer or selects an installation-time latest version.
 
-Run `mise run apply` from the intended worktree to prepare the locked executable, merge private `~/.grok/config.toml`, render `~/.grok/AGENTS.md` from the shared instruction template with `harness=grok`, and register the pinned local Compound Engineering source through native Grok plugin commands. Worktree preparation does not apply settings or sign in.
+Run `mise run apply` from the intended worktree to prepare the locked executable, merge private `~/.grok/config.toml`, render `~/.grok/AGENTS.md` from the shared instruction template with `harness=grok`, register the pinned local Compound Engineering source through native Grok plugin commands, and place the pinned [korean-skills](harness-plugins.md#shared-user-scope-skills) in `~/.agents/skills`, which Grok reads natively. Worktree preparation does not apply settings or sign in.
 
 The managed scope is the default `~/.grok`. Custom `GROK_HOME` directories remain unmanaged.
 
-The managed configuration disables CLI automatic updates and Claude/Cursor instruction and skill compatibility. Native Grok plugins remain available. Other configuration, credentials, sessions, and unrelated plugins are preserved. Sign in separately with `grok login`, or provide `XAI_API_KEY` through the native environment route. Authentication is not provisioned by dotfiles.
+The managed configuration disables CLI automatic updates and Claude/Cursor instruction and skill compatibility. Grok therefore shows the Claude Code copies of the korean-skills in `~/.claude/skills` as `disabled` and loads each skill once from `~/.agents/skills`. Native Grok plugins remain available. Other configuration, credentials, sessions, and unrelated plugins are preserved. Sign in separately with `grok login`, or provide `XAI_API_KEY` through the native environment route. Authentication is not provisioned by dotfiles.
 
 Repository instructions follow Grok's native project-trust decision. Dotfiles does not pretrust repositories.
 

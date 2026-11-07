@@ -67,7 +67,7 @@ Malformed JSON or incompatible managed parent objects cause application to fail 
 
 ### Instructions shared with the terminal
 
-The native user instruction files select their harness branch from `home/.chezmoitemplates/agent-instructions`. T3 uses those same files and account homes. Edit the template's `context = t3` branch to add instructions only for T3; this branch is empty by default. Select a harness inside that branch when an addition should apply to one provider. The thin adapters render private files under `~/.t3/userdata/instructions/`, containing only the T3 addition. Close T3 and run `mise run apply` to reconcile launch settings after editing.
+The native user instruction files select their harness branch from `home/.chezmoitemplates/agent-instructions`. T3 uses those same files and account homes, so the common baseline, including its [writing-skills rule](harness-plugins.md#shared-user-scope-agent-instructions), reaches T3 launches. Edit the template's `context = t3` branch to add instructions only for T3; this branch is empty by default. Select a harness inside that branch when an addition should apply to one provider. The thin adapters render private files under `~/.t3/userdata/instructions/`, containing only the T3 addition. Close T3 and run `mise run apply` to reconcile launch settings after editing.
 
 `scripts/t3-instructions.py` composes additions with existing native options:
 
@@ -109,6 +109,8 @@ The template also manages a single `claudeAgent` provider entry:
 - Preserves unowned options, model choices, presentation, and unrelated providers. A custom path on this managed instance is restored to the managed destination on reapply.
 
 Claude uses its native SDK protocol; no ACP argument is added. Run `claude auth login` manually before authenticated use. Native compatibility is verified against T3 Code 0.1.7; a retained older desktop may need its normal update first.
+
+T3's Claude and Codex launches read the same user settings as the terminal, so the [account source isolation](harness-plugins.md#account-source-isolation) applies to them as well. claude.ai connectors, including T3 Connect, no longer load in T3's Claude sessions. The `t3-code` MCP server that T3 registers for each launch is not an account source and stays available to both Claude and Codex.
 
 > **Operational Warning:** **Close T3 Code before running `chezmoi apply` or `mise run apply`.** T3 Code writes to its settings files while running and does not share a cooperative file lock with chezmoi.
 

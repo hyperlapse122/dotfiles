@@ -9,11 +9,12 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
 
-from asset_fixtures import copy_asset_templates
+from asset_fixtures import copy_asset_templates, harness_skill_names
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 from smoke_codex import capture_requests, strings
 
@@ -91,7 +92,7 @@ def main():
             + '{{ if eq .harness "antigravity" }}' + markers["antigravity"] + "{{ end }}\n"
             + '{{ if ne .harness "antigravity" }}' + markers["foreign"] + "{{ end }}\n",
             encoding="utf-8")
-        copy_asset_templates(source, ('personal-apps', 'harness-plugins'))
+        copy_asset_templates(source, ('personal-apps', 'harness-plugins', 'harness-skills'))
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":
@@ -168,6 +169,14 @@ def main():
                 or any(markers["foreign"] in text for text in contexts)):
             raise RuntimeError("Native instruction discovery was not proven: " + captured.stdout + captured.stderr)
         print("Native instruction discovery: common and Antigravity rules included, foreign rules excluded; localhost capture rejected model execution")
+        # Antigravity lists each discovered skill as "- NAME (PATH): DESCRIPTION"
+        # in the same system instruction that carries the user rules.
+        agent_contexts = [text for text in contexts if markers["common"] in text]
+        for name in harness_skill_names():
+            counts = [len(re.findall(r"^- " + re.escape(name) + r" \(", text, re.M)) for text in agent_contexts]
+            if counts != [1] * len(agent_contexts):
+                raise RuntimeError(f"Native skill listing must name shared skill {name} exactly once per request: {counts}")
+        print("Native skill discovery: each shared skill listed exactly once in the outgoing request")
         chez("apply", "--force")
         plugins = json.loads(run([str(cli), "plugin", "list", "--json"], env=env, cwd=outside))
         managed = [plugin for plugin in plugins if plugin["name"] == "compound-engineering"]
