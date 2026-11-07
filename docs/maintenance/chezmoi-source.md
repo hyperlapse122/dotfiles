@@ -169,7 +169,7 @@ Verify in a disposable sandbox:
 - The common instructions are included.
 - Foreign harness conditional blocks are excluded.
 - The destination file is created with owner-only permissions.
-- Native CE skill discovery and invocation succeed from the pinned archive. Antigravity's authenticated invocation is deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52); its installation, enablement, validation, and discovery remain required.
+- Native CE skill discovery and invocation succeed from the pinned archive. Antigravity authenticated invocation is verified locally under the owner-selected scope in [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52); hosted smoke remains credential-free. Installation, enablement, validation, discovery, and isolated instruction checks remain required on eligible platforms.
 - Reapplication restores owned settings and preserves unrelated plugins, credentials, and application state.
 - T3 Code loads the native provider and launches its absolute managed executable without relying on the managed binary directory being on `PATH`.
 - Direct, concurrent T3, and later direct launches load the same baseline exactly once; only T3 receives its addition. Verify existing instruction settings, quoting, environment precedence, resume, compaction, and mode transitions through native request capture. Keep source inspection, controlled model transports, and authenticated model completion evidence distinct.

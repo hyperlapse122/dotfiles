@@ -291,57 +291,30 @@ Native smoke evidence supplements those fixtures; mocked Swift or shell commands
 Actual desktop launch, macOS approval, and current-directory forwarding with an existing Ghostty instance remain the [terminal guide's desktop checklist](../guides/terminal.md#desktop-acceptance-checklist).
 Do not describe a passing headless smoke or a selected desktop ID as proof that those GUI checks passed.
 
-### Automatic event policy
+### Automatic events
 
-`test-events.yml` owns read-only push/PR admission. Automatic runs are never canceled by this workflow. `test.yml` remains the read-only reusable and manually dispatchable suite. The personal-lock updater still calls `test.yml` with its immutable `base-sha` and `lock-artifact`; every suite checkout uses `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials.
+`test.yml` directly handles unfiltered `push` and `pull_request` events alongside its existing manual and reusable interfaces. The former `Test events` admission workflow and its metadata policy are removed. There is no conditional `Validate` reusable-call wrapper to leave a redundant skipped check.
 
-| Event or state | Validation |
+| Event | Validation |
 |---|---|
-| Nondefault branch without a PR | Branch-head suite |
-| PR opens or reopens | Event merge-result suite; any branch suite already admitted finishes |
-| Push updates an open, mergeable PR | PR merge-result suite owns validation once its matching run is scheduled; duplicate push fan-out is omitted |
-| PR conflicts or mergeability/run scheduling is unknown | Branch suite remains as fallback, with the admission reason in logs |
-| Default-branch push | Branch suite, regardless of PR lookup |
-| Tag push | Tag suite, distinct from a branch with the same short name |
-| Fork PR | Read-only merge-result suite |
-| Manual dispatch | Independent suite, with optional `base-sha` and `lock-artifact` inputs |
-| Reusable call | Independent caller-owned suite and input identity; automatic events cannot cancel it |
+| Any branch push, including the default branch | Event branch-head suite |
+| Tag push | Event tag suite |
+| PR opened, updated or reopened, including fork PRs | Event merge-result suite when GitHub can create the merge result |
+| Conflicted PR | GitHub does not schedule a `pull_request` run; the branch push suite remains available |
+| Manual dispatch | Independent suite with optional immutable checkout and candidate-artifact inputs |
+| Reusable call | Independent caller-owned suite with its existing input identity |
 
-PR checkout uses the event's immutable merge SHA, never a substituted head SHA. If only the base branch advances before admission, the original merge snapshot still runs: base advancement alone does not schedule a replacement PR event. This policy does not promise continuous revalidation against every later base commit.
+Every suite checkout retains `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials. Automatic PR validation uses the event's immutable merge SHA. Pin updaters still call the same reusable suite with an immutable `base-sha` and candidate artifacts.
 
-Deduplication uses only the read-only admission lookup. A push omits its full suite when a matching usable PR merge run owns the same head. There is no cancellation controller, `actions: write` permission, or workflow concurrency group that cancels runs. Superseded heads are rejected before fan-out; suites already admitted finish normally so their checks do not become `CANCELLED`.
+Push and PR suites are independent. A same-repository PR branch can run both suites for one update; this duplicate runner cost is the deliberate tradeoff for removing admission while preserving branch and merge-result coverage. There is no PR metadata lookup, superseded-head suppression, workflow cancellation, or Actions write permission. A fork's branch-push validation depends on Actions being enabled in that fork; the base repository still handles eligible fork PR events under GitHub's normal approval rules. Base-only advancement does not by itself schedule a new PR event.
 
-PR opening is not an atomic handoff: a push can pass admission before the PR exists or before its matching merge run is visible. Unknown metadata retains coverage rather than guessing, so fallback suites can overlap. Admission does not guarantee exactly one suite for every head under these races. Record observed overlap in the PR validation record; do not cancel an admitted run to remove it.
+The direct-workflow contracts in `tests/test_ci_workflows.py` cover unfiltered automatic triggers, retained manual/reusable entry points and checkout/artifact selection, read-only permissions, and removal of the conditional wrapper. Existing candidate-lock and matrix contracts remain in `tests/test_ci_areas.py`. Record current-head hosted push/PR run URLs and outcomes after publication; the historical measurements below describe the earlier topology.
 
-### Skipped reusable-call limitation
+### Check names
 
-The duplicate push suite is omitted, but its declared `Validate` reusable-workflow call remains a skipped check. GitHub documents that a false job condition [marks the job as skipped and leaves a visible check](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions). The check API reports `skipped`; GitHub treats that result as passing for merge requirements. It does not prove that validation ran. Required checks must select the actual per-area validation results described below.
+Automatic jobs now report directly under `Test`, without the `Validate /` reusable-call prefix. Their names remain `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`; the existing build and control jobs remain intact. Reusable callers can still add their own caller prefix.
 
-The scheduling investigation found no supported way to remove this check while retaining read-only admission and all existing fallbacks:
-
-| Alternative | Constraint it cannot preserve |
-|---|---|
-| Filter feature-branch pushes at the trigger | [Push filters match branch/tag names and paths](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushbranchestagsbranches-ignoretags-ignore); they cannot query current PR mergeability, matching run availability, or metadata errors. Excluding a branch also removes its no-PR, conflicted, and uncertain-metadata fallback. Tags need their own coverage. |
-| Use only PR events | [Conflicted PRs do not trigger `pull_request` workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request); branches without PRs and tags also lose coverage. |
-| Move the condition or change the matrix | A condition still skips a declared job. [Job conditions run before matrix expansion, and reusable calls use a static `uses` value](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idif). Matrix changes do not provide a documented guarantee that an empty configuration removes the call without a skipped check or scheduling error. |
-| Chain admission through `workflow_run` | [The downstream event is scheduled regardless of the upstream conclusion](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run). Reading admission output there still needs a conditional job; its default-branch SHA/ref also requires explicit preservation of the original event identity. |
-| Dispatch the suite only after admission | [Creating a workflow dispatch requires Actions write permission](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event). This exceeds the read-only policy. |
-
-The workflow and policy therefore retain their current behavior. Renaming the call, returning artificial success, or canceling a run would not satisfy the requested scheduling behavior. Removing the skipped check remains an unresolved platform limitation tracked in [the scheduling issue](https://github.com/hyperlapse122/dotfiles/issues/90).
-
-Hosted evidence checked on 2026-11-07 uses PR #89 head `0c3cd729a847746abb52c7ced215ed22bb72954b`:
-
-| Evidence | Observed result |
-|---|---|
-| [Push run](https://github.com/hyperlapse122/dotfiles/actions/runs/42325927961) | Success; admission passed and [Validate was skipped with zero steps](https://github.com/hyperlapse122/dotfiles/actions/runs/42325927961/job/128261208228). |
-| [Matching PR run](https://github.com/hyperlapse122/dotfiles/actions/runs/42325947961) | Success; all 122 jobs passed, including 121 jobs beneath the reusable call. |
-| [PR check rollup](https://github.com/hyperlapse122/dotfiles/pull/89/checks) | 126 successful checks and one skipped `Validate`; no canceled checks. This is evidence of the remaining check, not its removal. |
-
-The unchanged `test_ci_event_policy.py` module passes all 10 tests, covering branch/tag/default/fork/explicit invocations, superseded heads, base advancement, missing or mismatched PR runs, canceled PR runs, conflicts, unknown mergeability, and metadata errors. Each subsequent PR should record its own push/PR run URLs and check rollup after publication; the historical pair above does not verify a later commit.
-
-### Check-name migration and validation records
-
-Combined `Unit and supported-target rendering (...)` and `Native apps, CE, PATH, and credentials (...)` checks are replaced by `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, displayed beneath the `Validate` reusable call for automatic events. Each area's result remains independently visible. No required-check configuration or ruleset was returned for main during this change; repository protection settings are not modified. If protection is enabled, select the new per-area merge-result checks rather than the removed combined names or admission-only checks.
+Repository protection settings are not modified by this change. If a ruleset requires a former `Validate / ...` context, update it to the corresponding direct `Test` job context before merging. Admission-only checks never prove that the suite passed.
 
 ### Hosted measurements
 
