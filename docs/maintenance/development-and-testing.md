@@ -293,29 +293,25 @@ Do not describe a passing headless smoke or a selected desktop ID as proof that 
 
 ### Automatic event policy
 
-`test-events.yml` owns push/PR admission and obsolete-run cancellation. `test.yml` remains the read-only reusable and manually dispatchable suite. The personal-lock updater still calls `test.yml` with its immutable `base-sha` and `lock-artifact`; every suite checkout uses `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials.
+`test-events.yml` owns read-only push/PR admission. Automatic runs are never canceled by this workflow. `test.yml` remains the read-only reusable and manually dispatchable suite. The personal-lock updater still calls `test.yml` with its immutable `base-sha` and `lock-artifact`; every suite checkout uses `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials.
 
 | Event or state | Validation |
 |---|---|
 | Nondefault branch without a PR | Branch-head suite |
-| PR opens or reopens | Event merge-result suite; eligible in-flight branch suite is canceled |
+| PR opens or reopens | Event merge-result suite; any branch suite already admitted finishes |
 | Push updates an open, mergeable PR | PR merge-result suite owns validation once its matching run is scheduled; duplicate push fan-out is omitted |
 | PR conflicts or mergeability/run scheduling is unknown | Branch suite remains as fallback, with the admission reason in logs |
 | Default-branch push | Branch suite, regardless of PR lookup |
 | Tag push | Tag suite, distinct from a branch with the same short name |
-| Fork PR | Read-only merge-result suite; no write-capable cancellation controller |
+| Fork PR | Read-only merge-result suite |
 | Manual dispatch | Independent suite, with optional `base-sha` and `lock-artifact` inputs |
 | Reusable call | Independent caller-owned suite and input identity; automatic events cannot cancel it |
 
 PR checkout uses the event's immutable merge SHA, never a substituted head SHA. If only the base branch advances before admission, the original merge snapshot still runs: base advancement alone does not schedule a replacement PR event. This policy does not promise continuous revalidation against every later base commit.
 
-The primary deduplication decision is the read-only admission lookup, not cancellation. A metadata-only controller has job-local `actions: write`, no checkout, and no repository-code execution. It targets only older runs of the exact event-entry workflow and verified logical target. Full refs in run titles distinguish branches from tags. Freshness checks and run-number bounds prevent delayed old controllers from selecting newer runs. An exact event/ref/SHA concurrency group cancels duplicate snapshots without making arrival order decide which commit is current.
+Deduplication uses only the read-only admission lookup. A push omits its full suite when a matching usable PR merge run owns the same head. There is no cancellation controller, `actions: write` permission, or workflow concurrency group that cancels runs. Superseded heads are rejected before fan-out; suites already admitted finish normally so their checks do not become `CANCELLED`.
 
-PR opening is not an atomic handoff: a push can pass admission before the PR exists, and API listing/cancellation can race. Targeted cleanup cancels the replaceable push while the merge suite remains authoritative. Unknown metadata retains coverage rather than guessing; any overlap and actual cancellation evidence belong in the PR validation record.
-
-The first observed handoff is [PR run 41966823335](https://github.com/hyperlapse122/dotfiles/actions/runs/41966823335): its metadata-only controller logged cancellation of [push run 41966778441](https://github.com/hyperlapse122/dotfiles/actions/runs/41966778441) at `2026-11-05T04:17:17Z`, and all PR jobs passed. Canceled push checks can remain visible alongside the successful PR merge run. Check the event and run URL before retrying them; retrying the superseded push would recreate the duplicate suite.
-
-For a current-head push, reconciliation cancels only an already-active duplicate suite, not admission-only work or a completed suite. The push admission can then finish successfully and omit its fan-out, instead of leaving canceled control checks on the current PR. Older-head automatic runs remain eligible for cancellation. If uncertain admission metadata starts fallback work after reconciliation inspected the job list, overlap remains possible; coverage takes precedence.
+PR opening is not an atomic handoff: a push can pass admission before the PR exists or before its matching merge run is visible. Unknown metadata retains coverage rather than guessing, so fallback suites can overlap. Admission does not guarantee exactly one suite for every head under these races. Record observed overlap in the PR validation record; do not cancel an admitted run to remove it.
 
 ### Check-name migration and validation records
 
