@@ -165,6 +165,33 @@ source = "/local-market"
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)
 
+    def test_personal_marketplace_plugins_count_as_local(self):
+        manifest = self.home / ".agents/plugins/marketplace.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({"name": "personal-market", "plugins": []}), encoding="utf-8")
+        # A lower-priority manifest must not add a second local name.
+        claude_manifest = self.home / ".claude-plugin/marketplace.json"
+        claude_manifest.parent.mkdir(parents=True)
+        claude_manifest.write_text(json.dumps({"name": "shadow-market", "plugins": []}), encoding="utf-8")
+        self.codex.mkdir()
+        self.settings.write_text('''[plugins."mine@personal-market"]
+[plugins."off@personal-market"]
+enabled = false
+[plugins."shadow@shadow-market"]
+enabled = true
+[plugins."repo@unregistered-repo-market"]
+enabled = true
+''', encoding="utf-8")
+        self.apply()
+        plugins = tomllib.loads(self.settings.read_text(encoding="utf-8"))["plugins"]
+        self.assertEqual(plugins["mine@personal-market"], {"enabled": True})
+        self.assertEqual(plugins["off@personal-market"], {"enabled": False})
+        self.assertEqual(plugins["shadow@shadow-market"], {"enabled": False})
+        self.assertEqual(plugins["repo@unregistered-repo-market"], {"enabled": False})
+        before = self.settings.read_bytes()
+        self.apply()
+        self.assertEqual(self.settings.read_bytes(), before)
+
     def test_invalid_toml_and_owned_table_shapes_fail_without_replacement(self):
         self.codex.mkdir()
         for text in ('model = [unterminated\n', 'plugins = []\n', 'marketplaces = false\n',

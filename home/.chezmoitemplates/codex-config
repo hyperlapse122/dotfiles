@@ -28,9 +28,22 @@
 {{- $entries = $entries | setValueAtPath $key $entry -}}
 {{- $settings = $settings | setValueAtPath $table $entries -}}
 {{- end -}}
-{{- /* Account-synced plugins have no entry, so _default turns them off. Existing entries stay on only from configured or bundled marketplaces. */ -}}
+{{- /* Account-synced plugins have no entry, so _default turns them off. Existing entries stay on only from
+      configured, bundled, or personal (home-directory) marketplaces. */ -}}
 {{- $plugins := get $settings "plugins" -}}
 {{- $localMarketplaces := concat (keys (get $settings "marketplaces")) (list "openai-bundled" "openai-primary-runtime") -}}
+{{- /* Codex reads the first of these manifests under the home directory as the personal marketplace. */ -}}
+{{- $personalFound := false -}}
+{{- range $relative := list ".agents/plugins/marketplace.json" ".agents/plugins/api_marketplace.json" ".claude-plugin/marketplace.json" ".cursor-plugin/marketplace.json" -}}
+{{- $manifestPath := joinPath $.chezmoi.destDir $relative -}}
+{{- if and (not $personalFound) (stat $manifestPath) -}}
+{{- $personalFound = true -}}
+{{- $manifest := include $manifestPath | fromJson -}}
+{{- if and (kindIs "map" $manifest) (kindIs "string" (get $manifest "name")) (get $manifest "name") -}}
+{{- $localMarketplaces = append $localMarketplaces (get $manifest "name") -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- if not (hasKey $plugins "_default") -}}
 {{- $_ := set $plugins "_default" (dict) -}}
 {{- end -}}
