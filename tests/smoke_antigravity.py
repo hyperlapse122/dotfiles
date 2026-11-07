@@ -91,7 +91,7 @@ def main():
             + '{{ if eq .harness "antigravity" }}' + markers["antigravity"] + "{{ end }}\n"
             + '{{ if ne .harness "antigravity" }}' + markers["foreign"] + "{{ end }}\n",
             encoding="utf-8")
-        copy_asset_templates(source, ('personal-apps', 'harness-plugins'))
+        copy_asset_templates(source, ('personal-apps', 'harness-plugins', 'harness-skills'))
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":

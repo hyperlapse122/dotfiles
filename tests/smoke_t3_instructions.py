@@ -400,7 +400,7 @@ def main():
                 shutil.copytree(args.plugin_directory / resource, plugin / resource)
             shutil.copytree(args.plugin_directory / '.agents/plugins', plugin / '.agents/plugins')
         else:
-            assets.append('harness-plugins')
+            assets += ['harness-plugins', 'harness-skills']
         copy_asset_templates(source, assets)
         config = root / 'chezmoi.toml'
         config.write_text('')

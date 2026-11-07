@@ -161,7 +161,7 @@ def main():
             'codex-smoke-common-instructions\n'
             '{{ if eq .harness "codex" }}codex-smoke-native-instructions{{ end }}\n'
             '{{ if eq .harness "omp" }}codex-smoke-foreign-instructions{{ end }}\n', encoding="utf-8")
-        copy_asset_templates(source, ('personal-apps', 'codex-package', 'harness-plugins'))
+        copy_asset_templates(source, ('personal-apps', 'codex-package', 'harness-plugins', 'harness-skills'))
         config = root / "chezmoi.toml"
         config_text = ""
         if os.name == "nt":

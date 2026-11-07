@@ -203,7 +203,7 @@ def main():
             for name in ('.grok-plugin', 'skills'):
                 shutil.copytree(args.plugin_directory / name, plugin / name)
         else:
-            assets.append('harness-plugins')
+            assets += ['harness-plugins', 'harness-skills']
         copy_asset_templates(source, assets)
         (home / '.grok').mkdir()
         config_path = home / '.grok/config.toml'

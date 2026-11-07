@@ -394,7 +394,7 @@ def main():
             destination = home / ".local/bin" / binary_name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(existing_omp, destination)
-        copy_asset_templates(source, ("personal-apps", "codex-package", "harness-plugins"))
+        copy_asset_templates(source, ("personal-apps", "codex-package", "harness-plugins", "harness-skills"))
         declaration = source / ".chezmoidata/personal-apps.json"
         data = json.loads(declaration.read_text(encoding="utf-8"))
         selected = ("codex", "claude") if existing_omp.is_file() else ("omp", "codex", "claude")

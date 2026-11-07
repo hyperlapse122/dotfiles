@@ -214,7 +214,7 @@ def main():
             for resource in ('.pi', 'skills'):
                 shutil.copytree(args.plugin_directory / resource, plugin / resource)
         else:
-            assets.append('harness-plugins')
+            assets += ['harness-plugins', 'harness-skills']
         copy_asset_templates(source, assets)
         config = root / 'chezmoi.toml'
         config.write_text('')

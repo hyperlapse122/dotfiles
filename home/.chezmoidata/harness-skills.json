@@ -3,10 +3,6 @@
     "korean-skills": {
       "repository": "DaleSeo/korean-skills",
       "tagPrefix": "v",
-      "archiveExclude": [
-        "*/AGENTS.md",
-        "*/CLAUDE.md"
-      ],
       "skills": {
         "grammar-checker": {
           "allowedTools": "Read Write Edit Grep Glob AskUserQuestion"

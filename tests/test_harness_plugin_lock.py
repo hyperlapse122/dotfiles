@@ -40,7 +40,6 @@ class HarnessPluginLockTest(unittest.TestCase):
         self.skills_manifest.write_text(json.dumps({"harnessSkills": {"writing": {
             "repository": "owner/skills",
             "tagPrefix": "v",
-            "archiveExclude": ["*/AGENTS.md", "*/CLAUDE.md"],
             "skills": {name: {"allowedTools": TOOLS} for name in ("grammar-checker", "humanizer", "style-guide")},
         }}}), encoding="utf-8")
         self.skill_base = "repos/owner/skills"
