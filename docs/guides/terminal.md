@@ -135,7 +135,7 @@ After applying and renewing the session:
 3. In a newly launched Ghostty shell, check `printf '%s\n' "$SHELL"`, `ps -p $$ -o comm=`, and discovery of the repository-managed commands.
 4. Where a native file-manager terminal action uses the managed dispatcher, select a known folder and check `pwd` in the new terminal.
 5. Repeat the directory check with Ghostty already running, because preference selection alone does not prove existing-instance working-directory forwarding.
-6. Apply again and confirm the intended defaults remain selected without duplicate shell startup entries or application upgrades.
+6. Apply again and confirm the intended defaults remain selected without duplicate shell startup entries. On macOS, each full apply also [updates eligible Homebrew packages](../setup/macos.md#preview-and-apply).
 
 Hosted native CI verifies actual installation and native interfaces separately from isolated unit fixtures.
 It cannot establish physical desktop shortcuts, interactive approval, or the working directory of an opened GUI window; retain those observations separately.

@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 import unittest
@@ -15,7 +16,7 @@ class MacAppsTest(MacFixture):
         executable.chmod(0o755)
         result = self.run_script('scripts/macos-apps.sh', 'cask:ghostty')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in self.calls()))
+        self.assertFalse(any(name == 'brew' and args[0] == 'install' for name, args in self.calls()))
 
     def test_incomplete_ghostty_bundle_does_not_count_as_installed(self):
         (self.home / 'Applications/Ghostty.app').mkdir(parents=True)
@@ -37,13 +38,15 @@ class MacAppsTest(MacFixture):
         calls = self.calls()
         installs = [args for name, args in calls if name == 'brew' and args[0] == 'install']
         self.assertEqual(installs, [['install', '--cask', package.split(':')[1]] for package in packages])
+        self.assertEqual(calls[-2:], [['brew', ['update']], ['brew', ['upgrade']]])
         self.assertFalse(any(name == 'podman' for name, args in calls))
         self.state = json.loads((self.root / 'state.json').read_text())
         before = len(calls)
         result = self.run_script('scripts/macos-apps.sh', *packages)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         repeated = self.calls()[before:]
-        self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in repeated))
+        self.assertFalse(any(name == 'brew' and args[0] == 'install' for name, args in repeated))
+        self.assertEqual(repeated[-2:], [['brew', ['update']], ['brew', ['upgrade']]])
         self.assertFalse(any(name == 'podman' for name, args in repeated))
 
     def test_existing_podman_and_stopped_machine_are_untouched(self):
@@ -66,7 +69,55 @@ class MacAppsTest(MacFixture):
         self.wrapper(self.bin / 'op', 'op')
         result = self.run_script('scripts/macos-apps.sh', 'cask:google-chrome', 'cask:1password', 'cask:1password-cli')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in self.calls()))
+        self.assertFalse(any(name == 'brew' and args[0] == 'install' for name, args in self.calls()))
+
+    def test_empty_app_list_still_updates_all_homebrew_packages(self):
+        result = self.run_script('scripts/macos-apps.sh')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.calls()[-2:], [['brew', ['update']], ['brew', ['upgrade']]])
+
+    def test_update_failures_fail_application(self):
+        for command in ('update', 'upgrade'):
+            with self.subTest(command=command):
+                self.state['fail'] = 'brew ' + command
+                result = self.run_script('scripts/macos-apps.sh')
+                self.assertEqual(result.returncode, 23, result.stdout + result.stderr)
+                self.assertEqual(self.calls()[-1], ['brew', [command]])
+                if command == 'update':
+                    self.assertNotIn(['brew', ['upgrade']], self.calls())
+
+    @unittest.skipUnless(os.name != 'nt' and shutil.which('chezmoi'), 'Real POSIX chezmoi required')
+    def test_unchanged_native_apply_updates_homebrew_each_time(self):
+        templates = self.source / '.chezmoitemplates'
+        templates.mkdir()
+        hook = self.repo / 'home/.chezmoiscripts/run_before_15-install-macos-apps.sh.tmpl'
+        shutil.copy2(hook, templates / 'app-hook')
+        config = self.root / 'empty.toml'
+        config.write_text('')
+        data = {'chezmoi': {'os': 'darwin', 'arch': 'arm64', 'workingTree': str(self.repo)},
+                'macos': {'formulae': [], 'casks': ['1password-cli']}}
+        template = '{{ $data := ' + json.dumps(json.dumps(data)) + ' | fromJson }}{{ includeTemplate "app-hook" $data }}'
+        chezmoi = shutil.which('chezmoi')
+        rendered = subprocess.run([chezmoi, '--source', str(self.source), '--config', str(config),
+                                   'execute-template', template],
+                                  env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+        scripts = self.source / '.chezmoiscripts'
+        scripts.mkdir()
+        (scripts / hook.name.removesuffix('.tmpl')).write_text(rendered.stdout)
+        (self.root / 'state.json').write_text(json.dumps(self.state))
+        env = dict(self.env, PATH=str(self.bin))
+        for _ in range(2):
+            result = subprocess.run([chezmoi, '--source', str(self.source), '--destination', str(self.home),
+                                     '--config', str(config), '--cache', str(self.root / 'cache'),
+                                     '--persistent-state', str(self.root / 'chezmoi-state.boltdb'),
+                                     '--no-tty', 'apply'],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        mutations = [args for name, args in self.calls()
+                     if name == 'brew' and args[0] in ('install', 'update', 'upgrade')]
+        self.assertEqual(mutations, [['install', '--cask', '1password-cli'],
+                                     ['update'], ['upgrade'], ['update'], ['upgrade']])
 
     def test_command_failure_stops_application(self):
         self.state['fail'] = 'brew'
