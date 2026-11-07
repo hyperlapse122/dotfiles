@@ -173,9 +173,9 @@ items:
     verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#52":
     source: "gh-issues"
-    status: "in_plan"
+    status: "analyzed"
     sensitive: false
-    body: "Verify authenticated native CE invocation for Antigravity — deferred verification from the Antigravity onboarding in #32."
+    body: "Verify authenticated native CE invocation for Antigravity on the local PC; paid Actions model calls excluded by user scope."
     author_class: "teammate"
     cursor: "2026-11-06T04:10:17Z"
     existing_ack: true
@@ -183,13 +183,21 @@ items:
     existing_closeout: false
     existing_closeout_actor: null
     id: "hyperlapse122/dotfiles#52"
+    local_verification:
+      authenticated_completion: true
+      ce_version: "3.35.1"
+      cli_version: "1.5.2"
+      full_skill_read: true
+      platform: "darwin-arm64"
+      scope: "Local native profile in disposable working directory; existing native authentication; credentials not copied; not disposable-home proof."
+    local_verified_at: "2026-11-07T04:17:25.818927+00:00"
     media: []
-    needs_attention: true
+    needs_attention: false
     origin: "https://github.com/hyperlapse122/dotfiles/issues/52"
     requirement_id: "R9"
     source_state: "closed"
     source_state_reason: "completed"
-    verification_note: "Source closed by owner without new fix evidence. PR #92 explicitly does not prove authenticated disposable-home execution on each eligible platform; retain requirement R9 pending verification."
+    verification_note: "Authenticated local macOS ARM64 execution passed with pinned agy 1.5.2 / CE 3.35.1, full skill read and exact SUCCESS response. User selected local-PC-only verification; no other-platform or disposable-home authentication claim."
   "gh-issues:hyperlapse122/dotfiles#54":
     source: "gh-issues"
     status: "closed"
