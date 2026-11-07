@@ -104,6 +104,9 @@ It replaces primary and legacy Ghostty configuration with default-only repositor
 Complete any login-shell authentication or native default-app approval, then use the [terminal guide](../guides/terminal.md) to check status and the association's boundaries.
 Pending session renewal or approval does not prevent later authentication hooks from running, but it does not mean the terminal environment is ready.
 
+Application also restores the declared [Dock preferences and pinned apps](../guides/macos-dock.md).
+Dock restarts briefly only when a managed preference changes; unrelated Dock preferences remain unchanged.
+
 Podman is not required or automatically installed on macOS.
 An existing Homebrew-installed Podman package participates in the full upgrade, but application does not manage Podman configuration or VM lifecycle.
 

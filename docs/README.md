@@ -28,6 +28,8 @@ Day-to-day operations, application management, and tool configurations:
   T3 Code desktop app installation, bundled CLI launchers, native Claude Code and Codex providers, and oh-my-pi ACP configuration.
 - **[Harness Plugins and AI Agent Configuration](guides/harness-plugins.md)**
   Compound Engineering for Claude Code, Codex, and omp, local marketplace cutover, update policies, version rollback, and shared user-scope instruction wiring.
+- **[macOS Dock](guides/macos-dock.md)**
+  Declared personal, work, and development app pins, Dock preferences, repeat application, and isolated verification.
 - **[Native System CA Trust](guides/system-ca.md)**
   Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, OS environment activation, and TLS verification.
 
