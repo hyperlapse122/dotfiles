@@ -8,7 +8,8 @@ import platform
 import plistlib
 import subprocess
 import sys
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 
 class Defaults:
@@ -38,7 +39,7 @@ def tile_path(tile):
     parsed = urlparse(url)
     if parsed.scheme != 'file' or parsed.netloc not in ('', 'localhost'):
         return None
-    return Path(unquote(parsed.path))
+    return Path(url2pathname(parsed.path))
 
 
 def make_tile(path, folder=False):
