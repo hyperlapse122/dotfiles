@@ -267,6 +267,27 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertFalse((self.tree / "CLAUDE.md").is_symlink())
         self.assertFalse((self.tree / "site").exists())
 
+    def test_archive_omits_unloaded_root_instructions_but_preserves_plugin_rules(self):
+        self.add_archive(self.first_sha, {
+            "AGENTS.md": "Contributor instructions, not plugin rules\n",
+            "GEMINI.md": "Unsupported root plugin context\n",
+            "rules/AGENTS.md": "Supported plugin rule\n",
+            "skills/example/SKILL.md": "Runtime skill\n",
+            "plugin.json": '{"name":"compound-engineering","version":"1.0.0"}\n',
+        })
+        # Reconciliation must also remove files left by an earlier installation.
+        self.tree.mkdir(parents=True)
+        for name in ("AGENTS.md", "GEMINI.md"):
+            (self.tree / name).write_text("previous installation\n", encoding="utf-8")
+        for _ in range(2):
+            self.apply()
+            for name in ("AGENTS.md", "GEMINI.md"):
+                self.assertFalse((self.tree / name).exists(), name)
+            self.assertEqual((self.tree / "rules/AGENTS.md").read_text(encoding="utf-8"),
+                             "Supported plugin rule\n")
+            self.assertTrue((self.tree / "skills/example/SKILL.md").is_file())
+            self.assertTrue((self.tree / "plugin.json").is_file())
+
     def test_existing_yml_wins_and_yaml_is_untouched(self):
         self.agent.mkdir(parents=True)
         self.yml.write_text("marketplace: {autoUpdate: auto}\nkeep: yml\n", encoding="utf-8")
