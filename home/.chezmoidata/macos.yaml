@@ -5,3 +5,5 @@ macos:
     - 1password
     - 1password-cli
     - ghostty
+    - claude
+    - chatgpt
