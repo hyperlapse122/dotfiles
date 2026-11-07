@@ -1,123 +1,179 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-11-06T04:10:27Z"
+    cursor: "2026-11-07T01:56:51Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#10":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Support CA-file trust fallback and encrypted CA provisioning on macOS/Linux — add CA-file integration for tools that cannot use OS trust, without disabling TLS verification."
+    fix_ref: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:25.276971+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:09:56Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 79
     id: "hyperlapse122/dotfiles#10"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/10"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#21":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Integrate GitHub CLI authentication and Docker Hub keyring-backed token authentication — follow-up auth work deferred from the Windows Kubernetes environment change."
+    fix_ref: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:28.557078+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:09:59Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 79
     id: "hyperlapse122/dotfiles#21"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/21"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#25":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Add keyring-backed GitLab registry login for Docker and Podman — authenticate to the private GitLab registry without plaintext tokens in client config."
+    fix_ref: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:30.974559+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:02Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 79
     id: "hyperlapse122/dotfiles#25"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/25"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#29":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Drop remaining Intel Mac support repository-wide — macOS support should be Apple Silicon only; darwin-amd64 entries remain in personal-apps data."
+    fix_ref: "78"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:33.525281+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:04Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 78
     id: "hyperlapse122/dotfiles#29"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/29"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#33":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Add pi as a managed harness with synthetic.new as its only provider — managed install, pinning, and repo-owned settings for pi."
+    fix_ref: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:35.791920+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:07Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 80
     id: "hyperlapse122/dotfiles#33"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/33"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#34":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Add Grok Build as a managed harness — managed install, pinning, and repo-owned settings under home/."
+    fix_ref: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:38.143148+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:09Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 80
     id: "hyperlapse122/dotfiles#34"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/34"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#41":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "ci: split test areas into parallel GitHub Actions jobs — run each independently runnable test area as its own job while keeping coverage."
+    fix_ref: "51"
+    verified_merge_sha: "5f4d8cc98559ce1853c2ceb4c6cdb0cbbab486c5"
+    verified_at: "2026-11-07T02:01:40.439966+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:14Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 51
     id: "hyperlapse122/dotfiles#41"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/41"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#42":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "ci: avoid duplicate push and pull request workflow runs — Test workflow runs on both push and PR events for the same branch."
+    fix_ref: "51"
+    verified_merge_sha: "5f4d8cc98559ce1853c2ceb4c6cdb0cbbab486c5"
+    verified_at: "2026-11-07T02:01:42.738557+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:12Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 51
     id: "hyperlapse122/dotfiles#42"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/42"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#52":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "in_plan"
     sensitive: false
     body: "Verify authenticated native CE invocation for Antigravity — deferred verification from the Antigravity onboarding in #32."
     author_class: "teammate"
@@ -129,73 +185,142 @@ items:
     id: "hyperlapse122/dotfiles#52"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/52"
+    requirement_id: "R9"
   "gh-issues:hyperlapse122/dotfiles#54":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Append T3-only instructions through native harness launch options — same baseline for CLI and T3 launches, extra T3 instructions only via per-launch mechanism."
+    fix_ref: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:45.020807+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:19Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 81
     id: "hyperlapse122/dotfiles#54"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/54"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#58":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Support protected SSH key storage and 1Password identities — keep local private keys in protected storage and allow 1Password-managed identities."
+    fix_ref: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:47.404487+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:22Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 79
     id: "hyperlapse122/dotfiles#58"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/58"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#68":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Organize Rust crates under crates/ in a Cargo workspace — move dotfiles-pinentry under crates/ with a root workspace."
+    fix_ref: "78"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:49.567274+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:24Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 78
     id: "hyperlapse122/dotfiles#68"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/68"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#70":
     source: "gh-issues"
-    status: "acknowledged"
+    status: "closed"
     sensitive: false
     body: "Provide jdx/usage-based shell completions for repository CLIs — completions starting with dotfiles-pinentry, as a reusable convention."
+    fix_ref: "78"
+    verified_merge_sha: "e3b2805da3a5b5799f20fd91620483f745cb5ca4"
+    verified_at: "2026-11-07T02:01:51.871375+00:00"
     author_class: "teammate"
     cursor: "2026-11-06T04:10:27Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
+    existing_closeout: true
     existing_closeout_actor: null
+    fix_evidence_note: "Merged PR describes this requirement; merge commit verified ancestor of current default-branch head."
+    fix_pr: 78
     id: "hyperlapse122/dotfiles#70"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/70"
+    verified_default_branch: "main"
+    verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
+  "gh-issues:hyperlapse122/dotfiles#83":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    body: "Use curl's cacert.pem as the public CA bundle source — retain pinned checksums, cache recovery, combined roots and scoped trust."
+    author_class: "teammate"
+    cursor: "2026-11-06T10:59:35Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#83"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/83"
+    requirement_id: "R16"
+  "gh-issues:hyperlapse122/dotfiles#84":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    body: "Import the dotfiles GPG public key before GPG is used — verify the configured recipient fingerprint during explicit apply; keep bootstrap read-only."
+    author_class: "teammate"
+    cursor: "2026-11-06T11:38:21Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#84"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/84"
+    requirement_id: "R17"
+  "gh-issues:hyperlapse122/dotfiles#90":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    body: "Remove redundant skipped push Validate checks from PRs — preserve merge-result validation, fallback coverage and read-only workflow permissions."
+    author_class: "teammate"
+    cursor: "2026-11-07T01:56:51Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#90"
+    media: []
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/90"
+    requirement_id: "R18"
 last_run:
-  timestamp: "2026-11-06T04:32:08.715116+00:00"
+  timestamp: "2026-11-07T02:02:26.434077+00:00"
   outcome: "completed"
-  writer: "sweep-codex-t3-8367affa-20261106"
+  writer: "sweep-codex-t3-7b8de630-20261107"
   counts:
     gh-issues:
       ack_deferred: 0
-      acknowledged: 0
-      closed: 0
-      existing_ack_confirmed: 13
-      ingested: 0
+      acknowledged: 3
+      closed: 12
+      existing_ack_confirmed: 1
+      ingested: 3
       manual_stuck: 0
-      new: 0
+      new: 3
+      open: 4
       recordings_analyzed: 0
