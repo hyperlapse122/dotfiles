@@ -2,3 +2,4 @@
 __pycache__/
 /target/
 .compound-engineering/config.local.yaml
+/.claude/
