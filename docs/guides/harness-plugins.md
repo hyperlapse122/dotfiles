@@ -84,7 +84,7 @@ Registration lives in Antigravity's native `~/.gemini/config` state. Apply does 
 Bootstrap does not install or enable plugins. Close Antigravity and T3 sessions before explicitly applying.
 
 Native installation, enablement, package validation, and skill discovery are verified without credentials.
-Authenticated CE skill invocation remains deferred to [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52); discovery is not evidence of model-backed invocation.
+Authenticated CE invocation is verified on the local PC as requested in [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52). Hosted CI remains credential-free; discovery alone is not evidence of model-backed invocation. See the local evidence below.
 
 ## Disabling Marketplace Auto-Updates
 
@@ -160,7 +160,7 @@ mise exec -- python tests/smoke_antigravity.py
 
 The omp smoke verifies local marketplace cutover, update policy, skill discovery, and preservation of unrelated plugins. The default Antigravity smoke proves native global-instruction ingestion through a localhost capture-only endpoint, runs the native preservation/malformed-state checks with its locked CLI, and verifies that apply leaves T3's native provider ID unclaimed. These default checks use disposable homes without real credentials or model completion; authenticated completion is a separate check.
 
-For an authorized Gemini API-key verification, provision `GEMINI_API_KEY` through the environment without printing its value, then run:
+For an optional local disposable-home Gemini API-key verification, provision `GEMINI_API_KEY` through the environment without printing its value, then run:
 
 ```sh
 mise exec -- python tests/smoke_antigravity.py --authenticated
@@ -168,7 +168,7 @@ mise exec -- python tests/smoke_antigravity.py --authenticated
 
 This opt-in path keeps the disposable home, selects the CLI's Gemini provider, and executes native `/ce-noslop` against the official Gemini endpoint. It requires a completed native `read_file` event for the selected pinned skill, with its full line/byte counts, before the final successful response. An echo without that read fails verification. Antigravity loads skill content through the agent's progressive file-read flow; its first model request contains the skill index, not an eagerly expanded body. It fails before preparation when the key is absent. It does not copy personal account state, use personal keyring credentials as a fixture, or automate sign-in. A custom/capture endpoint cannot supply authenticated evidence. The ordinary CI smoke remains credential-free. See [official authentication requirements](https://antigravity.google/docs/install#using-a-gemini-api-key).
 
-On 2026-11-07, the owner-authorized native macOS ARM64 `agy 1.5.2` completed both a plain authenticated probe (`AGY_AUTHENTICATED_OK`) and `/ce-noslop` with CE 3.35.1. The latter streaming trace records a completed native read of the selected skill (45 lines, 4048 bytes), followed by `SUCCESS` and `The dotfiles verification returned AGY_CE_NATIVE_OK.`. These live probes used the already configured native account and `/tmp` as the working directory; they did not use a disposable account home. They supplement the isolated instruction/plugin smoke and do not establish authenticated disposable-home execution on Windows or Linux. [Issue #52](https://github.com/hyperlapse122/dotfiles/issues/52) remains open until the required platform evidence is available. T3's separately installed native runtime is outside this CLI proof.
+On 2026-11-07, the owner-authorized native macOS ARM64 `agy 1.5.2` completed both a plain authenticated probe (`AGY_AUTHENTICATED_OK`) and `/ce-noslop` with CE 3.35.1. The latter streaming trace records a completed native read of the selected skill (45 lines, 4048 bytes), followed by `SUCCESS` and `The dotfiles verification returned AGY_CE_NATIVE_OK.`. These live probes used the already configured native account and `/tmp` as the working directory; they did not use a disposable account home. They supplement the isolated instruction/plugin smoke and do not establish authenticated disposable-home execution on Windows or Linux. The owner selected local-PC-only authenticated verification for [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52); authenticated Windows/Linux or disposable-home execution is outside that scope. A fresh local run on 2026-11-07 again passed the existing full-skill-read and exact-response verifier using native authentication in a disposable working directory. Do not add paid model calls or inference credentials to Actions for this verification. T3's separately installed native runtime is outside this CLI proof.
 
 For Codex's isolated native integration:
 
