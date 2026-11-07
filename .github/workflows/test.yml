@@ -88,6 +88,14 @@ jobs:
         shell: bash
         run: cp -- "$RUNNER_TEMP/locked-fonts/font-lock.json" home/.chezmoidata/font-lock.json
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+      - name: Check that installing tools leaves the committed lock unchanged
+        if: matrix.area == 'platform'
+        shell: bash
+        run: |
+          if ! git diff --exit-code -- mise.lock .mise/locks; then
+            echo "::error file=mise.lock::mise install rewrote the lock on ${{ matrix.runner }}; run 'mise lock' and commit the result."
+            exit 1
+          fi
       - &native-windows-gpg
         name: Provision native Windows GPG integration-test prerequisite
         if: runner.os == 'Windows' && (matrix.area == 'security' || matrix.area == 'github-auth' || matrix.area == 'gitlab-auth')
