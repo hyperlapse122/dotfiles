@@ -90,15 +90,19 @@ mise run apply
 Preview may require GPG key access to render encrypted destinations.
 Explicit application installs missing host apps, configures existing managed files, installs native user-scope CE integrations, and runs `macos-build`.
 Host applications include Chrome, 1Password and its CLI, and Ghostty; T3 retains its existing installer.
-Already-installed host packages are retained without an automatic package upgrade policy.
+Every full `chezmoi apply`, including `mise run apply`, runs `brew update` followed by `brew upgrade` after ensuring the declared host apps are installed.
+This upgrades all eligible Homebrew packages, including packages installed outside this repository, using Homebrew's default pin and cask policies.
+No lockfile, scheduled updater, forced upgrades, or explicit cleanup is added.
+An update failure stops before upgrade; either command failing fails application.
+Configuration previews and worktree preparation do not run these commands.
 
 Application also reconciles the account's zsh login shell and Ghostty's native Unix-executable association.
 It replaces primary and legacy Ghostty configuration with default-only repository content, including the macOS Application Support location.
 Complete any login-shell authentication or native default-app approval, then use the [terminal guide](../guides/terminal.md) to check status and the association's boundaries.
 Pending session renewal or approval does not prevent later authentication hooks from running, but it does not mean the terminal environment is ready.
 
-Podman is not managed or required on macOS.
-Application leaves existing Podman installations and VMs untouched, including their running or stopped state.
+Podman is not required or automatically installed on macOS.
+An existing Homebrew-installed Podman package participates in the full upgrade, but application does not manage Podman configuration or VM lifecycle.
 
 `macos-build` validates Apple's selected compiler and SDK, installs native .NET 8/10 and Rust through mise, and prepares the pinned writable vcpkg checkout.
 It publishes tool roots and Python/PowerShell/CMake/Ninja links under `~/.local/share/dotfiles/build` for use outside a task.

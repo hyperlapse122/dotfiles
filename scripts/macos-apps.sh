@@ -35,4 +35,7 @@ for item in "$@"; do
     fi
 done
 
+brew update
+brew upgrade
+
 printf '%s\n' 'macOS applications are available.'
