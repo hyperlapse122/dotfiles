@@ -21,7 +21,7 @@ import threading
 import time
 from unittest.mock import patch
 
-from asset_fixtures import copy_asset_templates, run_with_assets
+from asset_fixtures import copy_asset_templates, harness_skill_names, run_with_assets
 from smoke_personal_apps import REPO, check_version, executable
 from smoke_codex import strings
 
@@ -203,7 +203,9 @@ def main():
             for name in ('.grok-plugin', 'skills'):
                 shutil.copytree(args.plugin_directory / name, plugin / name)
         else:
-            assets += ['harness-plugins', 'harness-skills']
+            assets.append('harness-plugins')
+        # A local CE directory replaces only the CE asset; the shared-skill count needs these copies.
+        assets.append('harness-skills')
         copy_asset_templates(source, assets)
         (home / '.grok').mkdir()
         config_path = home / '.grok/config.toml'
@@ -262,6 +264,11 @@ def main():
         skills = [item for item in repaired['skills'] if item['name'] == 'ce-noslop']
         if len(skills) != 1:
             raise RuntimeError('Native Grok CE skill discovery was missing or duplicated.')
+        # Grok marks the Claude-compatible copies it lists but does not load as disabled.
+        for skill in harness_skill_names():
+            active = [item['source'] for item in repaired['skills'] if item['name'] == skill and not item.get('disabled')]
+            if len(active) != 1:
+                raise RuntimeError(f'Native Grok shared skill {skill} was missing or duplicated: {active}')
         if state.read_text() != 'preserve unrelated application state' or 'auto_compact_threshold_percent = 73' not in config_path.read_text():
             raise RuntimeError('Explicit apply changed unrelated native Grok settings/state.')
         result = invoke(binary, ['-m', 'grok-code-fast-1', '--max-turns', '1', '-p',
@@ -285,7 +292,8 @@ def main():
             raise RuntimeError('Native Grok loaded foreign harness instructions.')
         if args.t3 or args.install_desktop:
             t3_startup(binary, root, home, outside, env, target, args.install_desktop)
-        print(f'Native Grok {pins["grok"]["tag"]}: {target}, private settings, native CE repair/discovery/expansion passed')
+        print(f'Native Grok {pins["grok"]["tag"]}: {target}, private settings, native CE repair/discovery/expansion, '
+              'and exactly-once shared skill discovery passed')
         print('Model completion was not exercised: loopback inference requests were deliberately rejected.')
 
 

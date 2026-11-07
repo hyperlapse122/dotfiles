@@ -17,7 +17,7 @@ import threading
 import time
 import tomllib
 
-from asset_fixtures import copy_asset_templates
+from asset_fixtures import copy_asset_templates, harness_skill_names
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 
 
@@ -240,6 +240,8 @@ def main():
             raise RuntimeError("Reapply discarded an unrelated configuration table")
         if settings["plugins"]["smoke-unrelated@smoke-unrelated"]["enabled"] is not False:
             raise RuntimeError("Reapply changed unrelated plugin enablement")
+        if settings["plugins"]["_default"]["enabled"] is not False:
+            raise RuntimeError("Rendered config does not turn off plugins that have no entry")
         if not Path(other_install["installedPath"]).is_dir():
             raise RuntimeError("Reapply removed the unrelated plugin")
         if cached_skill.read_bytes() != original_skill or (managed / "skills/ce-plan/SKILL.md").read_bytes() != original_skill:
@@ -276,7 +278,24 @@ def main():
                 skill = next((item for item in skills if item["name"] == "compound-engineering:ce-plan" and item.get("pluginId") == plugin_id and item["enabled"]), None)
                 if skill is None or Path(skill["path"]).read_bytes() != original_skill:
                     raise RuntimeError("Native app-server skills/list did not discover pinned CE ce-plan")
-                print("Verified: native app-server skills/list discovers enabled pinned CE ce-plan")
+                if not any(item["name"] == "compound-engineering:ce-noslop" and item.get("pluginId") == plugin_id
+                           and item["enabled"] for item in skills):
+                    raise RuntimeError("Native app-server skills/list lost CE ce-noslop under the plugin allowlist")
+                print("Verified: under plugins._default enabled = false, native app-server skills/list discovers enabled pinned CE ce-plan and ce-noslop")
+                if os.name == "nt":
+                    missing = [name for name in harness_skill_names()
+                               if not (home / ".agents/skills" / name / "SKILL.md").is_file()]
+                    if missing:
+                        raise RuntimeError("Shared skills are missing from the disposable ~/.agents/skills: " + repr(missing))
+                    print("Verified: shared skills placed in the disposable ~/.agents/skills. "
+                          "Discovery count skipped on Windows: Codex resolves ~/.agents/skills from the OS profile "
+                          "and ignores HOME and USERPROFILE, so it would count the real profile instead.")
+                else:
+                    for name in harness_skill_names():
+                        found = [item["path"] for item in skills if item["name"] == name]
+                        if len(found) != 1:
+                            raise RuntimeError(f"Native shared skill {name} is missing or duplicated: {found}")
+                    print("Verified: native app-server skills/list discovers each shared skill exactly once")
                 thread = server.request("thread/start", {"cwd": str(outside), "approvalPolicy": "never", "sandbox": "read-only"})
                 if not any(Path(path).samefile(home / ".codex/AGENTS.md") for path in thread["instructionSources"]):
                     raise RuntimeError("Native thread did not discover user-scope AGENTS.md")

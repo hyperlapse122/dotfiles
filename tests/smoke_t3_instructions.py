@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import socket
@@ -19,10 +20,11 @@ import subprocess
 import sys
 import threading
 import time
+import tomllib
 import uuid
 from urllib.parse import urlsplit
 
-from asset_fixtures import copy_asset_templates, run_with_assets
+from asset_fixtures import copy_asset_templates, harness_skill_names, run_with_assets
 from smoke_codex import AppServer, strings
 from smoke_personal_apps import REPO, executable, temporary_destination
 
@@ -140,6 +142,22 @@ def check_context(payload, harness, addition, *, existing=False):
         raise RuntimeError('Native context discarded existing launch instructions.')
 
 
+def check_t3_claude_request(payload, baseline):
+    """The rendered Claude account-source settings must keep T3's tools and every local skill source."""
+    text = '\n'.join(strings(payload)).replace('\r\n', '\n')
+    # Claude sends a tool either with its schema or, when deferred, as a bare name line.
+    tools = [tool.get('name', '') for tool in payload.get('tools', [])]
+    if (not any(name.startswith('mcp__t3-code__') for name in tools)
+            and not re.search(r'^mcp__t3-code__\w+$', text, re.M)):
+        raise RuntimeError('T3 Claude request lost its mcp__t3-code__ tools under the rendered settings.')
+    # Claude lists each available skill as "- NAME: DESCRIPTION", or "- NAME" when the listing is over budget.
+    for name in ('compound-engineering:ce-noslop', *harness_skill_names()):
+        if not re.search('^- ' + re.escape(name) + '(?::|$)', text, re.M):
+            raise RuntimeError('T3 Claude request does not list skill ' + name)
+    if baseline not in text:
+        raise RuntimeError('T3 Claude request is missing the baseline writing block.')
+
+
 def codex_turn(binary, arguments, env, cwd, log, records, *, addition):
     start = len(records)
     phase = 'PHASE_' + log.name
@@ -150,8 +168,10 @@ def codex_turn(binary, arguments, env, cwd, log, records, *, addition):
                                            'capabilities': {'experimentalApi': True}})
             server.send({'method': 'initialized', 'params': {}})
             skills = server.request('skills/list', {'cwds': [str(cwd)], 'forceReload': True})
-            skill = next(item for group in skills['data'] for item in group['skills']
-                         if item['name'].endswith(':ce-noslop') and item.get('enabled'))
+            skill = next((item for group in skills['data'] for item in group['skills']
+                          if item['name'] == 'compound-engineering:ce-noslop' and item.get('enabled')), None)
+            if skill is None:
+                raise RuntimeError('Native Codex skills/list lost CE ce-noslop under the rendered plugin allowlist.')
             thread = server.request('thread/start', {'cwd': str(cwd), 'approvalPolicy': 'never', 'sandbox': 'read-only'})
             server.request('turn/start', {'threadId': thread['thread']['id'], 'input': [
                 {'type': 'skill', 'name': skill['name'], 'path': skill['path']},
@@ -173,7 +193,7 @@ def codex_turn(binary, arguments, env, cwd, log, records, *, addition):
         raise RuntimeError('Native Codex CE invocation was not preserved.')
 
 
-def t3_turns(root, home, cwd, env, target, install_desktop, records):
+def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline):
     from smoke_t3_code import T3Rpc, WindowsProcessJob, desktop_command, provision_desktop
     real_env = os.environ.copy()
     if install_desktop:
@@ -274,6 +294,8 @@ def t3_turns(root, home, cwd, env, target, install_desktop, records):
                             raise RuntimeError('Native application context disappeared from T3 ' + harness)
                         if phase == 'fresh' and 'Write without slop' not in content:
                             raise RuntimeError('Native CE invocation disappeared from actual T3 ' + harness)
+                        if phase == 'fresh' and harness == 'claude':
+                            check_t3_claude_request(payloads[-1], baseline)
                     return projection
                 def direct():
                     binary = Path(settings['providerInstances'][provider]['config']['binaryPath'])
@@ -359,11 +381,15 @@ def main():
         apps = json.loads(declarations.read_text())
         apps['personalApps'] = {name: apps['personalApps'][name] for name in ('codex', 'claude', 'pi')}
         declarations.write_text(json.dumps(apps))
-        (source / '.chezmoitemplates/agent-instructions').write_text(
+        # The markers wrap the repository template, so native files also carry its baseline writing block.
+        templates = source / '.chezmoitemplates'
+        shutil.copy2(templates / 'agent-instructions', templates / 'repository-agent-instructions')
+        (templates / 'agent-instructions').write_text(
             '{{ if eq (get . "context" | default "baseline") "t3" }}T3_ONLY_6C32\nQuoted "text" and apostrophe\'s.\n'
             '{{ else }}NATIVE_COMMON_71AE\nNATIVE_EXISTING_USER_98D1\n'
             '{{ if eq .harness "codex" }}NATIVE_CODEX_9F26{{ else if eq .harness "claude" }}NATIVE_CLAUDE_9F26'
-            '{{ else if eq .harness "pi" }}NATIVE_PI_9F26{{ else }}FOREIGN_HARNESS_B8C1{{ end }}{{ end }}')
+            '{{ else if eq .harness "pi" }}NATIVE_PI_9F26{{ else }}FOREIGN_HARNESS_B8C1{{ end }}\n'
+            '{{ includeTemplate "repository-agent-instructions" . }}{{ end }}')
         (outside / 'AGENTS.md').write_text('NATIVE_REPOSITORY_41D2\n')
         (outside / 'CLAUDE.md').write_text('NATIVE_REPOSITORY_41D2\n')
         env = {key: value for key, value in os.environ.items() if not any(word in key.upper() for word in
@@ -400,7 +426,9 @@ def main():
                 shutil.copytree(args.plugin_directory / resource, plugin / resource)
             shutil.copytree(args.plugin_directory / '.agents/plugins', plugin / '.agents/plugins')
         else:
-            assets += ['harness-plugins', 'harness-skills']
+            assets.append('harness-plugins')
+        # A local CE directory replaces only the CE asset; the T3 Claude skill check needs these copies.
+        assets.append('harness-skills')
         copy_asset_templates(source, assets)
         config = root / 'chezmoi.toml'
         config.write_text('')
@@ -412,6 +440,14 @@ def main():
         applied = run_with_assets([*chez, 'apply', '--force', '--exclude=scripts'], env=env,
                                   capture_output=True, text=True, timeout=300)
         applied.check_returncode()
+        baseline = run([*chez, 'execute-template', '{{ includeTemplate "repository-agent-instructions" (dict "harness" "claude") }}'],
+                       env, outside).strip().replace('\r\n', '\n')
+        if '## Writing skills' not in baseline:
+            raise RuntimeError('The repository baseline has no writing block to verify.')
+        claude_settings = json.loads((home / '.claude/settings.json').read_text(encoding='utf-8'))
+        if (claude_settings.get('syncClaudeAiSkills') is not False or claude_settings.get('syncClaudeAiPlugins') is not False
+                or claude_settings.get('disableClaudeAiConnectors') is not True):
+            raise RuntimeError('Rendered Claude settings do not turn off claude.ai account sources.')
         suffix = '.exe' if os.name == 'nt' else ''
         codex, claude = (home / '.local/bin' / (name + suffix) for name in ('codex', 'claude'))
         pi = home / '.local/bin/pi-native' / ('pi' + suffix)
@@ -422,6 +458,8 @@ def main():
             + '\nwire_api = "responses"\nrequires_openai_auth = false\nrequest_max_retries = 0\nstream_max_retries = 0\n')
         run([codex, 'plugin', 'marketplace', 'add', plugin], env, outside)
         run([codex, 'plugin', 'add', 'compound-engineering@compound-engineering-plugin'], env, outside)
+        if tomllib.loads(codex_config.read_text(encoding='utf-8'))['plugins']['_default']['enabled'] is not False:
+            raise RuntimeError('Rendered Codex config does not turn off plugins that have no entry.')
         run([claude, 'plugin', 'marketplace', 'add', plugin, '--scope', 'user', '--json'], env, outside)
         run([claude, 'plugin', 'install', 'compound-engineering@compound-engineering-plugin', '--scope', 'user', '--json'], env, outside)
         with __import__('unittest.mock', fromlist=['patch']).patch.dict(os.environ, env, clear=True):
@@ -471,7 +509,7 @@ def main():
                 if not payloads:
                     raise RuntimeError('Native CE invocation disappeared from ' + name)
                 check_context(payloads[0], name, addition, existing=addition)
-        t3_turns(root, home, outside, env, target, args.install_desktop, records)
+        t3_turns(root, home, outside, env, target, args.install_desktop, records, baseline)
         for path, content in snapshot.items():
             if path.read_bytes() != content:
                 raise RuntimeError('Per-launch context changed a shared native instruction/config file.')

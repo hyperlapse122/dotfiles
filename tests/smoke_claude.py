@@ -10,11 +10,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import threading
 
-from asset_fixtures import copy_asset_templates
+from asset_fixtures import copy_asset_templates, harness_skill_names
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 
 PLUGIN_ID = "compound-engineering@compound-engineering-plugin"
@@ -202,6 +203,25 @@ def main():
             requests.clear()
             result = subprocess.run(invocation, env=capture_env, cwd=outside,
                 capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=90)
+            # Claude lists skills only when the Skill tool is available. The
+            # capture rejects every request, so the tool can never run.
+            listing_start = len(requests)
+            listed = subprocess.run([str(binary), "--print", "List the available skills without running tools.",
+                "--tools", "Skill", "--max-turns", "1", "--no-session-persistence", "--strict-mcp-config",
+                "--mcp-config", '{"mcpServers":{}}', "--setting-sources", "user"], env=capture_env, cwd=outside,
+                capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=90)
+            listings = ["\n".join(strings(request)).replace("\r\n", "\n") for request in requests[listing_start:]]
+            del requests[listing_start:]
+        # Count skill-list entries in each request that lists the CE skills beside them.
+        # An entry is "- NAME: DESCRIPTION", or "- NAME" when the listing is over budget.
+        listings = [text for text in listings if re.search(r"^- compound-engineering:ce-plan(?::|$)", text, re.M)]
+        if not listings:
+            raise RuntimeError("Native outgoing request has no skill listing\n" + listed.stdout + listed.stderr)
+        for name in harness_skill_names():
+            counts = [len(re.findall(r"^- " + re.escape(name) + r"(?::|$)", text, re.M)) for text in listings]
+            if counts != [1] * len(listings):
+                raise RuntimeError(f"Native skill listing must name shared skill {name} exactly once: {counts}")
+        print("Verified: the native skill listing in the outgoing request names each shared skill exactly once")
         texts = list(strings(requests))
         prompt = "\n".join(texts).replace("\r\n", "\n")
         for marker in ("claude-smoke-common-instructions", "claude-smoke-native-instructions"):

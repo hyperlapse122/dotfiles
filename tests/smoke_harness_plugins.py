@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import shutil
 
-from asset_fixtures import copy_asset_templates
+from asset_fixtures import copy_asset_templates, harness_skill_names
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 
 
@@ -144,6 +144,13 @@ def main():
         discovery = omp("read", "skill://ce-pov:1-20")
         if "Form a Point of View" not in discovery:
             raise RuntimeError("Fresh native skill discovery did not find CE ce-pov: " + discovery)
+        # CLAUDE_CONFIG_DIR above makes omp read ~/.claude/skills beside
+        # ~/.agents/skills, so this count also covers the duplicate copies.
+        listed = json.loads(omp("skill", "list", "--json"))["skills"]
+        for skill in harness_skill_names():
+            found = [item["filePath"] for item in listed if item["name"] == skill]
+            if len(found) != 1:
+                raise RuntimeError(f"Native omp must list shared skill {skill} exactly once: {found}")
         registry = json.loads(registry_path.read_text(encoding="utf-8"))
         ce_registry = next(item for item in registry["marketplaces"] if item["name"] == plugin["omp"]["marketplace"])
         if Path(ce_registry["sourceUri"]).resolve() != managed.resolve():
@@ -190,7 +197,7 @@ def main():
         if chez("diff", "--exclude=scripts"):
             raise RuntimeError("Managed source/config still differs after reconciliation")
         print(f"Native {target}: {version}; CE {pin['tag']} ({pin['commit']})")
-        print("Verified: local-source cutover, native skill URI discovery, autoUpdate=off, "
+        print("Verified: local-source cutover, native skill URI discovery, shared skills listed exactly once, autoUpdate=off, "
               "unchanged-action skipping, template-triggered cache repair, enabled state, "
               "unrelated plugin preservation, and clean file diff")
 

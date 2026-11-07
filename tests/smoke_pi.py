@@ -20,7 +20,7 @@ import threading
 import time
 from unittest.mock import patch
 
-from asset_fixtures import copy_asset_templates, run_with_assets
+from asset_fixtures import copy_asset_templates, harness_skill_names, run_with_assets
 from smoke_personal_apps import REPO, check_version, executable, temporary_destination
 
 sys.path.insert(0, str(REPO / 'scripts'))
@@ -214,7 +214,9 @@ def main():
             for resource in ('.pi', 'skills'):
                 shutil.copytree(args.plugin_directory / resource, plugin / resource)
         else:
-            assets += ['harness-plugins', 'harness-skills']
+            assets.append('harness-plugins')
+        # A local CE directory replaces only the CE asset; the shared-skill count needs these copies.
+        assets.append('harness-skills')
         copy_asset_templates(source, assets)
         config = root / 'chezmoi.toml'
         config.write_text('')
@@ -302,6 +304,10 @@ def main():
             names = [entry['name'] for entry in commands]
             if names.count('skill:ce-noslop') != 1:
                 raise RuntimeError('Native CE skill discovery is missing or duplicated: ' + repr([name for name in names if 'noslop' in name]))
+            for skill in harness_skill_names():
+                if names.count('skill:' + skill) != 1:
+                    raise RuntimeError('Native shared skill discovery is missing or duplicated: '
+                                       + repr([name for name in names if skill in name]))
             response = rpc.command('prompt', message='/dotfiles-reload-proof')
             if not response['success']:
                 raise RuntimeError('Native Pi reload failed.')
