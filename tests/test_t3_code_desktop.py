@@ -26,7 +26,7 @@ class NativeT3SmokeDiscoveryTest(unittest.TestCase):
             with self.subTest(smoke=name), mock.patch.object(Path, 'is_file', return_value=False):
                 with self.assertRaisesRegex(RuntimeError, 'Install the T3 Code desktop application'):
                     if entrypoint == 't3_turns':
-                        smoke.t3_turns(None, None, None, {}, 'fixture', False, [])
+                        smoke.t3_turns(None, None, None, {}, 'fixture', False, [], '')
                     else:
                         smoke.t3_startup(None, None, None, None, {}, 'fixture', False)
 
