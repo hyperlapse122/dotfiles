@@ -313,6 +313,32 @@ Deduplication uses only the read-only admission lookup. A push omits its full su
 
 PR opening is not an atomic handoff: a push can pass admission before the PR exists or before its matching merge run is visible. Unknown metadata retains coverage rather than guessing, so fallback suites can overlap. Admission does not guarantee exactly one suite for every head under these races. Record observed overlap in the PR validation record; do not cancel an admitted run to remove it.
 
+### Skipped reusable-call limitation
+
+The duplicate push suite is omitted, but its declared `Validate` reusable-workflow call remains a skipped check. GitHub documents that a false job condition [marks the job as skipped and leaves a visible check](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions). The check API reports `skipped`; GitHub treats that result as passing for merge requirements. It does not prove that validation ran. Required checks must select the actual per-area validation results described below.
+
+The scheduling investigation found no supported way to remove this check while retaining read-only admission and all existing fallbacks:
+
+| Alternative | Constraint it cannot preserve |
+|---|---|
+| Filter feature-branch pushes at the trigger | [Push filters match branch/tag names and paths](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushbranchestagsbranches-ignoretags-ignore); they cannot query current PR mergeability, matching run availability, or metadata errors. Excluding a branch also removes its no-PR, conflicted, and uncertain-metadata fallback. Tags need their own coverage. |
+| Use only PR events | [Conflicted PRs do not trigger `pull_request` workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request); branches without PRs and tags also lose coverage. |
+| Move the condition or change the matrix | A condition still skips a declared job. [Job conditions run before matrix expansion, and reusable calls use a static `uses` value](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idif). Matrix changes do not provide a documented guarantee that an empty configuration removes the call without a skipped check or scheduling error. |
+| Chain admission through `workflow_run` | [The downstream event is scheduled regardless of the upstream conclusion](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run). Reading admission output there still needs a conditional job; its default-branch SHA/ref also requires explicit preservation of the original event identity. |
+| Dispatch the suite only after admission | [Creating a workflow dispatch requires Actions write permission](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event). This exceeds the read-only policy. |
+
+The workflow and policy therefore retain their current behavior. Renaming the call, returning artificial success, or canceling a run would not satisfy the requested scheduling behavior. Removing the skipped check remains an unresolved platform limitation tracked in [the scheduling issue](https://github.com/hyperlapse122/dotfiles/issues/90).
+
+Hosted evidence checked on 2026-11-07 uses PR #89 head `0c3cd729a847746abb52c7ced215ed22bb72954b`:
+
+| Evidence | Observed result |
+|---|---|
+| [Push run](https://github.com/hyperlapse122/dotfiles/actions/runs/42325927961) | Success; admission passed and [Validate was skipped with zero steps](https://github.com/hyperlapse122/dotfiles/actions/runs/42325927961/job/128261208228). |
+| [Matching PR run](https://github.com/hyperlapse122/dotfiles/actions/runs/42325947961) | Success; all 122 jobs passed, including 121 jobs beneath the reusable call. |
+| [PR check rollup](https://github.com/hyperlapse122/dotfiles/pull/89/checks) | 126 successful checks and one skipped `Validate`; no canceled checks. This is evidence of the remaining check, not its removal. |
+
+The unchanged `test_ci_event_policy.py` module passes all 10 tests, covering branch/tag/default/fork/explicit invocations, superseded heads, base advancement, missing or mismatched PR runs, canceled PR runs, conflicts, unknown mergeability, and metadata errors. Each subsequent PR should record its own push/PR run URLs and check rollup after publication; the historical pair above does not verify a later commit.
+
 ### Check-name migration and validation records
 
 Combined `Unit and supported-target rendering (...)` and `Native apps, CE, PATH, and credentials (...)` checks are replaced by `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, displayed beneath the `Validate` reusable call for automatic events. Each area's result remains independently visible. No required-check configuration or ruleset was returned for main during this change; repository protection settings are not modified. If protection is enabled, select the new per-area merge-result checks rather than the removed combined names or admission-only checks.
