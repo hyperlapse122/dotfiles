@@ -17,6 +17,33 @@ from asset_fixtures import copy_asset_templates
 from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
 from smoke_codex import capture_requests, strings
 
+CE_PROMPT = ("/ce-noslop mode:edit Before rewriting, use read_file to load the discovered ce-noslop SKILL.md. "
+             "Read no other files and use no other tools. Rewrite only this sentence and return only it: "
+             "The dotfiles verification returned AGY_CE_NATIVE_OK.")
+
+
+def verify_authenticated_invocation(transcript, selected_skill):
+    try:
+        events = [json.loads(line) for line in transcript.splitlines() if line.strip()]
+    except ValueError:
+        raise RuntimeError("Authenticated native CE events could not be parsed") from None
+    skill_bytes = selected_skill.read_bytes()
+    expected_read = f"{len(skill_bytes.splitlines())} lines, {len(skill_bytes)} bytes"
+    read_complete = False
+    for event in events[:-1]:
+        step = event.get("step_update", {})
+        info = step.get("tool_info", {})
+        path = info.get("parameters", {}).get("Path")
+        if (step.get("state") == "DONE" and step.get("step_type") == "tool"
+                and step.get("tool_name") == "read_file" and isinstance(path, str)
+                and Path(path).resolve() == selected_skill.resolve()
+                and info.get("output") == expected_read):
+            read_complete = True
+    result = events[-1].get("result", {}) if events and events[-1].get("event") == "result" else {}
+    if (not read_complete or result.get("status") != "SUCCESS"
+            or result.get("response", "").strip() != "The dotfiles verification returned AGY_CE_NATIVE_OK."):
+        raise RuntimeError("Authenticated native CE completion or full pinned skill read was not proven")
+
 
 def authenticated_environment(original, isolated):
     key = original.get("GEMINI_API_KEY")
@@ -24,7 +51,6 @@ def authenticated_environment(original, isolated):
         raise RuntimeError("--authenticated requires an explicitly provisioned GEMINI_API_KEY")
     result = isolated.copy()
     result["GEMINI_API_KEY"] = key
-    # A capture/custom endpoint cannot count as authenticated provider evidence.
     result.pop("GOOGLE_GEMINI_BASE_URL", None)
     return result
 
@@ -167,19 +193,14 @@ def main():
         print("Verified: pinned CLI, native instructions/CE discovery, plugin repair, and native T3 provider ID left untouched")
         if args.authenticated:
             auth_env = authenticated_environment(real_environment, env)
-            prompt = ("/ce-noslop mode:edit Rewrite only this supplied sentence and return only the rewritten sentence: "
-                      "The dotfiles verification returned AGY_CE_NATIVE_OK.")
             completed = subprocess.run(
-                [str(cli), "--print", prompt, "--mode", "plan", "--print-timeout", "60s",
-                 "--output-format", "json"], env=auth_env, cwd=outside,
+                [str(cli), "--print", CE_PROMPT, "--mode", "plan", "--print-timeout", "60s",
+                 "--output-format", "stream-json"], env=auth_env, cwd=outside,
                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90)
-            try:
-                result = json.loads(completed.stdout)
-            except ValueError:
-                result = {}
-            if (completed.returncode or result.get("status") != "SUCCESS"
-                    or result.get("response", "").strip() != "The dotfiles verification returned AGY_CE_NATIVE_OK."):
-                raise RuntimeError("Authenticated native CE invocation did not complete with the expected response")
+            if completed.returncode:
+                raise RuntimeError("Authenticated native CE invocation did not complete")
+            selected_skill = Path(managed[0]["path"]) / "skills/ce-noslop/SKILL.md"
+            verify_authenticated_invocation(completed.stdout, selected_skill)
             print(f"Authenticated {target}: native /ce-noslop completed with pinned CE {managed[0]['version']}; "
                   "common/Antigravity instruction inclusion and foreign exclusion verified by the independent capture above")
         else:

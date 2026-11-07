@@ -15,6 +15,31 @@ import unittest
 from asset_fixtures import copy_asset_templates, run_with_assets
 
 class AntigravityAuthenticationTest(unittest.TestCase):
+    def test_authenticated_completion_without_skill_read_is_rejected(self):
+        from smoke_antigravity import verify_authenticated_invocation
+        with tempfile.TemporaryDirectory() as scratch:
+            skill = Path(scratch) / "SKILL.md"
+            skill.write_text("# Pinned skill\n", encoding="utf-8")
+            events = json.dumps({"event": "result", "result": {"status": "SUCCESS",
+                "response": "The dotfiles verification returned AGY_CE_NATIVE_OK."}})
+            with self.assertRaisesRegex(RuntimeError, "skill read"):
+                verify_authenticated_invocation(events, skill)
+
+    def test_authenticated_completion_requires_full_selected_skill_read(self):
+        from smoke_antigravity import verify_authenticated_invocation
+        with tempfile.TemporaryDirectory() as scratch:
+            skill = Path(scratch) / "SKILL.md"
+            skill.write_bytes(b"# Pinned skill\n")
+            read = {"event": "step_update", "step_update": {"state": "DONE", "step_type": "tool",
+                "tool_name": "read_file", "tool_info": {"parameters": {"Path": str(skill)},
+                "output": "1 lines, 15 bytes"}}}
+            result = {"event": "result", "result": {"status": "SUCCESS",
+                "response": "The dotfiles verification returned AGY_CE_NATIVE_OK."}}
+            verify_authenticated_invocation("\n".join(map(json.dumps, [read, result])), skill)
+            read["step_update"]["tool_info"]["output"] = "1 lines, 2 bytes"
+            with self.assertRaisesRegex(RuntimeError, "skill read"):
+                verify_authenticated_invocation("\n".join(map(json.dumps, [read, result])), skill)
+
     def test_authenticated_smoke_requires_explicit_api_key(self):
         from smoke_antigravity import authenticated_environment
         with self.assertRaisesRegex(RuntimeError, "GEMINI_API_KEY"):
