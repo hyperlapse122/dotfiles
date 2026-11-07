@@ -92,8 +92,11 @@ jobs:
         if: matrix.area == 'platform'
         shell: bash
         run: |
-          if ! git diff --exit-code -- mise.lock .mise/locks; then
-            echo "::error file=mise.lock::mise install rewrote the lock on ${{ matrix.runner }}; run 'mise lock' and commit the result."
+          drift=$(git status --porcelain --untracked-files=all -- mise.lock .mise/locks)
+          if [ -n "$drift" ]; then
+            printf '%s\n' "$drift"
+            git diff -- mise.lock .mise/locks
+            echo "::error file=mise.lock::mise $(mise --version) rewrote the lock on ${{ matrix.runner }}; run 'mise lock' and commit the result."
             exit 1
           fi
       - &native-windows-gpg
