@@ -2,6 +2,21 @@
 {{/* T3-only additions go here. Native user-scope files supply the baseline. */ -}}
 {{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}
+## Writing skills
+
+Before sending in-scope prose, run the writing skills for its dominant language.
+
+- In scope:
+  - the message that delivers completed work, an answer, or a summary to the user
+  - handoffs
+  - documents, commit messages, PR descriptions, issues, and other persistent artifacts
+  - user-facing strings in code, such as string resources and UI or error messages
+- Out of scope: progress notes, questions to the user, reports a subagent returns to its caller, code and config, code comments and docstrings, verbatim quotes, and text the user asked to post as written.
+- Korean, including Korean text with English technical terms: run the korean-skills `humanizer` skill, then the korean-skills `grammar-checker` skill. When writing a multi-section document or editing an existing document, also run the korean-skills `style-guide` skill.
+- English: run the `ce-noslop` skill.
+- Any other language: run none of these skills.
+- Apply the skills silently. Deliver only the corrected text, without the skills' analysis or change reports, and do not pause for confirmation inside a skill.
+- These rules add to project instructions. When a project instruction names another writing skill, apply both.
 
 {{ if eq .harness "omp" -}}
 {{/* omp-only instructions go here. */ -}}
