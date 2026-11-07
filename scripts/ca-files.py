@@ -106,8 +106,6 @@ def remove(source, config, identity):
 
 def install_bundle(document, destination, public_roots):
     validate_inventory(document)
-    # Preserve the public input bytes as a prefix; parse a comment-free view only
-    # for deduplication. The upstream explanatory comments remain intact.
     public_blocks = CERTIFICATE.findall(public_roots)
     public = certificates('\n'.join(public_blocks))
     seen = {der for der, _ in public}
