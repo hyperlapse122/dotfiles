@@ -2,7 +2,7 @@
 
 Pi is installed from complete, checksum-verified official release archives on Windows x64/ARM64, Linux x64/ARM64, and Apple Silicon. Shared external-asset preparation downloads and extracts the locked distribution once, reuses verified preparation on unchanged applies, and repairs missing installed files from its cache. The full distribution lives in `~/.local/bin/pi-native`, retaining native resources, themes, and bundled files. Direct terminal entry points are `~/.local/bin/pi` on Unix and `pi.ps1` on Windows. T3 uses the distribution's absolute native executable through its built-in Pi RPC driver.
 
-Run `mise run apply` explicitly to install files, register the pinned native Compound Engineering package, and reconcile private Pi settings. Worktree preparation inventories the source without applying configuration or decrypting credentials. Close Pi and T3 before applying.
+Run `mise run apply` explicitly to install files, register the pinned native Compound Engineering package, place the pinned [korean-skills](harness-plugins.md#shared-user-scope-skills) in `~/.agents/skills`, and reconcile private Pi settings. Pi discovers those skills natively, for example as `/skill:humanizer`. Worktree preparation inventories the source without applying configuration or decrypting credentials. Close Pi and T3 before applying.
 
 The encrypted `home/.secrets/synthetic-api-key.asc` provisions only the `synthetic` entry in private `~/.pi/agent/auth.json`. Other provider credentials remain intact. Plaintext exists only in memory during decryption and in that native private credential file; it is not exported globally or placed in tracked settings, model metadata, command arguments, or logs. The external import input remains outside the repository.
 

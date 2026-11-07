@@ -1,6 +1,7 @@
 # Harness Plugins and AI Agent Configuration
 
 This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, pi, Grok, oh-my-pi (omp), and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
+It also covers the shared korean-skills writing skills that every managed harness discovers, and the settings that stop Claude Code and Codex from loading skills, plugins, and connectors from the signed-in account.
 
 ## Compound Engineering Plugin for omp
 
@@ -32,7 +33,15 @@ codex plugin add compound-engineering@compound-engineering-plugin
 
 `plugin add` installs and enables the plugin; Codex has no separate `plugin enable` command in the pinned version. Reapplication repairs the native CE cache and activation even when the pin is unchanged. The local marketplace follows the shared CE lock, not an independent latest release.
 
-The private `~/.codex/config.toml` modify template owns only the CE marketplace source, CE activation, and `check_for_update_on_startup = false`. Other settings, model choices, plugins, and credentials are preserved. Close Codex and T3 Code before applying, then start a fresh session.
+The private `~/.codex/config.toml` modify template owns only these keys:
+
+- the CE marketplace source and CE activation
+- `[plugins._default] enabled = false`
+- the `enabled` key of every other `[plugins."<id>"]` entry, set by the rules in [Account Source Isolation](#codex)
+- `features.apps = false`
+- `check_for_update_on_startup = false`
+
+Other settings, model choices, the other keys of plugin entries, sibling `[features]` flags, and credentials are preserved. A `features` value or plugin entry that is not a table fails apply without replacing the file. Close Codex and T3 Code before applying, then start a fresh session.
 
 ### Sign-in and Invocation
 
@@ -56,7 +65,7 @@ claude plugin enable compound-engineering@compound-engineering-plugin --scope us
 
 The pinned CLI returns exit code 1 when the plugin is already enabled. The hook accepts only its structured `already_in_goal_state` result with `alreadyInGoalState=true` as that no-op; genuine errors fail apply. Native marketplace registration repairs a stale source path, and the relative local plugin source loads in place. Reapplication follows the shared archive pin without deleting caches or editing native registry files directly.
 
-The private settings merge owns the CE directory marketplace entry and activation flag, alongside the [Claude preferences](personal-applications.md#claude-code-version-and-preferences). Only CE's marketplace has `autoUpdate=false`; unrelated marketplace policies and plugins are preserved. Malformed settings or incompatible owned containers fail instead of replacing the file.
+The private settings merge owns the CE directory marketplace entry and activation flag, alongside the [Claude preferences](personal-applications.md#claude-code-version-and-preferences) and the [account source settings](#claude-code). Only CE's marketplace has `autoUpdate=false`; unrelated marketplace policies and plugins are preserved. Malformed settings or incompatible owned containers fail instead of replacing the file.
 
 Close Claude Code and T3 Code before apply, then start a fresh session. Complete `claude auth login` manually and invoke a skill such as `/compound-engineering:ce-plan`. Authentication and billing remain with Claude; dotfiles stores no plaintext secrets.
 
@@ -130,6 +139,54 @@ mise exec -- python scripts/update-harness-plugin-lock.py
 
 A GitHub Actions workflow (**Update harness plugin pins**) runs daily at 06:43 UTC, validating release tags and commit SHAs against the native test matrix before committing to `main`.
 
+The same script and workflow refresh the korean-skills pin. See [Pin and Refresh](#pin-and-refresh) for the checks that apply only to skill packs.
+
+## Shared User-Scope Skills
+
+Explicit apply installs the three skills from [DaleSeo/korean-skills](https://github.com/DaleSeo/korean-skills), `grammar-checker`, `humanizer`, and `style-guide`, as plain user-scope skill directories. No plugin is registered, so each harness lists them under their bare names, such as `humanizer` rather than `korean-skills:humanizer`. The [writing-skills rule](#shared-user-scope-agent-instructions) in the shared instructions tells agents when to run them.
+
+### Skill Roots
+
+Each harness loads the skills from one of three shared roots:
+
+| Root | Harnesses |
+|---|---|
+| `~/.agents/skills/<skill>` | Codex, pi, omp, Grok |
+| `~/.claude/skills/<skill>` | Claude Code |
+| `~/.gemini/config/skills/<skill>` | Antigravity CLI and app |
+
+`home/.chezmoitemplates/external-assets/harness-skills.toml.tmpl` declares one archive root per skill in each location. A location is rendered only when at least one of its harnesses has a pinned target for the current OS and architecture. All roots use the same pinned archive URL, so the [asset preparation](../maintenance/chezmoi-source.md#external-asset-preparation) downloads it once, and an `include` filter extracts only that skill's subtree.
+
+Each skill directory is exact. Apply replaces a same-named directory at a managed path and removes files inside it that the pinned archive does not contain. Other skills in the same parent directory are left alone. Installation runs only during explicit apply; worktree preparation does not place any skill.
+
+### Pin and Refresh
+
+`home/.chezmoidata/harness-skills.json` declares the pack under `harnessSkills`: the repository, the `v` tag prefix, the three skill names, and each skill's expected `allowed-tools` value. The pin lives in `home/.chezmoidata/harness-plugin-lock.json` under `harnessSkillLocks`, next to the CE pin. The initial pin is `v1.0.0` at `fe6432e95f6675f7e411eacb2e1c36f1de54f962`. Apply fails when the pin lacks a full 40-character commit.
+
+`scripts/update-harness-plugin-lock.py` resolves the latest stable `v<MAJOR>.<MINOR>.<PATCH>` release the same way it resolves CE releases. Before writing the lock, it compares the declaration with the `skills/*/SKILL.md` files at the resolved commit. The refresh fails and writes no lock when:
+
+- upstream adds or removes a skill; the error names each added and removed skill
+- a skill's `allowed-tools` frontmatter differs from the declared value; the error names the skill and shows both values
+
+After reviewing the upstream change, update `harness-skills.json` to match and run the refresh again.
+
+Like CE refreshes, a korean-skills refresh publishes to `main` after the native test matrix passes, without a person reviewing the changed SKILL.md text.
+
+### Exactly-Once Discovery
+
+Each harness must list each skill once, so each root holds one copy and each harness loads one root. The choice of roots and the managed settings cover the cases where a harness sees more than one location:
+
+- Codex reads both `~/.agents/skills` and `~/.codex/skills`, lists a skill from both, and reports `~/.codex/skills` as deprecated. The skills therefore go only to `~/.agents/skills`.
+- Gemini CLI also reads `~/.gemini/skills`, so the Antigravity copies go to `~/.gemini/config/skills` instead.
+- Grok's managed configuration turns off Claude skill compatibility, so Grok shows the `~/.claude/skills` copies as `disabled` entries and loads only the `~/.agents/skills` copies.
+- If `CLAUDE_CONFIG_DIR` is exported globally, omp also reads `~/.claude/skills`. omp drops byte-identical copies, and both copies come from the same pinned archive, so it still lists each skill once.
+
+Apply does not manage same-named copies in other roots. A copy such as `~/.codex/skills/humanizer`, written by Codex's own skill installer, makes Codex list that skill twice. Remove the extra copy by hand.
+
+### Allowed-Tools Pre-Approval
+
+Each upstream skill declares `allowed-tools: Read Write Edit Grep Glob AskUserQuestion`. In a Claude Code session that uses the default permission mode, the first korean-skills call in a turn pre-approves those tools, so later Write and Edit calls in the same turn run without a prompt. This is an accepted risk: the repository does not edit korean-skills content, the refresh check above fails if upstream widens the field, and T3 sessions under the [managed T3 preferences](t3-code.md#personal-preferences) already run with full-access permissions.
+
 ## Shared User-Scope Agent Instructions
 
 Every managed AI harness in this repository wires its native instruction file to a shared template:
@@ -139,7 +196,16 @@ Every managed AI harness in this repository wires its native instruction file to
 - **Native Codex Target:** `~/.codex/AGENTS.md` (generated via `home/private_dot_codex/private_empty_AGENTS.md.tmpl`)
 - **Native Antigravity Target:** `~/.gemini/GEMINI.md` (generated via `home/private_dot_gemini/private_empty_GEMINI.md.tmpl` with `harness: antigravity`)
 
-Applying dotfiles replaces those native instruction files with their harness-specific render of the shared repository template. The source is initially empty of policies, preserving owner-only empty files until rules are authored.
+Applying dotfiles replaces those native instruction files with their harness-specific render of the shared repository template.
+
+The common region holds one rule, a **Writing skills** block that every harness renders with identical text in CLI and T3 launches:
+
+- **In scope:** the message that delivers completed work, an answer, or a summary to the user; handoffs; documents, commit messages, PR descriptions, issues, and other persistent artifacts; and user-facing strings in code, such as string resources and UI or error messages.
+- **Out of scope:** progress notes, questions to the user, reports a subagent returns to its caller, code and config, code comments and docstrings, verbatim quotes, and text the user asked to post as written.
+- **Korean**, including Korean text with English technical terms: run the korean-skills `humanizer` skill, then `grammar-checker`. Also run `style-guide` when writing a multi-section document or editing an existing document.
+- **English:** run `ce-noslop`. **Any other language:** run none of these skills.
+
+The block tells agents to apply the skills silently: deliver only the corrected text, without the skills' analysis or change reports, and do not pause for confirmation inside a skill. It adds to project instructions, so a repository rule that names another writing skill applies as well. The `context = t3` branch and the omp branch hold no content.
 
 > **Scope Note:** In omp, `~/.omp/agent/AGENTS.md` applies to the main interactive session and advisors. Task subagents do not inherit files named `AGENTS.md`.
 
@@ -148,6 +214,51 @@ Codex uses a nonempty `~/.codex/AGENTS.override.md` before `AGENTS.md`. Apply pr
 Disabling Claude automatic memory does not disable its managed `CLAUDE.md` instructions.
 
 For the technical procedure to onboard a new AI harness, see [Chezmoi Source Maintenance](../maintenance/chezmoi-source.md#shared-user-scope-harness-onboarding).
+
+## Account Source Isolation
+
+Claude Code and Codex load only skills, plugins, and MCP servers that come from this repository, the harness itself, local registration, or T3. Sources supplied by the signed-in claude.ai or ChatGPT account are turned off in user-scope settings, so the isolation applies to every launch that reads those settings, including CLI and T3 launches. Without it, Claude Code listed the account's `anthropic-skills:ce-noslop` next to `compound-engineering:ce-noslop`, and what an agent could load depended on the signed-in account.
+
+These keep working: harness-bundled skills and plugins with their local MCP servers, locally registered MCP servers, project MCP configuration, and the MCP server T3 adds to each launch.
+
+### Claude Code
+
+The private `~/.claude/settings.json` merge owns three account-source keys:
+
+| Key | Value | Effect |
+|---|---|---|
+| `syncClaudeAiSkills` | `false` | Stops syncing claude.ai account skills |
+| `syncClaudeAiPlugins` | `false` | Stops syncing claude.ai account plugins |
+| `disableClaudeAiConnectors` | `true` | Stops loading claude.ai MCP connectors |
+
+Claude Code moves content it already synced to `.trash` instead of deleting it. The pinned Claude Code `2.1.318` supports all three keys; `syncClaudeAiPlugins` needs `2.1.273` or later. T3 Code 0.1.7 launches Claude through the Agent SDK with the default setting sources, which include user settings, so T3 launches inherit these keys. The per-launch `t3-code` server that T3 registers is not a claude.ai connector and stays available; see [T3 Code](t3-code.md#managed-settings).
+
+Users lose the account skills, such as `anthropic-skills:pdf`, `docx`, `pptx`, and `xlsx`, and the claude.ai connectors, such as Figma, GitLab, Microsoft 365, and T3 Connect. Built-in skills, `compound-engineering:*` skills, and the korean-skills in `~/.claude/skills` remain.
+
+### Codex
+
+The `~/.codex/config.toml` merge sets `[plugins._default] enabled = false`. Remote plugins synced from the ChatGPT account have no config entry, so this default turns them off. Remote sync never writes `config.toml`, so the setting holds across later syncs.
+
+An explicit plugin entry overrides that default, so every apply also decides each existing `[plugins."<id>"]` entry by the marketplace after the last `@` in its ID:
+
+| Entry | Result |
+|---|---|
+| `compound-engineering@compound-engineering-plugin` | `enabled = true` |
+| A local marketplace without an `enabled` key: one configured under `[marketplaces]`, `openai-bundled`, or `openai-primary-runtime` | `enabled = true`, other keys kept |
+| A local marketplace with an explicit `enabled` key | Kept as is |
+| Any other marketplace, including `openai-curated-remote`, `created-by-me-remote`, the `workspace-*` marketplaces, and names Codex adds later | `enabled = false`, other keys kept |
+
+A bundled marketplace that a later Codex release adds stays off until it is added to the template's local list. A bundled plugin entry that Codex writes later without an `enabled` key stays off until the next apply.
+
+`features.apps = false` removes the ChatGPT-hosted `codex_apps` connector server. Locally configured `[mcp_servers]`, plugin MCP servers, and the per-thread `t3-code` servers that T3 adds stay.
+
+Users lose remote plugins from the ChatGPT account, such as GitHub, GitLab, Outlook, Teams, and SharePoint. The bundled `spreadsheets@openai-primary-runtime` plugin and its local skills keep loading, but its `connected_documents` connector reaches the account through `codex_apps` and is removed with it. Bundled tools such as browser and computer use keep working.
+
+### Limits
+
+- Connectors that the Claude desktop app delivers itself, and Codex desktop builds newer than the pinned CLI, are outside what these user-scope settings control.
+- The native smokes run without a claude.ai or ChatGPT sign-in, so they show that local sources survive, not that account sources are blocked. After applying, check by hand that a signed-in Claude Code session lists no `anthropic-skills:*` skills or claude.ai connectors, and that a signed-in Codex session loads no remote plugins.
+- A custom `CODEX_HOME`, a `CLAUDE_CONFIG_DIR` outside the default `~/.claude`, or a T3 provider `homePath` selects an unmanaged home that these settings do not reach.
 
 ## Verification
 
@@ -187,3 +298,5 @@ mise exec -- python tests/smoke_claude.py
 This verifies native CE discovery, stale-source and enabled-state repair, preservation, common and Claude-specific instructions, the Korean response preference, and explicit expansion of the pinned skill body. It characterizes an automatic-memory fixture while enabled, then confirms the managed disabled state excludes it without deleting the file. The localhost endpoint deliberately rejects model requests with HTTP 400 using inert credentials. This proves request expansion, not authenticated model completion. Windows x64 has been exercised locally; other eligible targets are checked by the native CI lane, and a missing required result remains unverified.
 
 For Grok's isolated native integration, run `python tests/smoke_grok.py` with the repository tools on PATH. This verifies the native local marketplace, pinned installation and enablement, shared instructions, foreign-content exclusion, unrelated-plugin preservation, and explicit expansion of the complete CE skill body. Add `--t3` for the fresh native ACP driver check. See [Grok Build](grok.md) for native-copy repair and authentication boundaries.
+
+Each of these smokes, plus `tests/smoke_pi.py` and `tests/smoke_t3_instructions.py`, also installs the shared skills in its disposable home and checks that the harness lists `grammar-checker`, `humanizer`, and `style-guide` exactly once. Grok's count ignores entries marked `disabled`. On Windows, Codex resolves `~/.agents/skills` from the OS profile and ignores `HOME`, so its smoke counts the skills only on Linux and macOS and checks the copied directories on Windows. The Codex smoke also confirms that CE skills still load under the `[plugins._default]` allowlist. The T3 instruction smoke confirms that a T3 Claude launch under the account-source settings still sends the `mcp__t3-code__*` tools, the CE and Korean skills, and the writing block. On 2026-11-07 all of these passed locally on Windows x64. None of them signs in to an account, so none proves that account sources are blocked; see [Limits](#limits).
