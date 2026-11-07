@@ -7,7 +7,9 @@
         "*/.agy",
         "*/.agy/*",
         "*/.claude/skills",
+        "*/AGENTS.md",
         "*/CLAUDE.md",
+        "*/GEMINI.md",
         "*/site",
         "*/site/*"
       ],
