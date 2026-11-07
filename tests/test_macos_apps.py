@@ -22,7 +22,7 @@ class MacAppsTest(MacFixture):
         (self.home / 'Applications/Ghostty.app').mkdir(parents=True)
         result = self.run_script('scripts/macos-apps.sh', 'cask:ghostty')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(['brew', ['install', '--cask', 'ghostty']], self.calls())
+        self.assertIn(['brew', ['install', '--yes', '--cask', 'ghostty']], self.calls())
 
     def test_unsupported_macos_stops_before_application_changes(self):
         self.state['version'] = '25.9'
@@ -37,8 +37,8 @@ class MacAppsTest(MacFixture):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         calls = self.calls()
         installs = [args for name, args in calls if name == 'brew' and args[0] == 'install']
-        self.assertEqual(installs, [['install', '--cask', package.split(':')[1]] for package in packages])
-        self.assertEqual(calls[-2:], [['brew', ['update']], ['brew', ['upgrade']]])
+        self.assertEqual(installs, [['install', '--yes', '--cask', package.split(':')[1]] for package in packages])
+        self.assertEqual(calls[-2:], [['brew', ['update']], ['brew', ['upgrade', '--yes']]])
         self.assertFalse(any(name == 'podman' for name, args in calls))
         self.state = json.loads((self.root / 'state.json').read_text())
         before = len(calls)
@@ -46,7 +46,7 @@ class MacAppsTest(MacFixture):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         repeated = self.calls()[before:]
         self.assertFalse(any(name == 'brew' and args[0] == 'install' for name, args in repeated))
-        self.assertEqual(repeated[-2:], [['brew', ['update']], ['brew', ['upgrade']]])
+        self.assertEqual(repeated[-2:], [['brew', ['update']], ['brew', ['upgrade', '--yes']]])
         self.assertFalse(any(name == 'podman' for name, args in repeated))
 
     def test_existing_podman_and_stopped_machine_are_untouched(self):
@@ -74,17 +74,18 @@ class MacAppsTest(MacFixture):
     def test_empty_app_list_still_updates_all_homebrew_packages(self):
         result = self.run_script('scripts/macos-apps.sh')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(self.calls()[-2:], [['brew', ['update']], ['brew', ['upgrade']]])
+        self.assertEqual(self.calls()[-2:], [['brew', ['update']], ['brew', ['upgrade', '--yes']]])
 
     def test_update_failures_fail_application(self):
         for command in ('update', 'upgrade'):
             with self.subTest(command=command):
-                self.state['fail'] = 'brew ' + command
+                self.state['fail'] = 'brew ' + command + (' --yes' if command == 'upgrade' else '')
                 result = self.run_script('scripts/macos-apps.sh')
                 self.assertEqual(result.returncode, 23, result.stdout + result.stderr)
-                self.assertEqual(self.calls()[-1], ['brew', [command]])
+                expected = [command, '--yes'] if command == 'upgrade' else [command]
+                self.assertEqual(self.calls()[-1], ['brew', expected])
                 if command == 'update':
-                    self.assertNotIn(['brew', ['upgrade']], self.calls())
+                    self.assertNotIn(['brew', ['upgrade', '--yes']], self.calls())
 
     @unittest.skipUnless(os.name != 'nt' and shutil.which('chezmoi'), 'Real POSIX chezmoi required')
     def test_unchanged_native_apply_updates_homebrew_each_time(self):
@@ -116,8 +117,8 @@ class MacAppsTest(MacFixture):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         mutations = [args for name, args in self.calls()
                      if name == 'brew' and args[0] in ('install', 'update', 'upgrade')]
-        self.assertEqual(mutations, [['install', '--cask', '1password-cli'],
-                                     ['update'], ['upgrade'], ['update'], ['upgrade']])
+        self.assertEqual(mutations, [['install', '--yes', '--cask', '1password-cli'],
+                                     ['update'], ['upgrade', '--yes'], ['update'], ['upgrade', '--yes']])
 
     def test_command_failure_stops_application(self):
         self.state['fail'] = 'brew'

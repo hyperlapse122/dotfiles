@@ -19,7 +19,7 @@ fi
 if "$brew" list --cask t3-code >/dev/null 2>&1; then
     exit 0
 fi
-"$brew" install --cask t3-code
+"$brew" install --yes --cask t3-code
 {{ else -}}
 if [ -x '/opt/T3 Code (Beta)/t3code' ]; then
     exit 0

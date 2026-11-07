@@ -31,11 +31,11 @@ for item in "$@"; do
         fi
     fi
     if ! brew list "--$kind" --versions "$package" >/dev/null 2>&1; then
-        brew install "--$kind" "$package"
+        brew install --yes "--$kind" "$package"
     fi
 done
 
 brew update
-brew upgrade
+brew upgrade --yes
 
 printf '%s\n' 'macOS applications are available.'

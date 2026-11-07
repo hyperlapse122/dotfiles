@@ -18,6 +18,7 @@ if name == 'curl':
     shutil.copy2(root/'installer-template', args[args.index('--output')+1])
     sys.exit()
 if name == 'install-homebrew':
+    if os.environ.get('NONINTERACTIVE') != '1': sys.exit('Homebrew installer requires NONINTERACTIVE=1')
     if state.get('fail') == 'install-homebrew': sys.exit(23)
     import shutil
     target = root/'homebrew prefix/bin/brew'
@@ -37,6 +38,7 @@ if name == 'brew':
     elif args[:1] == ['list']:
         sys.exit(0 if args[-1] in state.get('packages', []) else 1)
     elif args[:1] == ['install']:
+        if '--yes' not in args: sys.exit('Homebrew installation requires --yes')
         package = args[-1]
         if state.get('fail_package') == package: sys.exit(23)
         state.setdefault('packages', []).append(package)
