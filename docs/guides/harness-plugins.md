@@ -161,16 +161,19 @@ Each skill directory is exact. Apply replaces a same-named directory at a manage
 
 ### Pin and Refresh
 
-`home/.chezmoidata/harness-skills.json` declares the pack under `harnessSkills`: the repository, the `v` tag prefix, the three skill names, and each skill's expected `allowed-tools` value. The pin lives in `home/.chezmoidata/harness-plugin-lock.json` under `harnessSkillLocks`, next to the CE pin. The initial pin is `v1.0.0` at `fe6432e95f6675f7e411eacb2e1c36f1de54f962`. Apply fails when the pin lacks a full 40-character commit.
+`home/.chezmoidata/harness-skills.json` declares the pack under `harnessSkills`: the repository, the `v` tag prefix, the reviewed top-level SKILL.md frontmatter keys (`frontmatterKeys`), the three skill names, and each skill's expected `allowed-tools` value. The pin lives in `home/.chezmoidata/harness-plugin-lock.json` under `harnessSkillLocks`, next to the CE pin. The initial pin is `v1.0.0` at `fe6432e95f6675f7e411eacb2e1c36f1de54f962`. Apply fails when the pin lacks a full 40-character commit.
 
-`scripts/update-harness-plugin-lock.py` resolves the latest stable `v<MAJOR>.<MINOR>.<PATCH>` release the same way it resolves CE releases. Before writing the lock, it compares the declaration with the `skills/*/SKILL.md` files at the resolved commit. The refresh fails and writes no lock when:
+`scripts/update-harness-plugin-lock.py` resolves the latest stable `v<MAJOR>.<MINOR>.<PATCH>` release the same way it resolves CE releases. Before accepting a new skill pin, it checks the release at the resolved commit and rejects it when:
 
 - upstream adds or removes a skill; the error names each added and removed skill
-- a skill's `allowed-tools` frontmatter differs from the declared value; the error names the skill and shows both values
+- a SKILL.md frontmatter has a top-level key outside `frontmatterKeys`, such as `hooks` or `shell`, or repeats a key
+- a skill's `allowed-tools` value differs from the declared value; the error names the skill and shows both values
+- a file under a declared skill is not a plain file or directory (a symlink, an executable, or a submodule), or a declared skill nests another `SKILL.md`
+- the repository tree listing comes back truncated
 
-After reviewing the upstream change, update `harness-skills.json` to match and run the refresh again.
+When a rejected pack already has a reviewed pin, the refresh keeps that pin, still writes the CE pin, and exits with status `3`. The daily workflow then publishes the CE pin and fails its run in a separate `report-skill-drift` job, so the change stays visible until someone reviews it. A pack with no reviewed pin yet fails the whole refresh and writes nothing. After reviewing the upstream change, update `harness-skills.json` to match and run the refresh again.
 
-Like CE refreshes, a korean-skills refresh publishes to `main` after the native test matrix passes, without a person reviewing the changed SKILL.md text.
+Like CE refreshes, an accepted korean-skills refresh publishes to `main` after the native test matrix passes. Changed instruction text inside an accepted SKILL.md is not reviewed by a person; the checks above cover the capability fields and file types.
 
 ### Exactly-Once Discovery
 
@@ -185,7 +188,7 @@ Apply does not manage same-named copies in other roots. A copy such as `~/.codex
 
 ### Allowed-Tools Pre-Approval
 
-Each upstream skill declares `allowed-tools: Read Write Edit Grep Glob AskUserQuestion`. In a Claude Code session that uses the default permission mode, the first korean-skills call in a turn pre-approves those tools, so later Write and Edit calls in the same turn run without a prompt. This is an accepted risk: the repository does not edit korean-skills content, the refresh check above fails if upstream widens the field, and T3 sessions under the [managed T3 preferences](t3-code.md#personal-preferences) already run with full-access permissions.
+Each upstream skill declares `allowed-tools: Read Write Edit Grep Glob AskUserQuestion`. In a Claude Code session that uses the default permission mode, the first korean-skills call in a turn pre-approves those tools, so later Write and Edit calls in the same turn run without a prompt. This is an accepted risk: the repository does not edit korean-skills content, the refresh checks above reject a widened field or any other capability frontmatter such as `hooks`, and T3 sessions under the [managed T3 preferences](t3-code.md#personal-preferences) already run with full-access permissions.
 
 ## Shared User-Scope Agent Instructions
 
@@ -244,20 +247,29 @@ An explicit plugin entry overrides that default, so every apply also decides eac
 | Entry | Result |
 |---|---|
 | `compound-engineering@compound-engineering-plugin` | `enabled = true` |
-| A local marketplace without an `enabled` key: one configured under `[marketplaces]`, `openai-bundled`, or `openai-primary-runtime` | `enabled = true`, other keys kept |
+| A local marketplace without an `enabled` key: one configured under `[marketplaces]`, `openai-bundled`, `openai-primary-runtime`, or the personal marketplace in the home directory | `enabled = true`, other keys kept |
 | A local marketplace with an explicit `enabled` key | Kept as is |
 | Any other marketplace, including `openai-curated-remote`, `created-by-me-remote`, the `workspace-*` marketplaces, and names Codex adds later | `enabled = false`, other keys kept |
+
+The personal marketplace is the first of `~/.agents/plugins/marketplace.json`, `~/.agents/plugins/api_marketplace.json`, `~/.claude-plugin/marketplace.json`, and `~/.cursor-plugin/marketplace.json` that exists, the same order Codex uses; its `name` field counts as local. A malformed personal manifest fails the apply. A repository's own `.agents/plugins/marketplace.json` is not visible to this user-scope merge, so register a repository marketplace with `codex plugin marketplace add <path>` to keep its plugins enabled.
 
 A bundled marketplace that a later Codex release adds stays off until it is added to the template's local list. A bundled plugin entry that Codex writes later without an `enabled` key stays off until the next apply.
 
 `features.apps = false` removes the ChatGPT-hosted `codex_apps` connector server. Locally configured `[mcp_servers]`, plugin MCP servers, and the per-thread `t3-code` servers that T3 adds stay.
 
-Users lose remote plugins from the ChatGPT account, such as GitHub, GitLab, Outlook, Teams, and SharePoint. The bundled `spreadsheets@openai-primary-runtime` plugin and its local skills keep loading, but its `connected_documents` connector reaches the account through `codex_apps` and is removed with it. Bundled tools such as browser and computer use keep working.
+Users lose remote plugins from the ChatGPT account, such as GitHub, GitLab, Outlook, Teams, and SharePoint. The bundled `spreadsheets@openai-primary-runtime` plugin and its local skills keep loading, but its `connected_documents` connector reaches the account through `codex_apps` and is removed with it; the owner chose this so that only locally declared sources load. Bundled tools such as browser and computer use keep working.
+
+### Signed-In Verification
+
+The native smokes run without an account, so they show that local sources survive, not that account sources are blocked. On 2026-11-07 the owner's signed-in Windows x64 accounts were probed with the same settings passed per run, without changing the home directory:
+
+- **Codex 0.166.0 app-server** (`skills/list`), with `-c plugins._default.enabled=false -c features.apps=false`: enabled skills went from 83 to 50. All 33 skills from seven `openai-curated-remote` plugins disappeared (1password, onenote, openai-templates, pages, plugin-management, sites, and work-pets). The 37 CE skills, the bundled and primary-runtime plugin skills, and the `.system` skills remained. The CLI prompt also dropped the account's plugin recommendations and its `request_plugin_install` tool.
+- **Claude Code 2.1.318** session init, with the three keys passed through `--settings`: all 19 `anthropic-skills:*` skills, all 13 claude.ai connectors (including both T3 Connect connectors), and the synced GitHub plugin disappeared. The 37 CE skills and Claude Code's built-in plugins remained, and the synced files were not moved.
 
 ### Limits
 
 - Connectors that the Claude desktop app delivers itself, and Codex desktop builds newer than the pinned CLI, are outside what these user-scope settings control.
-- The native smokes run without a claude.ai or ChatGPT sign-in, so they show that local sources survive, not that account sources are blocked. After applying, check by hand that a signed-in Claude Code session lists no `anthropic-skills:*` skills or claude.ai connectors, and that a signed-in Codex session loads no remote plugins.
+- Organization-required claude.ai plugins still load; Claude Code does not let user settings turn them off.
 - A custom `CODEX_HOME`, a `CLAUDE_CONFIG_DIR` outside the default `~/.claude`, or a T3 provider `homePath` selects an unmanaged home that these settings do not reach.
 
 ## Verification
@@ -299,4 +311,4 @@ This verifies native CE discovery, stale-source and enabled-state repair, preser
 
 For Grok's isolated native integration, run `python tests/smoke_grok.py` with the repository tools on PATH. This verifies the native local marketplace, pinned installation and enablement, shared instructions, foreign-content exclusion, unrelated-plugin preservation, and explicit expansion of the complete CE skill body. Add `--t3` for the fresh native ACP driver check. See [Grok Build](grok.md) for native-copy repair and authentication boundaries.
 
-Each of these smokes, plus `tests/smoke_pi.py` and `tests/smoke_t3_instructions.py`, also installs the shared skills in its disposable home and checks that the harness lists `grammar-checker`, `humanizer`, and `style-guide` exactly once. Grok's count ignores entries marked `disabled`. On Windows, Codex resolves `~/.agents/skills` from the OS profile and ignores `HOME`, so its smoke counts the skills only on Linux and macOS and checks the copied directories on Windows. The Codex smoke also confirms that CE skills still load under the `[plugins._default]` allowlist. The T3 instruction smoke confirms that a T3 Claude launch under the account-source settings still sends the `mcp__t3-code__*` tools, the CE and Korean skills, and the writing block. On 2026-11-07 all of these passed locally on Windows x64. None of them signs in to an account, so none proves that account sources are blocked; see [Limits](#limits).
+Each of these smokes, plus `tests/smoke_pi.py` and `tests/smoke_t3_instructions.py`, also installs the shared skills in its disposable home and checks that the harness lists `grammar-checker`, `humanizer`, and `style-guide` exactly once. Grok's count ignores entries marked `disabled`. On Windows, Codex resolves `~/.agents/skills` from the OS profile and ignores `HOME`, so its smoke counts the skills only on Linux and macOS and checks the copied directories on Windows. The Codex smoke also confirms that CE skills still load under the `[plugins._default]` allowlist. The T3 instruction smoke confirms that a T3 Claude launch under the account-source settings still sends the `mcp__t3-code__*` tools, the CE and Korean skills, and the writing block. On 2026-11-07 all of these passed locally on Windows x64. None of them signs in to an account, so none proves that account sources are blocked; see [Signed-In Verification](#signed-in-verification).

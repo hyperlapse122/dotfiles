@@ -31,7 +31,7 @@ Chezmoi automatically merges all files in `.chezmoidata/` into a single global d
 - `personal-apps.json` / `personal-app-lock.json`: Personal CLI declarations and locked SHA-256 release pins.
 - `fonts.json` / `font-lock.json`: Desktop font selections and generated release/archive-member SHA-256 pins, exposed as `fonts` and `fontLocks`.
 - `harness-plugins.json` / `harness-plugin-lock.json`: AI harness plugin declarations and release pins.
-- `harness-skills.json`: Shared user-scope skill pack declarations (`harnessSkills`), with each skill's expected `allowed-tools` value. Their release pins live in `harness-plugin-lock.json` under `harnessSkillLocks`.
+- `harness-skills.json`: Shared user-scope skill pack declarations (`harnessSkills`), with the reviewed SKILL.md frontmatter keys and each skill's expected `allowed-tools` value. Their release pins live in `harness-plugin-lock.json` under `harnessSkillLocks`.
 
 > **Note:** Filenames in `.chezmoidata/` do not create namespaces in chezmoi. Ensure top-level dictionary keys remain unique across files.
 
