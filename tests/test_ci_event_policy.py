@@ -78,5 +78,17 @@ class EventAdmissionTest(unittest.TestCase):
         self.assertTrue(policy.decide("pull_request", {"pull_request": self.pr}, {"api_error": "unavailable"})["run"])
 
 
+class EventWorkflowTest(unittest.TestCase):
+    def test_automatic_validation_uses_read_only_admission_without_cancelling_runs(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/test-events.yml").read_text()
+        for forbidden in ("cancel-in-progress: true", "cancelWorkflowRun", "actions: write", "\n  reconcile:"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, workflow)
+        self.assertIn("python scripts/ci-event-policy.py", workflow)
+        self.assertIn("needs: admission", workflow)
+        self.assertIn("if: needs.admission.outputs.run == 'true'", workflow)
+        self.assertIn("uses: ./.github/workflows/test.yml", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
