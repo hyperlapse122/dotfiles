@@ -107,7 +107,7 @@ def remove(source, config, identity):
 def install_bundle(document, destination, public_roots):
     validate_inventory(document)
     # Preserve the public input bytes as a prefix; parse a comment-free view only
-    # for deduplication. Certifi's upstream explanatory comments remain intact.
+    # for deduplication. The upstream explanatory comments remain intact.
     public_blocks = CERTIFICATE.findall(public_roots)
     public = certificates('\n'.join(public_blocks))
     seen = {der for der, _ in public}
@@ -145,7 +145,7 @@ def apply(source, config, destination, *, platform):
     supported(platform)
     document = read_inventory(source, config)
     try:
-        public = (Path(destination) / PUBLIC_ROOTS).read_text(encoding='ascii')
+        public = (Path(destination) / PUBLIC_ROOTS).read_text(encoding='utf-8')
     except (OSError, UnicodeError):
         raise common.AuthError('Install the pinned public CA roots before applying enrolled certificates.') from None
     install_bundle(document, destination, public)

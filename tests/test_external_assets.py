@@ -186,18 +186,15 @@ class ExternalAssetsTest(unittest.TestCase):
                 stream.writestr("bash-completion-2.18.0/" + name, content)
             stream.writestr("bash-completion-2.18.0/not-selected", b"unneeded")
         self.payloads["/completion.zip"] = archive.getvalue()
-        archive = io.BytesIO()
-        with zipfile.ZipFile(archive, "w") as stream:
-            stream.writestr("certifi/cacert.pem", b"public root fixture\n")
-        self.payloads["/roots.whl"] = archive.getvalue()
+        self.payloads["/cacert.pem"] = b"public root fixture\n"
         source = self.root / "enrollment source"
         (source / ".secrets").mkdir(parents=True)
         # Membership selects the asset; rendering must never decrypt this file.
         (source / ".secrets/ca-certificates.json.asc").write_text("inert enrollment marker")
         bash_pin = {"url": self.url + "/completion.zip",
                     "sha256": hashlib.sha256(self.payloads["/completion.zip"]).hexdigest()}
-        ca_pin = {"url": self.url + "/roots.whl",
-                  "sha256": hashlib.sha256(self.payloads["/roots.whl"]).hexdigest()}
+        ca_pin = {"url": self.url + "/cacert.pem",
+                  "sha256": hashlib.sha256(self.payloads["/cacert.pem"]).hexdigest()}
         context = ('{{ $ctx := . | setValueAtPath "chezmoi.os" "linux" '
                    '| setValueAtPath "chezmoi.arch" "amd64" '
                    '| setValueAtPath "chezmoi.sourceDir" ' + json.dumps(str(source))
@@ -218,8 +215,8 @@ class ExternalAssetsTest(unittest.TestCase):
         self.assertIn(bash_root, assets.keys())
         self.assertIn(ca_root, assets.keys())
         selected = {path: assets[path] for path in (bash_root, ca_root)}
-        # The zip is the transport fixture; the selected members and ownership
-        # come from the real shared declaration, including its single Bash root.
+        # Bash uses a ZIP transport fixture; selection and ownership come from
+        # the real shared declarations, including the directly downloaded PEM.
         selected[bash_root]["format"] = "zip"
         lines = []
         for path, declaration in selected.items():
@@ -236,12 +233,22 @@ class ExternalAssetsTest(unittest.TestCase):
             self.assertEqual((self.home / bash_root / name).read_bytes(), content)
         self.assertFalse((self.home / bash_root / "not-selected").exists())
         self.assertEqual((self.home / ca_root).read_bytes(), b"public root fixture\n")
+        private_bundle = self.home / ".local/share/dotfiles/ca/bundle.pem"
+        private_bundle.write_bytes(b"last valid combined bundle\n")
+        self.assertIn("Reusing prepared external assets", self.prepare().stdout)
         (self.home / bash_root / "bash_completion").unlink()
         (self.home / ca_root).unlink()
         self.prepare()
         self.assertEqual((self.home / bash_root / "bash_completion").read_bytes(), bash_files["bash_completion"])
         self.assertEqual((self.home / ca_root).read_bytes(), b"public root fixture\n")
-        self.assertCountEqual(self.requests, ["/completion.zip", "/roots.whl"])
+        self.assertCountEqual(self.requests, ["/completion.zip", "/cacert.pem"])
+        self.assertEqual(private_bundle.read_bytes(), b"last valid combined bundle\n")
+        # A forced download of changed upstream bytes must retain both outputs.
+        self.payloads["/cacert.pem"] = b"unexpected upstream revision\n"
+        result = self.prepare("refresh", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.home / ca_root).read_bytes(), b"public root fixture\n")
+        self.assertEqual(private_bundle.read_bytes(), b"last valid combined bundle\n")
 
     def test_changed_pin_at_same_url_prepares_new_content(self):
         self.prepare()
