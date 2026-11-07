@@ -4,5 +4,11 @@
       "commit": "42f9745ea0a4b70f8dde059aa8cf7f974d2991f1",
       "tag": "compound-engineering-v3.35.1"
     }
+  },
+  "harnessSkillLocks": {
+    "korean-skills": {
+      "commit": "fe6432e95f6675f7e411eacb2e1c36f1de54f962",
+      "tag": "v1.0.0"
+    }
   }
 }

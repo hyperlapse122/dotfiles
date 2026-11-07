@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 from pathlib import Path
@@ -15,9 +16,9 @@ def github_json(endpoint):
     return json.loads(result.stdout)
 
 
-def resolve_plugin(plugin, fetch):
-    repository = plugin["repository"]
-    prefix = plugin["tagPrefix"]
+def resolve_release(source, fetch):
+    repository = source["repository"]
+    prefix = source["tagPrefix"]
     if not isinstance(repository, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Expected a GitHub owner/repository")
     if not isinstance(prefix, str) or not prefix:
@@ -54,11 +55,48 @@ def resolve_plugin(plugin, fetch):
         target = annotated.get("object")
 
 
+def allowed_tools(text):
+    lines = text.splitlines()
+    if not lines or lines[0] != "---" or "---" not in lines[1:]:
+        return None
+    for line in lines[1:lines.index("---", 1)]:
+        key, separator, value = line.partition(":")
+        if separator and key == "allowed-tools":
+            return value.strip()
+    return None
+
+
+def check_skills(skill_set, pin, fetch):
+    repository = skill_set["repository"]
+    tree = fetch(f"repos/{repository}/git/trees/{pin['commit']}?recursive=1")["tree"]
+    upstream = {}
+    for entry in tree:
+        match = re.fullmatch(r"skills/([^/]+)/SKILL\.md", entry["path"])
+        if match and entry["type"] == "blob":
+            upstream[match.group(1)] = entry["sha"]
+    declared = skill_set["skills"]
+    added = sorted(upstream.keys() - declared.keys())
+    removed = sorted(declared.keys() - upstream.keys())
+    if added or removed:
+        raise ValueError(f"{repository} {pin['tag']}: skill set differs from the declaration; "
+                         f"added upstream: {', '.join(added) or 'none'}; removed upstream: {', '.join(removed) or 'none'}")
+    for name, blob in sorted(upstream.items()):
+        text = base64.b64decode(fetch(f"repos/{repository}/git/blobs/{blob}")["content"]).decode("utf-8")
+        actual = allowed_tools(text)
+        if actual != declared[name]["allowedTools"]:
+            raise ValueError(f"{repository} {pin['tag']}: {name} allowed-tools differs; "
+                             f"declared {declared[name]['allowedTools']!r}, upstream {actual!r}")
+
+
 def update_lock(root, fetch=github_json):
     data_dir = root / "home" / ".chezmoidata"
     plugins = json.loads((data_dir / "harness-plugins.json").read_text(encoding="utf-8"))["harnessPlugins"]
-    resolved = {name: resolve_plugin(plugin, fetch) for name, plugin in plugins.items()}
-    lock = {"harnessPluginLocks": resolved}
+    skill_sets = json.loads((data_dir / "harness-skills.json").read_text(encoding="utf-8"))["harnessSkills"]
+    plugin_pins = {name: resolve_release(plugin, fetch) for name, plugin in plugins.items()}
+    skill_pins = {name: resolve_release(skill_set, fetch) for name, skill_set in skill_sets.items()}
+    for name, skill_set in skill_sets.items():
+        check_skills(skill_set, skill_pins[name], fetch)
+    lock = {"harnessPluginLocks": plugin_pins, "harnessSkillLocks": skill_pins}
     lock_path = data_dir / "harness-plugin-lock.json"
     if lock_path.exists() and json.loads(lock_path.read_text(encoding="utf-8")) == lock:
         print("Harness plugin pins are unchanged")
@@ -75,7 +113,8 @@ def update_lock(root, fetch=github_json):
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-    print("Updated harness plugin pins: " + ", ".join(f"{name} {pin['tag']}" for name, pin in resolved.items()))
+    pins = {**plugin_pins, **skill_pins}
+    print("Updated harness plugin pins: " + ", ".join(f"{name} {pin['tag']}" for name, pin in pins.items()))
     return True
 
 

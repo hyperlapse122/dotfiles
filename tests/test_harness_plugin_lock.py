@@ -1,3 +1,4 @@
+import base64
 import copy
 import importlib.util
 import json
@@ -12,6 +13,7 @@ REPO = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("harness_plugin_lock", REPO / "scripts/update-harness-plugin-lock.py")
 UPDATER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(UPDATER)
+TOOLS = "Read Write Edit Grep Glob AskUserQuestion"
 
 
 class HarnessPluginLockTest(unittest.TestCase):
@@ -34,23 +36,97 @@ class HarnessPluginLockTest(unittest.TestCase):
             self.release_path: {"tag_name": "plugin.v1.2.3", "draft": False, "prerelease": False},
             self.ref_path: {"ref": "refs/tags/plugin.v1.2.3", "object": {"type": "commit", "sha": "a" * 40}},
         }
+        self.skills_manifest = self.data / "harness-skills.json"
+        self.skills_manifest.write_text(json.dumps({"harnessSkills": {"writing": {
+            "repository": "owner/skills",
+            "tagPrefix": "v",
+            "archiveExclude": ["*/AGENTS.md", "*/CLAUDE.md"],
+            "skills": {name: {"allowedTools": TOOLS} for name in ("grammar-checker", "humanizer", "style-guide")},
+        }}}), encoding="utf-8")
+        self.skill_base = "repos/owner/skills"
+        self.skill_release_path = self.skill_base + "/releases/latest"
+        self.responses[self.skill_release_path] = {"tag_name": "v1.0.0", "draft": False, "prerelease": False}
+        self.responses[self.skill_base + "/git/ref/tags/v1.0.0"] = {"ref": "refs/tags/v1.0.0", "object": {"type": "commit", "sha": "d" * 40}}
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS})
+
+    def publish_upstream(self, skills):
+        tree = [{"path": "CLAUDE.md", "type": "blob", "sha": "e" * 40}, {"path": "skills", "type": "tree", "sha": "f" * 40}]
+        for index, (name, tools) in enumerate(sorted(skills.items())):
+            blob = f"{index:040x}"
+            tree += [{"path": f"skills/{name}", "type": "tree", "sha": "f" * 40}, {"path": f"skills/{name}/SKILL.md", "type": "blob", "sha": blob}]
+            text = f"---\nname: {name}\ndescription: Example skill\nallowed-tools: {tools}\n---\n\n# {name}\n"
+            self.responses[f"{self.skill_base}/git/blobs/{blob}"] = {"content": base64.encodebytes(text.encode()).decode(), "encoding": "base64"}
+        self.responses[f"{self.skill_base}/git/trees/{'d' * 40}?recursive=1"] = {"sha": "f" * 40, "truncated": False, "tree": tree}
 
     def refresh(self):
         return UPDATER.update_lock(self.root, self.responses.__getitem__)
 
+    def locked(self):
+        return json.loads(self.lock.read_text(encoding="utf-8"))
+
     def pin(self):
-        return json.loads(self.lock.read_text(encoding="utf-8"))["harnessPluginLocks"]["example"]
+        return self.locked()["harnessPluginLocks"]["example"]
 
     def test_lightweight_commit_and_semantically_unchanged_lock(self):
-        declaration = self.manifest.read_bytes()
+        declarations = self.manifest.read_bytes(), self.skills_manifest.read_bytes()
         self.assertTrue(self.refresh())
         self.assertEqual(self.pin(), {"tag": "plugin.v1.2.3", "commit": "a" * 40})
-        self.lock.write_text(json.dumps({"harnessPluginLocks": {"example": self.pin()}}, indent=4), encoding="utf-8")
+        self.assertEqual(self.locked()["harnessSkillLocks"], {"writing": {"tag": "v1.0.0", "commit": "d" * 40}})
+        self.lock.write_text(json.dumps(self.locked(), indent=4), encoding="utf-8")
         os.utime(self.lock, ns=(1000000000, 1000000000))
         before = self.lock.read_bytes(), self.lock.stat().st_mtime_ns
         self.assertFalse(self.refresh())
         self.assertEqual((self.lock.read_bytes(), self.lock.stat().st_mtime_ns), before)
-        self.assertEqual(self.manifest.read_bytes(), declaration)
+        self.assertEqual((self.manifest.read_bytes(), self.skills_manifest.read_bytes()), declarations)
+
+    def test_first_run_appends_skill_pin_after_byte_identical_plugin_pin(self):
+        plugin_only = json.dumps({"harnessPluginLocks": {"example": {"tag": "plugin.v1.2.3", "commit": "a" * 40}}}, indent=2, sort_keys=True) + "\n"
+        self.lock.write_bytes(plugin_only.encode())
+        self.assertTrue(self.refresh())
+        self.assertEqual(self.lock.read_text(encoding="utf-8"), plugin_only[:-len("\n}\n")] + (
+            ',\n'
+            '  "harnessSkillLocks": {\n'
+            '    "writing": {\n'
+            f'      "commit": "{"d" * 40}",\n'
+            '      "tag": "v1.0.0"\n'
+            '    }\n'
+            '  }\n'
+            '}\n'
+        ))
+        self.assertFalse(self.refresh())
+
+    def test_unstable_skill_release_preserves_prior_bytes(self):
+        release = self.responses[self.skill_release_path]
+        for case in ({**release, "draft": True}, {**release, "prerelease": True}, {**release, "tag_name": "v1.0.0-rc1"},
+                     {**release, "tag_name": "1.0.0"}, {**release, "tag_name": "v1.0"}):
+            with self.subTest(case=case):
+                self.responses[self.skill_release_path] = case
+                with self.assertRaises(ValueError):
+                    self.refresh()
+                self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_upstream_skill_added_fails_naming_it_and_preserves_lock(self):
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS, "translator": TOOLS})
+        with self.assertRaisesRegex(ValueError, "added upstream: translator"):
+            self.refresh()
+        self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_upstream_skill_removed_fails_naming_it_and_preserves_lock(self):
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS})
+        with self.assertRaisesRegex(ValueError, "removed upstream: style-guide"):
+            self.refresh()
+        self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_widened_allowed_tools_fails_with_both_values_and_preserves_lock(self):
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS + " Bash", "style-guide": TOOLS})
+        with self.assertRaises(ValueError) as raised:
+            self.refresh()
+        message = str(raised.exception)
+        self.assertIn("humanizer", message)
+        self.assertIn(f"declared {TOOLS!r}", message)
+        self.assertIn(f"upstream {TOOLS + ' Bash'!r}", message)
+        self.assertNotIn("style-guide", message)
+        self.assertEqual(self.lock.read_bytes(), self.previous)
 
     def test_annotated_and_nested_tags_resolve_terminal_commit(self):
         for depth in (1, 2):
