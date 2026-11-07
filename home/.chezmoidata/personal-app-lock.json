@@ -1,68 +1,68 @@
 {
   "personalAppLocks": {
     "antigravity": {
-      "tag": "1.5.2",
+      "tag": "1.5.3",
       "targets": {
         "darwin-arm64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "antigravity",
-          "sha512": "89c9080f26d99bb94c2aed1bf67e0612dc7803a77fc64963e6c95377de6dd0d6269931f413a21ab2ba885c3f4ee8343727520c5ff94740345ac06b4b73085d67",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/darwin-arm/cli_mac_arm64.tar.gz"
+          "sha512": "3215656cfe5336bce310365f61de7c85b4946a14de506747837106dfaf948dcff303c47e648e06fbbb73a8702538eae171e675f2910e4f49b280549018b46e95",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.3-6604829099950080/darwin-arm/cli_mac_arm64.tar.gz"
         },
         "linux-amd64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "antigravity",
-          "sha512": "aa876c0813572efaf85ed47983cc937414705d40490cbdb54f6e255656a4f8744ae38e457823e924fa8270b348124e0521d3cda3fec6824bb2d14b98a7a05baa",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/linux-x64/cli_linux_x64.tar.gz"
+          "sha512": "e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.3-6604829099950080/linux-x64/cli_linux_x64.tar.gz"
         },
         "linux-arm64": {
           "format": "tar.gz",
           "kind": "archive-file",
           "path": "antigravity",
-          "sha512": "9a141da7b218c640a962188b388905f065cc307425bbeff6e74c07f95266f93526f6d0dee9bad876b79431403f5b30ef4e6514f5f44fbf06dca2a077f54f6175",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/linux-arm/cli_linux_arm64.tar.gz"
+          "sha512": "c2fac818b3c1bb224079df03a714ccba99728b6a3a41d86d247ab2feb8582a43840c5032f1c2b75e72667623d5503e7ffda2712c4f37b6ee19f99c3fcfb25bae",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.3-6604829099950080/linux-arm/cli_linux_arm64.tar.gz"
         },
         "windows-amd64": {
           "kind": "file",
-          "sha512": "d0b00af82e3fd882f83efbe97905222c80afc4283d74fbfbe362b4e5bb6cab6fa0d3188d3851b2b31d45fbd6312feb54f22321e146f0972ed9583fb38efb7276",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/windows-x64/cli_windows_x64.exe"
+          "sha512": "b282c10ca3266078806d7bcae66db8ec0c6e2953ee6e62de1da6499182d24c02fffa8a74c620817bd35b15cf5f5a18287fb1ab30bcb9c7a67592c248696ed909",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.3-6604829099950080/windows-x64/cli_windows_x64.exe"
         },
         "windows-arm64": {
           "kind": "file",
-          "sha512": "652b2fd876d248c41eaf65414e32f719eaab8ac35b26deef213fe240c04a1aec3d16f9e513fd47fb4ad8bd12b32c45c35518dce7fdb1fc1af996cb550be69323",
-          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.2-4951595792859136/windows-arm/cli_windows_arm64.exe"
+          "sha512": "62f09bb3dc3c8bb142de2ad87c855c524ca0efb70bb9a54430121a021b14060fa3aa39d2a0e0b40b6198ee8ff26af59ca5911ff5ce19c70fd8ac2cf4e3c7d699",
+          "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.3-6604829099950080/windows-arm/cli_windows_arm64.exe"
         }
       }
     },
     "claude": {
-      "tag": "2.1.318",
+      "tag": "2.1.319",
       "targets": {
         "darwin-arm64": {
           "kind": "file",
-          "sha256": "677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d",
-          "url": "https://downloads.claude.ai/claude-code-releases/2.1.318/darwin-arm64/claude"
+          "sha256": "1f53587e92dee8e089fa349188a4cda64fa34ace6e7b0ca2ee278ddaa3cc2ebd",
+          "url": "https://downloads.claude.ai/claude-code-releases/2.1.319/darwin-arm64/claude"
         },
         "linux-amd64": {
           "kind": "file",
-          "sha256": "708c77b204db30086ff6f1ed34577bda03e1be74ced80557cbf7b54249ebf0bd",
-          "url": "https://downloads.claude.ai/claude-code-releases/2.1.318/linux-x64/claude"
+          "sha256": "dabafec82ca1319fa43d8be36a10fc61b1d11821cb98ad5df04ad95e199b8eed",
+          "url": "https://downloads.claude.ai/claude-code-releases/2.1.319/linux-x64/claude"
         },
         "linux-arm64": {
           "kind": "file",
-          "sha256": "53a0d7e219d7b0804ecba5dbc002745e89f786cc946d2de85a6470d5b2d1fb06",
-          "url": "https://downloads.claude.ai/claude-code-releases/2.1.318/linux-arm64/claude"
+          "sha256": "a7e687fd1cb054d651c7588223de3786c99d4c682365e3c3ae1e59ce7f3a591f",
+          "url": "https://downloads.claude.ai/claude-code-releases/2.1.319/linux-arm64/claude"
         },
         "windows-amd64": {
           "kind": "file",
-          "sha256": "b9aa5b08dc2cc46ea77d334dce792d1b8fdbb3a43bb290efdebdc905b1181082",
-          "url": "https://downloads.claude.ai/claude-code-releases/2.1.318/win32-x64/claude.exe"
+          "sha256": "2e055732c9d03d22700d9046251a8370b673607bfcc9e4d16a1b0e8fb1345cbd",
+          "url": "https://downloads.claude.ai/claude-code-releases/2.1.319/win32-x64/claude.exe"
         },
         "windows-arm64": {
           "kind": "file",
-          "sha256": "4626adbfe89eac61c79771ba866c63e7561d501cfba66a45be11213f1a33b1a0",
-          "url": "https://downloads.claude.ai/claude-code-releases/2.1.318/win32-arm64/claude.exe"
+          "sha256": "59b1ace11fad7f95c17a4ba01cf50eb48af20cd133df93129b34aa8e633bd6b1",
+          "url": "https://downloads.claude.ai/claude-code-releases/2.1.319/win32-arm64/claude.exe"
         }
       }
     },
@@ -308,32 +308,32 @@
       }
     },
     "omp": {
-      "tag": "v18.17.0",
+      "tag": "v18.18.0",
       "targets": {
         "darwin-arm64": {
           "kind": "file",
-          "sha256": "51f2836f267a8ba6c12cfb50f80e75f0301ccfb1bd53535fc6f9df03199da364",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-darwin-arm64"
+          "sha256": "0adae2a341a1e6840b00c96ce0b1c9d2e0257b1ea6782e4302e17b717a6ffb0a",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-darwin-arm64"
         },
         "linux-amd64": {
           "kind": "file",
-          "sha256": "a4ce6001ab1012ca835f4184d675437531bd1ac477a7ba8424ed0b5476e9e4cb",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-linux-x64"
+          "sha256": "ec271e0d7df4c0f57acb6a7a28f8585d46bd050bcef8494f6d33db8a6c0dfbba",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-linux-x64"
         },
         "linux-arm64": {
           "kind": "file",
-          "sha256": "a9423fd7a69d869bf514931226b21d4ff55474225f574e2911fec457fc470e68",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-linux-arm64"
+          "sha256": "b394bfbf7c0e0ba82e01913defb5fadf14a6ea5a71ee05348070ab5e40187144",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-linux-arm64"
         },
         "windows-amd64": {
           "kind": "file",
-          "sha256": "7cc6960d173dcb021843b3b073c2443f6544672ca98803f96f2682bebcc5acef",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-windows-x64.exe"
+          "sha256": "20267b4914dca40306c71e824216e0f79061869d9e9d4780fc0c255b7a3e5339",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-windows-x64.exe"
         },
         "windows-arm64": {
           "kind": "file",
-          "sha256": "bd600af2ea9098c93fbf8541104817edb25cb3eb32267a4ac803d599bc25d521",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.17.0/omp-windows-arm64.exe"
+          "sha256": "4cb8c1ca84baab5a3f66febc54c979c184802e9efa75a99627e3bec446535be9",
+          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-windows-arm64.exe"
         }
       }
     },
