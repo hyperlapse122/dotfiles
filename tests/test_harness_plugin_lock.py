@@ -40,6 +40,7 @@ class HarnessPluginLockTest(unittest.TestCase):
         self.skills_manifest.write_text(json.dumps({"harnessSkills": {"writing": {
             "repository": "owner/skills",
             "tagPrefix": "v",
+            "frontmatterKeys": ["allowed-tools", "description", "license", "metadata", "name"],
             "skills": {name: {"allowedTools": TOOLS} for name in ("grammar-checker", "humanizer", "style-guide")},
         }}}), encoding="utf-8")
         self.skill_base = "repos/owner/skills"
@@ -48,14 +49,26 @@ class HarnessPluginLockTest(unittest.TestCase):
         self.responses[self.skill_base + "/git/ref/tags/v1.0.0"] = {"ref": "refs/tags/v1.0.0", "object": {"type": "commit", "sha": "d" * 40}}
         self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS})
 
-    def publish_upstream(self, skills):
-        tree = [{"path": "CLAUDE.md", "type": "blob", "sha": "e" * 40}, {"path": "skills", "type": "tree", "sha": "f" * 40}]
+    def publish_upstream(self, skills, extra_frontmatter=None, extra_entries=(), truncated=False):
+        tree = [{"path": "CLAUDE.md", "mode": "120000", "type": "blob", "sha": "e" * 40},
+                {"path": "skills", "mode": "040000", "type": "tree", "sha": "f" * 40}]
         for index, (name, tools) in enumerate(sorted(skills.items())):
             blob = f"{index:040x}"
-            tree += [{"path": f"skills/{name}", "type": "tree", "sha": "f" * 40}, {"path": f"skills/{name}/SKILL.md", "type": "blob", "sha": blob}]
-            text = f"---\nname: {name}\ndescription: Example skill\nallowed-tools: {tools}\n---\n\n# {name}\n"
+            tree += [{"path": f"skills/{name}", "mode": "040000", "type": "tree", "sha": "f" * 40},
+                     {"path": f"skills/{name}/SKILL.md", "mode": "100644", "type": "blob", "sha": blob},
+                     {"path": f"skills/{name}/references", "mode": "040000", "type": "tree", "sha": "f" * 40},
+                     {"path": f"skills/{name}/references/rules.md", "mode": "100644", "type": "blob", "sha": "9" * 40}]
+            extra = (extra_frontmatter or {}).get(name, "")
+            text = (f"---\nname: {name}\ndescription: Example skill\nlicense: MIT\nmetadata:\n  version: \"1.0.0\"\n"
+                    f"allowed-tools: {tools}\n{extra}---\n\n# {name}\n")
             self.responses[f"{self.skill_base}/git/blobs/{blob}"] = {"content": base64.encodebytes(text.encode()).decode(), "encoding": "base64"}
-        self.responses[f"{self.skill_base}/git/trees/{'d' * 40}?recursive=1"] = {"sha": "f" * 40, "truncated": False, "tree": tree}
+        tree += list(extra_entries)
+        self.responses[f"{self.skill_base}/git/trees/{'d' * 40}?recursive=1"] = {"sha": "f" * 40, "truncated": truncated, "tree": tree}
+
+    def start_from_reviewed_skill_pin(self):
+        reviewed = {"harnessPluginLocks": {"example": {"tag": "plugin.v1.2.2", "commit": "0" * 40}},
+                    "harnessSkillLocks": {"writing": {"tag": "v0.9.0", "commit": "c" * 40}}}
+        self.lock.write_text(json.dumps(reviewed, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     def refresh(self):
         return UPDATER.update_lock(self.root, self.responses.__getitem__)
@@ -126,6 +139,74 @@ class HarnessPluginLockTest(unittest.TestCase):
         self.assertIn(f"upstream {TOOLS + ' Bash'!r}", message)
         self.assertNotIn("style-guide", message)
         self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_unreviewed_capability_frontmatter_fails_naming_the_key(self):
+        for key, block in (("hooks", "hooks:\n  PreToolUse: []\n"), ("shell", "shell: bash\n")):
+            with self.subTest(key=key):
+                self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS},
+                                      extra_frontmatter={"humanizer": block})
+                with self.assertRaisesRegex(ValueError, f"humanizer frontmatter adds unreviewed keys: {key}"):
+                    self.refresh()
+                self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_duplicated_allowed_tools_line_fails(self):
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS},
+                              extra_frontmatter={"style-guide": "allowed-tools: Bash\n"})
+        with self.assertRaisesRegex(ValueError, "style-guide duplicate frontmatter key 'allowed-tools'"):
+            self.refresh()
+        self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_non_regular_or_nested_skill_entries_fail(self):
+        cases = {
+            "symlink": {"path": "skills/humanizer/link", "mode": "120000", "type": "blob", "sha": "8" * 40},
+            "executable": {"path": "skills/humanizer/run.sh", "mode": "100755", "type": "blob", "sha": "8" * 40},
+            "submodule": {"path": "skills/humanizer/vendor", "mode": "160000", "type": "commit", "sha": "8" * 40},
+            "nested skill": {"path": "skills/humanizer/inner/SKILL.md", "mode": "100644", "type": "blob", "sha": "8" * 40},
+        }
+        for case, entry in cases.items():
+            with self.subTest(case=case):
+                self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS}, extra_entries=[entry])
+                with self.assertRaisesRegex(ValueError, entry["path"]):
+                    self.refresh()
+                self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_truncated_tree_listing_fails(self):
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS}, truncated=True)
+        with self.assertRaisesRegex(ValueError, "truncated"):
+            self.refresh()
+        self.assertEqual(self.lock.read_bytes(), self.previous)
+
+    def test_skill_drift_keeps_reviewed_skill_pin_and_still_moves_plugin_pins(self):
+        self.start_from_reviewed_skill_pin()
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS, "style-guide": TOOLS},
+                              extra_frontmatter={"humanizer": "hooks:\n  PreToolUse: []\n"})
+        with self.assertRaisesRegex(UPDATER.SkillDriftError, "writing: .*humanizer frontmatter adds unreviewed keys: hooks"):
+            self.refresh()
+        self.assertEqual(self.pin(), {"tag": "plugin.v1.2.3", "commit": "a" * 40})
+        self.assertEqual(self.locked()["harnessSkillLocks"], {"writing": {"tag": "v0.9.0", "commit": "c" * 40}})
+
+    def test_unreachable_skill_release_keeps_reviewed_skill_pin(self):
+        self.start_from_reviewed_skill_pin()
+
+        def fetch(endpoint):
+            if endpoint == self.skill_release_path:
+                raise subprocess.CalledProcessError(1, "gh", stderr="not found")
+            return self.responses[endpoint]
+
+        with self.assertRaises(UPDATER.SkillDriftError):
+            UPDATER.update_lock(self.root, fetch)
+        self.assertEqual(self.pin(), {"tag": "plugin.v1.2.3", "commit": "a" * 40})
+        self.assertEqual(self.locked()["harnessSkillLocks"], {"writing": {"tag": "v0.9.0", "commit": "c" * 40}})
+
+    def test_drift_with_unchanged_plugin_pins_still_reports_without_rewriting(self):
+        self.start_from_reviewed_skill_pin()
+        self.responses[self.release_path]["tag_name"] = "plugin.v1.2.2"
+        self.responses[self.ref_path.replace("1.2.3", "1.2.2")] = {"ref": "refs/tags/plugin.v1.2.2", "object": {"type": "commit", "sha": "0" * 40}}
+        self.publish_upstream({"grammar-checker": TOOLS, "humanizer": TOOLS})
+        before = self.lock.read_bytes()
+        with self.assertRaisesRegex(UPDATER.SkillDriftError, "removed upstream: style-guide"):
+            self.refresh()
+        self.assertEqual(self.lock.read_bytes(), before)
 
     def test_annotated_and_nested_tags_resolve_terminal_commit(self):
         for depth in (1, 2):

@@ -3,6 +3,13 @@
     "korean-skills": {
       "repository": "DaleSeo/korean-skills",
       "tagPrefix": "v",
+      "frontmatterKeys": [
+        "allowed-tools",
+        "description",
+        "license",
+        "metadata",
+        "name"
+      ],
       "skills": {
         "grammar-checker": {
           "allowedTools": "Read Write Edit Grep Glob AskUserQuestion"
