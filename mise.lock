@@ -316,8 +316,20 @@ checksum = "sha256:1d7c2a3241b56effa68c724359fb30e603a802699b2b7b20fe2fae5ff6819
 url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_arm64.tar.gz"
 url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977468"
 
+[tools.podman."platforms.linux-arm64-musl"]
+checksum = "sha256:1d7c2a3241b56effa68c724359fb30e603a802699b2b7b20fe2fae5ff6819601"
+checksum_source = "mise-versions"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977468"
+
 [tools.podman."platforms.linux-x64"]
 checksum = "sha256:af1f85c22214088a0a9986b9c82b4c9b5b74eda8ecaa6c8cca82b1a63f339b4a"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977464"
+
+[tools.podman."platforms.linux-x64-musl"]
+checksum = "sha256:af1f85c22214088a0a9986b9c82b4c9b5b74eda8ecaa6c8cca82b1a63f339b4a"
+checksum_source = "mise-versions"
 url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_amd64.tar.gz"
 url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977464"
 
