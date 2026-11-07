@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import tomllib
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
@@ -85,6 +87,23 @@ class CaFilesTest(unittest.TestCase):
                 with self.assertRaises(self.module.common.AuthError):
                     self.module.install_bundle(self.inventory(invalid), self.home, self.public)
                 self.assertEqual(bundle.read_bytes(), before)
+
+    def test_apply_preserves_public_bundle_utf8_comments(self):
+        source = self.home/'source'
+        (source/'home/.secrets').mkdir(parents=True)
+        (source/'.chezmoiroot').write_text('home\n')
+        (source/'home/.secrets/ca-certificates.json.asc').write_text('inert ciphertext')
+        public = '# Public CA: TÜRKTRUST\n' + self.public
+        public_path = self.home/self.module.PUBLIC_ROOTS
+        public_path.parent.mkdir(parents=True)
+        public_path.write_text(public, encoding='utf-8')
+        with mock.patch.object(self.module, 'read_inventory', return_value=self.inventory()):
+            self.module.apply(source, None, self.home, platform='linux')
+        bundle = (self.home/self.module.BUNDLE).read_bytes()
+        self.assertTrue(bundle.startswith(public.encode('utf-8')))
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.load_verify_locations(cadata='\n'.join(self.module.CERTIFICATE.findall(bundle.decode('utf-8'))))
+        self.assertEqual(len(context.get_ca_certs()), 2)
 
     def test_private_ca_tls_succeeds_only_with_combined_bundle(self):
         self.module.install_bundle(self.inventory(), self.home, self.public)
@@ -265,8 +284,14 @@ class CaTemplateTest(unittest.TestCase):
             self.assertEqual(render('external', 'linux'), '')
             self.assertEqual(render('hook', 'darwin'), '')
             (source/'.secrets/ca-certificates.json.asc').write_text('must not decrypt during rendering')
-            self.assertIn('certifi/cacert.pem', render('external', 'linux'))
-            self.assertIn('checksum.sha256', render('external', 'darwin'))
+            pin = json.loads((REPO/'home/.chezmoidata/ca-files.json').read_text())['caFilesPublicRoots']
+            for platform in ('linux', 'darwin'):
+                asset = tomllib.loads(render('external', platform))['.local/share/dotfiles/ca/public-roots.pem']
+                self.assertEqual(asset['type'], 'file')
+                self.assertEqual(asset['url'], 'https://curl.se/ca/cacert.pem#sha256=' + pin['sha256'])
+                self.assertEqual(asset['checksum']['sha256'], pin['sha256'])
+                self.assertNotIn('format', asset)
+                self.assertNotIn('path', asset)
             self.assertIn('ca-files.py', render('hook', 'linux'))
             self.assertEqual(render('external', 'windows'), '')
             self.assertEqual(render('hook', 'windows'), '')

@@ -329,5 +329,164 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.assertEqual(trust.read_bytes(), original_trust)
 
 
+@unittest.skipUnless(shutil.which("gpg") and shutil.which("gpgconf"), "Native GnuPG required")
+class GpgRecipientApplyTest(unittest.TestCase):
+    run_command = GitGpgSettingsTest.run_command
+    chezmoi = GitGpgSettingsTest.chezmoi
+
+    def setUp(self):
+        self.repo = Path(__file__).resolve().parents[1]
+        # GnuPG's native agent socket names also have a short path limit on Windows.
+        scratch = tempfile.TemporaryDirectory(prefix="cgi-", dir=None if os.name == "nt" else "/tmp")
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name)
+        self.source = self.root / "source"
+        for relative in (".chezmoidata", ".chezmoitemplates", ".chezmoiscripts"):
+            (self.source / relative).mkdir(parents=True)
+        for relative in (
+            ".chezmoidata/gpg.yaml", ".chezmoidata/gpg-recipient.yaml",
+            ".chezmoitemplates/gpg-settings", ".chezmoitemplates/gpg-home",
+            ".chezmoiscripts/run_before_10-check-gpg-home.sh.tmpl",
+            ".chezmoiscripts/run_before_10-check-gpg-home.ps1.tmpl",
+            ".chezmoiscripts/run_before_15-import-gpg-recipient.sh.tmpl",
+            ".chezmoiscripts/run_before_15-import-gpg-recipient.ps1.tmpl",
+        ):
+            original = self.repo / "home" / relative
+            if original.exists():
+                shutil.copy2(original, self.source / relative)
+        self.home = self.root / "h"
+        self.home.mkdir()
+        self.gpg_home = self.home / ("AppData/Roaming/gnupg" if os.name == "nt" else ".gnupg")
+        self.gpg_home.mkdir(parents=True, mode=0o700)
+        self.config = self.root / "chezmoi.toml"
+        gpg = Path(shutil.which("gpg")).resolve()
+        config = ""
+        if os.name == "nt":
+            shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+            config += ('[interpreters.ps1]\ncommand = ' + json.dumps(str(shell)) +
+                       '\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n')
+        self.config.write_text(config + "[data]\ngpgProgram = " + json.dumps(gpg.as_posix()) + "\n", encoding="utf-8")
+        self.env = os.environ | {
+            "HOME": str(self.home), "USERPROFILE": str(self.home),
+            "APPDATA": str(self.home / "AppData/Roaming"),
+            "LOCALAPPDATA": str(self.root / "local"),
+            "XDG_CONFIG_HOME": str(self.root / "config"),
+            "XDG_CACHE_HOME": str(self.root / "cache"),
+            "XDG_DATA_HOME": str(self.root / "data"),
+            "XDG_STATE_HOME": str(self.root / "state"),
+            "GNUPGHOME": str(self.gpg_home),
+        }
+        self.gpg = str(gpg)
+        self.recipient = self.chezmoi("execute-template", "{{ .gpgRecipient }}").stdout.strip()
+        self.addCleanup(self.run_command, str(gpg.with_name("gpgconf.exe" if os.name == "nt" else "gpgconf")),
+                        "--kill", "gpg-agent")
+
+    def gpg_command(self, *args, check=True):
+        return self.run_command(self.gpg, "--no-options", "--batch", "--no-auto-check-trustdb", *args, check=check)
+
+    def primary_fingerprints(self):
+        lines = self.gpg_command("--with-colons", "--list-keys").stdout.splitlines()
+        return [lines[index + 1].split(":")[9] for index, line in enumerate(lines) if line.startswith("pub:")]
+
+    def ownertrust(self):
+        return tuple(line for line in self.gpg_command("--export-ownertrust").stdout.splitlines()
+                     if line and not line.startswith("#"))
+
+    def generate_unrelated_key(self):
+        self.gpg_command("--pinentry-mode", "loopback", "--passphrase", "", "--quick-generate-key",
+                         "Unrelated fixture <unrelated@example.invalid>", "ed25519", "sign", "0")
+        return self.primary_fingerprints()[0]
+
+    def test_explicit_apply_imports_exact_recipient_and_rerun_is_noop(self):
+        self.chezmoi("apply", "--force")
+        self.assertEqual(self.primary_fingerprints(), [self.recipient])
+        keyring = self.gpg_home / "pubring.kbx"
+        before = (keyring.read_bytes(), keyring.stat().st_mtime_ns)
+        self.chezmoi("apply", "--force")
+        self.assertEqual((keyring.read_bytes(), keyring.stat().st_mtime_ns), before)
+
+    def test_import_preserves_unrelated_key_and_ownertrust(self):
+        unrelated = self.generate_unrelated_key()
+        trust = self.ownertrust()
+        exported = self.gpg_command("--armor", "--export", unrelated).stdout
+        self.chezmoi("apply", "--force")
+        self.assertEqual(set(self.primary_fingerprints()), {self.recipient, unrelated})
+        self.assertEqual(self.ownertrust(), trust)
+        self.assertEqual(self.gpg_command("--armor", "--export", unrelated).stdout, exported)
+        self.assertFalse(any(line.startswith(self.recipient + ":") for line in trust))
+        keyring = self.gpg_home / "pubring.kbx"
+        before = (keyring.read_bytes(), keyring.stat().st_mtime_ns)
+        self.chezmoi("apply", "--force")
+        self.assertEqual((keyring.read_bytes(), keyring.stat().st_mtime_ns), before)
+
+    def test_wrong_configured_fingerprint_leaves_empty_keyring_untouched(self):
+        data = self.source / ".chezmoidata/gpg.yaml"
+        data.write_text(data.read_text().replace(self.recipient, "F" * 40), encoding="utf-8")
+        result = self.chezmoi("apply", "--force", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("fingerprint", result.stderr.lower())
+        self.assertEqual(list(self.gpg_home.iterdir()), [])
+
+    def test_mismatched_artifact_fails_before_keyring_mutation(self):
+        unrelated = self.generate_unrelated_key()
+        artifact = self.source / ".chezmoidata/gpg-recipient.yaml"
+        artifact.write_text("gpgRecipientPublicKey: |\n" + "".join(
+            "  " + line + "\n" for line in self.gpg_command("--armor", "--export", unrelated).stdout.splitlines()
+        ), encoding="ascii")
+        keyring = self.gpg_home / "pubring.kbx"
+        before = keyring.read_bytes()
+        trust = self.ownertrust()
+        result = self.chezmoi("apply", "--force", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("fingerprint", result.stderr.lower())
+        self.assertEqual(keyring.read_bytes(), before)
+        self.assertEqual(self.ownertrust(), trust)
+
+    def test_bootstrap_and_dry_run_leave_keyring_untouched(self):
+        before = list(self.gpg_home.iterdir())
+        self.chezmoi("managed", "--exclude=scripts")
+        self.chezmoi("apply", "--dry-run")
+        self.assertEqual(list(self.gpg_home.iterdir()), before)
+
+    def test_import_precedes_later_apply_script_and_target_rendering(self):
+        # A later before-script performs real encryption; trust is scoped to this
+        # fixture command because importing a public key does not confer trust.
+        if os.name == "nt":
+            script = ("$ErrorActionPreference = 'Stop'\n& '" + self.gpg.replace("'", "''")
+                      + "' --no-options --batch --trust-model always --recipient " + self.recipient
+                      + " --output '" + str(self.root / "proof.gpg").replace("'", "''")
+                      + "' --encrypt '" + str(self.root / "payload").replace("'", "''")
+                      + "'\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n")
+            extension = "ps1"
+        else:
+            import shlex
+            script = ("#!/bin/sh\nset -eu\n" + shlex.join([
+                self.gpg, "--no-options", "--batch", "--trust-model", "always", "--recipient", self.recipient,
+                "--output", str(self.root / "proof.gpg"), "--encrypt", str(self.root / "payload"),
+            ]) + "\n")
+            extension = "sh"
+        (self.root / "payload").write_bytes(b"public recipient lifecycle proof\n")
+        (self.source / (".chezmoiscripts/run_before_30-prove-recipient." + extension)).write_text(script, encoding="utf-8")
+        query = [self.gpg, "--no-options", "--batch", "--no-autostart", "--with-colons", "--list-keys", self.recipient]
+        (self.source / "dot_recipient-ready.tmpl").write_text(
+            "{{ output " + " ".join(json.dumps(value) for value in query) + " }}", encoding="utf-8",
+        )
+        self.chezmoi("apply", "--force")
+        self.assertTrue((self.root / "proof.gpg").is_file())
+        self.assertIn("fpr:::::::::" + self.recipient + ":", (self.home / ".recipient-ready").read_text())
+
+    def test_platform_rendering_uses_selected_native_gpg(self):
+        for platform in ("windows", "linux", "darwin"):
+            with self.subTest(platform=platform):
+                selected = "C:/native tools/gpg.exe" if platform == "windows" else "/native tools/gpg"
+                extension = "ps1" if platform == "windows" else "sh"
+                override = json.dumps({"chezmoi": {"os": platform}, "gpgProgram": selected})
+                script = self.chezmoi("--override-data", override, "execute-template", "--file",
+                                      str(self.source / (".chezmoiscripts/run_before_15-import-gpg-recipient." + extension + ".tmpl"))).stdout
+                self.assertIn(selected, script)
+                self.assertNotIn("--trust-model", script)
+                self.assertNotIn("--import-ownertrust", script)
+
+
 if __name__ == "__main__":
     unittest.main()

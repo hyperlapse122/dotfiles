@@ -80,7 +80,7 @@ If TLS connections continue to fail despite OS trust:
 
 On macOS and Linux, explicit enrollment can add CA certificates for Requests-based clients and file-based curl. This path uses an application PEM bundle; it does not install certificates into OS trust stores or change Java, Node, Bun, Go, or Windows native trust behavior.
 
-The public-root input is the unchanged `certifi` 2026.10.23 Mozilla bundle, installed from its checksummed official wheel. Managed CA certificates are appended after DER deduplication. The original certifi installation is never edited. The generated bundle is private at `~/.local/share/dotfiles/ca/bundle.pem`.
+The public-root input is curl's [Mozilla PEM bundle](https://curl.se/docs/caextract.html), downloaded directly from `https://curl.se/ca/cacert.pem`. The committed pin identifies revision `2026-11-05` with SHA-256 `427c064216761a1e72a8b30f0d954d08cb6e4435a82091fb865afd20c8497285`. Its original bytes, including UTF-8 certificate names and comments, form the public prefix; managed CA certificates are appended after DER deduplication. The generated bundle is private at `~/.local/share/dotfiles/ca/bundle.pem`.
 
 Enroll a PEM file containing only CA certificates using the initialized repository GPG configuration:
 
@@ -107,8 +107,17 @@ mise exec -- python scripts/ca-files.py remove --id corporate
 mise run apply
 ```
 
-An empty enrollment produces the public-only bundle. Unrelated files in the managed directory survive. Invalid certificates, missing public input, or decryption failure leave the last valid bundle unchanged. Without an enrollment file, bootstrap and apply do not decrypt CA data or provision fallback files. The public-root pin is repository-owned; update its version, official wheel URL, and SHA-256 together in `home/.chezmoidata/ca-files.json` and verify the selected `certifi/cacert.pem` member.
+An empty enrollment produces the public-only bundle. Unrelated files in the managed directory survive. Invalid certificates, missing public input, or decryption failure leave the last valid bundle unchanged. Without an enrollment file, bootstrap and apply do not decrypt CA data or provision fallback files.
 
-Enrolled Unix hosts prepare that public-root member through the shared external-asset cache before CA reconciliation. The preparation owns only `public-roots.pem`; the generated private bundle and unrelated CA files are preserved. Unchanged applies reuse preparation, and missing public-root files are repaired from the cache. See [external asset preparation](../maintenance/chezmoi-source.md#external-asset-preparation) for full verification and refresh commands.
+Enrolled Unix hosts prepare that public PEM through the shared external-asset cache before CA reconciliation. The preparation owns only `public-roots.pem`; the generated private bundle and unrelated CA files are preserved. Unchanged applies reuse preparation, and missing public-root files are repaired from the cache. A checksum failure stops preparation before replacing the installed public input or combined bundle. See [external asset preparation](../maintenance/chezmoi-source.md#external-asset-preparation) for full verification and refresh commands.
+
+### Refreshing the public-root pin
+
+The download URL follows curl's current bundle, while the committed digest admits only the reviewed revision. An upstream update can therefore make a cold download or forced refresh fail until the pin is updated; an intact prepared cache remains reusable. Refreshing assets does not accept a new checksum automatically.
+
+1. Open curl's [CA Extract page](https://curl.se/docs/caextract.html) over verified HTTPS and identify the current dated revision. Download `https://curl.se/ca/cacert.pem` and its [published SHA-256](https://curl.se/ca/cacert.pem.sha256) into a temporary directory using normal TLS verification.
+2. Compute the downloaded PEM's SHA-256, for example with `mise exec -- python -c 'import hashlib, pathlib; print(hashlib.sha256(pathlib.Path("cacert.pem").read_bytes()).hexdigest())'` from that directory. Require equality with the published checksum. Check its header date and compare its bytes or digest with the dated PEM and checksum linked by curl's revision table. If the live bundle changed during verification, download and verify again.
+3. Review the upstream revision, then update `version` and `sha256` together in `home/.chezmoidata/ca-files.json`. Keep `url` as `https://curl.se/ca/cacert.pem`. Do not replace the pin merely with a digest reported by a failed preparation.
+4. Run `mise exec -- python -m unittest discover -s tests -p test_ca_files.py` and `mise exec -- python -m unittest discover -s tests -p test_external_assets.py`. Commit the reviewed pin. Use `mise run apply` when ready to apply personal configuration; use `mise run assets:refresh` only when a forced download is also intended.
 
 Synthetic local TLS tests verify that the combined bundle accepts an enrolled CA while the public-only bundle rejects it. They also check public-root preservation, rejection of leaf/private-key/partial PEM input, repeated apply, certificate removal, and child-only environment selection. These tests do not install an organization's CA or prove that a real enterprise endpoint has the expected chain.
