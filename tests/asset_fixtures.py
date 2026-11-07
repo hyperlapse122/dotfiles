@@ -1,5 +1,6 @@
 """Prepare only fixture-selected assets without enabling personal apply scripts."""
 
+import json
 import os
 from pathlib import Path
 import shutil
@@ -8,6 +9,12 @@ import subprocess
 
 REPO = Path(__file__).resolve().parents[1]
 ASSET_DIRECTORY = ".chezmoitemplates/external-assets"
+
+
+def harness_skill_names():
+    """Every skill the harness-skills asset places in each shared skill root."""
+    declared = json.loads((REPO / "home/.chezmoidata/harness-skills.json").read_text(encoding="utf-8"))
+    return sorted(name for skill_set in declared["harnessSkills"].values() for name in skill_set["skills"])
 
 
 def copy_asset_templates(source, names):

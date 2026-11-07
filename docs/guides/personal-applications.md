@@ -131,11 +131,14 @@ Explicit apply owns these values in private `~/.claude/settings.json`:
 {
   "language": "korean",
   "autoMemoryEnabled": false,
+  "syncClaudeAiSkills": false,
+  "syncClaudeAiPlugins": false,
+  "disableClaudeAiConnectors": true,
   "env": { "DISABLE_AUTOUPDATER": "1" }
 }
 ```
 
-Fresh sessions default to Korean responses and do not read or write automatic memory. Existing memory files, credentials, sessions, and unrelated settings remain intact. Reapply restores these preferences after local edits. Native Claude settings precedence still applies; project settings or session overrides can take precedence over user preferences.
+Fresh sessions default to Korean responses and do not read or write automatic memory. They also load no skills, plugins, or MCP connectors from the claude.ai account; see [Account Source Isolation](harness-plugins.md#claude-code) for what remains available. Existing memory files, credentials, sessions, and unrelated settings remain intact. Reapply restores these preferences after local edits. Native Claude settings precedence still applies; project settings or session overrides can take precedence over user preferences.
 
 Run `claude auth login` manually before authenticated use, or provision credentials through a supported Claude mechanism. Never commit a plaintext API key or credentials file. The default `~/.claude` is managed; a custom direct-session `CLAUDE_CONFIG_DIR` remains unmanaged. See [Harness Plugins](harness-plugins.md#compound-engineering-plugin-for-claude-code) for CE and shared instructions, and [T3 Code](t3-code.md#managed-settings) for the native provider.
 

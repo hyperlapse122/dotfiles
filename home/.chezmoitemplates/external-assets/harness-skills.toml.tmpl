@@ -1,0 +1,38 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- /* Each shared skill root and the harnesses that read it. One copy per root keeps
+      discovery to exactly once per harness. */ -}}
+{{- $readers := dict ".agents/skills" (list "codex" "pi" "omp" "grok") ".claude/skills" (list "claude") ".gemini/config/skills" (list "antigravity") -}}
+{{- $locations := list -}}
+{{- range $location, $apps := $readers -}}
+{{- $targeted := false -}}
+{{- range $app := $apps -}}
+{{- if hasKey (get (get $.personalApps $app | default dict) "targets" | default dict) $target -}}
+{{- $targeted = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $targeted -}}
+{{- $locations = append $locations $location -}}
+{{- end -}}
+{{- end -}}
+{{- if $locations -}}
+{{- range $name, $set := .harnessSkills -}}
+{{- $pin := index $.harnessSkillLocks $name | default dict -}}
+{{- if not (regexMatch "^[0-9a-f]{40}$" (get $pin "commit")) -}}
+{{- fail (printf "Missing full harness skill commit pin for %s" $name) -}}
+{{- end -}}
+{{- /* One exact root per skill, so unrelated skills beside it survive. The include alone
+      selects the skill subtree; do not add an exclude, because chezmoi rejects an archive
+      that declares both. stripComponents removes the archive top directory and skills/<name>. */ -}}
+{{- range $location := $locations -}}
+{{- range $skill := keys $set.skills | sortAlpha }}
+[{{ printf "%s/%s" $location $skill | quote }}]
+type = "archive"
+refreshPeriod = "0"
+url = {{ printf "https://github.com/%s/archive/%s.tar.gz" $set.repository $pin.commit | quote }}
+stripComponents = 3
+exact = true
+include = [{{ printf "*/skills/%s/**" $skill | quote }}]
+{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

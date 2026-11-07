@@ -23,4 +23,4 @@
 {{- $env := get $settings "env" | default dict -}}
 {{- $env = $env | setValueAtPath "DISABLE_AUTOUPDATER" "1" -}}
 {{- $env = $env | setValueAtPath "CLAUDE_CODE_USE_POWERSHELL_TOOL" "1" -}}
-{{- $settings | setValueAtPath "language" "korean" | setValueAtPath "autoMemoryEnabled" false | setValueAtPath "env" $env | setValueAtPath "enabledPlugins" $plugins | setValueAtPath "extraKnownMarketplaces" $marketplaces | toPrettyJson -}}
+{{- $settings | setValueAtPath "language" "korean" | setValueAtPath "autoMemoryEnabled" false | setValueAtPath "syncClaudeAiSkills" false | setValueAtPath "syncClaudeAiPlugins" false | setValueAtPath "disableClaudeAiConnectors" true | setValueAtPath "env" $env | setValueAtPath "enabledPlugins" $plugins | setValueAtPath "extraKnownMarketplaces" $marketplaces | toPrettyJson -}}
