@@ -10,7 +10,6 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 |---|---|---|---|
 | `claude` | [anthropics/claude-code](https://github.com/anthropics/claude-code) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `codex` | [openai/codex](https://github.com/openai/codex) | Canonical CLI package | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
-| `omp` | [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) | Raw binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | Complete native distribution | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `grok` | [Grok Build](https://docs.x.ai/build/overview) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
@@ -51,7 +50,7 @@ Both tasks apply personal configuration, including font and plugin reconciliatio
 The outer `--refresh-externals` flag no longer controls these script-managed assets.
 Normal application can miss modifications that preserve file size and modification time; full verification restores the declared content.
 
-> **Windows Note:** Close running Claude Code, Codex, and omp sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
+> **Windows Note:** Close running Claude Code and Codex sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
 
 ### Antigravity version ownership
 
@@ -62,6 +61,12 @@ T3's native Antigravity provider uses a separate official ACP runtime installed 
 The old third-party `antigravity-acp` payload and launchers are no longer installed. Explicit apply removes their known executable paths and the old managed provider entry, while preserving unrelated files and native T3 providers.
 
 To roll back, restore the desired `home/.chezmoidata/personal-app-lock.json` revision and explicitly apply again with Antigravity and T3 sessions closed. See [native CE integration](harness-plugins.md) and [T3 configuration and security limits](t3-code.md).
+
+### Retired omp installation
+
+Dotfiles no longer declares or pins omp and does not install or reconcile it. Applying the current source preserves an existing `~/.local/bin/omp` (`omp.exe` on Windows), `~/.omp` configuration, credentials, plugins, and session data. Existing completion files also remain on disk. A fresh home receives none of these omp files.
+
+The T3 settings modify template separately removes the `omp` provider entry during explicit apply; see [Managed Settings](t3-code.md#managed-settings).
 
 ## PATH Integration
 
@@ -86,10 +91,10 @@ Verify that the managed commands take precedence:
 
 ```sh
 # Windows PowerShell
-Get-Command omp -All
+Get-Command codex -All
 
 # POSIX Shells
-command -v omp
+command -v codex
 ```
 
 If another copy precedes `~/.local/bin`, resolve the conflicting PATH entry in your shell configuration.

@@ -178,8 +178,8 @@ All AI harnesses managed by this repository must connect their user-scope instru
 - Common instructions shared across all AI agents.
 - Conditional blocks for harness-specific logic:
   ```gotemplate
-  {{ if eq .harness "omp" }}
-  # omp-specific instructions
+  {{ if eq .harness "example" }}
+  # Harness-specific instructions
   {{ end }}
   ```
 
@@ -192,7 +192,7 @@ To onboard a new harness (e.g. `example-harness`):
    ```gotemplate
    {{- template "agent-instructions" (dict "harness" "example" "chezmoi" .) -}}
    ```
-4. Register, install, and enable the repository-pinned Compound Engineering plugin through the harness's native user-scope mechanism. Codex uses native `plugin marketplace add` and `plugin add`; Claude uses `plugin marketplace add`, `plugin install`, and `plugin enable` with `--scope user`; omp uses its own marketplace/install/enable commands. Antigravity uses its supported native plugin commands. Reuse the existing release/commit pin, preserve unrelated plugins and settings, and install only during explicit apply.
+4. Register, install, and enable the repository-pinned Compound Engineering plugin through the harness's native user-scope mechanism. Codex uses native `plugin marketplace add` and `plugin add`; Claude uses `plugin marketplace add`, `plugin install`, and `plugin enable` with `--scope user`. Antigravity uses its supported native plugin commands. Reuse the existing release/commit pin, preserve unrelated plugins and settings, and install only during explicit apply.
 5. Make the harness discover each shared user-scope skill exactly once. In `home/.chezmoitemplates/external-assets/harness-skills.toml.tmpl`, add the harness's `personalApps` identifier to the reader list of the shared skill root it reads natively, so that root renders whenever the harness is targeted. If the harness also reads another managed root, its native listing must still show each skill once. Grok, for example, has Claude skill compatibility turned off. See [Exactly-Once Discovery](../guides/harness-plugins.md#exactly-once-discovery).
 6. For T3 integration, select `context = t3` from the same shared template with the explicit native `harness` identifier. The resulting private addition file must omit the common baseline. Pass it through the supported native launch option or SDK equivalent while retaining native user/repository discovery and the normal account home. `scripts/t3-instructions.py` reconciles the current Codex, Claude, and pi launch options during explicit application; its private state preserves original options for reapplication and removal. Document unsupported adapters instead of creating a shadow profile or substituting untrusted application context.
 

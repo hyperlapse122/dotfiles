@@ -259,17 +259,6 @@
         }
       }
     },
-    "omp": {
-      "command": "omp",
-      "repository": "can1357/oh-my-pi",
-      "targets": {
-        "darwin-arm64": {"asset": "omp-darwin-arm64", "kind": "file"},
-        "linux-amd64": {"asset": "omp-linux-x64", "kind": "file"},
-        "linux-arm64": {"asset": "omp-linux-arm64", "kind": "file"},
-        "windows-amd64": {"asset": "omp-windows-x64.exe", "kind": "file"},
-        "windows-arm64": {"asset": "omp-windows-arm64.exe", "kind": "file"}
-      }
-    },
     "grok": {
       "command": "grok",
       "source": "grok",

@@ -1,7 +1,7 @@
 {{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
 {{- /* Each shared skill root and the harnesses that read it. One copy per root keeps
       discovery to exactly once per harness. */ -}}
-{{- $readers := dict ".agents/skills" (list "codex" "pi" "omp" "grok") ".claude/skills" (list "claude") ".gemini/config/skills" (list "antigravity") -}}
+{{- $readers := dict ".agents/skills" (list "codex" "pi" "grok") ".claude/skills" (list "claude") ".gemini/config/skills" (list "antigravity") -}}
 {{- $locations := list -}}
 {{- range $location, $apps := $readers -}}
 {{- $targeted := false -}}

@@ -1,5 +1,6 @@
-"""Apply real omp/CE pins and exercise native discovery in a disposable home.
+"""Verify pinned shared CE and skill assets in a disposable home.
 
+Native harness discovery is covered by each harness's own smoke check.
 No personal PATH, registry, account, or real home settings are changed.
 """
 
@@ -8,9 +9,10 @@ import json
 import os
 from pathlib import Path
 import shutil
+import tomllib
 
 from asset_fixtures import copy_asset_templates, harness_skill_names
-from smoke_personal_apps import REPO, check_version, executable, run, temporary_destination
+from smoke_personal_apps import REPO, executable, run, temporary_destination
 
 
 def main():
@@ -18,56 +20,20 @@ def main():
     parser.add_argument("--expected-target")
     args = parser.parse_args()
     chezmoi = executable("chezmoi")
-    declarations = json.loads((REPO / "home/.chezmoidata/harness-plugins.json").read_text(encoding="utf-8"))
     pins = json.loads((REPO / "home/.chezmoidata/harness-plugin-lock.json").read_text(encoding="utf-8"))
-    app_pins = json.loads((REPO / "home/.chezmoidata/personal-app-lock.json").read_text(encoding="utf-8"))
     name = "compound-engineering"
-    plugin = declarations["harnessPlugins"][name]
     pin = pins["harnessPluginLocks"][name]
-    plugin_id = plugin["omp"]["plugin"] + "@" + plugin["omp"]["marketplace"]
-
     with temporary_destination() as scratch:
         root = Path(scratch)
         home, source, outside = (root / part for part in ("home ' 한글", "source", "outside"))
         for directory in (home, source, outside):
             directory.mkdir()
-        # Stop native nearest-project discovery before it reaches an ancestor's
-        # real .omp directory when the OS temp directory is below the real home.
-        (outside / ".omp").mkdir()
-        for relative in (
-            ".chezmoidata/personal-apps.json",
-            ".chezmoidata/personal-app-lock.json",
-            ".chezmoidata/harness-plugins.json",
-            ".chezmoidata/harness-plugin-lock.json",
-            ".chezmoidata/harness-skills.json",
-            ".chezmoitemplates",
-            "private_dot_omp",
-            ".chezmoiscripts/run_onchange_after_20-harness-plugins.ps1.tmpl",
-            ".chezmoiscripts/run_onchange_after_20-harness-plugins.sh.tmpl",
-        ):
-            origin, destination = REPO / "home" / relative, source / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            if origin.is_dir():
-                shutil.copytree(origin, destination)
-            else:
-                shutil.copy2(origin, destination)
-        # Keep only this feature's conditional ignores, rather than enabling
-        # unrelated personal app/PATH/GPG scripts in the smoke source.
-        shutil.copy2(REPO / "home/.chezmoiignore", source / ".chezmoiignore")
-        copy_asset_templates(source, ('personal-apps', 'harness-plugins', 'harness-skills'))
+        for relative in (".chezmoidata", ".chezmoitemplates"):
+            shutil.copytree(REPO / "home" / relative, source / relative)
+        copy_asset_templates(source, ("harness-plugins", "harness-skills"))
         config = root / "chezmoi.toml"
-        config_text = ""
-        if os.name == "nt":
-            shell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
-            config_text = ('[interpreters.ps1]\ncommand = ' + json.dumps(str(shell)) +
-                           '\nargs = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]\n')
-        config.write_text(config_text, encoding="utf-8")
+        config.write_text("", encoding="utf-8")
         env = os.environ.copy()
-        for key in (
-            "PI_CODING_AGENT_DIR", "PI_CONFIG_DIR", "PI_CONFIG_FILES", "PI_PACKAGE_DIR",
-            "OMP_PROFILE", "PI_PROFILE", "ZDOTDIR",
-        ):
-            env.pop(key, None)
         env.update({
             "HOME": str(home), "USERPROFILE": str(home),
             "APPDATA": str(root / "config"), "LOCALAPPDATA": str(root / "local"),
@@ -75,14 +41,10 @@ def main():
             "XDG_CONFIG_DIRS": str(root / "system-config"),
             "XDG_DATA_HOME": str(root / "data"), "XDG_CACHE_HOME": str(root / "cache"),
             "XDG_STATE_HOME": str(root / "state"),
-            "CLAUDE_CONFIG_DIR": str(home / ".claude"),
-            "CODEX_HOME": str(home / ".codex"), "NO_COLOR": "1",
         })
-        command = [
-            chezmoi, "--config", str(config), "--source", str(source),
-            "--destination", str(home), "--cache", str(root / "chezmoi-cache"),
-            "--persistent-state", str(root / "chezmoi-state.boltdb"), "--no-tty",
-        ]
+        command = [chezmoi, "--config", str(config), "--source", str(source),
+                   "--destination", str(home), "--cache", str(root / "chezmoi-cache"),
+                   "--persistent-state", str(root / "chezmoi-state.boltdb"), "--no-tty"]
 
         def chez(*arguments):
             return run(command + list(arguments), env=env, cwd=outside)
@@ -90,116 +52,48 @@ def main():
         target = chez("execute-template", "{{ .chezmoi.os }}-{{ .chezmoi.arch }}")
         if args.expected_target and args.expected_target != target:
             raise RuntimeError(f"Expected native {args.expected_target}, got {target}")
-        if target not in app_pins["personalAppLocks"]["omp"]["targets"]:
-            raise RuntimeError(f"No committed omp binary for {target}")
-        # Download and materialize only managed files first. Subsequent calls
-        # below exercise the real after-script, not an imitation of its commands.
-        chez("apply", "--force", "--exclude=scripts")
-        binary = home / ".local/bin" / ("omp.exe" if os.name == "nt" else "omp")
+        manifest = tomllib.loads(chez("execute-template", '{{ includeTemplate "external-assets-manifest" . }}'))
+        entry = manifest.get(".local/share/dotfiles/harness-plugins/" + name)
+        if not entry or pin["commit"] not in entry["url"] or not entry["exact"]:
+            raise RuntimeError(f"No exact committed CE payload for {target}")
+        unrelated = home / ".local/share/dotfiles/harness-plugins/unrelated/state"
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_bytes(b"unrelated plugin state\n")
+        chez("apply", "--force")
         managed = home / ".local/share/dotfiles/harness-plugins" / name
-
-        def omp(*arguments):
-            return run([str(binary), *arguments], env=env, cwd=outside)
-
-        version = omp("--version")
-        check_version(version, app_pins["personalAppLocks"]["omp"]["tag"])
-        original_skill = (managed / "skills/ce-pov/SKILL.md").read_bytes()
-        # Seed native state, then simulate a preexisting moving remote CE source
-        # without cloning that remote or resolving anything beyond committed pins.
-        omp("plugin", "marketplace", "add", str(managed))
-        registry_path = home / ".omp/marketplaces.json"
-        registry = json.loads(registry_path.read_text(encoding="utf-8"))
-        for entry in registry["marketplaces"]:
-            if entry["name"] == plugin["omp"]["marketplace"]:
-                entry["sourceUri"] = "https://github.com/" + plugin["repository"]
-        registry_path.write_text(json.dumps(registry), encoding="utf-8")
-
-        unrelated = root / "unrelated-plugin"
-        (unrelated / ".omp-plugin").mkdir(parents=True)
-        (unrelated / "package.json").write_text(json.dumps({
-            "name": "smoke-unrelated", "version": "1.0.0",
-        }), encoding="utf-8")
-        (unrelated / ".omp-plugin/marketplace.json").write_text(json.dumps({
-            "name": "smoke-unrelated", "owner": {"name": "isolated smoke"},
-            "plugins": [{"name": "smoke-unrelated", "source": "./", "version": "1.0.0"}],
-        }), encoding="utf-8")
-        omp("plugin", "marketplace", "add", str(unrelated))
-        omp("plugin", "install", "smoke-unrelated@smoke-unrelated", "--scope", "user")
-        installed_path = home / ".omp/plugins/installed_plugins.json"
-        unrelated_before = json.loads(installed_path.read_text(encoding="utf-8"))["plugins"]["smoke-unrelated@smoke-unrelated"]
-        runtime_path = home / ".omp/plugins/omp-plugins.lock.json"
-        runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
-        runtime["plugins"]["smoke-unrelated"]["settings"] = {"fixtureValue": "retain-me"}
-        runtime_path.write_text(json.dumps(runtime), encoding="utf-8")
-
+        skill = managed / "skills/ce-pov/SKILL.md"
+        original_skill = skill.read_bytes()
+        if b"Form a Point of View" not in original_skill:
+            raise RuntimeError("Pinned CE payload is missing the ce-pov skill")
+        skill_roots = [path for path in manifest if "/skills/" in path]
+        for skill_name in harness_skill_names():
+            matches = [path for path in skill_roots if path.endswith("/" + skill_name)]
+            if not matches:
+                raise RuntimeError(f"No shared skill root for {skill_name}")
+            for location in matches:
+                if not (home / location / "SKILL.md").is_file():
+                    raise RuntimeError(f"Shared skill was not materialized: {location}")
+        snapshot = {path: (home / path / "SKILL.md").read_bytes() for path in skill_roots}
+        before = skill.stat().st_mtime_ns
         chez("apply", "--force")
-        installed = json.loads(installed_path.read_text(encoding="utf-8"))["plugins"]
-        entries = installed[plugin_id]
-        entry = next(item for item in entries if item["scope"] == "user")
-        cache = Path(entry["installPath"])
-        if (cache / "skills/ce-pov/SKILL.md").read_bytes() != original_skill:
-            raise RuntimeError("Native installed CE skill differs from the committed source")
-        if omp("config", "get", "marketplace.autoUpdate").strip() != "off":
-            raise RuntimeError("Native omp did not read the managed automatic-update setting")
-        discovery = omp("read", "skill://ce-pov:1-20")
-        if "Form a Point of View" not in discovery:
-            raise RuntimeError("Fresh native skill discovery did not find CE ce-pov: " + discovery)
-        # CLAUDE_CONFIG_DIR above makes omp read ~/.claude/skills beside
-        # ~/.agents/skills, so this count also covers the duplicate copies.
-        listed = json.loads(omp("skill", "list", "--json"))["skills"]
-        for skill in harness_skill_names():
-            found = [item["filePath"] for item in listed if item["name"] == skill]
-            if len(found) != 1:
-                raise RuntimeError(f"Native omp must list shared skill {skill} exactly once: {found}")
-        registry = json.loads(registry_path.read_text(encoding="utf-8"))
-        ce_registry = next(item for item in registry["marketplaces"] if item["name"] == plugin["omp"]["marketplace"])
-        if Path(ce_registry["sourceUri"]).resolve() != managed.resolve():
-            raise RuntimeError("CE marketplace still follows a moving remote source")
-        source_pins = json.loads((source / ".chezmoidata/harness-plugin-lock.json").read_text(encoding="utf-8"))
-        source_pins["harnessPluginLocks"]["unconfigured"] = {"commit": "0" * 40}
-        (source / ".chezmoidata/harness-plugin-lock.json").write_text(json.dumps(source_pins, indent=4), encoding="utf-8")
-        source_apps = json.loads((source / ".chezmoidata/personal-app-lock.json").read_text(encoding="utf-8"))
-        other_target = next(key for key in source_apps["personalAppLocks"]["omp"]["targets"] if key != target)
-        source_apps["personalAppLocks"]["omp"]["targets"][other_target]["sha256"] = "0" * 64
-        (source / ".chezmoidata/personal-app-lock.json").write_text(json.dumps(source_apps, indent=4), encoding="utf-8")
-        (source / ".chezmoidata/unrelated.yaml").write_text("unrelated: changed\n", encoding="utf-8")
-        if chez("status", "--include=scripts"):
-            raise RuntimeError("Successful onchange reconciliation is still pending")
-
-        omp("plugin", "disable", plugin_id, "--scope", "user")
-        (cache / "skills/ce-pov/SKILL.md").write_text("local cache drift", encoding="utf-8")
-        (managed / "skills/ce-pov/SKILL.md").write_text("local source drift", encoding="utf-8")
+        if skill.stat().st_mtime_ns != before:
+            raise RuntimeError("Unchanged apply rewrote the pinned CE payload")
+        skill.write_bytes(b"local source drift\n")
+        selected = next(iter(snapshot))
+        (home / selected / "SKILL.md").write_bytes(b"local skill drift\n")
         chez("apply", "--force")
-        if (managed / "skills/ce-pov/SKILL.md").read_bytes() != original_skill:
-            raise RuntimeError("Unchanged apply did not repair the managed source")
-        if (cache / "skills/ce-pov/SKILL.md").read_text(encoding="utf-8") != "local cache drift":
-            raise RuntimeError("Unchanged apply unexpectedly reran native installation")
-        runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
-        if runtime["plugins"]["compound-engineering"]["enabled"] is not False:
-            raise RuntimeError("Unchanged apply unexpectedly reset native enabled state")
-        helper = source / ".chezmoitemplates/harness-plugin-marketplaces"
-        with helper.open("a", encoding="utf-8") as stream:
-            stream.write("{{/* smoke: consumed template change */}}\n")
-        chez("apply", "--force")
-        if (cache / "skills/ce-pov/SKILL.md").read_bytes() != original_skill:
-            raise RuntimeError("Consumed-template change did not repair native same-version cache drift")
-        runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
-        if runtime["plugins"]["compound-engineering"]["enabled"] is not True:
-            raise RuntimeError("Consumed-template change did not enable the managed CE plugin")
-        if runtime["plugins"]["smoke-unrelated"]["settings"] != {"fixtureValue": "retain-me"}:
-            raise RuntimeError("Apply discarded unrelated plugin settings")
-        installed = json.loads(installed_path.read_text(encoding="utf-8"))["plugins"]
-        if installed["smoke-unrelated@smoke-unrelated"] != unrelated_before:
-            raise RuntimeError("Apply changed an unrelated plugin installation")
-        if chez("status", "--include=scripts"):
-            raise RuntimeError("Reconciled onchange action remains pending")
-        # Managed source/config and the successful action should now be stable.
-        if chez("diff", "--exclude=scripts"):
-            raise RuntimeError("Managed source/config still differs after reconciliation")
-        print(f"Native {target}: {version}; CE {pin['tag']} ({pin['commit']})")
-        print("Verified: local-source cutover, native skill URI discovery, shared skills listed exactly once, autoUpdate=off, "
-              "unchanged-action skipping, template-triggered cache repair, enabled state, "
-              "unrelated plugin preservation, and clean file diff")
+        if skill.read_bytes() != original_skill:
+            raise RuntimeError("Apply did not repair the pinned CE payload")
+        if any((home / path / "SKILL.md").read_bytes() != content for path, content in snapshot.items()):
+            raise RuntimeError("Apply did not preserve and repair pinned shared skills")
+        if unrelated.read_bytes() != b"unrelated plugin state\n":
+            raise RuntimeError("Apply changed unrelated plugin state")
+        binary_name = "omp.exe" if os.name == "nt" else "omp"
+        if (home / ".omp").exists() or (home / ".local/bin" / binary_name).exists():
+            raise RuntimeError("Fresh asset application acquired retired omp state")
+        print(f"Native {target}: CE {pin['tag']} ({pin['commit']})")
+        print("Verified: pinned shared payloads, skill roots, unchanged apply, drift repair, "
+              "unrelated state preservation, and no fresh omp installation")
 
 
 if __name__ == "__main__":

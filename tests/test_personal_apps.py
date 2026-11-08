@@ -73,7 +73,7 @@ class PersonalAppsTest(unittest.TestCase):
             "XDG_CACHE_HOME": str(self.root / "cache"),
             "XDG_STATE_HOME": str(self.root / "state"),
         })
-        self.payloads = {"/omp": b"#!/bin/sh\nprintf 'first\\n'\n"}
+        self.payloads = {"/fixture-app": b"#!/bin/sh\nprintf 'first\\n'\n"}
         self.requests = []
         payloads, requests = self.payloads, self.requests
 
@@ -102,22 +102,27 @@ class PersonalAppsTest(unittest.TestCase):
             name: self.apps["personalApps"][name] for name in ("gh", "ghq", "glab")
         }
         # Raw-file fixtures declare only their local application; no public downloads.
-        self.apps["personalApps"] = {"omp": self.apps["personalApps"]["omp"]}
+        self.apps["personalApps"] = {"fixture-app": {
+            "command": "fixture-app", "repository": "fixture/application", "targets": {
+                target: {"asset": "fixture-app", "kind": "file"} for target in (
+                    "darwin-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "windows-arm64")
+            },
+        }}
         self.write_apps()
         self.set_pin()
-        self.binary = self.home / ".local" / "bin" / ("omp.exe" if os.name == "nt" else "omp")
+        self.binary = self.home / ".local" / "bin" / ("fixture-app.exe" if os.name == "nt" else "fixture-app")
 
     def stop_server(self):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
 
-    def set_pin(self, path="/omp", checksum=None):
+    def set_pin(self, path="/fixture-app", checksum=None):
         checksum = checksum or hashlib.sha256(self.payloads[path]).hexdigest()
-        self.locks = {"personalAppLocks": {"omp": {
+        self.locks = {"personalAppLocks": {"fixture-app": {
             "tag": "fixture", "targets": {
                 target: {"url": self.base_url + path, "sha256": checksum, "kind": "file"}
-                for target in self.apps["personalApps"]["omp"]["targets"]
+                for target in self.apps["personalApps"]["fixture-app"]["targets"]
             },
         }}}
         self.write_locks()
@@ -140,7 +145,7 @@ class PersonalAppsTest(unittest.TestCase):
                     info.size = len(content)
                     stream.addfile(info, io.BytesIO(content))
         self.payloads[path] = archive.getvalue()
-        targets = self.apps["personalApps"]["omp"]["targets"]
+        targets = self.apps["personalApps"]["fixture-app"]["targets"]
         self.apps["personalApps"][command] = {
             **self.archive_apps[command],
             "targets": {target: {
@@ -197,7 +202,7 @@ class PersonalAppsTest(unittest.TestCase):
                 info.mode = 0o755
                 stream.addfile(info, io.BytesIO(content))
         self.payloads["/codex.tar.gz"] = archive.getvalue()
-        targets = self.apps["personalApps"]["omp"]["targets"]
+        targets = self.apps["personalApps"]["fixture-app"]["targets"]
         self.apps["personalApps"]["codex"] = {
             "command": "codex", "repository": "openai/codex",
             "targets": {target: {
@@ -228,33 +233,33 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual((self.home / ".local/bin" / ("codex" + suffix)).read_bytes(), b"codex")
 
     def test_install_reapply_and_reconcile_changed_url(self):
-        first = self.payloads["/omp"]
+        first = self.payloads["/fixture-app"]
         self.apply()
         self.assertEqual(self.binary.read_bytes(), first)
         if os.name != "nt":
             self.assertTrue(os.access(self.binary, os.X_OK))
-        self.assertEqual(self.requests, ["/omp"])
+        self.assertEqual(self.requests, ["/fixture-app"])
         self.apply()
         self.assertEqual(self.binary.read_bytes(), first)
-        self.assertEqual(self.requests, ["/omp"])
+        self.assertEqual(self.requests, ["/fixture-app"])
         self.payloads["/next"] = b"updated release bytes\n"
         self.set_pin("/next")
         self.apply()
         self.assertEqual(self.binary.read_bytes(), self.payloads["/next"])
-        self.assertEqual(self.requests, ["/omp", "/next"])
+        self.assertEqual(self.requests, ["/fixture-app", "/next"])
         # Reconcile destination drift too, without another network request.
         self.binary.write_bytes(b"local drift")
         self.apply()
         self.assertEqual(self.binary.read_bytes(), self.payloads["/next"])
-        self.assertEqual(self.requests, ["/omp", "/next"])
+        self.assertEqual(self.requests, ["/fixture-app", "/next"])
 
     def test_checksum_only_change_at_same_url_fetches_replacement(self):
         self.apply()
-        self.payloads["/omp"] = b"replacement at the same release URL\n"
+        self.payloads["/fixture-app"] = b"replacement at the same release URL\n"
         self.set_pin()
         self.apply()
-        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
-        self.assertEqual(self.requests, ["/omp", "/omp"])
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/fixture-app"])
+        self.assertEqual(self.requests, ["/fixture-app", "/fixture-app"])
 
     def test_bad_checksum_preserves_installed_executable(self):
         self.apply()
@@ -264,7 +269,7 @@ class PersonalAppsTest(unittest.TestCase):
         result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.binary.read_bytes(), original)
-        self.assertEqual(self.requests, ["/omp", "/corrupt"])
+        self.assertEqual(self.requests, ["/fixture-app", "/corrupt"])
 
     def test_archive_install_and_bad_checksum_preserve_existing_commands(self):
         command = "ghq.exe" if os.name == "nt" else "ghq"
@@ -293,7 +298,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.write_locks()
         self.apply()
         self.assertEqual(binary.read_bytes(), payload)
-        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/fixture-app"])
         self.assertFalse((binary.parent / "README").exists())
         self.apply()
         self.assertEqual(binary.read_bytes(), payload)
@@ -308,7 +313,7 @@ class PersonalAppsTest(unittest.TestCase):
         result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(binary.read_bytes(), payload)
-        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/fixture-app"])
 
     def test_tar_and_zip_install_selected_member_reapply_and_repair_drift(self):
         for format in ("tar.gz", "zip"):
@@ -317,7 +322,7 @@ class PersonalAppsTest(unittest.TestCase):
                 binary = self.add_archive(format, path="/" + format, payload=payload)
                 self.apply()
                 self.assertEqual(binary.read_bytes(), payload)
-                self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+                self.assertEqual(self.binary.read_bytes(), self.payloads["/fixture-app"])
                 if os.name != "nt":
                     self.assertTrue(os.access(binary, os.X_OK))
                 self.assertFalse((self.home / "release").exists())
@@ -338,7 +343,7 @@ class PersonalAppsTest(unittest.TestCase):
                 )
                 self.apply()
                 self.assertEqual(binary.read_bytes(), payload)
-                self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+                self.assertEqual(self.binary.read_bytes(), self.payloads["/fixture-app"])
                 if os.name != "nt":
                     self.assertTrue(os.access(binary, os.X_OK))
                 self.assertFalse((self.home / "bin").exists())
@@ -366,7 +371,7 @@ class PersonalAppsTest(unittest.TestCase):
                     self.assertEqual(binary.read_bytes(), original)
 
     def configure_managed_payloads(self):
-        targets = self.apps["personalApps"]["omp"]["targets"]
+        targets = self.apps["personalApps"]["fixture-app"]["targets"]
         for name, command, payload in (
             ("antigravity", "agy", b"CLI payload\n"),
         ):
@@ -458,7 +463,7 @@ class PersonalAppsTest(unittest.TestCase):
             self.assertEqual(path.read_bytes(), payload)
             if os.name != "nt":
                 self.assertTrue(os.access(path, os.X_OK))
-        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/fixture-app"])
         if os.name == "nt":
             self.assertFalse((self.home / ".local/bin/agy.exe").exists())
             self.assertFalse((self.home / ".local/bin/antigravity-acp.exe").exists())
@@ -522,9 +527,9 @@ class PersonalAppsTest(unittest.TestCase):
         return self.run_chezmoi("execute-template", input=wrapper)
 
     def test_supported_platforms_select_their_locked_target(self):
-        targets = self.apps["personalApps"]["omp"]["targets"]
+        targets = self.apps["personalApps"]["fixture-app"]["targets"]
         for number, target in enumerate(targets):
-            self.locks["personalAppLocks"]["omp"]["targets"][target] = {
+            self.locks["personalAppLocks"]["fixture-app"]["targets"][target] = {
                 "url": self.base_url + "/" + target, "sha256": f"{number + 1:064x}", "kind": "file",
             }
         self.write_locks()
@@ -534,10 +539,10 @@ class PersonalAppsTest(unittest.TestCase):
                 result = self.render_external(os_name, arch)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 rendered = tomllib.loads(result.stdout)
-                command = ".local/bin/omp" + (".exe" if os_name == "windows" else "")
+                command = ".local/bin/fixture-app" + (".exe" if os_name == "windows" else "")
                 self.assertEqual(list(rendered), [command])
                 entry = rendered[command]
-                pin = self.locks["personalAppLocks"]["omp"]["targets"][target]
+                pin = self.locks["personalAppLocks"]["fixture-app"]["targets"][target]
                 self.assertEqual(entry["type"], "file")
                 self.assertTrue(entry["executable"])
                 self.assertEqual(entry["url"], pin["url"] + "#sha256=" + pin["sha256"])
@@ -593,8 +598,8 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(self.requests, [])
 
     def test_undeclared_raw_file_platform_emits_no_app_even_with_pin(self):
-        self.locks["personalAppLocks"]["omp"]["targets"]["darwin-amd64"] = (
-            self.locks["personalAppLocks"]["omp"]["targets"]["linux-amd64"]
+        self.locks["personalAppLocks"]["fixture-app"]["targets"]["darwin-amd64"] = (
+            self.locks["personalAppLocks"]["fixture-app"]["targets"]["linux-amd64"]
         )
         self.write_locks()
         for os_name, arch in (("freebsd", "amd64"), ("darwin", "amd64")):
@@ -605,7 +610,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(self.requests, [])
 
     def test_missing_supported_target_pin_fails(self):
-        self.locks["personalAppLocks"]["omp"]["targets"].pop("linux-arm64")
+        self.locks["personalAppLocks"]["fixture-app"]["targets"].pop("linux-arm64")
         self.write_locks()
         result = self.render_external("linux", "arm64")
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -617,7 +622,7 @@ class PersonalAppsTest(unittest.TestCase):
         shutil.copy2(self.repo / ".chezmoi-bootstrap.toml", self.config)
         result = self.run_chezmoi("managed", "--exclude=scripts")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertNotIn(".local/bin/omp", result.stdout.replace("\\", "/"))
+        self.assertNotIn(".local/bin/fixture-app", result.stdout.replace("\\", "/"))
         self.assertEqual(self.requests, [])
         self.assertFalse(self.binary.exists())
         self.assertEqual(list(self.home.iterdir()), [])
@@ -678,7 +683,7 @@ class PersonalAppsTest(unittest.TestCase):
         shell = shutil.which("sh")
         self.assertIsNotNone(shell, "POSIX tests require sh")
         result = subprocess.run(
-            [shell, "-c", '. "$1"; . "$1"; command -v omp; printf "%s\\n" "$PATH"', "sh", str(profile)],
+            [shell, "-c", '. "$1"; . "$1"; command -v fixture-app; printf "%s\\n" "$PATH"', "sh", str(profile)],
             env=self.env, capture_output=True, text=True, encoding="utf-8", timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -801,7 +806,7 @@ class PersonalAppPathTest(unittest.TestCase):
         self.remove_integration()
         lock = self.source / ".chezmoidata/personal-app-lock.json"
         data = json.loads(lock.read_text(encoding="utf-8"))
-        data["personalAppLocks"]["omp"]["tag"] = "unrelated-release"
+        data["personalAppLocks"]["gh"]["tag"] = "unrelated-release"
         lock.write_text(json.dumps(data, indent=4), encoding="utf-8")
         self.assertNotIn("personal-app-path", self.chezmoi("status").stdout)
         self.apply()

@@ -17,7 +17,6 @@ BASELINE_ADAPTERS = {
     "codex": "private_dot_codex/private_empty_AGENTS.md.tmpl",
     "pi": "private_dot_pi/private_agent/private_empty_AGENTS.md.tmpl",
     "grok": "private_dot_grok/private_empty_AGENTS.md.tmpl",
-    "omp": "private_dot_omp/private_agent/private_empty_AGENTS.md.tmpl",
     "antigravity": "private_dot_gemini/private_empty_GEMINI.md.tmpl",
 }
 T3_ADAPTERS = {harness: f"private_dot_t3/private_userdata/private_instructions/private_empty_{harness}.md.tmpl"

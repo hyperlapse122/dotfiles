@@ -36,6 +36,6 @@ Write repository documentation in English.
 ## Harness plugin integration
 
 - Every repository-managed AI harness MUST register, install, and enable the Compound Engineering plugin at user scope through its supported native integration. Adding a harness is incomplete without both this integration and the shared-instruction connection above.
-- Reuse the repository-owned CE release and commit pin, and perform installation and configuration only through explicit chezmoi application. Keep worktree preparation read-only for personal settings; adapt to the harness's native mechanism rather than copying omp commands.
+- Reuse the repository-owned CE release and commit pin, and perform installation and configuration only through explicit chezmoi application. Keep worktree preparation read-only for personal settings; use the harness's native mechanism.
 - Verify native CE skill discovery and invocation in a disposable home on each eligible platform. Preserve unrelated plugins and settings.
 - Every repository-managed AI harness MUST discover each shared user-scope skill from `home/.chezmoidata/harness-skills.json` exactly once, through the skill roots in `home/.chezmoitemplates/external-assets/harness-skills.toml.tmpl`. Adding a harness is incomplete until its native skill listing in a disposable home shows each of those skills once.

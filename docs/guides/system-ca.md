@@ -18,7 +18,6 @@ Dotfiles enables native OS certificate store discovery without disabling TLS ver
 |---|---|---|
 | **Node.js** | 22.19.0+ (in 22.x) or 24.6.0+ (in 24.x) | Queries system root certificates in addition to bundled roots |
 | **Bun** | 1.2.23 or newer | Queries system root certificates in addition to bundled roots |
-| **Standalone omp** | Bundled embedded Bun | Inherits `NODE_USE_SYSTEM_CA=1` automatically |
 | **Python standard library** | Supported Python 3 releases | Windows loads CryptoAPI stores; Linux uses system OpenSSL paths |
 | **pip** | pip 24.2+ on Python 3.10+ | Uses system certificates alongside `certifi` |
 | **Requests** | All versions | Defaults to `certifi`; no automatic OS store integration |
@@ -59,8 +58,8 @@ Because environment variables must reach both GUI desktop launchers and command-
 Verify effective trust by running an actual HTTPS command through an affected tool outside the repository:
 
 ```sh
-# Probe public update endpoint without updating
-omp update --check
+# Probe HTTPS with a supported Node.js runtime
+node -e 'require("node:https").get("https://nodejs.org", response => console.log(response.statusCode))'
 ```
 
 ### Troubleshooting Conflicting Variables
@@ -73,7 +72,7 @@ If TLS connections continue to fail despite OS trust:
    echo $SSL_CERT_DIR
    ```
 2. Some tools (such as Go) switch from OS CryptoAPI to file-based lookups when `SSL_CERT_FILE` or `SSL_CERT_DIR` is set.
-3. In `omp`, explicit request-level CA configurations may conflict if `NODE_EXTRA_CA_CERTS` points to a missing or invalid bundle.
+3. For Node.js or Bun, check that any inherited `NODE_EXTRA_CA_CERTS` path points to a valid CA bundle.
 4. **Never resolve certificate issues by disabling TLS verification (`NODE_TLS_REJECT_UNAUTHORIZED=0`).** Ensure the issuing enterprise root CA is installed in your operating system's root store.
 
 ## Opt-in CA-file Fallback
