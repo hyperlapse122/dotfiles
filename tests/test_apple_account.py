@@ -31,7 +31,11 @@ class AppleAccountTest(unittest.TestCase):
             marker = root / 'terminal.json'
             command.write_text('#!' + sys.executable + '\nimport json,os,sys\n'
                                'from pathlib import Path\n'
-                               'Path(os.environ["TTY_MARKER"]).write_text(json.dumps([sys.stdin.isatty(), os.environ.get("GPG_TTY")]))\n'
+                               'marker=Path(os.environ["TTY_MARKER"])\n'
+                               'if "--list-secret-keys" in sys.argv: sys.exit(2)\n'
+                               'if "--card-status" in sys.argv: marker.write_text("learned"); sys.exit()\n'
+                               'if not marker.exists(): sys.exit(23)\n'
+                               'marker.write_text(json.dumps([sys.stdin.isatty(), os.environ.get("GPG_TTY")]))\n'
                                'print(json.dumps({"username":"fixture-user","password":"fixture-password"}))\n')
             command.chmod(0o755)
             cipher = root / 'account.asc'

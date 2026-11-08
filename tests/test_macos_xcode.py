@@ -3,6 +3,8 @@ import io
 import os
 from pathlib import Path
 import plistlib
+import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -125,7 +127,7 @@ class XcodeReleaseTest(unittest.TestCase):
                 try:
                     with mock.patch.object(sys, 'stdin', terminal), mock.patch.object(sys, 'stdout', output):
                         xcode.run_interactive([sys.executable, '-c',
-                            'import sys;sys.stdout.write("Enter code: ");sys.stdout.flush() if sys.stdout.isatty() else None;input()'])
+                            'import ctypes;libc=ctypes.CDLL(None);libc.printf(b"Enter code: ");libc.getchar()'])
                 except Exception as error:
                     errors.append(error)
             thread = threading.Thread(target=run)
@@ -139,6 +141,45 @@ class XcodeReleaseTest(unittest.TestCase):
                 os.close(slave)
             self.assertFalse(thread.is_alive())
             self.assertEqual(errors, [])
+
+
+@unittest.skipUnless(os.name != 'nt' and shutil.which('chezmoi'), 'POSIX chezmoi required')
+class XcodeApplyTest(unittest.TestCase):
+    def test_every_explicit_apply_runs_update_with_source_and_config(self):
+        repo = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(prefix="xcode apply ' ") as directory:
+            root = Path(directory)
+            source = root / 'source'
+            scripts = source / 'home/.chezmoiscripts'
+            scripts.mkdir(parents=True)
+            (source / '.chezmoiroot').write_text('home')
+            shutil.copy2(repo / 'home/.chezmoiscripts/run_before_18-update-xcode.sh.tmpl', scripts)
+            home = root / 'home'
+            home.mkdir()
+            config = root / 'chezmoi.toml'
+            config.write_text('')
+            commands = root / 'commands'
+            commands.mkdir()
+            mise = commands / 'mise'
+            mise.write_text('#!' + sys.executable + '\nimport json,os,sys\n'
+                            'with open(os.environ["XCODE_CALLS"],"a") as stream: stream.write(json.dumps(sys.argv[1:])+"\\n")\n')
+            mise.chmod(0o755)
+            log = root / 'calls'
+            env = os.environ | {'HOME': str(home), 'PATH': str(commands) + os.pathsep + os.environ['PATH'], 'XCODE_CALLS': str(log)}
+            argv = ['chezmoi', '--source', str(source / 'home'), '--working-tree', str(source),
+                    '--destination', str(home), '--config', str(config), '--cache', str(root / 'cache'),
+                    '--persistent-state', str(root / 'state'), 'apply', '--force']
+            for _ in range(2):
+                subprocess.run(argv, env=env, capture_output=True, check=True)
+            if platform.system() == 'Darwin' and platform.machine() == 'arm64':
+                import json
+                calls = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(calls[0], ['--cd', str(source), 'exec', '--', 'python',
+                                         str(source / 'scripts/macos-xcode.py'), '--source', str(source),
+                                         '--config', str(config)])
+            else:
+                self.assertFalse(log.exists())
 
 
 if __name__ == '__main__':

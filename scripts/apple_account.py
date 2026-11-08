@@ -87,6 +87,15 @@ def terminal_input():
 def decrypt(path, gpg):
     try:
         with terminal_input() as (terminal, env):
+            keys = subprocess.run([gpg['command'], *GPG_ARGS, '--with-colons', '--list-secret-keys', gpg['recipient']],
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                  env=env, text=True, encoding='utf-8', timeout=60)
+            if keys.returncode or not any(line.startswith(('sec:', 'ssb:')) for line in keys.stdout.splitlines()):
+                learned = subprocess.run([gpg['command'], *GPG_ARGS, '--card-status'], stdin=terminal,
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                         env=env, timeout=60)
+                if learned.returncode:
+                    raise AccountError('Cannot discover the connected hardware key; connect it and rerun.')
             result = subprocess.run([gpg['command'], *GPG_ARGS, '--decrypt', str(path)],
                                     stdin=terminal, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                     env=env, text=True, encoding='utf-8', timeout=180)

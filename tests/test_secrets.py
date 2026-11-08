@@ -33,6 +33,7 @@ class SecretsTest(unittest.TestCase):
         shutil.copy2(self.repo / ".chezmoiroot", self.source)
         # Secret proofs must not fetch production apps or run personal PATH hooks.
         shutil.copytree(self.repo / "home", self.source / "home", ignore=shutil.ignore_patterns(
+            "run_before_18-update-xcode.sh.tmpl",
             ".chezmoiexternals", "personal-app*.json", "run_onchange_after_10-personal-app-path.*",
             "run_onchange_after_20-harness-plugins.*", "harness-plugin*.json", "private_dot_omp",
             "run_after_40-github-auth.*",

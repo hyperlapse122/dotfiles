@@ -90,25 +90,26 @@ def host_version():
 
 
 class Redactor:
-    """Release prompt bytes promptly while retaining only possible secret prefixes."""
-
     def __init__(self, values):
         self.secrets = tuple(value.encode('utf-8') for value in values if value)
         self.pending = b''
 
     def feed(self, data):
-        self.pending += data
+        buffer = self.pending + data
+        position = 0
         result = bytearray()
-        while self.pending:
-            match = next((secret for secret in self.secrets if self.pending.startswith(secret)), None)
+        while position < len(buffer):
+            match = next((secret for secret in self.secrets if buffer.startswith(secret, position)), None)
             if match is not None:
                 result.extend(b'[redacted]')
-                self.pending = self.pending[len(match):]
-            elif any(secret.startswith(self.pending) for secret in self.secrets):
+                position += len(match)
+            elif any(len(secret) > len(buffer) - position and secret.startswith(buffer[position:])
+                     for secret in self.secrets):
                 break
             else:
-                result.append(self.pending[0])
-                self.pending = self.pending[1:]
+                result.append(buffer[position])
+                position += 1
+        self.pending = buffer[position:]
         return bytes(result)
 
     def finish(self):
