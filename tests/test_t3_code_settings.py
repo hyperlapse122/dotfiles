@@ -430,6 +430,36 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.assertEqual((self.settings.read_bytes(), client_path.read_bytes()), before)
         self.assertEqual(self.chez("diff", "--exclude=scripts").stdout, "")
 
+    def test_pi_default_model_is_hidden_without_resetting_model_preferences(self):
+        client = self.settings.with_name("client-settings.json")
+        client.parent.mkdir(parents=True, exist_ok=True)
+        original = {"providerModelPreferences": {
+            "pi": {"hiddenModels": ["other"], "modelOrder": ["synthetic/model"]},
+            "codex": {"hiddenModels": ["keep"], "modelOrder": ["keep-order"]},
+        }, "theme": "keep"}
+        client.write_text(json.dumps(original), encoding="utf-8")
+        self.apply()
+        actual = json.loads(client.read_text())
+        self.assertEqual(actual["providerModelPreferences"]["pi"], {
+            "hiddenModels": ["other", "default"], "modelOrder": ["synthetic/model"]})
+        self.assertEqual(actual["providerModelPreferences"]["codex"],
+                         original["providerModelPreferences"]["codex"])
+        self.assertEqual(actual["theme"], "keep")
+        before = client.read_bytes()
+        self.apply()
+        self.assertEqual(client.read_bytes(), before)
+
+    def test_invalid_model_preferences_preserve_client_settings(self):
+        client = self.settings.with_name("client-settings.json")
+        client.parent.mkdir(parents=True, exist_ok=True)
+        for value in (None, [], False, {"pi": None}, {"pi": []},
+                      {"pi": {"hiddenModels": None}}, {"pi": {"hiddenModels": "default"}}):
+            with self.subTest(value=value):
+                original = json.dumps({"providerModelPreferences": value}).encode()
+                client.write_bytes(original)
+                self.assertNotEqual(self.apply(check=False).returncode, 0)
+                self.assertEqual(client.read_bytes(), original)
+
     def test_font_choices_converge_without_resetting_other_typography(self):
         client_path = self.settings.with_name("client-settings.json")
         client_path.parent.mkdir(parents=True, exist_ok=True)
