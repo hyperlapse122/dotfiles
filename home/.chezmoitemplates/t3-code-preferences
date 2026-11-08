@@ -1,6 +1,27 @@
 {{- $settings := .settings -}}
 {{- range $key, $value := .desired -}}
-{{- if has $key (list "storageCleanup" "sourceControlWritingStyle") -}}
+{{- if eq $key "providerModelPreferences" -}}
+{{- $providers := get $settings $key | default dict -}}
+{{- if and (hasKey $settings $key) (not (kindIs "map" (get $settings $key))) -}}
+{{- fail (printf "Invalid T3 Code %s: providerModelPreferences must be an object" $.file) -}}
+{{- end -}}
+{{- range $id, $desired := $value -}}
+{{- $provider := get $providers $id | default dict -}}
+{{- if and (hasKey $providers $id) (not (kindIs "map" (get $providers $id))) -}}
+{{- fail (printf "Invalid T3 Code %s: providerModelPreferences.%s must be an object" $.file $id) -}}
+{{- end -}}
+{{- $hidden := list -}}
+{{- if hasKey $provider "hiddenModels" -}}
+{{- $hidden = get $provider "hiddenModels" -}}
+{{- if not (kindIs "slice" $hidden) -}}
+{{- fail (printf "Invalid T3 Code %s: hiddenModels must be an array" $.file) -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := set $provider "hiddenModels" (concat $hidden $desired.hiddenModels | uniq) -}}
+{{- $_ := set $providers $id $provider -}}
+{{- end -}}
+{{- $_ := set $settings $key $providers -}}
+{{- else if has $key (list "storageCleanup" "sourceControlWritingStyle") -}}
 {{- $current := dict -}}
 {{- if hasKey $settings $key -}}
 {{- $current = get $settings $key -}}
