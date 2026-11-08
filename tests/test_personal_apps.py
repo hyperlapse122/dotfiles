@@ -23,6 +23,15 @@ if os.name == "nt":
 
 
 class NativeAppVersionTest(unittest.TestCase):
+    def test_bun_release_tag_matches_only_its_exact_version(self):
+        from smoke_personal_apps import check_version
+
+        check_version("1.4.4", "bun-v1.4.4")
+        check_version("rustc 1.99.1", "rust-1.99.1")
+        for banner in ("1.4.40", "11.4.4", "1.4.4-canary", "1.4.4suffix", "1.4.4.1"):
+            with self.subTest(banner=banner), self.assertRaises(RuntimeError):
+                check_version(banner, "bun-v1.4.4")
+
     def test_version_banner_accepts_v_prefix_and_rejects_partial_versions(self):
         from smoke_personal_apps import check_version
 
