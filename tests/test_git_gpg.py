@@ -346,6 +346,7 @@ class GpgRecipientApplyTest(unittest.TestCase):
         for relative in (
             ".chezmoidata/gpg.yaml", ".chezmoidata/gpg-recipient.yaml",
             ".chezmoitemplates/gpg-settings", ".chezmoitemplates/gpg-home",
+            ".chezmoitemplates/gpg-home-check.sh", ".chezmoitemplates/gpg-import-recipient.sh",
             ".chezmoiscripts/run_before_10-check-gpg-home.sh.tmpl",
             ".chezmoiscripts/run_before_10-check-gpg-home.ps1.tmpl",
             ".chezmoiscripts/run_before_15-import-gpg-recipient.sh.tmpl",

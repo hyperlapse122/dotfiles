@@ -26,7 +26,7 @@ AREAS = {
         "test_cli_completions", "test_synthetic_model_lock",
     ),
     "security": (
-        "test_pinentry_apply",
+        "test_pinentry_apply", "test_apple_account",
         "test_ssh_identities",
         "test_ca_files", "test_container_auth",
         "test_secrets", "test_git_gpg", "test_script_lifecycle", "test_github_auth",
