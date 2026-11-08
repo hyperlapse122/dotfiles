@@ -175,7 +175,7 @@ def installed_candidate(release):
 
 def verify_candidate(app):
     run_command(['/usr/bin/codesign', '--verify', '--deep', '--strict', '--test-requirement',
-                 'anchor apple and identifier "com.apple.dt.Xcode"', str(app)])
+                 '=anchor apple and identifier "com.apple.dt.Xcode"', str(app)])
     run_command(['/usr/sbin/spctl', '--assess', '--type', 'execute', str(app)])
     developer = app / 'Contents/Developer'
     build = developer / 'usr/bin/xcodebuild'

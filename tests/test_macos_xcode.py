@@ -103,6 +103,10 @@ class XcodeReleaseTest(unittest.TestCase):
             selected = []
             def native(argv, **kwargs):
                 calls.append(argv)
+                if argv[0] == '/usr/bin/codesign':
+                    requirement = argv[argv.index('--test-requirement') + 1]
+                    self.assertEqual(requirement, '=anchor apple and identifier "com.apple.dt.Xcode"',
+                                     'Inline codesign requirements need = or they are read as file paths')
                 status, output = 0, ''
                 if 'codesign' in argv[0] and failure == 'signature':
                     status = 1
