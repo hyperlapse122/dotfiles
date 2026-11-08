@@ -63,7 +63,8 @@ def check_bunx(home, outside, env):
         literals = ",".join("'" + str(arg).replace("'", "''") + "'" for arg in [launcher, *arguments])
         command = [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"),
                    "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-                   f"$items = @({literals}); & $items[0] @($items[1..($items.Length-1)]); exit $LASTEXITCODE"]
+                   f"$items = @({literals}); $forward = $items[1..($items.Length-1)]; "
+                   "& $items[0] @forward; exit $LASTEXITCODE"]
     else:
         command = [str(launcher), *arguments]
     result = subprocess.run(command, env=env, cwd=fixture, capture_output=True,
