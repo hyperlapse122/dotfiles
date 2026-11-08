@@ -8,6 +8,7 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 
 | Command | Upstream Repository | Package Kind | Supported Platforms |
 |---|---|---|---|
+| `bun` | [oven-sh/bun](https://github.com/oven-sh/bun) | Archive member, with managed `bunx` launcher | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `claude` | [anthropics/claude-code](https://github.com/anthropics/claude-code) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `codex` | [openai/codex](https://github.com/openai/codex) | Canonical CLI package | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | Complete native distribution | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
@@ -18,7 +19,7 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 
 > **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
 
-Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). The Antigravity CLI payload lives in `~/.local/share/dotfiles/antigravity/bin`; its POSIX or Windows `.ps1` launcher selects that absolute path. Run Windows launchers from PowerShell. Device application does not require a Bun or Python runtime.
+Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). The Antigravity CLI payload lives in `~/.local/share/dotfiles/antigravity/bin`; its POSIX or Windows `.ps1` launcher selects that absolute path. Run Windows launchers from PowerShell. Provisioning these applications does not require a preinstalled Bun or Python runtime.
 
 Codex includes its native helper executables, `~/.local/codex-package.json`, `~/.local/codex-path`, and `~/.local/codex-resources`. Keep these together: copying only `codex` is not a complete installation. The Codex-specific resource directories are reconciled exactly; unrelated programs in `~/.local/bin` are preserved. Upstream currently names its Linux packages `unknown-linux-musl`; that artifact name does not expand this repository's supported host policy.
 
@@ -61,6 +62,19 @@ T3's native Antigravity provider uses a separate official ACP runtime installed 
 The old third-party `antigravity-acp` payload and launchers are no longer installed. Explicit apply removes their known executable paths and the old managed provider entry, while preserving unrelated files and native T3 providers.
 
 To roll back, restore the desired `home/.chezmoidata/personal-app-lock.json` revision and explicitly apply again with Antigravity and T3 sessions closed. See [native CE integration](harness-plugins.md) and [T3 configuration and security limits](t3-code.md).
+
+### Bun version ownership
+
+Bun uses the same immutable release pins and checksum-verified preparation as the other personal CLI applications.
+The managed `bunx` launcher calls that installation's `bun x`; it does not install a second runtime.
+On Windows, run `bunx` from PowerShell, which discovers `~/.local/bin/bunx.ps1`.
+The launchers preserve arguments and the child exit status, including in Windows PowerShell 5.1.
+
+Refresh Bun through the personal application pin workflow below.
+Running `bun upgrade` directly bypasses the committed pin; use `mise run assets:verify` to restore the pinned bytes after such a change.
+To roll back, restore only Bun's entry in `home/.chezmoidata/personal-app-lock.json` and explicitly apply again with Bun processes closed.
+Existing Bun installations elsewhere and Bun's package caches are retained; resolve any competing PATH entry if the managed command is not selected.
+This installation does not add shell completions, install global packages, or change project package managers.
 
 ### Retired omp installation
 

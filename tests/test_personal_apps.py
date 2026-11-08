@@ -1,3 +1,4 @@
+import copy
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
@@ -22,6 +23,15 @@ if os.name == "nt":
 
 
 class NativeAppVersionTest(unittest.TestCase):
+    def test_bun_release_tag_matches_only_its_exact_version(self):
+        from smoke_personal_apps import check_version
+
+        check_version("1.4.4", "bun-v1.4.4")
+        check_version("rustc 1.99.1", "rust-1.99.1")
+        for banner in ("1.4.40", "11.4.4", "1.4.4-canary", "1.4.4suffix", "1.4.4.1"):
+            with self.subTest(banner=banner), self.assertRaises(RuntimeError):
+                check_version(banner, "bun-v1.4.4")
+
     def test_version_banner_accepts_v_prefix_and_rejects_partial_versions(self):
         from smoke_personal_apps import check_version
 
@@ -99,7 +109,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.base_url = "http://127.0.0.1:" + str(self.server.server_port)
         self.apps = json.loads((self.source / ".chezmoidata" / "personal-apps.json").read_text(encoding="utf-8"))
         self.archive_apps = {
-            name: self.apps["personalApps"][name] for name in ("gh", "ghq", "glab")
+            name: self.apps["personalApps"][name] for name in ("gh", "ghq", "glab", "bun")
         }
         # Raw-file fixtures declare only their local application; no public downloads.
         self.apps["personalApps"] = {"fixture-app": {
@@ -331,7 +341,79 @@ class PersonalAppsTest(unittest.TestCase):
                 binary.write_bytes(b"drift")
                 self.apply()
                 self.assertEqual(binary.read_bytes(), payload)
+                binary.unlink()
+                self.apply()
+                self.assertEqual(binary.read_bytes(), payload)
                 self.assertEqual(self.requests, requests)
+
+    def test_bun_zip_repair_and_rollback_preserve_other_programs(self):
+        suffix = ".exe" if os.name == "nt" else ""
+        member = "bun-platform/bun" + suffix
+        binary = self.add_archive("zip", command="bun", member=member, path="/bun-old.zip",
+                                  payload=b"previous Bun")
+        previous = copy.deepcopy(self.locks["personalAppLocks"]["bun"])
+        self.apply()
+        binary = self.add_archive("zip", command="bun", member=member, path="/bun-new.zip",
+                                  payload=b"current Bun")
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"current Bun")
+        requests = list(self.requests)
+        binary.unlink()
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"current Bun")
+        self.assertEqual(self.requests, requests)
+        self.locks["personalAppLocks"]["bun"] = previous
+        self.write_locks()
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"previous Bun")
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/fixture-app"])
+
+    def configure_bun_launcher(self):
+        launchers = self.source / "dot_local/bin"
+        launchers.mkdir(parents=True, exist_ok=True)
+        for name in ("executable_bunx.tmpl", "bunx.ps1.tmpl"):
+            shutil.copy2(self.repo / "home/dot_local/bin" / name, launchers / name)
+        shutil.copy2(self.repo / "home/.chezmoiignore", self.source / ".chezmoiignore")
+
+    @unittest.skipIf(os.name == "nt", "POSIX argument recorder; native Windows is covered by apps smoke")
+    def test_bunx_uses_managed_bun_and_preserves_arguments_and_exit(self):
+        self.configure_bun_launcher()
+        payload = b'#!/bin/sh\nprintf "<%s>\\n" "$@"\nexit 37\n'
+        self.add_archive("zip", command="bun", member="release/bun", payload=payload)
+        self.apply()
+        launcher = self.home / ".local/bin/bunx"
+        unrelated = self.root / "other bin"
+        unrelated.mkdir()
+        competitor = unrelated / "bun"
+        competitor.write_text("#!/bin/sh\nexit 99\n")
+        competitor.chmod(0o755)
+        env = {**self.env, "PATH": str(unrelated) + os.pathsep + self.env["PATH"]}
+        result = subprocess.run([str(launcher), "with spaces", "", "--flag", "quote'\""],
+                                env=env, cwd=self.root, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 37, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ["<x>", "<with spaces>", "<>", "<--flag>", "<quote'\">"])
+        launcher.unlink()
+        self.apply()
+        self.assertTrue(launcher.is_file())
+        self.assertFalse((launcher.parent / "bunx.ps1").exists())
+
+    def test_bunx_templates_select_only_the_declared_platform(self):
+        self.configure_bun_launcher()
+        self.apps["personalApps"]["bun"] = self.archive_apps["bun"]
+        self.write_apps()
+        for target in (*self.archive_apps["bun"]["targets"], "darwin-amd64", "freebsd-amd64"):
+            os_name, arch = target.split("-")
+            for filename in ("executable_bunx.tmpl", "bunx.ps1.tmpl"):
+                template = (self.source / "dot_local/bin" / filename).read_text()
+                wrapper = ('{{ template "launcher" (dict "chezmoi" (dict "os" '
+                           + json.dumps(os_name) + ' "arch" ' + json.dumps(arch)
+                           + ' "destDir" .chezmoi.destDir) "personalApps" .personalApps) }}'
+                           + '{{ define "launcher" }}' + template + '{{ end }}')
+                result = self.run_chezmoi("execute-template", input=wrapper)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                supported = target in self.archive_apps["bun"]["targets"]
+                expected = supported and ((filename == "bunx.ps1.tmpl") == (os_name == "windows"))
+                self.assertEqual(bool(result.stdout.strip()), expected, (target, filename))
 
     def test_gitlab_archives_use_existing_installer_and_stable_command_path(self):
         for format in ("tar.gz", "zip"):

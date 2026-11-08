@@ -43,9 +43,68 @@ def run(arguments, *, env, cwd):
 
 
 def check_version(output, tag):
-    version = tag.removeprefix("rust-").removeprefix("v")
-    if not re.search(r"(?<![\w.])v?" + re.escape(version) + r"(?![\w.])", output):
+    version = tag.removeprefix("bun-").removeprefix("rust-").removeprefix("v")
+    if not re.search(r"(?<![\w.])v?" + re.escape(version) + r"(?![\w.+-])", output):
         raise RuntimeError(f"Expected pinned version {tag!r}, got {output!r}")
+
+
+def check_bunx(home, outside, env):
+    fixture = outside / "local bunx package"
+    bins = fixture / "node_modules/.bin"
+    bins.mkdir(parents=True, exist_ok=True)
+    (bins / "dotfiles-bun-fixture").write_text(
+        '#!/usr/bin/env bun\nconsole.log(JSON.stringify(process.argv.slice(2)));\nprocess.exit(37);\n',
+        encoding="utf-8",
+    )
+    (bins / "dotfiles-bun-fixture").chmod(0o755)
+    arguments = ["--bun", "--no-install", "dotfiles-bun-fixture", "with spaces", "", "--flag", "quote'\"", "trailing\\"]
+    launcher = home / ".local/bin" / ("bunx.ps1" if os.name == "nt" else "bunx")
+    if os.name == "nt":
+        literals = ",".join("'" + str(arg).replace("'", "''") + "'" for arg in [launcher, *arguments])
+        command = [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"),
+                   "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                   f"$items = @({literals}); $forward = $items[1..($items.Length-1)]; "
+                   "& $items[0] @forward; exit $LASTEXITCODE"]
+    else:
+        command = [str(launcher), *arguments]
+    result = subprocess.run(command, env=env, cwd=fixture, capture_output=True,
+                            text=True, encoding="utf-8", timeout=60)
+    if result.returncode != 37 or json.loads(result.stdout) != arguments[3:]:
+        raise RuntimeError(f"bunx argument/exit forwarding failed: {result.returncode}, {result.stdout}, {result.stderr}")
+
+
+def check_bun_lifecycle(command, source, home, outside, env, target):
+    lock_path = source / ".chezmoidata/personal-app-lock.json"
+    original = lock_path.read_text(encoding="utf-8")
+    candidate = json.loads(original)
+    current = candidate["personalAppLocks"]["bun"]
+    rollback = json.loads((REPO / "tests/fixtures/bun-rollback-lock.json").read_text(encoding="utf-8"))
+    binary = home / ".local/bin" / ("bun.exe" if os.name == "nt" else "bun")
+    launcher = binary.with_name("bunx.ps1" if os.name == "nt" else "bunx")
+    paths = (binary, launcher)
+
+    def apply_and_check(pin):
+        run(command + ["apply", "--force", "--exclude=scripts"], env=env, cwd=outside)
+        check_version(run([str(binary), "--version"], env=env, cwd=outside), pin["tag"])
+        check_bunx(home, outside, env)
+
+    before = [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]
+    apply_and_check(current)
+    if before != [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]:
+        raise RuntimeError("Unchanged apply rewrote the Bun installation")
+    for path in paths:
+        path.unlink()
+        apply_and_check(current)
+    if target not in rollback["targets"]:
+        raise RuntimeError(f"Missing verified Bun rollback fixture for {target}")
+    try:
+        candidate["personalAppLocks"]["bun"] = rollback
+        lock_path.write_text(json.dumps(candidate), encoding="utf-8")
+        apply_and_check(rollback)
+    finally:
+        lock_path.write_text(original, encoding="utf-8")
+    apply_and_check(current)
+    print(f"Native {target}: Bun/bunx repeated apply, repair, and {rollback['tag']} rollback passed")
 
 
 @contextmanager
@@ -161,7 +220,7 @@ def fresh_windows_environment(isolated):
 
 
 def check_terminal_path(home, outside, env, name, tag, shells):
-    suffix = ".ps1" if name in ("agy", "pi") else ".exe"
+    suffix = ".ps1" if name in ("agy", "pi", "bunx") else ".exe"
     installed = home / ".local/bin" / (name + suffix if os.name == "nt" else name)
     if os.name == "nt":
         output = run([
@@ -268,6 +327,8 @@ def main():
             "dot_local/bin/agy.ps1.tmpl",
             "dot_local/bin/executable_pi.tmpl",
             "dot_local/bin/executable_pi.ps1.tmpl",
+            "dot_local/bin/executable_bunx.tmpl",
+            "dot_local/bin/bunx.ps1.tmpl",
             "dot_config/dotfiles/path.sh",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
@@ -292,6 +353,8 @@ def main():
             "CLAUDE_CONFIG_DIR": str(home / ".claude"),
             "AGY_CLI_DISABLE_AUTO_UPDATE": "true",
             "AGY_SKIP_DOWNLOAD": "1",
+            "BUN_INSTALL": str(home / ".bun"),
+            "BUN_INSTALL_CACHE_DIR": str(root / "cache/bun"),
         })
         command = [
             chezmoi, "--config", str(config), "--source", str(source),
@@ -324,12 +387,18 @@ def main():
                 print(f"Native {target}, {name}, committed {tag}: {output}")
                 if args.path_integration:
                     check_terminal_path(home, outside, env, application["command"], tag, shells)
+            if target in applications.get("bun", {}).get("targets", {}):
+                check_bunx(home, outside, env)
+                if args.path_integration:
+                    check_terminal_path(home, outside, env, "bunx", lock["personalAppLocks"]["bun"]["tag"], shells)
 
         if args.path_integration and os.name == "nt":
             with windows_path_restored():
                 check_windows_path_preservation(apply_and_check, home, env)
         else:
             apply_and_check()
+        if target in applications.get("bun", {}).get("targets", {}):
+            check_bun_lifecycle(command, source, home, outside, env, target)
 
 
 if __name__ == "__main__":

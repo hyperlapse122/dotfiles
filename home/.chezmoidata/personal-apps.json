@@ -1,5 +1,16 @@
 {
   "personalApps": {
+    "bun": {
+      "command": "bun",
+      "repository": "oven-sh/bun",
+      "targets": {
+        "darwin-arm64": {"asset": "bun-darwin-aarch64.zip", "kind": "archive-file", "format": "zip", "path": "bun-darwin-aarch64/bun"},
+        "linux-amd64": {"asset": "bun-linux-x64.zip", "kind": "archive-file", "format": "zip", "path": "bun-linux-x64/bun"},
+        "linux-arm64": {"asset": "bun-linux-aarch64.zip", "kind": "archive-file", "format": "zip", "path": "bun-linux-aarch64/bun"},
+        "windows-amd64": {"asset": "bun-windows-x64.zip", "kind": "archive-file", "format": "zip", "path": "bun-windows-x64/bun.exe"},
+        "windows-arm64": {"asset": "bun-windows-aarch64.zip", "kind": "archive-file", "format": "zip", "path": "bun-windows-aarch64/bun.exe"}
+      }
+    },
     "claude": {
       "command": "claude",
       "source": "claude",
