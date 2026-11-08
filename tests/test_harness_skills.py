@@ -13,7 +13,7 @@ import threading
 import tomllib
 import unittest
 
-from asset_fixtures import copy_asset_templates, run_with_assets
+from asset_fixtures import copy_asset_templates, preserve_mise_directories, run_with_assets
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -50,6 +50,7 @@ class HarnessSkillsTest(unittest.TestCase):
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("", encoding="utf-8")
         self.env = os.environ.copy()
+        preserve_mise_directories(self.env)
         self.env.update({
             "HOME": str(self.home), "USERPROFILE": str(self.home),
             "APPDATA": str(self.root / "config"),
