@@ -137,9 +137,11 @@ def check_context(payload, harness, addition, *, existing=False):
     if ('T3_ONLY_6C32' in text) != addition:
         raise RuntimeError('Native ' + harness + ' leaked or omitted the per-launch T3 addition.')
     if ('## T3 delegation' in text) != addition:
-        raise RuntimeError('Native ' + harness + ' leaked or omitted the repository delegation preference.')
-    if addition and ('`delegate_task`' not in text or 'agents dispatched by skills' not in text):
-        raise RuntimeError('Native ' + harness + ' lost the delegation tool or skill dispatch scope.')
+        raise RuntimeError('Native ' + harness + ' leaked or omitted the repository delegation policy.')
+    if addition and not all(part in text for part in (
+            '`delegate_task`', 'agents dispatched by skills', 'replace its explicit acpx',
+            "Keep CE's existing retry, recovery, inline fallback, skip, and reporting behavior.")):
+        raise RuntimeError('Native ' + harness + ' lost the CE dispatch override or recovery contract.')
     if 'FOREIGN_HARNESS_B8C1' in text:
         raise RuntimeError('Native context includes a foreign harness branch.')
     if existing and 'EXISTING_' + harness.upper() + '_LAUNCH' not in text:
