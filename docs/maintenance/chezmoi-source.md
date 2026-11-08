@@ -136,6 +136,38 @@ Modify templates transform existing files on the host in-place rather than compl
 
 ---
 
+## Tool Retirement
+
+Retiring a tool makes it unmanaged. Remove its repository-owned installation declarations, tool-specific release and binary pins, configuration sources, instruction adapters, and tool-specific integration code. Later applies must leave its installed executable, settings, credentials, plugin state, and session data on disk without reinstalling or reconciling them. A fresh home must not acquire the retired tool or its configuration.
+
+Removing source management and deleting destination state are separate operations. Do not add cleanup scripts, deletion manifests, or uninstall commands to implement retirement. Uninstalling a binary or deleting existing user configuration or data requires a separate explicit request. Check for surviving scripts, external-asset reconciliation, or directory ownership rules that could still restore or delete retired destinations; absence from `chezmoi managed` alone does not prove retirement.
+
+An explicitly requested integration removal inside a still-managed configuration file is different. Update the file's existing `modify` transformation to remove the owned entry from the current destination and keep it absent on repeated applies. Merely removing the code that inserts the entry leaves existing homes unchanged. Preserve unrelated entries and settings, and retain the modify-template parsing and failure rules above.
+
+Keep shared resources managed for remaining consumers. Retiring one harness must not remove the shared Compound Engineering release/commit pin, skills, instruction template, or assets that another harness still uses. Remove only tool-exclusive declarations and branches from those resources.
+
+### Example: Retiring omp
+
+For an `omp` retirement, remove its installation declarations and binary pin from the repository, along with its configuration sources, instruction adapter, and exclusive integration code. Leave the installed `omp` executable and `~/.omp` directory on existing PCs, including credentials, plugins, and sessions. Continue managing shared Compound Engineering resources for the other harnesses.
+
+When that request explicitly includes removing the T3 Code provider entry, use the existing `home/private_dot_t3/private_userdata/modify_private_settings.json` adapter and its `t3-code-settings` partial to remove only the `omp` provider entry from the destination settings. The entry must stay absent after repeated applies while unrelated providers and user settings survive. This example defines the retirement requirements; it does not assert that `omp` has already been retired in this checkout.
+
+### Verification in Disposable Homes
+
+Run retirement checks against both an existing-home fixture and a separate fresh-home fixture. Bind chezmoi to the current worktree source, use a hook-free test configuration and isolated persistent state, and redirect home variables and every script's destination to the disposable home. Inspect the rendered scripts before executing them: `--destination` alone does not isolate native installers, credentials, application homes, or OS actions. Stub external installers and OS operations or use a disposable VM/container when they cannot be redirected safely. Do not run `mise run apply` against the real home for these checks.
+
+1. **Existing home:** Seed representative pre-retirement state in the fixture: the executable, settings, dummy credentials, plugin state, and session data. Include the old integration entry in the still-managed configuration file, together with unrelated provider entries and user settings. Record file paths and content hashes before applying the retirement source.
+2. Apply the current worktree source to the isolated fixture. Confirm all retired files and data survive byte-for-byte, the executable remains present, and no retired installer or reconciler runs. Confirm the explicitly removed integration entry is absent and unrelated settings retain their values.
+3. Edit a retired settings file and remove a retired file inside the fixture. Reapply and confirm the edit survives and the missing file is not recreated. Confirm the integration entry stays absent on this repeated apply. Reinsert the old entry and apply again to prove the `modify` transformation removes existing entries rather than merely declining to add them. Check unrelated settings after each apply.
+4. **Fresh home:** Start with an empty destination and separate test state, then apply the retirement source under the same isolation. Confirm the retired executable, configuration, instruction adapter, plugin state, and integration entry are never created, and no retired installation is attempted. Do not copy the existing-home fixture or reuse its chezmoi script execution state.
+5. In both fixtures, verify remaining harnesses still receive their shared Compound Engineering pins, skills, instructions, and assets. Inspect both the native chezmoi inventory and script-managed asset destinations. Repeat the fresh-home apply to check idempotence.
+
+For `omp`, these checks specifically cover preservation of the installed executable and `~/.omp` contents, no restoration of changed or missing retired files, and removal of its T3 Code provider entry on every apply. Fresh-home checks must show no `omp` executable, `~/.omp` configuration, or T3 Code `omp` provider entry.
+
+Worktree bootstrap remains read-only with respect to personal settings: initialize with `mise install` and the repository's hook-free chezmoi configuration. Retirement verification is an explicit isolated test, never a new bootstrap step.
+
+---
+
 ## Shared User-Scope Harness Onboarding
 
 All AI harnesses managed by this repository must connect their user-scope instructions to a single shared template.
