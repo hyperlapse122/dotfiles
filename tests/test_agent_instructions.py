@@ -96,6 +96,19 @@ class AgentInstructionsTest(unittest.TestCase):
                 for text in (*lines, *SKILLS):
                     self.assertNotIn(text, rendered)
 
+    def test_delegation_preference_is_only_in_t3_additions(self):
+        heading = "## T3 delegation"
+        for harness, rendered in self.t3.items():
+            with self.subTest(harness=harness):
+                self.assertEqual(rendered.count(heading), 1)
+                for text in ("delegate_task", "same-provider", "skills", "higher-priority",
+                             "native subagent", "top-level thread"):
+                    self.assertIn(text, rendered)
+        for harness, rendered in self.baseline.items():
+            with self.subTest(harness=harness):
+                self.assertNotIn(heading, rendered)
+                self.assertNotIn("delegate_task", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
