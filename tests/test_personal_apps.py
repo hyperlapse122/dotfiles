@@ -1,3 +1,4 @@
+import copy
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
@@ -99,7 +100,7 @@ class PersonalAppsTest(unittest.TestCase):
         self.base_url = "http://127.0.0.1:" + str(self.server.server_port)
         self.apps = json.loads((self.source / ".chezmoidata" / "personal-apps.json").read_text(encoding="utf-8"))
         self.archive_apps = {
-            name: self.apps["personalApps"][name] for name in ("gh", "ghq", "glab")
+            name: self.apps["personalApps"][name] for name in ("gh", "ghq", "glab", "bun")
         }
         # Raw-file fixtures declare only their local application; no public downloads.
         self.apps["personalApps"] = {"omp": self.apps["personalApps"]["omp"]}
@@ -326,7 +327,32 @@ class PersonalAppsTest(unittest.TestCase):
                 binary.write_bytes(b"drift")
                 self.apply()
                 self.assertEqual(binary.read_bytes(), payload)
+                binary.unlink()
+                self.apply()
+                self.assertEqual(binary.read_bytes(), payload)
                 self.assertEqual(self.requests, requests)
+
+    def test_bun_zip_repair_and_rollback_preserve_other_programs(self):
+        suffix = ".exe" if os.name == "nt" else ""
+        member = "bun-platform/bun" + suffix
+        binary = self.add_archive("zip", command="bun", member=member, path="/bun-old.zip",
+                                  payload=b"previous Bun")
+        previous = copy.deepcopy(self.locks["personalAppLocks"]["bun"])
+        self.apply()
+        binary = self.add_archive("zip", command="bun", member=member, path="/bun-new.zip",
+                                  payload=b"current Bun")
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"current Bun")
+        requests = list(self.requests)
+        binary.unlink()
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"current Bun")
+        self.assertEqual(self.requests, requests)
+        self.locks["personalAppLocks"]["bun"] = previous
+        self.write_locks()
+        self.apply()
+        self.assertEqual(binary.read_bytes(), b"previous Bun")
+        self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
 
     def test_gitlab_archives_use_existing_installer_and_stable_command_path(self):
         for format in ("tar.gz", "zip"):
