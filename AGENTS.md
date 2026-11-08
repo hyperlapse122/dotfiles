@@ -17,6 +17,14 @@ Write repository documentation in English.
 - When chezmoi scripts require relative execution order within the same phase, use consistently padded numeric prefixes in their descriptive names, such as `run_once_before_10-windows.ps1.tmpl` and `run_once_before_20-windows-tools.ps1.tmpl`. Preserve `before_` and `after_` phase semantics.
 - Keep setup and chezmoi scripts idempotent. Use OS-conditional templates for platform-specific chezmoi scripts.
 
+## Tool retirement
+
+- Retiring a tool stops repository management while preserving its installed executable, settings, credentials, plugin state, and session data on existing PCs. Remove its installation declarations, tool-specific release pins, configuration sources, instruction adapters, and integration code from the repository; later applies must neither reinstall nor reconcile the retired tool.
+- Do not add cleanup scripts, deletion manifests, or uninstall commands as a consequence of retirement. Uninstalling a binary or deleting existing user configuration or data requires a separate explicit request. Fresh homes must not acquire the retired tool or its configuration.
+- When the request explicitly includes removing an integration entry from a configuration file that remains managed, update that file's `modify` transformation to remove the existing entry and keep it absent on repeated applies. Removing insertion logic alone is insufficient. Preserve unrelated entries and settings.
+- Keep shared Compound Engineering release pins, skills, instructions, and assets managed while any remaining harness consumes them. Remove only resources exclusive to the retired tool.
+- Verify preservation and lack of reconciliation in an existing disposable home, and absence in a fresh disposable home, as described in [Tool Retirement](docs/maintenance/chezmoi-source.md#tool-retirement). Retirement must not apply personal configuration during worktree bootstrap.
+
 ## User-scope harness instructions
 
 - Every repository-managed AI harness MUST wire its native user-scope instruction file to `home/.chezmoitemplates/agent-instructions`. Adding a harness is incomplete without this connection.
