@@ -132,7 +132,7 @@ Compiles sample C++, MFC, WPF, Rust, and vcpkg targets in temporary directories.
 mise exec -- python tests/smoke_t3_code.py
 ```
 
-Tests bundled CLI discovery, omp ACP initialization, native Codex app-server initialization, and Claude SDK initialization with pinned CE command discovery. Fresh T3 servers launch the managed binaries with their directory absent from `PATH`.
+Tests bundled CLI discovery, retired omp provider removal, native Codex app-server initialization, and Claude SDK initialization with pinned CE command discovery. Fresh T3 servers launch the managed binaries with their directory absent from `PATH`.
 
 ### Personal CLI Applications
 
@@ -141,7 +141,7 @@ Tests bundled CLI discovery, omp ACP initialization, native Codex app-server ini
 mise exec -- python tests/smoke_personal_apps.py
 ```
 
-Tests actual Claude Code, Codex, `omp`, `gh`, `ghq`, and `glab` binaries. CI runs with `--path-integration` to verify shell PATH inheritance.
+Tests actual Claude Code, Codex, `gh`, `ghq`, and `glab` binaries. CI runs with `--path-integration` to verify shell PATH inheritance.
 
 ### User Fonts
 
@@ -254,9 +254,9 @@ Each area/target pair owns a separate hosted runner. All matrices use `fail-fast
 | Area | Invocation after tool preparation | Job-owned prerequisites |
 |---|---|---|
 | apps | `mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target TARGET` | Pinned apps and disposable PATH/profile fixture |
-| t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned omp/Codex/Claude and CE acquisition, scoped GitHub token |
+| t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned Codex/Claude and CE acquisition, scoped GitHub token |
 | t3-instructions | `mise exec chezmoi python gh -- python tests/smoke_t3_instructions.py --install-desktop --expected-target TARGET` | Pinned Codex/Claude/Pi, native CE, controlled local model transport and disposable T3 lifecycle fixtures |
-| ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated pinned omp/CE payload and harness state |
+| ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated shared CE acquisition and integrity checks |
 | codex | `mise exec chezmoi python -- python tests/smoke_codex.py --expected-target TARGET` | Complete pinned Codex package and isolated native CE state |
 | claude | `mise exec chezmoi python -- python tests/smoke_claude.py --expected-target TARGET` | Pinned Claude binary and isolated native CE, instruction, preference, and memory fixtures |
 | pi | `mise exec chezmoi python gh -- python tests/smoke_pi.py --install-desktop --expected-target TARGET` | Complete pinned Pi distribution, committed Synthetic model lock, native CE and disposable T3 server |

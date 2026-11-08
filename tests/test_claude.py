@@ -66,7 +66,7 @@ class ClaudeTest(unittest.TestCase):
         (self.source / ".chezmoitemplates/agent-instructions").write_text(
             'common-marker\n{{ if eq .harness "claude" }}claude-marker{{ end }}\n'
             '{{ if eq .harness "codex" }}foreign-marker{{ end }}\n'
-            '{{ if eq .harness "omp" }}foreign-marker{{ end }}\n', encoding="utf-8")
+            '{{ if eq .harness "pi" }}foreign-marker{{ end }}\n', encoding="utf-8")
         self.apply()
         self.assert_owned()
         instructions = (self.claude / "CLAUDE.md").read_text(encoding="utf-8")

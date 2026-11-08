@@ -51,7 +51,14 @@
       "notificationMode": "notifications",
       "inAppNotificationsEnabled": true,
       "sidebarWorkingShelfEnabled": true,
-      "snapShotEnabled": true
+      "snapShotEnabled": true,
+      "providerModelPreferences": {
+        "pi": {
+          "hiddenModels": [
+            "default"
+          ]
+        }
+      }
     }
   }
 }

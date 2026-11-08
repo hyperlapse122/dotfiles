@@ -39,7 +39,6 @@ Application publishes these supported completion definitions before Prezto initi
 | Command | Official provider |
 |---|---|
 | `codex` | `codex completion zsh` |
-| `omp` | `omp completions zsh` |
 | `gh` | `gh completion -s zsh` |
 | `glab` | `glab completion -s zsh` |
 | `ghq` | `misc/zsh/_ghq` from the same locked release tag |

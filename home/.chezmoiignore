@@ -63,18 +63,6 @@ Library
 {{ if or (not $piSupported) (eq .chezmoi.os "windows") }}
 .local/bin/pi
 {{ end }}
-{{ $omp := get $apps "omp" | default dict }}
-{{ $targets := get $omp "targets" | default dict }}
-{{ if not (hasKey $targets $target) }}
-.omp
-{{ else }}
-{{ $agent := joinPath .chezmoi.destDir ".omp" "agent" }}
-{{ if or (stat (joinPath $agent "config.yml")) (not (stat (joinPath $agent "config.yaml"))) }}
-.omp/agent/config.yaml
-{{ else }}
-.omp/agent/config.yml
-{{ end }}
-{{ end }}
 {{ $codex := get $apps "codex" | default dict }}
 {{ if not (hasKey (get $codex "targets" | default dict) $target) }}
 .codex

@@ -143,9 +143,9 @@ class ExternalAssetsTest(unittest.TestCase):
                    for arch in ("amd64", "arm64")}
         checksum = hashlib.sha256(self.payloads["/tool"]).hexdigest()
         (data / "apps.json").write_text(json.dumps({"personalApps": {
-            "omp": {"command": "tool", "targets": targets}}}), encoding="utf-8")
+            "fixture-app": {"command": "tool", "targets": targets}}}), encoding="utf-8")
         (data / "locks.json").write_text(json.dumps({"personalAppLocks": {
-            "omp": {"targets": {target: {"kind": "file", "url": self.url + "/tool",
+            "fixture-app": {"targets": {target: {"kind": "file", "url": self.url + "/tool",
                 "sha256": checksum} for target in targets}}}}), encoding="utf-8")
         (source / "scripts").mkdir()
         scripts = source / ".chezmoiscripts"

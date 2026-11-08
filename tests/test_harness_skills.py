@@ -22,7 +22,7 @@ REPOSITORY = "DaleSeo/korean-skills"
 SKILLS = ("grammar-checker", "humanizer", "style-guide")
 # Each shared root and the harnesses that read it.
 LOCATIONS = {
-    ".agents/skills": ("codex", "pi", "omp", "grok"),
+    ".agents/skills": ("codex", "pi", "grok"),
     ".claude/skills": ("claude",),
     ".gemini/config/skills": ("antigravity",),
 }

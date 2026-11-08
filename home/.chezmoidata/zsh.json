@@ -5,7 +5,6 @@
     "targets": ["linux-amd64", "linux-arm64", "darwin-arm64"],
     "completions": {
       "codex": {"args": ["completion", "zsh"]},
-      "omp": {"args": ["completions", "zsh"]},
       "gh": {"args": ["completion", "-s", "zsh"]},
       "glab": {"args": ["completion", "-s", "zsh"]},
       "ghq": {"source": "misc/zsh/_ghq"},

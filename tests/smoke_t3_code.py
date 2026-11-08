@@ -1,4 +1,4 @@
-"""Exercise managed T3 launchers, omp ACP, and native Codex/Claude initialization.
+"""Exercise managed T3 launchers and native Codex/Claude initialization.
 
 --install-desktop provisions an official desktop release on disposable CI only.
 It does not test WinGet acquisition; the normal Windows apply uses WinGet.
@@ -356,7 +356,6 @@ def main():
     parser.add_argument("--expected-target")
     args = parser.parse_args()
     chezmoi = executable("chezmoi")
-    real_home = Path.home()
     with temporary_destination() as scratch:
         root = Path(scratch)
         home, source, outside = (root / name for name in ("user home", "source", "unrelated cwd"))
@@ -378,7 +377,7 @@ def main():
             "CODEX_HOME": str(home / ".codex"),
         })
         # Keep native app-install discovery (LOCALAPPDATA/Applications) separate
-        # from the isolated T3/omp runtime state; no registry action is copied.
+        # from the isolated T3 runtime state; no registry action is copied.
         command = [chezmoi, "--source", str(source), "--destination", str(home), "--config", str(config),
                    "--cache", str(root / "cache"), "--persistent-state", str(root / "state.boltdb"), "--no-tty"]
         target = run(command + ["execute-template", "{{ .chezmoi.os }}-{{ .chezmoi.arch }}"], env=env, cwd=outside)
@@ -388,16 +387,10 @@ def main():
             raise RuntimeError(f"Unsupported T3 smoke target: {target}")
         if args.install_desktop:
             provision_desktop(target, root, os.environ.copy())
-        binary_name = "omp.exe" if os.name == "nt" else "omp"
-        existing_omp = real_home / ".local/bin" / binary_name
-        if existing_omp.is_file():
-            destination = home / ".local/bin" / binary_name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(existing_omp, destination)
         copy_asset_templates(source, ("personal-apps", "codex-package", "harness-plugins", "harness-skills"))
         declaration = source / ".chezmoidata/personal-apps.json"
         data = json.loads(declaration.read_text(encoding="utf-8"))
-        selected = ("codex", "claude") if existing_omp.is_file() else ("omp", "codex", "claude")
+        selected = ("codex", "claude")
         data["personalApps"] = {name: data["personalApps"][name] for name in selected}
         declaration.write_text(json.dumps(data), encoding="utf-8")
         hooks = source / ".chezmoiscripts"
@@ -413,7 +406,8 @@ def main():
         settings = home / ".t3/userdata/settings.json"
         settings.parent.mkdir(parents=True)
         settings.write_text(json.dumps({"idleCompaction": "onReturn", "providerInstances": {
-            "smoke-unrelated": {"driver": "codex", "enabled": False, "displayName": "Unrelated smoke provider", "config": {}}
+            "smoke-unrelated": {"driver": "codex", "enabled": False, "displayName": "Unrelated smoke provider", "config": {}},
+            "omp": {"driver": "acpRegistry", "enabled": True, "config": {}}
         }}), encoding="utf-8")
         run(command + ["apply", "--force"], env=env, cwd=outside)
         first = json.loads(settings.read_text(encoding="utf-8"))
@@ -431,17 +425,8 @@ def main():
             version = run(["/bin/sh", "-c", "command -v t3; t3 --version"], env=child, cwd=outside)
         if "t3 v" not in version:
             raise RuntimeError(f"Unexpected bundled CLI version: {version}")
-        provider = first["providerInstances"]["omp"]
-        request = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-            "protocolVersion": 1, "clientCapabilities": {}, "clientInfo": {"name": "dotfiles-smoke", "version": "1"}
-        }}
-        response = subprocess.run([provider["config"]["commandPath"], *provider["config"]["commandArgs"]],
-                                  input=json.dumps(request) + "\n", env=child, cwd=outside,
-                                  capture_output=True, text=True, encoding="utf-8", timeout=60)
-        messages = [json.loads(line) for line in response.stdout.splitlines() if line.startswith("{")]
-        initialized = next((message.get("result") for message in messages if message.get("id") == 1), None)
-        if response.returncode or not initialized or initialized.get("agentInfo", {}).get("name") != "omp":
-            raise RuntimeError(f"ACP initialization failed: {response.stdout}\n{response.stderr}")
+        if "omp" in first["providerInstances"]:
+            raise RuntimeError("Retired omp provider was not removed")
         run(command + ["apply", "--force"], env=env, cwd=outside)
         if json.loads(settings.read_text(encoding="utf-8")) != first:
             raise RuntimeError("Repeated provider reconciliation did not converge")
@@ -450,7 +435,7 @@ def main():
         prove_t3_provider(launcher, settings, env, outside, root, "codex", expected_version)
         prove_t3_provider(launcher, settings, env, outside, root, "claudeAgent",
                           lock["personalAppLocks"]["claude"]["tag"])
-        print(f"Native {target}: {version}; managed omp ACP initialize succeeded; unrelated settings and reapply preserved")
+        print(f"Native {target}: {version}; native providers initialized; unrelated settings and reapply preserved")
 
 
 if __name__ == "__main__":

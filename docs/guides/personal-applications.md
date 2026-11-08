@@ -11,7 +11,6 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 | `bun` | [oven-sh/bun](https://github.com/oven-sh/bun) | Archive member, with managed `bunx` launcher | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `claude` | [anthropics/claude-code](https://github.com/anthropics/claude-code) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `codex` | [openai/codex](https://github.com/openai/codex) | Canonical CLI package | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
-| `omp` | [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi) | Raw binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | Complete native distribution | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `grok` | [Grok Build](https://docs.x.ai/build/overview) | Official native binary | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `gh` | [cli/cli](https://github.com/cli/cli) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
@@ -52,7 +51,7 @@ Both tasks apply personal configuration, including font and plugin reconciliatio
 The outer `--refresh-externals` flag no longer controls these script-managed assets.
 Normal application can miss modifications that preserve file size and modification time; full verification restores the declared content.
 
-> **Windows Note:** Close running Claude Code, Codex, and omp sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
+> **Windows Note:** Close running Claude Code and Codex sessions, including T3 Code sessions using them, before updating their executables to avoid file-lock errors. Run the update from a standard terminal window.
 
 ### Antigravity version ownership
 
@@ -77,6 +76,12 @@ To roll back, restore only Bun's entry in `home/.chezmoidata/personal-app-lock.j
 Existing Bun installations elsewhere and Bun's package caches are retained; resolve any competing PATH entry if the managed command is not selected.
 This installation does not add shell completions, install global packages, or change project package managers.
 
+### Retired omp installation
+
+Dotfiles no longer declares or pins omp and does not install or reconcile it. Applying the current source preserves an existing `~/.local/bin/omp` (`omp.exe` on Windows), `~/.omp` configuration, credentials, plugins, and session data. Existing completion files also remain on disk. A fresh home receives none of these omp files.
+
+The T3 settings modify template separately removes the `omp` provider entry during explicit apply; see [Managed Settings](t3-code.md#managed-settings).
+
 ## PATH Integration
 
 Applying personal settings configures your shell environment to discover commands in `~/.local/bin`.
@@ -100,10 +105,10 @@ Verify that the managed commands take precedence:
 
 ```sh
 # Windows PowerShell
-Get-Command omp -All
+Get-Command codex -All
 
 # POSIX Shells
-command -v omp
+command -v codex
 ```
 
 If another copy precedes `~/.local/bin`, resolve the conflicting PATH entry in your shell configuration.

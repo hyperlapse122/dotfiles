@@ -89,7 +89,7 @@ def main():
             'claude-smoke-common-instructions\n'
             '{{ if eq .harness "claude" }}claude-smoke-native-instructions{{ end }}\n'
             '{{ if eq .harness "codex" }}claude-smoke-foreign-instructions{{ end }}\n'
-            '{{ if eq .harness "omp" }}claude-smoke-foreign-instructions{{ end }}\n', encoding="utf-8")
+            '{{ if eq .harness "pi" }}claude-smoke-foreign-instructions{{ end }}\n', encoding="utf-8")
         copy_asset_templates(source, ('personal-apps', 'harness-plugins', 'harness-skills'))
         config = root / "chezmoi.toml"
         config_text = ""

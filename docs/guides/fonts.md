@@ -24,7 +24,7 @@ Managed application settings select `Jetendard` for Ghostty and T3 Code coding s
 The variable family's selectable name is `Pretendard Variable`, not `Pretendard` or the filename `PretendardVariable.ttf`.
 Sizes, line spacing, themes, and separate T3 composer preferences remain local.
 See [Ghostty](terminal.md#managed-configuration-and-native-boundaries) and [T3 Code](t3-code.md#personal-preferences) for ownership and platform scope.
-Terminal-rendered Claude Code, Codex, omp, and Antigravity tools inherit their host's font; dotfiles does not add independent font settings to those CLIs or manage Windows Terminal.
+Terminal-rendered Claude Code, Codex, and Antigravity tools inherit their host's font; dotfiles does not add independent font settings to those CLIs or manage Windows Terminal.
 
 ## Install or Reconcile
 

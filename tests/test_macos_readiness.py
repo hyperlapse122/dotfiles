@@ -68,11 +68,14 @@ class MacReadinessTest(unittest.TestCase):
         self.assertNotIn("8.0.100", json.dumps(result))
         self.assertNotIn("fixture", json.dumps(result))
 
-    def test_podman_is_not_a_readiness_requirement(self):
+    def test_unmanaged_tools_are_not_readiness_requirements(self):
         result, _ = self.collect()
-        self.assertNotIn("podman", self.command_lookups)
+        for command in ("podman", "omp"):
+            self.assertNotIn(command, self.command_lookups)
         names = {check["name"] for check in result["checks"]}
         self.assertNotIn("Command: podman", names)
+        self.assertNotIn("Command: omp", names)
+        self.assertNotIn("omp instructions", names)
         self.assertNotIn("Application: Podman Desktop", names)
         self.assertNotIn("Container execution", names)
         self.assertIn("Command: op", names)
