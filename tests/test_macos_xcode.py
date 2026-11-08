@@ -72,6 +72,73 @@ class XcodeReleaseTest(unittest.TestCase):
         output = b''.join(filter_.feed(chunk) for chunk in [b'Using ow', b'ner@example.invalid: sec', b'ret-pass', b'word\nEnter code: ']) + filter_.finish()
         self.assertEqual(output, b'Using [redacted]: [redacted]\nEnter code: ')
 
+    def test_overlapping_credentials_never_expose_the_password_suffix(self):
+        for chunks in [(b'owner-private-suffix\nEnter code: ',),
+                       (b'owner', b'-private-', b'suffix\nEnter code: ')]:
+            with self.subTest(chunks=chunks):
+                filter_ = xcode.Redactor(['owner', 'owner-private-suffix'])
+                output = b''.join(filter_.feed(chunk) for chunk in chunks) + filter_.finish()
+                self.assertEqual(output, b'[redacted]\nEnter code: ')
+
+    def test_first_and_later_prerelease_install_arguments_match_the_pinned_tool(self):
+        for channel, sequence, expected in [('release', True, '27.3'), ('beta', 1, '27.3 Beta'),
+                                             ('beta', 3, '27.3 Beta 3'), ('rc', 1, '27.3 Release Candidate'),
+                                             ('rc', 2, '27.3 Release Candidate 2'), ('dp', 1, '27.3 DP')]:
+            with self.subTest(channel=channel, sequence=sequence), \
+                 mock.patch.object(xcode, 'fetch_catalog', return_value=[release('27.3', channel, sequence)]), \
+                 mock.patch.object(xcode, 'host_version', return_value='26.6'), \
+                 mock.patch.object(xcode, 'installed_candidate', return_value=None), \
+                 mock.patch.object(xcode.apple_account, 'read_account', return_value={'username': 'fixture-user', 'password': 'fixture-password'}), \
+                 mock.patch.object(xcode, 'run_interactive', side_effect=xcode.XcodeError('stop after argument capture')) as install, \
+                 mock.patch.object(sys, 'stdout', io.StringIO()):
+                with self.assertRaises(xcode.XcodeError):
+                    xcode.update(Path('.'))
+                self.assertEqual(install.call_args.args[0][2], expected)
+
+    def test_real_candidate_verification_prevents_selection_on_native_failures(self):
+        app = Path('/Applications/Xcode-fixture.app')
+        developer = str(app / 'Contents/Developer')
+        for failure in ['signature', 'first-launch', 'sdk', None]:
+            calls = []
+            selected = []
+            def native(argv, **kwargs):
+                calls.append(argv)
+                status, output = 0, ''
+                if 'codesign' in argv[0] and failure == 'signature':
+                    status = 1
+                elif '-checkFirstLaunchStatus' in argv and failure == 'first-launch':
+                    status = 1
+                elif '--find' in argv:
+                    output = '/fixture/clang'
+                elif '--show-sdk-path' in argv:
+                    output = '' if failure == 'sdk' else '/fixture/MacOSX.sdk'
+                elif '--print-path' in argv:
+                    output = '/old/developer'
+                return subprocess.CompletedProcess(argv, status, output, '')
+            def interactive(argv, **kwargs):
+                if '-license' in argv:
+                    raise xcode.XcodeError('first-launch failed')
+                selected.append(argv)
+            with self.subTest(failure=failure), \
+                 mock.patch.object(xcode, 'fetch_catalog', return_value=[release('27.1')]), \
+                 mock.patch.object(xcode, 'host_version', return_value='26.6'), \
+                 mock.patch.object(xcode, 'installed_candidate', return_value=app), \
+                 mock.patch.object(xcode.subprocess, 'run', side_effect=native), \
+                 mock.patch.object(xcode, 'run_interactive', side_effect=interactive), \
+                 mock.patch.object(xcode.apple_account, 'read_account') as secrets, \
+                 mock.patch.object(sys, 'stdout', io.StringIO()):
+                if failure is not None:
+                    with self.assertRaises(xcode.XcodeError):
+                        xcode.update(Path('.'))
+                    self.assertEqual(selected, [])
+                else:
+                    xcode.update(Path('.'))
+                    self.assertEqual(selected, [['/usr/bin/sudo', '/usr/bin/xcode-select', '--switch', developer]])
+                    self.assertTrue(any('codesign' in argv[0] for argv in calls))
+                    self.assertTrue(any('-checkFirstLaunchStatus' in argv for argv in calls))
+                    self.assertTrue(any('--show-sdk-path' in argv for argv in calls))
+                secrets.assert_not_called()
+
     def test_install_verifies_build_before_switching_and_reuse_needs_no_secret(self):
         app = Path('/Applications/Xcode-fixture.app')
         events = []

@@ -91,7 +91,7 @@ def host_version():
 
 class Redactor:
     def __init__(self, values):
-        self.secrets = tuple(value.encode('utf-8') for value in values if value)
+        self.secrets = tuple(sorted((value.encode('utf-8') for value in values if value), key=len, reverse=True))
         self.pending = b''
 
     def feed(self, data):
@@ -99,13 +99,13 @@ class Redactor:
         position = 0
         result = bytearray()
         while position < len(buffer):
+            if any(len(secret) > len(buffer) - position and secret.startswith(buffer[position:])
+                   for secret in self.secrets):
+                break
             match = next((secret for secret in self.secrets if buffer.startswith(secret, position)), None)
             if match is not None:
                 result.extend(b'[redacted]')
                 position += len(match)
-            elif any(len(secret) > len(buffer) - position and secret.startswith(buffer[position:])
-                     for secret in self.secrets):
-                break
             else:
                 result.append(buffer[position])
                 position += 1
@@ -201,16 +201,20 @@ def update(source, config=None):
         raise XcodeError('The newest Xcode requires macOS ' + required + ' or later; update macOS and rerun.')
     app = installed_candidate(release)
     if app is None:
+        channel, sequence = next(iter(release['version']['release'].items()))
+        if channel == 'gmSeed':
+            raise XcodeError('The pinned Xcode installer cannot select GM Seed releases; update installer support before retrying.')
+        label = {'beta': 'Beta', 'rc': 'Release Candidate', 'dp': 'DP'}.get(channel)
+        version = release['version']['number']
+        if label:
+            version += ' ' + label
+            if sequence > 1:
+                version += ' ' + str(sequence)
         account = apple_account.read_account(source, config)
         env = os.environ.copy()
         for name in ('DEVELOPER_DIR', 'SDKROOT', 'TOOLCHAINS', 'XCODES_DIRECTORY'):
             env.pop(name, None)
         env.update({'XCODES_USERNAME': account['username'], 'XCODES_PASSWORD': account['password']})
-        channel, sequence = next(iter(release['version']['release'].items()))
-        label = {'beta': 'Beta', 'rc': 'Release Candidate', 'dp': 'DP', 'gmSeed': 'GM Seed'}.get(channel)
-        version = release['version']['number']
-        if label:
-            version += ' ' + label + ' ' + str(sequence)
         print('Installing Xcode ' + version + ' (' + release['version']['build'] + ').', flush=True)
         run_interactive(['xcodes', 'install', version, '--update', '--directory', str(APPLICATIONS), '--no-aria2', '--no-color'],
                         env=env, secrets=account.values())
