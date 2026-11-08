@@ -40,6 +40,14 @@ Library
 {{ end }}
 {{ $target := printf "%s-%s" .chezmoi.os .chezmoi.arch }}
 {{ $apps := get . "personalApps" | default dict }}
+{{ $bun := get $apps "bun" | default dict }}
+{{ $bunSupported := hasKey (get $bun "targets" | default dict) $target }}
+{{ if or (not $bunSupported) (ne .chezmoi.os "windows") }}
+.local/bin/bunx.ps1
+{{ end }}
+{{ if or (not $bunSupported) (eq .chezmoi.os "windows") }}
+.local/bin/bunx
+{{ end }}
 {{ $grok := get $apps "grok" | default dict }}
 {{ if not (hasKey (get $grok "targets" | default dict) $target) }}
 .grok

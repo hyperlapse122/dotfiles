@@ -354,6 +354,53 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(binary.read_bytes(), b"previous Bun")
         self.assertEqual(self.binary.read_bytes(), self.payloads["/omp"])
 
+    def configure_bun_launcher(self):
+        launchers = self.source / "dot_local/bin"
+        launchers.mkdir(parents=True, exist_ok=True)
+        for name in ("executable_bunx.tmpl", "bunx.ps1.tmpl"):
+            shutil.copy2(self.repo / "home/dot_local/bin" / name, launchers / name)
+        shutil.copy2(self.repo / "home/.chezmoiignore", self.source / ".chezmoiignore")
+
+    @unittest.skipIf(os.name == "nt", "POSIX argument recorder; native Windows is covered by apps smoke")
+    def test_bunx_uses_managed_bun_and_preserves_arguments_and_exit(self):
+        self.configure_bun_launcher()
+        payload = b'#!/bin/sh\nprintf "<%s>\\n" "$@"\nexit 37\n'
+        self.add_archive("zip", command="bun", member="release/bun", payload=payload)
+        self.apply()
+        launcher = self.home / ".local/bin/bunx"
+        unrelated = self.root / "other bin"
+        unrelated.mkdir()
+        competitor = unrelated / "bun"
+        competitor.write_text("#!/bin/sh\nexit 99\n")
+        competitor.chmod(0o755)
+        env = {**self.env, "PATH": str(unrelated) + os.pathsep + self.env["PATH"]}
+        result = subprocess.run([str(launcher), "with spaces", "", "--flag", "quote'\""],
+                                env=env, cwd=self.root, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 37, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ["<x>", "<with spaces>", "<>", "<--flag>", "<quote'\">"])
+        launcher.unlink()
+        self.apply()
+        self.assertTrue(launcher.is_file())
+        self.assertFalse((launcher.parent / "bunx.ps1").exists())
+
+    def test_bunx_templates_select_only_the_declared_platform(self):
+        self.configure_bun_launcher()
+        self.apps["personalApps"]["bun"] = self.archive_apps["bun"]
+        self.write_apps()
+        for target in (*self.archive_apps["bun"]["targets"], "darwin-amd64", "freebsd-amd64"):
+            os_name, arch = target.split("-")
+            for filename in ("executable_bunx.tmpl", "bunx.ps1.tmpl"):
+                template = (self.source / "dot_local/bin" / filename).read_text()
+                wrapper = ('{{ template "launcher" (dict "chezmoi" (dict "os" '
+                           + json.dumps(os_name) + ' "arch" ' + json.dumps(arch)
+                           + ' "destDir" .chezmoi.destDir) "personalApps" .personalApps) }}'
+                           + '{{ define "launcher" }}' + template + '{{ end }}')
+                result = self.run_chezmoi("execute-template", input=wrapper)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                supported = target in self.archive_apps["bun"]["targets"]
+                expected = supported and ((filename == "bunx.ps1.tmpl") == (os_name == "windows"))
+                self.assertEqual(bool(result.stdout.strip()), expected, (target, filename))
+
     def test_gitlab_archives_use_existing_installer_and_stable_command_path(self):
         for format in ("tar.gz", "zip"):
             with self.subTest(format=format):

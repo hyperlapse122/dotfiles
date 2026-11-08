@@ -1,0 +1,6 @@
+{{- $target := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+{{- $app := get .personalApps "bun" | default dict -}}
+{{- if and (hasKey (get $app "targets" | default dict) $target) (ne .chezmoi.os "windows") -}}
+#!/bin/sh
+exec '{{ joinPath .chezmoi.destDir ".local" "bin" "bun" | replace "'" "'\\''" }}' x "$@"
+{{ end -}}
