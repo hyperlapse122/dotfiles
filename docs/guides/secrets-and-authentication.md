@@ -47,13 +47,37 @@ Templates access decrypted tokens through the shared `secrets` partial:
 {"apiToken": {{ $secrets.example.serviceB | toJson }}}
 ```
 
-Decryption occurs only during explicit `mise run apply` when a template calls the partial. Worktree preparation (`mise install`) and bootstrap do not decrypt secrets.
+Template token decryption occurs during explicit application when a template calls the partial.
+Explicit Mac provisioning also decrypts the separate Apple-account document for Xcode installation.
+Worktree preparation (`mise install`) and source inspection do not decrypt secrets.
 
 ### Security Boundaries
 
 - **Plaintext Generation:** Encryption protects committed repository source. Generated destination files on your filesystem contain plaintext. Be cautious with `diff`, `cat`, and template previews.
 - **Temporary Files:** Editing encrypted files creates temporary plaintext files. Use trusted local editors and avoid insecure scratch disks.
 - **Fail Closed:** If private-key access is unavailable, apply fails with an error. No dummy or empty token fallback is permitted.
+
+---
+
+## Apple Account for Xcode
+
+The Apple login is stored separately at `home/.secrets/apple-account.json.asc` and excluded from destination files.
+To enroll or refresh it on a host with authenticated 1Password CLI access and the existing hardware key:
+
+```sh
+mise exec -- python scripts/apple_account.py import
+```
+
+The importer reads the username and password from 1Password item `7qtqghyfcstvy4xijdgorbzvki`, verifies the repository recipient, and encrypts in memory.
+It verifies decryption before atomically publishing ciphertext; failed verification preserves any previous document.
+Its initial preparation uses repository-owned settings through the hook-free config, so personal chezmoi initialization is not required for this command.
+No private key or ownertrust is imported.
+
+Mac provisioning and apply-time Xcode updates use this encrypted document without live 1Password access.
+Decryption requires the connected hardware key and an interactive terminal for PIN entry.
+The account is passed only in the installer child's environment, and its values are redacted from forwarded output.
+Apple 2FA and administrator approval remain native interactive steps.
+The `xcodes` installer may persist a successful login in macOS Keychain; the repository copy remains GPG-encrypted.
 
 ---
 

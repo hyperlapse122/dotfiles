@@ -16,7 +16,7 @@ The repository manages global Git configuration (`~/.gitconfig`) and GPG agent p
 ## Prerequisites
 
 Before applying dotfiles, verify that Git, mise, GnuPG (including `gpgconf`), and a compatible pinentry program are installed.
-Explicit application builds the repository's Rust pinentry using the mise-pinned Rust toolchain. Windows application first runs the existing Visual Studio Build Tools readiness/provisioning task; Linux needs a native linker, and macOS needs its Command Line Tools.
+Explicit application builds the repository's Rust pinentry using the mise-pinned Rust toolchain. Windows application first runs the existing Visual Studio Build Tools readiness/provisioning task; Linux needs a native linker, and macOS uses the selected Xcode compiler and SDK.
 Worktree preparation (`mise install`) validates source state without building or installing the personal pinentry.
 
 Your private signing key (and physical hardware token/YubiKey, if applicable) must already be configured on the host. Explicit application provisions the configured recipient's public key; private keys and ownertrust remain the user's responsibility.
@@ -28,6 +28,11 @@ During explicit application, `run_before_15-import-gpg-recipient` runs after the
 The reviewed public key is stored as ASCII armor in `home/.chezmoidata/gpg-recipient.yaml`. Application first inspects a temporary copy in a disposable GPG home and requires exactly one public primary key matching `gpgRecipient`. This avoids changing the managed keyring during artifact verification. If the exact primary key is already present, import is skipped. Otherwise the script imports it and reads back its primary fingerprint. Unrelated keys and assigned ownertrust are preserved; fresh application does not need a keyserver connection.
 
 Worktree bootstrap (`mise install`), source inspection, and dry-run application do not import the key. The script does not run for standalone encryption commands or configuration initialization; apply first when preparing a fresh keyring.
+
+Explicit Mac initialization and the Apple-account importer render the same GPG home guard and public-recipient import partials through the repository's hook-free chezmoi config.
+They can therefore prepare the recipient before Xcode and personal application.
+The cold-start decryption path sets `GPG_TTY` from the operator's terminal and captures plaintext privately while Homebrew's default terminal pinentry handles PIN entry.
+It does not require the Rust wrapper, replace existing agent configuration, or assign ownertrust.
 
 Public-key presence does not establish recipient validity or authorize private-key access. An unknown-validity recipient can still trigger GPG's trust prompt during encryption, including a failure in a shell without a TTY. Make any personal trust decision separately; application does not assign ownertrust or disable encryption trust checks.
 
