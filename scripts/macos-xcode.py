@@ -1,0 +1,251 @@
+"""Install the newest Xcode across release channels and select it after verification."""
+
+import argparse
+import errno
+import json
+import os
+from pathlib import Path
+import platform
+import plistlib
+import re
+import subprocess
+import sys
+import urllib.request
+
+import apple_account
+
+
+XcodeError = apple_account.AccountError
+APPLICATIONS = Path('/Applications')
+CATALOG = 'https://xcodereleases.com/data.json'
+CHANNELS = {'dp': 0, 'beta': 1, 'gmSeed': 2, 'rc': 3, 'gm': 4, 'release': 5}
+
+
+def numeric(value):
+    if not isinstance(value, str) or not re.fullmatch(r'\d+(?:\.\d+){0,2}', value):
+        raise XcodeError('Xcode release metadata contains an invalid version.')
+    parts = tuple(map(int, value.split('.')))
+    return parts + (0,) * (3 - len(parts))
+
+
+def release_key(record):
+    version = record['version']
+    channel = version['release']
+    if not isinstance(channel, dict) or len(channel) != 1:
+        raise XcodeError('Xcode release channel metadata is invalid.')
+    name, sequence = next(iter(channel.items()))
+    if name not in CHANNELS or not isinstance(sequence, (int, bool)) or sequence < 1:
+        raise XcodeError('Xcode release channel metadata is unsupported.')
+    return numeric(version['number']), CHANNELS[name], int(sequence)
+
+
+def latest(catalog):
+    try:
+        if not isinstance(catalog, list):
+            raise ValueError()
+        candidates = []
+        for record in catalog:
+            if record.get('name') != 'Xcode' or not record.get('version', {}).get('number'):
+                continue
+            architectures = record.get('links', {}).get('download', {}).get('architectures')
+            if architectures is not None:
+                if not isinstance(architectures, list):
+                    raise ValueError()
+                if 'arm64' not in architectures and 'universal' not in architectures:
+                    continue
+            candidates.append(record)
+        chosen = max(candidates, key=release_key)
+        numeric(chosen.get('requires'))
+        if not re.fullmatch(r'[A-Za-z0-9]+', chosen['version'].get('build', '')):
+            raise ValueError()
+        return chosen
+    except XcodeError:
+        raise
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise XcodeError('Cannot resolve the newest Xcode from complete release metadata.') from None
+
+
+def fetch_catalog():
+    try:
+        request = urllib.request.Request(CATALOG, headers={'User-Agent': 'dotfiles-xcode'})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.load(response)
+    except Exception:
+        raise XcodeError('Cannot refresh Xcode release metadata; check network and TLS trust.') from None
+
+
+def run_command(argv, *, env=None, check=True):
+    try:
+        result = subprocess.run(argv, env=env, stdin=subprocess.DEVNULL, capture_output=True,
+                                text=True, encoding='utf-8', timeout=180)
+        if check and result.returncode:
+            raise XcodeError('Xcode verification command failed; the previous selection was retained.')
+        return result
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        raise XcodeError('Cannot run the required native Xcode tool.') from None
+
+
+def host_version():
+    return run_command(['/usr/bin/sw_vers', '-productVersion']).stdout.strip()
+
+
+class Redactor:
+    """Release prompt bytes promptly while retaining only possible secret prefixes."""
+
+    def __init__(self, values):
+        self.secrets = tuple(value.encode('utf-8') for value in values if value)
+        self.pending = b''
+
+    def feed(self, data):
+        self.pending += data
+        result = bytearray()
+        while self.pending:
+            match = next((secret for secret in self.secrets if self.pending.startswith(secret)), None)
+            if match is not None:
+                result.extend(b'[redacted]')
+                self.pending = self.pending[len(match):]
+            elif any(secret.startswith(self.pending) for secret in self.secrets):
+                break
+            else:
+                result.append(self.pending[0])
+                self.pending = self.pending[1:]
+        return bytes(result)
+
+    def finish(self):
+        result = b'[redacted]' if self.pending else b''
+        self.pending = b''
+        return result
+
+
+def run_interactive(argv, *, env=None, secrets=()):
+    import codecs
+    import pty
+    master, slave = pty.openpty()
+    child = None
+    decoder = codecs.getincrementaldecoder('utf-8')('replace')
+    redactor = Redactor(secrets)
+    try:
+        with apple_account.terminal_input() as (terminal, terminal_env):
+            child = subprocess.Popen(argv, stdin=terminal, stdout=slave, stderr=slave,
+                                     env=terminal_env if env is None else env | {'GPG_TTY': terminal_env['GPG_TTY']})
+        os.close(slave)
+        slave = None
+        while True:
+            try:
+                chunk = os.read(master, 4096)
+            except OSError as error:
+                if error.errno == errno.EIO:
+                    break
+                raise
+            if not chunk:
+                break
+            sys.stdout.write(decoder.decode(redactor.feed(chunk)))
+            sys.stdout.flush()
+        sys.stdout.write(decoder.decode(redactor.finish(), final=True))
+        sys.stdout.flush()
+        if child.wait():
+            raise XcodeError('Xcode installation or authorization failed; the previous selection was retained.')
+    except (OSError, subprocess.SubprocessError):
+        raise XcodeError('Cannot run the interactive Xcode installer.') from None
+    finally:
+        if child is not None and child.poll() is None:
+            child.terminate()
+            child.wait()
+        os.close(master)
+        if slave is not None:
+            os.close(slave)
+
+
+def installed_candidate(release):
+    for app in sorted(APPLICATIONS.glob('Xcode*.app')):
+        try:
+            with (app / 'Contents/Info.plist').open('rb') as stream:
+                info = plistlib.load(stream)
+            with (app / 'Contents/version.plist').open('rb') as stream:
+                version = plistlib.load(stream)
+            if (info.get('CFBundleIdentifier') == 'com.apple.dt.Xcode'
+                    and numeric(info.get('CFBundleShortVersionString')) == numeric(release['version']['number'])
+                    and version.get('ProductBuildVersion') == release['version']['build']):
+                return app.resolve()
+        except (OSError, ValueError, plistlib.InvalidFileException, XcodeError):
+            continue
+    return None
+
+
+def verify_candidate(app):
+    run_command(['/usr/bin/codesign', '--verify', '--deep', '--strict', '--test-requirement',
+                 'anchor apple and identifier "com.apple.dt.Xcode"', str(app)])
+    run_command(['/usr/sbin/spctl', '--assess', '--type', 'execute', str(app)])
+    developer = app / 'Contents/Developer'
+    build = developer / 'usr/bin/xcodebuild'
+    env = os.environ.copy()
+    for name in ('DEVELOPER_DIR', 'SDKROOT', 'TOOLCHAINS'):
+        env.pop(name, None)
+    env['DEVELOPER_DIR'] = str(developer)
+    if run_command([str(build), '-checkFirstLaunchStatus'], env=env, check=False).returncode:
+        run_interactive(['/usr/bin/sudo', str(build), '-license', 'accept'], env=env)
+        run_interactive(['/usr/bin/sudo', str(build), '-runFirstLaunch'], env=env)
+        run_command([str(build), '-checkFirstLaunchStatus'], env=env)
+    clang = run_command(['/usr/bin/xcrun', '--find', 'clang'], env=env).stdout.strip()
+    sdk = run_command(['/usr/bin/xcrun', '--sdk', 'macosx', '--show-sdk-path'], env=env).stdout.strip()
+    if not clang or not sdk:
+        raise XcodeError('The candidate Xcode compiler or macOS SDK is unavailable.')
+    run_command([clang, '--version'], env=env)
+
+
+def update(source, config=None):
+    release = latest(fetch_catalog())
+    required = release['requires']
+    if numeric(host_version()) < numeric(required):
+        raise XcodeError('The newest Xcode requires macOS ' + required + ' or later; update macOS and rerun.')
+    app = installed_candidate(release)
+    if app is None:
+        account = apple_account.read_account(source, config)
+        env = os.environ.copy()
+        for name in ('DEVELOPER_DIR', 'SDKROOT', 'TOOLCHAINS', 'XCODES_DIRECTORY'):
+            env.pop(name, None)
+        env.update({'XCODES_USERNAME': account['username'], 'XCODES_PASSWORD': account['password']})
+        channel, sequence = next(iter(release['version']['release'].items()))
+        label = {'beta': 'Beta', 'rc': 'Release Candidate', 'dp': 'DP', 'gmSeed': 'GM Seed'}.get(channel)
+        version = release['version']['number']
+        if label:
+            version += ' ' + label + ' ' + str(sequence)
+        print('Installing Xcode ' + version + ' (' + release['version']['build'] + ').', flush=True)
+        run_interactive(['xcodes', 'install', version, '--update', '--directory', str(APPLICATIONS), '--no-aria2', '--no-color'],
+                        env=env, secrets=account.values())
+        app = installed_candidate(release)
+        if app is None:
+            raise XcodeError('The installed Xcode does not match the selected release build.')
+    verify_candidate(app)
+    env = os.environ.copy()
+    env.pop('DEVELOPER_DIR', None)
+    current = run_command(['/usr/bin/xcode-select', '--print-path'], env=env, check=False).stdout.strip()
+    developer = str(app / 'Contents/Developer')
+    if current != developer:
+        run_interactive(['/usr/bin/sudo', '/usr/bin/xcode-select', '--switch', developer], env=env)
+    print('Xcode ' + release['version']['number'] + ' (' + release['version']['build'] + ') is ready.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument('--config', type=Path)
+    args = parser.parse_args()
+    try:
+        if platform.system() != 'Darwin' or platform.machine() != 'arm64':
+            raise XcodeError('Xcode provisioning requires native Apple Silicon macOS.')
+        update(args.source, args.config)
+    except XcodeError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print('Xcode setup cancelled; the previous selection was retained.', file=sys.stderr)
+        return 1
+    except Exception:
+        print('Xcode setup failed; no credential details were printed.', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

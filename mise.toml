@@ -22,6 +22,7 @@ windows_vcpkg_repository = "https://github.com/microsoft/vcpkg.git"
 windows_vcpkg_revision = "2026.10.16"
 
 [tools]
+"aqua:XcodesOrg/xcodes" = { version = "2.1.0", os = ["macos"] }
 ast-grep = "latest"
 chezmoi = { version = "latest", libc = "musl" }
 gh = "latest"
