@@ -23,7 +23,8 @@ if name == 'shasum':
 if name == 'pkgutil':
     sys.exit(23 if state.get('fail') == 'signature' else 0)
 if name == 'sudo':
-    sys.exit(subprocess_run([str(root/'commands/installer'), *args[1:]]))
+    sys.exit(subprocess_run([os.environ['MAC_TEST_BASH'], '--noprofile', '--norc',
+                             (root/'commands/installer').as_posix(), *args[1:]]))
 if name == 'installer':
     if state.get('fail') == 'installer': sys.exit(23)
     import shutil
@@ -103,6 +104,7 @@ class MacProvisionTest(MacFixture):
         self.env['TMPDIR'] = str(self.root/'temporary files')
         (self.root/'temporary files').mkdir()
         self.env['PYTHONDONTWRITEBYTECODE'] = '1'
+        self.env['MAC_TEST_BASH'] = find_bash()
         resolved = subprocess.run(
             [find_bash(), '--noprofile', '--norc', '-c',
              'PATH=/usr/bin:/bin; export PATH; command -v mktemp rm'],
@@ -128,6 +130,13 @@ class MacProvisionTest(MacFixture):
 
     def installed(self):
         return [args[-1] for name, args in self.calls() if name == 'brew' and args[:1] == ['install']]
+
+    def test_sudo_uses_bash_to_run_the_installer_fixture(self):
+        installer = self.bin/'installer'
+        installer.write_text(installer.read_text(encoding='utf-8').split('\n', 1)[1], encoding='utf-8')
+        result = self.run_provision()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(any(name == 'installer' for name, args in self.calls()))
 
     def test_first_device_installs_homebrew_and_missing_prerequisites_only(self):
         result = self.run_provision()
