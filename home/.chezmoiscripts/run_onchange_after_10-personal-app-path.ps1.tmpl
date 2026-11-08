@@ -1,6 +1,6 @@
 {{- if eq .chezmoi.os "windows" -}}
 {{ "\ufeff" -}}
-# data path.settings sha256: {{ dict "home" .chezmoi.destDir | toJson | sha256sum }}
+# data path.settings sha256: {{ dict "home" .chezmoi.destDir "node" (hasKey .personalApps "node") | toJson | sha256sum }}
 $ErrorActionPreference = 'Stop'
 
 $bin = Join-Path '{{ .chezmoi.destDir | replace "'" "''" }}' '.local\bin'
@@ -19,14 +19,28 @@ try {
     } else {
         $key.GetValueKind('Path')
     }
-    $normalizedBin = ConvertTo-NormalizedPath $bin
-    foreach ($entry in ($userPath -split ';')) {
-        if ([string]::Equals((ConvertTo-NormalizedPath $entry), $normalizedBin, [StringComparison]::OrdinalIgnoreCase)) {
-            return
+    $directories = @($bin)
+{{ if hasKey .personalApps "node" -}}
+    $directories += Join-Path '{{ .chezmoi.destDir | replace "'" "''" }}' '.local\share\dotfiles\node'
+{{ end -}}
+    $changed = $false
+    foreach ($directory in $directories) {
+        $normalized = ConvertTo-NormalizedPath $directory
+        $found = $false
+        foreach ($entry in ($userPath -split ';')) {
+            if ([string]::Equals((ConvertTo-NormalizedPath $entry), $normalized, [StringComparison]::OrdinalIgnoreCase)) {
+                $found = $true
+                break
+            }
+        }
+        if (-not $found) {
+            $separator = if ($userPath -and -not $userPath.EndsWith(';')) { ';' } else { '' }
+            $userPath = $userPath + $separator + $directory
+            $changed = $true
         }
     }
-    $separator = if ($userPath -and -not $userPath.EndsWith(';')) { ';' } else { '' }
-    $key.SetValue('Path', ($userPath + $separator + $bin), $kind)
+    if (-not $changed) { return }
+    $key.SetValue('Path', $userPath, $kind)
 } finally {
     $key.Dispose()
 }

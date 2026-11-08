@@ -629,3 +629,40 @@ class AntigravityPersonalAppLockTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NodeReleaseTest(unittest.TestCase):
+    def test_latest_stable_excludes_prereleases_and_lts_filter(self):
+        import io
+        releases = [{'version': v} for v in ('v27.0.0-alpha.1', 'v24.99.0', 'v26.9.0', 'v26.13.0')]
+        with patch.object(UPDATER, 'urlopen', return_value=io.BytesIO(json.dumps(releases).encode())):
+            self.assertEqual(UPDATER.node_release(), 'v26.13.0')
+
+    def test_official_checksums_cover_all_targets(self):
+        application = json.loads((REPO / 'home/.chezmoidata/personal-apps.json').read_text())['personalApps']['node']
+        manifest = '\n'.join('a' * 64 + '  ' + t['asset'].replace('{version}', '26.13.0')
+                             for t in application['targets'].values())
+        pin = UPDATER.resolve_node(application, 'v26.13.0', lambda url: manifest)
+        self.assertEqual(len(pin['targets']), 5)
+        for target in pin['targets'].values():
+            self.assertEqual(target['stripComponents'], 1)
+            self.assertEqual(target['kind'], 'archive')
+            self.assertTrue(target['url'].startswith('https://nodejs.org/dist/v26.13.0/node-v26.13.0-'))
+        for bad in ('', manifest + '\n' + manifest.splitlines()[0], 'invalid'):
+            with self.subTest(manifest=bad), self.assertRaises(ValueError):
+                UPDATER.resolve_node(application, 'v26.13.0', lambda url: bad)
+
+    def test_node_source_updates_lock_without_github(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / 'home/.chezmoidata'
+            data.mkdir(parents=True)
+            application = json.loads((REPO / 'home/.chezmoidata/personal-apps.json').read_text())['personalApps']['node']
+            (data / 'personal-apps.json').write_text(json.dumps({'personalApps': {'node': application}}))
+            checksums = '\n'.join('a' * 64 + '  ' + t['asset'].replace('{version}', '26.13.0')
+                                  for t in application['targets'].values())
+            for expected in (True, False):
+                self.assertEqual(UPDATER.update_lock(root, fetch_node_release=lambda: 'v26.13.0',
+                                                     fetch_checksums=lambda url: checksums), expected)
+            lock = json.loads((data / 'personal-app-lock.json').read_text())['personalAppLocks']['node']
+            self.assertEqual(lock['tag'], 'v26.13.0')

@@ -600,6 +600,25 @@ class PersonalAppsTest(unittest.TestCase):
         self.assertEqual(binary.read_bytes(), b"CLI payload\n")
         self.assertEqual(self.requests.count("/official-cli.tar.gz"), 1)
 
+    def test_npm_prefix_preserves_settings_and_is_idempotent(self):
+        template = (self.repo / "home/modify_dot_npmrc").read_text()
+        for platform, destination, prefix in (("linux", "/tmp/user home", "/tmp/user home/.local"),
+                                               ("windows", "C:/Users/example", "C:/Users/example/.local/bin")):
+            existing = "# local settings\r\nprefix=old\r\nregistry=https://registry.npmjs.org/\r\n//registry.npmjs.org/:_authToken=fixture\r\n"
+            def render(text):
+                context = {"chezmoi": {"os": platform, "destDir": destination, "stdin": text},
+                           "personalApps": {"node": {}}}
+                wrapper = ('{{ template "npmrc" (fromJson ' + json.dumps(json.dumps(context)) + ') }}'
+                           + '{{ define "npmrc" }}' + template + '{{ end }}')
+                return self.run_chezmoi("execute-template", input=wrapper).stdout
+            with self.subTest(platform=platform):
+                rendered = render(existing)
+                self.assertTrue(rendered.startswith("prefix=" + json.dumps(prefix) + "\n"))
+                self.assertNotIn("prefix=old", rendered)
+                self.assertIn("_authToken=fixture", rendered)
+                self.assertIn("registry=https://registry.npmjs.org/", rendered)
+                self.assertEqual(render(rendered), rendered)
+
     def render_external(self, os_name, arch):
         template = (self.source / ".chezmoitemplates/external-assets/personal-apps.toml.tmpl").read_text(encoding="utf-8")
         wrapper = ('{{ template "external" (dict "chezmoi" (dict "os" '

@@ -300,6 +300,43 @@
           "kind": "file"
         }
       }
+    },
+    "node": {
+      "command": "node",
+      "source": "node",
+      "installDirectory": ".local/share/dotfiles/node",
+      "targets": {
+        "darwin-arm64": {
+          "asset": "node-v{version}-darwin-arm64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "linux-amd64": {
+          "asset": "node-v{version}-linux-x64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "linux-arm64": {
+          "asset": "node-v{version}-linux-arm64.tar.gz",
+          "kind": "archive",
+          "format": "tar.gz",
+          "stripComponents": 1
+        },
+        "windows-amd64": {
+          "asset": "node-v{version}-win-x64.zip",
+          "kind": "archive",
+          "format": "zip",
+          "stripComponents": 1
+        },
+        "windows-arm64": {
+          "asset": "node-v{version}-win-arm64.zip",
+          "kind": "archive",
+          "format": "zip",
+          "stripComponents": 1
+        }
+      }
     }
   }
 }
