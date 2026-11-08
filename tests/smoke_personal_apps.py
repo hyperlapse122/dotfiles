@@ -5,6 +5,7 @@ GitHub-hosted disposable runners and restores the exact Windows user PATH.
 """
 
 import argparse
+import errno
 from contextlib import contextmanager
 import json
 import os
@@ -14,6 +15,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 
 from asset_fixtures import copy_asset_templates, run_with_assets
 
@@ -64,7 +66,15 @@ def temporary_destination():
             os.chmod(path, mode | stat.S_IWRITE)
             function(path)
 
-        shutil.rmtree(cleanup_root, onexc=remove_readonly)
+        # Native harnesses can finish writing state after their parent exits.
+        for attempt in range(5):
+            try:
+                shutil.rmtree(cleanup_root, onexc=remove_readonly)
+                break
+            except OSError as error:
+                if error.errno != errno.ENOTEMPTY or attempt == 4:
+                    raise
+                time.sleep(0.1)
 
 
 @contextmanager

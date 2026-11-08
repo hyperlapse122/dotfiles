@@ -1,4 +1,5 @@
 import ctypes
+import errno
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
@@ -10,6 +11,7 @@ import subprocess
 import threading
 import tomllib
 import unittest
+from unittest import mock
 import zipfile
 
 from smoke_personal_apps import temporary_destination
@@ -200,6 +202,7 @@ class ExternalAssetsTest(unittest.TestCase):
                   "sha256": hashlib.sha256(self.payloads["/cacert.pem"]).hexdigest()}
         context = ('{{ $ctx := . | setValueAtPath "chezmoi.os" "linux" '
                    '| setValueAtPath "chezmoi.arch" "amd64" '
+                   '| setValueAtPath "chezmoi.osRelease.id" "debian" '
                    '| setValueAtPath "chezmoi.sourceDir" ' + json.dumps(str(source))
                    + ' | setValueAtPath "cliCompletionAssets.bashCompletion" (fromJson '
                    + json.dumps(json.dumps(bash_pin)) + ') '
@@ -423,3 +426,40 @@ class ExternalAssetsTest(unittest.TestCase):
         finally:
             for handle in handles:
                 kernel.CloseHandle(handle)
+
+
+class TemporaryDestinationTest(unittest.TestCase):
+    def test_cleanup_retries_directory_populated_during_removal(self):
+        original = os.rmdir
+        injected = False
+
+        def late_write(path, *args, **kwargs):
+            nonlocal injected
+            if not injected and str(path).endswith("user home"):
+                injected = True
+                (home / "late-state.json").write_text("{}")
+            return original(path, *args, **kwargs)
+
+        with mock.patch("os.rmdir", side_effect=late_write):
+            with temporary_destination() as scratch:
+                home = Path(scratch) / "user home"
+                home.mkdir()
+        self.assertTrue(injected)
+        self.assertFalse(Path(scratch).exists())
+
+    def test_cleanup_propagates_unrelated_errors(self):
+        with mock.patch("smoke_personal_apps.shutil.rmtree", side_effect=OSError(errno.EIO, "fixture")):
+            with self.assertRaises(OSError) as error:
+                with temporary_destination() as scratch:
+                    pass
+        self.assertEqual(error.exception.errno, errno.EIO)
+        shutil.rmtree(scratch)
+
+    def test_cleanup_stops_retrying_a_persistent_writer(self):
+        error = OSError(errno.ENOTEMPTY, "fixture")
+        with mock.patch("smoke_personal_apps.shutil.rmtree", side_effect=error) as remove, mock.patch("smoke_personal_apps.time.sleep"):
+            with self.assertRaises(OSError):
+                with temporary_destination() as scratch:
+                    pass
+        self.assertEqual(remove.call_count, 5)
+        shutil.rmtree(scratch)
