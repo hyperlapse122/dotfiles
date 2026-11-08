@@ -11,6 +11,18 @@ REPO = Path(__file__).resolve().parents[1]
 ASSET_DIRECTORY = ".chezmoitemplates/external-assets"
 
 
+def preserve_mise_directories(env):
+    """Keep installed tools reachable when a fixture relocates HOME and XDG."""
+    if os.name == "nt":
+        data = Path(env["LOCALAPPDATA"]) / "mise"
+        cache = data / "cache"
+    else:
+        data = Path(env.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "mise"
+        cache = Path(env.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "mise"
+    env.setdefault("MISE_DATA_DIR", str(data))
+    env.setdefault("MISE_CACHE_DIR", str(cache))
+
+
 def harness_skill_names():
     """Every skill the harness-skills asset places in each shared skill root."""
     declared = json.loads((REPO / "home/.chezmoidata/harness-skills.json").read_text(encoding="utf-8"))

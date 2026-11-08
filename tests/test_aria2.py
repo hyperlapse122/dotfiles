@@ -55,8 +55,8 @@ class LinuxAria2Test(unittest.TestCase):
             sudo = commands / 'sudo'
             sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$ARIA2_TEST_CALLS"\n')
             sudo.chmod(0o755)
-            env = dict(os.environ, ARIA2_TEST_CALLS=str(calls))
-            command = 'PATH="$1"; export PATH; shift; eval "$1"'
+            env = dict(os.environ, ARIA2_TEST_CALLS=calls.as_posix())
+            command = 'PATH="$(cd "$1" && pwd -P)"; export PATH; shift; eval "$1"'
             for _ in range(2):
                 result = subprocess.run([find_bash(), '--noprofile', '--norc', '-c', command,
                                          'fixture', commands.as_posix(), script], env=env,

@@ -13,6 +13,7 @@ import unittest
 import zipfile
 
 from smoke_personal_apps import temporary_destination
+from asset_fixtures import preserve_mise_directories
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -58,7 +59,9 @@ class ExternalAssetsTest(unittest.TestCase):
         thread.start()
         self.addCleanup(self.stop_server, thread)
         self.url = f"http://127.0.0.1:{self.server.server_port}"
-        self.env = dict(os.environ, HOME=str(self.home), USERPROFILE=str(self.home),
+        self.env = dict(os.environ)
+        preserve_mise_directories(self.env)
+        self.env.update(HOME=str(self.home), USERPROFILE=str(self.home),
                         XDG_CONFIG_HOME=str(self.root / "config"),
                         XDG_CACHE_HOME=str(self.root / "xdg-cache"),
                         APPDATA=str(self.root / "config"),
