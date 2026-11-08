@@ -6,16 +6,8 @@ Use a normal user account with permission to approve native installers.
 
 ## Prepare Native Prerequisites
 
-Install Apple's Command Line Tools interactively and wait for installation to finish:
-
-```sh
-xcode-select --install
-xcode-select -p
-xcrun --find clang
-xcrun --show-sdk-path
-```
-
-Download the explicit device provisioning script, inspect it, then run it from a native terminal:
+Connect the existing GPG hardware key and use an interactive native terminal for PIN, Apple 2FA, and administrator prompts.
+Download the explicit device provisioning script, inspect it, then run it:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/hyperlapse122/dotfiles/main/provision-macos.sh -o /tmp/dotfiles-provision-macos.sh
@@ -23,14 +15,26 @@ less /tmp/dotfiles-provision-macos.sh
 sh /tmp/dotfiles-provision-macos.sh
 ```
 
-This operation needs no existing Git, mise or checkout.
-It installs Homebrew through its [official installer](https://docs.brew.sh/Installation) when absent, then installs missing Git, mise, standalone chezmoi, GnuPG and pinentry-mac formulae.
+This operation needs no existing Git, mise, checkout, Xcode, or standalone Command Line Tools.
+When Homebrew is absent, it verifies the pinned official `Homebrew.pkg` checksum and package signature before installation.
+It installs mise, standalone chezmoi, GnuPG and pinentry-mac from bottles with Homebrew Git auto-update disabled during this phase.
 The supported Apple Silicon prefix is `/opt/homebrew`; an incompatible existing Homebrew installation requires manual resolution.
-Run as your normal user. The Homebrew installer runs with `NONINTERACTIVE=1`, and formula installation uses `--yes` to skip confirmation questions.
-If initial installation needs administrator access, authorize it beforehand with `sudo -v`; the unattended installer fails if it cannot obtain the required privileges.
-If a download or installation fails, resolve the reported problem and rerun; already installed packages are retained without requesting upgrades.
-The script does not initialize a checkout, register a chezmoi source, apply personal settings or edit shell startup files.
-It is not part of worktree initialization.
+Run as your normal user and approve native administrator requests when needed.
+For a standalone download, provisioning resolves `main` to one commit and downloads that source archive; running from a repository uses that source, and an optional source-root argument selects another checkout.
+Its `mise install` prepares repository tools without applying personal configuration.
+The shared GPG guard verifies the expected keyring and imports the reviewed public recipient before the encrypted Apple account is consumed.
+The connected hardware key supplies private-key access; public-key import alone cannot decrypt the account.
+
+Provisioning compares stable, RC, and beta Xcode releases by numeric version and release precedence, rather than publication date.
+If the newest release needs a newer macOS, it stops and reports the requirement without installing an older Xcode or upgrading the OS.
+The installer verifies Xcode, completes first-launch preparation, checks its compiler and macOS SDK, and selects its developer directory only after success.
+Git is installed afterward so permanent checkout preparation can proceed.
+Existing Xcode bundles are retained; allow enough disk space for another full installation.
+
+If a download, authentication, or verification step fails, fix the reported problem and rerun.
+Already installed prerequisite packages are retained.
+Provisioning prepares the personal GPG keyring and installs/selects Xcode; it does not register a global chezmoi source or apply the remaining dotfiles.
+Worktree initialization remains separate and does not import keys, decrypt credentials, or install Xcode.
 
 Activate Homebrew in the current terminal before the next step:
 
@@ -43,8 +47,8 @@ The standalone Homebrew chezmoi registers the permanent source; the repository's
 Python, PowerShell, CMake, Ninja, Rust and .NET development versions remain owned by `mise.toml` and `mise.lock`.
 Do not install second Homebrew copies of those development tools for this setup.
 
-Configure GPG private-key or hardware-token access before personal application.
-The repository does not distribute private GPG keys, establish trust, sign in to accounts, or install organization root certificates.
+Keep GPG hardware-key access available for personal application.
+The repository does not distribute private GPG keys, assign ownertrust, or install organization root certificates.
 Use the [Git/GPG guide](../guides/git-and-gpg.md) and [secrets guide](../guides/secrets-and-authentication.md) to confirm the expected `~/.gnupg` location and key access.
 Explicit application also restores the existing repository-managed default SSH identity as `~/.ssh/id_ed25519` and `~/.ssh/id_ed25519.pub` after GPG decryption.
 Review any existing default SSH identity before previewing and applying, as described in the [SSH identity guide](../guides/secrets-and-authentication.md#ssh-identity).
@@ -89,6 +93,11 @@ mise run apply
 ```
 
 Preview may require GPG key access to render encrypted destinations.
+Every full apply checks the newest Xcode before the compiler-dependent Rust pinentry installation.
+An already installed exact Xcode build is verified and reused without decrypting the Apple account.
+When a newer build is needed, the updater decrypts the enrolled account and permits native authentication; xcodes may retain its successful login in macOS Keychain.
+Xcode check or installation failures stop the apply before later targets and scripts; the previous developer-tool selection is retained.
+Restore network/key access or update macOS as directed, then rerun the apply.
 Explicit application installs missing host apps, configures existing managed files, installs native user-scope CE integrations, and runs `macos-build`.
 Host applications include Chrome, 1Password and its CLI, and Ghostty; T3 retains its existing installer.
 Every full `chezmoi apply`, including `mise run apply`, runs `brew update` followed by `brew upgrade` after ensuring the declared host apps are installed.

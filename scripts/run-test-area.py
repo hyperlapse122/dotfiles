@@ -26,7 +26,7 @@ AREAS = {
         "test_cli_completions", "test_synthetic_model_lock",
     ),
     "security": (
-        "test_pinentry_apply",
+        "test_pinentry_apply", "test_apple_account",
         "test_ssh_identities",
         "test_ca_files", "test_container_auth",
         "test_secrets", "test_git_gpg", "test_script_lifecycle", "test_github_auth",
@@ -35,7 +35,7 @@ AREAS = {
     "platform": (
         "test_bootstrap", "test_global_chezmoi", "test_windows_bootstrap",
         "test_windows_apply_hook", "test_windows_apps", "test_windows_virtualization", "test_windows_long_paths",
-        "test_macos_bootstrap", "test_macos_provision", "test_macos_apps", "test_macos_readiness", "test_macos_dock",
+        "test_macos_xcode", "test_macos_bootstrap", "test_macos_provision", "test_macos_apps", "test_macos_readiness", "test_macos_dock",
         "test_ghostty_install", "test_terminal_environment",
     ),
     "build-contracts": (

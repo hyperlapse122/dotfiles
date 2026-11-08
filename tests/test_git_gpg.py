@@ -17,6 +17,7 @@ class GitGpgSettingsTest(unittest.TestCase):
         # Keep Git/GPG proofs offline and unable to run personal-app PATH actions.
         self.source = self.root / "source"
         shutil.copytree(self.repo / "home", self.source, ignore=shutil.ignore_patterns(
+            "run_before_18-update-xcode.sh.tmpl",
             ".chezmoiexternals", "personal-app*.json", "dot_config",
             "run_onchange_after_10-personal-app-path.*", "run_onchange_after_20-harness-plugins.*",
             "harness-plugin*.json", "private_dot_omp", "run_after_40-github-auth.*",
@@ -346,6 +347,7 @@ class GpgRecipientApplyTest(unittest.TestCase):
         for relative in (
             ".chezmoidata/gpg.yaml", ".chezmoidata/gpg-recipient.yaml",
             ".chezmoitemplates/gpg-settings", ".chezmoitemplates/gpg-home",
+            ".chezmoitemplates/gpg-home-check.sh", ".chezmoitemplates/gpg-import-recipient.sh",
             ".chezmoiscripts/run_before_10-check-gpg-home.sh.tmpl",
             ".chezmoiscripts/run_before_10-check-gpg-home.ps1.tmpl",
             ".chezmoiscripts/run_before_15-import-gpg-recipient.sh.tmpl",

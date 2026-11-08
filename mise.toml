@@ -22,6 +22,7 @@ windows_vcpkg_repository = "https://github.com/microsoft/vcpkg.git"
 windows_vcpkg_revision = "2026.10.16"
 
 [tools]
+"aqua:XcodesOrg/xcodes" = { version = "2.1.0", os = ["macos"] }
 ast-grep = "latest"
 chezmoi = { version = "latest", libc = "musl" }
 gh = "latest"
@@ -41,15 +42,18 @@ description = "Check the chezmoi source without applying personal settings"
 run = 'chezmoi --config "{{config_root}}/.chezmoi-bootstrap.toml" --source "{{config_root}}" managed --exclude=scripts'
 
 [tasks.apply]
+raw = true
 description = "Apply this worktree's chezmoi configuration to the user home"
 run = 'chezmoi --source "{{config_root}}" apply'
 
 [tasks."assets:verify"]
+raw = true
 description = "Fully verify cached assets and reconcile personal configuration from this worktree"
 env = { DOTFILES_ASSET_MODE = "verify" }
 run = 'chezmoi --source "{{config_root}}" apply'
 
 [tasks."assets:refresh"]
+raw = true
 description = "Download fresh assets, verify them, and reconcile personal configuration from this worktree"
 env = { DOTFILES_ASSET_MODE = "refresh" }
 run = 'chezmoi --source "{{config_root}}" apply'
