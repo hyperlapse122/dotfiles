@@ -1,0 +1,8 @@
+{{- $release := get .chezmoi "osRelease" | default dict -}}
+{{- if and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (has .chezmoi.arch (list "amd64" "arm64")) (has (get $release "versionID") (list "24.04" "26.04")) -}}
+#!/bin/sh
+set -eu
+if ! command -v aria2c >/dev/null 2>&1; then
+    sudo apt-get install -y aria2
+fi
+{{ end -}}

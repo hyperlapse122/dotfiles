@@ -1,5 +1,6 @@
 macos:
-  formulae: []
+  formulae:
+    - aria2
   casks:
     - google-chrome
     - 1password
