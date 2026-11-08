@@ -1,5 +1,12 @@
 {{ if eq (get . "context" | default "baseline") "t3" -}}
 {{/* T3-only additions go here. Native user-scope files supply the baseline. */ -}}
+## T3 delegation
+
+When delegating work in T3 Code, prefer T3 Code's `delegate_task` and related task tools over native subagent tools, including for same-provider children and agents dispatched by skills such as Compound Engineering research and review.
+Where both routes are permitted, this preference replaces the default guidance to use native subagent tools for same-provider children. Follow higher-priority instructions and explicit tool requirements; this preference does not override them.
+Use T3's capability discovery and task lifecycle rules. Each `delegate_task` child is a separate T3 thread; do not create a top-level thread to delegate work.
+If T3 delegation tools are unavailable or cannot support the task, use a native subagent tool only when the governing instructions permit it, and report the limitation.
+
 {{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}
 ## Writing skills

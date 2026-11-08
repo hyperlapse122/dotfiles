@@ -74,11 +74,18 @@ class T3CodeSettingsTest(unittest.TestCase):
         self.apply()
         for harness in ('codex', 'claude', 'pi'):
             path = self.home / '.t3/userdata/instructions' / (harness + '.md')
-            self.assertEqual(path.read_text().split(), ['T3_COMMON', 'T3_' + harness.upper()])
-            self.assertNotIn('BASELINE_COMMON', path.read_text())
+            text = path.read_text()
+            self.assertEqual(text.split()[:2], ['T3_COMMON', 'T3_' + harness.upper()])
+            self.assertEqual(text.count('## T3 delegation'), 1)
+            self.assertIn('`delegate_task`', text)
+            self.assertNotIn('BASELINE_COMMON', text)
+            for other in ('codex', 'claude', 'pi'):
+                if other != harness:
+                    self.assertNotIn('T3_' + other.upper(), text)
         baseline = self.chez('execute-template', '{{ template "agent-instructions" (dict "harness" "codex") }}').stdout
         self.assertIn('BASELINE_COMMON', baseline)
         self.assertNotIn('T3_COMMON', baseline)
+        self.assertNotIn('## T3 delegation', baseline)
 
     def expected_provider(self, os_name=None, name="omp"):
         if os_name is None:

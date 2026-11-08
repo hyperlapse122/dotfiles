@@ -136,6 +136,10 @@ def check_context(payload, harness, addition, *, existing=False):
             raise RuntimeError('Native ' + harness + ' context must contain exactly one ' + marker)
     if ('T3_ONLY_6C32' in text) != addition:
         raise RuntimeError('Native ' + harness + ' leaked or omitted the per-launch T3 addition.')
+    if ('## T3 delegation' in text) != addition:
+        raise RuntimeError('Native ' + harness + ' leaked or omitted the repository delegation preference.')
+    if addition and ('`delegate_task`' not in text or 'agents dispatched by skills' not in text):
+        raise RuntimeError('Native ' + harness + ' lost the delegation tool or skill dispatch scope.')
     if 'FOREIGN_HARNESS_B8C1' in text:
         raise RuntimeError('Native context includes a foreign harness branch.')
     if existing and 'EXISTING_' + harness.upper() + '_LAUNCH' not in text:
@@ -386,6 +390,7 @@ def main():
         shutil.copy2(templates / 'agent-instructions', templates / 'repository-agent-instructions')
         (templates / 'agent-instructions').write_text(
             '{{ if eq (get . "context" | default "baseline") "t3" }}T3_ONLY_6C32\nQuoted "text" and apostrophe\'s.\n'
+            '{{ includeTemplate "repository-agent-instructions" . }}'
             '{{ else }}NATIVE_COMMON_71AE\nNATIVE_EXISTING_USER_98D1\n'
             '{{ if eq .harness "codex" }}NATIVE_CODEX_9F26{{ else if eq .harness "claude" }}NATIVE_CLAUDE_9F26'
             '{{ else if eq .harness "pi" }}NATIVE_PI_9F26{{ else }}FOREIGN_HARNESS_B8C1{{ end }}\n'
