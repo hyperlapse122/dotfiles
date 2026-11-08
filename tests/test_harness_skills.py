@@ -200,7 +200,7 @@ class HarnessSkillsTest(unittest.TestCase):
                 self.assertIn("korean-skills", result.stderr)
 
     def test_real_manifest_declares_every_skill_root_as_exact_directory(self):
-        context = ('{{ $ctx := . | setValueAtPath "chezmoi.os" "linux" | setValueAtPath "chezmoi.arch" "amd64" }}'
+        context = ('{{ $ctx := . | setValueAtPath "chezmoi.os" "linux" | setValueAtPath "chezmoi.arch" "amd64" | setValueAtPath "chezmoi.osRelease.id" "debian" }}'
                    '{{ includeTemplate "external-asset-roots" $ctx }}')
         result = subprocess.run([self.chezmoi, "--source", str(REPO), "--config", str(self.config),
                                  "execute-template", context], env=self.env, capture_output=True,
