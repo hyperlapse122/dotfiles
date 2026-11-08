@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-11-07T02:00:59Z"
+    cursor: "2026-11-07T07:43:28Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#10":
     source: "gh-issues"
@@ -173,9 +173,12 @@ items:
     verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
   "gh-issues:hyperlapse122/dotfiles#52":
     source: "gh-issues"
-    status: "analyzed"
+    status: "source_closed"
     sensitive: false
     body: "Verify authenticated native CE invocation for Antigravity on the local PC; paid Actions model calls excluded by user scope."
+    fix_ref: null
+    verified_merge_sha: null
+    verified_at: null
     author_class: "teammate"
     cursor: "2026-11-06T04:10:17Z"
     existing_ack: true
@@ -195,9 +198,11 @@ items:
     needs_attention: false
     origin: "https://github.com/hyperlapse122/dotfiles/issues/52"
     requirement_id: "R9"
+    source_close_reason: "COMPLETED"
+    source_closed_at: "2026-11-07T03:58:06Z"
     source_state: "closed"
     source_state_reason: "completed"
-    verification_note: "Authenticated local macOS ARM64 execution passed with pinned agy 1.5.2 / CE 3.35.1, full skill read and exact SUCCESS response. User selected local-PC-only verification; no other-platform or disposable-home authentication claim."
+    verification_note: "Source closed as completed; no stored fix reference or closing pull request was supplied. Existing local invocation evidence is retained without claiming a verified merged fix."
   "gh-issues:hyperlapse122/dotfiles#54":
     source: "gh-issues"
     status: "closed"
@@ -326,34 +331,58 @@ items:
     verified_default_branch_head: "566e37ea047738dfa8c48eb7a6dcb9fac9fc68a8"
   "gh-issues:hyperlapse122/dotfiles#90":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     body: "Remove redundant skipped push Validate checks from PRs — investigate scheduling while preserving merge-result validation, fallback coverage and read-only workflow permissions."
+    fix_ref: "95"
+    verified_merge_sha: "a95f601d37d20a0db03a625150a6c00048b7cef0"
+    verified_at: "2026-11-08T12:39:26.741641+00:00"
     author_class: "teammate"
     cursor: "2026-11-07T02:00:59Z"
     existing_ack: true
     existing_ack_actor: "hyperlapse122"
-    existing_closeout: false
-    existing_closeout_actor: null
+    existing_closeout: true
+    existing_closeout_actor: "hyperlapse122"
     fix_claims: []
+    fix_evidence_note: "Source links PR #95 in the same GitHub repository; verified merged to default branch main, and feedback:resolved label read back successfully."
     id: "hyperlapse122/dotfiles#90"
     media: []
     origin: "https://github.com/hyperlapse122/dotfiles/issues/90"
     related_prs: [{"claim": "Documents the scheduling limitation; explicitly leaves issue #90 open and states workflow behavior is unchanged.", "number": 92, "relationship": "cross-reference"}]
     requirement_id: "R18"
+    source_state: "closed"
+  "gh-issues:hyperlapse122/dotfiles#97":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "Prefer T3 Code delegation tools over native subagent tools in T3 launches"
+    body: "Prefer T3 Code delegation tools over native subagent tools in T3 launches — add a T3-only preference through existing Codex, Claude, and pi addition paths; retain Grok’s documented limitation and clarify precedence and skill-dispatched agents."
+    author_class: "teammate"
+    cursor: "2026-11-07T07:43:28Z"
+    existing_ack: true
+    existing_ack_actor: "hyperlapse122"
+    existing_closeout: false
+    fix_claims: []
+    id: "hyperlapse122/dotfiles#97"
+    media: []
+    needs_product_decision: true
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/97"
+    outstanding_questions: ["How should the delegation preference interact with T3’s existing same-provider native-tool guidance?", "Should the preference also cover agents dispatched internally by skills?"]
+    requirement_id: "R19"
 last_run:
-  timestamp: "2026-11-07T04:01:12.172458+00:00"
+  timestamp: "2026-11-08T12:39:47Z"
   outcome: "completed"
-  writer: "sweep-codex-t3-d438d32e-20261107-68c1l8"
+  writer: "sweep-codex-t3-a4c3d514-20261108-1"
   counts:
     gh-issues:
       ack_deferred: 0
-      acknowledged: 0
-      closed: 2
-      existing_ack_confirmed: 1
-      ingested: 0
+      acknowledged: 1
+      closed: 1
+      deferred_product_questions: 2
+      ingested: 1
       manual_stuck: 0
-      needs_attention: 2
-      new: 0
-      open: 2
+      needs_attention: 1
+      new: 1
+      open: 1
       recordings_analyzed: 0
+      source_closed: 1
