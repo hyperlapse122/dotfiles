@@ -1,3 +1,12 @@
+dotfiles_node_bin="$HOME/.local/share/dotfiles/node/bin"
+if [ -d "$dotfiles_node_bin" ]; then
+    case ":${PATH-}:" in
+        *:"$dotfiles_node_bin":*) ;;
+        *) PATH="$dotfiles_node_bin${PATH:+:$PATH}" ;;
+    esac
+fi
+unset dotfiles_node_bin
+
 case ":${PATH-}:" in
     *:"$HOME/.local/bin":*) ;;
     *) PATH="$HOME/.local/bin${PATH:+:$PATH}" ;;

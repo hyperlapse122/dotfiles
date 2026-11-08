@@ -207,11 +207,13 @@ def fresh_windows_environment(isolated):
     # Isolate competing installs in this child only; the managed directory
     # must still be discovered from the PATH action's real registry value.
     installed = Path(isolated["HOME"]) / ".local/bin"
-    commands = [executable.name for executable in installed.glob("*.exe")]
+    node_directory = Path(isolated["HOME"]) / ".local/share/dotfiles/node"
+    managed_directories = [installed, node_directory]
+    commands = [executable.name for directory in managed_directories for executable in directory.glob("*.exe")]
     paths = []
     for entry in expanded["PATH"].split(os.pathsep):
         directory = Path(entry.strip('"'))
-        if (entry and directory.is_dir() and not directory.samefile(installed)
+        if (entry and directory.is_dir() and not any(managed.is_dir() and directory.samefile(managed) for managed in managed_directories)
                 and any((directory / command).is_file() for command in commands)):
             continue
         paths.append(entry)
@@ -222,6 +224,8 @@ def fresh_windows_environment(isolated):
 def check_terminal_path(home, outside, env, name, tag, shells):
     suffix = ".ps1" if name in ("agy", "pi", "bunx") else ".exe"
     installed = home / ".local/bin" / (name + suffix if os.name == "nt" else name)
+    if name == "node":
+        installed = home / ".local/share/dotfiles/node" / ("node.exe" if os.name == "nt" else "bin/node")
     if os.name == "nt":
         output = run([
             shells["powershell"], "-NoProfile", "-Command",
@@ -330,6 +334,7 @@ def main():
             "dot_local/bin/executable_bunx.tmpl",
             "dot_local/bin/bunx.ps1.tmpl",
             "dot_config/dotfiles/path.sh",
+            "modify_dot_npmrc",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.ps1.tmpl",
             ".chezmoiscripts/run_onchange_after_10-personal-app-path.sh.tmpl",
             ".chezmoitemplates/zsh-settings",
@@ -382,9 +387,25 @@ def main():
                     continue
                 tag = lock["personalAppLocks"][name]["tag"]
                 binary = home / application.get("installDirectory", ".local/bin") / (application["command"] + ".exe" if os.name == "nt" else application["command"])
+                if name == "node" and os.name != "nt":
+                    binary = binary.parent / "bin/node"
                 output = run([str(binary), "--version"], env=env, cwd=outside)
                 check_version(output, tag)
                 print(f"Native {target}, {name}, committed {tag}: {output}")
+                if name == "node":
+                    node_env = dict(env, PATH=str(binary.parent) + os.pathsep + env["PATH"])
+                    for tool in ("npm", "npx"):
+                        cli = binary.parent / "node_modules/npm/bin" / (tool + "-cli.js") if os.name == "nt" else binary.parent.parent / "lib/node_modules/npm/bin" / (tool + "-cli.js")
+                        version = run([str(binary), str(cli), "--version"], env=node_env, cwd=outside)
+                        print(f"Native {target}, {tool}: {version}")
+                        if tool == "npm":
+                            prefix = run([str(binary), str(cli), "prefix", "--global"], env=node_env, cwd=outside)
+                            expected = home / (".local/bin" if os.name == "nt" else ".local")
+                            if Path(prefix) != expected:
+                                raise RuntimeError(f"Unexpected npm global prefix: {prefix}")
+                    if os.name != "nt":
+                        for tool in ("node", "npm", "npx"):
+                            run(["/bin/sh", "-c", '. "$HOME/.config/dotfiles/path.sh"; command -v "$1"; "$1" --version', "sh", tool], env=dict(env, PATH="/usr/bin:/bin"), cwd=outside)
                 if args.path_integration:
                     check_terminal_path(home, outside, env, application["command"], tag, shells)
             if target in applications.get("bun", {}).get("targets", {}):
@@ -397,6 +418,22 @@ def main():
                 check_windows_path_preservation(apply_and_check, home, env)
         else:
             apply_and_check()
+        if target in applications.get("node", {}).get("targets", {}):
+            node_root = home / applications["node"]["installDirectory"]
+            marker = home / ".local/bin/node_modules/dotfiles-global-fixture/package.json" if os.name == "nt" else home / ".local/lib/node_modules/dotfiles-global-fixture/package.json"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text('{"name":"dotfiles-global-fixture"}', encoding="utf-8")
+            run(command + ["apply", "--exclude=scripts"], env=env, cwd=outside)
+            if not marker.is_file():
+                raise RuntimeError("Repeated Node apply removed a global package")
+            npm_cli = node_root / "node_modules/npm/bin/npm-cli.js" if os.name == "nt" else node_root / "lib/node_modules/npm/bin/npm-cli.js"
+            npm_cli.unlink()
+            run(command + ["apply", "--exclude=scripts"], env=env, cwd=outside)
+            if not npm_cli.is_file():
+                raise RuntimeError("Node apply did not repair npm")
+            if not marker.is_file():
+                raise RuntimeError("Node repair removed a global package")
+            print(f"Native {target}: Node repeat apply, npm repair, global-package preservation passed")
         if target in applications.get("bun", {}).get("targets", {}):
             check_bun_lifecycle(command, source, home, outside, env, target)
 

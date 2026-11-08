@@ -190,3 +190,19 @@ Applying personal settings installs automatic `mise` activation into each PowerS
 - **macOS & Linux:** Updates modern PowerShell (`~/.config/powershell/profile.ps1`).
 - Mise must already be available on your startup PATH.
 - Sessions started with `-NoProfile` or execution policies that block scripts do not execute profile activation.
+
+## Node.js
+
+The `node` personal app installs the complete official distribution, including npm
+and npx, under `~/.local/share/dotfiles/node`. Unix shells add its `bin` directory
+to PATH; Windows adds the distribution root to the user PATH. Open a new terminal
+after explicitly applying the configuration. These commands work outside this
+repository without mise activation.
+
+The daily pin updater selects the highest stable version from the official
+Node.js release index, including future stable majors, and verifies archives
+against the release's `SHASUMS256.txt`. Prereleases are excluded. The initial pin
+is 26.13.0. The managed `.npmrc` sets the global prefix to `~/.local` on Unix
+and `~/.local/bin` on Windows, preserving unrelated npm settings. Global package
+commands therefore use the existing user PATH directory. Reapplying replaces the
+Node.js distribution without deleting separately installed global packages.

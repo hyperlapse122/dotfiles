@@ -13,6 +13,39 @@ CLAUDE_RELEASES = "https://downloads.claude.ai/claude-code-releases"
 GROK_RELEASES = "https://x.ai/cli"
 
 
+NODE_RELEASES = "https://nodejs.org/dist"
+
+
+def node_release():
+    with urlopen(f"{NODE_RELEASES}/index.json", timeout=60) as response:
+        releases = json.loads(response.read())
+    versions = [entry["version"] for entry in releases
+                if re.fullmatch(r"v\d+\.\d+\.\d+", entry.get("version", ""))]
+    if not versions:
+        raise ValueError("Node.js: no stable release in the official index")
+    return max(versions, key=lambda tag: tuple(map(int, tag[1:].split("."))))
+
+
+def resolve_node(application, tag, fetch_checksums):
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", tag or ""):
+        raise ValueError("Node.js: expected a published stable version")
+    checksums = {}
+    for line in fetch_checksums(f"{NODE_RELEASES}/{tag}/SHASUMS256.txt").splitlines():
+        match = re.fullmatch(r"([0-9a-fA-F]{64}) [ *](\S+)", line)
+        if not match or match[2] in checksums:
+            raise ValueError("Node.js: malformed or duplicate SHA-256 checksum")
+        checksums[match[2]] = match[1].lower()
+    targets = {}
+    for target, declaration in application["targets"].items():
+        asset = expand_version(declaration["asset"], tag[1:])
+        if asset not in checksums:
+            raise ValueError(f"Node.js: missing SHA-256 digest for {asset}")
+        targets[target] = {"kind": "archive", "format": declaration["format"],
+                           "stripComponents": declaration["stripComponents"],
+                           "url": f"{NODE_RELEASES}/{tag}/{asset}", "sha256": checksums[asset]}
+    return {"tag": tag, "targets": targets}
+
+
 def grok_release():
     with urlopen(f"{GROK_RELEASES}/stable", timeout=60) as response:
         return response.read().decode("utf-8").strip()
@@ -293,6 +326,7 @@ def update_lock(
     fetch_checksums=gitlab_checksums, fetch_manifest=antigravity_manifest,
     fetch_claude_release=claude_release, fetch_completion=completion_bytes,
     fetch_grok_release=grok_release, fetch_digest=download_sha256,
+    fetch_node_release=node_release,
 ):
     data_dir = root / "home" / ".chezmoidata"
     applications = json.loads((data_dir / "personal-apps.json").read_text(encoding="utf-8"))["personalApps"]
@@ -301,6 +335,9 @@ def update_lock(
     resolved = {}
     for name, application in applications.items():
         source = application.get("source", "github")
+        if source == "node":
+            resolved[name] = resolve_node(application, fetch_node_release(), fetch_checksums)
+            continue
         if source == "antigravity":
             resolved[name] = resolve_antigravity(application, fetch_manifest)
             continue
