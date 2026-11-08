@@ -6,7 +6,7 @@ This guide explains how this repository configures global Git identity, automati
 
 The repository manages global Git configuration (`~/.gitconfig`) and GPG agent pinentry settings (`gpg-agent.conf`) declaratively.
 
-- **Author Identity:** Joosung Park (`hyperlapse@jpi.co.kr`)
+- **Author Identity:** Joosung Park (`iam@h82.dev`)
 - **Default Branch:** `main` (for newly initialized repositories)
 - **Commit Signing:** Enabled by default using OpenPGP key `621512777E6933FEB4458FDC4945855D4F283F05`
 - **Repository Root:** `~/src` (managed via `ghq.root`)
