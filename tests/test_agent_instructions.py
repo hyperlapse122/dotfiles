@@ -96,14 +96,19 @@ class AgentInstructionsTest(unittest.TestCase):
                 for text in (*lines, *SKILLS):
                     self.assertNotIn(text, rendered)
 
-    def test_delegation_preference_is_only_in_t3_additions(self):
+    def test_delegation_policy_is_only_in_t3_additions(self):
         heading = "## T3 delegation"
         for harness, rendered in self.t3.items():
             with self.subTest(harness=harness):
                 self.assertEqual(rendered.count(heading), 1)
-                for text in ("delegate_task", "same-provider", "skills", "higher-priority",
-                             "native subagent", "top-level thread"):
+                for text in ("delegate_task", "same-provider", "agents dispatched by skills", "higher-priority",
+                             "native subagent", "top-level thread", "acpx", "cross-model",
+                             "CE's existing", "self-contained", "target.options",
+                             "Do not fabricate", "inline"):
                     self.assertIn(text, rendered)
+                self.assertNotIn("prefer T3 Code's", rendered)
+                self.assertNotIn("explicit tool requirements; this preference does not override them", rendered)
+                self.assertNotIn("use a native subagent tool", rendered)
         for harness, rendered in self.baseline.items():
             with self.subTest(harness=harness):
                 self.assertNotIn(heading, rendered)

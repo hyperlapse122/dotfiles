@@ -2,10 +2,14 @@
 {{/* T3-only additions go here. Native user-scope files supply the baseline. */ -}}
 ## T3 delegation
 
-When delegating work in T3 Code, prefer T3 Code's `delegate_task` and related task tools over native subagent tools, including for same-provider children and agents dispatched by skills such as Compound Engineering research and review.
-Where both routes are permitted, this preference replaces the default guidance to use native subagent tools for same-provider children. Follow higher-priority instructions and explicit tool requirements; this preference does not override them.
-Use T3's capability discovery and task lifecycle rules. Each `delegate_task` child is a separate T3 thread; do not create a top-level thread to delegate work.
-If T3 delegation tools are unavailable or cannot support the task, use a native subagent tool only when the governing instructions permit it, and report the limitation.
+When delegating work in T3 Code, use T3 Code's `delegate_task` and related task tools instead of native subagent tools. This includes same-provider children and agents dispatched by skills, such as Compound Engineering (CE) scouts and reviewers.
+For CE cross-model review, implementation, and reasoning elevation, replace its explicit acpx, provider CLI, and launcher-script instructions with T3 delegation. A CE call described as a shell-out rather than a subagent is still covered. Follow higher-priority host constraints.
+
+Preserve CE's decisions about whether to delegate, provider/model/effort selection, role, scope, access restrictions, output, and result validation. Use T3 capability discovery to resolve the selected target and supported `target.options`; do not silently inherit a different model or effort. Give each child a self-contained brief with the required context, accessible workspace/artifact paths, and this routing policy. Authorize further delegation only when its assigned CE task requires it.
+
+Use T3's task lifecycle in place of CE's process runners, polling, cancellation, and transport receipts. Do not run the legacy transport alongside a T3 task. Do not fabricate controller receipts or treat task completion as proof of CE validation or serving-model identity. Retain substantive scope, integration, and verification checks; if their contract cannot be satisfied, use CE's existing unavailable-route handling before starting incompatible transport machinery.
+
+Keep CE's existing retry, recovery, inline fallback, skip, and reporting behavior. Any resulting delegation must still use T3; do not add a separate failure policy or approval step. A wait timeout does not mean the child stopped: follow T3's lifecycle and CE's recovery prerequisites before replacing work. Each `delegate_task` child is a separate T3 thread; do not create a top-level thread to delegate work.
 
 {{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}
