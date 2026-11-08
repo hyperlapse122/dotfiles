@@ -23,7 +23,7 @@ class HarnessPluginLockTest(unittest.TestCase):
         self.root = Path(self.scratch.name)
         self.data = self.root / "home/.chezmoidata"
         self.data.mkdir(parents=True)
-        self.plugin = {"repository": "owner/plugin", "tagPrefix": "plugin.v", "omp": {"marketplace": "example", "plugin": "example"}}
+        self.plugin = {"repository": "owner/plugin", "tagPrefix": "plugin.v", "codex": {"marketplace": "example", "plugin": "example"}}
         self.manifest = self.data / "harness-plugins.json"
         self.manifest.write_text(json.dumps({"harnessPlugins": {"example": self.plugin}}), encoding="utf-8")
         self.lock = self.data / "harness-plugin-lock.json"

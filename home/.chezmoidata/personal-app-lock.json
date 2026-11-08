@@ -307,36 +307,6 @@
         }
       }
     },
-    "omp": {
-      "tag": "v18.18.0",
-      "targets": {
-        "darwin-arm64": {
-          "kind": "file",
-          "sha256": "0adae2a341a1e6840b00c96ce0b1c9d2e0257b1ea6782e4302e17b717a6ffb0a",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-darwin-arm64"
-        },
-        "linux-amd64": {
-          "kind": "file",
-          "sha256": "ec271e0d7df4c0f57acb6a7a28f8585d46bd050bcef8494f6d33db8a6c0dfbba",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-linux-x64"
-        },
-        "linux-arm64": {
-          "kind": "file",
-          "sha256": "b394bfbf7c0e0ba82e01913defb5fadf14a6ea5a71ee05348070ab5e40187144",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-linux-arm64"
-        },
-        "windows-amd64": {
-          "kind": "file",
-          "sha256": "20267b4914dca40306c71e824216e0f79061869d9e9d4780fc0c255b7a3e5339",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-windows-x64.exe"
-        },
-        "windows-arm64": {
-          "kind": "file",
-          "sha256": "4cb8c1ca84baab5a3f66febc54c979c184802e9efa75a99627e3bec446535be9",
-          "url": "https://github.com/can1357/oh-my-pi/releases/download/v18.18.0/omp-windows-arm64.exe"
-        }
-      }
-    },
     "pi": {
       "tag": "v1.5.0",
       "targets": {

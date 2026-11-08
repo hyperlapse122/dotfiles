@@ -84,7 +84,7 @@ Registration does not apply dotfiles.
 
 ## Preview and Apply
 
-Close active Claude Code, Codex, omp, Antigravity and T3 sessions before updating their managed configuration and plugins.
+Close active Claude Code, Codex, Antigravity and T3 sessions before updating their managed configuration and plugins.
 From the selected checkout:
 
 ```sh
@@ -136,7 +136,7 @@ PowerShell receives its existing managed mise profile integration.
 Check discovery in a fresh shell outside the dotfiles directory:
 
 ```sh
-command -v claude codex omp agy gh glab ghq t3 op
+command -v claude codex agy gh glab ghq t3 op
 command -v python pwsh dotnet rustc cargo cmake ninja vcpkg
 dotnet --list-sdks
 ```
@@ -166,7 +166,7 @@ A successful installer or a discovered skill alone does not establish full devic
 | Native prerequisites | macOS 26+, native `arm64`, Homebrew `/opt/homebrew`, selected clang and macOS SDK |
 | CLI and shells | Commands above resolve in fresh Zsh/Bash and PowerShell sessions outside the repository |
 | Ghostty and login shell | The [terminal status check](../guides/terminal.md#renew-the-session-and-check-status) returns ready; native Unix-executable opening selects Ghostty, and a new Ghostty shell uses the account's zsh |
-| AI instructions | Claude Code `~/.claude/CLAUDE.md`, Codex `~/.codex/AGENTS.md`, omp `~/.omp/agent/AGENTS.md`, Antigravity `~/.gemini/GEMINI.md` are discovered natively; shared content includes no foreign harness branch |
+| AI instructions | Claude Code `~/.claude/CLAUDE.md`, Codex `~/.codex/AGENTS.md`, Antigravity `~/.gemini/GEMINI.md` are discovered natively; shared content includes no foreign harness branch |
 | CE installation and discovery | Each harness lists/enables the pinned user-scope CE plugin and discovers its native skills; existing disposable-home smoke coverage is described in the testing guide |
 | Authenticated CE execution | Sign in through each harness's supported flow and invoke a harmless CE skill; retain the result separately from installation/discovery evidence |
 | T3 and desktop apps | `t3 --version`, `t3 app` in a project, managed preferences/provider initialization, Chrome and 1Password launch |

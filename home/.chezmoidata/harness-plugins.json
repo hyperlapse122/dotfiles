@@ -13,10 +13,6 @@
         "*/site",
         "*/site/*"
       ],
-      "omp": {
-        "marketplace": "compound-engineering-plugin",
-        "plugin": "compound-engineering"
-      },
       "codex": {
         "marketplace": "compound-engineering-plugin",
         "plugin": "compound-engineering"

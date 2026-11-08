@@ -1,6 +1,6 @@
 # T3 Code Desktop and Harness Integration
 
-This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code, Codex, pi, and Grok plus the oh-my-pi (omp) ACP provider, while preserving native Antigravity settings.
+This guide describes how dotfiles installs the [T3 Code](https://github.com/pingdotgg/t3code) desktop application, provisions bundled command-line launchers, and configures native Claude Code, Codex, pi, and Grok providers, while preserving native Antigravity settings.
 
 ## Platform Support and Installation
 
@@ -90,9 +90,8 @@ Dotfiles reconciles T3 Code's settings file (`~/.t3/userdata/settings.json`) on 
 ### Managed Settings
 
 The modify template (`modify_private_settings.json`):
-- Creates or updates the keyed `omp` entry using the local ACP registry driver.
-- Runs omp through the absolute destination `.local/bin/omp` path (`omp.exe` on Windows) with the `acp` argument.
-- Enables omp while preserving its presentation and unowned configuration.
+- Removes the retired `omp` entry from `providerInstances`, including an existing entry in the destination file. Repeated apply keeps it absent.
+- Leaves the existing omp executable and `~/.omp` configuration, credentials, plugins, and session data on disk; they are no longer managed or pinned. Other provider IDs are preserved.
 - Leaves T3's native `antigravity` provider unchanged, including enablement, authentication, custom executable paths, model choices, and environment variables.
 - Removes the former repository-managed CLI adapter entry only when its driver is `acpRegistry` and its command matches the old absolute managed adapter path. A custom ACP provider occupying `antigravity` fails apply without changing the file; move it to another ID first.
 - Removes the retired third-party adapter payload and launchers on explicit apply. Unrelated files in its directory remain intact.
@@ -100,7 +99,7 @@ The modify template (`modify_private_settings.json`):
 The same template manages a single `codex` provider entry:
 - Uses T3's native `codex` driver with `setupMode = "existing"`, not its separate managed-installation mode.
 - Enables the provider and sets `binaryPath` to the fully expanded absolute destination-home `.local/bin/codex` path (`codex.exe` on Windows).
-- Lets T3 append the `app-server` subcommand; it does not reuse omp's ACP arguments.
+- Lets T3 append the `app-server` subcommand.
 - Preserves unowned Codex options, additional provider instances, and presentation settings.
 
 Run `codex login` manually before authenticated use, then start a fresh T3 Code session. T3 uses Codex's own login; dotfiles does not copy credentials. Native-driver compatibility is verified against T3 Code 0.1.7. Existing desktop installations are retained, so update an older incompatible T3 version through its normal updater.
@@ -140,6 +139,6 @@ mise exec -- python tests/smoke_t3_code.py
 mise exec -- python tests/smoke_antigravity.py
 ```
 
-The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and checks omp's ACP handshake. It starts fresh local T3 servers with the managed binary directory absent from `PATH`. The native Codex driver must complete app-server initialization, and the native Claude driver must complete SDK initialization and discover the pinned CE slash command. Both accounts remain unauthenticated; the smoke uses no personal credentials and does not claim model completion. Windows x64 has passed locally against T3 Code 0.1.7; other eligible targets rely on their native CI results.
+The `smoke_t3_code.py` check applies the template to a temporary home, resolves the bundled launcher, and verifies removal of a retired omp provider. It starts fresh local T3 servers with the managed binary directory absent from `PATH`. The native Codex driver must complete app-server initialization, and the native Claude driver must complete SDK initialization and discover the pinned CE slash command. Both accounts remain unauthenticated; the smoke uses no personal credentials and does not claim model completion. Windows x64 has passed locally against T3 Code 0.1.7; other eligible targets rely on their native CI results.
 
 The Antigravity smoke verifies the locked CLI and native instruction content through a localhost-only request capture that rejects model execution. It checks native CE discovery, plugin preservation and repair, and repeated apply without claiming T3's native provider ID. It does not prove T3 native runtime authentication or model completion. Authenticated CLI CE invocation remains tracked in [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52).

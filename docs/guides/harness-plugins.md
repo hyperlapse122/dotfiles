@@ -1,11 +1,11 @@
 # Harness Plugins and AI Agent Configuration
 
-This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, pi, Grok, oh-my-pi (omp), and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
+This guide explains how dotfiles installs and manages the [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) plugin for Claude Code, Codex, pi, Grok, and Antigravity, controls update ownership, performs repairs and rollbacks, and wires shared user-scope agent instructions.
 It also covers the shared korean-skills writing skills that every managed harness discovers, and the settings that stop Claude Code and Codex from loading skills, plugins, and connectors from the signed-in account.
 
-## Compound Engineering Plugin for omp
+## Shared Compound Engineering Payload
 
-Dotfiles installs Compound Engineering at user scope for the standard omp environment across Windows, Linux, and macOS.
+Managed harnesses use one repository-pinned Compound Engineering archive through their native user-scope integrations.
 
 The archive is prepared before native plugin reconciliation through the shared [asset cache](../maintenance/chezmoi-source.md#external-asset-preparation).
 Unchanged archive and extracted-file metadata reuse the completed preparation; native plugin registration and repair still run according to each harness's existing lifecycle.
@@ -16,13 +16,11 @@ These tasks explicitly apply this worktree's personal configuration; close the a
 
 1. **Declarations (`home/.chezmoidata/harness-plugins.json`):** Tracks upstream repository, tag prefixes, and marketplace metadata. Alternate-host symlinks are excluded to ensure smooth installation on Windows without elevated privileges.
 2. **Lockfile (`home/.chezmoidata/harness-plugin-lock.json`):** Tracks verified release tags and exact commit SHAs.
-3. **Local Marketplace:** Chezmoi extracts the archive into `~/.local/share/dotfiles/harness-plugins/compound-engineering`, registers it as a local marketplace, and runs `omp plugin install --scope user --force` and `omp plugin enable`.
-
-> **Operational Rule:** **Always apply with omp closed.** Starting a new omp session after apply loads the updated skills.
+3. **Shared extraction:** Chezmoi extracts the archive into `~/.local/share/dotfiles/harness-plugins/compound-engineering`. Each managed harness registers or installs that directory through its native mechanism during explicit apply.
 
 ## Compound Engineering Plugin for Codex
 
-Explicit apply installs Codex's native CE plugin from the same repository-pinned archive used by omp. The native marketplace manifest is `.agents/plugins/marketplace.json`; Codex loads skills through `.codex-plugin/plugin.json`.
+Explicit apply installs Codex's native CE plugin from the shared repository-pinned archive. The native marketplace manifest is `.agents/plugins/marketplace.json`; Codex loads skills through `.codex-plugin/plugin.json`.
 
 On each apply, the Codex hook runs the managed executable with `CODEX_HOME` set to the destination home's `.codex` directory:
 
@@ -53,7 +51,7 @@ The managed scope is the default `~/.codex`. Custom `CODEX_HOME` locations remai
 
 ## Compound Engineering Plugin for Claude Code
 
-Explicit apply registers, installs, and enables CE at Claude user scope from the shared local directory. Claude uses the same CE release and commit pin as Codex and omp; the initial pin is `compound-engineering-v3.35.1` at `42f9745ea0a4b70f8dde059aa8cf7f974d2991f1`.
+Explicit apply registers, installs, and enables CE at Claude user scope from the shared local directory. Claude uses the same CE release and commit pin as Codex; the initial pin is `compound-engineering-v3.35.1` at `42f9745ea0a4b70f8dde059aa8cf7f974d2991f1`.
 
 The after hook runs the absolute managed Claude executable with `HOME` bound to the destination home; Windows also sets `USERPROFILE`. It clears `CLAUDE_CONFIG_DIR` so native global state remains in `~/.claude.json`, alongside the default `.claude` directory. Setting that variable even to the default directory would relocate the global file. It performs the native lifecycle:
 
@@ -86,8 +84,8 @@ Explicit apply registers the shared pinned extraction as a native local marketpl
 ## Compound Engineering Plugin for Antigravity
 
 On eligible Windows, glibc Linux, and Apple Silicon targets, explicit apply uses the pinned `agy` CLI to validate, install, enable, and list the local CE package through native plugin commands.
-It uses the same `harness-plugin-lock.json` tag and commit as omp, not a separate release.
-The package's root `plugin.json` and `skills/` provide the native integration; no copied omp registry or compatibility alias is needed.
+It uses the shared `harness-plugin-lock.json` tag and commit.
+The package's root `plugin.json` and `skills/` provide the native integration.
 
 Registration lives in Antigravity's native `~/.gemini/config` state. Apply does not rewrite the registry or unrelated CLI settings and plugins. An apply-always hook restores a missing or disabled managed plugin; malformed native state fails rather than being replaced.
 Bootstrap does not install or enable plugins. Close Antigravity and T3 sessions before explicitly applying.
@@ -95,37 +93,16 @@ Bootstrap does not install or enable plugins. Close Antigravity and T3 sessions 
 Native installation, enablement, package validation, and skill discovery are verified without credentials.
 Authenticated CE invocation is verified on the local PC as requested in [issue #52](https://github.com/hyperlapse122/dotfiles/issues/52). Hosted CI remains credential-free; discovery alone is not evidence of model-backed invocation. See the local evidence below.
 
-## Disabling Marketplace Auto-Updates
-
-The repository configures omp's mutable configuration (`~/.omp/agent/config.yml` or `config.yaml`):
-
-```yaml
-marketplace:
-  autoUpdate: "off"
-```
-
-> **Important:** This disables background automatic updates for **all** omp marketplace plugins, not only Compound Engineering. This guarantees that your tool versions remain predictable and locked to repository commits.
-
-The template preserves all other settings, custom profiles, and model credentials. If legacy `settings.json` or `agent.db` files exist, apply stops to let omp perform native first-run migration before writing YAML.
-
 ## Repair and Rollback
 
-### Manual Cache Repair
-
-If plugin cache files become corrupted or skills are accidentally disabled, run these commands with omp closed:
-
-```sh
-omp plugin marketplace update compound-engineering-plugin
-omp plugin install --scope user --force compound-engineering@compound-engineering-plugin
-omp plugin enable --scope user compound-engineering@compound-engineering-plugin
-```
+Reapply the current worktree with affected harnesses closed to restore the shared payload and run each native plugin reconciliation hook. Use `mise run assets:verify` when full cached-asset integrity verification is needed.
 
 ### Version Rollback
 
 To roll back Compound Engineering to an earlier version:
 1. Revert `home/.chezmoidata/harness-plugin-lock.json` to the target commit in Git.
 2. Run `chezmoi apply` or `mise run apply`.
-3. Dotfiles reconciles the shared directory and refreshes each harness through its native integration. Claude loads its local plugin in place; omp force-reinstalls its pinned plugin.
+3. Dotfiles reconciles the shared directory and refreshes each harness through its native integration. Claude loads its local plugin in place; the other harnesses repair their native installation or activation as described above.
 
 ## Refreshing Plugin Pins
 
@@ -151,7 +128,7 @@ Each harness loads the skills from one of three shared roots:
 
 | Root | Harnesses |
 |---|---|
-| `~/.agents/skills/<skill>` | Codex, pi, omp, Grok |
+| `~/.agents/skills/<skill>` | Codex, pi, Grok |
 | `~/.claude/skills/<skill>` | Claude Code |
 | `~/.gemini/config/skills/<skill>` | Antigravity CLI and app |
 
@@ -182,7 +159,6 @@ Each harness must list each skill once, so each root holds one copy and each har
 - Codex reads both `~/.agents/skills` and `~/.codex/skills`, lists a skill from both, and reports `~/.codex/skills` as deprecated. The skills therefore go only to `~/.agents/skills`.
 - Gemini CLI also reads `~/.gemini/skills`, so the Antigravity copies go to `~/.gemini/config/skills` instead.
 - Grok's managed configuration turns off Claude skill compatibility, so Grok shows the `~/.claude/skills` copies as `disabled` entries and loads only the `~/.agents/skills` copies.
-- If `CLAUDE_CONFIG_DIR` is exported globally, omp also reads `~/.claude/skills`. omp drops byte-identical copies, and both copies come from the same pinned archive, so it still lists each skill once.
 
 Apply does not manage same-named copies in other roots. A copy such as `~/.codex/skills/humanizer`, written by Codex's own skill installer, makes Codex list that skill twice. Remove the extra copy by hand.
 
@@ -194,7 +170,6 @@ Each upstream skill declares `allowed-tools: Read Write Edit Grep Glob AskUserQu
 
 Every managed AI harness in this repository wires its native instruction file to a shared template:
 - **Shared Source:** `home/.chezmoitemplates/agent-instructions`
-- **Native omp Target:** `~/.omp/agent/AGENTS.md` (generated via `home/private_dot_omp/private_agent/private_empty_AGENTS.md.tmpl`)
 - **Native Claude Target:** `~/.claude/CLAUDE.md` (generated via `home/private_dot_claude/private_empty_CLAUDE.md.tmpl` with `harness = claude`)
 - **Native Codex Target:** `~/.codex/AGENTS.md` (generated via `home/private_dot_codex/private_empty_AGENTS.md.tmpl`)
 - **Native Antigravity Target:** `~/.gemini/GEMINI.md` (generated via `home/private_dot_gemini/private_empty_GEMINI.md.tmpl` with `harness: antigravity`)
@@ -208,9 +183,7 @@ The common region holds one rule, a **Writing skills** block that every harness 
 - **Korean**, including Korean text with English technical terms: run the korean-skills `humanizer` skill, then `grammar-checker`. Also run `style-guide` when writing a multi-section document or editing an existing document.
 - **English:** run `ce-noslop`. **Any other language:** run none of these skills.
 
-The block tells agents to apply the skills silently: deliver only the corrected text, without the skills' analysis or change reports, and do not pause for confirmation inside a skill. It adds to project instructions, so a repository rule that names another writing skill applies as well. The `context = t3` branch and the omp branch hold no content.
-
-> **Scope Note:** In omp, `~/.omp/agent/AGENTS.md` applies to the main interactive session and advisors. Task subagents do not inherit files named `AGENTS.md`.
+The block tells agents to apply the skills silently: deliver only the corrected text, without the skills' analysis or change reports, and do not pause for confirmation inside a skill. It adds to project instructions, so a repository rule that names another writing skill applies as well. The `context = t3` branch supplies only the separately selected T3 additions described in [T3 Code](t3-code.md#instructions-shared-with-the-terminal).
 
 Codex uses a nonempty `~/.codex/AGENTS.override.md` before `AGENTS.md`. Apply preserves that override; remove or update it manually if it should no longer suppress the managed instructions. Project instructions and native configuration precedence still apply.
 
@@ -281,7 +254,7 @@ mise exec -- python tests/smoke_harness_plugins.py
 mise exec -- python tests/smoke_antigravity.py
 ```
 
-The omp smoke verifies local marketplace cutover, update policy, skill discovery, and preservation of unrelated plugins. The default Antigravity smoke proves native global-instruction ingestion through a localhost capture-only endpoint, runs the native preservation/malformed-state checks with its locked CLI, and verifies that apply leaves T3's native provider ID unclaimed. These default checks use disposable homes without real credentials or model completion; authenticated completion is a separate check.
+The shared-payload smoke verifies pinned CE and shared-skill acquisition, exact skill roots, reapplication, corrupted-payload repair, unrelated-file preservation, and fresh-home omp absence. Shared plugin unit tests cover release rollback. Native harness discovery and invocation are checked by the harness-specific smokes below. The default Antigravity smoke proves native global-instruction ingestion through a localhost capture-only endpoint, runs the native preservation/malformed-state checks with its locked CLI, and verifies that apply leaves T3's native provider ID unclaimed. These default checks use disposable homes without real credentials or model completion; authenticated completion is a separate check.
 
 For an optional local disposable-home Gemini API-key verification, provision `GEMINI_API_KEY` through the environment without printing its value, then run:
 

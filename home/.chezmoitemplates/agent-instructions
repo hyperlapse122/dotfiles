@@ -25,7 +25,4 @@ Before sending in-scope prose, run the writing skills for its dominant language.
 - Apply the skills silently. Deliver only the corrected text, without the skills' analysis or change reports, and do not pause for confirmation inside a skill.
 - These rules add to project instructions. When a project instruction names another writing skill, apply both.
 
-{{ if eq .harness "omp" -}}
-{{/* omp-only instructions go here. */ -}}
-{{ end -}}
 {{ end -}}

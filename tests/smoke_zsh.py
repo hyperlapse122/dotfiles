@@ -81,7 +81,7 @@ print -r -- "zsh-ready:$ZDOTDIR"
 def deny_startup_installation(home, real_mise, real_usage):
     stage = home / ".local/share/dotfiles/zsh"
     real_tools = {name: home / ".local/bin" / name
-                  for name in ("codex", "omp", "gh", "glab", "ghq")}
+                  for name in ("codex", "gh", "glab", "ghq")}
     real_tools.update(mise=Path(real_mise), usage=Path(real_usage))
     for name, binary in real_tools.items():
         destination = stage / "bin" / name

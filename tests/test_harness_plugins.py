@@ -66,14 +66,11 @@ class HarnessPluginsTest(unittest.TestCase):
         self.home.mkdir()
         self.source = self.root / "source"
         self.source.mkdir()
-        for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_omp", "private_dot_gemini"):
+        for directory in (".chezmoidata", ".chezmoitemplates", "private_dot_gemini"):
             shutil.copytree(self.repo / "home" / directory, self.source / directory)
         shutil.copy2(self.repo / "home/.chezmoiignore", self.source / ".chezmoiignore")
         copy_asset_templates(self.source, ("harness-plugins",))
         self.external = self.source / ".chezmoitemplates/external-assets/harness-plugins.toml.tmpl"
-        (self.source / ".chezmoiscripts").mkdir()
-        for name in ("run_onchange_after_20-harness-plugins.ps1.tmpl", "run_onchange_after_20-harness-plugins.sh.tmpl"):
-            shutil.copy2(self.repo / "home/.chezmoiscripts" / name, self.source / ".chezmoiscripts" / name)
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("", encoding="utf-8")
         self.env = os.environ.copy()
@@ -122,9 +119,6 @@ class HarnessPluginsTest(unittest.TestCase):
         self.add_archive(self.next_sha, {"skills/example/SKILL.md": "next revision\n", "new-only": "new\n"})
         self.set_pin(self.first_sha)
         self.tree = self.home / ".local/share/dotfiles/harness-plugins/compound-engineering"
-        self.agent = self.home / ".omp/agent"
-        self.yml = self.agent / "config.yml"
-        self.yaml = self.agent / "config.yaml"
 
     def stop_server(self):
         self.server.shutdown()
@@ -160,11 +154,6 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result
 
-    def read_yaml(self, path):
-        result = self.run_chezmoi("execute-template", "{{ include " + json.dumps(path.as_posix()) + " | fromYaml | toJson }}")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        return json.loads(result.stdout)
-
     def test_pins_are_stable_and_changes_rollback_exactly(self):
         outside = self.tree.parent / "unrelated-plugin/state"
         outside.parent.mkdir(parents=True)
@@ -194,49 +183,6 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertFalse((self.tree / "new-only").exists())
         self.assertEqual(outside.read_text(encoding="utf-8"), "keep")
         self.assertEqual(self.requests, ["/fixture/source/archive/" + sha + ".tar.gz" for sha in (self.first_sha, self.next_sha)])
-        result = self.run_chezmoi("diff", "--exclude=scripts")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(result.stdout, "")
-
-    def test_configuration_and_parents_remain_owner_only(self):
-        self.config.write_text("umask = 0o022\n", encoding="utf-8")
-        self.agent.mkdir(parents=True)
-        for directory in (self.agent.parent, self.agent):
-            directory.chmod(0o700)
-        for path in (self.yml, self.yaml):
-            with self.subTest(filename=path.name):
-                path.write_text("auth: {broker: {token: fixture-only}}\n", encoding="utf-8")
-                path.chmod(0o600)
-                for _ in range(2):
-                    self.apply()
-                    result = self.run_chezmoi("dump", "--format=json", "--parent-dirs", str(path))
-                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                    state = json.loads(result.stdout)
-                    for target, mode in ((".omp", 0o700), (".omp/agent", 0o700),
-                                         (".omp/agent/" + path.name, 0o600)):
-                        self.assertEqual(state[target]["perm"], mode)
-                        if os.name != "nt":
-                            self.assertEqual((self.home / target).stat().st_mode & 0o777, mode)
-                path.unlink()
-
-    def test_effective_yaml_preserves_mutable_values_and_has_no_shadow(self):
-        self.agent.mkdir(parents=True)
-        self.yaml.write_text("marketplace:\n  autoUpdate: auto\n  sibling: keep\nnested:\n  array: [one, 2, true]\n", encoding="utf-8")
-        self.apply()
-        self.assertFalse(self.yml.exists())
-        self.assertEqual(self.read_yaml(self.yaml), {
-            "marketplace": {"autoUpdate": "off", "sibling": "keep"},
-            "nested": {"array": ["one", 2, True]},
-        })
-        self.yaml.write_text("marketplace:\n  autoUpdate: notify\n  sibling: changed\nnested:\n  array: [new, 3, false]\nextra: {value: user-edit}\n", encoding="utf-8")
-        self.apply()
-        self.assertEqual(self.read_yaml(self.yaml), {
-            "marketplace": {"autoUpdate": "off", "sibling": "changed"},
-            "nested": {"array": ["new", 3, False]}, "extra": {"value": "user-edit"},
-        })
-        before = self.yaml.read_bytes()
-        self.apply()
-        self.assertEqual(self.yaml.read_bytes(), before)
         result = self.run_chezmoi("diff", "--exclude=scripts")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout, "")
@@ -288,50 +234,6 @@ class HarnessPluginsTest(unittest.TestCase):
             self.assertTrue((self.tree / "skills/example/SKILL.md").is_file())
             self.assertTrue((self.tree / "plugin.json").is_file())
 
-    def test_existing_yml_wins_and_yaml_is_untouched(self):
-        self.agent.mkdir(parents=True)
-        self.yml.write_text("marketplace: {autoUpdate: auto}\nkeep: yml\n", encoding="utf-8")
-        original = b"keep: yaml\nmarketplace: {autoUpdate: notify}\n"
-        self.yaml.write_bytes(original)
-        self.apply()
-        self.assertEqual(self.read_yaml(self.yml), {"marketplace": {"autoUpdate": "off"}, "keep": "yml"})
-        self.assertEqual(self.yaml.read_bytes(), original)
-
-    def test_missing_and_empty_configuration_initialize_minimally(self):
-        self.apply()
-        self.assertEqual(self.read_yaml(self.yml), {"marketplace": {"autoUpdate": "off"}})
-        self.assertFalse(self.yaml.exists())
-        self.yml.write_bytes(b"")
-        self.apply()
-        self.assertEqual(self.read_yaml(self.yml), {"marketplace": {"autoUpdate": "off"}})
-
-    def test_malformed_yaml_fails_without_replacement(self):
-        self.agent.mkdir(parents=True)
-        for path in (self.yml, self.yaml):
-            with self.subTest(filename=path.name):
-                original = b"marketplace: [unterminated\nkeep: untouched\n"
-                path.write_bytes(original)
-                result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
-                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertEqual(path.read_bytes(), original)
-                self.assertFalse((self.yaml if path == self.yml else self.yml).exists())
-                path.unlink()
-
-    def test_legacy_pending_migration_is_not_shadowed(self):
-        self.agent.mkdir(parents=True)
-        for filename in ("settings.json", "agent.db"):
-            with self.subTest(filename=filename):
-                legacy = self.agent / filename
-                original = b"legacy state must remain untouched\x00"
-                legacy.write_bytes(original)
-                result = self.run_chezmoi("apply", "--force", "--exclude=scripts")
-                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn("migration", result.stderr.lower())
-                self.assertEqual(legacy.read_bytes(), original)
-                self.assertFalse(self.yml.exists())
-                self.assertFalse(self.yaml.exists())
-                legacy.unlink()
-
     def test_bootstrap_managed_does_not_install_or_write_configuration(self):
         shutil.copy2(self.repo / ".chezmoi-bootstrap.toml", self.config)
         result = self.run_chezmoi("managed", "--exclude=scripts")
@@ -369,62 +271,65 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertEqual(tomllib.loads(result.stdout), {})
         self.assertEqual(self.requests, [])
 
-    @unittest.skipUnless(os.name == "nt", "Windows Search indexing applies only to Windows")
-    def test_windows_plugin_cache_is_excluded_from_indexing_before_install(self):
-        # Indexing a just-copied plugin tree makes omp's immediate staging rename fail with EPERM.
-        log = self.root / "omp-calls.txt"
-        fake = self.home / ".local/bin/omp.exe"
-        fake.parent.mkdir(parents=True)
-        program = (
-            "using System; using System.IO;\n"
-            "public static class FakeOmp { public static int Main(string[] a) {\n"
-            "  string home = Environment.GetEnvironmentVariable(\"HOME\");\n"
-            "  string cache = Path.Combine(home, \".omp\", \"plugins\", \"cache\", \"plugins\");\n"
-            "  bool excluded = Directory.Exists(cache) &&\n"
-            "    (File.GetAttributes(cache) & FileAttributes.NotContentIndexed) != 0;\n"
-            "  File.AppendAllText(Environment.GetEnvironmentVariable(\"FAKE_OMP_LOG\"),\n"
-            "    string.Join(\" \", a) + \" excluded=\" + excluded + Environment.NewLine);\n"
-            "  return 0; } }\n")
-        build = subprocess.run(
-            [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"),
-             "-NoProfile", "-NonInteractive", "-Command",
-             "Add-Type -TypeDefinition $env:FAKE_OMP_SOURCE -OutputAssembly $env:FAKE_OMP_EXE "
-             "-OutputType ConsoleApplication"],
-            env=dict(self.env, FAKE_OMP_SOURCE=program, FAKE_OMP_EXE=str(fake)),
-            capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=120)
-        self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
-        rendered = self.run_chezmoi("execute-template", '{{ includeTemplate "harness-plugins-windows" . }}')
-        self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
-        script = self.root / "reconcile.ps1"
-        script.write_text(rendered.stdout, encoding="utf-8-sig")
-        result = subprocess.run(
-            [str(Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"),
-             "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
-            env=dict(self.env, FAKE_OMP_LOG=str(log)), capture_output=True, text=True,
-            encoding="utf-8", errors="backslashreplace", timeout=120)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        installs = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("plugin install ")]
-        self.assertEqual(len(installs), 1, log.read_text(encoding="utf-8"))
-        self.assertTrue(installs[0].endswith("excluded=True"), installs[0])
-
     def test_native_instructions_include_common_and_only_selected_harness(self):
         (self.source / ".chezmoitemplates/agent-instructions").write_text(
             'common instructions for {{ .chezmoi.destDir }}\n'
-            '{{ if eq .harness "omp" }}omp only{{ end }}'
+            '{{ if eq .harness "codex" }}codex only{{ end }}'
             '{{ if eq .harness "antigravity" }}antigravity only{{ end }}'
             '{{ if eq .harness "foreign" }}foreign only{{ end }}',
             encoding="utf-8",
         )
         self.apply()
         native = (self.home / ".gemini/GEMINI.md").read_text(encoding="utf-8")
-        omp = (self.home / ".omp/agent/AGENTS.md").read_text(encoding="utf-8")
-        for rendered in (native, omp):
-            self.assertIn("common instructions for " + self.home.as_posix(), rendered.replace("\\", "/"))
-            self.assertNotIn("foreign only", rendered)
+        self.assertIn("common instructions for " + self.home.as_posix(), native.replace("\\", "/"))
         self.assertIn("antigravity only", native)
-        self.assertNotIn("omp only", native)
-        self.assertIn("omp only", omp)
-        self.assertNotIn("antigravity only", omp)
+        self.assertNotIn("codex only", native)
+        self.assertNotIn("foreign only", native)
+
+    def test_retired_omp_files_survive_shared_asset_apply_without_reconciliation(self):
+        retired = {
+            ".local/bin/omp": b"retired executable\x00",
+            ".local/bin/omp.exe": b"retired Windows executable\x00",
+            ".omp/agent/config.yml": b"marketplace: {autoUpdate: notify}\n",
+            ".omp/agent/config.yaml": b"other: configuration\n",
+            ".omp/agent/AGENTS.md": b"personal instructions\n",
+            ".omp/agent/auth.json": b"fixture-only credentials\n",
+            ".omp/agent/agent.db": b"legacy session data\x00",
+            ".omp/plugins/installed_plugins.json": b"personal plugin state\n",
+            ".local/share/dotfiles/zsh/completions/_omp": b"retired completion\n",
+        }
+        for name, contents in retired.items():
+            path = self.home / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(contents)
+        for _ in range(2):
+            self.apply()
+            self.assertEqual({name: (self.home / name).read_bytes() for name in retired}, retired)
+            self.assertTrue((self.tree / "skills/example/SKILL.md").is_file())
+
+    def test_fresh_apply_does_not_materialize_omp_state(self):
+        self.apply()
+        self.assertFalse((self.home / ".omp").exists())
+        self.assertFalse((self.home / ".local/bin/omp").exists())
+        self.assertFalse((self.home / ".local/bin/omp.exe").exists())
+
+    def test_repository_inventory_and_asset_manifest_leave_omp_unmanaged(self):
+        command = [self.chezmoi, "--config", str(self.config), "--source", str(self.repo),
+                   "--destination", str(self.home), "--cache", str(self.root / "repository-cache"),
+                   "--persistent-state", str(self.root / "repository-state.boltdb"), "--no-tty"]
+        options = dict(env=self.env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        managed = subprocess.run(command + ["managed", "--exclude=scripts"], **options)
+        self.assertEqual(managed.returncode, 0, managed.stdout + managed.stderr)
+        inventory = managed.stdout.replace("\\", "/").splitlines()
+        self.assertFalse(any(path == ".omp" or path.startswith(".omp/") for path in inventory))
+        manifest = subprocess.run(command + ["execute-template", '{{ includeTemplate "external-assets-manifest" . }}'],
+                                  **options)
+        self.assertEqual(manifest.returncode, 0, manifest.stdout + manifest.stderr)
+        assets = tomllib.loads(manifest.stdout)
+        self.assertNotIn(".local/bin/omp", assets)
+        self.assertNotIn(".local/bin/omp.exe", assets)
+        self.assertFalse(any(path == ".omp" or path.startswith(".omp/") for path in assets))
+
 
 
 @unittest.skipUnless(os.environ.get("ANTIGRAVITY_TEST_BINARY"), "Set ANTIGRAVITY_TEST_BINARY to the locked native CLI")

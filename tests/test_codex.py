@@ -56,7 +56,7 @@ class CodexTest(unittest.TestCase):
         self.config.write_text("umask = 0o022\n", encoding="utf-8")
         (self.source / ".chezmoitemplates/agent-instructions").write_text(
             'common-marker\n{{ if eq .harness "codex" }}codex-marker{{ end }}\n'
-            '{{ if eq .harness "omp" }}foreign-marker{{ end }}\n', encoding="utf-8")
+            '{{ if eq .harness "pi" }}foreign-marker{{ end }}\n', encoding="utf-8")
         self.apply()
         settings = tomllib.loads(self.settings.read_text(encoding="utf-8"))
         self.assertIs(settings["check_for_update_on_startup"], False)

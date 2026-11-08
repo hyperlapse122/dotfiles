@@ -26,35 +26,8 @@
 {{- $providers = omit $providers "antigravity" -}}
 {{- end -}}
 {{- end -}}
-{{- $managed := list (dict "id" "omp" "command" "omp" "directory" ".local/bin" "args" (list "acp") "displayName" "oh-my-pi" "accentColor" "#f84fcc") -}}
-{{- range $entry := $managed -}}
-{{- $provider := dict -}}
-{{- if hasKey $providers $entry.id -}}
-{{- $provider = get $providers $entry.id -}}
-{{- if not (kindIs "map" $provider) -}}
-{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s must be an object" $entry.id) -}}
-{{- end -}}
-{{- end -}}
-{{- $config := dict -}}
-{{- if hasKey $provider "config" -}}
-{{- $config = get $provider "config" -}}
-{{- if not (kindIs "map" $config) -}}
-{{- fail (printf "Invalid T3 Code settings.json: providerInstances.%s.config must be an object" $entry.id) -}}
-{{- end -}}
-{{- end -}}
-{{- $executable := $entry.command -}}
-{{- if eq $.chezmoi.os "windows" -}}{{- $executable = printf "%s.exe" $executable -}}{{- end -}}
-{{- $command := joinPath $.chezmoi.destDir $entry.directory $executable | replace "\\" "/" -}}
-{{- $config = $config | setValueAtPath "enabled" true | setValueAtPath "source" "local" | setValueAtPath "commandPath" $command | setValueAtPath "commandArgs" $entry.args -}}
-{{- $provider = $provider | setValueAtPath "driver" "acpRegistry" | setValueAtPath "enabled" true | setValueAtPath "config" $config -}}
-{{- if not (hasKey $provider "displayName") -}}
-{{- $provider = $provider | setValueAtPath "displayName" $entry.displayName -}}
-{{- end -}}
-{{- if and (hasKey $entry "accentColor") (not (hasKey $provider "accentColor")) -}}
-{{- $provider = $provider | setValueAtPath "accentColor" $entry.accentColor -}}
-{{- end -}}
-{{- $providers = $providers | setValueAtPath $entry.id $provider -}}
-{{- end -}}
+{{- /* Retire the omp integration while leaving its executable and user state unmanaged. */ -}}
+{{- $providers = omit $providers "omp" -}}
 {{- $codex := dict -}}
 {{- if hasKey $providers "codex" -}}
 {{- $codex = get $providers "codex" -}}
