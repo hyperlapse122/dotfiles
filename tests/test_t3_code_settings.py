@@ -127,6 +127,7 @@ class T3CodeSettingsTest(unittest.TestCase):
         return {
             "driver": "claudeAgent", "enabled": True,
             "config": {"enabled": True,
+                       "idleCompaction": "beforeCacheExpires",
                        "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
@@ -246,13 +247,25 @@ class T3CodeSettingsTest(unittest.TestCase):
         provider = self.expected_claude()
         provider.update(driver="stale", enabled=False, displayName="My Claude", accentColor=None)
         provider["config"].update(enabled=False, binaryPath="old", homePath="/custom/home",
-                                  launchArgs="--max-budget-usd 1", customModels=["owner-model"])
-        self.write_settings({"providerInstances": {"claudeAgent": provider}})
+                                  launchArgs="--max-budget-usd 1", customModels=["owner-model"],
+                                  idleCompaction="off")
+        sibling = {"driver": "claudeAgent", "config": {"idleCompaction": "onReturn"}}
+        self.write_settings({"idleCompaction": "onReturn", "compactIdleThreads": False,
+                             "providerInstances": {"claudeAgent": provider, "other-claude": sibling}})
         self.apply()
         actual = self.read_settings()["providerInstances"]["claudeAgent"]
         provider.update(driver="claudeAgent", enabled=True)
         provider["config"].update(self.expected_claude()["config"])
         self.assertEqual(actual, provider)
+        self.assertEqual(self.read_settings()["idleCompaction"], "onReturn")
+        self.assertIs(self.read_settings()["compactIdleThreads"], False)
+        self.assertEqual(self.read_settings()["providerInstances"]["other-claude"], sibling)
+        drifted = self.read_settings()
+        drifted["providerInstances"]["claudeAgent"]["config"]["idleCompaction"] = "default"
+        self.write_settings(drifted)
+        self.apply()
+        drifted["providerInstances"]["claudeAgent"] = provider
+        self.assertEqual(self.read_settings(), drifted)
         before = self.settings.read_bytes()
         self.apply()
         self.assertEqual(self.settings.read_bytes(), before)

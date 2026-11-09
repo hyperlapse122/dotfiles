@@ -69,7 +69,7 @@
 {{- if and (kindIs "string" (get $claudeConfig "homePath")) (eq (get $claudeConfig "homePath") $claudeHome) -}}
 {{- $claudeConfig = omit $claudeConfig "homePath" -}}
 {{- end -}}
-{{- $claudeConfig = $claudeConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $claudeCommand -}}
+{{- $claudeConfig = $claudeConfig | setValueAtPath "enabled" true | setValueAtPath "binaryPath" $claudeCommand | setValueAtPath "idleCompaction" "beforeCacheExpires" -}}
 {{- $claude = $claude | setValueAtPath "driver" "claudeAgent" | setValueAtPath "enabled" true | setValueAtPath "config" $claudeConfig -}}
 {{- $providers = $providers | setValueAtPath "claudeAgent" $claude -}}
 {{- $piApp := get (get . "personalApps" | default dict) "pi" | default dict -}}
