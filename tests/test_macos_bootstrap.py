@@ -14,6 +14,9 @@ from test_native_ca_shell import find_bash
 
 FIXTURE = r'''
 import json, os, pathlib, sys
+# Model macOS command output even when Python runs on Windows.
+sys.stdout.reconfigure(newline='\n')
+sys.stderr.reconfigure(newline='\n')
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['MAC_TEST_ROOT'])
 state = json.loads((root/'state.json').read_text())
@@ -144,6 +147,32 @@ class MacFixture(unittest.TestCase):
 
 
 class MacFixtureIsolationTest(MacFixture):
+    def test_launchctl_emits_macos_lf_even_with_windows_text_streams(self):
+        domain = 'gui/501'
+        for status, output in (
+            (0, domain + ' = {\n\tservices = {\n\t}\n}'),
+            (112, 'Bad request.\nCould not find domain for user gui: 501'),
+        ):
+            with self.subTest(status=status):
+                self.state['launchd'] = {domain: {'status': status, 'output': output}}
+                (self.root/'state.json').write_text(json.dumps(self.state), encoding='utf-8')
+                # Force Windows newline translation on any test host. Capture
+                # bytes so universal-newline decoding cannot hide a mismatch.
+                command = (
+                    "import runpy, sys; "
+                    "sys.stdout.reconfigure(newline='\\r\\n'); "
+                    "sys.stderr.reconfigure(newline='\\r\\n'); "
+                    "sys.argv = sys.argv[1:]; "
+                    "runpy.run_path(sys.argv[0], run_name='__main__')"
+                )
+                result = subprocess.run(
+                    [sys.executable, '-c', command, str(self.fixture), 'launchctl', 'print', domain],
+                    env=self.env, capture_output=True, timeout=30)
+                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                expected = (output + '\n').encode('utf-8')
+                self.assertEqual(result.stdout, b'' if status else expected)
+                self.assertEqual(result.stderr, expected if status else b'')
+
     def test_fixture_cannot_discover_host_commands(self):
         probe = self.root/'probe.sh'
         probe.write_text('''#!/bin/sh
