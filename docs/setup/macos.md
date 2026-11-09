@@ -85,6 +85,7 @@ Registration does not apply dotfiles.
 ## Preview and Apply
 
 Close active Claude Code, Codex, Antigravity and T3 sessions before updating their managed configuration and plugins.
+Finish active container tasks and keep the container runtime stopped throughout application.
 From the selected checkout:
 
 ```sh
@@ -99,13 +100,18 @@ When a newer build is needed, the updater decrypts the enrolled account and perm
 Xcode check or installation failures stop the apply before later targets and scripts; the previous developer-tool selection is retained.
 Restore network/key access or update macOS as directed, then rerun the apply.
 Explicit application installs missing host apps, configures existing managed files, installs native user-scope CE integrations, and runs `macos-build`.
-Host applications include Chrome, 1Password and its CLI, and Ghostty; T3 retains its existing installer.
+Host applications include Chrome, 1Password and its CLI, Ghostty, and Apple's `container` CLI; T3 retains its existing installer.
 Every full `chezmoi apply`, including `mise run apply`, runs `brew update` followed by `brew upgrade` after ensuring the declared host apps are installed.
 Package installation and `brew upgrade` use `--yes` to skip Homebrew confirmation questions.
 Casks that require administrator access may still request a sudo password.
 This upgrades all eligible Homebrew packages, including packages installed outside this repository, using Homebrew's default pin and cask policies.
 No lockfile, scheduled updater, forced upgrades, or explicit cleanup is added.
 An update failure stops before upgrade; either command failing fails application.
+The [container formula's post-install hook](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/c/container.rb) unloads container services during installation or upgrade.
+Before installing container and before the global upgrade, application checks the current user's GUI and background launchd domains for registered container services.
+It refuses the package operation if services are registered or inspection fails; a confirmed absent login domain is allowed.
+Finish the owning tasks and stop the runtime from their launch context before retrying; application never stops it for you.
+The checks do not lock the runtime, so do not start new container work while application is running.
 Configuration previews and worktree preparation do not run these commands.
 
 Application also reconciles the account's zsh login shell and Ghostty's native Unix-executable association.
@@ -137,12 +143,48 @@ Check discovery in a fresh shell outside the dotfiles directory:
 
 ```sh
 command -v claude codex agy gh glab ghq t3 op
-command -v python pwsh dotnet rustc cargo cmake ninja vcpkg
+command -v container python pwsh dotnet rustc cargo cmake ninja vcpkg
 dotnet --list-sdks
 ```
 
 If an unrelated executable precedes a managed one, inspect the shell's PATH before proceeding.
 PATH integration runs on source changes; an unchanged apply does not repair manually removed shell source lines.
+
+## Temporary Container Work
+
+Apple container is the default runtime for container-related development work on this Mac.
+The [upstream requirements](https://github.com/apple/container#requirements) match the supported Apple Silicon macOS 26+ host.
+Configuration application installs the CLI without starting its runtime or enabling startup at login.
+All managed harnesses receive the macOS guidance through their native instruction baseline, including launches from T3; Windows receives Podman guidance instead.
+
+Check the installed version and start the runtime only when a task needs it:
+
+```sh
+container --version
+container system start
+container list --all
+container image list
+```
+
+First startup may request the recommended Linux kernel or native macOS permissions.
+Record the existing resources and their owners before creating or downloading anything.
+For a disposable smoke check, use a unique container name:
+
+```sh
+container run --rm --name "dotfiles-check-$(date +%s)" docker.io/library/alpine:latest echo hello
+```
+
+`--rm` removes that container after it exits, but leaves the image in the local store.
+If this task downloaded the image and no other active task needs it, remove it with `container image delete docker.io/library/alpine:latest`.
+Remove and verify all other task-owned disposable resources, including volumes, networks, build caches, and temporary data, after success, failure, or cancellation.
+Preserve other active tasks' resources and avoid global prune commands.
+Stop the runtime with `container system stop` only after establishing that no other work depends on it.
+Check host disk-space reclamation separately from resource deletion.
+
+Use the installed CLI's help and the command reference from its [release tag](https://github.com/apple/container/releases), rather than assuming Docker API or Compose compatibility.
+If a required operation is unsupported, report the limitation and agree on an alternative before switching runtimes or installing compatibility tools.
+The optional [registry credential enrollment](../guides/secrets-and-authentication.md) still configures Docker/Podman helpers and requires one of those clients; it does not configure Apple container authentication.
+A container-only host with registry enrollment needs that separate integration resolved before applying the enrolled authentication.
 
 ## Inspect Readiness and Complete Runtime Checks
 
@@ -174,6 +216,7 @@ A successful installer or a discovered skill alone does not establish full devic
 | GitHub and GitLab | Verify real intended-account CLI and Git operations after managed Keychain reconciliation; CI fixture credentials prove no real account login |
 | Secrets and CA trust | Encrypted destinations apply with the intended GPG key; organization CA is already trusted; a fresh desktop session has `NODE_USE_SYSTEM_CA=1` |
 | Native builds | The explicit smoke command below builds, ARM64-identifies and runs Rust, C++, both .NET SDK outputs and a CMake/vcpkg fmt consumer |
+| Container workflow | `container` resolves in a fresh shell; an explicit disposable workload succeeds and its task-owned resources are removed; the read-only snapshot proves command presence only |
 | Repeat application | A second `mise run apply` preserves unrelated settings/plugins, keeps commands usable and repairs missing apps |
 | New worktree | `mise trust`, `mise install`, and `mise run bootstrap` prepare another worktree without applying personal settings or executing personal chezmoi hooks |
 | SSH identity | Review the existing default key before explicit application restores the repository-managed encrypted SSH identity; the former host name records its origin, not a host restriction |

@@ -9,6 +9,11 @@ from test_native_ca_shell import find_bash
 
 
 class MacAppsTest(MacFixture):
+    def assert_no_runtime_mutations(self, calls):
+        self.assertFalse(any(name in ('container', 'podman') for name, args in calls))
+        self.assertFalse(any(name == 'brew' and args[:1] == ['services'] for name, args in calls))
+        self.assertTrue(all(args[:1] == ['print'] for name, args in calls if name == 'launchctl'))
+
     def test_usable_manual_ghostty_bundle_is_reused(self):
         executable = self.home / 'Applications/Ghostty.app/Contents/MacOS/ghostty'
         executable.parent.mkdir(parents=True)
@@ -31,29 +36,98 @@ class MacAppsTest(MacFixture):
         self.assertIn('macOS 26', result.stderr)
         self.assertFalse(any(name in ('brew', 'podman') for name, args in self.calls()))
 
-    def test_fresh_application_installs_once_without_podman(self):
-        packages = ('cask:google-chrome', 'cask:1password', 'cask:1password-cli')
+    def test_fresh_application_installs_container_once_without_runtime_startup(self):
+        self.wrapper(self.bin / 'container', 'container')
+        self.state['fail'] = 'container'
+        packages = ('formula:container', 'cask:google-chrome', 'cask:1password', 'cask:1password-cli')
         result = self.run_script('scripts/macos-apps.sh', *packages)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         calls = self.calls()
         installs = [args for name, args in calls if name == 'brew' and args[0] == 'install']
-        self.assertEqual(installs, [['install', '--yes', '--cask', package.split(':')[1]] for package in packages])
-        self.assertEqual(calls[-2:], [['brew', ['update']], ['brew', ['upgrade', '--yes']]])
-        self.assertFalse(any(name == 'podman' for name, args in calls))
+        self.assertEqual(installs, [['install', '--yes', '--' + package.split(':')[0], package.split(':')[1]] for package in packages])
+        self.assertEqual([args for name, args in calls if name == 'brew'][-2:], [['update'], ['upgrade', '--yes']])
+        self.assert_no_runtime_mutations(calls)
         self.state = json.loads((self.root / 'state.json').read_text())
         before = len(calls)
         result = self.run_script('scripts/macos-apps.sh', *packages)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         repeated = self.calls()[before:]
         self.assertFalse(any(name == 'brew' and args[0] == 'install' for name, args in repeated))
-        self.assertEqual(repeated[-2:], [['brew', ['update']], ['brew', ['upgrade', '--yes']]])
-        self.assertFalse(any(name == 'podman' for name, args in repeated))
+        self.assertEqual([args for name, args in repeated if name == 'brew'][-2:], [['update'], ['upgrade', '--yes']])
+        self.assert_no_runtime_mutations(repeated)
+
+    def test_registered_container_services_block_installation_and_global_upgrade(self):
+        for domain, uid in (('gui/501', '501'), ('user/501', '501'), ('system', '0')):
+            for operation in ('install', 'upgrade'):
+                with self.subTest(domain=domain, operation=operation):
+                    self.state = {'uid': uid, 'launchd': {domain: {
+                        'output': domain + ' = {\n\tservices = {\n\t\t0  -  com.apple.container.apiserver\n\t}\n}'}}}
+                    if operation == 'upgrade':
+                        self.state['packages'] = ['container']
+                    before = len(self.calls())
+                    result = self.run_script('scripts/macos-apps.sh', *(['formula:container'] if operation == 'install' else []))
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(domain, result.stderr)
+                    calls = self.calls()[before:]
+                    self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in calls))
+                    self.assertEqual(json.loads((self.root / 'state.json').read_text())['launchd'], self.state['launchd'])
+                    self.assert_no_runtime_mutations(calls)
+
+    def test_domain_inspection_errors_block_package_mutation(self):
+        for domain, status, output in (
+            ('gui/501', 23, 'Permission denied'),
+            ('user/501', 112, 'Could not inspect domain'),
+            ('gui/501', 112, 'Could not find domain for user gui: 999999'),
+            ('gui/501', 23, 'Could not find domain for user gui: 501'),
+        ):
+            for operation in ('install', 'upgrade'):
+                with self.subTest(domain=domain, status=status, output=output, operation=operation):
+                    self.state = {'launchd': {domain: {'status': status, 'output': output}}}
+                    before = len(self.calls())
+                    result = self.run_script('scripts/macos-apps.sh', *(['formula:container'] if operation == 'install' else []))
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(domain, result.stderr)
+                    calls = self.calls()[before:]
+                    self.assertFalse(any(name == 'brew' and args[0] in ('install', 'upgrade') for name, args in calls))
+                    self.assert_no_runtime_mutations(calls)
+
+    def test_absent_domain_allows_headless_application(self):
+        for domain, kind, prefix in (('gui/501', 'gui', ''), ('user/501', 'user', ''),
+                                     ('gui/501', 'gui', 'Bad request.\n')):
+            with self.subTest(domain=domain, prefix=prefix):
+                self.state = {'launchd': {domain: {'status': 112,
+                    'output': prefix + 'Could not find domain for user ' + kind + ': 501'}}}
+                before = len(self.calls())
+                result = self.run_script('scripts/macos-apps.sh', 'formula:container')
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                calls = self.calls()[before:]
+                self.assertIn(['brew', ['install', '--yes', '--formula', 'container']], calls)
+                self.assertIn(['brew', ['upgrade', '--yes']], calls)
+                domains = {args[1] for name, args in calls if name == 'launchctl'}
+                self.assertEqual(domains, {'gui/501', 'user/501'})
+                self.assert_no_runtime_mutations(calls)
+
+    def test_container_service_starting_during_update_blocks_upgrade(self):
+        for domain in ('gui/501', 'user/501'):
+            with self.subTest(domain=domain):
+                self.state = {'launchd_after_update': {domain: {
+                    'output': domain + ' = {\n\tservices = {\n\t\t123  -  com.apple.container.apiserver\n\t}\n}'}}}
+                before = len(self.calls())
+                result = self.run_script('scripts/macos-apps.sh', 'formula:container')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(domain, result.stderr)
+                calls = self.calls()[before:]
+                self.assertIn(['brew', ['install', '--yes', '--formula', 'container']], calls)
+                self.assertIn(['brew', ['update']], calls)
+                self.assertNotIn(['brew', ['upgrade', '--yes']], calls)
+                self.assertEqual(json.loads((self.root / 'state.json').read_text())['launchd'], self.state['launchd_after_update'])
+                self.assert_no_runtime_mutations(calls)
 
     def test_existing_podman_and_stopped_machine_are_untouched(self):
         self.wrapper(self.bin / 'podman', 'podman')
         self.wrapper(self.root / 'bundled-podman', 'podman')
         self.state.update(packages=['podman'], machines='personal|false|true\n', fail='podman')
-        result = self.run_script('scripts/macos-apps.sh', 'cask:google-chrome')
+        result = self.run_script('scripts/macos-apps.sh', 'formula:container', 'cask:google-chrome')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         calls = self.calls()
         self.assertFalse(any(name == 'podman' or 'podman' in args for name, args in calls))
@@ -74,7 +148,7 @@ class MacAppsTest(MacFixture):
     def test_empty_app_list_still_updates_all_homebrew_packages(self):
         result = self.run_script('scripts/macos-apps.sh')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(self.calls()[-2:], [['brew', ['update']], ['brew', ['upgrade', '--yes']]])
+        self.assertEqual([args for name, args in self.calls() if name == 'brew'][-2:], [['update'], ['upgrade', '--yes']])
 
     def test_update_failures_fail_application(self):
         for command in ('update', 'upgrade'):
@@ -95,9 +169,12 @@ class MacAppsTest(MacFixture):
         shutil.copy2(hook, templates / 'app-hook')
         config = self.root / 'empty.toml'
         config.write_text('')
+        data_dir = self.source / '.chezmoidata'
+        data_dir.mkdir()
+        shutil.copy2(self.repo / 'home/.chezmoidata/macos.yaml', data_dir / 'macos.yaml')
         data = {'chezmoi': {'os': 'darwin', 'arch': 'arm64', 'workingTree': str(self.repo)},
                 'macos': {'formulae': [], 'casks': ['1password-cli']}}
-        template = '{{ $data := ' + json.dumps(json.dumps(data)) + ' | fromJson }}{{ includeTemplate "app-hook" $data }}'
+        template = '{{ $data := ' + json.dumps(json.dumps(data)) + ' | fromJson }}{{ $_ := set $data.macos "formulae" .macos.formulae }}{{ includeTemplate "app-hook" $data }}'
         chezmoi = shutil.which('chezmoi')
         rendered = subprocess.run([chezmoi, '--source', str(self.source), '--config', str(config),
                                    'execute-template', template],
@@ -117,7 +194,9 @@ class MacAppsTest(MacFixture):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         mutations = [args for name, args in self.calls()
                      if name == 'brew' and args[0] in ('install', 'update', 'upgrade')]
-        self.assertEqual(mutations, [['install', '--yes', '--cask', '1password-cli'],
+        self.assertEqual(mutations, [['install', '--yes', '--formula', 'aria2'],
+                                     ['install', '--yes', '--formula', 'container'],
+                                     ['install', '--yes', '--cask', '1password-cli'],
                                      ['update'], ['upgrade', '--yes'], ['update'], ['upgrade', '--yes']])
 
     def test_command_failure_stops_application(self):

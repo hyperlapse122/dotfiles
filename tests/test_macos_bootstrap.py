@@ -14,6 +14,9 @@ from test_native_ca_shell import find_bash
 
 FIXTURE = r'''
 import json, os, pathlib, sys
+# Model macOS command output even when Python runs on Windows.
+sys.stdout.reconfigure(newline='\n')
+sys.stderr.reconfigure(newline='\n')
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['MAC_TEST_ROOT'])
 state = json.loads((root/'state.json').read_text())
@@ -25,6 +28,14 @@ elif name == 'sw_vers': print(state.get('version','26.0'))
 elif name == 'sysctl': print(state.get('translated','0'))
 elif name == 'xcode-select': print('/Library/Developer/CommandLineTools')
 elif name == 'xcrun': print('/usr/bin/clang')
+elif name == 'id': print(state.get('uid', '501'))
+elif name == 'launchctl':
+    if args[:1] != ['print']: sys.exit('Only read-only launchctl print is allowed')
+    domain = args[1]
+    response = state.get('launchd', {}).get(domain, {})
+    print(response.get('output', domain + ' = {\n\tservices = {\n\t}\n}'),
+          file=sys.stderr if response.get('status', 0) else sys.stdout)
+    sys.exit(response.get('status', 0))
 elif name == 'brew':
     if args == ['--prefix']: print('/opt/homebrew')
     elif args[:1] == ['--prefix']: print((root/'tools'/args[1]).as_posix())
@@ -36,6 +47,9 @@ elif name == 'brew':
             import shutil
             dest=root/'tools/podman/bin/podman'; dest.parent.mkdir(parents=True,exist_ok=True)
             shutil.copy2(root/'podman-template',dest)
+        (root/'state.json').write_text(json.dumps(state))
+    elif args == ['update']:
+        state.setdefault('launchd', {}).update(state.get('launchd_after_update', {}))
         (root/'state.json').write_text(json.dumps(state))
 elif name == 'git':
     if args[0] == 'clone':
@@ -94,7 +108,7 @@ class MacFixture(unittest.TestCase):
         self.state = {'source':str(self.source)}
         self.fixture = self.root/'fixture.py'
         self.fixture.write_text(FIXTURE, encoding='utf-8')
-        for command in ['uname','sw_vers','sysctl','xcode-select','xcrun','brew','git','mise']:
+        for command in ['uname','sw_vers','sysctl','xcode-select','xcrun','id','launchctl','brew','git','mise']:
             self.wrapper(self.bin/command, command)
         for package, executable in [('chezmoi','chezmoi'),('gnupg','gpg'),('gnupg','gpgconf'),('pinentry-mac','pinentry-mac')]:
             self.wrapper(self.root/'tools'/package/'bin'/executable, executable)
@@ -133,6 +147,32 @@ class MacFixture(unittest.TestCase):
 
 
 class MacFixtureIsolationTest(MacFixture):
+    def test_launchctl_emits_macos_lf_even_with_windows_text_streams(self):
+        domain = 'gui/501'
+        for status, output in (
+            (0, domain + ' = {\n\tservices = {\n\t}\n}'),
+            (112, 'Bad request.\nCould not find domain for user gui: 501'),
+        ):
+            with self.subTest(status=status):
+                self.state['launchd'] = {domain: {'status': status, 'output': output}}
+                (self.root/'state.json').write_text(json.dumps(self.state), encoding='utf-8')
+                # Force Windows newline translation on any test host. Capture
+                # bytes so universal-newline decoding cannot hide a mismatch.
+                command = (
+                    "import runpy, sys; "
+                    "sys.stdout.reconfigure(newline='\\r\\n'); "
+                    "sys.stderr.reconfigure(newline='\\r\\n'); "
+                    "sys.argv = sys.argv[1:]; "
+                    "runpy.run_path(sys.argv[0], run_name='__main__')"
+                )
+                result = subprocess.run(
+                    [sys.executable, '-c', command, str(self.fixture), 'launchctl', 'print', domain],
+                    env=self.env, capture_output=True, timeout=30)
+                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                expected = (output + '\n').encode('utf-8')
+                self.assertEqual(result.stdout, b'' if status else expected)
+                self.assertEqual(result.stderr, expected if status else b'')
+
     def test_fixture_cannot_discover_host_commands(self):
         probe = self.root/'probe.sh'
         probe.write_text('''#!/bin/sh
@@ -168,6 +208,8 @@ class MacBootstrapTest(MacFixture):
         self.assertEqual(Path(mise[0][1]).resolve(),(self.source/'mise.toml').resolve())
         self.assertEqual([mise[0][0],*mise[1:]],['trust',['install'],['run','bootstrap']])
         self.assertFalse(any(name=='chezmoi' and ('init' in args or 'apply' in args) for name,args in self.calls()))
+        self.assertFalse(any(name in ('launchctl', 'container', 'podman') for name, args in self.calls()))
+        self.assertTrue(all(args[:1] == ['--prefix'] for name, args in self.calls() if name == 'brew'))
 
     def test_conflicting_origin_is_not_prepared(self):
         self.state['origin']='https://example.invalid/other.git'

@@ -479,7 +479,7 @@ def main():
         applied = run_with_assets([*chez, 'apply', '--force', '--exclude=scripts'], env=env,
                                   capture_output=True, text=True, timeout=300)
         applied.check_returncode()
-        baseline = run([*chez, 'execute-template', '{{ includeTemplate "repository-agent-instructions" (dict "harness" "claude") }}'],
+        baseline = run([*chez, 'execute-template', '{{ includeTemplate "repository-agent-instructions" (dict "harness" "claude" "chezmoi" .chezmoi) }}'],
                        env, outside).strip().replace('\r\n', '\n')
         if '## Writing skills' not in baseline:
             raise RuntimeError('The repository baseline has no writing block to verify.')

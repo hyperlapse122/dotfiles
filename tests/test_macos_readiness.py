@@ -68,6 +68,20 @@ class MacReadinessTest(unittest.TestCase):
         self.assertNotIn("8.0.100", json.dumps(result))
         self.assertNotIn("fixture", json.dumps(result))
 
+    def test_container_readiness_uses_path_without_executing_the_runtime(self):
+        for available in (True, False):
+            with self.subTest(available=available):
+                result, run = self.collect(available=available)
+                checks = [check for check in result['checks'] if check['name'] == 'Command: container']
+                self.assertEqual(len(checks), 1)
+                self.assertEqual(checks[0]['status'], 'passed' if available else 'failed')
+                self.assertEqual(self.command_lookups.count('container'), 1)
+                self.assertFalse(any(call.args[0][0] in ('container', 'launchctl', 'brew')
+                                     for call in run.call_args_list))
+                self.assertFalse(result['ready'])
+                self.assertNotIn('Container execution', {check['name'] for check in result['checks']
+                                                       if check['status'] == 'passed'})
+
     def test_unmanaged_tools_are_not_readiness_requirements(self):
         result, _ = self.collect()
         for command in ("podman", "omp"):

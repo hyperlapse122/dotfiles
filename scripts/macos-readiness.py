@@ -12,7 +12,7 @@ import shutil
 import subprocess
 
 
-COMMANDS = ("brew", "git", "mise", "chezmoi", "gpg", "gpgconf", "pinentry-mac",
+COMMANDS = ("brew", "container", "git", "mise", "chezmoi", "gpg", "gpgconf", "pinentry-mac",
             "claude", "codex", "agy", "gh", "glab", "ghq", "op",
             "t3", "python", "pwsh", "dotnet", "rustc", "cargo", "cmake", "ninja", "vcpkg")
 MANAGED_FILES = {

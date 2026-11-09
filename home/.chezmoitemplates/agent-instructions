@@ -40,4 +40,16 @@ Use container runtimes and local Kubernetes clusters only for temporary developm
 - Verify that no task-owned disposable resources remain, including zero task-owned volumes, before reporting cleanup complete. If deletion fails or ownership cannot be established, report the remaining resources and the reason instead of claiming success.
 - Check host disk-space reclamation separately from resource deletion. Before stopping a shared runtime or compacting its disk, establish that no other user or agent work depends on it. If that cannot be established, leave the runtime running and report the unreclaimed space. Do not shut down unrelated VMs or WSL distributions. Report any unfinished cleanup.
 
+{{ if eq .chezmoi.os "darwin" -}}
+## Container runtime
+
+- Use Apple's `container` CLI by default for temporary container-related development work, including image builds, execution, testing, and supported image, network, and volume operations.
+- Check the installed `container` version and its capabilities before relying on a required operation. If it cannot perform that operation, explain the concrete limitation and agree on an alternative with the user before using another runtime or installing compatibility tools.
+- Start the runtime manually with `container system start` only when an active task needs it. Do not start it during configuration application or enable startup at login.
+{{ else if eq .chezmoi.os "windows" -}}
+## Container runtime
+
+- Use Podman (with Podman Desktop as needed) for temporary container-related development work on Windows. Do not automate engine provisioning.
+- Start the runtime only when an active task needs it. Do not start it during configuration application or enable startup at login.
+{{ end -}}
 {{ end -}}
