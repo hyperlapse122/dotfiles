@@ -188,9 +188,9 @@ All AI harnesses managed by this repository must connect their user-scope instru
 To onboard a new harness (e.g. `example-harness`):
 1. Identify the harness's documented user-scope instruction file (e.g. `~/.config/example/AGENTS.md`).
 2. Add a thin template adapter in `home/` at the matching relative path (e.g. `home/private_dot_config/private_example/private_empty_AGENTS.md.tmpl`).
-3. Pass the harness identifier and chezmoi context into the shared template:
+3. Pass the harness identifier and native `.chezmoi` object into the shared template; the baseline reads `.chezmoi.os` to select host-specific guidance:
    ```gotemplate
-   {{- template "agent-instructions" (dict "harness" "example" "chezmoi" .) -}}
+   {{- template "agent-instructions" (dict "harness" "example" "chezmoi" .chezmoi) -}}
    ```
 4. Register, install, and enable the repository-pinned Compound Engineering plugin through the harness's native user-scope mechanism. Codex uses native `plugin marketplace add` and `plugin add`; Claude uses `plugin marketplace add`, `plugin install`, and `plugin enable` with `--scope user`. Antigravity uses its supported native plugin commands. Reuse the existing release/commit pin, preserve unrelated plugins and settings, and install only during explicit apply.
 5. Make the harness discover each shared user-scope skill exactly once. In `home/.chezmoitemplates/external-assets/harness-skills.toml.tmpl`, add the harness's `personalApps` identifier to the reader list of the shared skill root it reads natively, so that root renders whenever the harness is targeted. If the harness also reads another managed root, its native listing must still show each skill once. Grok, for example, has Claude skill compatibility turned off. See [Exactly-Once Discovery](../guides/harness-plugins.md#exactly-once-discovery).
