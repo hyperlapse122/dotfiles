@@ -345,7 +345,9 @@ def main():
         copy_asset_templates(source, ('personal-apps', 'codex-package'))
         config = root / "config/chezmoi.toml"
         config.write_text("", encoding="utf-8")
-        env = os.environ.copy()
+        # Hosted runners can override .npmrc through machine-level npm settings.
+        env = {key: value for key, value in os.environ.items()
+               if not key.upper().startswith("NPM_CONFIG_")}
         env.update({
             "HOME": str(home), "USERPROFILE": str(home), "ZDOTDIR": str(home),
             "APPDATA": str(root / "config"), "LOCALAPPDATA": str(root / "local"),

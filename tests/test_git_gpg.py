@@ -18,7 +18,7 @@ class GitGpgSettingsTest(unittest.TestCase):
         self.source = self.root / "source"
         shutil.copytree(self.repo / "home", self.source, ignore=shutil.ignore_patterns(
             "run_before_18-update-xcode.sh.tmpl",
-            ".chezmoiexternals", "personal-app*.json", "dot_config",
+            ".chezmoiexternals", "personal-app*.json", "modify_dot_npmrc", "dot_config",
             "run_onchange_after_10-personal-app-path.*", "run_onchange_after_20-harness-plugins.*",
             "harness-plugin*.json", "private_dot_omp", "run_after_40-github-auth.*",
             "run_after_45-gitlab-auth.*", "run_after_30-install-fonts.*", "private_dot_ssh",
