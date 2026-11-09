@@ -247,11 +247,6 @@ def apply(destination, environment=None):
                 config['launchArgs'] = base
             else:
                 config.pop('launchArgs', None)
-            if name == 'codex':
-                if had_environment:
-                    provider['environment'] = base_environment
-                else:
-                    provider.pop('environment', None)
             changed = True
             continue
         arguments = tokenize(base)
