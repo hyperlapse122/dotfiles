@@ -160,7 +160,9 @@ def t3_startup(binary, root, home, outside, env, target, install_desktop, reques
             deadline = time.monotonic() + 60
             captured = []
             while time.monotonic() < deadline:
-                captured = [body for body in requests[start:] if nonce in '\n'.join(strings(body))]
+                captured = [body for body in requests[start:]
+                            if body.get('model') == 'grok-code-fast-1'
+                            and nonce in '\n'.join(strings(body))]
                 if captured:
                     break
                 projection = rpc.call(str(uuid.uuid4()), 'orchestration.getThreadProjection', {'threadId': thread_id})
