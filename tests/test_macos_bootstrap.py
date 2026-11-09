@@ -39,6 +39,18 @@ elif name == 'launchctl':
 elif name == 'brew':
     if args == ['--prefix']: print('/opt/homebrew')
     elif args[:1] == ['--prefix']: print((root/'tools'/args[1]).as_posix())
+    elif args == ['list', '--pinned']:
+        print('\n'.join(state.get('pins', [])))
+    elif args[:1] in (['pin'], ['unpin']):
+        pins = state.setdefault('pins', [])
+        if args[0] == 'pin' and args[1] not in pins: pins.append(args[1])
+        if args[0] == 'unpin' and args[1] in pins: pins.remove(args[1])
+        (root/'state.json').write_text(json.dumps(state))
+    elif args[:2] == ['services', 'info']:
+        print(state.get('service_json', json.dumps([{'name': 'container', 'registered': state.get('registered', False), 'running': False}])))
+    elif args == ['services', 'start', 'container']:
+        state['registered'] = True
+        (root/'state.json').write_text(json.dumps(state))
     elif args[:1] == ['list']:
         sys.exit(0 if args[-1] in state.get('packages',[]) else 1)
     elif args[:1] == ['install']:
@@ -50,7 +62,29 @@ elif name == 'brew':
         (root/'state.json').write_text(json.dumps(state))
     elif args == ['update']:
         state.setdefault('launchd', {}).update(state.get('launchd_after_update', {}))
+        if 'runtime_after_update' in state: state['runtime'] = state['runtime_after_update']
         (root/'state.json').write_text(json.dumps(state))
+    elif args == ['upgrade', '--yes']:
+        state['container_upgraded'] = 'container' in state.get('packages', []) and 'container' not in state.get('pins', [])
+        state['unrelated_upgraded'] = True
+        (root/'state.json').write_text(json.dumps(state))
+        if state.get('interrupt_upgrade'):
+            # Ask the POSIX wrapper to signal its parent shell. Native Windows
+            # Python's os.kill uses Windows termination, not Git Bash signals.
+            sys.exit(143)
+elif name == 'container':
+    if args == ['system', 'status', '--format', 'json']:
+        status = state.get('runtime', 'unregistered')
+        print(state.get('runtime_json', json.dumps({'status': status})))
+        sys.exit(state.get('runtime_exit', 0 if status == 'running' else 1))
+    elif args == ['system', 'start', '--disable-kernel-install']:
+        if not state.get('start_no_effect'): state['runtime'] = 'running'
+    elif args == ['system', 'kernel', 'set', '--recommended', '--force']:
+        if state.get('runtime') != 'running': sys.exit('API must run before kernel installation')
+        state['kernel'] = True
+        if 'runtime_after_kernel' in state: state['runtime'] = state['runtime_after_kernel']
+    else: sys.exit('Unexpected container command')
+    (root/'state.json').write_text(json.dumps(state))
 elif name == 'git':
     if args[0] == 'clone':
         target=pathlib.Path(args[-1]); (target/'.git').mkdir(parents=True)
@@ -88,12 +122,16 @@ class MacFixture(unittest.TestCase):
         self.bin.mkdir()
         # Expose only these harmless host utilities. System directories can
         # contain a real Podman, even when the developer's PATH is excluded.
-        utilities = ('bash', 'awk', 'dirname', 'ls', 'tr', 'wc')
+        utilities = ('bash', 'awk', 'dirname', 'ls', 'tr', 'wc', 'sleep', 'mkdir', 'rm', 'cat')
         resolved = subprocess.run(
             [find_bash(), '--noprofile', '--norc', '-c',
              'PATH=/usr/bin:/bin; export PATH; command -v ' + ' '.join(utilities)],
             capture_output=True, text=True, encoding='utf-8', check=True)
-        for name, executable in zip(utilities, resolved.stdout.splitlines(), strict=True):
+        jq = shutil.which('jq')
+        if not jq:
+            self.skipTest('Declared mise jq tool required')
+        executables = [*zip(utilities, resolved.stdout.splitlines(), strict=True), ('jq', Path(jq).as_posix())]
+        for name, executable in executables:
             target = self.bin/name
             target.write_text('#!/bin/sh\nexec ' + shlex.quote(executable) + ' "$@"\n', encoding='utf-8')
             target.chmod(0o755)
@@ -108,7 +146,7 @@ class MacFixture(unittest.TestCase):
         self.state = {'source':str(self.source)}
         self.fixture = self.root/'fixture.py'
         self.fixture.write_text(FIXTURE, encoding='utf-8')
-        for command in ['uname','sw_vers','sysctl','xcode-select','xcrun','id','launchctl','brew','git','mise']:
+        for command in ['uname','sw_vers','sysctl','xcode-select','xcrun','id','launchctl','brew','git','mise','container']:
             self.wrapper(self.bin/command, command)
         for package, executable in [('chezmoi','chezmoi'),('gnupg','gpg'),('gnupg','gpgconf'),('pinentry-mac','pinentry-mac')]:
             self.wrapper(self.root/'tools'/package/'bin'/executable, executable)
@@ -122,7 +160,12 @@ class MacFixture(unittest.TestCase):
     def wrapper(self, path, command):
         path.parent.mkdir(parents=True, exist_ok=True)
         def quote(value): return "'"+str(value).replace("'", "'\\''")+"'"
-        path.write_text('#!/bin/sh\nexec '+quote(Path(sys.executable).as_posix())+' '+quote(self.fixture.as_posix())+' '+quote(command)+' "$@"\n', encoding='utf-8')
+        invocation = quote(Path(sys.executable).as_posix())+' '+quote(self.fixture.as_posix())+' '+quote(command)+' "$@"\n'
+        if command == 'brew':
+            body = invocation + 'result=$?\nif [ "$result" -eq 143 ]; then\n    kill -TERM "$PPID"\n    exit 0\nfi\nexit "$result"\n'
+        else:
+            body = 'exec ' + invocation
+        path.write_text('#!/bin/sh\n'+body, encoding='utf-8', newline='\n')
         path.chmod(0o755)
 
     def run_script(self, name, *args):
@@ -136,10 +179,16 @@ class MacFixture(unittest.TestCase):
             text=text.replace('/opt/podman/bin/podman',(self.root/'bundled-podman').as_posix())
             text=text.replace('"/Applications/','"'+(self.root/'Applications').as_posix()+'/')
             script.write_text(text,encoding='utf-8')
-        # Let Bash normalize the fixture path without exposing host commands.
-        command='PATH="$(cd "$1" && pwd -P)"; export PATH; shift; exec bash --noprofile --norc "$@"'
-        return subprocess.run([find_bash(),'--noprofile','--norc','-c',command,'fixture',self.bin.as_posix(),script.as_posix(),*map(str,args)],
+            helper = self.repo/'scripts/macos-container-state.sh'
+            if helper.exists(): shutil.copy2(helper, self.root/helper.name)
+        return subprocess.run([find_bash(),*self.shell_arguments(),script.as_posix(),*map(str,args)],
                               env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=30)
+
+    def shell_arguments(self):
+        # Normalize Windows paths and replace Bash's inherited search path
+        # after startup, for both direct scripts and native chezmoi hooks.
+        command='PATH="$(cd "$1" && pwd -P)"; export PATH; shift; exec bash --noprofile --norc "$@"'
+        return ['--noprofile', '--norc', '-c', command, 'fixture', self.bin.as_posix()]
 
     def calls(self):
         path=self.root/'calls.jsonl'
@@ -147,6 +196,25 @@ class MacFixture(unittest.TestCase):
 
 
 class MacFixtureIsolationTest(MacFixture):
+    @unittest.skipUnless(shutil.which('chezmoi'), 'Real chezmoi required')
+    def test_native_shell_interpreter_replaces_inherited_host_path(self):
+        self.state['os'] = 'FixtureOS'
+        (self.root/'state.json').write_text(json.dumps(self.state), encoding='utf-8')
+        config = self.root/'shell.toml'
+        config.write_text('[interpreters.sh]\ncommand = ' + json.dumps(find_bash()) +
+                          '\nargs = ' + json.dumps(self.shell_arguments()) + '\n', encoding='utf-8')
+        scripts = self.source/'.chezmoiscripts'
+        scripts.mkdir()
+        (scripts/'run_before_probe.sh').write_text('#!/bin/sh\nuname -s\n', encoding='utf-8', newline='\n')
+        result = subprocess.run(
+            [shutil.which('chezmoi'), '--source', str(self.source), '--destination', str(self.home),
+             '--config', str(config), '--cache', str(self.root/'cache'),
+             '--persistent-state', str(self.root/'chezmoi-state.boltdb'), '--no-tty', 'apply'],
+            env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip(), 'FixtureOS')
+        self.assertEqual(self.calls(), [['uname', ['-s']]])
+
     def test_launchctl_emits_macos_lf_even_with_windows_text_streams(self):
         domain = 'gui/501'
         for status, output in (

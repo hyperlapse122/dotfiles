@@ -170,15 +170,19 @@ class AgentInstructionsTest(unittest.TestCase):
                      "before using another runtime or installing compatibility tools"):
             self.assertIn(text, block)
 
-    def test_runtime_startup_is_on_demand_only(self):
+    def test_runtime_startup_policy_matches_host(self):
         for os_name in ("darwin", "windows"):
             block = instruction_block(self.baselines[os_name]["claude"], RUNTIME_HEADING)
             with self.subTest(os=os_name):
-                for text in ("only when an active task needs it", "Do not start it during configuration application",
-                             "or enable startup at login"):
-                    self.assertIn(text, block)
                 if os_name == "darwin":
-                    self.assertIn("manually with `container system start`", block)
+                    for text in ("Explicit configuration application", "recommended kernel", "startup at login",
+                                 "Preserve an already running runtime", "Do not restart or stop"):
+                        self.assertIn(text, block)
+                    self.assertNotIn("Do not start it during configuration application", block)
+                else:
+                    for text in ("only when an active task needs it", "Do not start it during configuration application",
+                                 "or enable startup at login"):
+                        self.assertIn(text, block)
 
     def test_t3_additions_contain_no_runtime_baseline_on_any_host(self):
         runtime_lines = {line for os_name in ("darwin", "windows")

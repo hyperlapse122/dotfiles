@@ -85,7 +85,7 @@ Registration does not apply dotfiles.
 ## Preview and Apply
 
 Close active Claude Code, Codex, Antigravity and T3 sessions before updating their managed configuration and plugins.
-Finish active container tasks and keep the container runtime stopped throughout application.
+An already running container runtime can remain active throughout application.
 From the selected checkout:
 
 ```sh
@@ -108,11 +108,29 @@ This upgrades all eligible Homebrew packages, including packages installed outsi
 No lockfile, scheduled updater, forced upgrades, or explicit cleanup is added.
 An update failure stops before upgrade; either command failing fails application.
 The [container formula's post-install hook](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/c/container.rb) unloads container services during installation or upgrade.
-Before installing container and before the global upgrade, application checks the current user's GUI and background launchd domains for registered container services.
-It refuses the package operation if services are registered or inspection fails; a confirmed absent login domain is allowed.
-Finish the owning tasks and stop the runtime from their launch context before retrying; application never stops it for you.
-The checks do not lock the runtime, so do not start new container work while application is running.
+Before package installation and again after `brew update`, application inspects the actual runtime and the current user's GUI and background launchd registrations.
+An active runtime or registered native services protect container from both direct and dependency-driven upgrades through a temporary Homebrew pin.
+Other eligible packages continue upgrading; registration alone no longer blocks application.
+An existing owner pin stays in place, and application removes only its own pin on success, command failure, or an ordinary interruption.
+Failed inspection, protection, or pin restoration fails application with a diagnostic.
+If a missing container installation still has registered native services, resolve that inconsistent installation before retrying.
+Homebrew may reject a package that requires a newer pinned container dependency; application does not remove protection to force that upgrade.
+The checks do not lock the runtime, so avoid starting new container work while package maintenance is running.
 Configuration previews and worktree preparation do not run these commands.
+
+After package maintenance, a separate apply hook prepares the kernel and login service.
+For a stopped runtime, it runs `container system start --disable-kernel-install`, then `container system kernel set --recommended --force`.
+The kernel installer requires the API service; `--force` permits refreshing an existing recommended kernel in this stopped-on-entry branch.
+Application then registers a missing login service with `brew services start container` and verifies actual API readiness.
+A registered service is not re-registered, and a runtime already active on entry keeps its kernel and service state.
+Homebrew may report its one-shot launcher as stopped while `container system status` reports the actual runtime as running; that state is preserved.
+
+If kernel preparation fails after API startup, application fails and reports that the API may remain running.
+It does not stop the API or register a missing login service after that failure.
+The pending record at `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/container-kernel-pending` prevents later applies from treating that running API as a prepared runtime.
+Resolve the reported kernel error and, once no other task depends on the kernel, complete `container system kernel set --recommended --force` manually.
+After it succeeds, remove the pending record and reapply.
+If the API is already stopped, reapplying retries preparation and clears the record on success.
 
 Application also reconciles the account's zsh login shell and Ghostty's native Unix-executable association.
 It replaces primary and legacy Ghostty configuration with default-only repository content, including the macOS Application Support location.
@@ -154,19 +172,20 @@ PATH integration runs on source changes; an unchanged apply does not repair manu
 
 Apple container is the default runtime for container-related development work on this Mac.
 The [upstream requirements](https://github.com/apple/container#requirements) match the supported Apple Silicon macOS 26+ host.
-Configuration application installs the CLI without starting its runtime or enabling startup at login.
+Explicit configuration application installs the CLI, prepares its recommended kernel, and enables the runtime at login.
+The managed kernel and login service are host infrastructure, separate from disposable workload resources.
 All managed harnesses receive the macOS guidance through their native instruction baseline, including launches from T3; Windows receives Podman guidance instead.
 
-Check the installed version and start the runtime only when a task needs it:
+Check the installed version and runtime before creating task resources:
 
 ```sh
 container --version
-container system start
+container system status
 container list --all
 container image list
 ```
 
-First startup may request the recommended Linux kernel or native macOS permissions.
+Native macOS permissions may still require approval during initial setup.
 Record the existing resources and their owners before creating or downloading anything.
 For a disposable smoke check, use a unique container name:
 

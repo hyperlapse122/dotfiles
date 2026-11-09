@@ -16,6 +16,7 @@ import stat
 import subprocess
 import tempfile
 import time
+import uuid
 
 from asset_fixtures import copy_asset_templates, run_with_assets
 
@@ -29,10 +30,18 @@ def executable(name):
     return str(Path(found).resolve())
 
 
+def report_phase(label, elapsed):
+    if elapsed is None:
+        print(f"Smoke phase started: {label}", flush=True)
+    else:
+        print(f"Smoke phase ended: {label} ({elapsed:.3f}s)", flush=True)
+
+
 def run(arguments, *, env, cwd):
     result = run_with_assets(
         arguments, env=env, cwd=cwd, capture_output=True, text=True,
         encoding="utf-8", errors="backslashreplace", timeout=300,
+        phase_reporter=report_phase,
     )
     if result.returncode:
         raise RuntimeError(
@@ -93,27 +102,29 @@ def check_bun_lifecycle(command, source, home, outside, env, target):
     launcher = binary.with_name("bunx.ps1" if os.name == "nt" else "bunx")
     paths = (binary, launcher)
 
-    def apply_and_check(pin):
+    def apply_and_check(pin, stage):
+        print(f"Bun lifecycle started: {stage}", flush=True)
         run(command + ["apply", "--force", "--exclude=scripts"], env=env, cwd=outside)
         check_version(run([str(binary), "--version"], env=env, cwd=outside), pin["tag"])
         check_bunx(home, outside, env)
+        print(f"Bun lifecycle passed: {stage}", flush=True)
 
     before = [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]
-    apply_and_check(current)
+    apply_and_check(current, "unchanged apply")
     if before != [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]:
         raise RuntimeError("Unchanged apply rewrote the Bun installation")
     for path in paths:
         path.unlink()
-        apply_and_check(current)
+        apply_and_check(current, "repair " + path.name)
     if target not in rollback["targets"]:
         raise RuntimeError(f"Missing verified Bun rollback fixture for {target}")
     try:
         candidate["personalAppLocks"]["bun"] = rollback
         lock_path.write_text(json.dumps(candidate), encoding="utf-8")
-        apply_and_check(rollback)
+        apply_and_check(rollback, "rollback")
     finally:
         lock_path.write_text(original, encoding="utf-8")
-    apply_and_check(current)
+    apply_and_check(current, "restore current pin")
     print(f"Native {target}: Bun/bunx repeated apply, repair, and {rollback['tag']} rollback passed")
 
 
@@ -231,23 +242,61 @@ def fresh_windows_environment(isolated):
     return expanded
 
 
+def check_windows_terminal_paths(home, outside, env, commands, shells):
+    # Keep one fresh terminal per registry case and reuse its discovery cache.
+    expected = [name for name, _ in commands]
+    if len(expected) != len(set(expected)):
+        raise RuntimeError("Fresh Windows command batch contains duplicate names")
+    names = ",".join("'" + name.replace("'", "''") + "'" for name, _ in commands)
+    prefix = "DOTFILES_TERMINAL_" + uuid.uuid4().hex + ":"
+    output = run([
+        shells["powershell"], "-NoProfile", "-Command",
+        "$ErrorActionPreference = 'Stop'; $prefix = '" + prefix + "'; foreach ($name in @(" + names + ")) { "
+        "$command = Get-Command $name -ErrorAction Stop; "
+        "[Console]::WriteLine($prefix + 'BEGIN:' + $name); "
+        "[Console]::WriteLine((ConvertTo-Json -InputObject $command.Source -Compress)); [Console]::Out.Flush(); "
+        "& $command --version | ForEach-Object { [Console]::WriteLine($_) }; "
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; "
+        "[Console]::WriteLine(); [Console]::WriteLine($prefix + 'END:' + $name); [Console]::Out.Flush() }",
+    ], env=fresh_windows_environment(env), cwd=outside)
+    # Start-Process launchers inherit stdout outside PowerShell's success stream.
+    # Frame the shared stdout channel rather than trying to capture that stream.
+    lines = output.splitlines()
+    records = []
+    index = 0
+    while index < len(lines):
+        if not lines[index].startswith(prefix + "BEGIN:") or index + 1 >= len(lines):
+            raise RuntimeError(f"Fresh Windows child returned incomplete command discovery: {output}")
+        name = lines[index].removeprefix(prefix + "BEGIN:")
+        source = json.loads(lines[index + 1])
+        index += 2
+        version = []
+        while index < len(lines) and not lines[index].startswith(prefix):
+            version.append(lines[index])
+            index += 1
+        if index == len(lines) or lines[index] != prefix + "END:" + name:
+            raise RuntimeError(f"Fresh Windows child returned incomplete command discovery: {output}")
+        records.append({"name": name, "source": source, "version": "\n".join(version)})
+        index += 1
+    if [record["name"] for record in records] != expected:
+        raise RuntimeError(f"Fresh Windows child returned incomplete command discovery: {output}")
+    for (name, tag), record in zip(commands, records, strict=True):
+        suffix = ".ps1" if name in ("agy", "pi", "bunx") else ".exe"
+        installed = home / ".local/bin" / (name + suffix)
+        if name == "node":
+            installed = home / ".local/share/dotfiles/node/node.exe"
+        if not installed.samefile(record["source"]):
+            raise RuntimeError(f"Fresh Windows child did not discover {installed}: {record}")
+        check_version(record["version"], tag)
+        print(f"Fresh Windows child: {record['source']}\n{record['version']}")
+
+
 def check_terminal_path(home, outside, env, name, tag, shells):
-    suffix = ".ps1" if name in ("agy", "pi", "bunx") else ".exe"
-    installed = home / ".local/bin" / (name + suffix if os.name == "nt" else name)
-    if name == "node":
-        installed = home / ".local/share/dotfiles/node" / ("node.exe" if os.name == "nt" else "bin/node")
     if os.name == "nt":
-        output = run([
-            shells["powershell"], "-NoProfile", "-Command",
-            f"(Get-Command {name} -ErrorAction Stop).Source; "
-            f"& {name} --version; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}",
-        ], env=fresh_windows_environment(env), cwd=outside)
-        lines = output.splitlines()
-        if not lines or not installed.samefile(lines[0]):
-            raise RuntimeError(f"Fresh Windows child did not discover {installed}: {output}")
-        check_version("\n".join(lines[1:]), tag)
-        print("Fresh Windows child: " + output)
-        return
+        return check_windows_terminal_paths(home, outside, env, [(name, tag)], shells)
+    installed = home / ".local/bin" / name
+    if name == "node":
+        installed = home / ".local/share/dotfiles/node/bin/node"
 
     terminal_env = env.copy()
     terminal_env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
@@ -424,12 +473,18 @@ def main():
                     if os.name != "nt":
                         for tool in ("node", "npm", "npx"):
                             run(["/bin/sh", "-c", '. "$HOME/.config/dotfiles/path.sh"; command -v "$1"; "$1" --version', "sh", tool], env=dict(env, PATH="/usr/bin:/bin"), cwd=outside)
-                if args.path_integration:
+                if args.path_integration and os.name != "nt":
                     check_terminal_path(home, outside, env, application["command"], tag, shells)
             if target in applications.get("bun", {}).get("targets", {}):
                 check_bunx(home, outside, env)
-                if args.path_integration:
+                if args.path_integration and os.name != "nt":
                     check_terminal_path(home, outside, env, "bunx", lock["personalAppLocks"]["bun"]["tag"], shells)
+            if args.path_integration and os.name == "nt":
+                commands = [(app["command"], lock["personalAppLocks"][name]["tag"])
+                            for name, app in applications.items() if target in app["targets"]]
+                if target in applications.get("bun", {}).get("targets", {}):
+                    commands.append(("bunx", lock["personalAppLocks"]["bun"]["tag"]))
+                check_windows_terminal_paths(home, outside, env, commands, shells)
 
         if args.path_integration and os.name == "nt":
             with windows_path_restored():
