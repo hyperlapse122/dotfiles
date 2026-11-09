@@ -82,7 +82,7 @@ class T3CodeSettingsTest(unittest.TestCase):
             for other in ('codex', 'claude', 'pi'):
                 if other != harness:
                     self.assertNotIn('T3_' + other.upper(), text)
-        baseline = self.chez('execute-template', '{{ template "agent-instructions" (dict "harness" "codex") }}').stdout
+        baseline = self.chez('execute-template', '{{ template "agent-instructions" (dict "harness" "codex" "chezmoi" .chezmoi) }}').stdout
         self.assertIn('BASELINE_COMMON', baseline)
         self.assertNotIn('T3_COMMON', baseline)
         self.assertNotIn('## T3 delegation', baseline)
