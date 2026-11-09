@@ -35,9 +35,9 @@ Use container runtimes and local Kubernetes clusters only for temporary developm
 
 - Before creating resources, identify the local runtime or cluster endpoint and distinguish this task's resources from those used by other active tasks. Track the resources you create or download so they can all be removed.
 - As soon as their use ends, delete the task's clusters, containers, images, volumes, networks, build caches, and temporary data. Stopping containers or pruning only unused resources is not sufficient. Volumes are temporary: do not retain them for reuse or debugging, or merely because they already existed.
-- Protect resources used by other active tasks; their owning tasks must clean them up when finished. Do not use a global prune or runtime reset that would remove those resources. Do not delete remote resources, installed runtime binaries, credentials, or unrelated host files.
+- Protect resources used by other active tasks, whether run by a user or an agent; their owning tasks must clean them up when finished. Do not use a global prune or runtime reset that would remove those resources. Do not delete remote resources, installed runtime binaries, credentials, or unrelated host files.
 - Clean up after success, failure, and orderly cancellation. After a forced interruption, check for and remove leftover task resources when work resumes. Do not leave development deployments running after the task ends.
 - Verify that no task-owned disposable resources remain, including zero task-owned volumes, before reporting cleanup complete. If deletion fails or ownership cannot be established, report the remaining resources and the reason instead of claiming success.
-- Check host disk-space reclamation separately from resource deletion. Reclaim unused virtual-disk space when safe, but do not stop a shared runtime or compact its disk while another active task depends on it. Report any unreclaimed space or unfinished cleanup.
+- Check host disk-space reclamation separately from resource deletion. Before stopping a shared runtime or compacting its disk, establish that no other user or agent work depends on it. If that cannot be established, leave the runtime running and report the unreclaimed space. Do not shut down unrelated VMs or WSL distributions. Report any unfinished cleanup.
 
 {{ end -}}

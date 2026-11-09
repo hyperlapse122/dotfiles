@@ -99,6 +99,9 @@ class AgentInstructionsTest(unittest.TestCase):
         heading = "## Temporary containers and local Kubernetes"
         expected = instruction_block(self.baseline["claude"], heading)
         self.assertTrue(expected.strip())
+        for safeguard in ("whether run by a user or an agent", "Do not delete remote resources",
+                          "ownership cannot be established", "leave the runtime running"):
+            self.assertIn(safeguard, expected)
         for harness, rendered in self.baseline.items():
             with self.subTest(harness=harness):
                 self.assertEqual(rendered.count(heading), 1)
