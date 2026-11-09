@@ -314,7 +314,14 @@ class HarnessPluginsTest(unittest.TestCase):
         self.assertFalse((self.home / ".local/bin/omp.exe").exists())
 
     def test_repository_inventory_and_asset_manifest_leave_omp_unmanaged(self):
-        command = [self.chezmoi, "--config", str(self.config), "--source", str(self.repo),
+        config = self.root / "inventory.json"
+        config.write_text(json.dumps({"data": {"t3CodeRelease": {
+            "tag_name": "v0.0.0",
+            "assets": [{"name": f"T3-Code-0.0.0-{arch}.deb",
+                        "browser_download_url": f"https://example.invalid/t3-{arch}.deb",
+                        "digest": "sha256:" + "1" * 64} for arch in ("amd64", "arm64")],
+        }}}), encoding="utf-8")
+        command = [self.chezmoi, "--config", str(config), "--source", str(self.repo),
                    "--destination", str(self.home), "--cache", str(self.root / "repository-cache"),
                    "--persistent-state", str(self.root / "repository-state.boltdb"), "--no-tty"]
         options = dict(env=self.env, capture_output=True, text=True, encoding="utf-8", timeout=60)

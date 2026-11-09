@@ -50,13 +50,23 @@ def check_version(output, tag):
 
 def check_bunx(home, outside, env):
     fixture = outside / "local bunx package"
-    bins = fixture / "node_modules/.bin"
-    bins.mkdir(parents=True, exist_ok=True)
-    (bins / "dotfiles-bun-fixture").write_text(
+    package = fixture / "package"
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "package.json").write_text(json.dumps({
+        "name": "dotfiles-bun-fixture", "version": "1.0.0",
+        "bin": {"dotfiles-bun-fixture": "cli.js"},
+    }), encoding="utf-8")
+    (package / "cli.js").write_text(
         '#!/usr/bin/env bun\nconsole.log(JSON.stringify(process.argv.slice(2)));\nprocess.exit(37);\n',
         encoding="utf-8",
     )
-    (bins / "dotfiles-bun-fixture").chmod(0o755)
+    (package / "cli.js").chmod(0o755)
+    (fixture / "package.json").write_text(json.dumps({
+        "private": True, "dependencies": {"dotfiles-bun-fixture": "file:./package"},
+    }), encoding="utf-8")
+    # Let Bun create its native Windows bin shim instead of a Unix-only executable.
+    binary = home / ".local/bin" / ("bun.exe" if os.name == "nt" else "bun")
+    run([str(binary), "install", "--offline", "--ignore-scripts", "--no-cache"], env=env, cwd=fixture)
     arguments = ["--bun", "--no-install", "dotfiles-bun-fixture", "with spaces", "", "--flag", "quote'\"", "trailing\\"]
     launcher = home / ".local/bin" / ("bunx.ps1" if os.name == "nt" else "bunx")
     if os.name == "nt":
