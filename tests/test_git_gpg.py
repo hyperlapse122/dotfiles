@@ -26,6 +26,8 @@ class GitGpgSettingsTest(unittest.TestCase):
             "private_dot_t3", "dot_local", "run_onchange_after_30-install-t3-code.sh.tmpl",
             "private_dot_gemini", "run_after_20-antigravity-plugins.*",
         ))
+        (self.source / ".chezmoidata/personal-apps.json").write_text(
+            '{"personalApps": {}}\n', encoding="utf-8")
         sidecar = self.source / "dot_local/bin/private_dotfiles-pinentry.json.tmpl"
         sidecar.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(self.repo / "home/dot_local/bin/private_dotfiles-pinentry.json.tmpl", sidecar)

@@ -41,6 +41,8 @@ class SecretsTest(unittest.TestCase):
             "run_after_45-gitlab-auth.*", "run_after_30-install-fonts.*",
             "private_dot_gemini", "run_after_20-antigravity-plugins.*",
         ))
+        (self.source / "home/.chezmoidata/personal-apps.json").write_text(
+            '{"personalApps": {}}\n', encoding="utf-8")
         self.config = self.root / "chezmoi.toml"
         self.env = os.environ.copy()
         self.env.update({
