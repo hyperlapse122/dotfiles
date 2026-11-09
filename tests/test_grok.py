@@ -98,8 +98,14 @@ class GrokTest(unittest.TestCase):
         self.assertEqual(path.parent.name, 'bin')
         self.assertTrue(result['enabled'] and result['config']['enabled'])
         self.assertIn({'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}, result['environment'])
+        self.assertIn({'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}, result['environment'])
         self.assertIn(previous['providerInstances']['grok']['environment'][0], result['environment'])
         self.assertNotIn('launchArgs', result['config'])
+        result['environment'] += [{'name': 'GROK_SUBAGENTS', 'value': '1'}]
+        again = self.render('t3-code-settings', json.dumps({'providerInstances': {'grok': result}}))
+        reconciled = json.loads(again.stdout)['providerInstances']['grok']['environment']
+        self.assertEqual([x['value'] for x in reconciled if x['name'] == 'GROK_SUBAGENTS'], ['0'])
+        self.assertIn(previous['providerInstances']['grok']['environment'][0], reconciled)
         for invalid in (False, None, [], {'config': False}, {'environment': False}):
             with self.subTest(invalid=invalid):
                 self.assertNotEqual(self.render('t3-code-settings', json.dumps({'providerInstances': {'grok': invalid}})).returncode, 0)

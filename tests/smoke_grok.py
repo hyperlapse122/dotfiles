@@ -19,6 +19,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from unittest.mock import patch
 
 from asset_fixtures import copy_asset_templates, harness_skill_names, run_with_assets
@@ -85,7 +86,13 @@ def capture_requests():
         thread.join()
 
 
-def t3_startup(binary, root, home, outside, env, target, install_desktop):
+def check_subagent_tools(request, *, controlled):
+    names = {tool.get('function', tool).get('name', '') for tool in request.get('tools', [])}
+    if ('spawn_subagent' in names) == controlled:
+        raise RuntimeError('Unexpected native Grok subagent availability: ' + str(sorted(names)))
+
+
+def t3_startup(binary, root, home, outside, env, target, install_desktop, requests):
     from smoke_t3_code import T3Rpc, desktop_command, provision_desktop
     real_env = os.environ.copy()
     if install_desktop:
@@ -109,7 +116,6 @@ def t3_startup(binary, root, home, outside, env, target, install_desktop):
         listener.bind(('127.0.0.1', 0))
         port = listener.getsockname()[1]
     token = subprocess.run(command + ['auth', 'session', 'issue', '--base-dir', str(t3_home),
-                                     '--scope', 'providers:manage', '--scope', 'orchestration:read',
                                      '--ttl', '5m', '--token-only'], env=env, cwd=outside,
                            capture_output=True, text=True, check=True, timeout=60).stdout.strip()
     with (root / 't3.log').open('w', encoding='utf-8') as log:
@@ -138,6 +144,39 @@ def t3_startup(binary, root, home, outside, env, target, install_desktop):
                     or 'goal' not in {entry['name'].lstrip('/') for entry in snapshot.get('slashCommands', [])}):
                 raise RuntimeError('Fresh T3 did not initialize the native managed Grok ACP driver.')
             print('Fresh T3 initialized native Grok with the managed binary directory absent from PATH')
+            project_id, thread_id = str(uuid.uuid4()), str(uuid.uuid4())
+            rpc.call('2', 'projects.mutate', {'type': 'project.create', 'commandId': str(uuid.uuid4()),
+                'projectId': project_id, 'title': 'Native tool control proof', 'workspaceRoot': str(outside)})
+            rpc.call('3', 'orchestration.dispatchCommand', {'type': 'thread.create', 'commandId': str(uuid.uuid4()),
+                'threadId': thread_id, 'projectId': project_id, 'title': 'Native Grok control proof',
+                'modelSelection': {'instanceId': 'grok', 'model': 'grok-code-fast-1'},
+                'runtimeMode': 'full-access', 'interactionMode': 'default', 'branch': None, 'worktreePath': None,
+                'createdBy': 'user', 'creationSource': 'web'})
+            nonce = 'T3_GROK_CONTROL_' + uuid.uuid4().hex
+            start = len(requests)
+            rpc.call('4', 'orchestration.dispatchCommand', {'type': 'message.dispatch', 'commandId': str(uuid.uuid4()),
+                'threadId': thread_id, 'messageId': str(uuid.uuid4()), 'text': nonce + ' Reply hello; execute no tools.',
+                'attachments': [], 'dispatchMode': {'type': 'start_immediately'}, 'createdBy': 'user', 'creationSource': 'web'})
+            deadline = time.monotonic() + 60
+            captured = []
+            while time.monotonic() < deadline:
+                captured = [body for body in requests[start:]
+                            if body.get('model') == 'grok-code-fast-1'
+                            and nonce in '\n'.join(strings(body))]
+                if captured:
+                    break
+                projection = rpc.call(str(uuid.uuid4()), 'orchestration.getThreadProjection', {'threadId': thread_id})
+                if projection.get('runs') and projection['runs'][-1].get('status') in ('failed', 'cancelled', 'interrupted'):
+                    errors = [item.get('failure') for item in projection.get('turnItems', []) if item.get('type') == 'error']
+                    raise RuntimeError('Native T3 Grok capture turn failed: ' + json.dumps(errors))
+                time.sleep(.1)
+            if not captured:
+                raise RuntimeError('Native T3 Grok turn did not reach the capture endpoint: ' + log.name)
+            check_subagent_tools(captured[-1], controlled=True)
+            text = '\n'.join(strings(captured[-1]))
+            if 'search_tool' not in text or 'use_tool' not in text:
+                raise RuntimeError('Native Grok request lost its MCP discovery/call tools.')
+            print('Native T3 Grok request omitted spawn_subagent and retained MCP discovery/call tools')
         finally:
             if rpc:
                 rpc.close()
@@ -282,6 +321,7 @@ def main():
         if not agent_requests:
             raise RuntimeError('Native Grok did not request the selected agent model.')
         for request in agent_requests:
+            check_subagent_tools(request, controlled=False)
             if not any(body in text.replace('\r\n', '\n') for text in strings(request)):
                 raise RuntimeError('Native Grok did not expand the full CE skill into its agent request.')
             payload = json.dumps(request)
@@ -291,7 +331,14 @@ def main():
         if markers['foreign'] in json.dumps(requests):
             raise RuntimeError('Native Grok loaded foreign harness instructions.')
         if args.t3 or args.install_desktop:
-            t3_startup(binary, root, home, outside, env, target, args.install_desktop)
+            t3_startup(binary, root, home, outside, env, target, args.install_desktop, requests)
+            start = len(requests)
+            invoke(binary, ['-m', 'grok-code-fast-1', '--max-turns', '1', '-p', 'CLI_AFTER_T3 hello'],
+                   env, outside, success=False)
+            later = [body for body in requests[start:] if body.get('model') == 'grok-code-fast-1']
+            if not later:
+                raise RuntimeError('Later direct Grok CLI did not reach the capture endpoint.')
+            check_subagent_tools(later[-1], controlled=False)
         print(f'Native Grok {pins["grok"]["tag"]}: {target}, private settings, native CE repair/discovery/expansion, '
               'and exactly-once shared skill discovery passed')
         print('Model completion was not exercised: loopback inference requests were deliberately rejected.')

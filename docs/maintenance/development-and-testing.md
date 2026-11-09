@@ -194,7 +194,7 @@ Both smokes prepare official pinned artifacts in disposable homes, repair native
 
 These inference requests use inert credentials and rejecting loopback endpoints. Native validation jobs receive no Synthetic secret; only the model-discovery resolver step uses the repository Actions secret. Hosted CI uses `--install-desktop` to provision its own T3 prerequisite.
 
-The separate T3 instruction smoke uses controlled local model replies to exercise native context selection, resume, compaction and mode transitions. It checks existing instruction settings, per-provider environment precedence, CE invocation, and isolation from concurrent or later direct CLI processes.
+The separate T3 instruction smoke uses controlled local model replies to exercise native context selection, resume, compaction and mode transitions. It checks existing instruction settings, per-provider environment precedence, CE invocation, and isolation from concurrent or later direct CLI processes. Codex and Claude checks also inspect native spawning tool removal while retaining named T3 delegation tools across fresh turns, mode changes, resume, and compaction. Repeat `--harness codex --harness claude` to run only those harnesses; the default still includes pi. The Grok smoke captures an actual T3 request and compares its spawning tools with direct CLI requests before and after the T3 launch.
 
 ```sh
 mise exec chezmoi python -- python tests/smoke_t3_instructions.py

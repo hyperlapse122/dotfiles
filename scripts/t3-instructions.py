@@ -12,6 +12,11 @@ import tomllib
 CODEX_MARKER = '<dotfiles-t3-developer-instructions>'
 CLAUDE_MARKER = '<dotfiles-preserved-claude-append>'
 OVERRIDE = 'T3CODE_CODEX_LAUNCH_ARGS'
+NATIVE_CONTROLS = {
+    'codex': [['--disable', feature] for feature in
+              ('multi_agent', 'multi_agent_v2', 'multi_agent_v2_dynamic_tools')],
+    'claudeAgent': [['--disallowedTools=Agent']],
+}
 
 
 def environment_key(name):
@@ -110,7 +115,13 @@ def instruction_config(home, provider, arguments, environment):
     return developer
 
 
-def clean_owned(arguments, addition_file):
+def clean_owned(arguments, addition_file, controls=(), control_base=()):
+    arguments = list(arguments)
+    for contribution in reversed(controls):
+        for index in range(len(arguments) - len(contribution), -1, -1):
+            if arguments[index:index + len(contribution)] == contribution:
+                arguments[index:index + len(contribution)] = control_base
+                break
     result = []
     index = 0
     while index < len(arguments):
@@ -126,6 +137,28 @@ def clean_owned(arguments, addition_file):
         result.append(argument)
         index += 1
     return result
+
+
+def claude_controls(arguments):
+    remaining, original, denied = [], [], []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        name, separator, value = argument.partition('=')
+        if name not in ('--disallowedTools', '--disallowed-tools'):
+            remaining.append(argument)
+            index += 1
+            continue
+        original.append(argument)
+        if separator:
+            denied.append(value)
+        index += 1
+        while index < len(arguments) and not arguments[index].startswith('-'):
+            original.append(arguments[index])
+            denied.append(arguments[index])
+            index += 1
+    controls = [['--disallowedTools=' + ','.join([*denied, 'Agent'])]]
+    return remaining, original, controls
 
 
 def read_mapping(path):
@@ -177,14 +210,17 @@ def apply(destination, environment=None):
         addition_file = settings_path.parent / 'instructions' / (harness + '.md')
         addition = addition_file.read_text(encoding='utf-8') if addition_file.is_file() else ''
         old = records.get(name, {})
-        if not addition.strip() and not old:
+        controls = NATIVE_CONTROLS.get(name, [])
+        control_base = []
+        if not addition.strip() and not old and not controls:
             continue
         current = config.get('launchArgs', '')
         if current == old.get('lastArgs'):
             base = old['baseArgs']
             had_args = old['hadArgs']
         else:
-            base = join_args(clean_owned(tokenize(current), addition_file))
+            base = join_args(clean_owned(tokenize(current), addition_file, old.get('controlArgs', []),
+                                         old.get('controlBaseArgs', [])))
             had_args = 'launchArgs' in config
             if tokenize(base) == tokenize(current):
                 base = current
@@ -206,16 +242,11 @@ def apply(destination, environment=None):
         if not isinstance(base_environment, list) or any(
                 not isinstance(entry, dict) or not isinstance(entry.get('name'), str) for entry in base_environment):
             raise ValueError('Native provider environment must contain named entries.')
-        if not addition.strip():
+        if not addition.strip() and not controls:
             if had_args:
                 config['launchArgs'] = base
             else:
                 config.pop('launchArgs', None)
-            if name == 'codex':
-                if had_environment:
-                    provider['environment'] = base_environment
-                else:
-                    provider.pop('environment', None)
             changed = True
             continue
         arguments = tokenize(base)
@@ -229,15 +260,19 @@ def apply(destination, environment=None):
             override = effective.get(OVERRIDE, '')
             if override.strip():
                 arguments = clean_owned(tokenize(override), addition_file)
-            developer = instruction_config(home, provider, arguments, effective)
-            combined = '\n\n'.join(value for value in (developer, CODEX_MARKER + '\n' + addition.rstrip()
-                + '\n</dotfiles-t3-developer-instructions>') if value)
-            arguments += ['-c', 'developer_instructions=' + json.dumps(combined, ensure_ascii=False)]
+            arguments += [value for contribution in controls for value in contribution]
+            if addition.strip():
+                developer = instruction_config(home, provider, arguments, effective)
+                combined = '\n\n'.join(value for value in (developer, CODEX_MARKER + '\n' + addition.rstrip()
+                    + '\n</dotfiles-t3-developer-instructions>') if value)
+                arguments += ['-c', 'developer_instructions=' + json.dumps(combined, ensure_ascii=False)]
             provider['environment'] = [entry for entry in base_environment if environment_key(entry['name']) != OVERRIDE]
             provider['environment'].append({'name': OVERRIDE, 'value': '', 'sensitive': False})
         elif name == 'claudeAgent':
-            files = flag_values(arguments, ('--append-system-prompt-file',))
-            inline = flag_values(arguments, ('--append-system-prompt',))
+            arguments, control_base, controls = claude_controls(arguments)
+            arguments += [value for contribution in controls for value in contribution]
+            files = flag_values(arguments, ('--append-system-prompt-file',)) if addition.strip() else []
+            inline = flag_values(arguments, ('--append-system-prompt',)) if addition.strip() else []
             preserved = []
             if files:
                 path = Path(files[-1])
@@ -246,14 +281,17 @@ def apply(destination, environment=None):
                 preserved.append(path.read_text(encoding='utf-8').removesuffix('\n').removesuffix('\r'))
             if inline:
                 preserved.append(inline[-1])
-            arguments += ['--append-system-prompt-file', str(addition_file)]
-            if preserved:
+            if addition.strip():
+                arguments += ['--append-system-prompt-file', str(addition_file)]
+            if preserved and addition.strip():
                 arguments += ['--append-system-prompt', CLAUDE_MARKER + '\n' + '\n'.join(preserved)
                               + '\n</dotfiles-preserved-claude-append>']
         else:
             arguments += ['--append-system-prompt', str(addition_file)]
         config['launchArgs'] = join_args(arguments)
         next_records[name] = {'baseArgs': base, 'hadArgs': had_args, 'lastArgs': config['launchArgs'],
+                              'controlArgs': controls,
+                              'controlBaseArgs': control_base,
                               'baseEnvironment': base_environment, 'hadEnvironment': had_environment,
                               'lastEnvironment': copy.deepcopy(provider.get('environment', []))}
         changed = True

@@ -131,8 +131,9 @@ class T3CodeSettingsTest(unittest.TestCase):
                        "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
-    def render(self, body, os_name, arch, *, existing="", distro="ubuntu"):
+    def render(self, body, os_name, arch, *, existing="", distro="ubuntu", personal_apps=None):
         context = ('(dict "t3CodePreferences" (fromJson ' + json.dumps(json.dumps(self.preferences))
+                   + ') "personalApps" (fromJson ' + json.dumps(json.dumps(personal_apps or {}))
                    + ') "chezmoi" (dict "os" ' + json.dumps(os_name)
                    + ' "arch" ' + json.dumps(arch)
                    + ' "osRelease" (dict "id" ' + json.dumps(distro) + ')'
@@ -142,6 +143,21 @@ class T3CodeSettingsTest(unittest.TestCase):
         wrapper = ('{{ template "fixture" ' + context + ' }}'
                    + '{{ define "fixture" }}' + body + '{{ end }}')
         return self.chez("execute-template", input=wrapper).stdout
+
+    def test_grok_subagent_environment_uses_native_platform_case_rules(self):
+        body = (self.repo / 'home/private_dot_t3/private_userdata/modify_private_settings.json').read_text()
+        for os_name, arch in (('windows', 'amd64'), ('linux', 'amd64'), ('darwin', 'arm64')):
+            with self.subTest(os=os_name):
+                unrelated = {'name': 'CUSTOM', 'secretRef': 'keep-reference'}
+                existing = json.dumps({'providerInstances': {'grok': {'environment': [unrelated,
+                    {'name': 'grok_subagents', 'value': '1'}, {'name': 'GROK_SUBAGENTS', 'value': '1'}]}}})
+                apps = {'grok': {'targets': {os_name + '-' + arch: {}}}}
+                rendered = self.render(body, os_name, arch, existing=existing, personal_apps=apps)
+                entries = json.loads(rendered)['providerInstances']['grok']['environment']
+                self.assertIn(unrelated, entries)
+                self.assertEqual([e['value'] for e in entries if e['name'] == 'GROK_SUBAGENTS'], ['0'])
+                self.assertEqual(any(e['name'] == 'grok_subagents' for e in entries), os_name != 'windows')
+                self.assertEqual(json.loads(self.render(body, os_name, arch, existing=rendered, personal_apps=apps)), json.loads(rendered))
 
     def test_missing_empty_and_missing_provider_objects_initialize_minimally(self):
         cases = (None, "", " \n\t", "{}", '{"preferences":{"theme":"dark"}}',

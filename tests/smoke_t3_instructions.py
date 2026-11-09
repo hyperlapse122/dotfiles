@@ -164,6 +164,30 @@ def check_t3_claude_request(payload, baseline):
         raise RuntimeError('T3 Claude request is missing the baseline writing block.')
 
 
+def check_native_tools(payload, harness, *, controlled, t3=False):
+    if harness == 'pi':
+        return
+    def tool_names(tools):
+        for tool in tools:
+            yield tool.get('name', tool.get('function', {}).get('name', ''))
+            yield from tool_names(tool.get('tools', []))
+    names = set(tool_names(payload.get('tools', [])))
+    native = {'spawn_agent', 'spawn_agents', 'send_input', 'resume_agent', 'wait_agent', 'close_agent',
+              'Agent', 'Task'}
+    has_spawn = bool(names & {'spawn_agent', 'spawn_agents', 'Agent', 'Task'})
+    if controlled and names & native:
+        raise RuntimeError('Native subagent tools remain available in controlled ' + harness + ': ' + str(names & native))
+    if controlled and harness == 'claude' and 'Read' in names:
+        raise RuntimeError('Existing Claude tool denial was discarded.')
+    if not controlled and not has_spawn:
+        raise RuntimeError('Direct CLI lost its baseline native spawning tool: ' + harness + ': ' + str(sorted(names)))
+    if t3:
+        text = '\n'.join(strings(payload))
+        for tool in ('delegate_task', 'orchestrator_capabilities'):
+            if not any(tool in name for name in names) and not re.search(r'mcp__t3[-_]code__' + tool + r'\b', text):
+                raise RuntimeError('T3 delegation tool disappeared from ' + harness + ': ' + tool + ': ' + str(sorted(names)))
+
+
 def codex_turn(binary, arguments, env, cwd, log, records, *, addition):
     start = len(records)
     phase = 'PHASE_' + log.name
@@ -195,11 +219,12 @@ def codex_turn(binary, arguments, env, cwd, log, records, *, addition):
     if not requests:
         raise RuntimeError('Codex did not reach the controlled native model transport.')
     check_context(requests[-1], 'codex', addition, existing=addition)
+    check_native_tools(requests[-1], 'codex', controlled=addition)
     if 'Write without slop' not in '\n'.join(strings(requests[-1])):
         raise RuntimeError('Native Codex CE invocation was not preserved.')
 
 
-def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline):
+def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline, harnesses):
     from smoke_t3_code import T3Rpc, WindowsProcessJob, desktop_command, provision_desktop
     real_env = os.environ.copy()
     if install_desktop:
@@ -208,7 +233,7 @@ def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline):
     settings_path = home / '.t3/userdata/settings.json'
     settings = json.loads(settings_path.read_text())
     for name, provider in settings['providerInstances'].items():
-        if name not in ('codex', 'claudeAgent', 'pi'):
+        if name not in {'codex' if h == 'codex' else 'claudeAgent' if h == 'claude' else 'pi' for h in harnesses}:
             provider['enabled'] = False
             provider.setdefault('config', {})['enabled'] = False
     settings_path.write_text(json.dumps(settings))
@@ -255,6 +280,8 @@ def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline):
             for provider, harness, model in (('codex', 'codex', 'gpt-5.1-codex'),
                                               ('claudeAgent', 'claude', 'claude-sonnet-4-6'),
                                               ('pi', 'pi', 'default')):
+                if harness not in harnesses:
+                    continue
                 snapshot = call('server.refreshProviders', {'instanceId': provider, 'cwd': str(cwd),
                                 'fresh': True, 'refreshModels': True})
                 native = next(item for item in snapshot['providers'] if item['instanceId'] == provider)
@@ -293,6 +320,7 @@ def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline):
                         raise RuntimeError('T3 native ' + harness + ' turn did not reach transport: ' + json.dumps(detail)[-3500:])
                     if text is None:
                         check_context(payloads[-1], harness, True, existing=True)
+                        check_native_tools(payloads[-1], harness, controlled=True, t3=True)
                         content = '\n'.join(strings(payloads[-1]))
                         if 'INCORRECT_INHERITED_OVERRIDE' in content:
                             raise RuntimeError('Inherited Codex launch arguments masked managed context.')
@@ -312,7 +340,7 @@ def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline):
                     nonce = 'CLI_NATIVE_' + uuid.uuid4().hex
                     start = len(records)
                     command_args = ([str(binary), '--print', '/compound-engineering:ce-noslop ' + nonce,
-                        '--tools', '', '--max-turns', '1', '--no-session-persistence'] if harness == 'claude' else
+                        '--max-turns', '1', '--no-session-persistence'] if harness == 'claude' else
                         [str(binary), '--no-session', '--no-tools', '--print', '/skill:ce-noslop ' + nonce])
                     run(command_args, env, cwd)
                     payloads = [body for path, body in records[start:]
@@ -320,6 +348,7 @@ def t3_turns(root, home, cwd, env, target, install_desktop, records, baseline):
                     if not payloads:
                         raise RuntimeError('Concurrent native CLI did not reach its transport.')
                     check_context(payloads[-1], harness, False)
+                    check_native_tools(payloads[-1], harness, controlled=False)
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     concurrent = pool.submit(direct)
                     projection = turn('fresh')
@@ -371,7 +400,10 @@ def main():
     parser.add_argument('--plugin-directory', type=Path)
     parser.add_argument('--expected-target')
     parser.add_argument('--install-desktop', action='store_true')
+    parser.add_argument('--harness', choices=('codex', 'claude', 'pi'), action='append',
+                        help='Limit native verification to selected harnesses (repeatable; default: all)')
     args = parser.parse_args()
+    harnesses = args.harness or ('codex', 'claude', 'pi')
     with temporary_destination() as temporary, model_transport() as (endpoint, records):
         root = Path(temporary)
         home, source, outside = root / "user's 한글", root / 'home', root / 'repository'
@@ -485,42 +517,47 @@ def main():
         settings = json.loads(settings_path.read_text())
         old_claude = root / 'existing-append.md'
         old_claude.write_text('EXISTING_CLAUDE_LAUNCH\n')
+        settings['providerInstances']['codex']['config']['launchArgs'] = '--enable multi_agent --enable multi_agent_v2'
         settings['providerInstances']['claudeAgent']['config']['launchArgs'] = instructions.join_args([
-            '--append-system-prompt-file', str(old_claude)])
+            '--disallowedTools=Read', '--append-system-prompt-file', str(old_claude)])
         settings['providerInstances']['pi']['config']['launchArgs'] = '--append-system-prompt EXISTING_PI_LAUNCH'
         settings_path.write_text(json.dumps(settings))
         instructions.apply(home, env)
         settings = json.loads(settings_path.read_text())
         snapshot = {path: path.read_bytes() for path in (codex_config, home / '.codex/AGENTS.md', home / '.claude/CLAUDE.md', home / '.pi/agent/AGENTS.md')}
         codex_args = instructions.tokenize(settings['providerInstances']['codex']['config']['launchArgs'])
-        # Complete native SQLite's first initialization before concurrent users
-        # open the same home; the two tested instances still share that home.
-        codex_turn(codex, [], env, outside, root / 'initial.log', records, addition=False)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [pool.submit(codex_turn, codex, arguments, env, outside, root / name, records, addition=addition)
-                       for arguments, name, addition in (([], 'direct.log', False), (codex_args, 't3.log', True))]
-            for future in futures:
-                future.result()
-        codex_turn(codex, [], env, outside, root / 'later.log', records, addition=False)
+        if 'codex' in harnesses:
+            # Complete native SQLite's first initialization before concurrent users
+            # open the same home; the two tested instances still share that home.
+            codex_turn(codex, [], env, outside, root / 'initial.log', records, addition=False)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(codex_turn, codex, arguments, env, outside, root / name, records, addition=addition)
+                           for arguments, name, addition in (([], 'direct.log', False), (codex_args, 't3.log', True))]
+                for future in futures:
+                    future.result()
+            codex_turn(codex, [], env, outside, root / 'later.log', records, addition=False)
         for name, binary in (('claude', claude), ('pi', pi)):
+            if name not in harnesses:
+                continue
             provider = 'claudeAgent' if name == 'claude' else 'pi'
             extra = instructions.tokenize(settings['providerInstances'][provider]['config']['launchArgs'])
             base = ([str(binary), '--print', '/compound-engineering:ce-noslop Reply with the fixture response.',
-                     '--tools', '', '--max-turns', '1', '--no-session-persistence'] if name == 'claude' else
+                     '--max-turns', '1', '--no-session-persistence'] if name == 'claude' else
                     [str(binary), '--no-session', '--no-tools', '--print', '/skill:ce-noslop Reply with the fixture response.'])
             for addition in (False, True, False):
                 start = len(records)
-                run([*base, *(extra if addition else [])], env, outside)
+                output = run([*base, *(extra if addition else [])], env, outside)
                 paths = ('/messages',) if name == 'claude' else ('/chat/completions',)
                 payloads = [body for path, body in records[start:] if path.endswith(paths) and 'Write without slop' in '\n'.join(strings(body))]
                 if not payloads:
-                    raise RuntimeError('Native CE invocation disappeared from ' + name)
+                    raise RuntimeError('Native CE invocation disappeared from ' + name + ': ' + output[-500:])
                 check_context(payloads[0], name, addition, existing=addition)
-        t3_turns(root, home, outside, env, target, args.install_desktop, records, baseline)
+                check_native_tools(payloads[0], name, controlled=addition)
+        t3_turns(root, home, outside, env, target, args.install_desktop, records, baseline, harnesses)
         for path, content in snapshot.items():
             if path.read_bytes() != content:
                 raise RuntimeError('Per-launch context changed a shared native instruction/config file.')
-        print(f'Native {target}: Codex/Claude/Pi direct, T3 launch options, native CE, and later-CLI isolation passed')
+        print(f'Native {target}: {", ".join(harnesses)} direct, T3 launch options, native CE, tool controls, and later-CLI isolation passed')
 
 
 if __name__ == '__main__':

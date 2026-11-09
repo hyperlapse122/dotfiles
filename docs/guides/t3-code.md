@@ -89,9 +89,30 @@ T3's task API does not provide CE's transport-enforced read-only review mode. A 
 - Claude receives an absolute `--append-system-prompt-file` pointing to its private addition. Existing effective append-file and inline append content is preserved together in an additional inline option because native duplicate flags use the last value. An existing absolute append file is read at apply time; reapply after changing it. Relative existing append files depend on each turn's working directory and cannot be composed at apply time. Application reports this unsupported case before changing launch settings; make that existing path absolute or leave the T3 addition empty. Native `CLAUDE.md` and repository discovery continue normally.
 - pi receives an additional `--append-system-prompt` file option. Its native repeated options accumulate, preserving existing file or inline additions and the managed provider policy extension.
 
-The private `~/.t3/userdata/dotfiles-launch-state.json` records original launch options for idempotent reapplication and restoration when an addition becomes empty. Subsequent edits to unrelated arguments and environment entries survive. It contains existing instruction text and environment metadata, so retain its owner-only permissions. The composer leaves native harness instruction/config files, the machine-wide environment, account directories, and terminal launch settings unchanged.
+The private `~/.t3/userdata/dotfiles-launch-state.json` records original instruction launch options and managed control contributions for idempotent reapplication. Clearing an addition restores its instruction options while keeping native subagent controls active. Subsequent edits to unrelated arguments and environment entries survive. It contains existing instruction text and environment metadata, so retain its owner-only permissions. The composer leaves native harness instruction/config files, the machine-wide environment, account directories, and terminal launch settings unchanged.
 
 The T3 Code 0.1.7 Grok driver does not support `launchArgs`; a T3-only native prompt addition is unsupported there. Its native user-scope baseline still loads. Do not replace this limitation with another account home or untrusted application context. The supported mechanisms were checked against Codex 0.166.0, Claude Code 2.1.318, and pi 1.5.0; native driver changes require repeating request/context verification.
+
+### T3-only native subagent controls
+
+Explicit apply suppresses native subagent spawning for the managed Codex, Claude Code, and Grok providers while retaining the existing prompt instructions and T3 task tools.
+The controls belong to provider launches, not shared native configuration, so terminal CLI sessions keep their original tool availability.
+Pi receives no new control, and Antigravity remains unchanged.
+
+- Codex receives `--disable multi_agent`, `--disable multi_agent_v2`, and `--disable multi_agent_v2_dynamic_tools` after effective launch-argument selection. Native `--disable` wins even when existing arguments contain `--enable`; a later `-c features.multi_agent=false` alone does not override that enable flag in Codex 0.167.0.
+- Claude receives one `--disallowedTools` value combining its existing deny rules with `Agent`. T3 collapses repeated instances of the same launch option, so the composer merges both native aliases and their values before passing them to the adapter. The bare tool denial covers the legacy Task alias without blocking the separately named T3 MCP tools.
+- Grok receives provider-scoped `GROK_SUBAGENTS=0`. This uses its documented stdio environment mechanism, independent of the unsupported T3 prompt-addition path. Reapplication replaces conflicting values and Windows case variants while preserving unrelated environment entries.
+
+Codex and Claude suppression remains active when their prompt addition is empty or missing.
+Their private launch-state records track only the managed argument contributions so later unrelated edits survive reconciliation.
+Close T3 before applying, then relaunch it; a saved setting does not change an already-running native process or cancel existing children.
+These controls remove native spawning tools, not arbitrary shell execution.
+
+On macOS ARM64, disposable T3 Code 0.1.7 requests with Codex 0.167.0 and Claude Code 2.1.319 omit native spawn tools and retain named T3 delegation/capability tools across fresh turns, mode changes, same-conversation resume, and completed compaction.
+Concurrent and later direct CLI requests retain native spawning tools and the same instruction baseline.
+Grok 1.0.77's actual T3 request omits `spawn_subagent` and retains MCP discovery/call tools; direct requests before and after T3 retain spawning.
+The Grok transport deliberately rejects inference after capture, so this verifies tool availability rather than model completion.
+Successful child-task execution under the new controls, pre-control conversation migration, Grok resume/compaction and concurrent CLI use, and native behavior on Windows/Linux remain unverified.
 
 `tests/smoke_t3_instructions.py` captures real native provider requests against a controlled local model transport in disposable homes. The transport returns generic fixture text to drive lifecycle transitions; it does not establish authenticated Codex or Claude model completion. For Codex, Claude, and pi, the test checks delivery of the actual repository delegation policy, baseline and repository inclusion, branch exclusion, native CE invocation, existing options, multiline quoting, concurrent/later CLI isolation, fresh T3 turns, Plan and mode changes, native conversation resume, completed native compaction, and postcompaction context. The pi fixture lowers its documented recent-token retention so short fixture conversations actually compact. Run it on the platform being validated, with an installed T3 desktop or `--install-desktop` on a disposable GitHub-hosted runner.
 
