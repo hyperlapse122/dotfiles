@@ -115,12 +115,12 @@ def instruction_config(home, provider, arguments, environment):
     return developer
 
 
-def clean_owned(arguments, addition_file, controls=()):
+def clean_owned(arguments, addition_file, controls=(), control_base=()):
     arguments = list(arguments)
     for contribution in reversed(controls):
         for index in range(len(arguments) - len(contribution), -1, -1):
             if arguments[index:index + len(contribution)] == contribution:
-                del arguments[index:index + len(contribution)]
+                arguments[index:index + len(contribution)] = control_base
                 break
     result = []
     index = 0
@@ -137,6 +137,28 @@ def clean_owned(arguments, addition_file, controls=()):
         result.append(argument)
         index += 1
     return result
+
+
+def claude_controls(arguments):
+    remaining, original, denied = [], [], []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        name, separator, value = argument.partition('=')
+        if name not in ('--disallowedTools', '--disallowed-tools'):
+            remaining.append(argument)
+            index += 1
+            continue
+        original.append(argument)
+        if separator:
+            denied.append(value)
+        index += 1
+        while index < len(arguments) and not arguments[index].startswith('-'):
+            original.append(arguments[index])
+            denied.append(arguments[index])
+            index += 1
+    controls = [['--disallowedTools=' + ','.join([*denied, 'Agent'])]]
+    return remaining, original, controls
 
 
 def read_mapping(path):
@@ -189,6 +211,7 @@ def apply(destination, environment=None):
         addition = addition_file.read_text(encoding='utf-8') if addition_file.is_file() else ''
         old = records.get(name, {})
         controls = NATIVE_CONTROLS.get(name, [])
+        control_base = []
         if not addition.strip() and not old and not controls:
             continue
         current = config.get('launchArgs', '')
@@ -196,7 +219,8 @@ def apply(destination, environment=None):
             base = old['baseArgs']
             had_args = old['hadArgs']
         else:
-            base = join_args(clean_owned(tokenize(current), addition_file, old.get('controlArgs', [])))
+            base = join_args(clean_owned(tokenize(current), addition_file, old.get('controlArgs', []),
+                                         old.get('controlBaseArgs', [])))
             had_args = 'launchArgs' in config
             if tokenize(base) == tokenize(current):
                 base = current
@@ -250,6 +274,7 @@ def apply(destination, environment=None):
             provider['environment'] = [entry for entry in base_environment if environment_key(entry['name']) != OVERRIDE]
             provider['environment'].append({'name': OVERRIDE, 'value': '', 'sensitive': False})
         elif name == 'claudeAgent':
+            arguments, control_base, controls = claude_controls(arguments)
             arguments += [value for contribution in controls for value in contribution]
             files = flag_values(arguments, ('--append-system-prompt-file',)) if addition.strip() else []
             inline = flag_values(arguments, ('--append-system-prompt',)) if addition.strip() else []
@@ -271,6 +296,7 @@ def apply(destination, environment=None):
         config['launchArgs'] = join_args(arguments)
         next_records[name] = {'baseArgs': base, 'hadArgs': had_args, 'lastArgs': config['launchArgs'],
                               'controlArgs': controls,
+                              'controlBaseArgs': control_base,
                               'baseEnvironment': base_environment, 'hadEnvironment': had_environment,
                               'lastEnvironment': copy.deepcopy(provider.get('environment', []))}
         changed = True

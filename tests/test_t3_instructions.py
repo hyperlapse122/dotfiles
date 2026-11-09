@@ -37,7 +37,7 @@ class T3InstructionsTest(unittest.TestCase):
             file.write_text('')
         self.write({'providerInstances': {
             'codex': {'config': {'launchArgs': '--enable multi_agent -c features.multi_agent_v2=true'}},
-            'claudeAgent': {'config': {'launchArgs': '--disallowedTools Read --allowedTools Agent'}},
+            'claudeAgent': {'config': {'launchArgs': '--disallowedTools Read Edit --disallowed-tools="Bash(git *)" --allowedTools Agent'}},
             'pi': {'config': {'launchArgs': '--thinking low'}},
         }})
         self.module.apply(self.home, {})
@@ -46,8 +46,8 @@ class T3InstructionsTest(unittest.TestCase):
         for feature in ('multi_agent', 'multi_agent_v2', 'multi_agent_v2_dynamic_tools'):
             self.assertTrue(any(codex[i:i + 2] == ['--disable', feature] for i in range(len(codex) - 1)))
         claude = self.module.tokenize(providers['claudeAgent']['config']['launchArgs'])
-        self.assertIn('--disallowedTools=Agent', claude)
-        self.assertEqual(claude[:4], ['--disallowedTools', 'Read', '--allowedTools', 'Agent'])
+        self.assertIn('--disallowedTools=Read,Edit,Bash(git *),Agent', claude)
+        self.assertEqual(claude[:2], ['--allowedTools', 'Agent'])
         self.assertEqual(providers['pi']['config']['launchArgs'], '--thinking low')
         before = self.settings.read_bytes()
         self.module.apply(self.home, {})
@@ -69,9 +69,8 @@ class T3InstructionsTest(unittest.TestCase):
         self.module.apply(self.home, {})
         providers = self.read()['providerInstances']
         self.assertEqual(self.module.tokenize(providers['codex']['config']['launchArgs']).count('--disable'), 3)
-        self.assertEqual(self.module.tokenize(providers['claudeAgent']['config']['launchArgs']).count('--disallowedTools=Agent'), 1)
+        self.assertIn('--disallowedTools=Edit,Agent', self.module.tokenize(providers['claudeAgent']['config']['launchArgs']))
         self.assertIn('--enable', self.module.tokenize(providers['codex']['config']['launchArgs']))
-        self.assertIn('Edit', self.module.tokenize(providers['claudeAgent']['config']['launchArgs']))
 
     def test_schema_one_records_and_preexisting_controls_preserve_the_user_base(self):
         base = '--disable multi_agent --enable user-feature'
