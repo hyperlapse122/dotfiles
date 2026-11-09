@@ -241,23 +241,40 @@ def fresh_windows_environment(isolated):
     return expanded
 
 
+def check_windows_terminal_paths(home, outside, env, commands, shells):
+    # Keep one fresh terminal per registry case and reuse its discovery cache.
+    expected = [name for name, _ in commands]
+    if len(expected) != len(set(expected)):
+        raise RuntimeError("Fresh Windows command batch contains duplicate names")
+    names = ",".join("'" + name.replace("'", "''") + "'" for name, _ in commands)
+    output = run([
+        shells["powershell"], "-NoProfile", "-Command",
+        "$ErrorActionPreference = 'Stop'; $results = @(foreach ($name in @(" + names + ")) { "
+        "$command = Get-Command $name -ErrorAction Stop; "
+        "$version = @(& $command --version); if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; "
+        "[pscustomobject]@{name=$name; source=$command.Source; version=($version -join \"`n\")} "
+        "}); ConvertTo-Json -InputObject $results -Compress",
+    ], env=fresh_windows_environment(env), cwd=outside)
+    records = json.loads(output)
+    if not isinstance(records, list) or [record.get("name") for record in records] != expected:
+        raise RuntimeError(f"Fresh Windows child returned incomplete command discovery: {output}")
+    for (name, tag), record in zip(commands, records, strict=True):
+        suffix = ".ps1" if name in ("agy", "pi", "bunx") else ".exe"
+        installed = home / ".local/bin" / (name + suffix)
+        if name == "node":
+            installed = home / ".local/share/dotfiles/node/node.exe"
+        if not installed.samefile(record["source"]):
+            raise RuntimeError(f"Fresh Windows child did not discover {installed}: {record}")
+        check_version(record["version"], tag)
+        print(f"Fresh Windows child: {record['source']}\n{record['version']}")
+
+
 def check_terminal_path(home, outside, env, name, tag, shells):
-    suffix = ".ps1" if name in ("agy", "pi", "bunx") else ".exe"
-    installed = home / ".local/bin" / (name + suffix if os.name == "nt" else name)
-    if name == "node":
-        installed = home / ".local/share/dotfiles/node" / ("node.exe" if os.name == "nt" else "bin/node")
     if os.name == "nt":
-        output = run([
-            shells["powershell"], "-NoProfile", "-Command",
-            f"(Get-Command {name} -ErrorAction Stop).Source; "
-            f"& {name} --version; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}",
-        ], env=fresh_windows_environment(env), cwd=outside)
-        lines = output.splitlines()
-        if not lines or not installed.samefile(lines[0]):
-            raise RuntimeError(f"Fresh Windows child did not discover {installed}: {output}")
-        check_version("\n".join(lines[1:]), tag)
-        print("Fresh Windows child: " + output)
-        return
+        return check_windows_terminal_paths(home, outside, env, [(name, tag)], shells)
+    installed = home / ".local/bin" / name
+    if name == "node":
+        installed = home / ".local/share/dotfiles/node/bin/node"
 
     terminal_env = env.copy()
     terminal_env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
@@ -434,12 +451,18 @@ def main():
                     if os.name != "nt":
                         for tool in ("node", "npm", "npx"):
                             run(["/bin/sh", "-c", '. "$HOME/.config/dotfiles/path.sh"; command -v "$1"; "$1" --version', "sh", tool], env=dict(env, PATH="/usr/bin:/bin"), cwd=outside)
-                if args.path_integration:
+                if args.path_integration and os.name != "nt":
                     check_terminal_path(home, outside, env, application["command"], tag, shells)
             if target in applications.get("bun", {}).get("targets", {}):
                 check_bunx(home, outside, env)
-                if args.path_integration:
+                if args.path_integration and os.name != "nt":
                     check_terminal_path(home, outside, env, "bunx", lock["personalAppLocks"]["bun"]["tag"], shells)
+            if args.path_integration and os.name == "nt":
+                commands = [(app["command"], lock["personalAppLocks"][name]["tag"])
+                            for name, app in applications.items() if target in app["targets"]]
+                if target in applications.get("bun", {}).get("targets", {}):
+                    commands.append(("bunx", lock["personalAppLocks"]["bun"]["tag"]))
+                check_windows_terminal_paths(home, outside, env, commands, shells)
 
         if args.path_integration and os.name == "nt":
             with windows_path_restored():

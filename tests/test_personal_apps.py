@@ -23,6 +23,40 @@ if os.name == "nt":
 
 
 class NativeAppVersionTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("pwsh") or shutil.which("powershell.exe"), "Native PowerShell required")
+    def test_windows_terminal_batch_discovers_and_checks_every_launcher_once(self):
+        from unittest.mock import patch
+        from smoke_personal_apps import check_windows_terminal_paths, run
+
+        shell = shutil.which("pwsh") or shutil.which("powershell.exe")
+        with tempfile.TemporaryDirectory(prefix="terminal batch ") as scratch:
+            home = Path(scratch)
+            directory = home / ".local/bin"
+            directory.mkdir(parents=True)
+            commands = [("agy", "1.2.3"), ("bunx", "2.3.4")]
+            for name, version in commands:
+                launcher = directory / (name + ".ps1")
+                launcher.write_text(f'Write-Output "{version}"\nexit 0\n', encoding="utf-8")
+                launcher.chmod(0o755)
+            env = dict(os.environ, PATH=str(directory) + os.pathsep + os.environ["PATH"])
+            with patch("smoke_personal_apps.fresh_windows_environment", return_value=env), patch(
+                "smoke_personal_apps.run", wraps=run
+            ) as invoke:
+                check_windows_terminal_paths(home, home, env, commands, {"powershell": shell})
+                self.assertEqual(invoke.call_count, 1)
+                (directory / "bunx.ps1").write_text('Write-Output "9.9.9"\nexit 0\n', encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "Expected pinned version"):
+                    check_windows_terminal_paths(home, home, env, commands, {"powershell": shell})
+                (directory / "bunx.ps1").write_text('exit 37\n', encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, r"Command failed \(37\)"):
+                    check_windows_terminal_paths(home, home, env, commands, {"powershell": shell})
+                first = {"name": "agy", "source": str(directory / "agy.ps1"), "version": "1.2.3"}
+                for records in ([first], [first, first]):
+                    with self.subTest(records=records), patch(
+                        "smoke_personal_apps.run", return_value=json.dumps(records)
+                    ), self.assertRaisesRegex(RuntimeError, "incomplete command discovery"):
+                        check_windows_terminal_paths(home, home, env, commands, {"powershell": shell})
+
     def test_bun_release_tag_matches_only_its_exact_version(self):
         from smoke_personal_apps import check_version
 
@@ -497,7 +531,8 @@ class PersonalAppsTest(unittest.TestCase):
         with patch("smoke_personal_apps.fresh_windows_environment", return_value=self.env):
             for discovered, accepted in ((alias, True), (other, False)):
                 with self.subTest(discovered=discovered), patch(
-                    "smoke_personal_apps.run", return_value=str(discovered) + "\n1.5.1\n"
+                    "smoke_personal_apps.run", return_value=json.dumps([
+                        {"name": "agy", "source": str(discovered), "version": "1.5.1"}])
                 ):
                     if accepted:
                         check_terminal_path(self.home, self.root, self.env, "agy", "1.5.1",
