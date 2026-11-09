@@ -69,8 +69,9 @@ elif name == 'brew':
         state['unrelated_upgraded'] = True
         (root/'state.json').write_text(json.dumps(state))
         if state.get('interrupt_upgrade'):
-            import signal
-            os.kill(os.getppid(), signal.SIGTERM)
+            # Ask the POSIX wrapper to signal its parent shell. Native Windows
+            # Python's os.kill uses Windows termination, not Git Bash signals.
+            sys.exit(143)
 elif name == 'container':
     if args == ['system', 'status', '--format', 'json']:
         status = state.get('runtime', 'unregistered')
@@ -159,7 +160,12 @@ class MacFixture(unittest.TestCase):
     def wrapper(self, path, command):
         path.parent.mkdir(parents=True, exist_ok=True)
         def quote(value): return "'"+str(value).replace("'", "'\\''")+"'"
-        path.write_text('#!/bin/sh\nexec '+quote(Path(sys.executable).as_posix())+' '+quote(self.fixture.as_posix())+' '+quote(command)+' "$@"\n', encoding='utf-8')
+        invocation = quote(Path(sys.executable).as_posix())+' '+quote(self.fixture.as_posix())+' '+quote(command)+' "$@"\n'
+        if command == 'brew':
+            body = invocation + 'result=$?\nif [ "$result" -eq 143 ]; then\n    kill -TERM "$PPID"\n    exit 0\nfi\nexit "$result"\n'
+        else:
+            body = 'exec ' + invocation
+        path.write_text('#!/bin/sh\n'+body, encoding='utf-8', newline='\n')
         path.chmod(0o755)
 
     def run_script(self, name, *args):

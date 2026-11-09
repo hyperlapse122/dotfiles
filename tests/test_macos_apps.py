@@ -87,7 +87,8 @@ class MacAppsTest(MacFixture):
                 self.state = {'packages': ['container'], 'runtime': 'running', **override}
                 before = len(self.calls())
                 result = self.run_script('scripts/macos-apps.sh')
-                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.returncode, 143 if override.get('interrupt_upgrade') else 23,
+                                 result.stdout + result.stderr)
                 self.assertIn(['brew', ['unpin', 'container']], self.calls()[before:])
                 self.assertEqual(json.loads((self.root / 'state.json').read_text())['pins'], [])
 
