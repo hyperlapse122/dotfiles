@@ -50,13 +50,23 @@ def check_version(output, tag):
 
 def check_bunx(home, outside, env):
     fixture = outside / "local bunx package"
-    bins = fixture / "node_modules/.bin"
-    bins.mkdir(parents=True, exist_ok=True)
-    (bins / "dotfiles-bun-fixture").write_text(
+    package = fixture / "package"
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "package.json").write_text(json.dumps({
+        "name": "dotfiles-bun-fixture", "version": "1.0.0",
+        "bin": {"dotfiles-bun-fixture": "cli.js"},
+    }), encoding="utf-8")
+    (package / "cli.js").write_text(
         '#!/usr/bin/env bun\nconsole.log(JSON.stringify(process.argv.slice(2)));\nprocess.exit(37);\n',
         encoding="utf-8",
     )
-    (bins / "dotfiles-bun-fixture").chmod(0o755)
+    (package / "cli.js").chmod(0o755)
+    (fixture / "package.json").write_text(json.dumps({
+        "private": True, "dependencies": {"dotfiles-bun-fixture": "file:./package"},
+    }), encoding="utf-8")
+    # Let Bun create its native Windows bin shim instead of a Unix-only executable.
+    binary = home / ".local/bin" / ("bun.exe" if os.name == "nt" else "bun")
+    run([str(binary), "install", "--offline", "--ignore-scripts", "--no-cache"], env=env, cwd=fixture)
     arguments = ["--bun", "--no-install", "dotfiles-bun-fixture", "with spaces", "", "--flag", "quote'\"", "trailing\\"]
     launcher = home / ".local/bin" / ("bunx.ps1" if os.name == "nt" else "bunx")
     if os.name == "nt":
@@ -252,36 +262,40 @@ def check_terminal_path(home, outside, env, name, tag, shells):
             print(f"Fresh {shell_name} {mode}: {output}")
 
 
-def check_windows_path_preservation(apply_and_check, home, env):
+def check_windows_path_preservation(apply_and_check, home, env, *, reapply=None):
     import winreg
 
     env["CE_PATH_SMOKE_ROOT"] = str(home / "unrelated tools")
     env["CE_PATH_SMOKE_HOME"] = str(home)
     expandable = r"%CE_PATH_SMOKE_ROOT%\bin"
     equivalent = expandable + ';%CE_PATH_SMOKE_HOME%/.LOCAL/BIN/'
+    directories = (home / ".local/bin", home / ".local/share/dotfiles/node")
     cases = (
-        (expandable, winreg.REG_EXPAND_SZ, False),
-        (str(home / "literal tools"), winreg.REG_SZ, False),
-        (equivalent, winreg.REG_EXPAND_SZ, True),
+        (expandable, winreg.REG_EXPAND_SZ, directories),
+        (str(home / "literal tools"), winreg.REG_SZ, directories),
+        (equivalent, winreg.REG_EXPAND_SZ, directories[1:]),
+        (equivalent + ';%CE_PATH_SMOKE_HOME%/.LOCAL/SHARE/DOTFILES/NODE/',
+         winreg.REG_EXPAND_SZ, ()),
     )
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
                        winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as key:
-        for case_index, (original, kind, already_present) in enumerate(cases):
+        for case_index, (original, kind, missing) in enumerate(cases):
             winreg.SetValueEx(key, "Path", 0, kind, original)
             apply_and_check(case_index)
             actual, actual_kind = winreg.QueryValueEx(key, "Path")
             if actual_kind != kind:
                 raise RuntimeError("PATH integration changed the existing registry value kind")
-            if already_present:
+            if not missing:
                 if actual != original:
                     raise RuntimeError("PATH integration rewrote an equivalent existing entry")
             else:
                 prefix = original + ";"
-                appended = actual[len(prefix):]
-                expected = os.path.normcase(str(home / ".local/bin"))
-                if not actual.startswith(prefix) or os.path.normcase(os.path.normpath(appended)) != expected:
+                appended = [os.path.normcase(os.path.normpath(entry))
+                            for entry in actual[len(prefix):].split(";")]
+                expected = [os.path.normcase(str(directory)) for directory in missing]
+                if not actual.startswith(prefix) or appended != expected:
                     raise RuntimeError("PATH integration changed unrelated raw entries or appended the wrong directory")
-            apply_and_check(case_index)
+            (reapply or apply_and_check)(case_index)
             if winreg.QueryValueEx(key, "Path") != (actual, actual_kind):
                 raise RuntimeError("Repeated PATH integration changed the existing value")
     print("Windows PATH: expandable and literal entries, registry kinds, and equivalent-entry idempotence preserved")
@@ -345,7 +359,9 @@ def main():
         copy_asset_templates(source, ('personal-apps', 'codex-package'))
         config = root / "config/chezmoi.toml"
         config.write_text("", encoding="utf-8")
-        env = os.environ.copy()
+        # Hosted runners can override .npmrc through machine-level npm settings.
+        env = {key: value for key, value in os.environ.items()
+               if not key.upper().startswith("NPM_CONFIG_")}
         env.update({
             "HOME": str(home), "USERPROFILE": str(home), "ZDOTDIR": str(home),
             "APPDATA": str(root / "config"), "LOCALAPPDATA": str(root / "local"),
@@ -374,7 +390,7 @@ def main():
         if not any(target in app["targets"] for app in applications.values()):
             raise RuntimeError(f"No declared personal application for native target {target}")
 
-        def apply_and_check(case_index=0):
+        def apply_and_check(case_index=0, *, verify_binaries=True):
             # Separate initial-state cases, but preserve onchange history within each case.
             arguments = command + [
                 "--persistent-state", str(root / "state" / f"chezmoi-{case_index}.boltdb"), "apply",
@@ -382,6 +398,8 @@ def main():
             if not args.path_integration:
                 arguments.append("--exclude=scripts")
             run(arguments, env=env, cwd=outside)
+            if not verify_binaries:
+                return
             for name, application in applications.items():
                 if target not in application["targets"]:
                     continue
@@ -415,7 +433,10 @@ def main():
 
         if args.path_integration and os.name == "nt":
             with windows_path_restored():
-                check_windows_path_preservation(apply_and_check, home, env)
+                check_windows_path_preservation(
+                    apply_and_check, home, env,
+                    reapply=lambda index: apply_and_check(index, verify_binaries=False),
+                )
         else:
             apply_and_check()
         if target in applications.get("node", {}).get("targets", {}):

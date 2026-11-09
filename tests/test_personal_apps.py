@@ -902,6 +902,23 @@ class PersonalAppPathTest(unittest.TestCase):
         self.apply()
         self.assert_integration_absent()
 
+    @unittest.skipUnless(os.name == "nt", "Windows registry PATH integration")
+    def test_native_smoke_validates_both_managed_path_directories(self):
+        from unittest.mock import patch
+        from smoke_personal_apps import check_windows_path_preservation
+
+        open_key = winreg.OpenKey
+
+        def isolated_key(hive, path, *args):
+            return open_key(hive, self.registry_path if path == "Environment" else path, *args)
+
+        def apply_case(index):
+            self.chezmoi("--persistent-state", str(self.root / f"smoke-{index}.boltdb"),
+                         "apply", "--force")
+
+        with patch.object(winreg, "OpenKey", side_effect=isolated_key):
+            check_windows_path_preservation(apply_case, self.home, self.env, reapply=apply_case)
+
     def test_application_pin_change_does_not_schedule_path_action(self):
         self.apply()
         self.remove_integration()

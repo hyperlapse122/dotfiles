@@ -23,11 +23,11 @@ T3_ADAPTERS = {harness: f"private_dot_t3/private_userdata/private_instructions/p
                for harness in ("claude", "codex", "pi")}
 
 
-def writing_block(text):
-    start = text.find(HEADING)
+def instruction_block(text, heading=HEADING):
+    start = text.find(heading)
     if start < 0:
         return ""
-    end = re.compile(r"^#{1,2} ", re.MULTILINE).search(text, start + len(HEADING))
+    end = re.compile(r"^#{1,2} ", re.MULTILINE).search(text, start + len(heading))
     return text[start:end.start() if end else len(text)].rstrip("\n") + "\n"
 
 
@@ -70,17 +70,17 @@ class AgentInstructionsTest(unittest.TestCase):
         cls.t3 = {harness: render(adapter) for harness, adapter in T3_ADAPTERS.items()}
 
     def test_every_harness_renders_the_block_once_with_identical_text(self):
-        expected = writing_block(self.baseline["claude"])
+        expected = instruction_block(self.baseline["claude"])
         self.assertTrue(expected.strip(), self.baseline["claude"])
         for harness, rendered in self.baseline.items():
             with self.subTest(harness=harness):
                 self.assertEqual(rendered.count(HEADING), 1, rendered)
-                self.assertEqual(writing_block(rendered), expected)
+                self.assertEqual(instruction_block(rendered), expected)
                 self.assertTrue(rendered.startswith(HEADING), repr(rendered[:80]))
                 self.assertNotIn("\n\n\n", rendered)
 
     def test_block_names_the_writing_skills_and_every_exclusion(self):
-        block = writing_block(self.baseline["claude"])
+        block = instruction_block(self.baseline["claude"])
         for skill in SKILLS:
             self.assertIn(skill, block)
         self.assertLess(block.index("`humanizer`"), block.index("`grammar-checker`"))
@@ -89,11 +89,29 @@ class AgentInstructionsTest(unittest.TestCase):
             self.assertIn(exclusion, excluded)
 
     def test_t3_additions_contain_no_part_of_the_block(self):
-        lines = [line.strip() for line in writing_block(self.baseline["claude"]).splitlines() if line.strip()]
+        lines = [line.strip() for line in instruction_block(self.baseline["claude"]).splitlines() if line.strip()]
         for harness, rendered in self.t3.items():
             with self.subTest(harness=harness):
                 for text in (*lines, *SKILLS):
                     self.assertNotIn(text, rendered)
+
+    def test_cleanup_policy_is_shared_once_and_not_duplicated_in_t3(self):
+        heading = "## Temporary containers and local Kubernetes"
+        expected = instruction_block(self.baseline["claude"], heading)
+        self.assertTrue(expected.strip())
+        for safeguard in ("whether run by a user or an agent", "Do not delete remote resources",
+                          "ownership cannot be established", "leave the runtime running"):
+            self.assertIn(safeguard, expected)
+        for harness, rendered in self.baseline.items():
+            with self.subTest(harness=harness):
+                self.assertEqual(rendered.count(heading), 1)
+                self.assertEqual(instruction_block(rendered, heading), expected)
+        for harness, rendered in self.t3.items():
+            with self.subTest(harness=harness):
+                self.assertNotIn(heading, rendered)
+                for line in expected.splitlines():
+                    if line.strip():
+                        self.assertNotIn(line, rendered)
 
     def test_delegation_policy_is_only_in_t3_additions(self):
         heading = "## T3 delegation"
