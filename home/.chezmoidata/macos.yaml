@@ -1,6 +1,7 @@
 macos:
   formulae:
     - aria2
+    - container
   casks:
     - google-chrome
     - 1password
