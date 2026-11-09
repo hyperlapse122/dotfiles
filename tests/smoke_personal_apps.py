@@ -16,6 +16,7 @@ import stat
 import subprocess
 import tempfile
 import time
+import uuid
 
 from asset_fixtures import copy_asset_templates, run_with_assets
 
@@ -247,16 +248,37 @@ def check_windows_terminal_paths(home, outside, env, commands, shells):
     if len(expected) != len(set(expected)):
         raise RuntimeError("Fresh Windows command batch contains duplicate names")
     names = ",".join("'" + name.replace("'", "''") + "'" for name, _ in commands)
+    prefix = "DOTFILES_TERMINAL_" + uuid.uuid4().hex + ":"
     output = run([
         shells["powershell"], "-NoProfile", "-Command",
-        "$ErrorActionPreference = 'Stop'; $results = @(foreach ($name in @(" + names + ")) { "
+        "$ErrorActionPreference = 'Stop'; $prefix = '" + prefix + "'; foreach ($name in @(" + names + ")) { "
         "$command = Get-Command $name -ErrorAction Stop; "
-        "$version = @(& $command --version); if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; "
-        "[pscustomobject]@{name=$name; source=$command.Source; version=($version -join \"`n\")} "
-        "}); ConvertTo-Json -InputObject $results -Compress",
+        "[Console]::WriteLine($prefix + 'BEGIN:' + $name); "
+        "[Console]::WriteLine((ConvertTo-Json -InputObject $command.Source -Compress)); [Console]::Out.Flush(); "
+        "& $command --version | ForEach-Object { [Console]::WriteLine($_) }; "
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; "
+        "[Console]::WriteLine(); [Console]::WriteLine($prefix + 'END:' + $name); [Console]::Out.Flush() }",
     ], env=fresh_windows_environment(env), cwd=outside)
-    records = json.loads(output)
-    if not isinstance(records, list) or [record.get("name") for record in records] != expected:
+    # Start-Process launchers inherit stdout outside PowerShell's success stream.
+    # Frame the shared stdout channel rather than trying to capture that stream.
+    lines = output.splitlines()
+    records = []
+    index = 0
+    while index < len(lines):
+        if not lines[index].startswith(prefix + "BEGIN:") or index + 1 >= len(lines):
+            raise RuntimeError(f"Fresh Windows child returned incomplete command discovery: {output}")
+        name = lines[index].removeprefix(prefix + "BEGIN:")
+        source = json.loads(lines[index + 1])
+        index += 2
+        version = []
+        while index < len(lines) and not lines[index].startswith(prefix):
+            version.append(lines[index])
+            index += 1
+        if index == len(lines) or lines[index] != prefix + "END:" + name:
+            raise RuntimeError(f"Fresh Windows child returned incomplete command discovery: {output}")
+        records.append({"name": name, "source": source, "version": "\n".join(version)})
+        index += 1
+    if [record["name"] for record in records] != expected:
         raise RuntimeError(f"Fresh Windows child returned incomplete command discovery: {output}")
     for (name, tag), record in zip(commands, records, strict=True):
         suffix = ".ps1" if name in ("agy", "pi", "bunx") else ".exe"
