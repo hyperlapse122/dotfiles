@@ -7,3 +7,21 @@ windows:
     - RedHat.Podman-Desktop
     - T3Tools.T3Code
     - Python.Python.3.14
+    - GnuWin32.Bison
+    - GnuWin32.Cpio
+    - GnuWin32.DiffUtils
+    - GnuWin32.File
+    - GnuWin32.FindUtils
+    - GnuWin32.Flex
+    - GnuWin32.GetText
+    - GnuWin32.Gperf
+    - GnuWin32.Grep
+    - GnuWin32.Gzip
+    - GnuWin32.M4
+    - GnuWin32.Make
+    - GnuWin32.Patch
+    - GnuWin32.Tar
+    - GnuWin32.Tree
+    - GnuWin32.UnZip
+    - GnuWin32.Which
+    - GnuWin32.Zip
