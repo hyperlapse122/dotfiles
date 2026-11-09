@@ -93,7 +93,8 @@ class MacAppsTest(MacFixture):
 
     def test_failed_protection_prevents_package_mutations(self):
         for override in ({'fail': 'brew pin container'}, {'runtime_json': '{}'},
-                         {'runtime_exit': 23}, {'fail': 'brew list --pinned'}):
+                         {'runtime_exit': 23}, {'fail': 'brew list --pinned'},
+                         {'fail': 'brew list --formula --versions container'}):
             with self.subTest(override=override):
                 self.state = {'packages': ['container'], 'runtime': 'running', **override}
                 before = len(self.calls())

@@ -70,8 +70,12 @@ container
                     ;;
             esac
         fi
-    elif [ "$container_protection" = true ]; then
-        fail 'Container services exist without a Homebrew installation; resolve the installation before applying.'
+    else
+        container_install_status=$?
+        [ "$container_install_status" -eq 1 ] || fail 'Cannot inspect the Homebrew container installation.'
+        if [ "$container_protection" = true ]; then
+            fail 'Container services exist without a Homebrew installation; resolve the installation before applying.'
+        fi
     fi
 }
 

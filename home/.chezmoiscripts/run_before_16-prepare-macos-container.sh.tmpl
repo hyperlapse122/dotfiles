@@ -1,0 +1,7 @@
+{{ if and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") -}}
+#!/bin/sh
+# file macos-container sha256: {{ include (joinPath .chezmoi.workingTree "scripts" "macos-container.sh") | sha256sum }}
+# file macos-container-state sha256: {{ include (joinPath .chezmoi.workingTree "scripts" "macos-container-state.sh") | sha256sum }}
+set -eu
+exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "macos-container.sh" | replace "'" "'\\''" }}'
+{{ end -}}

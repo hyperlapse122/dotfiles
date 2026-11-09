@@ -78,9 +78,10 @@ elif name == 'container':
         sys.exit(state.get('runtime_exit', 0 if status == 'running' else 1))
     elif args == ['system', 'start', '--disable-kernel-install']:
         if not state.get('start_no_effect'): state['runtime'] = 'running'
-    elif args == ['system', 'kernel', 'set', '--recommended']:
+    elif args == ['system', 'kernel', 'set', '--recommended', '--force']:
         if state.get('runtime') != 'running': sys.exit('API must run before kernel installation')
         state['kernel'] = True
+        if 'runtime_after_kernel' in state: state['runtime'] = state['runtime_after_kernel']
     else: sys.exit('Unexpected container command')
     (root/'state.json').write_text(json.dumps(state))
 elif name == 'git':
@@ -120,7 +121,7 @@ class MacFixture(unittest.TestCase):
         self.bin.mkdir()
         # Expose only these harmless host utilities. System directories can
         # contain a real Podman, even when the developer's PATH is excluded.
-        utilities = ('bash', 'awk', 'dirname', 'ls', 'tr', 'wc', 'jq', 'sleep')
+        utilities = ('bash', 'awk', 'dirname', 'ls', 'tr', 'wc', 'jq', 'sleep', 'mkdir', 'rm', 'cat')
         resolved = subprocess.run(
             [find_bash(), '--noprofile', '--norc', '-c',
              'PATH=/usr/bin:/bin; export PATH; command -v ' + ' '.join(utilities)],
