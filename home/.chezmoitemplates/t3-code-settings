@@ -106,10 +106,13 @@
 {{- if not (and (kindIs "map" $variable) (kindIs "string" (get $variable "name"))) -}}
 {{- fail "Invalid T3 Code settings.json: grok.environment entries require string names" -}}
 {{- end -}}
-{{- if ne $variable.name "GROK_DISABLE_AUTOUPDATER" -}}{{- $environment = append $environment $variable -}}{{- end -}}
+{{- $name := $variable.name -}}
+{{- if eq $.chezmoi.os "windows" -}}{{- $name = upper $name -}}{{- end -}}
+{{- if not (has $name (list "GROK_DISABLE_AUTOUPDATER" "GROK_SUBAGENTS")) -}}{{- $environment = append $environment $variable -}}{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- $environment = append $environment (dict "name" "GROK_DISABLE_AUTOUPDATER" "value" "1" "sensitive" false) -}}
+{{- $environment = append $environment (dict "name" "GROK_SUBAGENTS" "value" "0" "sensitive" false) -}}
 {{- $grok = $grok | setValueAtPath "driver" "grok" | setValueAtPath "enabled" true | setValueAtPath "config" $grokConfig | setValueAtPath "environment" $environment -}}
 {{- $providers = $providers | setValueAtPath "grok" $grok -}}
 {{- end -}}

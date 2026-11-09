@@ -32,6 +32,65 @@ class T3InstructionsTest(unittest.TestCase):
     def read(self):
         return json.loads(self.settings.read_text())
 
+    def test_native_controls_survive_empty_prompts_and_preserve_user_denials(self):
+        for file in self.instructions.iterdir():
+            file.write_text('')
+        self.write({'providerInstances': {
+            'codex': {'config': {'launchArgs': '--enable multi_agent -c features.multi_agent_v2=true'}},
+            'claudeAgent': {'config': {'launchArgs': '--disallowedTools Read --allowedTools Agent'}},
+            'pi': {'config': {'launchArgs': '--thinking low'}},
+        }})
+        self.module.apply(self.home, {})
+        providers = self.read()['providerInstances']
+        codex = self.module.tokenize(providers['codex']['config']['launchArgs'])
+        for feature in ('multi_agent', 'multi_agent_v2', 'multi_agent_v2_dynamic_tools'):
+            self.assertTrue(any(codex[i:i + 2] == ['--disable', feature] for i in range(len(codex) - 1)))
+        claude = self.module.tokenize(providers['claudeAgent']['config']['launchArgs'])
+        self.assertIn('--disallowedTools=Agent', claude)
+        self.assertEqual(claude[:4], ['--disallowedTools', 'Read', '--allowedTools', 'Agent'])
+        self.assertEqual(providers['pi']['config']['launchArgs'], '--thinking low')
+        before = self.settings.read_bytes()
+        self.module.apply(self.home, {})
+        self.assertEqual(self.settings.read_bytes(), before)
+        for file in self.instructions.iterdir():
+            file.unlink()
+        self.module.apply(self.home, {})
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_later_user_edits_do_not_accumulate_managed_native_controls(self):
+        self.write({'providerInstances': {'codex': {'config': {}}, 'claudeAgent': {'config': {}}}})
+        self.module.apply(self.home, {})
+        for file in self.instructions.iterdir():
+            file.write_text('')
+        edited = self.read()
+        edited['providerInstances']['codex']['config']['launchArgs'] += ' --enable user-feature'
+        edited['providerInstances']['claudeAgent']['config']['launchArgs'] += ' --disallowedTools Edit'
+        self.write(edited)
+        self.module.apply(self.home, {})
+        providers = self.read()['providerInstances']
+        self.assertEqual(self.module.tokenize(providers['codex']['config']['launchArgs']).count('--disable'), 3)
+        self.assertEqual(self.module.tokenize(providers['claudeAgent']['config']['launchArgs']).count('--disallowedTools=Agent'), 1)
+        self.assertIn('--enable', self.module.tokenize(providers['codex']['config']['launchArgs']))
+        self.assertIn('Edit', self.module.tokenize(providers['claudeAgent']['config']['launchArgs']))
+
+    def test_schema_one_records_and_preexisting_controls_preserve_the_user_base(self):
+        base = '--disable multi_agent --enable user-feature'
+        self.write({'providerInstances': {'codex': {'config': {'launchArgs': base}}}})
+        state_path = self.settings.with_name('dotfiles-launch-state.json')
+        state_path.write_text(json.dumps({'schema': 1, 'providers': {'codex': {
+            'baseArgs': base, 'lastArgs': base, 'hadArgs': True,
+            'baseEnvironment': [], 'lastEnvironment': [], 'hadEnvironment': False}}}))
+        self.module.apply(self.home, {})
+        edited = self.read()
+        edited['providerInstances']['codex']['config']['launchArgs'] += ' --config model=fixture'
+        self.write(edited)
+        self.module.apply(self.home, {})
+        args = self.module.tokenize(self.read()['providerInstances']['codex']['config']['launchArgs'])
+        self.assertEqual(args.count('--disable'), 4)
+        self.assertIn('model=fixture', args)
+        saved = json.loads(state_path.read_text())['providers']['codex']
+        self.assertEqual(self.module.tokenize(saved['baseArgs'])[:4], ['--disable', 'multi_agent', '--enable', 'user-feature'])
+
     def test_existing_context_is_composed_once_and_removal_restores_user_settings(self):
         codex = self.home / '.codex'
         codex.mkdir()
@@ -69,7 +128,15 @@ class T3InstructionsTest(unittest.TestCase):
         for file in self.instructions.iterdir():
             file.write_text('')
         self.module.apply(self.home, {})
-        self.assertEqual(self.read(), original)
+        restored = self.read()['providerInstances']
+        saved = json.loads(self.settings.with_name('dotfiles-launch-state.json').read_text())['providers']
+        for name in ('codex', 'claudeAgent'):
+            if name not in original['providerInstances']:
+                continue
+            self.assertEqual(saved[name]['baseArgs'], original['providerInstances'][name]['config']['launchArgs'])
+            self.assertNotIn('T3_' + ('claude' if name == 'claudeAgent' else name), restored[name]['config']['launchArgs'])
+        if 'pi' in original['providerInstances']:
+            self.assertEqual(restored['pi'], original['providerInstances']['pi'])
 
     def test_effective_environment_override_is_preserved_and_cannot_hide_the_addition(self):
         original = {'providerInstances': {'codex': {'config': {'launchArgs': '--config model="unused"'},
@@ -87,7 +154,15 @@ class T3InstructionsTest(unittest.TestCase):
         self.assertEqual(self.settings.read_bytes(), first)
         (self.instructions / 'codex.md').write_text('')
         self.module.apply(self.home, {})
-        self.assertEqual(self.read(), original)
+        restored = self.read()['providerInstances']
+        saved = json.loads(self.settings.with_name('dotfiles-launch-state.json').read_text())['providers']
+        for name in ('codex', 'claudeAgent'):
+            if name not in original['providerInstances']:
+                continue
+            self.assertEqual(saved[name]['baseArgs'], original['providerInstances'][name]['config']['launchArgs'])
+            self.assertNotIn('T3_' + ('claude' if name == 'claudeAgent' else name), restored[name]['config']['launchArgs'])
+        if 'pi' in original['providerInstances']:
+            self.assertEqual(restored['pi'], original['providerInstances']['pi'])
 
     def test_unresolvable_relative_claude_file_preserves_all_existing_settings(self):
         self.write({'providerInstances': {'claudeAgent': {'config': {
@@ -115,9 +190,10 @@ class T3InstructionsTest(unittest.TestCase):
         (self.instructions / 'codex.md').write_text('')
         self.module.apply(self.home, {})
         result = self.read()['providerInstances']['codex']
-        self.assertEqual(self.module.tokenize(result['config']['launchArgs']),
+        self.assertEqual(self.module.tokenize(result['config']['launchArgs'])[:4],
                          ['--config', 'model=fixture', '--enable', 'user-feature'])
-        self.assertEqual(result['environment'], [{'name': 'NEW_USER_VARIABLE', 'value': 'preserve'}])
+        self.assertIn({'name': 'NEW_USER_VARIABLE', 'value': 'preserve'}, result['environment'])
+        self.assertEqual(next(x['value'] for x in result['environment'] if x['name'] == 'T3CODE_CODEX_LAUNCH_ARGS'), '')
 
     def test_environment_names_follow_native_platform_case_rules(self):
         # Patch the existing runtime platform seam; production has no test-only switch.
@@ -152,7 +228,10 @@ class T3InstructionsTest(unittest.TestCase):
                 self.module.apply(self.home, {})
         self.assertEqual(state_path.read_bytes(), state_before)
         self.module.apply(self.home, {})
-        self.assertEqual(self.read()['providerInstances']['codex'], {'config': {'launchArgs': '--enable user-feature'}})
+        result = self.read()['providerInstances']['codex']
+        self.assertEqual(self.module.tokenize(result['config']['launchArgs'])[:2], ['--enable', 'user-feature'])
+        self.assertNotIn(self.module.CODEX_MARKER, result['config']['launchArgs'])
+        self.assertIn('multi_agent', self.module.tokenize(result['config']['launchArgs']))
 
 
 if __name__ == '__main__':
