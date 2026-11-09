@@ -4,6 +4,7 @@ windows:
     - AgileBits.1Password
     - AgileBits.1Password.CLI
     - Microsoft.PowerShell
+    - wez.wezterm
     - RedHat.Podman-Desktop
     - T3Tools.T3Code
     - Python.Python.3.14

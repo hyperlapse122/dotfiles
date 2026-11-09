@@ -1,7 +1,36 @@
-# Ghostty and the Login Shell
+# Terminal Emulators and Shells
 
 Explicit personal configuration installs Ghostty, selects it through the platform's native default-terminal mechanism, and uses the account's zsh login shell.
-Windows terminal settings are outside this configuration.
+On Windows, explicit application installs WezTerm and configures it to open PowerShell 7 with Jetendard.
+Windows system default-terminal delegation remains unchanged.
+
+## Windows WezTerm
+
+Run `mise run apply` from the worktree to install `wez.wezterm` through the existing WinGet application owner and apply its configuration.
+An existing installation is retained without a forced upgrade.
+Worktree preparation with `mise install` does not install WezTerm or register Explorer menus.
+
+The repository manages `~/.wezterm.lua`, replacing that file's existing contents with two preferences: the Jetendard font and `pwsh.exe` as the default program.
+PowerShell loads its normal profile; the existing repository profile integration remains responsible for mise.
+Font size, colors, padding, cursor, and key bindings use WezTerm defaults.
+Linux and macOS continue to use Ghostty.
+
+Application also reconciles **Open WezTerm Here** for a selected directory and a directory's background menu under `HKCU\Software\Classes`.
+On Windows 11, use **Show more options** if the classic verb is absent from the first menu.
+The command opens a local PowerShell session in the selected directory, including directories with spaces or non-ASCII names.
+Repeated application repairs these entries and retains unrelated verbs and values.
+It uses the installer's verb name so a machine-wide installation does not create a second differently named menu entry.
+
+WezTerm can load another configuration before `~/.wezterm.lua`, including a file selected with `--config-file` or `WEZTERM_CONFIG_FILE`, a portable configuration beside its executable, or an XDG/`~/.config/wezterm/wezterm.lua` file.
+If the managed preferences do not appear, inspect those locations; application does not remove them.
+See [WezTerm configuration discovery](https://wezterm.org/config/files.html).
+
+This integration does not redirect arbitrary console launches or replace Windows Terminal.
+The Windows default-terminal registry values select COM handoff implementations; setting a WezTerm executable path there cannot provide that interface.
+See the [upstream default-terminal request](https://github.com/wezterm/wezterm/issues/7534).
+
+To check a personal application, open WezTerm directly and through both Explorer menu locations.
+Confirm `$PSVersionTable.PSEdition` is `Core`, `(Get-Location).Path` is the selected directory, `mise --version` works, and `wezterm ls-fonts --text 'ABC 한글'` resolves Jetendard.
 
 ## Supported Devices
 

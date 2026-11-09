@@ -14,6 +14,7 @@ README.md
 .zshrc
 {{ else }}
 AppData
+.wezterm.lua
 {{ end }}
 {{ $zsh := get . "zsh" | default dict }}
 {{ if not (has (printf "%s-%s" .chezmoi.os .chezmoi.arch) (get $zsh "targets" | default list)) }}
