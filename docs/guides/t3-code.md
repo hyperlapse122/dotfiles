@@ -57,7 +57,9 @@ Model selections are replaced as complete values, including their options; omitt
 Cleanup and writing-style objects merge only their declared children.
 Pi’s `default` model is disabled in the T3 model picker through `providerModelPreferences.pi.hiddenModels`.
 Apply adds the declared hidden models while preserving existing hidden choices, model ordering, and other providers’ preferences.
-Other settings and nested children remain local, including project overrides, idle compaction, branch prefixes and instructions, `followChangeRequestTemplates`, other SnapShots options, and appearance preferences beyond the three managed font families.
+The managed Claude provider (`claudeAgent`) uses `Compact idle threads = Before the cache expires (beta)` (`config.idleCompaction = "beforeCacheExpires"`).
+Explicit application restores this choice after local edits while preserving other Claude settings and additional provider instances.
+Other settings and nested children remain local, including project overrides, global idle-compaction defaults, branch prefixes and instructions, `followChangeRequestTemplates`, other SnapShots options, and appearance preferences beyond the three managed font families.
 The client map owns `fontFamilySans = "Pretendard Variable"`, `fontFamilyCode = "Jetendard"`, and `fontFamilyTerminal = "Jetendard"`.
 Both coding preferences are set so the terminal uses Jetendard in either unified or separate-font mode; the local mode flag is preserved.
 Sizes, line spacing, themes, and `fontFamilyComposer` remain local; the prompt input uses T3's native inheritance unless a separate composer preference overrides it.
