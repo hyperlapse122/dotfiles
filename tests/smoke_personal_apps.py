@@ -269,27 +269,31 @@ def check_windows_path_preservation(apply_and_check, home, env):
     env["CE_PATH_SMOKE_HOME"] = str(home)
     expandable = r"%CE_PATH_SMOKE_ROOT%\bin"
     equivalent = expandable + ';%CE_PATH_SMOKE_HOME%/.LOCAL/BIN/'
+    directories = (home / ".local/bin", home / ".local/share/dotfiles/node")
     cases = (
-        (expandable, winreg.REG_EXPAND_SZ, False),
-        (str(home / "literal tools"), winreg.REG_SZ, False),
-        (equivalent, winreg.REG_EXPAND_SZ, True),
+        (expandable, winreg.REG_EXPAND_SZ, directories),
+        (str(home / "literal tools"), winreg.REG_SZ, directories),
+        (equivalent, winreg.REG_EXPAND_SZ, directories[1:]),
+        (equivalent + ';%CE_PATH_SMOKE_HOME%/.LOCAL/SHARE/DOTFILES/NODE/',
+         winreg.REG_EXPAND_SZ, ()),
     )
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
                        winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as key:
-        for case_index, (original, kind, already_present) in enumerate(cases):
+        for case_index, (original, kind, missing) in enumerate(cases):
             winreg.SetValueEx(key, "Path", 0, kind, original)
             apply_and_check(case_index)
             actual, actual_kind = winreg.QueryValueEx(key, "Path")
             if actual_kind != kind:
                 raise RuntimeError("PATH integration changed the existing registry value kind")
-            if already_present:
+            if not missing:
                 if actual != original:
                     raise RuntimeError("PATH integration rewrote an equivalent existing entry")
             else:
                 prefix = original + ";"
-                appended = actual[len(prefix):]
-                expected = os.path.normcase(str(home / ".local/bin"))
-                if not actual.startswith(prefix) or os.path.normcase(os.path.normpath(appended)) != expected:
+                appended = [os.path.normcase(os.path.normpath(entry))
+                            for entry in actual[len(prefix):].split(";")]
+                expected = [os.path.normcase(str(directory)) for directory in missing]
+                if not actual.startswith(prefix) or appended != expected:
                     raise RuntimeError("PATH integration changed unrelated raw entries or appended the wrong directory")
             apply_and_check(case_index)
             if winreg.QueryValueEx(key, "Path") != (actual, actual_kind):
