@@ -14,7 +14,6 @@ url_api = "https://api.github.com/repos/XcodesOrg/xcodes/releases/assets/5635629
 
 [tools."aqua:XcodesOrg/xcodes"."platforms.macos-x64"]
 checksum = "sha256:f1519afe934a513e85dd9b32fc872394becbbb6a41db15d9ac3926a09a891888"
-checksum_source = "mise-versions"
 url = "https://github.com/XcodesOrg/xcodes/releases/download/2.1.0/xcodes.zip"
 url_api = "https://api.github.com/repos/XcodesOrg/xcodes/releases/assets/563562943"
 
@@ -55,7 +54,6 @@ url_api = "https://api.github.com/repos/ast-grep/ast-grep/releases/assets/700681
 
 [tools.ast-grep."platforms.windows-arm64"]
 checksum = "sha256:8b3f8fed40e99e0fa4df050859d2897fce454cba262d903486dc12a464237126"
-checksum_source = "mise-versions"
 url = "https://github.com/ast-grep/ast-grep/releases/download/0.51.1/app-aarch64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/ast-grep/ast-grep/releases/assets/701851689"
 
@@ -132,7 +130,6 @@ url_api = "https://api.github.com/repos/Kitware/CMake/releases/assets/682699600"
 
 [tools.cmake."platforms.macos-x64"]
 checksum = "sha256:679e77a96b9ef9484cc6c1445255fc4f84206b48a65420efbedf16bdab55fbff"
-checksum_source = "mise-versions"
 url = "https://github.com/Kitware/CMake/releases/download/v4.4.5/cmake-4.4.5-macos-universal.tar.gz"
 url_api = "https://api.github.com/repos/Kitware/CMake/releases/assets/682699600"
 
@@ -309,7 +306,6 @@ url_api = "https://api.github.com/repos/ninja-build/ninja/releases/assets/318863
 
 [tools.ninja."platforms.macos-x64"]
 checksum = "sha256:c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b"
-checksum_source = "mise-versions"
 url = "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-mac.zip"
 url_api = "https://api.github.com/repos/ninja-build/ninja/releases/assets/318863524"
 
@@ -334,7 +330,6 @@ url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/a
 
 [tools.podman."platforms.linux-arm64-musl"]
 checksum = "sha256:1d7c2a3241b56effa68c724359fb30e603a802699b2b7b20fe2fae5ff6819601"
-checksum_source = "mise-versions"
 url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_arm64.tar.gz"
 url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977468"
 
@@ -345,7 +340,6 @@ url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/a
 
 [tools.podman."platforms.linux-x64-musl"]
 checksum = "sha256:af1f85c22214088a0a9986b9c82b4c9b5b74eda8ecaa6c8cca82b1a63f339b4a"
-checksum_source = "mise-versions"
 url = "https://github.com/podman-container-tools/podman/releases/download/v6.1.4/podman-remote-static-linux_amd64.tar.gz"
 url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/634977464"
 
