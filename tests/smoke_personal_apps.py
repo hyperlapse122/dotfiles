@@ -262,7 +262,7 @@ def check_terminal_path(home, outside, env, name, tag, shells):
             print(f"Fresh {shell_name} {mode}: {output}")
 
 
-def check_windows_path_preservation(apply_and_check, home, env):
+def check_windows_path_preservation(apply_and_check, home, env, *, reapply=None):
     import winreg
 
     env["CE_PATH_SMOKE_ROOT"] = str(home / "unrelated tools")
@@ -295,7 +295,7 @@ def check_windows_path_preservation(apply_and_check, home, env):
                 expected = [os.path.normcase(str(directory)) for directory in missing]
                 if not actual.startswith(prefix) or appended != expected:
                     raise RuntimeError("PATH integration changed unrelated raw entries or appended the wrong directory")
-            apply_and_check(case_index)
+            (reapply or apply_and_check)(case_index)
             if winreg.QueryValueEx(key, "Path") != (actual, actual_kind):
                 raise RuntimeError("Repeated PATH integration changed the existing value")
     print("Windows PATH: expandable and literal entries, registry kinds, and equivalent-entry idempotence preserved")
@@ -390,7 +390,7 @@ def main():
         if not any(target in app["targets"] for app in applications.values()):
             raise RuntimeError(f"No declared personal application for native target {target}")
 
-        def apply_and_check(case_index=0):
+        def apply_and_check(case_index=0, *, verify_binaries=True):
             # Separate initial-state cases, but preserve onchange history within each case.
             arguments = command + [
                 "--persistent-state", str(root / "state" / f"chezmoi-{case_index}.boltdb"), "apply",
@@ -398,6 +398,8 @@ def main():
             if not args.path_integration:
                 arguments.append("--exclude=scripts")
             run(arguments, env=env, cwd=outside)
+            if not verify_binaries:
+                return
             for name, application in applications.items():
                 if target not in application["targets"]:
                     continue
@@ -431,7 +433,10 @@ def main():
 
         if args.path_integration and os.name == "nt":
             with windows_path_restored():
-                check_windows_path_preservation(apply_and_check, home, env)
+                check_windows_path_preservation(
+                    apply_and_check, home, env,
+                    reapply=lambda index: apply_and_check(index, verify_binaries=False),
+                )
         else:
             apply_and_check()
         if target in applications.get("node", {}).get("targets", {}):

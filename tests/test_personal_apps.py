@@ -917,7 +917,7 @@ class PersonalAppPathTest(unittest.TestCase):
                          "apply", "--force")
 
         with patch.object(winreg, "OpenKey", side_effect=isolated_key):
-            check_windows_path_preservation(apply_case, self.home, self.env)
+            check_windows_path_preservation(apply_case, self.home, self.env, reapply=apply_case)
 
     def test_application_pin_change_does_not_schedule_path_action(self):
         self.apply()

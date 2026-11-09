@@ -46,6 +46,8 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, windows-2025, macos-26]
         area: [applications, security, platform, build-contracts]
     runs-on: ${{ matrix.runner }}
+    env:
+      MISE_LOCKED: "true"
     steps:
       - &checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -178,6 +180,7 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     env:
       MISE_AUTO_INSTALL: "false"
+      MISE_LOCKED: "true"
     steps:
       - *checkout
       - *candidate-lock
@@ -314,6 +317,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       MISE_AUTO_INSTALL: "false"
+      MISE_LOCKED: "true"
     steps:
       - *checkout
       - uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
