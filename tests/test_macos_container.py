@@ -129,7 +129,7 @@ class MacContainerTest(MacFixture):
         templates.mkdir()
         config = self.root / 'empty.toml'
         config.write_text('[interpreters.sh]\ncommand = ' + json.dumps(find_bash()) +
-                          '\nargs = ["--noprofile", "--norc"]\n')
+                          '\nargs = ' + json.dumps(self.shell_arguments()) + '\n')
         hooks = ['run_before_15-install-macos-apps.sh.tmpl', 'run_before_16-prepare-macos-container.sh.tmpl']
         scripts = self.source / '.chezmoiscripts'
         scripts.mkdir()

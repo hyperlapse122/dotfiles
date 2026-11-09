@@ -181,10 +181,14 @@ class MacFixture(unittest.TestCase):
             script.write_text(text,encoding='utf-8')
             helper = self.repo/'scripts/macos-container-state.sh'
             if helper.exists(): shutil.copy2(helper, self.root/helper.name)
-        # Let Bash normalize the fixture path without exposing host commands.
-        command='PATH="$(cd "$1" && pwd -P)"; export PATH; shift; exec bash --noprofile --norc "$@"'
-        return subprocess.run([find_bash(),'--noprofile','--norc','-c',command,'fixture',self.bin.as_posix(),script.as_posix(),*map(str,args)],
+        return subprocess.run([find_bash(),*self.shell_arguments(),script.as_posix(),*map(str,args)],
                               env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=30)
+
+    def shell_arguments(self):
+        # Normalize Windows paths and replace Bash's inherited search path
+        # after startup, for both direct scripts and native chezmoi hooks.
+        command='PATH="$(cd "$1" && pwd -P)"; export PATH; shift; exec bash --noprofile --norc "$@"'
+        return ['--noprofile', '--norc', '-c', command, 'fixture', self.bin.as_posix()]
 
     def calls(self):
         path=self.root/'calls.jsonl'
@@ -192,6 +196,25 @@ class MacFixture(unittest.TestCase):
 
 
 class MacFixtureIsolationTest(MacFixture):
+    @unittest.skipUnless(shutil.which('chezmoi'), 'Real chezmoi required')
+    def test_native_shell_interpreter_replaces_inherited_host_path(self):
+        self.state['os'] = 'FixtureOS'
+        (self.root/'state.json').write_text(json.dumps(self.state), encoding='utf-8')
+        config = self.root/'shell.toml'
+        config.write_text('[interpreters.sh]\ncommand = ' + json.dumps(find_bash()) +
+                          '\nargs = ' + json.dumps(self.shell_arguments()) + '\n', encoding='utf-8')
+        scripts = self.source/'.chezmoiscripts'
+        scripts.mkdir()
+        (scripts/'run_before_probe.sh').write_text('#!/bin/sh\nuname -s\n', encoding='utf-8', newline='\n')
+        result = subprocess.run(
+            [shutil.which('chezmoi'), '--source', str(self.source), '--destination', str(self.home),
+             '--config', str(config), '--cache', str(self.root/'cache'),
+             '--persistent-state', str(self.root/'chezmoi-state.boltdb'), '--no-tty', 'apply'],
+            env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip(), 'FixtureOS')
+        self.assertEqual(self.calls(), [['uname', ['-s']]])
+
     def test_launchctl_emits_macos_lf_even_with_windows_text_streams(self):
         domain = 'gui/501'
         for status, output in (
