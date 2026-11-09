@@ -121,12 +121,16 @@ class MacFixture(unittest.TestCase):
         self.bin.mkdir()
         # Expose only these harmless host utilities. System directories can
         # contain a real Podman, even when the developer's PATH is excluded.
-        utilities = ('bash', 'awk', 'dirname', 'ls', 'tr', 'wc', 'jq', 'sleep', 'mkdir', 'rm', 'cat')
+        utilities = ('bash', 'awk', 'dirname', 'ls', 'tr', 'wc', 'sleep', 'mkdir', 'rm', 'cat')
         resolved = subprocess.run(
             [find_bash(), '--noprofile', '--norc', '-c',
              'PATH=/usr/bin:/bin; export PATH; command -v ' + ' '.join(utilities)],
             capture_output=True, text=True, encoding='utf-8', check=True)
-        for name, executable in zip(utilities, resolved.stdout.splitlines(), strict=True):
+        jq = shutil.which('jq')
+        if not jq:
+            self.skipTest('Declared mise jq tool required')
+        executables = [*zip(utilities, resolved.stdout.splitlines(), strict=True), ('jq', Path(jq).as_posix())]
+        for name, executable in executables:
             target = self.bin/name
             target.write_text('#!/bin/sh\nexec ' + shlex.quote(executable) + ' "$@"\n', encoding='utf-8')
             target.chmod(0o755)

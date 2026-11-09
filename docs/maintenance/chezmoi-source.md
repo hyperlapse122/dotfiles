@@ -90,6 +90,11 @@ run_after_45-gitlab-auth.py.tmpl
 
 Keep scripts idempotent and fail-safe: an error in any script must return a non-zero exit code to stop subsequent execution and preserve the environment.
 
+On supported Macs, `run_before_15-install-macos-apps.sh.tmpl` performs package maintenance with active-container protection.
+`run_before_16-prepare-macos-container.sh.tmpl` then prepares the container API, recommended kernel, and login service.
+Both run on every explicit apply; bootstrap and previews do not execute them.
+See [macOS setup](../setup/macos.md#preview-and-apply) for startup ordering, temporary pins, and failed-kernel recovery.
+
 The OS-conditional `run_after_30-install-fonts.*` hooks reconcile fonts on every explicit apply so missing files and Windows registrations can be repaired without changing the lock.
 `home/.chezmoitemplates/external-assets/fonts.toml.tmpl` selects archive members; `font-index.tsv` supplies their member hashes to the native installers.
 Native installation owns prefixed filenames and an installation manifest, never the entire user font directory.

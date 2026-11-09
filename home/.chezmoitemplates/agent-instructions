@@ -45,7 +45,7 @@ Use container runtimes and local Kubernetes clusters only for temporary developm
 
 - Use Apple's `container` CLI by default for temporary container-related development work, including image builds, execution, testing, and supported image, network, and volume operations.
 - Check the installed `container` version and its capabilities before relying on a required operation. If it cannot perform that operation, explain the concrete limitation and agree on an alternative with the user before using another runtime or installing compatibility tools.
-- Start the runtime manually with `container system start` only when an active task needs it. Do not start it during configuration application or enable startup at login.
+- Explicit configuration application starts a stopped API, installs the recommended kernel, and enables startup at login. Preserve an already running runtime and its kernel. Do not restart or stop shared services to apply configuration or clean up temporary workloads; the managed kernel and login service are host infrastructure.
 {{ else if eq .chezmoi.os "windows" -}}
 ## Container runtime
 
