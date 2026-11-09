@@ -29,10 +29,18 @@ def executable(name):
     return str(Path(found).resolve())
 
 
+def report_phase(label, elapsed):
+    if elapsed is None:
+        print(f"Smoke phase started: {label}", flush=True)
+    else:
+        print(f"Smoke phase ended: {label} ({elapsed:.3f}s)", flush=True)
+
+
 def run(arguments, *, env, cwd):
     result = run_with_assets(
         arguments, env=env, cwd=cwd, capture_output=True, text=True,
         encoding="utf-8", errors="backslashreplace", timeout=300,
+        phase_reporter=report_phase,
     )
     if result.returncode:
         raise RuntimeError(
@@ -93,27 +101,29 @@ def check_bun_lifecycle(command, source, home, outside, env, target):
     launcher = binary.with_name("bunx.ps1" if os.name == "nt" else "bunx")
     paths = (binary, launcher)
 
-    def apply_and_check(pin):
+    def apply_and_check(pin, stage):
+        print(f"Bun lifecycle started: {stage}", flush=True)
         run(command + ["apply", "--force", "--exclude=scripts"], env=env, cwd=outside)
         check_version(run([str(binary), "--version"], env=env, cwd=outside), pin["tag"])
         check_bunx(home, outside, env)
+        print(f"Bun lifecycle passed: {stage}", flush=True)
 
     before = [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]
-    apply_and_check(current)
+    apply_and_check(current, "unchanged apply")
     if before != [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]:
         raise RuntimeError("Unchanged apply rewrote the Bun installation")
     for path in paths:
         path.unlink()
-        apply_and_check(current)
+        apply_and_check(current, "repair " + path.name)
     if target not in rollback["targets"]:
         raise RuntimeError(f"Missing verified Bun rollback fixture for {target}")
     try:
         candidate["personalAppLocks"]["bun"] = rollback
         lock_path.write_text(json.dumps(candidate), encoding="utf-8")
-        apply_and_check(rollback)
+        apply_and_check(rollback, "rollback")
     finally:
         lock_path.write_text(original, encoding="utf-8")
-    apply_and_check(current)
+    apply_and_check(current, "restore current pin")
     print(f"Native {target}: Bun/bunx repeated apply, repair, and {rollback['tag']} rollback passed")
 
 
