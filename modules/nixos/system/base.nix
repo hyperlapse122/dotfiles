@@ -57,6 +57,8 @@
       sops
       gnupg
       dmidecode
+      sbctl
+      cryptsetup
       e2fsprogs
     ]
     ++ [ (import ../../../packages/gpg-tools.nix { inherit pkgs; }).restoreAgeIdentity ];

@@ -11,6 +11,10 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v1.1.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     sops-nix = {
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -126,6 +130,7 @@
           "git-lfs"
           "git-trim"
           "gpg-agent-no-cache"
+          "iphone-restore"
           "kde-theme"
           "kernel-sysctl"
           "korean-skills"
@@ -863,11 +868,7 @@
             '';
           gpg-agent-no-cache =
             let
-              # A user that relays to a remote agent runs no local one; the
-              # gpg-agent-relay VM check covers it.
               assertConfiguration =
-                entry: if entry.user.my.gpgAgentRelay.enable or false then "" else assertLocalAgent entry;
-              assertLocalAgent =
                 entry:
                 let
                   homedir = entry.user.programs.gpg.homedir or null;
@@ -1332,6 +1333,8 @@
           emoji-font = import ./tests/emoji-font.nix { inherit pkgs self; };
           user-avatar = import ./tests/user-avatar.nix { inherit pkgs self; };
           udev-device-access = import ./tests/udev-device-access.nix { inherit pkgs self; };
+          iphone-restore = import ./tests/iphone-restore.nix { inherit pkgs self; };
+          wireplumber-bluetooth = import ./tests/wireplumber-bluetooth.nix { inherit pkgs self; };
           ssh-server = import ./tests/ssh-server.nix { inherit pkgs self; };
           kernel-sysctl = import ./tests/kernel-sysctl.nix { inherit pkgs self; };
           proton-vpn = import ./tests/proton-vpn.nix { inherit pkgs self; };

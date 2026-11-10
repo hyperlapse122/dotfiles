@@ -61,15 +61,7 @@
       };
     };
 
-    gpgAgentRelay = {
-      enable = lib.mkEnableOption "a relay that serves gpg from a remote gpg-agent over TCP, in place of a local agent and card reader";
-      endpoint = lib.mkOption {
-        type = lib.types.nullOr (lib.types.strMatching "[^:[:space:]]+:[0-9]+");
-        default = null;
-        example = "192.168.250.1:4321";
-        description = "The `host:port` the remote agent's relay listens on. Required when the relay is enabled.";
-      };
-    };
+    nuphyGem80.enable = lib.mkEnableOption "device access for the NuPhy Gem80 configurator and firmware flashing";
     sshServer.enable = lib.mkEnableOption "an OpenSSH server that accepts only the user, authenticated by the OpenPGP card's authentication subkey (NixOS hosts only)";
     t3.cli.enable = lib.mkEnableOption "the headless T3 Code `t3` CLI";
     t3.desktop.enable = lib.mkEnableOption "the T3 Code desktop app (NixOS and macOS hosts only)";

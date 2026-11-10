@@ -27,6 +27,12 @@
     ./system/desktop-ssh.nix
     ./wifi.nix
     ./hardware/yubikey.nix
+    ./hardware/nuphy-gem80.nix
+    ./hardware/sennheiser-btd.nix
+    ./hardware/dualsense.nix
+    ./hardware/iphone-restore.nix
+    ./hardware/bluetooth-audio.nix
+    ./hardware/nvidia.nix
     ../shared/host.nix
   ];
 

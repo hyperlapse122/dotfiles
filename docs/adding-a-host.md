@@ -17,7 +17,7 @@ Use the machine's distinctive model identifier, such as the DMI product name or 
 Create `hosts/<host>/` with three files.
 
 - `hardware.nix`: kernel modules, firmware, CPU microcode, and graphics drivers. The production boot splash needs the GPU's KMS driver in the initrd: add it (for example `i915`, or `vmwgfx` in a VMware guest) to `boot.initrd.kernelModules` under `lib.mkIf (!config.my.bootstrap)`; the `boot-splash` check fails otherwise. Start from `nixos-generate-config --no-filesystems --show-hardware-config` run on the target from the installation media, then keep only what the machine needs.
-- `disko.nix`: the disk layout. Copy an existing host's `disko.nix` to keep the shared layout (a 2 GiB ESP, then a `root` partition holding Btrfs subvolumes for `/`, `/home`, `/nix`, `/var/log`, and `/swap`, unencrypted; protect the disk outside NixOS), and change only `device` to the target disk's `/dev/disk/by-id/` path.
+- `disko.nix`: the disk layout. Copy an existing host's `disko.nix` to keep the shared layout (a 2 GiB ESP, then a LUKS2 `cryptroot` container holding Btrfs subvolumes for `/`, `/home`, `/nix`, `/var/log`, and `/swap`), and change only `device` to the target disk's `/dev/disk/by-id/` path.
 - `default.nix`: imports the other two files and declares the host's traits.
 
 ```nix
@@ -39,7 +39,6 @@ A trait is a `my.*.enable` option that defaults to `false`. Hardware-specific mo
 
 | Trait | Enables |
 | --- | --- |
-| `my.gpgAgentRelay.enable` | Serves gpg from a remote gpg-agent through a socket-activated TCP relay to `my.gpgAgentRelay.endpoint` (`host:port`), in place of a local agent and card reader. |
 | `my.sshServer.enable` | An OpenSSH server that accepts only the user, authenticated by the OpenPGP card's authentication subkey. NixOS hosts only. |
 | `my.t3.cli.enable` | The headless T3 Code server, `t3` (`packages/t3code-cli.nix`). It also works on macOS. |
 | `my.t3.desktop.enable` | The T3 Code desktop app (`packages/t3code.nix`). NixOS and macOS hosts only. |
