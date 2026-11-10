@@ -31,7 +31,7 @@ elif name == 'dscl':
 elif name == 'sw_vers': print('26.0')
 elif name == 'dpkg': print(state.get('arch','amd64'))
 elif name == 'dpkg-query':
-    if not state.get('studio',True): sys.exit(1)
+    if not state.get('flavor',True): sys.exit(1)
     print('install ok installed')
 elif name == 'zsh': sys.exit(0)
 elif name == 'ghostty': print('Ghostty 1.3.1')
@@ -40,23 +40,16 @@ elif name == 'chsh':
 elif name == 'systemctl':
     if state.get('no_session'): sys.exit(1)
     print(state.get('manager_environment','SHELL='+state.get('manager_shell',state['shell'])))
-elif name in ('kreadconfig6', 'kwriteconfig6'):
-    import configparser
-    path=root/'home/xdg/kdeglobals'
-    parser=configparser.ConfigParser(interpolation=None)
-    parser.optionxform=str
-    parser.read(path)
-    if args[:5] != ['--file','kdeglobals','--group','General','--key']: sys.exit(42)
-    key=args[args.index('--key')+1]
-    if name=='kreadconfig6': print(parser.get('General',key,fallback=''))
-    else:
-        if not parser.has_section('General'): parser.add_section('General')
-        parser.set('General',key,args[-1])
-        with path.open('w') as f: parser.write(f)
+elif name == 'xdg-terminal-exec':
+    # Model the dispatcher: the first user preference wins, else the distribution default.
+    if args != ['--print-id'] or os.environ.get('XTE_CACHE_ENABLED') != '0': sys.exit(42)
+    path=root/'home/xdg/ubuntu-xdg-terminals.list'
+    lines=path.read_text().splitlines() if path.exists() else []
+    print(lines[0] if lines else 'org.gnome.Ptyxis.desktop')
 elif name == 'python3':
     if args[0].endswith('linux-platform.py'):
         import importlib.util
-        spec=importlib.util.spec_from_file_location('probe',os.environ['STUDIO_PROBE'])
+        spec=importlib.util.spec_from_file_location('probe',os.environ['HOST_PROBE'])
         probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
         def run_probe(args, **kwargs):
             command = shlex.join(['bash', (root/'commands'/args[0]).as_posix(), *args[1:]])
@@ -144,7 +137,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.fixture = self.root/'fixture.py'
         self.fixture.write_text(FIXTURE, encoding='utf-8')
         for name in ('uname','id','getent','dscl','sw_vers','dpkg','dpkg-query','zsh','ghostty',
-                     'chsh','systemctl','kwriteconfig6','kreadconfig6','python3','swift'):
+                     'chsh','systemctl','xdg-terminal-exec','python3','swift'):
             p=self.bin/name
             p.write_text('#!/bin/sh\nexport MSYS2_ARG_CONV_EXCL="*"\nexec '+shlex.quote(Path(sys.executable).as_posix())+' '+
                          shlex.quote(self.fixture.as_posix())+' '+shlex.quote(name)+' "$@"\n',encoding='utf-8')
@@ -162,7 +155,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.env=os.environ.copy()
         self.env.update(HOME=self.home.as_posix(),USERPROFILE=str(self.home),
                         TERMINAL_TEST_ROOT=str(self.root),SHELL=self.shell,
-                        FIXTURE_BASH=find_bash(), STUDIO_PROBE=str(self.repo/'scripts/linux-platform.py'),
+                        FIXTURE_BASH=find_bash(), HOST_PROBE=str(self.repo/'scripts/linux-platform.py'),
                         XDG_DATA_HOME=str(self.root/'data'),XDG_DATA_DIRS=str(self.root/'system-data'),
                         XDG_CONFIG_HOME=self.shellpath(self.home/'xdg'),
                         ZDOTDIR=(self.home/'separate-zsh').as_posix())
@@ -204,7 +197,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         result = self.run_terminal()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(['dpkg', ['--print-architecture']], self.calls())
-        self.assertIn(['dpkg-query', ['-W', '-f=${Status}', 'ubuntustudio-desktop']], self.calls())
+        self.assertIn(['dpkg-query', ['-W', '-f=${Status}', 'ubuntu-desktop']], self.calls())
 
     def calls(self):
         p=self.root/'calls.jsonl'
@@ -231,15 +224,17 @@ class TerminalEnvironmentTest(unittest.TestCase):
         shutil.move(self.root/'data', system_data)
         result = self.run_terminal()
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
-        self.assertIn('TerminalService = com.mitchellh.ghostty.desktop',
-                      (self.home/'xdg/kdeglobals').read_text())
+        self.assertEqual((self.home/'xdg/ubuntu-xdg-terminals.list').read_text(),
+                         'com.mitchellh.ghostty.desktop\n')
 
     def test_apply_and_status_are_idempotent_and_preserve_other_settings(self):
         config=self.home/'xdg/ghostty'
         config.mkdir(parents=True)
         (config/'config').write_text('command = bash\nconfig-file = unwanted\n')
+        terminals=self.home/'xdg/ubuntu-xdg-terminals.list'
+        terminals.write_text('org.gnome.Ptyxis.desktop\ncom.mitchellh.ghostty.desktop\norg.gnome.Terminal.desktop\n')
         kde=self.home/'xdg/kdeglobals'
-        kde.write_text('[General]\nColorScheme=BreezeDark\nTerminalApplication=konsole\n[Other]\nUnrelated=keep\n')
+        kde.write_text('[General]\nTerminalApplication=konsole\nTerminalService=org.kde.konsole.desktop\n')
         startup=self.home/'.zshrc'; startup.write_text('keep this\n')
         result=self.run_terminal()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
@@ -247,33 +242,45 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.assertNotIn('config-file',(config/'config').read_text())
         for name in ('config', 'config.ghostty'):
             self.assertIn('font-family = Jetendard', (config/name).read_text().splitlines())
-        self.assertIn('ColorScheme = BreezeDark',kde.read_text())
-        self.assertIn('Unrelated = keep',kde.read_text())
-        self.assertIn('TerminalService = com.mitchellh.ghostty.desktop',kde.read_text())
-        self.assertIn(' --new-window',kde.read_text())
-        self.assertFalse((self.home/'xdg/ubuntu-xdg-terminals.list').exists())
-        before={p:p.read_bytes() for p in self.home.rglob('*') if p.is_file()}
+        self.assertEqual(terminals.read_text(),
+                         'com.mitchellh.ghostty.desktop\norg.gnome.Ptyxis.desktop\norg.gnome.Terminal.desktop\n')
+        self.assertEqual(kde.read_text(),'[General]\nTerminalApplication=konsole\nTerminalService=org.kde.konsole.desktop\n')
+        self.assertEqual(sorted(p.name for p in (self.home/'xdg').iterdir()),
+                         ['ghostty','kdeglobals','ubuntu-xdg-terminals.list'])
+        before={p:(p.read_bytes(),p.stat().st_mtime_ns) for p in self.home.rglob('*') if p.is_file()}
         result=self.run_terminal('status')
         self.assertEqual(result.returncode,2,result.stdout+result.stderr)
-        self.assertEqual(before,{p:p.read_bytes() for p in before})
+        self.assertEqual([line for line in result.stderr.splitlines() if 'PENDING' in line],
+                         ['Terminal environment PENDING: Native GNOME acceptance remains unverified: check Ctrl+Alt+T, '
+                          'the Files terminal action, and a Terminal=true launcher in a fresh desktop session.'])
+        self.assertEqual(before,{p:(p.read_bytes(),p.stat().st_mtime_ns) for p in before})
         self.assertFalse(any(name in ('chsh','sudo') for name,args in self.calls()))
         self.assertEqual(startup.read_text(),'keep this\n')
         result=self.run_terminal()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        self.assertEqual(before,{p:p.read_bytes() for p in before})
+        self.assertEqual(before,{p:(p.read_bytes(),p.stat().st_mtime_ns) for p in self.home.rglob('*') if p.is_file()})
 
-    def test_status_reports_drift_without_writing_kde_settings(self):
+    def test_apply_creates_the_preference_list_when_absent(self):
+        result=self.run_terminal()
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.home/'xdg/ubuntu-xdg-terminals.list').read_text(),'com.mitchellh.ghostty.desktop\n')
+
+    def test_status_reports_drift_without_writing_the_preference_list(self):
         config=self.home/'xdg'
         config.mkdir()
-        kde=config/'kdeglobals'
-        kde.write_text('[General]\nTerminalApplication=konsole\nTerminalService=org.kde.konsole.desktop\n')
-        before=kde.read_bytes()
+        terminals=config/'ubuntu-xdg-terminals.list'
+        terminals.write_text('org.gnome.Ptyxis.desktop\ncom.mitchellh.ghostty.desktop\n')
+        before=terminals.read_bytes()
         result=self.run_terminal('status')
         self.assertEqual(result.returncode,2,result.stdout+result.stderr)
-        self.assertIn('KDE TerminalApplication',result.stderr)
-        self.assertIn('KDE TerminalService',result.stderr)
-        self.assertEqual(kde.read_bytes(),before)
-        self.assertFalse(any(name=='kwriteconfig6' for name,args in self.calls()))
+        self.assertIn('dispatcher does not select the installed Ghostty entry',result.stderr)
+        self.assertEqual(terminals.read_bytes(),before)
+        self.assertEqual([p.name for p in config.iterdir() if p.name!='ghostty'],['ubuntu-xdg-terminals.list'])
+        terminals.unlink()
+        result=self.run_terminal('status')
+        self.assertEqual(result.returncode,2,result.stdout+result.stderr)
+        self.assertIn('dispatcher does not select the installed Ghostty entry',result.stderr)
+        self.assertFalse(terminals.exists())
 
     def test_shell_change_is_pending_but_apply_allows_following_hooks(self):
         self.state['shell']='/bin/bash'
@@ -296,7 +303,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.assertEqual(result.returncode,1)
 
     def test_rejects_unsupported_hosts_before_personal_writes(self):
-        for change,release in [({},'24.04'),({'studio':False},'26.04'),
+        for change,release in [({},'24.04'),({'flavor':False},'26.04'),
                                ({'arch':'arm64'},'26.04'),({'distro':'debian'},'26.04')]:
             with self.subTest(change=change,release=release):
                 original=self.state.copy()
@@ -313,32 +320,36 @@ class TerminalEnvironmentTest(unittest.TestCase):
             '[Desktop Entry]\nType=Application\nExec=env SNAP_TEST=yes '+shlex.quote((self.bin/'ghostty').as_posix())+' -e\n')
         result=self.run_terminal()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        kde=(self.home/'xdg/kdeglobals').read_text()
-        self.assertIn('TerminalService = ghostty_ghostty.desktop',kde)
-        self.assertIn('TerminalApplication = env SNAP_TEST=yes ',kde)
+        self.assertEqual((self.home/'xdg/ubuntu-xdg-terminals.list').read_text(),'ghostty_ghostty.desktop\n')
         self.assertEqual(self.run_terminal('status').returncode,2)
 
-    def test_missing_or_wrong_desktop_entry_fails_without_changing_kde(self):
+    def test_missing_or_wrong_desktop_entry_fails_without_writing_the_preference_list(self):
         entry=self.root/'data/applications/com.mitchellh.ghostty.desktop'
         for metadata in ('', '[Desktop Entry]\nType=Application\nExec=/bin/false\n',
                          '[Desktop Entry]\nType=Application\nHidden=true\nExec=ghostty\n'):
             entry.write_text(metadata)
             result=self.run_terminal()
             self.assertEqual(result.returncode,1,result.stdout+result.stderr)
-            self.assertFalse(any(name=='kwriteconfig6' for name,args in self.calls()))
+            self.assertFalse((self.home/'xdg/ubuntu-xdg-terminals.list').exists())
+            self.assertFalse(any(name=='xdg-terminal-exec' for name,args in self.calls()))
 
-    def test_kde_read_or_write_failure_is_an_error(self):
-        for command in ('kreadconfig6','kwriteconfig6'):
-            self.state['fail']=command
-            result=self.run_terminal()
-            self.assertEqual(result.returncode,1,result.stdout+result.stderr)
+    def test_missing_or_failing_dispatcher_is_an_error(self):
+        self.state['fail']='xdg-terminal-exec'
+        result=self.run_terminal()
+        self.assertEqual(result.returncode,1,result.stdout+result.stderr)
+        self.assertIn('Cannot inspect the effective desktop terminal',result.stderr)
+        self.state.pop('fail')
+        (self.bin/'xdg-terminal-exec').unlink()
+        result=self.run_terminal('status')
+        self.assertEqual(result.returncode,1,result.stdout+result.stderr)
+        self.assertIn('xdg-terminal-exec is missing',result.stderr)
 
     def test_graphical_environment_alone_does_not_prove_native_launch(self):
-        self.env.update(XDG_CURRENT_DESKTOP='KDE',XDG_SESSION_TYPE='wayland')
+        self.env.update(XDG_CURRENT_DESKTOP='ubuntu:GNOME',XDG_SESSION_TYPE='wayland')
         self.run_terminal()
         result=self.run_terminal('status')
         self.assertEqual(result.returncode,2,result.stdout+result.stderr)
-        self.assertIn('Native Plasma acceptance remains unverified',result.stderr)
+        self.assertIn('Native GNOME acceptance remains unverified',result.stderr)
 
     def test_stale_manager_environment_and_missing_session_are_pending(self):
         self.run_terminal()
@@ -351,7 +362,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.state['manager_environment']='PATH=/usr/bin'
         result=self.run_terminal()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        self.assertIn('Native Plasma acceptance remains unverified',result.stderr)
+        self.assertIn('Native GNOME acceptance remains unverified',result.stderr)
         result=self.run_terminal('status')
         self.assertEqual(result.returncode,2,result.stdout+result.stderr)
 
@@ -370,7 +381,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.state.update(shell=selected,allowed=selected+'\n'+self.shell)
         result=self.run_terminal()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        self.assertIn('Native Plasma acceptance remains unverified',result.stderr)
+        self.assertIn('Native GNOME acceptance remains unverified',result.stderr)
         self.assertEqual(self.state['shell'],selected)
         self.assertFalse(any(name=='chsh' for name,args in self.calls()))
 
@@ -380,7 +391,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         result=self.run_terminal('status',operating_system='darwin',release='26')
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('READY',result.stdout)
-        self.assertFalse(any(name in ('python3','kreadconfig6','kwriteconfig6') for name,args in self.calls()))
+        self.assertFalse(any(name in ('python3','xdg-terminal-exec') for name,args in self.calls()))
 
     def test_mac_native_approval_pending_does_not_fail_apply(self):
         self.state.update(os='Darwin',machine='arm64',swift_pending=True)

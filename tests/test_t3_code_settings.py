@@ -131,7 +131,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                        "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
-    def render(self, body, os_name, arch, *, existing="", distro="ubuntu", personal_apps=None, studio=False):
+    def render(self, body, os_name, arch, *, existing="", distro="ubuntu", personal_apps=None, workstation=False):
         context = ('(dict "t3CodePreferences" (fromJson ' + json.dumps(json.dumps(self.preferences))
                    + ') "personalApps" (fromJson ' + json.dumps(json.dumps(personal_apps or {}))
                    + ') "chezmoi" (dict "os" ' + json.dumps(os_name)
@@ -140,7 +140,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                    + ' "destDir" ' + json.dumps(self.home.as_posix())
                    + ' "sourceDir" ' + json.dumps(self.source.as_posix())
                    + ' "workingTree" ' + json.dumps(self.source.as_posix())
-                   + ' "stdin" ' + json.dumps(existing) + ') "fixtureHostReport" (dict "supported" ' + ('true' if studio else 'false') + '))')
+                   + ' "stdin" ' + json.dumps(existing) + ') "fixtureHostReport" (dict "supported" ' + ('true' if workstation else 'false') + '))')
         wrapper = ('{{ template "fixture" ' + context + ' }}'
                    + '{{ define "fixture" }}' + body + '{{ end }}')
         return self.chez("execute-template", input=wrapper).stdout
@@ -543,10 +543,10 @@ class T3CodeSettingsTest(unittest.TestCase):
                  ("darwin", "arm64", "", True), ("darwin", "amd64", "", False),
                  ("linux", "amd64", "debian", False), ("linux", "386", "ubuntu", False),
                  ("windows", "386", "", False), ("freebsd", "amd64", "", False))
-        for os_name, arch, distro, supported in (*cases, ("linux", "amd64", "studio", True)):
+        for os_name, arch, distro, supported in (*cases, ("linux", "amd64", "workstation", True)):
             with self.subTest(os=os_name, arch=arch, distro=distro):
                 (self.source / ".chezmoiignore").write_text(
-                    self.render(ignore, os_name, arch, distro="ubuntu" if distro == "studio" else distro, studio=distro == "studio"), encoding="utf-8")
+                    self.render(ignore, os_name, arch, distro="ubuntu" if distro == "workstation" else distro, workstation=distro == "workstation"), encoding="utf-8")
                 managed = set(self.chez("managed", "--path-style=relative", "--exclude=scripts").stdout.replace("\\", "/").splitlines())
                 self.assertEqual(".t3/userdata/settings.json" in managed, supported)
                 self.assertEqual(".t3/userdata/client-settings.json" in managed, supported)

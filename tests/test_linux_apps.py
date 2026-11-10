@@ -96,8 +96,13 @@ class LinuxAppsTest(unittest.TestCase):
         self.assertEqual(source.read_text(), 'Types: deb\nURIs: https://example.invalid\n')
         self.assertFalse(any('upgrade' in c or 'dist-upgrade' in c for c in self.calls))
 
+    def test_declared_packages_target_the_gnome_workstation(self):
+        declared = CONFIG['packages']
+        self.assertTrue({'pinentry-gnome3', 'xdg-terminal-exec'} <= set(declared))
+        self.assertNotIn('pinentry-qt', declared)
+
     def test_unsupported_hosts_never_run_package_commands(self):
-        for blocker in ('Requires Linux.', 'Requires Ubuntu Studio 26.04.', 'Requires amd64.'):
+        for blocker in ('Requires Linux.', 'Requires Ubuntu Desktop 26.04.', 'Requires amd64.'):
             with self.subTest(blocker=blocker), self.assertRaisesRegex(apps.ProvisionError, blocker):
                 self.provision({'supported': False, 'blockers': [blocker]})
         self.assertEqual(self.calls, [])

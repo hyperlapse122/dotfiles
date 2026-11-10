@@ -4,7 +4,7 @@ set -eu
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-python3 "$script_directory/linux-platform.py" >/dev/null || fail 'Requires a supported Ubuntu Studio host; run the host probe for details.'
+python3 "$script_directory/linux-platform.py" >/dev/null || fail 'Requires a supported Ubuntu Desktop host; run the host probe for details.'
 
 state="$HOME/.local/share/dotfiles/build"
 publish() {

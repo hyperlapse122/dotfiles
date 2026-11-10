@@ -27,13 +27,13 @@ class LinuxReadinessTest(unittest.TestCase):
         if args == ['dpkg', '--print-architecture']:
             output = self.arch
         elif args[:3] == ['dpkg-query', '-W', '-f=${Status}']:
-            output = 'install ok installed' if self.studio or args[3] not in self.module.host.STUDIO_PACKAGES else ''
+            output = 'install ok installed' if self.flavor or args[3] not in self.module.host.DESKTOP_PACKAGES else ''
         else:
             self.fail(f'Unexpected executable invocation: {args}')
         return subprocess.CompletedProcess(args, 0, output, 'secret-error-value')
 
-    def collect(self, *, available=True, studio=True, arch='amd64', version='26.04', desktop='KDE', populate=True):
-        self.calls, self.studio, self.arch = [], studio, arch
+    def collect(self, *, available=True, flavor=True, arch='amd64', version='26.04', desktop='ubuntu:GNOME', populate=True):
+        self.calls, self.flavor, self.arch = [], flavor, arch
         if populate:
             for relative in self.module.MANAGED_FILES.values():
                 file = self.home / relative
@@ -55,6 +55,12 @@ class LinuxReadinessTest(unittest.TestCase):
         self.assertIn('Minikube workload and cleanup', pending)
         self.assertIn('Secret Service and credentials', pending)
         self.assertIn('Desktop applications and vendor limitations', pending)
+        self.assertIn({'name': 'GNOME session', 'status': 'passed',
+                       'detail': self.module.DESKTOP_DETAIL}, report['checks'])
+
+    def test_command_inventory_targets_the_gnome_workstation(self):
+        self.assertTrue({'pinentry-gnome3', 'xdg-terminal-exec'} <= set(self.module.COMMANDS))
+        self.assertFalse({'pinentry-qt', 'kwriteconfig6', 'kreadconfig6'} & set(self.module.COMMANDS))
 
     def test_missing_tools_and_managed_configuration_fail(self):
         report = self.collect(available=False, populate=False)
@@ -65,7 +71,7 @@ class LinuxReadinessTest(unittest.TestCase):
         self.assertTrue(any(c['name'] == 'Claude instructions' and c['status'] == 'failed' for c in report['checks']))
 
     def test_wrong_flavor_version_or_architecture_fails(self):
-        for override in ({'studio': False}, {'version': '24.04'}, {'version': '28.04'}, {'arch': 'arm64'}):
+        for override in ({'flavor': False}, {'version': '24.04'}, {'version': '28.04'}, {'arch': 'arm64'}):
             with self.subTest(override=override):
                 report = self.collect(**override)
                 self.assertEqual(self.module.exit_code(report), 1)
@@ -73,7 +79,7 @@ class LinuxReadinessTest(unittest.TestCase):
 
     def test_missing_graphical_session_is_pending(self):
         report = self.collect(desktop='')
-        self.assertIn({'name': 'KDE session', 'status': 'pending',
+        self.assertIn({'name': 'GNOME session', 'status': 'pending',
                        'detail': self.module.DESKTOP_DETAIL}, report['checks'])
         self.assertEqual(self.module.exit_code(report), 2)
 
@@ -103,7 +109,7 @@ class LinuxReadinessTest(unittest.TestCase):
                     return subprocess.CompletedProcess(args, 0, failure)
                 return saved(args, **kwargs)
 
-            self.calls, self.studio, self.arch = [], True, 'amd64'
+            self.calls, self.flavor, self.arch = [], True, 'amd64'
             with patch.object(self.module.host, 'inspect_host', return_value={
                 'supported': True, 'desktop': {'status': 'passed'}}), \
                  patch.object(self.module.subprocess, 'run', side_effect=package_probe):

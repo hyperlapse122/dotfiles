@@ -1,16 +1,16 @@
 #!/bin/sh
 set -eu
 
-fail() { printf '%s\n' "Ubuntu Studio provisioning: $*" >&2; exit 1; }
-[ "$#" -le 1 ] || fail 'Usage: provision-ubuntu-studio.sh [inspected-checkout]'
+fail() { printf '%s\n' "Ubuntu provisioning: $*" >&2; exit 1; }
+[ "$#" -le 1 ] || fail 'Usage: provision-ubuntu.sh [inspected-checkout]'
 source=${1:-"$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"}
 [ -f "$source/.chezmoiroot" ] && [ -f "$source/mise.toml" ] && [ -f "$source/scripts/linux-platform.py" ] ||
     fail 'Run from an inspected checkout containing .chezmoiroot, mise.toml and scripts/linux-platform.py; a standalone download is insufficient.'
-command -v python3 >/dev/null 2>&1 || fail 'Ubuntu Studio system python3 is required for host inspection; restore it manually before provisioning.'
+command -v python3 >/dev/null 2>&1 || fail 'Ubuntu system python3 is required for host inspection; restore it manually before provisioning.'
 python3 "$source/scripts/linux-platform.py" || fail 'Host prerequisites failed; no packages or personal settings were changed.'
 [ "$(id -u)" -ne 0 ] || fail 'Run as a normal user with sudo access, not root.'
 for command in sudo apt-get dpkg-query; do
-    command -v "$command" >/dev/null 2>&1 || fail "Requires $command from the installed Ubuntu Studio system."
+    command -v "$command" >/dev/null 2>&1 || fail "Requires $command from the installed Ubuntu system."
 done
 
 # Bootstrap tools only. Application and native build packages belong to explicit apply.
@@ -40,4 +40,4 @@ for command in git curl mise; do
     command -v "$command" >/dev/null 2>&1 || fail "Missing $command after provisioning; repair the package and rerun."
 done
 printf '%s\n' 'Prerequisites ready. No worktree preparation, personal application or runtime action was performed.'
-printf '%s\n' 'Prepare the permanent checkout with bootstrap-ubuntu-studio.sh, then register and apply explicitly.'
+printf '%s\n' 'Prepare the permanent checkout with bootstrap-ubuntu.sh, then register and apply explicitly.'

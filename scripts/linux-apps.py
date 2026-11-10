@@ -1,4 +1,4 @@
-"""Missing-only native Ubuntu Studio packages, invoked by explicit application."""
+"""Missing-only native Ubuntu Desktop packages, invoked by explicit application."""
 
 from contextlib import contextmanager
 import importlib.util

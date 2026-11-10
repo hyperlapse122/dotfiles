@@ -17,7 +17,7 @@ def load_platform():
 
 
 class LinuxPlatformTest(unittest.TestCase):
-    def inspect(self, *, system='Linux', release=None, arch='amd64', packages=('ubuntustudio-desktop',), env=None):
+    def inspect(self, *, system='Linux', release=None, arch='amd64', packages=('ubuntu-desktop',), env=None):
         calls = []
 
         def run(args, **kwargs):
@@ -34,13 +34,19 @@ class LinuxPlatformTest(unittest.TestCase):
         self.assertTrue(all(call[0] in ('dpkg', 'dpkg-query') for call in calls))
         return report
 
-    def test_supported_studio_metapackages(self):
-        for package in ('ubuntustudio-desktop', 'ubuntustudio-desktop-core'):
+    def test_supported_ubuntu_desktop_metapackages(self):
+        for package in ('ubuntu-desktop', 'ubuntu-desktop-minimal'):
             with self.subTest(package=package):
-                report = self.inspect(packages=(package,), env={'XDG_CURRENT_DESKTOP': 'KDE', 'XDG_SESSION_TYPE': 'wayland'})
+                report = self.inspect(packages=(package,), env={'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME', 'XDG_SESSION_TYPE': 'wayland'})
                 self.assertTrue(report['supported'])
                 self.assertEqual(report['desktop']['status'], 'passed')
                 self.assertEqual(report['blockers'], [])
+                self.assertEqual(report['evidence']['desktop_packages'], [package])
+
+    def test_studio_metapackage_alone_is_unsupported(self):
+        report = self.inspect(packages=('ubuntustudio-desktop',))
+        self.assertFalse(report['supported'])
+        self.assertIn('ubuntu-desktop', ' '.join(report['blockers']))
 
     def test_unsupported_hosts(self):
         for override in ({'system': 'Darwin'}, {'arch': 'arm64'}, {'packages': ()},
@@ -53,8 +59,8 @@ class LinuxPlatformTest(unittest.TestCase):
                 self.assertTrue(report['blockers'])
 
     def test_desktop_is_separate_from_host_support(self):
-        for env in ({}, {'XDG_CURRENT_DESKTOP': 'GNOME', 'XDG_SESSION_TYPE': 'wayland'},
-                    {'XDG_CURRENT_DESKTOP': 'KDE', 'XDG_SESSION_TYPE': 'tty'}):
+        for env in ({}, {'XDG_CURRENT_DESKTOP': 'KDE', 'XDG_SESSION_TYPE': 'wayland'},
+                    {'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME', 'XDG_SESSION_TYPE': 'tty'}):
             report = self.inspect(env=env)
             self.assertTrue(report['supported'])
             self.assertEqual(report['desktop']['status'], 'pending')

@@ -4,8 +4,8 @@ set -eu
 fail() { printf '%s\n' "Ghostty installation: $*" >&2; exit 1; }
 [ "$#" -eq 2 ] || fail 'Expected Ubuntu release and architecture.'
 release=$1 architecture=$2
-[ "$release:$architecture" = '26.04:amd64' ] || fail 'Requires Ubuntu Studio 26.04 amd64.'
-python3 "$(dirname "$0")/linux-platform.py" || fail 'Unsupported Ubuntu Studio host; see the host probe blockers.'
+[ "$release:$architecture" = '26.04:amd64' ] || fail 'Requires Ubuntu Desktop 26.04 amd64.'
+python3 "$(dirname "$0")/linux-platform.py" || fail 'Unsupported Ubuntu Desktop host; see the host probe blockers.'
 
 has_system_zsh() {
     for shell in '/bin/zsh' '/usr/bin/zsh'; do

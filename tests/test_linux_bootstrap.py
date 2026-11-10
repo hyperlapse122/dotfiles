@@ -23,7 +23,7 @@ if name == 'python3':
     spec = importlib.util.spec_from_file_location('linux_platform', args[0])
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     def run(command, **kwargs):
-        output = state.get('arch', 'amd64') if command[0] == 'dpkg' else ('install ok installed' if state.get('studio', True) else '')
+        output = state.get('arch', 'amd64') if command[0] == 'dpkg' else ('install ok installed' if state.get('flavor', True) else '')
         return subprocess.CompletedProcess(command, 0, output, '')
     report = module.inspect_host(system=state.get('os', 'Linux'), os_release={'ID': 'ubuntu', 'VERSION_ID': state.get('version', '26.04')}, environ={}, run=run)
     print(json.dumps(report)); sys.exit(0 if report['supported'] else 1)
@@ -59,7 +59,7 @@ class LinuxBootstrapTest(unittest.TestCase):
         self.home = self.root/'home'; self.home.mkdir()
         self.source = self.root/'source with spaces'; self.source.mkdir()
         for name in ('mise.toml', '.chezmoiroot', '.chezmoi-bootstrap.toml',
-                     'bootstrap-ubuntu-studio.sh', 'provision-ubuntu-studio.sh', 'scripts/linux-platform.py'):
+                     'bootstrap-ubuntu.sh', 'provision-ubuntu.sh', 'scripts/linux-platform.py'):
             target = self.source/name; target.parent.mkdir(parents=True, exist_ok=True)
             if (REPO/name).exists(): shutil.copy2(REPO/name, target)
         (self.source/'.git').mkdir()
@@ -102,7 +102,7 @@ class LinuxBootstrapTest(unittest.TestCase):
         config.write_text(text)
         sentinel = self.home/'existing'; sentinel.write_text('keep')
         for _ in range(2):
-            result = self.run_script('bootstrap-ubuntu-studio.sh', self.source)
+            result = self.run_script('bootstrap-ubuntu.sh', self.source)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             self.assertIn('chezmoi --source', result.stdout)
             self.assertNotIn('configure-chezmoi.sh', result.stdout)
@@ -116,11 +116,11 @@ class LinuxBootstrapTest(unittest.TestCase):
 
     def test_unsupported_home_unchanged_for_both_entry_points(self):
         sentinel = self.home/'existing'; sentinel.write_bytes(b'keep')
-        self.state['studio'] = False
-        for name in ('bootstrap-ubuntu-studio.sh', 'provision-ubuntu-studio.sh'):
+        self.state['flavor'] = False
+        for name in ('bootstrap-ubuntu.sh', 'provision-ubuntu.sh'):
             result = self.run_script(name, self.source)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn('ubuntustudio', result.stdout+result.stderr)
+            self.assertIn('ubuntu-desktop', result.stdout+result.stderr)
         self.assertEqual(list(self.home.iterdir()), [sentinel])
         self.assertEqual(sentinel.read_bytes(), b'keep')
         self.assertFalse(any(name in ('sudo', 'mise', 'git') for name, _ in self.calls()))
@@ -130,14 +130,14 @@ class LinuxBootstrapTest(unittest.TestCase):
             with self.subTest(override=override):
                 self.state.update(override)
                 if not override: (self.source/'.git').rmdir()
-                result = self.run_script('bootstrap-ubuntu-studio.sh', self.source)
+                result = self.run_script('bootstrap-ubuntu.sh', self.source)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(any(name == 'mise' for name, _ in self.calls()))
                 self.state.pop('origin', None); self.state.pop('prefix', None)
 
     def test_provision_only_installs_missing_prerequisites(self):
         (self.bin/'mise').unlink()
-        result = self.run_script('provision-ubuntu-studio.sh', self.source)
+        result = self.run_script('provision-ubuntu.sh', self.source)
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         installs = [args for name, args in self.calls() if name == 'sudo']
         self.assertIn(['extrepo', 'enable', 'mise'], installs)
@@ -146,27 +146,27 @@ class LinuxBootstrapTest(unittest.TestCase):
         self.assertEqual(list(self.home.iterdir()), [])
         self.state = json.loads((self.root/'state.json').read_text())
         before = len(self.calls())
-        result = self.run_script('provision-ubuntu-studio.sh', self.source)
+        result = self.run_script('provision-ubuntu.sh', self.source)
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertFalse(any(name == 'sudo' for name, _ in self.calls()[before:]))
 
     def test_provision_rejects_uninspected_standalone_before_actions(self):
         shutil.rmtree(self.source/'scripts')
-        result = self.run_script('provision-ubuntu-studio.sh', self.source)
+        result = self.run_script('provision-ubuntu.sh', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('inspected checkout', result.stderr)
         self.assertFalse(self.calls())
 
     def test_provision_failure_does_not_claim_success(self):
         self.state['fail'] = 'sudo'
-        result = self.run_script('provision-ubuntu-studio.sh', self.source)
+        result = self.run_script('provision-ubuntu.sh', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('Prerequisites ready', result.stdout)
 
     def test_bootstrap_clones_only_to_empty_destination(self):
         if not self.chezmoi: self.skipTest('Real chezmoi required')
         destination = self.root/'permanent checkout'
-        result = self.run_script('bootstrap-ubuntu-studio.sh', destination)
+        result = self.run_script('bootstrap-ubuntu.sh', destination)
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertTrue((destination/'.git').is_dir())
         self.assertIn(['git', ['clone', '--', 'https://github.com/hyperlapse122/dotfiles.git', str(destination)]], self.calls())
@@ -175,7 +175,7 @@ class LinuxBootstrapTest(unittest.TestCase):
     def test_nonempty_unrelated_directory_is_preserved(self):
         destination = self.root/'unrelated'; destination.mkdir()
         sentinel = destination/'keep'; sentinel.write_text('keep')
-        result = self.run_script('bootstrap-ubuntu-studio.sh', destination)
+        result = self.run_script('bootstrap-ubuntu.sh', destination)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(list(destination.iterdir()), [sentinel])
         self.assertEqual(sentinel.read_text(), 'keep')
@@ -183,14 +183,14 @@ class LinuxBootstrapTest(unittest.TestCase):
 
     def test_root_provisioning_rejected_before_package_actions(self):
         self.state['uid'] = '0'
-        result = self.run_script('provision-ubuntu-studio.sh', self.source)
+        result = self.run_script('provision-ubuntu.sh', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('normal user', result.stderr)
         self.assertFalse(any(name == 'sudo' for name, _ in self.calls()))
 
     def test_missing_python_blocks_before_package_actions(self):
         (self.bin/'python3').unlink()
-        result = self.run_script('provision-ubuntu-studio.sh', self.source)
+        result = self.run_script('provision-ubuntu.sh', self.source)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('python3', result.stderr)
         self.assertFalse(self.calls())
@@ -199,7 +199,7 @@ class LinuxBootstrapTest(unittest.TestCase):
         for failed_action in (['install'], ['run', 'bootstrap']):
             with self.subTest(failed_action=failed_action):
                 self.state['fail_mise'] = failed_action
-                result = self.run_script('bootstrap-ubuntu-studio.sh', self.source)
+                result = self.run_script('bootstrap-ubuntu.sh', self.source)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn('Prepared:', result.stdout)
 

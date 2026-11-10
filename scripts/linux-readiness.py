@@ -1,8 +1,8 @@
-"""Inspect Ubuntu Studio prerequisites without changing personal or runtime state.
+"""Inspect Ubuntu Desktop prerequisites without changing personal or runtime state.
 
 Exit 0 requires every check to pass, 1 reports blocking prerequisites, and 2
 reports pending native proof. Inspection alone cannot certify daily work.
-See docs/setup/ubuntu-studio.md for separate acceptance procedures.
+See docs/setup/ubuntu.md for separate acceptance procedures.
 """
 
 import argparse
@@ -18,14 +18,14 @@ host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
 
 COMMANDS = (
-    'git', 'mise', 'chezmoi', 'gpg', 'gpgconf', 'pinentry-qt', 'ssh',
+    'git', 'mise', 'chezmoi', 'gpg', 'gpgconf', 'pinentry-gnome3', 'ssh',
     'aria2c', 'curl', 'zsh', 'ghostty', 'fc-match', 'secret-tool',
     'bun', 'node', 'claude', 'codex', 'agy', 'pi', 'grok', 'gh', 'glab', 'ghq', 'op', 't3',
     'docker-credential-secretservice', 'cc', 'c++', 'pkg-config', 'python', 'pwsh',
     'dotnet', 'rustc', 'cargo', 'rustup', 'cmake', 'ninja', 'vcpkg',
     'docker', 'dockerd', 'dockerd-rootless.sh', 'dockerd-rootless-setuptool.sh',
     'rootlesskit', 'newuidmap', 'newgidmap', 'slirp4netns', 'fuse-overlayfs',
-    'systemd-run', 'systemctl', 'minikube', 'kubectl', 'kwriteconfig6', 'kreadconfig6',
+    'systemd-run', 'systemctl', 'minikube', 'kubectl', 'xdg-terminal-exec',
 )
 PACKAGES = ('google-chrome-stable', '1password', '1password-cli', 'claude-desktop', 'chatgpt',
             'docker-ce', 'docker-ce-cli', 'containerd.io', 'docker-ce-rootless-extras',
@@ -47,10 +47,10 @@ MANAGED_FILES = {
     'T3 client preferences': '.t3/userdata/client-settings.json',
 }
 MISSING_TOOL = 'Missing; complete explicit application/build provisioning and open a fresh shell.'
-DESKTOP_DETAIL = 'Session metadata only; complete the separate native Plasma acceptance checklist.'
+DESKTOP_DETAIL = 'Session metadata only; complete the separate native GNOME acceptance checklist.'
 NATIVE_CHECKS = {
     'Hardware and install media': 'Verify signed 26.04.1-or-later 26.04 amd64 media, drivers, Secure Boot, peripherals, reboot and native session.',
-    'Terminal, shell and fonts': 'Verify zsh login, Prezto/completions, Jetendard rendering, KDE defaults, Ctrl+Alt+T, Dolphin and Terminal=true launchers.',
+    'Terminal, shell and fonts': 'Verify zsh login, Prezto/completions, Jetendard rendering, the default-terminal preference, Ctrl+Alt+T, the Files terminal action and Terminal=true launchers.',
     'Native harness discovery': 'Verify Claude, Codex, Antigravity, pi and Grok instructions, pinned native CE and each shared skill exactly once.',
     'Authenticated harness and T3 work': 'Invoke CE through each harness; open a project and complete work through each configured T3 provider.',
     'Secret Service and credentials': 'Verify the existing provider/default collection, harmless roundtrip and deletion, GPG signing, SSH, GitHub/GitLab and enrolled registries without logging values.',
@@ -72,10 +72,10 @@ def collect(home):
 
     report = host.inspect_host(run=subprocess.run)
     record('Supported host', 'passed' if report['supported'] else 'failed',
-           'Requires native Ubuntu Studio 26.04 LTS, installed from 26.04.1 or later 26.04 amd64 media; other flavors and architectures are unsupported.')
+           'Requires native Ubuntu Desktop 26.04 LTS with GNOME, installed from 26.04.1 or later 26.04 amd64 media; other flavors and architectures are unsupported.')
     if not report['supported']:
         return {'ready': False, 'checks': checks}
-    record('KDE session', report['desktop']['status'], DESKTOP_DETAIL)
+    record('GNOME session', report['desktop']['status'], DESKTOP_DETAIL)
     for command in COMMANDS:
         available = shutil.which(command)
         record('Command: ' + command, 'passed' if available else 'failed',
@@ -114,7 +114,7 @@ def main():
     else:
         for check in result['checks']:
             print(f"{check['status'].upper():7} {check['name']}: {check['detail']}")
-        print('Native evidence remains separate; follow docs/setup/ubuntu-studio.md.')
+        print('Native evidence remains separate; follow docs/setup/ubuntu.md.')
     return exit_code(result)
 
 

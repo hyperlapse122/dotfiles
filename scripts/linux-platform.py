@@ -1,4 +1,4 @@
-"""Read-only Ubuntu Studio host inspection, shared by workstation actions.
+"""Read-only Ubuntu Desktop host inspection, shared by workstation actions.
 
 inspect_host accepts injected OS metadata, session environment and a subprocess.run
 compatible runner. The CLI prints the same JSON report and exits 0 for a supported
@@ -13,7 +13,7 @@ import platform
 import subprocess
 
 
-STUDIO_PACKAGES = ('ubuntustudio-desktop', 'ubuntustudio-desktop-core')
+DESKTOP_PACKAGES = ('ubuntu-desktop', 'ubuntu-desktop-minimal')
 
 
 def inspect_host(*, system=None, os_release=None, environ=None, run=subprocess.run):
@@ -34,29 +34,29 @@ def inspect_host(*, system=None, os_release=None, environ=None, run=subprocess.r
         return result.stdout.strip() if result.returncode == 0 else ''
 
     architecture = output(['dpkg', '--print-architecture']) if system == 'Linux' else ''
-    packages = [package for package in STUDIO_PACKAGES
+    packages = [package for package in DESKTOP_PACKAGES
                 if system == 'Linux' and output(['dpkg-query', '-W', '-f=${Status}', package]) == 'install ok installed']
     blockers = []
     if system != 'Linux':
-        blockers.append('Requires Linux on an Ubuntu Studio workstation.')
+        blockers.append('Requires Linux on an Ubuntu Desktop workstation.')
     if os_release.get('ID') != 'ubuntu' or os_release.get('VERSION_ID') != '26.04':
-        blockers.append('Requires the validated Ubuntu Studio 26.04 LTS release line; install Ubuntu Studio 26.04.1 or a later 26.04 point release manually.')
+        blockers.append('Requires the validated Ubuntu Desktop 26.04 LTS release line; install Ubuntu Desktop 26.04.1 or a later 26.04 point release manually.')
     if architecture != 'amd64':
         blockers.append('Requires native dpkg architecture amd64.')
     if not packages:
-        blockers.append('Requires installed ubuntustudio-desktop or ubuntustudio-desktop-core metapackage evidence; other Linux desktops are unsupported.')
+        blockers.append('Requires installed ubuntu-desktop or ubuntu-desktop-minimal metapackage evidence; other Ubuntu flavors and Linux desktops are unsupported.')
     desktops = environ.get('XDG_CURRENT_DESKTOP', '').upper().split(':')
     session_type = environ.get('XDG_SESSION_TYPE', '').lower()
-    kde = 'KDE' in desktops and session_type in ('wayland', 'x11')
+    gnome = 'GNOME' in desktops and session_type in ('wayland', 'x11')
     return {
         'supported': not blockers,
         'blockers': blockers,
         'evidence': {'system': system, 'id': os_release.get('ID', ''),
                      'version_id': os_release.get('VERSION_ID', ''),
-                     'architecture': architecture, 'studio_packages': packages},
-        'desktop': {'status': 'passed' if kde else 'pending',
-                    'detail': 'KDE graphical session evidence is present.' if kde else
-                    'Log into the native KDE Plasma desktop and repeat desktop acceptance checks.',
+                     'architecture': architecture, 'desktop_packages': packages},
+        'desktop': {'status': 'passed' if gnome else 'pending',
+                    'detail': 'GNOME graphical session evidence is present.' if gnome else
+                    'Log into the native GNOME desktop and repeat desktop acceptance checks.',
                     'current_desktop': environ.get('XDG_CURRENT_DESKTOP', ''),
                     'session_type': session_type},
     }

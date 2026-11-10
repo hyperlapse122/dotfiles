@@ -55,7 +55,7 @@ def as_account(username, home, arguments):
     return ["sudo", "--user", username, "--", "env", "HOME=" + str(home),
             "XDG_CONFIG_HOME=" + str(home / ".config"), "SHELL=/bin/zsh",
             "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-            "XDG_CURRENT_DESKTOP=", "XDG_SESSION_TYPE=", *arguments]
+            "XDG_CURRENT_DESKTOP=ubuntu:GNOME", "XDG_SESSION_TYPE=", "XTE_CACHE_ENABLED=0", *arguments]
 
 
 def verify_terminal_status(status):
@@ -63,7 +63,7 @@ def verify_terminal_status(status):
                if line.startswith("Terminal environment PENDING:")]
     allowed = {
         "Terminal environment PENDING: The systemd user-manager environment is unavailable; verify in a desktop session.",
-        "Terminal environment PENDING: Native Plasma acceptance remains unverified: check Default Applications, Ctrl+Alt+T, Dolphin Open Terminal Here, and a Terminal=true launcher in a fresh desktop session.",
+        "Terminal environment PENDING: Native GNOME acceptance remains unverified: check Ctrl+Alt+T, the Files terminal action, and a Terminal=true launcher in a fresh desktop session.",
     }
     if status.returncode == 0 and not pending:
         return
@@ -108,12 +108,9 @@ def ubuntu_smoke(selected, root):
         status = run(as_account(username, home, [*arguments[:2], "status", *arguments[3:]]),
                      accepted=(0, 2))
         verify_terminal_status(status)
-        for key, expected in (("TerminalService", DESKTOP_ID),
-                              ("TerminalApplication", next(line[5:] for line in metadata.splitlines() if line.startswith("Exec=")))):
-            value = run(as_account(username, home, ["kreadconfig6", "--file", "kdeglobals",
-                         "--group", "General", "--key", key])).stdout.strip()
-            if value != expected:
-                raise RuntimeError(f"KDE {key} selected {value!r}")
+        desktop_id = run(as_account(username, home, ["xdg-terminal-exec", "--print-id"])).stdout.strip()
+        if desktop_id != DESKTOP_ID:
+            raise RuntimeError(f"Native terminal dispatcher selected {desktop_id!r}")
         print("Native account/default/configuration probes passed; desktop launch remains untested.")
 
 
