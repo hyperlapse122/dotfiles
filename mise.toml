@@ -154,3 +154,39 @@ run = "sh ./scripts/macos-build-environment.sh rust"
 description = "Install build utilities and publish persistent mise tool commands"
 tools = { cmake = { version = "latest", os = ["macos"] }, ninja = { version = "latest", os = ["macos"] } }
 run = "sh ./scripts/macos-build-environment.sh tools"
+
+[tasks.linux-build]
+description = "Provision the native Ubuntu Studio GNU Linux build environment"
+run = [
+  "sh ./scripts/linux-build-environment.sh preflight",
+  { task = "linux-build:dotnet8" },
+  { task = "linux-build:dotnet10" },
+  { task = "linux-build:rust" },
+  { task = "linux-build:tools" },
+  "sh ./scripts/linux-build-environment.sh vcpkg '{{vars.windows_vcpkg_repository}}' '{{vars.windows_vcpkg_revision}}'",
+]
+
+[tasks."linux-build:dotnet8"]
+description = "Install and publish native .NET SDK 8"
+tools = { "core:dotnet" = { version = "8", os = ["linux"] } }
+run = "sh ./scripts/linux-build-environment.sh dotnet 8"
+
+[tasks."linux-build:dotnet10"]
+description = "Install and publish native .NET SDK 10"
+tools = { "core:dotnet" = { version = "10", os = ["linux"] } }
+run = "sh ./scripts/linux-build-environment.sh dotnet 10"
+
+[tasks."linux-build:rust"]
+description = "Install and publish native stable Rust"
+tools = { "core:rust" = { version = "stable-x86_64-unknown-linux-gnu", profile = "default", targets = ["x86_64-unknown-linux-gnu"], os = ["linux"] } }
+run = "sh ./scripts/linux-build-environment.sh rust"
+
+[tasks."linux-build:tools"]
+description = "Install build utilities and publish persistent mise tool commands"
+tools = { cmake = { version = "latest", os = ["linux"] }, ninja = { version = "latest", os = ["linux"] } }
+run = "sh ./scripts/linux-build-environment.sh tools"
+
+[tasks.linux-kubernetes]
+description = "Install and publish Linux Kubernetes clients without starting a runtime"
+tools = { minikube = { version = "1.39.0", os = ["linux"] }, kubectl = { version = "1.37.2", os = ["linux"] } }
+run = "sh ./scripts/linux-build-environment.sh kubernetes"

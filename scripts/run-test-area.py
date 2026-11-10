@@ -43,7 +43,7 @@ AREAS = {
         "test_windows_build_apply", "test_windows_build_environment", "test_windows_build_prepare",
         "test_windows_build_smoke", "test_windows_visual_studio", "test_ci_areas",
         "test_ci_workflows",
-        "test_macos_build_environment",
+        "test_macos_build_environment", "test_linux_build_environment",
     ),
 }
 
