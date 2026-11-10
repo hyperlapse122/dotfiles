@@ -35,10 +35,10 @@ Follow the [macOS Setup and Readiness Guide](docs/setup/macos.md) to install nat
 The supported baseline is macOS 26 or later on native Apple Silicon.
 The guide covers all managed harnesses, applications, credentials, local containers and native Rust/C++/.NET builds, with separate manual and runtime readiness checks.
 
-### 3. New Ubuntu Desktop PC
+### 3. New Fedora KDE PC
 
-Follow the [Ubuntu Setup and Readiness Guide](docs/setup/ubuntu.md) for Windows backups, verified installation media, native prerequisites, inspected checkout preparation, explicit registration/application, and separate daily-work acceptance.
-Linux workstation support is standard Ubuntu Desktop 26.04 LTS with GNOME on amd64, starting with 26.04.1 media. The GNOME desktop, credentials, native builds and minikube require owner acceptance on the target host.
+Follow the [Fedora Setup and Readiness Guide](docs/setup/fedora.md) for Windows backups, verified installation media, native prerequisites, inspected checkout preparation, explicit registration/application, and separate daily-work acceptance.
+Linux workstation support is the dnf-based Fedora KDE Plasma Desktop edition on amd64, at Fedora 45 or later; Fedora 45 is the validated release. The Plasma desktop, credentials, native builds and minikube require owner acceptance on the target host.
 
 ### 4. Worktree Preparation (Any OS)
 
@@ -59,7 +59,7 @@ To apply managed configuration, personal applications, and user fonts to your ac
 mise run apply
 ```
 
-On supported Ubuntu Desktop GNOME hosts and Apple Silicon macOS, application also installs Ghostty and reconciles the account's zsh login shell and native terminal defaults.
+On supported Fedora KDE Plasma Desktop hosts and Apple Silicon macOS, application also installs Ghostty and reconciles the account's zsh login shell and native terminal defaults.
 See [Ghostty and the Login Shell](docs/guides/terminal.md) for configuration ownership, session renewal, status checks, and the OS-specific default-terminal boundaries.
 
 To preview pending changes before applying:
@@ -77,7 +77,7 @@ mise exec -- chezmoi --source . diff
 | `mise run apply` | Apply settings directly from the current repository worktree |
 | `mise exec -- chezmoi --source . diff` | Inspect rendered file diffs against destination files |
 | `mise run windows-build` | Provision or update Windows native development toolchains (C++, .NET, Rust) |
-| `mise run linux-build` | Explicitly provision native Ubuntu Desktop build tools |
+| `mise run linux-build` | Explicitly provision native Fedora build tools |
 | `mise run linux-kubernetes` | Publish Linux minikube/kubectl without starting a runtime or cluster |
 | `python3 scripts/linux-readiness.py --json` | Inspect Linux prerequisites; report pending native acceptance separately |
 | `mise run macos-build` | Explicitly provision native Apple Silicon C++/.NET/Rust build tools |
@@ -90,7 +90,7 @@ Comprehensive guides are organized in [docs/](docs/README.md):
 
 ### Setup
 
-- **[Ubuntu Setup and Readiness](docs/setup/ubuntu.md):** Windows migration, signed installation media, GNOME apps/shell, native credentials/builds, rootless Docker/minikube proof and cleanup.
+- **[Fedora Setup and Readiness](docs/setup/fedora.md):** Windows migration, signed installation media, KDE Plasma apps/shell, native credentials/builds, rootless Podman/minikube proof and cleanup.
 - **[macOS Setup and Readiness](docs/setup/macos.md):** Native prerequisites, source registration, managed apps/harnesses, Podman, native builds, and a complete readiness checklist.
 - **[Windows Setup and Bootstrap](docs/setup/windows.md):** Automated PC bootstrap, chezmoi source registration, WinGet host applications, virtualization preflight, build environments, and Podman / Kubernetes onboarding.
 
@@ -100,7 +100,7 @@ Comprehensive guides are organized in [docs/](docs/README.md):
 - **[Secrets and API Authentication](docs/guides/secrets-and-authentication.md):** Encrypted token source, GitHub and GitLab PAT imports, native OS keyrings, and Git HTTPS credentials.
 - **[Personal CLI Applications](docs/guides/personal-applications.md):** Installation of Claude Code, Codex, `gh`, `ghq`, and `glab` under `~/.local/bin`, shell PATH activation, pin updates, and PowerShell mise activation.
 - **[User Fonts](docs/guides/fonts.md):** Pinned JetBrains Mono, Pretendard, D2Coding, and Nerd Font installation, user-scope discovery, updates, and Windows loaded-file recovery.
-- **[Ghostty and the Login Shell](docs/guides/terminal.md):** Supported Ubuntu/macOS installation, default-terminal selection, zsh account shell, pending actions, and manual package updates.
+- **[Ghostty and the Login Shell](docs/guides/terminal.md):** Supported Fedora/macOS installation, default-terminal selection, zsh account shell, pending actions, and manual package updates.
 - **[T3 Code Desktop and Harness Integration](docs/guides/t3-code.md):** Desktop editor installation, command-line launchers, native Claude Code, Codex, pi, and Grok providers.
 - **[Harness Plugins](docs/guides/harness-plugins.md):** Compound Engineering and the korean-skills writing skills for every managed harness, pinned local marketplaces, update controls, shared agent instructions, and account source isolation for Claude Code and Codex.
 - **[Native System CA Trust](docs/guides/system-ca.md):** Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, and platform activation.

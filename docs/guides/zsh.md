@@ -1,7 +1,7 @@
 # Zsh and Prezto
 
-Explicit chezmoi application configures Prezto for Ubuntu Desktop amd64 and Apple Silicon macOS.
-Shared Linux AMD64/ARM64 assets and CLI compatibility tests remain available, but do not expand the [supported workstation baseline](../setup/ubuntu.md).
+Explicit chezmoi application configures Prezto for Fedora KDE Plasma Desktop amd64 and Apple Silicon macOS.
+Shared Linux AMD64/ARM64 assets and CLI compatibility tests remain available, but do not expand the [supported workstation baseline](../setup/fedora.md).
 Install zsh through the platform setup first; changing the default login shell is a separate operation.
 
 ```sh

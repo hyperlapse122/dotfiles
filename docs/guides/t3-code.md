@@ -8,7 +8,7 @@ T3 Code is supported on:
 
 - **Windows (x64 and ARM64):** Installed via WinGet (`T3Tools.T3Code`, declared in `home/.chezmoidata/windows.yaml`).
 - **macOS (Apple Silicon):** Installed via Homebrew cask (`t3-code`) if no existing app is detected.
-- **Ubuntu Desktop 26.04 LTS (amd64, from 26.04.1+ media):** Staged via a checksum-verified `.deb` external and installed via APT after the shared Ubuntu Desktop host check.
+- **Fedora KDE Plasma Desktop (amd64, Fedora 45 or later):** The release publishes no RPM, so the vendor's `T3-Code-<version>-x86_64.AppImage` is staged as an external verified against the release's SHA-256 digest. After the shared Fedora host check, application extracts it to `~/.local/share/dotfiles/t3-code` without sudo or a FUSE library and writes `t3code.desktop` to `~/.local/share/applications`. Whether the extracted app runs under Fedora's user-namespace sandbox is unverified until native acceptance.
 
 > **Note:** Intel Mac support is not maintained.
 

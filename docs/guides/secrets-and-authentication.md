@@ -264,7 +264,7 @@ Registry enrollment is optional and separate from GitHub/GitLab API authenticati
 
 The repository pins the official Docker credential helpers (`wincred`, `osxkeychain`, and `secretservice`) for supported targets. An enrolled registry is stored in Windows Credential Manager, macOS Keychain, or Linux Secret Service. The helper must be installed on the client host and discoverable on `PATH`; a configured Docker or Podman client is required. No engine, VM, WSL machine, or cluster is installed or started by this feature.
 
-On Linux, the official helper also requires the `libsecret-1` runtime library (`libsecret-1-0` on Ubuntu) and an available Secret Service provider for credential operations.
+On Linux, the official helper also requires the `libsecret-1` runtime library (the `libsecret` package on Fedora) and an available Secret Service provider for credential operations. On Fedora the client is rootless Podman, whose `podman-docker` package supplies the `docker` command; reconciliation writes the helper selection to Podman's `containers/auth.json` as well as the Docker client file.
 
 Import a Docker Hub account using a plaintext token file outside the repository:
 
@@ -294,11 +294,11 @@ The effective `DOCKER_CONFIG` and `REGISTRY_AUTH_FILE` overrides are reconciled 
 
 Locked or unavailable native storage fails without a plaintext fallback. Rotate credentials by importing the replacement and applying again. No real registry push is part of the smoke tests. `tests/smoke_container_auth.py` writes only synthetic records on disposable GitHub-hosted runners, restoring macOS Keychain selection and erasing its record. CI supplies the mise-pinned Podman 6.1.4 client and requires a real host-side `podman login --get-login` lookup. Remote Podman initializes a connection before this local lookup; a ping-only loopback fixture satisfies that handshake without returning credentials or starting an engine. The account must still come from the official helper and native credential store.
 
-## Ubuntu Native Credential Acceptance
+## Fedora Native Credential Acceptance
 
-Explicit Linux application installs Secret Service client libraries and `secret-tool`, and uses the GNOME pinentry for GPG. The existing Ubuntu Desktop session must supply the unlocked Secret Service collection, which gnome-keyring normally provides. An installed gnome-keyring or KWallet package does not prove that it owns the bus name, provides a default collection or can persist credentials. Application does not start another provider or migrate wallets.
+Explicit Linux application installs the `libsecret` package, which provides the Secret Service client library and `secret-tool`, and the Qt pinentry (`pinentry-qt`) for GPG prompts. The existing KDE Plasma session must supply the unlocked Secret Service collection, which KWallet normally provides through `ksecretd`. An installed KWallet or other keyring package does not prove that it owns the bus name, provides a default collection or can persist credentials. Application checks the provider the session already runs; it does not start another provider or migrate wallets.
 
-In the owner's native GNOME session, check the bus owner without activating a provider:
+In the owner's native Plasma session, check the bus owner without activating a provider:
 
 ```sh
 gdbus call --session --dest org.freedesktop.DBus \
@@ -306,7 +306,7 @@ gdbus call --session --dest org.freedesktop.DBus \
   org.freedesktop.secrets
 ```
 
-Require `true` before further Secret Service calls. Resolve a missing provider using the desktop's supported configuration and log in again; do not launch a competing daemon for this test. To identify the current owner, call `org.freedesktop.DBus.GetNameOwner` on the same bus object with `org.freedesktop.secrets`, then inspect that unique owner's process in the session. Confirm whether gnome-keyring or another provider owns it. Only after confirming ownership, inspect the default alias:
+Require `true` before further Secret Service calls. Resolve a missing provider using the desktop's supported configuration and log in again; do not launch a competing daemon for this test. To identify the current owner, call `org.freedesktop.DBus.GetNameOwner` on the same bus object with `org.freedesktop.secrets`, then inspect that unique owner's process in the session. Confirm whether KWallet's `ksecretd` or another provider owns it. Only after confirming ownership, inspect the default alias:
 
 ```sh
 gdbus call --session --dest org.freedesktop.secrets \
@@ -335,4 +335,4 @@ Record store, comparison and deletion results separately. If interrupted or a co
 
 Open 1Password, sign in and unlock it manually. Enable its supported CLI and browser integration, then verify `op --version`, a native CLI authorization prompt and browser unlock/fill on a harmless account. For SSH, use the enrolled public identity and documented Linux socket; confirm only the selected account is offered. Do not capture vault item values. Complete GPG PIN and ownertrust verification, a disposable signed commit, authorized GitHub/GitLab operations and any enrolled registry lookup in the same desktop session. Confirm missing or locked native storage fails rather than persisting plaintext. The read-only Linux readiness report performs none of these operations.
 
-See the [Ubuntu setup guide](../setup/ubuntu.md) for the full acceptance record and build/runtime boundary.
+See the [Fedora setup guide](../setup/fedora.md) for the full acceptance record and build/runtime boundary.

@@ -153,10 +153,13 @@ class AgentInstructionsTest(unittest.TestCase):
                         self.assertNotIn("Apple", rendered)
                         self.assertNotIn("`container`", rendered)
                     else:
-                        for phrase in ("rootless Docker Engine", "Delegate=yes", "/run/user/$UID",
-                                       "smoke_linux_minikube.py", "zero owned volumes", "AppArmor"):
+                        for phrase in ("rootless Podman with minikube's Podman driver", "`podman-docker`",
+                                       "Fedora KDE Plasma Desktop", "CONTAINERS_STORAGE_CONF", "/run/user/$UID",
+                                       "smoke_linux_minikube.py", "`podman unshare`", "zero owned volumes",
+                                       "Do not install a Docker engine"):
                             self.assertIn(phrase, expected)
-                        for runtime in ("Apple", "`container`", "Podman"):
+                        for runtime in ("Apple", "`container`", "Podman Desktop", "rootless Docker", "Ubuntu",
+                                        "AppArmor"):
                             self.assertNotIn(runtime, rendered)
 
     def test_native_host_matches_its_explicit_os_context(self):
@@ -221,11 +224,11 @@ class AgentInstructionsTest(unittest.TestCase):
         for os_name in ('darwin', 'windows'):
             for text in self.baselines[os_name].values():
                 self.assertNotIn('smoke_linux_minikube.py', text)
-                self.assertNotIn('rootless Docker Engine', text)
+                self.assertNotIn("minikube's Podman driver", text)
         for additions in self.t3_additions.values():
             for text in additions.values():
                 self.assertNotIn('smoke_linux_minikube.py', text)
-                self.assertNotIn('rootless Docker Engine', text)
+                self.assertNotIn("minikube's Podman driver", text)
 
 
 if __name__ == "__main__":
