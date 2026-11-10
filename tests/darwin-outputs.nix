@@ -632,6 +632,7 @@ in
 pkgs.runCommand "darwin-outputs"
   {
     nativeBuildInputs = [
+      pkgs.jq
       pkgs.python3
       pkgs.unzip
     ];
