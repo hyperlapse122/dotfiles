@@ -12,8 +12,8 @@
   - bin/agy_acp_server.par execs the runtime built from
     packages/antigravity-acp-release.json, never T3 Code's pin, and links
     into Compound Engineering run homes exactly the skills the user's
-    home-files puts in ~/.gemini/antigravity-cli/skills, the pinned Compound
-    Engineering skills (ce-plan among them) included;
+    home-files puts in ~/.gemini/antigravity-cli/skills: contributed skills
+    only, with Compound Engineering supplied by the native plugin;
   - bin/localharness_external, beside it, is that runtime's executable helper.
 
   tests/antigravity-acp-path.nix runs the wrapper itself. macOS users are
@@ -96,8 +96,9 @@ pkgs.runCommand "antigravity-profiles-tests" { } ''
     printf '%s\n' "$@" | sort > "$work/wrapper"
     cmp -s "$work/linked" "$work/wrapper" \
       || fail "agy_acp_server.par links other skills than ~/.gemini/antigravity-cli/skills holds: $(diff "$work/linked" "$work/wrapper" | grep '^[<>]' | tr '\n' ' ')"
-    grep -qx ce-plan "$work/wrapper" \
-      || fail "agy_acp_server.par does not link the Compound Engineering skill ce-plan"
+    if grep -qE '^ce-' "$work/wrapper"; then
+      fail "agy_acp_server.par links native Compound Engineering skills as contributed skills"
+    fi
   )
 
   ${lib.concatMapStringsSep "\n" assertEntry configurations.userEntries}

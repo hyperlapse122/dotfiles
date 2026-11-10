@@ -20,8 +20,8 @@ in
   # grok-bot cask declares only `app "Grok Bot.app"` and a `zap trash:` list
   # of ~/Library paths, and no `uninstall` stanza (homebrew-cask
   # Casks/g/grok-bot.rb at 37b48ceb2d85), so uninstall removes the app bundle
-  # and Homebrew's own records and nothing under ~/Library. Orca's user data is
-  # removed by the retireOrca Home Manager step instead. The orca cask is
+  # and Homebrew's own records and nothing under ~/Library. Orca is no longer
+  # managed, and its user data is preserved. The orca cask is
   # named by its bare token, the name its Caskroom directory carries, and is
   # uninstalled before its stablyai/orca tap is removed. --force only
   # unpins a pinned cask, tolerates a missing or occupied app path, and purges

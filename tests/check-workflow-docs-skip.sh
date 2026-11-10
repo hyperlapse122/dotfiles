@@ -14,7 +14,7 @@ import yaml
 
 workflow = yaml.safe_load(Path(sys.argv[1]).read_text())
 light = "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
-full = "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+full = "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
 docs = "!cancelled() && github.event_name == 'pull_request' && needs.changes.result == 'success' && needs.changes.outputs.docs_only == 'true'"
 heavy = {"host-checks", "hosts", "build", "build-darwin", "vm-check-names", "vm-checks"}
 
@@ -86,9 +86,14 @@ for event in ["push", "workflow_dispatch", "pull_request"]:
 
 for name in heavy:
     condition = workflow["jobs"][name]["if"]
-    assert not evaluate(condition, "pull_request", True, "success", "false", "labeled", "unrelated")
+    assert evaluate(condition, "pull_request", True, "success", "false", "labeled", "unrelated")
+    assert not evaluate(condition, "pull_request", False, "success", "false", "labeled", "unrelated")
     assert evaluate(condition, "pull_request", True, "success", "false", "labeled", "full-ci")
-    for replacement in [light, "True"]:
+    old_label_gate = full.replace(
+        "contains(github.event.pull_request.labels.*.name, 'full-ci')",
+        "contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci')",
+    )
+    for replacement in [light, "True", old_label_gate]:
         mutant = copy.deepcopy(workflow)
         mutant["jobs"][name]["if"] = replacement
         try:
@@ -96,7 +101,7 @@ for name in heavy:
         except AssertionError:
             pass
         else:
-            raise AssertionError("survived missing full-ci gate: " + name)
+            raise AssertionError("survived broken full-ci gate: " + name)
 mutant = copy.deepcopy(workflow)
 for step in mutant["jobs"]["check-shard-names"]["steps"]:
     if "run" in step:
