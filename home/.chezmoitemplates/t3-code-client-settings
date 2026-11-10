@@ -1,8 +1,0 @@
-{{- $settings := dict -}}
-{{- if .chezmoi.stdin | trim -}}
-{{- $settings = .chezmoi.stdin | fromJson -}}
-{{- if not (kindIs "map" $settings) -}}
-{{- fail "Invalid T3 Code client-settings.json: expected a settings object; refusing to replace existing settings" -}}
-{{- end -}}
-{{- end -}}
-{{- includeTemplate "t3-code-preferences" (dict "settings" $settings "desired" .t3CodePreferences.client "file" "client-settings.json") -}}

@@ -271,7 +271,7 @@ Run no actual-home apply or default-shell changes during development.
 Use explicit temporary chezmoi config, destination, cache, and state paths for every fixture; keep all generated tools/settings inside disposable test environments.
 
 | Check | Command or method | Units | Pass signal |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Test ownership | `mise exec -- python scripts/run-test-area.py --validate-only` | U1-U4 | Every discovered test module has one owner |
 | New feature fixtures | `mise exec -- python -m unittest discover -s tests -p "test_zsh*.py"` | U1-U3 | Pinning, XDG, startup, and completion lifecycle scenarios pass |
 | App and CA regressions | `mise exec -- python scripts/run-test-area.py --area applications` | U1-U4 | Existing fixture behavior and new modules pass together |

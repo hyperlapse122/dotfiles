@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""Materialize a pinned agent plugin and register it with a coding agent.
+
+Creates a version-keyed symlink to the pinned source, drives the agent's own
+plugin commands against that path, and removes superseded versions only after
+the registration is observed pointing at the current one. --harness picks the
+agent (claude or codex); each has its own adapter for commands, listings and
+manifest paths.
+
+With --retire it does the reverse for a plugin the repository no longer
+declares: unregister it and delete its version-keyed base directory.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+# A segment names a directory this script creates and later prunes siblings of.
+# Anything that could escape the base directory is refused rather than quoted.
+SEGMENT = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+
+# `enable` reports this when the plugin is already enabled. It is the one
+# non-zero outcome treated as success; every other failure stops the run, so a
+# broken registration can never be mistaken for a converged one.
+ALREADY_ENABLED = 'already enabled'
+
+
+class Failure(Exception):
+    """A refusal that should stop activation with a readable message."""
+
+
+def run(argv, dry_run):
+    code, stdout, stderr = run_split(argv, dry_run)
+    return code, combined(stdout, stderr)
+
+
+def combined(stdout, stderr):
+    return (stdout + stderr).strip()
+
+
+def run_split(argv, dry_run):
+    if dry_run:
+        print('would run: ' + ' '.join(argv))
+        return 0, '', ''
+    proc = subprocess.run(
+        argv,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode, proc.stdout or '', proc.stderr or ''
+
+
+def require(argv, dry_run, what):
+    code, output = run(argv, dry_run)
+    if code != 0:
+        raise Failure('{} failed: {}'.format(what, output or 'no output'))
+    return output
+
+
+def read_manifests(source, harness):
+    """Return the marketplace manifest, refusing a tree this wiring cannot drive."""
+    marketplace = source / harness.marketplace_manifest
+    plugin = source / harness.plugin_manifest
+    for path in (marketplace, plugin):
+        if not path.is_file():
+            raise Failure('pinned source is missing {}'.format(path))
+
+    try:
+        manifest = json.loads(marketplace.read_text())
+    except ValueError as exc:
+        raise Failure('{} is not valid JSON: {}'.format(marketplace, exc))
+
+    # A marketplace-declared command would make `install` want --accept-command,
+    # i.e. run upstream-authored shell during activation. This wiring never
+    # passes that flag, so a tree that declares one is refused instead.
+    declared = []
+    for entry in [manifest] + list(manifest.get('plugins') or []):
+        if not isinstance(entry, dict):
+            continue
+        for key in ('command', 'commands', 'headersHelper'):
+            if entry.get(key):
+                declared.append(key)
+    if declared:
+        raise Failure(
+            'pinned source declares marketplace commands ({}); refusing to '
+            'install, because that would need --accept-command'.format(
+                ', '.join(sorted(set(declared)))
+            )
+        )
+    return manifest
+
+
+def link_version(base, segment, source, dry_run):
+    destination = base / segment
+    if dry_run:
+        print('would link {} -> {}'.format(destination, source))
+        return destination
+    base.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink() and os.readlink(destination) == str(source):
+        return destination
+    staging = base / ('.{}.staging'.format(segment))
+    if staging.is_symlink() or staging.exists():
+        staging.unlink()
+    staging.symlink_to(source)
+    os.replace(staging, destination)
+    return destination
+
+
+def listing(harness, argv, what, key):
+    """The entries of one of the agent's JSON listings.
+
+    `key` names the field an agent that wraps its listings in an object keeps
+    the entries under.
+    """
+    code, stdout, stderr = run_split([harness.cli] + argv, False)
+    if code != 0:
+        raise Failure('{} failed: {}'.format(what, combined(stdout, stderr) or 'no output'))
+    if stderr.strip():
+        print('agent-plugin-sync: {}: {}'.format(what, stderr.strip()), file=sys.stderr)
+    try:
+        parsed = json.loads(stdout)
+    except ValueError as exc:
+        raise Failure('{} did not return JSON: {}'.format(what, exc))
+    return harness.entries(parsed, what, key)
+
+
+def registrations(harness, dry_run):
+    if dry_run:
+        return []
+    return listing(harness, ['plugin', 'marketplace', 'list', '--json'], 'marketplace list',
+                   'marketplaces')
+
+
+def installed(harness):
+    return listing(harness, ['plugin', 'list', '--json'], 'plugin list', 'installed')
+
+
+class Harness:
+    """What every agent adapter shares: its CLI and the marketplace removal.
+
+    sync and retire default to the marketplace flow; an adapter for an agent
+    without marketplaces overrides both.
+    """
+
+    def __init__(self, cli):
+        self.cli = cli
+
+    def sync(self, args):
+        return marketplace_sync(args, self)
+
+    def retire(self, args):
+        return marketplace_retire(args, self)
+
+    def remove_marketplace(self, name, dry_run):
+        require([self.cli, 'plugin', 'marketplace', 'remove', name], dry_run, 'marketplace remove')
+
+
+class Claude(Harness):
+    marketplace_manifest = '.claude-plugin/marketplace.json'
+    plugin_manifest = '.claude-plugin/plugin.json'
+    plugin_key = 'id'
+
+    @staticmethod
+    def recorded_source(entry):
+        """The path or repository a listed marketplace resolves to."""
+        for key in ('path', 'url', 'repo', 'installLocation'):
+            value = entry.get(key)
+            if value:
+                return str(value)
+        return ''
+
+    def entries(self, parsed, what, key):
+        return parsed if isinstance(parsed, list) else []
+
+    def add_marketplace(self, path, dry_run):
+        require(
+            [self.cli, 'plugin', 'marketplace', 'add', path, '--scope', 'user'],
+            dry_run,
+            'marketplace add',
+        )
+
+    def remove_plugin(self, plugin_id, dry_run):
+        require(
+            [self.cli, 'plugin', 'uninstall', plugin_id, '--scope', 'user'],
+            dry_run,
+            'plugin uninstall',
+        )
+
+    def unregister(self, marketplace, plugin_id, dry_run):
+        self.remove_marketplace(marketplace, dry_run)
+
+    def ensure_plugin(self, plugin_id, dry_run):
+        # install, update and enable still run on a converged machine: they are
+        # how a plugin removed or disabled by hand between rebuilds comes back.
+        # install is a no-op at any present version, so update is what
+        # re-resolves a moved pin.
+        require(
+            [self.cli, 'plugin', 'install', plugin_id, '--scope', 'user'],
+            dry_run,
+            'plugin install',
+        )
+        require(
+            [self.cli, 'plugin', 'update', plugin_id, '--scope', 'user'],
+            dry_run,
+            'plugin update',
+        )
+        code, output = run([self.cli, 'plugin', 'enable', plugin_id], dry_run)
+        if code != 0 and ALREADY_ENABLED not in output.lower():
+            raise Failure('plugin enable failed: {}'.format(output or 'no output'))
+
+    def restore(self, previous, plugin_id, marketplace):
+        # Only the marketplace: install and enable run again on every activation.
+        self.add_marketplace(previous, False)
+
+
+class Codex(Harness):
+    marketplace_manifest = '.agents/plugins/marketplace.json'
+    plugin_manifest = '.codex-plugin/plugin.json'
+    plugin_key = 'pluginId'
+
+    @staticmethod
+    def recorded_source(entry):
+        source = entry.get('marketplaceSource')
+        if not entry.get('root') and isinstance(source, dict):
+            return str(source.get('source') or '')
+        return str(entry.get('root') or '')
+
+    def entries(self, parsed, what, key):
+        # Codex wraps each listing in an object, keyed by what it lists. The JSON
+        # shapes are not a stable contract. Reading an unexpected one as empty
+        # would re-add the plugin on every run, so it stops the run instead.
+        value = parsed.get(key) if isinstance(parsed, dict) else None
+        if not isinstance(value, list):
+            raise Failure('{} returned an unexpected shape; expected an object with a '
+                          '{!r} list'.format(what, key))
+        return value
+
+    def add_marketplace(self, path, dry_run):
+        require([self.cli, 'plugin', 'marketplace', 'add', path, '--json'], dry_run,
+                'marketplace add')
+
+    def add_plugin(self, plugin_id, dry_run):
+        require([self.cli, 'plugin', 'add', plugin_id, '--json'], dry_run, 'plugin add')
+
+    def remove_plugin(self, plugin_id, dry_run):
+        require([self.cli, 'plugin', 'remove', plugin_id, '--json'], dry_run, 'plugin remove')
+
+    def unregister(self, marketplace, plugin_id, dry_run):
+        if find(installed(self), plugin_id, key=self.plugin_key) is not None:
+            self.remove_plugin(plugin_id, dry_run)
+        self.remove_marketplace(marketplace, dry_run)
+
+    def ensure_plugin(self, plugin_id, dry_run):
+        # Codex has no install, update or enable. Adding only a missing plugin
+        # keeps a converged run from changing anything, and still brings back a
+        # plugin removed by hand between rebuilds.
+        if dry_run or find(installed(self), plugin_id, key=self.plugin_key) is None:
+            self.add_plugin(plugin_id, dry_run)
+
+    def restore(self, previous, plugin_id, marketplace):
+        # A plugin still installed came from the new version, so it is removed
+        # and added again from the previous marketplace. Codex refuses to add
+        # a name already registered from another source, so a half-registered
+        # new marketplace is removed first; one still at the previous source
+        # is kept.
+        if find(installed(self), plugin_id, key=self.plugin_key) is not None:
+            self.remove_plugin(plugin_id, False)
+        entry = find(registrations(self, False), marketplace)
+        if entry is not None and self.recorded_source(entry) != previous:
+            self.remove_marketplace(marketplace, False)
+            entry = None
+        if entry is None:
+            self.add_marketplace(previous, False)
+        self.add_plugin(plugin_id, False)
+
+
+HARNESSES = {
+    'claude': Claude,
+    'codex': Codex,
+}
+
+
+def find(entries, value, key='name'):
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get(key) == value:
+            return entry
+    return None
+
+
+def resolves_to(harness, entry, segment, destination):
+    """Whether a listed marketplace already points at this version.
+
+    An agent that names only its own cache location reports nothing to compare,
+    which is not evidence either way -- callers decide what to do with False.
+    Codex resolves the version-keyed link and records its target, so the
+    link's current target counts as this version too.
+    """
+    recorded = harness.recorded_source(entry)
+    if not recorded:
+        return False
+    return (segment in recorded or str(destination) in recorded
+            or os.path.realpath(destination) == recorded)
+
+
+def remove_entry(path):
+    """Delete a symlink, or a directory tree this script created."""
+    # unlink() on a directory raises IsADirectoryError on Linux but
+    # PermissionError on macOS, so decide by what the path is instead.
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def remove_base(base, dry_run):
+    """Delete a retired plugin's base directory, which may already be gone."""
+    if dry_run:
+        print('would remove {}'.format(base))
+        return
+    try:
+        remove_entry(base)
+    except FileNotFoundError:
+        pass
+
+
+def prune(base, segment, dry_run):
+    """Remove superseded version entries, leaving anything this script did not create."""
+    if dry_run or not base.is_dir():
+        return []
+    removed = []
+    for child in sorted(base.iterdir()):
+        if child.name == segment:
+            continue
+        if not (child.is_symlink() or child.is_dir()):
+            continue
+        remove_entry(child)
+        removed.append(child.name)
+    return removed
+
+
+def marketplace_retire(args, harness):
+    """Remove a plugin an earlier generation registered, and its base directory.
+
+    Each removal runs only when the agent still lists what it removes, so a
+    converged run changes nothing and every other CLI failure stops activation
+    instead of being mistaken for an already-retired plugin.
+    """
+    plugin_id = '{}@{}'.format(args.plugin, args.marketplace)
+    try:
+        if args.dry_run:
+            print('would remove plugin {} and marketplace {} if listed'.format(
+                plugin_id, args.marketplace))
+            print('would remove {}'.format(args.base))
+            return 0
+        if find(installed(harness), plugin_id, key=harness.plugin_key) is not None:
+            harness.remove_plugin(plugin_id, False)
+        if find(registrations(harness, False), args.marketplace) is not None:
+            harness.remove_marketplace(args.marketplace, False)
+        remove_base(args.base, False)
+        return 0
+    except (Failure, OSError) as exc:
+        print('agent-plugin-sync: {}'.format(exc), file=sys.stderr)
+        return 1
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--retire', action='store_true',
+                        help='unregister the plugin and delete its base directory')
+    parser.add_argument('--harness', required=True, choices=sorted(HARNESSES),
+                        help='which agent the CLI is')
+    parser.add_argument('--cli', required=True, help='path to the agent CLI')
+    parser.add_argument('--source', type=Path, help='pinned plugin source (sync only)')
+    parser.add_argument('--base', required=True, type=Path, help='version-keyed base directory')
+    parser.add_argument('--segment', help='version segment, e.g. v3.28.0 (sync only)')
+    parser.add_argument('--plugin', required=True, help='plugin name from plugin.json')
+    parser.add_argument('--marketplace', required=True, help='marketplace name from marketplace.json')
+    parser.add_argument('--dry-run', action='store_true')
+    args = parser.parse_args(argv)
+    harness = HARNESSES[args.harness](args.cli)
+
+    if os.geteuid() == 0:
+        parser.error('must run as the destination user, not root')
+    if args.retire:
+        if args.source is not None or args.segment is not None:
+            parser.error('--retire takes no --source or --segment')
+        return harness.retire(args)
+    if args.source is None or args.segment is None:
+        parser.error('sync requires --source and --segment')
+    if not SEGMENT.match(args.segment):
+        parser.error('refusing unsafe version segment: {!r}'.format(args.segment))
+
+    return harness.sync(args)
+
+
+def marketplace_sync(args, harness):
+    """Register the pinned source as a local marketplace and add the plugin."""
+    previous = None
+    plugin_id = '{}@{}'.format(args.plugin, args.marketplace)
+    try:
+        read_manifests(args.source, harness)
+        destination = link_version(args.base, args.segment, args.source, args.dry_run)
+
+        # Leave a registration that already points here alone. Re-registering it
+        # would end in the same state while briefly leaving the agent with none,
+        # and a converged run is supposed to change nothing.
+        existing = find(registrations(harness, args.dry_run), args.marketplace)
+        if existing is None or not resolves_to(harness, existing, args.segment, destination):
+            # Remove before adding rather than tolerating whatever `add` does
+            # with an existing name. The destination changes on every version
+            # bump, so same-name-different-path is the ordinary case, and a
+            # deterministic prologue keeps `enable`'s already-enabled message the
+            # only tolerated non-zero outcome.
+            if existing is not None:
+                # Recorded before unregistering, so a failure partway through
+                # still restores what was there.
+                previous = harness.recorded_source(existing)
+                harness.unregister(args.marketplace, plugin_id, args.dry_run)
+            harness.add_marketplace(str(destination), args.dry_run)
+
+        harness.ensure_plugin(plugin_id, args.dry_run)
+
+        # Read the registration back before pruning. The remove-then-add
+        # prologue already rules out keeping a stale source, so this guards the
+        # remaining case: an `add` that recorded something other than what it
+        # was handed.
+        prunable = True
+        if not args.dry_run:
+            entry = find(registrations(harness, False), args.marketplace)
+            if entry is None:
+                raise Failure(
+                    'marketplace {} is not registered after wiring'.format(args.marketplace)
+                )
+            resolved = harness.recorded_source(entry)
+            if not resolved:
+                # The agent may describe a local marketplace only by its own
+                # cache location. That is not evidence of staleness, so keep the
+                # superseded version rather than failing every rebuild.
+                prunable = False
+                print(
+                    'agent-plugin-sync: {} reports no source path; keeping superseded '
+                    'versions'.format(args.marketplace),
+                    file=sys.stderr,
+                )
+            elif not resolves_to(harness, entry, args.segment, destination):
+                raise Failure(
+                    'marketplace {} resolves to {!r}, not the current version {}; '
+                    'refusing to prune'.format(args.marketplace, resolved, args.segment)
+                )
+
+        if prunable:
+            for name in prune(args.base, args.segment, args.dry_run):
+                print('removed superseded plugin version {}'.format(name))
+        return 0
+
+    except (Failure, OSError) as exc:
+        if previous and not args.dry_run:
+            # Put the agent back where it was so a failed bump leaves a working
+            # plugin rather than no registration at all.
+            try:
+                harness.restore(previous, plugin_id, args.marketplace)
+            except Failure as restore_exc:
+                print(
+                    'agent-plugin-sync: could not restore the previous marketplace '
+                    'registration {}: {}'.format(previous, restore_exc),
+                    file=sys.stderr,
+                )
+        print('agent-plugin-sync: {}'.format(exc), file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

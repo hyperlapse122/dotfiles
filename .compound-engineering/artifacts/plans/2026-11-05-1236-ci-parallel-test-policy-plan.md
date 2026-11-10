@@ -121,13 +121,13 @@ Sources: .github/workflows/test.yml, .github/workflows/update-personal-app-lock.
 
 ### Sources and Research
 
-- Issues https://github.com/hyperlapse122/dotfiles/issues/41 and https://github.com/hyperlapse122/dotfiles/issues/42.
-- Existing successful same-head PR run https://github.com/hyperlapse122/dotfiles/actions/runs/41959406936: 13 jobs, elapsed 309 seconds, aggregate job duration 1532 seconds.
-- Corresponding push run https://github.com/hyperlapse122/dotfiles/actions/runs/41959146646: 13 jobs, elapsed 283 seconds, aggregate job duration 1599 seconds. Durations exclude billing rounding; elapsed includes queue delay through run update.
+- Issues <https://github.com/hyperlapse122/dotfiles/issues/41> and <https://github.com/hyperlapse122/dotfiles/issues/42>.
+- Existing successful same-head PR run <https://github.com/hyperlapse122/dotfiles/actions/runs/41959406936>: 13 jobs, elapsed 309 seconds, aggregate job duration 1532 seconds.
+- Corresponding push run <https://github.com/hyperlapse122/dotfiles/actions/runs/41959146646>: 13 jobs, elapsed 283 seconds, aggregate job duration 1599 seconds. Durations exclude billing rounding; elapsed includes queue delay through run update.
 - PR baseline Windows ARM native job: 305 seconds overall; setup/action/tool/GPG stages approximately 83 seconds, then apps 41, T3 62, CE 67, GitHub 32, GitLab 12 seconds. Windows x64 unit execution took 158 seconds; macOS took 41 seconds.
-- https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows — nested permissions can only be maintained or reduced; local workflow calls use the caller commit.
-- https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request — merge ref semantics, merge-conflict suppression, fork read-only credentials.
-- https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency — ordering is not guaranteed.
+- <https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows> — nested permissions can only be maintained or reduced; local workflow calls use the caller commit.
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request> — merge ref semantics, merge-conflict suppression, fork read-only credentials.
+- <https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency> — ordering is not guaranteed.
 - .compound-engineering/artifacts/solutions/integration-issues/github-cli-windows-ca-override.md — retain native CA/environment behavior; do not remove credential coverage to reduce setup.
 
 ### Risks and System-Wide Impact
@@ -151,10 +151,12 @@ Current workflow code is trusted only to the extent of its event permissions; wr
 **Patterns to follow:** Existing unittest discovery; sibling imports in test_gitlab_auth_import.py and test_github_auth_import.py.
 **Execution note:** Characterize baseline discovered IDs and existing outcomes before switching selection. Keep timing output separate from semantic assertions.
 **Test scenarios:**
+
 1. Disjoint synthetic modules collectively select each baseline case once, without scheduling imported fixture cases twice.
 2. An unassigned new module or multiply assigned module fails before execution.
 3. Missing/extra/duplicate IDs and loader import errors fail validation.
 4. Selected whole classes preserve class setup/teardown and skipped cases.
+
 **Test seam:** tests/test_ci_areas.py proves ownership and fixture selection; it cannot prove hosted tool availability or runtime improvement.
 **Verification:** Real list/validate and timed area invocations cover the local baseline exactly once with unchanged platform skips; measured timings justify physical grouping.
 
@@ -167,10 +169,12 @@ Current workflow code is trusted only to the extent of its event permissions; wr
 **Approach:** Add unit area dimension, native five-area dimension, explicit job/step timeouts, and per-area prerequisites. Preserve all original pins and candidate inputs. Restrict GPG/backend setup to credential areas; keep full unit mise setup where its coverage requires it. Each Linux credential execution owns its session.
 **Patterns to follow:** Existing native GPG fixture, immutable artifact selection, selective ARM installation, smoke argument conventions.
 **Test scenarios:**
+
 1. All six unit platforms validate and execute the same applicable baseline ID union.
 2. All five native areas pass independently on every existing target, including Windows ARM.
 3. Fresh T3 jobs acquire their own pinned omp fixture rather than depending on apps.
 4. A failed area leaves unrelated jobs able to report their own result.
+
 **Test seam:** Hosted job executions prove setup/isolation; no source-text workflow tests are added.
 **Verification:** Local runner smoke plus actual full hosted matrix; compare setup/area/job durations against baseline.
 
@@ -183,12 +187,14 @@ Current workflow code is trusted only to the extent of its event permissions; wr
 **Approach:** Implement KTD3–KTD5. Keep admission decisions testable with explicit event/API data. Preserve full ref identity in event run metadata so tags cannot be mistaken for branches. Keep write cancellation inline in a no-checkout metadata controller, with bounded exact-target candidate selection and freshness checks. Add manual input declarations. Cancellation complements admission, never chooses push over PR.
 **Patterns to follow:** Existing job-local permissions in lock publishers; gh/API metadata without shell interpolation of branch names.
 **Test scenarios:**
+
 1. Same-head mergeable PR suppresses nondefault push; absent/conflicted/unknown PR retains branch coverage with reason.
 2. Main and tag pushes always validate, including branch/tag short-name collisions.
 3. PR uses merge SHA; fork path executes with no write controller.
 4. An obsolete PR head cannot admit stale required checks or cancel a newer run; an unchanged head still validates its original event merge SHA after base-only advancement, even when its push was suppressed and no replacement PR event exists.
 5. Manual/called validation and distinct artifact inputs remain isolated.
 6. API failure reports fallback rather than silently dropping coverage.
+
 **Test seam:** tests/test_ci_event_policy.py proves policy decisions from realistic data; actual hosted runs prove permission/ref/cancellation semantics.
 **Verification:** Actual no-PR push, PR opening, update, rapid pushes, unrelated target, tag, dispatch, and read-only reusable caller evidence; record unexercised scenarios explicitly.
 

@@ -156,6 +156,7 @@ The former minimum-OS, provisioning and verification questions are resolved by K
 - `docs/guides/harness-plugins.md`: native integration and the documented Antigravity authenticated-invocation gap.
 - `docs/guides/git-and-gpg.md`, `docs/guides/secrets-and-authentication.md`, `docs/guides/system-ca.md`, `docs/guides/personal-applications.md`: existing macOS policies and behavior.
 - `docs/maintenance/development-and-testing.md`, `.github/workflows/test.yml`: Apple Silicon CI coverage and existing test organization.
+
 ---
 
 ## Planning Contract

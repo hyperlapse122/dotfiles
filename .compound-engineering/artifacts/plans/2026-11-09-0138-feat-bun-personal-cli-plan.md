@@ -64,7 +64,7 @@ A newly demonstrated incompatibility with a supported target would require revis
 All entries use ZIP `archive-file` extraction. Paths are relative to the archive root.
 
 | Chezmoi target | Release asset | Archive member |
-|---|---|---|
+| --- | --- | --- |
 | darwin-arm64 | bun-darwin-aarch64.zip | bun-darwin-aarch64/bun |
 | linux-amd64 | bun-linux-x64.zip | bun-linux-x64/bun |
 | linux-arm64 | bun-linux-aarch64.zip | bun-linux-aarch64/bun |

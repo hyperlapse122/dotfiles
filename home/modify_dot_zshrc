@@ -1,2 +1,0 @@
-{{- /* chezmoi:modify-template */ -}}
-{{- includeTemplate "cli-completions-shell" (merge (dict "shell" "zsh") .) -}}

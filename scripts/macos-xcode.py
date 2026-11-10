@@ -12,10 +12,44 @@ import subprocess
 import sys
 import urllib.request
 
-import apple_account
+import pwd
+import stat
+from contextlib import contextmanager
 
 
-XcodeError = apple_account.AccountError
+class XcodeError(Exception):
+    pass
+
+
+@contextmanager
+def terminal_input():
+    with open("/dev/tty", "rb", buffering=0) as terminal:
+        yield terminal, {}
+
+
+def read_account(source, identity, owner):
+    metadata = identity.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != pwd.getpwnam(owner).pw_uid:
+        raise XcodeError("The age identity must be a regular file owned by the primary user.")
+    if stat.S_IMODE(metadata.st_mode) != 0o600:
+        raise XcodeError("The age identity must have mode 0600.")
+    if str(source).startswith("/nix/store/"):
+        raise XcodeError("Apple account ciphertext must be read from the checkout.")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("SOPS_AGE_")}
+    env["SOPS_AGE_KEY_FILE"] = str(identity)
+    result = subprocess.run(["sops", "--decrypt", "--output-type", "json", str(source)],
+                            env=env, capture_output=True, check=False)
+    if result.returncode:
+        raise XcodeError("Cannot decrypt the Apple account.")
+    try:
+        account = json.loads(result.stdout)
+        if not all(isinstance(account[k], str) and account[k].strip() for k in ("username", "password")):
+            raise ValueError()
+        return {k: account[k] for k in ("username", "password")}
+    except (ValueError, KeyError, TypeError):
+        raise XcodeError("The Apple account needs username and password fields.") from None
+
+
 APPLICATIONS = Path('/Applications')
 CATALOG = 'https://xcodereleases.com/data.json'
 CHANNELS = {'dp': 0, 'beta': 1, 'gmSeed': 2, 'rc': 3, 'gm': 4, 'release': 5}
@@ -126,9 +160,9 @@ def run_interactive(argv, *, env=None, secrets=()):
     decoder = codecs.getincrementaldecoder('utf-8')('replace')
     redactor = Redactor(secrets)
     try:
-        with apple_account.terminal_input() as (terminal, terminal_env):
+        with terminal_input() as (terminal, terminal_env):
             child = subprocess.Popen(argv, stdin=terminal, stdout=slave, stderr=slave,
-                                     env=terminal_env if env is None else env | {'GPG_TTY': terminal_env['GPG_TTY']})
+                                     env=terminal_env if env is None else env)
         os.close(slave)
         slave = None
         while True:
@@ -194,7 +228,7 @@ def verify_candidate(app):
     run_command([clang, '--version'], env=env)
 
 
-def update(source, config=None):
+def update(source, identity, owner):
     release = latest(fetch_catalog())
     required = release['requires']
     if numeric(host_version()) < numeric(required):
@@ -210,7 +244,7 @@ def update(source, config=None):
             version += ' ' + label
             if sequence > 1:
                 version += ' ' + str(sequence)
-        account = apple_account.read_account(source, config)
+        account = read_account(source, identity, owner)
         env = os.environ.copy()
         for name in ('DEVELOPER_DIR', 'SDKROOT', 'TOOLCHAINS', 'XCODES_DIRECTORY'):
             env.pop(name, None)
@@ -233,13 +267,14 @@ def update(source, config=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument('--config', type=Path)
+    parser.add_argument('--source', type=Path, required=True)
+    parser.add_argument('--identity', type=Path, required=True)
+    parser.add_argument('--owner', required=True)
     args = parser.parse_args()
     try:
         if platform.system() != 'Darwin' or platform.machine() != 'arm64':
             raise XcodeError('Xcode provisioning requires native Apple Silicon macOS.')
-        update(args.source, args.config)
+        update(args.source, args.identity, args.owner)
     except XcodeError as error:
         print(str(error), file=sys.stderr)
         return 1

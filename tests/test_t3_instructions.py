@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 import tempfile
 import tomllib
@@ -14,7 +15,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 class T3InstructionsTest(unittest.TestCase):
     def setUp(self):
-        spec = importlib.util.spec_from_file_location('t3_instructions', REPO / 'scripts/t3-instructions.py')
+        spec = importlib.util.spec_from_file_location('t3_instructions', Path(os.environ.get('T3_INSTRUCTIONS_SCRIPT', str(REPO / 'scripts/t3-instructions.py'))))
         self.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.module)
         scratch = tempfile.TemporaryDirectory(prefix="t3 instructions ' ")
@@ -31,6 +32,39 @@ class T3InstructionsTest(unittest.TestCase):
 
     def read(self):
         return json.loads(self.settings.read_text())
+
+    def test_grok_controls_and_client_hidden_choices_preserve_user_state(self):
+        self.write({'providerInstances': {'grok': {'config': {'local': True}, 'environment': [
+            {'name': 'grok_subagents', 'value': '1'}, {'name': 'KEEP', 'value': 'yes'}]}}})
+        client = self.settings.with_name('client-settings.json')
+        client.write_text(json.dumps({'providerModelPreferences': {'pi': {
+            'hiddenModels': ['user-hidden'], 'order': ['custom']}}}))
+        for _ in range(2):
+            self.module.apply(self.home, {})
+            grok = self.read()['providerInstances']['grok']
+            self.assertEqual(grok['config'], {'local': True})
+            self.assertEqual(grok['environment'], [
+                {'name': 'KEEP', 'value': 'yes'},
+                {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False},
+                {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}])
+            self.assertEqual(json.loads(client.read_text())['providerModelPreferences']['pi'], {
+                'hiddenModels': ['user-hidden', 'default'], 'order': ['custom']})
+
+    def test_only_the_retired_managed_antigravity_adapter_is_removed(self):
+        native = {'driver': 'antigravity', 'config': {'binaryPath': '/custom/runtime'}}
+        self.write({'providerInstances': {'antigravity': native}})
+        self.module.apply(self.home, {})
+        self.assertEqual(self.read()['providerInstances']['antigravity'], native)
+        self.write({'providerInstances': {'antigravity': {'driver': 'acpRegistry', 'config': {
+            'commandPath': str(self.home / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp')}}}})
+        self.module.apply(self.home, {})
+        self.assertNotIn('antigravity', self.read()['providerInstances'])
+        self.write({'providerInstances': {'antigravity': {'driver': 'acpRegistry', 'config': {
+            'commandPath': '/custom/adapter'}}}})
+        before = self.settings.read_bytes()
+        with self.assertRaises(ValueError):
+            self.module.apply(self.home, {})
+        self.assertEqual(self.settings.read_bytes(), before)
 
     def test_native_controls_survive_empty_prompts_and_preserve_user_denials(self):
         for file in self.instructions.iterdir():

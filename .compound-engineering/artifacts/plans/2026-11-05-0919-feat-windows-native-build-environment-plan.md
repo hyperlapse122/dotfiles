@@ -118,7 +118,6 @@ flowchart TD
 - .NET Framework 4.x runtimes are in-place updates, whereas developer/targeting packs provide framework-specific build references; R6 does not require parallel 4.8 and 4.8.1 runtimes.
 - Repository instructions remain authoritative for mise tool declarations, generated lockfiles, chezmoi ownership, and bootstrap safety.
 
-
 ### Sources and Research
 
 - [VS Build Tools workload and component IDs](https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=visualstudio): use the VS 2026 section, including compatibility toolsets and the unaffiliated architecture-specific MFC/ATL components.
@@ -237,6 +236,7 @@ Only elevate the machine-installer subprocess, and stop on a reboot-required res
 **Patterns:** Native exit handling in the existing Windows app action and isolated command doubles in `tests/test_windows_apps.py`.
 
 **Test scenarios:**
+
 - Covers AE9. Existing eligible instance is updated even when component inventory is complete; missing components are added rather than skipped.
 - A partial Build Tools instance is not confused with absence or an unrelated IDE.
 - Failed signature verification prevents execution.
@@ -261,6 +261,7 @@ Use task-provided paths and revisions, preserve existing Rust project overrides,
 **Patterns:** Existing personal-app raw registry PATH handling and temporary-key isolation used by `tests/test_personal_apps.py` and `tests/test_native_ca_windows.py`.
 
 **Test scenarios:**
+
 - Covers AE8. Replace the managed vcpkg selection while preserving unrelated user environment values and PATH type.
 - A repeated integration adds no duplicate paths and repairs a missing managed path.
 - A checkout with unrelated local modifications is not destructively reset.
@@ -280,12 +281,14 @@ Use task-provided paths and revisions, preserve existing Rust project overrides,
 **Files:** Modify `mise.toml`, regenerate `mise.lock`, and update affected bootstrap tests, `home/.chezmoitemplates/powershell-mise-profile`, and `tests/test_powershell_profile.py`; create `scripts/windows-build-tools.vsconfig`, `home/.chezmoiscripts/run_after_25-windows-build-environment.ps1.tmpl`, and `tests/test_windows_build_apply.py`.
 
 **Approach:**
+
 1. Declare the aggregate task and native installer/vcpkg inputs in `mise.toml`.
 2. Run VS, SDK 8, SDK 10, Rust, and final vcpkg/user integration sequentially with task-scoped language tools.
 3. Render the hook only for Windows amd64, with the existing native PowerShell encoding/quoting conventions and current-worktree source binding.
 4. Regenerate locked task-tool resolutions without adding those tools to base bootstrap installation.
 
 **Test scenarios:**
+
 - Covers AE1. Plain bootstrap cannot invoke host provisioning, while every explicit build-hook apply invokes the aggregate task.
 - Covers AE1. Linux, macOS, and Windows ARM64 render no build action.
 - Covers AE9. Failed aggregate provisioning causes apply failure.

@@ -295,6 +295,32 @@ def apply(destination, environment=None):
                               'baseEnvironment': base_environment, 'hadEnvironment': had_environment,
                               'lastEnvironment': copy.deepcopy(provider.get('environment', []))}
         changed = True
+    native = providers.get('antigravity', {})
+    if native.get('driver') == 'acpRegistry':
+        legacy = str(home / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp')
+        if native.get('config', {}).get('commandPath') != legacy:
+            raise ValueError('Move the custom ACP Registry provider to another ID before applying.')
+        del providers['antigravity']
+        changed = True
+    grok = providers.get('grok')
+    if grok is not None:
+        entries = grok.get('environment', [])
+        if not isinstance(entries, list) or any(not isinstance(e, dict) or not isinstance(e.get('name'), str) for e in entries):
+            raise ValueError('Grok environment must contain named entries.')
+        grok['environment'] = [e for e in entries if e['name'].upper() not in
+                               ('GROK_SUBAGENTS', 'GROK_DISABLE_AUTOUPDATER')]
+        grok['environment'] += [{'name': key, 'value': value, 'sensitive': False} for key, value in
+                                (('GROK_SUBAGENTS', '0'), ('GROK_DISABLE_AUTOUPDATER', '1'))]
+        changed = True
+    client_path = settings_path.with_name('client-settings.json')
+    client = read_mapping(client_path)
+    preferences = client.setdefault('providerModelPreferences', {}).setdefault('pi', {})
+    hidden = preferences.get('hiddenModels', [])
+    if not isinstance(hidden, list):
+        raise ValueError('Pi hiddenModels must be a list.')
+    if 'default' not in hidden:
+        preferences['hiddenModels'] = hidden + ['default']
+        publish(client_path, client)
     if changed:
         had_state = state_path.is_file()
         publish(state_path, {'schema': 1, 'providers': next_records})

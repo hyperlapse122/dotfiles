@@ -1,0 +1,8 @@
+Key `{{ .user.gpgKey }}`, kept `${TMPDIR:-/tmp}`.
+Indexed `{{ index .user "gpgKey" }}`.
+{{ if .t3.cli.enable }}CLI section.
+{{ end }}{{ if .t3.desktop.enable }}Desktop section.
+{{ end }}{{ if .desktopSSH.publicKey }}SSH section.
+{{ end }}Literal `<no value>` and `<nil>` stay prose.
+Large {{ .numbers.large }}, fraction {{ .numbers.fraction }}, zero is {{ if .numbers.zero }}true{{ else }}false{{ end }}.
+End.

@@ -1,0 +1,268 @@
+name: Nix
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+  push:
+    branches: [main]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  fmt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Check formatting
+        run: nix fmt -- --ci
+
+  markdown-lint:
+    needs: changes
+    # A check-shards entry already builds this same check, so this job only
+    # needs to run standalone in exactly the case check-shards is skipped in
+    # (a genuine docs-only PR) -- the complement of check-shards/build's
+    # condition below, so markdown-lint is exercised
+    # exactly once on every event instead of twice on ordinary PRs and push.
+    if: "!cancelled() && github.event_name == 'pull_request' && needs.changes.result == 'success' && needs.changes.outputs.docs_only == 'true'"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Lint markdown
+        run: nix build --no-link .#checks.x86_64-linux.markdown-lint
+
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Classify changed paths
+        id: classify
+        run: |
+          # base.sha is the base branch tip as of the last PR sync event, not
+          # necessarily its current tip -- a two-dot diff against it would
+          # include every unrelated commit main has gained since, so diff
+          # from the merge-base instead.
+          merge_base=$(git merge-base "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+          docs_only=$(git diff --name-only "$merge_base" "${{ github.event.pull_request.head.sha }}" | ./scripts/ci-docs-only-paths)
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
+  flake-check:
+    needs: changes
+    # A skipped or failed classifier must not silently skip real Nix
+    # validation, so this condition (not the implicit needs-succeeded
+    # default) decides whether the job runs: any event other than
+    # pull_request, or a classifier that did not complete successfully,
+    # always runs; only a definitive docs_only:true skips.
+    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      # The checks are built in check-shards and the VM tests in vm-checks;
+      # this job evaluates every output once, so an evaluation error reports
+      # here without waiting on builds, and it needs no disk cleanup or KVM.
+      - name: Evaluate
+        run: nix flake check --no-build
+
+  check-shard-names:
+    needs: changes
+    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      names: ${{ steps.list.outputs.names }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: List check shards
+        id: list
+        run: |
+          names=$(nix eval --json .#checkShards --apply 's: builtins.filter (n: builtins.match "light-.*" n != null) (builtins.attrNames s)')
+          # An empty matrix would skip check-shards and leave the run green
+          # with no check evidence.
+          if [ "$names" = "[]" ]; then
+            echo "no shards found under checkShards" >&2
+            exit 1
+          fi
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+
+  check-shards:
+    needs: [changes, check-shard-names]
+    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        name: ${{ fromJSON(needs.check-shard-names.outputs.names) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Make room for NixOS closures
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+        with:
+          extra_nix_config: |
+            system-features = big-parallel benchmark
+      - name: Build check shard
+        # The name comes from the checkShards attribute names, so it reaches
+        # the shell as data rather than being spliced into the script.
+        # --keep-going reports every failing check in the shard, not only
+        # the first.
+        env:
+          NAME: ${{ matrix.name }}
+        run: nix build --no-link --keep-going --print-build-logs ".#checkShards.${NAME}"
+
+  host-checks:
+    needs: changes
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Make room for NixOS closures
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Build host check shard
+        run: nix build --no-link --keep-going --print-build-logs .#checkShards.hosts
+
+  vm-check-names:
+    needs: changes
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      names: ${{ steps.list.outputs.names }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: List VM checks
+        id: list
+        run: |
+          names=$(nix eval --json .#vmChecks --apply 'v: builtins.filter (n: n != "all") (builtins.attrNames v)')
+          # An empty matrix would skip vm-checks and leave the run green with
+          # no VM evidence.
+          if [ "$names" = "[]" ]; then
+            echo "no VM checks found under vmChecks" >&2
+            exit 1
+          fi
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+
+  vm-checks:
+    needs: [changes, vm-check-names]
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        name: ${{ fromJSON(needs.vm-check-names.outputs.names) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Make room for NixOS closures
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+        with:
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+      - name: Enable KVM for the Nix builder
+        run: sudo chmod 666 /dev/kvm
+      - name: Build VM check
+        # The name comes from the vmChecks attribute names, so it reaches the
+        # shell as data rather than being spliced into the script.
+        env:
+          NAME: ${{ matrix.name }}
+        run: nix build --no-link --print-build-logs ".#vmChecks.${NAME}"
+
+  hosts:
+    needs: changes
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+      darwin_targets: ${{ steps.list.outputs.darwin_targets }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: List host configurations
+        id: list
+        run: |
+          # List every production/bootstrap NixOS and Darwin target.
+          # shellcheck disable=SC2016
+          lists=$(nix eval --impure --json --expr '
+            let
+              flake = builtins.getFlake (toString ./.);
+              darwinHosts = builtins.filter (n: builtins.match ".*-bootstrap" n == null)
+                (builtins.attrNames flake.darwinConfigurations);
+            in {
+              targets = builtins.attrNames flake.nixosConfigurations;
+              darwin_targets =
+                map (n: "darwinConfigurations.${n}.system darwinConfigurations.${n}-bootstrap.system") darwinHosts
+                ++ map (n: "checks.aarch64-darwin.${n}") (builtins.attrNames flake.checks.aarch64-darwin);
+            }')
+          for key in targets darwin_targets; do
+            echo "$key=$(jq -c --arg key "$key" '.[$key]' <<<"$lists")" >> "$GITHUB_OUTPUT"
+          done
+
+  build:
+    needs: [changes, hosts]
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.hosts.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Make room for NixOS closures
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+        with:
+          extra_nix_config: |
+            system-features = big-parallel benchmark
+      - name: Build host configuration without secrets
+        # The target comes from hosts/ directory names, so it reaches the
+        # shell as data rather than being spliced into the script.
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          nix build --no-link \
+            ".#nixosConfigurations.${TARGET}.config.system.build.toplevel"
+
+  build-darwin:
+    needs: [changes, hosts]
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    # macOS outputs build on an Apple Silicon runner; nothing is activated.
+    runs-on: macos-15
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.hosts.outputs.darwin_targets) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Build macOS output
+        # The target comes from the hosts job, so it reaches the shell as
+        # data rather than being spliced into the script. One entry may name
+        # several attributes, separated by spaces.
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -f
+          args=()
+          for attr in $TARGET; do args+=(".#$attr"); done
+          nix build --no-link --print-build-logs "${args[@]}"

@@ -139,12 +139,15 @@ flowchart TB
 **Dependencies:** None.
 **Files:** `mise.toml`, `mise.lock`, `home/.chezmoidata/personal-apps.json`, `home/.chezmoidata/personal-app-lock.json`, `home/.chezmoiexternals/personal-apps.toml.tmpl`, `scripts/update-personal-app-lock.py`, `tests/test_personal_app_lock.py`, `tests/test_personal_apps.py`, `tests/smoke_personal_apps.py`, `.github/workflows/test.yml` only where native-smoke labeling/coverage needs updating.
 **Approach:**
+
 1. Apply KTD1–KTD2 and migrate the declaration consumers/fixtures together.
 2. Resolve all five gh release assets and exact archive members, retaining the existing atomic complete-lock publication and SHA-256 authority.
 3. Extend the native smoke from omp-only to exercise both installed commands and terminal discovery without executing authentication hooks.
+
 **Patterns:** Existing local HTTP fixtures, all-or-nothing pin updater, and isolated destination/native runner smoke.
 **Execution note:** Prefer real archive installation and executable smoke over source-text assertions.
 **Test scenarios:**
+
 - A versioned fixture release resolves archive asset/member patterns into the next lock, including a different version on a later refresh.
 - Missing/ambiguous assets or invalid digests preserve the previous complete multi-app lock.
 - Local tar.gz and zip fixtures install only the selected executable; a missing member or bad checksum fails without replacing an existing executable.
@@ -160,6 +163,7 @@ flowchart TB
 **Approach:** Apply KTD3 with explicit source/config/input paths and value-free errors. Use only ciphertext temporary files in the source directory; distinguish a successful source replacement followed by failed input deletion from a failed import. Do not hard-code the owner's Downloads path as a reusable default.
 **Patterns:** Existing fixture-scoped GPG keys and atomic replacement in the pin updater.
 **Test scenarios:**
+
 - Covers AE1. Import a fixture TXT with a trailing line ending, preserve unrelated mappings, decrypt the final document, and verify the TXT is gone.
 - Invalid/empty/multiline input, unavailable private keys, encryption failure, and comparison failure retain the source TXT and do not publish an unverified document.
 - Publication failure retains the TXT; unlink failure reports incomplete cleanup while leaving the verified ciphertext intact.
@@ -173,12 +177,15 @@ flowchart TB
 **Dependencies:** U1, U2.
 **Files:** `mise.toml`, `mise.lock`, `scripts/github-auth.py`; new `scripts/gh_native.py`; new `home/.chezmoiscripts/run_after_40-github-auth.ps1.tmpl` and `home/.chezmoiscripts/run_after_40-github-auth.sh.tmpl`; `tests/test_github_auth.py`, `tests/test_bootstrap.py`, and unrelated full-source fixture setup in `tests/test_secrets.py`, `tests/test_git_gpg.py` as needed.
 **Approach:**
+
 1. Implement KTD4–KTD5 with explicit native-only backend selection and captured subprocess pipes.
 2. Use ordinary `run_after_` actions to check external state on every explicit apply, not `run_once_` or ciphertext-only onchange gating.
 3. Keep wrappers entirely nonsecret and OS-conditional, with the existing Windows BOM/profile-free PowerShell 5.1 convention. Resolve repository helpers and mise tool context from the selected source; no runtime helper/config path may point to this planning worktree after deployment.
 4. Perform decryption only inside the running orchestrator. Use the installed personal gh for compatibility verification after externals are applied.
 5. Keep unrelated source-copy test fixtures from executing this real authentication hook, without weakening the production apply path.
+
 **Test scenarios:**
+
 - Covers AE2. Bootstrap, initialization, rendering, and script-excluding apply succeed with inaccessible fixture private keys and no keyring write.
 - Missing token or backend denial fails visibly, with no new token-bearing gh config or secret diagnostics.
 - A failure after a prior successful backend check still cannot reach a file fallback.
@@ -194,6 +201,7 @@ flowchart TB
 **Files:** `home/dot_gitconfig.tmpl`, `tests/test_git_gpg.py`, `tests/test_github_auth.py`.
 **Approach:** Implement KTD6 in the managed template without adding a second configuration writer or a runtime mise wrapper.
 **Test scenarios:**
+
 - An inherited generic helper is not consulted or sent credentials for either managed HTTPS host after its host-specific reset.
 - Other hosts and the HTTP forms of both managed hosts retain their existing routing; SSH remotes receive no rewrite.
 - Paths containing spaces/non-ASCII characters work through Git's actual helper shell on each supported OS.

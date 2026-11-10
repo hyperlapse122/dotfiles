@@ -1,8 +1,0 @@
-$ErrorActionPreference = 'Stop'
-$target = $PROFILE.CurrentUserAllHosts
-$content = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{ includeTemplate "powershell-mise-profile" . | b64enc }}'))
-[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
-if ([IO.File]::Exists($target) -and [IO.File]::ReadAllText($target) -ceq $content) {
-    return
-}
-[IO.File]::WriteAllText($target, $content, [Text.UTF8Encoding]::new($false))

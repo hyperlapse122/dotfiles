@@ -231,9 +231,11 @@ flowchart TD
 ### Automated Checks
 
 1. **Test Suite:**
+
    ```sh
    mise exec -- python -m unittest discover -s tests
    ```
+
    Must pass with 0 failures and 0 errors, proving that documentation reorganization has not perturbed any chezmoi execution, isolation, or test discovery.
 
 2. **Link & Anchor Integrity Check:**

@@ -206,6 +206,7 @@ flowchart TB
 **Approach:** Implement KTD1 using the current application updater's injection and atomic-write patterns, keeping plugin release resolution separate from executable-asset resolution.
 
 **Test scenarios:**
+
 1. Covers AE7. A published stable CE release resolves a lightweight or annotated exact tag to the terminal commit rather than the tag-object SHA.
 2. Nested annotated tags resolve; malformed references, wrong-component releases, prereleases, missing SHAs, non-commit targets, and gh failures retain the previous lock bytes.
 3. Covers AE2 / AE7. Unchanged identity leaves the lock untouched, while a changed full SHA at the same tag is detected.
@@ -227,6 +228,7 @@ flowchart TB
 **Execution note:** Prefer real isolated chezmoi/native-plugin smoke evidence over mocks of CLI forwarding.
 
 **Test scenarios:**
+
 1. Covers AE2 / AE3. Local archive fixtures show unchanged pins, changed SHA, rollback, stale-file removal, and restoration of managed source drift.
 2. Covers AE4 / AE5. Existing unrelated nested values and arrays survive setting reconciliation, later application edits survive, and repeat apply leaves no diff.
 3. Covers AE6. Existing `.yaml` is not shadowed; missing config is initialized; malformed YAML fails without replacement.
@@ -248,6 +250,7 @@ flowchart TB
 **Approach:** Implement KTD5; scope old fixtures to their own contracts so adding a plugin external does not trigger network access or real plugin actions in unrelated tests. Document explicit apply, global update-policy impact, comments/formatting behavior, rollback, and issue #17.
 
 **Test scenarios:**
+
 1. Covers AE1. An isolated real apply installs the locked native omp and CE, then discovery finds CE skills in a fresh process outside the checkout.
 2. Covers AE3 / AE5 / AE8. Native installation preserves unrelated plugin settings; unchanged actions skip even after runtime drift, and a consumed-template change schedules same-version cache repair and enabling.
 3. Covers AE7. Candidate-lock native validation runs without write credentials; publication copies and commits only the validated lock.

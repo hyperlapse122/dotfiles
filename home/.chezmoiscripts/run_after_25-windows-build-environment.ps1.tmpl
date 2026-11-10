@@ -1,7 +1,0 @@
-{{ if and (eq .chezmoi.os "windows") (eq .chezmoi.arch "amd64") -}}
-{{ "\ufeff" -}}
-#requires -Version 5.1
-$ErrorActionPreference = 'Stop'
-& mise --cd '{{ .chezmoi.workingTree | replace "'" "''" }}' run windows-build
-exit $LASTEXITCODE
-{{ end -}}

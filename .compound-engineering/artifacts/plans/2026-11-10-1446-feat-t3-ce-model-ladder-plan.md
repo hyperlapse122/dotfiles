@@ -54,7 +54,7 @@ In practice every child inherits. The owner observed scouts and workers running 
 - R2. The ladders are:
 
   | Provider | Orchestrator | Top child rung | Middle rung | Bottom rung |
-  |---|---|---|---|---|
+  | --- | --- | --- | --- | --- |
   | Claude | Fable | Opus | Sonnet | Haiku |
   | Codex | `gpt-6-astra` | `gpt-6.1-sol` | `gpt-6.1-terra` | `gpt-6-luna` |
   | Synthetic through pi | latest Kimi | latest GLM | latest GLM Flash | latest DeepSeek Flash |
@@ -182,7 +182,7 @@ Product Contract preservation: changed: AE6 and one Scope Boundaries bullet — 
 ## Verification Contract
 
 | Check | Command | Applies to |
-|---|---|---|
+| --- | --- | --- |
 | Instruction rendering | `python3 -B -m unittest discover -s tests -p test_agent_instructions.py` | U1 |
 | Composer and settings regressions | `python3 -B -m unittest discover -s tests -p test_t3_instructions.py` and the same for `test_t3_code_settings.py` | U1 |
 | Native request capture | `mise exec chezmoi python -- python tests/smoke_t3_instructions.py` in a disposable home | U1 |

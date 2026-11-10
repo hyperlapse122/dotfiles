@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Resolve the newest complete Antigravity ACP runtime release from Google.
+
+Google publishes the ACP server archives under dl.google.com with no version
+pointer, listing, or digest, and published versions skip numbers. So the
+helper sends HEAD requests over a fixed window of candidate versions above the
+pinned one: the next ten patches, patches 0-10 of each of the next three
+minors, and patches 0-10 of the next major. It picks the highest candidate
+that every supported system serves with a positive length, downloads only that
+version's archives to compute their sha256 and to read the two binaries' sizes
+from each zip's central directory, and writes the pin file
+packages/antigravity-acp-path.nix consumes, in the record shape of T3 Code's
+antigravity entries in packages/t3code-release.json. It never writes that
+file: scripts/t3code-release fills it from the table T3 Code embeds.
+
+When nothing newer is found it downloads nothing. It refuses a downgrade, a
+release one system lacks, a download whose size differs from the HEAD length,
+an archive without exactly the two runtime members, and a HEAD answer other
+than 200 or 404, such as a rate limit, which it cannot read as either. The pin is written
+through a temporary file, so a failed write leaves the old pin in place. No
+vendor checksum exists, so each pin is trust-on-first-use from Google's HTTPS
+endpoint.
+"""
+
+import argparse
+import base64
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import zipfile
+from typing import NamedTuple
+
+BASE_URL = "https://dl.google.com/agy-extensions/releases"
+# HEAD requests, following redirects, with the headers on stdout. A 404 is a
+# missing candidate, not a failure, so curl must not fail on it.
+PROBE_COMMAND = ["curl", "-sSIL", "--max-time", "30"]
+DOWNLOAD_COMMAND = ["curl", "-sSfL", "--max-time", "1800", "-o"]
+COMMAND_TIMEOUT = 1900
+
+EXECUTABLE = "agy_acp_server.par"
+HARNESS = "localharness_external"
+
+class Target(NamedTuple):
+    t3_platform: str
+    directory: str
+    suffix: str
+
+
+TARGET_PLATFORMS = {
+    "x86_64-linux": Target("linux-x64", "linux", "linux-x86_64"),
+    "aarch64-linux": Target("linux-arm64", "linux", "linux-arm64"),
+    "aarch64-darwin": Target("darwin-arm64", "macos", "darwin-arm64"),
+}
+
+VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+PATCHES = 10
+MINORS = 3
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def run_command(command, args):
+    """Run a command with args appended and return its stdout."""
+    try:
+        proc = subprocess.run(
+            command + args,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=COMMAND_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        raise Failure(f"{command[0]} for {args[-1]} timed out after {COMMAND_TIMEOUT}s") from None
+    if proc.returncode != 0:
+        raise Failure(f"{command[0]} for {args[-1]} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def version_tuple(version):
+    if not isinstance(version, str) or not VERSION_PATTERN.match(version):
+        raise ValueError(f"not a release version such as 1.4.1: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def window(base):
+    """The candidate versions above base, highest first, and their ranges for messages."""
+    major, minor, patch = version_tuple(base)
+    ranges = [((major, minor), patch + 1, patch + PATCHES)]
+    ranges += [((major, minor + step), 0, PATCHES) for step in range(1, MINORS + 1)]
+    ranges.append(((major + 1, 0), 0, PATCHES))
+    candidates = [
+        f"{prefix[0]}.{prefix[1]}.{number}" for prefix, low, high in ranges for number in range(low, high + 1)
+    ]
+    described = ", ".join(
+        f"{prefix[0]}.{prefix[1]}.{low}-{prefix[0]}.{prefix[1]}.{high}" for prefix, low, high in ranges
+    )
+    return sorted(candidates, key=version_tuple, reverse=True), described
+
+
+def archive_url(system, version):
+    target = TARGET_PLATFORMS[system]
+    return f"{BASE_URL}/{target.directory}/agy-acp-server-{version}-{target.suffix}.zip"
+
+
+def head_length(url):
+    """The content length a 200 reports, or None for a 404 or an unusable length.
+
+    Any other final status, such as 429 or 503, fails: reading it as a missing
+    candidate would report nothing newer while Google only refused the probe.
+    """
+    output = run_command(PROBE_COMMAND, [url])
+    # With redirects followed, curl prints one header block per response.
+    blocks = [block for block in re.split(r"\r?\n\r?\n", output.strip()) if block.strip()]
+    if not blocks:
+        raise Failure(f"HEAD {url} returned no response headers")
+    lines = blocks[-1].splitlines()
+    status = re.match(r"^HTTP/\S+\s+(\d{3})", lines[0])
+    if not status:
+        raise Failure(f"HEAD {url} returned no status line: {lines[0]!r}")
+    if status.group(1) == "404":
+        return None
+    if status.group(1) != "200":
+        raise Failure(f"HEAD {url} returned status {status.group(1)}, neither 200 nor 404")
+    for line in lines[1:]:
+        name, _, value = line.partition(":")
+        if name.strip().lower() == "content-length":
+            try:
+                length = int(value.strip())
+            except ValueError:
+                return None
+            return length if length > 0 else None
+    return None
+
+
+def newest_complete(candidates):
+    """The highest candidate every system serves, with each system's length, or None."""
+    for version in candidates:
+        lengths = {}
+        for system in TARGET_PLATFORMS:
+            length = head_length(archive_url(system, version))
+            if length is None:
+                break
+            lengths[system] = length
+        else:
+            return version, lengths
+    return None
+
+
+def sha256_file(path):
+    with open(path, "rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def resolve_record(system, version, length, scratch):
+    """Download one system's archive and return its pin record."""
+    url = archive_url(system, version)
+    path = os.path.join(scratch, f"{system}.zip")
+    run_command(DOWNLOAD_COMMAND, [path, url])
+    try:
+        size = os.path.getsize(path)
+        if size != length:
+            raise Failure(f"{url} downloaded {size} bytes, not the {length} its HEAD reported")
+        sha256 = sha256_file(path)
+        try:
+            with zipfile.ZipFile(path) as archive:
+                members = {info.filename: info.file_size for info in archive.infolist()}
+        except zipfile.BadZipFile as exc:
+            raise Failure(f"{url} is not a zip archive: {exc}") from None
+    finally:
+        os.unlink(path)
+    if sorted(members) != sorted([EXECUTABLE, HARNESS]):
+        raise Failure(f"{url} holds {sorted(members)}, not exactly {EXECUTABLE} and {HARNESS}")
+    return {
+        "platform": TARGET_PLATFORMS[system].t3_platform,
+        "version": version,
+        "url": url,
+        "sha256": sha256,
+        "hash": "sha256-" + base64.b64encode(bytes.fromhex(sha256)).decode("ascii"),
+        "archiveBytes": length,
+        "executable": {"name": EXECUTABLE, "bytes": members[EXECUTABLE]},
+        "harness": {"name": HARNESS, "bytes": members[HARNESS]},
+    }
+
+
+def pinned_version(path):
+    """Return the version already pinned at path, or None when unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            version = json.load(f).get("version")
+        version_tuple(version)
+        return version
+    except Exception:
+        return None
+
+
+def write_pin(path, out_json):
+    directory = os.path.dirname(os.path.abspath(path))
+    fd, temporary = tempfile.mkstemp(dir=directory, prefix=".antigravity-acp-release.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(out_json)
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    except BaseException:
+        os.unlink(temporary)
+        raise
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to the antigravity-acp-release.json pin file to write or update",
+    )
+    parser.add_argument(
+        "--from",
+        dest="base",
+        help="Probe above this version instead of the pinned one, such as when no pin exists yet",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved pin JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        current = pinned_version(args.output) if args.output else None
+        base = args.base or current
+        if base is None:
+            raise Failure("no readable pin to probe above; pass --from VERSION")
+        try:
+            candidates, described = window(base)
+        except ValueError as exc:
+            raise Failure(str(exc)) from None
+
+        found = newest_complete(candidates)
+        if found is None:
+            print(f"no complete release newer than {base} within {described}")
+            return 0
+        version, lengths = found
+        if current is not None and version_tuple(version) <= version_tuple(current):
+            raise Failure(f"refusing to downgrade {args.output} from {current} to {version}")
+
+        with tempfile.TemporaryDirectory(prefix="antigravity-acp-release.") as scratch:
+            platforms = {
+                system: resolve_record(system, version, lengths[system], scratch) for system in TARGET_PLATFORMS
+            }
+        out_json = json.dumps({"version": version, "platforms": platforms}, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        write_pin(args.output, out_json)
+
+        print(f"updated {args.output} to version {version}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"antigravity-acp-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

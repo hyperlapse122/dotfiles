@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Resolve the newest upstream claude-code release manifest from Anthropic's own endpoints.
+
+Fetches the plaintext "latest" version pointer, then that version's manifest
+JSON, and writes or checks the manifest pin file nixpkgs' claude-code
+derivation consumes directly via its `manifest` override argument. Refuses to
+write a manifest that is missing a target platform's entry, or a version
+that is not strictly newer than the one already pinned, so neither an
+incomplete release nor a downgrade ever reaches the pin file.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+
+DEFAULT_BASE_URL = "https://downloads.claude.ai/claude-code-releases"
+
+# nixpkgs' claude-code derivation looks up the manifest by Node-style
+# platform-arch key: "linux-x64" for x86_64-linux (confirmed against a cached
+# build's fetch URL) and "linux-arm64" for aarch64-linux.
+TARGET_PLATFORMS = ("linux-x64", "linux-arm64")
+
+VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def fetch(url):
+    """Fetch one URL with curl and return the raw body."""
+    proc = subprocess.run(
+        ["curl", "-sfL", "--max-time", "60", url],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def fetch_latest_version(base_url):
+    """Fetch the plaintext /latest version pointer."""
+    body = fetch(f"{base_url}/latest").strip()
+    if not VERSION_PATTERN.match(body):
+        raise Failure(f"/latest did not return a plain version string: {body!r}")
+    return body
+
+
+def fetch_manifest(base_url, version):
+    """Fetch and parse the version-specific manifest JSON."""
+    body = fetch(f"{base_url}/{version}/manifest.zst.json")
+    try:
+        manifest = json.loads(body)
+    except ValueError:
+        raise Failure(f"manifest.zst.json for {version} did not return JSON")
+    if not isinstance(manifest, dict):
+        raise Failure(f"manifest.zst.json for {version} was not a JSON object")
+    return manifest
+
+
+def require_target_platforms(manifest, version):
+    """Refuse a manifest missing a platform entry nixpkgs' package will look up."""
+    platforms = manifest.get("platforms")
+    if not isinstance(platforms, dict):
+        platforms = {}
+    for platform in TARGET_PLATFORMS:
+        if platform not in platforms:
+            raise Failure(
+                f"manifest for {version} is missing the {platform!r} platform "
+                "entry; refusing to write an incomplete pin"
+            )
+        entry = platforms[platform]
+        if not isinstance(entry, dict) or not entry.get("binary") or not entry.get("checksum"):
+            raise Failure(
+                f"manifest for {version}'s {platform!r} entry is missing "
+                "'binary' or 'checksum'; refusing to write an incomplete pin"
+            )
+
+
+def version_tuple(version):
+    if not isinstance(version, str):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help="Base claude-code-releases URL",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to the manifest pin file to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved manifest JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        version = fetch_latest_version(args.base_url)
+
+        # Skip the manifest fetch entirely when it can't change the outcome:
+        # a scheduled run where nothing changed shouldn't pay for a second
+        # request just to discard its result below.
+        if not args.dry_run and args.output:
+            current_version = None
+            try:
+                with open(args.output, "r", encoding="utf-8") as f:
+                    current = json.load(f)
+                current_version = current.get("version")
+            except Exception:
+                current_version = None
+
+            if current_version is not None:
+                try:
+                    is_newer = version_tuple(version) > version_tuple(current_version)
+                except ValueError:
+                    is_newer = True
+                if not is_newer:
+                    print(
+                        f"{args.output} is already up to date at version {current_version} "
+                        f"(resolved {version} is not newer)"
+                    )
+                    return 0
+
+        manifest = fetch_manifest(args.base_url, version)
+        require_target_platforms(manifest, version)
+
+        out_json = json.dumps(manifest, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(out_json)
+        print(f"updated {args.output} to version {version}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"claude-code-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

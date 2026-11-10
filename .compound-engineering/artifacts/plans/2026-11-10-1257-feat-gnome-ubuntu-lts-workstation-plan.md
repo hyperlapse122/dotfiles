@@ -200,7 +200,7 @@ The owner now uses GNOME Ubuntu LTS instead, so every one of those gates rejects
 ## Verification Contract
 
 | Check | Command | Applies to |
-|---|---|---|
+| --- | --- | --- |
 | Worktree preparation | `mise install` | All units, before any test |
 | Unit and fixture tests | `mise exec -- python -m unittest discover -s tests -p 'test_*.py'`, or the repository's area runner `scripts/run-test-area.py` when it selects these modules | U1–U5 |
 | Shell syntax | `sh -n` on `bootstrap-ubuntu.sh`, `provision-ubuntu.sh`, `scripts/terminal-environment.sh`, `scripts/install-ghostty.sh`, `scripts/linux-build-environment.sh` | U1–U3 |

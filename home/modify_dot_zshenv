@@ -1,8 +1,0 @@
-{{- /* chezmoi:modify-template */ -}}
-{{- $native := includeTemplate "native-ca-shell" . -}}
-{{- $settings := includeTemplate "zsh-settings" . | fromJson -}}
-{{- if $settings.enabled -}}
-{{- includeTemplate "zsh-redirect" (setValueAtPath "chezmoi.stdin" $native .) -}}
-{{- else -}}
-{{- $native -}}
-{{- end -}}

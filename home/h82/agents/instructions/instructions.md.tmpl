@@ -1,0 +1,79 @@
+{{ if .t3 -}}
+{{/* T3-only additions go here. Native user-scope files supply the baseline. */ -}}
+# T3 delegation
+
+When delegating work in T3 Code, use T3 Code's `delegate_task` and related task tools instead of native subagent tools. This includes same-provider children and agents dispatched by skills, such as Compound Engineering (CE) scouts and reviewers.
+For CE cross-model review, implementation, and reasoning elevation, replace its explicit acpx, provider CLI, and launcher-script instructions with T3 delegation. A CE call described as a shell-out rather than a subagent is still covered. Follow higher-priority host constraints.
+
+Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. Choose the child's model and effort as the T3 CE model selection section says. Use T3 capability discovery to resolve the selected target and supported `target.options`. Give each child a self-contained brief with the required context, accessible workspace/artifact paths, and this routing policy. Authorize further delegation only when its assigned CE task requires it.
+
+Use T3's task lifecycle in place of CE's process runners, polling, cancellation, and transport receipts. Do not run the legacy transport alongside a T3 task. Do not fabricate controller receipts or treat task completion as proof of CE validation or serving-model identity. Retain substantive scope, integration, and verification checks; if their contract cannot be satisfied, use CE's existing unavailable-route handling before starting incompatible transport machinery.
+
+Keep CE's existing retry, recovery, inline fallback, skip, and reporting behavior. Any resulting delegation must still use T3; do not add a separate failure policy or approval step. A wait timeout does not mean the child stopped: follow T3's lifecycle and CE's recovery prerequisites before replacing work. Each `delegate_task` child is a separate T3 thread; do not create a top-level thread to delegate work.
+
+# T3 CE model selection
+
+When a CE skill delegates a child, choose the child's model from the ladder of the provider the child runs on. Each rung names a model family; use the newest listed model of that family from T3 capability discovery. A family named without `Flash` excludes Flash models.
+
+| Provider | Orchestrator | Top child rung | Middle rung | Bottom rung |
+| --- | --- | --- | --- | --- |
+| Claude | Fable | Opus | Sonnet | Haiku |
+| Codex | astra | sol | terra | luna |
+| Synthetic through pi | Kimi | GLM | GLM Flash | DeepSeek Flash |
+| Antigravity | Gemini Argon | Gemini Argon | Gemini Flash | Gemini Flash |
+
+- Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`, and CE's cross-model review peers.
+- Middle rung: implementation workers, CE's mid-tier and generation-tier children, and any CE child whose skill names no tier.
+- Bottom rung: CE's extraction-tier and cheapest-capable children, such as grounding scouts.
+
+Where a CE skill says to inherit the session or parent model, or to omit the model override because model names are unknown, use the ladder instead. A child never runs above the column of the model that delegates it: a role placed higher runs on the delegating model, or on another provider's model in that same column. A child that delegates further applies these rules with its own model as the limit.
+
+Set no effort for a ladder-selected child, so T3's default for that model applies. An effort that a CE skill suggests by default is not a named effort.
+
+A model or effort that the user's prompt or CE configuration names for a child wins over this section; pass a named effort in `target.options`. CE configuration includes `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, `work_engine_effort`, `plan_model`, and `brainstorm_model`.
+
+If the catalog lists no model for a rung, use the next lower rung of the same provider. If none is listed, use the next higher rung of that provider within the limit above, and only then the delegating model. Name the substitution in your report. Providers without a row and delegations outside CE skills keep their current model selection.
+
+{{ else -}}
+{{/* Common instructions for every managed harness go here. */ -}}
+# Writing skills
+
+Before sending in-scope prose, run the writing skills for its dominant language.
+
+- In scope:
+  - the message that delivers completed work, an answer, or a summary to the user
+  - handoffs
+  - documents, commit messages, PR descriptions, issues, and other persistent artifacts
+  - user-facing strings in code, such as string resources and UI or error messages
+- Out of scope: progress notes, questions to the user, reports a subagent returns to its caller, code and config, code comments and docstrings, verbatim quotes, and text the user asked to post as written.
+- Korean, including Korean text with English technical terms: run the korean-skills `humanizer` skill, then the korean-skills `grammar-checker` skill. When writing a multi-section document or editing an existing document, also run the korean-skills `style-guide` skill.
+- English: run the `ce-noslop` skill.
+- Any other language: run none of these skills.
+- Apply the skills silently. Deliver only the corrected text, without the skills' analysis or change reports, and do not pause for confirmation inside a skill.
+- These rules add to project instructions. When a project instruction names another writing skill, apply both.
+
+# Temporary containers and local Kubernetes
+
+Use container runtimes and local Kubernetes clusters only for temporary development and testing. Cleanup is part of the task, not optional follow-up work.
+
+- Before creating resources, identify the local runtime or cluster endpoint and distinguish this task's resources from those used by other active tasks. Track the resources you create or download so they can all be removed.
+- As soon as their use ends, delete the task's clusters, containers, images, volumes, networks, build caches, and temporary data. Stopping containers or pruning only unused resources is not sufficient. Volumes are temporary: do not retain them for reuse or debugging, or merely because they already existed.
+- Protect resources used by other active tasks, whether run by a user or an agent; their owning tasks must clean them up when finished. Do not use a global prune or runtime reset that would remove those resources. Do not delete remote resources, installed runtime binaries, credentials, or unrelated host files.
+- Clean up after success, failure, and orderly cancellation. After a forced interruption, check for and remove leftover task resources when work resumes. Do not leave development deployments running after the task ends.
+- Verify that no task-owned disposable resources remain, including zero task-owned volumes, before reporting cleanup complete. If deletion fails or ownership cannot be established, report the remaining resources and the reason instead of claiming success.
+- Check host disk-space reclamation separately from resource deletion. Before stopping a shared runtime or compacting its disk, establish that no other user or agent work depends on it. If that cannot be established, leave the runtime running and report the unreclaimed space. Do not shut down unrelated virtual machines. Report any unfinished cleanup.
+
+{{ if eq .kind "darwin" -}}
+# Container runtime
+
+- Use Apple's `container` CLI by default for temporary container-related development work, including image builds, execution, testing, and supported image, network, and volume operations.
+- Check the installed `container` version and its capabilities before relying on a required operation. If it cannot perform that operation, explain the concrete limitation and agree on an alternative with the user before using another runtime or installing compatibility tools.
+- Explicit configuration application starts a stopped API, installs the recommended kernel, and enables startup at login. Preserve an already running runtime and its kernel. Do not restart or stop shared services to apply configuration or clean up temporary workloads; the managed kernel and login service are host infrastructure.
+{{ else if eq .kind "nixos" -}}
+# Container runtime
+
+- Use rootless Podman for temporary NixOS development, with minikube's Podman driver when a task requires Kubernetes.
+- Identify the user's Podman socket and keep each task's containers, images, volumes, networks, minikube profile, and kubeconfig separate from other work.
+- Close port-forward processes before deleting the owned profile and enumerated resources. Never use global prune or all-profile deletion. Verify zero owned volumes and report disk-space reclamation separately.
+{{ end -}}
+{{ end -}}

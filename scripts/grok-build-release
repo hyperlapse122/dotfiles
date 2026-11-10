@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""Resolve the newest stable Grok Build CLI release from xAI's download host.
+
+Reads the plaintext stable channel pointer, checks that every supported
+platform's raw binary is published, downloads each through `nix store prefetch-file`,
+and writes or checks the pin file packages/grok-build.nix consumes. xAI
+publishes no checksum or signature, so the pin's hash is the prefetch's own,
+and the md5 the download host reports in its x-goog-hash header must match the
+downloaded file. That header comes from the same server as the binary, so it
+catches a corrupted transfer, not a tampered upstream. Refuses to write a pin
+when a platform is missing, a digest disagrees, or the version is not strictly
+newer than the one already pinned, and downloads nothing when the pin is
+already current.
+"""
+
+import argparse
+import base64
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+DEFAULT_SOURCE_URL = "https://x.ai/cli"
+FETCH_COMMAND = ["curl", "-fsSL", "--max-time", "60"]
+HEAD_COMMAND = ["curl", "-fsSI", "--max-time", "60"]
+PREFETCH_COMMAND = ["nix", "store", "prefetch-file", "--json", "--hash-type", "sha256"]
+COMMAND_TIMEOUT = 1800
+
+TARGET_PLATFORMS = {
+    "x86_64-linux": "linux-x86_64",
+    "aarch64-linux": "linux-aarch64",
+    "aarch64-darwin": "macos-aarch64",
+}
+
+VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
+SRI_PATTERN = re.compile(r"^sha256-[A-Za-z0-9+/]{43}=$")
+MD5_PATTERN = re.compile(r"(?:^|[\s,])md5=([A-Za-z0-9+/]{22}==)")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def run_command(command, url):
+    """Run a command with the URL appended and return its stdout."""
+    try:
+        proc = subprocess.run(
+            command + [url],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=COMMAND_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        raise Failure(f"{command[0]} for {url} timed out after {COMMAND_TIMEOUT}s") from None
+    if proc.returncode != 0:
+        raise Failure(f"{command[0]} for {url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def binary_url(base_url, version, platform):
+    return f"{base_url}/grok-{version}-{platform}"
+
+
+def fetch_stable_version(base_url):
+    body = run_command(FETCH_COMMAND, f"{base_url}/stable").strip()
+    if not VERSION_PATTERN.match(body):
+        raise Failure(f"the stable channel did not return a plain version string: {body!r}")
+    return body
+
+
+def published_md5(headers, url):
+    """Return the base64 md5 from the response's x-goog-hash headers."""
+    for line in headers.splitlines():
+        name, _, value = line.partition(":")
+        if name.strip().lower() == "x-goog-hash":
+            match = MD5_PATTERN.search(value.strip())
+            if match:
+                return match.group(1)
+    raise Failure(f"{url} reports no x-goog-hash md5")
+
+
+def parse_prefetch(output, url):
+    """Return (sri, store path) from `nix store prefetch-file --json` output."""
+    try:
+        data = json.loads(output)
+        sri, path = data.get("hash"), data.get("storePath")
+    except (ValueError, AttributeError):
+        sri = path = None
+    if not isinstance(sri, str) or not SRI_PATTERN.match(sri):
+        raise Failure(f"prefetch of {url} carries no sha256 SRI hash: {output.strip()!r}")
+    if not isinstance(path, str) or not path:
+        raise Failure(f"prefetch of {url} names no store path: {output.strip()!r}")
+    return sri, path
+
+
+def file_md5(path):
+    digest = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return base64.b64encode(digest.digest()).decode("ascii")
+
+
+def resolve_pin(base_url, version):
+    """Check every platform is published, then download and pin each."""
+    urls = {
+        system: binary_url(base_url, version, platform)
+        for system, platform in TARGET_PLATFORMS.items()
+    }
+    # Every platform is checked before any download: the stable pointer can
+    # move before every binary is published.
+    md5s = {}
+    for system, url in urls.items():
+        try:
+            headers = run_command(HEAD_COMMAND, url)
+        except Failure as exc:
+            raise Failure(
+                f"grok {version} is not published for {system} ({exc}); "
+                "refusing to write an incomplete pin"
+            ) from None
+        md5s[system] = published_md5(headers, url)
+
+    platforms = {}
+    for system, url in urls.items():
+        sri, path = parse_prefetch(run_command(PREFETCH_COMMAND, url), url)
+        actual = file_md5(path)
+        if actual != md5s[system]:
+            raise Failure(
+                f"{url} downloaded with md5 {actual}, but the host reports {md5s[system]}"
+            )
+        platforms[system] = {"url": url, "hash": sri}
+    return {"version": version, "platforms": platforms}
+
+
+def version_tuple(version):
+    if not isinstance(version, str) or not VERSION_PATTERN.match(version):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def pinned_version(path):
+    """Return the version already pinned at path, or None when unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f).get("version")
+    except Exception:
+        return None
+
+
+def write_atomically(path, text):
+    directory = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".grok-build-release.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        # mkstemp creates the file 0600; a pin file is an ordinary tracked file.
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_SOURCE_URL,
+        help="Base URL of xAI's Grok Build CLI downloads",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to the grok-build-release.json pin file to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved pin JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+    base_url = args.source_url.rstrip("/")
+
+    try:
+        version = fetch_stable_version(base_url)
+        write = not args.dry_run and bool(args.output)
+
+        if write:
+            current_version = pinned_version(args.output)
+            if current_version is not None:
+                try:
+                    is_newer = version_tuple(version) > version_tuple(current_version)
+                except ValueError:
+                    is_newer = True
+                if not is_newer:
+                    print(
+                        f"{args.output} is already up to date at version {current_version} "
+                        f"(resolved {version} is not newer)"
+                    )
+                    return 0
+
+        out_json = json.dumps(resolve_pin(base_url, version), indent=2) + "\n"
+        if not write:
+            sys.stdout.write(out_json)
+            return 0
+        write_atomically(args.output, out_json)
+        print(f"updated {args.output} to version {version}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"grok-build-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

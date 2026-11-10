@@ -1,5 +1,0 @@
-{{- if eq .chezmoi.os "windows" -}}
-{{- printf "%s/AppData/Roaming/gnupg" (.chezmoi.homeDir | replace "\\" "/") -}}
-{{- else -}}
-{{- printf "%s/.gnupg" .chezmoi.homeDir -}}
-{{- end -}}

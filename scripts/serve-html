@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""Serve one HTML file on loopback and print the preview_navigate target for it.
+
+T3 Code's preview tools reject file:// URLs, so a coding agent runs
+`serve-html <file>`, then opens the printed target with preview_navigate. The
+file is served on 127.0.0.1 at a free port, read from disk on every request,
+so a reload shows its current content. The script prints one line, the JSON
+target object
+
+    {"kind":"environment-port","port":<n>,"path":"/<p>"}
+
+and returns while a detached server keeps running. The server exits on its own
+after --idle-seconds (30 minutes by default) without a request.
+
+By default only the named file is served, at the printed path, and every other
+request gets 404. With --root <dir> the server also serves the regular files
+under that directory, for reports that load sibling stylesheets and scripts;
+the file must lie under the directory, and nothing outside it is served. A
+missing or unreadable file, a file outside --root, or a failed bind exits
+non-zero with a message on stderr and nothing on stdout.
+"""
+
+import argparse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import mimetypes
+import os
+import sys
+import threading
+import time
+import urllib.parse
+
+HTML_TYPE = 'text/html; charset=utf-8'
+CHARSET_TYPES = {'application/json', 'application/javascript', 'image/svg+xml'}
+# A page on another origin can point a DNS name at 127.0.0.1 and read the
+# file through the browser, so only loopback names are answered.
+LOOPBACK_HOSTS = {'127.0.0.1', 'localhost', '::1'}
+
+
+def fail(message):
+    print('serve-html: {}'.format(message), file=sys.stderr)
+    sys.exit(1)
+
+
+def content_type(path):
+    guessed = mimetypes.guess_type(path)[0] or 'application/octet-stream'
+    if guessed.startswith('text/') or guessed in CHARSET_TYPES:
+        return guessed + '; charset=utf-8'
+    return guessed
+
+
+class Handler(BaseHTTPRequestHandler):
+    # A connection that never sends its request would otherwise hold the
+    # server open past its idle window.
+    timeout = 60
+
+    def log_message(self, *args):
+        pass
+
+    def do_GET(self):
+        host = urllib.parse.urlsplit('//' + self.headers.get('Host', '')).hostname
+        found = None
+        if host in LOOPBACK_HOSTS:
+            found = self.server.lookup(urllib.parse.unquote(urllib.parse.urlsplit(self.path).path))
+        if found is None:
+            self.not_found()
+            return
+        path, kind = found
+        try:
+            with open(path, 'rb') as handle:
+                body = handle.read()
+        except OSError:
+            self.not_found()
+            return
+        self.send_response(200)
+        self.send_header('Content-Type', kind)
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def not_found(self):
+        self.send_response(404)
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, page, page_path, root):
+        super().__init__(('127.0.0.1', 0), Handler)
+        self.page = page
+        self.page_path = page_path
+        self.root = root
+        self.lock = threading.Lock()
+        self.active = 0
+        self.last_request = time.monotonic()
+
+    def process_request(self, request, client_address):
+        # Counted from accept, so the idle check cannot end the server between
+        # accepting a connection and its handler thread starting.
+        with self.lock:
+            self.active += 1
+            self.last_request = time.monotonic()
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self.lock:
+                self.active -= 1
+                self.last_request = time.monotonic()
+
+    def idle_remaining(self, idle_seconds):
+        """Seconds left before an idle exit, or None while a request is open."""
+        with self.lock:
+            if self.active:
+                return None
+            return idle_seconds - (time.monotonic() - self.last_request)
+
+    def lookup(self, request_path):
+        if request_path == self.page_path:
+            return self.page, HTML_TYPE
+        if self.root is None or '..' in request_path.split('/'):
+            return None
+        candidate = os.path.realpath(os.path.join(self.root, request_path.lstrip('/')))
+        if os.path.commonpath([candidate, self.root]) != self.root or not os.path.isfile(candidate):
+            return None
+        if candidate == self.page:
+            return candidate, HTML_TYPE
+        return candidate, content_type(candidate)
+
+
+def serve(server, idle_seconds):
+    while True:
+        remaining = server.idle_remaining(idle_seconds)
+        if remaining is not None and remaining <= 0:
+            return
+        server.timeout = idle_seconds if remaining is None else remaining
+        server.handle_request()
+
+
+def detach(server, idle_seconds, pid_file):
+    ready_read, ready_write = os.pipe()
+    first = os.fork()
+    if first:
+        os.close(ready_write)
+        os.waitpid(first, 0)
+        if os.read(ready_read, 1) != b'1':
+            fail('the server did not start')
+        return
+    os.close(ready_read)
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    null = os.open(os.devnull, os.O_RDWR)
+    for descriptor in (0, 1, 2):
+        os.dup2(null, descriptor)
+    if pid_file:
+        try:
+            with open(pid_file, 'w') as handle:
+                handle.write(str(os.getpid()))
+        except OSError:
+            os._exit(1)
+    os.write(ready_write, b'1')
+    os.close(ready_write)
+    serve(server, idle_seconds)
+    os._exit(0)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    parser.add_argument('file', help='HTML file to serve')
+    parser.add_argument('--root', help='also serve the files under this directory')
+    parser.add_argument('--idle-seconds', type=float, default=1800,
+                        help='exit after this many seconds without a request (default: %(default)s)')
+    parser.add_argument('--pid-file', help='write the server process ID to this file')
+    args = parser.parse_args()
+
+    page = os.path.realpath(args.file)
+    if not os.path.isfile(page):
+        fail('{} is not a file'.format(args.file))
+    try:
+        with open(page, 'rb'):
+            pass
+    except OSError as error:
+        fail('cannot read {}: {}'.format(args.file, error.strerror))
+
+    root = None
+    if args.root is not None:
+        root = os.path.realpath(args.root)
+        if not os.path.isdir(root):
+            fail('{} is not a directory'.format(args.root))
+        if os.path.commonpath([page, root]) != root:
+            fail('{} is not under {}'.format(args.file, args.root))
+        name = os.path.relpath(page, root)
+    else:
+        name = os.path.basename(os.path.abspath(args.file))
+    page_path = '/' + name.replace(os.sep, '/')
+
+    try:
+        server = Server(page, page_path, root)
+    except OSError as error:
+        fail('cannot bind 127.0.0.1: {}'.format(error.strerror))
+
+    target = {'kind': 'environment-port', 'port': server.server_address[1],
+              'path': urllib.parse.quote(page_path)}
+    detach(server, args.idle_seconds, args.pid_file)
+    print(json.dumps(target, separators=(',', ':')))
+
+
+if __name__ == '__main__':
+    main()

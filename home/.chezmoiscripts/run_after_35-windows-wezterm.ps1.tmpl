@@ -1,5 +1,0 @@
-{{ if eq .chezmoi.os "windows" -}}
-{{ "\ufeff" -}}
-$ErrorActionPreference = 'Stop'
-& '{{ joinPath .chezmoi.workingTree "scripts" "windows-wezterm.ps1" | replace "'" "''" }}'
-{{ end -}}

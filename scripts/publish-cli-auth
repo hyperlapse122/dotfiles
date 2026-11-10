@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Publish SOPS tokens as user-owned CLI configuration. Run as the target user."""
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+
+
+def token(source, name):
+    value = (source / name).read_text().strip()
+    if not value or len(value) > 8192 or any(c.isspace() or ord(c) < 32 for c in value):
+        raise ValueError('invalid token')
+    return value
+
+
+def private_directory(path):
+    if path.is_symlink():
+        raise ValueError('configuration directory is a symlink')
+    path.mkdir(mode=0o700, exist_ok=True)
+
+
+def publish(source, home, github_user, gitlab_user, jpi_user):
+    if not all((github_user, gitlab_user, jpi_user)):
+        raise ValueError('missing account username')
+    github = token(source, 'github_token')
+    gitlab = token(source, 'gitlab_token')
+    jpi = token(source, 'jpi_token')
+    configs = {
+        'gh/hosts.yml': {
+            'github.com': {
+                'user': github_user, 'oauth_token': github, 'git_protocol': 'https',
+                'users': {github_user: {'oauth_token': github}},
+            },
+        },
+        'glab-cli/config.yml': {
+            'use_keyring': False,
+            'hosts': {
+                'gitlab.com': {'user': gitlab_user, 'token': gitlab,
+                               'git_protocol': 'https', 'api_protocol': 'https'},
+                'git.jpi.app': {'user': jpi_user, 'token': jpi,
+                               'git_protocol': 'https', 'api_protocol': 'https'},
+            },
+        },
+    }
+    # JSON is valid YAML for both CLIs and escapes every substituted value.
+    rendered = [(home / '.config' / name, json.dumps(data, indent=2) + '\n')
+                for name, data in configs.items()]
+    for _, text in rendered:
+        json.loads(text)
+    private_directory(home / '.config')
+    staged = []
+    try:
+        for destination, text in rendered:
+            private_directory(destination.parent)
+            if not destination.is_symlink() and destination.exists() and destination.read_text() == text:
+                destination.chmod(0o600)
+                continue
+            fd, temporary = tempfile.mkstemp(prefix='.auth-', dir=destination.parent)
+            staged.append((Path(temporary), destination))
+            with os.fdopen(fd, 'w') as stream:
+                stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
+        for temporary, destination in staged:
+            os.replace(temporary, destination)
+    finally:
+        for temporary, _ in staged:
+            temporary.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', required=True, type=Path)
+    parser.add_argument('--home', required=True, type=Path)
+    parser.add_argument('--github-user', required=True)
+    parser.add_argument('--gitlab-user', required=True)
+    parser.add_argument('--jpi-user', required=True)
+    args = parser.parse_args()
+    if os.geteuid() == 0:
+        parser.error('must run as the destination user, not root')
+    try:
+        publish(args.source, args.home, args.github_user, args.gitlab_user, args.jpi_user)
+    except (OSError, ValueError):
+        # Never include exception values: they may contain decrypted material.
+        print('CLI authentication publication failed; check secret files and home permissions.', file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

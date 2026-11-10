@@ -1,5 +1,0 @@
-{{ if eq .chezmoi.os "windows" -}}
-$ErrorActionPreference = 'Stop'
-& mise --cd '{{ .chezmoi.workingTree | replace "'" "''" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "gitlab-auth.py" | replace "'" "''" }}' apply --source '{{ .chezmoi.workingTree | replace "'" "''" }}' --config '{{ .chezmoi.configFile | replace "'" "''" }}' --destination '{{ .chezmoi.destDir | replace "'" "''" }}'
-exit $LASTEXITCODE
-{{ end -}}

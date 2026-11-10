@@ -211,6 +211,7 @@ sequenceDiagram
 **Files:** `home/.chezmoidata/personal-apps.json`, `home/.chezmoidata/personal-app-lock.json`, `scripts/update-personal-app-lock.py`, `tests/test_personal_apps.py`, `tests/test_personal_app_lock.py`, `tests/smoke_personal_apps.py`.
 
 **Approach:**
+
 1. Add the Claude declaration and source normalization per KTD1, reusing the existing raw-file external and atomic lock writer.
 2. Populate only Claude's initial locked targets from the observed version, retaining unrelated application pins.
 3. Extend the existing fixture/resolver and native application coverage for the new source and target mapping.
@@ -220,6 +221,7 @@ sequenceDiagram
 **Execution note:** Favor a real isolated install/version smoke over tests that merely mirror declaration text.
 
 **Test scenarios:**
+
 - Covers AE2. A valid Claude manifest resolves the declared native targets into versioned fixed-host URLs and checksums, then the native external executes the selected version.
 - Missing required platform, unexpected binary name, malformed checksum, or version mismatch fails before the existing lock is replaced.
 - Covers AE1. Worktree preparation renders/enumerates source with the hook-free config without personal Claude installation.
@@ -238,6 +240,7 @@ sequenceDiagram
 **Files:** New `home/private_dot_claude/modify_private_settings.json`, `home/private_dot_claude/private_empty_CLAUDE.md.tmpl`, `home/.chezmoitemplates/claude-settings`, `home/.chezmoitemplates/claude-plugins-posix`, `home/.chezmoitemplates/claude-plugins-windows`, `home/.chezmoiscripts/run_after_26-claude-plugins.sh.tmpl`, `home/.chezmoiscripts/run_after_26-claude-plugins.ps1.tmpl`, `tests/test_claude.py`, `tests/smoke_claude.py`; modify `home/.chezmoidata/harness-plugins.json`, `home/.chezmoiexternals/harness-plugins.toml.tmpl`, `home/.chezmoiignore`.
 
 **Approach:**
+
 1. Follow KTD2's private preserving adapter and thin instruction template, with target eligibility matching the Claude declaration.
 2. Register Claude under the shared CE declaration and extend archive eligibility without changing its lock or other harness behavior.
 3. Add OS-conditional native hooks with consistent padded phase names and explicit destination scope per KTD3.
@@ -246,6 +249,7 @@ sequenceDiagram
 **Patterns to follow:** Codex modify-template shape validation, unconditional native after hooks, and shared-instruction marker fixtures.
 
 **Test scenarios:**
+
 - Covers AE3. Local language/memory/update drift is restored; unrelated env/settings, credentials, sessions, and existing memory files survive.
 - Malformed JSON or owned object containers fail without replacing the existing settings.
 - Covers AE4. Seeded shared and harness branches reach native Claude as intended with automatic memory disabled.
@@ -266,6 +270,7 @@ sequenceDiagram
 **Files:** `home/.chezmoitemplates/t3-code-settings`, `tests/test_t3_code_settings.py`, `tests/smoke_t3_code.py`.
 
 **Approach:**
+
 1. Extend the current preserving provider merge with KTD4's owned native fields and path handling.
 2. Cover blank state, existing custom fields, owned-field drift, and malformed provider containers.
 3. Extend the real T3 runtime smoke to exercise KTD5's Claude boundary without replacing the direct smoke in U2.
@@ -273,6 +278,7 @@ sequenceDiagram
 **Patterns to follow:** Native Codex settings merge and actual T3 server snapshot/refresh smoke.
 
 **Test scenarios:**
+
 - Covers AE2. Fresh T3 loads the enabled managed Claude provider and completes native initialization with managed bin absent from PATH.
 - Covers AE5. Reapply repairs an incorrect executable and disabled state without duplicates or changes to unrelated providers.
 - Windows paths and paths containing spaces, apostrophes, and Korean characters remain expanded absolute paths.
@@ -291,12 +297,14 @@ sequenceDiagram
 **Files:** `.github/workflows/test.yml`, `scripts/run-test-area.py`, `tests/test_ci_areas.py`, `tests/smoke_claude.py`, `tests/smoke_t3_code.py`, `docs/guides/personal-applications.md`, `docs/guides/harness-plugins.md`, `docs/guides/t3-code.md`, `docs/maintenance/development-and-testing.md`, `docs/maintenance/chezmoi-source.md`, `README.md`, `docs/README.md` as applicable to existing ownership/links.
 
 **Approach:**
+
 1. Add Claude contract tests to the existing application test area and a native Claude lane to the current eligible runner matrix.
 2. Keep the native CI tool subset scoped to the lane and retain candidate personal-app/CE-lock validation through the reusable workflow.
 3. Run meaningful local native smoke and existing adjacent integration regression checks; use CI for other eligible native platforms.
 4. Document install/update/rollback, default managed scope, close-and-restart behavior, Korean responses, memory semantics, manual authentication, and verification limits in English.
 
 **Test scenarios:**
+
 - Covers AE1-AE7. The native matrix exercises the real pinned CLI and CE in disposable homes, and the actual T3 server path remains covered.
 - Existing omp/Codex plugin, personal application, and T3 provider smoke still passes after the shared changes.
 - CI area ownership includes the new module exactly once; its workflow installs required tools and preserves the current OS/architecture policy.

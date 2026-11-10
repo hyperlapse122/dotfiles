@@ -159,6 +159,7 @@ The new paths should extend these behaviors, not replace them.
 **Execution note:** Prefer installer/runtime smoke proof; use isolated regression fixtures for failure and coexistence boundaries.
 
 **Test scenarios:**
+
 1. With only mise's chezmoi discoverable, bootstrap does not report native installation complete merely because that command runs.
 2. With a usable native installation, repeated bootstrap preserves local checkout edits and personal chezmoi configuration.
 3. A failed chezmoi installation or an undiscoverable native command after installation produces a nonzero result and no success report.
@@ -185,6 +186,7 @@ The new paths should extend these behaviors, not replace them.
 **Execution note:** First exercise a disposable-home scenario with a local Git remote. Do not use the owner's live configuration to discover init or template behavior.
 
 **Test scenarios:**
+
 1. Register a standalone checkout at a Unicode path containing spaces from an unrelated current directory; effective source resolves to that checkout and no managed home file is applied.
 2. Advance a local remote with changed home content; plain update from outside the checkout pulls it and changes the isolated destination to the new content.
 3. Advance the same remote with a template-backed configuration change; update with init reloads the changed value, applies the expected content, and a subsequent plain update still uses the same checkout.

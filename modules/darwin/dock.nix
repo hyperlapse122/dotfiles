@@ -1,0 +1,52 @@
+{ config, lib, ... }:
+let
+  inherit (config.my.user) home;
+  homeManagerApps = "${home}/Applications/Home Manager Apps";
+in
+{
+  options.my.dock.hostApps = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [ ];
+    example = [ "/Applications/Microsoft Outlook.app" ];
+    description = "App bundle paths this host pins to the Dock between personal apps and Ghostty, for apps only this host installs.";
+  };
+
+  # The declared Dock replaces the pinned apps and right-side items on every
+  # apply. Keys left null here, such as position, auto-hide, magnification,
+  # and the minimize settings, are never written and stay the user's.
+  config.system.defaults.dock = {
+    persistent-apps = [
+      "/Applications/Google Chrome.app"
+      "/System/Applications/App Store.app"
+      "/System/Applications/Mail.app"
+      "/System/Applications/Calendar.app"
+      "/System/Applications/Reminders.app"
+      "/System/Applications/Notes.app"
+      "/System/Applications/Messages.app"
+      "/System/Applications/FaceTime.app"
+      "/System/Applications/Phone.app"
+      "/System/Applications/Photos.app"
+      "/System/Applications/Music.app"
+      "/System/Applications/iPhone Mirroring.app"
+    ]
+    ++ config.my.dock.hostApps
+    ++ [ "/Applications/Ghostty.app" ]
+    ++ lib.optional config.my.t3.desktop.enable "${homeManagerApps}/${import ../../packages/t3code-app-bundle.nix}"
+    ++ [
+      "/Applications/ChatGPT.app"
+      "/Applications/Claude.app"
+    ];
+    persistent-others = [
+      {
+        folder = {
+          path = "${home}/Downloads";
+          arrangement = "date-added";
+          displayas = "stack";
+          showas = "fan";
+        };
+      }
+    ];
+    show-recents = false;
+    tilesize = 32;
+  };
+}

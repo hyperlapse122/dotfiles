@@ -1,8 +1,0 @@
-{{- /* chezmoi:modify-template */ -}}
-{{- $existing := .chezmoi.stdin -}}
-{{- if hasKey .personalApps "node" -}}
-{{- $prefix := joinPath .chezmoi.destDir ".local" -}}
-{{- if eq .chezmoi.os "windows" -}}{{- $prefix = joinPath $prefix "bin" -}}{{- end -}}
-{{- $existing = $existing | replaceAllRegex "(?mi)^[ \t]*prefix[ \t]*=.*(?:\r?\n|$)" "" -}}
-{{- printf "prefix=%s\n%s" ($prefix | replace "\\" "/" | toJson) $existing -}}
-{{- else -}}{{- $existing -}}{{- end -}}

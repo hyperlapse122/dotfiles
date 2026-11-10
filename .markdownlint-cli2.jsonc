@@ -1,0 +1,21 @@
+{
+  // Rule configuration for docs/, root *.md files, and
+  // .compound-engineering/artifacts/. MD013 (line length), MD033 (inline
+  // HTML), and MD041 (first-line heading) are disabled: existing docs use
+  // long unwrapped lines and inline HTML, and CLAUDE.md is a heading-less
+  // @AGENTS.md import -- enabling them would fail on existing, intentional
+  // content (see the ci-docs-skip-markdown-lint plan, KTD6).
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD033": false,
+    "MD041": false,
+    "MD025": { "front_matter_title": "" },
+    "MD036": false
+  },
+  "globs": [
+    "docs/**/*.md",
+    "*.md",
+    ".compound-engineering/artifacts/**/*.md"
+  ]
+}

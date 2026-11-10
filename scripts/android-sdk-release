@@ -1,0 +1,676 @@
+#!/usr/bin/env ruby
+# update.rb appends to string literals, so they must stay mutable.
+# frozen_string_literal: false
+
+# Pin the Android SDK packages the flake builds from Google's repository XML.
+#
+# Writes or checks packages/android-sdk-repo.json, a trimmed repo.json in the
+# format nixpkgs' androidenv consumes through `composeAndroidPackages
+# { repoJson = ...; }`. The file carries only the packages the flake installs,
+# so every version and archive checksum the SDK is built from is locked in the
+# repository rather than in whichever nixpkgs revision flake.lock names.
+#
+# cmdline-tools, emulator, and platform-tools track the newest stable release.
+# build-tools, cmake, ndk, and platforms are the versions a project compiles
+# against, so they stay at the versions already pinned (or the ones passed on
+# the command line) and only their archive data is refreshed. Each declared
+# platform also pins its Google APIs arm64-v8a and x86_64 system images, read
+# from the system image XML beside the repository XML, so an emulator AVD can
+# be created from the read-only SDK on an Apple silicon Mac and on an x86_64
+# host alike. The helper refuses to write a pin that would downgrade a
+# tracked package, drop a declared version upstream no longer lists, or leave a
+# declared platform without either of its system images.
+#
+# The XML-to-repo.json conversion is vendored from nixpkgs'
+# pkgs/development/mobile/androidenv/update.rb rather than loaded from
+# pkgs.path at run time. update.rb is a script, not a library: loading it runs
+# its top-level Slop option parsing, fetches every repository, system image,
+# and addon XML over the network with curb, and writes repo.json next to
+# itself. It also needs slop and curb, which nothing else here uses. Vendoring
+# keeps the functions below verbatim, so a change upstream carries over by
+# diffing this section against the new update.rb.
+
+require 'json'
+require 'nokogiri'
+require 'open3'
+require 'optparse'
+require 'uri'
+
+DEFAULT_URL = 'https://dl.google.com/android/repository/repository2-3.xml'
+
+TRACKED = %w[cmdline-tools emulator platform-tools].freeze
+DECLARED = %w[build-tools cmake ndk platforms].freeze
+
+IMAGE_TAG = 'google_apis'
+IMAGE_ABIS = %w[arm64-v8a x86_64].freeze
+IMAGE_XML = "sys-img/#{IMAGE_TAG}/sys-img2-3.xml"
+
+STABLE_CHANNEL = 'channel-0'
+
+# A refusal that should stop the caller with a readable message.
+class Failure < StandardError; end
+
+# --- Vendored from nixpkgs pkgs/development/mobile/androidenv/update.rb at
+# --- revision e94cb152ed51bd6e24eb4a41f1460252beb52cd2. Keep verbatim.
+
+# Returns a repo URL for a given package name.
+def repo_url value
+  if value && value.start_with?('http')
+    value
+  elsif value
+    "https://dl.google.com/android/repository/#{value}"
+  else
+    nil
+  end
+end
+
+# Returns a system image URL for a given system image name.
+def image_url value, dir
+  if dir == "default"
+    dir = "android"
+  end
+  if value && value.start_with?('http')
+    value
+  elsif value
+    "https://dl.google.com/android/repository/sys-img/#{dir}/#{value}"
+  else
+    nil
+  end
+end
+
+# Returns a JSON with the data and structure of the input XML
+def to_json_collector doc
+  json = {}
+  index = 0
+  doc.element_children.each { |node|
+    if node.children.length == 1 and node.children.first.text?
+      json["#{node.name}:#{index}"] ||= node.content
+      index += 1
+      next
+    end
+    json["#{node.name}:#{index}"] ||= to_json_collector node
+    index += 1
+  }
+  element_attributes = {}
+  doc.attribute_nodes.each do |attr|
+    if attr.name == "type"
+      type = attr.value.split(':', 2).last
+      case attr.value
+      when 'generic:genericDetailsType'
+        element_attributes["xsi:type"] ||= "ns5:#{type}"
+      when 'addon:extraDetailsType'
+        element_attributes["xsi:type"] ||= "ns8:#{type}"
+      when 'addon:mavenType'
+        element_attributes["xsi:type"] ||= "ns8:#{type}"
+      when 'sdk:platformDetailsType'
+        element_attributes["xsi:type"] ||= "ns11:#{type}"
+      when 'sdk:sourceDetailsType'
+        element_attributes["xsi:type"] ||= "ns11:#{type}"
+      when 'sys-img:sysImgDetailsType'
+        element_attributes["xsi:type"] ||= "ns12:#{type}"
+      when 'addon:addonDetailsType' then
+        element_attributes["xsi:type"] ||= "ns8:#{type}"
+      end
+    else
+      element_attributes[attr.name] ||= attr.value
+    end
+  end
+  if !element_attributes.empty?
+    json['element-attributes'] ||= element_attributes
+  end
+  json
+end
+
+# Returns a tuple of [type, revision, revision components] for a package node.
+def package_revision package
+  type_details = package.at_css('> type-details')
+  type = type_details.attributes['type']
+  type &&= type.value
+
+  revision = nil
+  components = nil
+
+  case type
+  when 'generic:genericDetailsType', 'addon:extraDetailsType', 'addon:mavenType'
+    major = text package.at_css('> revision > major')
+    minor = text package.at_css('> revision > minor')
+    micro = text package.at_css('> revision > micro')
+    preview = text package.at_css('> revision > preview')
+
+    revision = ''
+    components = []
+    unless empty?(major)
+      revision << major
+      components << major
+    end
+
+    unless empty?(minor)
+      revision << ".#{minor}"
+      components << minor
+    end
+
+    unless empty?(micro)
+      revision << ".#{micro}"
+      components << micro
+    end
+
+    unless empty?(preview)
+      revision << "-rc#{preview}"
+      components << preview
+    end
+  when 'sdk:platformDetailsType'
+    codename = text type_details.at_css('> codename')
+    api_level = text type_details.at_css('> api-level')
+    revision = empty?(codename) ? api_level : codename
+    components = [revision]
+  when 'sdk:sourceDetailsType'
+    api_level = text type_details.at_css('> api-level')
+    revision, components = api_level, [api_level]
+  when 'sys-img:sysImgDetailsType'
+    codename = text type_details.at_css('> codename')
+    api_level = text type_details.at_css('> api-level')
+    _, _, id, _ = package['path'].split(';')
+    abi = text type_details.at_css('> abi')
+
+    revision = ''
+    components = []
+    if empty?(codename)
+      revision << api_level
+      components << api_level
+    else
+      revision << codename
+      components << codename
+    end
+
+    unless empty?(id)
+      revision << "-#{id}"
+      components << id
+    end
+
+    unless empty?(abi)
+      revision << "-#{abi}"
+      components << abi
+    end
+  when 'addon:addonDetailsType' then
+    api_level = text type_details.at_css('> api-level')
+    id = text type_details.at_css('> tag > id')
+    revision = api_level
+    components = [api_level, id]
+  end
+
+  [type, revision, components]
+end
+
+# Returns a hash of archives for the specified package node.
+def package_archives package
+  archives = {}
+  package.css('> archives > archive').each do |archive|
+    host_os = text archive.at_css('> host-os')
+    host_arch = text archive.at_css('> host-arch')
+    host_os = 'all' if empty?(host_os)
+    host_arch = 'all' if empty?(host_arch)
+    archives[host_os + host_arch] = {
+      'os' => host_os,
+      'arch' => host_arch,
+      'size' => Integer(text(archive.at_css('> complete > size'))),
+      'sha1' => text(archive.at_css('> complete > checksum')),
+      'url' => yield(text(archive.at_css('> complete > url')))
+    }
+  end
+  archives
+end
+
+# Returns the text from a node, or nil.
+def text node
+  node ? node.text : nil
+end
+
+# Nil or empty helper.
+def empty? value
+  !value || value.empty?
+end
+
+# Fixes up returned hashes by converting archives like
+#  (e.g. {'linux' => {'sha1' => ...}, 'macosx' => ...} to
+# [{'os' => 'linux', 'sha1' => ...}, {'os' => 'macosx', ...}, ...].
+def fixup value
+  Hash[value.map do |k, v|
+    if k == 'archives' && v.is_a?(Hash)
+      [k, v.map do |os, archive|
+        fixup(archive)
+      end]
+    elsif v.is_a?(Hash)
+      [k, fixup(v)]
+    else
+      [k, v]
+    end
+  end]
+end
+
+# Today since Unix Epoch, January 1, 1970.
+def today
+  Time.now.utc.to_i / 24 / 60 / 60
+end
+
+# Normalize the specified license text.
+# See: https://brash-snapper.glitch.me/ for how the munging works.
+def normalize_license license
+  license = license.dup
+  license.gsub!(/([^\n])\n([^\n])/m, '\1 \2')
+  license.gsub!(/ +/, ' ')
+  license.strip!
+  license
+end
+
+# Gets all license texts, deduplicating them.
+def get_licenses doc
+  licenses = {}
+  doc.css('license[type="text"]').each do |license_node|
+    license_id = license_node['id']
+    if license_id
+      licenses[license_id] ||= []
+      licenses[license_id] |= [normalize_license(text(license_node))]
+    end
+  end
+  licenses
+end
+
+def parse_package_xml doc
+  licenses = get_licenses doc
+  packages = {}
+  # check https://github.com/NixOS/nixpkgs/issues/373785
+  extras = {}
+
+  doc.css('remotePackage').each do |package|
+    name, _, version = package['path'].partition(';')
+    next if version == 'latest'
+
+    is_extras = name == 'extras'
+    if is_extras
+      name = package['path'].tr(';', '-')
+    end
+
+    type, revision, _ = package_revision(package)
+    next unless revision
+
+    path = package['path'].tr(';', '/')
+    display_name = text package.at_css('> display-name')
+    uses_license = package.at_css('> uses-license')
+    uses_license &&= uses_license['ref']
+    obsolete ||= package['obsolete']
+    type_details = to_json_collector package.at_css('> type-details')
+    revision_details = to_json_collector package.at_css('> revision')
+    archives = package_archives(package) {|url| repo_url url}
+    dependencies_xml = package.at_css('> dependencies')
+    dependencies = to_json_collector dependencies_xml if dependencies_xml
+
+    if is_extras
+      target = extras
+      component = package['path']
+      target = (target[component] ||= {})
+    else
+      target = (packages[name] ||= {})
+      target = (target[revision] ||= {})
+    end
+
+    target['name'] ||= name
+    target['path'] ||= path
+    target['revision'] ||= revision
+    target['displayName'] ||= display_name
+    target['license'] ||= uses_license if uses_license
+    target['obsolete'] ||= obsolete if obsolete == 'true'
+    target['type-details'] ||= type_details
+    target['revision-details'] ||= revision_details
+    target['dependencies'] ||= dependencies if dependencies
+    target['archives'] ||= {}
+    merge target['archives'], archives
+    target['last-available-day'] = today
+  end
+
+  [licenses, packages, extras]
+end
+
+def parse_image_xml loc, doc
+  licenses = get_licenses doc
+  images = {}
+
+  doc.css('remotePackage[path^="system-images;"]').each do |package|
+    type, revision, components = package_revision(package)
+    next unless revision
+
+    path = package['path'].tr(';', '/')
+    display_name = text package.at_css('> display-name')
+    uses_license = package.at_css('> uses-license')
+    uses_license &&= uses_license['ref']
+    obsolete &&= package['obsolete']
+    type_details = to_json_collector package.at_css('> type-details')
+    revision_details = to_json_collector package.at_css('> revision')
+    archives = package_archives(package) {|url| image_url url, loc}
+    dependencies_xml = package.at_css('> dependencies')
+    dependencies = to_json_collector dependencies_xml if dependencies_xml
+
+    target = images
+    components.each do |component|
+      target[component] ||= {}
+      target = target[component]
+    end
+
+    target['name'] ||= "system-image-#{revision}"
+    target['path'] ||= path
+    target['revision'] ||= revision
+    target['displayName'] ||= display_name
+    target['license'] ||= uses_license if uses_license
+    target['obsolete'] ||= obsolete if obsolete
+    target['type-details'] ||= type_details
+    target['revision-details'] ||= revision_details
+    target['dependencies'] ||= dependencies if dependencies
+    target['archives'] ||= {}
+    merge target['archives'], archives
+    target['last-available-day'] = today
+  end
+
+  [licenses, images]
+end
+
+# Make the clean diff by always sorting the result before putting it in the stdout.
+def sort_recursively value
+  if value.is_a?(Hash)
+    Hash[
+      value.map do |k, v|
+        [k, sort_recursively(v)]
+      end.sort_by {|(k, v)| k }
+    ]
+  elsif value.is_a?(Array)
+    value.map do |v| sort_recursively(v) end
+  else
+    value
+  end
+end
+
+def merge_recursively a, b
+  a.merge!(b) {|key, a_item, b_item|
+    if a_item.is_a?(Hash) && b_item.is_a?(Hash)
+      merge_recursively(a_item, b_item)
+    elsif b_item != nil
+      b_item
+    end
+  }
+  a
+end
+
+def merge dest, src
+  merge_recursively dest, src
+end
+
+# --- End of vendored update.rb.
+
+# Fetches one URL with curl and returns the body.
+def fetch url
+  body, status = Open3.capture2('curl', '-sfL', '--max-time', '60', url, stdin_data: '', binmode: true)
+  raise Failure, "fetching #{url} failed with status #{status.exitstatus}" unless status.success?
+
+  body
+end
+
+# update.rb parses with noblanks alone, which recovers from malformed XML;
+# strict makes a truncated download a refusal instead of an empty pin.
+def parse_xml xml, what
+  Nokogiri::XML(xml) { |conf| conf.strict.noblanks }
+rescue Nokogiri::XML::SyntaxError => e
+  raise Failure, "#{what} XML did not parse: #{e.message.strip}"
+end
+
+# Returns [licenses, packages, stable] for the package types pinned here.
+#
+# packages is parse_package_xml's name -> revision -> androidenv entry, minus
+# the last-available-day stamp: the pin keeps only what upstream lists now, so
+# it has nothing to expire. stable maps name -> the revisions on the stable
+# channel, which update.rb does not record.
+def parse_repository xml
+  doc = parse_xml(xml, 'repository')
+
+  licenses, packages, _ = parse_package_xml(doc)
+  packages = packages.slice(*TRACKED, *DECLARED)
+  packages.each_value do |versions|
+    versions.each_value { |entry| entry.delete('last-available-day') }
+  end
+
+  stable = Hash.new { |hash, name| hash[name] = [] }
+  doc.css('remotePackage').each do |package|
+    name, _, version = package['path'].partition(';')
+    next if version == 'latest' || !packages.key?(name)
+
+    _, revision, _ = package_revision(package)
+    next unless revision
+
+    channel = package.at_css('> channelRef')
+    stable[name] |= [revision] if channel && channel['ref'] == STABLE_CHANNEL
+  end
+
+  [licenses, packages, stable]
+end
+
+# Yields every entry of images, which androidenv keys api -> tag -> abi.
+def each_image_entry images
+  images.each_value do |tags|
+    tags.each_value do |abis|
+      abis.each_value { |entry| yield entry }
+    end
+  end
+end
+
+# Returns [licenses, images] for the IMAGE_TAG system image XML, with images
+# keyed as androidenv reads them, minus last-available-day.
+def parse_images xml
+  licenses, images = parse_image_xml(IMAGE_TAG, parse_xml(xml, 'system image'))
+  each_image_entry(images) { |entry| entry.delete('last-available-day') }
+  [licenses, images]
+end
+
+# Joins a to_json_collector revision ({"major:0" => "35", "minor:1" => "4"})
+# into a dotted version.
+def revision_version revision
+  revision.sort_by { |key, _| key.split(':').last.to_i }.map { |_, part| part }.join('.')
+end
+
+# Returns the minimum emulator revision an image declares, or nil.
+def emulator_min_revision entry
+  entry.fetch('dependencies', {}).each_value do |dependency|
+    next unless dependency.is_a?(Hash) && dependency.dig('element-attributes', 'path') == 'emulator'
+
+    minimum = dependency.find { |key, _| key.start_with?('min-revision:') }
+    return revision_version(minimum.last) if minimum
+  end
+  nil
+end
+
+# Returns [abi, entry] for the IMAGE_TAG image of one ABI on platform api. The
+# image must not be older than the one already pinned for that ABI, and must
+# boot on the pinned emulator.
+def select_image api, abi, images, emulator, current
+  entry = images.dig(api, IMAGE_TAG, abi)
+  label = "system image #{api} #{IMAGE_TAG} #{abi}"
+  raise Failure, "upstream lists no #{IMAGE_TAG} #{abi} system image for platform #{api}" unless entry
+
+  version = revision_version(entry['revision-details'])
+  pinned = current&.dig('images', api, IMAGE_TAG, abi, 'revision-details')
+  pinned &&= revision_version(pinned)
+  if pinned && compare_versions(version, pinned).negative?
+    raise Failure, "#{label} revision #{version} is older than the pinned #{pinned}; refusing to downgrade"
+  end
+
+  minimum = emulator_min_revision(entry)
+  if minimum && compare_versions(emulator, minimum).negative?
+    raise Failure, "#{label} needs emulator #{minimum} or newer, but the pinned emulator is #{emulator}"
+  end
+
+  [abi, entry]
+end
+
+# Returns the pinned images: the IMAGE_TAG image of every IMAGE_ABIS ABI for
+# every selected platform, keyed as parse_images keys them.
+def select_images images, platforms, emulator, current
+  platforms.to_h do |api|
+    abis = IMAGE_ABIS.to_h { |abi| select_image(api, abi, images, emulator, current) }
+    [api, { IMAGE_TAG => abis }]
+  end
+end
+
+# Numeric sort key; a part with no leading number sorts lowest.
+def version_key version
+  version.split(/[.-]/).map { |part| part[/\A\d+/]&.to_i || -1 }
+end
+
+def compare_versions a, b
+  version_key(a) <=> version_key(b)
+end
+
+def newest_stable name, packages, stable
+  candidates = stable[name].select do |version|
+    packages[name][version]['license'] == 'android-sdk-license'
+  end
+  raise Failure, "upstream lists no stable #{name} release" if candidates.empty?
+
+  candidates.max { |a, b| compare_versions(a, b) }
+end
+
+def load_current path
+  return nil unless path && File.exist?(path)
+
+  JSON.parse(File.read(path, encoding: 'UTF-8'))
+end
+
+# Returns name -> [versions] to pin.
+def select_versions packages, stable, current, requested
+  current ||= {}
+  selection = {}
+  TRACKED.each do |name|
+    version = newest_stable(name, packages, stable)
+    pinned = current.fetch('latest', {})[name]
+    if pinned && compare_versions(version, pinned).negative?
+      raise Failure, "newest stable #{name} #{version} is older than the pinned #{pinned}; " \
+                     'refusing to downgrade'
+    end
+    selection[name] = [version]
+  end
+  DECLARED.each do |name|
+    versions = requested[name]
+    if versions.nil? || versions.empty?
+      versions = current.fetch('packages', {}).fetch(name, {}).keys.sort { |a, b| compare_versions(a, b) }
+    end
+    raise Failure, "no #{name} version is pinned; pass --#{name} to choose one" if versions.empty?
+
+    versions.each do |version|
+      next if packages.fetch(name, {}).key?(version)
+
+      raise Failure, "#{name} #{version} is not in the upstream repository; " \
+                     'refusing to drop a pinned version'
+    end
+    selection[name] = versions
+  end
+  selection
+end
+
+def render licenses, packages, selection, images
+  pinned = {}
+  used_licenses = []
+  selection.each do |name, versions|
+    versions.each do |version|
+      entry = packages[name][version]
+      (pinned[name] ||= {})[version] = entry
+      used_licenses |= [entry['license']] if entry.key?('license')
+    end
+  end
+  each_image_entry(images) { |entry| used_licenses |= [entry['license']] if entry.key?('license') }
+  missing = (used_licenses - licenses.keys).sort
+  raise Failure, "repository XML carries no text for license #{missing.join(', ')}" unless missing.empty?
+
+  repo = {
+    'addons' => {},
+    'extras' => {},
+    'images' => images,
+    'latest' => selection.transform_values { |versions| versions.max { |a, b| compare_versions(a, b) } },
+    'licenses' => licenses.slice(*used_licenses),
+    'packages' => pinned
+  }
+  # ascii_only matches the escaping the committed pin was first written with.
+  # Older json gems render an empty object across two lines; a raw newline can
+  # only be layout, since generated strings escape theirs, so collapse it to
+  # keep the output identical whichever json version Ruby ships.
+  json = JSON.pretty_generate(sort_recursively(fixup(repo)), ascii_only: true)
+  json.gsub(/\{\n *\}/, '{}').gsub(/\[\n *\]/, '[]') + "\n"
+end
+
+def parse_options argv
+  options = { url: DEFAULT_URL, dry_run: false }
+  parser = OptionParser.new do |o|
+    o.banner = 'Usage: android-sdk-release [options]'
+    o.separator 'Pin the Android SDK packages the flake builds from Google\'s repository XML.'
+    o.on('--url URL', "Repository XML URL (default: #{DEFAULT_URL})") { |v| options[:url] = v }
+    o.on('-o', '--output PATH', 'Pin file to write or update') { |v| options[:output] = v }
+    o.on('--build-tools VERSION',
+         'build-tools version to pin (repeatable; default: the pinned ones)') do |v|
+      (options['build-tools'] ||= []) << v
+    end
+    o.on('--cmake VERSION',
+         'CMake version to pin (repeatable; default: the pinned ones)') do |v|
+      (options['cmake'] ||= []) << v
+    end
+    o.on('--ndk VERSION',
+         'NDK version to pin (repeatable; default: the pinned ones)') do |v|
+      (options['ndk'] ||= []) << v
+    end
+    o.on('--platforms VERSION',
+         'platform API level to pin (repeatable; default: the pinned ones)') do |v|
+      (options['platforms'] ||= []) << v
+    end
+    o.on('--dry-run', 'Print the resolved pin file to stdout without modifying files') do
+      options[:dry_run] = true
+    end
+  end
+  parser.parse!(argv)
+  raise OptionParser::InvalidArgument, argv.join(' ') unless argv.empty?
+
+  options
+rescue OptionParser::ParseError => e
+  warn "android-sdk-release: #{e.message}"
+  warn parser
+  exit 2
+end
+
+def main argv
+  options = parse_options(argv)
+  output = options[:output]
+
+  begin
+    current = load_current(output)
+    licenses, packages, stable = parse_repository(fetch(options[:url]))
+    image_licenses, images = parse_images(fetch(URI.join(options[:url], IMAGE_XML).to_s))
+    selection = select_versions(
+      packages, stable, current,
+      options.slice(*DECLARED)
+    )
+    pinned_images = select_images(images, selection['platforms'], selection['emulator'].first, current)
+    out_json = render(merge(licenses, image_licenses), packages, selection, pinned_images)
+
+    if options[:dry_run] || !output
+      $stdout.write(out_json)
+      return 0
+    end
+
+    if File.exist?(output) && File.binread(output) == out_json.b
+      puts "#{output} is already up to date"
+      return 0
+    end
+
+    File.binwrite(output, out_json)
+    summary = selection.map { |name, versions| "#{name} #{versions.join(' ')}" }.join(', ')
+    puts "updated #{output} to #{summary}"
+    0
+  rescue Failure, SystemCallError, IOError, JSON::ParserError, ArgumentError, TypeError, URI::Error => e
+    warn "android-sdk-release: #{e.message}"
+    1
+  end
+end
+
+exit main(ARGV) if $PROGRAM_NAME == __FILE__

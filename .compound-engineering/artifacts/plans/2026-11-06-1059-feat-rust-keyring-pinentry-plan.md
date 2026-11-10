@@ -142,7 +142,6 @@ The planning decisions below resolve these questions; implementation owns only e
 
 Upstream links were inspected on 2026-11-06 and refer to moving branches; planning must verify the versions selected for delivery.
 
-
 ---
 
 ## Planning Contract
@@ -208,6 +207,7 @@ Request routing, enrollment, and recovery follow F1-F4. The sequence shows the p
 **Approach:** Separate protocol transport from request classification and store access so tests cannot accidentally select personal native storage. Support existing options, data/status framing, RESET, termination and inquiry forwarding. Preserve exact frontend errors while removing secret-bearing context from custom diagnostics.
 **Patterns:** Existing subprocess isolation and secret-free error handling in `scripts/cli_native.py` and credential smoke tests.
 **Test scenarios:**
+
 - Covers AE1. Known card A and B descriptions route to distinct identities, including identical key material.
 - Covers AE5. Admin/new/repeat/passphrase, translated, malformed and ambiguous descriptions delegate without store access.
 - Covers AE2, AE3. Missing entry prompts and stores; supported retry warning deletes first and prompts; cancellation writes nothing.
@@ -223,6 +223,7 @@ Request routing, enrollment, and recovery follow F1-F4. The sequence shows the p
 **Files:** `pinentry/src/store.rs`, `pinentry/src/main.rs`, `pinentry/Cargo.toml`, `pinentry/Cargo.lock`, `pinentry/tests/protocol.rs`.
 **Approach:** Explicit native backend selection, one stable namespace and canonical card ID format shared by classifier and forget. Guard unsupported targets. Native errors expose no record value; buffers are zeroized after use.
 **Test scenarios:**
+
 - Covers AE3. Forget removes only A, repeated deletion succeeds, and subsequent A lookup misses.
 - Covers AE4. NoEntry is the sole missing-record outcome; denied/unavailable stores propagate errors.
 - Invalid card IDs are rejected before native lookup; logs and command output never contain synthetic PIN values.
@@ -236,6 +237,7 @@ Request routing, enrollment, and recovery follow F1-F4. The sequence shows the p
 **Files:** `mise.toml`, `mise.lock`, `.gitignore`, `home/.chezmoitemplates/gpg-settings`, `home/.chezmoitemplates/gpg-agent-config`, `home/.chezmoiscripts/run_before_20-install-pinentry.sh.tmpl`, `home/.chezmoiscripts/run_before_20-install-pinentry.ps1.tmpl`, `home/dot_local/bin/private_dotfiles-pinentry.json.tmpl`, reload scripts, `tests/test_git_gpg.py`, `tests/test_script_lifecycle.py`.
 **Approach:** Use current worktree source, explicit before-phase build/install and a private sidecar config next to the installed executable. Reuse Windows Visual Studio readiness/provisioning before the build. Reconcile exactly one wrapper pinentry directive and zero ordinary cache TTLs, preserving unrelated options. Retain the selected native pinentry separately and prevent recursive fallback.
 **Test scenarios:**
+
 - Covers AE6, AE7. Rendering reconciles duplicate cache/pinentry directives, preserves comments/other options and converges on repeat apply.
 - Covers AE7. Bootstrap/script-excluded rendering does not build/install or touch personal settings; safety failure occurs before install.
 - Covers AE7. Changing effective fallback/wrapper config schedules reload; unrelated platform data does not.
@@ -250,6 +252,7 @@ Request routing, enrollment, and recovery follow F1-F4. The sequence shows the p
 **Files:** `.github/workflows/test.yml`, `tests/smoke_pinentry.py`, `pinentry/tests/`.
 **Approach:** Add a dedicated native pinentry job using existing runner and isolation patterns. Run Rust formatting, lint, tests and real backend smoke. CI-only native smoke must refuse to run against the owner's normal session; Linux uses isolated session bus/keyring, macOS a disposable Keychain, Windows a disposable hosted account. Verify synthetic enrollment, hit, warning recovery, deletion and namespace isolation; no real card is needed.
 **Test scenarios:**
+
 - Covers AE8. Native store survives separate proxy processes, separates A/B, and forget causes a miss on all three OS families.
 - Covers AE4. Isolated backend failure cannot become a false NoEntry or plaintext fallback.
 - Covers AE2, AE3, AE5. Real native storage plus fake system frontend exercises enrollment, warning recovery and manual delegation end to end.

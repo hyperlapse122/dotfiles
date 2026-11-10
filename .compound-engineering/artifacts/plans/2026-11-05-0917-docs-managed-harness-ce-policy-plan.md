@@ -92,6 +92,7 @@ The open harness issues describe generic plugin integration without naming CE as
 **Files:** Modify `AGENTS.md`, `README.md`, and `home/README.md`. Inspect the declarations and lock cited above; retain `home/.chezmoitemplates/agent-instructions` unchanged. Existing verification: `tests/smoke_harness_plugins.py`.
 
 **Approach:**
+
 1. Confirm KTD3 against the current worktree; do not interpret a pending issue or an optional T3 provider as an installed managed harness.
 2. Add the R2/R3 policy after the existing shared-instruction rules, following KTD1.
 3. Update both onboarding guides, distinguishing the mandatory policy from the currently connected hosts.
@@ -113,12 +114,12 @@ The open harness issues describe generic plugin integration without naming CE as
 **Files:** No repository code files. External targets:
 
 | Issue | Harness | URL |
-|---|---|---|
-| #30 | Claude Code | https://github.com/hyperlapse122/dotfiles/issues/30 |
-| #31 | Codex | https://github.com/hyperlapse122/dotfiles/issues/31 |
-| #32 | Antigravity | https://github.com/hyperlapse122/dotfiles/issues/32 |
-| #33 | pi | https://github.com/hyperlapse122/dotfiles/issues/33 |
-| #34 | Grok Build | https://github.com/hyperlapse122/dotfiles/issues/34 |
+| --- | --- | --- |
+| #30 | Claude Code | <https://github.com/hyperlapse122/dotfiles/issues/30> |
+| #31 | Codex | <https://github.com/hyperlapse122/dotfiles/issues/31> |
+| #32 | Antigravity | <https://github.com/hyperlapse122/dotfiles/issues/32> |
+| #33 | pi | <https://github.com/hyperlapse122/dotfiles/issues/33> |
+| #34 | Grok Build | <https://github.com/hyperlapse122/dotfiles/issues/34> |
 
 **Approach:** Follow KTD2. Write comments in English, name the target harness, and present R3/R5 as requirements for that issue rather than claims of completed work. Point readers to `home/README.md` for the existing CE pattern and shared-instruction onboarding procedure. For pi, explicitly retain the synthetic.new-only constraint.
 

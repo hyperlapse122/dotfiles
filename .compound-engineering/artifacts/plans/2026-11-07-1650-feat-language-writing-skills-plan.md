@@ -136,10 +136,10 @@ The original request contained one more area; the list below is the current unde
 - `tests/smoke_pi.py:303`, `tests/smoke_grok.py:262-264` — exactly-once skill discovery checks that R3 can extend.
 - `docs/guides/t3-code.md:70`, `docs/guides/t3-code.md:108`, `scripts/t3-instructions.py:87` — T3 launches share the native homes.
 - `AGENTS.md:5` — the repository-level `ce-noslop` rule whose exclusions R7 mirrors.
-- https://github.com/DaleSeo/korean-skills — MIT license; tag v1.0.0 is `fe6432e`; `main` is three commits ahead with no change under `skills/`.
-- Claude Code docs: https://code.claude.com/docs/en/settings-reference.md, https://code.claude.com/docs/en/skills.md, https://code.claude.com/docs/en/mcp.md — `syncClaudeAiSkills`, `syncClaudeAiPlugins` (2.1.273 or later), `disableClaudeAiConnectors`, and `ENABLE_CLAUDEAI_MCP_SERVERS`. The managed version is 2.1.318.
-- Codex source at `rust-v0.166.0` and `rust-v0.167.0` (https://github.com/openai/codex), `core-plugins/src/loader.rs`, `core-plugins/src/manager.rs`, `core-plugins/src/remote.rs`, `config/src/types.rs` — remote plugin loading, the `[plugins._default]` policy, and the six remote marketplaces.
-- T3 Code `v0.1.7` (https://github.com/pingdotgg/t3code), `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts` and `CodexAdapterV2.ts` — default `settingSources`, `t3-code` registration through `setMcpServers()`, and per-thread `mcp_servers` for Codex.
+- <https://github.com/DaleSeo/korean-skills> — MIT license; tag v1.0.0 is `fe6432e`; `main` is three commits ahead with no change under `skills/`.
+- Claude Code docs: <https://code.claude.com/docs/en/settings-reference.md>, <https://code.claude.com/docs/en/skills.md>, <https://code.claude.com/docs/en/mcp.md> — `syncClaudeAiSkills`, `syncClaudeAiPlugins` (2.1.273 or later), `disableClaudeAiConnectors`, and `ENABLE_CLAUDEAI_MCP_SERVERS`. The managed version is 2.1.318.
+- Codex source at `rust-v0.166.0` and `rust-v0.167.0` (<https://github.com/openai/codex>), `core-plugins/src/loader.rs`, `core-plugins/src/manager.rs`, `core-plugins/src/remote.rs`, `config/src/types.rs` — remote plugin loading, the `[plugins._default]` policy, and the six remote marketplaces.
+- T3 Code `v0.1.7` (<https://github.com/pingdotgg/t3code>), `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts` and `CodexAdapterV2.ts` — default `settingSources`, `t3-code` registration through `setMcpServers()`, and per-thread `mcp_servers` for Codex.
 - Pinned-binary discovery runs on Windows x64 for all six harnesses — the shared roots, duplicate handling, and invocation names KTD1 records.
 
 ---
@@ -183,7 +183,7 @@ flowchart TB
 The Codex template decides each existing `[plugins."<id>"]` entry on every apply:
 
 | Entry | Result |
-|---|---|
+| --- | --- |
 | `compound-engineering@compound-engineering-plugin` | `enabled = true` |
 | Local marketplace (configured under `[marketplaces]`, `openai-bundled`, `openai-primary-runtime`, or the personal marketplace manifest in the home directory) without an `enabled` key | `enabled = true`, other keys kept |
 | Local marketplace with an explicit `enabled` | kept as is |
@@ -200,7 +200,7 @@ The Codex template decides each existing `[plugins."<id>"]` entry on every apply
 ### Risks
 
 | Risk | Mitigation |
-|---|---|
+| --- | --- |
 | A later Codex release changes the `_default` policy or adds marketplaces | Unknown marketplaces fail closed under KTD7. A new bundled marketplace stays off until it is added to the local list. The Codex native smoke proves CE still loads under the allowlist, and a lock refresh reruns it |
 | The account-source settings silently stop working after a harness update | Unit tests pin the owned keys; the docs name each key so a changed default is easy to diagnose |
 | Upstream renames or removes a skill, or adds capability frontmatter | KTD3 keeps the reviewed skill pin, still refreshes the CE pin, and fails the refresh workflow |
@@ -355,7 +355,7 @@ The Codex template decides each existing `[plugins."<id>"]` entry on every apply
 ## Verification Contract
 
 | Check | Command or method | Proves |
-|---|---|---|
+| --- | --- | --- |
 | Area map | `mise exec -- python scripts/run-test-area.py --validate-only` | New test modules are registered |
 | Unit area | `mise exec -- python scripts/run-test-area.py --area applications` | U1-U5 behavior and existing harness tests |
 | Focused units | `mise exec -- python -m unittest tests.test_harness_plugin_lock tests.test_harness_skills tests.test_agent_instructions tests.test_claude tests.test_codex tests.test_t3_code_settings` | Fast loop while implementing |

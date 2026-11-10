@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Resolve the newest upstream release carrying a plugin's own tag prefix.
+
+Upstream repositories publish several interleaved tag trains, so a bare
+"latest release" query can name the wrong product. Candidates come from the
+releases feed only -- the tag list carries no draft or prerelease status, so
+admitting candidates from it would let an unreleased tag win.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+
+# The resolved value is interpolated by a workflow that can push branches, so
+# the printed tag is constrained to a shape that cannot carry shell syntax.
+VERSION = re.compile(r'^v?(\d+(?:\.\d+)*)$')
+
+SOURCE = re.compile(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def fetch(source, path):
+    """Query GitHub's REST API via `gh api` and return parsed JSON."""
+    proc = subprocess.run(
+        ['gh', 'api', 'repos/{}/{}'.format(source, path)],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        # Never echo the payload: it is untrusted upstream text.
+        raise Failure('fetching {} failed with status {}'.format(path, proc.returncode))
+    try:
+        return json.loads(proc.stdout)
+    except ValueError:
+        raise Failure('fetching {} did not return JSON'.format(path))
+
+
+def candidates(releases, prefix):
+    """Published, non-draft, non-prerelease tags carrying the prefix."""
+    found = []
+    if not isinstance(releases, list):
+        raise Failure('releases feed did not return a list')
+    for release in releases:
+        if not isinstance(release, dict):
+            continue
+        if release.get('draft') or release.get('prerelease'):
+            continue
+        tag = release.get('tag_name')
+        if not isinstance(tag, str) or not tag.startswith(prefix):
+            continue
+        remainder = tag[len(prefix):]
+        match = VERSION.match(remainder)
+        if not match:
+            raise Failure(
+                'release tag {!r} carries the prefix but is not a plain version; '
+                'refusing it rather than passing it on'.format(tag)
+            )
+        found.append((tuple(int(part) for part in match.group(1).split('.')), tag))
+    return found
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', required=True, help='upstream owner/repo')
+    parser.add_argument('--tag-prefix', required=True, help='tag train prefix, e.g. compound-engineering-')
+    args = parser.parse_args(argv)
+
+    if not SOURCE.match(args.source):
+        parser.error('refusing unsafe source: {!r}'.format(args.source))
+    if not args.tag_prefix:
+        parser.error('--tag-prefix must not be empty')
+
+    try:
+        found = candidates(fetch(args.source, 'releases?per_page=100'), args.tag_prefix)
+        if not found:
+            raise Failure(
+                'no published release carries the prefix {!r}'.format(args.tag_prefix)
+            )
+        found.sort()
+        print(found[-1][1])
+        return 0
+    except (Failure, OSError) as exc:
+        print('agent-plugin-release: {}'.format(exc), file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -168,8 +168,10 @@ flowchart TB
 **Approach:** Apply KTD1–KTD3 using direct template comments and existing shell bodies; do not introduce a shared dependency framework.
 **Patterns to follow:** `gpg-settings`, `gpg-home`, `gpg-agent-config`, and existing OS-conditional templates.
 **Test scenarios:**
+
 1. Covers AE1, AE2, AE4. Isolated chezmoi applies observe one initial reload, no unchanged reload, and renewed eligibility only for relevant file/data changes.
 2. Covers AE5. A changed host GPG-home result still rejects application after prior successful execution.
+
 **Verification:** Render Linux and macOS branches and exercise actual shell execution where a shell is available; disclose any native platform limits.
 
 ### U2. Native Windows PowerShell scripts and host application
@@ -179,15 +181,19 @@ flowchart TB
 **Dependencies:** None; follows the same KTD1–KTD3 conventions as U1.
 **Files:** Four existing cmd templates and their `.ps1.tmpl` replacements in `home/.chezmoiscripts/`, `home/.chezmoi.toml.tmpl`, `home/.chezmoidata/windows.yaml`, `tests/test_global_chezmoi.py`, and Windows scenarios in `tests/test_windows_apps.py` and `tests/test_git_gpg.py`.
 **Approach:**
+
 1. Apply KTD4–KTD5 while retaining the guard-before-install ordering.
 2. Add the requested host application under R12 without changing bootstrap entry points or development-tool declarations.
 3. Preserve the current Native CA shared body and WinGet failure handling.
+
 **Patterns to follow:** Existing registry-provider body, GPG-home checks, WinGet exit normalization, and configuration-preserving template transformation.
 **Test scenarios:**
+
 1. Covers AE8. Execute through Windows PowerShell with pwsh unavailable and through pwsh when available; neither path invokes cmd as a production wrapper.
 2. Preserve Unicode GPG home/tool handling under a non-UTF-8 console.
 3. Covers AE6, AE9. A failed package remains retryable, successful package versions survive, and native failures propagate.
 4. Configuration regeneration preserves unrelated settings and selects profile-free interpreter execution.
+
 **Verification:** Real isolated Windows chezmoi application observes install inventory and GPG invocation results without invoking host WinGet or changing the user environment.
 
 ### U3. Lifecycle regressions and contributor guidance
@@ -197,16 +203,20 @@ flowchart TB
 **Dependencies:** U1 and U2 for final verification; fixtures and documentation can be prepared concurrently against their named paths.
 **Files:** `tests/test_script_lifecycle.py`, `tests/test_windows_apps.py`, `tests/test_git_gpg.py`, affected isolated-source fixtures, `home/README.md`, and `README.md`.
 **Approach:**
+
 1. Apply KTD6 and replace the obsolete every-apply app-restoration expectation.
 2. Exercise consumed file changes, selected data changes, irrelevant data changes, failed execution, and repeated safety checks through actual chezmoi state.
 3. Document R16 with per-role examples, explicit file/data dependency comments, and the existing-installation interpreter migration.
+
 **Execution note:** Exercise actual rendered scripts before the final suite; keep permanent tests for observable state transitions rather than template-source assertions.
 **Patterns to follow:** `tests/test_windows_apps.py` inventory doubles and `tests/test_native_ca_windows.py` disposable registry-provider execution.
 **Test scenarios:**
+
 1. Covers AE1–AE4. Repeated applies and selective dependency changes produce exact action counts while unrelated data and formatting changes do not.
 2. Covers AE5–AE7. Host-state guard failures remain visible, while source-unchanged app/CA drift does not schedule reconciliation.
 3. Covers AE8, AE9. No-pwsh first application, platform filtering, dry-run isolation, and failure propagation remain effective.
 4. Covers AE10. Documentation examples match the final names and supported interpreter settings.
+
 **Verification:** Focused lifecycle suites and the existing full unittest suite pass; real smoke evidence records commands, observed state, and platform limitations.
 
 ---

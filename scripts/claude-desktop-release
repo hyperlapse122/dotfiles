@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""Resolve the newest upstream release of Claude Desktop from Anthropic's APT repo.
+
+Fetches and parses the Debian Packages index, identifies the newest version of
+claude-desktop for amd64, computes the SRI hash, and writes or checks the
+version metadata file.
+"""
+
+import argparse
+import base64
+import json
+import os
+import re
+import subprocess
+import sys
+
+DEFAULT_SOURCE_URL = "https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/main/binary-amd64/Packages"
+
+VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
+SHA256_HEX_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def fetch(source_url):
+    """Fetch one URL with curl and return text."""
+    proc = subprocess.run(
+        ["curl", "-sfL", "--max-time", "60", source_url],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {source_url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def hex_to_sri(sha256_hex):
+    """Convert a 64-character hex sha256 string to Nix SRI format."""
+    sha256_hex = sha256_hex.strip()
+    if not SHA256_HEX_PATTERN.match(sha256_hex):
+        raise Failure(f"invalid sha256 hex string: {sha256_hex!r}")
+    digest_bytes = bytes.fromhex(sha256_hex)
+    b64 = base64.b64encode(digest_bytes).decode("ascii")
+    return f"sha256-{b64}"
+
+
+def parse_packages(content):
+    """Parse Debian Packages index text into a list of candidate dicts."""
+    candidates = []
+    # Stanzas are separated by one or more blank lines
+    stanzas = re.split(r"\n\s*\n", content.strip())
+    for stanza in stanzas:
+        if not stanza.strip():
+            continue
+        fields = {}
+        for line in stanza.splitlines():
+            if line.startswith(" ") or line.startswith("\t"):
+                # Continuation line
+                continue
+            if ":" in line:
+                key, val = line.split(":", 1)
+                fields[key.strip()] = val.strip()
+
+        if fields.get("Package") != "claude-desktop":
+            continue
+
+        arch = fields.get("Architecture")
+        if arch and arch != "amd64":
+            continue
+
+        version = fields.get("Version")
+        sha256_hex = fields.get("SHA256")
+        filename = fields.get("Filename")
+
+        if not version or not sha256_hex:
+            continue
+
+        if not VERSION_PATTERN.match(version):
+            continue
+
+        try:
+            version_tuple = tuple(int(x) for x in version.split("."))
+            sri_hash = hex_to_sri(sha256_hex)
+        except (ValueError, Failure):
+            continue
+
+        candidates.append(
+            {
+                "version_tuple": version_tuple,
+                "version": version,
+                "sha256": sha256_hex.lower(),
+                "hash": sri_hash,
+                "filename": filename,
+            }
+        )
+
+    return candidates
+
+
+def resolve_latest(candidates):
+    """Sort candidates by numeric version tuple and return the highest."""
+    if not candidates:
+        raise Failure("no valid claude-desktop packages found in index")
+    candidates.sort(key=lambda x: x["version_tuple"])
+    latest = candidates[-1]
+    return {
+        "version": latest["version"],
+        "sha256": latest["sha256"],
+        "hash": latest["hash"],
+    }
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_SOURCE_URL,
+        help="Debian Packages index URL",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to claude-desktop-version.json to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print resolved JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        content = fetch(args.source_url)
+        candidates = parse_packages(content)
+        resolved = resolve_latest(candidates)
+
+        out_json = json.dumps(resolved, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        # Check existing content
+        current_data = None
+        if os.path.exists(args.output):
+            try:
+                with open(args.output, "r", encoding="utf-8") as f:
+                    current_data = json.load(f)
+            except Exception:
+                current_data = None
+
+        changed = current_data != resolved
+
+        if changed:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(out_json)
+            print(f"updated {args.output} to version {resolved['version']}")
+        else:
+            print(f"{args.output} is already up to date at version {resolved['version']}")
+
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"claude-desktop-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

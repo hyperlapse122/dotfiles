@@ -1,5 +1,0 @@
-{{ if and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") -}}
-#!/bin/sh
-set -eu
-exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "macos-dock.py" | replace "'" "'\"'\"'" }}' --destination '{{ .chezmoi.destDir | replace "'" "'\"'\"'" }}' --settings '{{ .macosDock | toJson | replace "'" "'\"'\"'" }}'
-{{ end -}}

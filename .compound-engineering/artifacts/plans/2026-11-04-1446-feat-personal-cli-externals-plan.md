@@ -261,7 +261,7 @@ sequenceDiagram
 ## Verification Contract
 
 | Surface | Method | Evidence required |
-|---|---|---|
+| --- | --- | --- |
 | Lock refresh | `mise exec -- python -m unittest discover -s tests -p test_personal_app_lock.py` | Complete records, no-change behavior, same-tag changes, and failed refresh preservation |
 | External installation | `mise exec -- python -m unittest discover -s tests -p test_personal_apps.py` | Real chezmoi apply, update, checksum failure, target selection, and bootstrap no-download behavior |
 | Existing contracts | `mise exec -- python -m unittest discover -s tests` | Existing preparation, Windows bootstrap, and global-source tests remain isolated |

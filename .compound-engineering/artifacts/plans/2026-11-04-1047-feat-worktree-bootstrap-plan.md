@@ -158,6 +158,7 @@ flowchart TB
 **Files:** Modify `mise.toml` and `mise.lock`; create `.chezmoiroot`, `home/.chezmoiignore`, and `home/README.md`.
 
 **Approach:**
+
 1. Extend the existing tool declaration and generate the chezmoi lock entries without refreshing unrelated tools.
 2. Add the source metadata and implement the two tasks using KTD1–KTD3.
 3. Keep hook execution independent of shell activation and working-directory depth.
@@ -169,6 +170,7 @@ flowchart TB
 **Test expectation:** No permanent test file for config wiring; execute temporary integration fixtures outside the repository.
 
 **Test scenarios:**
+
 - Covers AE1 / AE2. Run actual initialization twice and observe the postinstall preparation on both runs.
 - Covers AE3. In a temporary checkout with spaces in its path, add a sentinel source file and apply through the task to an isolated destination; only the expected target appears and source documentation remains excluded.
 - Covers AE1 / AE2. Add a script to the temporary source and verify initialization neither writes the sentinel destination file nor runs the script.

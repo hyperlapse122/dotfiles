@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Refresh Bun or overlay font GitHub release assets, writing only complete pins."""
+import argparse
+import copy
+import hashlib
+import json
+from pathlib import Path
+import re
+import urllib.request
+
+
+def fetch(url):
+    with urllib.request.urlopen(url, timeout=120) as response:
+        return response.read()
+
+
+def version(tag):
+    match = re.fullmatch(r"(?:bun-)?v(\d+(?:\.\d+)*)", tag)
+    if not match:
+        raise ValueError("unsupported release tag")
+    return tuple(map(int, match[1].split(".")))
+
+
+def asset_digest(url, download):
+    if download is not fetch:
+        return hashlib.sha256(download(url)).hexdigest()
+    with urllib.request.urlopen(url, timeout=120) as response:
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: response.read(1024 * 1024), b""):
+            digest.update(chunk)
+        return digest.hexdigest()
+
+
+def refresh(pin, download=fetch):
+    result = copy.deepcopy(pin)
+    entries = [result] if "targets" in result else result.values()
+    releases = {}
+    for entry in entries:
+        targets = entry.get("targets", {"asset": entry})
+        first = next(iter(targets.values()))
+        match = re.fullmatch(r"https://github.com/([^/]+/[^/]+)/releases/download/([^/]+)/([^/]+)", first["url"])
+        if not match:
+            raise ValueError("unsupported release URL")
+        repo = match[1]
+        if repo not in releases:
+            releases[repo] = json.loads(download(f"https://api.github.com/repos/{repo}/releases/latest"))
+        release = releases[repo]
+        tag = release["tag_name"]
+        if release.get("draft") or release.get("prerelease"):
+            raise ValueError("release is not stable")
+        if version(tag) <= version(entry["tag"]):
+            continue
+        assets = release["assets"]
+        for target in targets.values():
+            old_name = target["url"].rsplit("/", 1)[1]
+            name = old_name.replace(entry["tag"].removeprefix("v"), tag.removeprefix("v"))
+            matches = [a for a in assets if a["name"] == name]
+            expected = f"https://github.com/{repo}/releases/download/{tag}/{name}"
+            if len(matches) != 1 or matches[0]["browser_download_url"] != expected:
+                raise ValueError("missing or unexpected release asset")
+            digest = asset_digest(expected, download)
+            published = matches[0].get("digest")
+            if published and published != "sha256:" + digest:
+                raise ValueError("release asset digest mismatch")
+            target.update(url=expected, sha256=digest)
+        entry["tag"] = tag
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
+    path = Path(args.output)
+    pin = json.loads(path.read_text())
+    updated = refresh(pin)
+    if updated != pin:
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(updated, indent=2) + "\n")
+        temporary.replace(path)
+
+
+if __name__ == "__main__":
+    main()

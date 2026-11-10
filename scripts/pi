@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs the pinned Pi with the switches that keep it from asking pi.dev for a
+# newer version or sending telemetry. The Nix package replaces the @...@
+# constant. Builtins only, so the wrapper needs nothing on PATH.
+set -euo pipefail
+
+PI='@PI@'
+
+export PI_SKIP_VERSION_CHECK=1
+export PI_TELEMETRY=0
+
+case "$*" in --version|--help) exec "$PI" "$@" ;; esac
+agent="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+'@STATE@' --agent "$agent" --key '@KEY@' --auth-only
+exec "$PI" --extension "$agent/dotfiles-policy.ts" "$@"
