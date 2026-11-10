@@ -1,41 +1,115 @@
-name: Update dependencies
-
-on:
+name: Update dependencies and model catalogs
+"on":
   schedule:
-    - cron: '7,37 * * * *' # Every 30 minutes, off the hour
+    - cron: 7,37 * * * *
   workflow_dispatch:
-
+    inputs:
+      part:
+        description: Maintenance part to run
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - dependencies
+          - catalogs
+          - drift
 concurrency:
   group: update-dependencies
   cancel-in-progress: false
-
 permissions:
-  contents: write
-  pull-requests: write
-
+  contents: read
 jobs:
   update-dependencies:
+    if: "!cancelled() && (github.event_name == 'schedule' || inputs.part != 'drift')"
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_UPDATES || secrets.GITHUB_TOKEN }}
+    timeout-minutes: 240
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
+          ref: main
           fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN_FOR_UPDATES || secrets.GITHUB_TOKEN }}
-
+          persist-credentials: false
       - name: Make room for NixOS closures
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
-
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
       - name: Enable KVM for the Nix builder
-        run: sudo chmod 666 /dev/kvm || true
-
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo chmod 666 /dev/kvm || true
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
         with:
           extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm
-
+      - name: Initialize maintenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/updates"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        id: initialize
+      - name: Prepare catalogs candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c core.hooksPath=/dev/null fetch -q origin +refs/heads/main:refs/remotes/origin/main
+          git worktree add --detach "$RUNNER_TEMP/updates/catalogs" origin/main
+        id: prepare_catalogs
+        if: "!cancelled() && (github.event_name == 'schedule' || inputs.part == 'all' || inputs.part == '' || inputs.part == 'catalogs') && steps.initialize.outcome == 'success'"
+        continue-on-error: true
+      - name: Refresh the Synthetic catalog snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot=home/h82/agents/synthetic-catalog.json
+          if [ -z "${SYNTHETIC_API_KEY:-}" ]; then
+            echo '::warning::SYNTHETIC_API_KEY is not set; keeping the current catalog snapshot.'
+            exit 1
+          fi
+          if ! nix run .#synthetic-models-watch -- --snapshot "$snapshot"; then
+            git restore -- "$snapshot"
+            echo '::warning::Catalog refresh failed; keeping the committed snapshot.'
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
+            git add -- "$snapshot"
+            git commit -m 'chore(agents): refresh the synthetic catalog snapshot' -- "$snapshot"
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+        id: catalog
+        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/catalogs
+        timeout-minutes: 20
+        env:
+          SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
+      - name: Publish verified catalogs
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$RUNNER_TEMP/updates/catalogs-logs"
+        id: publish_catalogs
+        if: "!cancelled() && steps.catalog.outcome == 'success' && steps.catalog.outputs.changed == 'true'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/catalogs
+        timeout-minutes: 40
+        env:
+          GH_TOKEN_FOR_UPDATES: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+      - name: Prepare dependencies candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c core.hooksPath=/dev/null fetch -q origin +refs/heads/main:refs/remotes/origin/main
+          git worktree add --detach "$RUNNER_TEMP/updates/dependencies" origin/main
+        id: prepare_dependencies
+        if: "!cancelled() && (github.event_name == 'schedule' || inputs.part == 'all' || inputs.part == '' || inputs.part == 'dependencies') && steps.initialize.outcome == 'success'"
+        continue-on-error: true
       - name: Update flake inputs, agent plugins, and packages
         id: update
         run: |
@@ -171,6 +245,9 @@ jobs:
             git checkout -- packages/antigravity-acp-release.json
           fi
 
+          # 16. Refresh Prezto and every recursively pinned submodule.
+          nix run .#prezto-release -- --output packages/prezto-pin.json
+
           if [ -z "$(git status --porcelain)" ]; then
             echo "No updates detected across all targets."
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -178,49 +255,15 @@ jobs:
             echo "Updates detected."
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Verify updates
-        if: steps.update.outputs.changed == 'true'
-        id: verify
-        run: |
-          set +e
-          # The step runs without pipefail, so $? after a pipe is tee's
-          # status; PIPESTATUS[0] is the command's own.
-          nix fmt -- --ci 2>&1 | tee fmt.log
-          FMT_EXIT=${PIPESTATUS[0]}
-          nix flake check --print-build-logs 2>&1 | tee check.log
-          CHECK_EXIT=${PIPESTATUS[0]}
-          # The VM tests live outside `nix flake check`. Their own log keeps a
-          # flake check failure from being pushed out of the tail below.
-          nix build --no-link --print-build-logs .#vmChecks.all 2>&1 | tee vm-check.log
-          VM_EXIT=${PIPESTATUS[0]}
-          set -e
-
-          if [ "$FMT_EXIT" -eq 0 ] && [ "$CHECK_EXIT" -eq 0 ] && [ "$VM_EXIT" -eq 0 ]; then
-            echo "status=success" >> "$GITHUB_OUTPUT"
-            echo "All verification checks passed."
-          else
-            echo "status=failure" >> "$GITHUB_OUTPUT"
-            echo "Verification failed (fmt: $FMT_EXIT, check: $CHECK_EXIT, vm checks: $VM_EXIT)."
-            {
-              echo "### Verification Failure Details"
-              if [ "$CHECK_EXIT" -ne 0 ]; then
-                echo "#### nix flake check"
-                echo '```text'
-                tail -n 50 check.log
-                echo '```'
-              fi
-              if [ "$VM_EXIT" -ne 0 ]; then
-                echo "#### NixOS VM tests"
-                echo '```text'
-                tail -n 50 vm-check.log
-                echo '```'
-              fi
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Push verified updates directly to main
-        if: steps.update.outputs.changed == 'true' && steps.verify.outputs.status == 'success'
+        shell: bash
+        if: "!cancelled() && steps.prepare_dependencies.outcome == 'success'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/dependencies
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Commit dependency candidates
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -299,6 +342,12 @@ jobs:
             git commit -m "chore(packages): bump mise to $NEW_VER"
           fi
 
+          if [ -n "$(git status --porcelain packages/prezto-pin.json)" ]; then
+            NEW_REV=$(jq -r '.zshLock.archives[0].commit' packages/prezto-pin.json)
+            git add packages/prezto-pin.json
+            git commit -m "chore(packages): refresh prezto to ${NEW_REV:0:12}"
+          fi
+
           if [ -n "$(git status --porcelain packages/android-sdk-repo.json)" ]; then
             PINNED=$(jq -r '.latest | to_entries | map("\(.key) \(.value)") | join(", ")' packages/android-sdk-repo.json)
             git add packages/android-sdk-repo.json
@@ -327,62 +376,219 @@ jobs:
             git add -A
             git commit -m "chore(deps): update dependencies"
           fi
-
-          # Rebase only after every change is committed: `git rebase` requires
-          # a clean working tree even when origin/main has not moved at all,
-          # so rebasing before committing fails unconditionally whenever this
-          # step has anything to push.
-          git fetch origin main
-          if ! git merge-base --is-ancestor origin/main HEAD; then
-            git rebase origin/main
-            nix fmt -- --ci
-            nix flake check --print-build-logs
-            nix build --no-link --print-build-logs .#vmChecks.all
-          fi
-
-          git push origin main
-          echo "Successfully pushed verified updates directly to main."
-
-      - name: Open reconciliation PR on failure
-        if: steps.update.outputs.changed == 'true' && steps.verify.outputs.status == 'failure'
-        env:
-          BRANCH: update-dependencies-fix
+        id: commit
+        if: "!cancelled() && steps.update.outcome == 'success' && steps.update.outputs.changed == 'true'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/dependencies
+      - name: Publish verified dependencies
+        shell: bash
         run: |
           set -euo pipefail
-          # An open PR's branch may carry fix commits from a person.
-          # Resetting it to this run's update would discard them, so an open
-          # PR only gets this run's logs. A failed query fails the step rather
-          # than reading as "no open PR".
-          open_prs=$(gh pr list --head "$BRANCH" --state open --json number --jq length)
-
-          {
-            echo "## Automated Dependency Update (Reconciliation Required)"
-            echo ""
-            echo "The dependency update job, which runs every 30 minutes, detected changes to flake inputs or packages, but pre-push verification failed."
-            echo ""
-            echo "### Failure Logs"
-            echo "#### nix flake check"
-            echo '```text'
-            tail -n 80 check.log
-            echo '```'
-            echo "#### NixOS VM tests"
-            echo '```text'
-            tail -n 80 vm-check.log
-            echo '```'
-            echo ""
-            if [ "$open_prs" -gt 0 ]; then
-              echo "These logs are from the latest failing run, which left this branch as it was."
-            fi
-            echo "Push a fix to this branch; CI runs on each push. This PR waits for you to review and merge it."
-          } > pr-body.md
-
-          if [ "$open_prs" -gt 0 ]; then
-            gh pr edit "$BRANCH" --body-file pr-body.md
-          else
-            TITLE="chore(deps): automated dependency update (reconciliation required)"
-            git checkout -B "$BRANCH"
-            git add -A
-            git commit -m "$TITLE"
-            git push --force-with-lease origin "$BRANCH"
-            gh pr create --head "$BRANCH" --title "$TITLE" --body-file pr-body.md
+          bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" dependencies "$RUNNER_TEMP/updates/dependencies-logs"
+        id: publish_dependencies
+        if: "!cancelled() && steps.commit.outcome == 'success'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/dependencies
+        timeout-minutes: 120
+        env:
+          GH_TOKEN_FOR_UPDATES: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+      - name: Open reconciliation PR on failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          FAILURE_STAGE=${FAILURE_STAGE:-interrupted}
+          LOG_DIR=${LOG_DIR:-$RUNNER_TEMP/updates/dependencies-logs}
+          if [ -d "$(git rev-parse --git-path rebase-merge)" ] || [ -d "$(git rev-parse --git-path rebase-apply)" ]; then
+            git rebase --abort
           fi
+          open_pr=$(gh pr list --state open --limit 1000 --json number,headRefName \
+            --jq 'map(select(.headRefName == "update-dependencies-fix" or (.headRefName | startswith("update-dependencies-fix-")))) | sort_by(.number) | .[0].number // empty')
+          body="$RUNNER_TEMP/updates/reconciliation.md"
+          {
+            echo '## Automated Dependency Update (Reconciliation Required)'
+            echo
+            echo 'The dependency update runs every 30 minutes. Its publication failed; no failing dependency candidate was pushed to main.'
+            echo
+            printf 'Failure stage: %s\n\n' "$FAILURE_STAGE"
+            for log in "$LOG_DIR"/*.log; do
+              [ -f "$log" ] || continue
+              printf '### %s\n\n```text\n' "${log##*/}"
+              tail -n 80 "$log"
+              printf '```\n'
+            done
+            echo 'Push a fix to this branch; CI runs on each push. This PR waits for you to review and merge it.'
+            if [ -n "$open_pr" ]; then
+              echo 'These logs are from the latest failing run, which left this branch as it was.'
+            fi
+          } > "$body"
+          if [ -n "$open_pr" ]; then
+            gh pr edit "$open_pr" --body-file "$body"
+          else
+            BRANCH="update-dependencies-fix-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            git -c core.hooksPath=/dev/null checkout -b "$BRANCH"
+            authorization=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+            GIT_CONFIG_COUNT=2 \
+              GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $authorization" \
+              GIT_CONFIG_KEY_1=core.hooksPath GIT_CONFIG_VALUE_1=/dev/null \
+              git push origin "HEAD:refs/heads/$BRANCH"
+            gh pr create --head "$BRANCH" --title 'chore(deps): automated dependency update (reconciliation required)' --body-file "$body"
+          fi
+        id: reconcile
+        if: "!cancelled() && steps.publish_dependencies.outcome == 'failure'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/dependencies
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+          FAILURE_STAGE: ${{ steps.publish_dependencies.outputs.failure_stage }}
+          LOG_DIR: ${{ steps.publish_dependencies.outputs.log_dir }}
+      - name: Remove candidate worktrees
+        shell: bash
+        run: |
+          set -euo pipefail
+          for part in catalogs dependencies; do
+            if [ -d "$RUNNER_TEMP/updates/$part" ]; then
+              git worktree remove --force "$RUNNER_TEMP/updates/$part"
+            fi
+          done
+        id: cleanup
+        if: always()
+      - name: Report maintenance outcomes
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Maintenance results'
+            printf 'Catalog refresh: %s; changed: %s; publication: %s\n' "$CATALOG" "$CATALOG_CHANGED" "$CATALOG_PUSH"
+            printf 'Dependencies: %s; changed: %s; publication: %s; reconciliation: %s\n' "$DEPENDENCIES" "$DEPENDENCIES_CHANGED" "$DEPENDENCIES_PUSH" "$RECONCILE"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
+            if [ "$outcome" = failure ] || [ "$outcome" = cancelled ]; then
+              exit 1
+            fi
+          done
+        if: always()
+        env:
+          PREPARE_CATALOGS: ${{ steps.prepare_catalogs.outcome }}
+          PREPARE_DEPENDENCIES: ${{ steps.prepare_dependencies.outcome }}
+          CATALOG: ${{ steps.catalog.outcome }}
+          CATALOG_CHANGED: ${{ steps.catalog.outputs.changed }}
+          CATALOG_PUSH: ${{ steps.publish_catalogs.outcome }}
+          DEPENDENCIES: ${{ steps.update.outcome }}
+          DEPENDENCIES_CHANGED: ${{ steps.update.outputs.changed }}
+          COMMIT: ${{ steps.commit.outcome }}
+          DEPENDENCIES_PUSH: ${{ steps.publish_dependencies.outcome }}
+          RECONCILE: ${{ steps.reconcile.outcome }}
+          CLEANUP: ${{ steps.cleanup.outcome }}
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          ref: main
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Compare with Synthetic's catalog
+        id: compare
+        env:
+          SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          nix run .#synthetic-models-watch -- \
+            --result "$RUNNER_TEMP/watch.json" \
+            --issue-body "$RUNNER_TEMP/issue.md"
+        shell: bash
+      - name: Open, update, or close the reconcile issue
+        if: ${{ !cancelled() && (steps.compare.outcome == 'success' || steps.compare.outcome == 'failure') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: model-reconcile
+          COMPARE_OUTCOME: ${{ steps.compare.outcome }}
+        run: |
+          set -euo pipefail
+          watch() { nix run .#synthetic-models-watch -- "$@"; }
+          result="$RUNNER_TEMP/watch.json"
+          body="$RUNNER_TEMP/issue.md"
+
+          # The oldest open issue is the reconcile issue; any other is closed.
+          gh issue list --repo "$GITHUB_REPOSITORY" --label "$LABEL" --state open \
+            --json number --limit 100 > "$RUNNER_TEMP/open.json"
+          number=$(jq -r 'map(.number) | sort | .[0] // ""' "$RUNNER_TEMP/open.json")
+          duplicates=$(jq -r 'map(.number) | sort | .[1:] | .[]' "$RUNNER_TEMP/open.json")
+          for duplicate in $duplicates; do
+            printf 'Closing as a duplicate of #%s, the reconcile issue this workflow keeps.\n' "$number" \
+              > "$RUNNER_TEMP/duplicate.md"
+            gh issue comment "$duplicate" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/duplicate.md"
+            gh issue close "$duplicate" --repo "$GITHUB_REPOSITORY"
+          done
+
+          if [ -n "$number" ]; then
+            gh issue view "$number" --repo "$GITHUB_REPOSITORY" --json body,comments > "$RUNNER_TEMP/open-issue.json"
+            watch --issue-state "$RUNNER_TEMP/open-issue.json" > "$RUNNER_TEMP/state.json"
+          else
+            printf '{}\n' > "$RUNNER_TEMP/state.json"
+          fi
+          previous=$(jq -r '.fingerprint // ""' "$RUNNER_TEMP/state.json")
+          previous_digest=$(jq -r '.bodyDigest // ""' "$RUNNER_TEMP/state.json")
+          notice=$(jq -r '.notice // ""' "$RUNNER_TEMP/state.json")
+
+          if [ "$COMPARE_OUTCOME" != success ]; then
+            # One comment per failure streak; with no open issue, the failed
+            # run is the signal.
+            if [ -n "$number" ] && [ "$notice" != unreachable ]; then
+              watch --notice unreachable > "$RUNNER_TEMP/notice.md"
+              gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/notice.md"
+            fi
+            echo "the comparison with Synthetic's catalog failed" >&2
+            exit 1
+          fi
+
+          status=$(jq -r '.status' "$result")
+          fingerprint=$(jq -r '.fingerprint // ""' "$result")
+          digest=$(jq -r '.bodyDigest // ""' "$result")
+
+          case "$status" in
+            drift)
+              title=$(jq -r '.title' "$result")
+              if [ -z "$number" ]; then
+                gh label create "$LABEL" --repo "$GITHUB_REPOSITORY" --force \
+                  --color B60205 --description 'Synthetic model drift for home/h82/agents/synthetic-models.nix'
+                gh issue create --repo "$GITHUB_REPOSITORY" --label "$LABEL" \
+                  --title "$title" --body-file "$body"
+              else
+                if [ "$previous" != "$fingerprint" ]; then
+                  gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
+                  {
+                    printf 'The drift changed; the issue body now reads:\n\n'
+                    head -n 1 "$body"
+                  } > "$RUNNER_TEMP/changed.md"
+                  gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/changed.md"
+                elif [ "$previous_digest" != "$digest" ]; then
+                  # Same drift, new details: refresh the body without a comment.
+                  gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
+                else
+                  echo "Issue #$number already reports this drift."
+                fi
+                if [ "$notice" = unreachable ]; then
+                  watch --notice reachable > "$RUNNER_TEMP/notice.md"
+                  gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/notice.md"
+                fi
+              fi
+              ;;
+            clean)
+              if [ -n "$number" ]; then
+                printf 'No Synthetic model drift remains as of commit %s.\n' "$(git rev-parse HEAD)" > "$RUNNER_TEMP/resolved.md"
+                gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/resolved.md"
+                gh issue close "$number" --repo "$GITHUB_REPOSITORY"
+              fi
+              ;;
+            *)
+              echo "unexpected watch status: $status" >&2
+              exit 1
+              ;;
+          esac
+        shell: bash
+    permissions:
+      contents: read
+      issues: write
+    if: "!cancelled() && (github.event_name == 'schedule' || inputs.part == 'all' || inputs.part == '' || inputs.part == 'drift')"

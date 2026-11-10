@@ -6,21 +6,7 @@ import sys
 
 
 def check(mode, root):
-    if mode == 'shell':
-        assert 'bash-completion' in (root / '.bashrc').read_text()
-        rc = (root / '.config/zsh/.zshrc').read_text()
-        assert len(re.findall(r'^source .*zsh-prezto/runcoms/zshrc$', rc, re.M)) == 1
-        assert 'zsh-autosuggestions.zsh' not in rc
-        assert 'zsh-syntax-highlighting.zsh' not in rc
-        assert 'compinit' not in rc
-        assert (root / '.zshenv').read_text().count('.config/zsh/.zshenv') == 1
-        for name in ['.zprofile', '.zshenv', '.zlogin', '.zlogout', '.zpreztorc']:
-            assert (root / '.config/zsh' / name).is_file(), name
-        match = re.search(r'(/nix/store/[^\s]+/share/zsh/site-functions)', rc)
-        assert match, 'missing completion directory on fpath'
-        for command in ['codex', 'gh', 'glab', 'ghq', 'mise', 'usage']:
-            assert (pathlib.Path(sys.argv[3] if len(sys.argv) > 3 else match[1]) / ('_' + command)).stat().st_size > 0, command
-    elif mode == 'git':
+    if mode == 'git':
         git = configparser.ConfigParser(strict=False)
         git.read(root / '.config/git/config')
         assert git['user']['signingkey'] == '"621512777E6933FEB4458FDC4945855D4F283F05"'

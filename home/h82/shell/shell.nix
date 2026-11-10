@@ -14,6 +14,7 @@ let
 in
 {
   home.sessionVariables.NODE_USE_SYSTEM_CA = "1";
+  home.sessionPath = lib.mkBefore [ "${config.home.homeDirectory}/.local/bin" ];
   programs.bash = {
     enable = true;
     enableCompletion = true;
@@ -29,13 +30,17 @@ in
       editor.keymap = "emacs";
       prompt.theme = "sorin";
       extraConfig = ''
-        if ! grep -Eq '^[[:space:]]*enable-ssh-support([[:space:]]|$)' "${config.programs.gpg.homedir}/gpg-agent.conf" 2>/dev/null \
-            && ! grep -Eq 'SSH_AUTH_SOCK|SSH_AGENT_PID' "${config.xdg.cacheHome}/prezto/gpg-agent.env" 2>/dev/null; then
-          zstyle -a ':prezto:load' pmodule modules
-          modules=($modules[1,-6] gpg $modules[-5,-1])
-          zstyle ':prezto:load' pmodule $modules
-          unset modules
+        typeset -a _dotfiles_modules
+        zstyle -a ':prezto:load' pmodule _dotfiles_modules
+        (( $+commands[git] )) || _dotfiles_modules=(''${_dotfiles_modules:#git})
+        (( $+commands[brew] )) || _dotfiles_modules=(''${_dotfiles_modules:#homebrew})
+        if (( $+commands[gpg-agent] )) \
+            && ! grep -Eq '^[[:space:]]*enable-ssh-support([[:space:]]|$)' "''${GNUPGHOME:-$HOME/.gnupg}/gpg-agent.conf" 2>/dev/null \
+            && ! grep -Eq 'SSH_AUTH_SOCK|SSH_AGENT_PID' "''${XDG_CACHE_HOME:-$HOME/.cache}/prezto/gpg-agent.env" 2>/dev/null; then
+          _dotfiles_modules=($_dotfiles_modules[1,-6] gpg $_dotfiles_modules[-5,-1])
         fi
+        zstyle ':prezto:load' pmodule $_dotfiles_modules
+        unset _dotfiles_modules
       '';
       pmodules = [
         "environment"
@@ -44,8 +49,8 @@ in
         "history"
         "directory"
         "spectrum"
-        "git"
         "utility"
+        "git"
       ]
       ++ lib.optional (config.my.kind == "darwin") "homebrew"
       ++ [
@@ -74,10 +79,17 @@ in
       path = "$HOME/.local/state/zsh/history";
       extended = true;
       ignoreDups = true;
+      ignoreAllDups = true;
+      saveNoDups = true;
+      findNoDups = true;
+      expireDuplicatesFirst = true;
       share = true;
     };
 
     initContent = lib.mkBefore ''
+      typeset -U path
+      path=("$HOME/.local/bin" $path)
+      export PATH
       # Keep the user's local completion functions ahead of system functions.
       typeset -U fpath
       fpath=(${completions}/share/zsh/site-functions $HOME/.local/share/zsh/site-functions(N) $fpath)

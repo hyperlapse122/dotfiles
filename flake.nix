@@ -184,6 +184,15 @@
           user = host.config.home-manager.users.${host.config.my.user.name};
         }) self.darwinConfigurations;
       };
+      checks.aarch64-darwin.zsh-prezto = import ./tests/zsh-prezto.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        entries = lib.mapAttrsToList (name: host: {
+          inherit name;
+          bootstrap = host.config.my.bootstrap;
+          kind = "darwin";
+          user = host.config.home-manager.users.${host.config.my.user.name};
+        }) darwinHosts;
+      };
       checks.aarch64-darwin.darwin-outputs = import ./tests/darwin-outputs.nix {
         inherit self;
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
@@ -215,6 +224,7 @@
         claude-code-release = agentTools.claudeCodeRelease;
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
+        prezto-release = agentTools.preztoRelease;
         mise = import ./packages/mise.nix { inherit pkgs; };
         overlay-release = pkgs.writeScriptBin "overlay-release" (
           "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ./scripts/overlay-release
@@ -551,6 +561,9 @@
             pythonScriptCheck "claude-code-release" ./scripts/claude-code-release
               ./tests/test_claude_code_release.py;
           mise-release = pythonScriptCheck "mise-release" ./scripts/mise-release ./tests/test_mise_release.py;
+          prezto-release =
+            pythonScriptCheck "prezto-release" ./scripts/prezto-release
+              ./tests/test_prezto_release.py;
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
@@ -596,26 +609,6 @@
                 export SYNTHETIC_MODELS_SOURCE_JSON=${realSource}
               '';
             } "synthetic-models-watch" ./scripts/synthetic-models-watch ./tests/test_synthetic_models_watch.py;
-          synthetic-models-reconcile =
-            pkgs.runCommand "synthetic-models-reconcile-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.jq
-                  pkgs.gawk
-                ];
-              }
-              ''
-                export PYTHONDONTWRITEBYTECODE=1
-                bash ${./tests/synthetic-models-reconcile.sh} \
-                  ${./.github/workflows/synthetic-models.yml} \
-                  ${agentTools.syntheticModelsWatch}/libexec/synthetic-models-watch/synthetic-models-watch \
-                  ${./tests/fixtures/synthetic-models/catalog-2026-10-21.json} \
-                  ${pkgs.writeText "synthetic-models.json" (
-                    builtins.toJSON (import ./home/h82/agents/synthetic-models.nix)
-                  )}
-                touch $out
-              '';
           # Drives the packaged helper, so a package that lost nokogiri from its
           # interpreter fails here rather than in the update workflow.
           android-sdk-release =
@@ -690,48 +683,10 @@
             inherit pkgs self;
             fixtures = [ ];
           };
-          zsh-prezto =
-            let
-              assertConfiguration =
-                entry:
-                let
-                  homeFiles = entry.user.home-files or null;
-                  # A missing file fails inside the builder with its name, rather
-                  # than aborting evaluation on a null coercion.
-                  assertSource =
-                    file: pattern:
-                    let
-                      source = if homeFiles == null then null else "${homeFiles}/${file}";
-                    in
-                    if source == null then
-                      ''
-                        echo 'missing home.file ${file} on ${entry.name}' >&2
-                        fail=1
-                      ''
-                    else
-                      ''
-                        if [ ! -f ${pkgs.lib.escapeShellArg source} ] || ! grep -q ${pkgs.lib.escapeShellArg pattern} ${pkgs.lib.escapeShellArg source}; then
-                          echo ${pkgs.lib.escapeShellArg "${file} does not contain ${pattern} on ${entry.name}"} >&2
-                          fail=1
-                        fi
-                      '';
-                  dotzshenv = if homeFiles == null then "/nonexistent/.zshenv" else "${homeFiles}/.zshenv";
-                  zshenv = "${entry.user.home.homeDirectory or "/nonexistent"}/.config/zsh/.zshenv";
-                in
-                ''
-                  ${assertSource ".config/zsh/.zpreztorc" "zstyle ':prezto:load' pmodule"}
-                  ${assertSource ".config/zsh/.zshenv" "runcoms/zshenv"}
-                  ${assertSource ".config/zsh/.zshrc" "runcoms/zshrc"}
-                  if [ ! -f ${pkgs.lib.escapeShellArg dotzshenv} ] || ! grep -qF ${pkgs.lib.escapeShellArg "source ${zshenv}"} ${pkgs.lib.escapeShellArg dotzshenv}; then
-                    echo ${pkgs.lib.escapeShellArg ".zshenv does not source ${zshenv} on ${entry.name}"} >&2
-                    fail=1
-                  fi
-                '';
-            in
-            pkgs.runCommand "zsh-prezto-tests" { nativeBuildInputs = [ pkgs.gnugrep ]; } ''
-              ${forEveryUser assertConfiguration}
-              touch $out
-            '';
+          zsh-prezto = import ./tests/zsh-prezto.nix {
+            inherit pkgs;
+            entries = configurations.userEntries;
+          };
           ghostty-font =
             let
               assertConfiguration =
@@ -1308,33 +1263,32 @@
             pkgs.runCommand "update-dependencies-reconcile-tests"
               {
                 nativeBuildInputs = [
+                  pkgs.actionlint
                   pkgs.git
                   pkgs.jq
                   pkgs.yq-go
                   pkgs.gawk
+                  pkgs.python3
                 ];
               }
               ''
                 export HOME=$TMPDIR
+                export PYTHONDONTWRITEBYTECODE=1
+                export UPDATE_CHECK_NAMES='${builtins.toJSON (builtins.attrNames self.checks.x86_64-linux)}'
+                actionlint -shellcheck= -pyflakes= ${./.github/workflows/update-dependencies.yml}
                 bash ${./tests/update-dependencies-reconcile.sh} \
                   ${./.github/workflows/update-dependencies.yml} \
-                  ${./.gitignore}
-                touch $out
-              '';
-          model-catalogs-reconcile =
-            pkgs.runCommand "model-catalogs-reconcile-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.git
-                  pkgs.jq
-                  pkgs.yq-go
-                  pkgs.gawk
-                ];
-              }
-              ''
-                export HOME=$TMPDIR
-                bash ${./tests/model-catalogs-reconcile.sh} \
-                  ${./.github/workflows/model-catalogs.yml}
+                  ${./.gitignore} \
+                  ${./scripts/ci-update-publish} \
+                  ${./scripts/ci-update-verify} \
+                  ${./tests/update-workflow.py}
+                bash ${./tests/synthetic-models-reconcile.sh} \
+                  ${./.github/workflows/update-dependencies.yml} \
+                  ${agentTools.syntheticModelsWatch}/libexec/synthetic-models-watch/synthetic-models-watch \
+                  ${./tests/fixtures/synthetic-models/catalog-2026-10-21.json} \
+                  ${pkgs.writeText "synthetic-models.json" (
+                    builtins.toJSON (import ./home/h82/agents/synthetic-models.nix)
+                  )}
                 touch $out
               '';
           ci-workflow-docs-skip =
@@ -1347,9 +1301,7 @@
                 ];
               }
               ''
-                bash ${./tests/check-workflow-docs-skip.sh} ${./.github/workflows/check.yml} \
-                  ${./.github/workflows/model-catalogs.yml} \
-                  '${builtins.toJSON (builtins.attrNames self.checks.x86_64-linux)}'
+                bash ${./tests/check-workflow-docs-skip.sh} ${./.github/workflows/check.yml}
                 touch $out
               '';
           desktop-autostart = import ./tests/desktop-autostart.nix { inherit pkgs self; };

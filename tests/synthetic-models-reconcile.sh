@@ -2,7 +2,7 @@
 #
 # Check interface:
 #
-#   bash tests/synthetic-models-reconcile.sh <synthetic-models-workflow> \
+#   bash tests/synthetic-models-reconcile.sh <merged-update-workflow> \
 #     <watch-script> <catalog-snapshot> <model-source-json>
 #
 # Runs the "Open, update, or close the reconcile issue" step's literal
@@ -23,7 +23,7 @@
 # - A failed comparison exits non-zero and comments once per failure streak
 #   on an open issue, and writes nothing when none is open. The first run
 #   that succeeds after it says the catalog is reachable again.
-# - The workflow's permissions are exactly contents: read and issues: write,
+# - The watch job's permissions are exactly contents: read and issues: write,
 #   the issue step runs after a failed comparison, and only the comparison
 #   step sees SYNTHETIC_API_KEY.
 
@@ -46,76 +46,22 @@ command -v jq >/dev/null || fail 'jq is required'
 
 step_name='Open, update, or close the reconcile issue'
 
-# step_run <name>: the dedented `run: |` block of the named step.
+wf_json=$(yq -o=json '.' "$workflow")
+watch_job=$(jq '.jobs.watch' <<<"$wf_json")
 step_run() {
-  awk -v step="- name: $1" '
-    found == 0 && index($0, step) > 0 { found = 1; next }
-    found == 1 && capturing == 0 && $0 ~ /^[[:space:]]*run: \|[[:space:]]*$/ { capturing = 1; next }
-    capturing == 1 {
-      if ($0 ~ /^[[:space:]]*$/) { print ""; next }
-      line = $0
-      sub(/^[[:space:]]*/, "", line)
-      lead = length($0) - length(line)
-      if (indent < 0) { indent = lead }
-      if (lead < indent) { exit }
-      print substr($0, indent + 1)
-      next
-    }
-  ' indent=-1 "$workflow"
+  jq -r --arg name "$1" '.steps[] | select(.name == $name) | .run' <<<"$watch_job"
 }
-
-# step_block <name>: every line of the named step, up to the next step.
-step_block() {
-  awk -v step="- name: $1" '
-    found == 0 && index($0, step) > 0 {
-      found = 1
-      line = $0
-      sub(/^[[:space:]]*/, "", line)
-      indent = length($0) - length(line)
-      print
-      next
-    }
-    found == 1 {
-      line = $0
-      sub(/^[[:space:]]*/, "", line)
-      lead = length($0) - length(line)
-      if (line != "" && lead <= indent) { exit }
-      print
-    }
-  ' "$workflow"
-}
-
-# --- workflow shape ----------------------------------------------------------
-
-permissions=$(awk '
-  /^permissions:/ { inside = 1; next }
-  inside && /^[^[:space:]]/ { exit }
-  inside && NF { sub(/^[[:space:]]+/, ""); print }
-' "$workflow")
-if [[ $permissions != $'contents: read\nissues: write' ]]; then
-  fail "the workflow's permissions are not exactly contents: read and issues: write: $permissions"
-fi
-if [[ $(grep -c 'permissions:' "$workflow") -ne 1 ]]; then
-  fail 'the workflow declares permissions outside its top level'
-fi
-pass 'permissions are exactly contents: read and issues: write'
-
-compare_block=$(step_block "Compare with Synthetic's catalog")
-issue_block=$(step_block "$step_name")
-[[ -n $compare_block && -n $issue_block ]] || fail "could not find the watch steps in $workflow"
-grep -Eq '^[[:space:]]*id: compare[[:space:]]*$' <<<"$compare_block" ||
-  fail 'the comparison step has no id: compare'
-grep -Fq "if: \${{ !cancelled() && (steps.compare.outcome == 'success' || steps.compare.outcome == 'failure') }}" \
-  <<<"$issue_block" || fail 'the issue step does not run after both outcomes of the comparison'
-grep -Fq 'COMPARE_OUTCOME: ${{ steps.compare.outcome }}' <<<"$issue_block" ||
-  fail 'the issue step does not receive the comparison outcome'
-grep -Eq '^[[:space:]]*LABEL: model-reconcile[[:space:]]*$' <<<"$issue_block" ||
-  fail 'the issue step does not use the model-reconcile label'
-if [[ $(grep -c 'SYNTHETIC_API_KEY' "$workflow") -ne 1 ]] ||
-  ! grep -Fq 'SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}' <<<"$compare_block"; then
-  fail 'SYNTHETIC_API_KEY reaches a step other than the comparison'
-fi
-pass 'the issue step runs after a failed comparison, and only the comparison sees the key'
+permissions=$(jq -cS '.permissions' <<<"$watch_job")
+[[ $permissions == '{"contents":"read","issues":"write"}' ]] || fail 'watch permissions must be exactly contents: read and issues: write'
+pass 'watch permissions are exactly contents: read and issues: write'
+compare_block=$(jq '.steps[] | select(.id == "compare")' <<<"$watch_job")
+issue_block=$(jq --arg name "$step_name" '.steps[] | select(.name == $name)' <<<"$watch_job")
+[[ $(jq -r '.if' <<<"$issue_block") == "\${{ !cancelled() && (steps.compare.outcome == 'success' || steps.compare.outcome == 'failure') }}" ]] || fail 'issue reconciliation must run after either comparison outcome'
+[[ $(jq -r '.env.COMPARE_OUTCOME' <<<"$issue_block") == '${{ steps.compare.outcome }}' ]] || fail 'issue reconciliation lost the comparison outcome'
+[[ $(jq -r '.env.LABEL' <<<"$issue_block") == model-reconcile ]] || fail 'issue label changed'
+[[ $(jq '[.steps[] | select(.env.SYNTHETIC_API_KEY != null)] | length' <<<"$watch_job") == 1 ]] || fail 'catalog key reaches another watch step'
+[[ $(jq -r '.env.SYNTHETIC_API_KEY' <<<"$compare_block") == '${{ secrets.SYNTHETIC_API_KEY }}' ]] || fail 'comparison lost the catalog key'
+pass 'issue reconciliation runs after comparison failure and only comparison receives the key'
 
 script=$(step_run "$step_name")
 [[ -n $script ]] || fail "could not find the issue step's run block in $workflow"
@@ -218,11 +164,14 @@ run_step() {
     cp "$scratch/$result.json" "$dir/runner/watch.json"
     if [[ -f $scratch/$result.md ]]; then cp "$scratch/$result.md" "$dir/runner/issue.md"; fi
   fi
+  git init -q --initial-branch=main "$dir"
+  git -C "$dir" -c user.name=Test -c user.email=test@example.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null commit --allow-empty -qm 'observed main revision'
+  observed_sha=$(git -C "$dir" rev-parse HEAD)
   status=0
-  PATH=$scratch/bin:$PATH STUB_LOG=$log STUB_DIR=$dir STUB_OPEN=$dir/open.json \
+  (cd "$dir" && PATH=$scratch/bin:$PATH STUB_LOG=$log STUB_DIR=$dir STUB_OPEN=$dir/open.json \
     RUNNER_TEMP=$dir/runner GITHUB_REPOSITORY=example/nix-config GITHUB_SHA=0123abcd \
     GH_TOKEN=fake-token LABEL=model-reconcile COMPARE_OUTCOME=$outcome \
-    bash -c "$script" >"$dir/step.log" 2>&1 || status=$?
+    bash -c "$script") >"$dir/step.log" 2>&1 || status=$?
 }
 
 # view <name> <body-file> <comment-file>...: a `gh issue view` answer.
@@ -290,7 +239,7 @@ run_step resolved success clean '[4]' 4 "$(view resolved "$scratch/flash.md")"
 expect_ok 'clean with an open issue'
 expect_writes "issue comment 4 --repo example/nix-config --body-file $dir/runner/resolved.md
 issue close 4 --repo example/nix-config" 'clean with an open issue'
-grep -Fq 'as of commit 0123abcd' "$dir/body-3.md" || fail 'the resolving comment lacks the commit'
+grep -Fq "as of commit $observed_sha" "$dir/body-3.md" || fail 'the resolving comment lacks the commit'
 pass 'clean with an open issue comments and closes it'
 
 # Clean with none: nothing.

@@ -88,6 +88,8 @@ done
 
 A `darwinConfigurations` output and `checks.aarch64-darwin.darwin-outputs` build only on `aarch64-darwin`. In CI (`.github/workflows/check.yml`), pull requests run `fmt`, `changes`, `markdown-lint` (on docs-only PRs), `flake-check` (`nix flake check --no-build`), and the `light-*` shards of `checkShards`. The heavy closure jobs (`host-checks`, `vm-checks`, `build`, and `build-darwin`) run on a push to `main`, a manual `workflow_dispatch`, or when a pull request has the `full-ci` label.
 
+Scheduled maintenance lives in `.github/workflows/update-dependencies.yml`, alongside `check.yml`. One schedule and concurrency group cover dependencies, catalog snapshots, and drift reporting every 30 minutes. Manual dispatch selects `all`, `dependencies`, `catalogs`, or `drift`. Keep the producers independent, publish catalog candidates before dependency candidates through `scripts/ci-update-publish`, and repeat the applicable verification after each changed-main rebase. The separate drift job receives no push token. `update-dependencies-reconcile` owns this workflow's regression and mutation coverage; `ci-workflow-docs-skip` owns `check.yml` policy.
+
 ## Coding style and naming
 
 Preserve exact commands, identifiers, and link targets. Any change to the T3 delegation or CE model-selection sections in `home/h82/agents/instructions/instructions.md.tmpl` must update `docs/agent-routing.md` in the same change.

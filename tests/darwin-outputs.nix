@@ -297,7 +297,7 @@ let
       }/bin/gpg-git" ]; then
         bad "Git does not use the card-discovery signing adapter"
       fi
-      for mode in shell git terminal gpg; do
+      for mode in git terminal gpg; do
         python3 ${./personal-environment.py} "$mode" "$gen/home-files" || bad "invalid $mode configuration"
       done
       "$gen/home-path/bin/dotnet" --list-sdks > sdks

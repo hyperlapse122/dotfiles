@@ -6,6 +6,7 @@
     with pkgs;
     [
       bat
+      btop
       fd
       ffmpeg
       file
