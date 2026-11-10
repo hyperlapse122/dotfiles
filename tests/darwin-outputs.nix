@@ -574,13 +574,13 @@ let
       fi
 
       ${lib.optionalString (t3Desktop != null) ''
-        app=${t3Desktop}/Applications/'T3 Code (Nightly).app'
+        app=${t3Desktop}/Applications/'${import ../packages/t3code-app-bundle.nix}'
         if [ ! -d "$app" ]; then
           bad "the T3 Code nightly bundle is missing"
         else
           exe=$(/usr/bin/plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist" 2>/dev/null \
             || sed -n '/CFBundleExecutable/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "$app/Contents/Info.plist")
-          unzip -p ${t3Desktop.src} "T3 Code (Nightly).app/Contents/MacOS/$exe" | cmp -s - "$app/Contents/MacOS/$exe" \
+          unzip -p ${t3Desktop.src} "${import ../packages/t3code-app-bundle.nix}/Contents/MacOS/$exe" | cmp -s - "$app/Contents/MacOS/$exe" \
             || bad "the T3 Code main executable differs from the release zip's, so its signature is broken"
         fi
         grep -qs T3CODE_DISABLE_AUTO_UPDATE "$gen/LaunchAgents/org.nix-community.home.t3code-disable-auto-update.plist" \

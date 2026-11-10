@@ -1,77 +1,9 @@
 /*
-  Check interface:
-
-    import ./tests/t3code-traits.nix { inherit pkgs self fixtures; }
-
-  `fixtures` is tests/lib/linux-fixtures.nix. Guards the two T3 Code traits,
-  my.t3.cli.enable and my.t3.desktop.enable, which home/h82/t3code.nix turns
-  into user packages.
-
-  On every NixOS configuration, production and bootstrap, and on each
-  production configuration re-evaluated with one trait forced off, the
-  materialized user profile (home.path, which useUserPackages makes the
-  per-user profile) is read rather than the package list:
-  - bin/t3 resolves into the t3code-cli package exactly when the CLI trait is
-    on;
-  - share/applications/t3code.desktop and bin/t3code-desktop resolve into the
-    t3code-desktop package exactly when the desktop trait is on;
-  - nothing else on PATH comes from a T3 Code package, so T3 Code brings no
-    claude of its own and its sessions run the flake's.
-  - home.activation.t3codeSettings and home.activation.t3codeClientSettings
-    exist exactly when either trait is on and run after installPackages. Each
-    script is executed by the shared agent-activation harness against scratch
-    files, checking destination/declaration, real file effects, repeat apply,
-    dry-run byte protection and refusal propagation. The
-    settings.json declaration names enabled Antigravity, Claude, Codex and Grok
-    instances, and the disabled Pi and OpenCode instances, the Claude instance's launch arguments emptied,
-    which retires the --add-dir an earlier generation wrote, no environment
-    entry upserted, and the Codex instance's launch arguments emptied, which
-    retires the developer_instructions override an earlier generation wrote; the
-    retired `providers` block of those six instances is migrated into them
-    first. The Antigravity instance names the executable of the runtime built
-    from the release the pinned T3 Code embeds, by store path;
-    tests/t3code-antigravity-instance.py reads the rendered declaration and
-    fails when that path is not inside that runtime, is not a store path (so
-    could resolve through PATH or ~/.t3/tools), names the PATH wrapper's
-    runtime while the two pins differ, or when the pin does not record the
-    localharness_external T3 Code looks for beside it; it also runs the real
-    merger over a settings.json that already holds an antigravity instance
-    with app state, which must survive with the declared path and enabled.
-    The Codex instance also declares `~/.codex` as its home path and
-    the non-managed `existing` setup mode, so neither a home or managed setup
-    set in the app nor a CODEX_HOME in the instance's environment can move it;
-    tests/t3code-codex-home.py reads the rendered declaration and fails when
-    any instance with driver "codex" leaves either undeclared, names another
-    home, or declares `managed`, since
-    T3 Code's Codex sessions must run on ~/.codex, where the plugin sync and
-    the skills land. The Pi instance declares no binaryPath and no launch arguments.
-    The declaration retires the old OpenCode model preference and the OMP
-    provider entries. The real merger runs twice over seeded settings,
-    preserving unrelated user keys while removing the retired entries.
-  The same holds on each non-NixOS fixture host of the builder's
-  architecture, production and bootstrap, and on each bootstrap fixture
-  re-assembled with only the CLI trait forced on, since the CLI is the T3
-  Code those hosts support.
-  Today every NixOS configuration enables both traits, so the forced-off
-  configurations, including one per production configuration with both traits
-  off, are what keep each "exactly when" from passing on the positive side
-  alone. Some production and some bootstrap configuration must enable each
-  trait.
-
-  On every non-NixOS fixture host's bootstrap variant, re-assembled through
-  lib/linux-host.nix with my.t3.desktop.enable forced on, Home Manager
-  refuses to evaluate, while the fixture as declared evaluates. Home Manager
-  throws on a failed assertion before its output can be read, so
-  home/h82/t3code.nix is also evaluated on its own: on a non-NixOS Linux kind
-  its assertion reports that the desktop app runs on NixOS and macOS only and
-  the desktop package is not added; on NixOS nothing fails and the package is
-  added; on macOS nothing fails, the package is added, and a launchd agent
-  sets T3CODE_DISABLE_AUTO_UPDATE=1 for GUI launches, which NixOS does not get.
-  On NixOS and macOS the module also declares both settings merges, checked
-  the same way as on the assembled configurations, since no macOS
-  configuration is evaluated here.
-
-  Every failure is collected in one build and names the configuration.
+  Guard T3 package traits and execute the materialized settings activations.
+  The existing activation harness checks repeat apply, dry runs, refusals,
+  whole model selections, migrations, and preservation of user-owned keys.
+  t3code-launch.py exercises the native launch composer and rendered files;
+  test_t3_instructions.py covers preservation and removal of native options.
 */
 {
   pkgs,
@@ -123,23 +55,6 @@ let
 
   profileEntries = configurations.entries ++ cliTrait.disabled ++ desktopTrait.disabled;
 
-  # The Antigravity runtime behind the instance is built from the pinned T3
-  # Code's embedded release, the one behind the PATH wrapper from Google's
-  # newest. Neither is built here: the archives weigh hundreds of megabytes, so
-  # the check compares the store paths the module would install.
-  t3AntigravityRuntime = import ../packages/antigravity-acp.nix {
-    inherit pkgs;
-    pins = (builtins.fromJSON (builtins.readFile ../packages/t3code-release.json)).antigravity;
-  };
-  pathAntigravityRuntime = import ../packages/antigravity-acp.nix {
-    inherit pkgs;
-    pins = (builtins.fromJSON (builtins.readFile ../packages/antigravity-acp-release.json)).platforms;
-  };
-  t3Pin = t3AntigravityRuntime.pin;
-  t3AntigravityDir = "${t3AntigravityRuntime}/libexec/antigravity-acp";
-  pinsDiffer = t3AntigravityRuntime.version != pathAntigravityRuntime.version;
-  pathAntigravityDir = "${pathAntigravityRuntime}/libexec/antigravity-acp";
-
   settingsExpectedBase = {
     set = {
       addProjectBaseDirectory = "~/src";
@@ -147,6 +62,10 @@ let
       branchNamingMode = "semantic";
       defaultAutoPull = true;
       defaultThreadEnvMode = "worktree";
+      defaultRuntimeMode = "full-access";
+      sidebarAutoSettleOnMerge = true;
+      sidebarAutoSettleAfterDays = 3;
+      sidebarAutoSettleKeepPullRequests = true;
       enableAgentDeviceAccess = true;
       enableDeviceSupport = true;
       snoozeLimitedThreads = true;
@@ -181,7 +100,6 @@ let
       from = "providers";
       to = "providerInstances";
       kinds = [
-        "antigravity"
         "claudeAgent"
         "codex"
         "grok"
@@ -189,41 +107,7 @@ let
         "pi"
       ];
     };
-    setPaths = [
-      {
-        path = [
-          "providerInstances"
-          "antigravity"
-          "config"
-          "binaryPath"
-        ];
-        value = noContext "${t3AntigravityDir}/${t3Pin.executable.name}";
-      }
-      {
-        path = [
-          "providerInstances"
-          "antigravity"
-          "driver"
-        ];
-        value = "antigravity";
-      }
-      {
-        path = [
-          "providerInstances"
-          "antigravity"
-          "enabled"
-        ];
-        value = true;
-      }
-      {
-        path = [
-          "providerInstances"
-          "claudeAgent"
-          "config"
-          "launchArgs"
-        ];
-        value = "";
-      }
+    setPaths = lib.sort (a: b: (lib.concatStringsSep "." a.path) < (lib.concatStringsSep "." b.path)) [
       {
         path = [
           "providerInstances"
@@ -248,15 +132,6 @@ let
           "homePath"
         ];
         value = "~/.codex";
-      }
-      {
-        path = [
-          "providerInstances"
-          "codex"
-          "config"
-          "launchArgs"
-        ];
-        value = "";
       }
       {
         path = [
@@ -329,7 +204,7 @@ let
           "pi"
           "enabled"
         ];
-        value = false;
+        value = true;
       }
       {
         path = [
@@ -357,7 +232,7 @@ let
           "storageCleanup"
           "worktreeAfterDays"
         ];
-        value = 8;
+        value = 5;
       }
       {
         path = [
@@ -387,22 +262,63 @@ let
         ];
         value = true;
       }
+      {
+        path = [
+          "providerInstances"
+          "claudeAgent"
+          "config"
+          "idleCompaction"
+        ];
+        value = "beforeCacheExpires";
+      }
+      {
+        path = [
+          "providerInstances"
+          "pi"
+          "config"
+          "enabled"
+        ];
+        value = true;
+      }
+      {
+        path = [
+          "providerInstances"
+          "pi"
+          "config"
+          "binaryPath"
+        ];
+        value = "@PI@";
+      }
+      {
+        path = [
+          "sourceControlWritingStyle"
+          "customInstructions"
+        ];
+        value = "";
+      }
     ];
     own = {
       defaultModelSelection = {
-        instanceId = "claudeAgent";
-        model = "claude-opus-5-5";
+        instanceId = "codex";
+        model = "gpt-6.1-sol";
         options = [
           {
-            id = "effort";
-            value = "medium";
+            id = "reasoningEffort";
+            value = "high";
+          }
+          {
+            id = "serviceTier";
+            value = "default";
           }
         ];
       };
-      textGenerationModelSelection = {
+      fallbackModelSelection = {
         instanceId = "claudeAgent";
-        model = "claude-haiku-5-5";
-        options = [ ];
+        model = "claude-opus-5-5";
+      };
+      textGenerationModelSelection = {
+        instanceId = "codex";
+        model = "gpt-6-luna";
       };
     };
   };
@@ -430,7 +346,15 @@ let
   };
 
   clientSettingsExpectedBase = {
-    set.fontFamilyCode = "JetBrains Mono";
+    set = {
+      fontFamilySans = "Pretendard Variable";
+      fontFamilyCode = "Jetendard";
+      fontFamilyTerminal = "Jetendard";
+      notificationMode = "notifications";
+      inAppNotificationsEnabled = true;
+      sidebarWorkingShelfEnabled = true;
+      snapShotEnabled = true;
+    };
     remove = [ ];
     setPaths = [ ];
     own = { };
@@ -479,7 +403,25 @@ let
             home = user.home.homeDirectory or "";
             contract = {
               file = ".t3/userdata/${merge.file}";
-              declared = merge.contract;
+              declared =
+                if merge.attr == "t3codeSettings" then
+                  merge.contract
+                  // {
+                    setPaths = map (
+                      row:
+                      if row.value == "@PI@" then
+                        row
+                        // {
+                          value = noContext "${
+                            user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile"
+                          }/bin/pi";
+                        }
+                      else
+                        row
+                    ) merge.contract.setPaths;
+                  }
+                else
+                  merge.contract;
             }
             // lib.optionalAttrs (merge.attr == "t3codeSettings") {
               seed = selectionSeed;
@@ -585,6 +527,14 @@ let
 
   moduleOn = moduleWith ../home/h82/t3code.nix;
 
+  launchManifest = import ./lib/t3code-launch-manifest.nix {
+    inherit pkgs;
+    users = map (kind: (moduleOn kind).config) [
+      "nixos"
+      "darwin"
+    ];
+  };
+
   assertModule =
     let
       nixos = moduleOn "nixos";
@@ -614,134 +564,130 @@ let
     ];
 in
 pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-  fail=0
-  ${configurations.guard}
-  ${cliTrait.guard}
-  ${desktopTrait.guard}
-  ${bootstrapGuard "my.t3.cli.enable" cliEnabled}
-  ${bootstrapGuard "my.t3.desktop.enable" desktopEnabled}
+   fail=0
+   ${configurations.guard}
+   ${cliTrait.guard}
+   ${desktopTrait.guard}
+   ${bootstrapGuard "my.t3.cli.enable" cliEnabled}
+   ${bootstrapGuard "my.t3.desktop.enable" desktopEnabled}
 
-  # True when $1 exists and resolves into a store path of package $2.
-  resolvesInto() {
-    [ -e "$1" ] || return 1
-    case $(readlink -f "$1") in
-      /nix/store/*-"$2"-*) return 0 ;;
-    esac
-    return 1
-  }
+   # True when $1 exists and resolves into a store path of package $2.
+   resolvesInto() {
+     [ -e "$1" ] || return 1
+     case $(readlink -f "$1") in
+       /nix/store/*-"$2"-*) return 0 ;;
+     esac
+     return 1
+   }
 
-  # Fails unless $3 resolving into package $4 matches the trait value $5.
-  expectPresence() {
-    local name=$1 what=$2 path=$3 pkg=$4 expected=$5 trait=$6 present=false
-    resolvesInto "$path" "$pkg" && present=true
-    if [ "$present" != "$expected" ]; then
-      echo "$name: $what is present=$present, $trait is $expected" >&2
-      fail=1
-    fi
-  }
+   # Fails unless $3 resolving into package $4 matches the trait value $5.
+   expectPresence() {
+     local name=$1 what=$2 path=$3 pkg=$4 expected=$5 trait=$6 present=false
+     resolvesInto "$path" "$pkg" && present=true
+     if [ "$present" != "$expected" ]; then
+       echo "$name: $what is present=$present, $trait is $expected" >&2
+       fail=1
+     fi
+   }
 
-  checkProfile() {
-    local name=$1 profile=$2 cli=$3 desktop=$4 target exe
-    if [ -z "$profile" ] || [ ! -d "$profile" ]; then
-      echo "$name: Home Manager renders no home.path" >&2
-      fail=1
-      return
-    fi
+   checkProfile() {
+     local name=$1 profile=$2 cli=$3 desktop=$4 target exe
+     if [ -z "$profile" ] || [ ! -d "$profile" ]; then
+       echo "$name: Home Manager renders no home.path" >&2
+       fail=1
+       return
+     fi
 
-    expectPresence "$name" "bin/t3 from t3code-cli" "$profile/bin/t3" t3code-cli "$cli" my.t3.cli.enable
-    expectPresence "$name" "the t3code.desktop entry" "$profile/share/applications/t3code.desktop" t3code-desktop "$desktop" my.t3.desktop.enable
-    expectPresence "$name" "bin/t3code-desktop" "$profile/bin/t3code-desktop" t3code-desktop "$desktop" my.t3.desktop.enable
+     expectPresence "$name" "bin/t3 from t3code-cli" "$profile/bin/t3" t3code-cli "$cli" my.t3.cli.enable
+     expectPresence "$name" "the t3code.desktop entry" "$profile/share/applications/t3code.desktop" t3code-desktop "$desktop" my.t3.desktop.enable
+     expectPresence "$name" "bin/t3code-desktop" "$profile/bin/t3code-desktop" t3code-desktop "$desktop" my.t3.desktop.enable
 
-    for exe in "$profile"/bin/*; do
-      target=$(readlink -f "$exe")
-      case $target in
-        /nix/store/*-t3code-cli-* | /nix/store/*-t3code-desktop-*)
-          case ''${exe##*/} in
-            t3 | t3code-desktop) ;;
-            *)
-              echo "$name: bin/''${exe##*/} on PATH comes from a T3 Code package ($target)" >&2
-              fail=1
-              ;;
-          esac
-          ;;
-      esac
-    done
-  }
+     for exe in "$profile"/bin/*; do
+       target=$(readlink -f "$exe")
+       case $target in
+         /nix/store/*-t3code-cli-* | /nix/store/*-t3code-desktop-*)
+           case ''${exe##*/} in
+             t3 | t3code-desktop) ;;
+             *)
+               echo "$name: bin/''${exe##*/} on PATH comes from a T3 Code package ($target)" >&2
+               fail=1
+               ;;
+           esac
+           ;;
+       esac
+     done
+   }
 
-  # Trait/order checks stay here; the shared file-effect harness owns settings
-  # invocation, destination/declaration, refusal and dry-run behavior.
-  checkSettings() {
-    local name=$1 attr=$2 expected=$3 present=$4 after=$6 full=$7 merger declared
-    if [ "$present" != "$expected" ]; then
-      echo "$name: home.activation.$attr is present=$present, either T3 Code trait on is $expected" >&2
-      fail=1
-      return
-    fi
-    [ "$present" = true ] || return 0
+   # Trait/order checks stay here; the shared file-effect harness owns settings
+   # invocation, destination/declaration, refusal and dry-run behavior.
+   checkSettings() {
+     local name=$1 attr=$2 expected=$3 present=$4 after=$6 full=$7 merger declared
+     if [ "$present" != "$expected" ]; then
+       echo "$name: home.activation.$attr is present=$present, either T3 Code trait on is $expected" >&2
+       fail=1
+       return
+     fi
+     [ "$present" = true ] || return 0
 
-    if [ "$after" != true ]; then
-      echo "$name: home.activation.$attr must run after installPackages" >&2
-      fail=1
-    fi
+     if [ "$after" != true ]; then
+       echo "$name: home.activation.$attr must run after installPackages" >&2
+       fail=1
+     fi
 
-    printf '%s\n' "$5" > script
-    merger=$(grep -oE '/nix/store/[^[:space:]]+/bin/agent-settings' script | head -n 1 || true)
-    if [ -z "$merger" ]; then
-      echo "$name: the $attr activation names no packaged merger" >&2
-      fail=1
-      return
-    fi
-    declared=$(sed -n 's/.*--declared \([^ ]*\).*/\1/p' script | tr -d "'\"")
-    if [ "$attr" = t3codeSettings ] && [ -n "$declared" ] \
-      && ! python3 -I ${./t3code-codex-home.py} "$declared" 2> codex-home.log; then
-      echo "$name: a declared Codex instance can run outside ~/.codex:" >&2
-      cat codex-home.log >&2
-      fail=1
-    fi
+     printf '%s\n' "$5" > script
+     merger=$(grep -oE '/nix/store/[^[:space:]]+/bin/agent-settings' script | head -n 1 || true)
+     if [ -z "$merger" ]; then
+       echo "$name: the $attr activation names no packaged merger" >&2
+       fail=1
+       return
+     fi
+     declared=$(sed -n 's/.*--declared \([^ ]*\).*/\1/p' script | tr -d "'\"")
+     if [ "$attr" = t3codeSettings ] && [ -n "$declared" ] \
+       && ! python3 -I ${./t3code-codex-home.py} "$declared" 2> codex-home.log; then
+       echo "$name: a declared Codex instance can run outside ~/.codex:" >&2
+       cat codex-home.log >&2
+       fail=1
+     fi
 
-    [ "$attr" = t3codeSettings ] || return 0
-    [ "$full" = true ] || return 0
-    checkOpencodeDisabled "$name" "$merger" "$declared"
-    checkAntigravityInstance "$name" "$merger" "$declared"
-  }
+     [ "$attr" = t3codeSettings ] || return 0
+     [ "$full" = true ] || return 0
+     checkOpencodeDisabled "$name" "$merger" "$declared"
+     checkAntigravityInstance "$name" "$merger" "$declared"
+   }
 
-  # The declared Antigravity instance names the T3-pinned runtime's executable
-  # by store path, and the real merger keeps an existing instance's app state.
-  # The harness binary the pin records sits in the same directory by the
-  # builder's construction; the runtime is not built here.
+   # Merging must preserve the user-owned native instance byte for byte.
   checkAntigravityInstance() {
-    local name=$1 realMerger=$2 declared=$3
-    if ! python3 -I ${./t3code-antigravity-instance.py} "$realMerger" "$declared" \
-      ${esc (noContext t3AntigravityDir)} ${
-        esc (if pinsDiffer then noContext pathAntigravityDir else "-")
-      } \
-      ${esc t3Pin.executable.name} ${esc t3Pin.harness.name} 2> antigravity-instance.log; then
-      echo "$name: the Antigravity instance is not the T3-pinned runtime or the merge drops it:" >&2
-      cat antigravity-instance.log >&2
-      fail=1
-    fi
-  }
+     local name=$1 realMerger=$2 declared=$3
+     if ! python3 -I ${./t3code-antigravity-instance.py} "$realMerger" "$declared" \
+  2> antigravity-instance.log; then
+       echo "$name: the merge changed the user-owned native Antigravity instance:" >&2
+       cat antigravity-instance.log >&2
+       fail=1
+     fi
+   }
 
-  # Merges the declared document into a settings.json that holds an enabled
-  # opencode instance and OpenCode's hidden-model preference with the real
-  # merger: the merged file must hold the instance disabled and the preference
-  # gone, also on a second run, and keep the keys the declaration does not
-  # touch. $2 is the packaged merger and $3 the declaration the activation
-  # passed it.
-  checkOpencodeDisabled() {
-    local name=$1 realMerger=$2 declared=$3
-    if ! python3 -I ${./t3code-opencode-disabled.py} "$realMerger" "$declared" 2> opencode-disabled.log; then
-      echo "$name: the merged settings.json does not hold the opencode instance disabled:" >&2
-      cat opencode-disabled.log >&2
-      fail=1
-    fi
-  }
+   # Merges the declared document into a settings.json that holds an enabled
+   # opencode instance and OpenCode's hidden-model preference with the real
+   # merger: the merged file must hold the instance disabled and the preference
+   # gone, also on a second run, and keep the keys the declaration does not
+   # touch. $2 is the packaged merger and $3 the declaration the activation
+   # passed it.
+   checkOpencodeDisabled() {
+     local name=$1 realMerger=$2 declared=$3
+     if ! python3 -I ${./t3code-opencode-disabled.py} "$realMerger" "$declared" 2> opencode-disabled.log; then
+       echo "$name: the merged settings.json does not hold the opencode instance disabled:" >&2
+       cat opencode-disabled.log >&2
+       fail=1
+     fi
+   }
 
 
-  ${lib.concatMapStrings assertProfile profileEntries}
-  ${lib.concatMapStrings assertSettingsOn bothOff}
-  ${assertModule}
+   python3 -I ${./t3code-launch.py} ${launchManifest}
+   T3_INSTRUCTIONS_SCRIPT=${../scripts/t3-instructions.py} python3 -I ${./test_t3_instructions.py}
+   ${lib.concatMapStrings assertProfile profileEntries}
+   ${lib.concatMapStrings assertSettingsOn bothOff}
+   ${assertModule}
 
-  [ "$fail" = 0 ] || exit 1
-  touch "$out"
+   [ "$fail" = 0 ] || exit 1
+   touch "$out"
 ''

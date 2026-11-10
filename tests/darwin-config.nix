@@ -1164,7 +1164,7 @@ let
           "/System/Applications/Photos.app"
           "/Applications/Ghostty.app"
         ]
-        ++ lib.optional t3 "${home}/Applications/Home Manager Apps/T3 Code (Nightly).app"
+        ++ lib.optional t3 "${home}/Applications/Home Manager Apps/${import ../packages/t3code-app-bundle.nix}"
         ++ [
           "${home}/Applications/Home Manager Apps/VSCodium.app"
           "/Applications/Xcode.app"

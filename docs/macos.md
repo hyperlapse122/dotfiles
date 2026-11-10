@@ -251,7 +251,7 @@ brew uninstall --zap orbstack
 ## App notes
 
 - VSCodium's user directory is `~/Library/Application Support/VSCodium/User`. Its keybindings file is a read-only store link; add a keybinding to `home/h82/dev/vscodium.nix` instead.
-- The T3 Code desktop app is the flake's pinned nightly, `T3 Code (Nightly).app`. A launch agent sets `T3CODE_DISABLE_AUTO_UPDATE=1` at login, so the app does not update itself off the pin.
+- The T3 Code desktop app is the flake's pinned release, currently `T3 Code (Beta).app`. A launch agent sets `T3CODE_DISABLE_AUTO_UPDATE=1` at login, so the app does not update itself off the pin.
 - An app added to the NixOS user environment needs a macOS decision in `modules/shared/darwin-apps.nix`: a cask, a Nix package, or a reason to leave it out. The `darwin-config` check fails without one.
 - T3 Code finds the Android SDK at `~/Library/Android/sdk` even when started from the Dock or Finder, where `ANDROID_HOME` is not set. The `emulator` in that tree sets `ANDROID_HOME` and `ANDROID_SDK_ROOT` itself before it starts the store emulator, so an AVD boots from T3 Code's Device panel.
 

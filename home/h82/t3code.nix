@@ -1,9 +1,9 @@
 /*
-  T3 Code nightly, one artifact per trait: my.t3.cli.enable installs the
+  T3 Code, one artifact per trait: my.t3.cli.enable installs the
   headless `t3` CLI and my.t3.desktop.enable the desktop app. Its Claude
   and Codex sessions run the flake's own claude and codex with their
   user-level settings, so nothing here adds a copy of either. The T3 Code
-  settings that differ from the pinned nightly's defaults are merged into its
+  declared settings are merged into its
   own settings files on activation.
 
   The desktop app runs on NixOS and macOS. A non-NixOS Linux host that enables
@@ -25,24 +25,21 @@ let
   merger = "${agentTools.agentSettings}/bin/agent-settings";
   t3 = cfg.cli.enable || cfg.desktop.enable;
 
-  # The runtime of the Antigravity ACP release the pinned T3 Code embeds,
-  # which can trail the newest one that packages/antigravity-acp-path.nix puts
-  # on PATH. T3 Code resolves an explicit binaryPath before its managed
-  # download, finds localharness_external beside it, and sets the child's
-  # SSL_CERT_FILE itself on Linux, so the instance needs no wrapper.
-  antigravityAcp = import ../../packages/antigravity-acp.nix {
-    inherit pkgs;
-    pins = (builtins.fromJSON (builtins.readFile ../../packages/t3code-release.json)).antigravity;
-  };
-  # The settings that differ from the pinned T3 Code's schema defaults; a
-  # value left at its default follows T3 Code when that default changes. Each
-  # declared provider instance states `enabled`, even where it equals the
-  # default: claudeAgent's and codex's do, since T3 Code turns those instances
-  # on. A cleanup that drops default-valued settings must keep it, or the instance
-  # would go back to following T3 Code's default. App state (onboarding marks,
-  # folded panels, favorites, and every provider instance field not declared
-  # here) stays the app's. T3 Code leaves its built-in Pi
-  # instance off until it is enabled, so none shows up on its own.
+  # Launch additions share the native account homes and baseline instructions.
+  composer = pkgs.writeScriptBin "t3-instructions" (
+    "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../scripts/t3-instructions.py
+  );
+  renderer = import ../../packages/text-template.nix { inherit pkgs; };
+  additions = pkgs.runCommand "t3-instruction-additions" { } ''
+    mkdir -p "$out"
+    for harness in claude codex pi; do
+      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s}' \
+        "$([ "$harness" = claude ] && echo true || echo false)" \
+        "$([ "$harness" = codex ] && echo true || echo false)" \
+        "$([ "$harness" = pi ] && echo true || echo false)" > context.json
+      ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/$harness.md"
+    done
+  '';
   settings = {
     addProjectBaseDirectory = "~/src";
     autoResumeLimitedThreads = true;
@@ -51,23 +48,21 @@ let
     # New threads start in a new worktree. A value here outranks every
     # repository's t3.json; only a per-project override in the app wins.
     defaultThreadEnvMode = "worktree";
+    defaultRuntimeMode = "full-access";
+    sidebarAutoSettleOnMerge = true;
+    sidebarAutoSettleAfterDays = 3;
+    sidebarAutoSettleKeepPullRequests = true;
     enableAgentDeviceAccess = true;
     enableDeviceSupport = true;
     providerInstances = {
-      antigravity = {
-        driver = "antigravity";
-        enabled = true;
-        config.binaryPath = "${antigravityAcp}/libexec/antigravity-acp/agy_acp_server.par";
-      };
       claudeAgent = {
         driver = "claudeAgent";
         enabled = true;
-        config.launchArgs = "";
+        config.idleCompaction = "beforeCacheExpires";
       };
       # The codex on PATH is the packaged wrapper, so no binaryPath is needed.
-      # Codex reads the instructions from ~/.codex/AGENTS.md, so the launch
-      # arguments an earlier generation wrote, which carried the old
-      # instructions, are overwritten with nothing.
+      # Codex reads the baseline from ~/.codex/AGENTS.md. The composer adds
+      # T3 context through its native developer-instructions launch option.
       #
       # T3 Code gives a Codex instance its own home only when its config names
       # one: a homePath, a shadowHomePath, or the "managed" setupMode. The
@@ -84,7 +79,6 @@ let
         enabled = true;
         config = {
           homePath = "~/.codex";
-          launchArgs = "";
           setupMode = "existing";
         };
       };
@@ -99,18 +93,25 @@ let
         driver = "opencode";
         enabled = false;
       };
-      # Keep the instance and its state, but stop offering it for new work.
+      # Pi resolves to the restored native wrapper in the shared user profile.
       pi = {
         driver = "pi";
-        enabled = false;
+        enabled = true;
+        config.enabled = true;
+        config.binaryPath = "${
+          config.home.profileDirectory or "${config.home.homeDirectory}/.nix-profile"
+        }/bin/pi";
       };
     };
     snoozeLimitedThreads = true;
-    sourceControlWritingStyle.mode = "conventional_commits";
+    sourceControlWritingStyle = {
+      mode = "conventional_commits";
+      customInstructions = "";
+    };
     storageCleanup = {
       browserArtifactsAfterDays = 8;
       logsAfterDays = 8;
-      worktreeAfterDays = 8;
+      worktreeAfterDays = 5;
       worktreeOnDelete = true;
       worktreeOnMerge = true;
       worktreeSettledAfterDays = 1;
@@ -168,23 +169,38 @@ let
   # a leaf merge would keep a previous model's options.
   modelSelections = {
     defaultModelSelection = {
-      instanceId = "claudeAgent";
-      model = "claude-opus-5-5";
+      instanceId = "codex";
+      model = "gpt-6.1-sol";
       options = [
         {
-          id = "effort";
-          value = "medium";
+          id = "reasoningEffort";
+          value = "high";
+        }
+        {
+          id = "serviceTier";
+          value = "default";
         }
       ];
     };
-    textGenerationModelSelection = {
+    fallbackModelSelection = {
       instanceId = "claudeAgent";
-      model = "claude-haiku-5-5";
-      options = [ ];
+      model = "claude-opus-5-5";
+    };
+    textGenerationModelSelection = {
+      instanceId = "codex";
+      model = "gpt-6-luna";
     };
   };
 
-  clientSettings.fontFamilyCode = "JetBrains Mono";
+  clientSettings = {
+    fontFamilySans = "Pretendard Variable";
+    fontFamilyCode = "Jetendard";
+    fontFamilyTerminal = "Jetendard";
+    notificationMode = "notifications";
+    inAppNotificationsEnabled = true;
+    sidebarWorkingShelfEnabled = true;
+    snapShotEnabled = true;
+  };
 
   # The app and the CLI rewrite both files at runtime, so the keys are merged
   # in rather than owned by a store symlink. An object T3 Code may extend is
@@ -255,7 +271,7 @@ in
     ];
 
   # Home Manager copies the macOS app bundle into ~/Applications writable, so
-  # the app's own updater could move it off the nightly pin. The Linux wrapper
+  # the app's own updater could move it off the release pin. The Linux wrapper
   # turns the updater off with this variable; on macOS a login agent sets it
   # for every app launched from Finder or the Dock.
   launchd.agents.t3code-disable-auto-update = lib.mkIf (cfg.desktop.enable && darwin) {
@@ -277,7 +293,21 @@ in
   # linkGeneration. `run` leaves the files alone on a dry run.
 
   home.activation = lib.mkIf t3 (
-    lib.mapAttrs (
+    {
+      t3codeInstructions =
+        lib.hm.dag.entryAfter
+          [ "t3codeSettings" "t3codeClientSettings" "agentInstructions" "codexSettings" ]
+          ''
+            if [[ ! -v DRY_RUN ]]; then
+              install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"
+              for harness in claude codex pi; do
+                install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
+              done
+              ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory}
+            fi
+          '';
+    }
+    // lib.mapAttrs (
       _: merge:
       lib.hm.dag.entryAfter [ "installPackages" ] ''
         run ${merger} \

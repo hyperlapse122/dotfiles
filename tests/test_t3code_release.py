@@ -359,6 +359,16 @@ class T3codeReleaseTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(self.output.read_text())["version"], NEWEST_VERSION)
 
+    def test_stable_pin_is_not_downgraded_by_older_nightlies(self):
+        for version in ('0.1.7', '0.0.46'):
+            with self.subTest(version=version):
+                self.write_pin(version)
+                before = self.output.read_bytes()
+                result = self.run_release(extra_args=["-o", str(self.output)])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("already up to date", result.stdout)
+                self.assertEqual(self.output.read_bytes(), before)
+
     def test_lower_date_is_older_even_with_a_higher_build(self):
         # Pinned build number is higher, but its date is later, so the
         # resolved nightly is older and must not replace it.

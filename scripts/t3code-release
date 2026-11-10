@@ -127,7 +127,10 @@ def hex_to_sri(sha256_hex):
 
 
 def version_key(version):
-    """Return the (semver, date, build) ordering key of a nightly version."""
+    """Order releases by semver, then nightly date/build before the stable release."""
+    stable = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version) if isinstance(version, str) else None
+    if stable:
+        return (tuple(map(int, stable.groups())), float('inf'), 0)
     match = VERSION_PATTERN.match(version) if isinstance(version, str) else None
     if not match:
         raise ValueError(f"not a nightly version: {version!r}")

@@ -30,8 +30,8 @@ let
     mainProgram = pname;
   };
 
-  # The bundle name the nightly zip holds; a rename upstream fails the copy.
-  appBundle = "T3 Code (Nightly).app";
+  # Stable beta and nightly artifacts use different signed bundle names.
+  appBundle = import ./t3code-app-bundle.nix;
 in
 if pkgs.stdenv.hostPlatform.isDarwin then
   pkgs.stdenvNoCC.mkDerivation {

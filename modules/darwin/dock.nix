@@ -28,7 +28,7 @@ in
       "/System/Applications/Photos.app"
       "/Applications/Ghostty.app"
     ]
-    ++ lib.optional config.my.t3.desktop.enable "${homeManagerApps}/T3 Code (Nightly).app"
+    ++ lib.optional config.my.t3.desktop.enable "${homeManagerApps}/${import ../../packages/t3code-app-bundle.nix}"
     ++ [
       "${homeManagerApps}/VSCodium.app"
       "/Applications/Xcode.app"
