@@ -178,6 +178,7 @@ let
   expectedPeers = import ./lib/cross-model-peers.nix { inherit lib; };
 
   fontFamilies = [
+    "Jetendard"
     "JetBrainsMono Nerd Font"
     "D2CodingLigature Nerd Font"
     "D2KodingLigature Nerd Font"
@@ -559,8 +560,8 @@ let
       if [ -z "$brewfile" ]; then
         bad "the system activation runs no brew bundle"
       else
-        grep -Fxq 'brew "container"' "$brewfile" || bad "container formula missing"
-        grep -Fxq 'brew "aria2"' "$brewfile" || bad "aria2 formula missing"
+        grep -Eq '^brew "container"(,|$)' "$brewfile" || bad "container formula missing"
+        grep -Eq '^brew "aria2"(,|$)' "$brewfile" || bad "aria2 formula missing"
         casks=$(sed -n 's/^cask "\([^"]*\)".*/\1/p' "$brewfile" | sort | tr '\n' ' ')
         [ "$casks" = ${lib.escapeShellArg "${lib.concatStringsSep " " expectedCasks} "} ] \
           || bad "the Brewfile lists casks: $casks"
