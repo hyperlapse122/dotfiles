@@ -13,6 +13,10 @@ let
       ''
         mkdir -p $out
         tar -xzf ${pkgs.fetchurl { inherit (asset) url sha256; }} --strip-components=1 -C $out
+        # fasd removed its manual page but retained this link to it.
+        if [ -L "$out/fasd.plugin/man/man1/fasd.1" ] && [ ! -e "$out/fasd.plugin/man/man1/fasd.1" ]; then
+          rm "$out/fasd.plugin/man/man1/fasd.1"
+        fi
       '';
 in
 pkgs.stdenvNoCC.mkDerivation {
@@ -39,12 +43,18 @@ pkgs.stdenvNoCC.mkDerivation {
   doInstallCheck = true;
   installCheckPhase = ''
     export HOME=$TMPDIR/prezto-home ZDOTDIR=$TMPDIR/prezto-home TERM=xterm-256color
-    export LANG=C.UTF-8 LC_ALL=C.UTF-8
+    export LANG=${if pkgs.stdenv.hostPlatform.isDarwin then "en_US.UTF-8" else "C.UTF-8"}
+    export LC_ALL=$LANG
     mkdir -p "$HOME"
     ${pkgs.lib.concatMapStringsSep "\n" (asset: ''
       rm -rf expected
       cp -r ${unpack asset} expected
       chmod -R u+w expected
+      ${pkgs.lib.concatMapStringsSep "\n" (child: ''
+        rm -rf expected/${pkgs.lib.removePrefix "${asset.path}/" child.path}
+        mkdir -p expected/${pkgs.lib.removePrefix "${asset.path}/" child.path}
+        cp -r ${unpack child}/. expected/${pkgs.lib.removePrefix "${asset.path}/" child.path}/
+      '') (builtins.filter (child: pkgs.lib.hasPrefix "${asset.path}/" child.path) archives)}
       patchShebangs --host expected
       diff -r expected $out/share/zsh-prezto/${asset.path}
     '') (builtins.tail archives)}

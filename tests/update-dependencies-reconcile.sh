@@ -81,6 +81,7 @@ EOF
   printf '{"version": "1.0.0"}\n' >"$clone/packages/claude-code-manifest.json"
   printf '{"latest": {"cmdline-tools": "19.0"}}\n' >"$clone/packages/android-sdk-repo.json"
   printf '{"version": "2026.10.0"}\n' >"$clone/packages/mise-release.json"
+  printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
   printf '{"version": "0.0.46-nightly.20261003.2600"}\n' >"$clone/packages/t3code-release.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/wifiman-desktop-version.json"
@@ -139,6 +140,10 @@ case "\$*" in
     ;;
   "run .#mise-release -- --output packages/mise-release.json")
     printf '{"version": "2026.10.5"}\n' >packages/mise-release.json
+    ;;
+  "run .#prezto-release -- --output packages/prezto-pin.json")
+    if [[ \${FAIL_PREZTO:-0} == 1 ]]; then exit 1; fi
+    printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >packages/prezto-pin.json
     ;;
   "run .#chatgpt-release -- --output packages/chatgpt-version.json")
     if [[ " \${FAIL_SOFT:-} " == *" chatgpt "* ]]; then
@@ -247,6 +252,8 @@ EOF
 
 read -r status clone <<<"$(run_update_step update-all)"
 ((status == 0)) || fail "full update step failed: $(cat "$scratch/update-all-step.log")"
+[[ $(jq -r '.zshLock.archives[0].commit' "$clone/packages/prezto-pin.json") == 2222222222222222222222222222222222222222 ]] ||
+  fail 'update step did not refresh the Prezto pin'
 grep -qx 'changed=true' "$scratch/update-all-output" ||
   fail "update step did not record changed=true: $(cat "$scratch/update-all-output")"
 if grep -q '^::warning' "$scratch/update-all-step.log"; then
@@ -315,44 +322,10 @@ pass 'the update step rejects an unusable locked revision for compound-engineeri
 
 # --- Per-pin commit boundaries ---------------------------------------------
 
+read -r status clone <<<"$(run_update_step prezto-failure FAIL_PREZTO=1)"
+((status != 0)) || fail 'a failed Prezto refresh did not stop the update step'
+[[ $(jq -r '.zshLock.archives[0].commit' "$clone/packages/prezto-pin.json") == 1111111111111111111111111111111111111111 ]] ||
+  fail 'a failed Prezto refresh changed the pin'
+pass 'a failed Prezto refresh stops publication and preserves its pin'
+
 push_step=$(step_by_name 'Commit dependency candidates') ||
-  fail "could not find the push step in $workflow"
-push_script=$(jq -r '.run // empty' <<<"$push_step")
-[[ -n $push_script ]] || fail "could not find the push step's run block in $workflow"
-
-read -r origin clone <<<"$(setup_clone pin-bumps)"
-base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
-new_t3_version=0.0.46-nightly.20261004.2644
-printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
-printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
-printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
-printf '{"version": "1.0.71", "platforms": {}}\n' >"$clone/packages/grok-build-release.json"
-printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
-printf '{"version": "1.5.1", "platforms": {}}\n' >"$clone/packages/antigravity-acp-release.json"
-printf '{"lockfileVersion": 3, "name": "acpx", "new": true}\n' >"$clone/packages/acpx/package-lock.json"
-sed -i 's/compound-engineering-v2.67.0/compound-engineering-v2.68.0/' \
-  "$clone/flake.nix" "$clone/home/h82/agents/agent-plugin-pins.nix"
-sed -i 's/1111111111111111111111111111111111111111/2222222222222222222222222222222222222222/' \
-  "$clone/flake.lock" "$clone/home/h82/agents/agent-plugin-pins.nix"
-(cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
-  fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
-commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 7 ]] || fail "expected 7 per-pin commits, found: $commits"
-for expected in \
-  'chore(packages): bump pi to 1.5.0|packages/pi-release.json' \
-  'chore(packages): bump grok-build to 1.0.71|packages/grok-build-release.json' \
-  'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
-  "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
-  'chore(packages): bump antigravity-cli to 1.5.0|packages/antigravity-cli-release.json' \
-  'chore(packages): bump antigravity-acp to 1.5.1|packages/antigravity-acp-release.json' \
-  'chore(agents): bump compound-engineering to compound-engineering-v2.68.0|flake.lock flake.nix home/h82/agents/agent-plugin-pins.nix'; do
-  subject=${expected%%|*} want=${expected#*|}
-  sha=$(awk -v s="$subject" '{ sha = $1; sub(/^[^ ]+ /, "") } $0 == s { print sha }' <<<"$commits")
-  [[ -n $sha ]] || fail "no commit '$subject' among: $commits"
-  files=$("$git_bin" -C "$clone" show --format= --name-only "$sha" | sort | paste -sd ' ')
-  [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
-done
-pass 'the t3code, antigravity-cli, antigravity-acp, pi, acpx, grok-build, and compound-engineering changes each land as their own commit with only their files'
-
-
-python3 "$runner" "$workflow" "$publisher" "$verifier"

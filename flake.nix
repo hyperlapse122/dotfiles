@@ -191,6 +191,7 @@
           pkgs = import nixpkgs { system = "aarch64-darwin"; };
           entries = lib.mapAttrsToList (name: host: {
             inherit name;
+            bootstrap = host.config.my.bootstrap;
             kind = "darwin";
             user = host.config.home-manager.users.${host.config.my.user.name};
           }) darwinHosts;
@@ -222,6 +223,7 @@
         claude-code-release = agentTools.claudeCodeRelease;
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
+        prezto-release = agentTools.preztoRelease;
         mise = import ./packages/mise.nix { inherit pkgs; };
         overlay-release = pkgs.writeScriptBin "overlay-release" (
           "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ./scripts/overlay-release
@@ -558,6 +560,9 @@
             pythonScriptCheck "claude-code-release" ./scripts/claude-code-release
               ./tests/test_claude_code_release.py;
           mise-release = pythonScriptCheck "mise-release" ./scripts/mise-release ./tests/test_mise_release.py;
+          prezto-release =
+            pythonScriptCheck "prezto-release" ./scripts/prezto-release
+              ./tests/test_prezto_release.py;
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
