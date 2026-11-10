@@ -1231,6 +1231,7 @@
             pkgs.runCommand "update-dependencies-reconcile-tests"
               {
                 nativeBuildInputs = [
+                  pkgs.actionlint
                   pkgs.git
                   pkgs.jq
                   pkgs.yq-go
@@ -1242,6 +1243,7 @@
                 export HOME=$TMPDIR
                 export PYTHONDONTWRITEBYTECODE=1
                 export UPDATE_CHECK_NAMES='${builtins.toJSON (builtins.attrNames self.checks.x86_64-linux)}'
+                actionlint -shellcheck= -pyflakes= ${./.github/workflows/update-dependencies.yml}
                 bash ${./tests/update-dependencies-reconcile.sh} \
                   ${./.github/workflows/update-dependencies.yml} \
                   ${./.gitignore} \

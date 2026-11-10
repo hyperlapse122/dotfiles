@@ -19,6 +19,8 @@ def policy(workflow):
     assert set(dispatch['options']) == {'all', 'dependencies', 'catalogs', 'drift'}
     assert [entry['cron'] for entry in workflow['on']['schedule']] == ['7,37 * * * *']
     assert workflow['concurrency']['cancel-in-progress'] is False
+    maintenance = workflow['jobs']['update-dependencies']
+    assert maintenance['timeout-minutes'] >= sum(s.get('timeout-minutes', 0) for s in maintenance['steps']) + 30, 'job timeout leaves no reconciliation and cleanup budget'
     assert 'GH_TOKEN_FOR_UPDATES' not in json.dumps(workflow['jobs']['watch'])
     for job in workflow['jobs'].values():
         checkout = next(s for s in job['steps'] if s.get('uses', '').startswith('actions/checkout@'))
@@ -31,7 +33,7 @@ def policy(workflow):
 # Stubs expose only the external Git/Nix/GitHub boundary. All branch, rebase,
 # commit and push effects below use real Git repositories.
 STUB = r'''#!PYTHON
-import json, os, pathlib, shutil, subprocess, sys
+import json, os, pathlib, shutil, signal, subprocess, sys
 root = pathlib.Path(os.environ['TEST_CONTROL'])
 c = json.loads((root / 'control.json').read_text())
 real_git = c['git']
@@ -55,8 +57,8 @@ def move_main(snapshot=False):
     other = c['other']
     subprocess.run([real_git, '-C', other, 'fetch', '-q', 'origin', 'main'], check=True)
     subprocess.run([real_git, '-C', other, 'checkout', '-qB', 'main', 'origin/main'], check=True)
-    p = pathlib.Path(other, 'home/h82/agents/synthetic-catalog.json' if snapshot else 'concurrent.txt')
-    p.write_text('{"data":[{"id":"other"}]}\n' if c.get('conflict') else '{"data":[{"id":"new"}]}\n' if snapshot else 'concurrent ' + str(count('moves')))
+    p = pathlib.Path(other, 'tracked.txt' if c.get('dependency_conflict') else 'home/h82/agents/synthetic-catalog.json' if snapshot else 'concurrent.txt')
+    p.write_text('concurrent dependency\n' if c.get('dependency_conflict') else '{"data":[{"id":"other"}]}\n' if c.get('conflict') else '{"data":[{"id":"new"}]}\n' if snapshot else 'concurrent ' + str(count('moves')))
     subprocess.run([real_git, '-C', other, 'add', '.'], check=True)
     subprocess.run([real_git, '-C', other, 'commit', '-qm', 'concurrent main change'], check=True)
     subprocess.run([real_git, '-C', other, 'push', '-q', 'origin', 'main'], check=True)
@@ -67,7 +69,12 @@ if name == 'gh':
     event('gh', args=args)
     if args[:2] == ['pr', 'list']:
         if c.get('query_error'): sys.exit(1)
-        print(1 if c.get('open_pr') else 0)
+        prs = [{'number': 1, 'headRefName': 'unrelated-feature'}]
+        if c.get('open_pr'):
+            prs.append({'number': 7, 'headRefName': c.get('open_branch', 'update-dependencies-fix')})
+        if '--head' in args:
+            prs = [pr for pr in prs if pr['headRefName'] == args[args.index('--head') + 1]]
+        print(subprocess.check_output(['jq', '-r', args[args.index('--jq') + 1]], input=json.dumps(prs), text=True).strip())
     elif args[:2] in (['pr', 'create'], ['pr', 'edit']):
         body = pathlib.Path(args[args.index('--body-file') + 1]).read_text()
         (root / 'pr-body.md').write_text(body)
@@ -115,6 +122,8 @@ if args and args[0] in ('fmt', 'flake', 'build'):
     if scope == 'catalogs' or args[0] == 'fmt': count(scope + '-round')
     round = int((root / (scope + '-round')).read_text())
     event('verify', scope=scope, command=args[0], round=round, sha=git('rev-parse', 'HEAD'))
+    if c.get('timeout_dependency_verify') and scope == 'dependencies':
+        os.killpg(os.getpgrp(), signal.SIGKILL)
     if os.environ.get('GH_TOKEN_FOR_UPDATES') or os.environ.get('SYNTHETIC_API_KEY'):
         event('secret-leak')
         sys.exit(95)
@@ -174,13 +183,15 @@ class Fixture:
             (self.repo / 'feature.txt').write_text('must not publish')
             self.call('-C', str(self.repo), 'add', 'feature.txt')
             self.call('-C', str(self.repo), 'commit', '-qm', 'feature-only work')
-        if controls.get('open_pr') or controls.get('query_error'):
-            self.call('-C', str(self.other), 'checkout', '-qb', 'update-dependencies-fix')
+        self.reconcile_branch = 'update-dependencies-fix-1729-1'
+        self.old_branch = controls.get('open_branch', 'update-dependencies-fix')
+        if controls.get('open_pr') or controls.get('query_error') or controls.get('closed_pr'):
+            self.call('-C', str(self.other), 'checkout', '-qb', self.old_branch)
             (self.other / 'human-fix').write_text('preserve')
             self.call('-C', str(self.other), 'add', '.')
             self.call('-C', str(self.other), 'commit', '-qm', 'human reconciliation fix')
-            self.call('-C', str(self.other), 'push', '-q', 'origin', 'update-dependencies-fix')
-            self.fix_head = self.call('--git-dir', str(self.origin), 'rev-parse', 'update-dependencies-fix').strip()
+            self.call('-C', str(self.other), 'push', '-q', 'origin', self.old_branch)
+            self.fix_head = self.call('--git-dir', str(self.origin), 'rev-parse', self.old_branch).strip()
         self.controls = dict(controls, git=self.git, other=str(self.other))
         (self.control / 'control.json').write_text(json.dumps(self.controls))
         self.bin = self.root / 'bin'
@@ -189,7 +200,7 @@ class Fixture:
             path = self.bin / name
             path.write_text(STUB.replace('PYTHON', sys.executable, 1))
             path.chmod(0o755)
-        self.env.update(PATH=str(self.bin) + os.pathsep + os.environ['PATH'], TEST_CONTROL=str(self.control), GITHUB_WORKSPACE=str(self.repo), RUNNER_TEMP=str(self.root / 'runner'), GITHUB_STEP_SUMMARY=str(self.root / 'summary'), GITHUB_REPOSITORY='example/dotfiles')
+        self.env.update(PATH=str(self.bin) + os.pathsep + os.environ['PATH'], TEST_CONTROL=str(self.control), GITHUB_WORKSPACE=str(self.repo), RUNNER_TEMP=str(self.root / 'runner'), GITHUB_STEP_SUMMARY=str(self.root / 'summary'), GITHUB_REPOSITORY='example/dotfiles', GITHUB_RUN_ID='1729', GITHUB_RUN_ATTEMPT='1')
         Path(self.env['RUNNER_TEMP']).mkdir()
         self.secrets = {'GH_TOKEN_FOR_UPDATES': 'fake-update-token', 'SYNTHETIC_API_KEY': 'fake-catalog-key'}
         if self.controls.get('missing_token'): del self.secrets['GH_TOKEN_FOR_UPDATES']
@@ -247,6 +258,7 @@ class Fixture:
                 continue
             if 'uses' in step:
                 if step['uses'].startswith('actions/checkout@'):
+                    self.call('-C', str(self.repo), 'fetch', '-q', 'origin')
                     self.call('-C', str(self.repo), 'checkout', '-qB', step['with']['ref'], 'origin/main')
                 elif not step['uses'].startswith('cachix/install-nix-action@'):
                     raise AssertionError('unhandled action: ' + step['uses'])
@@ -256,7 +268,7 @@ class Fixture:
             step_env = dict(env, GITHUB_OUTPUT=str(output))
             step_env.update({key: self.expand(value) for key, value in step.get('env', {}).items()})
             cwd = self.expand(step.get('working-directory', str(self.repo)))
-            result = subprocess.run(['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', step['run']], cwd=cwd, env=step_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            result = subprocess.run(['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', step['run']], cwd=cwd, env=step_env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
             self.log += '\n' + step.get('name', name) + ':\n' + result.stdout
             self.steps[name] = {'outcome': 'success' if result.returncode == 0 else 'failure', 'outputs': dict(line.split('=', 1) for line in output.read_text().splitlines() if '=' in line)}
             if result.returncode and not step.get('continue-on-error', False): self.ok = False
@@ -347,8 +359,8 @@ def behavioral_tests(workflow, publisher, verifier):
         require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'dependency failure blocked catalog publication')
         require('base dependency' in f.remote('tracked.txt'), 'failed dependency leaked to main')
         require(any(e['args'][:2] == ['pr', 'create'] for e in f.events_of('gh')), 'dependency failure did not reconcile')
-        require('updated dependency' in f.remote('tracked.txt', 'update-dependencies-fix'), 'reconciliation lost dependency candidate')
-        diff = f.call('--git-dir', str(f.origin), 'diff', '--name-only', 'main...update-dependencies-fix').splitlines()
+        require('updated dependency' in f.remote('tracked.txt', f.reconcile_branch), 'reconciliation lost dependency candidate')
+        diff = f.call('--git-dir', str(f.origin), 'diff', '--name-only', f'main...{f.reconcile_branch}').splitlines()
         require(diff == ['tracked.txt'], 'reconciliation contains catalog or logs: ' + repr(diff))
         logs = f.root / 'runner/updates/dependencies-logs/1'
         require('dependencies fmt' in (logs / 'fmt.log').read_text(), 'format log was lost')
@@ -364,9 +376,15 @@ def behavioral_tests(workflow, publisher, verifier):
     exercise(workflow, publisher, verifier, 'partial failed updater state stays isolated', update_failure, deps_update_fail=True)
     def preserved(f):
         require(not f.ok, 'verification failure was hidden')
-        require(f.call('--git-dir', str(f.origin), 'rev-parse', 'update-dependencies-fix').strip() == f.fix_head, 'human fix was overwritten')
+        require(f.call('--git-dir', str(f.origin), 'rev-parse', f.old_branch).strip() == f.fix_head, 'human fix was overwritten')
         require(any(e['args'][:2] == ['pr', 'edit'] for e in f.events_of('gh')), 'open PR did not receive logs')
     exercise(workflow, publisher, verifier, 'existing reconciliation preserves human commits', preserved, verify_fail='fmt', open_pr=True)
+    exercise(workflow, publisher, verifier, 'existing numbered reconciliation preserves human commits', preserved, verify_fail='fmt', open_pr=True, open_branch='update-dependencies-fix-1700-1')
+    def closed(f):
+        require(f.call('--git-dir', str(f.origin), 'rev-parse', f.old_branch).strip() == f.fix_head, 'closed PR branch was overwritten')
+        require('updated dependency' in f.remote('tracked.txt', f.reconcile_branch), 'new reconciliation lost dependency candidate')
+        require(any(e['args'][:2] == ['pr', 'create'] for e in f.events_of('gh')), 'closed PR prevented new reconciliation')
+    exercise(workflow, publisher, verifier, 'closed reconciliation branch is retained while a new PR is created', closed, verify_fail='fmt', closed_pr=True)
     def query_failed(f):
         require(not f.ok, 'failed PR query was hidden')
         require(f.call('--git-dir', str(f.origin), 'rev-parse', 'update-dependencies-fix').strip() == f.fix_head, 'failed query overwrote branch')
@@ -397,6 +415,20 @@ def behavioral_tests(workflow, publisher, verifier):
         require(not f.ok, 'two rejected pushes succeeded')
         require(len(f.events_of('push-attempt')) == 2 and not f.events_of('pushed'), 'publisher exceeded retry bound or published rejected candidate')
     exercise(workflow, publisher, verifier, 'second rejected push fails without another retry', twice, part='catalogs', race_pushes=2)
+    def dependency_recovery(f):
+        require(not f.ok and not f.events_of('pushed'), 'failed dependency candidate reached main')
+        require(any(e['args'][:2] == ['pr', 'create'] for e in f.events_of('gh')), 'failed dependency candidate did not reconcile')
+        require('updated dependency' in f.remote('tracked.txt', f.reconcile_branch), 'reconciliation lost dependency changes')
+        diff = f.call('--git-dir', str(f.origin), 'diff', '--name-only', f'main...{f.reconcile_branch}').splitlines()
+        require(diff == ['tracked.txt'], 'reconciliation contains unrelated files: ' + repr(diff))
+        verify_before_push(f)
+    exercise(workflow, publisher, verifier, 'dependency rebase conflict aborts before reconciliation', dependency_recovery, part='dependencies', move_fetch=2, dependency_conflict=True)
+    exercise(workflow, publisher, verifier, 'second dependency push rejection retains candidate for reconciliation', dependency_recovery, part='dependencies', race_pushes=2)
+    def dependency_timeout(f):
+        dependency_recovery(f)
+        require(f.steps['publish_dependencies']['outputs']['failure_stage'] == 'verification', 'interruption lost its last publication stage')
+        require('Failure stage: verification' in (f.control / 'pr-body.md').read_text(), 'interruption was not reported in reconciliation')
+    exercise(workflow, publisher, verifier, 'forced termination during dependency verification retains reconciliation', dependency_timeout, part='dependencies', timeout_dependency_verify=True)
     def no_token(f):
         require(not f.ok, 'missing push token succeeded')
         require(not f.events_of('push-attempt') and 'GH_TOKEN_FOR_UPDATES' in f.log, 'missing token pushed or was not named')
@@ -461,6 +493,14 @@ def mutation_tests(workflow, publisher, verifier):
     step['if'] = step['if'].replace('!cancelled()', 'always()')
     caught('cancellation guard removed', wf, publisher, verifier, no_push, 'failed verification reached push', cancel_after_catalog=True)
     wf = copy.deepcopy(workflow)
+    step = next(s for s in wf['jobs']['update-dependencies']['steps'] if s.get('id') == 'prepare_dependencies')
+    anchor = 'git worktree add --detach "$RUNNER_TEMP/updates/dependencies" origin/main'
+    require(anchor in step['run'], 'missing candidate isolation mutation anchor')
+    step['run'] = step['run'].replace(anchor, 'git worktree add --detach "$RUNNER_TEMP/updates/dependencies" "$(git -C "$RUNNER_TEMP/updates/catalogs" rev-parse HEAD)"')
+    def isolated(f):
+        require('old' in f.remote('home/h82/agents/synthetic-catalog.json'), 'failed catalog candidate leaked into dependency publication')
+    caught('dependency candidate isolation removed', wf, publisher, verifier, isolated, 'failed catalog candidate leaked', verify_fail='catalogs')
+    wf = copy.deepcopy(workflow)
     wf['jobs']['watch'].setdefault('env', {})['GH_TOKEN_FOR_UPDATES'] = '${{ secrets.GH_TOKEN_FOR_UPDATES }}'
     try:
         policy(wf)
@@ -468,6 +508,23 @@ def mutation_tests(workflow, publisher, verifier):
         print('update-workflow: mutation caught - push credential leaked to drift job')
     else:
         raise AssertionError('drift credential mutation survived')
+    wf = copy.deepcopy(workflow)
+    wf['jobs']['update-dependencies']['timeout-minutes'] = 180
+    try:
+        policy(wf)
+    except AssertionError as error:
+        require('cleanup budget' in str(error), 'timeout mutation failed for another reason: ' + str(error))
+    else:
+        raise AssertionError('job timeout mutation survived')
+    print('update-workflow: mutation caught - job timeout truncates sequential step budget')
+    wf = copy.deepcopy(workflow)
+    wf['jobs']['update-dependencies'].setdefault('env', {})['UPDATE_ROOT'] = '${{ runner.temp }}/updates'
+    with tempfile.TemporaryDirectory(prefix='update-workflow-validation-') as directory:
+        path = Path(directory, 'invalid.yml')
+        path.write_text(json.dumps(wf))
+        result = subprocess.run(['actionlint', '-shellcheck=', '-pyflakes=', str(path)], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        require(result.returncode != 0 and 'context "runner" is not allowed here' in result.stdout, 'invalid job context survived workflow validation: ' + result.stdout)
+    print('update-workflow: mutation caught - runner context in job environment')
 
 
 if __name__ == '__main__':

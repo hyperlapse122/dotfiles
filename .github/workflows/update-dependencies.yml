@@ -23,9 +23,7 @@ jobs:
   update-dependencies:
     if: "!cancelled() && (github.event_name == 'schedule' || inputs.part != 'drift')"
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
-    env:
-      UPDATE_ROOT: ${{ runner.temp }}/updates
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -50,7 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$UPDATE_ROOT"
+          mkdir -p "$RUNNER_TEMP/updates"
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         id: initialize
@@ -59,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           git -c core.hooksPath=/dev/null fetch -q origin +refs/heads/main:refs/remotes/origin/main
-          git worktree add --detach "$UPDATE_ROOT/catalogs" origin/main
+          git worktree add --detach "$RUNNER_TEMP/updates/catalogs" origin/main
         id: prepare_catalogs
         if: "!cancelled() && (github.event_name == 'schedule' || inputs.part == 'all' || inputs.part == '' || inputs.part == 'catalogs') && steps.initialize.outcome == 'success'"
         continue-on-error: true
@@ -95,7 +93,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$UPDATE_ROOT/catalogs-logs"
+          bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$RUNNER_TEMP/updates/catalogs-logs"
         id: publish_catalogs
         if: "!cancelled() && steps.catalog.outcome == 'success' && steps.catalog.outputs.changed == 'true'"
         continue-on-error: true
@@ -108,7 +106,7 @@ jobs:
         run: |
           set -euo pipefail
           git -c core.hooksPath=/dev/null fetch -q origin +refs/heads/main:refs/remotes/origin/main
-          git worktree add --detach "$UPDATE_ROOT/dependencies" origin/main
+          git worktree add --detach "$RUNNER_TEMP/updates/dependencies" origin/main
         id: prepare_dependencies
         if: "!cancelled() && (github.event_name == 'schedule' || inputs.part == 'all' || inputs.part == '' || inputs.part == 'dependencies') && steps.initialize.outcome == 'success'"
         continue-on-error: true
@@ -377,7 +375,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" dependencies "$UPDATE_ROOT/dependencies-logs"
+          bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" dependencies "$RUNNER_TEMP/updates/dependencies-logs"
         id: publish_dependencies
         if: "!cancelled() && steps.commit.outcome == 'success'"
         continue-on-error: true
@@ -389,8 +387,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          open_prs=$(gh pr list --head "$BRANCH" --state open --json number --jq length)
-          body="$UPDATE_ROOT/reconciliation.md"
+          FAILURE_STAGE=${FAILURE_STAGE:-interrupted}
+          LOG_DIR=${LOG_DIR:-$RUNNER_TEMP/updates/dependencies-logs}
+          if [ -d "$(git rev-parse --git-path rebase-merge)" ] || [ -d "$(git rev-parse --git-path rebase-apply)" ]; then
+            git rebase --abort
+          fi
+          open_pr=$(gh pr list --state open --limit 1000 --json number,headRefName \
+            --jq 'map(select(.headRefName == "update-dependencies-fix" or (.headRefName | startswith("update-dependencies-fix-")))) | sort_by(.number) | .[0].number // empty')
+          body="$RUNNER_TEMP/updates/reconciliation.md"
           {
             echo '## Automated Dependency Update (Reconciliation Required)'
             echo
@@ -404,19 +408,20 @@ jobs:
               printf '```\n'
             done
             echo 'Push a fix to this branch; CI runs on each push. This PR waits for you to review and merge it.'
-            if [ "$open_prs" -gt 0 ]; then
+            if [ -n "$open_pr" ]; then
               echo 'These logs are from the latest failing run, which left this branch as it was.'
             fi
           } > "$body"
-          if [ "$open_prs" -gt 0 ]; then
-            gh pr edit "$BRANCH" --body-file "$body"
+          if [ -n "$open_pr" ]; then
+            gh pr edit "$open_pr" --body-file "$body"
           else
-            git -c core.hooksPath=/dev/null checkout -B "$BRANCH"
+            BRANCH="update-dependencies-fix-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            git -c core.hooksPath=/dev/null checkout -b "$BRANCH"
             authorization=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
             GIT_CONFIG_COUNT=2 \
               GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $authorization" \
               GIT_CONFIG_KEY_1=core.hooksPath GIT_CONFIG_VALUE_1=/dev/null \
-              git push --force-with-lease origin "HEAD:refs/heads/$BRANCH"
+              git push origin "HEAD:refs/heads/$BRANCH"
             gh pr create --head "$BRANCH" --title 'chore(deps): automated dependency update (reconciliation required)' --body-file "$body"
           fi
         id: reconcile
@@ -424,7 +429,6 @@ jobs:
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/dependencies
         env:
-          BRANCH: update-dependencies-fix
           GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
           FAILURE_STAGE: ${{ steps.publish_dependencies.outputs.failure_stage }}
           LOG_DIR: ${{ steps.publish_dependencies.outputs.log_dir }}
@@ -433,8 +437,8 @@ jobs:
         run: |
           set -euo pipefail
           for part in catalogs dependencies; do
-            if [ -d "$UPDATE_ROOT/$part" ]; then
-              git worktree remove --force "$UPDATE_ROOT/$part"
+            if [ -d "$RUNNER_TEMP/updates/$part" ]; then
+              git worktree remove --force "$RUNNER_TEMP/updates/$part"
             fi
           done
         id: cleanup
