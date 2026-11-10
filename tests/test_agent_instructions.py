@@ -217,6 +217,29 @@ class AgentInstructionsTest(unittest.TestCase):
                     self.assertNotIn(heading, rendered)
                     self.assertNotIn("delegate_task", rendered)
 
+    def test_model_ladder_is_only_in_t3_additions(self):
+        heading = "## T3 CE model selection"
+        rows = ("| Claude | Fable | Opus | Sonnet | Haiku |",
+                "| Codex | astra | sol | terra | luna |",
+                "| Synthetic through pi | Kimi | GLM | GLM Flash | DeepSeek Flash |",
+                "| Antigravity | Gemini Argon | Gemini Argon | Gemini Flash | Gemini Flash |")
+        rules = ("`correctness-reviewer`", "cross-model review peers", "implementation workers", "grounding scouts",
+                 "Set no effort", "never runs above", "names for a child wins",
+                 "`cross_model_effort`", "`work_engine_preferences`", "next lower rung of the same provider", "next higher rung",
+                 "newest listed model")
+        for os_name, additions in self.t3_additions.items():
+            for harness, rendered in additions.items():
+                with self.subTest(os=os_name, harness=harness):
+                    self.assertEqual(rendered.count(heading), 1)
+                    for text in (*rows, *rules):
+                        self.assertIn(text, rendered)
+                    self.assertNotIn("do not silently inherit a different model or effort", rendered)
+        for os_name, baseline in self.baselines.items():
+            for harness, rendered in baseline.items():
+                with self.subTest(os=os_name, harness=harness):
+                    self.assertNotIn(heading, rendered)
+                    self.assertNotIn("| Claude | Fable |", rendered)
+
     def test_linux_guidance_stays_out_of_other_hosts_and_t3(self):
         for os_name in ('darwin', 'windows'):
             for text in self.baselines[os_name].values():
