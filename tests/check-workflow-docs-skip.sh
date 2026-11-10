@@ -138,21 +138,5 @@ with tempfile.TemporaryDirectory() as tmp:
         args = record.read_bytes().decode().split("\0")[:-1]
         assert [a for a in args if a.startswith(".#")] == expected
 
-if len(sys.argv) > 2:
-    catalogs = yaml.safe_load(Path(sys.argv[2]).read_text())
-    names = json.loads(sys.argv[3])
-    targets = catalogs["jobs"]["refresh"]["env"]["VERIFY_TARGETS"].split()
-    def valid_targets(entries):
-        assert entries
-        for target in entries:
-            prefix = ".#checks.x86_64-linux."
-            assert target.startswith(prefix) and target[len(prefix):] in names, target
-    valid_targets(targets)
-    try:
-        valid_targets(targets + [".#checks.x86_64-linux.removed-check"])
-    except AssertionError:
-        pass
-    else:
-        raise AssertionError("survived missing catalog verification check")
-print("check-workflow-docs-skip: all event, matrix, catalog, and mutation assertions passed")
+print("check-workflow-docs-skip: all event, matrix, and mutation assertions passed")
 PY

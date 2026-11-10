@@ -115,10 +115,10 @@ flowchart TB
 ### Key Technical Decisions
 
 - KTD1. **Two jobs in the existing update workflow.** Keep `update-dependencies.yml` with a maintenance job and an independent `watch` job, satisfying R1-R3 and R8. Serial producer phases within maintenance avoid artifact transport and multiple publishers; separate drift execution provides a credential boundary that steps alone cannot provide. The workflow defaults to read-only contents, and only `watch` receives issue-write permission.
-- KTD2. **Isolate producer candidates from a common main revision.** For R3, R4, and R6, create task-owned temporary Git worktrees for dependency and catalog changes and retain their commit identities. Preserve the existing per-pin commit messages. Only candidates that pass their own applicable verification enter the publisher; failed or untracked producer output stays out of the other candidate. Remove the worktrees during final cleanup.
-- KTD3. **One verification implementation and one main publisher.** For R4, R5, and R9, share verification logic between candidate checks and publication. Dependency candidates require formatting, flake checks, and VM checks; catalog candidates require the existing Pi and Synthetic checks. Combined candidates require the dependency suite. Verify an assembled tree when it differs from an already verified candidate, and repeat the applicable suite after every changed-main rebase. Capture each command's own status and keep attempt-specific logs outside candidate trees.
-- KTD4. **A bounded publication retry.** For R4 and R5, the publisher fetches `main`, rebases when needed, verifies, and pushes `HEAD:refs/heads/main`; one rejected push may repeat that same gate once. Missing credentials, conflicts, or verification failure cannot fall through to a push. A failed combined or rebased tree is never partially published as a fallback.
-- KTD5. **Keep reconciliation attributable to its dependency candidate.** For R6, retain the dependency-only candidate and its own verification results separately from combined verification. Existing PRs receive logs without branch replacement, and lookup failure remains fail-closed. New reconciliation branches contain only dependency changes. A combined failure alone is not proof that dependencies fail: verify the isolated dependency tree against the relevant base before attributing it. Conflicts must be aborted in the publisher before recovery, and conflict reports must not claim verification ran.
+- KTD2. **Publish isolated candidates serially, catalog first.** For R3, R4, and R6, use separate task-owned Git worktrees and the same publisher for each candidate. Attempt catalog production and publication first, then prepare dependency changes from current `main`. Preserve per-pin dependency commits. Failed, staged, or untracked producer output cannot enter the other candidate. Remove owned worktrees during final cleanup.
+- KTD3. **One verification implementation and one main publisher.** For R4, R5, and R9, each candidate uses the same publication routine with its applicable verification scope. Dependency changes require formatting, flake checks, and VM checks; catalog changes require the existing Pi and Synthetic checks. Verify before publication and repeat that suite after every changed-main rebase. Capture each command's own status and keep attempt-specific logs outside candidate trees.
+- KTD4. **A bounded publication retry per candidate.** For R4 and R5, the shared publisher fetches `main`, rebases when needed, verifies, and pushes `HEAD:refs/heads/main`; one rejected push may repeat that same gate once. Missing credentials, conflicts, or verification failure cannot fall through to a push of that candidate. The other selected producer is still attempted under R3.
+- KTD5. **Keep reconciliation attributable to its dependency candidate.** For R6, retain the dependency candidate, its base, and its verification results. Existing PRs receive logs without branch replacement, and lookup failure remains fail-closed. New reconciliation branches contain only dependency changes above the applicable main revision. Catalog publication followed by failing dependency verification retains the catalog commit and reports the dependency failure. Abort a failed rebase before recovery; a conflict report must not claim verification ran.
 - KTD6. **Scope secrets to the steps that consume them.** For R8, every checkout is pinned to `main` with credential persistence disabled. Only catalog-fetch and drift-compare steps receive the catalog key. Only main publication and dependency reconciliation receive the update PAT; verification subprocesses must not inherit it. The drift job uses the job token only for issue operations. Its messages identify the actual checked-out revision, including manual dispatch from another branch.
 - KTD7. **Use the existing Actions interface.** For R2, use stable selection values `all`, `dependencies`, `catalogs`, and `drift`, defaulting to `all`. Gate producers explicitly, distinguish unselected, unchanged, changed, and failed outcomes, and finish with a failing result if a selected part failed. Cancellation prevents further publication. No separate agent API is needed.
 - KTD8. **One workflow check owns the merged behavior.** For R10-R13, keep `update-dependencies-reconcile` as the merged check and remove obsolete per-workflow check registrations. Retain the drift lifecycle helper under that owner. Move catalog-target validation out of the check-workflow policy test into the merged update check so each workflow has one primary owner.
@@ -133,9 +133,9 @@ flowchart TB
   T --> W[Watch: separate read-only checkout]
   M --> D[Dependency candidate worktree]
   M --> C[Catalog candidate worktree]
-  D --> V[Eligible verified candidate commits]
+  D --> V[Candidate with applicable verification scope]
   C --> V
-  V --> P[Single main publisher: step-scoped update token]
+  V --> P[Shared main publisher, called serially: step-scoped update token]
   D --> R[Dependency reconciliation: step-scoped update token]
   W --> I[Drift issue reconciliation: issue-write token]
 ```
@@ -147,7 +147,7 @@ stateDiagram-v2
   [*] --> NoCandidate
   NoCandidate --> Prepared: eligible changes exist
   NoCandidate --> [*]: no changes
-  Prepared --> Verified: assembled tree passes
+  Prepared --> Verified: candidate tree passes
   Prepared --> Failed: verification fails
   Verified --> Rebased: main moved
   Rebased --> Verified: verification passes
@@ -155,7 +155,7 @@ stateDiagram-v2
   Verified --> Published: push accepted
   Verified --> Prepared: first push rejected
   Verified --> Failed: second push rejected
-  Failed --> Reported: attributable reconciliation and outcomes
+  Failed --> Reported: candidate reconciliation and outcomes
   Published --> Reported
   Reported --> [*]
 ```
@@ -169,8 +169,9 @@ Selection under KTD7:
 
 ### Assumptions and Risks
 
-- The two publishing producers may run sequentially in the same job; R3 requires independent outcomes rather than simultaneous execution. Worktrees avoid rollback logic that could leave staged or untracked contamination.
+- Catalog-first publication prevents slow dependency verification from starving the catalog path. Bound step and job runtimes for the candidate check and at most two rebased checks, and report a timed-out part without presenting it as success. GitHub runner termination and cancellation stop publication rather than guaranteeing later work.
 - The watch observes its own checked-out `main`; it need not wait for the publisher or claim to have observed newly published changes.
+- Step-scoped credentials limit direct exposure, not hostile-code containment: this updater continues to trust code executed from its pinned upstream dependencies. Disable Git hooks for publication and avoid embedding tokens in remote URLs. A separate sandbox for compromised upstream packages is not introduced by this orchestration change.
 - Snapshot fetch failure or a missing catalog key preserves the committed snapshot but is visible as unavailable or failed, not unchanged success. Other selected parts continue under R3.
 - Existing `GH_TOKEN_FOR_UPDATES` and `SYNTHETIC_API_KEY` secrets remain externally provisioned prerequisites. Tests use fake values and cannot establish live secret availability.
 - Repository-owned references to removed workflow identities will be updated. External callers are not discoverable from this checkout; the README documents the replacement and selection values.
@@ -194,10 +195,10 @@ Selection under KTD7:
 - **Requirements:** R1-R9; F1, F2; AE1-AE7; KTD1-KTD7.
 - **Dependencies:** None.
 - **Files:** `.github/workflows/update-dependencies.yml`, removal of `.github/workflows/model-catalogs.yml` and `.github/workflows/synthetic-models.yml`, `scripts/ci-update-verify`, `scripts/ci-update-publish`, and `tests/update-dependencies-reconcile.sh`.
-- **Approach:** Preserve updater commands and per-pin commits, introduce the KTD2 ownership boundary, and route eligible candidates through KTD3-KTD5. Adapt the `watch` job's existing issue scripts and revision reporting. Share verification and main publication rather than duplicating gate implementations.
+- **Approach:** Preserve updater commands and per-pin commits, introduce the KTD2 ownership boundary, and route each candidate serially through KTD3-KTD5. Adapt the `watch` job's existing issue scripts and revision reporting. Share verification and main publication rather than duplicating gate implementations.
 - **Patterns to follow:** Existing snapshot publisher's main checkout, retry, and credential handling; existing dependency verifier's status capture; existing drift issue lifecycle.
 - **Execution note:** Characterize existing reconcile behavior before replacing the orchestration, then exercise the new workflow scripts against disposable remotes.
-- **Test scenarios:** Covers AE1-AE7. Exercise all four manual selections, dependency failure with successful catalog publication, catalog failure with successful dependency publication, both failures, no changes, and failed comparison with issue reconciliation still attempted. Check per-pin commit contents, partial and untracked failed-producer output, combined-only failure, rebase conflict recovery, actual revision reporting, and cancellation gates.
+- **Test scenarios:** Covers AE1-AE7. Exercise all four manual selections, dependency failure with successful catalog publication, catalog failure with successful dependency publication, both failures, no changes, and failed comparison with issue reconciliation still attempted. Check per-pin commit contents, partial and untracked failed-producer output, catalog-first success followed by failing dependency verification, rebase conflict recovery, actual revision reporting, and cancellation gates.
 - **Verification:** The extracted workflow and any shared helpers produce the expected remote history and per-part outcomes; no unverified candidate reaches main.
 
 ### U2. Merge the workflow regression suites

@@ -594,26 +594,6 @@
                 export SYNTHETIC_MODELS_SOURCE_JSON=${realSource}
               '';
             } "synthetic-models-watch" ./scripts/synthetic-models-watch ./tests/test_synthetic_models_watch.py;
-          synthetic-models-reconcile =
-            pkgs.runCommand "synthetic-models-reconcile-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.jq
-                  pkgs.gawk
-                ];
-              }
-              ''
-                export PYTHONDONTWRITEBYTECODE=1
-                bash ${./tests/synthetic-models-reconcile.sh} \
-                  ${./.github/workflows/synthetic-models.yml} \
-                  ${agentTools.syntheticModelsWatch}/libexec/synthetic-models-watch/synthetic-models-watch \
-                  ${./tests/fixtures/synthetic-models/catalog-2026-10-21.json} \
-                  ${pkgs.writeText "synthetic-models.json" (
-                    builtins.toJSON (import ./home/h82/agents/synthetic-models.nix)
-                  )}
-                touch $out
-              '';
           # Drives the packaged helper, so a package that lost nokogiri from its
           # interpreter fails here rather than in the update workflow.
           android-sdk-release =
@@ -1255,29 +1235,26 @@
                   pkgs.jq
                   pkgs.yq-go
                   pkgs.gawk
+                  pkgs.python3
                 ];
               }
               ''
                 export HOME=$TMPDIR
+                export PYTHONDONTWRITEBYTECODE=1
+                export UPDATE_CHECK_NAMES='${builtins.toJSON (builtins.attrNames self.checks.x86_64-linux)}'
                 bash ${./tests/update-dependencies-reconcile.sh} \
                   ${./.github/workflows/update-dependencies.yml} \
-                  ${./.gitignore}
-                touch $out
-              '';
-          model-catalogs-reconcile =
-            pkgs.runCommand "model-catalogs-reconcile-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.git
-                  pkgs.jq
-                  pkgs.yq-go
-                  pkgs.gawk
-                ];
-              }
-              ''
-                export HOME=$TMPDIR
-                bash ${./tests/model-catalogs-reconcile.sh} \
-                  ${./.github/workflows/model-catalogs.yml}
+                  ${./.gitignore} \
+                  ${./scripts/ci-update-publish} \
+                  ${./scripts/ci-update-verify} \
+                  ${./tests/update-workflow.py}
+                bash ${./tests/synthetic-models-reconcile.sh} \
+                  ${./.github/workflows/update-dependencies.yml} \
+                  ${agentTools.syntheticModelsWatch}/libexec/synthetic-models-watch/synthetic-models-watch \
+                  ${./tests/fixtures/synthetic-models/catalog-2026-10-21.json} \
+                  ${pkgs.writeText "synthetic-models.json" (
+                    builtins.toJSON (import ./home/h82/agents/synthetic-models.nix)
+                  )}
                 touch $out
               '';
           ci-workflow-docs-skip =
@@ -1290,9 +1267,7 @@
                 ];
               }
               ''
-                bash ${./tests/check-workflow-docs-skip.sh} ${./.github/workflows/check.yml} \
-                  ${./.github/workflows/model-catalogs.yml} \
-                  '${builtins.toJSON (builtins.attrNames self.checks.x86_64-linux)}'
+                bash ${./tests/check-workflow-docs-skip.sh} ${./.github/workflows/check.yml}
                 touch $out
               '';
           desktop-autostart = import ./tests/desktop-autostart.nix { inherit pkgs self; };

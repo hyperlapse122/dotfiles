@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scope=$1
+logs=$2
+helpers=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+stage=verification
+attempt=0
+
+finish() {
+  local status=$?
+  if [ "$status" -ne 0 ]; then
+    if [ "$stage" = rebase ]; then
+      git rebase --abort || true
+    fi
+    printf 'failure_stage=%s\nlog_dir=%s\n' "$stage" "$logs/$attempt" >> "$GITHUB_OUTPUT"
+  fi
+}
+trap finish EXIT
+
+verify() {
+  attempt=$((attempt + 1))
+  stage=verification
+  env -u GH_TOKEN_FOR_UPDATES -u GH_TOKEN -u SYNTHETIC_API_KEY \
+    bash "$helpers/ci-update-verify" "$scope" "$logs/$attempt"
+}
+
+sync_main() {
+  stage=fetch
+  git -c core.hooksPath=/dev/null fetch -q origin +refs/heads/main:refs/remotes/origin/main
+  if ! git merge-base --is-ancestor origin/main HEAD; then
+    stage=rebase
+    git -c core.hooksPath=/dev/null rebase origin/main
+    if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+      verify
+    fi
+  fi
+}
+
+verify
+sync_main
+if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then
+  echo 'No candidate commits remain after synchronization.'
+  exit 0
+fi
+
+stage=credentials
+if [ -z "${GH_TOKEN_FOR_UPDATES:-}" ]; then
+  echo '::error::GH_TOKEN_FOR_UPDATES is not set; nothing was pushed.'
+  exit 1
+fi
+
+# Keep authentication out of remote URLs and disable repository hooks.
+authorization=$(printf 'x-access-token:%s' "$GH_TOKEN_FOR_UPDATES" | base64 | tr -d '\n')
+push() {
+  stage=push
+  GIT_CONFIG_COUNT=2 \
+    GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $authorization" \
+    GIT_CONFIG_KEY_1=core.hooksPath GIT_CONFIG_VALUE_1=/dev/null \
+    git push -q origin HEAD:refs/heads/main
+}
+
+if ! push; then
+  echo '::notice::Push rejected; synchronizing and verifying once more.'
+  sync_main
+  if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+    push
+  fi
+fi
+echo "Published verified $scope changes."

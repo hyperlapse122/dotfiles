@@ -449,7 +449,7 @@ def body_lines(findings, rejected, detected_at):
         "",
         f"Change the entry's `id` or the efforts in {code(SOURCE_FILE)}, then run "
         "`nix run .#synthetic-models-watch` to confirm no drift remains. "
-        "The daily workflow closes this issue on its first run that finds none.",
+        "The maintenance workflow checks every 30 minutes and closes this issue when it finds no drift.",
         "",
         "Synthetic's catalog, not this repository, publishes every candidate ID above. "
         "Before you edit the source, confirm on Synthetic that the ID names the model you expect.",

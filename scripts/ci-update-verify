@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scope=$1
+logs=$2
+mkdir -p "$logs"
+failed=0
+
+check() {
+  local name=$1 status
+  shift
+  set +e
+  "$@" 2>&1 | tee "$logs/$name.log"
+  status=${PIPESTATUS[0]}
+  set -e
+  if [ "$status" -ne 0 ]; then
+    failed=1
+    {
+      printf '### %s verification failed\n\n```text\n' "$name"
+      tail -n 80 "$logs/$name.log"
+      printf '```\n'
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
+
+case "$scope" in
+  dependencies)
+    check fmt nix fmt -- --ci
+    check check nix flake check --print-build-logs
+    check vm-check nix build --no-link --print-build-logs .#vmChecks.all
+    ;;
+  catalogs)
+    check catalog nix build --no-link --print-build-logs \
+      .#checks.x86_64-linux.pi .#checks.x86_64-linux.synthetic-models
+    ;;
+  *) printf 'Unknown verification scope: %s\n' "$scope" >&2; exit 2 ;;
+esac
+exit "$failed"
