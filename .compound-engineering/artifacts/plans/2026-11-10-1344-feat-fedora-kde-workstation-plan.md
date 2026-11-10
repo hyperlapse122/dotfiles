@@ -13,7 +13,7 @@ execution: code
 ## Goal Capsule
 
 - **Objective:** The owner can prepare, apply, re-apply and check the repository's Linux workstation environment on Fedora KDE Plasma Desktop, the distribution and desktop the owner already knows, and the repository no longer claims or gates on Ubuntu.
-- **Means:** Rewrite the Ubuntu-specific host probe, entry points, package provisioning, desktop integration, container proof, readiness report and documentation for Fedora in place (KTD1–KTD11).
+- **Means:** Rewrite the Ubuntu-specific host probe, entry points, package provisioning, desktop integration, container proof, readiness report and documentation for Fedora in place (KTD1–KTD12).
 - **Product authority:** The owner directed the replacement, the Fedora edition, the container runtime, the minikube runtime, the version policy and the Ghostty source in the brainstorm and planning dialogue, and confirmed the scoping summary.
 - **Execution profile:** One PR, implemented and shipped by the autonomous workflow. The owner performs OS installation and native acceptance on the Fedora host.
 - **Stop conditions:** Stop if the change would require installing a Docker engine, supporting a second distribution, or breaking the hook-free bootstrap boundary in `AGENTS.md`.
@@ -23,7 +23,7 @@ execution: code
 
 ## Product Contract
 
-**Product Contract preservation:** changed: R8, AE1 and new R23 — the owner allowed a community repository for Ghostty after planning found no official Fedora package, and R8 now says that a vendor's own Linux artifact counts as official; the Outstanding Questions were resolved into KTD1–KTD11.
+**Product Contract preservation:** changed: R8, AE1 and new R23, R24 — the owner allowed a community repository for Ghostty after planning found no official Fedora package, and R8 now says that a vendor's own Linux artifact counts as official; the owner moved Linux CI onto a Fedora image during implementation (R24); the Outstanding Questions were resolved into KTD1–KTD12.
 
 ### Summary
 
@@ -53,6 +53,7 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 - **Applications without an official Fedora package are not installed.** Governs R8. (session-settled: user-approved — chosen over unofficial repackaging or converted packages: the repository installs from signed vendor or distribution sources.)
 - **A vendor's own Linux artifact counts as official when no RPM exists.** Governs R8. (session-settled: user-approved — chosen over recording T3 Code as unavailable on Fedora: the owner saw the AppImage plan for T3 Code and named it as the model for the Claude Desktop follow-up in #124.)
 - **Ghostty is the one community-source exception.** Governs R23. (session-settled: user-directed — chosen over using Konsole on Fedora and over building Ghostty from its signed source: the owner accepted either COPR or Terra and asked for the one that follows Ghostty releases fastest.)
+- **Linux CI runs in a Fedora image.** Governs R24. (session-settled: user-directed — chosen over keeping hosted Ubuntu runners as generic Linux hosts: once Ubuntu stopped being a supported host, the owner asked for CI on Fedora.)
 - **No distribution abstraction layer.** The Linux scripts are rewritten for Fedora in place. (session-settled: user-approved — chosen over a data-driven multi-distribution seam: this is the third target change, but one target is still the scope.)
 
 ### Requirements
@@ -94,6 +95,10 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 - R20. The setup guide, README, guides, maintenance notes and harness instructions describe Fedora KDE Plasma Desktop, including verified installation media and the capability inventory against macOS.
 - R21. No managed file, test or guide outside historical plan records names Ubuntu, GNOME, APT or rootless Docker as current Linux behavior.
 
+**Continuous integration**
+
+- R24. Linux unit and native CI lanes run in a Fedora image of the validated release, and lanes that need a KDE desktop host stay excluded on Linux.
+
 **Existing hosts**
 
 - R22. Applying the new source on a host configured under Ubuntu support removes nothing: installed packages, repositories, terminal settings and Docker state stay as they are.
@@ -110,7 +115,7 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 
 - Ubuntu in any flavor, Fedora Kinoite and other atomic desktops, and arm64 are outside the supported target.
 - A GNOME session on a supported host is not a supported desktop; R5 reports it as pending desktop evidence and host support is unchanged.
-- CI gains no Fedora desktop runner. Hosted Ubuntu runners stay as generic Linux hosts for fixture tests and distribution-neutral CLI lanes, and native acceptance stays with the owner.
+- CI gains no Fedora KDE desktop host. R24 moves the Linux lanes into a Fedora container image, which is not a KDE Plasma Desktop installation, so native acceptance stays with the owner.
 - Cleanup of Ubuntu-era packages, repositories, GNOME terminal settings or Docker state on previously configured hosts is not built, per the retirement rule in `AGENTS.md`.
 - Migrating existing Docker images, volumes or credentials into Podman is not built.
 - The repository does not upgrade the installed OS and does not detect the latest Fedora release over the network.
@@ -166,6 +171,8 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 - KTD10. **Isolate the minikube proof through Podman's own configuration, not a private daemon.** Podman has no daemon to own. The proof points `CONTAINERS_STORAGE_CONF` and `CONTAINERS_CONF` at files in its temporary state directory, so image storage, run state and network definitions are private, and it removes that state inside `podman unshare`. Implements R14.
 - KTD11. **Restore the KDE terminal selection from PR #121.** `scripts/terminal-environment.sh` writes the two `kdeglobals` keys named in Sources and drops the `xdg-terminal-exec` path. The script accepts any Linux release and leaves the release decision to the probe (KTD2). Implements R16.
 
+- KTD12. **Run Linux CI lanes as container jobs on `registry.fedoraproject.org/fedora`, tagged with the validated release.** GitHub hosts no Fedora runner, so the job keeps an Ubuntu runner label as the container host and every step runs inside the Fedora image. One amd64 and one arm64 lane replace the four Ubuntu 24.04 and 26.04 lanes. A contract test ties the image tag to the probe's validated release so the two move together. The image reports `VARIANT_ID=container`, so the probe rejects it and the Ghostty and desktop-backed T3 lanes stay excluded. The lock-update workflows keep their Ubuntu runners; they run automation, not Linux workstation tests. Implements R24.
+
 ### High-Level Technical Design
 
 The host probe is the only place that decides support. Every entry point, chezmoi script and smoke test calls it and stops on an unsupported verdict.
@@ -216,7 +223,8 @@ flowchart TB
 | U7 | minikube proof on rootless Podman | `tests/smoke_linux_minikube.py` | U1, U3 |
 | U8 | T3 Code desktop | `home/.chezmoitemplates/t3-code-desktop` | U1 |
 | U9 | Readiness report | `scripts/linux-readiness.py` | U1, U3, U5 |
-| U10 | Documentation and instructions | `docs/setup/fedora.md` | U1–U9 |
+| U10 | Documentation and instructions | `docs/setup/fedora.md` | U1–U9, U11 |
+| U11 | CI on a Fedora image | `.github/workflows/test.yml` | U1–U9 |
 
 ### U1. Host probe
 
@@ -424,16 +432,35 @@ flowchart TB
 - **Goal:** Every guide and instruction describes the Fedora KDE target, and nothing presents Ubuntu, GNOME, APT or rootless Docker as current Linux behavior.
 - **Requirements:** R8, R11, R15, R18, R20, R21.
 - **Dependencies:** U1–U9.
-- **Files:** `docs/setup/fedora.md` (renamed from `docs/setup/ubuntu.md`), `README.md`, `docs/README.md`, `docs/guides/terminal.md`, `docs/guides/secrets-and-authentication.md`, `docs/guides/t3-code.md`, `docs/guides/zsh.md`, `docs/guides/personal-applications.md`, `docs/maintenance/development-and-testing.md`, `home/.chezmoitemplates/agent-instructions`, `tests/test_agent_instructions.py`, `tests/test_ci_areas.py`, `.github/workflows/test.yml`.
+- **Files:** `docs/setup/fedora.md` (renamed from `docs/setup/ubuntu.md`), `README.md`, `docs/README.md`, `docs/guides/terminal.md`, `docs/guides/secrets-and-authentication.md`, `docs/guides/t3-code.md`, `docs/guides/zsh.md`, `docs/guides/personal-applications.md`, `docs/maintenance/development-and-testing.md`, `home/.chezmoitemplates/agent-instructions`, `tests/test_agent_instructions.py`.
 - **Approach:**
   1. Rewrite the setup guide for Fedora: the KDE Plasma Desktop ISO and its signed `CHECKSUM` file from fedoraproject.org, verified against the Fedora signing key; the Wayland Plasma session; `dnf` for the manual GPG prerequisites; and the version policy from R3 and R4 with the validated release.
   2. In the capability inventory, map containers to rootless Podman with the compatibility commands from KTD8, and record Claude Desktop as unavailable on Fedora.
   3. Document the cgroup delegation prerequisite for the minikube proof as an owner-approved OS step, and the recorded-limitation outcome from R15.
   4. In the terminal guide, describe the `kdeglobals` selection, the Terra source with the root-level exposure named in Risks, and the step after an OS upgrade: add the new release's Terra pin and apply again (KTD4, KTD5).
   5. In the credentials guide, rename the acceptance section for Fedora and name KWallet as the provider a Plasma session normally supplies.
-  6. Update the remaining files' wording and links. Workflow runner labels stay; only step names and comments that describe Ubuntu Desktop as the workstation change.
-- **Test scenarios:** Test expectation: none for prose. `tests/test_agent_instructions.py`, `tests/test_ci_areas.py` and any test that asserts guide paths or wording are updated to the new text.
-- **Verification:** `git grep -n -i -w 'ubuntu\|gnome\|apt\|apt-get\|dpkg\|dockerd\|pinentry-gnome3\|xdg-terminal-exec'` matches only historical plan records, hosted-runner labels and runner provisioning steps in `.github/workflows/`, and fixtures or assertions under `tests/` that name those terms as unsupported, absent or left-untouched inputs; every relative link to `docs/setup/fedora.md` and its renamed anchor resolves.
+  6. Update the remaining files' wording and links, and rewrite the CI runner policy in the maintenance guide for the Fedora image lanes from U11.
+- **Test scenarios:** Test expectation: none for prose. `tests/test_agent_instructions.py` and any test that asserts guide paths or wording are updated to the new text.
+- **Verification:** `git grep -n -i -w 'ubuntu\|gnome\|apt\|apt-get\|dpkg\|dockerd\|pinentry-gnome3\|xdg-terminal-exec'` matches only historical plan records, hosted-runner labels in `.github/workflows/`, and fixtures or assertions under `tests/` that name those terms as unsupported, absent or left-untouched inputs; every relative link to `docs/setup/fedora.md` and its renamed anchor resolves.
+
+### U11. CI on a Fedora image
+
+- **Goal:** Linux unit and native CI lanes run inside a Fedora image of the validated release.
+- **Requirements:** R24 (KTD12).
+- **Dependencies:** U1–U9.
+- **Files:** `.github/workflows/test.yml`, `tests/test_ci_areas.py`, `tests/test_ci_workflows.py`.
+- **Approach:**
+  1. In the `unit`, `native` and `pinentry` jobs, replace the four Ubuntu lanes with one amd64 and one arm64 lane that set a job container per KTD12.
+  2. Install what the image lacks before checkout and the mise action, and replace each `apt-get` provisioning step with its `dnf` equivalent.
+  3. Run the test steps as the account the suite expects; where tests refuse root, create a non-root account with passwordless sudo and run them under it.
+  4. Keep the Linux exclusions for Ghostty and the desktop-backed T3 lanes, the job names' shape, the candidate-lock steps, timeouts and `fail-fast: false`.
+- **Execution note:** The proof for this unit is the workflow run on the PR. Before that, run the unit areas inside a disposable Fedora container on the development host to find root, package and path differences, and remove the container and its image afterward.
+- **Test scenarios:**
+  - The Linux lanes in each matrix name a Fedora container image whose tag equals the probe's validated release.
+  - No matrix names an Ubuntu 26.04 lane, and the Linux exclusions for Ghostty, T3 and T3 instructions match the new lane keys.
+  - No step in the test workflow calls `apt-get`.
+  - Windows and macOS lanes and the existing workflow contracts pass unchanged.
+- **Verification:** `tests/test_ci_areas.py` and `tests/test_ci_workflows.py` pass, the unit areas pass in a local Fedora container, and the Linux lanes are green on the PR.
 
 ---
 
@@ -447,13 +474,14 @@ flowchart TB
 | Hook-free source check | `mise run bootstrap` | U3, U4, U5, U8, U10 |
 | Package name resolution | `dnf repoquery` in a disposable `fedora:45` container on the Apple `container` runtime, removed afterward with its image; recorded as pending when the runtime is unavailable | U3 |
 | Residual references | the `git grep` in U10 | U10 |
-| CI | The existing workflow on the PR | All units |
+| Fedora container run | The unit areas inside a disposable `fedora:45` container on the Apple `container` runtime, removed afterward with its image | U11 |
+| CI | The workflow on the PR, with Linux lanes in the Fedora image | All units |
 
 The development host is macOS, so no check here exercises a real Fedora KDE session, a real dnf transaction on amd64, or minikube. The PR description states that native acceptance is pending on the owner's host.
 
 ## Definition of Done
 
-- R1–R23 hold and each unit's verification passes.
+- R1–R24 hold and each unit's verification passes.
 - The test suite passes locally for the modules that run on macOS, and CI is green on the PR.
 - No file named for Ubuntu remains outside `.compound-engineering/artifacts/plans/`.
 - No temporary container, image or volume created for verification remains.
