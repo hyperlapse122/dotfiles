@@ -1,20 +1,12 @@
 {{- $desktop := includeTemplate "t3-code-desktop" . | fromJson -}}
-{{- if and $desktop.supported $desktop.ubuntu -}}
-{{- $installed := not (not (stat "/opt/T3 Code (Beta)/t3code")) -}}
-{{- if and (not $installed) (stat "/var/lib/dpkg/status") -}}
-{{- range splitList "\n\n" (include "/var/lib/dpkg/status") -}}
-{{- if and (has "Package: t3code" (splitList "\n" .)) (has "Status: install ok installed" (splitList "\n" .)) -}}
-{{- $installed = true -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-{{- if not $installed -}}
+{{- if and $desktop.supported $desktop.fedora -}}
+{{- if not (stat (joinPath $desktop.installDirectory "t3code")) -}}
 {{- $release := get . "t3CodeRelease" | default dict -}}
 {{- if not $release -}}
 {{- $release = output "mise" "--cd" .chezmoi.workingTree "exec" "python" "--" "python" (joinPath .chezmoi.workingTree "scripts" "t3-code-release.py") | fromJson -}}
 {{- end -}}
 {{- $version := get $release "tag_name" | toString | trimPrefix "v" -}}
-{{- $name := printf "T3-Code-%s-%s.deb" $version .chezmoi.arch -}}
+{{- $name := printf "T3-Code-%s-x86_64.AppImage" $version -}}
 {{- $asset := dict -}}
 {{- range get $release "assets" -}}
 {{- if eq (get . "name" | toString) $name -}}
@@ -22,15 +14,16 @@
 {{- end -}}
 {{- end -}}
 {{- if not $asset -}}
-{{- fail (printf "T3 Code release has no Ubuntu %s desktop package (%s)" .chezmoi.arch $name) -}}
+{{- fail (printf "T3 Code release has no Linux AppImage (%s)" $name) -}}
 {{- end -}}
 {{- $digest := get $asset "digest" | default "" | toString -}}
 {{- if not (regexMatch "^sha256:[0-9a-fA-F]{64}$" $digest) -}}
-{{- fail (printf "T3 Code desktop package %s has no valid SHA-256 release metadata" $name) -}}
+{{- fail (printf "T3 Code AppImage %s has no valid SHA-256 release metadata" $name) -}}
 {{- end -}}
 {{- $sha256 := trimPrefix "sha256:" $digest -}}
-[".cache/t3-code/t3code.deb"]
+[".cache/t3-code/t3code.AppImage"]
 type = "file"
+executable = true
 refreshPeriod = "0"
 url = {{ printf "%s#sha256=%s" (get $asset "browser_download_url" | toString) $sha256 | quote }}
 checksum.sha256 = {{ $sha256 | quote }}

@@ -25,8 +25,8 @@ if [ -z "$app" ] && [ -x /opt/homebrew/bin/brew ]; then
     done
 fi
 {{ else -}}
-app='/opt/T3 Code (Beta)/t3code'
-entry='/opt/T3 Code (Beta)/resources/app.asar/apps/server/dist/bin.mjs'
+app='{{ joinPath $desktop.installDirectory "t3code" | replace "'" "'\\''" }}'
+entry='{{ joinPath $desktop.installDirectory "resources" "app.asar" "apps" "server" "dist" "bin.mjs" | replace "'" "'\\''" }}'
 {{ end -}}
 if [ ! -x "$app" ]; then
     echo 'T3 Code desktop is missing. Run chezmoi apply to install it, then retry t3.' >&2

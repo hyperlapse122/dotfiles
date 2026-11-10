@@ -59,17 +59,20 @@ class T3CodeDesktopTest(unittest.TestCase):
             "XDG_STATE_HOME": str(self.root / "state"),
         })
         self.host_report = {"supported": True, "blockers": []}
+        self.distribution = "fedora"
         probe_template = self.source / ".chezmoitemplates/t3-code-desktop"
         native_probe = ('output "mise" "--cd" .chezmoi.workingTree "exec" "python" "--" "python" '
                         '(joinPath .chezmoi.workingTree "scripts" "linux-apps.py") "--inspect" | fromJson')
         self.assertIn(native_probe, probe_template.read_text())
         probe_template.write_text(probe_template.read_text().replace(native_probe, 'get . "fixtureHostReport"'))
         self.release = {"tag_name": "v9.8.7", "assets": [
-            {"name": f"T3-Code-9.8.7-{arch}.deb",
-             "browser_download_url": f"https://example.invalid/desktop-{arch}.deb",
+            {"name": name,
+             "browser_download_url": f"https://example.invalid/{name}",
              "digest": "sha256:" + digest * 64}
-            for arch, digest in (("amd64", "a"), ("arm64", "b"))
+            for name, digest in (("T3-Code-9.8.7-x86_64.AppImage", "a"), ("T3-Code-9.8.7-arm64.dmg", "b"))
         ]}
+        self.install = self.home / ".local/share/dotfiles/t3-code"
+        self.staged = self.home / ".cache/t3-code/t3code.AppImage"
 
     def test_reduced_source_without_host_probe_fails_closed(self):
         template = self.repo / 'home/.chezmoitemplates/t3-code-desktop'
@@ -80,17 +83,11 @@ class T3CodeDesktopTest(unittest.TestCase):
 
     def render(self, relative, os_name, arch, release=None, working_tree=None):
         context = {"chezmoi": {"os": os_name, "arch": arch,
-                              "osRelease": {"id": "ubuntu", "versionID": "26.04"},
+                              "osRelease": {"id": self.distribution, "versionID": "45"},
                               "destDir": self.home.as_posix(), "sourceDir": self.source.as_posix(), "workingTree": (working_tree or self.repo).as_posix()},
                    "fixtureHostReport": self.host_report,
                    "t3CodeRelease": self.release if release is None else release}
         template = (self.repo / "home" / relative).read_text(encoding="utf-8")
-        if relative == ".chezmoitemplates/external-assets/t3-code.toml.tmpl":
-            for native, isolated in (
-                ("/opt/T3 Code (Beta)/t3code", self.root / "installed-desktop"),
-                ("/var/lib/dpkg/status", self.root / "dpkg-status"),
-            ):
-                template = template.replace(native, isolated.as_posix())
         wrapper = ('{{ template "subject" (' + json.dumps(json.dumps(context)) + ' | fromJson) }}'
                    '{{ define "subject" }}' + template + '{{ end }}')
         return subprocess.run([
@@ -102,32 +99,73 @@ class T3CodeDesktopTest(unittest.TestCase):
         ], input=wrapper, env=self.env, capture_output=True, text=True,
             encoding="utf-8", errors="backslashreplace", timeout=60)
 
-    def test_ubuntu_selects_architecture_and_enforces_release_integrity(self):
-        for arch, digest in (("amd64", "a"),):
-            with self.subTest(arch=arch):
-                result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", "linux", arch)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                staged = tomllib.loads(result.stdout)
-                self.assertEqual(len(staged), 1)
-                entry = next(iter(staged.values()))
-                self.assertEqual(entry["type"], "file")
-                self.assertFalse(entry.get("executable", False))
-                self.assertEqual(entry["url"],
-                                 f"https://example.invalid/desktop-{arch}.deb#sha256=" + digest * 64)
-                self.assertEqual(entry["checksum"]["sha256"], digest * 64)
-        release = json.loads(json.dumps(self.release))
-        del release["assets"][0]["digest"]
-        result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", "linux", "amd64", release)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("SHA-256", result.stdout + result.stderr)
+    EXTERNAL = ".chezmoitemplates/external-assets/t3-code.toml.tmpl"
+    INSTALL_SCRIPT = ".chezmoiscripts/run_onchange_after_30-install-t3-code.sh.tmpl"
+
+    def install_extraction(self):
+        binary = self.install / "t3code"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("#!/bin/sh\nexit 91\n", encoding="utf-8")
+        binary.chmod(0o755)
+        return binary
+
+    def stage_appimage(self, extra=""):
+        # Stands in for the AppImage runtime: extraction writes squashfs-root in the working directory.
+        self.staged.parent.mkdir(parents=True)
+        self.staged.write_text(
+            '#!/bin/sh\n[ "$*" = "--appimage-extract" ] || exit 93\n'
+            'mkdir -p squashfs-root/resources\n'
+            'printf "#!/bin/sh\\nexit 0\\n" >squashfs-root/t3code\n'
+            'chmod +x squashfs-root/t3code\n' + extra, encoding="utf-8")
+        self.staged.chmod(0o755)
+
+    def run_install(self):
+        rendered = self.render(self.INSTALL_SCRIPT, "linux", "amd64")
+        self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+        self.assertNotIn("sudo", rendered.stdout)
+        script = self.root / "install.sh"
+        script.write_text(rendered.stdout, encoding="utf-8")
+        commands = self.root / "commands"
+        commands.mkdir(exist_ok=True)
+        sudo = commands / "sudo"
+        sudo.write_text("#!/bin/sh\nexit 94\n", encoding="utf-8")
+        sudo.chmod(0o755)
+        env = dict(self.env, PATH=str(commands) + os.pathsep + "/usr/bin:/bin")
+        return subprocess.run(["/bin/sh", str(script)], env=env, cwd=self.root,
+                              capture_output=True, text=True, timeout=30)
+
+    def test_fedora_stages_the_x86_64_appimage_and_enforces_release_integrity(self):
+        result = self.render(self.EXTERNAL, "linux", "amd64")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        staged = tomllib.loads(result.stdout)
+        self.assertEqual(list(staged), [".cache/t3-code/t3code.AppImage"])
+        entry = staged[".cache/t3-code/t3code.AppImage"]
+        self.assertEqual(entry["type"], "file")
+        self.assertTrue(entry["executable"])
+        self.assertEqual(entry["url"],
+                         "https://example.invalid/T3-Code-9.8.7-x86_64.AppImage#sha256=" + "a" * 64)
+        self.assertEqual(entry["checksum"]["sha256"], "a" * 64)
+        invalid = json.loads(json.dumps(self.release))
+        invalid["assets"][0]["digest"] = "sha256:short"
+        missing = json.loads(json.dumps(self.release))
+        del missing["assets"][0]
+        for release in (invalid, missing):
+            result = self.render(self.EXTERNAL, "linux", "amd64", release)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("T3-Code-9.8.7-x86_64.AppImage", result.stdout + result.stderr)
 
     def test_unsupported_linux_host_does_not_stage_or_install_t3(self):
-        self.host_report = {"supported": False, "blockers": ["Ubuntu Desktop required"]}
-        for subject in (".chezmoitemplates/external-assets/t3-code.toml.tmpl",
-                        ".chezmoiscripts/run_onchange_after_30-install-t3-code.sh.tmpl"):
-            rendered = self.render(subject, "linux", "amd64", {"invalid": "must not be examined"})
-            self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
-            self.assertEqual(rendered.stdout.strip(), "")
+        for distribution, supported in (("fedora", False), ("ubuntu", True)):
+            self.distribution = distribution
+            self.host_report = {"supported": supported, "blockers": []}
+            with self.subTest(distribution=distribution):
+                desktop = self.render(".chezmoitemplates/t3-code-desktop", "linux", "amd64")
+                self.assertEqual(desktop.returncode, 0, desktop.stdout + desktop.stderr)
+                self.assertFalse(json.loads(desktop.stdout)["supported"])
+                for subject in (self.EXTERNAL, self.INSTALL_SCRIPT):
+                    rendered = self.render(subject, "linux", "amd64", {"invalid": "must not be examined"})
+                    self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+                    self.assertEqual(rendered.stdout.strip(), "")
 
     def test_ignore_gate_tracks_workstation_host_eligibility(self):
         for supported in (True, False):
@@ -138,19 +176,74 @@ class T3CodeDesktopTest(unittest.TestCase):
             self.assertEqual(".t3" in ignored, not supported)
             self.assertEqual(".local/bin/t3" in ignored, not supported)
 
-    def test_installed_ubuntu_package_skips_release_lookup_and_download(self):
-        (self.root / "dpkg-status").write_bytes(
-            b"Package: t3code\nStatus: install ok installed\n\n")
-        result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", "linux", "amd64",
-                             {"invalid": "must not be examined"})
+    @unittest.skipIf(os.name == "nt", "POSIX install script")
+    def test_installed_extraction_skips_release_lookup_and_installation(self):
+        binary = self.install_extraction()
+        result = self.render(self.EXTERNAL, "linux", "amd64", {"invalid": "must not be examined"})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(tomllib.loads(result.stdout), {})
+        applied = self.run_install()
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+        self.assertEqual(binary.read_text(encoding="utf-8"), "#!/bin/sh\nexit 91\n")
+        self.assertFalse((self.home / ".local/share/applications").exists())
 
-    def test_other_platforms_do_not_stage_a_debian_payload(self):
+    @unittest.skipIf(os.name == "nt", "POSIX install script")
+    def test_missing_staged_appimage_asks_the_owner_to_apply_again(self):
+        applied = self.run_install()
+        self.assertNotEqual(applied.returncode, 0)
+        self.assertIn("Run chezmoi apply again", applied.stderr)
+        self.assertFalse(self.install.exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX install script")
+    def test_staged_appimage_is_extracted_with_a_desktop_entry(self):
+        self.stage_appimage()
+        applied = self.run_install()
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+        binary = self.install / "t3code"
+        self.assertTrue(os.access(binary, os.X_OK))
+        self.assertTrue((self.install / "resources").is_dir())
+        self.assertEqual([path.name for path in self.install.parent.iterdir()], ["t3-code"])
+        entry = (self.home / ".local/share/applications/t3code.desktop").read_text(encoding="utf-8")
+        self.assertEqual(entry.splitlines(), [
+            "[Desktop Entry]", "Type=Application", "Name=T3 Code (Beta)",
+            f'Exec="{binary.as_posix()}" %U', "Terminal=false"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX install script")
+    def test_desktop_entry_keeps_the_fields_the_appimage_ships(self):
+        self.stage_appimage(
+            'printf "[Desktop Entry]\\nName=Vendor Name\\nExec=AppRun --no-sandbox %%U\\n'
+            'Icon=t3code\\nStartupWMClass=t3code\\n" >squashfs-root/t3code.desktop\n'
+            ': >squashfs-root/t3code.png\n')
+        applied = self.run_install()
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+        entry = (self.home / ".local/share/applications/t3code.desktop").read_text(encoding="utf-8")
+        self.assertEqual(entry.splitlines(), [
+            "[Desktop Entry]", "Name=Vendor Name",
+            f'Exec="{(self.install / "t3code").as_posix()}" %U',
+            f'Icon={(self.install / "t3code.png").as_posix()}', "StartupWMClass=t3code"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX launcher")
+    def test_linux_launcher_runs_the_extracted_tree(self):
+        rendered = self.render("dot_local/bin/executable_t3.tmpl", "linux", "amd64")
+        self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+        self.assertNotIn("/opt", rendered.stdout)
+        launcher = self.root / "t3"
+        launcher.write_text(rendered.stdout, encoding="utf-8")
+        missing = subprocess.run(["/bin/sh", str(launcher)], env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(missing.returncode, 127, missing.stdout + missing.stderr)
+        binary = self.install_extraction()
+        binary.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n', encoding="utf-8")
+        applied = subprocess.run(["/bin/sh", str(launcher), "space value"], env=self.env,
+                                 capture_output=True, text=True, timeout=30)
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+        self.assertEqual(applied.stdout.splitlines(), [
+            (self.install / "resources/app.asar/apps/server/dist/bin.mjs").as_posix(), "space value"])
+
+    def test_other_platforms_do_not_stage_an_appimage(self):
         for os_name, arch in (("windows", "amd64"), ("windows", "arm64"),
                               ("darwin", "arm64"), ("darwin", "amd64"), ("linux", "386"), ("linux", "arm64")):
             with self.subTest(os=os_name, arch=arch):
-                result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", os_name, arch,
+                result = self.render(self.EXTERNAL, os_name, arch,
                                      {"invalid": "must not be examined"})
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(tomllib.loads(result.stdout), {})

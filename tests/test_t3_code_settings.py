@@ -131,7 +131,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                        "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
-    def render(self, body, os_name, arch, *, existing="", distro="ubuntu", personal_apps=None, workstation=False):
+    def render(self, body, os_name, arch, *, existing="", distro="fedora", personal_apps=None, workstation=False):
         context = ('(dict "t3CodePreferences" (fromJson ' + json.dumps(json.dumps(self.preferences))
                    + ') "personalApps" (fromJson ' + json.dumps(json.dumps(personal_apps or {}))
                    + ') "chezmoi" (dict "os" ' + json.dumps(os_name)
@@ -539,14 +539,14 @@ class T3CodeSettingsTest(unittest.TestCase):
         template.write_text(template.read_text().replace(native, 'get . "fixtureHostReport"'))
         ignore = (self.repo / "home/.chezmoiignore").read_text(encoding="utf-8")
         cases = (("windows", "amd64", "", True), ("windows", "arm64", "", True),
-                 ("linux", "amd64", "ubuntu", False), ("linux", "arm64", "ubuntu", False),
+                 ("linux", "amd64", "fedora", False), ("linux", "arm64", "fedora", False),
                  ("darwin", "arm64", "", True), ("darwin", "amd64", "", False),
-                 ("linux", "amd64", "debian", False), ("linux", "386", "ubuntu", False),
+                 ("linux", "amd64", "debian", False), ("linux", "386", "fedora", False),
                  ("windows", "386", "", False), ("freebsd", "amd64", "", False))
         for os_name, arch, distro, supported in (*cases, ("linux", "amd64", "workstation", True)):
             with self.subTest(os=os_name, arch=arch, distro=distro):
                 (self.source / ".chezmoiignore").write_text(
-                    self.render(ignore, os_name, arch, distro="ubuntu" if distro == "workstation" else distro, workstation=distro == "workstation"), encoding="utf-8")
+                    self.render(ignore, os_name, arch, distro="fedora" if distro == "workstation" else distro, workstation=distro == "workstation"), encoding="utf-8")
                 managed = set(self.chez("managed", "--path-style=relative", "--exclude=scripts").stdout.replace("\\", "/").splitlines())
                 self.assertEqual(".t3/userdata/settings.json" in managed, supported)
                 self.assertEqual(".t3/userdata/client-settings.json" in managed, supported)

@@ -45,7 +45,7 @@ def desktop_command(real_home, environment):
             if app.is_file():
                 return [str(app), str(bundle / "Contents/Resources/app.asar/apps/server/dist/bin.mjs")]
     else:
-        app = Path("/opt/T3 Code (Beta)/t3code")
+        app = real_home / ".local/share/dotfiles/t3-code/t3code"
         if app.is_file():
             return [str(app), str(app.parent / "resources/app.asar/apps/server/dist/bin.mjs")]
     raise RuntimeError("Install the T3 Code desktop application before running this smoke")
@@ -62,7 +62,7 @@ def provision_desktop(target, root, env):
         raise RuntimeError("Expected a stable T3 desktop release")
     arch = target.split("-", 1)[1]
     version = release["tag_name"].removeprefix("v")
-    asset_name = f"T3-Code-{version}-{arch}.deb" if target.startswith("linux-") else f"T3-Code-{version}-{'x64' if arch == 'amd64' else 'arm64'}.exe"
+    asset_name = f"T3-Code-{version}-{'x86_64' if arch == 'amd64' else arch}.AppImage" if target.startswith("linux-") else f"T3-Code-{version}-{'x64' if arch == 'amd64' else 'arm64'}.exe"
     matches = [asset for asset in release["assets"] if asset["name"] == asset_name]
     if len(matches) != 1 or not matches[0].get("digest", "").startswith("sha256:"):
         raise RuntimeError(f"No uniquely checksummed T3 desktop asset: {asset_name}")
@@ -75,8 +75,11 @@ def provision_desktop(target, root, env):
     if target.startswith("windows-"):
         run([str(asset), "/S"], env=env, cwd=root)
     else:
-        run([executable("sudo"), "apt-get", "update"], env=env, cwd=root)
-        run([executable("sudo"), "apt-get", "install", "-y", str(asset)], env=env, cwd=root)
+        asset.chmod(0o755)
+        run([str(asset), "--appimage-extract"], env=env, cwd=root)
+        install = Path(env["HOME"]) / ".local/share/dotfiles/t3-code"
+        install.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(root / "squashfs-root", install)
 
 
 class T3Rpc:
