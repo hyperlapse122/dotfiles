@@ -274,7 +274,7 @@ Each area/target pair owns a separate hosted runner. All matrices use `fail-fast
 
 The independent pinentry job runs workspace formatting, clippy, locked Rust tests, a native release build, generated shell completion checks, and hosted native PIN-store verification. Its tool preparation includes Usage and PowerShell for completion generation.
 
-Application-lock candidates contain both `personal-app-lock.json` and `synthetic-model-lock.json`. Every candidate consumer selects that immutable pair before validation. The Pi native job exercises the candidate binary against the candidate catalog; publication waits for the complete validation suite. Synthetic discovery failure retains the previous pair and fails the update job.
+Application-lock candidates contain both `personal-app-lock.json` and `synthetic-model-lock.json`. The automatic updater publishes that immutable pair after generation without running the validation suite. Synthetic discovery failure retains the previous pair and fails the update job. When the reusable Test workflow is invoked with a candidate, the Pi native job exercises the candidate binary against the candidate catalog.
 
 Hosted-only PATH, desktop-installation, and credential-write modes must not run on a personal workstation. Their existing disposable-host guards remain intact. The apps and desktop scripts offer non-installing local modes as described above; CE, Codex, and Claude use disposable homes. Claude and T3 native startup have passed locally on Windows x64. Other eligible platforms require their own CI result; local request capture and initialization do not prove authenticated model completion.
 
@@ -310,7 +310,9 @@ Do not describe a passing headless smoke or a selected desktop ID as proof that 
 | Manual dispatch | Independent suite with optional immutable checkout and candidate-artifact inputs |
 | Reusable call | Independent caller-owned suite with its existing input identity |
 
-Every suite checkout retains `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials. Automatic PR validation uses the event's immutable merge SHA. Pin updaters still call the same reusable suite with an immutable `base-sha` and candidate artifacts.
+Every suite checkout retains `${{ inputs.base-sha || github.sha }}` with nonpersistent credentials. Automatic PR validation uses the event's immutable merge SHA. Manual and reusable Test entry points retain their candidate-artifact interfaces.
+
+The font, harness plugin, and personal application updaters publish generated candidates without invoking Test or waiting for CI validation. Publication still uses the resolver's immutable base SHA and artifact ID, commits only changed generated locks, and reports generation or push failures normally. The bot's GITHUB_TOKEN pushes do not start push workflows, so publication does not automatically schedule a replacement Test run. Problems discovered afterward are handled separately. The harness updater's separate shared-skill drift report remains active and can fail the run even when plugin pins have been published.
 
 Push and PR suites are independent. A same-repository PR branch can run both suites for one update; this duplicate runner cost is the deliberate tradeoff for removing admission while preserving branch and merge-result coverage. There is no PR metadata lookup, superseded-head suppression, workflow cancellation, or Actions write permission. A fork's branch-push validation depends on Actions being enabled in that fork; the base repository still handles eligible fork PR events under GitHub's normal approval rules. Base-only advancement does not by itself schedule a new PR event.
 

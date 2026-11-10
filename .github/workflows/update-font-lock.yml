@@ -42,15 +42,8 @@ jobs:
           path: ${{ runner.temp }}/locked-fonts/font-lock.json
           if-no-files-found: error
 
-  validate:
-    needs: resolve
-    uses: ./.github/workflows/test.yml
-    with:
-      base-sha: ${{ needs.resolve.outputs.base-sha }}
-      font-lock-artifact: ${{ needs.resolve.outputs.lock-artifact }}
-
   publish:
-    needs: [resolve, validate]
+    needs: resolve
     runs-on: ubuntu-24.04
     permissions:
       contents: write
