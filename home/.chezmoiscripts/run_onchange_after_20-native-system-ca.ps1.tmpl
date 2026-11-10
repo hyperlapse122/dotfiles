@@ -1,5 +1,0 @@
-{{ if eq .chezmoi.os "windows" -}}
-{{ "\ufeff" -}}
-# file native-ca-windows sha256: {{ include ".chezmoitemplates/native-ca-windows" | sha256sum }}
-{{ includeTemplate "native-ca-windows" . }}
-{{ end -}}

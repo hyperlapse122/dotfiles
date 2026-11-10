@@ -1,0 +1,170 @@
+name: Refresh model catalogs
+
+on:
+  schedule:
+    - cron: '22,52 * * * *' # Between update-dependencies runs
+  workflow_dispatch:
+
+concurrency:
+  group: model-catalogs
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      # The verification before the commit, and again before each push when
+      # main moved.
+      VERIFY_TARGETS: .#checks.x86_64-linux.omp-settings .#checks.x86_64-linux.omp-models-load .#checks.x86_64-linux.synthetic-models
+    steps:
+      # No token stays in .git/config; only the push step holds one. Pin ref
+      # to main so workflow_dispatch from another branch cannot push that
+      # branch's commits to main.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+
+      # Each fetch is its own step, so only its command sees its key. A
+      # missing key or a failed fetch keeps the committed snapshot and lets
+      # the other provider's refresh through. synthetic-models-watch fetches
+      # without a key, so the empty key is refused here.
+      - name: Refresh the Synthetic catalog snapshot
+        shell: bash
+        env:
+          SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          snapshot=home/h82/agents/synthetic-catalog.json
+          if [ -z "${SYNTHETIC_API_KEY:-}" ]; then
+            echo "::warning title=Synthetic catalog snapshot skipped::SYNTHETIC_API_KEY is not set; keeping the current $snapshot."
+          elif ! nix run .#synthetic-models-watch -- --snapshot "$snapshot"; then
+            echo "::warning title=Synthetic catalog snapshot skipped::synthetic-models-watch --snapshot failed; keeping the current $snapshot."
+            git checkout -- "$snapshot"
+          fi
+
+      - name: Refresh the OpenRouter catalog snapshot
+        shell: bash
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          snapshot=home/h82/agents/openrouter-catalog.json
+          if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+            echo "::warning title=OpenRouter catalog snapshot skipped::OPENROUTER_API_KEY is not set; keeping the current $snapshot."
+          elif ! nix run .#openrouter-catalog-snapshot -- --snapshot "$snapshot"; then
+            echo "::warning title=OpenRouter catalog snapshot skipped::openrouter-catalog-snapshot failed; keeping the current $snapshot."
+            git checkout -- "$snapshot"
+          fi
+
+      - name: Detect snapshot changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- home/h82/agents/synthetic-catalog.json home/h82/agents/openrouter-catalog.json)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No snapshot changed."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify the refreshed snapshots
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          syn=home/h82/agents/synthetic-catalog.json
+          or=home/h82/agents/openrouter-catalog.json
+          verify() {
+            # VERIFY_TARGETS is a list of installables, split on purpose.
+            # shellcheck disable=SC2086
+            nix build --no-link --print-build-logs $VERIFY_TARGETS
+          }
+          if ! verify; then
+            if [ -n "$(git status --porcelain -- "$syn")" ] && [ -n "$(git status --porcelain -- "$or")" ]; then
+              tmp=$(mktemp -d)
+              cp "$syn" "$tmp/synthetic"
+              cp "$or" "$tmp/openrouter"
+              git checkout -- "$syn" "$or"
+              cp "$tmp/synthetic" "$syn"
+              if ! verify; then
+                echo "::warning title=Synthetic catalog snapshot rejected::Verification failed for $syn; keeping the current snapshot."
+                git checkout -- "$syn"
+              fi
+              cp "$tmp/openrouter" "$or"
+              if ! verify; then
+                echo "::warning title=OpenRouter catalog snapshot rejected::Verification failed for $or; keeping the current snapshot."
+                git checkout -- "$or"
+              fi
+              rm -rf -- "$tmp"
+              if [ -z "$(git status --porcelain -- "$syn" "$or")" ]; then
+                exit 1
+              fi
+            else
+              exit 1
+            fi
+          fi
+
+      - name: Commit each changed snapshot
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          for provider in synthetic openrouter; do
+            snapshot="home/h82/agents/$provider-catalog.json"
+            if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
+              git commit -m "chore(agents): refresh the $provider catalog snapshot" -- "$snapshot"
+            fi
+          done
+
+      # A push with GITHUB_TOKEN would not start check.yml, so the push needs
+      # GH_TOKEN_FOR_UPDATES. The token only reaches git inside a URL built
+      # here; git prints remote URLs without their credentials, and nothing
+      # here echoes it.
+      - name: Push the refreshed snapshots to main
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN_FOR_UPDATES: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN_FOR_UPDATES:-}" ]; then
+            echo "::error title=GH_TOKEN_FOR_UPDATES missing::The GH_TOKEN_FOR_UPDATES secret is not set, so nothing was pushed; a GITHUB_TOKEN push would not start check.yml."
+            exit 1
+          fi
+          remote="https://x-access-token:${GH_TOKEN_FOR_UPDATES}@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git"
+
+          verify() {
+            # shellcheck disable=SC2086
+            nix build --no-link --print-build-logs $VERIFY_TARGETS
+          }
+
+          # Rebase onto the current main; when main moved, the rebased tree
+          # is new, so verify it again before it can be pushed.
+          sync_main() {
+            git fetch -q "$remote" +refs/heads/main:refs/remotes/origin/main
+            if git merge-base --is-ancestor origin/main HEAD; then
+              return 0
+            fi
+            git rebase origin/main
+            verify
+          }
+
+          sync_main
+          if ! git push -q "$remote" HEAD:refs/heads/main; then
+            echo "::notice title=Push rejected::main moved during the run; rebasing, verifying, and pushing once more."
+            sync_main
+            # A second rejection fails the run; the next scheduled run retries.
+            git push -q "$remote" HEAD:refs/heads/main
+          fi
+          echo "Pushed the refreshed snapshots to main."

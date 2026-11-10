@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Brings an existing Podman machine's memory and CPUs to the configured values.
+# Home Manager's podman module passes them only to `podman machine init`, so a
+# changed value would otherwise never reach a machine that already exists.
+#
+#   podman-machine-resources <podman> <machine> <memory MiB> <cpus>
+#
+# An absent machine is left to the module. `podman machine set` needs the
+# machine stopped, and the module's watchdog restarts a stopped machine, so a
+# set that loses that race stops the machine again and retries. The helper
+# never starts the machine: the watchdog does, so the VM runs under launchd
+# rather than under the terminal that ran the apply.
+set -euo pipefail
+
+podman=$1
+machine=$2
+memory=$3
+cpus=$4
+
+if ! current=$("$podman" machine inspect --format '{{.Resources.Memory}} {{.Resources.CPUs}}' "$machine" 2>/dev/null); then
+  exit 0
+fi
+[ "$current" = "$memory $cpus" ] && exit 0
+
+echo "podman-machine-resources: $machine has memory and CPUs $current; setting $memory $cpus" >&2
+for _ in 1 2 3; do
+  "$podman" machine stop "$machine" >/dev/null 2>&1 || true
+  if "$podman" machine set --memory "$memory" --cpus "$cpus" "$machine"; then
+    exit 0
+  fi
+done
+echo "podman-machine-resources: could not change $machine; it kept restarting before the change" >&2
+exit 1

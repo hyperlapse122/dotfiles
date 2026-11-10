@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Resolve the newest upstream release of the ChatGPT app from OpenAI's APT repo.
+
+Fetches and parses the Debian Packages index, identifies the newest version of
+chatgpt for amd64, and writes or checks the version pin file with its pool
+filename and SRI hash. Refuses to write a version that is not strictly newer
+than the one already pinned, so a rollback of the single-stanza index never
+reaches the pin file as a downgrade.
+"""
+
+import argparse
+import base64
+import json
+import re
+import subprocess
+import sys
+
+DEFAULT_SOURCE_URL = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/dists/stable/main/binary-amd64/Packages"
+
+VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
+SHA256_HEX_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+class Failure(Exception):
+    pass
+
+
+def fetch(source_url):
+    proc = subprocess.run(
+        [
+            "curl", "--fail", "--silent", "--show-error", "--location",
+            "--connect-timeout", "10", "--max-time", "60", source_url,
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {source_url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def hex_to_sri(sha256_hex):
+    return "sha256-" + base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
+
+
+def version_tuple(version):
+    if not isinstance(version, str) or not VERSION_PATTERN.match(version):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def parse_packages(content):
+    candidates = []
+    for stanza in re.split(r"\n\s*\n", content.strip()):
+        fields = {}
+        for line in stanza.splitlines():
+            if line.startswith((" ", "\t")) or ":" not in line:
+                continue
+            key, val = line.split(":", 1)
+            fields[key.strip()] = val.strip()
+
+        if fields.get("Package") != "chatgpt":
+            continue
+        if fields.get("Architecture", "amd64") != "amd64":
+            continue
+
+        version = fields.get("Version", "")
+        sha256_hex = fields.get("SHA256", "")
+        filename = fields.get("Filename", "")
+        if not filename or not SHA256_HEX_PATTERN.match(sha256_hex):
+            continue
+        try:
+            key = version_tuple(version)
+        except ValueError:
+            continue
+
+        candidates.append(
+            (
+                key,
+                {
+                    "version": version,
+                    "filename": filename,
+                    "sha256": sha256_hex.lower(),
+                    "hash": hex_to_sri(sha256_hex),
+                },
+            )
+        )
+    return candidates
+
+
+def resolve_latest(candidates):
+    if not candidates:
+        raise Failure("no valid chatgpt packages found in index")
+    return max(candidates, key=lambda c: c[0])[1]
+
+
+def pinned_metadata(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            current = json.load(f)
+        return current if isinstance(current, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_SOURCE_URL,
+        help="Debian Packages index URL",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to chatgpt-version.json to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print resolved JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        resolved = resolve_latest(parse_packages(fetch(args.source_url)))
+        out_json = json.dumps(resolved, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        current = pinned_metadata(args.output)
+        current_version = current.get("version")
+        if current_version is not None:
+            try:
+                resolved_version = version_tuple(resolved["version"])
+                existing_version = version_tuple(current_version)
+                if resolved_version == existing_version and any(
+                    current.get(field) != resolved[field]
+                    for field in ("filename", "sha256", "hash")
+                ):
+                    raise Failure(
+                        f"version {current_version} identity changed; "
+                        "refusing to replace the pinned filename or hashes"
+                    )
+                is_newer = resolved_version > existing_version
+            except ValueError:
+                is_newer = True
+            if not is_newer:
+                print(
+                    f"{args.output} is already up to date at version {current_version} "
+                    f"(resolved {resolved['version']} is not newer)"
+                )
+                return 0
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(out_json)
+        print(f"updated {args.output} to version {resolved['version']}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"chatgpt-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

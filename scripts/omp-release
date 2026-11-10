@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Resolve a stable OMP build and verify every supported native artifact."""
+
+import argparse
+import base64
+import hashlib
+import json
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ORIGIN = "https://build.stencil.so"
+SOURCE_URL = f"{ORIGIN}/api/products/omp/latest/linux-x86_64?channel=stable"
+ASSETS = {
+    "x86_64-linux": "omp-linux-x64",
+    "aarch64-linux": "omp-linux-arm64",
+    "aarch64-darwin": "omp-darwin-arm64",
+}
+
+
+class Failure(Exception):
+    pass
+
+
+def fetch(url, destination):
+    command = ["curl", "-fsSL", "--max-time", "120"]
+    result = subprocess.run(command + [url], stdin=subprocess.DEVNULL, stdout=destination)
+    if result.returncode:
+        raise Failure(f"fetching {url} failed with status {result.returncode}")
+
+
+def resolve(url):
+    with tempfile.TemporaryFile() as response:
+        fetch(url, response)
+        response.seek(0)
+        build = json.load(response).get("build")
+    if not isinstance(build, dict) or build.get("product") != "omp" or build.get("channel") != "stable":
+        raise Failure("lookup returned no stable omp build")
+    version, build_id, commit = (build.get(key, "") for key in ("version", "id", "commit"))
+    if not re.fullmatch(r"\d+(?:\.\d+)+", version):
+        raise Failure("build has no plain dotted version")
+    if not re.fullmatch(r"\d{8}-\d{6}-[0-9a-f]{7}", build_id):
+        raise Failure("build has no immutable build id")
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not build_id.endswith(commit[:7]):
+        raise Failure("build commit does not match its id")
+    files = {item["name"]: item for item in build["files"]}
+    platforms = {}
+    for system, name in ASSETS.items():
+        item = files.get(name)
+        path = f"/d/omp/{build_id}/{name}"
+        if item is None or item.get("url") != path:
+            raise Failure(f"build has no immutable artifact for {name}")
+        expected = item.get("sha256", "")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", expected):
+            raise Failure(f"build has no sha256 for {name}")
+        with tempfile.TemporaryFile() as artifact:
+            fetch(ORIGIN + path, artifact)
+            artifact.seek(0)
+            digest = hashlib.file_digest(artifact, "sha256").digest()
+        if digest.hex() != expected.lower():
+            raise Failure(f"digest mismatch for {name}")
+        platforms[system] = {
+            "url": ORIGIN + path,
+            "hash": "sha256-" + base64.b64encode(digest).decode("ascii"),
+        }
+    return {"version": version, "build": build_id, "commit": commit, "platforms": platforms}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-url", default=SOURCE_URL)
+    parser.add_argument("--output", "-o")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    try:
+        resolved = resolve(args.source_url)
+        content = json.dumps(resolved, indent=2) + "\n"
+        if args.dry_run or not args.output:
+            sys.stdout.write(content)
+            return 0
+        output = Path(args.output)
+        if output.exists():
+            current = json.loads(output.read_text())
+            current_version = tuple(map(int, current["version"].split(".")))
+            new_version = tuple(map(int, resolved["version"].split(".")))
+            if (new_version, resolved["build"]) <= (current_version, current.get("build", "")):
+                print(f"{output} is already up to date")
+                return 0
+        output.write_text(content)
+        print(f"updated {output} to {resolved['version']} ({resolved['build']})")
+        return 0
+    except (Failure, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        print(f"omp-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

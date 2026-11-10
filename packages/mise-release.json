@@ -1,0 +1,20 @@
+{
+  "version": "2026.10.21",
+  "systems": {
+    "x86_64-linux": {
+      "asset": "linux-x64-musl",
+      "sha256": "63b5621467b5b9950b99b7333aec1b4a34c5f23a9e464d330357c5b35502e8d7",
+      "hash": "sha256-Y7ViFGe1uZULmbczOuwbSjTF8jqeRk0zA1fFs1UC6Nc="
+    },
+    "aarch64-linux": {
+      "asset": "linux-arm64-musl",
+      "sha256": "9b44072897d0489d79b8f12de13c3a27342e11f857b614aa58c5f34774c0da75",
+      "hash": "sha256-m0QHKJfQSJ15uPEt4Tw6JzQuEfhXthSqWMXzR3TA2nU="
+    },
+    "aarch64-darwin": {
+      "asset": "macos-arm64",
+      "sha256": "d67b6006cb1144131910ce80d6cf52134f55b9c7da55648bd717df36b3f238d6",
+      "hash": "sha256-1ntgBssRRBMZEM6A1s9SE09VucfaVWSL1xffNrPyONY="
+    }
+  }
+}

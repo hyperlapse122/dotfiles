@@ -1,0 +1,704 @@
+#!/usr/bin/env bash
+# stdout is the log: one UTC timestamped line per event. Lines name a short
+# hash of the signature and never include command output, an SSID, or an
+# address. Exit 0 after the run. Exit 2 only when the arguments are wrong.
+set -euo pipefail
+
+usage() {
+  printf 'usage: network-recovery --state-dir DIR --tailscale PATH\n' >&2
+  exit 2
+}
+
+state_dir=
+tailscale_bin=
+deadline=0
+cmd_timeout=10
+in_finish=0
+sig_hash=
+iface=
+gw=
+mac=
+addr=
+cycle_iface=
+console_name=
+console_uid=
+ts_state=
+prev_hash=
+prev_run=
+field_value=
+CAP=
+http_result=fail
+dns_result=fail
+ip_result=fail
+check_result=fail
+refresh_signature=0
+
+# Apple's captive-portal success document, compared with whitespace and case
+# ignored. Any other body is a portal or a policy page.
+http_canon='<html><head><title>success</title></head><body>success</body></html>'
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --state-dir)
+      [[ $# -ge 2 ]] || usage
+      state_dir=$2
+      shift 2
+      ;;
+    --tailscale)
+      [[ $# -ge 2 ]] || usage
+      tailscale_bin=$2
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+[[ -n $state_dir && -n $tailscale_bin ]] || usage
+
+log() {
+  printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
+}
+
+trim() {
+  local v=$1
+  while [[ $v == [[:space:]]* ]]; do
+    v=${v#?}
+  done
+  while [[ $v == *[[:space:]] ]]; do
+    v=${v%?}
+  done
+  printf '%s' "$v"
+}
+
+check_deadline() {
+  local now left
+  now=$(date +%s)
+  left=$((deadline - now))
+  if [[ $left -le 0 ]]; then
+    if [[ $in_finish -eq 1 ]]; then
+      return 1
+    fi
+    log "deadline reached"
+    exit 0
+  fi
+  if [[ $left -gt 10 ]]; then
+    cmd_timeout=10
+  else
+    cmd_timeout=$left
+  fi
+  return 0
+}
+
+capture_out() {
+  if ! check_deadline; then
+    CAP=
+    return 1
+  fi
+  if CAP=$(timeout "$cmd_timeout" "$@" 2>/dev/null); then
+    return 0
+  fi
+  CAP=
+  return 1
+}
+
+run_ok() {
+  if ! check_deadline; then
+    return 1
+  fi
+  if timeout "$cmd_timeout" "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+hash_signature() {
+  sig_hash=$(printf 'iface=%s\ngw=%s\nmac=%s\naddr=%s\n' "$iface" "$gw" "$mac" "$addr" | sha256sum | cut -c1-12)
+}
+
+read_signature() {
+  local old_hash=$sig_hash
+  iface=
+  gw=
+  mac=
+  addr=
+  if capture_out route -n get default; then
+    if [[ $CAP =~ interface:[[:space:]]*([^[:space:]]+) ]]; then
+      iface=${BASH_REMATCH[1]}
+    fi
+    if [[ $CAP =~ gateway:[[:space:]]*([^[:space:]]+) ]]; then
+      gw=${BASH_REMATCH[1]}
+    fi
+  elif [[ $in_finish -eq 1 ]]; then
+    sig_hash=$old_hash
+    return 1
+  fi
+  if [[ -n $gw ]]; then
+    if capture_out arp -n "$gw"; then
+      if [[ $CAP =~ at[[:space:]]([0-9a-fA-F:]+) ]]; then
+        mac=${BASH_REMATCH[1]}
+      fi
+    fi
+  fi
+  if [[ -n $iface ]]; then
+    if capture_out ifconfig "$iface"; then
+      if [[ $CAP =~ inet[[:space:]]([0-9.]+) ]]; then
+        addr=${BASH_REMATCH[1]}
+      fi
+    fi
+  fi
+  mac=$(printf '%s' "$mac" | tr '[:upper:]' '[:lower:]')
+  hash_signature
+}
+
+link_ready() {
+  local route_cap got_iface
+  if ! capture_out route -n get default; then
+    return 1
+  fi
+  route_cap=$CAP
+  got_iface=
+  if [[ $route_cap =~ interface:[[:space:]]*([^[:space:]]+) ]]; then
+    got_iface=${BASH_REMATCH[1]}
+  fi
+  if [[ -z $got_iface ]]; then
+    return 1
+  fi
+  if ! capture_out ifconfig "$got_iface"; then
+    return 1
+  fi
+  if [[ $CAP =~ inet[[:space:]]([0-9.]+) ]]; then
+    return 0
+  fi
+  return 1
+}
+
+settle() {
+  local begin now
+  begin=$(date +%s)
+  while true; do
+    if link_ready; then
+      return 0
+    fi
+    now=$(date +%s)
+    if [[ $((now - begin)) -ge 8 ]]; then
+      return 0
+    fi
+    if ! check_deadline; then
+      return 0
+    fi
+    sleep 1
+  done
+}
+
+read_console() {
+  local line
+  console_name=
+  console_uid=
+  if ! capture_out scutil <<< 'show State:/Users/ConsoleUser'; then
+    return 1
+  fi
+  while IFS= read -r line; do
+    case $line in
+      *"Name :"*)
+        if [[ -z $console_name ]]; then
+          console_name=${line##*Name :}
+        fi
+        ;;
+      *"UID :"*)
+        if [[ -z $console_uid ]]; then
+          console_uid=${line##*UID :}
+        fi
+        ;;
+    esac
+  done <<EOF
+$CAP
+EOF
+  console_name=$(trim "$console_name")
+  console_uid=$(trim "$console_uid")
+  if [[ -z $console_name || $console_name == loginwindow || -z $console_uid ]]; then
+    console_name=
+    console_uid=
+    return 1
+  fi
+  return 0
+}
+
+note_tailscale_state() {
+  ts_state=none
+  if ! read_console; then
+    return 0
+  fi
+  ts_state=unknown
+  if ! capture_out launchctl asuser "$console_uid" sudo -u "$console_name" "$tailscale_bin" status --json; then
+    return 0
+  fi
+  if [[ $CAP =~ \"BackendState\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+    ts_state=${BASH_REMATCH[1]}
+  fi
+  return 0
+}
+
+episode_get() {
+  local key=$1 line
+  field_value=
+  while IFS= read -r line; do
+    case $line in
+      "$key"=*) field_value=${line#"$key"=} ;;
+    esac
+  done < "$state_dir/episode"
+}
+
+open_episode() {
+  local now reason
+  note_tailscale_state
+  now=$(date +%s)
+  cat > "$state_dir/episode" <<EOF
+status=open
+started_at=$now
+tailscale=$ts_state
+next_step=dns-flush
+EOF
+  reason=signature
+  if [[ -n $prev_hash && $prev_hash == "$sig_hash" ]]; then
+    reason=gap
+  fi
+  log "episode open $sig_hash reason=$reason"
+}
+
+close_episode() {
+  local started now duration
+  episode_get started_at
+  started=$field_value
+  now=$(date +%s)
+  if [[ -n $started ]]; then
+    duration=$((now - started))
+  else
+    duration=0
+  fi
+  rm -f -- "$state_dir/episode"
+  log "episode close duration=${duration}s"
+}
+
+save_step() {
+  local status=$1 next=$2 started tail
+  episode_get started_at
+  started=$field_value
+  episode_get tailscale
+  tail=$field_value
+  cat > "$state_dir/episode.new" <<EOF
+status=$status
+started_at=$started
+tailscale=$tail
+next_step=$next
+EOF
+  mv -f "$state_dir/episode.new" "$state_dir/episode"
+}
+
+mark_exhausted() {
+  save_step exhausted 'done'
+  log "episode exhausted"
+  log "repair restored none"
+}
+
+probe_http() {
+  local got
+  http_result=fail
+  if ! capture_out curl -sS --proto '=http' --max-redirs 0 --noproxy '*' --max-time 5 -o - http://captive.apple.com/hotspot-detect.html; then
+    return 0
+  fi
+  got=$(printf '%s' "$CAP" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+  if [[ $got == "$http_canon" ]]; then
+    http_result=pass
+  else
+    http_result=captive
+  fi
+}
+
+probe_dns() {
+  dns_result=fail
+  if ! capture_out timeout 2 dscacheutil -q host -a name example.com; then
+    return 0
+  fi
+  case $CAP in
+    *ip_address:*) dns_result=pass ;;
+  esac
+}
+
+probe_ip() {
+  ip_result=fail
+  if capture_out nc -z -w 2 1.1.1.1 443; then
+    ip_result=pass
+    return 0
+  fi
+  if capture_out nc -z -w 2 8.8.8.8 443; then
+    ip_result=pass
+  fi
+}
+
+run_checks() {
+  http_result=fail
+  dns_result=fail
+  ip_result=fail
+  check_result=fail
+  probe_http
+  probe_dns
+  probe_ip
+  if [[ $http_result == captive ]]; then
+    check_result=captive
+  elif [[ $http_result == pass && $dns_result == pass && $ip_result == pass ]]; then
+    check_result=pass
+  else
+    check_result=fail
+  fi
+}
+
+log_check() {
+  case $check_result in
+    pass) log "check pass" ;;
+    captive) log "check captive" ;;
+    fail)
+      if [[ $http_result != pass ]]; then
+        log "check fail http"
+      fi
+      if [[ $dns_result != pass ]]; then
+        log "check fail dns"
+      fi
+      if [[ $ip_result != pass ]]; then
+        log "check fail ip"
+      fi
+      ;;
+  esac
+}
+
+restore_tailscale() {
+  local user uid
+  if [[ -f $state_dir/pending-tailscale ]]; then
+    refresh_signature=1
+    user=
+    uid=
+    {
+      IFS= read -r user || true
+      IFS= read -r uid || true
+    } < "$state_dir/pending-tailscale"
+    user=$(trim "$user")
+    uid=$(trim "$uid")
+    log "pending-restore tailscale"
+    # The tunnel may need the physical repair first; do not spend the whole
+    # run waiting for it to become Running on a broken underlying network.
+    if [[ -n $user && -n $uid ]] && run_ok timeout 2 launchctl asuser "$uid" sudo -u "$user" "$tailscale_bin" up; then
+      rm -f -- "$state_dir/pending-tailscale"
+      log "pending-restore tailscale done"
+    else
+      log "pending-restore tailscale failed"
+    fi
+  fi
+}
+
+restore_service() {
+  local mode value ok
+  if [[ -f $state_dir/pending-service ]]; then
+    refresh_signature=1
+    mode=
+    value=
+    {
+      IFS= read -r mode || true
+      IFS= read -r value || true
+    } < "$state_dir/pending-service"
+    mode=$(trim "$mode")
+    value=$(trim "$value")
+    log "pending-restore service"
+    ok=0
+    if [[ $mode == airport && -n $value ]]; then
+      if run_ok networksetup -setairportpower "$value" on; then
+        ok=1
+      fi
+    elif [[ $mode == service && -n $value ]]; then
+      if run_ok networksetup -setnetworkserviceenabled "$value" on; then
+        ok=1
+      fi
+    fi
+    if [[ $ok -eq 1 ]]; then
+      rm -f -- "$state_dir/pending-service"
+      log "pending-restore service done"
+    else
+      log "pending-restore service failed"
+    fi
+  fi
+}
+
+write_pending_service() {
+  local mode=$1 value=$2
+  printf '%s\n%s\n' "$mode" "$value" > "$state_dir/pending-service.new"
+  mv -f "$state_dir/pending-service.new" "$state_dir/pending-service"
+}
+
+reconnect_tailscale() {
+  if [[ -f $state_dir/pending-tailscale ]]; then
+    log "repair skip tailscale pending-restore"
+    return 1
+  fi
+  episode_get tailscale
+  if [[ $field_value != Running ]]; then
+    log "repair skip tailscale ${field_value:-unknown}"
+    return 1
+  fi
+  if ! read_console; then
+    log "repair skip tailscale no-console-user"
+    return 1
+  fi
+  printf '%s\n%s\n' "$console_name" "$console_uid" > "$state_dir/pending-tailscale.new"
+  mv -f "$state_dir/pending-tailscale.new" "$state_dir/pending-tailscale"
+  log "repair tailscale"
+  refresh_signature=1
+  run_ok launchctl asuser "$console_uid" sudo -u "$console_name" "$tailscale_bin" down || true
+  if run_ok launchctl asuser "$console_uid" sudo -u "$console_name" "$tailscale_bin" up; then
+    rm -f -- "$state_dir/pending-tailscale"
+  else
+    log "repair tailscale up-failed"
+  fi
+  return 0
+}
+
+# Enabled services only. networksetup marks a disabled service with a leading *.
+enabled_services() {
+  awk '
+    BEGIN { name = ""; disabled = 0 }
+    /^\([0-9]+\) / {
+      line = $0
+      sub(/^\([0-9]+\) /, "", line)
+      disabled = 0
+      if (line ~ /^\*/) {
+        disabled = 1
+        sub(/^\*[[:space:]]*/, "", line)
+      }
+      name = line
+      next
+    }
+    /Device: / {
+      if (name != "" && disabled == 0) {
+        dev = $0
+        sub(/.*Device: /, "", dev)
+        sub(/[)].*$/, "", dev)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", dev)
+        print name "\t" dev
+      }
+      name = ""
+    }
+  '
+}
+
+service_is_wifi() {
+  awk -v iface="$cycle_iface" '
+    BEGIN { found = 0; port = "" }
+    /^Hardware Port: / {
+      port = $0
+      sub(/^Hardware Port: /, "", port)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", port)
+      next
+    }
+    /^Device: / {
+      dev = $0
+      sub(/^Device: /, "", dev)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", dev)
+      if (dev == iface && port == "Wi-Fi") found = 1
+    }
+    END { exit (found ? 0 : 1) }
+  '
+}
+
+cycle_service() {
+  local services name dev
+  case $cycle_iface in
+    utun*)
+      log "repair skip cycle utun"
+      return 1
+      ;;
+  esac
+  services=
+  if ! capture_out networksetup -listnetworkserviceorder; then
+    log "repair wait service-discovery"
+    return 2
+  fi
+  services=$CAP
+  match_count=0
+  match_name=
+  while IFS=$'\t' read -r name dev; do
+    [[ -n $name ]] || continue
+    if [[ $dev == "$cycle_iface" ]]; then
+      match_count=$((match_count + 1))
+      match_name=$name
+    fi
+  done < <(printf '%s\n' "$services" | enabled_services)
+  if [[ $match_count -ne 1 ]]; then
+    log "repair skip cycle no-single-match"
+    return 1
+  fi
+  if ! capture_out networksetup -listallhardwareports; then
+    log "repair wait hardware-discovery"
+    return 2
+  fi
+  check_deadline
+  log "repair cycle"
+  refresh_signature=1
+  if printf '%s\n' "$CAP" | service_is_wifi; then
+    write_pending_service airport "$cycle_iface"
+    save_step open 'done'
+    run_ok networksetup -setairportpower "$cycle_iface" off || true
+    if run_ok networksetup -setairportpower "$cycle_iface" on; then
+      rm -f -- "$state_dir/pending-service"
+    fi
+  else
+    write_pending_service service "$match_name"
+    save_step open 'done'
+    run_ok networksetup -setnetworkserviceenabled "$match_name" off || true
+    if run_ok networksetup -setnetworkserviceenabled "$match_name" on; then
+      rm -f -- "$state_dir/pending-service"
+    fi
+  fi
+  return 0
+}
+
+stop_if_restored() {
+  local which=$1
+  if [[ $check_result == pass ]]; then
+    log "repair restored $which"
+    close_episode
+    return 0
+  fi
+  if [[ $check_result == captive ]]; then
+    return 0
+  fi
+  return 1
+}
+
+attempt_repairs() {
+  local step attempted result
+  episode_get next_step
+  step=${field_value:-dns-flush}
+  while [[ $step != 'done' ]]; do
+    check_deadline
+    attempted=0
+    # Persist progress before a repair can use the remaining budget. Pending
+    # restore records separately guarantee that every off/down gets its on/up.
+    case $step in
+      dns-flush)
+        save_step open tailscale
+        log "repair dns-flush"
+        run_ok dscacheutil -flushcache || true
+        run_ok killall -HUP mDNSResponder || true
+        attempted=1
+        ;;
+      tailscale)
+        save_step open cycle
+        if reconnect_tailscale; then attempted=1; fi
+        ;;
+      cycle)
+        if cycle_service; then
+          attempted=1
+        else
+          result=$?
+          if [[ $result -eq 2 ]]; then return 0; fi
+          save_step open 'done'
+        fi
+        ;;
+      *) mark_exhausted; return 0 ;;
+    esac
+    if [[ $attempted -eq 1 ]]; then
+      settle
+      if [[ $step == cycle && ! -f $state_dir/pending-service ]]; then
+        restore_tailscale
+      fi
+      run_checks
+      log_check
+      if stop_if_restored "$step"; then
+        return 0
+      fi
+    fi
+    episode_get next_step
+    step=$field_value
+  done
+  mark_exhausted
+}
+
+finish() {
+  in_finish=1
+  if [[ $refresh_signature -eq 1 ]] && check_deadline; then
+    read_signature || true
+  fi
+  if [[ -n $sig_hash ]]; then
+    printf '%s\n' "$sig_hash" > "$state_dir/signature"
+  fi
+  date +%s > "$state_dir/last-run"
+}
+
+mkdir -p -- "$state_dir"
+chmod 700 "$state_dir" || true
+deadline=$(( $(date +%s) + 25 ))
+trap finish EXIT
+
+restore_service
+if [[ -f $state_dir/pending-service ]]; then
+  exit 0
+fi
+restore_tailscale
+read_signature
+cycle_iface=$iface
+if [[ -f $state_dir/signature ]]; then
+  prev_hash=$(tr -d '[:space:]' < "$state_dir/signature")
+fi
+if [[ -f $state_dir/last-run ]]; then
+  prev_run=$(tr -d '[:space:]' < "$state_dir/last-run")
+fi
+now=$(date +%s)
+changed=0
+if [[ -z $prev_hash || $prev_hash != "$sig_hash" ]]; then
+  changed=1
+fi
+if [[ -z $prev_run ]]; then
+  changed=1
+elif [[ $((now - prev_run)) -gt 30 ]]; then
+  changed=1
+fi
+
+# With no default route there is nothing to repair: Wi-Fi is still joining a
+# network, or the user turned it off. The route that appears next is a new
+# signature and opens an episode then.
+if [[ -z $iface ]]; then
+  if [[ $changed -eq 1 ]]; then
+    log "no default route"
+  fi
+  exit 0
+fi
+
+if [[ $changed -eq 1 ]]; then
+  open_episode
+elif [[ ! -f $state_dir/episode ]]; then
+  exit 0
+else
+  episode_get status
+  if [[ $field_value == exhausted ]]; then
+    run_checks
+    log_check
+    if [[ $check_result == pass ]]; then
+      close_episode
+    fi
+    exit 0
+  fi
+fi
+
+run_checks
+log_check
+# A network that was just joined often needs a few seconds before DHCP and DNS
+# answer, so the first repair waits until the episode is 10 seconds old.
+grace=10
+case $check_result in
+  pass) close_episode ;;
+  captive) ;;
+  fail)
+    episode_get started_at
+    if [[ $((now - ${field_value:-0})) -lt $grace ]]; then
+      log "repair wait grace"
+    else
+      attempt_repairs
+    fi
+    ;;
+esac

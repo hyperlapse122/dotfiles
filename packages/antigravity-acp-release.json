@@ -1,0 +1,53 @@
+{
+  "version": "1.4.3",
+  "platforms": {
+    "x86_64-linux": {
+      "platform": "linux-x64",
+      "version": "1.4.3",
+      "url": "https://dl.google.com/agy-extensions/releases/linux/agy-acp-server-1.4.3-linux-x86_64.zip",
+      "sha256": "0634ce5306ba92c932945455e7a83fda78e2d99c33fa8aa6ee0566206a382714",
+      "hash": "sha256-BjTOUwa6kskylFRV56g/2nji2Zwz+oqm7gVmIGo4JxQ=",
+      "archiveBytes": 336846435,
+      "executable": {
+        "name": "agy_acp_server.par",
+        "bytes": 927707135
+      },
+      "harness": {
+        "name": "localharness_external",
+        "bytes": 133926136
+      }
+    },
+    "aarch64-linux": {
+      "platform": "linux-arm64",
+      "version": "1.4.3",
+      "url": "https://dl.google.com/agy-extensions/releases/linux/agy-acp-server-1.4.3-linux-arm64.zip",
+      "sha256": "05c153443b0b1175151c760eeddea538950bc9843e317d54786a1f03670182bc",
+      "hash": "sha256-BcFTRDsLEXUVHHYO7d6lOJULyYQ+MX1UeGofA2cBgrw=",
+      "archiveBytes": 322887047,
+      "executable": {
+        "name": "agy_acp_server.par",
+        "bytes": 932662106
+      },
+      "harness": {
+        "name": "localharness_external",
+        "bytes": 127512832
+      }
+    },
+    "aarch64-darwin": {
+      "platform": "darwin-arm64",
+      "version": "1.4.3",
+      "url": "https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-1.4.3-darwin-arm64.zip",
+      "sha256": "c57db0a9b8b712daa9c3c17cdb990a61842ea569f279e8bd79d7aa85a303b20b",
+      "hash": "sha256-xX2wqbi3Etqpw8F825kKYYQupWnyeei9edeqhaMDsgs=",
+      "archiveBytes": 114147623,
+      "executable": {
+        "name": "agy_acp_server.par",
+        "bytes": 282446160
+      },
+      "harness": {
+        "name": "localharness_external",
+        "bytes": 122957936
+      }
+    }
+  }
+}

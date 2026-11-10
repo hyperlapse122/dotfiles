@@ -1,0 +1,371 @@
+name: Update dependencies
+
+on:
+  schedule:
+    - cron: '7,37 * * * *' # Every 30 minutes, off the hour
+  workflow_dispatch:
+
+concurrency:
+  group: update-dependencies
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_UPDATES || secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN_FOR_UPDATES || secrets.GITHUB_TOKEN }}
+
+      - name: Make room for NixOS closures
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+
+      - name: Enable KVM for the Nix builder
+        run: sudo chmod 666 /dev/kvm || true
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+        with:
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Update flake inputs, agent plugins, and packages
+        id: update
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # 1. Update flake inputs
+          nix flake update
+
+          # 2. Update agent plugins
+          PLUGIN_SOURCE="EveryInc/compound-engineering-plugin"
+          TAG_PREFIX="compound-engineering-"
+          resolved=$(nix run .#agent-plugin-release -- --source "$PLUGIN_SOURCE" --tag-prefix "$TAG_PREFIX")
+          current=$(sed -n 's#.*url = "github:EveryInc/compound-engineering-plugin/\(.*\)";#\1#p' flake.nix)
+          if [ -n "$resolved" ] && [ "$resolved" != "$current" ]; then
+            case "$resolved" in
+              "$TAG_PREFIX"v[0-9]*) ;;
+              *) echo "refusing an unexpected resolved tag: $resolved" >&2; exit 1 ;;
+            esac
+            sed -i "s#compound-engineering-plugin/$current#compound-engineering-plugin/$resolved#" flake.nix
+            sed -i "s#tag = \"$current\";#tag = \"$resolved\";#" home/h82/agents/agent-plugin-pins.nix
+            nix flake lock --update-input compound-engineering-plugin
+            rev=$(jq -r '.nodes["compound-engineering-plugin"].locked.rev' flake.lock)
+            case "$rev" in
+              [0-9a-f][0-9a-f]*) ;;
+              *) echo "flake.lock recorded no usable revision" >&2; exit 1 ;;
+            esac
+            sed -i "s#expectedRev = \"[0-9a-f]*\";#expectedRev = \"$rev\";#" home/h82/agents/agent-plugin-pins.nix
+          fi
+
+          # 3. Update Claude Desktop
+          nix run .#claude-desktop-release -- --output packages/claude-desktop-version.json
+
+          # 4. Update Claude Code
+          nix run .#claude-code-release -- --output packages/claude-code-manifest.json
+
+          # 5. Update the Android SDK pin
+          nix run .#android-sdk-release -- --output packages/android-sdk-repo.json
+
+          # 6. Update mise
+          nix run .#mise-release -- --output packages/mise-release.json
+
+          # 7. Update ChatGPT. A feed failure or changed release identity keeps
+          # the current pin and lets the other updates through.
+          if ! nix run .#chatgpt-release -- --output packages/chatgpt-version.json; then
+            echo "::warning title=ChatGPT update skipped::chatgpt-release failed; keeping the current pin in packages/chatgpt-version.json."
+            git checkout -- packages/chatgpt-version.json
+          fi
+
+          # 8. Update T3 Code. A nightly can be published before its assets
+          # and digests are, so a failure here keeps the current pin and lets
+          # the other updates through. Status 2 means the release's embedded
+          # Antigravity table could not be read or trusted; the whole file
+          # stays, so the T3 Code and ACP pins never split.
+          t3code_status=0
+          nix run .#t3code-release -- --output packages/t3code-release.json || t3code_status=$?
+          if [ "$t3code_status" -eq 2 ]; then
+            echo "::warning title=T3 Code Antigravity table unreadable::t3code-release could not read or trust the Antigravity table embedded in the T3 Code CLI; keeping the current pin in packages/t3code-release.json."
+            git checkout -- packages/t3code-release.json
+          elif [ "$t3code_status" -ne 0 ]; then
+            echo "::warning title=T3 Code update skipped::t3code-release failed; keeping the current pin in packages/t3code-release.json."
+            git checkout -- packages/t3code-release.json
+          fi
+
+          # 9. Update the Antigravity CLI. A feed failure keeps the current
+          # pin and lets the other updates through, as T3 Code's does.
+          if ! nix run .#antigravity-cli-release -- --output packages/antigravity-cli-release.json; then
+            echo "::warning title=Antigravity CLI update skipped::antigravity-cli-release failed; keeping the current pin in packages/antigravity-cli-release.json."
+            git checkout -- packages/antigravity-cli-release.json
+          fi
+
+          # 10. Update WiFiman Desktop. An API failure keeps the current pin
+          # and lets the other updates through, as T3 Code's does.
+          if ! nix run .#wifiman-desktop-release -- --output packages/wifiman-desktop-version.json; then
+            echo "::warning title=WiFiman Desktop update skipped::wifiman-desktop-release failed; keeping the current pin in packages/wifiman-desktop-version.json."
+            git checkout -- packages/wifiman-desktop-version.json
+          fi
+
+          # 11. Update OMP. A release can be published before every platform
+          # tarball or its SHA256SUMS line, so a failure keeps the current pin
+          # and lets the other updates through, as T3 Code's does.
+          if ! nix run .#omp-release -- --output packages/omp-release.json; then
+            echo "::warning title=OMP update skipped::omp-release failed; keeping the current pin in packages/omp-release.json."
+            git checkout -- packages/omp-release.json
+          fi
+
+          # 12. Update the npm packages: the shared ACP client and the Claude
+          # Agent SDK that agent-usage reads Claude limits through. Each pin
+          # moves with its regenerated lock file, so a failure restores both
+          # and lets the other updates through, as OMP's does.
+          for npm_package in acpx claude-agent-sdk; do
+            case "$npm_package" in
+              claude-agent-sdk) registry_name=@anthropic-ai/claude-agent-sdk ;;
+              *) registry_name=$npm_package ;;
+            esac
+            if ! nix run .#npm-release -- --package "$registry_name" \
+              --output "packages/$npm_package-release.json" \
+              --lock "packages/$npm_package/package-lock.json"; then
+              echo "::warning title=$npm_package update skipped::npm-release failed; keeping the current pin in packages/$npm_package-release.json."
+              git checkout -- "packages/$npm_package-release.json" "packages/$npm_package/package-lock.json"
+            fi
+          done
+
+          # 13. Update Codex. A release can be published before every platform
+          # tarball or its digest, so a failure keeps the current pin and lets
+          # the other updates through, as OMP's does.
+          if ! nix run .#codex-release -- --output packages/codex-release.json; then
+            echo "::warning title=Codex update skipped::codex-release failed; keeping the current pin in packages/codex-release.json."
+            git checkout -- packages/codex-release.json
+          fi
+
+          # 14. Update Grok Build. The stable pointer can move before every
+          # platform's binary is published, so a failure keeps the current pin
+          # and lets the other updates through, as Codex's does.
+          if ! nix run .#grok-build-release -- --output packages/grok-build-release.json; then
+            echo "::warning title=Grok Build update skipped::grok-build-release failed; keeping the current pin in packages/grok-build-release.json."
+            git checkout -- packages/grok-build-release.json
+          fi
+
+          # 15. Update the Antigravity ACP runtime on PATH. Google publishes
+          # no pointer, so the helper probes candidate versions and downloads
+          # only a newer complete release. It writes only the PATH pin; T3
+          # Code's runtime pin comes from t3code-release. A failure keeps the
+          # current pin and lets the other updates through, as T3 Code's does.
+          if ! nix run .#antigravity-acp-release -- --output packages/antigravity-acp-release.json; then
+            echo "::warning title=Antigravity ACP runtime update skipped::antigravity-acp-release failed; keeping the current pin in packages/antigravity-acp-release.json."
+            git checkout -- packages/antigravity-acp-release.json
+          fi
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No updates detected across all targets."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Updates detected."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify updates
+        if: steps.update.outputs.changed == 'true'
+        id: verify
+        run: |
+          set +e
+          # The step runs without pipefail, so $? after a pipe is tee's
+          # status; PIPESTATUS[0] is the command's own.
+          nix fmt -- --ci 2>&1 | tee fmt.log
+          FMT_EXIT=${PIPESTATUS[0]}
+          nix flake check --print-build-logs 2>&1 | tee check.log
+          CHECK_EXIT=${PIPESTATUS[0]}
+          # The VM tests live outside `nix flake check`. Their own log keeps a
+          # flake check failure from being pushed out of the tail below.
+          nix build --no-link --print-build-logs .#vmChecks.all 2>&1 | tee vm-check.log
+          VM_EXIT=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$FMT_EXIT" -eq 0 ] && [ "$CHECK_EXIT" -eq 0 ] && [ "$VM_EXIT" -eq 0 ]; then
+            echo "status=success" >> "$GITHUB_OUTPUT"
+            echo "All verification checks passed."
+          else
+            echo "status=failure" >> "$GITHUB_OUTPUT"
+            echo "Verification failed (fmt: $FMT_EXIT, check: $CHECK_EXIT, vm checks: $VM_EXIT)."
+            {
+              echo "### Verification Failure Details"
+              if [ "$CHECK_EXIT" -ne 0 ]; then
+                echo "#### nix flake check"
+                echo '```text'
+                tail -n 50 check.log
+                echo '```'
+              fi
+              if [ "$VM_EXIT" -ne 0 ]; then
+                echo "#### NixOS VM tests"
+                echo '```text'
+                tail -n 50 vm-check.log
+                echo '```'
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Push verified updates directly to main
+        if: steps.update.outputs.changed == 'true' && steps.verify.outputs.status == 'success'
+        run: |
+          set -euo pipefail
+
+          if [ -n "$(git status --porcelain packages/claude-desktop-version.json)" ]; then
+            NEW_VER=$(jq -r .version packages/claude-desktop-version.json)
+            git add packages/claude-desktop-version.json
+            git commit -m "chore(packages): bump claude-desktop to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/claude-code-manifest.json)" ]; then
+            NEW_VER=$(jq -r .version packages/claude-code-manifest.json)
+            git add packages/claude-code-manifest.json
+            git commit -m "chore(packages): bump claude-code to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/codex-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/codex-release.json)
+            git add packages/codex-release.json
+            git commit -m "chore(packages): bump codex to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/grok-build-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/grok-build-release.json)
+            git add packages/grok-build-release.json
+            git commit -m "chore(packages): bump grok-build to $NEW_VER"
+          fi
+
+
+          if [ -n "$(git status --porcelain packages/omp-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/omp-release.json)
+            git add packages/omp-release.json
+            git commit -m "chore(packages): bump omp to $NEW_VER"
+          fi
+
+          for npm_package in acpx claude-agent-sdk; do
+            if [ -n "$(git status --porcelain "packages/$npm_package-release.json" "packages/$npm_package/package-lock.json")" ]; then
+              NEW_VER=$(jq -r .version "packages/$npm_package-release.json")
+              git add "packages/$npm_package-release.json" "packages/$npm_package/package-lock.json"
+              git commit -m "chore(packages): bump $npm_package to $NEW_VER"
+            fi
+          done
+          if [ -n "$(git status --porcelain packages/t3code-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/t3code-release.json)
+            git add packages/t3code-release.json
+            git commit -m "chore(packages): bump t3code to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/antigravity-cli-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/antigravity-cli-release.json)
+            git add packages/antigravity-cli-release.json
+            git commit -m "chore(packages): bump antigravity-cli to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/antigravity-acp-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/antigravity-acp-release.json)
+            git add packages/antigravity-acp-release.json
+            git commit -m "chore(packages): bump antigravity-acp to $NEW_VER"
+          fi
+
+
+          if [ -n "$(git status --porcelain packages/chatgpt-version.json)" ]; then
+            NEW_VER=$(jq -r .version packages/chatgpt-version.json)
+            git add packages/chatgpt-version.json
+            git commit -m "chore(packages): bump chatgpt to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/wifiman-desktop-version.json)" ]; then
+            NEW_VER=$(jq -r .version packages/wifiman-desktop-version.json)
+            git add packages/wifiman-desktop-version.json
+            git commit -m "chore(packages): bump wifiman-desktop to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/mise-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/mise-release.json)
+            git add packages/mise-release.json
+            git commit -m "chore(packages): bump mise to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/android-sdk-repo.json)" ]; then
+            PINNED=$(jq -r '.latest | to_entries | map("\(.key) \(.value)") | join(", ")' packages/android-sdk-repo.json)
+            git add packages/android-sdk-repo.json
+            git commit -m "chore(packages): bump android sdk pin" -m "Pinned: $PINNED"
+          fi
+
+          if [ -n "$(git status --porcelain home/h82/agents/agent-plugin-pins.nix)" ]; then
+            NEW_TAG=$(sed -n 's/.*tag = "\(.*\)";/\1/p' home/h82/agents/agent-plugin-pins.nix)
+            git add flake.nix flake.lock home/h82/agents/agent-plugin-pins.nix
+            git commit -m "chore(agents): bump compound-engineering to $NEW_TAG"
+          fi
+
+          if [ -n "$(git status --porcelain flake.lock)" ]; then
+            git add flake.lock
+            git commit -m "chore(flake): update flake.lock"
+          fi
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "chore(deps): update dependencies"
+          fi
+
+          # Rebase only after every change is committed: `git rebase` requires
+          # a clean working tree even when origin/main has not moved at all,
+          # so rebasing before committing fails unconditionally whenever this
+          # step has anything to push.
+          git fetch origin main
+          git rebase origin/main || { git rebase --abort; echo "Rebase failed, proceeding with current head"; }
+
+          git push origin main
+          echo "Successfully pushed verified updates directly to main."
+
+      - name: Open reconciliation PR on failure
+        if: steps.update.outputs.changed == 'true' && steps.verify.outputs.status == 'failure'
+        env:
+          BRANCH: update-dependencies-fix
+        run: |
+          set -euo pipefail
+          # An open PR's branch may carry fix commits from a person.
+          # Resetting it to this run's update would discard them, so an open
+          # PR only gets this run's logs. A failed query fails the step rather
+          # than reading as "no open PR".
+          open_prs=$(gh pr list --head "$BRANCH" --state open --json number --jq length)
+
+          {
+            echo "## Automated Dependency Update (Reconciliation Required)"
+            echo ""
+            echo "The dependency update job, which runs every 30 minutes, detected changes to flake inputs or packages, but pre-push verification failed."
+            echo ""
+            echo "### Failure Logs"
+            echo "#### nix flake check"
+            echo '```text'
+            tail -n 80 check.log
+            echo '```'
+            echo "#### NixOS VM tests"
+            echo '```text'
+            tail -n 80 vm-check.log
+            echo '```'
+            echo ""
+            if [ "$open_prs" -gt 0 ]; then
+              echo "These logs are from the latest failing run, which left this branch as it was."
+            fi
+            echo "Push a fix to this branch; CI runs on each push. This PR waits for you to review and merge it."
+          } > pr-body.md
+
+          if [ "$open_prs" -gt 0 ]; then
+            gh pr edit "$BRANCH" --body-file pr-body.md
+          else
+            TITLE="chore(deps): automated dependency update (reconciliation required)"
+            git checkout -B "$BRANCH"
+            git add -A
+            git commit -m "$TITLE"
+            git push --force-with-lease origin "$BRANCH"
+            gh pr create --head "$BRANCH" --title "$TITLE" --body-file pr-body.md
+          fi

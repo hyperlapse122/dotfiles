@@ -1,8 +1,0 @@
-{{ if and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") -}}
-#!/bin/sh
-# file macos-apps sha256: {{ include (joinPath .chezmoi.workingTree "scripts" "macos-apps.sh") | sha256sum }}
-# file macos-container-state sha256: {{ include (joinPath .chezmoi.workingTree "scripts" "macos-container-state.sh") | sha256sum }}
-# data macos.apps sha256: {{ .macos | toJson | sha256sum }}
-set -eu
-exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "macos-apps.sh" | replace "'" "'\\''" }}' {{ range .macos.formulae }}'formula:{{ . | replace "'" "'\\''" }}' {{ end }}{{ range .macos.casks }}'cask:{{ . | replace "'" "'\\''" }}' {{ end }}
-{{ end -}}

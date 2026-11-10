@@ -1,110 +1,70 @@
-# dotfiles
+# Nix Config
 
-Personal environment configuration for Windows, Linux, and macOS.
-Worktree preparation and applying personal settings are separate operations.
-See [STRATEGY.md](STRATEGY.md) for the repository's scope and design boundaries.
+A Nix flake configuring personal machines. NixOS hosts run the default Plasma desktop. Non-NixOS Linux hosts, on x86_64-linux or aarch64-linux, get the same shell, development tools, coding-agent configuration, Git signing, and CLI authentication, without the desktop. macOS hosts, on Apple silicon, get the same user environment through nix-darwin, plus the GUI apps through Homebrew casks. The flake pins nixos-unstable with a lock file. Every directory under `hosts/` is a host: the flake builds a production `<host>` output and a `<host>-bootstrap` output for each, from one shared profile plus the traits the host declares.
 
-Detailed documentation is organized under [docs/](docs/README.md).
-
-## Quick Start
-
-### 1. New Windows PC Bootstrap
-
-On a clean Windows 10/11 machine, enable **Developer Mode** in **Settings > For developers** (`start ms-settings:developers`), then open Windows PowerShell (5.1+) and run:
-
-```powershell
-$bootstrap = Join-Path $env:TEMP 'dotfiles-bootstrap.ps1'
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/hyperlapse122/dotfiles/main/bootstrap.ps1' -OutFile $bootstrap
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
-```
-
-This checks Developer Mode before making changes, installs missing Git, mise, and chezmoi via WinGet, clones this repository to `~/src/github.com/hyperlapse122/dotfiles`, and initializes the worktree. Bootstrap stops if Developer Mode is disabled or its enabled state cannot be confirmed; it never enables the setting automatically.
-
-After bootstrap completes, open a fresh PowerShell window and register the permanent checkout:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\src\github.com\hyperlapse122\dotfiles\configure-chezmoi.ps1"
-```
-
-For custom destinations, host application lists, and build toolchains, see the [Windows Setup Guide](docs/setup/windows.md).
-
-### 2. New Apple Silicon Mac
-
-Follow the [macOS Setup and Readiness Guide](docs/setup/macos.md) to install native prerequisites, prepare the permanent checkout with `bootstrap.sh`, register it separately with `configure-chezmoi.sh`, and explicitly apply the environment.
-The supported baseline is macOS 26 or later on native Apple Silicon.
-The guide covers all managed harnesses, applications, credentials, local containers and native Rust/C++/.NET builds, with separate manual and runtime readiness checks.
-
-### 3. New Ubuntu Desktop PC
-
-Follow the [Ubuntu Setup and Readiness Guide](docs/setup/ubuntu.md) for Windows backups, verified installation media, native prerequisites, inspected checkout preparation, explicit registration/application, and separate daily-work acceptance.
-Linux workstation support is standard Ubuntu Desktop 26.04 LTS with GNOME on amd64, starting with 26.04.1 media. The GNOME desktop, credentials, native builds and minikube require owner acceptance on the target host.
-
-### 4. Worktree Preparation (Any OS)
-
-To prepare a fresh git worktree or existing checkout for development without modifying personal settings:
+On a NixOS host:
 
 ```sh
-mise trust
-mise install
+sudo nixos-rebuild switch --flake .#<host>
 ```
 
-This installs locked development tools and runs read-only source verification via the project `postinstall` hook.
+Replace `<host>` with the machine's directory name under `hosts/`, listed below. After initial installation and key recovery, this command applies the system, Home Manager configuration, and gh/glab authentication files together. Three YubiKeys carry the same signing key, each under its own PIN; any one of them handles Git signing and initial secret recovery. Ordinary rebuilds use the local age identity, which the host's disk encryption protects. Sign in to 1Password manually; the SSH agent configuration is declarative.
 
-### 5. Apply Personal Settings
-
-To apply managed configuration, personal applications, and user fonts to your actual user home directory:
+On a non-NixOS host, run this from the clone:
 
 ```sh
-mise run apply
+nr switch
 ```
 
-On supported Ubuntu Desktop GNOME hosts and Apple Silicon macOS, application also installs Ghostty and reconciles the account's zsh login shell and native terminal defaults.
-See [Ghostty and the Login Shell](docs/guides/terminal.md) for configuration ownership, session renewal, status checks, and the OS-specific default-terminal boundaries.
+It applies the system layer through system-manager and `sudo`, then the standalone Home Manager configuration, which publishes the gh/glab files, the tokens, and the host's own SSH key. Routine applies use the user-owned age identity at `~/.config/nix-config/age/key.txt`. [Adding a host](docs/adding-a-host.md#non-nixos-hosts) covers the first setup.
 
-To preview pending changes before applying:
+On a macOS host, `nr switch` from the clone builds the nix-darwin system, which holds the Home Manager configuration, and activates it through `sudo`. The first apply installs Homebrew and the casks. Secrets work as on a non-NixOS Linux host, with FileVault protecting the user-owned identity. [macOS hosts](docs/macos.md) covers the first setup and everyday use.
+
+## Hosts
+
+| Host | Machine |
+| --- | --- |
+| `MS-7D91-VM` | VMware Workstation guest on the MSI MS-7D91 PC, which runs Windows; GPG goes through the Windows Gpg4win agent |
+| `MacBook-Pro-Mac17-9` | Apple silicon MacBook Pro (model identifier `Mac17,9`), macOS |
+
+[Adding a host](docs/adding-a-host.md) covers a new machine.
+
+## Included tools
+
+zsh, Git, Ghostty, Claude Code, Claude Desktop, ChatGPT, Codex, Pi (with `pi-acp` and `acpx`), the Antigravity CLI (`agy`), T3 Code (desktop app and headless `t3` server, each opt-in per host), gh, glab, 1Password GUI and CLI, Kleopatra, Google Chrome, and a Tokscale wrapper that supplies its API token, device name, and the Antigravity sessions T3 Code runs. Claude Code's scalar settings — model, effort level, language, theme, notifications, and transcript retention — are managed declaratively and reapplied on each rebuild that produces a new Home Manager generation, while anything the repository does not declare stays yours to change. Its logins, permissions, hooks, MCP servers, and plugins are not migrated. The T3 Code nightly is pinned to upstream releases and bumped every 30 minutes. Every Synthetic model the repository uses is named once, in `home/h82/agents/synthetic-models.nix`, and a daily workflow opens an issue when Synthetic's catalog drifts from it. Claude Code and Pi review each other's work and take `ce-work` units, Pi runs `ce-plan`'s research scouts, and T3 Code writes commit messages on Pi with DeepSeek V4.1 Flash. The Antigravity CLI is pinned the same way with its self-updater off, and it gets the shared instructions in its own home, and the Compound Engineering plugin in its own home and in every T3 Code Antigravity instance home. It stays a manual backup: nothing assigns it a review, a work unit, or text generation. Grok is not installed on any host. Non-NixOS hosts get the command-line tools and agent configuration, but no Ghostty, 1Password, Kleopatra, Google Chrome, Claude Desktop, ChatGPT, T3 Code desktop, or other desktop application; a headless one can opt into the `t3` server. macOS hosts get the command-line tools and agent configuration, and install Ghostty, 1Password, Google Chrome, Claude Desktop, ChatGPT, and the other GUI apps as Homebrew casks. ChatGPT launches manually on NixOS and macOS; neither inspected build provides verified silent login startup. They run containers in one Podman machine on libkrun, with minikube inside it, started at login with no app to launch. VSCodium and the T3 Code desktop app come from Nix.
+
+## Installation and operation
+
+- [Fresh installation](docs/install.md): initialize the disk, bootstrap, and recover the age identity.
+- [Updates and recovery](docs/recovery.md): retry failures, roll back, repair from the installation media, and recover card and signing-key access.
+- [macOS hosts](docs/macos.md): set up a Mac with nix-darwin, recover its secrets, and apply routine updates.
+- [Windows host](docs/windows.md): set up the Windows PC that runs the VMware guest and lends it the YubiKey.
+- [Adding a host](docs/adding-a-host.md): create a host directory, its bootstrap age material, and its `.sops.yaml` recipient, for a NixOS, a non-NixOS, or a macOS host.
+- [Secret file conventions](secrets/README.md)
+
+Each `<host>-bootstrap` output can be installed without private keys or tokens. The final outputs can also be evaluated and built without plaintext secrets. Applying them requires the local age identity and encrypted tokens. Authentication recovery is not complete until the repository contains the real tokens in encrypted form and the bootstrap ciphertext.
+
+## Development checks
 
 ```sh
-mise exec -- chezmoi --source . diff
+nix flake check
+nix build --no-link .#vmChecks.all  # NixOS VM tests; needs /dev/kvm
+nix eval .#nixosConfigurations --apply builtins.attrNames
+for host in $(nix eval --raw .#nixosConfigurations --apply 'c: toString (builtins.attrNames c)'); do
+  nix build --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
+done
+for host in $(nix eval --raw .#homeConfigurations --apply 'c: toString (builtins.attrNames c)'); do
+  nix build --no-link ".#homeConfigurations.$host.activationPackage"
+done
+for host in $(nix eval --raw .#systemConfigs --apply 'c: toString (builtins.attrNames c)'); do
+  nix build --no-link ".#systemConfigs.$host"
+done
+for host in $(nix eval --raw .#darwinConfigurations --apply 'c: toString (builtins.attrNames c)'); do
+  nix build --no-link ".#darwinConfigurations.$host.system"  # macOS builder only
+done
+nix fmt
 ```
 
-## Common Commands
+`homeConfigurations` and `systemConfigs` hold the non-NixOS hosts' outputs and `darwinConfigurations` the macOS hosts'; each stays empty until `hosts/` has such a host. An aarch64 output builds only on an aarch64 builder; CI builds those on its arm runners. A macOS output builds only on a macOS builder; CI's `build-darwin` job builds those on a `macos-15` runner.
 
-| Command | Purpose |
-|---|---|
-| `chezmoi apply` | Apply configuration from the registered permanent checkout to user home |
-| `chezmoi update` | Pull latest commits, regenerate configuration, and apply updates |
-| `mise run apply` | Apply settings directly from the current repository worktree |
-| `mise exec -- chezmoi --source . diff` | Inspect rendered file diffs against destination files |
-| `mise run windows-build` | Provision or update Windows native development toolchains (C++, .NET, Rust) |
-| `mise run linux-build` | Explicitly provision native Ubuntu Desktop build tools |
-| `mise run linux-kubernetes` | Publish Linux minikube/kubectl without starting a runtime or cluster |
-| `python3 scripts/linux-readiness.py --json` | Inspect Linux prerequisites; report pending native acceptance separately |
-| `mise run macos-build` | Explicitly provision native Apple Silicon C++/.NET/Rust build tools |
-| `mise exec -- python scripts/macos-readiness.py` | Inspect macOS local prerequisites and pending manual/runtime checks |
-| `mise exec -- python -m unittest discover -s tests` | Run the repository test suite |
-
-## Documentation
-
-Comprehensive guides are organized in [docs/](docs/README.md):
-
-### Setup
-
-- **[Ubuntu Setup and Readiness](docs/setup/ubuntu.md):** Windows migration, signed installation media, GNOME apps/shell, native credentials/builds, rootless Docker/minikube proof and cleanup.
-- **[macOS Setup and Readiness](docs/setup/macos.md):** Native prerequisites, source registration, managed apps/harnesses, Podman, native builds, and a complete readiness checklist.
-- **[Windows Setup and Bootstrap](docs/setup/windows.md):** Automated PC bootstrap, chezmoi source registration, WinGet host applications, virtualization preflight, build environments, and Podman / Kubernetes onboarding.
-
-### User Guides
-
-- **[Git and GPG Configuration](docs/guides/git-and-gpg.md):** Identity, automatic commit signing, pinentry selection, GPG home safety guards, and `ghq` repository cloning.
-- **[Secrets and API Authentication](docs/guides/secrets-and-authentication.md):** Encrypted token source, GitHub and GitLab PAT imports, native OS keyrings, and Git HTTPS credentials.
-- **[Personal CLI Applications](docs/guides/personal-applications.md):** Installation of Claude Code, Codex, `gh`, `ghq`, and `glab` under `~/.local/bin`, shell PATH activation, pin updates, and PowerShell mise activation.
-- **[User Fonts](docs/guides/fonts.md):** Pinned JetBrains Mono, Pretendard, D2Coding, and Nerd Font installation, user-scope discovery, updates, and Windows loaded-file recovery.
-- **[Ghostty and the Login Shell](docs/guides/terminal.md):** Supported Ubuntu/macOS installation, default-terminal selection, zsh account shell, pending actions, and manual package updates.
-- **[T3 Code Desktop and Harness Integration](docs/guides/t3-code.md):** Desktop editor installation, command-line launchers, native Claude Code, Codex, pi, and Grok providers.
-- **[Harness Plugins](docs/guides/harness-plugins.md):** Compound Engineering and the korean-skills writing skills for every managed harness, pinned local marketplaces, update controls, shared agent instructions, and account source isolation for Claude Code and Codex.
-- **[Native System CA Trust](docs/guides/system-ca.md):** Enterprise root certificate trust via `NODE_USE_SYSTEM_CA=1`, runtime support matrix, and platform activation.
-
-### Maintenance
-- **[Chezmoi Source Maintenance](docs/maintenance/chezmoi-source.md):** Directory layout (`home/`), script lifecycle phases, dependency signatures, modify templates, and harness onboarding.
-- **[Development, Testing, and CI](docs/maintenance/development-and-testing.md):** Worktree initialization, test suite architecture, standalone smoke tests, and CI runner policies.
+Installation and enrollment are explicit, one-time operations. Do not run disko or rebuild switch on the current host for validation.

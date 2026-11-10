@@ -1,0 +1,15 @@
+creation_rules:
+  - path_regex: secrets/hosts/MacBook-Pro-Mac17-9/ssh\.yaml$
+    age: age1s9qs3km4wy0zt4g7tf0jc60fr2nhmr73kmsruj4y9h5wvmppxc9se70rcm
+  - path_regex: secrets/hosts/MacBook-Pro-Mac17-9/tls-inspection-ca\.yaml$
+    age: age1s9qs3km4wy0zt4g7tf0jc60fr2nhmr73kmsruj4y9h5wvmppxc9se70rcm
+  - path_regex: secrets/hosts/MS-7D91-VM/ssh\.yaml$
+    age: age1r9h8fs5uspezenxdtmckfkhaef797q0nswl6u2mss8rdsuf6cv4sa9tcjw
+  - path_regex: secrets/tokens\.yaml$
+    age: age1r9h8fs5uspezenxdtmckfkhaef797q0nswl6u2mss8rdsuf6cv4sa9tcjw,age1s9qs3km4wy0zt4g7tf0jc60fr2nhmr73kmsruj4y9h5wvmppxc9se70rcm
+  - path_regex: secrets/wifi\.yaml$
+    age: age1r9h8fs5uspezenxdtmckfkhaef797q0nswl6u2mss8rdsuf6cv4sa9tcjw
+  - path_regex: secrets/printers\.yaml$
+    age: age1r9h8fs5uspezenxdtmckfkhaef797q0nswl6u2mss8rdsuf6cv4sa9tcjw
+  - path_regex: secrets/tailscale\.yaml$
+    age: age1r9h8fs5uspezenxdtmckfkhaef797q0nswl6u2mss8rdsuf6cv4sa9tcjw

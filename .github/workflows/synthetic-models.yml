@@ -1,0 +1,128 @@
+name: Synthetic models
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: synthetic-models
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+
+      # The only step that sees the Synthetic key.
+      - name: Compare with Synthetic's catalog
+        id: compare
+        env:
+          SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          nix run .#synthetic-models-watch -- \
+            --result "$RUNNER_TEMP/watch.json" \
+            --issue-body "$RUNNER_TEMP/issue.md"
+
+      # Runs after a failed comparison too, so an open issue says the watch
+      # is blind; the failed comparison step still fails the run.
+      - name: Open, update, or close the reconcile issue
+        if: ${{ !cancelled() && (steps.compare.outcome == 'success' || steps.compare.outcome == 'failure') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: model-reconcile
+          COMPARE_OUTCOME: ${{ steps.compare.outcome }}
+        run: |
+          set -euo pipefail
+          watch() { nix run .#synthetic-models-watch -- "$@"; }
+          result="$RUNNER_TEMP/watch.json"
+          body="$RUNNER_TEMP/issue.md"
+
+          # The oldest open issue is the reconcile issue; any other is closed.
+          gh issue list --repo "$GITHUB_REPOSITORY" --label "$LABEL" --state open \
+            --json number --limit 100 > "$RUNNER_TEMP/open.json"
+          number=$(jq -r 'map(.number) | sort | .[0] // ""' "$RUNNER_TEMP/open.json")
+          duplicates=$(jq -r 'map(.number) | sort | .[1:] | .[]' "$RUNNER_TEMP/open.json")
+          for duplicate in $duplicates; do
+            printf 'Closing as a duplicate of #%s, the reconcile issue this workflow keeps.\n' "$number" \
+              > "$RUNNER_TEMP/duplicate.md"
+            gh issue comment "$duplicate" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/duplicate.md"
+            gh issue close "$duplicate" --repo "$GITHUB_REPOSITORY"
+          done
+
+          if [ -n "$number" ]; then
+            gh issue view "$number" --repo "$GITHUB_REPOSITORY" --json body,comments > "$RUNNER_TEMP/open-issue.json"
+            watch --issue-state "$RUNNER_TEMP/open-issue.json" > "$RUNNER_TEMP/state.json"
+          else
+            printf '{}\n' > "$RUNNER_TEMP/state.json"
+          fi
+          previous=$(jq -r '.fingerprint // ""' "$RUNNER_TEMP/state.json")
+          previous_digest=$(jq -r '.bodyDigest // ""' "$RUNNER_TEMP/state.json")
+          notice=$(jq -r '.notice // ""' "$RUNNER_TEMP/state.json")
+
+          if [ "$COMPARE_OUTCOME" != success ]; then
+            # One comment per failure streak; with no open issue, the failed
+            # run is the signal.
+            if [ -n "$number" ] && [ "$notice" != unreachable ]; then
+              watch --notice unreachable > "$RUNNER_TEMP/notice.md"
+              gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/notice.md"
+            fi
+            echo "the comparison with Synthetic's catalog failed" >&2
+            exit 1
+          fi
+
+          status=$(jq -r '.status' "$result")
+          fingerprint=$(jq -r '.fingerprint // ""' "$result")
+          digest=$(jq -r '.bodyDigest // ""' "$result")
+
+          case "$status" in
+            drift)
+              title=$(jq -r '.title' "$result")
+              if [ -z "$number" ]; then
+                gh label create "$LABEL" --repo "$GITHUB_REPOSITORY" --force \
+                  --color B60205 --description 'Synthetic model drift for home/h82/agents/synthetic-models.nix'
+                gh issue create --repo "$GITHUB_REPOSITORY" --label "$LABEL" \
+                  --title "$title" --body-file "$body"
+              else
+                if [ "$previous" != "$fingerprint" ]; then
+                  gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
+                  {
+                    printf 'The drift changed; the issue body now reads:\n\n'
+                    head -n 1 "$body"
+                  } > "$RUNNER_TEMP/changed.md"
+                  gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/changed.md"
+                elif [ "$previous_digest" != "$digest" ]; then
+                  # Same drift, new details: refresh the body without a comment.
+                  gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body"
+                else
+                  echo "Issue #$number already reports this drift."
+                fi
+                if [ "$notice" = unreachable ]; then
+                  watch --notice reachable > "$RUNNER_TEMP/notice.md"
+                  gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/notice.md"
+                fi
+              fi
+              ;;
+            clean)
+              if [ -n "$number" ]; then
+                printf 'No Synthetic model drift remains as of commit %s.\n' "$GITHUB_SHA" > "$RUNNER_TEMP/resolved.md"
+                gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/resolved.md"
+                gh issue close "$number" --repo "$GITHUB_REPOSITORY"
+              fi
+              ;;
+            *)
+              echo "unexpected watch status: $status" >&2
+              exit 1
+              ;;
+          esac

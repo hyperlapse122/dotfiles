@@ -1,0 +1,803 @@
+#!/usr/bin/env python3
+"""Manage desktop SSH keys and primary-first authentication."""
+
+import argparse
+import base64
+import ctypes
+import fcntl
+import hashlib
+import os
+import json
+import select
+import signal
+import socket
+import struct
+import subprocess
+import tempfile
+import threading
+from pathlib import Path
+import resource
+import secrets
+import stat
+import sys
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from cryptography.exceptions import UnsupportedAlgorithm
+
+REAL_SSH = "@REAL_SSH@"
+REAL_SCP = "@REAL_SCP@"
+REAL_SFTP = "@REAL_SFTP@"
+SYSTEMCTL = "@SYSTEMCTL@"
+MAX_FRAME = 262144
+MAX_IDENTITIES = 128
+MAX_CONNECTIONS = 128
+ENUM_TIMEOUT = 0.3
+SIGN_TIMEOUT = 120
+PRIMARY_SIGN_TIMEOUT = 10
+UNLOCK_TIMEOUT = 8
+FAILURE = b"\x05"
+
+
+def ssh_string(value):
+    return struct.pack(">I", len(value)) + value
+
+
+class Packet:
+    def __init__(self, data):
+        self.data = data
+
+    def uint(self):
+        if len(self.data) < 4:
+            raise ValueError("short SSH packet")
+        value = struct.unpack(">I", self.data[:4])[0]
+        self.data = self.data[4:]
+        return value
+
+    def string(self):
+        count = self.uint()
+        if count > len(self.data):
+            raise ValueError("short SSH string")
+        value, self.data = self.data[:count], self.data[count:]
+        return value
+
+    def end(self):
+        if self.data:
+            raise ValueError("trailing SSH packet")
+
+
+def exact(sock, size):
+    result = bytearray()
+    while len(result) < size:
+        chunk = sock.recv(size - len(result))
+        if not chunk:
+            raise EOFError()
+        result.extend(chunk)
+    return bytes(result)
+
+
+def receive(sock):
+    count = struct.unpack(">I", exact(sock, 4))[0]
+    if not 0 < count <= MAX_FRAME:
+        raise ValueError("invalid SSH agent frame length")
+    return exact(sock, count)
+
+
+def send(sock, payload):
+    if not 0 < len(payload) <= MAX_FRAME:
+        raise ValueError("invalid SSH agent reply length")
+    sock.sendall(ssh_string(payload))
+
+
+def identity_blob(key):
+    return base64.b64decode(public_bytes(key).split()[1], validate=True)
+
+
+def identities(payload):
+    if payload[:1] != b"\x0c":
+        raise ValueError("invalid identities response")
+    packet = Packet(payload[1:])
+    count = packet.uint()
+    if count > MAX_IDENTITIES:
+        raise ValueError("too many agent identities")
+    result = [(packet.string(), packet.string()) for _ in range(count)]
+    packet.end()
+    return result
+
+
+def identity_response(items):
+    return b"\x0c" + struct.pack(">I", len(items)) + b"".join(
+        ssh_string(blob) + ssh_string(comment) for blob, comment in items)
+
+
+def load_config(path):
+    with open(path, encoding="utf-8") as stream:
+        config = json.load(stream)
+    for name in ("public_key", "key_file", "fallback_socket"):
+        if not isinstance(config.get(name), str) or not os.path.isabs(config[name]):
+            raise DesktopSSHError("SSH configuration requires absolute credential paths")
+    config["primary_socket"] = f"/run/user/{os.getuid()}/desktop-ssh/agent.sock"
+    config["config_path"] = str(path)
+    return config
+
+
+class Transport:
+    """A frontend owns each backend connection, including its session binding."""
+
+    def __init__(self, path):
+        self.path = path
+        self.sock = None
+        self.dead = False
+
+    def request(self, payload, timeout):
+        if self.dead:
+            return FAILURE
+        try:
+            if self.sock is None:
+                self.sock = socket.socket(socket.AF_UNIX)
+                self.sock.settimeout(timeout)
+                self.sock.connect(self.path)
+            self.sock.settimeout(timeout)
+            send(self.sock, payload)
+            return receive(self.sock)
+        except (OSError, ValueError, EOFError):
+            self.close()
+            return FAILURE
+
+    def close(self):
+        # Reconnecting would discard restrictions bound to this frontend session.
+        self.dead = True
+        if self.sock is not None:
+            self.sock.close()
+            self.sock = None
+
+
+class Composite:
+    def __init__(self, config):
+        self.config = config
+        self.primary = Transport(config["primary_socket"])
+        self.fallback = Transport(config["fallback_socket"])
+        self.routes = {}
+        self.fallback_failed = False
+
+    def handle(self, payload):
+        if payload == b"\x0b":
+            try:
+                declared = identity_blob(read_public_key(self.config["public_key"]))
+                result = [(declared, b"nix-config host key")]
+                self.routes = {declared: self.primary}
+            except DesktopSSHError:
+                declared = None
+                result = []
+                self.routes = {}
+                print("desktop-ssh: primary public key unavailable; restore host key metadata", file=sys.stderr)
+            if not self.fallback_failed:
+                reply = self.fallback.request(payload, ENUM_TIMEOUT)
+                try:
+                    others = identities(reply)
+                    for blob, comment in others:
+                        if blob not in self.routes:
+                            result.append((blob, comment))
+                            self.routes[blob] = self.fallback
+                    if len(result) > MAX_IDENTITIES:
+                        raise ValueError("too many identities")
+                except ValueError:
+                    self.fallback_failed = True
+                    self.fallback.close()
+                    # Keep primary usable; never present a truncated fallback selection.
+                    result = [(declared, b"nix-config host key")] if declared is not None else []
+                    self.routes = {declared: self.primary} if declared is not None else {}
+            return identity_response(result)
+        if payload[:1] == b"\x0d":
+            packet = Packet(payload[1:])
+            blob = packet.string()
+            packet.string()
+            packet.uint()
+            packet.end()
+            backend = self.routes.get(blob)
+            if backend is None:
+                return FAILURE
+            reply = backend.request(payload, PRIMARY_SIGN_TIMEOUT if backend is self.primary else SIGN_TIMEOUT)
+            if reply[:1] != b"\x0e":
+                return FAILURE
+            checked = Packet(reply[1:])
+            checked.string()
+            checked.end()
+            return reply
+        if payload[:1] == b"\x1b":
+            packet = Packet(payload[1:])
+            name = packet.string()
+            if name != b"session-bind@openssh.com":
+                return b"\x1c"
+            # Validate the extension envelope before preserving its opaque payload.
+            packet.string()
+            packet.string()
+            packet.string()
+            if len(packet.data) != 1 or packet.data[0] not in (0, 1):
+                return b"\x1c"
+            reply = self.fallback.request(payload, ENUM_TIMEOUT)
+            if reply == b"\x06":
+                return reply
+            if self.fallback.sock is None:
+                self.fallback_failed = True
+            return b"\x1c"
+        return FAILURE
+
+    def close(self):
+        self.primary.close()
+        self.fallback.close()
+
+
+class Primary:
+    def __init__(self, config):
+        self.config = config
+        self.key = None
+        self.state = None
+        self.lock = threading.Lock()
+        self.generation = 0
+        self.failed_state = None
+
+    def key_state(self):
+        declared = read_public_key(self.config["public_key"])
+        try:
+            protected = read_private_file(self.config["key_file"])
+        except DesktopSSHError:
+            protected = b""
+        return declared, hashlib.sha256(public_bytes(declared) + protected).digest()
+
+    def load(self):
+        # A fresh process avoids forking the agent's threaded Python/D-Bus state.
+        # The raw key crosses only an anonymous pipe, never argv or a disk file.
+        read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
+        try:
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).resolve()), "unlock", "--config",
+                 self.config["config_path"], "--parent-pid", str(os.getpid()),
+                 "--key-fd", str(write_fd)],
+                pass_fds=(write_fd,), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                timeout=UNLOCK_TIMEOUT)
+            if result.returncode != 0:
+                raise DesktopSSHError("primary SSH key unavailable; unlock kdewallet and retry provisioning")
+            os.close(write_fd)
+            write_fd = None
+            raw = os.read(read_fd, 33)
+            if len(raw) != 32:
+                raise DesktopSSHError("primary SSH key unavailable; retry provisioning")
+            return Ed25519PrivateKey.from_private_bytes(raw)
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            raise DesktopSSHError("SSH wallet timed out; unlock kdewallet and retry provisioning") from None
+        finally:
+            os.close(read_fd)
+            if write_fd is not None:
+                os.close(write_fd)
+
+    def handle(self, payload, client_alive=lambda: True):
+        if payload == b"\x0b":
+            blob = identity_blob(read_public_key(self.config["public_key"]))
+            return identity_response([(blob, b"nix-config host key")])
+        if payload[:1] != b"\x0d":
+            return b"\x1c" if payload[:1] == b"\x1b" else FAILURE
+        packet = Packet(payload[1:])
+        requested, data, flags = packet.string(), packet.string(), packet.uint()
+        packet.end()
+        generation = self.generation
+        with self.lock:
+            if not client_alive():
+                return FAILURE
+            declared, state = self.key_state()
+            if state != self.state:
+                self.key = None
+            if requested != identity_blob(declared) or flags != 0:
+                return FAILURE
+            if self.key is None:
+                # Waiters inherit the attempt they observed before taking the
+                # lock. A new request can retry immediately, without a cooldown.
+                if generation != self.generation and state == self.failed_state:
+                    raise DesktopSSHError("primary SSH unlock failed; unlock kdewallet and retry SSH")
+                try:
+                    self.key = self.load()
+                except DesktopSSHError:
+                    self.failed_state = state
+                    raise
+                finally:
+                    self.generation += 1
+                declared, state = self.key_state()
+                if identity_blob(self.key.public_key()) != identity_blob(declared):
+                    self.key = None
+                    raise DesktopSSHError("SSH key changed during unlock; retry SSH")
+                self.state = state
+                self.failed_state = None
+            signature = self.key.sign(data)
+        return b"\x0e" + ssh_string(ssh_string(b"ssh-ed25519") + ssh_string(signature))
+
+
+def serve_connection(client, handler):
+    def client_alive():
+        try:
+            if not select.select([client], [], [], 0)[0]:
+                return True
+            return client.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT) != b""
+        except BlockingIOError:
+            return True
+        except OSError:
+            return False
+    try:
+        peer_pid, peer_uid, _ = struct.unpack("3i", client.getsockopt(
+            socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+        if peer_uid != os.getuid():
+            return
+        client.settimeout(SIGN_TIMEOUT + 5)
+        while True:
+            payload = receive(client)
+            try:
+                reply = handler.handle(payload, client_alive) if isinstance(handler, Primary) else handler.handle(payload)
+            except (ValueError, DesktopSSHError) as error:
+                if isinstance(error, DesktopSSHError):
+                    print(f"desktop-ssh: {error}", file=sys.stderr, flush=True)
+                reply = FAILURE
+            send(client, reply)
+    except (OSError, EOFError, ValueError):
+        pass
+    finally:
+        client.close()
+        if isinstance(handler, Composite):
+            handler.close()
+
+
+def serve(path, handler_factory, ready=None):
+    slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
+
+    def worker(client):
+        try:
+            serve_connection(client, handler_factory())
+        finally:
+            client.close()
+            slots.release()
+
+    listener = socket.socket(socket.AF_UNIX)
+    listener.bind(path)
+    os.chmod(path, 0o600)
+    listener.listen(16)
+    if ready is not None:
+        ready.send(b"1")
+        ready.close()
+    try:
+        while True:
+            client, _ = listener.accept()
+            if not slots.acquire(blocking=False):
+                client.close()
+                continue
+            try:
+                threading.Thread(target=worker, args=(client,), daemon=True).start()
+            except (RuntimeError, OSError):
+                client.close()
+                slots.release()
+    finally:
+        listener.close()
+        Path(path).unlink(missing_ok=True)
+
+
+def launch_ssh(config, arguments):
+    # Explicit operator transport choices retain normal OpenSSH behavior.
+    for name, value in command_options(arguments, "BbcDEeFIiJLlmOoPpQRSWw"):
+        if name == "o" and value.lower().replace("=", " ").split()[:1] == ["identityagent"]:
+            os.execv(REAL_SSH, [REAL_SSH] + arguments)
+    runtime = Path(f"/run/user/{os.getuid()}")
+    info = runtime.stat()
+    if info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise DesktopSSHError("private desktop runtime directory is unavailable")
+    directory = tempfile.mkdtemp(prefix="desktop-ssh-invocation-", dir=runtime)
+    path = os.path.join(directory, "agent.sock")
+    parent_pid = os.getpid()
+    ready_parent, ready_child = socket.socketpair()
+    pid = os.fork()
+    if pid == 0:
+        ready_parent.close()
+        def cleanup(signum, frame):
+            try:
+                Path(path).unlink(missing_ok=True)
+                os.rmdir(directory)
+            except FileNotFoundError:
+                pass
+            os._exit(0)
+        signal.signal(signal.SIGTERM, cleanup)
+        if ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGTERM, 0, 0, 0) != 0:
+            os._exit(1)
+        if os.getppid() != parent_pid:
+            cleanup(None, None)
+        try:
+            serve(path, lambda: Composite(config), ready_child)
+        finally:
+            cleanup(None, None)
+    ready_child.close()
+    ready_parent.settimeout(5)
+    try:
+        if ready_parent.recv(1) != b"1":
+            raise DesktopSSHError("cannot start SSH authentication proxy")
+    finally:
+        ready_parent.close()
+    os.execv(REAL_SSH, [REAL_SSH, "-o", f"IdentityAgent={path}"] + arguments)
+
+
+def command_options(arguments, valued):
+    """Read only the local option prefix; remote arguments are opaque operands."""
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if not argument.startswith("-") or argument in ("-", "--"):
+            return
+        index += 1
+        offset = 1
+        while offset < len(argument):
+            name = argument[offset]
+            offset += 1
+            if name in valued:
+                value = argument[offset:]
+                if not value:
+                    if index >= len(arguments):
+                        return
+                    value = arguments[index]
+                    index += 1
+                yield name, value
+                break
+            yield name, ""
+
+
+class DesktopSSHError(RuntimeError):
+    """An error safe to present without credential contents."""
+
+
+def disable_core_dumps():
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    # PR_SET_DUMPABLE also prevents same-UID ptrace of the credential process.
+    if ctypes.CDLL(None, use_errno=True).prctl(4, 0, 0, 0, 0) != 0:
+        raise DesktopSSHError("cannot disable credential process dumps")
+
+
+def public_bytes(key):
+    return key.public_bytes(serialization.Encoding.OpenSSH,
+                            serialization.PublicFormat.OpenSSH)
+
+
+def fingerprint(key):
+    blob = identity_blob(key)
+    return "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+
+
+def read_public_key(path):
+    try:
+        with Path(path).open("rb") as stream:
+            data = stream.read(16385)
+        if len(data) > 16384:
+            raise ValueError()
+        key = serialization.load_ssh_public_key(data)
+        if not isinstance(key, Ed25519PublicKey):
+            raise ValueError()
+        return key
+    except (ValueError, TypeError, OSError):
+        raise DesktopSSHError("declared SSH public key must be a valid Ed25519 key") from None
+
+
+def _check_private_file(info, owner=None):
+    owner = os.getuid() if owner is None else owner
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != owner
+            or stat.S_IMODE(info.st_mode) not in (0o400, 0o600)
+            or info.st_nlink != 1):
+        raise DesktopSSHError("SSH state must be an owned private regular file (mode 0600 or 0400)")
+
+
+def _check_credential_acl(fd, info):
+    # LoadCredential uses root ownership with an ACL for precisely the service UID.
+    # Its group mode bits are the ACL mask, not permission for the owning group.
+    expected = [(1, 4, 0xffffffff), (2, 4, os.getuid()),
+                (4, 0, 0xffffffff), (16, 4, 0xffffffff), (32, 0, 0xffffffff)]
+    acl = os.getxattr(fd, "system.posix_acl_access")
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_nlink != 1
+            or len(acl) != 4 + 8 * len(expected)
+            or struct.unpack("<I", acl[:4])[0] != 2
+            or list(struct.iter_unpack("<HHI", acl[4:])) != expected):
+        raise DesktopSSHError("SSH recovery credential ACL must grant read access only to root and the service user")
+
+
+def read_private_file(path, source=False):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if source and info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o440:
+                _check_credential_acl(stream.fileno(), info)
+            else:
+                _check_private_file(info, info.st_uid if source and info.st_uid == 0 else None)
+            data = stream.read(65537)
+            if len(data) > 65536:
+                raise DesktopSSHError("SSH key exceeds the supported size")
+            return data
+    except OSError:
+        raise DesktopSSHError("cannot read private SSH state; check ownership, mode and symlinks") from None
+
+
+class KWallet:
+    APP = "nix-config-desktop-ssh"
+    FOLDER = "nix-config SSH"
+
+    def __init__(self):
+        import dbus
+
+        self.dbus = dbus
+        self.handle = None
+        try:
+            # System services must not inherit an arbitrary caller's bus address.
+            bus = dbus.bus.BusConnection(f"unix:path=/run/user/{os.getuid()}/bus")
+            self.interface = dbus.Interface(
+                bus.get_object("org.kde.kwalletd6", "/modules/kwalletd6"),
+                "org.kde.KWallet")
+            # kwalletd6 overloads isOpen and close; introspection alone selects
+            # the last declaration, isOpen(i), so name the overload.
+            if not self.interface.isOpen("kdewallet", signature="s"):
+                raise DesktopSSHError("unlock kdewallet in KWallet Manager, then retry SSH")
+            self.handle = int(self.interface.open("kdewallet", dbus.Int64(0), self.APP,
+                                                  timeout=90))
+            if self.handle < 0:
+                raise DesktopSSHError("unlock kdewallet in KWallet Manager, then retry SSH")
+            if not self.interface.hasFolder(self.handle, self.FOLDER, self.APP):
+                if not self.interface.createFolder(self.handle, self.FOLDER, self.APP):
+                    raise DesktopSSHError("cannot create SSH password folder in kdewallet")
+        except dbus.DBusException:
+            self.close()
+            raise DesktopSSHError("KWallet unavailable; unlock kdewallet in the desktop session and retry SSH") from None
+        except DesktopSSHError:
+            self.close()
+            raise
+
+    def read(self, name):
+        try:
+            if not self.interface.hasEntry(self.handle, self.FOLDER, name, self.APP):
+                return None
+            value = str(self.interface.readPassword(self.handle, self.FOLDER, name, self.APP))
+            if not value:
+                raise DesktopSSHError("SSH password entry in KWallet is empty; restore the wallet entry")
+            return value
+        except self.dbus.DBusException:
+            raise DesktopSSHError("cannot read SSH password; unlock kdewallet and retry SSH") from None
+
+    def write(self, name, value):
+        try:
+            if self.interface.writePassword(self.handle, self.FOLDER, name, value, self.APP) != 0:
+                raise DesktopSSHError("cannot store SSH password in kdewallet")
+            self.interface.sync(self.handle, self.APP, ignore_reply=True)
+        except self.dbus.DBusException:
+            raise DesktopSSHError("cannot store SSH password in kdewallet") from None
+
+    def close(self):
+        if self.handle is not None:
+            try:
+                self.interface.close(self.handle, False, self.APP, signature="ibs")
+            except self.dbus.DBusException:
+                pass
+            self.handle = None
+
+
+def _open_key_directory(path):
+    path = Path(path).absolute()
+    # Refuse redirectable ancestors before creating the dedicated SSH directory.
+    for parent in reversed(path.parents):
+        info = parent.lstat()
+        if (not stat.S_ISDIR(info.st_mode)
+                or (info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX)):
+            raise DesktopSSHError("SSH directory has a writable ancestor or symlink")
+    try:
+        path.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        raise DesktopSSHError("SSH directory is unsafe or inaccessible") from None
+    info = os.fstat(fd)
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        os.close(fd)
+        raise DesktopSSHError("SSH directory must be owned by the user with mode 0700")
+    return fd
+
+
+def _read_working(directory, name):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                     dir_fd=directory)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise DesktopSSHError("working SSH key is unsafe or inaccessible") from None
+    with os.fdopen(fd, "rb") as stream:
+        _check_private_file(os.fstat(stream.fileno()))
+        data = stream.read(65537)
+        if len(data) > 65536:
+            raise DesktopSSHError("working SSH key exceeds the supported size")
+        return data
+
+
+class WorkingKeyUnavailable(DesktopSSHError):
+    pass
+
+
+def load_working_key(key_file, declared_public, wallet):
+    """Read and decrypt an existing working key; never publish or fall back here."""
+    password = wallet.read(fingerprint(declared_public))
+    if password is None:
+        raise WorkingKeyUnavailable("SSH password missing from KWallet; retry provisioning")
+    try:
+        protected = read_private_file(key_file)
+    except DesktopSSHError as error:
+        raise WorkingKeyUnavailable(str(error)) from None
+    try:
+        key = serialization.load_ssh_private_key(protected, password.encode())
+        if (not isinstance(key, Ed25519PrivateKey)
+                or public_bytes(key.public_key()) != public_bytes(declared_public)):
+            raise ValueError()
+        return key
+    except (ValueError, TypeError):
+        raise WorkingKeyUnavailable("protected SSH key and wallet entry do not match; retry provisioning") from None
+
+
+def provision(source, public_key, key_file, wallet):
+    """Return whether publication changed; wallet may be a fake boundary in tests."""
+    declared = read_public_key(public_key)
+    try:
+        source_key = serialization.load_ssh_private_key(read_private_file(source, source=True), None)
+        if (not isinstance(source_key, Ed25519PrivateKey)
+                or public_bytes(source_key.public_key()) != public_bytes(declared)):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise DesktopSSHError("recovery SSH key does not match declared Ed25519 identity") from None
+    key_file = Path(key_file)
+    directory = _open_key_directory(key_file.parent)
+    lock_fd = None
+    staging_name = None
+    try:
+        try:
+            lock_fd = os.open(".desktop-ssh.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
+                              | os.O_NONBLOCK | os.O_CLOEXEC, 0o600, dir_fd=directory)
+        except OSError:
+            raise DesktopSSHError("cannot open private SSH provisioning lock") from None
+        _check_private_file(os.fstat(lock_fd))
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        existing = _read_working(directory, key_file.name)
+        name = fingerprint(declared)
+        password = wallet.read(name)
+        if password is None:
+            password = secrets.token_urlsafe(48)
+            wallet.write(name, password)
+        if not password or wallet.read(name) != password:
+            raise DesktopSSHError("SSH wallet password readback failed; existing key was preserved")
+        if existing is not None:
+            try:
+                key = serialization.load_ssh_private_key(existing, password.encode())
+                if (isinstance(key, Ed25519PrivateKey)
+                        and public_bytes(key.public_key()) == public_bytes(declared)):
+                    return False
+            except (ValueError, TypeError):
+                pass
+        protected = source_key.private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
+            serialization.BestAvailableEncryption(password.encode()))
+        validated = serialization.load_ssh_private_key(protected, password.encode())
+        if public_bytes(validated.public_key()) != public_bytes(declared):
+            raise DesktopSSHError("encrypted SSH key validation failed")
+        staging_name = ".desktop-ssh-" + secrets.token_hex(16)
+        fd = os.open(staging_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+                     | os.O_CLOEXEC, 0o600, dir_fd=directory)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(protected)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Recheck a destination an operator may have changed while KWallet opened.
+        _read_working(directory, key_file.name)
+        os.replace(staging_name, key_file.name, src_dir_fd=directory, dst_dir_fd=directory)
+        staging_name = None
+        os.fsync(directory)
+        return True
+    finally:
+        if staging_name is not None:
+            os.unlink(staging_name, dir_fd=directory)
+        if lock_fd is not None:
+            os.close(lock_fd)
+        os.close(directory)
+
+
+def main():
+    os.umask(0o077)
+    command_name = Path(sys.argv[0]).name
+    default_config = str(Path.home() / ".config/desktop-ssh/config.json")
+    if command_name in ("ssh", "scp", "sftp"):
+        try:
+            if command_name == "ssh":
+                launch_ssh(load_config(default_config), sys.argv[1:])
+            else:
+                executable = REAL_SCP if command_name == "scp" else REAL_SFTP
+                args = sys.argv[1:]
+                valued = "DFiJloPSX" if command_name == "scp" else "BbcDFiJloPRSs"
+                if not any(name == "S" for name, value in command_options(args, valued)):
+                    args = ["-S", str(Path(sys.argv[0]).absolute().with_name("ssh"))] + args
+                os.execv(executable, [executable] + args)
+        except (DesktopSSHError, OSError, ValueError):
+            print("desktop-ssh: SSH launcher unavailable; check desktop session and configuration", file=sys.stderr)
+            return 1
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    setup = commands.add_parser("provision")
+    setup.add_argument("--source", required=True)
+    setup.add_argument("--public-key", required=True)
+    setup.add_argument("--key-file", required=True)
+    for name in ("agent", "unlock", "ssh"):
+        sub = commands.add_parser(name)
+        sub.add_argument("--config", default=default_config)
+        if name == "ssh":
+            sub.add_argument("arguments", nargs=argparse.REMAINDER)
+        if name == "unlock":
+            sub.add_argument("--key-fd", type=int, required=True)
+            sub.add_argument("--parent-pid", type=int, required=True)
+    args = parser.parse_args()
+    wallet = None
+    try:
+        disable_core_dumps()
+        if args.command != "provision":
+            if args.command == "unlock" and (args.key_fd < 3 or
+                    not stat.S_ISFIFO(os.fstat(args.key_fd).st_mode)):
+                raise DesktopSSHError("unlock is an internal agent operation requiring a private pipe")
+            if args.command == "unlock":
+                if ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGTERM, 0, 0, 0) != 0:
+                    raise DesktopSSHError("cannot bind wallet operation to SSH agent lifetime")
+                if os.getppid() != args.parent_pid:
+                    return 1
+            config = load_config(args.config)
+            if args.command == "ssh":
+                launch_ssh(config, args.arguments)
+            if args.command == "agent":
+                path = config["primary_socket"]
+                if os.path.lexists(path):
+                    info = os.lstat(path)
+                    if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+                        raise DesktopSSHError("primary socket path is unsafe")
+                    Path(path).unlink()
+                primary = Primary(config)
+                signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
+                serve(path, lambda: primary)
+                return 0
+            declared = read_public_key(config["public_key"])
+            wallet = KWallet()
+            try:
+                key = load_working_key(config["key_file"], declared, wallet)
+            except WorkingKeyUnavailable:
+                if wallet is not None:
+                    wallet.close()
+                    wallet = None
+                result = subprocess.run(
+                    [SYSTEMCTL, "--no-ask-password", "start", "desktop-ssh-provision.service"],
+                    timeout=90, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if result.returncode:
+                    raise DesktopSSHError("SSH provisioning unavailable; unlock kdewallet and retry SSH")
+                wallet = KWallet()
+                key = load_working_key(config["key_file"], declared, wallet)
+            os.write(args.key_fd, key.private_bytes(
+                serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+                serialization.NoEncryption()))
+            return 0
+        wallet = KWallet()
+        provision(args.source, args.public_key, args.key_file, wallet)
+        return 0
+    except (DesktopSSHError, OSError, ValueError, TypeError, UnsupportedAlgorithm,
+            subprocess.TimeoutExpired):
+        # OSError may carry secret-derived data from third-party code; never print it.
+        message = "local SSH provisioning failed; check private file permissions and unlock kdewallet"
+        error = sys.exc_info()[1]
+        if isinstance(error, DesktopSSHError):
+            message = str(error)
+        print(f"desktop-ssh: {message}", file=sys.stderr)
+        return 1
+    finally:
+        if wallet is not None:
+            wallet.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

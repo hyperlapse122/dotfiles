@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Decides whether a list of changed repo-relative paths, one per line on
+# stdin, is entirely documentation. Prints "true" or "false" and exits 0.
+#
+# A path counts as documentation when it is under docs/, under
+# .compound-engineering/artifacts/, or is a root-level *.md file (no "/").
+# Empty input, or any single non-matching path, prints "false" -- this
+# script fails open toward running the full CI matrix, never toward
+# skipping it silently.
+set -euo pipefail
+
+is_doc_path() {
+  case "$1" in
+    docs/*) return 0 ;;
+    .compound-engineering/artifacts/*) return 0 ;;
+    */*) return 1 ;;
+    *.md) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+any_path=0
+all_docs=1
+while IFS= read -r path; do
+  [[ -n $path ]] || continue
+  any_path=1
+  if ! is_doc_path "$path"; then
+    all_docs=0
+  fi
+done
+
+if [[ $any_path -eq 1 && $all_docs -eq 1 ]]; then
+  echo true
+else
+  echo false
+fi

@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Runs the latest Tokscale through bun with the device name, the API token,
+# and the Antigravity ACP session directories supplied. The Nix package
+# replaces the @...@ constants. Builtins only apart from bun, so
+# the wrapper needs nothing else on PATH.
+set -euo pipefail
+
+HOST_NAME='@HOST_NAME@'
+TOKEN_FILE='@TOKEN_FILE@'
+
+# bun is resolved from PATH rather than pinned in the package, so a missing
+# bun is reported here instead of failing inside exec.
+if ! command -v bun >/dev/null 2>&1; then
+  printf 'tokscale: bun is not on PATH; install bun to run tokscale\n' >&2
+  exit 127
+fi
+
+# A token the caller already exported wins, so another account can be tested
+# without touching secrets. Anything wrong with the file means no token, and
+# Tokscale runs unauthenticated: the file is absent on hosts that do not opt
+# in, and saying nothing about it keeps local reports quiet there.
+if [[ -z ${TOKSCALE_API_TOKEN:-} ]]; then
+  unset TOKSCALE_API_TOKEN
+  token=
+  if [[ -f $TOKEN_FILE && -r $TOKEN_FILE ]]; then
+    { IFS= read -r -d '' -N 16384 token <"$TOKEN_FILE"; } 2>/dev/null || true
+  fi
+  token=${token%"${token##*[![:space:]]}"}
+  if [[ -n $token && ${#token} -le 8192 && $token != *[[:space:][:cntrl:]]* ]]; then
+    export TOKSCALE_API_TOKEN=$token
+  fi
+  unset token
+fi
+
+# The Antigravity ACP server (T3 Code gives each provider instance its own
+# GEMINI_HOME) keeps sessions where Tokscale does not look. The ACP
+# conversations share the Antigravity CLI's format.
+extra_dirs=()
+add_dirs() {
+  local client=$1 dir
+  shift
+  for dir in "$@"; do
+    # TOKSCALE_EXTRA_DIRS is comma-separated, so a path holding a comma
+    # would split into two bogus entries and is skipped.
+    [[ -d $dir && $dir != *,* ]] || continue
+    extra_dirs+=("$client:$dir")
+  done
+}
+if [[ -n ${HOME:-} ]]; then
+  shopt -s nullglob
+  add_dirs antigravity-cli \
+    "$HOME"/.t3/userdata/providers/antigravity/*/antigravity-acp/conversations \
+    "$HOME"/.gemini/antigravity-acp/conversations
+  shopt -u nullglob
+fi
+if [[ ${#extra_dirs[@]} -gt 0 ]]; then
+  joined=$(
+    IFS=,
+    printf '%s' "${extra_dirs[*]}"
+  )
+  if [[ -n ${TOKSCALE_EXTRA_DIRS:-} ]]; then
+    joined=$TOKSCALE_EXTRA_DIRS,$joined
+  fi
+  export TOKSCALE_EXTRA_DIRS=$joined
+fi
+
+export TOKSCALE_DEVICE_NAME=$HOST_NAME
+
+# Keep an explicit version tag. A bare `bun x tokscale` prefers a
+# node_modules/.bin/tokscale found in the current or a parent directory, which
+# inside an untrusted checkout would hand that code the API token.
+exec bun x tokscale@latest "$@"

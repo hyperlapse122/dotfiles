@@ -1,4 +1,0 @@
-{{- $manifest := get . "zsh" | default dict -}}
-{{- $enabled := has (printf "%s-%s" .chezmoi.os .chezmoi.arch) (get $manifest "targets" | default list) -}}
-{{- $xdg := env "XDG_CONFIG_HOME" | default (joinPath .chezmoi.destDir ".config") -}}
-{{- dict "enabled" $enabled "root" (joinPath $xdg "zsh") "stage" (joinPath .chezmoi.destDir ".local/share/dotfiles/zsh") | toJson -}}

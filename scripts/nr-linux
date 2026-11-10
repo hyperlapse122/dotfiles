@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# Apply helper for a non-NixOS host, installed as `nr` where the host kind is
+# linux. It builds the host's system-manager and Home Manager outputs as the
+# invoking user, activates the system layer through sudo, then the user
+# environment. The Nix package replaces the @...@ constants with absolute
+# store paths.
+set -euo pipefail
+
+GIT="@GIT@"
+
+# Overridable so tests can point at fixtures instead of the real paths.
+ROOT=${NR_ROOT:-}
+MARKER=$ROOT/etc/nix-config-host
+NEWUIDMAP=$ROOT/usr/bin/newuidmap
+NEWGIDMAP=$ROOT/usr/bin/newgidmap
+# Prebuilt store paths to activate instead of building from the flake, as the
+# VM check does with closures built on its host.
+SYSTEM_OUT=${NR_SYSTEM_OUT:-}
+HOME_OUT=${NR_HOME_OUT:-}
+# Set to any non-empty value to print the resolved commands instead of running them.
+DRY_RUN=${NR_DRY_RUN:-}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: nr {switch|build} [--host NAME] [--bootstrap] [--flake-dir PATH]
+
+  switch  build and activate the system layer and the user environment
+  build   build both outputs only, no sudo
+
+  --host       the host directory to apply; read from /etc/nix-config-host
+               once the host has been applied, required before that
+  --bootstrap  apply the secret-free bootstrap output instead of production
+USAGE
+}
+
+die() {
+  printf 'nr: %s\n' "$*" >&2
+  exit 1
+}
+
+subcommand=${1:-}
+case $subcommand in
+  switch | build) shift ;;
+  boot | test)
+    die "$subcommand has no meaning on a non-NixOS host, which has no bootloader generation; use nr switch"
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  '') usage; exit 2 ;;
+  *)
+    printf 'nr: unknown subcommand %s\n' "$subcommand" >&2
+    usage
+    exit 2
+    ;;
+esac
+
+host=
+flake_dir=
+bootstrap=
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --host)
+      [[ $# -ge 2 ]] || die 'missing value for --host'
+      host=$2
+      shift 2
+      ;;
+    --flake-dir)
+      [[ $# -ge 2 ]] || die 'missing value for --flake-dir'
+      flake_dir=$2
+      shift 2
+      ;;
+    --bootstrap)
+      bootstrap=1
+      shift
+      ;;
+    *) die "unexpected argument $1" ;;
+  esac
+done
+
+# The distribution owns the hostname, so the host comes from the marker the
+# system layer writes, never from uname -n.
+if [[ -z $host && -r $MARKER ]]; then
+  host=$(sed -n 's/^host=//p' "$MARKER")
+fi
+[[ -n $host ]] || die "no host is recorded in $MARKER yet; name it with --host NAME"
+
+output=$host
+[[ -n $bootstrap ]] && output=$host-bootstrap
+
+user=$(id -un)
+zsh_path=$HOME/.nix-profile/bin/zsh
+identity=$HOME/.config/nix-config/age/key.txt
+
+# Prerequisites that live in files the distribution owns. The system layer
+# never writes them, so nr refuses to apply until they hold.
+preflight() {
+  grep -q "^$user:" "$ROOT/etc/subuid" 2>/dev/null ||
+    die "$user has no subordinate uid range in /etc/subuid; add one with: sudo usermod --add-subuids 100000-165535 $user"
+  grep -q "^$user:" "$ROOT/etc/subgid" 2>/dev/null ||
+    die "$user has no subordinate gid range in /etc/subgid; add one with: sudo usermod --add-subgids 100000-165535 $user"
+
+  grep -q "^$user:" "$ROOT/etc/group" 2>/dev/null ||
+    die "$user has no private group of the same name, which the pcscd socket is restricted to; create it with: sudo groupadd $user && sudo usermod -aG $user $user"
+
+  local unit
+  for unit in "$ROOT/lib/systemd/system/pcscd.service" "$ROOT/usr/lib/systemd/system/pcscd.service"; do
+    [[ ! -e $unit ]] ||
+      die "the distribution's pcscd is installed ($unit) and would conflict with this flake's; remove the distribution package, e.g. sudo apt remove pcscd"
+  done
+
+  grep -qxF -- "$zsh_path" "$ROOT/etc/shells" 2>/dev/null ||
+    die "$zsh_path is not listed in /etc/shells; add it with: echo $zsh_path | sudo tee -a /etc/shells"
+
+  if [[ -z $bootstrap && ! -f $identity ]]; then
+    die "no age identity at $identity for the production output; apply --bootstrap first, then recover it with scripts/recover-age-identity --user --host $host"
+  fi
+
+  local helper
+  for helper in "$NEWUIDMAP" "$NEWGIDMAP"; do
+    [[ -u $helper ]] ||
+      die "$helper is missing or not setuid; rootless Podman needs the distribution's uidmap package, e.g. sudo apt install uidmap"
+  done
+}
+
+build() {
+  if [[ -n $SYSTEM_OUT && -n $HOME_OUT ]]; then
+    system_out=$SYSTEM_OUT
+    home_out=$HOME_OUT
+    return
+  fi
+  if [[ -z $flake_dir ]]; then
+    flake_dir=$("$GIT" rev-parse --show-toplevel 2>/dev/null) ||
+      die 'not inside a git repository; name the checkout with --flake-dir PATH'
+  fi
+  [[ -f $flake_dir/flake.nix ]] ||
+    die "no flake.nix in $flake_dir; name the checkout with --flake-dir PATH"
+  # Absolute, so a relative --flake-dir cannot reach Nix as an indirect
+  # registry reference instead of a path.
+  flake_dir=$(cd -- "$flake_dir" && pwd -P)
+
+  # One invocation evaluates the flake once and builds both closures
+  # together; the out paths come back in installable order.
+  local build_cmd=(nix build --no-link --print-out-paths
+    "$flake_dir#systemConfigs.$output"
+    "$flake_dir#homeConfigurations.$output.activationPackage")
+  if [[ -n $DRY_RUN ]]; then
+    printf '%s\n' "${build_cmd[*]}"
+    system_out='<system>'
+    home_out='<home>'
+    return
+  fi
+  local built outs
+  built=$("${build_cmd[@]}")
+  mapfile -t outs <<<"$built"
+  [[ ${#outs[@]} -eq 2 ]] || die "nix build returned ${#outs[@]} paths for two outputs"
+  system_out=${outs[0]}
+  home_out=${outs[1]}
+}
+
+if [[ $subcommand == switch ]]; then
+  preflight
+fi
+
+build
+[[ $subcommand == build ]] && exit 0
+
+# Root runs only the store paths just built, never anything it evaluates from
+# the user's checkout. Registering first gives the new system layer a profile
+# generation and a GC root, as system-manager switch does.
+activate_cmds=(
+  "sudo -- $system_out/bin/register-profile"
+  "sudo -- $system_out/bin/activate"
+  "$home_out/activate"
+)
+if [[ -n $DRY_RUN ]]; then
+  printf '%s\n' "${activate_cmds[@]}"
+  exit 0
+fi
+
+sudo -v
+sudo -- "$system_out/bin/register-profile"
+sudo -- "$system_out/bin/activate"
+"$home_out/activate"
+
+# The apply already succeeded; an account the name service cannot resolve
+# (sssd, LDAP) only loses the reminder.
+login_shell=$(getent passwd "$user" | cut -d: -f7) || login_shell=
+if [[ $login_shell != "$zsh_path" ]]; then
+  printf 'nr: your login shell is %s; switch to the managed zsh with: chsh -s %s\n' "$login_shell" "$zsh_path"
+fi

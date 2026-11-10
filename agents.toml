@@ -1,0 +1,14 @@
+version = 1
+agents = ["claude"]
+
+[trust]
+allow_all = true
+
+[[skills]]
+name = "dotagents"
+source = "getsentry/dotagents"
+
+[[plugins]]
+name = "compound-engineering"
+source = "EveryInc/compound-engineering-plugin"
+path = "."

@@ -1,5 +1,0 @@
-{{ if eq .chezmoi.os "linux" -}}
-#!/bin/sh
-set -eu
-exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\\''" }}' exec python -- python '{{ joinPath .chezmoi.workingTree "scripts" "linux-apps.py" | replace "'" "'\\''" }}' '{{ .linux | toJson | replace "'" "'\\''" }}'
-{{ end -}}

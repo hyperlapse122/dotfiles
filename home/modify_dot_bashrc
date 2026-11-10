@@ -1,6 +1,0 @@
-{{- /* chezmoi:modify-template */ -}}
-{{- $native := includeTemplate "native-ca-shell" . -}}
-{{- $context := deepCopy . -}}
-{{- $_ := set $context.chezmoi "stdin" $native -}}
-{{- $_ := set $context "shell" "bash" -}}
-{{- includeTemplate "cli-completions-shell" $context -}}

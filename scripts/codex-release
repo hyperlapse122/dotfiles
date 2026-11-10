@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Resolve the newest upstream Codex CLI release from GitHub's release API.
+
+Fetches openai/codex's latest GitHub release, reads the version from its
+rust-v tag and the sha256 digest GitHub records for each tarball
+packages/codex.nix installs on each supported system -- the codex binary and
+the codex-code-mode-host it spawns -- and writes or checks the pin file that
+package consumes. Refuses to write a pin for a prerelease, a release missing
+any of those tarballs or their digests, or a version that is not strictly
+newer than the one already pinned, so neither an incomplete release nor a
+downgrade ever reaches the pin file.
+"""
+
+import argparse
+import base64
+import json
+import re
+import subprocess
+import sys
+
+DEFAULT_SOURCE_URL = "https://api.github.com/repos/openai/codex/releases/latest"
+
+# Every system a host in this flake can be, and the tarballs installed on it.
+# The Linux musl builds are statically linked, so they run on NixOS and other
+# distributions without patching.
+TARGET_ASSETS = {
+    "x86_64-linux": {
+        "codex": "codex-x86_64-unknown-linux-musl.tar.gz",
+        "codeModeHost": "codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+    },
+    "aarch64-linux": {
+        "codex": "codex-aarch64-unknown-linux-musl.tar.gz",
+        "codeModeHost": "codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+    },
+    "aarch64-darwin": {
+        "codex": "codex-aarch64-apple-darwin.tar.gz",
+        "codeModeHost": "codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+    },
+}
+TAG_PREFIX = "rust-v"
+
+VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
+DIGEST_PATTERN = re.compile(r"^sha256:([0-9a-fA-F]{64})$")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def fetch(url):
+    """Fetch one URL with curl and return the raw body."""
+    proc = subprocess.run(
+        ["curl", "-sfL", "--max-time", "60", url],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def hex_to_sri(sha256_hex):
+    """Convert a 64-character hex sha256 string to Nix SRI format."""
+    return "sha256-" + base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
+
+
+def parse_release(body):
+    """Return the pin for each system's tarballs in one GitHub release object."""
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise Failure(f"release response is not JSON: {exc}") from None
+    if not isinstance(data, dict):
+        raise Failure("release response is not a JSON object")
+
+    tag = data.get("tag_name")
+    if data.get("prerelease") is not False or data.get("draft"):
+        raise Failure(f"release {tag!r} is a prerelease or draft; refusing to pin it")
+    if not isinstance(tag, str) or not tag.startswith(TAG_PREFIX):
+        raise Failure(f"release tag {tag!r} does not start with {TAG_PREFIX!r}")
+    version = tag[len(TAG_PREFIX):]
+    if not VERSION_PATTERN.match(version):
+        raise Failure(f"release version is not a plain version string: {version!r}")
+
+    assets = data.get("assets")
+    assets = assets if isinstance(assets, list) else []
+    platforms = {}
+    for system, components in TARGET_ASSETS.items():
+        platforms[system] = {}
+        for component, name in components.items():
+            matches = [a for a in assets if isinstance(a, dict) and a.get("name") == name]
+            if len(matches) != 1:
+                raise Failure(
+                    f"release {tag} lists {len(matches)} {name} assets, "
+                    "expected exactly one; refusing to write an incomplete pin"
+                )
+            digest = matches[0].get("digest")
+            match = DIGEST_PATTERN.match(digest) if isinstance(digest, str) else None
+            if not match:
+                raise Failure(f"invalid sha256 digest for {name} in {tag}: {digest!r}")
+            sha256_hex = match.group(1).lower()
+            platforms[system][component] = {
+                "asset": name,
+                "sha256": sha256_hex,
+                "hash": hex_to_sri(sha256_hex),
+            }
+    return {"version": version, "platforms": platforms}
+
+
+def version_tuple(version):
+    if not isinstance(version, str):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def pinned_version(path):
+    """Return the version already pinned at path, or None when unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            current = json.load(f)
+        return current.get("version")
+    except Exception:
+        return None
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_SOURCE_URL,
+        help="URL of the latest-release GitHub API object",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to the codex-release.json pin file to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved pin JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        resolved = parse_release(fetch(args.source_url))
+        out_json = json.dumps(resolved, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        current_version = pinned_version(args.output)
+        if current_version is not None:
+            try:
+                is_newer = version_tuple(resolved["version"]) > version_tuple(current_version)
+            except ValueError:
+                is_newer = True
+            if not is_newer:
+                print(
+                    f"{args.output} is already up to date at version {current_version} "
+                    f"(resolved {resolved['version']} is not newer)"
+                )
+                return 0
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(out_json)
+        print(f"updated {args.output} to version {resolved['version']}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"codex-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

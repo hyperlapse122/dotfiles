@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# OMP resolves this command only for a request. Never export the file's key
+# into the agent environment, which its child tools would inherit.
+set -euo pipefail
+
+KEY_VAR='@KEY_VAR@'
+KEY_FILE='@KEY_FILE@'
+LC_ALL=C
+key=${!KEY_VAR:-}
+if [[ -z $key ]]; then
+  { IFS= read -r -d '' -N 16384 key <"$KEY_FILE"; } 2>/dev/null || true
+  key=${key%"${key##*[![:space:]]}"}
+fi
+if [[ -n $key && ${#key} -le 8192 && $key != *[![:graph:]]* ]]; then
+  printf '%s' "$key"
+else
+  echo 'omp: provider key is unavailable or invalid' >&2
+  exit 1
+fi

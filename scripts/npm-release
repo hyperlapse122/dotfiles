@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+"""Resolve the newest release of one npm package and regenerate its lock file.
+
+For a package that ships no lock file of its own, such as acpx.
+Reads the registry's latest manifest for the version, tarball URL, and sha512
+integrity; downloads the tarball and checks it against that integrity; takes
+its package.json without devDependencies, the same way the Nix package does
+before `npm ci`; and asks npm for a lock file of the runtime dependencies
+alone. Then it hashes that lock file's dependencies with prefetch-npm-deps
+and writes the lock file and the pin file packages/<name>.nix consumes:
+version, tarball url, hash, and npmDepsHash.
+
+Refuses a deprecated package, a version that is not plain dotted numbers, a
+manifest whose name differs from the request, an integrity that is not one
+sha512 digest, a tarball outside registry.npmjs.org, a tarball that does not
+match its integrity, and a lock file entry that npm would fetch from anywhere
+but the registry. Leaves both files alone when the resolved version is not
+strictly newer than the one already pinned, so a downgrade never reaches them.
+
+npm and prefetch-npm-deps each get NPM_RELEASE_TIMEOUT seconds, 600 by
+default, so a registry call that hangs fails the run instead of holding the
+update job until its own timeout.
+"""
+
+import argparse
+import base64
+import hashlib
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+DEFAULT_SOURCE_URL = "https://registry.npmjs.org"
+DEFAULT_STEP_TIMEOUT = 600
+TARBALL_PREFIX = DEFAULT_SOURCE_URL + "/"
+
+NAME_PATTERN = re.compile(r"^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$")
+VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
+INTEGRITY_PATTERN = re.compile(r"sha512-[A-Za-z0-9+/]{86}==")
+DEPS_HASH_PATTERN = re.compile(r"sha256-[A-Za-z0-9+/]{43}=")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def step_timeout():
+    raw = os.environ.get("NPM_RELEASE_TIMEOUT", str(DEFAULT_STEP_TIMEOUT))
+    try:
+        seconds = float(raw)
+    except ValueError:
+        raise Failure(f"NPM_RELEASE_TIMEOUT is not a number of seconds: {raw!r}") from None
+    if not seconds > 0:
+        raise Failure(f"NPM_RELEASE_TIMEOUT must be positive: {raw!r}")
+    return seconds
+
+
+def run_step(label, command, timeout, **kwargs):
+    """Run one lock-file step, failing cleanly when it outlives `timeout`."""
+    try:
+        return subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired:
+        raise Failure(f"{label} timed out after {timeout:g} seconds") from None
+
+
+def fetch(url):
+    """Fetch one URL with curl and return the raw bytes."""
+    proc = subprocess.run(
+        ["curl", "-sfL", "--max-time", "60", url],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def fetch_manifest(url):
+    """Fetch one registry manifest and return it as a JSON object."""
+    try:
+        data = json.loads(fetch(url))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise Failure(f"response from {url} is not JSON: {exc}") from None
+    if not isinstance(data, dict):
+        raise Failure(f"response from {url} is not a JSON object")
+    if "deprecated" in data:
+        raise Failure(f"{url} is deprecated: {data['deprecated']!r}; refusing to pin it")
+    return data
+
+
+def resolve_manifest(base, name):
+    """Return the version, tarball URL, and integrity of the latest release."""
+    latest = fetch_manifest(f"{base}/{name}/latest")
+    if latest.get("name") != name:
+        raise Failure(f"manifest for {name} names {latest.get('name')!r}")
+    version = latest.get("version")
+    if not isinstance(version, str) or not VERSION_PATTERN.match(version):
+        raise Failure(f"release version is not a plain version string: {version!r}")
+    dist = latest.get("dist")
+    dist = dist if isinstance(dist, dict) else {}
+    url = dist.get("tarball")
+    if not isinstance(url, str) or not url.startswith(TARBALL_PREFIX):
+        raise Failure(f"tarball for {name} {version} is not under {TARBALL_PREFIX}: {url!r}")
+    integrity = dist.get("integrity")
+    if not isinstance(integrity, str) or not INTEGRITY_PATTERN.fullmatch(integrity):
+        raise Failure(f"invalid sha512 integrity for {name} {version}: {integrity!r}")
+    return {"version": version, "url": url, "hash": integrity}
+
+
+def runtime_manifest(name, pin):
+    """Download the pinned tarball and return its package.json without devDependencies."""
+    body = fetch(pin["url"])
+    digest = "sha512-" + base64.b64encode(hashlib.sha512(body).digest()).decode("ascii")
+    if digest != pin["hash"]:
+        raise Failure(f"tarball {pin['url']} does not match its integrity {pin['hash']}")
+    try:
+        with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
+            member = archive.extractfile("package/package.json")
+            manifest = json.load(member)
+    except (tarfile.TarError, KeyError, AttributeError, json.JSONDecodeError) as exc:
+        raise Failure(f"tarball {pin['url']} holds no readable package/package.json: {exc}") from None
+    if not isinstance(manifest, dict):
+        raise Failure(f"package.json in {pin['url']} is not a JSON object")
+    if manifest.get("name") != name or manifest.get("version") != pin["version"]:
+        raise Failure(
+            f"package.json in {pin['url']} names "
+            f"{manifest.get('name')!r} {manifest.get('version')!r}"
+        )
+    manifest.pop("devDependencies", None)
+    return manifest
+
+
+def check_lock(lock):
+    """Require every dependency in the lock file to come from the registry with an integrity."""
+    packages = lock.get("packages") if isinstance(lock, dict) else None
+    if not isinstance(packages, dict) or "" not in packages:
+        raise Failure("npm wrote a lock file without a packages map")
+    for path, entry in packages.items():
+        if path == "":
+            continue
+        entry = entry if isinstance(entry, dict) else {}
+        resolved = entry.get("resolved")
+        if not isinstance(resolved, str) or not resolved.startswith(TARBALL_PREFIX):
+            raise Failure(f"lock entry {path} resolves outside {TARBALL_PREFIX}: {resolved!r}")
+        if not isinstance(entry.get("integrity"), str):
+            raise Failure(f"lock entry {path} has no integrity")
+
+
+def lock_and_hash(base, manifest):
+    """Return the lock file text npm writes for manifest and its npmDepsHash."""
+    timeout = step_timeout()
+    with tempfile.TemporaryDirectory(prefix="npm-release-") as work:
+        with open(os.path.join(work, "package.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2)
+        proc = run_step(
+            "npm install --package-lock-only",
+            [
+                "npm",
+                "install",
+                "--package-lock-only",
+                "--ignore-scripts",
+                "--no-audit",
+                "--no-fund",
+                f"--registry={base}/",
+            ],
+            timeout,
+            cwd=work,
+        )
+        if proc.returncode != 0:
+            raise Failure(f"npm could not write a lock file (status {proc.returncode}): {proc.stderr.strip()}")
+        lock_path = os.path.join(work, "package-lock.json")
+        try:
+            with open(lock_path, "r", encoding="utf-8") as f:
+                lock_text = f.read()
+            lock = json.loads(lock_text)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise Failure(f"npm wrote no readable package-lock.json: {exc}") from None
+        check_lock(lock)
+        proc = run_step("prefetch-npm-deps", ["prefetch-npm-deps", lock_path], timeout)
+        if proc.returncode != 0:
+            raise Failure(f"prefetch-npm-deps failed with status {proc.returncode}: {proc.stderr.strip()}")
+        deps_hash = proc.stdout.strip()
+        if not DEPS_HASH_PATTERN.fullmatch(deps_hash):
+            raise Failure(f"prefetch-npm-deps printed no sha256 hash: {deps_hash!r}")
+    return lock_text, deps_hash
+
+
+def version_tuple(version):
+    if not isinstance(version, str):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def pinned_version(path):
+    """Return the version already pinned at path, or None when unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            current = json.load(f)
+        return current.get("version")
+    except Exception:
+        return None
+
+
+def write_atomically(path, text):
+    directory = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".npm-release-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--package", required=True, help="npm package name to resolve")
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_SOURCE_URL,
+        help="Base URL of the npm registry to read",
+    )
+    parser.add_argument("--output", "-o", help="Path to the pin file to write or update")
+    parser.add_argument("--lock", help="Path to the package-lock.json to write beside the pin")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved pin JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        if not NAME_PATTERN.match(args.package):
+            raise Failure(f"not an npm package name: {args.package!r}")
+        if not args.dry_run and bool(args.output) != bool(args.lock):
+            raise Failure("--output and --lock go together")
+        base = args.source_url.rstrip("/")
+        pin = resolve_manifest(base, args.package)
+
+        if not args.dry_run and args.output:
+            current_version = pinned_version(args.output)
+            if current_version is not None:
+                try:
+                    is_newer = version_tuple(pin["version"]) > version_tuple(current_version)
+                except ValueError:
+                    is_newer = True
+                if not is_newer:
+                    print(
+                        f"{args.output} is already up to date at version {current_version} "
+                        f"(resolved {pin['version']} is not newer)"
+                    )
+                    return 0
+
+        manifest = runtime_manifest(args.package, pin)
+        lock_text, pin["npmDepsHash"] = lock_and_hash(base, manifest)
+        out_json = json.dumps(pin, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        # The lock file goes first: a pin that names new hashes beside the old
+        # lock file would fail every build, while a new lock file beside the
+        # old pin fails only the npmDepsHash check until the pin lands.
+        write_atomically(args.lock, lock_text)
+        write_atomically(args.output, out_json)
+        print(f"updated {args.output} and {args.lock} to version {pin['version']}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"npm-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

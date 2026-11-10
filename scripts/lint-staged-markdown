@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Lints the staged Markdown, not the working tree. When any Markdown is
+# staged, the whole index is checked out into a scratch directory and bare
+# markdownlint-cli2 runs there, so the result matches CI's markdown-lint check
+# on this commit: same config globs, nested configs, and symlink targets.
+# markdownlint-cli2 is usually a mise shim, which refuses the copy's untrusted
+# mise.toml. MISE_TRUSTED_CONFIG_PATHS trusts the copy for this one command
+# without writing a trust entry; pwd -P resolves it because mise compares
+# resolved paths (macOS $TMPDIR is under /var, a link to /private/var).
+# MISE_SAFE keeps the now-trusted copy from running staged environment code,
+# such as an [env] _.source script in a staged mise.toml.
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if git diff --cached --quiet --diff-filter=ACMR -- '*.md'; then
+  exit 0
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+git checkout-index --all --prefix="$tmpdir/"
+
+status=0
+(cd "$tmpdir" && MISE_TRUSTED_CONFIG_PATHS="$(pwd -P)" MISE_SAFE=1 markdownlint-cli2) || status=$?
+
+if [[ $status -ne 0 ]]; then
+  printf "To fix: mise exec -- markdownlint-cli2 --no-globs --fix <file> (skip with git commit --no-verify)\n" >&2
+  exit "$status"
+fi

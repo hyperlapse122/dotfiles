@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Starts the minikube cluster at login on a macOS host, once the Podman
+# machine answers. launchd starts this agent and the machine's watchdog in no
+# set order, so the wait is the dependency; a timeout or a failed start exits
+# non-zero, and launchd runs the agent again after its throttle interval.
+# Each probe is bounded by the time left: Podman's client sets no timeout of
+# its own, so a machine that accepts the connection and never answers would
+# otherwise hold the job, and launchd would never retry it.
+#
+#   minikube-darwin-start <podman> <minikube> <timeout seconds> <poll seconds> <memory MiB> <cpus>
+#
+# The flags pin what the NixOS unit's environment pins: the profile, the
+# Podman driver, and containerd.
+set -euo pipefail
+
+podman=$1
+minikube=$2
+timeout=$3
+interval=$4
+memory=$5
+cpus=$6
+
+deadline=$((SECONDS + timeout))
+until timeout "$((deadline > SECONDS ? deadline - SECONDS : 1))" "$podman" info >/dev/null 2>&1; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "minikube-darwin-start: the Podman machine did not answer within ${timeout}s" >&2
+    exit 1
+  fi
+  sleep "$interval"
+done
+
+exec "$minikube" start \
+  --profile=minikube \
+  --driver=podman \
+  --container-runtime=containerd \
+  --memory="$memory" \
+  --cpus="$cpus"

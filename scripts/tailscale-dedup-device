@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# Deletes any tailnet device already registered under this host's hostname,
+# but only when tailscaled's own state file is not yet on disk -- i.e. only
+# on a genuine fresh install. An ordinary reboot or a key-expiry
+# reauthentication both leave that state file in place, and in both cases
+# the existing registration under this hostname *is* this instance, so it
+# must never be touched.
+#
+# Runs before tailscaled-autoconnect registers this instance, not after:
+# Tailscale suffixes a colliding hostname on the newly-registering device,
+# not the pre-existing one, so the stale entry must be cleared first or the
+# new instance keeps a "-1"-suffixed name permanently.
+#
+# Reads:
+#   SELF_HOSTNAME       -- this host's hostname (not secret)
+#   TAILSCALE_API_TOKEN -- Tailscale API bearer token
+#   TAILSCALE_API_BASE  -- Tailscale API base URL
+set -uo pipefail
+
+TAILSCALE_STATE_FILE="/var/lib/tailscale/tailscaled.state"
+
+if [ -e "$TAILSCALE_STATE_FILE" ]; then
+  echo "tailscale-dedup-device: existing tailscaled state found; not a fresh install, skipping" >&2
+  exit 0
+fi
+
+authed_curl() {
+  printf 'header = "Authorization: Bearer %s"\n' "$TAILSCALE_API_TOKEN" | curl -sS --fail -K - "$@"
+}
+
+if ! devices_json="$(authed_curl "$TAILSCALE_API_BASE/api/v2/tailnet/-/devices")"; then
+  echo "tailscale-dedup-device: Tailscale API request failed; skipping cleanup this run" >&2
+  exit 0
+fi
+
+stale_ids="$(printf '%s' "$devices_json" | jq -r --arg host "$SELF_HOSTNAME" \
+  '.devices[] | select((.hostname | ascii_downcase) == ($host | ascii_downcase)) | .id')"
+
+if [ -z "$stale_ids" ]; then
+  echo "tailscale-dedup-device: no existing devices for $SELF_HOSTNAME"
+  exit 0
+fi
+
+printf '%s\n' "$stale_ids" | while IFS= read -r stale_id; do
+  [ -n "$stale_id" ] || continue
+  if authed_curl -X DELETE "$TAILSCALE_API_BASE/api/v2/device/$stale_id"; then
+    echo "tailscale-dedup-device: removed stale device $stale_id"
+  else
+    echo "tailscale-dedup-device: failed to remove stale device $stale_id" >&2
+  fi
+done

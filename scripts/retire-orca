@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Remove what the retired Orca app left in a user's home. Run as that user.
+
+Orca wrote hooks into the coding agents' own settings files, a Claude Code
+status line, and its state directories. The agents keep their files, so only
+Orca's entries are removed from them:
+
+  ~/.claude/settings.json        hooks and statusLine whose command is Orca's
+  ~/.codex/hooks.json            hooks whose command is Orca's; the file and its
+                                 [hooks.state] trust entries in config.toml go
+                                 when nothing else is left
+  ~/.gemini/config/hooks.json    the orca-status entry
+
+then ~/.orca, ~/.config/orca, and on macOS Orca's Application Support data are
+deleted. A symlink at one of those paths is removed as a link; its target is
+left alone.
+
+A hook counts as Orca's when its command names ORCA_AGENT_HOOK or
+/.orca/agent-hooks/. Matching hooks are removed one at a time, so a hook
+another tool added to the same group stays; a group left with no hooks, an
+event left with no groups, and an empty hooks object are dropped after them.
+
+Every step is idempotent and leaves a file untouched when it holds nothing of
+Orca's. A file that cannot be read or parsed is left as it is with one warning,
+and the run still exits 0, so a damaged file never fails the rebuild.
+"""
+import argparse
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+import tomlkit
+
+ORCA_COMMAND = re.compile(r'ORCA_AGENT_HOOK|/\.orca/agent-hooks/')
+STATE_DIRECTORIES = ('.orca', '.config/orca')
+MACOS_STATE_DIRECTORIES = ('Library/Application Support/orca', 'Library/Application Support/Orca')
+
+
+def warn(message):
+    print('retire-orca: {}'.format(message), file=sys.stderr)
+
+
+def is_orca(entry):
+    return isinstance(entry, dict) and bool(ORCA_COMMAND.search(str(entry.get('command', ''))))
+
+
+def write(path, text):
+    mode = path.stat().st_mode & 0o777
+    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix='.{}.'.format(path.name))
+    try:
+        with os.fdopen(descriptor, 'w') as handle:
+            handle.write(text)
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+def read_json(path):
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        document = json.loads(path.read_text())
+    except (OSError, ValueError) as error:
+        warn('left {} alone: {}'.format(path, error))
+        return None
+    if not isinstance(document, dict):
+        warn('left {} alone: not a JSON object'.format(path))
+        return None
+    return document
+
+
+def write_json(path, document):
+    write(path, json.dumps(document, indent=2, ensure_ascii=False) + '\n')
+
+
+def strip_hooks(document):
+    """Remove Orca's hooks from document['hooks']; return whether any went."""
+    events = document.get('hooks')
+    if not isinstance(events, dict):
+        return False
+    changed = False
+    for event in list(events):
+        groups = events[event]
+        if not isinstance(groups, list):
+            continue
+        kept_groups = []
+        for group in groups:
+            hooks = group.get('hooks') if isinstance(group, dict) else None
+            if not isinstance(hooks, list):
+                kept_groups.append(group)
+                continue
+            kept = [hook for hook in hooks if not is_orca(hook)]
+            if len(kept) != len(hooks):
+                changed = True
+                if not kept:
+                    continue
+                group = dict(group, hooks=kept)
+            kept_groups.append(group)
+        if kept_groups:
+            events[event] = kept_groups
+        else:
+            del events[event]
+    if changed and not events:
+        del document['hooks']
+    return changed
+
+
+def retire_claude(home):
+    path = home / '.claude/settings.json'
+    document = read_json(path)
+    if document is None:
+        return
+    changed = strip_hooks(document)
+    if is_orca(document.get('statusLine')):
+        del document['statusLine']
+        changed = True
+    if changed:
+        write_json(path, document)
+
+
+def retire_codex(home):
+    path = home / '.codex/hooks.json'
+    if not os.path.lexists(path):
+        # An earlier run may have deleted the file but failed to edit
+        # config.toml, so its trust entries are retired on every run.
+        retire_codex_trust(home, path)
+        return
+    document = read_json(path)
+    if document is None or not strip_hooks(document):
+        return
+    if document:
+        write_json(path, document)
+        return
+    path.unlink()
+    retire_codex_trust(home, path)
+
+
+def retire_codex_trust(home, hooks):
+    """Drop the [hooks.state] trust entries Codex keeps for a deleted hooks file."""
+    config = home / '.codex/config.toml'
+    if not config.is_file() or config.is_symlink():
+        return
+    try:
+        document = tomlkit.parse(config.read_text())
+    except (OSError, ValueError) as error:
+        warn('left {} alone: {}'.format(config, error))
+        return
+    state = document.get('hooks', {}).get('state')
+    if state is None:
+        return
+    prefix = '{}:'.format(hooks)
+    stale = [key for key in state if key.startswith(prefix)]
+    if not stale:
+        return
+    for key in stale:
+        del state[key]
+    write(config, tomlkit.dumps(document))
+
+
+def retire_gemini(home):
+    path = home / '.gemini/config/hooks.json'
+    document = read_json(path)
+    if document is None or 'orca-status' not in document:
+        return
+    del document['orca-status']
+    write_json(path, document)
+
+
+def remove_directory(path):
+    if path.is_symlink():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def retire_state(home, macos):
+    for relative in STATE_DIRECTORIES + (MACOS_STATE_DIRECTORIES if macos else ()):
+        try:
+            remove_directory(home / relative)
+        except OSError as error:
+            warn('could not remove {}: {}'.format(home / relative, error))
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--home', required=True, type=Path)
+    parser.add_argument('--macos', action='store_true', help='also remove Orca data under ~/Library')
+    args = parser.parse_args(argv)
+    home = args.home
+    if not home.is_absolute() or home == Path('/') or not home.is_dir():
+        parser.error('--home must be an existing absolute directory other than /: {}'.format(home))
+    if os.geteuid() == 0:
+        parser.error('must run as the home directory\'s user, not root')
+    for step in (retire_claude, retire_codex, retire_gemini):
+        try:
+            step(home)
+        except OSError as error:
+            warn('{} failed: {}'.format(step.__name__, error))
+    retire_state(home, args.macos)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

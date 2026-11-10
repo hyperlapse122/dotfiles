@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+"""Restore complete common OMP documents without replacing runtime state."""
+
+import argparse
+import copy
+from contextlib import ExitStack, contextmanager
+import errno
+import fcntl
+import json
+import math
+import os
+from pathlib import Path
+import re
+import socket
+import stat
+import sys
+import tempfile
+import time
+
+import xxhash
+import yaml
+
+
+class Refusal(Exception):
+    pass
+
+
+class UniqueLoader(yaml.SafeLoader):
+    """Ambiguous keys must not conceal a credential during preflight."""
+
+    def construct_mapping(self, node, deep=False):
+        self.flatten_mapping(node)
+        result = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, str) or key in result:
+                raise Refusal("configuration has duplicate or non-string keys")
+            result[key] = self.construct_object(value_node, deep=deep)
+        return result
+
+
+def load(path):
+    try:
+        value = yaml.load(path.read_text(), Loader=UniqueLoader)
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise Refusal("configuration must be a mapping")
+        # Reject YAML values JSON/OMP cannot represent (including alias cycles).
+        json.dumps(value, allow_nan=False)
+        return value
+    except FileNotFoundError:
+        return {}
+    except (ValueError, TypeError, RecursionError, yaml.YAMLError):
+        raise Refusal("configuration is malformed; existing files were preserved") from None
+
+
+@contextmanager
+def lock(path, deadline):
+    # OMP 18.12.6, 45c35e40: pi-utils/file-lock.ts appends .lock;
+    # pi-natives/src/file_lock/{mod,linux,unix}.rs defines these leases.
+    lock_path = str(path) + ".lock"
+    if sys.platform == "linux":
+        lease = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        high = xxhash.xxh64(lock_path.encode(), seed=0x4F4D502D4C4F434B).hexdigest()
+        low = xxhash.xxh64(lock_path.encode(), seed=0x50492D46494C454C).hexdigest()
+        acquire = lambda: lease.bind("\0omp-file-lock-" + high + low)
+    else:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        lease = os.fdopen(descriptor, "r+b")
+        acquire = lambda: fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        while True:
+            try:
+                acquire()
+                break
+            except OSError as error:
+                if error.errno not in (errno.EADDRINUSE, errno.EAGAIN, errno.EWOULDBLOCK):
+                    raise
+                if time.monotonic() >= deadline:
+                    raise Refusal("OMP configuration lock timed out; retry after the writer finishes") from None
+                time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+        yield
+    finally:
+        lease.close()
+
+
+def get(document, dotted):
+    value = document
+    for key in dotted.split("."):
+        if not isinstance(value, dict) or key not in value:
+            return None
+        value = value[key]
+    return value
+
+
+def put(document, dotted, value):
+    keys = dotted.split(".")
+    for key in keys[:-1]:
+        if not isinstance(document.get(key), dict):
+            document[key] = {}
+        document = document[key]
+    document[keys[-1]] = copy.deepcopy(value)
+
+
+def check_credentials(old, new):
+    if isinstance(old, dict):
+        for key, value in old.items():
+            replacement = new.get(key) if isinstance(new, dict) else None
+            normalized = key.lower().replace("_", "").replace("-", "")
+            sensitive = normalized.endswith(("apikey", "token", "password", "secret")) or normalized in (
+                "credentials", "credentialid", "clientid", "authorization", "headers", "env",
+            )
+            if sensitive and value and value != replacement:
+                raise Refusal("credential binding cannot be preserved safely; existing files were preserved")
+            check_credentials(value, replacement)
+    elif isinstance(old, list):
+        for index, value in enumerate(old):
+            replacement = new[index] if isinstance(new, list) and index < len(new) else None
+            check_credentials(value, replacement)
+
+
+def same_managed_helper(provider, previous, current):
+    if provider not in ("synthetic", "openrouter"):
+        return False
+    if not isinstance(previous, dict) or not isinstance(current, dict):
+        return False
+    if previous.get("apiKey") == current.get("apiKey"):
+        return False
+    # Catalog rows may change; all provider-level routing/account settings must
+    # stay identical before a credential command can be considered equivalent.
+    identity = lambda value: {k: v for k, v in value.items()
+                              if k not in ("apiKey", "models", "modelOverrides")}
+    if not previous.get("baseUrl") or identity(previous) != identity(current):
+        return False
+    store = r"/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-"
+    command = store + r"omp-[0-9][A-Za-z0-9.+-]*/bin/omp-" + provider + "-key"
+    bodies = []
+    for value in (previous.get("apiKey"), current.get("apiKey")):
+        if not isinstance(value, str) or re.fullmatch("!" + command, value) is None:
+            return False
+        path = Path(value[1:])
+        # Read immutable helper code, never execute it or read its key file.
+        # This also migrates already deployed pre-fix documents with no ledger.
+        if path.resolve() != path or not path.is_file():
+            return False
+        shebang, separator, body = path.read_bytes().partition(b"\n")
+        if not separator or re.fullmatch(
+            ("#!" + store + r"bash-[0-9][A-Za-z0-9.+-]*/bin/bash").encode(), shebang
+        ) is None:
+            return False
+        bodies.append(body)
+    # A bash dependency update is harmless; a changed credential source or
+    # helper implementation requires explicit migration rather than guessing.
+    return bodies[0] == bodies[1]
+
+
+def preserve(name, old, declared):
+    new = copy.deepcopy(declared)
+    if name == "config.yml":
+        # Credential-marked settings in the pinned registry, paired with their
+        # endpoint/account identity. An undeclared identity cannot inherit a key.
+        bindings = {
+            "auth.broker.token": ["auth.broker.url"],
+            "searxng.token": ["searxng.endpoint"],
+            "searxng.basicPassword": ["searxng.endpoint", "searxng.basicUsername"],
+            "dev.autoqaPush.token": ["dev.autoqaPush.endpoint"],
+            "hindsight.apiToken": ["hindsight.apiUrl"],
+            "mnemopi.embeddingApiKey": ["mnemopi.embeddingApiUrl"],
+            "mnemopi.llmApiKey": ["mnemopi.llmBaseUrl"],
+        }
+        for credential, identity in bindings.items():
+            value = get(old, credential)
+            if value and get(new, credential) is None:
+                if all(get(old, key) is not None and get(old, key) == get(new, key) for key in identity):
+                    put(new, credential, value)
+    elif name == "mcp.json":
+        for server, previous in old.get("mcpServers", {}).items():
+            current = new.get("mcpServers", {}).get(server)
+            if not isinstance(previous, dict) or not isinstance(current, dict):
+                continue
+            identity = ("type", "url", "command", "args", "cwd", "env", "headers")
+            same_identity = all(previous.get(key) == current.get(key) for key in identity)
+            if same_identity:
+                for key in ("auth", "oauth"):
+                    if previous.get(key) and key not in current:
+                        current[key] = copy.deepcopy(previous[key])
+    checked = old
+    if name == "models.yml" and isinstance(old.get("providers"), dict):
+        checked = copy.deepcopy(old)
+        providers = new.get("providers", {})
+        for provider, previous in checked["providers"].items():
+            current = providers.get(provider) if isinstance(providers, dict) else None
+            if same_managed_helper(provider, previous, current):
+                previous["apiKey"] = current["apiKey"]
+    check_credentials(checked, new)
+    return new
+
+
+ALLOWED = {"config.yml", "models.yml", "mcp.json"}
+
+
+def targets(agent, documents):
+    paths = {name: agent / name for name in documents}
+    if "config.yml" in paths:
+        if not os.path.lexists(paths["config.yml"]) and os.path.lexists(agent / "config.yaml"):
+            paths["config.yml"] = agent / "config.yaml"
+    for name, path in paths.items():
+        # OMP follows main-settings symlinks and locks the physical target;
+        # MCP writes instead lock the logical filename and replace its inode.
+        if name != "config.yml" and path.is_symlink():
+            raise Refusal("a managed non-settings document is a symlink; existing files were preserved")
+        paths[name] = path.resolve()
+        if name == "config.yml" and (
+            paths[name].parent != agent.resolve() or paths[name].name not in ("config.yml", "config.yaml")
+        ):
+            raise Refusal("main settings symlink leaves the common configuration boundary; existing files were preserved")
+    if len(set(paths.values())) != len(paths):
+        raise Refusal("managed documents resolve to the same file")
+    return paths
+
+
+def reconcile(args):
+    manifest = load(args.declared)
+    if not manifest or not set(manifest) <= ALLOWED or "config.yml" not in manifest:
+        raise Refusal("declaration must name common OMP documents, including config.yml")
+    documents = {}
+    for name, source in manifest.items():
+        if not isinstance(source, str) or not Path(source).is_file():
+            raise Refusal("a declared document is unavailable")
+        documents[name] = load(Path(source))
+    agent = args.agent_dir.absolute()
+    with ExitStack() as stack:
+        paths = targets(agent, documents)
+        # Lock fallback filenames too: first-start migration and a concurrent
+        # OMP startup must not race our filename selection or legacy preflight.
+        aliases = [agent / name for name in ("config.yml", "config.yaml", "settings.json", "models.json")]
+        if not args.dry_run:
+            for path in set(paths.values()) | {p.resolve() for p in aliases}:
+                path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            deadline = time.monotonic() + args.lock_timeout
+            for path in sorted(set(paths.values()) | {p.resolve() for p in aliases}):
+                stack.enter_context(lock(path, deadline))
+            if targets(agent, documents) != paths:
+                raise Refusal("configuration paths changed while waiting for locks; retry apply")
+        pending = {}
+        for name, path in paths.items():
+            if path.exists():
+                info = path.stat()
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid():
+                    raise Refusal("managed document is not a regular file owned by this user")
+            old = load(path)
+            # Legacy JSON files stay on disk as inactive state. Do not mask a
+            # credential-bearing migration input with a new canonical document.
+            legacy = agent / {"config.yml": "settings.json", "models.yml": "models.json"}.get(name, name)
+            if not path.exists() and legacy != path:
+                check_credentials(load(legacy), documents[name])
+            restored = preserve(name, old, documents[name])
+            payload = json.dumps(restored, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+            if not path.exists() or path.read_text() != payload or stat.S_IMODE(path.stat().st_mode) != 0o600:
+                pending[path] = payload
+        if args.dry_run:
+            print("OMP common configuration checked (dry run)")
+            return
+        staged = {}
+        try:
+            for path, payload in pending.items():
+                descriptor, temporary = tempfile.mkstemp(prefix=".omp-config-", dir=path.parent)
+                staged[path] = Path(temporary)
+                with os.fdopen(descriptor, "w") as output:
+                    output.write(payload)
+                    output.flush()
+                    os.fsync(output.fileno())
+            for path, temporary in staged.items():
+                os.replace(temporary, path)
+        finally:
+            for temporary in staged.values():
+                temporary.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--agent-dir", type=Path, required=True)
+    parser.add_argument("--declared", type=Path, required=True)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--lock-timeout", type=float, default=5)
+    args = parser.parse_args()
+    try:
+        if not math.isfinite(args.lock_timeout) or not 0 <= args.lock_timeout <= 60:
+            raise Refusal("lock timeout must be between 0 and 60 seconds")
+        reconcile(args)
+    except Refusal as error:
+        print(f"omp-config-reconcile: {error}", file=sys.stderr)
+        return 1
+    except (OSError, RuntimeError, TypeError, AttributeError):
+        # Exceptions from parsers and file operations can contain user data.
+        print("omp-config-reconcile: configuration I/O or structure failure; no contents logged", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

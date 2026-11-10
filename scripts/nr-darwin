@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Apply helper for a macOS host, installed as `nr` where the host kind is
+# darwin. It builds the host's nix-darwin system, which embeds the Home
+# Manager generation, as the invoking user, registers it as the system
+# profile through sudo, then activates it through sudo. The Nix package
+# replaces the @...@ constants with absolute store paths.
+set -euo pipefail
+
+GIT="@GIT@"
+
+# Overridable so tests can point at fixtures instead of the real paths.
+ROOT=${NR_ROOT:-}
+MARKER=$ROOT/etc/nix-config-host
+PROFILE=/nix/var/nix/profiles/system
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: nr {switch|build} [--host NAME] [--bootstrap] [--flake-dir PATH]
+
+  switch  build the system, which includes the user environment, and activate it
+  build   build the system only, no sudo
+
+  --host       the host directory to apply; read from /etc/nix-config-host
+               once the host has been applied, required before that
+  --bootstrap  apply the secret-free bootstrap output instead of production
+USAGE
+}
+
+die() {
+  printf 'nr: %s\n' "$*" >&2
+  exit 1
+}
+
+subcommand=${1:-}
+case $subcommand in
+  switch | build) shift ;;
+  boot | test)
+    die "$subcommand has no meaning on a macOS host, which has no bootloader generation; use nr switch"
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  '') usage; exit 2 ;;
+  *)
+    printf 'nr: unknown subcommand %s\n' "$subcommand" >&2
+    usage
+    exit 2
+    ;;
+esac
+
+host=
+flake_dir=
+bootstrap=
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --host)
+      [[ $# -ge 2 ]] || die 'missing value for --host'
+      host=$2
+      shift 2
+      ;;
+    --flake-dir)
+      [[ $# -ge 2 ]] || die 'missing value for --flake-dir'
+      flake_dir=$2
+      shift 2
+      ;;
+    --bootstrap)
+      bootstrap=1
+      shift
+      ;;
+    *) die "unexpected argument $1" ;;
+  esac
+done
+
+# The host comes from the marker the system layer writes, never from the
+# machine name, which macOS lets the user rename.
+host_given=$host
+variant=
+if [[ -r $MARKER ]]; then
+  [[ -n $host ]] || host=$(sed -n 's/^host=//p' "$MARKER")
+  variant=$(sed -n 's/^variant=//p' "$MARKER")
+fi
+[[ -n $host ]] || die "no host is recorded in $MARKER yet; name it with --host NAME"
+
+# The marker names the same host for both variants, so a bare switch on a
+# bootstrap generation would silently move to production. That move needs
+# the recovered age identity, so it must be asked for by name.
+if [[ $subcommand == switch && -z $host_given && -z $bootstrap && $variant == bootstrap ]]; then
+  die "running the bootstrap generation; reapply it with --bootstrap, or move to production with --host $host once the age identity is recovered"
+fi
+
+output=$host
+[[ -n $bootstrap ]] && output=$host-bootstrap
+
+identity=$HOME/.config/nix-config/age/key.txt
+
+preflight() {
+  if [[ -z $bootstrap && ! -f $identity ]]; then
+    die "no age identity at $identity for the production output; apply --bootstrap first, then recover it with scripts/recover-age-identity --user --host $host"
+  fi
+}
+
+build() {
+  if [[ -z $flake_dir ]]; then
+    flake_dir=$("$GIT" rev-parse --show-toplevel 2>/dev/null) ||
+      die 'not inside a git repository; name the checkout with --flake-dir PATH'
+  fi
+  [[ -f $flake_dir/flake.nix ]] ||
+    die "no flake.nix in $flake_dir; name the checkout with --flake-dir PATH"
+  # Absolute, so a relative --flake-dir cannot reach Nix as an indirect
+  # registry reference instead of a path.
+  flake_dir=$(cd -- "$flake_dir" && pwd -P)
+
+  local build_cmd=(nix build --no-link --print-out-paths
+    "$flake_dir#darwinConfigurations.$output.system")
+  system_out=$("${build_cmd[@]}")
+  [[ -n $system_out && $system_out != *$'\n'* ]] ||
+    die "nix build returned an unexpected result for one output: $system_out"
+}
+
+if [[ $subcommand == switch ]]; then
+  preflight
+fi
+
+build
+[[ $subcommand == build ]] && exit 0
+
+# sudo's secure_path on macOS does not include the Nix profile, so root gets
+# the invoking user's nix-env by absolute path.
+nix_env=$(command -v nix-env) || die 'nix-env is not on PATH'
+
+# Root runs only the store paths just built, never anything it evaluates from
+# the user's checkout. Registering first gives the generation a profile entry,
+# a GC root, and a rollback target; without it nix-darwin's boot-time
+# activation would point /run/current-system back at the old profile.
+
+sudo -v
+sudo -- "$nix_env" -p "$PROFILE" --set "$system_out"
+sudo -- "$system_out/activate"

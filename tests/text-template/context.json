@@ -1,0 +1,6 @@
+{
+  "desktopSSH": { "publicKey": null },
+  "numbers": { "fraction": 1.5, "large": 1000000, "zero": 0 },
+  "t3": { "cli": { "enable": true }, "desktop": { "enable": false } },
+  "user": { "gpgKey": "0123456789ABCDEF0123456789ABCDEF01234567" }
+}

@@ -1,5 +1,0 @@
-{{- if eq .chezmoi.os "windows" -}}
-{{ "﻿" -}}
-$ErrorActionPreference = 'Stop'
-& '{{ joinPath .chezmoi.workingTree "scripts/windows-long-paths.ps1" | replace "'" "''" }}'
-{{ end -}}

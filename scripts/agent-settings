@@ -1,0 +1,946 @@
+#!/usr/bin/env python3
+"""Set declared keys in a coding agent's user settings file. Run as the target user.
+
+Claude Code, Codex, and the Antigravity CLI each own their settings file and
+rewrite it whenever a setting changes at runtime, so Home Manager cannot place a read-only
+store symlink there.  Activation assigns the declared top-level keys, drops the
+ones this repository has retired, and leaves every other key exactly as the
+agent wrote it.  Tokscale does the same with a settings file whose preferences
+sit inside objects beside its own runtime state, so a declaration may also
+assign scalars at explicit nested paths.
+
+--label names the agent in failure messages only.  Nothing else in the merge
+depends on which agent owns the file: each writes a JSON object that the user
+also edits through the agent's own interface.
+
+--format toml merges into a TOML file instead, such as Codex's config.toml,
+with the same semantics.  The declaration stays JSON.  The file is edited in
+place through tomlkit, so the user's comments and the tables the declaration
+does not name keep their bytes.  TOML has no null, so a declared null is
+refused before anything is touched.
+
+The declared document is a JSON object with up to ten fields:
+
+  set       {name: scalar}          top-level keys to assign
+  remove    [name]                  top-level keys to drop
+  setPaths  [{path: [key, ...], value: scalar}]
+                                    leaves to assign inside nested objects
+  removePaths [{path: [key, ...], key: name, prune: bool, value: scalar,
+                values: [scalar], migration: name}]
+                                    the named key in the object at path:
+                                    removes it when present; a missing path,
+                                    a non-object segment, or an absent key is
+                                    a no-op.  `value` is optional; when given,
+                                    the key goes only while it holds exactly
+                                    that value, so a value the user chose
+                                    stays.  `values` replaces `value` to match
+                                    any of several.  `prune` is optional; true
+                                    also removes each object on the path that
+                                    the removals leave empty, innermost first,
+                                    after every removal has run, so the
+                                    result never depends on declaration order.
+                                    `migration` is optional; entries naming
+                                    one run on the first apply the ledger has
+                                    not recorded it for, and never again, so
+                                    a value the user saves later survives
+                                    even when it equals the one removed
+  removeEntries [{path: [key, ...], key: name, values: [scalar]}]
+                                    the list at path: drops every object entry
+                                    whose `key` field equals one of values;
+                                    a missing path, a non-list, or no match is
+                                    a no-op
+  upsertPaths [{path: [key, ...], key: name, value: object}]
+                                    one entry in the list at path: replaces the
+                                    entry whose `key` field equals value[key],
+                                    else appends value; other entries stay
+  prefixEntries [{path: [key, ...], prefix: string, value: string | null}]
+                                    one string entry in the list at path:
+                                    drops every string entry starting with
+                                    prefix, then appends value unless it is
+                                    null; other entries stay
+  own       {name: any JSON}        top-level keys whose whole value is
+                                    declared here
+  ownEntries [{path: [key, ...], key: name, entries: [object],
+               preLedgerIds: [string]}]
+            [{path: [key, ...], entries: {name: any JSON},
+              preLedgerIds: [string]}]
+                                    a keyed set of entries at path: a list of
+                                    objects named by their `key` field, or,
+                                    without `key`, an object's properties.
+                                    Every declared entry is upserted, and
+                                    every entry an earlier apply wrote that
+                                    the declaration no longer names is
+                                    removed; entries no apply wrote stay
+  migrateInstances {from: name, to: name, kinds: [name]}
+                                    T3 Code's move of a retired per-kind
+                                    block into provider instances, run before
+                                    the rest; see migrate() below
+
+`own` is for a top-level key nobody else writes -- a named entry beside the
+ones the agent or another tool maintains -- so replacing its whole value
+cannot discard another writer's data, which is the reason `set` refuses
+objects.
+
+`ownEntries` and `migration` need --ledger, a JSON file that records, for
+this settings file, the IDs each owned path last wrote and the migrations
+already run. Applies hold a per-settings interprocess lock from the ledger
+read through its final write. Before the settings swap, the ledger keeps its
+committed state and a separate pending state with the staged settings digest
+and filename. The rename consumes that file, so recovery knows whether the
+swap landed even if the agent saved another preference afterwards. Only a
+landed swap commits pending ownership and completed migrations. A path the
+ledger has no record of, such as on the first apply, owns its `preLedgerIds`.
+A ledger that cannot be read or parsed fails before settings or ownership
+change, because guessing its contents would prune the user's entries.
+
+A path is a list of keys rather than a dotted string, so a key that itself
+contains a dot is never split, and a literal top-level "a.b" key is never taken
+for the path ["a", "b"].
+"""
+import argparse
+import collections
+import copy
+from contextlib import contextmanager
+import errno
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+
+import tomlkit
+
+# The settings file has another writer, so the merge is a compare-and-swap
+# rather than a plain read-modify-write.  A couple of retries is enough: each
+# one costs a read, and a file changing faster than that is a problem the user
+# needs told about rather than one worth spinning on.
+ATTEMPTS = 3
+
+# Syntaxes the settings file may be in. The declaration is always JSON.
+FORMATS = ('json', 'toml')
+
+Removal = collections.namedtuple('Removal', 'path key prune values migration')
+EntrySet = collections.namedtuple('EntrySet', 'path key entries pre_ledger')
+
+
+def check_directory(path):
+    """Refuse a symlinked parent without touching anything.
+
+    O_NOFOLLOW below only inspects the final component, so the parent is
+    checked separately. This runs before any mutation so a refusal really does
+    leave the disk alone.
+    """
+    if path.is_symlink():
+        raise ValueError('settings directory is a symlink: {}'.format(path))
+
+
+def private_directory(path):
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # mkdir applies its mode only when it creates the directory, and the
+    # settings directory normally exists already -- the agent made it under the
+    # default umask.  It holds credentials, OAuth state, and transcripts, so
+    # tighten it either way rather than promising a private directory only on a
+    # fresh machine.
+    path.chmod(0o700)
+
+
+# A removal that names no value removes its key whatever it holds.
+ANY_VALUE = object()
+
+FIELDS = {'set', 'remove', 'setPaths', 'removePaths', 'removeEntries', 'upsertPaths', 'prefixEntries', 'own',
+          'ownEntries', 'migrateInstances'}
+
+
+def describe(path):
+    # JSON rather than a dotted join, which would print ["a.b"] and ["a", "b"]
+    # identically.
+    return json.dumps(path, ensure_ascii=False)
+
+
+def holds_null(value):
+    if isinstance(value, dict):
+        return any(holds_null(item) for item in value.values())
+    if isinstance(value, list):
+        return any(holds_null(item) for item in value)
+    return value is None
+
+
+def strings(value):
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def declaration(declared, fmt='json'):
+    """Parse the rendered declaration into (assign, retire, paths, removals, owned, upserts, prefixes, migration, drops,
+    entry_sets).
+
+    `remove` is how a key leaves the declared set.  Dropping it from `set`
+    alone would leave its last written value on every machine forever, because
+    the merge only ever assigns.
+    """
+    document = json.loads(declared.read_text())
+    if not isinstance(document, dict):
+        raise ValueError('declared settings are not a JSON object: {}'.format(declared))
+    # A misspelt field would otherwise be ignored, and the values under it
+    # never asserted, with nothing in the rebuild log to say so.
+    unknown = sorted(set(document) - FIELDS)
+    if unknown:
+        raise ValueError('declared settings carry unknown fields: {}'.format(', '.join(unknown)))
+    assign = document.get('set', {})
+    retire = document.get('remove', [])
+    if not isinstance(assign, dict):
+        raise ValueError('declared "set" is not a JSON object: {}'.format(declared))
+    if not isinstance(retire, list) or any(not isinstance(name, str) for name in retire):
+        raise ValueError('declared "remove" is not a list of names: {}'.format(declared))
+    # Assignment is one level deep, so an object-valued declaration would
+    # replace the user's whole object -- their permission allowlist, hooks, or
+    # env map -- rather than merging into it.  Fail closed instead.
+    nested = sorted(name for name, value in assign.items() if isinstance(value, (dict, list)))
+    if nested:
+        raise ValueError('declared settings must be scalars; these are not: {}'.format(', '.join(nested)))
+    contradictory = sorted(set(assign) & set(retire))
+    if contradictory:
+        raise ValueError('declared as both set and removed: {}'.format(', '.join(contradictory)))
+    owned = document.get('own', {})
+    if not isinstance(owned, dict):
+        raise ValueError('declared "own" is not a JSON object: {}'.format(declared))
+    # An owned key is replaced whole, so any other declaration touching it
+    # would fight that replacement with an outcome that depends on order.
+    shared = sorted(set(owned) & (set(assign) | set(retire)))
+    if shared:
+        raise ValueError('declared as owned and also set or removed: {}'.format(', '.join(shared)))
+    paths = nested_paths(document.get('setPaths', []), assign, retire, declared)
+    through = sorted({path[0] for path, _ in paths if path[0] in owned})
+    if through:
+        raise ValueError('declared path starts at an owned key: {}'.format(', '.join(through)))
+    upserts = upsert_entries(document.get('upsertPaths', []), assign, retire, owned, paths, declared)
+    prefixes = prefix_entries(document.get('prefixEntries', []), assign, retire, owned, paths, upserts, declared)
+    removals = removal_paths(document.get('removePaths', []), assign, retire, owned, paths, upserts, prefixes, declared)
+    drops = removal_entries(document.get('removeEntries', []), assign, retire, owned, paths, upserts, prefixes,
+                            removals, declared)
+    entry_sets = owned_entry_sets(document.get('ownEntries', []), assign, retire, owned, paths, upserts, prefixes,
+                                  removals, drops, declared)
+    migration = instance_migration(document.get('migrateInstances'), assign, retire, owned, declared)
+    if fmt == 'toml':
+        # A prefix entry's null means "append nothing", and a removal's values
+        # only match; neither is written, so only the assigned values are held
+        # to TOML's no-null rule.
+        nulls = sorted({describe([name]) for name, value in {**assign, **owned}.items() if holds_null(value)}
+                       | {describe(path) for path, value in paths if value is None}
+                       | {describe(path) for path, _, value in upserts if holds_null(value)}
+                       | {describe(entry_set.path) for entry_set in entry_sets if holds_null(entry_set.entries)})
+        if nulls:
+            raise ValueError('TOML cannot hold a declared null: {}'.format(', '.join(nulls)))
+    return assign, retire, paths, removals, owned, upserts, prefixes, migration, drops, entry_sets
+
+
+def check_path(path, declared):
+    if not isinstance(path, list) or not path or any(not isinstance(name, str) for name in path):
+        raise ValueError('declared path is not a non-empty list of names: {}'.format(declared))
+
+
+def check_disjoint(path, others):
+    """Refuse a path that runs through another's leaf, or repeats it."""
+    for other in others:
+        shorter = min(len(path), len(other))
+        if path[:shorter] == other[:shorter]:
+            raise ValueError('declared paths overlap: {} and {}'.format(describe(path), describe(other)))
+
+
+def nested_paths(entries, assign, retire, declared):
+    if not isinstance(entries, list):
+        raise ValueError('declared "setPaths" is not a list: {}'.format(declared))
+    paths = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {'path', 'value'}:
+            raise ValueError('declared "setPaths" entry is not {{path, value}}: {}'.format(declared))
+        path, value = entry['path'], entry['value']
+        check_path(path, declared)
+        # Values stay scalars for the same reason as `set`: an object would
+        # replace whatever the owner keeps beside the declared keys.
+        if isinstance(value, (dict, list)):
+            raise ValueError('declared path value must be a scalar: {}'.format(describe(path)))
+        # A top-level key owned by `set` or `remove` as well would have two
+        # declarations fighting over it, with the outcome depending on order.
+        if path[0] in assign or path[0] in retire:
+            raise ValueError('declared path starts at a key that set or remove also declares: {}'.format(describe(path)))
+        paths.append((path, value))
+    # Likewise when one path runs through another's leaf, or repeats it.
+    for index, (path, _) in enumerate(paths):
+        check_disjoint(path, [other for other, _ in paths[index + 1:]])
+    return paths
+
+
+def check_top_level(path, assign, retire, owned):
+    if path[0] in assign or path[0] in retire or path[0] in owned:
+        raise ValueError('declared path starts at a key that set, remove, or own also declares: {}'.format(describe(path)))
+
+
+def assigned_paths(paths, upserts, prefixes):
+    """Every leaf path another declaration assigns or manages."""
+    return ([other for other, _ in paths]
+            + [other for other, _, _ in upserts]
+            + [other for other, _, _ in prefixes])
+
+
+def upsert_entries(entries, assign, retire, owned, paths, declared):
+    if not isinstance(entries, list):
+        raise ValueError('declared "upsertPaths" is not a list: {}'.format(declared))
+    upserts = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {'path', 'key', 'value'}:
+            raise ValueError('declared "upsertPaths" entry is not {{path, key, value}}: {}'.format(declared))
+        path, key, value = entry['path'], entry['key'], entry['value']
+        check_path(path, declared)
+        if not isinstance(key, str) or not isinstance(value, dict) or key not in value:
+            raise ValueError('declared upsert value must be an object holding its key field: {}'.format(describe(path)))
+        # Same reasoning as setPaths: another declaration on the top-level key
+        # would fight this one, with the outcome depending on order.
+        check_top_level(path, assign, retire, owned)
+        check_disjoint(path, [other for other, _ in paths])
+        # Two upserts on one list are fine when they name different entries;
+        # anything else would have the later one undo the earlier.
+        for other, other_key, other_value in upserts:
+            if path == other and key == other_key and value[key] != other_value[other_key]:
+                continue
+            check_disjoint(path, [other])
+        upserts.append((path, key, value))
+    return upserts
+
+
+def prefix_entries(entries, assign, retire, owned, paths, upserts, declared):
+    if not isinstance(entries, list):
+        raise ValueError('declared "prefixEntries" is not a list: {}'.format(declared))
+    prefixes = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {'path', 'prefix', 'value'}:
+            raise ValueError('declared "prefixEntries" entry is not {{path, prefix, value}}: {}'.format(declared))
+        path, prefix, value = entry['path'], entry['prefix'], entry['value']
+        check_path(path, declared)
+        if not isinstance(prefix, str) or not prefix:
+            raise ValueError('declared prefix must be a non-empty string: {}'.format(describe(path)))
+        if value is not None and (not isinstance(value, str) or not value.startswith(prefix)):
+            raise ValueError('declared prefix entry must be null or a string under its prefix: {}'.format(describe(path)))
+        check_top_level(path, assign, retire, owned)
+        check_disjoint(path, assigned_paths(paths, upserts, prefixes))
+        prefixes.append((path, prefix, value))
+    return prefixes
+
+
+def removal_paths(entries, assign, retire, owned, paths, upserts, prefixes, declared):
+    if not isinstance(entries, list):
+        raise ValueError('declared "removePaths" is not a list: {}'.format(declared))
+    removals = []
+    for entry in entries:
+        if (not isinstance(entry, dict)
+                or not {'path', 'key'} <= set(entry) <= {'path', 'key', 'prune', 'value', 'values', 'migration'}
+                or {'value', 'values'} <= set(entry)):
+            raise ValueError('declared "removePaths" entry is not {{path, key[, prune][, value | values][, migration]}}: {}'
+                             .format(declared))
+        path, key, prune = entry['path'], entry['key'], entry.get('prune', False)
+        values = [entry['value']] if 'value' in entry else entry.get('values', ANY_VALUE)
+        migration = entry.get('migration')
+        check_path(path, declared)
+        if not isinstance(key, str):
+            raise ValueError('declared removePaths key must be a name: {}'.format(describe(path)))
+        if not isinstance(prune, bool):
+            raise ValueError('declared removePaths prune must be a boolean: {}'.format(describe(path)))
+        if values is not ANY_VALUE and (not isinstance(values, list)
+                                        or any(isinstance(value, (dict, list)) for value in values)):
+            raise ValueError('declared removePaths value or values must be scalars: {}'.format(describe(path)))
+        if migration is not None and (not isinstance(migration, str) or not migration):
+            raise ValueError('declared removePaths migration must be a non-empty name: {}'.format(describe(path)))
+        # Same reasoning as setPaths: another declaration on the top-level key
+        # would fight this one, with the outcome depending on order.
+        check_top_level(path, assign, retire, owned)
+        # The removal's leaf is the node it pops.  A declaration that sets or
+        # manages that node, or an ancestor of it, would fight the removal
+        # with an outcome that depends on the order they run in.  Two removals
+        # under one object name different leaves, so they do not conflict.
+        leaf = path + [key]
+        check_disjoint(leaf, assigned_paths(paths, upserts, prefixes))
+        removals.append(Removal(path, key, prune, values, migration))
+    for index, removal in enumerate(removals):
+        check_disjoint(removal.path + [removal.key],
+                       [other.path + [other.key] for other in removals[index + 1:]])
+    return removals
+
+
+def removal_entries(entries, assign, retire, owned, paths, upserts, prefixes, removals, declared):
+    if not isinstance(entries, list):
+        raise ValueError('declared "removeEntries" is not a list: {}'.format(declared))
+    drops = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {'path', 'key', 'values'}:
+            raise ValueError('declared "removeEntries" entry is not {{path, key, values}}: {}'.format(declared))
+        path, key, values = entry['path'], entry['key'], entry['values']
+        check_path(path, declared)
+        if not isinstance(key, str):
+            raise ValueError('declared removeEntries key must be a name: {}'.format(describe(path)))
+        if not isinstance(values, list) or any(isinstance(value, (dict, list)) for value in values):
+            raise ValueError('declared removeEntries values must be a list of scalars: {}'.format(describe(path)))
+        check_top_level(path, assign, retire, owned)
+        # An upsert on the same list may stay beside the removal only when it
+        # names its entry by the same field and keeps an entry the removal
+        # drops; otherwise the two would fight with an order-dependent result.
+        for other, other_key, value in upserts:
+            if other == path and other_key == key and value[key] not in values:
+                continue
+            check_disjoint(path, [other])
+        check_disjoint(path, [other for other, _ in paths]
+                       + [other for other, _, _ in prefixes]
+                       + [other.path + [other.key] for other in removals])
+        for other, _, _ in drops:
+            check_disjoint(path, [other])
+        drops.append((path, key, values))
+    return drops
+
+
+def owned_entry_sets(entries, assign, retire, owned, paths, upserts, prefixes, removals, drops, declared):
+    if not isinstance(entries, list):
+        raise ValueError('declared "ownEntries" is not a list: {}'.format(declared))
+    entry_sets = []
+    for entry in entries:
+        if (not isinstance(entry, dict)
+                or not {'path', 'entries'} <= set(entry) <= {'path', 'key', 'entries', 'preLedgerIds'}):
+            raise ValueError('declared "ownEntries" entry is not {{path[, key], entries[, preLedgerIds]}}: {}'
+                             .format(declared))
+        path, key, values = entry['path'], entry.get('key'), entry['entries']
+        pre_ledger = entry.get('preLedgerIds', [])
+        check_path(path, declared)
+        if key is None:
+            if not isinstance(values, dict):
+                raise ValueError('declared ownEntries without a key must be an object of entries: {}'.format(
+                    describe(path)))
+        else:
+            # The ledger records IDs as strings, so an entry must name itself
+            # by one, and only once, or two entries would claim one ID.
+            if (not isinstance(key, str) or not isinstance(values, list)
+                    or any(not isinstance(value, dict) or not isinstance(value.get(key), str) for value in values)):
+                raise ValueError('declared ownEntries must be objects holding a string {}: {}'.format(
+                    json.dumps(key), describe(path)))
+            if len({value[key] for value in values}) != len(values):
+                raise ValueError('declared ownEntries names one entry twice: {}'.format(describe(path)))
+        if not strings(pre_ledger):
+            raise ValueError('declared preLedgerIds is not a list of strings: {}'.format(describe(path)))
+        # The owned path is managed whole, so any other declaration on it, an
+        # ancestor, or a descendant would fight the prune or the upsert.
+        check_top_level(path, assign, retire, owned)
+        check_disjoint(path, assigned_paths(paths, upserts, prefixes)
+                       + [other.path + [other.key] for other in removals]
+                       + [other for other, _, _ in drops]
+                       + [other.path for other in entry_sets])
+        entry_sets.append(EntrySet(path, key, values, pre_ledger))
+    return entry_sets
+
+
+def entry_ids(key, entries):
+    return list(entries) if key is None else [value[key] for value in entries]
+
+
+def instance_migration(entry, assign, retire, owned, declared):
+    if entry is None:
+        return None
+    if (not isinstance(entry, dict) or set(entry) != {'from', 'to', 'kinds'}
+            or not isinstance(entry['from'], str) or not isinstance(entry['to'], str)
+            or entry['from'] == entry['to']
+            or not isinstance(entry['kinds'], list)
+            or any(not isinstance(kind, str) for kind in entry['kinds'])):
+        raise ValueError('declared "migrateInstances" is not {{from, to, kinds}}: {}'.format(declared))
+    # The migration rewrites both keys, so another top-level declaration on
+    # either would fight it.
+    for name in (entry['from'], entry['to']):
+        if name in assign or name in retire or name in owned:
+            raise ValueError('migrated key is also set, removed, or owned: {}'.format(name))
+    return entry['from'], entry['to'], entry['kinds']
+
+
+def migrate(merged, migration):
+    """Move each listed kind out of the retired per-kind block, as T3 Code does.
+
+    T3 Code moves providers.<kind> into providerInstances.<kind> once, on
+    load, and only into an instance that does not exist yet.  The declaration
+    creates those instances, so without this step the next load would find
+    them present and the user's legacy fields would be dropped unread.  The
+    shape mirrors the pinned T3 Code's migrateLegacyProviderSettings:
+    `enabled` stays on the instance, every other field goes under `config`,
+    and an empty block makes no instance.  Kinds the declaration does not
+    list stay in the block for T3 Code to migrate itself.
+    """
+    if migration is None:
+        return
+    source, target, kinds = migration
+    legacy = merged.get(source)
+    if not isinstance(legacy, dict):
+        return
+    for kind in kinds:
+        blob = legacy.get(kind)
+        if not isinstance(blob, dict):
+            continue
+        instances = merged.setdefault(target, {})
+        if not isinstance(instances, dict):
+            raise ValueError('{} is not an object, so {} cannot be migrated into it'.format(
+                describe([target]), describe([source, kind])))
+        config = {name: value for name, value in blob.items() if name != 'enabled'}
+        enabled = blob.get('enabled')
+        if kind not in instances and (config or isinstance(enabled, bool)):
+            instance = {'driver': kind}
+            if isinstance(enabled, bool):
+                instance['enabled'] = enabled
+            instance['config'] = config
+            instances[kind] = instance
+        del legacy[kind]
+    if not legacy:
+        del merged[source]
+
+
+def upsert(entries, key, value):
+    """Replace the entry of `entries` named value[key], else append value.
+
+    The app applies the entries in order and the last one wins, so a later
+    duplicate would override the declared value: keep one entry, where the
+    first match stood.
+    """
+    matches = [index for index, entry in enumerate(entries)
+               if isinstance(entry, dict) and key in entry and entry[key] == value[key]]
+    if matches:
+        entries[matches[0]] = copy.deepcopy(value)
+        for index in reversed(matches[1:]):
+            del entries[index]
+    else:
+        entries.append(copy.deepcopy(value))
+
+
+def apply(current, assign, retire, paths, owned=None, upserts=None, migration=None, prefixes=None,
+          removals=None, drops=None, entry_sets=None):
+    """Return `current` with the declaration applied, leaving `current` alone.
+
+    The whole document is deep-copied and the copy edited in place.  The
+    caller skips the write when the result equals what it read, and editing
+    the read objects would make that comparison true every time.  Editing in
+    place, rather than rebuilding each table as a plain dict, keeps a tomlkit
+    document's comments and layout; a plain dict assigned into it becomes a
+    table.
+
+    Each of `entry_sets` is an EntrySet whose pre_ledger holds the IDs its
+    path owned before this apply, as merge() read them from the ledger.
+    """
+    merged = copy.deepcopy(current)
+    migrate(merged, migration)
+    merged.update(assign)
+    # A copy, so a later edit to the result never reaches the declaration.
+    merged.update(copy.deepcopy(owned or {}))
+    for name in retire:
+        merged.pop(name, None)
+    for path, value in paths:
+        node = parent_of(merged, path)
+        node[path[-1]] = value
+    for path, key, value in upserts or []:
+        node = parent_of(merged, path)
+        if path[-1] not in node:
+            node[path[-1]] = []
+        entries = node[path[-1]]
+        if not isinstance(entries, list):
+            raise ValueError('{} is not a list, so {} cannot be upserted'.format(describe(path), describe(value)))
+        upsert(entries, key, value)
+    for path, key, declared, previous in entry_sets or []:
+        node = parent_of(merged, path)
+        if path[-1] not in node:
+            node[path[-1]] = {} if key is None else []
+        entries = node[path[-1]]
+        # Only IDs an earlier apply wrote go, so an entry the user added
+        # stays until the declaration names it.
+        stale = set(previous) - set(entry_ids(key, declared))
+        if key is None:
+            if not isinstance(entries, dict):
+                raise ValueError('{} is not an object, so its entries cannot be owned'.format(describe(path)))
+            for name in stale:
+                entries.pop(name, None)
+            for name, value in declared.items():
+                entries[name] = copy.deepcopy(value)
+        else:
+            if not isinstance(entries, list):
+                raise ValueError('{} is not a list, so its entries cannot be owned'.format(describe(path)))
+            entries[:] = [entry for entry in entries
+                          if not (isinstance(entry, dict) and isinstance(entry.get(key), str)
+                                  and entry[key] in stale)]
+            for value in declared:
+                upsert(entries, key, value)
+    for path, prefix, value in prefixes or []:
+        node = parent_of(merged, path)
+        if path[-1] not in node:
+            if value is None:
+                continue
+            node[path[-1]] = []
+        entries = node[path[-1]]
+        if not isinstance(entries, list):
+            raise ValueError('{} is not a list, so entries under {} cannot be replaced'.format(
+                describe(path), json.dumps(prefix, ensure_ascii=False)))
+        entries[:] = [entry for entry in entries
+                      if not (isinstance(entry, str) and entry.startswith(prefix))]
+        if value is not None:
+            entries.append(value)
+    pruned = []
+    for removal in removals or []:
+        # A walk that stops early is the no-op case: a missing path, a
+        # non-object segment, or an absent key has nothing to remove, the way
+        # top-level remove treats an absent key.  No parent is created.
+        node = merged
+        for segment in removal.path:
+            if not isinstance(node, dict) or segment not in node:
+                break
+            node = node[segment]
+        else:
+            # A declared value keeps what the user chose since: the key goes
+            # only while it still holds what this repository wrote.  Compared
+            # with the type too, so 1 never matches a true.
+            if (isinstance(node, dict) and removal.key in node
+                    and (removal.values is ANY_VALUE
+                         or any(isinstance(node[removal.key], bool) == isinstance(value, bool)
+                                and node[removal.key] == value
+                                for value in removal.values))):
+                del node[removal.key]
+                if removal.prune:
+                    pruned.append(removal.path)
+    # Only after every removal, so a plain removal beside a pruning one under
+    # the same object empties it whichever is declared first.  Only an object
+    # a removal emptied goes, so a path that was already empty or never held
+    # the key stays as the user left it.
+    for path in pruned:
+        for depth in range(len(path), 0, -1):
+            node = merged
+            for segment in path[:depth]:
+                node = node.get(segment) if isinstance(node, dict) else None
+            if not isinstance(node, dict) or node:
+                break
+            parent = merged
+            for segment in path[:depth - 1]:
+                parent = parent[segment]
+            del parent[path[depth - 1]]
+    for path, key, values in drops or []:
+        # The same no-op walk as removePaths, ending at a list.
+        node = merged
+        for segment in path:
+            if not isinstance(node, dict) or segment not in node:
+                break
+            node = node[segment]
+        else:
+            if isinstance(node, list):
+                # Compared with the type too, so 1 never drops a true.
+                node[:] = [entry for entry in node
+                           if not (isinstance(entry, dict) and key in entry
+                                   and any(type(entry[key]) is type(value) and entry[key] == value
+                                           for value in values))]
+    return merged
+
+
+def parent_of(merged, path):
+    """Return the object that holds the last key of `path`, creating parents."""
+    node = merged
+    for depth, key in enumerate(path[:-1]):
+        if key not in node:
+            node[key] = {}
+        elif not isinstance(node[key], dict):
+            # Replacing it would discard whatever the owner stored there,
+            # so refuse and let the rebuild report it.
+            raise ValueError('{} is not an object, so {} cannot be set'.format(
+                describe(path[:depth + 1]), describe(path)))
+        node = node[key]
+    return node
+
+
+def snapshot(settings):
+    """Identify the file well enough to notice another writer replacing it."""
+    try:
+        state = os.lstat(settings)
+    except FileNotFoundError:
+        return None
+    return (state.st_dev, state.st_ino, state.st_mtime_ns, state.st_size)
+
+
+def read_text(settings):
+    """Return the file's text, or None when it does not exist."""
+    # O_NOFOLLOW refuses a symlinked path in the same syscall that opens it, so
+    # there is no window between deciding the path is safe and reading it.
+    try:
+        descriptor = os.open(settings, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        if error.errno in (errno.ELOOP, errno.EMLINK):
+            raise ValueError('settings file is a symlink: {}'.format(settings))
+        raise
+    # Explicit UTF-8: the activation unit carries no locale, so letting Python
+    # pick one risks failing to read a file the agent wrote with non-ASCII
+    # content -- likely here, where the interface language is Korean, and where
+    # a declared path can carry any name the user typed.
+    with os.fdopen(descriptor, 'r', encoding='utf-8') as stream:
+        return stream.read()
+
+
+def read_settings(settings):
+    text = read_text(settings)
+    # An empty file holds nothing to keep. The Antigravity CLI creates its MCP
+    # config as a 0-byte file, which json.loads rejects.
+    if text is None or not text.strip():
+        return {}
+    try:
+        current = json.loads(text)
+    except json.JSONDecodeError:
+        raise ValueError('settings file is not valid JSON: {}'.format(settings))
+    if not isinstance(current, dict):
+        raise ValueError('settings file is not a JSON object: {}'.format(settings))
+    return current
+
+
+def read_toml_settings(settings):
+    # A TOML document is always a table, so there is no "not an object" case.
+    text = read_text(settings)
+    if text is None:
+        return tomlkit.document()
+    try:
+        return tomlkit.parse(text)
+    except tomlkit.exceptions.ParseError:
+        raise ValueError('settings file is not valid TOML: {}'.format(settings))
+
+
+def serialize(merged, fmt):
+    if fmt == 'toml':
+        return tomlkit.dumps(merged)
+    # ensure_ascii=False keeps the agent's non-ASCII text as the bytes it wrote
+    # instead of rewriting it to \uXXXX escapes on every activation.
+    return json.dumps(merged, indent=2, ensure_ascii=False) + '\n'
+
+
+@contextmanager
+def settings_lock(settings):
+    # Never unlink the lock: a waiter must lock the same inode as a new apply.
+    lock = settings.with_name('.' + settings.name + '.lock')
+    descriptor = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def sync_directory(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def digest(text):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def swap(settings, text, before, ledger=None, committed=None, final=None):
+    """Write `text` only if the file still looks like `before`."""
+    descriptor, temporary = tempfile.mkstemp(prefix='.settings-', dir=settings.parent)
+    journaled = False
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
+        # Re-check immediately before the swap.  The agent may have rewritten
+        # the file since it was read, and replacing it then would discard what
+        # it just wrote -- hooks, plugins, trusted workspaces, per-project
+        # state.
+        if snapshot(settings) != before:
+            return False
+        if ledger is not None:
+            # Keep the stage until its journal has been cleared. Its absence
+            # then proves os.replace consumed it, even after an external save
+            # changes the settings digest. Set the flag before record(): a
+            # failed fsync can still leave its pending record on disk.
+            sync_directory(settings.parent)
+            journaled = True
+            pending = dict(final, settings=str(settings.absolute()), temporary=Path(temporary).name,
+                           digest=digest(text))
+            record(ledger, ledger_text(*committed, pending=pending))
+            if snapshot(settings) != before:
+                return False
+        os.replace(temporary, settings)
+        temporary = None
+        sync_directory(settings.parent)
+        return True
+    finally:
+        if temporary is not None and not journaled:
+            Path(temporary).unlink(missing_ok=True)
+
+
+def read_ledger(ledger):
+    """Read committed ownership, migrations and an optional interrupted transaction."""
+    try:
+        raw = ledger.read_bytes()
+    except FileNotFoundError:
+        return {}, [], None
+    try:
+        document = json.loads(raw.decode('utf-8'))
+    except ValueError:
+        document = None
+    def valid_state(state):
+        return (isinstance(state, dict) and isinstance(state.get('owned'), list)
+                and all(isinstance(record, dict) and set(record) == {'path', 'ids'}
+                        and strings(record['path']) and record['path'] and strings(record['ids'])
+                        for record in state['owned'])
+                and strings(state.get('migrations')))
+
+    if (not valid_state(document) or set(document) not in ({'owned', 'migrations'}, {'owned', 'migrations', 'pending'})):
+        raise ValueError('ledger is malformed: {}'.format(ledger))
+    pending = document.get('pending')
+    if 'pending' in document and (
+            not valid_state(pending) or set(pending) != {'owned', 'migrations', 'settings', 'temporary', 'digest'}
+            or not isinstance(pending['settings'], str) or not Path(pending['settings']).is_absolute()
+            or not isinstance(pending['temporary'], str) or not pending['temporary'].startswith('.settings-')
+            or Path(pending['temporary']).name != pending['temporary']
+            or not isinstance(pending['digest'], str) or len(pending['digest']) != 64
+            or any(char not in '0123456789abcdef' for char in pending['digest'])):
+        raise ValueError('ledger is malformed: {}'.format(ledger))
+    return ({tuple(record['path']): record['ids'] for record in document['owned']}, document['migrations'], pending)
+
+
+def ledger_state(owned, migrations):
+    return {
+        'owned': [{'path': list(path), 'ids': sorted(ids)} for path, ids in sorted(owned.items())],
+        'migrations': sorted(migrations),
+    }
+
+
+def ledger_text(owned, migrations, pending=None):
+    state = ledger_state(owned, migrations)
+    if pending is not None:
+        state['pending'] = pending
+    return json.dumps(state, indent=2, ensure_ascii=False) + '\n'
+
+
+def recover_ledger(ledger, settings):
+    owned, migrations, pending = read_ledger(ledger)
+    if pending is not None:
+        if pending['settings'] != str(settings.absolute()):
+            raise ValueError('ledger pending settings path does not match: {}'.format(ledger))
+        temporary = settings.parent / pending['temporary']
+        staged = read_text(temporary)
+        if staged is None:
+            # Only the rename removes a journaled stage. A user's later save
+            # must not cause a completed migration to run for a second time.
+            owned = {tuple(record['path']): record['ids'] for record in pending['owned']}
+            migrations = pending['migrations']
+        elif digest(staged) != pending['digest']:
+            raise ValueError('ledger pending settings digest does not match: {}'.format(ledger))
+        # Clear the journal before deleting a stage whose rename never ran;
+        # interruption during cleanup must never look like a landed swap.
+        record(ledger, ledger_text(owned, migrations))
+        temporary.unlink(missing_ok=True)
+        sync_directory(settings.parent)
+    return owned, migrations
+
+
+def record(ledger, text):
+    """Replace the ledger with `text`, whole or not at all, unless it holds it already."""
+    try:
+        if ledger.read_bytes() == text.encode('utf-8'):
+            return
+    except FileNotFoundError:
+        pass
+    ledger.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix='.ledger-', dir=ledger.parent)
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, ledger)
+        temporary = None
+        sync_directory(ledger.parent)
+    finally:
+        if temporary is not None:
+            Path(temporary).unlink(missing_ok=True)
+
+
+def merge(settings, declared, fmt='json', ledger=None):
+    (assign, retire, paths, removals, owned, upserts, prefixes, migration, drops,
+     entry_sets) = declaration(declared, fmt)
+    migrations = {removal.migration for removal in removals if removal.migration is not None}
+    keeps_ledger = bool(entry_sets or migrations)
+    if keeps_ledger and ledger is None:
+        raise ValueError('declared ownEntries and migrations need --ledger: {}'.format(declared))
+    # Looked up per call rather than bound at import, so a test that patches
+    # either reader reaches this merge.
+    read = read_toml_settings if fmt == 'toml' else read_settings
+    check_directory(settings.parent)
+    # Validate before creating or tightening anything, so a refusal leaves the
+    # disk exactly as it found it; applying the declaration here also refuses
+    # a non-object intermediate before anything changes. The result is
+    # deliberately discarded: each attempt below pairs its own read with its
+    # own snapshot, and reusing this one would break that pairing and let a
+    # concurrent write be overwritten.
+    apply(read(settings), assign=assign, retire=retire, paths=paths, owned=owned,
+          upserts=upserts, migration=migration, prefixes=prefixes, removals=removals, drops=drops,
+          entry_sets=entry_sets)
+    private_directory(settings.parent)
+    with settings_lock(settings):
+        recorded, completed = recover_ledger(ledger, settings) if keeps_ledger else ({}, [])
+        removals = [removal for removal in removals if removal.migration not in completed]
+        entry_sets = [entry_set._replace(pre_ledger=recorded.get(tuple(entry_set.path), entry_set.pre_ledger))
+                      for entry_set in entry_sets]
+        final_owned = dict(recorded)
+        for path, key, entries, _ in entry_sets:
+            final_owned[tuple(path)] = entry_ids(key, entries)
+        final_migrations = set(completed) | migrations
+        final = ledger_text(final_owned, final_migrations)
+        for _ in range(ATTEMPTS):
+            before = snapshot(settings)
+            current = read(settings)
+            merged = apply(current, assign=assign, retire=retire, paths=paths, owned=owned,
+                           upserts=upserts, migration=migration, prefixes=prefixes, removals=removals,
+                           drops=drops, entry_sets=entry_sets)
+            if merged == current and before is not None:
+                try:
+                    os.chmod(settings, 0o600)
+                except FileNotFoundError:
+                    continue
+                if snapshot(settings) != before:
+                    continue
+                if keeps_ledger:
+                    record(ledger, final)
+                return
+            if swap(settings, serialize(merged, fmt), before,
+                    ledger=ledger if keeps_ledger else None, committed=(recorded, completed),
+                    final=ledger_state(final_owned, final_migrations)):
+                if keeps_ledger:
+                    record(ledger, final)
+                return
+            if keeps_ledger:
+                recover_ledger(ledger, settings)
+    raise ValueError('settings file kept changing while merging: {}'.format(settings))
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--settings', required=True, type=Path)
+    parser.add_argument('--declared', required=True, type=Path)
+    parser.add_argument('--label', default='Agent', help='agent name used in failure messages')
+    parser.add_argument('--format', default='json', choices=FORMATS, dest='fmt',
+                        help='syntax of the settings file; the declaration is always JSON')
+    parser.add_argument('--ledger', type=Path,
+                        help='the record of owned entries and migrations, needed by ownEntries and migration')
+    args = parser.parse_args(argv)
+    if os.geteuid() == 0:
+        parser.error('must run as the destination user, not root')
+    try:
+        merge(args.settings, args.declared, args.fmt, args.ledger)
+    except (OSError, ValueError) as error:
+        print('{} settings merge failed: {}'.format(args.label, error), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -1,5 +1,0 @@
-{{ if ne .chezmoi.os "windows" -}}
-#!/bin/sh
-set -eu
-exec mise --cd '{{ .chezmoi.workingTree | replace "'" "'\"'\"'" }}' exec -- python '{{ joinPath .chezmoi.workingTree "scripts" "t3-instructions.py" | replace "'" "'\"'\"'" }}' --destination '{{ .chezmoi.destDir | replace "'" "'\"'\"'" }}'
-{{ end -}}

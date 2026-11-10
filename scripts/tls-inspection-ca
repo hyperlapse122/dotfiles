@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# Trust a TLS inspection CA on a macOS host. nix-darwin activation runs it as
+# root in two steps:
+#
+#   tls-inspection-ca bundle   in preActivation, before /etc and launchd
+#                              change: decrypt the CA with the host identity,
+#                              check that it is one CA certificate, and write
+#                              it and a bundle of the base roots followed by
+#                              it into DIR. Any failure exits non-zero and
+#                              leaves the previous files in place. When the
+#                              bundle changed, nix-daemon is restarted so it
+#                              reads the new roots.
+#   tls-inspection-ca trust    in postActivation: when the admin trust
+#                              settings do not make the CA an SSL root, add
+#                              that trust, which shows the macOS
+#                              authorization dialog. Never fails.
+#
+# bundle takes --certificate-file FILE --identity KEY --identity-owner USER
+# --base BUNDLE --out-dir DIR --daemon LABEL; trust takes --certificate PEM.
+# Nothing decrypted is printed.
+set -euo pipefail
+
+die() {
+  printf 'tls-inspection-ca: %s\n' "$*" >&2
+  exit 1
+}
+
+warn() {
+  printf 'tls-inspection-ca: %s\n' "$*" >&2
+}
+
+command=${1:-}
+[[ $command == bundle || $command == trust ]] ||
+  die 'usage: tls-inspection-ca bundle --certificate-file FILE --identity KEY --identity-owner USER --base BUNDLE --out-dir DIR --daemon LABEL | trust --certificate PEM'
+shift
+
+certificate_file='' identity='' owner='' base='' out_dir='' daemon='' certificate=''
+# The scratch directory the EXIT trap removes.
+work=''
+while [[ $# -gt 0 ]]; do
+  [[ $# -ge 2 ]] || die "missing value for $1"
+  case $command/$1 in
+    bundle/--certificate-file) certificate_file=$2 ;;
+    bundle/--identity) identity=$2 ;;
+    bundle/--identity-owner) owner=$2 ;;
+    bundle/--base) base=$2 ;;
+    bundle/--out-dir) out_dir=$2 ;;
+    bundle/--daemon) daemon=$2 ;;
+    trust/--certificate) certificate=$2 ;;
+    *) die "unexpected argument $1" ;;
+  esac
+  shift 2
+done
+
+# A path this script creates or replaces must never be a symlink someone
+# planted to redirect the write.
+refuse_symlink() {
+  for path in "$@"; do
+    [[ ! -L $path ]] || die "$path is a symlink; refusing to write through it"
+  done
+}
+
+write_bundle() {
+  [[ -n $certificate_file && -n $identity && -n $owner && -n $base && -n $out_dir && -n $daemon ]] ||
+    die 'bundle needs every option'
+  local recover="recover it with scripts/recover-age-identity --user, then apply the production output again"
+  [[ ! -L $identity && -f $identity ]] || die "no age identity at $identity; $recover"
+  [[ $(stat -c %U -- "$identity") == "$owner" ]] || die "$identity is not owned by $owner; $recover"
+  [[ $(stat -c %a -- "$identity") == 600 ]] || die "$identity must have mode 0600; $recover"
+  [[ -f $base ]] || die "no base CA bundle at $base"
+
+  work=$(mktemp -d)
+  trap 'rm -rf -- "$work"' EXIT
+  SOPS_AGE_KEY_FILE=$identity sops --decrypt --extract '["certificate"]' -- "$certificate_file" \
+    >"$work/ca.pem" 2>/dev/null ||
+    die "cannot decrypt the CA with $identity; it is not this host's identity, or the host is not a recipient of $certificate_file"
+
+  if [[ $(grep -c -- '^-----BEGIN ' "$work/ca.pem") != 1 ]] ||
+    ! grep -q -- '^-----BEGIN CERTIFICATE-----$' "$work/ca.pem"; then
+    die "the decrypted value in $certificate_file is not exactly one certificate"
+  fi
+  local constraints
+  constraints=$(openssl x509 -in "$work/ca.pem" -noout -ext basicConstraints 2>/dev/null) ||
+    die "the decrypted certificate in $certificate_file does not parse"
+  [[ $constraints == *CA:TRUE* ]] || die "the decrypted certificate in $certificate_file is not a CA"
+
+  { cat -- "$base"; [[ -z $(tail -c 1 -- "$base") ]] || echo; cat -- "$work/ca.pem"; } >"$work/bundle.crt"
+
+  local pem=$out_dir/tls-inspection-ca.pem bundle=$out_dir/ca-certificates.crt changed=1
+  refuse_symlink "$out_dir" "$pem" "$bundle" "$pem.new" "$bundle.new"
+  mkdir -p -- "$out_dir"
+  chmod 0755 -- "$out_dir"
+  if [[ -f $bundle ]] && cmp -s -- "$work/bundle.crt" "$bundle"; then
+    changed=0
+  fi
+  install -m 0644 -- "$work/ca.pem" "$pem.new"
+  install -m 0644 -- "$work/bundle.crt" "$bundle.new"
+  mv -f -- "$pem.new" "$pem"
+  mv -f -- "$bundle.new" "$bundle"
+
+  # nix-daemon reads its CA bundle path from its plist, which stays the same,
+  # so new content reaches it only through a restart.
+  if [[ $changed == 1 ]] && launchctl print "system/$daemon" >/dev/null 2>&1; then
+    launchctl kickstart -k "system/$daemon" >/dev/null ||
+      warn "restarting $daemon failed; it reads the new CA bundle after its next restart"
+  fi
+}
+
+# True when the admin-domain trust settings make the certificate whose SHA-1
+# hash is $1 an SSL root. A setting without a policy applies to every policy,
+# SSL included; the result defaults to trustRoot (1), and a deny (3) for SSL
+# wins.
+admin_ssl_root() {
+  python3 - "$1" "$2" <<'PY'
+import plistlib, sys
+try:
+    with open(sys.argv[2], "rb") as f:
+        entry = plistlib.load(f).get("trustList", {}).get(sys.argv[1])
+except Exception:
+    sys.exit(1)
+if entry is None:
+    sys.exit(1)
+settings = entry.get("trustSettings", [])
+if not settings:
+    sys.exit(0)
+ssl = [s.get("kSecTrustSettingsResult", 1) for s in settings
+       if s.get("kSecTrustSettingsPolicyName", "sslServer") == "sslServer"
+       and ("kSecTrustSettingsPolicy" not in s or "kSecTrustSettingsPolicyName" in s)]
+sys.exit(0 if 1 in ssl and 3 not in ssl else 1)
+PY
+}
+
+repair_trust() {
+  [[ -n $certificate ]] || die 'trust needs --certificate'
+  local manual="security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain $certificate"
+  if [[ ! -f $certificate ]]; then
+    warn "no CA at $certificate; skipping the macOS trust check"
+    return 0
+  fi
+  if ! command -v security >/dev/null; then
+    warn "security is not on PATH; skipping the macOS trust check"
+    return 0
+  fi
+
+  local hash
+  hash=$(openssl x509 -in "$certificate" -noout -fingerprint -sha1 | sed 's/^.*=//; s/://g')
+  work=$(mktemp -d)
+  trap 'rm -rf -- "$work"' EXIT
+  if security trust-settings-export -d "$work/admin.plist" >/dev/null 2>&1 &&
+    admin_ssl_root "$hash" "$work/admin.plist" &&
+    security verify-cert -c "$certificate" -p ssl -L -l >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "tls-inspection-ca: macOS does not trust the TLS inspection CA as an SSL root; approve the dialog to add it" >&2
+  if ! security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain "$certificate"; then
+    warn "adding macOS trust for the TLS inspection CA failed; run $manual"
+  fi
+  return 0
+}
+
+case $command in
+  bundle) write_bundle ;;
+  trust) repair_trust ;;
+esac

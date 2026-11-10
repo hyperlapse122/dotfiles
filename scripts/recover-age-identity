@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Decrypt this host's bootstrap age identity and hand it to the fixed root
+# installer. GPG stays on the invoking user's side of the pipe; sudo crosses
+# exactly once, on the right-hand side, as secrets/README.md requires. With
+# --user, a non-NixOS host's identity goes to the invoking user's installer
+# instead, and no sudo is involved.
+set -euo pipefail
+
+# Overridable so tests never invoke the real system installer.
+INSTALLER=${RECOVER_AGE_INSTALLER:-/run/current-system/sw/bin/restore-age-identity}
+# The non-NixOS user-mode installer, found on the user's PATH.
+USER_INSTALLER=install-user-age-identity
+
+die() {
+  printf 'recover-age-identity: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  printf 'usage: %s [--host NAME]\n       %s --user --host NAME\n' "${0##*/}" "${0##*/}" >&2
+}
+
+if [[ $(id -u) -eq 0 ]]; then
+  die 'must not run as root; GPG has to run as the invoking user so it reaches that user'\
+' agent and card pinentry. Run it unprivileged; it calls sudo itself for the installer.'
+fi
+
+host=
+user_mode=
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --host)
+      [[ $# -ge 2 ]] || die 'missing value for --host'
+      host=$2
+      shift 2
+      ;;
+    --user)
+      user_mode=1
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *) die "unexpected argument $1" ;;
+  esac
+done
+
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+bootstrap_dir=$repo_root/secrets/bootstrap
+
+# On a non-NixOS host the distribution owns the hostname, so it says nothing
+# about which host directory applies.
+[[ -z $host && -n $user_mode ]] && { usage; die '--user needs --host NAME'; }
+[[ -z $host ]] && host=$(uname -n)
+
+host_dir=$bootstrap_dir/$host
+if [[ ! -d $host_dir ]]; then
+  {
+    printf 'recover-age-identity: no bootstrap material for host %s\n' "$host"
+    printf 'hosts with material under secrets/bootstrap:\n'
+    found=
+    for d in "$bootstrap_dir"/*/; do
+      [[ -d $d ]] || continue
+      found=1
+      printf '  %s\n' "$(basename -- "$d")"
+    done
+    [[ -n $found ]] || printf '  (none)\n'
+    printf 'name the target with --host NAME\n'
+  } >&2
+  exit 1
+fi
+
+ciphertext=$host_dir/age-key.asc
+recipient_file=$host_dir/recipient.txt
+[[ -f $ciphertext ]] || die "missing $ciphertext"
+[[ -f $recipient_file ]] || die "missing $recipient_file"
+
+recipient=$(<"$recipient_file")
+[[ -n $recipient ]] || die "empty recipient in $recipient_file"
+
+decrypt_cmd=(gpg --batch --no-tty --decrypt -- "$ciphertext")
+if [[ -n $user_mode ]]; then
+  install_cmd=("$USER_INSTALLER" --recipient "$recipient")
+else
+  install_cmd=(sudo -- "$INSTALLER" --recipient "$recipient")
+fi
+if [[ -n $user_mode ]]; then
+  command -v -- "$USER_INSTALLER" >/dev/null ||
+    die "installer not found at $USER_INSTALLER; apply the bootstrap output first"
+else
+  [[ -x $INSTALLER ]] || die "installer not found at $INSTALLER; apply the configuration first"
+  sudo -v
+fi
+
+# pipefail matters here: without it a GPG failure is masked by the installer's
+# exit status and the run looks successful.
+"${decrypt_cmd[@]}" | "${install_cmd[@]}"
+
+printf 'recover-age-identity: installed the age identity for %s\n' "$host"

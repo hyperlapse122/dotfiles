@@ -1,0 +1,14 @@
+--- a/skills/ce-code-review/scripts/cross-model-adversarial-review.sh
++++ b/skills/ce-code-review/scripts/cross-model-adversarial-review.sh
+@@ -575,1 +575,10 @@
+-[ "$HOST_PROVIDER" != "unknown" ] || skip "host serving family unattested; automatic cross-model review skipped"
++if [ "$HOST_PROVIDER" = "unknown" ]; then
++  [ "${CROSS_MODEL_EXPLICIT_UNKNOWN_HOST:-}" = 1 ] || skip "host serving family unattested; automatic cross-model review skipped"
++  [ "$HOST_HARNESS" = omp ] || skip "explicit unknown-host review requires the OMP harness; skipping"
++  [ -n "${CROSS_MODEL_PEERS:-}" ] || skip "explicit unknown-host review requires an allowlist; skipping"
++  # A live opt-in binds one target and route; ordinary selection below still
++  # enforces recipient/intermediary sanction, availability and model identity.
++  explicit_target="$(route_target "${CROSS_MODEL_FIXED_ROUTE:-}")"
++  [ -n "$explicit_target" ] && [ "$CANDIDATES" = "$explicit_target" ] || skip "explicit unknown-host review requires one fixed candidate; skipping"
++  log "explicit OMP cross-harness review; host family and independence remain unverified"
++fi

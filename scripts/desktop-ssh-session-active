@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Fail closed unless the named account owns an active local graphical session."""
+import pwd
+import sys
+
+import dbus
+
+
+def active(username):
+    uid = pwd.getpwnam(username).pw_uid
+    bus = dbus.SystemBus()
+    manager = dbus.Interface(bus.get_object("org.freedesktop.login1", "/org/freedesktop/login1"),
+                             "org.freedesktop.login1.Manager")
+    for _, session_uid, _, _, path in manager.ListSessions():
+        if int(session_uid) != uid:
+            continue
+        props = dbus.Interface(bus.get_object("org.freedesktop.login1", path),
+                               "org.freedesktop.DBus.Properties").GetAll("org.freedesktop.login1.Session")
+        if (str(props["Type"]) in ("wayland", "x11") and str(props["Class"]) == "user"
+                and not bool(props["Remote"]) and str(props["Seat"][0])
+                and bool(props["Active"]) and str(props["State"]) == "active"):
+            return True
+    return False
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(0 if len(sys.argv) == 2 and active(sys.argv[1]) else 1)
+    except (KeyError, OSError, dbus.DBusException):
+        sys.exit(1)

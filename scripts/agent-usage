@@ -1,0 +1,524 @@
+#!/usr/bin/env python3
+"""Read subscription usage without making model requests or exposing credentials."""
+
+import argparse
+import concurrent.futures
+import copy
+import datetime
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import selectors
+import subprocess
+import tempfile
+import time
+import tomllib
+import urllib.parse
+
+
+class Unavailable(Exception):
+    def __init__(self, exhausted=False, reason=None):
+        self.exhausted = exhausted
+        self.reason = reason
+
+
+def load(path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def run(command, **kwargs):
+    return subprocess.run(command, capture_output=True, text=True, timeout=20,
+                          check=True, **kwargs).stdout
+
+
+def timestamp(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return float(value)
+    except ValueError:
+        return datetime.datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
+
+
+WEEK = 7 * 24 * 60
+
+
+def window(label, used, reset=None, model=None, **extra):
+    used = float(used)
+    if not 0 <= used <= 100:
+        raise Unavailable()
+    result = dict(label=label, usedPercent=used, remainingPercent=100 - used, **extra)
+    if reset is not None:
+        result['resetsAt'] = timestamp(reset)
+    if model:
+        result['model'] = str(model)
+    return result
+
+
+def codex():
+    process = subprocess.Popen(['codex', 'app-server', '--listen', 'stdio://'],
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL)
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    pending = b''
+    deadline = time.monotonic() + 20
+
+    def send(value):
+        process.stdin.write(json.dumps(value).encode() + b'\n')
+        process.stdin.flush()
+
+    def response(request_id):
+        nonlocal pending
+        while True:
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                value = json.loads(line)
+                if value.get('id') == request_id:
+                    if 'error' in value:
+                        raise Unavailable()
+                    return value['result']
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not selector.select(remaining):
+                raise Unavailable()
+            chunk = os.read(process.stdout.fileno(), 65536)
+            if not chunk:
+                raise Unavailable()
+            pending += chunk
+
+    try:
+        send({'id': 1, 'method': 'initialize', 'params': {
+            'clientInfo': {'name': 'agent-usage', 'version': '1'}}})
+        response(1)
+        send({'method': 'initialized'})
+        send({'id': 2, 'method': 'account/rateLimits/read', 'params': {}})
+        data = response(2)
+    finally:
+        selector.close()
+        process.kill()
+        process.wait()
+        process.stdin.close()
+        process.stdout.close()
+    snapshots = data.get('rateLimitsByLimitId') or {'default': data['rateLimits']}
+    windows = []
+    for limit_id, snapshot in snapshots.items():
+        for name in ('primary', 'secondary'):
+            entry = snapshot.get(name)
+            if entry:
+                model = snapshot.get('limitName') if limit_id not in ('default', 'codex') else None
+                windows.append(window(name, entry['usedPercent'], entry.get('resetsAt'),
+                                      model=model, durationMins=entry.get('windowDurationMins')))
+    return data.get('accountId'), windows
+
+
+def claude():
+    data = json.loads(run(['node', str(Path(__file__).with_name('agent-usage-claude.mjs'))]))
+    windows = []
+    rates = data.get('rate_limits') or {}
+    for label, minutes in (('five_hour', 300), ('seven_day', WEEK)):
+        entry = rates.get(label)
+        if entry and entry.get('utilization') is not None:
+            windows.append(window(label, entry['utilization'], entry.get('resets_at'),
+                                  durationMins=minutes))
+    for model in ('Opus', 'Sonnet'):
+        label = 'seven_day_' + model.lower()
+        entry = rates.get(label)
+        if entry and entry.get('utilization') is not None:
+            windows.append(window(label, entry['utilization'], entry.get('resets_at'), model=model,
+                                  durationMins=WEEK))
+    scoped = data.get('model_scoped', rates.get('model_scoped', []))
+    if isinstance(scoped, dict):
+        scoped = [dict(entry, display_name=entry.get('display_name', name))
+                  for name, entry in scoped.items()]
+    for entry in scoped:
+        if entry.get('utilization') is None:
+            continue
+        # Claude's model-scoped limits share the seven-day window's reset.
+        scoped_window = window(entry['display_name'], entry['utilization'],
+                               entry.get('resets_at'), model=entry['display_name'],
+                               durationMins=WEEK)
+        if not any(existing.get('model', '').casefold() == scoped_window['model'].casefold()
+                   and existing['usedPercent'] == scoped_window['usedPercent']
+                   and existing.get('resetsAt') == scoped_window.get('resetsAt')
+                   for existing in windows):
+            windows.append(scoped_window)
+    return None, windows
+
+
+def antigravity_credential_path():
+    return Path(os.environ.get('GEMINI_HOME', Path.home() / '.gemini')) / 'antigravity-acp/acp_token.json'
+
+
+ANTIGRAVITY_WINDOWS = {'weekly': WEEK, '5h': 300}
+
+
+def gemini():
+    # The Antigravity ACP runtime's own OAuth credential reads the quota
+    # summary its clients show; refreshing it mints an access token only.
+    credential = load(antigravity_credential_path())
+    if not credential:
+        raise Unavailable(reason='no Antigravity ACP sign-in')
+    version = os.environ.get('AGENT_USAGE_ANTIGRAVITY_VERSION')
+    if not version or any(char in version for char in '\r\n"\\'):
+        raise Unavailable(reason='no Antigravity ACP version')
+    fields = ('client_id', 'client_secret', 'refresh_token', 'project_id')
+    if (credential.get('token_uri') != 'https://oauth2.googleapis.com/token'
+            or not all(isinstance(credential.get(field), str) and credential[field] for field in fields)):
+        raise Unavailable()
+    form = urllib.parse.urlencode(dict(client_id=credential['client_id'], client_secret=credential['client_secret'],
+                                       refresh_token=credential['refresh_token'], grant_type='refresh_token'))
+    status, token = http(credential['token_uri'], None, data=form, bearer=False)
+    if status != 200:
+        raise Unavailable()
+    # The service rejects a User-Agent that does not name Antigravity, and
+    # omits the Gemini buckets unless it names a current ACP client version.
+    status, data = http('https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary',
+                        token.get('access_token'), data=json.dumps({'project': credential['project_id']}),
+                        headers=['Content-Type: application/json',
+                                 f'User-Agent: antigravity/acp/{version} (aidev_client)'])
+    if status != 200:
+        raise Unavailable()
+    windows = []
+    for group in data.get('groups', []):
+        for bucket in group.get('buckets', []):
+            # Claude and GPT share separate 3p- buckets; only gemini- buckets
+            # meter the Gemini models routed here.
+            if bucket.get('disabled') or not bucket.get('bucketId', '').startswith('gemini-'):
+                continue
+            duration = ANTIGRAVITY_WINDOWS.get(bucket.get('window'))
+            windows.append(window(bucket.get('window', bucket['bucketId']), 100 * (1 - bucket['remainingFraction']),
+                                  bucket.get('resetTime'), **({'durationMins': duration} if duration else {})))
+    if not windows:
+        raise Unavailable()
+    return credential['project_id'], windows
+
+
+def grok_entry():
+    home = Path(os.environ.get('GROK_HOME', Path.home() / '.grok'))
+    auth = load(home / 'auth.json')
+    return auth.get('https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828',
+                    auth.get('https://accounts.x.ai/sign-in', {}))
+
+
+def custom_endpoint(config):
+    if not isinstance(config, dict):
+        return False
+    return any((key in ('base_url', 'baseUrl', 'api_base_url', 'endpoint') and bool(value))
+               or custom_endpoint(value) for key, value in config.items())
+
+
+def http(url, token, data=None, headers=(), bearer=True):
+    # curl's config comes over stdin: the bearer and any request body that
+    # carries a credential never appear in argv or logs.
+    config = [f'header = "{header}"\n' for header in headers]
+    if bearer:
+        if not token or any(char in token for char in '\r\n"\\'):
+            raise Unavailable()
+        config.append(f'header = "Authorization: Bearer {token}"\n')
+    if data is not None:
+        if any(char in data for char in '\r\n'):
+            raise Unavailable()
+        config.append('data = "' + data.replace('\\', '\\\\').replace('"', '\\"') + '"\n')
+    output = run(['curl', '--config', '-', '--silent', '--max-time', '15',
+                  '--write-out', '\n%{http_code}', url],
+                 input=''.join(config))
+    body, status = output.rsplit('\n', 1)
+    if int(status) != 200:
+        return int(status), {}
+    return 200, json.loads(body)
+
+
+def grok():
+    entry = grok_entry()
+    home = Path(os.environ.get('GROK_HOME', Path.home() / '.grok'))
+    config = load(home / 'config.json')
+    try:
+        with (home / 'config.toml').open('rb') as source:
+            toml_config = tomllib.load(source)
+    except FileNotFoundError:
+        toml_config = {}
+    if (os.environ.get('XAI_API_KEY') or entry.get('auth_mode') == 'api_key'
+            or any(os.environ.get(key) for key in ('XAI_BASE_URL', 'GROK_BASE_URL', 'GROK_API_BASE_URL'))
+            or custom_endpoint(config) or custom_endpoint(toml_config)):
+        raise Unavailable()
+    url = 'https://cli-chat-proxy.grok.com/v1/billing?format=credits'
+    status, data = http(url, entry.get('key'))
+    if status == 401:
+        run(['grok', 'models'])
+        entry = grok_entry()
+        status, data = http(url, entry.get('key'))
+    if status != 200:
+        raise Unavailable(exhausted=status == 402)
+    config = data['config']
+    period = config['currentPeriod']
+    label = period['type'].removeprefix('USAGE_PERIOD_TYPE_').lower()
+    duration = {}
+    if period.get('start') is not None:
+        duration['durationMins'] = (timestamp(period['end']) - timestamp(period['start'])) / 60
+    return entry.get('email'), [window(label, config.get('creditUsagePercent', 0), period['end'],
+                                       **duration)]
+
+
+def synthetic():
+    key = run(['omp-synthetic-key']).strip()
+    status, data = http('https://api.synthetic.new/v2/quotas', key)
+    if status != 200:
+        raise Unavailable()
+    windows = []
+    for label, entry in [('subscription', data.get('subscription')),
+                         ('search hourly', data.get('search', {}).get('hourly'))]:
+        if entry:
+            resource = {'resource': 'search'} if label == 'search hourly' else {}
+            windows.append(window(label, 100 * entry['requests'] / entry['limit'],
+                                  entry.get('renewsAt'), **resource))
+    weekly = data.get('planWeeklyLimit')
+    if weekly:
+        windows.append(window('weekly rolling', 100 - weekly['percentRemaining'],
+                              nextRegenAt=timestamp(weekly.get('nextRegenAt')),
+                              nextRegenPercent=weekly.get('nextRegenPercent')))
+    return 'default', windows
+
+
+READERS = dict(codex=codex, claude=claude, gemini=gemini, grok=grok, synthetic=synthetic)
+
+
+def identity_stamp(provider):
+    """Detect local account switches without hashing or storing any credential."""
+    home = Path.home()
+    paths = {
+        'codex': [Path(os.environ.get('CODEX_HOME', home / '.codex')) / 'auth.json'],
+        'claude': [home / '.claude.json', Path(os.environ.get('CLAUDE_CONFIG_DIR', home / '.claude')) / '.claude.json',
+                   Path(os.environ.get('CLAUDE_CONFIG_DIR', home / '.claude')) / '.credentials.json'],
+        'gemini': [antigravity_credential_path()],
+        'grok': [Path(os.environ.get('GROK_HOME', home / '.grok')) / name
+                 for name in ('auth.json', 'config.json', 'config.toml')],
+        'synthetic': [],
+    }[provider]
+    stamp = []
+    for path in paths:
+        try:
+            stat = path.stat()
+            stamp.append([str(path), stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size])
+        except OSError:
+            stamp.append([str(path), None])
+    # Presence is enough: key-based sessions do not have subscription limits.
+    stamp.append([bool(os.environ.get(key)) for key in (
+        'XAI_API_KEY', 'XAI_BASE_URL', 'GROK_BASE_URL', 'GROK_API_BASE_URL',
+        'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL')])
+    return stamp
+
+
+def account_hint(provider):
+    if provider == 'synthetic':
+        return 'default'
+    if provider == 'grok':
+        return grok_entry().get('email')
+    if provider == 'codex':
+        auth = load(Path(os.environ.get('CODEX_HOME', Path.home() / '.codex')) / 'auth.json')
+        return (auth.get('tokens') or {}).get('account_id')
+    if provider == 'claude':
+        directory = Path(os.environ.get('CLAUDE_CONFIG_DIR', Path.home() / '.claude'))
+        for path in (directory / '.claude.json', Path.home() / '.claude.json'):
+            account = load(path).get('oauthAccount', {})
+            if account.get('accountUuid') or account.get('organizationUuid'):
+                return account.get('accountUuid') or account['organizationUuid']
+    return None
+
+
+def fetch(provider):
+    account = None
+    try:
+        account = account_hint(provider)
+        identified, windows = READERS[provider]()
+        account = identified or account
+        if not windows:
+            raise Unavailable()
+        result = dict(status='ok', windows=windows, fetchedAt=time.time())
+    except Exception as exc:
+        # Provider stderr and exception messages can hold credentials.
+        result = dict(status='unknown', windows=[], fetchedAt=time.time())
+        if isinstance(exc, Unavailable) and exc.exhausted:
+            result['exhausted'] = True
+        if isinstance(exc, Unavailable) and exc.reason:
+            result['reason'] = exc.reason
+    if account:
+        result['accountHash'] = hashlib.sha256(str(account).encode()).hexdigest()
+    return result
+
+
+def cache_view(record):
+    current = record['result']
+    if current.get('exhausted'):
+        return current
+    if current['status'] != 'ok':
+        success = record.get('lastSuccess')
+        if success and time.time() - success['fetchedAt'] < 86400:
+            current = dict(success, status='stale')
+    elif time.time() - current['fetchedAt'] >= 60:
+        current = (dict(current, status='stale') if time.time() - current['fetchedAt'] < 86400
+                   else dict(status='unknown', windows=[], fetchedAt=current['fetchedAt']))
+    return current
+
+
+def publish(directory, provider, record):
+    account = record['result'].get('accountHash') or record.get('lastSuccess', {}).get('accountHash')
+    account = account or hashlib.sha256(b'unknown').hexdigest()
+    path = directory / f'{provider}-{account}.json'
+    fd, temporary = tempfile.mkstemp(prefix='.' + provider, dir=directory)
+    try:
+        with os.fdopen(fd, 'w') as output:
+            json.dump(record, output)
+        os.replace(temporary, path)
+        # The pointer names the account file written last, so the next call
+        # finds it without fetching just to learn which account is active.
+        os.symlink(path.name, temporary)
+        os.replace(temporary, directory / f'{provider}-current')
+    finally:
+        if os.path.lexists(temporary):
+            os.unlink(temporary)
+
+
+def cached(provider, refresh):
+    directory = Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'agent-usage'
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    pointer = directory / f'{provider}-current'
+    with (directory / f'{provider}.lock').open('a') as lock:
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    record = load(pointer)
+                    if record.get('identityStamp') == identity_stamp(provider):
+                        return cache_view(record)
+                    return dict(status='unknown', windows=[], fetchedAt=None)
+                time.sleep(.05)
+        stamp = identity_stamp(provider)
+        record = load(pointer)
+        if record.get('identityStamp') != stamp:
+            record = {}
+        previous = record.get('result')
+        if previous and not refresh:
+            lifetime = 60 if previous['status'] == 'ok' else 300
+            if time.time() - previous['fetchedAt'] < lifetime:
+                return cache_view(record)
+        result = fetch(provider)
+        success = result if result['status'] == 'ok' else record.get('lastSuccess')
+        record = dict(result=result, identityStamp=stamp)
+        if success and time.time() - success['fetchedAt'] < 86400:
+            record['lastSuccess'] = success
+        publish(directory, provider, record)
+        return cache_view(record)
+
+
+PACE_TOLERANCE = 25
+FLOOR = 10
+
+
+def scope_state(entries):
+    overshoots = [e['overshootPercent'] for e in entries if e['overshootPercent'] is not None]
+    remaining = [e['remainingPercent'] for e in entries if e['remainingPercent'] is not None]
+    return dict(overshootPercent=max(overshoots, default=None),
+                remainingPercent=min(remaining, default=None))
+
+
+def skip_reason(state):
+    if state['remainingPercent'] is not None and state['remainingPercent'] < FLOOR:
+        return 'below floor'
+    return None
+
+
+def ahead_of_pace(state):
+    return state['overshootPercent'] is not None and state['overshootPercent'] > 0
+
+
+def judge(result):
+    result = copy.deepcopy(result)
+    now = time.time()
+    # Only inference windows participate in routing and fallback scoring.
+    result['resources'] = [entry for entry in result['windows'] if entry.get('resource')]
+    result['windows'] = [entry for entry in result['windows'] if not entry.get('resource')]
+    for entry in result['windows']:
+        if result['status'] == 'stale' and entry.get('resetsAt', float('inf')) <= now:
+            entry['historicalRemainingPercent'] = entry['remainingPercent']
+            entry['remainingPercent'] = None
+        remaining, duration = entry['remainingPercent'], entry.get('durationMins')
+        elapsed = None
+        if remaining is not None and duration and duration > 0 and entry.get('resetsAt') is not None:
+            left = 100 * (entry['resetsAt'] - now) / (duration * 60)
+            elapsed = min(100, max(0, 100 - left))
+        overshoot = None if elapsed is None else entry['usedPercent'] - elapsed - PACE_TOLERANCE
+        entry.update(elapsedPercent=elapsed, overshootPercent=overshoot,
+                     aheadOfPace=overshoot is not None and overshoot > 0,
+                     belowFloor=remaining is not None and remaining < FLOOR)
+    provider = scope_state([e for e in result['windows'] if not e.get('model')])
+    result.update(provider, skipReason=skip_reason(provider))
+    result['skip'] = result['skipReason'] is not None
+    result['aheadOfPace'] = ahead_of_pace(provider)
+    result['skipModels'] = {}
+    result['aheadModels'] = {}
+    for model in sorted({e['model'] for e in result['windows'] if e.get('model')}):
+        state = scope_state([e for e in result['windows'] if e.get('model') == model])
+        # The root ranks a model's entries by these values alone, so they
+        # fold in the provider-wide windows the entries are also subject to.
+        combined = scope_state([state, provider])
+        if skip_reason(combined):
+            result['skipModels'][model] = dict(combined, skipReason=skip_reason(combined))
+        elif ahead_of_pace(state):
+            result['aheadModels'][model] = combined
+    return result
+
+
+def display_time(value):
+    if value is None:
+        return 'unknown'
+    return datetime.datetime.fromtimestamp(value, datetime.timezone.utc).isoformat()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--json', action='store_true', help='Print machine-readable usage')
+    parser.add_argument('--refresh', action='store_true', help='Bypass cached results')
+    args = parser.parse_args()
+    def report(provider):
+        try:
+            result = cached(provider, args.refresh)
+        except (OSError, ValueError, KeyError, TypeError):
+            result = fetch(provider)
+        return judge(result)
+
+    # Providers have separate cache files and locks, so they are read at once;
+    # a cold run then waits for the slowest provider, not the sum of all five.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(READERS)) as pool:
+        reports = pool.map(report, READERS)
+        providers = dict(zip(READERS, reports))
+    if args.json:
+        print(json.dumps({'providers': providers}))
+    else:
+        for provider, result in providers.items():
+            print(f"{provider}: {result['status']}" + (f" ({result['reason']})" if result.get('reason') else ''))
+            for entry in result['windows'] + result['resources']:
+                timing = (f"regenerates {entry.get('nextRegenPercent')}% at {display_time(entry['nextRegenAt'])}"
+                          if 'nextRegenAt' in entry else f"resets at {display_time(entry.get('resetsAt'))}")
+                remaining = entry['remainingPercent']
+                allowance = 'unknown' if remaining is None else f'{remaining:g}%'
+                pace = ''
+                if entry.get('elapsedPercent') is not None:
+                    state = 'ahead of pace' if entry['aheadOfPace'] else 'within pace'
+                    pace = f"; {entry['elapsedPercent']:.0f}% elapsed, {state}"
+                if entry.get('belowFloor'):
+                    pace += '; below floor'
+                print(f"  {entry['label']}: {entry['usedPercent']:g}% used, {allowance} remaining; {timing}{pace}")
+
+
+if __name__ == '__main__':
+    main()

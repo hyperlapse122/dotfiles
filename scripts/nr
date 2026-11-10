@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# Rebuild helper for this flake. The Nix package replaces the @...@ constants
+# with absolute store paths.
+set -euo pipefail
+
+NVD="@NVD@"
+GIT="@GIT@"
+
+# An absolute path rather than a PATH lookup: this runs under sudo, so letting
+# the invoking user's PATH pick the binary would hand root an attacker-chosen
+# one. /run/current-system is still the running system's own copy.
+NIXOS_REBUILD=${NR_NIXOS_REBUILD:-/run/current-system/sw/bin/nixos-rebuild}
+
+# Overridable so tests can point at fixtures instead of the real paths.
+VARIANT_FILE=${NR_VARIANT_FILE:-/etc/nixos-host-variant}
+PROFILE=${NR_PROFILE:-/nix/var/nix/profiles/system}
+CURRENT=${NR_CURRENT:-/run/current-system}
+# Set to any non-empty value to print the resolved command instead of running it.
+DRY_RUN=${NR_DRY_RUN:-}
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: nr {switch|boot|test|build} [--host NAME] [--flake-dir PATH]
+
+  switch  activate the configuration now
+  boot    install it for the next boot without activating
+  test    activate without touching the bootloader
+  build   build the toplevel only, no sudo and no diff
+USAGE
+}
+
+die() {
+  printf 'nr: %s\n' "$*" >&2
+  exit 1
+}
+
+subcommand=${1:-}
+case $subcommand in
+  switch | boot | test | build) shift ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  '') usage; exit 2 ;;
+  *)
+    printf 'nr: unknown subcommand %s\n' "$subcommand" >&2
+    usage
+    exit 2
+    ;;
+esac
+
+host=
+flake_dir=
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --host)
+      [[ $# -ge 2 ]] || die 'missing value for --host'
+      host=$2
+      shift 2
+      ;;
+    --flake-dir)
+      [[ $# -ge 2 ]] || die 'missing value for --flake-dir'
+      flake_dir=$2
+      shift 2
+      ;;
+    *) die "unexpected argument $1" ;;
+  esac
+done
+
+if [[ -z $flake_dir ]]; then
+  flake_dir=$("$GIT" rev-parse --show-toplevel 2>/dev/null) ||
+    die 'not inside a git repository; name the checkout with --flake-dir PATH'
+fi
+[[ -f $flake_dir/flake.nix ]] ||
+  die "no flake.nix in $flake_dir; name the checkout with --flake-dir PATH"
+# Absolute, so a relative --flake-dir cannot reach Nix as an indirect registry
+# reference instead of a path.
+flake_dir=$(cd -- "$flake_dir" && pwd -P)
+
+host_given=1
+if [[ -z $host ]]; then
+  host_given=
+  host=$(uname -n)
+fi
+
+# Both configurations set the same networking.hostName, so on a bootstrap
+# generation the detected host would silently target the production
+# configuration that docs/install.md sequences after key recovery.
+# An unreadable marker does not refuse: generations built before the marker
+# existed have none, and refusing there would break the ordinary rebuild that
+# installs it.
+if [[ -z $host_given && $subcommand != build && -r $VARIANT_FILE ]]; then
+  if [[ $(<"$VARIANT_FILE") == bootstrap* ]]; then
+    die "running the bootstrap generation; name the target with --host (docs/install.md sequences the move to $host)"
+  fi
+fi
+
+# Nix reads the git index, so anything untracked is invisible to the build.
+# A flake directory outside git has nothing to warn about, and must not abort.
+untracked=$("$GIT" -C "$flake_dir" ls-files --others --exclude-standard 2>/dev/null) || untracked=
+if [[ -n $untracked ]]; then
+  printf 'nr: these files are untracked and Nix will not see them:\n' >&2
+  while IFS= read -r path; do
+    printf '  %s\n' "$path" >&2
+  done <<<"$untracked"
+fi
+
+flake_ref="$flake_dir#$host"
+
+if [[ $subcommand == build ]]; then
+  cmd=(nix build --no-link "$flake_dir#nixosConfigurations.$host.config.system.build.toplevel")
+  if [[ -n $DRY_RUN ]]; then
+    printf '%s\n' "${cmd[*]}"
+    exit 0
+  fi
+  exec "${cmd[@]}"
+fi
+
+# boot does not activate, so its new generation lands in the system profile
+# while /run/current-system still points at the running one.
+if [[ $subcommand == boot ]]; then
+  diff_target=$PROFILE
+else
+  diff_target=$CURRENT
+fi
+
+cmd=(sudo -- "$NIXOS_REBUILD" "$subcommand" --flake "$flake_ref")
+
+if [[ -n $DRY_RUN ]]; then
+  printf '%s\n' "${cmd[*]}"
+  printf 'diff-target: %s\n' "$diff_target"
+  exit 0
+fi
+
+# Sample the same path before and after: comparing /run/current-system against
+# the system profile would report a difference on every boot run even when the
+# generation did not change.
+before=$(readlink -f "$diff_target")
+sudo -v
+"${cmd[@]}"
+after=$(readlink -f "$diff_target")
+
+# Older generations have no refresh helper. Read it from the newly applied
+# user environment, including when Home Manager's generation did not change.
+refresh_status=0
+if [[ $subcommand != boot && -x $HOME/.local/share/nix-config/refresh-agent-instructions ]]; then
+  "$HOME/.local/share/nix-config/refresh-agent-instructions" || {
+    refresh_status=$?
+    printf 'nr: configuration applied, but agent instruction refresh failed (exit %s)\n' "$refresh_status" >&2
+  }
+fi
+
+if [[ $before == "$after" ]]; then
+  printf 'nr: %s produced no change to %s\n' "$subcommand" "$diff_target"
+else
+  # The rebuild already succeeded; a diff that cannot render must not turn that
+  # into a failure.
+  "$NVD" diff "$before" "$after" ||
+    printf 'nr: %s succeeded but nvd could not diff the generations\n' "$subcommand" >&2
+fi
+
+exit "$refresh_status"

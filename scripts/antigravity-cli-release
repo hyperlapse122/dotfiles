@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""Resolve the newest Antigravity CLI (agy) release from Google's public feed.
+
+Fetches the plaintext "latest" version pointer, then that version's manifest
+JSON, and writes or checks the pin file packages/antigravity-cli.nix consumes.
+The manifest URLs embed a build id, so the pin stores each URL as published.
+Refuses to write a pin when a supported system's platform entry, URL, or
+sha512 digest is missing or malformed, or when the version is not strictly
+newer than the one already pinned, so neither an incomplete release nor a
+downgrade ever reaches the pin file.
+"""
+
+import argparse
+import base64
+import json
+import re
+import subprocess
+import sys
+
+DEFAULT_BASE_URL = "https://storage.googleapis.com/antigravity-public/antigravity-cli"
+FETCH_COMMAND = ["curl", "-sfL", "--max-time", "60"]
+
+# Nix system -> the feed's platform key.
+TARGET_PLATFORMS = {
+    "x86_64-linux": "linux-x64",
+    "aarch64-linux": "linux-arm",
+    "aarch64-darwin": "darwin-arm",
+}
+
+VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
+DIGEST_PATTERN = re.compile(r"^[0-9a-f]{128}$")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def fetch(url):
+    """Fetch one URL with curl and return the raw body."""
+    proc = subprocess.run(
+        FETCH_COMMAND + [url],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def hex_to_sri(sha512_hex):
+    """Convert a 128-character hex sha512 string to Nix SRI format."""
+    return "sha512-" + base64.b64encode(bytes.fromhex(sha512_hex)).decode("ascii")
+
+
+def fetch_latest_version(base_url):
+    """Fetch the plaintext /latest version pointer."""
+    body = fetch(f"{base_url}/latest").strip()
+    if not VERSION_PATTERN.match(body):
+        raise Failure(f"/latest did not return a plain version string: {body!r}")
+    return body
+
+
+def parse_manifest(body, version, base_url):
+    """Return the pin for each supported system in one version's manifest."""
+    try:
+        manifest = json.loads(body)
+    except ValueError:
+        raise Failure(f"manifest for {version} did not return JSON") from None
+    if not isinstance(manifest, dict):
+        raise Failure(f"manifest for {version} was not a JSON object")
+    feed_platforms = manifest.get("platforms")
+    if not isinstance(feed_platforms, dict):
+        feed_platforms = {}
+
+    platforms = {}
+    for system, key in TARGET_PLATFORMS.items():
+        entry = feed_platforms.get(key)
+        if not isinstance(entry, dict):
+            raise Failure(
+                f"manifest for {version} is missing the {key!r} platform "
+                "entry; refusing to write an incomplete pin"
+            )
+        url = entry.get("url")
+        if not isinstance(url, str) or not url.startswith(base_url + "/"):
+            raise Failure(f"invalid url for {key} in {version}: {url!r}")
+        digest = entry.get("sha512")
+        if not isinstance(digest, str) or not DIGEST_PATTERN.match(digest):
+            raise Failure(f"invalid sha512 digest for {key} in {version}: {digest!r}")
+        platforms[system] = {"url": url, "sha512": digest, "hash": hex_to_sri(digest)}
+    return {"version": version, "platforms": platforms}
+
+
+def version_tuple(version):
+    if not isinstance(version, str):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def pinned_version(path):
+    """Return the version already pinned at path, or None when unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f).get("version")
+    except Exception:
+        return None
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_BASE_URL,
+        help="Base URL of the antigravity-cli feed",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to the antigravity-cli-release.json pin file to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved pin JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+    base_url = args.source_url.rstrip("/")
+
+    try:
+        version = fetch_latest_version(base_url)
+
+        # Skip the manifest fetch when it cannot change the outcome.
+        if not args.dry_run and args.output:
+            current_version = pinned_version(args.output)
+            if current_version is not None:
+                try:
+                    is_newer = version_tuple(version) > version_tuple(current_version)
+                except ValueError:
+                    is_newer = True
+                if not is_newer:
+                    print(
+                        f"{args.output} is already up to date at version {current_version} "
+                        f"(resolved {version} is not newer)"
+                    )
+                    return 0
+
+        resolved = parse_manifest(fetch(f"{base_url}/{version}/manifest.json"), version, base_url)
+        out_json = json.dumps(resolved, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(out_json)
+        print(f"updated {args.output} to version {version}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"antigravity-cli-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

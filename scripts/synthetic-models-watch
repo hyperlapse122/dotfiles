@@ -1,0 +1,580 @@
+#!/usr/bin/env python3
+"""Compare the Synthetic models the repository uses with Synthetic's catalog.
+
+Reads the model source home/h82/agents/synthetic-models.nix (through
+`nix eval --json --file`, or a pre-evaluated JSON copy) and Synthetic's model
+list, and classifies each model in use:
+
+- removed: its ID is missing from the catalog.
+- new-version: a catalog ID matches the model's lineage and is newer: its
+  captured version is higher, whatever its `created`, or equal with a later
+  `created`. An equal version whose `created` is equal or missing is not
+  newer, and neither is a lower version.
+- changed: the catalog's `reasoning_parameters.efforts` lacks an effort the
+  source assigns to the model.
+
+`syn:` IDs are ignored. A row carrying `alias_of` never keeps a model in
+use present, but an `hf:` alias row in a model's lineage can be a newer
+candidate. Every other catalog ID must match ^hf:<org>/<name> of
+[A-Za-z0-9._-]; the rest are reported only as a count, so no third-party text
+reaches the issue except inside code spans.
+
+Writes a JSON result (status, findings, a fingerprint of the findings, a
+digest of the issue body without its detection time, and the issue title)
+and, when there is drift, an issue body whose first line states the whole
+request. A fetch that fails, or answers 429, is retried once after a wait; a
+second failure or an empty catalog exits non-zero and writes nothing.
+SYNTHETIC_API_KEY, when set and non-empty, is sent as a bearer header on the
+fetch command's stdin, never in its argv.
+
+The script owns every marker the workflow reads back from the issue:
+`--issue-state` reads `gh issue view --json body,comments` output and prints
+the fingerprint, the body digest, and the latest catalog notice, and
+`--notice` prints the comment for a notice kind.
+
+`--snapshot FILE` rewrites the committed catalog snapshot instead of
+comparing: it keeps every catalog row, `syn:` and alias rows included, sorted
+by `id` and trimmed to the fields OMP's model config renders, in the catalog's
+own shape, and leaves FILE untouched unless the content changes. `pricing`
+keeps only the four prices OMP's config reads, each a string
+home/h82/agents/omp-declarations.py can parse. A row without
+`reasoning_parameters` keeps none. A malformed row is skipped with a warning
+naming it on stderr, keeping its previous entry from FILE when one exists
+outside the source IDs. It refuses to write, and exits non-zero, when no row
+is left, when the valid rows shrink below the retention floor of FILE, or
+when a source ID is missing or malformed.
+"""
+
+import argparse
+import datetime
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+# The shared module sits beside this script, also when a test loads it by
+# path or Python runs it isolated.
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from catalog_snapshot import (  # noqa: E402
+    Failure,
+    check_shrink_floor,
+    child_env,
+    existing_rows,
+    is_int,
+    is_strings,
+    read_json,
+    run_fetch,
+    write,
+    write_if_changed,
+)
+
+SOURCE_FILE = "home/h82/agents/synthetic-models.nix"
+DEFAULT_URL = "https://api.synthetic.new/openai/v1/models"
+DEFAULT_RETRY_WAIT = 30
+DEFAULT_EVAL_TIMEOUT = 300
+KEY_VARIABLE = "SYNTHETIC_API_KEY"
+MARKER = "synthetic-models-watch fingerprint"
+DIGEST_MARKER = "synthetic-models-watch body"
+NOTICE_MARKER = "synthetic-models-watch notice"
+TITLE_LIMIT = 256
+# Captured versions are padded to this many parts when sorting candidates.
+VERSION_WIDTH = 8
+
+DIGEST_PATTERN = r"sha256:[0-9a-f]{64}"
+FINGERPRINT_LINE = re.compile(f"<!-- {MARKER}: ({DIGEST_PATTERN}) -->")
+DIGEST_LINE = re.compile(f"<!-- {DIGEST_MARKER}: ({DIGEST_PATTERN}) -->")
+NOTICE_LINE = re.compile(f"<!-- {NOTICE_MARKER}: (unreachable|reachable) -->")
+NOTICES = {
+    "unreachable": "The watch cannot reach Synthetic's catalog, so this issue may be stale. "
+    "It stays as it is until a run fetches the catalog again; check the workflow's failing run "
+    "and the `SYNTHETIC_API_KEY` Actions secret.",
+    "reachable": "The watch reaches Synthetic's catalog again, and this issue reflects its latest run.",
+}
+
+ID_PATTERN = re.compile(r"hf:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+")
+EFFORT_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
+# The prices home/h82/agents/omp-declarations.py reads, each an optional `$`
+# and a JSON number without a sign, which is what its per_million parses.
+PRICE_FIELDS = ("prompt", "completion", "input_cache_reads", "input_cache_writes")
+PRICE_PATTERN = re.compile(r"\$?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?")
+# The catalog fields a snapshot row keeps, with the check each must pass.
+SNAPSHOT_FIELDS = {
+    "display_name": lambda v: isinstance(v, str) and v != "",
+    "input_modalities": is_strings,
+    "context_length": is_int,
+    "max_output_length": is_int,
+    "pricing": lambda v: isinstance(v, dict)
+    and all(isinstance(v.get(field), str) and PRICE_PATTERN.fullmatch(v[field]) for field in PRICE_FIELDS),
+}
+# The top-level keys of the source that name an entry, in the order the
+# issue lists them among that entry's uses.
+ENTRY_POINTERS = ("defaultModel", "textGeneration")
+
+
+def load_source(source, source_json, timeout):
+    if source_json:
+        return read_json(source_json)
+    try:
+        proc = subprocess.run(
+            ["nix", "eval", "--json", "--file", source],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            env=child_env(KEY_VARIABLE),
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise Failure(f"evaluating {source} timed out after {timeout:g} seconds") from None
+    if proc.returncode != 0:
+        raise Failure(f"evaluating {source} failed with status {proc.returncode}: {proc.stderr.strip()}")
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise Failure(f"evaluating {source} printed no JSON: {exc}") from None
+
+
+def models_in_use(source):
+    """Return {entry: model} for every entry of the source, validated."""
+    if not isinstance(source, dict):
+        raise Failure("the model source is not an attribute set")
+    models = {}
+    for name, entry in source.items():
+        if not isinstance(entry, dict):
+            continue
+        model_id = entry.get("id")
+        lineage = entry.get("lineage")
+        roles = entry.get("roles")
+        if not isinstance(model_id, str) or not ID_PATTERN.fullmatch(model_id):
+            raise Failure(f"source entry {name} has no valid id")
+        if not isinstance(roles, dict) or not all(isinstance(v, str) for v in roles.values()):
+            raise Failure(f"source entry {name} has no valid roles")
+        try:
+            pattern = re.compile(lineage)
+        except (TypeError, re.error):
+            raise Failure(f"source entry {name} has no valid lineage") from None
+        match = pattern.fullmatch(model_id)
+        if not match or match.lastindex is None:
+            raise Failure(f"source entry {name}: lineage does not match and capture its own id")
+        efforts = dict(roles)
+        if isinstance(entry.get("defaultEffort"), str):
+            efforts["defaultEffort"] = entry["defaultEffort"]
+        models[name] = {
+            "id": model_id,
+            "lineage": pattern,
+            "version": version_tuple(match.group(1)),
+            "efforts": efforts,
+            "roles": sorted(roles),
+            "pointers": [key for key in ENTRY_POINTERS if source.get(key) == name],
+        }
+    if not models:
+        raise Failure("the model source declares no models")
+    return models
+
+
+def version_tuple(text):
+    return tuple(int(part) for part in text.split("."))
+
+
+def compare_versions(candidate, current):
+    """-1, 0, or 1 as the candidate's version is lower, equal, or higher."""
+    width = max(len(candidate), len(current))
+    pad = lambda v: v + (0,) * (width - len(v))
+    return (pad(candidate) > pad(current)) - (pad(candidate) < pad(current))
+
+
+def fetch(url, retry_wait):
+    """Return the catalog body, retrying once after a wait."""
+    key = os.environ.get(KEY_VARIABLE, "")
+    for attempt in (1, 2):
+        proc = run_fetch(url, key, KEY_VARIABLE)
+        if proc.returncode == 0:
+            try:
+                return json.loads(proc.stdout)
+            except json.JSONDecodeError:
+                problem = "a body that is not JSON"
+        else:
+            problem = f"status {proc.returncode}"
+            # curl -f reports an HTTP error such as 429 only on stderr.
+            reason = proc.stderr.strip().splitlines()[-1:] if proc.stderr else []
+            if reason and (not key or key not in reason[0]):
+                problem += f" ({reason[0]})"
+        print(f"synthetic-models-watch: fetching {url} attempt {attempt}: {problem}", file=sys.stderr)
+        if attempt == 1:
+            time.sleep(retry_wait)
+    raise Failure(f"fetching {url} failed twice")
+
+
+def catalog_rows(catalog):
+    """Return (valid rows by ID, valid alias rows by ID, rejected count).
+
+    syn: rows are dropped. An alias row never keeps a model present, so it
+    goes to its own map, which only the lineage search reads.
+    """
+    data = catalog.get("data") if isinstance(catalog, dict) else None
+    if not isinstance(data, list):
+        raise Failure("the catalog has no data list")
+    rows, aliases, rejected = {}, {}, 0
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        model_id = row.get("id")
+        if isinstance(model_id, str) and model_id.startswith("syn:"):
+            continue
+        if not isinstance(model_id, str) or not ID_PATTERN.fullmatch(model_id):
+            rejected += 1
+            continue
+        if "alias_of" in row:
+            aliases.setdefault(model_id, row)
+        else:
+            rows[model_id] = row
+    if not rows:
+        raise Failure("the catalog lists no models")
+    return rows, aliases, rejected
+
+
+def created(row):
+    value = row.get("created")
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def efforts_of(row):
+    params = row.get("reasoning_parameters")
+    efforts = params.get("efforts") if isinstance(params, dict) else None
+    if not isinstance(efforts, list):
+        return []
+    return [e for e in efforts if isinstance(e, str) and EFFORT_PATTERN.fullmatch(e)]
+
+
+def is_newer(order, when, current_created):
+    """A higher version is newer; created orders only equal versions."""
+    if order != 0:
+        return order > 0
+    return when is not None and current_created is not None and when > current_created
+
+
+def lineage_candidates(model, rows, current_created, removed=False):
+    """IDs in the model's lineage, newest first.
+
+    For a model still listed, only builds newer than it; for a removed one,
+    every build whose version is not lower, as its possible replacements.
+    """
+    found = []
+    for model_id, row in rows.items():
+        if model_id == model["id"]:
+            continue
+        match = model["lineage"].fullmatch(model_id)
+        if not match:
+            continue
+        version = version_tuple(match.group(1))
+        order = compare_versions(version, model["version"])
+        when = created(row)
+        if not (order >= 0 if removed else is_newer(order, when, current_created)):
+            continue
+        padded = version + (0,) * (VERSION_WIDTH - len(version))
+        found.append((padded, when if when is not None else float("-inf"), model_id))
+    return [model_id for _, _, model_id in sorted(found, reverse=True)]
+
+
+def classify(models, rows, aliases):
+    findings = []
+    searched = {**aliases, **rows}
+    for name in sorted(models):
+        model = models[name]
+        row = rows.get(model["id"])
+        uses = model["roles"] + model["pointers"]
+        if row is None:
+            findings.append({
+                "kind": "removed",
+                "entry": name,
+                "id": model["id"],
+                "uses": uses,
+                "candidates": lineage_candidates(model, searched, None, removed=True),
+            })
+            continue
+        candidates = lineage_candidates(model, searched, created(row))
+        if candidates:
+            findings.append({
+                "kind": "new-version",
+                "entry": name,
+                "id": model["id"],
+                "uses": uses,
+                "candidates": candidates,
+            })
+        offered = efforts_of(row)
+        missing = sorted({e for e in model["efforts"].values() if e not in offered})
+        if missing:
+            affected = sorted(r for r in model["roles"] if model["efforts"][r] in missing)
+            if model["efforts"].get("defaultEffort") in missing:
+                affected.append("defaultEffort")
+            findings.append({
+                "kind": "changed",
+                "entry": name,
+                "id": model["id"],
+                "uses": affected,
+                "missingEfforts": missing,
+                "offeredEfforts": offered,
+            })
+    return findings
+
+
+def snapshot_row(row):
+    """The trimmed row for one catalog entry, or a Failure naming the bad field.
+
+    A row without `reasoning_parameters` keeps no such key, so a renderer can
+    tell it from a row that lists no efforts.
+    """
+    model_id = row.get("id") if isinstance(row, dict) else None
+    if not isinstance(model_id, str) or model_id == "":
+        raise Failure(f"catalog entry {json.dumps(row)[:120]} has no valid id")
+    kept = {"id": model_id}
+    for field, valid in SNAPSHOT_FIELDS.items():
+        if field not in row or not valid(row[field]):
+            raise Failure(f"catalog entry {model_id} has no valid {field}")
+        kept[field] = row[field]
+    kept["pricing"] = {field: row["pricing"][field] for field in PRICE_FIELDS}
+    params = row.get("reasoning_parameters")
+    if params is None:
+        return kept
+    efforts = params.get("efforts") if isinstance(params, dict) else None
+    if not isinstance(efforts, list) or not all(isinstance(e, str) and EFFORT_PATTERN.fullmatch(e) for e in efforts):
+        raise Failure(f"catalog entry {model_id} has efforts that are not a list of strings")
+    kept["reasoning_parameters"] = {"efforts": efforts}
+    return kept
+
+
+def catalog_snapshot(models, catalog, previous=None):
+    """The snapshot text for every well-formed catalog row.
+
+    A malformed row is skipped with a warning naming it, keeping its previous
+    entry when one exists outside the source IDs. Refuses a source ID that is
+    missing or malformed, or a catalog that shrinks below the retention floor.
+    """
+    data = catalog.get("data") if isinstance(catalog, dict) else None
+    if not isinstance(data, list):
+        raise Failure("the catalog has no data list")
+    previous = previous or {}
+    source_ids = {m["id"] for m in models.values()}
+    kept, problems, fresh = {}, {}, set()
+    for row in data:
+        try:
+            entry = snapshot_row(row)
+        except Failure as exc:
+            model_id = row.get("id") if isinstance(row, dict) else None
+            if isinstance(model_id, str):
+                problems[model_id] = str(exc)
+                if model_id in previous and model_id not in source_ids:
+                    kept.setdefault(model_id, previous[model_id])
+            print(f"synthetic-models-watch: skipping {exc}", file=sys.stderr)
+            continue
+        kept[entry["id"]] = entry
+        fresh.add(entry["id"])
+    missing = sorted(m["id"] for m in models.values() if m["id"] not in kept)
+    # The source always names a model, so this also refuses an empty result.
+    if missing:
+        raise Failure("; ".join(problems.get(i, f"the catalog lacks {i}") for i in missing))
+    check_shrink_floor(len(fresh), len(previous))
+    return json.dumps({"data": [kept[i] for i in sorted(kept)]}, indent=2) + "\n"
+
+
+def sha256(text):
+    return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
+
+
+def fingerprint(findings):
+    """What the drift is, without the efforts Synthetic happens to offer.
+
+    A change here edits the issue and comments on it; a change only in the
+    body (offered efforts, the rejected count) edits it silently.
+    """
+    if not findings:
+        return None
+    stable = [{k: v for k, v in f.items() if k != "offeredEfforts"} for f in findings]
+    return sha256(json.dumps(stable, sort_keys=True))
+
+
+def code(value):
+    return f"`{value}`"
+
+
+def codes(values):
+    return ", ".join(code(v) for v in values) if values else "none"
+
+
+def summary(finding, with_uses=True):
+    """One clause stating a finding; every catalog value in a code span."""
+    uses = f" (uses {codes(finding['uses'])})" if with_uses else ""
+    if finding["kind"] == "removed":
+        replacement = (
+            f"; candidate {code(finding['candidates'][0])}" if finding["candidates"] else "; no candidate in its lineage"
+        )
+        return f"{code(finding['id'])} removed{uses}{replacement}"
+    if finding["kind"] == "new-version":
+        return f"{code(finding['id'])} has a newer build {code(finding['candidates'][0])}{uses}"
+    return f"{code(finding['id'])} no longer offers effort {codes(finding['missingEfforts'])}{uses}"
+
+
+def title(findings):
+    full = f"Reconcile {SOURCE_FILE}: " + "; ".join(summary(f) for f in findings)
+    if len(full) <= TITLE_LIMIT:
+        return full
+    short = f"Reconcile {SOURCE_FILE}: " + "; ".join(summary(f, with_uses=False) for f in findings)
+    if len(short) <= TITLE_LIMIT:
+        return short
+    return f"Reconcile {SOURCE_FILE}: {len(findings)} Synthetic model differences"
+
+
+def body_lines(findings, rejected, detected_at):
+    lines = [
+        f"Edit {code(SOURCE_FILE)} for Synthetic model drift detected {detected_at}: "
+        + "; ".join(summary(f) for f in findings)
+        + ".",
+        "",
+        "## Findings",
+    ]
+    for f in findings:
+        lines += ["", f"### {f['kind']}: entry {code(f['entry'])}", ""]
+        lines.append(f"- Current ID: {code(f['id'])}")
+        lines.append(f"- Affected uses: {codes(f['uses'])}")
+        if f["kind"] in ("removed", "new-version"):
+            lines.append(f"- Candidates in its lineage, newest first: {codes(f['candidates'])}")
+        if f["kind"] == "changed":
+            lines.append(f"- Missing efforts: {codes(f['missingEfforts'])}")
+            lines.append(f"- Efforts Synthetic reports: {codes(f['offeredEfforts'])}")
+    lines += [
+        "",
+        "## Resolve",
+        "",
+        f"Change the entry's `id` or the efforts in {code(SOURCE_FILE)}, then run "
+        "`nix run .#synthetic-models-watch` to confirm no drift remains. "
+        "The daily workflow closes this issue on its first run that finds none.",
+        "",
+        "Synthetic's catalog, not this repository, publishes every candidate ID above. "
+        "Before you edit the source, confirm on Synthetic that the ID names the model you expect.",
+    ]
+    if rejected:
+        noun = "entry was" if rejected == 1 else "entries were"
+        lines += ["", f"{rejected} catalog {noun} ignored for an ID outside `^hf:<org>/<name>$`."]
+    return lines
+
+
+def body_digest(findings, rejected):
+    """A digest of the issue body that ignores the detection time."""
+    return sha256("\n".join(body_lines(findings, rejected, "")))
+
+
+def issue_body(findings, mark, rejected, detected_at):
+    lines = body_lines(findings, rejected, detected_at)
+    lines[1:1] = [
+        "",
+        f"<!-- {MARKER}: {mark} -->",
+        f"<!-- {DIGEST_MARKER}: {body_digest(findings, rejected)} -->",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def issue_state(path):
+    """The marks the watch left on an issue: `gh issue view --json body,comments`."""
+    issue = read_json(path)
+    if not isinstance(issue, dict):
+        raise Failure(f"{path} is not an issue object")
+    body = issue.get("body") if isinstance(issue.get("body"), str) else ""
+    fingerprint_match = FINGERPRINT_LINE.search(body)
+    digest_match = DIGEST_LINE.search(body)
+    notice = None
+    comments = issue.get("comments") if isinstance(issue.get("comments"), list) else []
+    for comment in comments:
+        text = comment.get("body") if isinstance(comment, dict) else None
+        found = NOTICE_LINE.findall(text) if isinstance(text, str) else []
+        if found:
+            notice = found[-1]
+    return {
+        "fingerprint": fingerprint_match.group(1) if fingerprint_match else None,
+        "bodyDigest": digest_match.group(1) if digest_match else None,
+        "notice": notice,
+    }
+
+
+def notice_text(kind):
+    return f"{NOTICES[kind]}\n\n<!-- {NOTICE_MARKER}: {kind} -->\n"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--source", default=SOURCE_FILE, help="Nix model source to evaluate (default: %(default)s)")
+    parser.add_argument("--source-json", help="Read the model source from this pre-evaluated JSON file instead")
+    parser.add_argument("--catalog", help="Read the catalog from this JSON file instead of fetching it")
+    parser.add_argument("--url", default=DEFAULT_URL, help="Catalog URL (default: %(default)s)")
+    parser.add_argument("--result", help="Write the JSON result here instead of stdout")
+    parser.add_argument("--issue-body", help="Write the issue body here when there is drift")
+    parser.add_argument("--detected-at", help="Detection time to report (default: now, UTC)")
+    parser.add_argument(
+        "--retry-wait",
+        type=float,
+        default=DEFAULT_RETRY_WAIT,
+        help="Seconds to wait before the one retry (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--eval-timeout",
+        type=float,
+        default=DEFAULT_EVAL_TIMEOUT,
+        help="Seconds the source evaluation may take (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--snapshot",
+        metavar="FILE",
+        help="Rewrite this catalog snapshot for the models in use instead of comparing",
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--issue-state",
+        metavar="FILE",
+        help="Print the fingerprint, body digest, and latest notice from `gh issue view --json body,comments` output",
+    )
+    mode.add_argument("--notice", choices=sorted(NOTICES), help="Print the issue comment for this notice")
+    args = parser.parse_args(argv)
+    detected_at = args.detected_at or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    try:
+        if args.notice:
+            sys.stdout.write(notice_text(args.notice))
+            return 0
+        if args.issue_state:
+            sys.stdout.write(json.dumps(issue_state(args.issue_state)) + "\n")
+            return 0
+        models = models_in_use(load_source(args.source, args.source_json, args.eval_timeout))
+        catalog = read_json(args.catalog) if args.catalog else fetch(args.url, args.retry_wait)
+        if args.snapshot:
+            previous = existing_rows(args.snapshot, snapshot_row)
+            write_if_changed(args.snapshot, catalog_snapshot(models, catalog, previous))
+            return 0
+        rows, aliases, rejected = catalog_rows(catalog)
+        findings = classify(models, rows, aliases)
+        mark = fingerprint(findings)
+        result = {
+            "status": "drift" if findings else "clean",
+            "source": SOURCE_FILE,
+            "detectedAt": detected_at,
+            "fingerprint": mark,
+            "bodyDigest": body_digest(findings, rejected) if findings else None,
+            "title": title(findings) if findings else None,
+            "findings": findings,
+            "rejectedCatalogEntries": rejected,
+        }
+        if findings and args.issue_body:
+            write(args.issue_body, issue_body(findings, mark, rejected, detected_at))
+        out = json.dumps(result, indent=2) + "\n"
+        if args.result:
+            write(args.result, out)
+        else:
+            sys.stdout.write(out)
+        return 0
+    except (Failure, OSError) as exc:
+        print(f"synthetic-models-watch: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

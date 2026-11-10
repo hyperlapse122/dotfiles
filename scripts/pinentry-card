@@ -1,0 +1,456 @@
+#!/usr/bin/env python3
+"""Assuan proxy that supplies only the cached OpenPGP card User PIN.
+
+A PIN the card rejected is discarded from the keychain instead of being
+replayed on the next prompt.
+
+The exact prompt and serial checks intentionally mirror the existing dotfiles
+wrapper.  Every other prompt is delegated to the selected desktop pinentry.
+The Nix package replaces the three @...@ constants with absolute store paths.
+"""
+
+import base64
+import os
+import re
+import select
+import signal
+import socket
+import subprocess
+import sys
+import threading
+import time
+
+DELEGATE_PATH = "@PINENTRY_QT@"
+LINUX_FALLBACK_PATH = "@PINENTRY_CURSES@"
+SECRET_TOOL_PATH = "@SECRET_TOOL@"
+IS_LINUX = True
+KEYRING_BACKEND = "secret-tool"
+MAX_DECODE_LEN = 4096
+# A cold Secret Service may outlive the old five-second lookup deadline.
+# Keep removal of a rejected PIN short so its replacement prompt is reachable.
+KEYRING_LOOKUP_TIMEOUT = 30
+KEYRING_CLEAR_TIMEOUT = 5
+# After stdin closes, a delegate gets EXIT_GRACE seconds to exit on its own:
+# on a loaded machine a healthy one can take that long just to start.  One
+# that has answered every command before a pending dialog is showing that
+# dialog and will not notice the EOF, so it gets DIALOG_GRACE seconds, as does
+# every delegate once a signal asks the wrapper to stop.
+EXIT_GRACE = 10
+DIALOG_GRACE = 2
+DIALOG_COMMANDS = (b"GETPIN", b"CONFIRM", b"MESSAGE")
+NUMBER_LINE_RE = re.compile(r"(?:^|\n)[\x1e\x1f]*Number:[\x1e\x1f]*[ \t]*([^\n]*)")
+SERIAL_FORM_RE = re.compile(r"\d+(?: \d+)*")
+
+
+def percent_decode(data):
+    if len(data) > MAX_DECODE_LEN:
+        return None
+    out = bytearray()
+    index = 0
+    while index < len(data):
+        byte = data[index]
+        if byte == 0x0D:
+            return None
+        if byte == 0x25:
+            if index + 3 > len(data):
+                return None
+            try:
+                out.append(int(data[index + 1 : index + 3], 16))
+            except ValueError:
+                return None
+            index += 3
+        else:
+            out.append(byte)
+            index += 1
+    return bytes(out)
+
+
+def percent_encode(data):
+    out = bytearray()
+    for byte in data:
+        if byte == 0x25 or byte < 0x20 or byte == 0x7F:
+            out.extend(("%%%02X" % byte).encode("ascii"))
+        else:
+            out.append(byte)
+    return bytes(out)
+
+
+def normalize_serial(raw):
+    text = raw.strip(" \t\x1e\x1f")
+    if not SERIAL_FORM_RE.fullmatch(text):
+        return None
+    compact = text.replace(" ", "")
+    if len(compact) == 12 and compact.startswith("0006"):
+        compact = compact[4:]
+    return compact.lstrip("0") or None
+
+
+def log_lookup(outcome, started):
+    """One bounded, best-effort Linux syslog datagram, never Assuan output.
+
+    Avoid libc syslog's blocking writes and reconnects. Modern Darwin has no
+    syslog socket; native logging there needs a separate implementation.
+    A missing or saturated sink must not hold up protected PIN entry.
+    """
+    if not IS_LINUX:
+        return
+    elapsed_ms = min(999999, max(0, int((time.monotonic() - started) * 1000)))
+    message = f"<14>pinentry-card: lookup outcome={outcome} elapsed_ms={elapsed_ms}".encode("ascii")
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sink:
+            sink.setblocking(False)
+            sink.connect("/dev/log")
+            sink.send(message)
+    except OSError:
+        pass
+
+
+def lookup_pin(serial):
+    if KEYRING_BACKEND == "secret-tool":
+        argv = [SECRET_TOOL_PATH, "lookup", "service", "gnupg-card-pin", "username", serial]
+    else:
+        argv = [SECRET_TOOL_PATH, "find-generic-password", "-s", "gnupg-card-pin", "-a", serial, "-w"]
+    started = time.monotonic()
+    outcome = "os-error"
+    try:
+        try:
+            result = subprocess.run(
+                argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=KEYRING_LOOKUP_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            outcome = "timeout"
+            return None
+        except OSError:
+            return None
+        if result.returncode != 0:
+            outcome = "nonzero"
+            return None
+        value = result.stdout[:-1] if result.stdout.endswith(b"\n") else result.stdout
+        if not value:
+            outcome = "empty"
+            return None
+        if KEYRING_BACKEND == "security":
+            text = value.decode("utf-8", "replace")
+            outcome = "invalid-encoding"
+            if text.startswith("go-keyring-base64:"):
+                try:
+                    value = base64.b64decode(text[len("go-keyring-base64:") :], validate=True)
+                except (ValueError, base64.binascii.Error):
+                    return None
+            elif text.startswith("go-keyring-encoded:"):
+                try:
+                    value = bytes.fromhex(text[len("go-keyring-encoded:") :])
+                except ValueError:
+                    return None
+        outcome = "success"
+        return value
+    finally:
+        log_lookup(outcome, started)
+
+
+def clear_pin(serial):
+    """Drop the stored PIN for one serial.  Never raises: a keychain that is
+    absent, slow, or failing must not stop the prompt from being delegated."""
+    if KEYRING_BACKEND == "secret-tool":
+        argv = [SECRET_TOOL_PATH, "clear", "service", "gnupg-card-pin", "username", serial]
+    else:
+        argv = [SECRET_TOOL_PATH, "delete-generic-password", "-s", "gnupg-card-pin", "-a", serial]
+    try:
+        subprocess.run(
+            argv,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=KEYRING_CLEAR_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return
+
+
+class Prompt:
+    def __init__(self):
+        self.prompt = None
+        self.desc = None
+        self.seen_error = False
+        self.cleared = set()
+
+    def remember(self, command, argument):
+        if command == b"SETERROR":
+            self.seen_error = True
+            return
+        decoded = percent_decode(argument)
+        text = decoded.decode("utf-8", "replace") if decoded is not None else None
+        if command == b"SETPROMPT":
+            self.prompt = text
+        elif command == b"SETDESC":
+            self.desc = text
+
+    def card_serial(self):
+        """Serial of an unambiguous card User PIN prompt, else None.  An
+        ambiguous serial stays unanswered: one card's PIN offered to another
+        would burn that card's retry counter."""
+        if self.prompt != "PIN" or not self.desc:
+            return None
+        if not self.desc.startswith("Please unlock the card"):
+            return None
+        numbers = NUMBER_LINE_RE.findall(self.desc)
+        if len(numbers) != 1:
+            return None
+        return normalize_serial(numbers[0])
+
+    def rejected(self):
+        return self.seen_error or bool(self.desc and "Remaining attempts" in self.desc)
+
+    def wants_cancel(self):
+        return bool(self.desc and self.desc.startswith("Please insert the card"))
+
+
+def choose_delegate_path():
+    if IS_LINUX and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return LINUX_FALLBACK_PATH
+    return DELEGATE_PATH
+
+
+def spawn_delegate(path):
+    environment = dict(os.environ)
+    environment["PATH"] = "/usr/bin:/bin"
+    return subprocess.Popen(
+        [path] + sys.argv[1:],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        env=environment,
+        close_fds=True,
+    )
+
+
+class Exchange:
+    """Commands forwarded to the delegate and replies it has sent.  The
+    relay thread only writes replies, relayed, and writing_since, and the
+    main thread only writes the rest, so no lock is needed (and none that
+    on_signal could block on)."""
+
+    def __init__(self):
+        self.forwarded = 0
+        # The greeting is the reply to command 0, so command n is answered
+        # once replies exceeds n.  relayed counts the replies the client has
+        # been written.
+        self.replies = 0
+        self.relayed = 0
+        self.dialog_at = 0
+        # When the relay's current write to the client began, or None.
+        self.writing_since = None
+
+    def sent(self, command):
+        self.forwarded += 1
+        if command in DIALOG_COMMANDS:
+            self.dialog_at = self.forwarded
+
+    def received(self, line):
+        if line == b"OK\n" or line.startswith((b"OK ", b"ERR ")):
+            self.replies += 1
+
+    def showing_dialog(self):
+        return self.dialog_at > 0 and self.replies == self.dialog_at
+
+    def owes_reply(self):
+        return self.relayed <= self.forwarded
+
+
+def pump(delegate_stdout, client_out, output_lock, exchange):
+    while True:
+        chunk = delegate_stdout.readline()
+        if not chunk:
+            return
+        exchange.received(chunk)
+        with output_lock:
+            exchange.writing_since = time.monotonic()
+            client_out.write(chunk)
+            client_out.flush()
+            exchange.writing_since = None
+        exchange.relayed = exchange.replies
+
+
+def has_room(stream):
+    """True when a write to stream would not block: a pipe the client still
+    drains, or a file."""
+    try:
+        return bool(select.select([], [stream], [], 0)[1])
+    except (OSError, ValueError):
+        return False
+
+
+def drain_relay(relay, exchange, patient, client_out):
+    """Wait for the relay to pass on what the client is still owed.  A reply
+    the child wrote before it exited is already in the pipe, so while one is
+    owed and patient() holds, the relay gets up to EXIT_GRACE: on a loaded
+    machine that can take seconds.  Otherwise it gets DIALOG_GRACE, since a
+    grandchild may hold the pipe open forever, and so does a relay stuck in
+    one write to a client that stopped reading.  A write counts as stuck only
+    once client_out has no room: one that is merely slow, because the relay
+    went unscheduled or the disk stalled, gets the same grace as any other.
+    exchange needs owes_reply() and writing_since; the darwin front stage
+    passes its own."""
+    start = time.monotonic()
+    while relay.is_alive():
+        relay.join(timeout=0.1)
+        now = time.monotonic()
+        writing_since = exchange.writing_since
+        if writing_since is not None and now - writing_since >= DIALOG_GRACE and not has_room(client_out):
+            return
+        owed = exchange.owes_reply() and patient()
+        if now - start >= (EXIT_GRACE if owed else DIALOG_GRACE):
+            return
+
+
+def main():
+    client_in = sys.stdin.buffer
+    client_out = sys.stdout.buffer
+    delegate = spawn_delegate(choose_delegate_path())
+    output_lock = threading.Lock()
+    exchange = Exchange()
+    relay = threading.Thread(target=pump, args=(delegate.stdout, client_out, output_lock, exchange), daemon=True)
+    relay.start()
+    state = Prompt()
+    stopped = threading.Event()
+    hurried = threading.Event()
+
+    def exited_within(timeout):
+        try:
+            delegate.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return False
+        return True
+
+    def exited_unprompted():
+        deadline = time.monotonic() + EXIT_GRACE
+        dialog_since = None
+        hurried_at = None
+        while not exited_within(0.1):
+            now = time.monotonic()
+            if hurried_at is None and hurried.is_set():
+                hurried_at = now
+                deadline = min(deadline, now + DIALOG_GRACE)
+            if now >= deadline:
+                return False
+            if not exchange.showing_dialog():
+                dialog_since = None
+            elif dialog_since is None:
+                dialog_since = now
+            elif now - dialog_since >= DIALOG_GRACE:
+                return False
+        return True
+
+    def reap(close_stdin, exited):
+        close_stdin()
+        if not exited():
+            delegate.terminate()
+            if not exited_within(2):
+                delegate.kill()
+                delegate.wait()
+        return delegate.returncode
+
+    def close_delegate_stdin():
+        try:
+            delegate.stdin.close()
+        except OSError:
+            pass
+
+    # A delegate terminated in a dialog never answers it, and a signal hurries
+    # the exit, so neither waits on an owed reply.
+    def patient():
+        return delegate.returncode >= 0 and not hurried.is_set()
+
+    # Every exit ends in os._exit: interpreter shutdown aborts (exit 134) when
+    # the daemon relay thread is inside a stdout write at that moment.
+    def shutdown():
+        stopped.set()
+        status = reap(close_delegate_stdin, exited_unprompted)
+        drain_relay(relay, exchange, patient, client_out)
+        # Holding the lock means the relay is not mid-write, so no reply is
+        # cut short.  The wait is bounded: a relay blocked on a stdout nobody
+        # reads gives up the final flush, never the exit.
+        if output_lock.acquire(timeout=2):
+            try:
+                client_out.flush()
+            except OSError:
+                pass
+        os._exit(status)
+
+    def on_signal(signum, frame):
+        del signum, frame
+        # The main thread is already reaping the delegate and exits on its
+        # own once that bounded wait ends, cut to DIALOG_GRACE from here;
+        # waiting here could deadlock on Popen's waitpid lock.
+        if stopped.is_set():
+            hurried.set()
+            return
+        stopped.set()
+
+        # The interrupted main thread may hold output_lock or be inside a
+        # buffered write to stdout or to the delegate's stdin, so leave both
+        # buffered objects alone: close the raw descriptor and exit.
+        def close_raw_stdin():
+            try:
+                os.close(delegate.stdin.fileno())
+            except OSError:
+                pass
+
+        os._exit(reap(close_raw_stdin, lambda: exited_within(DIALOG_GRACE)))
+
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
+
+    def forward(line, command):
+        exchange.sent(command)
+        try:
+            delegate.stdin.write(line)
+            delegate.stdin.flush()
+        except (BrokenPipeError, OSError):
+            shutdown()
+
+    while True:
+        line = client_in.readline()
+        if not line or not line.endswith(b"\n"):
+            shutdown()
+        command, _, argument = line[:-1].partition(b" ")
+        if command == b"GETPIN":
+            serial = state.card_serial()
+            pin = None
+            if serial is not None:
+                if state.rejected():
+                    # gpg-agent closes the pinentry after every agent_askpin,
+                    # and scdaemon verifies the PIN only once that call has
+                    # returned, so a rejection always reaches a *different*
+                    # process than the one that supplied the PIN.  This prompt
+                    # is the only evidence available here: treat the stored PIN
+                    # for this serial as the rejected one and drop it, rather
+                    # than replay it on every following prompt.
+                    if serial not in state.cleared:
+                        state.cleared.add(serial)
+                        clear_pin(serial)
+                else:
+                    pin = lookup_pin(serial)
+            state.seen_error = False
+            if pin is not None:
+                with output_lock:
+                    client_out.write(b"D " + percent_encode(pin) + b"\nOK\n")
+                    client_out.flush()
+                continue
+            forward(line, command)
+            continue
+        if command == b"CONFIRM" and state.wants_cancel():
+            with output_lock:
+                client_out.write(b"ERR 83886179 Operation cancelled <Pinentry>\n")
+                client_out.flush()
+            continue
+        if command in (b"SETPROMPT", b"SETDESC", b"SETERROR"):
+            state.remember(command, argument)
+        forward(line, command)
+        if command == b"BYE":
+            shutdown()
+
+
+if __name__ == "__main__":
+    main()
