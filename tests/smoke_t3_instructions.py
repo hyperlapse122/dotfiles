@@ -142,6 +142,10 @@ def check_context(payload, harness, addition, *, existing=False):
             '`delegate_task`', 'agents dispatched by skills', 'replace its explicit acpx',
             "Keep CE's existing retry, recovery, inline fallback, skip, and reporting behavior.")):
         raise RuntimeError('Native ' + harness + ' lost the CE dispatch override or recovery contract.')
+    if ('## T3 CE model selection' in text) != addition:
+        raise RuntimeError('Native ' + harness + ' leaked or omitted the CE model ladder.')
+    if addition and '| Claude | Fable | Opus | Sonnet | Haiku |' not in text:
+        raise RuntimeError('Native ' + harness + ' lost the CE model ladder rows.')
     if 'FOREIGN_HARNESS_B8C1' in text:
         raise RuntimeError('Native context includes a foreign harness branch.')
     if existing and 'EXISTING_' + harness.upper() + '_LAUNCH' not in text:
