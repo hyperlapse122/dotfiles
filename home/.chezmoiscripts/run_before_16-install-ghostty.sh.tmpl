@@ -1,8 +1,7 @@
 {{- $release := get .chezmoi "osRelease" | default dict -}}
-{{- $version := get $release "versionID" | default "" -}}
-{{- if and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (eq .chezmoi.arch "amd64") (eq $version "26.04") -}}
+{{- if and (eq .chezmoi.os "linux") (eq (get $release "id") "fedora") (eq .chezmoi.arch "amd64") -}}
 #!/bin/sh
 # file install-ghostty sha256: {{ include (joinPath .chezmoi.workingTree "scripts" "install-ghostty.sh") | sha256sum }}
 set -eu
-exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "install-ghostty.sh" | replace "'" "'\\''" }}' '{{ $version }}' '{{ .chezmoi.arch }}'
+exec /bin/sh '{{ joinPath .chezmoi.workingTree "scripts" "install-ghostty.sh" | replace "'" "'\\''" }}'
 {{ end -}}

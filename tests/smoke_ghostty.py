@@ -75,7 +75,7 @@ def fedora_smoke(selected, root):
     run(["python3", REPO / "scripts/linux-platform.py"])
     version = platform.freedesktop_os_release()["VERSION_ID"]
     architecture = selected.split("-", 1)[1]
-    run(["/bin/sh", REPO / "scripts/install-ghostty.sh", version, architecture])
+    run(["/bin/sh", REPO / "scripts/install-ghostty.sh"])
     ghostty = shutil.which("ghostty")
     if not ghostty:
         raise RuntimeError("Native installation did not expose Ghostty on PATH")
