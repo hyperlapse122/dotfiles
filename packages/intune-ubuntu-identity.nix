@@ -2,7 +2,6 @@
   Package interface:
 
     identity = pkgs.callPackage ./packages/intune-ubuntu-identity.nix { };
-    identity.osRelease                     the Ubuntu os-release file
     identity.wrap package [ "name" ... ]   package with those bin/ entries wrapped
 
   Microsoft supports the Intune app on Ubuntu and RHEL only, and every Intune
@@ -19,9 +18,6 @@
   encryption from its own /proc/mounts, so a sparse root would misreport it.
   bubblewrap refuses to mount on a symlink, and /etc/os-release is one on
   NixOS, so the bind lands on the file the link resolves to.
-
-  To present another release, edit `osRelease` here; Microsoft supports
-  24.04 LTS and 26.04 LTS.
 */
 {
   lib,
@@ -47,6 +43,8 @@ let
     LOGO=ubuntu-logo
   '';
 
+  libexecDir = "$out/libexec/intune-ubuntu-identity";
+
   wrapOne = name: ''
     if [ ! -x "$out/bin/${name}" ]; then
       echo "intune-ubuntu-identity: $out/bin/${name} is not an executable to wrap" >&2
@@ -54,26 +52,24 @@ let
     fi
     # A second wrap would move the wrapper over the real executable and leave
     # a script that starts itself without end.
-    if [ -e "$out/libexec/intune-ubuntu-identity/${name}" ]; then
+    if [ -e "${libexecDir}/${name}" ]; then
       echo "intune-ubuntu-identity: $out/bin/${name} is already wrapped" >&2
       exit 1
     fi
-    mv "$out/bin/${name}" "$out/libexec/intune-ubuntu-identity/${name}"
+    mv "$out/bin/${name}" "${libexecDir}/${name}"
     cat > "$out/bin/${name}" <<EOF
     #!${runtimeShell}
-    exec ${bubblewrap}/bin/bwrap --dev-bind / / --ro-bind ${osRelease} "\$(${coreutils}/bin/realpath /etc/os-release)" -- "$out/libexec/intune-ubuntu-identity/${name}" "\$@"
+    exec ${bubblewrap}/bin/bwrap --dev-bind / / --ro-bind ${osRelease} "\$(${coreutils}/bin/realpath /etc/os-release)" -- "${libexecDir}/${name}" "\$@"
     EOF
     chmod +x "$out/bin/${name}"
   '';
 in
 {
-  inherit osRelease;
-
   wrap =
     package: names:
     package.overrideAttrs (old: {
       postInstall = (old.postInstall or "") + ''
-        mkdir -p "$out/libexec/intune-ubuntu-identity"
+        mkdir -p "${libexecDir}"
         ${lib.concatMapStrings wrapOne names}
       '';
     });
