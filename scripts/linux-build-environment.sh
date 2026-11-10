@@ -4,7 +4,7 @@ set -eu
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-python3 "$script_directory/linux-platform.py" >/dev/null || fail 'Requires a supported Ubuntu Desktop host; run the host probe for details.'
+python3 "$script_directory/linux-platform.py" >/dev/null || fail 'Requires a supported Fedora KDE Plasma Desktop host; run the host probe for details.'
 
 state="$HOME/.local/share/dotfiles/build"
 publish() {
@@ -18,7 +18,7 @@ preflight)
     for compiler in cc c++; do
         command -v "$compiler" >/dev/null || fail "Run mise run apply from the inspected checkout to install the native $compiler compiler."
         target=$("$compiler" -dumpmachine) || fail "Cannot inspect $compiler target."
-        [ "$target" = x86_64-linux-gnu ] || fail "$compiler must target native x86_64-linux-gnu."
+        [ "$target" = x86_64-redhat-linux ] || fail "$compiler must target native x86_64-redhat-linux."
     done
     ;;
 dotnet)

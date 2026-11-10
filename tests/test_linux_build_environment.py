@@ -29,8 +29,8 @@ class LinuxBuildEnvironmentTest(unittest.TestCase):
         self.env.update(HOME=shell_path(self.home), PATH=shell_path(self.bin) + ":/usr/bin:/bin")
         self.command("uname", "echo Linux")
         self.command("python3", "exit 0")
-        self.command("cc", "echo x86_64-linux-gnu")
-        self.command("c++", "echo x86_64-linux-gnu")
+        self.command("cc", "echo x86_64-redhat-linux")
+        self.command("c++", "echo x86_64-redhat-linux")
 
     def command(self, name, body):
         path = self.bin / name
@@ -145,6 +145,17 @@ esac''')
         for tool in ("cmake", "ninja", "python", "pwsh"):
             self.assertIn(f"{tool} managed-version", result.stdout)
 
+    def test_fedora_compiler_targets_pass_preflight(self):
+        result = self.run_phase("preflight")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_non_native_compiler_target_fails_naming_the_compiler(self):
+        self.command("c++", "echo aarch64-redhat-linux")
+        result = self.run_phase("preflight")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("c++", result.stderr)
+        self.assertIn("x86_64-redhat-linux", result.stderr)
+
     def test_failed_compiler_preflight_does_not_publish(self):
         self.command("c++", "exit 23")
         result = self.run_phase("preflight")
@@ -156,6 +167,7 @@ esac''')
         result = self.run_phase("tools")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unsupported-host", result.stderr)
+        self.assertIn("Fedora", result.stderr)
         self.assertEqual(list(self.home.iterdir()), [])
 
     def test_unrelated_vcpkg_directory_is_preserved(self):
