@@ -34,7 +34,7 @@ AREAS = {
     ),
     "platform": (
         "test_bootstrap", "test_global_chezmoi", "test_windows_bootstrap",
-        "test_linux_platform", "test_linux_bootstrap", "test_linux_apps",
+        "test_linux_platform", "test_linux_bootstrap", "test_linux_apps", "test_linux_minikube",
         "test_windows_apply_hook", "test_windows_apps", "test_windows_virtualization", "test_windows_long_paths",
         "test_macos_xcode", "test_macos_bootstrap", "test_macos_provision", "test_macos_apps", "test_macos_container", "test_macos_readiness", "test_macos_dock",
         "test_ghostty_install", "test_aria2", "test_terminal_environment", "test_windows_wezterm",

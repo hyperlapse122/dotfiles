@@ -51,5 +51,12 @@ Use container runtimes and local Kubernetes clusters only for temporary developm
 
 - Use Podman (with Podman Desktop as needed) for temporary container-related development work on Windows. Do not automate engine provisioning.
 - Start the runtime only when an active task needs it. Do not start it during configuration application or enable startup at login.
+{{ else if eq .chezmoi.os "linux" -}}
+## Container runtime
+
+- Use rootless Docker Engine with minikube's Docker driver and containerd for temporary Linux development. Start it only for an active task; configuration application must not start a runtime, create a cluster, enable login startup, or enable lingering.
+- Use `python3 tests/smoke_linux_minikube.py --report /path/to/report.json` from the dotfiles checkout for the explicit Ubuntu Studio build, container execution, Kubernetes readiness, and loopback HTTP proof. Provision its tools first with `mise run linux-kubernetes` after explicit Linux application.
+- Keep each proof on its own transient systemd user service with `Delegate=yes`, socket under `/run/user/$UID`, Docker data and configuration, rootlesskit state, minikube profile and state, and kubeconfig. Do not change global Docker contexts, credentials, or shared services; do not disable AppArmor or grant docker-group root access.
+- Close port-forward processes before deleting the owned profile and enumerated containers, images, build caches, networks, and volumes. Stop only the owned service, remove its state, and verify absence, including zero owned volumes. If cleanup fails, report the exact endpoint, profile, unit, and remaining state from the JSON report; preserve that state for recovery. Never use global prune or all-profile deletion. Report disk-space measurements separately without claiming compaction.
 {{ end -}}
 {{ end -}}
