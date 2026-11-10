@@ -193,6 +193,7 @@ The existing instruction, plugin, and T3 acquisition policies remain authoritati
 **Files:** `home/.chezmoidata/personal-apps.json`, `home/.chezmoidata/personal-app-lock.json`, new `home/.chezmoiexternals/codex-package.toml.tmpl`, `tests/test_personal_apps.py`, `tests/test_personal_app_lock.py`, `tests/smoke_personal_apps.py`; update `scripts/update-personal-app-lock.py` only if upstream tag handling requires it.
 
 **Approach:**
+
 1. Add the five KTD1 target mappings using canonical package archives and the existing checksum lock mechanism.
 2. Install supplemental package members using the same locked archive, exact ownership only for Codex-specific directories.
 3. Update version matching for `rust-v` tags and isolate Codex state in the native app smoke.
@@ -202,6 +203,7 @@ The existing instruction, plugin, and T3 acquisition policies remain authoritati
 **Execution note:** This is packaging work; inspect the actual archive and prove native launch before extending integration.
 
 **Test scenarios:**
+
 - Covers AE1. Apply a fixture package and prove the CLI, helpers, manifest, and nested resources appear at the canonical relative paths.
 - Covers AE6. Apply a changed package then roll back; managed bytes converge while an unrelated `.local/bin` executable survives.
 - A bad package checksum fails without substituting an unverified download.
@@ -219,6 +221,7 @@ The existing instruction, plugin, and T3 acquisition policies remain authoritati
 **Files:** New `home/private_dot_codex/modify_private_config.toml`, new `home/private_dot_codex/private_empty_AGENTS.md.tmpl`, new `home/.chezmoitemplates/codex-config`, new Codex plugin hooks/partials under `home/.chezmoiscripts/` and `home/.chezmoitemplates/`, `home/.chezmoidata/harness-plugins.json`, `home/.chezmoiexternals/harness-plugins.toml.tmpl`, `home/.chezmoiignore`, new `tests/test_codex.py`, new `tests/smoke_codex.py`.
 
 **Approach:**
+
 1. Follow KTD2 for private instructions and partial TOML ownership.
 2. Follow KTD3 for native installation and explicit destination-home scoping; reuse the shared archive without changing omp behavior.
 3. Exercise a neutral workspace so project instruction overrides cannot masquerade as global discovery.
@@ -226,6 +229,7 @@ The existing instruction, plugin, and T3 acquisition policies remain authoritati
 **Patterns:** Existing private modify templates, platform-conditional PowerShell/BOM scripts, and disposable-home harness smoke.
 
 **Test scenarios:**
+
 - Covers AE2. Reapply after CE is disabled and verify activation while preserving an unrelated plugin and configuration table.
 - Covers AE3. Native discovery includes common and Codex-specific instruction markers, excluding foreign harness markers.
 - Covers AE4. Native plugin listing and skill discovery identify the pinned CE source; explicit native selection invokes that skill surface.
@@ -244,11 +248,13 @@ The existing instruction, plugin, and T3 acquisition policies remain authoritati
 **Files:** `home/.chezmoitemplates/t3-code-settings`, `tests/test_t3_code_settings.py`, `tests/smoke_t3_code.py`.
 
 **Approach:**
+
 1. Add the KTD4 native driver entry inside the existing preservation-oriented modify template.
 2. Rename preservation fixtures that currently use `codex` as an unrelated instance.
 3. Extend smoke verification with an actual fresh T3 server and provider refresh, using isolated homes and an absolute managed binary path.
 
 **Test scenarios:**
+
 - Covers AE5. T3 launches native Codex with the managed binary directory removed from PATH.
 - Covers AE2. Wrong executable path and disabled managed instance are reconciled on reapply without duplicating the provider.
 - Preserve unrelated provider settings, user display choices, and unowned Codex options.
@@ -269,6 +275,7 @@ The existing instruction, plugin, and T3 acquisition policies remain authoritati
 **Approach:** Add the native Codex smoke to existing CI and CE candidate verification; document installation/update/rollback, required sign-in, native instruction precedence, package layout, T3 driver, and actual platform limits without claiming unrun cases passed.
 
 **Test scenarios:**
+
 - Covers AE7. Unsupported or unverified cases remain explicit rather than silently weakening the completion condition.
 - CI runs the relevant native package, CE, and T3 scenarios on every declared eligible target.
 

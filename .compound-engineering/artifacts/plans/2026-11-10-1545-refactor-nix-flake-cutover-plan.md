@@ -182,7 +182,7 @@ flowchart TB
 Secrets end in this recipient layout:
 
 | File | Recipients |
-|---|---|
+| --- | --- |
 | `secrets/tokens.yaml` | `MS-7D91`, `MacBook-Pro-Mac17-9` |
 | `secrets/wifi.yaml`, `secrets/tailscale.yaml`, `secrets/printers.yaml` | `MS-7D91` |
 | `secrets/hosts/MS-7D91/ssh.yaml` | `MS-7D91` |
@@ -207,7 +207,7 @@ Secrets end in this recipient layout:
 ### Risks & Dependencies
 
 | Risk | Mitigation |
-|---|---|
+| --- | --- |
 | The restored hardware and boot modules no longer evaluate against two months of later refactors. | U3 restores them against the current module layout and proves it with `nix flake check --no-build` and the boot-layout invariants. |
 | A check that partitions hosts by trait goes vacuous or fails when a host kind disappears. | U2 and U3 follow `removing-a-host-empties-one-side-of-a-partitioned-check.md` and keep each guard non-vacuous. |
 | `tests/linux-host-secrets.sh` also covers the Darwin host's recipients, so deleting it with the non-NixOS code loses that coverage. | U2 keeps the Darwin assertions under a name that no longer mentions non-NixOS hosts. |
@@ -220,7 +220,7 @@ Secrets end in this recipient layout:
 ## Implementation Units
 
 | U-ID | Title | Key paths | Depends on |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | U1 | Import the baseline and remove the chezmoi tree | whole tree | none |
 | U2 | Drop non-NixOS Linux support | `lib/`, `modules/system-manager/`, `tests/`, `flake.nix` | U1 |
 | U3 | Restore bare-metal `MS-7D91`, remove the VM host | `hosts/`, `modules/nixos/`, `tests/` | U2 |
@@ -456,7 +456,7 @@ Secrets end in this recipient layout:
 ## Verification Contract
 
 | Gate | Command or evidence | Applies to |
-|---|---|---|
+| --- | --- | --- |
 | Formatting | `nix fmt -- --ci` | every unit |
 | Evaluation | `nix flake check --no-build`, plus `nix eval` of each `darwinConfigurations.<name>.system.drvPath` and of `checks.aarch64-darwin` | every unit |
 | Host outputs exist | `nix eval .#nixosConfigurations --apply builtins.attrNames` and the same for `darwinConfigurations` return only the two hosts and their `-bootstrap` variants | U2, U3 |
@@ -478,4 +478,3 @@ Local commands run inside a disposable `nixos/nix` container started with Apple 
 - No disposable container, image, or volume from verification remains.
 - Abandoned attempts and temporary files are removed from the diff.
 - The pull request is open against `main` with CI decided; the owner merges it and reinstalls from `docs/install.md` and `docs/macos.md`.
-

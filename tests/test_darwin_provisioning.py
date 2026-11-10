@@ -33,7 +33,7 @@ class Provisioning(unittest.TestCase):
 
     def stub(self, name, body):
         p = self.bin / name
-        p.write_text('#!/usr/bin/env python3\n' + body)
+        p.write_text('#!' + sys.executable + '\n' + body)
         p.chmod(0o755)
 
     def identity(self):

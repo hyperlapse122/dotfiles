@@ -157,7 +157,6 @@ flowchart TB
 - `mise.toml` and `.chezmoi-bootstrap.toml`: explicit application separated from hook-free bootstrap.
 - Owner's current default-home settings files: read-only capture evidence above; these files are machine-local and are not committed source inputs.
 
-
 ---
 
 ## Planning Contract

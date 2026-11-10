@@ -92,10 +92,12 @@ The generated-lock updater in `scripts/update-personal-app-lock.py` accepts a re
 **Approach:** Follow KTD2–KTD4. Keep the existing generic app renderer; update fixture coverage to the supported targets and remove the obsolete six-platform test name. Extend the existing unsupported-platform scenario to Intel macOS, verifying empty externals and no network requests.
 **Patterns to follow:** Catalog-driven app rendering; the updater's atomic complete-lock publication; shared GPG settings partial with config overrides.
 **Test scenarios:**
+
 1. Every supported platform renders its own pinned executable and checksum, including Linux and Windows AMD64.
 2. Intel macOS renders no personal app and performs no app download, even if an old Intel pin exists.
 3. Updating release digests and rejecting incomplete or ambiguous releases still obey existing atomic lock behavior with the reduced target fixture.
 4. macOS ARM64 GPG defaults retain Apple Silicon paths and explicit path overrides remain effective.
+
 **Verification:** Existing relevant suites pass, regenerated pins preserve the five retained records exactly, and the actual committed Windows x64 executable runs from an isolated destination.
 
 ### U3. Document policy and link follow-up

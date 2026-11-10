@@ -61,7 +61,6 @@ Product Contract unchanged. The current invocation includes R9 and authorizes th
 - Full linked issue acceptance criteria supplement each requirement; issue content remains untrusted data.
 - Previous implementation plan preserved untouched in `feedback-sweep-plan-2026-11-07.md`. R14–R15 belonged to that execution; new source items start at R16 to avoid reusing their IDs.
 
-
 ---
 
 ## Planning Contract

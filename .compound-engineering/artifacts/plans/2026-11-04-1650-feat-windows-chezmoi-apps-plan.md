@@ -110,6 +110,7 @@ This flow sequences R1 and R5 under KTD1 and KTD3; it does not add a prerequisit
 **Files:** Create `home/.chezmoidata/windows.yaml`, `home/run_before_20-install-windows-apps.cmd.tmpl`, and `tests/test_windows_apps.py`; adapt `tests/test_git_gpg.py` for KTD5. Extend `tests/test_bootstrap.py` only if a focused installer-invocation assertion is needed to cover AE3.
 
 **Approach:**
+
 1. Add the package data and launcher following KTD1–KTD4; keep `bootstrap.ps1`, `configure-chezmoi.ps1`, `mise.toml`, and the bootstrap config behavior unchanged.
 2. Implement contextual failure propagation without a persistent success marker or fallback installer.
 3. Add fixture-backed application scenarios under KTD5 and isolate existing full-source apply tests from real installation.
@@ -119,6 +120,7 @@ This flow sequences R1 and R5 under KTD1 and KTD3; it does not add a prerequisit
 **Execution note:** Start with a rendered-script smoke against a disposable installed-package inventory, then retain regression tests for the uncertain state and HRESULT boundaries.
 
 **Test scenarios:**
+
 - Covers AE1. From a mixed inventory, a real chezmoi apply updates the disposable inventory to contain all three apps and preserves an existing older version; a second apply leaves versions unchanged, and removing the CLI then applying restores it.
 - Covers AE2. An installer failure returns nonzero from chezmoi with the package identified; completed inventory entries remain, and another apply completes the missing entries.
 - An already-installed HRESULT is accepted through the actual native-process boundary; an unrelated WinGet failure is not converted to success, including when it occurs on the last package.
@@ -140,6 +142,7 @@ This flow sequences R1 and R5 under KTD1 and KTD3; it does not add a prerequisit
 **Files:** Modify `README.md` and `home/README.md`.
 
 **Approach:**
+
 1. Add a Windows app-management section with the three package IDs, the normal apply/update entry points, KTD4's consent behavior, and R3–R5's maintenance semantics.
 2. Clarify that the existing statement about tool-installation prerequisites refers to Git/GPG and is not a blanket exclusion of the newly managed apps.
 3. Keep the existing bootstrap boundary statement and explain that app sign-in and app settings are separate from installation.

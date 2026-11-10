@@ -60,6 +60,38 @@ let
             contract = {
               file = settingsFile;
               format = "toml";
+              declared.setPaths = [
+                {
+                  path = [
+                    "cli"
+                    "auto_update"
+                  ];
+                  value = false;
+                }
+              ]
+              ++
+                lib.concatMap
+                  (
+                    vendor:
+                    map
+                      (kind: {
+                        path = [
+                          "compat"
+                          vendor
+                          kind
+                        ];
+                        value = false;
+                      })
+                      [
+                        "agents"
+                        "rules"
+                        "skills"
+                      ]
+                  )
+                  [
+                    "claude"
+                    "cursor"
+                  ];
               declared.ownEntries = [
                 {
                   path = [ "mcp_servers" ];
@@ -72,6 +104,16 @@ let
               ];
               seed = ''
                 # user comment survives
+                [cli]
+                auto_update = true
+                [compat.claude]
+                agents = true
+                rules = true
+                skills = true
+                [compat.cursor]
+                agents = true
+                rules = true
+                skills = true
                 [marketplace]
                 auto_update = false
                 [[marketplace.sources]]
@@ -80,6 +122,19 @@ let
                 command = "other"
               '';
               expected = {
+                cli.auto_update = false;
+                compat = {
+                  claude = {
+                    agents = false;
+                    rules = false;
+                    skills = false;
+                  };
+                  cursor = {
+                    agents = false;
+                    rules = false;
+                    skills = false;
+                  };
+                };
                 marketplace = {
                   auto_update = false;
                   sources = [ { name = "kept"; } ];

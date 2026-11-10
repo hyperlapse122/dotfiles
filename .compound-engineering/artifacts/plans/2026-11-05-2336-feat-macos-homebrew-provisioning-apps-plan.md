@@ -117,7 +117,6 @@ flowchart TB
 - [Homebrew installation](https://docs.brew.sh/Installation): supported prefix, installer interaction and native prerequisites.
 - [Homebrew Bundle](https://docs.brew.sh/Brew-Bundle-and-Brewfile): a possible package-list mechanism; its default upgrade behavior differs from R9.
 
-
 ---
 
 ## Planning Contract

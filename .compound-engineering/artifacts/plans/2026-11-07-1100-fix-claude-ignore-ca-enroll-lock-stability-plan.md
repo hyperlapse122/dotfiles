@@ -65,7 +65,7 @@ product_contract_source: ce-plan-bootstrap
 ### Sources / Research
 
 - `scripts/ca-files.py`, `tests/test_ca_files.py`, `docs/guides/system-ca.md`, `home/.chezmoiignore:22`, `home/.chezmoiscripts/run_after_35-ca-files.sh.tmpl`.
-- mise settings reference (`lockfile_platforms`, `lockfile_mode`, `lockfile_auto_prune`), https://mise.jdx.dev/configuration/settings.html; https://mise.jdx.dev/dev-tools/mise-lock.html.
+- mise settings reference (`lockfile_platforms`, `lockfile_mode`, `lockfile_auto_prune`), <https://mise.jdx.dev/configuration/settings.html>; <https://mise.jdx.dev/dev-tools/mise-lock.html>.
 - `.compound-engineering/artifacts/solutions/integration-issues/mise-lock-conflict-command-context.md` (commands can activate mise and rewrite the lock incidentally; inspect unstaged lock changes after each command).
 - `.github/workflows/test.yml` (multi-OS matrix that already runs `mise install` per tool).
 

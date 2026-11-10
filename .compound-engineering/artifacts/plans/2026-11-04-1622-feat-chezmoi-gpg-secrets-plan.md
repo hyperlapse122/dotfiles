@@ -157,6 +157,7 @@ flowchart TB
 **Files:** `home/.chezmoi.toml.tmpl`, `home/.chezmoidata/gpg.yaml`, `home/.chezmoiignore`, new `home/.chezmoitemplates/secrets`, new `home/.secrets/api-tokens.yaml.asc`; behavior coverage in `tests/test_secrets.py`.
 
 **Approach:**
+
 1. Apply KTD1-KTD2 while preserving source-path binding and unrelated configuration.
 2. Encrypt two distinct dummy API tokens for R2 and add the lazy consumption seam from KTD3.
 3. Keep the ignored source ciphertext out of destination enumeration.
@@ -166,6 +167,7 @@ flowchart TB
 **Execution note:** Prefer a real-tool smoke proof before finalizing permanent regression coverage.
 
 **Test scenarios:**
+
 - Covers AE1. Generate ciphertext with a fixture owner key and local additional-recipient settings; only the fixture owner's selected encryption key can receive it.
 - Covers AE2. Initialize and enumerate source without private keys; no secret destination or decryption occurs.
 - Covers AE5. A configured GPG executable works without repository hardware checks.
@@ -185,6 +187,7 @@ flowchart TB
 **Approach:** Follow KTD4-KTD5 and use temporary GPG homes, generated keys, source copies, and destinations without touching the owner's key stores or settings.
 
 **Test scenarios:**
+
 - Covers AE1. Consume the second of two dummy tokens into a local fixture configuration and assert its exact value.
 - Covers AE1. Existing chezmoi recipients, symmetric mode, and recipient-affecting arguments do not survive explicit initialization as effective policy.
 - Covers AE2. Preparation succeeds with ciphertext present and no private-key access.

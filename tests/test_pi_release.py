@@ -64,8 +64,7 @@ def sums(digests=None, extra=()):
 
 
 # Serves a URL from FAKE_DIR, keyed by its last path segment.
-FAKE_FETCH = """#!/usr/bin/env python3
-import os, sys
+FAKE_FETCH = "#!" + sys.executable + "\n" + """import os, sys
 path = os.path.join(os.environ['FAKE_DIR'], sys.argv[-1].rsplit('/', 1)[-1])
 if not os.path.exists(path):
     sys.exit(22)

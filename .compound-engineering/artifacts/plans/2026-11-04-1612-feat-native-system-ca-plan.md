@@ -182,12 +182,15 @@ The diagram shows configuration ownership, not a promise that every desktop laun
 **Dependencies:** None.
 **Files:** Create `home/.chezmoitemplates/native-ca-shell`, `home/modify_dot_profile`, `home/modify_dot_bashrc`, `home/modify_dot_bash_profile`, `home/modify_dot_bash_login`, `home/modify_dot_zshenv`, `home/dot_config/environment.d/60-native-system-ca.conf.tmpl`, and `tests/test_native_ca_shell.py`; extend `home/.chezmoiignore`.
 **Approach:**
+
 1. Implement KTD2's shared transformation and thin modify-template wrappers.
 2. Select Unix files through the existing OS-conditional ignore mechanism; use destination-file existence for the optional Bash login files.
 3. Install Linux's user-manager environment file under KTD3 and document its manager/session refresh under KTD4.
+
 **Patterns:** `home/.chezmoitemplates/gpg-agent-config`, `home/private_dot_gnupg/modify_gpg-agent.conf`, and the isolated fixtures in `tests/test_git_gpg.py`.
 **Execution note:** Prefer real startup-process smoke proof over tests that compare generated source text.
 **Test scenarios:**
+
 - Covers AE1 / AE7. Apply against a disposable home containing custom startup side effects, launch a supported shell with the variable absent from its parent, and observe both the opt-in and the preserved side effect after repeated apply.
 - Preserve Bash's selected login-file behavior when only `.profile` exists and when a custom `.bash_profile` already exists.
 - Reject an incomplete owned marker pair without removing the original startup content.
@@ -201,11 +204,14 @@ The diagram shows configuration ownership, not a promise that every desktop laun
 **Dependencies:** None; the integration owner extends `home/.chezmoiignore` once for U1 and U2.
 **Files:** Create `home/.chezmoitemplates/native-ca-windows`, `home/run_after_20-native-system-ca.cmd.tmpl`, `home/Library/LaunchAgents/com.hyperlapse.native-system-ca.plist.tmpl`, and `tests/test_native_ca_windows.py`.
 **Approach:**
+
 1. Follow the existing profile-free `.cmd`/PowerShell pattern for a single-value user-registry update; keep the shared PowerShell body directly exercisable against a disposable registry-provider root.
 2. Install the macOS LaunchAgent with the direct `launchctl setenv` command, Aqua session selection, and login-time execution; no helper daemon or polling.
 3. Apply KTD4's refresh boundary without claiming that already-running processes have changed.
+
 **Patterns:** `home/run_after_10-reload-gpg-agent.cmd.tmpl` and OS-conditional script templates.
 **Test scenarios:**
+
 - Covers AE7. Execute the real registry-writing body using a child PowerShell process whose HKCU provider is redirected to a disposable subtree; observe the owned value and unchanged unrelated sentinels after repeated execution.
 - Fail on a real registry-provider write error rather than reporting successful persistence.
 - Confirm non-Windows script rendering is empty during the throwaway cross-OS rendering smoke.
@@ -219,11 +225,14 @@ The diagram shows configuration ownership, not a promise that every desktop laun
 **Dependencies:** U1, U2 for integrated activation instructions.
 **Files:** Modify `home/dot_gitconfig.tmpl`, `README.md`, `home/README.md`, and `tests/test_git_gpg.py`.
 **Approach:**
+
 1. Implement KTD5 within the existing Git configuration template.
 2. Publish the R5 matrix with native/default/unsupported distinctions, runtime/backend prerequisites, desktop launch boundaries, and inherited override troubleshooting.
 3. Link issue #10 as deferred work without adding its certificate files, decryption, or provisioning to the source state.
 4. Isolate the existing Windows Unicode-home regression before running the suite: apply its fixture files with scripts excluded, then render and execute only its existing GPG reload hook under the disposable Unicode environment.
+
 **Test scenarios:**
+
 - Covers AE4. Use the installed Git for Windows against a public HTTPS Git endpoint under the generated user configuration, preserving TLS verification.
 - Covers AE1 / AE3. Exercise an available supported runtime and an unauthenticated actual omp network operation outside the checkout, recording success or a concrete environment limitation.
 - Covers AE4. Observe rejection of an untrusted issuer or hostname mismatch using an isolated TLS scenario; do not install test roots into the owner's OS stores.

@@ -77,7 +77,7 @@ The baseline is the repository at commit `b477f7f7b7179faf52b9a0246f8860288b3c5a
 This inventory locates the scope of R3; it is not a commitment to install every app mentioned in a document.
 
 | Capability | Current macOS evidence | Linux planning obligation |
-|---|---|---|
+| --- | --- | --- |
 | Host applications | `home/.chezmoidata/macos.yaml`, `docs/guides/t3-code.md` | Cover Chrome, 1Password and CLI, Ghostty, Claude, ChatGPT, T3 Code, and aria2. |
 | Application access | `home/.chezmoidata/macos-dock.json`, `docs/guides/macos-dock.md` | Account for browser, personal, work, and development app groups; distinguish references to OS or organization-provided apps from repository installations. |
 | Development tools | `mise.toml`, `docs/setup/macos.md` | Cover R7 with native Linux tools and discovery from a fresh shell outside the checkout. |
@@ -237,10 +237,12 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 **Approach:** Implement KTD1 with injectable metadata/package/session probes. Mirror the permanent-checkout validation in `bootstrap.sh` without changing its macOS behavior. Keep explicit first-use prerequisite provisioning separate from `mise install`, registration and personal application. A downloaded standalone entry point must obtain only a verified repository-owned companion snapshot, following `provision-macos.sh`, or clearly require an inspected checkout.
 **Patterns:** `bootstrap.sh`, `provision-macos.sh`, `.chezmoi-bootstrap.toml`, `tests/test_bootstrap.py`.
 **Test scenarios:**
+
 1. Studio 26.04 amd64 with metapackage evidence qualifies; ordinary Ubuntu GNOME, 24.04, 26.10 and arm64 do not qualify as supported workstations.
 2. A supported host with no live KDE session reports pending desktop evidence without executing desktop or package actions during inspection.
 3. Covers AE3. A hostile personal chezmoi hook cannot run through new worktree preparation, including repeat initialization.
 4. Covers AE6. An unsupported existing home remains unchanged and no uninstall/deletion operation is offered.
+
 **Verification:** Host eligibility and preparation boundaries pass under disposable fixtures, with no personal apply or runtime side effect.
 
 ### U2. Provision signed host applications and prerequisites
@@ -252,11 +254,13 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 **Approach:** Follow KTD2 and KTD5. Use Ubuntu packages for native prerequisites, vendor signed sources for Chrome/1Password/Claude/ChatGPT and Docker, and the existing T3 installer. Pin verification keys or signed package authority; never bind a mutable latest URL to a permanent checksum. Reuse existing personal credential-helper assets rather than adding a second competing helper install. Missing compiler/linker, GPG frontend, fontconfig and libsecret prerequisites must be supplied before their lifecycle consumers.
 **Patterns:** `scripts/macos-apps.sh`, `scripts/install-ghostty.sh`, T3 desktop template and package checks.
 **Test scenarios:**
+
 1. Covers AE1. An eligible fresh fixture installs the intended missing packages and verifies vendor key/source and package identity before use.
 2. Reapplying preserves unrelated APT sources and installed apps without an unconditional distribution upgrade.
 3. Conflicting source files, signing keys or runtime packages fail with an actionable diagnostic rather than overwrite or uninstall.
 4. Covers AE3. Non-Linux and unsupported hosts produce no Linux package operations.
 5. Covers AE7. Successful and failed APT transactions restore the prior service-start policy, never start/enable Docker/containerd, and never invoke rootless setup, context switching or cluster creation.
+
 **Verification:** Synthetic subprocess fixtures prove package selection, authenticated-source handling, ordering and restoration on failure; live package installation remains a separate eligible-host check.
 
 ### U3. Prepare native builds and fresh-shell discovery
@@ -268,10 +272,12 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 **Approach:** Implement KTD3 using the existing shared SDK root and native GNU Rust target. Publish roots and executable links using the macOS layout, preserve existing rustup defaults and project overrides, and consume the repository-owned vcpkg revision without changing unrelated macOS/Windows behavior.
 **Patterns:** `scripts/macos-build-environment.sh`, `tests/test_macos_build_environment.py`, `tests/smoke_macos_build_environment.py`.
 **Test scenarios:**
+
 1. Paths containing spaces publish correctly, repeated runs converge, and missing SDK/native compiler or wrong Rust host fail before readiness.
 2. Dirty or unrelated vcpkg directories are preserved and reported; the correct clean checkout uses the existing revision.
 3. Covers F2 / AE1. A fresh external-directory shell resolves Python, PowerShell, CMake/Ninja, both .NET SDK majors, Rust and vcpkg without task activation.
 4. The opt-in native smoke compiles and runs C++, Rust and .NET 8/10 programs plus a vcpkg-backed CMake/Ninja sample, and removes disposable projects.
+
 **Verification:** Unit fixtures prove publication and safety; a native GNU Linux smoke proves compiler/linker/runtime behavior when an eligible host is available.
 
 ### U4. Integrate KDE terminal and credential readiness
@@ -283,11 +289,13 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 **Approach:** Implement KTD4, remove the obsolete Ubuntu 24.04 package path, and retain account-shell/session checks. Determine Ghostty's installed desktop entry and update only the KDE terminal keys. Preserve shared credential clients; fix a demonstrated KDE incompatibility only at their existing protocol boundary. Keep CE and skills wired through existing templates.
 **Patterns:** Existing terminal apply/status contract and native credential smoke fixtures.
 **Test scenarios:**
+
 1. Covers AE7. Repeated apply changes only managed KDE terminal keys and Ghostty defaults, preserving unrelated settings and the macOS branch.
 2. Pending shell/session renewal remains pending; headless inspection cannot claim a GUI launch succeeded.
 3. Covers AE4. Missing/default-less/locked Secret Service fails securely and never writes plaintext or starts a competing daemon.
 4. Eligible native acceptance checks default-terminal UI, shortcut, Dolphin and `Terminal=true` launch, followed by a disposable Secret Service round trip and real user authentication checks.
 5. Native harness listings and existing integration smokes retain baseline/T3 isolation and exactly-once shared skill discovery.
+
 **Verification:** Fixture tests prove preserving modifications and failure behavior; actual Plasma and wallet acceptance remain distinct native evidence.
 
 ### U5. Add isolated minikube proof and Linux runtime guidance
@@ -299,11 +307,13 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 **Approach:** Implement KTD6. Use explicit `--driver=docker --container-runtime=containerd` for the owned profile, record endpoint/version/ownership evidence, and bind the test workload to a high loopback port. Keep all state disposable and close port-forward processes before teardown. A failed cleanup must retain and report the exact remaining owned resources rather than claim success.
 **Patterns:** Shared temporary-resource rules, subprocess smoke conventions and native ownership checks.
 **Test scenarios:**
+
 1. Covers F3 / AE1. The native smoke proves node/workload readiness and an actual host HTTP response.
 2. Covers AE5. Success, workload failure and ordinary interruption remove only owned resources and leave zero task-owned volumes; pre-existing user contexts and profiles are untouched.
 3. Missing rootless prerequisites or unsupported host fails before starting any daemon or cluster.
 4. Cleanup failure yields a nonzero result naming the owned endpoint/profile/state left for recovery; it never invokes global prune or all-profile deletion.
 5. Harness rendering adds only Linux runtime guidance and preserves macOS/Windows and T3-baseline isolation.
+
 **Verification:** Command fixtures prove lifecycle and teardown ordering; the opt-in native smoke proves Kubernetes behavior only on a supported Linux host.
 
 ### U6. Expose readiness and migration coverage
@@ -315,10 +325,12 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 **Approach:** Implement KTD7 and a capability inventory tied to R3. Map Dock references to existing Linux/browser options or explicit limitations without enrolling organization apps or reimplementing Apple services. Document exact native acceptance procedures, .NET 8 lifecycle and vendor Linux feature gaps. Keep runtime-starting proof separate from default inspection.
 **Patterns:** `scripts/macos-readiness.py`, `tests/test_macos_readiness.py`, `docs/setup/macos.md`.
 **Test scenarios:**
+
 1. Covers AE3. Readiness inspection never invokes an installer, decryption, authentication, daemon start, cluster creation or destructive command.
 2. Missing tools fail; missing GUI/hardware/authentication/native evidence is pending; only fully evidenced readiness is successful.
 3. Output contains no credential values or captured secret-bearing command output.
 4. Coverage distinguishes package installation from usable native work and records every unmet R3 capability.
+
 **Verification:** JSON/exit-code fixtures and documentation review agree on failed versus pending status, while macOS/Windows setup remains unchanged.
 
 ### U7. Integrate regression and native verification lanes
@@ -329,9 +341,11 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 **Files:** Update `scripts/run-test-area.py`, relevant `.github/workflows/test.yml` jobs, `tests/test_ci_areas.py`, `tests/test_ci_workflows.py`, and bootstrap tests where needed.
 **Approach:** Assign every new test module exactly once. Retain useful generic Linux unit runners as compatibility infrastructure, add eligible native CLI proof only where its actual requirements are available, and keep GUI/manual evidence explicitly separate. Do not create permanent development deployments or run rootless smoke on macOS through another runtime.
 **Test scenarios:**
+
 1. Every new unittest module is assigned once and the area/discovery ID sets match.
 2. Existing macOS/Windows bootstrap, apps, build, credential and harness regressions continue passing.
 3. Unsupported native smoke execution fails or clearly reports unavailable eligibility without mutating the host.
+
 **Verification:** Required unit areas, generated lock integrity and targeted native smokes pass where eligible; every unavailable native check has its reason and exact owner acceptance procedure recorded.
 
 ---
@@ -339,7 +353,7 @@ This work does not execute that path or rewrite it: R12 governs new Linux behavi
 ## Verification Contract
 
 | Scope | Method | Required outcome |
-|---|---|---|
+| --- | --- | --- |
 | Source boundaries and ownership | `mise exec -- python scripts/run-test-area.py --validate-only` | Complete, unique test-area assignments and unchanged hook-free bootstrap. |
 | Platform and build behavior | `mise exec -- python scripts/run-test-area.py --area platform` and `--area build-contracts` | Studio gates, no-start installation, KDE preservation, build publication and existing OS regressions pass. |
 | Shared apps and credentials | `mise exec -- python scripts/run-test-area.py --area applications` and `--area security` | Existing asset/harness/credential behavior remains functional and secure. |

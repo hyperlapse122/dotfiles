@@ -134,7 +134,7 @@ Until that issue is implemented, macOS eligibility follows the repository's curr
 The current researched releases yield 178 selected font files; this count is evidence for the first lock, not a permanent cap on later supported releases.
 
 | Collection | Current tag | Selection | Current files |
-|---|---|---|---:|
+| --- | --- | --- | ---: |
 | JetBrains Mono | `v2.304` | `fonts/ttf/*.ttf`, including supplied NL faces; omit JetBrains variable files | 32 |
 | Pretendard / JP / Std / GOV | `v1.3.9` | Each archive's `public/static/alternative/*.ttf` plus `public/variable/*Variable.ttf`; omit OTF, webfonts, and duplicate Std variable location | 40 |
 | D2Coding | `VER1.4.0` | `D2Coding/*.ttf` and `D2CodingLigature/*.ttf`; omit TTC collections | 4 |

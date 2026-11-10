@@ -640,15 +640,15 @@ printf 'concurrent\n' >"$other/other.txt"
 "$git_bin" -C "$other" push -q origin main
 
 mkdir -p "$scratch/rebase-bin"
-cat >"$scratch/rebase-bin/nix" <<'EOF'
-#!/usr/bin/env bash
+printf '#!%s\n' "$BASH" >"$scratch/rebase-bin/nix"
+cat >>"$scratch/rebase-bin/nix" <<'EOF'
 printf '%s\n' "$*" >> "$VERIFY_CALLS"
 [[ ! -f fail-combined ]]
 EOF
 chmod +x "$scratch/rebase-bin/nix"
 printf 'changed\n' >>"$clone/tracked.txt"
 (cd "$clone" && PATH=$scratch/rebase-bin:$PATH VERIFY_CALLS=$scratch/rebase-calls bash -e -c "$push_script") >"$scratch/diverged-step.log" 2>&1 ||
-  fail 'the push step failed to rebase onto a diverged origin/main'
+  fail "the push step failed to rebase onto a diverged origin/main: $(tail -n 10 "$scratch/diverged-step.log")"
 log=$("$git_bin" --git-dir "$origin" log --format=%s main)
 [[ $log == *"chore(deps): update dependencies"* ]] ||
   fail "origin/main is missing the rebased commit: $log"

@@ -171,6 +171,7 @@ sequenceDiagram
 **Files:** Modify `scripts/windows-visual-studio.ps1`, `tests/test_windows_visual_studio.py`, and the Visual Studio task description in `mise.toml`; preserve `scripts/windows-build-tools.vsconfig` unchanged.
 
 **Approach:**
+
 1. Add the existing-instance readiness/manual-action branch before temporary acquisition and remove automatic existing-instance servicing.
 2. Use identity-scoped health/component diagnostics under KTD2 and include the selected path, relevant state, exact missing IDs, and tracked config path in actionable errors.
 3. Keep signed first installation and post-install inventory validation, using the same readiness rule as reuse.
@@ -181,6 +182,7 @@ sequenceDiagram
 **Test seam:** `tests/test_windows_visual_studio.py` proves PowerShell/native argv and orchestration behavior against disposable binaries, not Microsoft's installer UI or actual UAC approval.
 
 **Test scenarios:**
+
 - Covers AE1. A complete, launchable stable instance is reused on two applies with zero download and launch receipts, identical installed state/version, and the same ready path.
 - Covers AE1. An older usable 18.x instance remains unchanged despite an available-newer-version fixture; no update-discovery or servicing process runs.
 - Covers AE2. One and several tracked IDs are missing; diagnostics list those IDs and the selected path/config, no unrelated IDs are reported missing, and installed components are unchanged.
@@ -204,6 +206,7 @@ sequenceDiagram
 **Files:** Modify `tests/smoke_windows_build_environment.py`; create `tests/test_windows_build_smoke.py` for behavioral verifier coverage.
 
 **Approach:**
+
 1. Retain the existing build families and fresh-environment proof; add a read-only preflight ahead of the first representative build.
 2. Check native Windows token state, stable VS identity and required inventory, actual toolset/SDK/reference paths, .NET SDK 8/10 availability in the managed root, installed stable MSVC Rust targets, and vcpkg executable/checkout/user-wide integration.
 3. Reuse existing SDK/toolset/reference queries by moving checks ahead of build loops rather than creating a second, drifting inventory list.
@@ -214,6 +217,7 @@ sequenceDiagram
 **Test seam:** Import the smoke module and invoke its orchestration with disposable command doubles and recorded child processes. This proves sequencing/no preparation but does not replace the real native build matrix.
 
 **Test scenarios:**
+
 - Covers AE5. A prepared, non-elevated fixture reaches all four existing build families and the fresh-profile check, with no preparation command or elevation request recorded.
 - Covers AE6. Missing vswhere/eligible stable instance, v142/v143/ARM64 tools or ATL/MFC, SDK 22621/26100, Framework 4.8/4.8.1 targeting files, SDK 8/10, stable Rust/one required target, and vcpkg integration each produce an actionable failure before any build family begins.
 - Covers AE6. A diagnostic query fails: preserve its failure rather than claiming missing state was successfully inspected.
@@ -235,6 +239,7 @@ sequenceDiagram
 **Files:** Modify `tests/smoke_windows_build_environment.py` and `tests/test_windows_build_smoke.py`; create `tests/prepare_windows_build_environment.py` and `tests/test_windows_build_prepare.py`.
 
 **Approach:**
+
 1. Move the existing guarded two-apply preparation branch to the new helper, requiring explicit `--provision` opt-in and the current disposable GitHub-hosted environment checks.
 2. Keep streamed aggregate-task output and native exit propagation; stop immediately on failed apply/reboot-required outcomes and report preparation distinctly from build readiness.
 3. Remove `--provision` from the verifier. The preparation helper never invokes builds; verification always uses the existing `--verify-only` command afterward in the intended prepared user's non-elevated session.
@@ -245,6 +250,7 @@ sequenceDiagram
 **Test seam:** `tests/test_windows_build_prepare.py` uses a disposable task executable/command recorder, not real machine preparation. Existing apply tests continue to prove explicit-apply/ordinary-bootstrap separation.
 
 **Test scenarios:**
+
 - Without the explicit opt-in or outside the disposable-host guard, preparation fails before any task invocation.
 - An opted-in disposable fixture invokes only the aggregate preparation task twice; it never runs the representative builds or emits the verifier's full-matrix PASS message.
 - A first or second preparation failure stops immediately, preserves output/status, and never invokes verification or an automatic restart.
@@ -264,6 +270,7 @@ sequenceDiagram
 **Files:** Modify `docs/setup/windows.md` and `docs/maintenance/development-and-testing.md`; preserve `.compound-engineering/artifacts/plans/2026-11-05-0919-feat-windows-native-build-environment-plan.md` unchanged.
 
 **Approach:**
+
 1. Describe the new ordinary-apply behavior and manual Visual Studio Installer Update/Modify/repair actions. Point missing-component users to the tracked `.vsconfig` and Microsoft's maintenance documentation.
 2. Publish the ordinary-test, verify-only, and opt-in disposable preparation commands from the Verification Contract; distinguish machine install permissions from non-admin compilation.
 3. Explain required prepared-user environment/integration, allowed project-local restores, non-elevated receipts, full coverage, and the deferred hosted lane without claiming hosted success or attributing its earlier stall to UAC.
