@@ -311,16 +311,6 @@ let
           "ux-flows"
         ]
       ) koreanRoots;
-      # Antigravity loads no plugins, so its root also holds every skill of
-      # the pinned Compound Engineering input, named by that input.
-      ceSkillsDir = "${self.inputs.compound-engineering-plugin}/skills";
-      ceTargets = map (name: ".gemini/antigravity-cli/skills/${name}") (
-        lib.attrNames (
-          lib.filterAttrs (
-            name: type: type == "directory" && builtins.pathExists "${ceSkillsDir}/${name}/SKILL.md"
-          ) (builtins.readDir ceSkillsDir)
-        )
-      );
       # Resolved targets of enabled entries, not attribute names. The source is
       # compared as a string with its context dropped, so no darwin derivation
       # is built, and the store path is never interpolated.
@@ -462,9 +452,8 @@ let
         lib.elem "nr-darwin" pnames && !lib.elem "nr" pnames && !lib.elem "nr-linux" pnames
       ) "${entry.name}: nr must be nr-darwin")
       (check (
-        lib.hasInfix "pinentry-card-darwin" (plain (pinentry.drvAttrs.installPhase or ""))
-        && lib.hasInfix "pinentry-mac" (plain (pinentry.drvAttrs.installPhase or ""))
-      ) "${entry.name}: the YubiKey pinentry must be the darwin filter in front of pinentry_mac")
+        pinentry.pname == "dotfiles-pinentry" && lib.hasInfix "pinentry-mac" (plain pinentry.postInstall)
+      ) "${entry.name}: native pinentry must delegate to pinentry_mac")
       (check ((user.targets.darwin.defaults."org.gpgtools.pinentry-mac".UseKeychain or null) == false)
         "${entry.name}: pinentry_mac's UseKeychain default must be false, or Save in Keychain starts ticked"
       )
@@ -474,6 +463,7 @@ let
       ) "${entry.name}: Ghostty must come from the cask, not nixpkgs")
       (check (
         user.programs.ghostty.settings.font-family or [ ] == [
+          "Jetendard"
           "JetBrainsMono Nerd Font"
           "D2CodingLigature Nerd Font"
           "D2KodingLigature Nerd Font"
@@ -652,10 +642,9 @@ let
           )
           "${entry.name}: ${target} must be exactly one enabled home.file whose source is the in-tree test-audit skill directory, got ${builtins.toJSON (map koreanSourceOf files)}"
       ) testAuditTargets)
-      (check
-        (sort koreanUnderRoots == sort (koreanTargets ++ testAuditTargets ++ pinnedTargets ++ ceTargets))
+      (check (sort koreanUnderRoots == sort (koreanTargets ++ testAuditTargets ++ pinnedTargets))
         "${entry.name}: the targets under the skill roots must be exactly ${
-          builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets ++ ceTargets)
+          builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets)
         }, got ${builtins.toJSON (sort koreanUnderRoots)}"
       )
       (check (koreanElsewhere == [ ])

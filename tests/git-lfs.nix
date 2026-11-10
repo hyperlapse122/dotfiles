@@ -65,58 +65,67 @@ let
       checkHost ${esc entry.name} ${esc homePath} ${esc gitConfig}
     '';
 in
-pkgs.runCommand "git-lfs-tests" { nativeBuildInputs = [ pkgs.git ]; } ''
-  ${configurations.userGuard}
-  failures=$PWD/failures
-  : > "$failures"
+pkgs.runCommand "git-lfs-tests"
+  {
+    nativeBuildInputs = [
+      pkgs.git
+      pkgs.python3
+    ];
+  }
+  ''
+    ${configurations.userGuard}
+    failures=$PWD/failures
+    : > "$failures"
 
-  checkHost() (
-    host=$1 homePath=$2 gitConfig=$3
-    fail() { echo "$host: $*" >> "$failures"; }
+    checkHost() (
+      host=$1 homePath=$2 gitConfig=$3
+      fail() { echo "$host: $*" >> "$failures"; }
 
-    if [ -z "$homePath" ] || [ ! -x "$homePath/bin/git-lfs" ]; then
-      fail "git-lfs is not in home.path"
+      if [ -z "$homePath" ] || [ ! -x "$homePath/bin/git-lfs" ]; then
+        fail "git-lfs is not in home.path"
+      fi
+      if [ -z "$gitConfig" ] || [ ! -f "$gitConfig" ]; then
+        fail "home-manager renders no git/config"
+        exit
+      fi
+
+      python3 ${./personal-environment.py} git "$(dirname "$(dirname "$(dirname "$gitConfig")")")"
+
+      work=$(mktemp -d)
+      export HOME=$work/home
+      export XDG_CONFIG_HOME=$HOME/.config
+      export PATH=$homePath/bin:$PATH
+      mkdir -p "$XDG_CONFIG_HOME/git"
+      cp "$gitConfig" "$XDG_CONFIG_HOME/git/config"
+      # The rendered config signs every commit; the sandbox has no key.
+      export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgSign GIT_CONFIG_VALUE_0=false
+
+      git init -q "$work/repo"
+      cd "$work/repo"
+      echo '*.bin filter=lfs diff=lfs merge=lfs -text' > .gitattributes
+      printf 'large asset %s\n' "$host" > "$work/content"
+      cp "$work/content" data.bin
+      oid=$(sha256sum "$work/content" | cut -d' ' -f1)
+      git add .gitattributes data.bin
+      git commit -q -m "add asset"
+
+      blob=$(git cat-file -p HEAD:data.bin)
+      case $blob in
+        "version https://git-lfs.github.com/spec/v1"*"oid sha256:$oid"*) ;;
+        *) fail "committed data.bin is not an LFS pointer to its content" ;;
+      esac
+
+      rm data.bin
+      git checkout -q -- data.bin
+      cmp -s data.bin "$work/content" || fail "checkout did not restore data.bin content"
+    )
+
+    ${lib.concatMapStringsSep "\n" assertEntry configurations.userEntries}
+
+    if [ -s "$failures" ]; then
+      cat "$failures" >&2
+      exit 1
     fi
-    if [ -z "$gitConfig" ] || [ ! -f "$gitConfig" ]; then
-      fail "home-manager renders no git/config"
-      exit
-    fi
 
-    work=$(mktemp -d)
-    export HOME=$work/home
-    export XDG_CONFIG_HOME=$HOME/.config
-    export PATH=$homePath/bin:$PATH
-    mkdir -p "$XDG_CONFIG_HOME/git"
-    cp "$gitConfig" "$XDG_CONFIG_HOME/git/config"
-    # The rendered config signs every commit; the sandbox has no key.
-    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgSign GIT_CONFIG_VALUE_0=false
-
-    git init -q "$work/repo"
-    cd "$work/repo"
-    echo '*.bin filter=lfs diff=lfs merge=lfs -text' > .gitattributes
-    printf 'large asset %s\n' "$host" > "$work/content"
-    cp "$work/content" data.bin
-    oid=$(sha256sum "$work/content" | cut -d' ' -f1)
-    git add .gitattributes data.bin
-    git commit -q -m "add asset"
-
-    blob=$(git cat-file -p HEAD:data.bin)
-    case $blob in
-      "version https://git-lfs.github.com/spec/v1"*"oid sha256:$oid"*) ;;
-      *) fail "committed data.bin is not an LFS pointer to its content" ;;
-    esac
-
-    rm data.bin
-    git checkout -q -- data.bin
-    cmp -s data.bin "$work/content" || fail "checkout did not restore data.bin content"
-  )
-
-  ${lib.concatMapStringsSep "\n" assertEntry configurations.userEntries}
-
-  if [ -s "$failures" ]; then
-    cat "$failures" >&2
-    exit 1
-  fi
-
-  touch $out
-''
+    touch $out
+  ''

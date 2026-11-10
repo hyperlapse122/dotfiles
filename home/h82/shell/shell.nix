@@ -5,6 +5,7 @@
   ...
 }:
 let
+  completions = import ../../../packages/zsh-completions.nix { inherit pkgs; };
   mise = config.programs.mise;
   # The condition under which the Home Manager module writes globalConfig to
   # mise/config.toml.
@@ -12,15 +13,30 @@ let
   miseGlobalConfig = "${config.xdg.configHome}/mise/config.toml";
 in
 {
+  home.sessionVariables.NODE_USE_SYSTEM_CA = "1";
+  programs.bash = {
+    enable = true;
+    enableCompletion = true;
+  };
   programs.zsh = {
     enable = true;
     dotDir = "${config.xdg.configHome}/zsh";
-    enableCompletion = true;
-    autosuggestion.enable = true;
-    syntaxHighlighting.enable = true;
+    enableCompletion = false;
 
     prezto = {
       enable = true;
+      package = import ../../../packages/prezto.nix { inherit pkgs; };
+      editor.keymap = "emacs";
+      prompt.theme = "sorin";
+      extraConfig = ''
+        if ! grep -Eq '^[[:space:]]*enable-ssh-support([[:space:]]|$)' "${config.programs.gpg.homedir}/gpg-agent.conf" 2>/dev/null \
+            && ! grep -Eq 'SSH_AUTH_SOCK|SSH_AGENT_PID' "${config.xdg.cacheHome}/prezto/gpg-agent.env" 2>/dev/null; then
+          zstyle -a ':prezto:load' pmodule modules
+          modules=($modules[1,-6] gpg $modules[-5,-1])
+          zstyle ':prezto:load' pmodule $modules
+          unset modules
+        fi
+      '';
       pmodules = [
         "environment"
         "terminal"
@@ -30,6 +46,9 @@ in
         "spectrum"
         "git"
         "utility"
+      ]
+      ++ lib.optional (config.my.kind == "darwin") "homebrew"
+      ++ [
         "completion"
         "syntax-highlighting"
         "history-substring-search"
@@ -58,9 +77,12 @@ in
       share = true;
     };
 
-    initContent = ''
+    initContent = lib.mkBefore ''
       # Keep the user's local completion functions ahead of system functions.
-      fpath=($HOME/.local/share/zsh/site-functions(N) $fpath)
+      typeset -U fpath
+      fpath=(${completions}/share/zsh/site-functions $HOME/.local/share/zsh/site-functions(N) $fpath)
+      [[ -z $TTY ]] || export GPG_TTY=$TTY
+
     '';
   };
 

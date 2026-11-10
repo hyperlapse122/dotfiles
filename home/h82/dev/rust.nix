@@ -33,11 +33,12 @@ let
   );
 in
 {
-  # rustup honours each project's rust-toolchain.toml; the toolchains it
-  # downloads are dynamically linked and run through nix-ld. The first
-  # toolchain is a one-time `rustup default stable`.
   home.packages = [
-    pkgs.rustup
+    (lib.lowPrio pkgs.rustup)
+    pkgs.rustc
+    pkgs.cargo
+    pkgs.rustfmt
+    pkgs.clippy
     pkgs.sccache
   ];
 

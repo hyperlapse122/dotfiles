@@ -4,6 +4,7 @@
     ./android.nix
     ./containers.nix
     ./cpp.nix
+    ./dotnet.nix
     ./ghq.nix
     ./git.nix
     ./kubernetes.nix

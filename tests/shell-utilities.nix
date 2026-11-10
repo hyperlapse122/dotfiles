@@ -37,10 +37,10 @@ let
       homePath = entry.user.home.path or "";
     in
     ''
-      checkHost ${esc entry.name} ${esc homePath}
+      checkHost ${esc entry.name} ${esc homePath} ${esc (entry.user.home-files or "")}
     '';
 in
-pkgs.runCommand "shell-utilities-tests" { } ''
+pkgs.runCommand "shell-utilities-tests" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   ${configurations.guard}
   failures=$PWD/failures
   : > "$failures"
@@ -48,6 +48,13 @@ pkgs.runCommand "shell-utilities-tests" { } ''
   checkHost() (
     host=$1 homePath=$2
     fail() { echo "$host: $*" >> "$failures"; }
+    python3 ${./personal-environment.py} shell "$3" || fail "invalid zsh startup"
+    "$homePath/bin/dotnet" --list-sdks > sdks
+    grep -q "^8\." sdks && grep -q "^10\." sdks || fail "missing .NET SDK"
+    for tool in bun bunx rustc cargo cmake ninja vcpkg; do
+      test -x "$homePath/bin/$tool" || fail "missing $tool"
+    done
+
 
     if [ -z "$homePath" ] || [ ! -d "$homePath/bin" ]; then
       fail "home-manager renders no home.path"

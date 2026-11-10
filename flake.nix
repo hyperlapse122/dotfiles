@@ -166,6 +166,9 @@
     {
       # Reads what the macOS fixture hosts materialize, so building it builds
       # both fixture systems; only a macOS builder can.
+      checks.aarch64-darwin.pinentry-keyring = import ./packages/pinentry-keyring.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+      };
       checks.aarch64-darwin.agent-unmanaged = import ./tests/agent-unmanaged.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
         entries = nixpkgs.lib.mapAttrsToList (name: host: {
@@ -345,22 +348,7 @@
             '';
         in
         {
-          pinentry-card =
-            pkgs.runCommand "pinentry-card-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.bash
-                ];
-              }
-              ''
-                cp ${./scripts/pinentry-card} ./pinentry-card
-                bash ${./tests/pinentry-card.sh} ./pinentry-card \
-                  ${(import ./packages/gpg-tools.nix { inherit pkgs; }).pinentryCard}/bin/pinentry-card \
-                  ${pkgs.pinentry-qt}/bin/pinentry-qt ${pkgs.pinentry-curses}/bin/pinentry-curses \
-                  ${pkgs.libsecret}/bin/secret-tool
-                touch $out
-              '';
+          pinentry-keyring = import ./packages/pinentry-keyring.nix { inherit pkgs; };
           darwin-provisioning =
             pkgs.runCommand "darwin-provisioning-tests"
               {
@@ -388,22 +376,6 @@
               darwinFixtures
               ;
           };
-          pinentry-card-darwin =
-            pkgs.runCommand "pinentry-card-darwin-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.bash
-                ];
-              }
-              ''
-                bash ${./tests/pinentry-card-darwin.sh} ${
-                  (import ./packages/gpg-tools.nix { inherit pkgs; }).mkDarwinPinentryCard {
-                    pinentryMac = "/pinentry-mac-stand-in/bin/pinentry-mac";
-                  }
-                }
-                touch $out
-              '';
           restore-age-identity =
             pythonScriptCheckWith
               {
@@ -765,6 +737,7 @@
                         fi
                       '')
                       [
+                        "Jetendard"
                         "JetBrainsMono Nerd Font"
                         "D2CodingLigature Nerd Font"
                         "D2KodingLigature Nerd Font"
@@ -861,6 +834,7 @@
                       echo 'gpg-agent.conf no longer sets default-cache-ttl 0 on ${entry.name}' >&2
                       fail=1
                     fi
+                    python3 ${./tests/personal-environment.py} gpg ${entry.user.home-files}
                     if ! grep -Fxq 'max-cache-ttl 0' ${gpgAgentConf}; then
                       echo 'gpg-agent.conf no longer sets max-cache-ttl 0 on ${entry.name}' >&2
                       fail=1
@@ -874,11 +848,18 @@
                   ''}
                 '';
             in
-            pkgs.runCommand "gpg-agent-no-cache-tests" { nativeBuildInputs = [ pkgs.gnugrep ]; } ''
-              set -x
-              ${forEveryUser assertConfiguration}
-              touch $out
-            '';
+            pkgs.runCommand "gpg-agent-no-cache-tests"
+              {
+                nativeBuildInputs = [
+                  pkgs.gnugrep
+                  pkgs.python3
+                ];
+              }
+              ''
+                set -x
+                ${forEveryUser assertConfiguration}
+                touch $out
+              '';
           yubikey-fido = import ./tests/yubikey-fido.nix { inherit pkgs self; };
           desktop-packages =
             let

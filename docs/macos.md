@@ -183,7 +183,7 @@ Production activation publishes:
 
 Git uses `gpg-git` to read the card with `gpg --batch --card-status` before selecting its signing key. This refresh addresses the reported case where a card read restores a missing signing key after idle. It waits at most ten seconds, discards card metadata, and leaves the signing input untouched. If the refresh fails, GPG still runs and reports its own result. The adapter never retries a signature or a PIN, and verification passes directly to GPG. The cause of the intermittent card-discovery failure remains unconfirmed; this is a preventive recovery step.
 
-Three YubiKeys carry the same signing key, each under its own PIN. The PIN prompt is the native `pinentry_mac` dialog (`scripts/pinentry-card-darwin`), which keys items by `n/gnupg-card-pin-<serial>` and offers a "Save in Keychain" checkbox that starts unticked (`UseKeychain = false`). Ticking it saves that card's PIN in the login Keychain (`service = "GnuPG"`, `account = "gnupg-card-pin-<serial>"`), and a rejected PIN deletes that card's item automatically. Remove a saved PIN manually with `security delete-generic-password -s GnuPG -a gnupg-card-pin-<serial>`.
+Three YubiKeys carry the same signing key, each under its own PIN. The packaged `dotfiles-pinentry` frontend stores OpenPGP user PINs in the macOS Keychain under service `dotfiles.pinentry.openpgp` and account `yubikey:<serial>:user`. It delegates prompts to the native `pinentry_mac` dialog. Remove a saved PIN with `dotfiles-pinentry forget <card-id>`; serial numbers may be decimal digits or a quoted grouped serial such as `"12 345 678"`. GnuPG's agent cache remains disabled. The native dialog's separate “Save in Keychain” option starts unticked (`UseKeychain = false`).
 
 ### SSH key
 

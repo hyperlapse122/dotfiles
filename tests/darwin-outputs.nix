@@ -296,19 +296,24 @@ let
       }/bin/gpg-git" ]; then
         bad "Git does not use the card-discovery signing adapter"
       fi
+      for mode in shell git terminal gpg; do
+        python3 ${./personal-environment.py} "$mode" "$gen/home-files" || bad "invalid $mode configuration"
+      done
+      "$gen/home-path/bin/dotnet" --list-sdks > sdks
+      grep -q '^8\.' sdks && grep -q '^10\.' sdks || bad "missing .NET SDK"
       if [ ! -f "$agentconf" ]; then
         bad "no gpg-agent.conf"
       else
         pinentry=$(sed -n 's/^pinentry-program //p' "$agentconf")
         case $pinentry in
-          */bin/pinentry-card) ;;
+          */bin/dotfiles-pinentry) ;;
           *) bad "gpg-agent.conf names $pinentry, not the darwin pinentry filter" ;;
         esac
-        proxy=$(dirname "$(dirname "$pinentry")")/libexec/pinentry-card/pinentry-card-proxy
-        grep -q 'KEYRING_BACKEND = "security"' "$proxy" 2>/dev/null \
-          || bad "the pinentry filter's proxy is not the macOS Keychain render"
-        grep -q 'bin/pinentry-mac' "$proxy" 2>/dev/null \
-          || bad "the pinentry filter's proxy does not delegate to pinentry_mac"
+        fallback=$(jq -r .fallback "$pinentry.json" 2>/dev/null)
+        case "$fallback" in
+          /nix/store/*/bin/pinentry-mac) test -x "$fallback" || bad "missing fallback" ;;
+          *) bad "pinentry companion does not name pinentry_mac" ;;
+        esac
         grep -qx 'default-cache-ttl 0' "$agentconf" && grep -qx 'max-cache-ttl 0' "$agentconf" \
           || bad "gpg-agent must cache no PIN"
       fi

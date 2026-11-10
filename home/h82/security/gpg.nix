@@ -50,7 +50,7 @@ in
 
   services.gpg-agent = {
     enable = true;
-    pinentry.package = gpgTools.pinentryCard;
+    pinentry.package = gpgTools.pinentryKeyring;
     extraConfig = ''
       allow-loopback-pinentry
       default-cache-ttl 0

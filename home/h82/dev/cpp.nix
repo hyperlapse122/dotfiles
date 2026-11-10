@@ -9,6 +9,7 @@
     gcc
     gdb
     gnumake
+    vcpkg
     ninja
     pkg-config
   ];

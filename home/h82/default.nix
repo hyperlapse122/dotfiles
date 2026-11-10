@@ -34,7 +34,10 @@ in
   home.packages =
     (
       with pkgs;
-      [ bun ]
+      [
+        (import ../../packages/bun.nix { inherit pkgs; })
+        docker-credential-helpers
+      ]
       ++ gui [ discord ]
       ++ [
         gh

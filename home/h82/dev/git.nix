@@ -12,7 +12,9 @@
     settings = {
       user.name = "Joosung Park";
       user.email = "iam@h82.dev";
-      core.autocrlf = false;
+      core.autocrlf = "input";
+      core.longpaths = true;
+      gpg.format = "openpgp";
       init.defaultBranch = "main";
       pull.rebase = true;
       push.autoSetupRemote = true;
