@@ -1,63 +1,79 @@
 # macOS hosts
 
-This guide covers a Mac from first setup to everyday use. A macOS host is an Apple silicon Mac (`aarch64-darwin`). It gets the same shell, development tools, coding-agent configuration, Git signing, and CLI authentication as a non-NixOS Linux host, and the GUI apps, fonts, and Ghostty settings of a NixOS host. Intel Macs are not supported.
+This guide covers an Apple silicon Mac (`aarch64-darwin`) from an erased machine through everyday use. A macOS host gets the same shell, development tools, coding-agent configuration, Git signing, CLI authentication, GUI apps, fonts, and Ghostty settings as the NixOS desktop host, assembled as a `nix-darwin` system with Home Manager inside it. Intel Macs are not supported.
 
 | Host | Machine |
 | --- | --- |
-| `MacBook-Pro-Mac17-9` | Apple silicon MacBook Pro (model identifier `Mac17,9`) |
+| `MacBook-Pro-Mac17-9` | Apple silicon MacBook Pro (M5 Pro, model identifier `Mac17,9`) |
 
-A Mac that has no directory under `hosts/` yet needs one first; [adding a host](adding-a-host.md#macos-hosts) creates the directory, the bootstrap age material, the `tokens.yaml` recipient, and the host SSH key. Run those steps on a machine that already has the checkout and a YubiKey, then push, so the Mac can clone the result.
+The repository owner runs every step in this runbook by hand on the Mac from a local GUI login session. No coding agent may erase macOS, install Nix, run `darwin-rebuild`, or run `nr switch` on a host.
 
-Before the first setup, have:
+## Back up before erasing the Mac
 
-- the host directory and its secrets pushed to `main`;
-- an administrator account on the Mac, for `sudo`;
-- an Apple Account for Xcode downloads and a signed-in Mac App Store for KakaoTalk and Flighty;
-- one of the three YubiKeys and its PIN, for the identity recovery in step 10;
-- network and time for the first apply, which downloads Homebrew, every cask, the Apple container kernel, Xcode (on the production apply), KakaoTalk, Flighty, an iOS Simulator runtime, and the Android SDK;
-- no directory at `~/Library/Android/sdk`, where Android Studio installs its SDK by default. Home Manager links the SDK there and stops the apply when it finds a real directory in the way. Move an existing one aside with `mv ~/Library/Android/sdk ~/Library/Android/sdk.before-nix-config`.
+Before erasing macOS or starting a clean installation, confirm and back up:
+
+- **YubiKeys**: all three YubiKeys that carry the OpenPGP key, with their User and Admin PINs and the offline signing-key backup verified and stored separately from the Mac.
+- **GPG public key and ownertrust**: `keys/signing.asc` (fingerprint `621512777E6933FEB4458FDC4945855D4F283F05`) committed in the repository and a copy of your GPG ownertrust (`gpg --export-ownertrust`) if you rely on trust assignments outside the ultimate trust declared for `keys/signing.asc`.
+- **File-based SSH keys**: any SSH private key on the Mac that is not already stored in `secrets/hosts/<host>/ssh.yaml` or 1Password.
+- **1Password access**: the 1Password Emergency Kit (account password, Secret Key, and two-factor authentication on another device) so you can sign in on the fresh installation.
+- **Disk data**: every local file, unpushed Git branch or worktree, Parallels virtual machine, container volume, and application state on the internal SSD that a macOS erase will destroy.
+
+## Prerequisites
+
+A Mac that has no directory under `hosts/` yet needs one first; [adding a host](adding-a-host.md#macos-hosts) creates the host directory, the bootstrap age material, the `secrets/tokens.yaml` recipient, and the per-host secret files (`ssh.yaml`, `apple-account.yaml`, and optional `tls-inspection-ca.yaml`). For `MacBook-Pro-Mac17-9`, all of those files are already committed in this repository.
+
+Before starting the setup on the Mac, have:
+
+- the host directory and its encrypted secrets pushed to `main`;
+- an administrator account on the Mac whose short username matches `my.user.name` in `hosts/<host>/default.nix` (`hyperlapse` on `MacBook-Pro-Mac17-9`), for `sudo`;
+- the Apple Account credentials stored in `secrets/hosts/<host>/apple-account.yaml` for Xcode downloads, and a signed-in Mac App Store session for KakaoTalk and Flighty;
+- one of the three YubiKeys and its User PIN, for the age identity recovery step;
+- network and time for the first applies, which download Homebrew, every formula and cask, the Apple container kernel, Xcode (on the production switch, not during bootstrap), KakaoTalk, Flighty, and the Android SDK;
+- no real directory at `~/Library/Android/sdk`, where Android Studio installs its SDK by default. Home Manager links the pinned SDK there and stops the apply when it finds a real directory in the way. Move an existing one aside with `mv ~/Library/Android/sdk ~/Library/Android/sdk.before-nix-config`.
 
 ## What the configuration manages
 
-The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` and `darwinConfigurations.<host>-bootstrap`. Each is a nix-darwin system with Home Manager inside it, so one activation applies both layers. The bootstrap output holds no secrets.
+The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` and `darwinConfigurations.<host>-bootstrap`. Each is a `nix-darwin` system with Home Manager inside it, so one activation applies both layers. The bootstrap output holds no secrets.
 
-- **Nix.** nix-darwin owns `/etc/nix/nix.conf` and keeps `auto-optimise-store` off, because store optimisation corrupts the store on macOS (NixOS/nix#7273).
-- **Host marker.** `/etc/nix-config-host` records the host name and whether the bootstrap or production output is applied. `nr` reads the host from it, so the name macOS shows for the machine does not matter.
-- **Homebrew.** nix-homebrew installs Homebrew on the first apply, or migrates one already at `/opt/homebrew` in place. The casks come from `modules/shared/darwin-apps.nix`: Ghostty, 1Password, Google Chrome, Claude Desktop, ChatGPT, and the other GUI apps, plus Parallels Desktop, which has no NixOS counterpart, and the Tailscale app, which NixOS hosts run as a system service instead. Cleanup is `"none"`, so an app you installed by hand stays installed. Each apply installs missing casks and upgrades outdated ones. Installing Parallels Desktop runs a privileged setup step, so the apply that installs it may ask for your administrator password. Its license is not managed here: enter your key, such as an education key, in Parallels Desktop after that apply. Tailscale installs from a package, so its first apply may also ask for the password. Nothing registers the Mac on the tailnet: open Tailscale, allow its system extension in System Settings → Privacy & Security when macOS asks, and log in in the app. Launch at login, exit nodes, and accepting subnet routes are settings in the app, not in this repository.
-- **Retired casks.** Homebrew cleanup is `"none"`, so dropping a cask from `modules/shared/darwin-apps.nix` leaves it installed. `modules/darwin/retired-casks.nix` is a root step after the Mac App Store app step that uninstalls each retired cask when it is installed, today `grok-bot`. It runs `brew uninstall --cask --force` as the primary user, because Homebrew refuses to run as root, with brew's prefix on a `PATH` that `sudo --preserve-env=PATH` keeps, the way nix-darwin calls `brew bundle`. It never passes `--zap`, so a cask's `~/Library` data stays. Only a `brew list` failure with no error output, or with `Error: Cask '<token>' is not installed.`, counts as the cask being absent; any other failure prints brew's error and the command to run. It prints one line per outcome and never fails the apply. Grok Bot's app data in `~/Library` and `~/.grok` stay in place; delete them manually and revoke the xAI grant if desired.
-- **Xcode.** Production activation runs the flake-pinned `xcodes` 2.1.0 after Homebrew. It selects the newest Apple Silicon release across stable and prerelease channels from xcodereleases.com, checks the required macOS version, verifies the installed build and signature, completes license and first-launch setup, checks the compiler and SDK, then switches the developer directory. It decrypts `secrets/hosts/<host>/apple-account.yaml` from the applying checkout in memory using the primary user's mode-0600 age identity. Only the installer receives `XCODES_USERNAME` and `XCODES_PASSWORD`; interactive 2FA or administrator prompts may appear. Bootstrap skips this step. Xcode has no second `mas` updater. A failed update stops activation and retains the previous developer selection.
-- **KakaoTalk and Flighty.** The two managed Mac App Store apps. `modules/darwin/app-store.nix` installs each with `mas` after Xcode, KakaoTalk first, or upgrades it when the App Store has a newer version. A copy already installed from the App Store is kept and upgraded in place. Signing in to KakaoTalk or Flighty itself is done in the app. Both need the App Store signed in. To add another App Store app, add its name, App Store id, and message prefix to the list in that file; the name must match the app's bundle in `/Applications`.
-- **Android SDK.** A Mac gets the same pinned Android SDK as a Linux x86_64 host, from `packages/android-sdk.nix`, built for Apple silicon with `arm64-v8a` system images. It sits at `~/Library/Android/sdk`, a read-only link into the Nix store. `ANDROID_HOME` and `ANDROID_SDK_ROOT` point there. An SDK Android Studio already installed at that path must be moved aside before the first apply; see the prerequisites above.
+- **Nix.** `nix-darwin` owns `/etc/nix/nix.conf` and keeps `auto-optimise-store` off, because store optimisation corrupts the store on macOS (NixOS/nix#7273).
+- **Host marker.** `/etc/nix-config-host` records the host name (`host=<host>`) and whether the `bootstrap` or `production` output is applied (`variant=bootstrap` or `variant=production`). `nr` reads the host from it, so the computer name macOS shows in System Settings does not matter.
+- **Homebrew.** `nix-homebrew` installs Homebrew on the first apply, or migrates one already at `/opt/homebrew` in place. `modules/darwin/homebrew.nix` installs the `aria2` and `container` formulae, and `modules/shared/darwin-apps.nix` supplies the casks: Ghostty, 1Password, Google Chrome, Claude Desktop, ChatGPT, Discord, Obsidian, VLC, WebTorrent, MacZip, and the other GUI apps, plus Parallels Desktop (which has no NixOS counterpart) and the Tailscale app (which NixOS runs as a system service instead). Cleanup is `"none"`, so an app you installed by hand or through Microsoft Intune stays installed. Each apply installs missing formulae and casks and upgrades outdated ones. Installing Parallels Desktop or Tailscale may ask for your administrator password. Parallels Desktop's license and Tailscale's tailnet login stay manual in their apps.
+- **Retired casks.** Because Homebrew cleanup is `"none"`, dropping a cask from `modules/shared/darwin-apps.nix` leaves it installed on existing Macs. `modules/darwin/retired-casks.nix` runs after the Mac App Store step and uninstalls each retired cask when present — today `grok-bot` and `orca` — via `brew uninstall --cask --force` as the primary user, then untaps `stablyai/orca`. It never passes `--zap`, so user data under `~/Library`, `~/.grok`, and `~/.orca` stays untouched, and it never fails the apply.
+- **Xcode.** Production activation (`!config.my.bootstrap`) runs the flake-pinned `xcodes` 2.1.0 after Homebrew (`modules/darwin/xcode.nix`). Bootstrap skips Xcode entirely so the bootstrap switch needs neither the age identity nor the Apple Account secret. On a production switch, `macos-xcode` selects the newest Apple Silicon release across stable and prerelease channels from xcodereleases.com, checks the required macOS version, verifies an existing `/Applications/Xcode.app` build and signature when already present, or downloads and installs the release with `aria2c`, completes `xcodebuild -license accept` and `-runFirstLaunch`, verifies `xcrun clang` and the macOS SDK, and selects `/Applications/Xcode.app/Contents/Developer` with `xcode-select`. It decrypts `secrets/hosts/<host>/apple-account.yaml` from the applying Git checkout in memory using `~/.config/nix-config/age/key.txt` (owned by the primary user, mode `0600`) and passes `XCODES_USERNAME` and `XCODES_PASSWORD` only in the `xcodes` child environment. Interactive 2FA prompts may appear on first sign-in. A failed Xcode install or upgrade fails the production switch and keeps the previous developer directory selection.
+- **KakaoTalk and Flighty.** The two managed Mac App Store apps (`modules/darwin/app-store.nix`). Activation installs or upgrades each with `mas` after the Xcode step when the App Store is signed in, and skips them with a warning when it is not.
+- **Android SDK.** `packages/android-sdk.nix` builds the pinned Android SDK for Apple silicon with `arm64-v8a` system images and links it at `~/Library/Android/sdk`, with `ANDROID_HOME` and `ANDROID_SDK_ROOT` pointing there.
 - **Mobile devices.** The iOS Simulators and Android Virtual Devices listed in `my.mobileDevices`; see [Mobile devices](#mobile-devices).
-- **Nix apps.** VSCodium and the T3 Code desktop app come from Nix. Home Manager copies their bundles into `~/Applications/Home Manager Apps`.
-- **Containers.** Apple's `container` CLI, with no automatic Kubernetes cluster; see [Containers](#containers).
-- **Fonts.** The NixOS font list is installed system-wide.
-- **System defaults.** `modules/darwin/defaults.nix` is where Dock, Finder, trackpad, and keyboard defaults go. It sets none yet.
-- **User environment.** zsh, Git, the development tools, Claude Code and the other agents, configured as on a non-NixOS Linux host.
+- **Nix apps.** VSCodium and the T3 Code desktop app (`0.1.7`) come from Nix. Home Manager copies their bundles into `~/Applications/Home Manager Apps`.
+- **Containers.** Apple's `container` CLI (`modules/darwin/container.nix`), with no Podman machine and no automatic minikube cluster; see [Containers](#containers).
+- **Fonts.** The shared font list (`modules/shared/font-packages.nix` and `packages/overlay-fonts.nix`, including Pretendard, Jetendard, D2Coding, Monoplex KR, Noto CJK, and Twemoji) is installed system-wide.
+- **Dock and system defaults.** `modules/darwin/defaults.nix` enables automatic light/dark appearance (`AppleInterfaceStyleSwitchesAutomatically = true`). `modules/darwin/dock.nix` sets tile size `32`, hides recent applications (`show-recents = false`), pins `~/Downloads` on the right side of the Dock, and replaces `persistent-apps` on each apply with the shared ordered app list: Finder, Launchpad, Safari, Ghostty, Google Chrome, VSCodium, Claude, ChatGPT, the host's `my.dock.hostApps` (`MacBook-Pro-Mac17-9` declares the Intune-managed Microsoft Outlook, Teams, Word, Excel, and PowerPoint apps there), Discord, T3 Code (when `my.t3.desktop.enable` is on), KakaoTalk, Obsidian, Flighty, 1Password, Parallels Desktop, and System Settings.
+- **User environment.** zsh (Prezto modules and completions), Ghostty (`Jetendard`), Git with YubiKey OpenPGP signing via `gpg-git` and `dotfiles-pinentry`, `.NET` 8 and 10, Rust (`rustup`), C++/CMake/Ninja/`vcpkg`, Bun, `mise`, `gh`, `glab`, `tokscale`, T3 Code `0.1.7`, and the managed coding agents (Claude Code, Codex, Pi `1.5.0`, Grok Build `1.0.77`, and the Antigravity CLI `agy`).
 
-ChatGPT is available from Applications on production and bootstrap outputs. Open it and sign in manually. No ChatGPT login agent is declared: inspected Linux and macOS Electron bundles gate `isBackgroundLaunch` to Windows and call `showInactive`, so neither platform has a verified windowless launch mode.
+ChatGPT is available from `/Applications` on production and bootstrap outputs; open it and sign in manually.
 
 ## First setup on the Mac
 
-Run these steps on the Mac, in order, from a local login session, not over SSH.
+Run these steps on the Mac, in order, from a local GUI login session, never over SSH.
 
-1. Confirm that FileVault is on. The age identity and the published tokens are plaintext files in your home directory, and FileVault is what encrypts them at rest:
+1. **Erase and reinstall macOS (when starting from an erased Mac).** In System Settings > General > Transfer or Reset > Erase All Content and Settings (or from macOS Recovery), erase the Mac, reinstall the current macOS release, and complete Setup Assistant creating the local administrator account named in `hosts/<host>/default.nix` (`hyperlapse` on `MacBook-Pro-Mac17-9`).
+
+2. **Confirm that FileVault is on.** The user age identity (`~/.config/nix-config/age/key.txt`), the host SSH private key (`~/.ssh/id_ed25519_nix_config`), and the published CLI tokens (`~/.local/state/cli-auth/`) sit in your home directory, and FileVault is what encrypts them at rest:
 
    ```sh
    fdesetup status
    ```
 
-   It must report `FileVault is On.` Turn it on in System Settings > Privacy & Security > FileVault before you continue.
+   It must report `FileVault is On.` Turn it on in System Settings > Privacy & Security > FileVault before continuing.
 
-2. Install Nix with the upstream multi-user installer, the same one a non-NixOS Linux host uses. Skip this step if Nix is already installed this way:
+3. **Install Nix** with the upstream multi-user installer. Skip this step if Nix is already installed:
 
    ```sh
    sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install) --daemon
    ```
 
-   Open a new terminal afterwards, so `nix` is on `PATH`.
+   Open a new terminal window afterward so `nix` is on `PATH`.
 
-3. Move aside the files the installer wrote or edited in `/etc`. nix-darwin takes over `/etc/nix/nix.conf`, `/etc/bashrc`, and `/etc/zshrc`, and its activation stops rather than replace a file it did not write:
+4. **Move aside the `/etc` files the installer wrote.** `nix-darwin` takes over `/etc/nix/nix.conf`, `/etc/bashrc`, and `/etc/zshrc`, and its activation refuses to overwrite a file it did not create:
 
    ```sh
    for file in /etc/nix/nix.conf /etc/bashrc /etc/zshrc; do
@@ -65,29 +81,27 @@ Run these steps on the Mac, in order, from a local login session, not over SSH.
    done
    ```
 
-   The installer's lines in `/etc/bashrc` and `/etc/zshrc` are what put `nix` on `PATH`, so run steps 4 to 7 in the terminal that is already open. A terminal opened before step 7 finishes has no `nix`; load it there with `. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh`.
+   Because `/etc/bashrc` and `/etc/zshrc` are what put `nix` on `PATH` before `nix-darwin` activates, run steps 5 through 8 in this same terminal window (or load Nix in a new shell with `. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh`).
 
-4. Clone the repository to `~/src/github.com/hyperlapse122/nix-config`, the path `ghq` uses with the configured root `~/src`. `ghq` is not installed until the bootstrap apply, so clone with `git`. The first time it runs, macOS's `git` may ask to install the Command Line Tools; accept.
+5. **Clone the repository** to `~/src/github.com/hyperlapse122/dotfiles`, matching the configured `ghq.root` (`~/src`). The first time `/usr/bin/git` runs on a fresh Mac, macOS prompts to install the Xcode Command Line Tools; accept and wait for the installation to finish, then run the clone:
 
    ```sh
-   git clone https://github.com/hyperlapse122/nix-config.git ~/src/github.com/hyperlapse122/nix-config
-   cd ~/src/github.com/hyperlapse122/nix-config
+   git clone https://github.com/hyperlapse122/dotfiles.git ~/src/github.com/hyperlapse122/dotfiles
+   cd ~/src/github.com/hyperlapse122/dotfiles
    ```
 
-5. Find the host directory for this Mac. A Mac's host name contains its model identifier with the comma replaced by a hyphen, such as `Mac17-9` in `MacBook-Pro-Mac17-9`, so look it up from `sysctl`:
+6. **Resolve the host directory name** for this Mac (`MacBook-Pro-Mac17-9`):
 
    ```sh
    host=$(ls hosts | grep -x ".*$(sysctl -n hw.model | tr , -).*")
    echo "$host"
    ```
 
-   It must print exactly one name. When it prints none, the Mac has no host directory yet; see [adding a host](adding-a-host.md#macos-hosts). When it prints more than one, set `host` to the right one by hand.
+   It must print `MacBook-Pro-Mac17-9` (or the single host directory matching `hw.model`). When it prints none, see [adding a host](adding-a-host.md#macos-hosts).
 
-6. Open the App Store app and sign in with your Apple Account. The apply downloads KakaoTalk and Flighty with the App Store account signed in to your login session. Xcode uses the separate encrypted Apple account on the production apply. On a Mac where you already installed either app from the App Store, apply keeps that copy and upgrades it in place.
+7. **Sign in to the Mac App Store.** Open the App Store app and sign in with your Apple Account so the apply can install KakaoTalk and Flighty via `mas`. (Xcode does not use `mas`; it installs on the production switch in step 12 using `secrets/hosts/<host>/apple-account.yaml`.) Without the App Store sign-in, the apply still succeeds, prints a warning for KakaoTalk and Flighty, and installs them on a later apply once you sign in.
 
-   Without the sign-in, the apply still succeeds. It prints a line for each app asking you to sign in to the App Store, skips KakaoTalk and Flighty, and sets up everything else, the Android SDK and Android Virtual Devices included. Sign in later and apply again to add them.
-
-7. Apply the bootstrap output. `nr` is not installed yet, so run nix-darwin's `darwin-rebuild` from its flake. With `nix.conf` moved aside, flakes are not enabled yet, so the command enables them for this one run:
+8. **Apply the bootstrap output** (`MacBook-Pro-Mac17-9-bootstrap`). `nr` is not installed yet, and `nix.conf` was moved aside in step 4, so invoke `darwin-rebuild` through `nix run` with flakes enabled on the command line:
 
    ```sh
    sudo nix --extra-experimental-features 'nix-command flakes' \
@@ -95,112 +109,128 @@ Run these steps on the Mac, in order, from a local login session, not over SSH.
      switch --flake ".#$host-bootstrap"
    ```
 
-   This apply also installs Homebrew, the casks, KakaoTalk, and Flighty, prepares the Apple container runtime, and creates the declared Android Virtual Device, so it takes a while and needs network. It writes `/etc/nix-config-host`, which records the host from now on, and installs GPG, the card tools, `install-user-age-identity`, and `nr`. Open a new terminal afterwards, so they are on `PATH`.
+   This bootstrap switch installs Homebrew, the formulae (`aria2`, `container`) and casks, KakaoTalk, and Flighty, prepares the Apple `container` runtime and its recommended kernel, creates the declared Android Virtual Device, writes `/etc/nix-config-host` (`host=MacBook-Pro-Mac17-9`, `variant=bootstrap`), and puts `gpg`, `dotfiles-pinentry`, `install-user-age-identity`, and `nr` on `PATH`. It skips Xcode and all sops secrets. Open a new terminal window (such as Ghostty) afterward so the managed shell and `PATH` are active.
 
-8. Give the terminal you apply from the App Management permission, in System Settings > Privacy & Security > App Management. From the second apply on, Home Manager updates the app bundles it copied into `~/Applications/Home Manager Apps`, and its `copyApps` check aborts the activation when the terminal cannot modify them. Apply from a local GUI session, not over SSH: over SSH, the same check aborts unless remote users have Full Disk Access.
+9. **Grant the terminal App Management permission** in System Settings > Privacy & Security > App Management. From the second apply onward, Home Manager updates the app bundles in `~/Applications/Home Manager Apps`, and its `copyApps` step aborts activation if the terminal cannot modify them.
 
-9. Create the directories that will hold plaintext secrets, with mode 0700, and exclude each from Time Machine. `tmutil addexclusion` needs the path to exist, so create them first:
-
-   ```sh
-   for dir in ~/.config/nix-config/age ~/.local/state/cli-auth ~/.config/gh ~/.config/glab-cli; do
-     mkdir -p "$dir"
-     chmod 0700 "$dir"
-     tmutil addexclusion "$dir"
-   done
-   ```
-
-10. With a YubiKey inserted, recover the host's age identity. It is the same helper and installer a non-NixOS Linux host uses; GPG reaches the card through macOS's own smart card support, with no pcscd. The new terminal does not have `host` from step 5, so read it from the marker the bootstrap apply wrote:
+10. **Create the secret directories and exclude them from Time Machine.** `tmutil addexclusion` requires each path to exist first:
 
     ```sh
-    cd ~/src/github.com/hyperlapse122/nix-config
+    for dir in ~/.config/nix-config/age ~/.local/state/cli-auth ~/.config/gh ~/.config/glab-cli; do
+      mkdir -p "$dir"
+      chmod 0700 "$dir"
+      tmutil addexclusion "$dir"
+    done
+    ```
+
+11. **Recover the user age identity with a YubiKey inserted.** GPG accesses the YubiKey through macOS's native smart-card stack (`scdaemon.conf` sets `disable-ccid` and `pcsc-shared`):
+
+    ```sh
+    cd ~/src/github.com/hyperlapse122/dotfiles
     host=$(sed -n 's/^host=//p' /etc/nix-config-host)
     ./scripts/recover-age-identity --user --host "$host"
     ```
 
-    It verifies the derived public recipient before atomically installing `~/.config/nix-config/age/key.txt` (mode `0600` in a `0700` directory; see `../secrets/README.md`).
+    `recover-age-identity --user --host "$host"` decrypts `secrets/bootstrap/<host>/age-key.asc` with `gpg` and pipes the identity into `install-user-age-identity --recipient "$(cat secrets/bootstrap/<host>/recipient.txt)"`, which verifies that the key derives the expected `age1...` recipient before atomically writing `~/.config/nix-config/age/key.txt` (owned by your user, mode `0600`, inside `~/.config/nix-config/age` with mode `0700`; see `../secrets/README.md`).
 
-11. Apply the production output, in the same terminal. `nr` refuses to move a bootstrap generation to production unless you name the host:
+12. **Apply the final production output** (`MacBook-Pro-Mac17-9`). Because the current generation is `bootstrap`, `nr` requires `--host "$host"` to confirm the move to production:
 
     ```sh
     nr switch --host "$host"
     ```
 
-    It publishes the gh and glab configuration, the tokens, and the host's SSH key.
+    The production switch:
+    - decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and ensures macOS admin SSL trust when `my.tlsInspectionCa.enable` is on (approve the macOS authorization dialog if prompted);
+    - installs and selects Xcode through `xcodes` using the Apple Account decrypted in memory from `secrets/hosts/<host>/apple-account.yaml` (complete any interactive Apple Account 2FA or `sudo` prompt if asked);
+    - stages and publishes the CLI tokens (`~/.local/state/cli-auth/`), `gh` and `glab` configuration, Pi's Synthetic API key (`~/.pi/agent/auth.json`), and the host SSH key (`~/.ssh/id_ed25519_nix_config`) from `secrets/tokens.yaml` and `secrets/hosts/<host>/ssh.yaml`;
+    - records `variant=production` in `/etc/nix-config-host`.
 
-12. Exclude the host's SSH key from Time Machine by path. `host-secrets` replaces that file on every apply, and an ordinary exclusion is attached to the file, so it would be lost with the first replacement. A path exclusion (`-p`) needs `sudo`:
+13. **Exclude the host SSH private key from Time Machine by path.** Because `host-secrets` replaces `~/.ssh/id_ed25519_nix_config` atomically on every apply, a sticky file exclusion would be lost on the next switch; use a fixed-path exclusion (`-p`) with `sudo`:
 
     ```sh
     sudo tmutil addexclusion -p ~/.ssh/id_ed25519_nix_config
     ```
 
-13. Register the host's SSH public key with GitHub and every server the host must reach; see [SSH key](#ssh-key) below.
+14. **Verify or register the host SSH public key** on GitHub and any server the Mac accesses; see [SSH key](#ssh-key) below.
 
 ## Everyday use
 
-Pull, then apply from the clone. Routine applies need no YubiKey:
+Pull, then apply from the clone. Routine applies use `~/.config/nix-config/age/key.txt` and need no YubiKey:
 
 ```sh
-cd ~/src/github.com/hyperlapse122/nix-config
+cd ~/src/github.com/hyperlapse122/dotfiles
 git pull
 nr switch
 ```
 
-`nr switch` builds the nix-darwin system as your user, registers it as the system profile, and activates it through `sudo`. Run it from the terminal that holds the App Management permission. `nr` builds the flake of the Git checkout it runs in; from anywhere else, name the checkout with `--flake-dir`.
+`nr switch` builds the `nix-darwin` system as your user, registers it as the system profile (`/nix/var/nix/profiles/system`), and activates it through `sudo` from the checkout root (`macos-xcode` reads `secrets/hosts/<host>/apple-account.yaml` from the checkout). Run it from a local terminal with App Management permission. From outside the checkout, pass `--flake-dir <path>`.
 
 | Command | Effect |
 | --- | --- |
-| `nr switch` | Build and activate the production output for the host in `/etc/nix-config-host`. |
-| `nr switch --host <host>` | Name the host explicitly. Required for the first move from bootstrap to production. |
-| `nr switch --bootstrap` | Apply the secret-free bootstrap output again. |
-| `nr switch --flake-dir <path>` | Build from the checkout at `<path>` instead of the current one. |
-| `nr build` | Build the system without activating it and without `sudo`. |
-| `nr boot`, `nr test` | Refused: a Mac has no boot generation. |
+| `nr switch` | Build and activate `darwinConfigurations.<host>.system` for the host in `/etc/nix-config-host`. |
+| `nr switch --host <host>` | Name the host explicitly. Required for the first move from `bootstrap` to `production`. |
+| `nr switch --bootstrap` | Build and activate `darwinConfigurations.<host>-bootstrap.system`. |
+| `nr switch --flake-dir <path>` | Build from the checkout at `<path>` instead of the current working directory. |
+| `nr build` | Build the system closure without activating it and without `sudo`. |
+| `nr boot`, `nr test` | Refused: a Mac has no bootloader generation. |
 
-The age identity is checked twice, and either check stops the apply before anything is published. Before building, `nr` stops when `~/.config/nix-config/age/key.txt` is missing. During activation, before Home Manager changes a single link, `host-secrets` stops when the identity is not owned by you, does not have mode 0600, or cannot decrypt every secret. Both name the file and the recovery command, and neither prints a secret.
+The age identity is checked before anything changes. Before building, `nr` stops when `~/.config/nix-config/age/key.txt` is missing. During activation, `tls-inspection-ca`, `macos-xcode`, and `host-secrets stage` each verify that `~/.config/nix-config/age/key.txt` is a regular file owned by your user with mode `0600` and can decrypt the required ciphertext before replacing any file or link.
 
 ### Rolling back
 
-Every `nr switch` adds a generation to the system profile, `/nix/var/nix/profiles/system`. To return to the previous one, point the profile back at it and activate it, as `nr` does for a new generation:
+Every `nr switch` registers a generation in `/nix/var/nix/profiles/system`. To roll back to the previous generation:
 
 ```sh
 sudo nix-env -p /nix/var/nix/profiles/system --rollback
 sudo /nix/var/nix/profiles/system/activate
 ```
 
-The next `nr switch` from the checkout builds a new generation again, so fix the checkout before applying once more.
+Fix the checkout before running `nr switch` again.
 
 ## Secrets and authentication
 
-The age identity lives at `~/.config/nix-config/age/key.txt`, protected by FileVault. It decrypts only `secrets/tokens.yaml` and the host's own `secrets/hosts/<host>/ssh.yaml` and, with the TLS inspection CA trait, `secrets/hosts/<host>/tls-inspection-ca.yaml`; a Mac is never a recipient of the Wi-Fi or Tailscale secrets. The Mac joins the tailnet through the Tailscale app's own login instead of an auth key.
+The user age identity lives at `~/.config/nix-config/age/key.txt`, protected at rest by FileVault. It decrypts:
+
+- `secrets/tokens.yaml` (shared across both hosts);
+- `secrets/hosts/<host>/ssh.yaml` (this Mac's SSH private key);
+- `secrets/hosts/<host>/apple-account.yaml` (this Mac's Apple Account `username` and `password` for `xcodes`);
+- `secrets/hosts/<host>/tls-inspection-ca.yaml` (when `my.tlsInspectionCa.enable = true`).
+
+A macOS host is never a recipient of `secrets/wifi.yaml`, `secrets/tailscale.yaml`, or `secrets/printers.yaml`; the `user-identity-secrets` check enforces that boundary. The Mac joins the tailnet through the Tailscale app's interactive login rather than a pre-authentication key.
 
 Production activation publishes:
 
-- the gh and glab configuration, under `~/.config/gh` and `~/.config/glab-cli`;
-- the registry and CLI tokens, under `~/.local/state/cli-auth/`;
-- the host SSH key, at `~/.ssh/id_ed25519_nix_config`.
+- `gh` and `glab` configuration under `~/.config/gh` and `~/.config/glab-cli`;
+- CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`);
+- the `synthetic` provider key in `~/.pi/agent/auth.json`;
+- the host SSH private key at `~/.ssh/id_ed25519_nix_config`.
 
 ### YubiKey PIN
 
-Git uses `gpg-git` to read the card with `gpg --batch --card-status` before selecting its signing key. This refresh addresses the reported case where a card read restores a missing signing key after idle. It waits at most ten seconds, discards card metadata, and leaves the signing input untouched. If the refresh fails, GPG still runs and reports its own result. The adapter never retries a signature or a PIN, and verification passes directly to GPG. The cause of the intermittent card-discovery failure remains unconfirmed; this is a preventive recovery step.
+Git uses `gpg-git` to run `gpg --batch --card-status` before signing so a sleeping card wakes cleanly. It waits at most ten seconds, discards card metadata, and passes verification calls straight to `gpg`.
 
-Three YubiKeys carry the same signing key, each under its own PIN. The packaged `dotfiles-pinentry` frontend stores OpenPGP user PINs in the macOS Keychain under service `dotfiles.pinentry.openpgp` and account `yubikey:<serial>:user`. It delegates prompts to the native `pinentry_mac` dialog. Remove a saved PIN with `dotfiles-pinentry forget <card-id>`; serial numbers may be decimal digits or a quoted grouped serial such as `"12 345 678"`. GnuPG's agent cache remains disabled. The native dialog's separate “Save in Keychain” option starts unticked (`UseKeychain = false`).
+Three YubiKeys carry the same signing key, each under its own PIN. The packaged `dotfiles-pinentry` frontend (`packages/pinentry-keyring.nix`) stores OpenPGP user PINs in the macOS Keychain under service `dotfiles.pinentry.openpgp` and account `yubikey:<serial>:user` on the first qualifying prompt and delegates dialogs to `pinentry_mac`. Remove a saved PIN with `dotfiles-pinentry forget <card-id>`; serial numbers may be decimal digits or a quoted grouped serial such as `"12 345 678"`. GnuPG's own agent cache remains disabled (`default-cache-ttl 0`, `max-cache-ttl 0`), and `pinentry_mac`'s built-in "Save in Keychain" checkbox starts unticked (`UseKeychain = false`).
 
 ### SSH key
 
-A Mac has no 1Password SSH agent configured. It uses its own SSH key, and `~/.ssh/config` names it with `IdentityFile ~/.ssh/id_ed25519_nix_config`. Registering the public key stays manual. After the first production apply, print it:
+A Mac uses its own Ed25519 SSH key at `~/.ssh/id_ed25519_nix_config`, declared in `~/.ssh/config` (`IdentityFile ~/.ssh/id_ed25519_nix_config`). Its public half is committed at `secrets/hosts/<host>/ssh.pub` and can also be printed after a production apply:
 
 ```sh
 ssh-keygen -y -f ~/.ssh/id_ed25519_nix_config
 ```
 
-Add it to GitHub under Settings > SSH and GPG keys, and to `~/.ssh/authorized_keys` on every server the host must reach. Register it as an authentication key only; Git signing still uses the YubiKey.
+Register it as an authentication key on GitHub (Settings > SSH and GPG keys) and in `~/.ssh/authorized_keys` on any server the Mac must reach. Git commit and tag signing always uses the YubiKey OpenPGP key.
+
+### Apple account for Xcode
+
+`modules/darwin/xcode.nix` reads `secrets/hosts/<host>/apple-account.yaml` from the checkout being applied. The encrypted YAML holds two string keys, `username` and `password`, encrypted to `<host>`'s age recipient alone. See [adding a host](adding-a-host.md#create-the-apple-account-secret) for creating or rotating that file without writing plaintext into the checkout.
 
 ### TLS inspection CA
 
-A Mac whose network traffic an endpoint protection product inspects re-signs TLS with that product's CA. macOS apps trust it through the System keychain, but tools from Nix read their own CA bundle and fail with errors such as `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`. The `my.tlsInspectionCa.enable` trait fixes that for one host:
+On a Mac where an endpoint protection product intercepts TLS and re-signs certificates with its own root CA, macOS apps trust that CA through the System keychain while Nix tools read their own CA bundle and fail with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`. Enabling `my.tlsInspectionCa.enable = true;` in `hosts/<host>/default.nix` fixes that for the host:
 
-1. Add a `.sops.yaml` rule for `secrets/hosts/<host>/tls-inspection-ca.yaml` with only that host's recipient.
-2. Pipe the CA's PEM certificate into `sops`, never through a file in the checkout, as the `certificate` key:
+1. Add a `.sops.yaml` creation rule for `^secrets/hosts/<host>/tls-inspection-ca\.yaml$` listing only that host's age recipient.
+2. Pipe the CA's PEM certificate into `sops` as the `certificate` key without writing plaintext into the checkout:
 
    ```sh
    openssl x509 -in <downloaded CA> -outform PEM \
@@ -212,99 +242,70 @@ A Mac whose network traffic an endpoint protection product inspects re-signs TLS
 
 3. Set `my.tlsInspectionCa.enable = true;` in `hosts/<host>/default.nix` and apply.
 
-Every production apply then writes `/etc/ssl/nix-config/ca-certificates.crt`, this generation's Nix roots followed by the CA, and restarts nix-daemon when the bundle changed. Shells, nix-daemon, and apps launched from Finder or the Dock see `SSL_CERT_FILE`, `NIX_SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, and `GIT_SSL_CAINFO` pointing at it; relaunch a running app to pick them up. When macOS itself does not trust the CA as an SSL root in its admin trust settings, the apply adds that trust, which shows the authorization dialog; declining it prints a warning and the next apply asks again. To replace the CA, re-encrypt the file the same way. Keep the certificate's subject and fingerprint out of commits, since the repository is public.
+Every production apply then writes `/etc/ssl/nix-config/ca-certificates.crt` (this generation's Nix root bundle followed by the inspection CA) and restarts `nix-daemon` when the bundle changes. Shells, `nix-daemon`, and GUI apps launched from Finder or the Dock receive `SSL_CERT_FILE`, `NIX_SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, and `GIT_SSL_CAINFO` pointing at `/etc/ssl/nix-config/ca-certificates.crt`, alongside `NODE_USE_SYSTEM_CA=1` in the shell environment; relaunch running apps after a change so they pick up the updated variables. When macOS admin trust settings do not yet trust the CA for SSL, `postActivation` runs `security add-trusted-cert`, which prompts for authorization.
 
 ## Network recovery
 
-On a Mac where switching networks can leave it offline until Wi-Fi is turned off and on, the `my.networkRecovery.enable` trait repairs that without you. A root launch daemon, `org.nixos.network-recovery`, runs every 5 seconds. When the network changes, or the Mac wakes, it checks plain HTTP to `captive.apple.com`, name resolution, and a direct TCP connection. While the Mac has no default route, as when Wi-Fi is still joining or is turned off, it does nothing. When a check fails on a network the Mac joined less than 10 seconds ago, it waits, since a new network often needs a few seconds for DHCP and DNS. After that, it tries these steps in order and stops at the first one after which the checks pass:
+On a Mac where switching networks can leave traffic wedged until Wi-Fi is cycled, `my.networkRecovery.enable = true` runs the `org.nixos.network-recovery` launch daemon every 5 seconds (`modules/darwin/network-recovery.nix`). When the network changes or the Mac wakes, it checks HTTP to `captive.apple.com`, DNS resolution, and a direct TCP connection. While there is no default route, or within 10 seconds of joining a network, it waits. When checks fail after that, it tries these steps in order and stops as soon as connectivity returns:
 
-1. Flush the DNS cache.
-2. Bring Tailscale down and up again, only when it was connected and someone is logged in at the console. It runs the app's CLI as that user with no flags, so your Tailscale settings stay.
-3. Turn the network service that carries the default route off and on: Wi-Fi, or another service such as iPhone USB tethering. It skips this step when the default route goes through a tunnel, such as a Tailscale exit node, or when no single service matches.
+1. Flush the macOS DNS cache.
+2. Reconnect Tailscale (`down` then `up`) as the console user when Tailscale was connected.
+3. Cycle the network service carrying the default route (such as Wi-Fi or iPhone USB tethering) off and back on, unless the default route is a tunnel.
 
-A captive portal or a policy page answers the HTTP check with its own page; the daemon logs that and repairs nothing. When every step fails, the daemon stops trying on that network and only checks until the network changes again. It never restarts an app, and it never touches Endpoint Protector or Defender.
-
-Each daemon run has a 25-second budget. When it runs out, the next run continues the unfinished ladder. A failed off/on or down/up pair leaves a restore record: physical services are restored first, and a pending Tailscale reconnect does not block the physical repair it may need.
-
-The log is `/var/log/network-recovery.log`, rotated by `newsyslog`. Each line names the episode by a short hash, never by a network name or address, so you can attach it to an issue as it is. Newly launched Claude Code sessions on such a host get `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` through both shell exports and the macOS GUI environment. Relaunch T3 Code after applying to pick it up. A stream that stalls during a switch can then time out after a minute; retry once connectivity returns. Codex keeps its default 300-second stream timeout. To turn the feature off, remove the trait from `hosts/<host>/default.nix` and apply; this also removes the managed GUI timeout, while preserving a different value you set yourself.
+A captive portal or policy page is logged without triggering repairs. The log is `/var/log/network-recovery.log`, rotated by `newsyslog`. Hosts with `my.networkRecovery.enable` also set `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` in shell and GUI environments on production outputs so stalled streams fail within a minute after a network switch.
 
 ## Containers
 
-A Mac uses Apple's `container` formula. Explicit activation starts a stopped API with automatic kernel installation disabled, installs the recommended kernel, and registers the Homebrew login service. An already-running API and its kernel stay untouched. A failed kernel preparation leaves a pending marker and fails the apply until it is resolved.
+macOS hosts use Apple's `container` CLI (`modules/darwin/container.nix`), installed via Homebrew's `container` formula. No Podman machine is configured, and no automatic `minikube` cluster runs at login.
 
-`kubectl`, Helm, and `minikube` remain available as clients. Activation starts no cluster. Apple `container` does not provide the Podman Docker socket or the old `docker` compatibility link, so Docker API clients and Testcontainers need a separately chosen compatible runtime. No existing Podman machines or their data are deleted by this configuration.
+During activation, `macos-container.sh` checks `container system status`:
 
-Use `container registry login` for Apple's native Keychain credentials. `docker-credential-sops` remains available for explicit Docker-protocol consumers, but Apple `container` does not read the old Podman `auth.json` routing, which activation no longer creates. Existing credential files are left in place.
+- If the runtime API is already running, activation leaves the running API and its kernel untouched.
+- If the API is stopped, activation runs `container system start --disable-kernel-install`, sets the recommended default kernel (`container system kernel set --recommended`) when none is configured yet, and registers the Homebrew login service (`brew services start container`). A failed kernel step records `~/.local/state/dotfiles/apple-container-kernel-pending` so the next apply retries it, and exits non-zero so the apply fails visibly.
 
-Temporary workloads and their images, volumes, networks, and caches must be removed after use; the runtime API, recommended kernel, and login service are host infrastructure.
+`kubectl`, `kubernetes-helm`, and `minikube` remain installed as client binaries on `PATH`, without an automatic cluster. Because Apple `container` does not expose a Docker-compatible socket or `docker` CLI alias, tools that require the Docker Engine API (such as Testcontainers) need an explicit alternative agreed with the owner. Existing Podman machines or credential files on disk are not deleted. Use `container registry login` for registry credentials stored in the macOS Keychain; `docker-credential-sops` remains on `PATH` for tools that speak the Docker credential helper protocol directly.
+
+Remove temporary containers, images, volumes, networks, and build caches as soon as a task finishes; the `container` system service and default kernel are host infrastructure and stay running.
 
 ## App notes
 
-- VSCodium's user directory is `~/Library/Application Support/VSCodium/User`. Its keybindings file is a read-only store link; add a keybinding to `home/h82/dev/vscodium.nix` instead.
-- The T3 Code desktop app is the flake's pinned release, currently `T3 Code (Beta).app`. A launch agent sets `T3CODE_DISABLE_AUTO_UPDATE=1` at login, so the app does not update itself off the pin.
-- An app added to the NixOS user environment needs a macOS decision in `modules/shared/darwin-apps.nix`: a cask, a Nix package, or a reason to leave it out. The `darwin-config` check fails without one.
-- T3 Code finds the Android SDK at `~/Library/Android/sdk` even when started from the Dock or Finder, where `ANDROID_HOME` is not set. The `emulator` in that tree sets `ANDROID_HOME` and `ANDROID_SDK_ROOT` itself before it starts the store emulator, so an AVD boots from T3 Code's Device panel.
+- VSCodium's user directory is `~/Library/Application Support/VSCodium/User`. Its `keybindings.json` is a read-only store link; add keybindings in `home/h82/dev/vscodium.nix`.
+- The T3 Code desktop app is the flake's pinned release (`0.1.7`, `T3 Code (Beta).app`). A launchd agent sets `T3CODE_DISABLE_AUTO_UPDATE=1` at login so the app does not self-update off the pin.
+- Every package in the NixOS user environment must have a corresponding decision in `modules/shared/darwin-apps.nix` (Homebrew cask, Nix package, or explicit exclusion reason); the `darwin-config` check enforces this.
+- T3 Code finds the Android SDK at `~/Library/Android/sdk` when launched from Finder or the Dock.
 
 ### Mobile devices
 
-The option `my.mobileDevices`, in `home/h82/dev/mobile-devices.nix`, lists the iOS Simulators and Android Virtual Devices (AVDs) a Mac gets. The default list contains only one `pixel_10_pro` AVD. iOS simulators and runtimes are left to Xcode unless you explicitly add an iOS entry. Previously created simulators, including `iPhone 18 Pro (iOS 27.0)`, remain; seeing them after an apply is expected. Each entry has three fields:
-
-- `platform`: `"ios"` or `"android"`.
-- `model`: for iOS, a device type name from `xcrun simctl list devicetypes`, such as `iPhone 18 Pro`; for Android, a device id from `avdmanager list device -c`, such as `pixel_10_pro`.
-- `version`: optional. For iOS, an iOS version such as `"27.0"`; left out, it is the newest installed iOS Simulator runtime that supports the model, which is usually the newest SDK's; a runtime that supports only some models, such as Xcode 27.1's iOS 27.1 runtime, which supports only the iPhone Duo, is passed over for the others. When no installed runtime supports the model, the device is skipped with a message: install an older iOS Simulator runtime in Xcode's Components settings, or set `version`, and apply again. For Android, a pinned API key from `packages/android-sdk-repo.json`, such as `"36"` or `"37.0"`; left out, it is the newest pinned API level.
-
-Every apply, bootstrap included, runs `mobile-devices` as your user and creates each listed device that does not exist yet. The name carries the version: an iOS Simulator is named `<model> (iOS <version>)`, such as `iPhone 18 Pro (iOS 27.0)`, with the runtime's major and minor version when the entry gives none, and an AVD `<model>_API_<api>`, such as `pixel_10_pro_API_37.0`. A device with that name is left as it is. With an explicit iOS entry targeting the newest SDK, the apply downloads that SDK's runtime first if it is missing. It downloads no other iOS version, so an entry pinned to an older iOS version whose runtime is not installed is skipped with a message. A device that cannot be created is reported and the apply continues.
-
-To add a device, add an entry to the option's `default` list in `home/h82/dev/mobile-devices.nix` and apply. These two entries add an iPad on the newest iOS and a Pixel on API 36:
-
-```nix
-{
-  platform = "ios";
-  model = "iPad Pro 13-inch (M5)";
-}
-{
-  platform = "android";
-  model = "pixel_10_pro";
-  version = "36";
-}
-```
-
-The apply never deletes, erases, or renames a device. A device you remove from the list, or one you created by hand, stays. For explicit unversioned iOS entries, an Xcode upgrade can cause the next apply to create the listed devices on a newer compatible runtime; existing devices and runtimes stay. Likewise, an unversioned Android entry gets a new AVD when the SDK pin gains a newer API level. Each iOS runtime takes about 8 GB. Remove what you no longer need by hand:
+`my.mobileDevices` in `home/h82/dev/mobile-devices.nix` declares the iOS Simulators and Android Virtual Devices (AVDs) that activation ensures exist. By default it declares one `pixel_10_pro` AVD on the newest pinned Android API level (`packages/android-sdk-repo.json`). iOS Simulators and runtimes are left to Xcode unless you add an `"ios"` entry to `my.mobileDevices`. Existing simulators and AVDs are never deleted or modified by activation. Remove unused devices or runtimes by hand:
 
 ```sh
-xcrun simctl list devices            # names and UDIDs
+xcrun simctl list devices
 xcrun simctl delete <udid>
-xcrun simctl runtime list            # installed runtimes and their identifiers
+xcrun simctl runtime list
 xcrun simctl runtime delete <identifier>
-avdmanager list avd -c               # AVD names
+avdmanager list avd -c
 avdmanager delete avd -n <name>
 ```
-
-AVDs live in `~/.android/avd` and name their system image by its SDK path. When the pin drops an API level, the AVDs for that level no longer boot; delete them.
 
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 | --- | --- |
-| The first apply stops on unexpected files in `/etc` | A file the installer wrote is still in place. Move it aside as step 3 does, then apply again. |
-| `nix: command not found` in a new terminal during setup | `/etc/bashrc` and `/etc/zshrc` are moved aside and nix-darwin has not replaced them yet. Run `. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh`. |
-| `nr: running the bootstrap generation; …` | A bare `nr switch` will not move a bootstrap generation to production. Recover the identity, then run the `nr switch --host` command the message names, or reapply with `nr switch --bootstrap`. |
-| `nr: no age identity at …` | The identity is not recovered yet. Run the `recover-age-identity` command the message names, from the clone. |
-| `… is not owned by …`, `… must have mode 0600`, or `cannot decrypt …` during activation | The identity file has the wrong owner or mode, or it is not this host's. Recover it again with the same command. |
-| `nr: not inside a git repository; …` | `nr` was run outside the clone. `cd` into it, or pass `--flake-dir <path>`. |
-| The Mac stays offline after a network switch even with the network recovery trait | Read the last lines of `/var/log/network-recovery.log`. An exhausted episode means every step failed on that network; turn Wi-Fi off and on by hand. A captive or policy result means the network answered with its own page; sign in to the portal. |
-| The second apply aborts in `copyApps` | The terminal lacks the App Management permission, or the apply runs over SSH. See step 8. |
-| The apply stops with `Existing file '…/Library/Android/sdk' would be clobbered` | An SDK, usually Android Studio's, is a real directory at `~/Library/Android/sdk`, where Home Manager links the pinned SDK. Run `mv ~/Library/Android/sdk ~/Library/Android/sdk.before-nix-config` and apply again. Point Android Studio at the linked SDK, or delete the old one once nothing uses it. |
-| `mobile-devices` prints `simctl could not list device types, so the iOS Simulators were skipped` after `CoreSimulator detected version change` | An Xcode upgrade left the old CoreSimulatorService loaded. The helper tries the listing twice, because the first call replaces the service; when both fail, run `xcrun simctl list devicetypes` once and apply again. |
-| Xcode provisioning fails | Check the Apple account ciphertext in the applying checkout, the recovered identity owner and mode, network access, the required macOS version, and interactive 2FA prompts; then apply production again. |
-| The apply prints `kakaotalk: App Store install failed; sign in to the App Store …` or `flighty: App Store install failed; …` | The App Store is not signed in, so the apply skipped that app. Sign in to the App Store and apply again. |
-| The apply prints `kakaotalk: App Store upgrade failed; …` or `flighty: App Store upgrade failed; …` | Either the App Store is not signed in, or the app in `/Applications` was installed from a download rather than the App Store, which `mas` cannot upgrade. Sign in to the App Store, or delete the app so the next apply installs it from the App Store. |
-| The apply prints `kakaotalk: cannot resolve the ids of …` or `flighty: cannot resolve the ids of …` | `system.primaryUser`, which comes from `my.user.name` in the host's `default.nix`, does not name an account on this Mac. Fix the account name and apply again. |
+| The first apply stops on unexpected files in `/etc` | A file the Nix installer wrote is still in place. Move `/etc/nix/nix.conf`, `/etc/bashrc`, and `/etc/zshrc` aside as step 4 shows, then apply again. |
+| `nix: command not found` in a new terminal during setup | `/etc/bashrc` and `/etc/zshrc` were moved aside before `nix-darwin` replaced them. Run `. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh`. |
+| `nr: running the bootstrap generation; …` | A bare `nr switch` refuses to move a bootstrap generation to production. Recover the age identity, then run `nr switch --host "$host"`, or reapply bootstrap with `nr switch --bootstrap`. |
+| `nr: no age identity at …` | `~/.config/nix-config/age/key.txt` is missing. Run `./scripts/recover-age-identity --user --host "$host"` from the checkout with a YubiKey connected. |
+| `… is not owned by …`, `… must have mode 0600`, or `cannot decrypt …` during activation | `~/.config/nix-config/age/key.txt` has the wrong owner or mode or does not match this host's recipient. Re-run `./scripts/recover-age-identity --user --host "$host"`. |
+| `nr: not inside a git repository; …` | `nr` was run outside the checkout. `cd ~/src/github.com/hyperlapse122/dotfiles` or pass `--flake-dir <path>`. |
+| The second apply aborts in `copyApps` | The terminal lacks App Management permission in System Settings > Privacy & Security > App Management, or the apply ran over SSH. See step 9. |
+| The apply stops with `Existing file '…/Library/Android/sdk' would be clobbered` | Move the existing directory aside with `mv ~/Library/Android/sdk ~/Library/Android/sdk.before-nix-config` and apply again. |
+| Xcode provisioning fails | Check that `nr switch` ran inside a Git checkout containing `secrets/hosts/<host>/apple-account.yaml`, verify `~/.config/nix-config/age/key.txt` ownership and mode `0600`, confirm network access and interactive 2FA approval, and run `nr switch` again. |
+| `kakaotalk: App Store install failed; …` or `flighty: App Store install failed; …` | Sign in to the Mac App Store app and run `nr switch` again. |
 
 ## Verification
 
-The repository checks for macOS evaluate the fixture host on Linux and build it on CI's `macos-15` runner; none of them activates a Mac. An activation that exits 0 is not proof that every step applied, so confirm the state each step names on the Mac after first setup and report hardware results separately from repository checks.
+Repository checks evaluate the macOS configuration on Linux (`darwin-config`) and build the `darwinConfigurations` closures on CI's `macos-15` runner when triggered (`main` push, manual dispatch, or `full-ci` label). Neither activates a Mac. Confirm hardware and GUI behavior on the Mac itself after applying and report live Mac checks separately from repository checks.
 
 ## Losing or retiring the Mac
 
-The age identity and SSH key are plaintext on the Mac's disk, so treat everything it could decrypt as exposed. Revoke its SSH key, remove its recipient, and rotate the tokens as [compromise or decommission of a host](recovery.md#compromise-or-decommission-of-a-host) describes.
+Because `~/.config/nix-config/age/key.txt` and `~/.ssh/id_ed25519_nix_config` sit on the Mac's disk, treat every secret the Mac could decrypt as exposed if the Mac is lost or compromised. Follow [compromise or decommission of a host](recovery.md#compromise-or-decommission-of-a-host) to revoke its SSH key, remove its recipient, re-key and rotate `secrets/tokens.yaml`, and rotate the Apple Account password.

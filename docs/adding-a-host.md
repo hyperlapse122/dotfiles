@@ -1,24 +1,24 @@
 # Adding a host
 
-A host is a directory under `hosts/`. `flake.nix` reads that directory and builds two outputs for each entry: `<host>` for production and `<host>-bootstrap` for the first installation. Adding a machine does not touch `flake.nix`, `modules/`, `home/`, or `tests/`. It needs a host directory, bootstrap age material, a host SSH key source, and the new recipient in `.sops.yaml`.
+A host is a directory under `hosts/`. `flake.nix` reads `hosts/` through `lib/hosts.nix` and builds two outputs for each entry: `<host>` for production and `<host>-bootstrap` for initial installation (`nixosConfigurations` for NixOS hosts and `darwinConfigurations` for macOS hosts). Today the repository declares `MS-7D91` (NixOS) and `MacBook-Pro-Mac17-9` (macOS). Adding a machine does not require editing `flake.nix`, `modules/`, `home/`, or `tests/`; it needs a host directory, bootstrap age material, per-host encrypted secrets, and `.sops.yaml` recipient updates.
 
 Replace `<host>` in every command below with the new directory name.
 
-The sections up to [Install](#install) describe a NixOS host. A Mac follows [macOS hosts](#macos-hosts).
+The sections up to [Install](#install) cover a NixOS host. A Mac follows [macOS hosts](#macos-hosts).
 
 ## Choose the name
 
-The directory name is the host name. `mkHost` in `flake.nix` sets `networking.hostName` from it, so the host files never declare it.
+The directory name is the host name. On NixOS, `mkHost` in `lib/nixos-host.nix` sets `networking.hostName` from it, so the host files never set `networking.hostName` themselves.
 
-Use the machine's distinctive model identifier, such as the DMI product name or the full model designation. The name must not appear as a substring anywhere in `flake.nix`, `modules/`, `home/`, `tests/`, `scripts/`, `packages/`, or `.github/workflows/`. The `host-name-guard` check scans those paths for every host directory name and fails on any hit. A generic word such as `desktop` or `laptop` would collide with ordinary code and comments, which is why the rule asks for a model identifier. Shared code refers to machines by trait, never by name.
+Use the machine's distinctive model identifier, such as the DMI product name (`MS-7D91`) or the full model designation (`MacBook-Pro-Mac17-9`). The name must not appear as a substring anywhere in `flake.nix`, `lib/`, `modules/`, `home/`, `tests/`, `scripts/`, `packages/`, or `.github/workflows/`. The `host-name-guard` check (`tests/host-name-guard.nix`) scans those paths for every host directory name and fails on any hit. A generic word such as `desktop` or `laptop` would collide with ordinary code and comments, which is why the rule requires a model identifier. Shared code refers to machines by trait, `my.kind`, or `my.bootstrap`, never by host name.
 
-## Create the host directory
+## Create the NixOS host directory
 
-Create `hosts/<host>/` with three files.
+A directory under `hosts/` without a `host.nix` file (or with `kind = "nixos"`) is a NixOS host. Create `hosts/<host>/` with three files:
 
-- `hardware.nix`: kernel modules, firmware, CPU microcode, and graphics drivers. The production boot splash needs the GPU's KMS driver in the initrd: add it (for example `i915`, or `vmwgfx` in a VMware guest) to `boot.initrd.kernelModules` under `lib.mkIf (!config.my.bootstrap)`; the `boot-splash` check fails otherwise. Start from `nixos-generate-config --no-filesystems --show-hardware-config` run on the target from the installation media, then keep only what the machine needs.
-- `disko.nix`: the disk layout. Copy an existing host's `disko.nix` to keep the shared layout (a 2 GiB ESP, then a LUKS2 `cryptroot` container holding Btrfs subvolumes for `/`, `/home`, `/nix`, `/var/log`, and `/swap`), and change only `device` to the target disk's `/dev/disk/by-id/` path.
-- `default.nix`: imports the other two files and declares the host's traits.
+- `hardware.nix`: kernel modules, firmware, CPU microcode, and graphics drivers. The production Plymouth boot splash requires the GPU's KMS driver in the initrd: add it (for example `i915`, `amdgpu`, or `nvidia` / `nvidia_modeset` / `nvidia_drm`) to `boot.initrd.kernelModules` under `lib.mkIf (!config.my.bootstrap)`; the `boot-splash` check (`tests/boot-splash.nix`) fails otherwise. Start from `nixos-generate-config --no-filesystems --show-hardware-config` run on the target from the installation media, then keep only what the machine needs.
+- `disko.nix`: the disk layout. Copy `hosts/MS-7D91/disko.nix` to keep the shared layout (a 2 GiB ESP with partlabel `disk-main-ESP`, then a LUKS2 `cryptroot` container with partlabel `disk-main-luks` holding Btrfs subvolumes for `/root` (`/`), `/home`, `/nix`, `/log` (`/var/log`), and `/swap` with a 64 GiB swapfile), and change only `device` to the target disk's `/dev/disk/by-id/` path.
+- `default.nix`: imports `./hardware.nix` and `./disko.nix` and declares the host's traits and any machine-specific mounts or options.
 
 ```nix
 { ... }:
@@ -27,30 +27,35 @@ Create `hosts/<host>/` with three files.
     ./hardware.nix
     ./disko.nix
   ];
+  my.t3.cli.enable = true;
   my.t3.desktop.enable = true;
 }
 ```
 
-Do not import `modules/nixos/profile.nix`. `mkHost` imports it for every host, and the profile imports every NixOS module under `modules/nixos/`. It also sets the shared defaults with `lib.mkDefault`: Podman, CLI authentication, the Tokscale token and the Pi API keys (Synthetic and Exa), Tailscale, and Proton VPN, the last three off on the bootstrap output. A host can override any of them.
+Do not import `modules/nixos/profile.nix` in `default.nix`. `mkHost` imports it automatically for every NixOS host, and the profile imports every NixOS module under `modules/nixos/`. It also sets the shared defaults with `lib.mkDefault`: rootless Podman, `my.cliAuth` (plus `enableTokscaleToken`, `enableSyntheticApiKey`, `enableExaApiKey`, and `enableOpenRouterApiKey` on production outputs), Tailscale, and Proton VPN (off on bootstrap outputs). A host can override any of them.
 
-### Traits
+### Traits and per-host options
 
-A trait is a `my.*.enable` option that defaults to `false`. Hardware-specific modules are imported on every host and stay inert until the host enables their trait. Set only the traits the machine's hardware calls for:
+Traits and shared host options live in `modules/shared/host.nix`:
 
-| Trait | Enables |
+| Option | Effect |
 | --- | --- |
-| `my.sshServer.enable` | An OpenSSH server that accepts only the user, authenticated by the OpenPGP card's authentication subkey. NixOS hosts only. |
-| `my.t3.cli.enable` | The headless T3 Code server, `t3` (`packages/t3code-cli.nix`). It also works on macOS. |
-| `my.t3.desktop.enable` | The T3 Code desktop app (`packages/t3code.nix`). NixOS and macOS hosts only. |
-| `my.wifiman.enable` | UniFi WiFiman Desktop (`packages/wifiman-desktop.nix`) and its root daemon (`modules/nixos/services/wifiman.nix`). On by default on every NixOS output, bootstrap included; set it to `false` to drop both. NixOS hosts only; a macOS host gets the `wifiman` cask regardless. |
+| `my.nuphyGem80.enable` | Installs the hidraw udev rule granting the local seat access to the NuPhy Gem80 keyboard (NixOS). |
+| `my.sennheiserBtd.enable` | Installs the hidraw udev rule granting the local seat access to the Sennheiser BTD 600 dongle (NixOS). |
+| `my.sshServer.enable` | Enables an OpenSSH server accepting only `my.user.name`, authenticated by the OpenPGP card's authentication subkey from `keys/signing.asc` (NixOS). |
+| `my.t3.cli.enable` | Installs the headless T3 Code server, `t3` (`packages/t3code-cli.nix`), on NixOS or macOS. |
+| `my.t3.desktop.enable` | Installs the T3 Code desktop app (`packages/t3code.nix`) on NixOS or macOS. |
+| `my.wifiman.enable` | Installs UniFi WiFiman Desktop (`packages/wifiman-desktop.nix`) and its root daemon (`modules/nixos/services/wifiman.nix`) on NixOS (on by default; macOS always installs the `wifiman` cask). |
+| `my.printing.queues` | List of CUPS queue labels decrypted from `secrets/printers.yaml` (NixOS, empty by default). |
+| `my.tlsInspectionCa.enable` | Decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and configures system and tool CA trust (macOS). |
+| `my.networkRecovery.enable` | Runs the `org.nixos.network-recovery` launch daemon and sets `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` (macOS). |
+| `my.dock.hostApps` | List of `.app` paths inserted into the macOS Dock between ChatGPT and Discord (`modules/darwin/dock.nix`). |
 
-Other per-host options keep their own meaning. `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, which only one host should be, and `my.cliAuth.enableDockerToken` decrypts the Docker Hub token (see `secrets/README.md`). Keep anything that is not a trait, such as an extra mount, in the host's `default.nix`.
-
-A check that covers a trait runs its positive branch on every production configuration that enables it, or, when none does, on each production configuration re-evaluated with the trait forced on, so removing the last host that enables a trait keeps the trait covered.
+Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from `secrets/tokens.yaml` (see `../secrets/README.md`).
 
 ## Create bootstrap age material
 
-Each host has its own age identity, encrypted to the OpenPGP card. Run the preparation helper from the development shell on an existing machine with a card inserted:
+Each host has its own age identity, encrypted to the OpenPGP card (`keys/signing.asc`). Run the preparation helper from the development shell on an existing machine with a YubiKey inserted:
 
 ```sh
 nix develop
@@ -59,13 +64,16 @@ nix develop
   --recipient 621512777E6933FEB4458FDC4945855D4F283F05
 ```
 
-It generates the identity in a private runtime directory, verifies GPG round-trip decryption, writes `secrets/bootstrap/<host>/age-key.asc` and `secrets/bootstrap/<host>/recipient.txt`, removes the plaintext, and refuses to overwrite an existing host directory. Do not write either file by hand.
+It generates the age identity in a private runtime directory (`$PREPARE_AGE_RUNTIME_DIR` or `/run/user/$(id -u)`), verifies a GPG round-trip decryption with the card, writes `secrets/bootstrap/<host>/age-key.asc` and `secrets/bootstrap/<host>/recipient.txt`, removes all temporary plaintext, and refuses to overwrite an existing directory. Do not write either file by hand.
 
 ## Add the recipient to `.sops.yaml` and re-encrypt
 
-`.sops.yaml` has one creation rule per encrypted file, and each rule lists the age recipients that may decrypt it. Append the value from `secrets/bootstrap/<host>/recipient.txt` to the `age:` list of every rule the new host needs, comma-separated. A production host needs `secrets/tokens.yaml`, `secrets/wifi.yaml`, and `secrets/tailscale.yaml`.
+`.sops.yaml` has one creation rule per encrypted file, listing the comma-separated age recipients that may decrypt it:
 
-Adding a recipient does not change existing ciphertext. Re-encrypt each file to the new recipient list from the repository root, on any machine with the checkout and a YubiKey. The key command below decrypts every host's bootstrap identity with GPG; one card opens them all, so together they reach every file in `.sops.yaml` whichever host runs it, and no sudo is needed. The card may prompt for its PIN. The development shell provides `sops`:
+- Every host (`nixos` or `darwin`) is added to the `secrets/tokens\.yaml$` rule.
+- Only NixOS hosts are added to `secrets/wifi\.yaml$` and `secrets/tailscale\.yaml$` (and to `secrets/printers\.yaml$` when the NixOS host declares `my.printing.queues`). Adding a `darwin` host recipient to `wifi.yaml` or `tailscale.yaml` fails `user-identity-secrets`.
+
+After updating `.sops.yaml`, re-encrypt each affected shared file from the repository root with a YubiKey connected:
 
 ```sh
 nix develop
@@ -76,16 +84,18 @@ sops updatekeys -y secrets/tailscale.yaml
 unset SOPS_AGE_KEY_CMD
 ```
 
+If the new NixOS host also declares `my.printing.queues`, add its recipient to `secrets/printers\.yaml$` and run `sops updatekeys -y secrets/printers.yaml` as well.
+
 ## Create the desktop SSH key source
 
-Each NixOS desktop needs a unique Ed25519 SSH authentication key. Add an exact creation rule for its recovery source to `.sops.yaml`, using only the recipient recorded for this host:
+Every host has a unique Ed25519 SSH authentication key under `secrets/hosts/<host>/{ssh.yaml,ssh.pub}`. Add a creation rule for `secrets/hosts/<host>/ssh.yaml` to `.sops.yaml`, listing only `<host>`'s recipient:
 
 ```yaml
   - path_regex: ^secrets/hosts/<host>/ssh\.yaml$
     age: <the value from secrets/bootstrap/<host>/recipient.txt>
 ```
 
-Generate the passphrase-free recovery key in a private runtime directory and encrypt it before copying anything secret into the checkout. Run this in a subshell from the development shell, with shell tracing disabled. It refuses to overwrite an existing source or public key in the output directory and removes temporary plaintext on exit. Output defaults to `secrets/hosts/<host>`; `DESKTOP_SSH_OUTPUT` can select a separate directory for rotation. The SOPS rule always uses the canonical host path. Replace `<host>` before running it:
+Generate the key pair in a private runtime directory and encrypt `ssh.yaml` before copying anything into the checkout. Run this in a subshell from `nix develop` with shell tracing disabled (`replace <host>` first; on macOS, use `mktemp -d "${TMPDIR:-/tmp}/desktop-ssh-source.XXXXXX"` if `/run/user/$(id -u)` does not exist):
 
 ```sh
 nix develop
@@ -97,7 +107,7 @@ nix develop
   test ! -L "$desktop_ssh_output/ssh.yaml"
   test ! -e "$desktop_ssh_output/ssh.pub"
   test ! -L "$desktop_ssh_output/ssh.pub"
-  desktop_ssh_tmp=$(mktemp -d /run/user/"$(id -u)"/desktop-ssh-source.XXXXXX)
+  desktop_ssh_tmp=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/desktop-ssh-source.XXXXXX")
   trap 'rm -rf -- "$desktop_ssh_tmp"' EXIT
   trap 'exit 1' HUP INT TERM
   ssh-keygen -q -t ed25519 -N '' -C '<host> nix-config' -f "$desktop_ssh_tmp/id_ed25519"
@@ -113,21 +123,17 @@ nix develop
 )
 ```
 
-The recipient output must contain exactly this host's recipient. `ssh.pub` is public metadata for the encrypted source; keep the two files together. Never evaluate or build with temporary plaintext in the checkout. The `desktop-ssh` check verifies encrypted fields, host-only recipients, valid public metadata, and distinct desktop public identities. Source/public correspondence is checked when the real source is provisioned on the target; builds do not decrypt it.
-
-After installation, `desktop-ssh-provision.service` creates the passphrase-protected working key through KWallet (see [desktop SSH recovery](recovery.md#restore-or-rotate-a-desktop-ssh-key)). Register `ssh.pub` on the required destinations; creating the repository files does not register the key.
+Verify that `grep 'recipient:'` prints only `<host>`'s recipient. On NixOS desktops, `desktop-ssh-provision.service` protects the working copy at `~/.ssh/id_ed25519_nix_config` with a random KWallet passphrase (see [desktop SSH recovery](recovery.md#restore-or-rotate-a-desktop-ssh-key)). On macOS, `host-secrets` installs the key at `~/.ssh/id_ed25519_nix_config` (`0600`), protected by FileVault. Register `secrets/hosts/<host>/ssh.pub` on GitHub and any server the host must reach.
 
 ## Stage the new files
 
-A flake sees only files that Git tracks. Until the new files are staged, `flake.nix` does not see `hosts/<host>`, and the checks do not see its bootstrap material:
+A Nix flake sees only paths tracked by Git. Stage the new host and secret files before evaluating or checking the flake:
 
 ```sh
 git add hosts/<host> secrets/bootstrap/<host> secrets/hosts/<host> .sops.yaml
 ```
 
-The re-encrypted `secrets/*.yaml` files are already tracked, so the flake sees their new contents without staging. Stage them with the rest before committing.
-
-Confirm that the flake now lists both outputs for the new host, `<host>` and `<host>-bootstrap`:
+Confirm that the flake lists both `<host>` and `<host>-bootstrap`:
 
 ```sh
 nix eval .#nixosConfigurations --apply builtins.attrNames
@@ -143,38 +149,38 @@ nix build --no-link .#nixosConfigurations.<host>.config.system.build.toplevel
 nix build --no-link .#nixosConfigurations.<host>-bootstrap.config.system.build.toplevel
 ```
 
-Build every other output too before shipping, using the host-build loops in `../AGENTS.md`. CI builds every output `nixosConfigurations` lists, so the new host joins its build matrix without a workflow change.
+These checks guard host onboarding:
 
-These checks fail when a step above was missed:
-
-- `bootstrap-recipients` (`tests/bootstrap-recipients.nix`) pairs `hosts/` with `secrets/bootstrap/`. It names the side that is missing when a host has no bootstrap material or bootstrap material has no host. It also fails when the recorded recipient does not appear in `.sops.yaml`. Run it alone with `nix build --no-link .#checks.x86_64-linux.bootstrap-recipients`.
-- `boot-layout-invariants` (`tests/boot-layout-invariants.nix`) checks the new host's `disko.nix` for the ESP, btrfs, and swapfile layout, with no LUKS container, that `boot.nix` relies on. The `boot-layout` VM test boots only the first host's layout, so this check is what covers the new one.
-- `host-name-guard` fails when the new name appears in one of the paths listed under [Choose the name](#choose-the-name). Rename the directory, or replace the reference in shared code with a trait.
-- `desktop-ssh` (`tests/desktop-ssh.nix`) fails when a NixOS host lacks its encrypted SSH source or matching public metadata, lists another recipient, or duplicates another desktop's public identity, and checks the materialized production services, launchers, and configuration, and their absence from bootstrap outputs.
+- `bootstrap-recipients` (`tests/bootstrap-recipients.nix`) pairs `hosts/` with `secrets/bootstrap/` and verifies that every recorded recipient appears in `.sops.yaml`.
+- `sops-recipients` (`tests/sops-recipients.nix`) verifies that every encrypted YAML file's recipient metadata matches its `.sops.yaml` creation rule.
+- `boot-layout-invariants` (`tests/boot-layout-invariants.nix`) checks each NixOS host's `disko.nix` for the ESP (`disk-main-ESP`), LUKS2 container (`cryptroot`, `disk-main-luks`), Btrfs subvolumes, and swapfile that `modules/nixos/system/boot.nix` expects.
+- `boot-splash` (`tests/boot-splash.nix`) checks that production NixOS outputs include a KMS driver in `boot.initrd.kernelModules`.
+- `host-name-guard` (`tests/host-name-guard.nix`) fails when any host directory name appears in shared code.
+- `desktop-ssh` (`tests/desktop-ssh.nix`) verifies `secrets/hosts/<host>/{ssh.yaml,ssh.pub}` and the `desktop-ssh` services on NixOS hosts.
 
 ## Install
 
-Follow [fresh installation](install.md) with the new host's name. Add a subsection under its per-host notes for anything specific to the machine, such as a secondary disk or firmware quirk, and record machine-specific hardware checks separately from build results.
+Follow [fresh installation](install.md) with `<host>`. Add a subsection under its per-host notes for machine-specific hardware facts and report hardware verification separately from build results.
 
 ## macOS hosts
 
-A macOS host is an Apple silicon Mac (`aarch64-darwin`). It gets the same shell, development tools, coding-agent configuration, Git signing, and CLI authentication as a NixOS host, and the GUI apps, fonts, and Ghostty settings of a NixOS host. Intel Macs are not supported: `lib/darwin-host.nix` stops evaluation with a message naming the host when `host.nix` sets any other system.
+A macOS host is an Apple silicon Mac (`aarch64-darwin`). Intel Macs are not supported: `lib/darwin-host.nix` fails evaluation when `host.nix` declares any other system.
 
-The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` and `darwinConfigurations.<host>-bootstrap`. Each is a nix-darwin system with Home Manager inside it, so one activation applies both layers. The bootstrap output holds no secrets.
+The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` and `darwinConfigurations.<host>-bootstrap`. Each is a `nix-darwin` system with Home Manager inside it. Every macOS host imports `modules/darwin/profile.nix`, which configures:
 
-Every macOS host imports `modules/darwin/profile.nix`, which sets up the system layer:
-
-- nix-darwin owns `/etc/nix/nix.conf` and writes the shared Nix settings into it, with `auto-optimise-store` forced off, because store optimisation corrupts the store on macOS (NixOS/nix#7273).
-- `/etc/nix-config-host` records the host and the variant, identifying the active variant.
-- nix-homebrew installs Homebrew on the first apply. A Homebrew already at `/opt/homebrew` is migrated in place (`autoMigrate`), keeping the formulae and casks it holds. nix-darwin's Homebrew module then installs the casks that `modules/shared/darwin-apps.nix` lists. Its cleanup mode is `"none"`, so an app you installed by hand stays installed. Each apply refreshes Homebrew's cask metadata, then installs missing casks and upgrades outdated ones. Homebrew itself stays at the version nix-homebrew pins.
-- The NixOS font list, `modules/shared/font-packages.nix`, is installed system-wide.
-- `modules/darwin/defaults.nix` is where macOS system defaults go: Dock, Finder, trackpad, appearance, and keyboard. It sets none yet.
-
-`modules/shared/darwin-apps.nix` gives every NixOS-only package of the user environment a macOS decision: a Homebrew cask, a Nix package, or left out with a reason. The `darwin-config` check fails when a NixOS-only package has no decision, so an app added on NixOS needs an entry here. A cask the configuration retires leaves this file and joins the list in `modules/darwin/retired-casks.nix`, which uninstalls it on the next apply, because Homebrew cleanup is `"none"`. VSCodium and the T3 Code desktop app come from Nix rather than Homebrew; the T3 Code app is the flake's pinned nightly.
+- `/etc/nix/nix.conf` with the shared Nix settings and `auto-optimise-store = false` (`modules/darwin/nix.nix`).
+- `/etc/nix-config-host` recording `host=<host>` and `variant=bootstrap|production` (`modules/darwin/host-marker.nix`).
+- Homebrew via `nix-homebrew`, the `aria2` and `container` formulae, and the casks from `modules/shared/darwin-apps.nix` with cleanup `"none"` (`modules/darwin/homebrew.nix`), plus retirement of `grok-bot` and `orca` (`modules/darwin/retired-casks.nix`).
+- Xcode provisioning via `xcodes` on production switches (`!config.my.bootstrap`), reading `secrets/hosts/<host>/apple-account.yaml` from the applying checkout (`modules/darwin/xcode.nix`).
+- KakaoTalk and Flighty via `mas` (`modules/darwin/app-store.nix`).
+- Apple's `container` runtime setup (`modules/darwin/container.nix`).
+- The macOS Dock (`modules/darwin/dock.nix`) and automatic appearance (`modules/darwin/defaults.nix`).
+- Optional TLS inspection CA trust (`modules/darwin/tls-inspection-ca.nix`) and network recovery daemon (`modules/darwin/network-recovery.nix`).
+- System-wide fonts from `modules/shared/font-packages.nix` (`modules/darwin/fonts.nix`).
 
 ### Name the macOS host
 
-The name rule is the same as for a NixOS host; see [Choose the name](#choose-the-name). The name macOS shows for the machine does not matter: `nr` reads the host from `/etc/nix-config-host`.
+Follow [Choose the name](#choose-the-name), and include the Mac's `hw.model` identifier with the comma replaced by a hyphen (for example `Mac17-9` in `MacBook-Pro-Mac17-9`) so the lookup step in [macOS hosts](macos.md#first-setup-on-the-mac) finds it.
 
 ### Create the macOS `host.nix` and `default.nix`
 
@@ -187,9 +193,10 @@ Create `hosts/<host>/` with two files. `host.nix` marks the directory as a macOS
 }
 ```
 
-`default.nix` sets the account and the traits. A macOS home directory is under `/Users`:
+`default.nix` sets the primary user account, home directory under `/Users`, and host traits:
 
 ```nix
+{ ... }:
 {
   my.user.name = "<account>";
   my.user.home = "/Users/<account>";
@@ -198,19 +205,32 @@ Create `hosts/<host>/` with two files. `host.nix` marks the directory as a macOS
 }
 ```
 
-Only the options in `modules/shared/host.nix` exist, and NixOS options such as `my.cliAuth.enableDockerToken` fail evaluation. Only `my.t3.cli.enable` and `my.t3.desktop.enable` change a macOS host; the hardware traits change nothing there.
-
 ### Create the macOS host's secrets
 
-A macOS host's secrets work as a NixOS host's do. Run these three steps on a machine that already has the checkout and a card:
+Run these steps on a machine that already has the checkout and a YubiKey:
 
-1. [Create the bootstrap age material](#create-the-non-nixos-bootstrap-age-material). `bootstrap-recipients` fails when `secrets/bootstrap/<host>/` is missing.
-2. [Add the recipient to the `tokens.yaml` rule only](#add-the-recipient-to-the-tokensyaml-rule-only), and re-encrypt `tokens.yaml`. On a Mac, FileVault protects the identity in place of the distribution's disk encryption.
-3. [Create the host SSH key file](#create-the-host-ssh-key-file). The production output does not evaluate without `secrets/hosts/<host>/ssh.yaml`.
+1. **Create the bootstrap age material** under `secrets/bootstrap/<host>/{age-key.asc,recipient.txt}` using `./scripts/prepare-age-identity` as shown in [Create bootstrap age material](#create-bootstrap-age-material). (On macOS without `/run/user/$(id -u)`, set `PREPARE_AGE_RUNTIME_DIR=$(mktemp -d)` for that run and remove the directory afterward.)
+2. **Add the recipient to `secrets/tokens.yaml` only.** Append the `age1...` string from `secrets/bootstrap/<host>/recipient.txt` to the `secrets/tokens\.yaml$` creation rule in `.sops.yaml` and run `sops updatekeys -y secrets/tokens.yaml`. Do not add a macOS host to `wifi.yaml`, `tailscale.yaml`, or `printers.yaml`.
+3. **Create the host SSH key files** `secrets/hosts/<host>/{ssh.yaml,ssh.pub}` and the `^secrets/hosts/<host>/ssh\.yaml$` rule in `.sops.yaml` as shown in [Create the desktop SSH key source](#create-the-desktop-ssh-key-source).
+4. **Create the Apple Account secret** `secrets/hosts/<host>/apple-account.yaml` for `xcodes`. Add its creation rule to `.sops.yaml` with only `<host>`'s recipient:
+
+   ```yaml
+     - path_regex: ^secrets/hosts/<host>/apple-account\.yaml$
+       age: <the value from secrets/bootstrap/<host>/recipient.txt>
+   ```
+
+   Encrypt the `username` and `password` mapping from a mode `0600` file outside the checkout without writing plaintext into the repository:
+
+   ```sh
+   sops --encrypt --filename-override secrets/hosts/<host>/apple-account.yaml \
+     --input-type yaml --output-type yaml <outside-apple-account-file> \
+     > secrets/hosts/<host>/apple-account.yaml
+   rm <outside-apple-account-file>
+   ```
+
+5. **Optional TLS inspection CA.** If the Mac enables `my.tlsInspectionCa.enable = true`, add `^secrets/hosts/<host>/tls-inspection-ca\.yaml$` to `.sops.yaml` and create `secrets/hosts/<host>/tls-inspection-ca.yaml` as shown in [macOS hosts](macos.md#tls-inspection-ca).
 
 ### Stage and check the macOS host
-
-Stage the new files, so the flake sees them, and confirm that the flake lists `<host>` and `<host>-bootstrap`:
 
 ```sh
 git add hosts/<host> secrets/bootstrap/<host> secrets/hosts/<host> .sops.yaml secrets/tokens.yaml
@@ -219,23 +239,20 @@ nix fmt -- --ci
 nix flake check
 ```
 
-A macOS output builds only on a macOS builder. On a Mac, build both:
+On a macOS builder, also build both system closures:
 
 ```sh
 nix build --no-link .#darwinConfigurations.<host>.system
 nix build --no-link .#darwinConfigurations.<host>-bootstrap.system
 ```
 
-CI's `build-darwin` job builds every `darwinConfigurations` output on a `macos-15` runner, so a new macOS host joins it without a workflow change.
+These checks guard a macOS host:
 
-Three checks fail when a step above was missed:
-
-- `bootstrap-recipients` fails when the host has no bootstrap material, or when its recipient is missing from `.sops.yaml`.
-- `user-identity-secrets` covers every macOS host. It fails when `secrets/hosts/<host>/ssh.yaml` is missing or lists another recipient, when the recipient is missing from the `tokens.yaml` rule, or when it appears in the `wifi.yaml` or `tailscale.yaml` rule.
-- `host-name-guard` fails when the new name appears in scanned code.
-
-Commit and push, so the Mac can clone the result.
+- `bootstrap-recipients` (`tests/bootstrap-recipients.nix`) checks `secrets/bootstrap/<host>/` and `.sops.yaml`.
+- `user-identity-secrets` (`tests/user-identity-secrets.nix`) checks that `secrets/hosts/<host>/ssh.yaml` exists and lists only `<host>`'s recipient, that `<host>`'s recipient is on `secrets/tokens.yaml`, and that it is absent from `secrets/wifi.yaml` and `secrets/tailscale.yaml`.
+- `sops-recipients` (`tests/sops-recipients.nix`) checks that every encrypted file under `secrets/hosts/<host>/` (including `apple-account.yaml` and `tls-inspection-ca.yaml`) matches its `.sops.yaml` rule.
+- `host-name-guard` (`tests/host-name-guard.nix`) checks that `<host>` does not appear in shared code.
 
 ### First setup on the Mac
 
-[macOS hosts](macos.md#first-setup-on-the-mac) gives the steps to run on the Mac itself, from FileVault and the bootstrap apply through key recovery and the first production apply, and covers everyday use afterwards.
+Follow [macOS hosts](macos.md#first-setup-on-the-mac) on the Mac itself.

@@ -4,7 +4,7 @@ Codex's built-in app and connector integration and its Computer Use feature
 are disabled. Home Manager reconciles `features.apps = false` and
 `features.computer_use = false` into the writable `~/.codex/config.toml`.
 On NixOS, this reconciliation runs when a rebuild produces a new Home Manager
-generation. Non-NixOS Linux and macOS applies run Home Manager activation directly.
+generation. macOS applies run Home Manager activation directly.
 
 The packaged `codex` command also passes `--disable apps` and
 `--disable computer_use` at startup. This overrides an enabled feature in a

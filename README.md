@@ -1,70 +1,87 @@
-# Nix Config
+# dotfiles
 
-A Nix flake configuring personal machines. NixOS hosts run the default Plasma desktop. Non-NixOS Linux hosts, on x86_64-linux or aarch64-linux, get the same shell, development tools, coding-agent configuration, Git signing, and CLI authentication, without the desktop. macOS hosts, on Apple silicon, get the same user environment through nix-darwin, plus the GUI apps through Homebrew casks. The flake pins nixos-unstable with a lock file. Every directory under `hosts/` is a host: the flake builds a production `<host>` output and a `<host>-bootstrap` output for each, from one shared profile plus the traits the host declares.
+A Nix flake configuring the owner's two personal machines from one repository:
 
-On a NixOS host:
+- **`MS-7D91`** (`x86_64-linux`, NixOS): bare-metal desktop workstation running KDE Plasma 6 on Wayland, `nixos-unstable`, LUKS2 + Btrfs via disko, Secure Boot via Lanzaboote, and the proprietary NVIDIA driver.
+- **`MacBook-Pro-Mac17-9`** (`aarch64-darwin`, `nix-darwin`): Apple silicon MacBook Pro (M5 Pro, model identifier `Mac17,9`), combining `nix-darwin`, Home Manager, and `nix-homebrew` in one system profile.
 
-```sh
-sudo nixos-rebuild switch --flake .#<host>
-```
+Every directory under `hosts/` is a host: the flake builds a production `<host>` output and a secret-free `<host>-bootstrap` output for each (`nixosConfigurations` on NixOS, `darwinConfigurations` on macOS), from one shared profile per OS plus the traits the host declares.
 
-Replace `<host>` with the machine's directory name under `hosts/`, listed below. After initial installation and key recovery, this command applies the system, Home Manager configuration, and gh/glab authentication files together. Three YubiKeys carry the same signing key, each under its own PIN; any one of them handles Git signing and initial secret recovery. Ordinary rebuilds use the local age identity, which the host's disk encryption protects. Sign in to 1Password manually; the SSH agent configuration is declarative.
-
-On a non-NixOS host, run this from the clone:
+On the NixOS host (`MS-7D91`), apply from the checkout:
 
 ```sh
 nr switch
 ```
 
-It applies the system layer through system-manager and `sudo`, then the standalone Home Manager configuration, which publishes the gh/glab files, the tokens, and the host's own SSH key. Routine applies use the user-owned age identity at `~/.config/nix-config/age/key.txt`. [Adding a host](docs/adding-a-host.md#non-nixos-hosts) covers the first setup.
+(Or run `sudo nixos-rebuild switch --flake .#MS-7D91`.) After initial installation and age-key recovery, this applies the NixOS system, Home Manager configuration, `sops-nix` secrets, KWallet-backed desktop SSH key (`~/.ssh/id_ed25519_nix_config`), and `gh`/`glab` authentication files together. Three YubiKeys carry the same OpenPGP signing and encryption key (`keys/signing.asc`), each under its own PIN; any one of them handles Git signing and bootstrap age-identity recovery. Routine rebuilds use the local age identity at `/var/lib/sops-nix/key.txt`, protected by LUKS2 disk encryption.
 
-On a macOS host, `nr switch` from the clone builds the nix-darwin system, which holds the Home Manager configuration, and activates it through `sudo`. The first apply installs Homebrew and the casks. Secrets work as on a non-NixOS Linux host, with FileVault protecting the user-owned identity. [macOS hosts](docs/macos.md) covers the first setup and everyday use.
+On the macOS host (`MacBook-Pro-Mac17-9`), apply from the checkout:
+
+```sh
+nr switch
+```
+
+`nr switch` builds `darwinConfigurations.MacBook-Pro-Mac17-9.system` as the invoking user, registers `/nix/var/nix/profiles/system`, and activates the system and Home Manager layers through `sudo`. The first bootstrap apply installs Homebrew and the declared formulae and casks; production switches use the user-owned age identity at `~/.config/nix-config/age/key.txt` (protected by FileVault) to provision Xcode via `xcodes`, configure the TLS inspection CA bundle, and publish the CLI tokens and host SSH key. See [macOS hosts](docs/macos.md) for first setup and everyday use.
 
 ## Hosts
 
-| Host | Machine |
-| --- | --- |
-| `MS-7D91-VM` | VMware Workstation guest on the MSI MS-7D91 PC, which runs Windows; GPG goes through the Windows Gpg4win agent |
-| `MacBook-Pro-Mac17-9` | Apple silicon MacBook Pro (model identifier `Mac17,9`), macOS |
+| Host | OS / System | Machine |
+| --- | --- | --- |
+| `MS-7D91` | NixOS (`x86_64-linux`) | MSI MS-7D91 desktop (Intel i7-13700F, NVIDIA GeForce RTX 3060, Samsung 980 PRO 1 TB NVMe + 2 TB SATA HDD) |
+| `MacBook-Pro-Mac17-9` | macOS (`aarch64-darwin`, `nix-darwin`) | Apple silicon MacBook Pro (M5 Pro, model identifier `Mac17,9`) |
 
-[Adding a host](docs/adding-a-host.md) covers a new machine.
+[Adding a host](docs/adding-a-host.md) covers adding another NixOS or macOS machine.
 
 ## Included tools
 
-zsh, Git, Ghostty, Claude Code, Claude Desktop, ChatGPT, Codex, Pi (with `pi-acp` and `acpx`), the Antigravity CLI (`agy`), T3 Code (desktop app and headless `t3` server, each opt-in per host), gh, glab, 1Password GUI and CLI, Kleopatra, Google Chrome, and a Tokscale wrapper that supplies its API token, device name, and the Antigravity sessions T3 Code runs. Claude Code's scalar settings — model, effort level, language, theme, notifications, and transcript retention — are managed declaratively and reapplied on each rebuild that produces a new Home Manager generation, while anything the repository does not declare stays yours to change. Its logins, permissions, hooks, MCP servers, and plugins are not migrated. The T3 Code nightly is pinned to upstream releases and bumped every 30 minutes. Every Synthetic model the repository uses is named once, in `home/h82/agents/synthetic-models.nix`, and a daily workflow opens an issue when Synthetic's catalog drifts from it. Claude Code and Pi review each other's work and take `ce-work` units, Pi runs `ce-plan`'s research scouts, and T3 Code writes commit messages on Pi with DeepSeek V4.1 Flash. The Antigravity CLI is pinned the same way with its self-updater off, and it gets the shared instructions in its own home, and the Compound Engineering plugin in its own home and in every T3 Code Antigravity instance home. It stays a manual backup: nothing assigns it a review, a work unit, or text generation. Grok is not installed on any host. Non-NixOS hosts get the command-line tools and agent configuration, but no Ghostty, 1Password, Kleopatra, Google Chrome, Claude Desktop, ChatGPT, T3 Code desktop, or other desktop application; a headless one can opt into the `t3` server. macOS hosts get the command-line tools and agent configuration, and install Ghostty, 1Password, Google Chrome, Claude Desktop, ChatGPT, and the other GUI apps as Homebrew casks. ChatGPT launches manually on NixOS and macOS; neither inspected build provides verified silent login startup. They run containers in one Podman machine on libkrun, with minikube inside it, started at login with no app to launch. VSCodium and the T3 Code desktop app come from Nix.
+- **Shell and terminal**: zsh (with Prezto modules and extra completions), Ghostty (`Jetendard` font stack), `gh`, `glab`, `ghq` (`~/src`), `ripgrep`, `fd`, `bat`, `eza`, `fzf`, `jq`, `yq-go`, `direnv`, and `mise`.
+- **Fonts**: Pretendard (`Pretendard` and `Pretendard Variable`), Jetendard, D2Coding and D2Coding Nerd Font, Monoplex KR Nerd, Kopub, Nanum Square Round, Noto Sans/Serif CJK, and Twemoji.
+- **Security and signing**: GnuPG with `gpg-git` (card-status wakeup wrapper) and `dotfiles-pinentry` (`packages/pinentry-keyring.nix`), which stores each YubiKey's OpenPGP user PIN in Secret Service (`kdewallet`) on NixOS or the macOS Keychain under `dotfiles.pinentry.openpgp` (`yubikey:<serial>:user`) and falls back to `pinentry-qt` or `pinentry_mac`. 1Password GUI and CLI, Kleopatra (NixOS), and `sops` + `age`.
+- **Coding agents and orchestration**:
+  - **T3 Code `0.1.7`** (`packages/t3code.nix` desktop app and `packages/t3code-cli.nix` headless `t3` server, enabled via `my.t3.desktop.enable` and `my.t3.cli.enable`). Merged settings (`home/h82/t3code.nix`) default new threads to Codex `gpt-6.1-sol` at `high` effort, with Claude Opus 5.5 as fallback and `gpt-6-luna` for text generation, starting in a worktree with full access. T3-only delegation and CE model-ladder instructions ([agent routing](docs/agent-routing.md)) are injected at launch through each harness's native per-launch option (`--append-system-prompt-file` for Claude, `-c developer_instructions=...` for Codex, `--append-system-prompt` for Pi), while CLI launches receive only the baseline user instructions.
+  - **Claude Code** (`packages/claude-code.nix`) and **Claude Desktop** (`packages/claude-desktop.nix` on NixOS, Homebrew cask on macOS). Scalar preferences (`language = "korean"`, `theme = "auto"`, notifications, cleanup retention, `disableClaudeAiConnectors = true`, `worktree.baseRef = "head"`) and the `fff` MCP server are merged into `~/.claude/settings.json` and `~/.claude.json`; model, effort, and context window remain the owner's choice.
+  - **Codex** (`packages/codex.nix`) and **ChatGPT** (`packages/chatgpt.nix` on NixOS, Homebrew cask on macOS). The wrapper and `~/.codex/config.toml` reconciliation disable built-in app connectors and Computer Use ([Codex app connectors and Computer Use](docs/codex.md)).
+  - **Pi `1.5.0`** (`packages/pi.nix`, `home/h82/agents/pi.nix`) with `pi-acp` and `acpx`, locked to the Synthetic catalog (`home/h82/agents/pi-model-lock.json` and `home/h82/agents/pi-policy.ts`) and authenticated from `synthetic_api_key` in `secrets/tokens.yaml`. Every Synthetic model the repository uses is tracked in `home/h82/agents/synthetic-models.nix` and checked daily against Synthetic's live catalog (`.github/workflows/synthetic-models.yml`).
+  - **Grok Build `1.0.77`** (`packages/grok-build.nix`, `home/h82/agents/grok.nix`), with auto-update and Claude/Cursor compatibility disabled so shared skills load once.
+  - **Antigravity CLI (`agy`)** and the **Antigravity ACP runtime** (`packages/antigravity-cli.nix`, `packages/antigravity-acp.nix`, `home/h82/agents/gemini.nix`).
+  - **Shared plugins, skills, and tools**: Compound Engineering (`v3.36.1`) is registered, installed, and enabled at user scope for every managed harness (`home/h82/agents/agent-plugins.nix`, `home/h82/agents/pi.nix`). Each harness discovers the Korean writing skills (`humanizer`, `grammar-checker`, `style-guide` from `home/h82/agents/korean-skills.nix`), the pinned design/stack skills (`home/h82/agents/pinned-skills.nix`), `design-lenses`, `ux-flows`, and `test-audit` once through its native skill root (`home/h82/agents/skills.nix`). `fff-mcp`, TanStack `intent`, `agent-usage`, and `tokscale` are on `PATH`.
+  - **Retired tools**: Oh My Pi and Orca are no longer managed or installed; existing user state on disk is left untouched (`modules/darwin/retired-casks.nix` removes only the retired `grok-bot` and `orca` Homebrew casks without `--zap`).
+- **Toolchains and SDKs**: `.NET` 8 and 10 SDKs (`home/h82/dev/dotnet.nix`), Rust via `rustup` (`home/h82/dev/rust.nix`), Clang/LLVM, CMake, Ninja, and `vcpkg` (`home/h82/dev/cpp.nix`), Bun (`packages/bun.nix`), Swift (`swiftformat` and `swiftlint`, plus Xcode via `xcodes` on macOS), VSCodium (`home/h82/dev/vscodium.nix`), and the pinned Android SDK (`packages/android-sdk.nix`) with declarative mobile simulators/AVDs (`home/h82/dev/mobile-devices.nix`).
+- **Containers and Kubernetes**:
+  - **NixOS (`MS-7D91`)**: rootless Podman (`modules/nixos/services/podman.nix`) and a rootless `minikube` service (`modules/nixos/services/minikube.nix`), plus `kubectl`, `kubernetes-helm`, `k9s`, and `minikube`.
+  - **macOS (`MacBook-Pro-Mac17-9`)**: Apple's `container` CLI (`modules/darwin/container.nix`), with `kubectl`, `kubernetes-helm`, and `minikube` as clients only (no Podman machine and no automatic `minikube` cluster).
 
 ## Installation and operation
 
-- [Fresh installation](docs/install.md): initialize the disk, bootstrap, and recover the age identity.
-- [Updates and recovery](docs/recovery.md): retry failures, roll back, repair from the installation media, and recover card and signing-key access.
-- [macOS hosts](docs/macos.md): set up a Mac with nix-darwin, recover its secrets, and apply routine updates.
-- [Windows host](docs/windows.md): set up the Windows PC that runs the VMware guest and lends it the YubiKey.
-- [Adding a host](docs/adding-a-host.md): create a host directory, its bootstrap age material, and its `.sops.yaml` recipient, for a NixOS, a non-NixOS, or a macOS host.
-- [Secret file conventions](secrets/README.md)
+- [Fresh installation (NixOS)](docs/install.md): back up, verify disk IDs, partition with `disko`, install `MS-7D91-bootstrap`, recover the age identity, enroll Secure Boot and TPM2, and switch to `MS-7D91`.
+- [macOS hosts](docs/macos.md): back up, reinstall macOS, install Nix, apply `MacBook-Pro-Mac17-9-bootstrap`, recover the user age identity, and switch to `MacBook-Pro-Mac17-9`.
+- [Updates and recovery](docs/recovery.md): routine switches, rollbacks, LUKS and Secure Boot backup/repair from installation media, YubiKey replacement, desktop SSH key recovery/rotation, host decommission, and iPhone/iPad IPSW restore.
+- [Adding a host](docs/adding-a-host.md): create a NixOS or macOS host directory, its bootstrap age material, per-host secrets, and `.sops.yaml` rules.
+- [Agent routing](docs/agent-routing.md): T3 delegation policy, CE model-selection ladder, and launch-time instruction composition.
+- [Codex app connectors and Computer Use](docs/codex.md): how Codex app connectors and Computer Use are disabled.
+- [Secret file conventions](secrets/README.md): sops/age layout, recipient rules, and recovery pipelines.
 
-Each `<host>-bootstrap` output can be installed without private keys or tokens. The final outputs can also be evaluated and built without plaintext secrets. Applying them requires the local age identity and encrypted tokens. Authentication recovery is not complete until the repository contains the real tokens in encrypted form and the bootstrap ciphertext.
+Each `<host>-bootstrap` output can be evaluated, built, and installed without private keys or tokens. Production `<host>` outputs also evaluate and build without plaintext secrets; activating them requires the host's recovered age identity and the encrypted files in `secrets/`.
 
-## Development checks
+## Development checks and CI
 
 ```sh
+nix fmt -- --ci
 nix flake check
-nix build --no-link .#vmChecks.all  # NixOS VM tests; needs /dev/kvm
+nix build --no-link .#vmChecks.all  # NixOS VM tests; requires Linux with /dev/kvm
 nix eval .#nixosConfigurations --apply builtins.attrNames
 for host in $(nix eval --raw .#nixosConfigurations --apply 'c: toString (builtins.attrNames c)'); do
   nix build --no-link ".#nixosConfigurations.$host.config.system.build.toplevel"
 done
-for host in $(nix eval --raw .#homeConfigurations --apply 'c: toString (builtins.attrNames c)'); do
-  nix build --no-link ".#homeConfigurations.$host.activationPackage"
-done
-for host in $(nix eval --raw .#systemConfigs --apply 'c: toString (builtins.attrNames c)'); do
-  nix build --no-link ".#systemConfigs.$host"
-done
+nix eval .#darwinConfigurations --apply builtins.attrNames
 for host in $(nix eval --raw .#darwinConfigurations --apply 'c: toString (builtins.attrNames c)'); do
   nix build --no-link ".#darwinConfigurations.$host.system"  # macOS builder only
 done
-nix fmt
 ```
 
-`homeConfigurations` and `systemConfigs` hold the non-NixOS hosts' outputs and `darwinConfigurations` the macOS hosts'; each stays empty until `hosts/` has such a host. An aarch64 output builds only on an aarch64 builder; CI builds those on its arm runners. A macOS output builds only on a macOS builder; CI's `build-darwin` job builds those on a `macos-15` runner.
+### Continuous integration (`.github/workflows/check.yml`)
 
-Installation and enrollment are explicit, one-time operations. Do not run disko or rebuild switch on the current host for validation.
+- **Every pull request** runs `fmt` (`nix fmt -- --ci`), path classification (`changes` via `scripts/ci-docs-only-paths`), `markdown-lint` (standalone on docs-only pull requests), `flake-check` (`nix flake check --no-build`), and the `light-*` shards of `checkShards` (`tests/check-shards.nix`).
+- **Heavy closure builds** — `host-checks` (`.#checkShards.hosts`), `vm-checks` (`.#vmChecks.*`), `build` (`.#nixosConfigurations.<host>.config.system.build.toplevel`), and `build-darwin` (`.#darwinConfigurations.<host>.system` and `.#checks.aarch64-darwin.*` on `macos-15`) — run only on a push to `main`, a manual `workflow_dispatch`, or a pull request carrying the `full-ci` label.
+
+Installation, disk partitioning, key enrollment, and host switches are manual owner operations. Never run `disko`, `nixos-install`, `nixos-rebuild switch`, or `nr switch` on a host as a validation step.
