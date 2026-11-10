@@ -10,6 +10,9 @@ import tempfile
 with tempfile.TemporaryDirectory() as directory:
     agent = Path(directory) / 'agent'
     shutil.copytree(sys.argv[1], agent, symlinks=False)
+    # A copy of a store tree keeps its read-only modes.
+    for path in [agent, *agent.rglob('*')]:
+        path.chmod(path.stat().st_mode | 0o200)
     (agent / 'settings.json').write_text(json.dumps({'defaultProvider': 'foreign', 'defaultModel': 'bad',
         'packages': ['other'], 'extensions': ['other.ts'], 'ownerSetting': True}))
     (agent / 'auth.json').write_text('{"other":{"type":"api_key","key":"FAKE-other"}}')
