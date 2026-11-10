@@ -183,19 +183,19 @@
           user = host.config.home-manager.users.${host.config.my.user.name};
         }) self.darwinConfigurations;
       };
+      checks.aarch64-darwin.zsh-prezto = import ./tests/zsh-prezto.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        entries = lib.mapAttrsToList (name: host: {
+          inherit name;
+          bootstrap = host.config.my.bootstrap;
+          kind = "darwin";
+          user = host.config.home-manager.users.${host.config.my.user.name};
+        }) darwinHosts;
+      };
       checks.aarch64-darwin.darwin-outputs = import ./tests/darwin-outputs.nix {
         inherit self;
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
         inherit darwinFixtures;
-        checks.aarch64-darwin.zsh-prezto = import ./tests/zsh-prezto.nix {
-          pkgs = import nixpkgs { system = "aarch64-darwin"; };
-          entries = lib.mapAttrsToList (name: host: {
-            inherit name;
-            bootstrap = host.config.my.bootstrap;
-            kind = "darwin";
-            user = host.config.home-manager.users.${host.config.my.user.name};
-          }) darwinHosts;
-        };
         darwinConfigurations = darwinHosts;
       };
       darwinConfigurations = darwinHosts;
