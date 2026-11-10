@@ -22,11 +22,11 @@ if name == 'uname': print(state.get('os', 'Linux'))
 elif name == 'dpkg': print(state.get('arch', 'amd64'))
 elif name in ('ghostty', 'zsh'): sys.exit(0 if state.get(name, False) else 1)
 elif name == 'dpkg-query':
-    if not state.get('studio',True): sys.exit(1)
+    if not state.get('flavor',True): sys.exit(1)
     print('install ok installed')
 elif name == 'python3':
     import importlib.util
-    spec=importlib.util.spec_from_file_location('probe',os.environ['STUDIO_PROBE'])
+    spec=importlib.util.spec_from_file_location('probe',os.environ['HOST_PROBE'])
     probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
     def run_probe(args, **kwargs):
         command = shlex.join(['bash', (root/'commands'/args[0]).as_posix(), *args[1:]])
@@ -71,7 +71,7 @@ class GhosttyInstallTest(unittest.TestCase):
         self.env = os.environ.copy()
         self.env.update(HOME=str(self.home), USERPROFILE=str(self.home), TMPDIR=str(self.root),
                         GHOSTTY_TEST_ROOT=str(self.root), FIXTURE_BASH=find_bash(),
-                        STUDIO_PROBE=str(self.repo/'scripts/linux-platform.py'),
+                        HOST_PROBE=str(self.repo/'scripts/linux-platform.py'),
                         XDG_CONFIG_HOME=str(self.home/'.config'))
 
     def wrapper(self, name):
@@ -104,7 +104,7 @@ class GhosttyInstallTest(unittest.TestCase):
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(['dpkg', ['--print-architecture']], self.calls())
-        self.assertIn(['dpkg-query', ['-W', '-f=${Status}', 'ubuntustudio-desktop']], self.calls())
+        self.assertIn(['dpkg-query', ['-W', '-f=${Status}', 'ubuntu-desktop']], self.calls())
 
     def calls(self):
         path = self.root/'calls.jsonl'
@@ -135,7 +135,7 @@ class GhosttyInstallTest(unittest.TestCase):
                                        ({},'24.04','amd64'), ({},'26.04','arm64'),
                                        ({'arch':'arm64'},'26.04','amd64'),
                                        ({'release':'24.04'},'26.04','amd64'),
-                                       ({'studio':False},'26.04','amd64')]:
+                                       ({'flavor':False},'26.04','amd64')]:
             with self.subTest(changes=changes, release=release, arch=arch):
                 self.state = {'zsh': True, **changes}
                 before = len(self.calls())

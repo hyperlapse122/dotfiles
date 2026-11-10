@@ -294,11 +294,11 @@ The effective `DOCKER_CONFIG` and `REGISTRY_AUTH_FILE` overrides are reconciled 
 
 Locked or unavailable native storage fails without a plaintext fallback. Rotate credentials by importing the replacement and applying again. No real registry push is part of the smoke tests. `tests/smoke_container_auth.py` writes only synthetic records on disposable GitHub-hosted runners, restoring macOS Keychain selection and erasing its record. CI supplies the mise-pinned Podman 6.1.4 client and requires a real host-side `podman login --get-login` lookup. Remote Podman initializes a connection before this local lookup; a ping-only loopback fixture satisfies that handshake without returning credentials or starting an engine. The account must still come from the official helper and native credential store.
 
-## Ubuntu Studio Native Credential Acceptance
+## Ubuntu Native Credential Acceptance
 
-Explicit Linux application installs Secret Service client libraries and `secret-tool`, and uses Qt pinentry for GPG. Ubuntu Studio's existing desktop session must supply the unlocked Secret Service collection. An installed KWallet or gnome-keyring package does not prove that it owns the bus name, provides a default collection or can persist credentials. Application does not start another provider or migrate wallets.
+Explicit Linux application installs Secret Service client libraries and `secret-tool`, and uses the GNOME pinentry for GPG. The existing Ubuntu Desktop session must supply the unlocked Secret Service collection, which gnome-keyring normally provides. An installed gnome-keyring or KWallet package does not prove that it owns the bus name, provides a default collection or can persist credentials. Application does not start another provider or migrate wallets.
 
-In the owner's native KDE session, check the bus owner without activating a provider:
+In the owner's native GNOME session, check the bus owner without activating a provider:
 
 ```sh
 gdbus call --session --dest org.freedesktop.DBus \
@@ -306,7 +306,7 @@ gdbus call --session --dest org.freedesktop.DBus \
   org.freedesktop.secrets
 ```
 
-Require `true` before further Secret Service calls. Resolve a missing provider using the desktop's supported configuration and log in again; do not launch a competing daemon for this test. To identify the current owner, call `org.freedesktop.DBus.GetNameOwner` on the same bus object with `org.freedesktop.secrets`, then inspect that unique owner's process in the session. Confirm whether KWallet or gnome-keyring owns it. Only after confirming ownership, inspect the default alias:
+Require `true` before further Secret Service calls. Resolve a missing provider using the desktop's supported configuration and log in again; do not launch a competing daemon for this test. To identify the current owner, call `org.freedesktop.DBus.GetNameOwner` on the same bus object with `org.freedesktop.secrets`, then inspect that unique owner's process in the session. Confirm whether gnome-keyring or another provider owns it. Only after confirming ownership, inspect the default alias:
 
 ```sh
 gdbus call --session --dest org.freedesktop.secrets \
@@ -335,4 +335,4 @@ Record store, comparison and deletion results separately. If interrupted or a co
 
 Open 1Password, sign in and unlock it manually. Enable its supported CLI and browser integration, then verify `op --version`, a native CLI authorization prompt and browser unlock/fill on a harmless account. For SSH, use the enrolled public identity and documented Linux socket; confirm only the selected account is offered. Do not capture vault item values. Complete GPG PIN and ownertrust verification, a disposable signed commit, authorized GitHub/GitLab operations and any enrolled registry lookup in the same desktop session. Confirm missing or locked native storage fails rather than persisting plaintext. The read-only Linux readiness report performs none of these operations.
 
-See the [Studio migration guide](../setup/ubuntu-studio.md) for the full acceptance record and build/runtime boundary.
+See the [Ubuntu setup guide](../setup/ubuntu.md) for the full acceptance record and build/runtime boundary.

@@ -1,11 +1,11 @@
 {
   "linux": {
     "packages": [
-      "ca-certificates", "curl", "git", "gnupg", "gpg-agent", "pinentry-qt",
+      "ca-certificates", "curl", "git", "gnupg", "gpg-agent", "pinentry-gnome3",
       "zsh", "fontconfig", "build-essential", "pkg-config", "tar", "zip", "unzip", "xz-utils",
       "libsecret-1-0", "libsecret-tools", "libc6", "libgcc-s1", "libstdc++6",
       "libgssapi-krb5-2", "libicu78", "libssl3t64", "libunwind8", "zlib1g",
-      "uidmap", "dbus-user-session", "slirp4netns", "fuse-overlayfs", "ghostty", "aria2",
+      "uidmap", "dbus-user-session", "slirp4netns", "fuse-overlayfs", "ghostty", "xdg-terminal-exec", "aria2",
       "qemu-system-x86", "ovmf", "virtiofsd"
     ],
     "repositories": [

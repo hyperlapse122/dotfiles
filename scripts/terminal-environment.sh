@@ -14,7 +14,7 @@ uid=$(id -u)
 user=$(id -un)
 
 if [ "$os" = linux ]; then
-    python3 "$(dirname "$0")/linux-platform.py" || fail 'Unsupported Ubuntu Studio host; see the host probe blockers.'
+    python3 "$(dirname "$0")/linux-platform.py" || fail 'Unsupported Ubuntu Desktop host; see the host probe blockers.'
     record=$(getent passwd "$uid") || fail 'Cannot read the current account.'
     account_home=$(printf '%s\n' "$record" | awk -F: '{print $6}')
     account_shell=$(printf '%s\n' "$record" | awk -F: '{print $7}')
@@ -96,9 +96,8 @@ if [ "$os" = darwin ]; then
 else
     ghostty=$(command -v ghostty) || fail 'Ghostty is not installed.'
     ghostty --version >/dev/null 2>&1 || fail 'Ghostty executable is not usable.'
-    command -v kwriteconfig6 >/dev/null 2>&1 || fail 'KDE kwriteconfig6 is missing.'
-    command -v kreadconfig6 >/dev/null 2>&1 || fail 'KDE kreadconfig6 is missing.'
-    desktop=$(python3 - "$ghostty" "$home" <<'PYTHON'
+    command -v xdg-terminal-exec >/dev/null 2>&1 || fail 'Ubuntu default-terminal dispatcher xdg-terminal-exec is missing.'
+    desktop_id=$(python3 - "$ghostty" "$home" <<'PYTHON'
 import configparser
 import os
 from pathlib import Path
@@ -134,27 +133,27 @@ for root in roots:
         executable = shutil.which(parts[0]) if parts else None
         if executable and os.path.realpath(executable) == os.path.realpath(binary):
             print(desktop_id)
-            print(command)
             sys.exit(0)
 sys.exit('No installed Ghostty desktop entry matches the active executable.')
 PYTHON
-    ) || fail 'Cannot establish the installed Ghostty desktop entry and Exec command.'
-    desktop_id=$(printf '%s\n' "$desktop" | sed -n '1p')
-    desktop_exec=$(printf '%s\n' "$desktop" | sed -n '2p')
-    for key in TerminalApplication TerminalService; do
-        case "$key" in TerminalApplication) expected=$desktop_exec ;; TerminalService) expected=$desktop_id ;; esac
-        selected=$(kreadconfig6 --file kdeglobals --group General --key "$key") || fail "Cannot read KDE $key."
-        if [ "$selected" != "$expected" ]; then
-            if [ "$mode" = apply ]; then
-                kwriteconfig6 --file kdeglobals --group General --key "$key" "$expected" || fail "Cannot set KDE $key."
-                selected=$(kreadconfig6 --file kdeglobals --group General --key "$key") || fail "Cannot verify KDE $key."
-                [ "$selected" = "$expected" ] || fail "KDE $key did not converge."
-            else
-                note_pending "KDE $key does not select the installed Ghostty entry; apply again."
-            fi
+    ) || fail 'Cannot establish the installed Ghostty desktop entry.'
+    list="$config_home/ubuntu-xdg-terminals.list"
+    if [ "$mode" = apply ]; then
+        temporary=$(mktemp "$config_home/.ghostty-terminals.XXXXXXXX") || fail 'Cannot stage the terminal preference list.'
+        { printf '%s\n' "$desktop_id"
+          if [ -f "$list" ]; then grep -Fvx "$desktop_id" "$list" || [ "$?" -eq 1 ]; fi
+        } > "$temporary" || { rm -f "$temporary"; fail 'Cannot read the existing terminal preference list.'; }
+        if cmp -s "$temporary" "$list"; then
+            rm -f "$temporary"
+        else
+            mv "$temporary" "$list" || fail 'Cannot write the terminal preference list.'
         fi
-    done
-    note_pending 'Native Plasma acceptance remains unverified: check Default Applications, Ctrl+Alt+T, Dolphin Open Terminal Here, and a Terminal=true launcher in a fresh desktop session.'
+    fi
+    selected_id=$(XTE_CACHE_ENABLED=0 xdg-terminal-exec --print-id) || fail 'Cannot inspect the effective desktop terminal.'
+    if [ "$selected_id" != "$desktop_id" ]; then
+        note_pending 'The desktop dispatcher does not select the installed Ghostty entry; check the Ubuntu GNOME session and apply again.'
+    fi
+    note_pending 'Native GNOME acceptance remains unverified: check Ctrl+Alt+T, the Files terminal action, and a Terminal=true launcher in a fresh desktop session.'
     manager_available=1
     manager_environment=$(systemctl --user show-environment 2>/dev/null) || manager_available=0
     if [ "$manager_available" -eq 0 ]; then

@@ -152,10 +152,10 @@ esac''')
         self.assertEqual(list(self.home.iterdir()), [])
 
     def test_unsupported_host_stops_before_publication(self):
-        self.command("python3", "echo unsupported-studio >&2; exit 23")
+        self.command("python3", "echo unsupported-host >&2; exit 23")
         result = self.run_phase("tools")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("unsupported-studio", result.stderr)
+        self.assertIn("unsupported-host", result.stderr)
         self.assertEqual(list(self.home.iterdir()), [])
 
     def test_unrelated_vcpkg_directory_is_preserved(self):

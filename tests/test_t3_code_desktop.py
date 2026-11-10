@@ -122,14 +122,14 @@ class T3CodeDesktopTest(unittest.TestCase):
         self.assertIn("SHA-256", result.stdout + result.stderr)
 
     def test_unsupported_linux_host_does_not_stage_or_install_t3(self):
-        self.host_report = {"supported": False, "blockers": ["Studio required"]}
+        self.host_report = {"supported": False, "blockers": ["Ubuntu Desktop required"]}
         for subject in (".chezmoitemplates/external-assets/t3-code.toml.tmpl",
                         ".chezmoiscripts/run_onchange_after_30-install-t3-code.sh.tmpl"):
             rendered = self.render(subject, "linux", "amd64", {"invalid": "must not be examined"})
             self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
             self.assertEqual(rendered.stdout.strip(), "")
 
-    def test_ignore_gate_tracks_studio_host_eligibility(self):
+    def test_ignore_gate_tracks_workstation_host_eligibility(self):
         for supported in (True, False):
             self.host_report = {"supported": supported, "blockers": []}
             result = self.render(".chezmoiignore", "linux", "amd64")

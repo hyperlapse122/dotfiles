@@ -35,10 +35,10 @@ Follow the [macOS Setup and Readiness Guide](docs/setup/macos.md) to install nat
 The supported baseline is macOS 26 or later on native Apple Silicon.
 The guide covers all managed harnesses, applications, credentials, local containers and native Rust/C++/.NET builds, with separate manual and runtime readiness checks.
 
-### 3. New Ubuntu Studio PC
+### 3. New Ubuntu Desktop PC
 
-Follow the [Ubuntu Studio Setup and Readiness Guide](docs/setup/ubuntu-studio.md) for Windows backups, verified installation media, native prerequisites, inspected checkout preparation, explicit registration/application, and separate daily-work acceptance.
-Linux workstation support is Ubuntu Studio 26.04 LTS on amd64, starting with 26.04.1 media. KDE Plasma, credentials, native builds and minikube require owner acceptance on the target host.
+Follow the [Ubuntu Setup and Readiness Guide](docs/setup/ubuntu.md) for Windows backups, verified installation media, native prerequisites, inspected checkout preparation, explicit registration/application, and separate daily-work acceptance.
+Linux workstation support is standard Ubuntu Desktop 26.04 LTS with GNOME on amd64, starting with 26.04.1 media. The GNOME desktop, credentials, native builds and minikube require owner acceptance on the target host.
 
 ### 4. Worktree Preparation (Any OS)
 
@@ -59,7 +59,7 @@ To apply managed configuration, personal applications, and user fonts to your ac
 mise run apply
 ```
 
-On supported Ubuntu Studio KDE Plasma desktops and Apple Silicon macOS, application also installs Ghostty and reconciles the account's zsh login shell and native terminal defaults.
+On supported Ubuntu Desktop GNOME hosts and Apple Silicon macOS, application also installs Ghostty and reconciles the account's zsh login shell and native terminal defaults.
 See [Ghostty and the Login Shell](docs/guides/terminal.md) for configuration ownership, session renewal, status checks, and the OS-specific default-terminal boundaries.
 
 To preview pending changes before applying:
@@ -77,7 +77,7 @@ mise exec -- chezmoi --source . diff
 | `mise run apply` | Apply settings directly from the current repository worktree |
 | `mise exec -- chezmoi --source . diff` | Inspect rendered file diffs against destination files |
 | `mise run windows-build` | Provision or update Windows native development toolchains (C++, .NET, Rust) |
-| `mise run linux-build` | Explicitly provision native Ubuntu Studio build tools |
+| `mise run linux-build` | Explicitly provision native Ubuntu Desktop build tools |
 | `mise run linux-kubernetes` | Publish Linux minikube/kubectl without starting a runtime or cluster |
 | `python3 scripts/linux-readiness.py --json` | Inspect Linux prerequisites; report pending native acceptance separately |
 | `mise run macos-build` | Explicitly provision native Apple Silicon C++/.NET/Rust build tools |
@@ -90,7 +90,7 @@ Comprehensive guides are organized in [docs/](docs/README.md):
 
 ### Setup
 
-- **[Ubuntu Studio Setup and Readiness](docs/setup/ubuntu-studio.md):** Windows migration, signed installation media, KDE apps/shell, native credentials/builds, rootless Docker/minikube proof and cleanup.
+- **[Ubuntu Setup and Readiness](docs/setup/ubuntu.md):** Windows migration, signed installation media, GNOME apps/shell, native credentials/builds, rootless Docker/minikube proof and cleanup.
 - **[macOS Setup and Readiness](docs/setup/macos.md):** Native prerequisites, source registration, managed apps/harnesses, Podman, native builds, and a complete readiness checklist.
 - **[Windows Setup and Bootstrap](docs/setup/windows.md):** Automated PC bootstrap, chezmoi source registration, WinGet host applications, virtualization preflight, build environments, and Podman / Kubernetes onboarding.
 

@@ -8,7 +8,7 @@ T3 Code is supported on:
 
 - **Windows (x64 and ARM64):** Installed via WinGet (`T3Tools.T3Code`, declared in `home/.chezmoidata/windows.yaml`).
 - **macOS (Apple Silicon):** Installed via Homebrew cask (`t3-code`) if no existing app is detected.
-- **Ubuntu Studio 26.04 LTS (amd64, from 26.04.1+ media):** Staged via a checksum-verified `.deb` external and installed via APT after the shared Studio host check.
+- **Ubuntu Desktop 26.04 LTS (amd64, from 26.04.1+ media):** Staged via a checksum-verified `.deb` external and installed via APT after the shared Ubuntu Desktop host check.
 
 > **Note:** Intel Mac support is not maintained.
 
