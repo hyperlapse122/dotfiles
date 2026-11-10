@@ -22,7 +22,7 @@ When a CE skill delegates a child, choose the child's model from the ladder of t
 | Synthetic through pi | Kimi | GLM | GLM Flash | DeepSeek Flash |
 | Antigravity | Gemini Argon | Gemini Argon | Gemini Flash | Gemini Flash |
 
-- Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`.
+- Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`, and CE's cross-model review peers.
 - Middle rung: implementation workers, CE's mid-tier and generation-tier children, and any CE child whose skill names no tier.
 - Bottom rung: CE's extraction-tier and cheapest-capable children, such as grounding scouts.
 
@@ -32,7 +32,7 @@ Set no effort for a ladder-selected child, so T3's default for that model applie
 
 A model or effort that the user's prompt or CE configuration names for a child wins over this section; pass a named effort in `target.options`. CE configuration includes `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, `work_engine_effort`, `plan_model`, and `brainstorm_model`.
 
-If the catalog lists no model for a rung, use the next lower rung, then the delegating model, and name the substitution in your report. Providers without a row and delegations outside CE skills keep their current model selection.
+If the catalog lists no model for a rung, use the next lower rung of the same provider. If none is listed, use the next higher rung of that provider within the limit above, and only then the delegating model. Name the substitution in your report. Providers without a row and delegations outside CE skills keep their current model selection.
 
 {{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}

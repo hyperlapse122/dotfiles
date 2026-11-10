@@ -223,9 +223,9 @@ class AgentInstructionsTest(unittest.TestCase):
                 "| Codex | astra | sol | terra | luna |",
                 "| Synthetic through pi | Kimi | GLM | GLM Flash | DeepSeek Flash |",
                 "| Antigravity | Gemini Argon | Gemini Argon | Gemini Flash | Gemini Flash |")
-        rules = ("`correctness-reviewer`", "implementation workers", "grounding scouts",
+        rules = ("`correctness-reviewer`", "cross-model review peers", "implementation workers", "grounding scouts",
                  "Set no effort", "never runs above", "names for a child wins",
-                 "`cross_model_effort`", "`work_engine_preferences`", "next lower rung",
+                 "`cross_model_effort`", "`work_engine_preferences`", "next lower rung of the same provider", "next higher rung",
                  "newest listed model")
         for os_name, additions in self.t3_additions.items():
             for harness, rendered in additions.items():
