@@ -82,7 +82,8 @@ def check(entry):
         agent.chmod(0o755)
         env = {
             "HOME": temporary,
-            "PATH": entry["profile"] + "/bin:" + os.environ["PATH"],
+            "PATH": entry["profile"] + "/bin:" + os.environ["PATH"]
+                    + (":/usr/bin:/bin:/usr/sbin:/sbin" if entry["kind"] == "darwin" else ""),
             "TERM": "xterm-256color",
             "LANG": entry["locale"],
             "LC_ALL": entry["locale"],
