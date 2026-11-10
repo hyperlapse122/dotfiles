@@ -41,7 +41,7 @@ class LinuxReadinessTest(unittest.TestCase):
                 file.touch()
         with patch.object(self.module.host.platform, 'system', return_value='Linux'), \
              patch.object(self.module.host.platform, 'freedesktop_os_release', return_value={'ID': 'ubuntu', 'VERSION_ID': version}), \
-             patch.dict(self.module.host.os.environ, {'XDG_CURRENT_DESKTOP': desktop, 'XDG_SESSION_TYPE': 'wayland'}), \
+             patch.object(self.module.host.os, 'environ', {'XDG_CURRENT_DESKTOP': desktop, 'XDG_SESSION_TYPE': 'wayland'}), \
              patch.object(self.module.shutil, 'which', return_value='/secret-bearing/path' if available else None), \
              patch.object(self.module.subprocess, 'run', side_effect=self.run_probe):
             return self.module.collect(self.home)

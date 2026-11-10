@@ -12,7 +12,7 @@ from test_native_ca_shell import find_bash
 
 
 FIXTURE = r'''
-import json, os, pathlib, sys
+import json, os, pathlib, subprocess, sys
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['TERMINAL_TEST_ROOT'])
 def shellpath(p):
@@ -56,8 +56,11 @@ elif name == 'python3':
         import importlib.util
         spec=importlib.util.spec_from_file_location('probe',os.environ['STUDIO_PROBE'])
         probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
+        def run_probe(args, **kwargs):
+            return subprocess.run([os.environ['FIXTURE_BASH'], (root/'commands'/args[0]).as_posix(), *args[1:]], **kwargs)
         report=probe.inspect_host(system=state.get('os','Linux'),
-            os_release={'ID':state.get('distro','ubuntu'),'VERSION_ID':state.get('release','26.04')})
+            os_release={'ID':state.get('distro','ubuntu'),'VERSION_ID':state.get('release','26.04')},
+            run=run_probe)
         print(json.dumps(report));sys.exit(0 if report['supported'] else 1)
     os.execv(sys.executable,[sys.executable,*args])
 elif name == 'swift':
@@ -98,7 +101,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         self.env=os.environ.copy()
         self.env.update(HOME=self.home.as_posix(),USERPROFILE=str(self.home),
                         TERMINAL_TEST_ROOT=str(self.root),SHELL=self.shell,
-                        STUDIO_PROBE=str(self.repo/'scripts/linux-platform.py'),
+                        FIXTURE_BASH=find_bash(), STUDIO_PROBE=str(self.repo/'scripts/linux-platform.py'),
                         XDG_DATA_HOME=str(self.root/'data'),XDG_DATA_DIRS=str(self.root/'system-data'),
                         XDG_CONFIG_HOME=self.shellpath(self.home/'xdg'),
                         ZDOTDIR=(self.home/'separate-zsh').as_posix())
@@ -133,6 +136,14 @@ class TerminalEnvironmentTest(unittest.TestCase):
                               env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=30)
         self.state=json.loads((self.root/'state.json').read_text())
         return result
+
+    def test_host_probe_runs_non_executable_shell_fixtures(self):
+        for name in ('dpkg', 'dpkg-query'):
+            (self.bin / name).chmod(0o644)
+        result = self.run_terminal()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(['dpkg', ['--print-architecture']], self.calls())
+        self.assertIn(['dpkg-query', ['-W', '-f=${Status}', 'ubuntustudio-desktop']], self.calls())
 
     def calls(self):
         p=self.root/'calls.jsonl'

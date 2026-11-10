@@ -12,7 +12,7 @@ from test_native_ca_shell import find_bash
 
 
 FIXTURE = r'''
-import json, os, pathlib, sys
+import json, os, pathlib, subprocess, sys
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['GHOSTTY_TEST_ROOT'])
 state = json.loads((root/'state.json').read_text())
@@ -28,8 +28,11 @@ elif name == 'python3':
     import importlib.util
     spec=importlib.util.spec_from_file_location('probe',os.environ['STUDIO_PROBE'])
     probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
+    def run_probe(args, **kwargs):
+        return subprocess.run([os.environ['FIXTURE_BASH'], (root/'commands'/args[0]).as_posix(), *args[1:]], **kwargs)
     report=probe.inspect_host(system=state.get('os','Linux'),
-        os_release={'ID':state.get('distro','ubuntu'),'VERSION_ID':state.get('release','26.04')})
+        os_release={'ID':state.get('distro','ubuntu'),'VERSION_ID':state.get('release','26.04')},
+        run=run_probe)
     print(json.dumps(report));sys.exit(0 if report['supported'] else 1)
 elif name == 'sudo':
     if args[:3] != ['apt-get', 'install', '-y']: sys.exit(41)
@@ -66,7 +69,9 @@ class GhosttyInstallTest(unittest.TestCase):
             target.chmod(0o755)
         self.env = os.environ.copy()
         self.env.update(HOME=str(self.home), USERPROFILE=str(self.home), TMPDIR=str(self.root),
-                        GHOSTTY_TEST_ROOT=str(self.root), STUDIO_PROBE=str(self.repo/'scripts/linux-platform.py'), XDG_CONFIG_HOME=str(self.home/'.config'))
+                        GHOSTTY_TEST_ROOT=str(self.root), FIXTURE_BASH=find_bash(),
+                        STUDIO_PROBE=str(self.repo/'scripts/linux-platform.py'),
+                        XDG_CONFIG_HOME=str(self.home/'.config'))
 
     def wrapper(self, name):
         path = self.bin/name
@@ -91,6 +96,14 @@ class GhosttyInstallTest(unittest.TestCase):
                                 capture_output=True, text=True, encoding='utf-8', timeout=30)
         self.state = json.loads((self.root/'state.json').read_text())
         return result
+
+    def test_host_probe_runs_non_executable_shell_fixtures(self):
+        for name in ('dpkg', 'dpkg-query'):
+            (self.bin / name).chmod(0o644)
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(['dpkg', ['--print-architecture']], self.calls())
+        self.assertIn(['dpkg-query', ['-W', '-f=${Status}', 'ubuntustudio-desktop']], self.calls())
 
     def calls(self):
         path = self.root/'calls.jsonl'
