@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import pwd
 import re
 import select
 import signal
@@ -87,7 +88,7 @@ def check(entry):
             "TERM": "xterm-256color",
             "LANG": entry["locale"],
             "LC_ALL": entry["locale"],
-            "LOGNAME": os.environ.get("USER", "nixbld"),
+            "LOGNAME": pwd.getpwuid(os.getuid()).pw_name,
             "XDG_CONFIG_HOME": str(home / ".config"),
             "XDG_CACHE_HOME": str(home / ".cache"),
             "XDG_STATE_HOME": str(home / ".local/state"),
