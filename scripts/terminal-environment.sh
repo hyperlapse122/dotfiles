@@ -98,7 +98,8 @@ else
     ghostty --version >/dev/null 2>&1 || fail 'Ghostty executable is not usable.'
     command -v kwriteconfig6 >/dev/null 2>&1 || fail 'KDE kwriteconfig6 is missing.'
     command -v kreadconfig6 >/dev/null 2>&1 || fail 'KDE kreadconfig6 is missing.'
-    desktop=$(python3 - "$ghostty" "$home" <<'PYTHON'
+    desktop_id=com.mitchellh.ghostty.desktop
+    desktop_exec=$(python3 - "$ghostty" "$home" "$desktop_id" <<'PYTHON'
 import configparser
 import os
 from pathlib import Path
@@ -106,8 +107,7 @@ import shlex
 import shutil
 import sys
 
-binary, home = sys.argv[1:]
-desktop_id = 'com.mitchellh.ghostty.desktop'
+binary, home, desktop_id = sys.argv[1:]
 roots = [os.environ.get('XDG_DATA_HOME', home + '/.local/share')]
 roots += os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':')
 # Only the highest-precedence entry counts: a hidden or foreign entry there masks lower ones.
@@ -125,14 +125,11 @@ if entry:
                 parts.pop(0)
         executable = shutil.which(parts[0]) if parts else None
         if executable and os.path.realpath(executable) == os.path.realpath(binary):
-            print(desktop_id)
             print(command)
             sys.exit(0)
 sys.exit('No installed Ghostty desktop entry matches the active executable.')
 PYTHON
     ) || fail 'Cannot establish the installed Ghostty desktop entry and Exec command.'
-    desktop_id=$(printf '%s\n' "$desktop" | sed -n '1p')
-    desktop_exec=$(printf '%s\n' "$desktop" | sed -n '2p')
     for key in TerminalApplication TerminalService; do
         case "$key" in TerminalApplication) expected=$desktop_exec ;; TerminalService) expected=$desktop_id ;; esac
         selected=$(kreadconfig6 --file kdeglobals --group General --key "$key") || fail "Cannot read KDE $key."

@@ -104,7 +104,6 @@ class Proof:
                                 f'graphroot = {json.dumps(str(self.graphroot))}\n'
                                 f'runroot = {json.dumps(str(self.runtime / "storage"))}\n')
         containers_conf.write_text(f'[network]\nnetwork_config_dir = {json.dumps(str(self.state / "networks"))}\n')
-        # Do not inherit a remote endpoint or a minikube profile, home or driver selection.
         self.env = {key: value for key, value in env.items()
                     if key not in ('DOCKER_HOST', 'CONTAINER_HOST') and not key.startswith('MINIKUBE_')}
         self.env.update(CONTAINERS_STORAGE_CONF=str(storage_conf), CONTAINERS_CONF=str(containers_conf),

@@ -25,7 +25,6 @@ if [ -n "$missing" ]; then
     sudo dnf install -y $missing
 fi
 if ! command -v mise >/dev/null 2>&1; then
-    # Writes the fingerprint-pinned mise repository, then installs mise from it; elevates through sudo itself.
     python3 "$source/scripts/linux-apps.py" --repository mise "$source/home/.chezmoidata/linux.yaml" ||
         fail 'Installing mise from its signed repository failed; resolve the reported problem and rerun.'
 fi
