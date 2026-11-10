@@ -12,7 +12,7 @@ from test_native_ca_shell import find_bash
 
 
 FIXTURE = r'''
-import json, os, pathlib, subprocess, sys
+import json, os, pathlib, shlex, subprocess, sys
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['GHOSTTY_TEST_ROOT'])
 state = json.loads((root/'state.json').read_text())
@@ -29,7 +29,8 @@ elif name == 'python3':
     spec=importlib.util.spec_from_file_location('probe',os.environ['STUDIO_PROBE'])
     probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
     def run_probe(args, **kwargs):
-        return subprocess.run([os.environ['FIXTURE_BASH'], (root/'commands'/args[0]).as_posix(), *args[1:]], **kwargs)
+        command = shlex.join(['bash', (root/'commands'/args[0]).as_posix(), *args[1:]])
+        return subprocess.run([os.environ['FIXTURE_BASH'], '--noprofile', '--norc', '-c', command], **kwargs)
     report=probe.inspect_host(system=state.get('os','Linux'),
         os_release={'ID':state.get('distro','ubuntu'),'VERSION_ID':state.get('release','26.04')},
         run=run_probe)

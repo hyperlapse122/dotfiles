@@ -12,7 +12,7 @@ from test_native_ca_shell import find_bash
 
 
 FIXTURE = r'''
-import json, os, pathlib, subprocess, sys
+import json, os, pathlib, shlex, subprocess, sys
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['TERMINAL_TEST_ROOT'])
 def shellpath(p):
@@ -57,12 +57,21 @@ elif name == 'python3':
         spec=importlib.util.spec_from_file_location('probe',os.environ['STUDIO_PROBE'])
         probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
         def run_probe(args, **kwargs):
-            return subprocess.run([os.environ['FIXTURE_BASH'], (root/'commands'/args[0]).as_posix(), *args[1:]], **kwargs)
+            command = shlex.join(['bash', (root/'commands'/args[0]).as_posix(), *args[1:]])
+            return subprocess.run([os.environ['FIXTURE_BASH'], '--noprofile', '--norc', '-c', command], **kwargs)
         report=probe.inspect_host(system=state.get('os','Linux'),
             os_release={'ID':state.get('distro','ubuntu'),'VERSION_ID':state.get('release','26.04')},
             run=run_probe)
         print(json.dumps(report));sys.exit(0 if report['supported'] else 1)
-    os.execv(sys.executable,[sys.executable,*args])
+    # Native Windows Python cannot open Git Bash /c/... drive paths. Keep
+    # shell-facing values POSIX, translating only this native Python boundary.
+    if os.name == 'nt':
+        # The production POSIX list splits on colons, so omit the drive and
+        # resolve from the scratch directory on that same drive.
+        os.environ['XDG_DATA_DIRS'] = (root/'system-data').as_posix()[len(root.drive):]
+        args = [arg[1]+':'+arg[2:] if len(arg)>2 and arg[0]=='/' and
+                arg[1].isalpha() and arg[2]=='/' else arg for arg in args]
+    sys.exit(subprocess.run([sys.executable, *args]).returncode)
 elif name == 'swift':
     if state.get('swift_pending'): sys.exit(2)
     print('Ghostty Unix-executable association is ready.')
@@ -109,7 +118,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         entries=self.root/'data/applications'
         entries.mkdir(parents=True)
         (entries/'com.mitchellh.ghostty.desktop').write_text(
-            '[Desktop Entry]\nType=Application\nExec='+shlex.quote(self.shellpath(self.bin/'ghostty'))+' --new-window\n')
+            '[Desktop Entry]\nType=Application\nExec='+shlex.quote((self.bin/'ghostty').as_posix())+' --new-window\n')
 
     def shellpath(self, p):
         value=p.as_posix()
@@ -133,7 +142,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
                                self.bin.as_posix(),script.as_posix(),mode,operating_system,'amd64' if operating_system=='linux' else 'arm64',
                                release,self.home.as_posix(),(self.repo/'scripts/ghostty-default-terminal.swift').as_posix(),
                                (self.repo/'home/.chezmoitemplates/ghostty-config').as_posix()],
-                              env=self.env,capture_output=True,text=True,encoding='utf-8',timeout=30)
+                              env=self.env,cwd=self.root,capture_output=True,text=True,encoding='utf-8',timeout=30)
         self.state=json.loads((self.root/'state.json').read_text())
         return result
 
@@ -148,6 +157,29 @@ class TerminalEnvironmentTest(unittest.TestCase):
     def calls(self):
         p=self.root/'calls.jsonl'
         return [json.loads(line) for line in p.read_text().splitlines()] if p.exists() else []
+
+    def test_inline_python_preserves_arguments_paths_and_failure_status(self):
+        (self.root/'state.json').write_text(json.dumps(self.state))
+        arguments = ['-f=${Status}', "space 환경 'path", '', self.shellpath(self.bin/'ghostty')]
+        command = shlex.join(['bash', (self.bin/'python3').as_posix(), '-', *arguments])
+        for status in (0, 23):
+            with self.subTest(status=status):
+                result = subprocess.run(
+                    [find_bash(), '--noprofile', '--norc', '-c', command],
+                    input='import json, pathlib, sys; print(json.dumps(sys.argv[1:])); '
+                          'assert pathlib.Path(sys.argv[-1]).is_file(); sys.exit('+str(status)+')',
+                    env=self.env, cwd=self.root, capture_output=True, text=True, encoding='utf-8', timeout=30)
+                self.assertEqual(result.returncode, status, result.stdout+result.stderr)
+                self.assertEqual(json.loads(result.stdout),
+                                 [*arguments[:-1], (self.bin/'ghostty').as_posix()])
+
+    def test_system_data_directory_entry_matches_native_executable(self):
+        system_data = self.root/'system-data'
+        shutil.move(self.root/'data', system_data)
+        result = self.run_terminal()
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('TerminalService = com.mitchellh.ghostty.desktop',
+                      (self.home/'xdg/kdeglobals').read_text())
 
     def test_apply_and_status_are_idempotent_and_preserve_other_settings(self):
         config=self.home/'xdg/ghostty'
@@ -225,7 +257,7 @@ class TerminalEnvironmentTest(unittest.TestCase):
         entries=self.root/'data/applications'
         (entries/'com.mitchellh.ghostty.desktop').unlink()
         (entries/'ghostty_ghostty.desktop').write_text(
-            '[Desktop Entry]\nType=Application\nExec=env SNAP_TEST=yes '+shlex.quote(self.shellpath(self.bin/'ghostty'))+' -e\n')
+            '[Desktop Entry]\nType=Application\nExec=env SNAP_TEST=yes '+shlex.quote((self.bin/'ghostty').as_posix())+' -e\n')
         result=self.run_terminal()
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         kde=(self.home/'xdg/kdeglobals').read_text()
