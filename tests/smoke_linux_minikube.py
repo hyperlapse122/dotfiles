@@ -1,7 +1,8 @@
-"""Explicit Ubuntu Desktop rootless build/run and minikube HTTP proof.
+"""Explicit Fedora KDE rootless Podman build/run and minikube HTTP proof.
 
 Run after explicit Linux application and `mise run linux-kubernetes`.
-No installation or persistent runtime setup is performed. Exit codes: 0 passed,
+No installation or persistent runtime setup is performed. Podman storage, run
+state and network definitions are private to the proof. Exit codes: 0 passed,
 1 proof failed/interrupted, 2 host/prerequisites unavailable, 3 cleanup incomplete.
 """
 
@@ -28,6 +29,8 @@ import uuid
 REPO = Path(__file__).resolve().parents[1]
 # Supported by minikube v1.39.0 constants; matches kubectl v1.37.2's minor.
 KUBERNETES_VERSION = 'v1.37.0'
+REQUIRED_CONTROLLERS = ('cpu', 'memory', 'pids')
+OPTIONAL_CONTROLLERS = ('cpuset', 'io')
 
 
 def command(args, env, timeout=120):
@@ -59,24 +62,29 @@ def preflight():
         if not any(len(parts := line.split(':')) == 3 and parts[0] in (user, str(uid))
                    and int(parts[2]) >= 65536 for line in entries):
             raise RuntimeError(f'Requires at least 65536 subordinate IDs in /etc/{name}.')
+    delegated = Path(f'/sys/fs/cgroup/user.slice/user-{uid}.slice/user@{uid}.service/cgroup.controllers'
+                     ).read_text().split()
+    missing = [name for name in REQUIRED_CONTROLLERS if name not in delegated]
+    if missing:
+        raise RuntimeError('Rootless Podman needs the cpu, memory and pids cgroup controllers delegated to the '
+                           f'systemd user session; not delegated: {", ".join(missing)}.')
+    optional = [name for name in OPTIONAL_CONTROLLERS if name not in delegated]
+    warnings = [f'The systemd user session does not delegate these cgroup controllers: {", ".join(optional)}. '
+                'Workloads that set their limits may not start.'] if optional else []
     env = os.environ.copy()
     env['PATH'] = str(Path.home() / '.local/share/dotfiles/build/bin') + os.pathsep + env.get('PATH', '')
-    for tool in ('docker', 'dockerd', 'dockerd-rootless.sh', 'rootlesskit', 'newuidmap', 'newgidmap',
-                 'dockerd-rootless-setuptool.sh', 'slirp4netns', 'systemd-run', 'systemctl', 'minikube', 'kubectl'):
+    for tool in ('podman', 'minikube', 'kubectl', 'systemctl'):
         if not shutil.which(tool, path=env['PATH']):
             raise RuntimeError(f'Missing prerequisite: {tool}')
     env['XDG_RUNTIME_DIR'] = str(runtime)
     env['DBUS_SESSION_BUS_ADDRESS'] = f'unix:path={runtime}/bus'
     command(['systemctl', '--user', 'show-environment'], env, 15)
-    # Docker's check performs no setup; it checks user namespaces and AppArmor too.
-    command(['dockerd-rootless-setuptool.sh', '--force', 'check'], env, 30)
-    # Exercise the packaged rootlesskit AppArmor policy before launching a daemon.
-    command(['rootlesskit', '--net=slirp4netns', 'true'], env, 30)
     versions = {'minikube': command(['minikube', 'version', '--short'], env, 15),
                 'kubectl': json.loads(command(['kubectl', 'version', '--client', '-o', 'json'], env, 15))}
     if versions['minikube'] != 'v1.39.0' or versions['kubectl']['clientVersion']['gitVersion'] != 'v1.37.2':
         raise RuntimeError('Requires provisioned minikube v1.39.0 and kubectl v1.37.2.')
-    return runtime, env, {'host': host, 'versions': versions, 'server_requested': KUBERNETES_VERSION}
+    return runtime, env, {'host': host, 'versions': versions, 'server_requested': KUBERNETES_VERSION,
+                          'delegated_controllers': delegated, 'warnings': warnings}
 
 
 class Proof:
@@ -88,24 +96,26 @@ class Proof:
             self.state.rmdir()
             raise
         self.name = 'dotfiles-k8s-' + uuid.uuid4().hex[:12]
-        self.unit = self.name + '.service'
-        self.env = env.copy()
-        # Do not inherit a context, TLS endpoint, builder or kubeconfig selection.
-        for key in ('DOCKER_CONTEXT', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'BUILDX_BUILDER',
-                    'MINIKUBE_ACTIVE_DOCKERD', 'MINIKUBE_PROFILE'):
-            self.env.pop(key, None)
-        self.env.update(DOCKER_HOST=f'unix://{self.runtime}/docker.sock',
-                        DOCKER_CONFIG=str(self.state / 'docker-config'),
-                        DOCKERD_ROOTLESS_ROOTLESSKIT_STATE_DIR=str(self.runtime / 'rootlesskit'),
+        self.graphroot = self.state / 'storage'
+        storage_conf = self.state / 'storage.conf'
+        containers_conf = self.state / 'containers.conf'
+        # json.dumps yields a valid TOML basic string for a filesystem path.
+        storage_conf.write_text('[storage]\ndriver = "overlay"\n'
+                                f'graphroot = {json.dumps(str(self.graphroot))}\n'
+                                f'runroot = {json.dumps(str(self.runtime / "storage"))}\n')
+        containers_conf.write_text(f'[network]\nnetwork_config_dir = {json.dumps(str(self.state / "networks"))}\n')
+        # Do not inherit a remote endpoint or a minikube profile, home or driver selection.
+        self.env = {key: value for key, value in env.items()
+                    if key not in ('DOCKER_HOST', 'CONTAINER_HOST') and not key.startswith('MINIKUBE_')}
+        self.env.update(CONTAINERS_STORAGE_CONF=str(storage_conf), CONTAINERS_CONF=str(containers_conf),
                         XDG_RUNTIME_DIR=str(runtime), MINIKUBE_HOME=str(self.state / 'minikube'),
-                        KUBECONFIG=str(self.state / 'kubeconfig'),
-                        BUILDX_CONFIG=str(self.state / 'buildx'))
-        (self.state / 'daemon.json').write_text('{}\n')
+                        KUBECONFIG=str(self.state / 'kubeconfig'))
         self.report = report
-        self.report.update(endpoint=self.env['DOCKER_HOST'], profile=self.name, unit=self.unit,
-                           state=str(self.state), runtime_state=str(self.runtime), ownership='exclusive newly created rootless engine',
+        self.report.update(profile=self.name, state=str(self.state), runtime_state=str(self.runtime),
+                           storage_conf=str(storage_conf), containers_conf=str(containers_conf),
+                           graphroot=str(self.graphroot), ownership='exclusive newly created rootless Podman store',
                            disk_free_before=shutil.disk_usage(self.state.parent).free, commands=[])
-        self.started = self.profile = self.builder = False
+        self.started = self.profile = False
         self.forward = None
         self.log = None
 
@@ -134,42 +144,34 @@ class Proof:
         return body
 
     def execute(self):
-        self.started = True  # A timed-out systemd-run may still have created the unit.
-        self.cmd(['systemd-run', '--user', '--unit=' + self.unit, '--collect',
-                  '--property=Delegate=yes', '--property=KillMode=mixed',
-                  *['--setenv=' + key + '=' + self.env[key] for key in
-                    ('PATH', 'XDG_RUNTIME_DIR', 'DOCKERD_ROOTLESS_ROOTLESSKIT_STATE_DIR')],
-                  'dockerd-rootless.sh', '--host=' + self.env['DOCKER_HOST'],
-                  '--data-root=' + str(self.state / 'data'), '--exec-root=' + str(self.runtime / 'exec'),
-                  '--pidfile=' + str(self.state / 'docker.pid'),
-                  '--config-file=' + str(self.state / 'daemon.json')])
-        info = json.loads(self.wait(lambda: self.cmd(['docker', 'info', '--format', '{{json .}}'], 15)))
-        if ('name=rootless' not in info['SecurityOptions'] or info['CgroupVersion'] != '2'
-                or Path(info['DockerRootDir']) != self.state / 'data'):
-            raise RuntimeError('Owned endpoint does not report the expected rootless data root and cgroup v2.')
-        self.report['docker'] = info
-        self.report['delegation'] = self.cmd(['systemctl', '--user', 'show', self.unit, '-p', 'Delegate', '--value'])
-        if self.report['delegation'] != 'yes':
-            raise RuntimeError('Transient service lacks cgroup delegation.')
+        self.started = True  # Any Podman command may create the private store.
+        info = json.loads(self.cmd(['podman', 'info', '--format', 'json'], 60))
+        if (not info['host']['security']['rootless'] or info['host']['cgroupVersion'] != 'v2'
+                or Path(info['store']['graphRoot']) != self.graphroot):
+            raise RuntimeError('Podman does not report rootless mode, cgroup v2 and the private storage root.')
+        self.report['podman'] = info
         context = self.state / 'context'
         context.mkdir()
         (context / 'index.html').write_text('dotfiles-kubernetes-ok\n')
-        (context / 'Dockerfile').write_text('FROM busybox:1.37.0\nCOPY index.html /www/index.html\nEXPOSE 8080\nCMD ["httpd", "-f", "-p", "8080", "-h", "/www"]\n')
-        self.builder = True
-        self.cmd(['docker', 'buildx', 'create', '--name', self.name, '--driver', 'docker-container'])
-        image = self.name + ':proof'
-        self.cmd(['docker', 'buildx', 'build', '--builder', self.name, '--load', '-t', image, context], 600)
-        body = self.cmd(['docker', 'run', '--rm', image, 'cat', '/www/index.html'])
+        (context / 'Containerfile').write_text('FROM docker.io/library/busybox:1.37.0\nCOPY index.html /www/index.html\nEXPOSE 8080\nCMD ["httpd", "-f", "-p", "8080", "-h", "/www"]\n')
+        # Podman stores a locally built image under the localhost registry name.
+        image = 'localhost/' + self.name + ':proof'
+        self.cmd(['podman', 'build', '-t', image, context], 600)
+        body = self.cmd(['podman', 'run', '--rm', image, 'cat', '/www/index.html'])
         if body != 'dotfiles-kubernetes-ok':
             raise RuntimeError('Built image failed the container execution proof.')
         self.profile = True
-        self.cmd(['minikube', 'start', '-p', self.name, '--driver=docker', '--container-runtime=containerd',
-                  '--kubernetes-version=' + KUBERNETES_VERSION, '--delete-on-failure=false', '--wait=all', '--wait-timeout=5m'], 900)
+        self.cmd(['minikube', 'start', '-p', self.name, '--driver=podman', '--rootless',
+                  '--container-runtime=containerd', '--kubernetes-version=' + KUBERNETES_VERSION,
+                  '--delete-on-failure=false', '--wait=all', '--wait-timeout=5m'], 900)
         self.cmd(['kubectl', 'wait', '--for=condition=Ready', 'nodes', '--all', '--timeout=180s'], 200)
         self.report['server'] = json.loads(self.cmd(['kubectl', 'version', '-o', 'json']))
         if self.report['server']['serverVersion']['gitVersion'] != KUBERNETES_VERSION:
             raise RuntimeError('Unexpected Kubernetes server version.')
-        self.cmd(['minikube', '-p', self.name, 'image', 'load', image], 300)
+        # minikube cannot read Podman storage, so the image travels as an archive.
+        archive = self.state / 'image.tar'
+        self.cmd(['podman', 'save', '-o', archive, image], 300)
+        self.cmd(['minikube', '-p', self.name, 'image', 'load', archive], 300)
         self.cmd(['kubectl', 'create', 'deployment', self.name, '--image=' + image])
         self.cmd(['kubectl', 'rollout', 'status', 'deployment/' + self.name, '--timeout=180s'], 200)
         # The high port is loopback-only; a collision fails the proof without touching its owner.
@@ -208,38 +210,32 @@ class Proof:
         if self.profile:
             attempt(lambda: self.cmd(['minikube', 'delete', '-p', self.name], 300))
             attempt(lambda: self.verify_profile_absent())
-        if self.builder:
-            attempt(lambda: self.cmd(['docker', 'buildx', 'rm', '--force', self.name], 120))
         if self.started:
-            # The endpoint and data directory were created exclusively for this proof.
-            # Enumerate each ID, including volumes; never prune a runtime.
-            for listing, deletion in (
-                (['container', 'ls', '-aq'], ['container', 'rm', '-f']),
-                (['image', 'ls', '-aq'], ['image', 'rm', '-f']),
-                (['network', 'ls', '--filter', 'type=custom', '-q'], ['network', 'rm']),
-                (['volume', 'ls', '-q'], ['volume', 'rm'])):
-                def remove(listing=listing, deletion=deletion):
-                    ids = self.cmd(['docker', *listing]).split()
-                    self.report.setdefault('owned_resources', {})[' '.join(listing)] = ids
+            # The store was created exclusively for this proof. Enumerate each
+            # resource, including volumes; never prune or reset a runtime.
+            for kind, listing, deletion in (
+                ('container', ['ls', '-aq'], ['rm', '-f']),
+                ('image', ['ls', '-aq'], ['rm', '-f']),
+                ('network', ['ls', '--format', '{{.Name}}'], ['rm']),
+                ('volume', ['ls', '-q'], ['rm'])):
+                def remove(kind=kind, listing=listing, deletion=deletion):
+                    def owned():
+                        # Podman's built-in default network is not a stored resource and cannot be removed.
+                        return [item for item in self.cmd(['podman', kind, *listing]).split()
+                                if (kind, item) != ('network', 'podman')]
+                    ids = owned()
+                    self.report.setdefault('owned_resources', {})[kind] = ids
                     for resource in dict.fromkeys(ids):
-                        attempt(lambda resource=resource: self.cmd(['docker', *deletion, resource]))
-                    left = self.cmd(['docker', *listing]).split()
-                    self.report.setdefault('remaining_resources', {})[' '.join(listing)] = left
+                        attempt(lambda resource=resource: self.cmd(['podman', kind, *deletion, resource]))
+                    left = owned()
+                    self.report.setdefault('remaining_resources', {})[kind] = left
                     if left:
-                        raise RuntimeError(f'Remaining {listing}: {left}')
+                        raise RuntimeError(f'Remaining {kind}: {left}')
                 attempt(remove)
-            # Always stop our service, even if endpoint enumeration failed.
-            attempt(lambda: self.cmd(['systemctl', '--user', 'stop', self.unit], 120))
-            def verify_stopped():
-                active = self.cmd(['systemctl', '--user', 'list-units', '--all', '--plain', '--no-legend', self.unit])
-                self.report['service_after_stop'] = active
-                if active:
-                    raise RuntimeError(f'Owned service still active: {self.unit}: {active}')
-            attempt(verify_stopped)
-        if not errors:
-            # Rootless layers contain subordinate-UID files. Re-enter the same UID
-            # mapping for deletion after the daemon has stopped, without host root.
-            attempt(lambda: self.cmd(['rootlesskit', '--net=none', 'rm', '-rf', '--', self.state / 'data']))
+            if not errors:
+                # Rootless layers contain subordinate-UID files. Re-enter the user
+                # namespace for deletion, without host root.
+                attempt(lambda: self.cmd(['podman', 'unshare', 'rm', '-rf', '--', self.graphroot]))
         if not errors:
             attempt(lambda: shutil.rmtree(self.runtime))
             attempt(lambda: shutil.rmtree(self.state))
@@ -257,7 +253,6 @@ class Proof:
             path = Path(self.env['MINIKUBE_HOME']) / '.minikube' / directory / self.name
             if path.exists():
                 raise RuntimeError(f'Owned minikube state remains: {path}')
-
 
 
 def interrupted(signum, frame):
