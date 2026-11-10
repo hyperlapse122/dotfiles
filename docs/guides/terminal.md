@@ -36,7 +36,7 @@ Confirm `$PSVersionTable.PSEdition` is `Core`, `(Get-Location).Path` is the sele
 
 | Platform | Installation | Native default selection |
 |---|---|---|
-| Ubuntu Studio 26.04 LTS, KDE Plasma, amd64 (26.04.1+ media) | Official Ubuntu APT package | User KDE `kdeglobals` terminal selection |
+| Ubuntu Desktop 26.04 LTS, GNOME, amd64 (26.04.1+ media) | Official Ubuntu APT package | User `ubuntu-xdg-terminals.list` preference |
 | macOS 26+, native Apple Silicon | Homebrew Ghostty cask | Unix-executable application association |
 
 Other Linux distributions, desktop environments, Intel Macs, and headless desktop acceptance are excluded.
@@ -77,10 +77,10 @@ Ghostty discovers the default shell from the system rather than a managed `comma
 Existing Bash/zsh PATH integration remains in place and honors exported `ZDOTDIR`.
 Unchanged PATH hooks retain their existing change-driven behavior; terminal reconciliation runs on every explicit apply.
 
-Ubuntu Studio reconciles `TerminalApplication` and `TerminalService` under `[General]` in the user's `kdeglobals` through `kwriteconfig6` and verifies them through `kreadconfig6`.
+Ubuntu Desktop places the installed Ghostty desktop entry first in `ubuntu-xdg-terminals.list` under the effective XDG configuration directory and verifies the result with `xdg-terminal-exec --print-id`.
 It first resolves an installed Ghostty desktop entry whose Exec executable matches the active Ghostty binary, honoring XDG desktop-entry precedence and hidden entries.
-It preserves unrelated KDE settings. It does not install a GNOME dispatcher, change system alternatives or rewrite shortcut bindings.
-Default Applications, Ctrl+Alt+T, Dolphin and `Terminal=true` launch behavior still require native acceptance; recorded preferences alone do not prove those launchers use them.
+It keeps the other entries in that list in their existing order. The APT package uses `com.mitchellh.ghostty.desktop`; a retained Snap installation uses `ghostty_ghostty.desktop`. It does not change system alternatives or rewrite shortcut bindings.
+Ctrl+Alt+T, the Files terminal action and `Terminal=true` launch behavior still require native acceptance; a recorded preference alone does not prove those launchers use it.
 
 macOS changes only the `public.unix-executable` association through AppKit.
 It validates the Ghostty bundle identifier and executable before selecting it.
@@ -112,14 +112,14 @@ sh "$PWD/scripts/terminal-environment.sh" status darwin arm64 26 \
   "$PWD/home/.chezmoitemplates/ghostty-config"
 ```
 
-Status returns `0` when its checks pass, `2` for pending user/session/configuration actions, and `1` for an error. On Linux it always retains pending native Plasma acceptance, even when all inspected settings match.
+Status returns `0` when its checks pass, `2` for pending user/session/configuration actions, and `1` for an error. On Linux it always retains pending native GNOME acceptance, even when all inspected settings match.
 It checks the account shell, managed Ghostty files, native default selection, and available session-shell evidence without changing them.
 Ubuntu also checks the systemd user-manager environment; unavailable manager evidence remains pending.
 Status does not prove that a GUI window actually opened or that a file-manager request kept its selected directory.
 
 ## Package Maintenance
 
-Ubuntu Studio uses the official Ubuntu Ghostty package and normal explicit APT updates.
+Ubuntu Desktop uses the official Ubuntu Ghostty package and normal explicit APT updates.
 macOS retains its explicit Homebrew update path.
 The terminal installation helper retains an existing usable Ghostty installation without forcing an upgrade.
 No community Debian package pin or standalone community installer remains managed.
@@ -129,9 +129,9 @@ No community Debian package pin or standalone community installer remains manage
 After applying and renewing the session:
 
 1. Run status and resolve configuration errors or session actions. Linux native acceptance remains pending in status; record the following GUI observations separately.
-2. On Ubuntu Studio, inspect KDE System Settings > Default Applications and press Ctrl+Alt+T; confirm Ghostty opens. On macOS, open a suitable Unix executable through its native association and confirm the selected app.
+2. On Ubuntu Desktop, press Ctrl+Alt+T and confirm Ghostty opens. On macOS, open a suitable Unix executable through its native association and confirm the selected app.
 3. In a newly launched Ghostty shell, check `printf '%s\n' "$SHELL"`, `ps -p $$ -o comm=`, and discovery of the repository-managed commands.
-4. On Ubuntu Studio, select a test folder containing spaces and Korean characters in Dolphin, choose Open Terminal Here, and check `pwd` in Ghostty. Also create a temporary local desktop entry with `Type=Application`, `Terminal=true`, `Exec=/bin/sh -c "pwd; read -r answer"` and `Path=` selecting that test folder. Launch it through KDE and observe that Ghostty opens in the selected directory, then press Enter to close the test shell. Remove only this test launcher and folder afterward. On other platforms, check directory forwarding where the native file-manager action supports the selected terminal.
+4. On Ubuntu Desktop, select a test folder containing spaces and Korean characters in Files, choose the terminal action that targets Ghostty, and check `pwd` in Ghostty. If Files offers no action that opens Ghostty, record that as a limitation. Also create a temporary local desktop entry with `Type=Application`, `Terminal=true`, `Exec=/bin/sh -c "pwd; read -r answer"` and `Path=` selecting that test folder. Launch it from GNOME and observe that Ghostty opens in the selected directory, then press Enter to close the test shell. Remove only this test launcher and folder afterward. On other platforms, check directory forwarding where the native file-manager action supports the selected terminal.
 5. Repeat the directory check with Ghostty already running, because preference selection alone does not prove existing-instance working-directory forwarding.
 6. Apply again and confirm the intended defaults remain selected without duplicate shell startup entries. On macOS, each full apply also [updates eligible Homebrew packages](../setup/macos.md#preview-and-apply).
 

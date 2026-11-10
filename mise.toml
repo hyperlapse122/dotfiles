@@ -156,7 +156,7 @@ tools = { cmake = { version = "latest", os = ["macos"] }, ninja = { version = "l
 run = "sh ./scripts/macos-build-environment.sh tools"
 
 [tasks.linux-build]
-description = "Provision the native Ubuntu Studio GNU Linux build environment"
+description = "Provision the native Ubuntu Desktop GNU Linux build environment"
 run = [
   "sh ./scripts/linux-build-environment.sh preflight",
   { task = "linux-build:dotnet8" },

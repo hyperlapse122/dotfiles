@@ -1,4 +1,4 @@
-"""Explicit Ubuntu Studio rootless build/run and minikube HTTP proof.
+"""Explicit Ubuntu Desktop rootless build/run and minikube HTTP proof.
 
 Run after explicit Linux application and `mise run linux-kubernetes`.
 No installation or persistent runtime setup is performed. Exit codes: 0 passed,

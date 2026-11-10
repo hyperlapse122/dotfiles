@@ -6,8 +6,8 @@ This directory contains task-oriented user guides, setup instructions, and maint
 
 Getting started on a new device or configuring platform prerequisites:
 
-- **[Ubuntu Studio Setup and Readiness](setup/ubuntu-studio.md)**
-  Windows backup and verified Studio 26.04.1+ amd64 installation, separate prerequisites/preparation/application, capability inventory, native desktop and credential acceptance, builds and minikube cleanup.
+- **[Ubuntu Setup and Readiness](setup/ubuntu.md)**
+  Windows backup and verified Ubuntu Desktop 26.04.1+ amd64 installation, separate prerequisites/preparation/application, capability inventory, native desktop and credential acceptance, builds and minikube cleanup.
 
 - **[macOS Setup and Readiness](setup/macos.md)**
   Explicit Homebrew prerequisite provisioning, separate checkout preparation and source registration, explicit application, native builds, managed harnesses/apps, and manual/runtime readiness evidence on Apple Silicon.
@@ -28,7 +28,7 @@ Day-to-day operations, application management, and tool configurations:
 - **[User Fonts](guides/fonts.md)**
   Pinned JetBrains Mono, Pretendard, D2Coding, and Nerd Font installation, native user-scope discovery, release updates, and Windows loaded-file recovery.
 - **[Ghostty and the Login Shell](guides/terminal.md)**
-  Ubuntu Studio KDE Plasma and macOS terminal selection, login-shell renewal, Prezto, fonts and native launch acceptance; Windows WezTerm.
+  Ubuntu Desktop GNOME and macOS terminal selection, login-shell renewal, Prezto, fonts and native launch acceptance; Windows WezTerm.
 - **[T3 Code Desktop and Harness Integration](guides/t3-code.md)**
   T3 Code desktop app installation, bundled CLI launchers, native Claude Code, Codex, pi, and Grok providers.
 - **[Harness Plugins and AI Agent Configuration](guides/harness-plugins.md)**
