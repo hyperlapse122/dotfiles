@@ -79,6 +79,10 @@ in
       path = "$HOME/.local/state/zsh/history";
       extended = true;
       ignoreDups = true;
+      ignoreAllDups = true;
+      saveNoDups = true;
+      findNoDups = true;
+      expireDuplicatesFirst = true;
       share = true;
     };
 

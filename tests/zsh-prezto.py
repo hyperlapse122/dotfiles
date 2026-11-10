@@ -111,6 +111,7 @@ def check(entry):
           [[ $HISTFILE == $HOME/.local/state/zsh/history ]] || fail 'wrong history path'
           [[ $HISTSIZE == 10000 && $SAVEHIST == 10000 ]] || fail 'wrong history limits'
           [[ -o extendedhistory && -o histignoredups && -o sharehistory ]] || fail 'history options missing'
+          [[ -o histignorealldups && -o histsavenodups && -o histfindnodups && -o histexpiredupsfirst ]] || fail 'Prezto duplicate history behavior was overridden'
           (( $+functions[_mise_hook] )) || fail 'mise was not activated'
           [[ $GPG_TTY == $TTY && -n $TTY ]] || fail 'wrong GPG_TTY'
           [[ $SSH_AUTH_SOCK == $HOME/existing-agent.sock ]] || fail 'SSH agent changed'
