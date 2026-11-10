@@ -333,7 +333,12 @@ jobs:
           # so rebasing before committing fails unconditionally whenever this
           # step has anything to push.
           git fetch origin main
-          git rebase origin/main || { git rebase --abort; echo "Rebase failed, proceeding with current head"; }
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            git rebase origin/main
+            nix fmt -- --ci
+            nix flake check --print-build-logs
+            nix build --no-link --print-build-logs .#vmChecks.all
+          fi
 
           git push origin main
           echo "Successfully pushed verified updates directly to main."

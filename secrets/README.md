@@ -64,7 +64,7 @@ On NixOS (`modules/nixos/system/secrets.nix`), `github_token`, `gitlab_token`, a
 
 On macOS (`home/h82/security/non-nixos-secrets.nix` and `scripts/host-secrets`), production activation always decrypts `github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, and `openrouter_api_key` into `~/.local/state/cli-auth/` (and removes any retired key files), failing activation before any symlink changes if any required key is missing or invalid. It never decrypts `docker_token`.
 
-`synthetic_api_key` backs Pi (`home/h82/agents/pi.nix` and `packages/pi.nix`): activation writes the `synthetic` credential in `~/.pi/agent/auth.json` via `pi-state`, and `pi-provider-key` reads the published key file at runtime.
+`synthetic_api_key` backs Pi (`home/h82/agents/pi.nix` and `packages/pi.nix`): activation writes the `synthetic` credential in `~/.pi/agent/auth.json` via `pi-state`, which reads the published key file.
 
 For container pulls through `docker-credential-sops`, `github_token` must carry `read:packages` (or `write:packages`) and `gitlab_token` must carry `read_registry` (or `write_registry`). The public accounts declared in `modules/shared/cli-accounts.nix` are `hyperlapse122` on GitHub and `hyperlapse` on GitLab.com and `git.jpi.app`.
 

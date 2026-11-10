@@ -17,7 +17,6 @@ with open(os.environ['CALLS'], 'a') as stream: stream.write(json.dumps(sys.argv[
 if sys.argv[-2:] == ['list', '--json']: print('[]')
 ''')
     stub.chmod(0o755)
-    # Replace only native executables; retain the packaged Python reconciler.
     script = re.sub(r'/nix/store/[^\s]+/bin/(?:grok|agy)\b', str(stub), script)
     env = dict(os.environ, HOME=str(home), CALLS=str(log))
     env.pop('DRY_RUN', None)

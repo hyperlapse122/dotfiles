@@ -24,6 +24,11 @@ for entry in entries:
     assert not any(mentions(name) for name in entry['packages']), entry['name']
     assert not any(mentions(name) for name in entry['modules']), entry['name']
     assert not (Path(entry['profile']) / 'bin/omp').exists(), entry['name']
+    for activation in entry['activations']:
+        path = Path(activation)
+        if path.is_dir():
+            path = path / 'activate'
+        assert not mentions(path.read_text()), (entry['name'], str(path))
     files = Path(entry['files'])
     assert files.is_dir(), entry['name']
     for path in files.rglob('*'):

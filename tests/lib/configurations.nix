@@ -24,11 +24,12 @@
     (`my.printing.enable`). `enabled` and `disabled` split `entries`. When
     no production configuration enables the trait, `enabled` holds each
     production configuration re-evaluated with `label` forced to `true`, and
-    when no configuration leaves it off, `disabled` holds each production
+    when no production configuration leaves it off, `disabled` holds each production
     configuration re-evaluated with it forced to `false`, so neither branch
     covers zero production configurations. `guard` fails the builder when
     `enabled` still holds no production configuration with the trait on,
-    which catches a forced value that stopped taking effect.
+    or `disabled` holds no production configuration with it off, which catches
+    a forced value that stopped taking effect.
   - `withTraitForcedOff label entry` and `withTraitForcedOn label entry`: a
     production `entry` re-evaluated with the option at `label` forced to
     `false` or `true`, named after the forced option.
@@ -138,16 +139,28 @@ in
       isOn = entry: predicate entry.config;
       on = lib.filter isOn entries;
       off = lib.filter (entry: !isOn entry) entries;
+      disabled =
+        off
+        ++ lib.optionals (!lib.any (entry: !entry.bootstrap) off) (
+          map (withTraitForcedOff label) production
+        );
       enabled =
         on
         ++ lib.optionals (!lib.any (entry: !entry.bootstrap) on) (map (withTraitForcedOn label) production);
     in
     {
-      inherit enabled;
-      disabled = if off != [ ] then off else map (withTraitForcedOff label) production;
-      guard = lib.optionalString (!lib.any (entry: !entry.bootstrap && isOn entry) enabled) ''
-        echo ${lib.escapeShellArg "tests/lib/configurations.nix: no production configuration enables ${label}, even one re-evaluated with it forced on, so this check's positive branch would cover no configuration"} >&2
-        exit 1
-      '';
+      inherit enabled disabled;
+      guard =
+        lib.optionalString (!lib.any (entry: !entry.bootstrap && isOn entry) enabled) ''
+          echo ${lib.escapeShellArg "tests/lib/configurations.nix: no production configuration enables ${label}, even one re-evaluated with it forced on, so this check's positive branch would cover no configuration"} >&2
+          exit 1
+        ''
+        +
+          lib.optionalString
+            (lib.any isOn disabled || !lib.any (entry: !entry.bootstrap && !isOn entry) disabled)
+            ''
+              echo ${lib.escapeShellArg "tests/lib/configurations.nix: no production configuration disables ${label}, even with it forced off"} >&2
+              exit 1
+            '';
     };
 }

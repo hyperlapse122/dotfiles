@@ -12,7 +12,18 @@
 let
   inherit (pkgs) lib;
   configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
-  userEntries = if entries == null then configurations.userEntries else entries;
+  userEntries =
+    if entries == null then
+      configurations.userEntries
+      ++ map (entry: {
+        inherit (entry) name;
+        user =
+          (self.nixosConfigurations.${entry.name}.extendModules {
+            modules = [ { my.user.gpgKey = lib.mkForce fakeKey; } ];
+          }).config.home-manager.users.h82;
+      }) configurations.production
+    else
+      entries;
   esc = value: lib.escapeShellArg (toString value);
   fakeKey = "0123456789ABCDEF0123456789ABCDEF01234567";
   deliveries = {
@@ -103,10 +114,7 @@ pkgs.runCommand "agent-instructions-tests" { nativeBuildInputs = [ pkgs.python3 
   failed=0
   ${lib.concatMapStrings assertEntry userEntries}
   ${lib.optionalString
-    (
-      pkgs.stdenv.hostPlatform.system == "x86_64-linux"
-      && !(lib.any (entry: (entry.user.my.user.gpgKey or null) == fakeKey) userEntries)
-    )
+    (entries == null && !(lib.any (entry: (entry.user.my.user.gpgKey or null) == fakeKey) userEntries))
     ''
       echo 'no user entry carries the fake my.user.gpgKey, so a literal fingerprint would pass' >&2
       failed=1

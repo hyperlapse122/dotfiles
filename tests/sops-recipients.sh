@@ -72,6 +72,8 @@ while IFS= read -r file; do
 
   expected=$(rule_recipients "$rel")
   actual=$(yq -r '.sops.age[].recipient' "$file" | sort -u)
+  [[ -n $expected ]] || fail "$rel: its .sops.yaml rule has no age recipients"
+  [[ -n $actual ]] || fail "$rel: file has no age recipients"
   while IFS= read -r recipient; do
     [[ -n $recipient ]] || continue
     fail "$rel: encrypted to $recipient, which its .sops.yaml rule does not name; run sops updatekeys $rel"

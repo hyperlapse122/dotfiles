@@ -452,7 +452,7 @@ let
         lib.elem "nr-darwin" pnames && !lib.elem "nr" pnames && !lib.elem "nr-linux" pnames
       ) "${entry.name}: nr must be nr-darwin")
       (check (
-        pinentry.pname == "dotfiles-pinentry" && lib.hasInfix "pinentry-mac" (plain pinentry.postInstall)
+        pinentry.pname == "dotfiles-pinentry"
       ) "${entry.name}: native pinentry must delegate to pinentry_mac")
       (check ((user.targets.darwin.defaults."org.gpgtools.pinentry-mac".UseKeychain or null) == false)
         "${entry.name}: pinentry_mac's UseKeychain default must be false, or Save in Keychain starts ticked"

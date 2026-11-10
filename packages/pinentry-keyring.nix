@@ -34,6 +34,7 @@ pkgs.rustPlatform.buildRustPackage {
     import json, os, sys
     fallback = json.load(open(sys.argv[1]))["fallback"]
     assert fallback.startswith("/nix/store/") and os.access(fallback, os.X_OK)
+    assert fallback == ${builtins.toJSON fallback}
     PY
         $out/bin/dotfiles-pinentry --version
   '';

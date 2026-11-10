@@ -68,6 +68,8 @@ Before each push, run `git diff --check`, lint changed Markdown with `markdownli
 
 When documentation is an input to a declared check (for example, `agent-instructions` passes `AGENTS.md`, `CONCEPTS.md`, and `docs/agent-routing.md` into its derivation), run that check whenever those files change, even if docs-only CI skips `check-shards`.
 
+Before declaring a pull request ready, require successful CI on its current head and all required platform evidence. For changes beyond inert documentation or state, this includes flake evaluation, all declared checks, VM tests, and every production and bootstrap NixOS and Darwin output. Apply the `full-ci` label and require a green run on the head commit that included `host-checks`, `vm-checks`, `build`, and `build-darwin`; skipped closure jobs do not satisfy this requirement. A missing builder is pending evidence, never a pass. Documentation consumed by a check and runtime instructions still require their affected checks even when CI classifies the branch as docs-only. Report hardware verification separately.
+
 For full verification on supported builders:
 
 ```sh

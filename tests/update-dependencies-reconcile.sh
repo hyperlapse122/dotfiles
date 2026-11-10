@@ -639,8 +639,15 @@ printf 'concurrent\n' >"$other/other.txt"
 "$git_bin" -C "$other" commit -qm 'concurrent commit'
 "$git_bin" -C "$other" push -q origin main
 
+mkdir -p "$scratch/rebase-bin"
+cat >"$scratch/rebase-bin/nix" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$VERIFY_CALLS"
+[[ ! -f fail-combined ]]
+EOF
+chmod +x "$scratch/rebase-bin/nix"
 printf 'changed\n' >>"$clone/tracked.txt"
-(cd "$clone" && bash -c "$push_script") >"$scratch/diverged-step.log" 2>&1 ||
+(cd "$clone" && PATH=$scratch/rebase-bin:$PATH VERIFY_CALLS=$scratch/rebase-calls bash -e -c "$push_script") >"$scratch/diverged-step.log" 2>&1 ||
   fail 'the push step failed to rebase onto a diverged origin/main'
 log=$("$git_bin" --git-dir "$origin" log --format=%s main)
 [[ $log == *"chore(deps): update dependencies"* ]] ||
@@ -648,3 +655,21 @@ log=$("$git_bin" --git-dir "$origin" log --format=%s main)
 [[ $log == *"concurrent commit"* ]] ||
   fail "origin/main lost the concurrent commit it should have rebased onto: $log"
 pass 'rebases onto a diverged origin/main and pushes both commits'
+
+[[ $(wc -l <"$scratch/rebase-calls") == 3 ]] || fail 'rebased tree did not run all three verification commands'
+read -r origin clone <<<"$(setup_clone combined-failure)"
+other=$scratch/combined-other
+"$git_bin" clone -q "$origin" "$other"
+"$git_bin" -C "$other" config user.email o@example.invalid
+"$git_bin" -C "$other" config user.name Other
+touch "$other/fail-combined"
+"$git_bin" -C "$other" add fail-combined
+"$git_bin" -C "$other" commit -qm 'break combined verification'
+"$git_bin" -C "$other" push -q origin main
+before=$("$git_bin" --git-dir "$origin" rev-parse main)
+printf 'changed\n' >>"$clone/tracked.txt"
+if (cd "$clone" && PATH=$scratch/rebase-bin:$PATH VERIFY_CALLS=$scratch/failed-calls bash -e -c "$push_script") >"$scratch/combined-failure.log" 2>&1; then
+  fail 'push step accepted failed combined verification'
+fi
+[[ $("$git_bin" --git-dir "$origin" rev-parse main) == "$before" ]] || fail 'failed combined tree was pushed'
+pass 'failed combined-tree verification stops the push'

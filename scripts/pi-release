@@ -24,7 +24,6 @@ REPOSITORY = "earendil-works/pi"
 DEFAULT_SOURCE_URL = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
 SUMS_ASSET = "SHA256SUMS"
 
-# Every system a host in this flake can be, and the release tarball it runs.
 TARGET_ASSETS = {
     "x86_64-linux": "pi-linux-x64.tar.gz",
     "aarch64-linux": "pi-linux-arm64.tar.gz",

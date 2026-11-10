@@ -64,7 +64,6 @@ def exercise(template, helper, renderer, kind):
             text = body(root, harness)
             assert harness + '-only' in text
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
-        # T3 is separately renderable and never includes the ordinary body.
         context.write_text(json.dumps({'t3': True}))
         source.write_text(template)
         t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
@@ -81,6 +80,7 @@ def main():
             for item in entry['paths']:
                 receipt(body(Path(item['path']).parents[len(Path(item['target']).parts)-1], item['delivery']), entry['kind'])
             continue
+        assert entry['key'] in Path(entry['git']).read_text(), entry['name']
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             script = entry['activation']

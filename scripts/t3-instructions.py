@@ -295,7 +295,6 @@ def apply(destination, environment=None):
                               'baseEnvironment': base_environment, 'hadEnvironment': had_environment,
                               'lastEnvironment': copy.deepcopy(provider.get('environment', []))}
         changed = True
-    # Native Antigravity is user-owned; remove only the retired adapter.
     native = providers.get('antigravity', {})
     if native.get('driver') == 'acpRegistry':
         legacy = str(home / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp')

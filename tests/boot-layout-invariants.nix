@@ -9,7 +9,7 @@
   layout. Every broken invariant on every host is listed from the builder
   before it fails, and it also fails when no host directory exists.
 */
-{ pkgs }:
+{ pkgs, self }:
 let
   inherit (pkgs) lib;
 
@@ -23,7 +23,18 @@ pkgs.runCommand "boot-layout-invariants-tests" { } ''
     fail=1
   fi
 
-  for problem in ${lib.escapeShellArgs invariants.problems}; do
+  for problem in ${
+    lib.escapeShellArgs (
+      invariants.problems
+      ++ lib.concatMap (
+        entry:
+        lib.optional (
+          entry.config.boot.initrd.luks.devices.cryptroot.device
+          != entry.config.disko.devices.disk.main.content.partitions.luks.device
+        ) "${entry.name}: evaluated cryptroot device differs from disko's luks partition"
+      ) (import ./lib/configurations.nix { inherit pkgs self; }).entries
+    )
+  }; do
     echo "boot-layout-invariants: $problem" >&2
     fail=1
   done

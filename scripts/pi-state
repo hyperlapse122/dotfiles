@@ -45,7 +45,6 @@ def main():
         for name in ('packages', 'extensions'):
             if not isinstance(value.get(name, []), list):
                 raise ValueError('Pi resources must be lists')
-        # Repair disabled CE filters and previous version-keyed local sources.
         packages = []
         for item in value.get('packages', []):
             source = item.get('source', '') if isinstance(item, dict) else item

@@ -113,6 +113,7 @@
         # sweeping each check's .drv closure for a NixOS system-path or a Home
         # Manager generation.
         hostClosureChecks = [
+          "nvidia-closure"
           "agent-browser-deps"
           "agent-unmanaged"
           "pi"
@@ -171,6 +172,11 @@
       };
       checks.aarch64-darwin.agent-unmanaged = import ./tests/agent-unmanaged.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        systems = map (
+          host:
+          (import nixpkgs { system = "aarch64-darwin"; }).writeText "system-activation"
+            host.config.system.activationScripts.script.text
+        ) (builtins.attrValues self.darwinConfigurations);
         entries = nixpkgs.lib.mapAttrsToList (name: host: {
           inherit name;
           user = host.config.home-manager.users.${host.config.my.user.name};
@@ -387,7 +393,8 @@
               "restore-age-identity"
               "${(import ./packages/gpg-tools.nix { inherit pkgs; }).restoreAgeIdentity}/bin/restore-age-identity"
               ./tests/restore-age-identity.py;
-          boot-layout-invariants = import ./tests/boot-layout-invariants.nix { inherit pkgs; };
+          nvidia-closure = import ./tests/nvidia-closure.nix { inherit pkgs self; };
+          boot-layout-invariants = import ./tests/boot-layout-invariants.nix { inherit pkgs self; };
           claude = import ./tests/claude.nix { inherit pkgs self; };
           codex = import ./tests/codex.nix { inherit pkgs self; };
           codex-settings = import ./tests/codex-settings.nix { inherit pkgs self; };
@@ -510,6 +517,9 @@
           };
           agent-unmanaged = import ./tests/agent-unmanaged.nix {
             inherit pkgs;
+            systems = map (
+              entry: pkgs.writeText "system-activation" entry.config.system.activationScripts.script
+            ) configurations.entries;
             entries = configurations.userEntries;
           };
           agent-instructions = import ./tests/agent-instructions.nix {

@@ -21,6 +21,16 @@ def version(tag):
     return tuple(map(int, match[1].split(".")))
 
 
+def asset_digest(url, download):
+    if download is not fetch:
+        return hashlib.sha256(download(url)).hexdigest()
+    with urllib.request.urlopen(url, timeout=120) as response:
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: response.read(1024 * 1024), b""):
+            digest.update(chunk)
+        return digest.hexdigest()
+
+
 def refresh(pin, download=fetch):
     result = copy.deepcopy(pin)
     entries = [result] if "targets" in result else result.values()
@@ -48,7 +58,7 @@ def refresh(pin, download=fetch):
             expected = f"https://github.com/{repo}/releases/download/{tag}/{name}"
             if len(matches) != 1 or matches[0]["browser_download_url"] != expected:
                 raise ValueError("missing or unexpected release asset")
-            digest = hashlib.sha256(download(expected)).hexdigest()
+            digest = asset_digest(expected, download)
             published = matches[0].get("digest")
             if published and published != "sha256:" + digest:
                 raise ValueError("release asset digest mismatch")

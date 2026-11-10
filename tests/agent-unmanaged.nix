@@ -1,5 +1,9 @@
 # Check materialized profiles and Home Manager deliveries on each native platform.
-{ pkgs, entries }:
+{
+  pkgs,
+  entries,
+  systems,
+}:
 let
   manifest = pkgs.writeText "agent-unmanaged.json" (
     builtins.toJSON (
@@ -8,6 +12,10 @@ let
         modules =
           map toString (pkgs.lib.filesystem.listFilesRecursive ../home/h82/agents)
           ++ map toString (pkgs.lib.filesystem.listFilesRecursive ../modules);
+        activations = [
+          entry.user.home.activationPackage
+        ]
+        ++ systems;
         packages = map (package: package.pname or (pkgs.lib.getName package)) entry.user.home.packages;
         files = toString entry.user.home-files;
         profile = toString entry.user.home.path;

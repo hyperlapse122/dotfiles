@@ -102,6 +102,13 @@ pkgs.runCommand "sops-recipients-tests"
         age: $a
     " >"$tree/.sops.yaml"
           ;;
+        empty-file-recipients)
+          yq -i '.sops.age = []' "$tree/secrets/tokens.yaml"
+          ;;
+        empty-recipients)
+          yq -i '.creation_rules[1].age = ""' "$tree/.sops.yaml"
+          yq -i '.sops.age = []' "$tree/secrets/tokens.yaml"
+          ;;
         no-rule) encrypt "$a" "$tree/secrets/orphan.yaml" ;;
         yml-file) encrypt "$a" "$tree/secrets/orphan.yml" ;;
         no-sops-block) cp plain.yaml "$tree/secrets/plain.yaml" ;;
@@ -137,6 +144,8 @@ pkgs.runCommand "sops-recipients-tests"
     expect_failure overlap-second-rule "secrets/wifi.yaml: encrypted to $b, which its .sops.yaml rule does not name"
     expect_failure pgp-only-file 'secrets/tokens.yaml: lists a pgp key group'
     expect_failure key-groups-rule 'secrets/tokens.yaml: its .sops.yaml rule uses key_groups'
+    expect_failure empty-file-recipients 'secrets/tokens.yaml: file has no age recipients'
+    expect_failure empty-recipients 'secrets/tokens.yaml: its .sops.yaml rule has no age recipients'
     expect_failure no-rule 'secrets/orphan.yaml: matches no creation rule'
     expect_failure yml-file 'secrets/orphan.yml: matches no creation rule'
     expect_failure no-sops-block 'secrets/plain.yaml: has no sops block'
