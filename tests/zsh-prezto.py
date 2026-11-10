@@ -43,7 +43,7 @@ def interactive(zsh, arguments, code, env, trace=False):
         os.close(terminal)
         _, status = os.waitpid(pid, 0)
     text = output.decode(errors="replace").replace("\r", "")
-    assert os.waitstatus_to_exitcode(status) == 0, text
+    assert os.waitstatus_to_exitcode(status) == 0, text[-8000:]
     # Terminal-title control sequences are normal; diagnostic text is not.
     text = re.sub(r"\x1b\][^\x07]*(?:\x07|\x1b\\)", "", text)
     if trace:
@@ -55,6 +55,7 @@ def interactive(zsh, arguments, code, env, trace=False):
 
 
 def check(entry):
+    assert entry["home"] and entry["profile"] and entry["files"], "missing materialized shell profile"
     with tempfile.TemporaryDirectory(prefix="zsh-parity-") as temporary:
         home = Path(temporary)
         dotdir = home / ".config/zsh"
@@ -68,15 +69,23 @@ def check(entry):
             (dotdir / name).write_text(content)
         bridge = (Path(entry["files"]) / ".zshenv").read_text().replace(entry["home"], temporary)
         (home / ".zshenv").write_text(bridge)
+        (home / ".zshrc").write_text("export PARITY_OLD_ROOT_RC=1\n")
         (home / ".gnupg").mkdir(mode=0o700)
         # Avoid starting an agent; this is also one of the real SSH guard cases.
         (home / ".gnupg/gpg-agent.conf").write_text("enable-ssh-support\n")
+        local_bin = home / ".local/bin"
+        local_bin.mkdir(parents=True)
+        agent = local_bin / "gpg-agent"
+        agent.write_text(f"#!{entry['bash']}\n"
+                         'touch "$HOME/gpg-agent-called"\n'
+                         "printf 'GPG_AGENT_INFO=parity-agent:0:1; export GPG_AGENT_INFO\\n'\n")
+        agent.chmod(0o755)
         env = {
             "HOME": temporary,
             "PATH": entry["profile"] + "/bin:" + os.environ["PATH"],
             "TERM": "xterm-256color",
-            "LANG": "C.UTF-8",
-            "LC_ALL": "C.UTF-8",
+            "LANG": entry["locale"],
+            "LC_ALL": entry["locale"],
             "LOGNAME": os.environ.get("USER", "nixbld"),
             "XDG_CONFIG_HOME": str(home / ".config"),
             "XDG_CACHE_HOME": str(home / ".cache"),
@@ -87,6 +96,7 @@ def check(entry):
         code = r'''
           fail() { print -r -- "FAIL: $*"; exit 1; }
           (( $+functions[pmodload] )) || fail 'Prezto did not initialize'
+          [[ -z ${PARITY_OLD_ROOT_RC-} ]] || fail 'old root zshrc was unexpectedly sourced'
           (( $+functions[prompt_sorin_setup] )) || fail 'sorin did not load'
           [[ $(bindkey '^A') == *beginning-of-line* ]] || fail 'emacs bindings missing'
           for cmd in codex gh glab ghq mise usage; do
@@ -97,7 +107,7 @@ def check(entry):
           (( $parity_modules[(i)utility] < $parity_modules[(i)git] )) || fail 'utility must precede git'
           zstyle -t ':prezto:*:*' color || fail 'color disabled'
           [[ $NODE_USE_SYSTEM_CA == 1 ]] || fail 'system CA environment missing'
-          (( $path[(i)$HOME/.local/bin] < $path[(i)$PARITY_PROFILE_BIN] )) || fail 'local bin lost precedence' 
+          (( $path[(i)$HOME/.local/bin] < $path[(i)$PARITY_PROFILE_BIN] )) || fail 'local bin lost precedence'
           [[ $HISTFILE == $HOME/.local/state/zsh/history ]] || fail 'wrong history path'
           [[ $HISTSIZE == 10000 && $SAVEHIST == 10000 ]] || fail 'wrong history limits'
           [[ -o extendedhistory && -o histignoredups && -o sharehistory ]] || fail 'history options missing'
@@ -105,10 +115,13 @@ def check(entry):
           [[ $GPG_TTY == $TTY && -n $TTY ]] || fail 'wrong GPG_TTY'
           [[ $SSH_AUTH_SOCK == $HOME/existing-agent.sock ]] || fail 'SSH agent changed'
           [[ $parity_modules[(Ie)gpg] == 0 ]] || fail 'GPG SSH guard ignored'
+          print -s -- parity-history-sentinel
           print -r -- SHELL_PARITY_OK
         '''
         for mode in ["-ic", "-ilc"]:
             interactive(entry["profile"] + "/bin/zsh", [mode], code, env)
+            history = home / ".local/state/zsh/history"
+            assert "parity-history-sentinel" in history.read_text(), "history was not saved"
             interactive(entry["profile"] + "/bin/zsh", [mode.replace("-", "-x")], code, env, trace=True)
         # The cached environment is an independent SSH guard, not the config guard.
         (home / ".gnupg/gpg-agent.conf").write_text("")
@@ -116,6 +129,10 @@ def check(entry):
         cached.parent.mkdir(parents=True, exist_ok=True)
         cached.write_text("export SSH_AUTH_SOCK=wrong-agent.sock\n")
         interactive(entry["profile"] + "/bin/zsh", ["-ic"], code, env)
+        cached.unlink()
+        allowed = code.replace("[[ $parity_modules[(Ie)gpg] == 0 ]]", "(( $parity_modules[(Ie)gpg] > 0 ))")
+        interactive(entry["profile"] + "/bin/zsh", ["-ic"], allowed, env)
+        assert (home / "gpg-agent-called").is_file(), "GPG module did not call the isolated stub"
         bashrc = (Path(entry["files"]) / ".bashrc").read_text().replace(entry["home"], temporary)
         (home / ".bashrc").write_text(bashrc.replace(entry["sessionVars"], str(session_vars)))
         interactive(entry["bash"], ["-ic"], r'''
@@ -160,11 +177,50 @@ def check(entry):
                 assert ("gpg" in selected) == (available and not guarded), selected
 
 
+def check_migration(entry):
+    files = Path(entry["files"])
+    assert not (files / ".zshrc").exists(), "root .zshrc ownership changed"
+    for name in [".zshenv", ".config/zsh/.zshenv", ".config/zsh/.zshrc", ".zshrc"]:
+        with tempfile.TemporaryDirectory(prefix="shell-collision-") as temporary:
+            home = Path(temporary)
+            generation = home / "generation"
+            generation.mkdir()
+            (generation / "home-files").symlink_to(files)
+            target = home / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            original = b"# unrelated owner content\nexport OWNER_CUSTOM=preserve-me\n"
+            target.write_bytes(original)
+            env = {"HOME": temporary, "PATH": os.environ["PATH"],
+                   "newGenPath": str(generation), "LC_ALL": entry["locale"],
+                   "HOME_MANAGER_BACKUP_EXT": "", "HOME_MANAGER_BACKUP_COMMAND": ""}
+            command = [entry["bash"], entry["collisionCheck"]]
+            result = subprocess.run(command, env=env, text=True, capture_output=True)
+            assert target.read_bytes() == original, f"collision check changed {name}"
+            if name == ".zshrc":
+                assert result.returncode == 0, result.stdout + result.stderr
+            else:
+                assert result.returncode != 0, f"activation would clobber {name}"
+                assert "would be clobbered" in result.stdout + result.stderr, result.stdout + result.stderr
+                target.write_bytes((files / name).read_bytes())
+                result = subprocess.run(command, env=env, text=True, capture_output=True)
+                assert result.returncode == 0, result.stdout + result.stderr
+                target.unlink()
+                target.symlink_to(files / name)
+                result = subprocess.run(command, env=env, text=True, capture_output=True)
+                assert result.returncode == 0, result.stdout + result.stderr
+                target.unlink()
+                target.write_bytes(original)
+            assert target.read_bytes() == original, f"activation changed owner content in {name}"
+
+
 entries = json.loads(Path(sys.argv[1]).read_text())
 assert entries, "no shell profiles to check"
+assert any(entry["bootstrap"] for entry in entries), "no bootstrap shell profile"
+assert any(not entry["bootstrap"] for entry in entries), "no production shell profile"
 for entry in entries:
     try:
         check(entry)
+        check_migration(entry)
     except Exception as error:
         raise AssertionError(f"{entry['name']}: {error}") from error
     print(f"{entry['name']}: interactive shell passed")
