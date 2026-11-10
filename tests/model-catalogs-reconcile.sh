@@ -33,9 +33,8 @@ for tool in git jq yq; do
 done
 
 synthetic=home/h82/agents/synthetic-catalog.json
-openrouter=home/h82/agents/openrouter-catalog.json
 token=fake-gh-token-0123456789
-verify_args='build --no-link --print-build-logs .#checks.x86_64-linux.omp-settings .#checks.x86_64-linux.omp-models-load .#checks.x86_64-linux.synthetic-models'
+verify_args='build --no-link --print-build-logs .#checks.x86_64-linux.pi .#checks.x86_64-linux.synthetic-models'
 
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/model-catalogs-reconcile.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
@@ -50,7 +49,6 @@ step_by_name() {
 }
 
 for pair in 'SYNTHETIC_API_KEY|Refresh the Synthetic catalog snapshot' \
-  'OPENROUTER_API_KEY|Refresh the OpenRouter catalog snapshot' \
   'GH_TOKEN_FOR_UPDATES|Push the refreshed snapshots to main'; do
   key=${pair%%|*} step=${pair#*|}
   [[ $(grep -c "secrets\.$key\b" "$workflow") == 1 ]] ||
@@ -124,8 +122,7 @@ EOF
   git -C "$clone" checkout -qb main
   mkdir -p "$clone/home/h82/agents"
   printf '{"data": [{"id": "hf:old/Model"}]}\n' >"$clone/$synthetic"
-  printf '{"data": [{"id": "old/model"}]}\n' >"$clone/$openrouter"
-  git -C "$clone" add "$synthetic" "$openrouter"
+  git -C "$clone" add "$synthetic"
   git -C "$clone" commit -qm init
   git -C "$clone" push -q origin main 2>/dev/null
   : >"$events"
@@ -236,76 +233,28 @@ all_secrets() {
 }
 
 syn_subject='chore(agents): refresh the synthetic catalog snapshot'
-or_subject='chore(agents): refresh the openrouter catalog snapshot'
 push_seen='syn= or= gh=set'
 
-setup ae2
+setup changed
 all_secrets
 echo change >"$ctl/synthetic-models-watch"
-echo fail >"$ctl/openrouter-catalog-snapshot"
-run_job ae2
-((job_ok)) || fail "(ae2) the run failed: $(tail -n 20 "$scratch/ae2.log")"
-[[ $(pushed_subjects) == "$syn_subject" ]] || fail "(ae2) origin got: $(pushed_subjects)"
-[[ $(commit_files "$syn_subject") == "$synthetic" ]] || fail '(ae2) the synthetic commit holds other files'
-or_blob=$(git --git-dir "$origin" show "main:$openrouter")
-grep -q '"old/model"' <<<"$or_blob" ||
-  fail '(ae2) the OpenRouter snapshot changed on origin'
-grep -q '^::warning.*OpenRouter' "$scratch/ae2.log" || fail '(ae2) no warning names OpenRouter'
-if grep -q '^::warning.*Synthetic' "$scratch/ae2.log"; then fail '(ae2) a warning names Synthetic'; fi
-[[ $(events_of fetch) == "fetch synthetic-models-watch syn=set or= gh=|fetch openrouter-catalog-snapshot syn= or=set gh=" ]] ||
-  fail "(ae2) each fetch should see only its own key: $(events_of fetch)"
-[[ $(events_of 'verify\|push') == "verify $verify_args syn= or= gh=|push $syn_subject" ]] ||
-  fail "(ae2) expected one verification, then the push: $(events_of 'verify\|push')"
-pass 'a failing OpenRouter fetch warns naming OpenRouter and the Synthetic refresh alone lands'
+run_job changed
+((job_ok)) || fail "(changed) the run failed: $(tail -n 20 "$scratch/changed.log")"
+[[ $(pushed_subjects) == "$syn_subject" ]] || fail 'wrong committed snapshot'
+[[ $(commit_files "$syn_subject") == "$synthetic" ]] || fail 'commit holds unrelated files'
+[[ $(events_of 'verify\|push') == "verify $verify_args syn= or= gh=|push $syn_subject" ]] || fail 'verify must precede push'
+pass 'changed Synthetic snapshot verifies and pushes'
 
-setup syn-fails
-all_secrets
-echo fail >"$ctl/synthetic-models-watch"
-echo change >"$ctl/openrouter-catalog-snapshot"
-run_job syn-fails
-((job_ok)) || fail "(syn-fails) the run failed: $(tail -n 20 "$scratch/syn-fails.log")"
-[[ $(pushed_subjects) == "$or_subject" ]] || fail "(syn-fails) origin got: $(pushed_subjects)"
-[[ $(commit_files "$or_subject") == "$openrouter" ]] || fail '(syn-fails) the openrouter commit holds other files'
-syn_blob=$(git --git-dir "$origin" show "main:$synthetic")
-grep -q '"hf:old/Model"' <<<"$syn_blob" ||
-  fail '(syn-fails) the Synthetic snapshot changed on origin'
-grep -q '^::warning.*Synthetic' "$scratch/syn-fails.log" || fail '(syn-fails) no warning names Synthetic'
-if grep -q '^::warning.*OpenRouter' "$scratch/syn-fails.log"; then fail '(syn-fails) a warning names OpenRouter'; fi
-pass 'a failing Synthetic fetch warns naming Synthetic and the OpenRouter refresh alone lands'
-
-setup both-fail
-all_secrets
-echo fail >"$ctl/synthetic-models-watch"
-echo fail >"$ctl/openrouter-catalog-snapshot"
-run_job both-fail
-((job_ok)) || fail "(both-fail) the run failed: $(tail -n 20 "$scratch/both-fail.log")"
-[[ -z $(pushed_subjects) && -z $(events_of 'verify\|push') ]] ||
-  fail "(both-fail) failed fetches verified or pushed: $(events_of 'verify\|push')"
-grep -q '^::warning.*Synthetic' "$scratch/both-fail.log" || fail '(both-fail) no warning names Synthetic'
-grep -q '^::warning.*OpenRouter' "$scratch/both-fail.log" || fail '(both-fail) no warning names OpenRouter'
-pass 'when both fetches fail, both warn, no verification runs, and nothing is pushed'
-
-setup nokey
-all_secrets
-unset 'secrets[SYNTHETIC_API_KEY]'
-echo change >"$ctl/synthetic-models-watch"
-echo change >"$ctl/openrouter-catalog-snapshot"
-run_job nokey
-((job_ok)) || fail "(nokey) the run failed: $(tail -n 20 "$scratch/nokey.log")"
-[[ $(pushed_subjects) == "$or_subject" ]] || fail "(nokey) origin got: $(pushed_subjects)"
-grep -q '^::warning.*Synthetic' "$scratch/nokey.log" || fail '(nokey) no warning names Synthetic'
-pass 'a missing Synthetic key keeps its snapshot, warns naming Synthetic, and the OpenRouter refresh lands'
-
-setup no-or-key
-all_secrets
-unset 'secrets[OPENROUTER_API_KEY]'
-echo change >"$ctl/synthetic-models-watch"
-echo change >"$ctl/openrouter-catalog-snapshot"
-run_job no-or-key
-((job_ok)) || fail "(no-or-key) the run failed: $(tail -n 20 "$scratch/no-or-key.log")"
-[[ $(pushed_subjects) == "$syn_subject" ]] || fail "(no-or-key) origin got: $(pushed_subjects)"
-grep -q '^::warning.*OpenRouter' "$scratch/no-or-key.log" || fail '(no-or-key) no warning names OpenRouter'
-pass 'a missing OpenRouter key keeps its snapshot, warns naming OpenRouter, and the Synthetic refresh lands'
+for scenario in fetch-fails missing-key; do
+  setup "$scenario"
+  all_secrets
+  echo fail >"$ctl/synthetic-models-watch"
+  if [[ $scenario == missing-key ]]; then unset 'secrets[SYNTHETIC_API_KEY]'; fi
+  run_job "$scenario"
+  ((job_ok)) || fail "$scenario failed"
+  [[ -z $(pushed_subjects) && -z $(events_of 'verify\|push') ]] || fail "$scenario pushed"
+  grep -q '^::warning.*Synthetic' "$scratch/$scenario.log" || fail 'missing warning'
+done
 
 setup same
 all_secrets
@@ -324,22 +273,6 @@ run_job verify-fails
 [[ -z $(pushed_subjects) ]] || fail "(verify-fails) origin got: $(pushed_subjects)"
 pass 'a failing verification fails the run and pushes nothing'
 
-setup isolate-verify
-all_secrets
-echo change >"$ctl/synthetic-models-watch"
-echo change >"$ctl/openrouter-catalog-snapshot"
-printf '1\n3\n' >"$ctl/verify-fail"
-run_job isolate-verify
-((job_ok)) || fail "(isolate-verify) the run failed: $(tail -n 20 "$scratch/isolate-verify.log")"
-[[ $(pushed_subjects) == "$syn_subject" ]] || fail "(isolate-verify) origin got: $(pushed_subjects)"
-[[ $(commit_files "$syn_subject") == "$synthetic" ]] || fail '(isolate-verify) the synthetic commit holds other files'
-or_blob=$(git --git-dir "$origin" show "main:$openrouter")
-grep -q '"old/model"' <<<"$or_blob" ||
-  fail '(isolate-verify) the OpenRouter snapshot changed on origin'
-grep -q '^::warning.*OpenRouter' "$scratch/isolate-verify.log" || fail '(isolate-verify) no warning names OpenRouter'
-if grep -q '^::warning.*Synthetic' "$scratch/isolate-verify.log"; then fail '(isolate-verify) a warning names Synthetic'; fi
-pass 'when one changed snapshot fails verification, it is reverted with a warning and the valid snapshot lands'
-
 setup dispatch-branch
 all_secrets
 git -C "$clone" checkout -qb feature
@@ -353,14 +286,12 @@ pass 'a run dispatched from another branch checks out main and does not push fea
 setup moved
 all_secrets
 echo change >"$ctl/synthetic-models-watch"
-echo change >"$ctl/openrouter-catalog-snapshot"
 move_main
 run_job moved
 ((job_ok)) || fail "(moved) the run failed: $(tail -n 20 "$scratch/moved.log")"
-[[ $(pushed_subjects) == "unrelated commit on main|$syn_subject|$or_subject" ]] ||
+[[ $(pushed_subjects) == "unrelated commit on main|$syn_subject" ]] ||
   fail "(moved) origin got: $(pushed_subjects)"
-[[ $(commit_files "$or_subject") == "$openrouter" ]] || fail '(moved) the openrouter commit holds other files'
-[[ $(events_of 'verify\|push') == "verify $verify_args syn= or= gh=|verify $verify_args $push_seen|push $or_subject" ]] ||
+[[ $(events_of 'verify\|push') == "verify $verify_args syn= or= gh=|verify $verify_args $push_seen|push $syn_subject" ]] ||
   fail "(moved) expected verification again before the push: $(events_of 'verify\|push')"
 pass 'when main moved, the push step rebases and verifies again before pushing'
 

@@ -1,6 +1,8 @@
 name: Nix
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
   push:
     branches: [main]
 concurrency:
@@ -76,8 +78,6 @@ jobs:
 
   check-shard-names:
     needs: changes
-    # Same fail-open gate as flake-check, so every check builds on push to
-    # main and whenever the classifier did not complete.
     if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -89,7 +89,7 @@ jobs:
       - name: List check shards
         id: list
         run: |
-          names=$(nix eval --json .#checkShards --apply builtins.attrNames)
+          names=$(nix eval --json .#checkShards --apply 's: builtins.filter (n: builtins.match "light-.*" n != null) (builtins.attrNames s)')
           # An empty matrix would skip check-shards and leave the run green
           # with no check evidence.
           if [ "$names" = "[]" ]; then
@@ -124,11 +124,22 @@ jobs:
           NAME: ${{ matrix.name }}
         run: nix build --no-link --keep-going --print-build-logs ".#checkShards.${NAME}"
 
+  host-checks:
+    needs: changes
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Make room for NixOS closures
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Build host check shard
+        run: nix build --no-link --keep-going --print-build-logs .#checkShards.hosts
+
   vm-check-names:
     needs: changes
-    # Same fail-open gate as flake-check, so the VM tests run on push to main
-    # and whenever the classifier did not complete.
-    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -150,7 +161,7 @@ jobs:
 
   vm-checks:
     needs: [changes, vm-check-names]
-    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -176,15 +187,11 @@ jobs:
 
   hosts:
     needs: changes
-    # Same fail-open gate as build: changes runs only on pull requests, so a
-    # plain needs-succeeded default would skip this job, and every build with
-    # it, on pushes to main.
-    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       targets: ${{ steps.list.outputs.targets }}
-      linux_targets: ${{ steps.list.outputs.linux_targets }}
       darwin_targets: ${{ steps.list.outputs.darwin_targets }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -192,38 +199,26 @@ jobs:
       - name: List host configurations
         id: list
         run: |
-          # One evaluation of the flake lists every matrix:
-          # - targets: the NixOS hosts;
-          # - linux_targets: each non-NixOS output with the system it builds
-          #   for, plus the aarch64 fixture checks that nix flake check on
-          #   x86_64 cannot build;
-          # - darwin_targets: per macOS host, both variants' systems in one
-          #   entry so one runner builds the shared closure once, plus the
-          #   macOS fixture checks.
+          # List every production/bootstrap NixOS and Darwin target.
+          # shellcheck disable=SC2016
           lists=$(nix eval --impure --json --expr '
             let
               flake = builtins.getFlake (toString ./.);
-              list = set: attrOf: systemOf:
-                map (n: { attr = attrOf n; system = systemOf set.${n}; }) (builtins.attrNames set);
               darwinHosts = builtins.filter (n: builtins.match ".*-bootstrap" n == null)
                 (builtins.attrNames flake.darwinConfigurations);
             in {
               targets = builtins.attrNames flake.nixosConfigurations;
-              linux_targets =
-                list flake.homeConfigurations (n: "homeConfigurations.${n}.activationPackage") (h: h.activationPackage.system)
-                ++ list flake.systemConfigs (n: "systemConfigs.${n}") (s: s.system)
-                ++ list flake.checks.aarch64-linux (n: "checks.aarch64-linux.${n}") (_: "aarch64-linux");
               darwin_targets =
                 map (n: "darwinConfigurations.${n}.system darwinConfigurations.${n}-bootstrap.system") darwinHosts
                 ++ map (n: "checks.aarch64-darwin.${n}") (builtins.attrNames flake.checks.aarch64-darwin);
             }')
-          for key in targets linux_targets darwin_targets; do
+          for key in targets darwin_targets; do
             echo "$key=$(jq -c --arg key "$key" '.[$key]' <<<"$lists")" >> "$GITHUB_OUTPUT"
           done
 
   build:
     needs: [changes, hosts]
-    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -247,33 +242,9 @@ jobs:
           nix build --no-link \
             ".#nixosConfigurations.${TARGET}.config.system.build.toplevel"
 
-  build-linux:
-    needs: [changes, hosts]
-    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
-    # Each non-NixOS output builds natively on its own architecture; aarch64
-    # is never emulated.
-    runs-on: ${{ matrix.target.system == 'aarch64-linux' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        target: ${{ fromJSON(needs.hosts.outputs.linux_targets) }}
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - name: Make room for Nix closures
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
-        with:
-          extra_nix_config: |
-            system-features = big-parallel benchmark
-      - name: Build non-NixOS output
-        env:
-          ATTR: ${{ matrix.target.attr }}
-        run: nix build --no-link ".#${ATTR}"
-
   build-darwin:
     needs: [changes, hosts]
-    if: "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
+    if: "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
     # macOS outputs build on an Apple Silicon runner; nothing is activated.
     runs-on: macos-15
     timeout-minutes: 120

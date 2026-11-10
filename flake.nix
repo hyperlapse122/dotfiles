@@ -208,6 +208,9 @@
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
         mise = import ./packages/mise.nix { inherit pkgs; };
+        overlay-release = pkgs.writeScriptBin "overlay-release" (
+          "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ./scripts/overlay-release
+        );
         pi-release = agentTools.piRelease;
         pi = import ./packages/pi.nix { inherit pkgs; };
         codex-release = agentTools.codexRelease;
@@ -484,6 +487,9 @@
           };
           boot-splash = import ./tests/boot-splash.nix { inherit pkgs self; };
           pi = import ./tests/pi.nix { inherit pkgs self; };
+          overlay-release =
+            pythonScriptCheck "overlay-release" ./scripts/overlay-release
+              ./tests/test_overlay_release.py;
           pi-release = pythonScriptCheck "pi-release" ./scripts/pi-release ./tests/test_pi_release.py;
           agent-plugins = import ./tests/agent-plugins.nix { inherit pkgs self; };
           antigravity-skills = import ./tests/antigravity-skills.nix {
@@ -1274,7 +1280,9 @@
                 ];
               }
               ''
-                bash ${./tests/check-workflow-docs-skip.sh} ${./.github/workflows/check.yml}
+                bash ${./tests/check-workflow-docs-skip.sh} ${./.github/workflows/check.yml} \
+                  ${./.github/workflows/model-catalogs.yml} \
+                  '${builtins.toJSON (builtins.attrNames self.checks.x86_64-linux)}'
                 touch $out
               '';
           desktop-autostart = import ./tests/desktop-autostart.nix { inherit pkgs self; };

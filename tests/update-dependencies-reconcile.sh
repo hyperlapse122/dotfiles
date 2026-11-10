@@ -19,10 +19,10 @@
 #     release runner (`claude-desktop-release`, `claude-code-release`,
 #     `android-sdk-release`, `mise-release`, `chatgpt-release`,
 #     `t3code-release`, `antigravity-cli-release`, `wifiman-desktop-release`,
-#     `omp-release`, `npm-release` for `acpx` and `claude-agent-sdk`,
+#     `pi-release`, `npm-release` for `acpx` and `claude-agent-sdk`,
 #     `codex-release`, `grok-build-release`, `antigravity-acp-release`);
 #   - soft-failing updaters (`chatgpt-release`, `t3code-release`,
-#     `antigravity-cli-release`, `wifiman-desktop-release`, `omp-release`,
+#     `antigravity-cli-release`, `wifiman-desktop-release`, `pi-release`,
 #     `npm-release` for `acpx` and `claude-agent-sdk`, `codex-release`,
 #     `grok-build-release`, `antigravity-acp-release`) emit `::warning`, restore
 #     their pin (and lock file for the npm packages), and let the remaining
@@ -35,7 +35,7 @@
 #   - VM build output lands in `vm-check.log`, never `check.log`.
 # - Runs `Push verified updates directly to main` against a sandboxed git
 #   remote initialized with the repository's real `.gitignore`:
-#   - per-pin bump commits (`compound-engineering`, `t3code`, `omp`, `acpx`,
+#   - per-pin bump commits (`compound-engineering`, `t3code`, `pi`, `acpx`,
 #     `grok-build`, `antigravity-cli`, `antigravity-acp`, etc.) each land with their exact commit message and only their own files;
 #   - unchanged `origin/main` commits before `git rebase` and never sweeps
 #     `fmt.log`, `check.log`, or `vm-check.log` into `git add -A`;
@@ -130,7 +130,7 @@ EOF
   printf '{"version": "1.0.0"}\n' >"$clone/packages/wifiman-desktop-version.json"
   printf '{"version": "1.4.8", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
   printf '{"version": "1.4.3", "platforms": {}}\n' >"$clone/packages/antigravity-acp-release.json"
-  printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/omp-release.json"
+  printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
   printf '{"version": "0.20.0"}\n' >"$clone/packages/acpx-release.json"
   printf '{"lockfileVersion": 3, "name": "acpx"}\n' >"$clone/packages/acpx/package-lock.json"
   printf '{"version": "0.3.311"}\n' >"$clone/packages/claude-agent-sdk-release.json"
@@ -386,13 +386,16 @@ case "\$*" in
     fi
     printf '{"version": "1.1.0"}\n' >packages/wifiman-desktop-version.json
     ;;
-  "run .#omp-release -- --output packages/omp-release.json")
-    if [[ " \${FAIL_SOFT:-} " == *" omp "* ]]; then
-      printf '{"version": "partial' >packages/omp-release.json
-      echo "omp-release: release v1.5.0 has no omp-linux-arm64" >&2
+  "run .#overlay-release -- --output packages/bun-pin.json"|"run .#overlay-release -- --output packages/overlay-fonts.json")
+    echo "\$*" >>"$clone/overlay-calls.log"
+    ;;
+  "run .#pi-release -- --output packages/pi-release.json")
+    if [[ " \${FAIL_SOFT:-} " == *" pi "* ]]; then
+      printf '{"version": "partial' >packages/pi-release.json
+      echo "pi-release: release v1.5.0 has no pi-linux-arm64" >&2
       exit 1
     fi
-    printf '{"version": "1.5.0", "platforms": {}}\n' >packages/omp-release.json
+    printf '{"version": "1.5.0", "platforms": {}}\n' >packages/pi-release.json
     ;;
   "run .#npm-release -- --package acpx --output packages/acpx-release.json --lock packages/acpx/package-lock.json")
     echo "acpx" >>"$clone/npm-calls.log"
@@ -463,8 +466,8 @@ grep -q 'expectedRev = "2222222222222222222222222222222222222222";' "$clone/home
   fail "update step did not update expectedRev in home/h82/agents/agent-plugin-pins.nix"
 grep -q '0.0.47-nightly.20261005.2700' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
-grep -q '"1.5.0"' "$clone/packages/omp-release.json" ||
-  fail "update step did not update packages/omp-release.json"
+grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
+  fail "update step did not update packages/pi-release.json"
 grep -q '"1.0.71"' "$clone/packages/grok-build-release.json" ||
   fail "update step did not update packages/grok-build-release.json"
 grep -q '"1.5.0"' "$clone/packages/antigravity-cli-release.json" ||
@@ -479,11 +482,12 @@ grep -q '"9.9.9"' "$clone/packages/claude-agent-sdk-release.json" &&
   fail "update step did not update the claude-agent-sdk pin and lock file"
 [[ $(paste -sd ' ' "$clone/npm-calls.log") == "acpx claude-agent-sdk" ]] ||
   fail "npm-release did not run for acpx and claude-agent-sdk, in that order"
+[[ $(wc -l <"$clone/overlay-calls.log") == 2 ]] || fail 'missing imported pin updater'
 pass 'the update step runs flake update, compound-engineering-plugin pin/lock update, and all release updaters'
 
-read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code agy-cli wifiman omp acpx claude-agent-sdk codex grok agy-acp")"
+read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code agy-cli wifiman pi acpx claude-agent-sdk codex grok agy-acp")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
-for title in "ChatGPT update skipped" "T3 Code update skipped" "WiFiman Desktop update skipped" "OMP update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped" "Grok Build update skipped" "Antigravity CLI update skipped" "Antigravity ACP runtime update skipped"; do
+for title in "ChatGPT update skipped" "T3 Code update skipped" "WiFiman Desktop update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped" "Grok Build update skipped" "Antigravity CLI update skipped" "Antigravity ACP runtime update skipped"; do
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
@@ -491,7 +495,7 @@ done
   packages/chatgpt-version.json \
   packages/t3code-release.json \
   packages/wifiman-desktop-version.json \
-  packages/omp-release.json \
+  packages/pi-release.json \
   packages/acpx-release.json \
   packages/acpx/package-lock.json \
   packages/claude-agent-sdk-release.json \
@@ -501,7 +505,7 @@ done
   packages/antigravity-cli-release.json \
   packages/antigravity-acp-release.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
-pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, wifiman, omp, acpx, claude-agent-sdk, codex, grok-build, antigravity-acp) warn, restore their files, and let the step continue'
+pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, wifiman, pi, acpx, claude-agent-sdk, codex, grok-build, antigravity-acp) warn, restore their files, and let the step continue'
 
 read -r status clone <<<"$(run_update_step update-acp-fail "FAIL_SOFT=agy-acp")"
 ((status == 0)) || fail "a failing antigravity-acp-release aborted the update step: $(cat "$scratch/update-acp-fail-step.log")"
@@ -578,7 +582,7 @@ read -r origin clone <<<"$(setup_clone pin-bumps)"
 base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
 new_t3_version=0.0.46-nightly.20261004.2644
 printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
-printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/omp-release.json"
+printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
 printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
 printf '{"version": "1.0.71", "platforms": {}}\n' >"$clone/packages/grok-build-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
@@ -593,7 +597,7 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 commits=$("$git_bin" --git-dir "$origin" log --reverse --format='%H %s' "$base_sha..main")
 [[ $(wc -l <<<"$commits") == 7 ]] || fail "expected 7 per-pin commits, found: $commits"
 for expected in \
-  'chore(packages): bump omp to 1.5.0|packages/omp-release.json' \
+  'chore(packages): bump pi to 1.5.0|packages/pi-release.json' \
   'chore(packages): bump grok-build to 1.0.71|packages/grok-build-release.json' \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
@@ -606,7 +610,7 @@ for expected in \
   files=$("$git_bin" --git-dir "$origin" show --format= --name-only "$sha" | sort | paste -sd ' ')
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
-pass 'the t3code, antigravity-cli, antigravity-acp, omp, acpx, grok-build, and compound-engineering changes each land as their own commit with only their files'
+pass 'the t3code, antigravity-cli, antigravity-acp, pi, acpx, grok-build, and compound-engineering changes each land as their own commit with only their files'
 
 # --- origin/main unchanged: dirty-tree commit-before-rebase & .gitignore logs
 read -r origin clone <<<"$(setup_clone same)"

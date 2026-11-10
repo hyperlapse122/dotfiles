@@ -19,7 +19,7 @@ jobs:
     env:
       # The verification before the commit, and again before each push when
       # main moved.
-      VERIFY_TARGETS: .#checks.x86_64-linux.omp-settings .#checks.x86_64-linux.omp-models-load .#checks.x86_64-linux.synthetic-models
+      VERIFY_TARGETS: .#checks.x86_64-linux.pi .#checks.x86_64-linux.synthetic-models
     steps:
       # No token stays in .git/config; only the push step holds one. Pin ref
       # to main so workflow_dispatch from another branch cannot push that
@@ -32,10 +32,8 @@ jobs:
 
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
 
-      # Each fetch is its own step, so only its command sees its key. A
-      # missing key or a failed fetch keeps the committed snapshot and lets
-      # the other provider's refresh through. synthetic-models-watch fetches
-      # without a key, so the empty key is refused here.
+      # Only the fetch step sees the catalog key. A missing key or failed
+      # fetch keeps the committed snapshot.
       - name: Refresh the Synthetic catalog snapshot
         shell: bash
         env:
@@ -50,26 +48,12 @@ jobs:
             git checkout -- "$snapshot"
           fi
 
-      - name: Refresh the OpenRouter catalog snapshot
-        shell: bash
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: |
-          set -euo pipefail
-          snapshot=home/h82/agents/openrouter-catalog.json
-          if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-            echo "::warning title=OpenRouter catalog snapshot skipped::OPENROUTER_API_KEY is not set; keeping the current $snapshot."
-          elif ! nix run .#openrouter-catalog-snapshot -- --snapshot "$snapshot"; then
-            echo "::warning title=OpenRouter catalog snapshot skipped::openrouter-catalog-snapshot failed; keeping the current $snapshot."
-            git checkout -- "$snapshot"
-          fi
-
       - name: Detect snapshot changes
         id: changes
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain -- home/h82/agents/synthetic-catalog.json home/h82/agents/openrouter-catalog.json)" ]; then
+          if [ -n "$(git status --porcelain -- home/h82/agents/synthetic-catalog.json)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No snapshot changed."
@@ -81,37 +65,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          syn=home/h82/agents/synthetic-catalog.json
-          or=home/h82/agents/openrouter-catalog.json
-          verify() {
-            # VERIFY_TARGETS is a list of installables, split on purpose.
-            # shellcheck disable=SC2086
-            nix build --no-link --print-build-logs $VERIFY_TARGETS
-          }
-          if ! verify; then
-            if [ -n "$(git status --porcelain -- "$syn")" ] && [ -n "$(git status --porcelain -- "$or")" ]; then
-              tmp=$(mktemp -d)
-              cp "$syn" "$tmp/synthetic"
-              cp "$or" "$tmp/openrouter"
-              git checkout -- "$syn" "$or"
-              cp "$tmp/synthetic" "$syn"
-              if ! verify; then
-                echo "::warning title=Synthetic catalog snapshot rejected::Verification failed for $syn; keeping the current snapshot."
-                git checkout -- "$syn"
-              fi
-              cp "$tmp/openrouter" "$or"
-              if ! verify; then
-                echo "::warning title=OpenRouter catalog snapshot rejected::Verification failed for $or; keeping the current snapshot."
-                git checkout -- "$or"
-              fi
-              rm -rf -- "$tmp"
-              if [ -z "$(git status --porcelain -- "$syn" "$or")" ]; then
-                exit 1
-              fi
-            else
-              exit 1
-            fi
-          fi
+          # shellcheck disable=SC2086
+          nix build --no-link --print-build-logs $VERIFY_TARGETS
 
       - name: Commit each changed snapshot
         if: steps.changes.outputs.changed == 'true'
@@ -120,7 +75,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          for provider in synthetic openrouter; do
+          for provider in synthetic; do
             snapshot="home/h82/agents/$provider-catalog.json"
             if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
               git commit -m "chore(agents): refresh the $provider catalog snapshot" -- "$snapshot"
