@@ -99,7 +99,9 @@ class Installer:
         if os.path.lexists(source):
             existing = source.read_text() if source.is_file() and not source.is_symlink() else None
             if existing is None or identity(existing) != identity(content):
-                raise ProvisionError(f'Conflicting repository file {source}; reconcile it manually before applying.')
+                raise ProvisionError(f'Conflicting repository file {source}; this repository is managed with a pinned '
+                                     'signing key. Remove the file (for a COPR, `dnf copr disable` or `dnf copr remove`) '
+                                     'or reconcile it manually, then apply again.')
         authority = repo['baseurl'].split('://', 1)[1].rstrip('/')
         for candidate in sorted(source.parent.glob('*.repo')) if source.parent.is_dir() else []:
             if candidate != source and candidate.is_file() and authority in identity(candidate.read_text()):
@@ -142,30 +144,27 @@ class Installer:
 
 
 def provision(config, *, installer=None, report=None, repository=None):
-    """Install the declared packages and repositories, or only the named repository and its packages."""
     report = inspect_host() if report is None else report
     if not report['supported']:
         raise ProvisionError(' '.join(report['blockers']))
     installer = installer or Installer()
     packages = config['packages']
-    declared = config['repositories']
+    repositories = config['repositories']
     if repository is not None:
         packages = []
-        declared = [repo for repo in declared if repo['name'] == repository]
-        if not declared:
+        repositories = [repo for repo in repositories if repo['name'] == repository]
+        if not repositories:
             raise ProvisionError(f'Unknown repository {repository}.')
     for package in DOCKER_ENGINES:
         if installer.installed(package):
             raise ProvisionError(f'Conflicting Docker engine package {package}; resolve it manually '
                                  'without removing active work.')
-    repositories = declared
     for repo in repositories:
         installer.check_sources(repo)
     installer.install_missing(packages)
     with tempfile.TemporaryDirectory(prefix='dotfiles-linux-apps-') as scratch:
         for repo in repositories:
             installer.repository(repo, Path(scratch))
-    # dnf verifies packages against the pinned keys; install only from the declared repository.
     for repo in repositories:
         for package in repo['packages']:
             if not installer.installed(package):

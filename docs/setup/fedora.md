@@ -34,7 +34,7 @@ System `python3`, a normal login account and sudo access are required. If Git is
 sh ./provision-fedora.sh "$PWD"
 ```
 
-This runs the host check and installs only first-use prerequisites that are missing: CA certificates, curl, Git, GnuPG and archive tools through dnf, and mise from the mise author's COPR repository `jdxcode/mise`, whose signing key is pinned by fingerprint. It does not prepare a checkout, register a source, apply personal files or start a runtime. Restore a missing system Python through the OS before provisioning. If mise is already installed it is retained; ensure it is available on PATH in a fresh shell.
+This runs the host check and installs only first-use prerequisites that are missing: CA certificates, curl, Git, GnuPG and archive tools through dnf, and mise from the mise author's COPR repository `jdxcode/mise`, whose signing key is pinned by fingerprint. It does not prepare a checkout, register a source, apply personal files or start a runtime. Restore a missing system Python through the OS before provisioning. If mise is already installed it is retained. If you enabled the mise or Ghostty COPR yourself with `dnf copr enable`, remove that repository file before applying: application manages both repositories with pinned signing keys and stops on a file it did not write. Then ensure it is available on PATH in a fresh shell.
 
 Prepare the permanent standalone checkout separately:
 

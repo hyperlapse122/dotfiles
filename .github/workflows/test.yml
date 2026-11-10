@@ -59,7 +59,14 @@ jobs:
       - &fedora-base
         name: Provision the base tools the Fedora image omits
         if: matrix.platform.container
-        run: dnf install -y git curl tar gzip xz unzip bzip2 sudo zsh gnupg2 findutils which procps-ng gawk diffutils libicu fontconfig
+        # The runner.temp context names the host path, which the container does not have;
+        # link it to the mounted temp directory so both spellings reach the same files.
+        run: |
+          dnf install -y git curl tar gzip xz unzip bzip2 sudo zsh gnupg2 findutils which procps-ng gawk diffutils libicu fontconfig
+          if [ ! -e '${{ runner.temp }}' ]; then
+            mkdir -p "$(dirname '${{ runner.temp }}')"
+            ln -s "$RUNNER_TEMP" '${{ runner.temp }}'
+          fi
       - &checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
