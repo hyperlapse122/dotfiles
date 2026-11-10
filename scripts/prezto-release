@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Refresh the complete Prezto archive pin from its upstream default branch."""
+
+import argparse
+import sys
+import base64
+import configparser
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import subprocess
+import tempfile
+from urllib.parse import quote
+
+
+def github_json(endpoint):
+    result = subprocess.run(
+        ["gh", "api", "--hostname", "github.com", endpoint],
+        check=True, capture_output=True, text=True, encoding="utf-8", timeout=60,
+    )
+    return json.loads(result.stdout)
+
+
+def download_archive(url):
+    result = subprocess.run(
+        ["curl", "-sfL", "--max-time", "60", "--", url],
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=65,
+    )
+    if result.returncode:
+        raise ValueError(f"Archive download failed for {url}: status {result.returncode}")
+    return result.stdout
+
+
+def repository_name(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", value):
+        raise ValueError("Expected a GitHub owner/repository")
+    return value
+
+
+def commit_sha(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", value):
+        raise ValueError("Expected a full Git commit pin")
+    return value.lower()
+
+
+def relative_path(value):
+    path = PurePosixPath(value)
+    if (not value or str(path) != value or path.is_absolute() or ".." in path.parts
+            or value == "." or not re.fullmatch(r"[A-Za-z0-9_./-]+", value)):
+        raise ValueError(f"Invalid submodule path: {value!r}")
+    return value
+
+
+def resolve_archives(repository, commit, required=(), prefix="", ancestors=()):
+    repository = repository_name(repository)
+    commit = commit_sha(commit)
+    identity = repository, commit
+    if identity in ancestors:
+        raise ValueError(f"Cyclic submodule dependency: {repository} {commit}")
+    url = f"https://codeload.github.com/{repository}/tar.gz/{commit}"
+    payload = download_archive(url)
+    if not payload:
+        raise ValueError(f"Empty archive: {repository} {commit}")
+    archives = [{"path": prefix, "repository": repository, "commit": commit,
+                 "url": url, "sha256": hashlib.sha256(payload).hexdigest()}]
+    base = f"repos/{repository}"
+    tree = github_json(f"{base}/git/trees/{commit}?recursive=1")
+    if tree.get("truncated"):
+        raise ValueError(f"Incomplete Git tree: {repository} {commit}")
+    gitlinks = {relative_path(item["path"]): commit_sha(item["sha"])
+                for item in tree["tree"] if item.get("mode") == "160000"}
+    paths = sorted(gitlinks)
+    for path in required:
+        relative_path(path)
+        if path not in gitlinks:
+            raise ValueError(f"Missing required submodule: {repository} {path}")
+    if not paths:
+        return archives
+    document = github_json(f"{base}/contents/.gitmodules?ref={commit}")
+    modules = configparser.ConfigParser(interpolation=None)
+    modules.read_string(base64.b64decode(document["content"]).decode("utf-8"))
+    repositories = {}
+    for section in modules.sections():
+        path = modules.get(section, "path")
+        if path not in paths:
+            continue
+        url_match = re.fullmatch(r"https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?", modules.get(section, "url"))
+        if not url_match:
+            raise ValueError(f"Expected official GitHub submodule URL for {path}")
+        repositories[path] = url_match[1]
+    for path in paths:
+        if path not in repositories:
+            raise ValueError(f"Missing submodule repository: {repository} {path}")
+        target = f"{prefix}/{path}" if prefix else path
+        archives.extend(resolve_archives(repositories[path], gitlinks[path],
+                                         prefix=target, ancestors=(*ancestors, identity)))
+    return archives
+
+
+REQUIRED_SUBMODULES = (
+    "modules/autosuggestions/external", "modules/completion/external",
+    "modules/history-substring-search/external", "modules/syntax-highlighting/external",
+    "modules/prompt/external/powerline", "modules/prompt/external/agnoster",
+    "modules/prompt/external/pure", "modules/prompt/external/async",
+    "modules/prompt/external/powerlevel10k",
+)
+REPOSITORY = "sorin-ionescu/prezto"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Example: prezto-release --output packages/prezto-pin.json",
+        allow_abbrev=False,
+    )
+    parser.add_argument("-o", "--output", type=Path, default=Path("packages/prezto-pin.json"),
+                        help="pin file to refresh (default: packages/prezto-pin.json)")
+    parser.add_argument("--check", action="store_true", help="report a stale pin without writing it")
+    args = parser.parse_args()
+    print("Resolving Prezto and its recursive submodules...", file=sys.stderr)
+    try:
+        branch = github_json(f"repos/{REPOSITORY}")["default_branch"]
+        if not isinstance(branch, str) or not branch:
+            raise ValueError("The upstream repository has no default branch")
+        revision = github_json(f"repos/{REPOSITORY}/commits/{quote(branch, safe='')}")["sha"]
+        archives = resolve_archives(REPOSITORY, revision, REQUIRED_SUBMODULES)
+        candidate = {"zshLock": {"archives": archives}}
+        try:
+            current = json.loads(args.output.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            current = None
+        if current == candidate:
+            print(f"Prezto pin is current: {archives[0]['commit']}")
+            return 0
+        if args.check:
+            print(f"Prezto pin is stale: {args.output}", file=sys.stderr)
+            return 1
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                                             prefix=f".{args.output.name}.",
+                                             dir=args.output.parent, delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(json.dumps(candidate, indent=2) + "\n")
+            os.replace(temporary, args.output)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        print(f"Updated {args.output}: {archives[0]['commit']}, {len(archives)} archives")
+        return 0
+    except (ValueError, KeyError, TypeError, AttributeError, configparser.Error,
+            subprocess.SubprocessError, OSError) as error:
+        print(f"prezto-release: refresh failed: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

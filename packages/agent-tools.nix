@@ -84,6 +84,23 @@ let
   # latest GitHub release.
   miseRelease = pythonHelper "mise-release" ../scripts/mise-release;
 
+  preztoRelease = (pythonHelper "prezto-release" ../scripts/prezto-release).overrideAttrs (old: {
+    nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
+    installPhase = old.installPhase + ''
+      wrapProgram $out/bin/prezto-release \
+        --prefix PATH : ${
+          pkgs.lib.makeBinPath [
+            pkgs.gh
+            pkgs.curl
+          ]
+        }
+    '';
+    doInstallCheck = true;
+    installCheckPhase = ''
+      $out/bin/prezto-release --help >/dev/null
+    '';
+  });
+
   # Resolves the latest Codex release and its musl asset digest from the
   # GitHub releases API.
   piRelease = pythonHelper "pi-release" ../scripts/pi-release;
@@ -186,6 +203,7 @@ in
     wifimanDesktopRelease
     claudeCodeRelease
     miseRelease
+    preztoRelease
     piRelease
     codexRelease
     grokBuildRelease

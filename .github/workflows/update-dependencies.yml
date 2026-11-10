@@ -245,6 +245,9 @@ jobs:
             git checkout -- packages/antigravity-acp-release.json
           fi
 
+          # 16. Refresh Prezto and every recursively pinned submodule.
+          nix run .#prezto-release -- --output packages/prezto-pin.json
+
           if [ -z "$(git status --porcelain)" ]; then
             echo "No updates detected across all targets."
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -337,6 +340,12 @@ jobs:
             NEW_VER=$(jq -r .version packages/mise-release.json)
             git add packages/mise-release.json
             git commit -m "chore(packages): bump mise to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/prezto-pin.json)" ]; then
+            NEW_REV=$(jq -r '.zshLock.archives[0].commit' packages/prezto-pin.json)
+            git add packages/prezto-pin.json
+            git commit -m "chore(packages): refresh prezto to ${NEW_REV:0:12}"
           fi
 
           if [ -n "$(git status --porcelain packages/android-sdk-repo.json)" ]; then

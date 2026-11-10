@@ -183,6 +183,15 @@
           user = host.config.home-manager.users.${host.config.my.user.name};
         }) self.darwinConfigurations;
       };
+      checks.aarch64-darwin.zsh-prezto = import ./tests/zsh-prezto.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        entries = lib.mapAttrsToList (name: host: {
+          inherit name;
+          bootstrap = host.config.my.bootstrap;
+          kind = "darwin";
+          user = host.config.home-manager.users.${host.config.my.user.name};
+        }) darwinHosts;
+      };
       checks.aarch64-darwin.darwin-outputs = import ./tests/darwin-outputs.nix {
         inherit self;
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
@@ -214,6 +223,7 @@
         claude-code-release = agentTools.claudeCodeRelease;
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
+        prezto-release = agentTools.preztoRelease;
         mise = import ./packages/mise.nix { inherit pkgs; };
         overlay-release = pkgs.writeScriptBin "overlay-release" (
           "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ./scripts/overlay-release
@@ -550,6 +560,9 @@
             pythonScriptCheck "claude-code-release" ./scripts/claude-code-release
               ./tests/test_claude_code_release.py;
           mise-release = pythonScriptCheck "mise-release" ./scripts/mise-release ./tests/test_mise_release.py;
+          prezto-release =
+            pythonScriptCheck "prezto-release" ./scripts/prezto-release
+              ./tests/test_prezto_release.py;
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
@@ -669,48 +682,10 @@
             inherit pkgs self;
             fixtures = [ ];
           };
-          zsh-prezto =
-            let
-              assertConfiguration =
-                entry:
-                let
-                  homeFiles = entry.user.home-files or null;
-                  # A missing file fails inside the builder with its name, rather
-                  # than aborting evaluation on a null coercion.
-                  assertSource =
-                    file: pattern:
-                    let
-                      source = if homeFiles == null then null else "${homeFiles}/${file}";
-                    in
-                    if source == null then
-                      ''
-                        echo 'missing home.file ${file} on ${entry.name}' >&2
-                        fail=1
-                      ''
-                    else
-                      ''
-                        if [ ! -f ${pkgs.lib.escapeShellArg source} ] || ! grep -q ${pkgs.lib.escapeShellArg pattern} ${pkgs.lib.escapeShellArg source}; then
-                          echo ${pkgs.lib.escapeShellArg "${file} does not contain ${pattern} on ${entry.name}"} >&2
-                          fail=1
-                        fi
-                      '';
-                  dotzshenv = if homeFiles == null then "/nonexistent/.zshenv" else "${homeFiles}/.zshenv";
-                  zshenv = "${entry.user.home.homeDirectory or "/nonexistent"}/.config/zsh/.zshenv";
-                in
-                ''
-                  ${assertSource ".config/zsh/.zpreztorc" "zstyle ':prezto:load' pmodule"}
-                  ${assertSource ".config/zsh/.zshenv" "runcoms/zshenv"}
-                  ${assertSource ".config/zsh/.zshrc" "runcoms/zshrc"}
-                  if [ ! -f ${pkgs.lib.escapeShellArg dotzshenv} ] || ! grep -qF ${pkgs.lib.escapeShellArg "source ${zshenv}"} ${pkgs.lib.escapeShellArg dotzshenv}; then
-                    echo ${pkgs.lib.escapeShellArg ".zshenv does not source ${zshenv} on ${entry.name}"} >&2
-                    fail=1
-                  fi
-                '';
-            in
-            pkgs.runCommand "zsh-prezto-tests" { nativeBuildInputs = [ pkgs.gnugrep ]; } ''
-              ${forEveryUser assertConfiguration}
-              touch $out
-            '';
+          zsh-prezto = import ./tests/zsh-prezto.nix {
+            inherit pkgs;
+            entries = configurations.userEntries;
+          };
           ghostty-font =
             let
               assertConfiguration =
