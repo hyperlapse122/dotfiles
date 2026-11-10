@@ -33,10 +33,10 @@ class LinuxAria2Test(unittest.TestCase):
             config = root / 'empty.toml'
             config.write_text('')
             for os_name, distro, arch, version in [
-                ('linux', 'ubuntu', arch, version)
-                for arch in ('amd64', 'arm64') for version in ('24.04', '26.04')
-            ] + [('linux', 'debian', 'amd64', '12'), ('linux', 'ubuntu', '386', '24.04'),
-                 ('linux', 'ubuntu', 'amd64', '25.10'), ('darwin', '', 'arm64', ''),
+                ('linux', 'fedora', arch, version)
+                for arch in ('amd64', 'arm64') for version in ('44', '45', '46')
+            ] + [('linux', 'ubuntu', 'amd64', '26.04'), ('linux', 'debian', 'amd64', '12'),
+                 ('linux', 'fedora', '386', '45'), ('darwin', '', 'arm64', ''),
                  ('windows', '', 'amd64', '')]:
                 with self.subTest(os=os_name, distro=distro, arch=arch, version=version):
                     data = {'chezmoi': {'os': os_name, 'arch': arch,
@@ -44,8 +44,7 @@ class LinuxAria2Test(unittest.TestCase):
                     template = '{{ $data := ' + json.dumps(json.dumps(data)) + ' | fromJson }}{{ includeTemplate "aria2" $data }}'
                     result = subprocess.run(['chezmoi', '--source', str(root), '--config', str(config),
                                              'execute-template', template], capture_output=True, text=True, check=True)
-                    supported = (os_name == 'linux' and distro == 'ubuntu' and
-                                 arch == 'amd64' and version == '26.04')
+                    supported = os_name == 'linux' and distro == 'fedora' and arch == 'amd64'
                     self.assertEqual(bool(result.stdout.strip()), supported)
                     if supported:
                         script = result.stdout
@@ -73,4 +72,4 @@ class LinuxAria2Test(unittest.TestCase):
                 aria2c = commands / 'aria2c'
                 aria2c.write_text('#!/bin/sh\nexit 0\n')
                 aria2c.chmod(0o755)
-            self.assertEqual(calls.read_text().splitlines(), ['apt-get install -y aria2'])
+            self.assertEqual(calls.read_text().splitlines(), ['dnf install -y aria2'])

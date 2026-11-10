@@ -1,9 +1,9 @@
 {{- $release := get .chezmoi "osRelease" | default dict -}}
-{{- if and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (eq .chezmoi.arch "amd64") (eq (get $release "versionID") "26.04") -}}
+{{- if and (eq .chezmoi.os "linux") (eq (get $release "id") "fedora") (eq .chezmoi.arch "amd64") -}}
 #!/bin/sh
 set -eu
 python3 '{{ joinPath .chezmoi.workingTree "scripts" "linux-platform.py" | replace "'" "'\\''" }}'
 if ! command -v aria2c >/dev/null 2>&1; then
-    sudo apt-get install -y aria2
+    sudo dnf install -y aria2
 fi
 {{ end -}}

@@ -1,8 +1,8 @@
+import copy
 import importlib.util
 import json
 import os
 from pathlib import Path
-import signal
 import shutil
 import subprocess
 import tempfile
@@ -13,134 +13,164 @@ spec = importlib.util.spec_from_file_location('linux_apps', REPO / 'scripts/linu
 apps = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(apps)
 CONFIG = json.loads((REPO / 'home/.chezmoidata/linux.yaml').read_text())['linux']
-SUPPORTED = {'supported': True, 'blockers': []}
+PINNED_RELEASE = 45
+UNPINNED_RELEASE = 46
 
 
-@unittest.skipIf(os.name == "nt", "Linux startup-policy fixtures require POSIX symlink and signal semantics")
+def supported(release=PINNED_RELEASE):
+    return {'supported': True, 'blockers': [], 'release': {'host': release}}
+
+
+def declared(name, config=CONFIG):
+    return next(repo for repo in config['repositories'] if repo['name'] == name)
+
+
+@unittest.skipIf(os.name == 'nt', 'Linux repository fixtures require POSIX symlinks')
 class LinuxAppsTest(unittest.TestCase):
     def setUp(self):
         scratch = tempfile.TemporaryDirectory()
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
+        self.repos = self.root / 'etc/yum.repos.d'
         self.calls = []
         self.installed = set()
+        self.candidates = {}
         self.bad_key = False
-        self.fail_install = False
-        self.cancel_install = False
+        self.config = CONFIG
+        self.release = PINNED_RELEASE
+        self.chrome_install_state = None
         self.installer = apps.Installer(root=self.root, run=self.run_command)
 
     def run_command(self, args, **kwargs):
         self.calls.append(args)
         stdout = b''
-        if args[0] == 'dpkg-query':
-            installed = args[-1] in self.installed
-            return subprocess.CompletedProcess(args, 0 if installed else 1,
-                                               'install ok installed' if installed else '', '')
-        if args[0] == 'apt-get':
-            policy = self.root / 'usr/sbin/policy-rc.d'
-            self.assertEqual(policy.read_text(), '#!/bin/sh\nexit 101\n')
-            for unit in ('docker.service', 'docker.socket', 'containerd.service'):
-                self.assertEqual(os.readlink(self.root / 'etc/systemd/system' / unit), '/dev/null')
-            if args[1] == 'install':
-                if self.fail_install:
-                    raise subprocess.CalledProcessError(100, args, stderr=b'fixture apt failure')
-                if self.cancel_install:
-                    os.kill(os.getpid(), signal.SIGTERM)
-                self.installed.update(args[args.index('--') + 1:])
+        if args[0] == 'rpm':
+            return subprocess.CompletedProcess(args, 0 if args[-1] in self.installed else 1, '', '')
+        if args[:2] == ['dnf', 'install']:
+            names = args[3:]
+            if 'google-chrome-stable' in names:
+                defaults = self.root / 'etc/default/google-chrome'
+                self.chrome_install_state = ((self.repos / 'google-chrome.repo').is_file(),
+                                             defaults.read_text() if defaults.is_file() else None)
+            self.installed.update(names)
+        if args[:2] == ['dnf', 'repoquery']:
+            package = args[-1]
+            repo = next(r for r in self.config['repositories'] if package in r['packages'])
+            stdout = self.candidates.get(package, repo.get('id', repo['name'])) + '\n'
         if args[0] == 'curl':
             Path(args[args.index('--output') + 1]).write_bytes(b'fixture key')
-        if args[0] == 'apt-cache':
-            repo = next(r for r in CONFIG['repositories'] if args[-1] in r['packages'])
-            stdout = f"{args[-1]}:\n  Candidate: 1.0\n  Version table:\n     1.0 500\n        500 {repo['uri']} stable/main amd64 Packages\n"
         if args[0] == 'gpg':
             if '--show-keys' in args:
-                name = Path(args[2]).name
-                repo = next(r for r in CONFIG['repositories'] if r['name'] == name)
-                fingerprint = '0' * 40 if self.bad_key else repo['fingerprint']
+                repo = declared(Path(args[2]).name, self.config)
+                fingerprint = repo.get('fingerprint') or repo['fingerprints'][str(self.release)]
+                if self.bad_key:
+                    fingerprint = '0' * 40
                 stdout = f'pub:::::::::\nfpr:::::::::{fingerprint}:\nsub:::::::::\nfpr:::::::::SUBKEY:\n'
             if '--export' in args:
                 stdout = b'authenticated exported key'
         return subprocess.CompletedProcess(args, 0, stdout, b'')
 
-    def provision(self, report=SUPPORTED):
-        apps.provision(CONFIG, installer=self.installer, report=report)
+    def provision(self, report=None, **kwargs):
+        report = supported(self.release) if report is None else report
+        apps.provision(self.config, installer=self.installer, report=report, **kwargs)
 
-    def test_fresh_install_orders_prerequisites_before_authenticated_vendor_packages(self):
+    def paths(self, name):
+        return self.installer.repository_paths(apps.resolve(declared(name, self.config), self.release))
+
+    def installs(self):
+        return [c for c in self.calls if c[:2] == ['dnf', 'install']]
+
+    def test_fresh_install_orders_host_packages_before_authenticated_vendor_packages(self):
         self.provision()
-        transactions = [c for c in self.calls if c[:2] == ['apt-get', 'install']]
+        transactions = self.installs()
         self.assertEqual(len(transactions), 2)
-        self.assertIn('build-essential', transactions[0])
-        self.assertIn('libsecret-1-0', transactions[0])
-        self.assertIn('docker-ce-rootless-extras', transactions[1])
-        self.assertIn('1password-cli', transactions[1])
-        self.assertIn('chatgpt', transactions[1])
-        self.assertNotIn('golang-docker-credential-helpers', transactions[0])
+        self.assertEqual(transactions[0], ['dnf', 'install', '--assumeyes', *CONFIG['packages']])
+        self.assertEqual(sorted(transactions[1][3:]),
+                         sorted(p for repo in CONFIG['repositories'] for p in repo['packages']))
         first_key = next(i for i, c in enumerate(self.calls) if c[0] == 'gpg')
         self.assertLess(self.calls.index(transactions[0]), first_key)
-        self.assertFalse(any(c[0] in ('systemctl', 'docker', 'minikube', 'dockerd-rootless-setuptool.sh') for c in self.calls))
-        self.assertFalse((self.root / 'usr/sbin/policy-rc.d').exists())
+        for transaction in transactions:
+            self.assertFalse({'upgrade', 'remove', '--allowerasing', '--best'} & set(transaction))
         for repo in CONFIG['repositories']:
-            key, source, content = self.installer.repository_paths(repo)
+            key, source, content = self.paths(repo['name'])
             self.assertEqual(source.read_text(), content)
+            self.assertIn('gpgcheck=1\n', content)
+            self.assertIn(f'gpgkey=file:///etc/pki/rpm-gpg/{key.name}\n', content)
+            self.assertEqual(key.parent, self.root / 'etc/pki/rpm-gpg')
             self.assertEqual(key.read_bytes(), b'authenticated exported key')
-        self.assertFalse(list(self.root.rglob('.dotfiles-policy-*')))
 
-    def test_repeat_preserves_unrelated_sources_and_does_not_upgrade_installed_apps(self):
-        source = self.root / 'etc/apt/sources.list.d/unrelated.sources'
-        source.parent.mkdir(parents=True)
-        source.write_text('Types: deb\nURIs: https://example.invalid\n')
+    def test_no_command_starts_a_unit_a_runtime_or_linger(self):
+        self.provision()
+        self.assertFalse(any(c[0] in ('systemctl', 'loginctl', 'podman', 'docker', 'minikube') for c in self.calls))
+        self.assertFalse(any('enable' in c or 'enable-linger' in c or 'start' in c for c in self.calls))
+
+    def test_repeat_preserves_unrelated_repositories_and_installs_nothing(self):
+        unrelated = self.repos / 'unrelated.repo'
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text('[unrelated]\nbaseurl=https://example.invalid\n')
         self.provision()
         self.calls.clear()
         self.provision()
-        self.assertFalse(any(c[:2] == ['apt-get', 'install'] for c in self.calls))
-        self.assertEqual(source.read_text(), 'Types: deb\nURIs: https://example.invalid\n')
-        self.assertFalse(any('upgrade' in c or 'dist-upgrade' in c for c in self.calls))
+        self.assertEqual(self.installs(), [])
+        self.assertEqual(unrelated.read_text(), '[unrelated]\nbaseurl=https://example.invalid\n')
+        self.assertFalse(any('upgrade' in c for c in self.calls))
 
-    def test_declared_packages_target_the_gnome_workstation(self):
-        declared = CONFIG['packages']
-        self.assertTrue({'pinentry-gnome3', 'xdg-terminal-exec'} <= set(declared))
-        self.assertNotIn('pinentry-qt', declared)
+    def test_declaration_targets_fedora_kde_with_podman_and_no_docker_engine(self):
+        packages = set(CONFIG['packages'])
+        self.assertTrue({'gnupg2', 'pinentry-qt', 'gcc-c++', 'pkgconf-pkg-config', 'xz', 'libsecret',
+                         'shadow-utils', 'podman', 'podman-docker', 'podman-compose', 'passt',
+                         'edk2-ovmf'} <= packages)
+        self.assertFalse({'ghostty', 'xdg-terminal-exec', 'pinentry-gnome3', 'build-essential'} & packages)
+        self.assertEqual([repo['name'] for repo in CONFIG['repositories']],
+                         ['google-chrome', '1password', 'chatgpt', 'mise', 'terra'])
+        vendor_packages = {p for repo in CONFIG['repositories'] for p in repo['packages']}
+        self.assertFalse({'claude-desktop', 'docker-ce', 'docker-ce-cli'} & vendor_packages)
+        for repo in CONFIG['repositories']:
+            self.assertFalse({'uri', 'suite', 'component'} & set(repo))
 
     def test_unsupported_hosts_never_run_package_commands(self):
-        for blocker in ('Requires Linux.', 'Requires Ubuntu Desktop 26.04.', 'Requires amd64.'):
+        for blocker in ('Requires Linux.', 'Requires Fedora; other distributions are unsupported.',
+                        'Requires native RPM architecture x86_64.'):
             with self.subTest(blocker=blocker), self.assertRaisesRegex(apps.ProvisionError, blocker):
                 self.provision({'supported': False, 'blockers': [blocker]})
         self.assertEqual(self.calls, [])
 
-    def test_conflicting_runtime_fails_before_transaction(self):
-        self.installed.add('docker.io')
-        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting runtime package docker.io'):
-            self.provision()
-        self.assertFalse(any(c[0] == 'apt-get' for c in self.calls))
+    def test_installed_docker_engine_fails_before_any_transaction(self):
+        for package in ('docker-ce', 'docker-ce-cli', 'moby-engine', 'docker'):
+            with self.subTest(package=package):
+                self.installed = {package}
+                with self.assertRaisesRegex(apps.ProvisionError, f'Docker engine package {package}.*manually'):
+                    self.provision()
+        self.assertFalse(any(c[0] == 'dnf' for c in self.calls))
+        self.assertFalse(self.repos.exists())
 
-    def test_conflicting_source_is_not_overwritten(self):
-        _, source, _ = self.installer.repository_paths(CONFIG['repositories'][0])
+    def test_differing_repository_file_is_not_overwritten(self):
+        _, source, _ = self.paths('1password')
         source.parent.mkdir(parents=True)
-        source.write_text('local source\n')
-        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting APT source'):
+        source.write_text('[1password]\nbaseurl=https://example.invalid\n')
+        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting repository file .*1password.repo'):
             self.provision()
-        self.assertEqual(source.read_text(), 'local source\n')
-        self.assertFalse(any(c[0] == 'apt-get' for c in self.calls))
+        self.assertEqual(source.read_text(), '[1password]\nbaseurl=https://example.invalid\n')
+        self.assertFalse(any(c[0] == 'dnf' for c in self.calls))
 
-    def test_duplicate_vendor_source_is_not_overwritten(self):
-        source = self.root / 'etc/apt/sources.list'
-        source.parent.mkdir(parents=True)
-        source.write_text('deb https://download.docker.com/linux/ubuntu noble stable\n')
-        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting repository entry'):
+    def test_foreign_file_naming_the_same_base_url_is_reported(self):
+        foreign = self.repos / 'local-chrome.repo'
+        foreign.parent.mkdir(parents=True)
+        foreign.write_text(f'[chrome]\nbaseurl={declared("google-chrome")["baseurl"]}\n')
+        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting repository entry in .*local-chrome.repo'):
             self.provision()
-        self.assertIn('noble', source.read_text())
+        self.assertFalse((self.repos / 'google-chrome.repo').exists())
 
     def test_bad_downloaded_key_never_becomes_trusted(self):
         self.bad_key = True
         with self.assertRaisesRegex(apps.ProvisionError, 'fingerprint mismatch'):
             self.provision()
-        key, source, _ = self.installer.repository_paths(CONFIG['repositories'][0])
+        key, source, _ = self.paths(CONFIG['repositories'][0]['name'])
         self.assertFalse(key.exists())
         self.assertFalse(source.exists())
-        self.assertFalse((self.root / 'usr/sbin/policy-rc.d').exists())
 
-    def test_existing_conflicting_key_is_preserved(self):
-        key, _, _ = self.installer.repository_paths(CONFIG['repositories'][0])
+    def test_existing_key_with_another_fingerprint_is_preserved(self):
+        key, _, _ = self.paths('google-chrome')
         key.parent.mkdir(parents=True)
         key.write_bytes(b'previous key')
         original = self.installer.fingerprints
@@ -149,67 +179,120 @@ class LinuxAppsTest(unittest.TestCase):
             self.provision()
         self.assertEqual(key.read_bytes(), b'previous key')
 
-    def test_foreign_candidate_is_rejected(self):
-        original = self.installer.command
-        def command(args, **kwargs):
-            result = original(args, **kwargs)
-            if args[0] == 'apt-cache':
-                result.stdout = result.stdout.replace(CONFIG['repositories'][0]['uri'], 'https://unrelated.invalid')
-            return result
-        self.installer.command = command
-        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting candidate source'):
+    def test_symlinked_key_is_reported_by_name(self):
+        key, _, _ = self.paths('chatgpt')
+        key.parent.mkdir(parents=True)
+        key.symlink_to('/dev/null')
+        with self.assertRaisesRegex(apps.ProvisionError, f'signing-key symlink .*{key.name}'):
             self.provision()
-        transactions = [c for c in self.calls if c[:2] == ['apt-get', 'install']]
-        self.assertEqual(len(transactions), 1)
+        self.assertTrue(key.is_symlink())
+        self.assertFalse(any(c[0] == 'dnf' for c in self.calls))
 
-    def test_policy_file_and_symlink_restored_on_success_failure_and_cancellation(self):
-        for kind in ('file', 'symlink', 'absent'):
-            for outcome in ('success', 'failure', 'cancel'):
-                with self.subTest(kind=kind, outcome=outcome):
-                    policy = self.root / 'usr/sbin/policy-rc.d'
-                    policy.parent.mkdir(parents=True, exist_ok=True)
-                    if os.path.lexists(policy):
-                        policy.unlink()
-                    if kind == 'file':
-                        policy.write_bytes(b'original policy\n')
-                        policy.chmod(0o751)
-                    if kind == 'symlink':
-                        policy.symlink_to('existing-policy')
-                    self.installed.clear()
-                    self.fail_install = outcome == 'failure'
-                    self.cancel_install = outcome == 'cancel'
-                    if outcome == 'success':
-                        self.provision()
-                    else:
-                        with self.assertRaises((subprocess.CalledProcessError, SystemExit)):
-                            self.provision()
-                    if kind == 'file':
-                        self.assertEqual(policy.read_bytes(), b'original policy\n')
-                        self.assertEqual(policy.stat().st_mode & 0o777, 0o751)
-                    elif kind == 'symlink':
-                        self.assertEqual(os.readlink(policy), 'existing-policy')
-                    else:
-                        self.assertFalse(os.path.lexists(policy))
-                    self.assertFalse(list(self.root.rglob('.dotfiles-policy-*')))
+    def test_candidate_from_another_repository_is_rejected(self):
+        self.candidates['1password'] = 'fedora'
+        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting candidate source for 1password'):
+            self.provision()
+        self.assertEqual(len(self.installs()), 1)
+        self.assertNotIn('1password', self.installed)
 
-    def test_only_new_runtime_boot_links_are_removed(self):
-        directory = self.root / 'etc/systemd/system/multi-user.target.wants'
-        directory.mkdir(parents=True)
-        existing = directory / 'docker.service'
-        existing.symlink_to('/lib/systemd/system/docker.service')
-        unrelated = directory / 'other.service'
-        unrelated.symlink_to('/lib/systemd/system/other.service')
-        prior = self.root / 'etc/systemd/system/containerd.service'
-        prior.write_bytes(b'local override')
-        prior.chmod(0o640)
-        with self.installer.inhibit_services():
-            created = directory / 'containerd.service'
-            created.symlink_to('/lib/systemd/system/containerd.service')
-        self.assertTrue(existing.is_symlink())
-        self.assertTrue(unrelated.is_symlink())
-        self.assertFalse(created.is_symlink())
-        self.assertEqual(prior.read_bytes(), b'local override')
-        self.assertEqual(prior.stat().st_mode & 0o777, 0o640)
+    def test_terra_names_the_pinned_release_and_filters_to_ghostty(self):
+        self.provision()
+        key, source, _ = self.paths('terra')
+        content = source.read_text()
+        self.assertIn('baseurl=https://repos.fyralabs.com/terra45\n', content)
+        self.assertIn('includepkgs=ghostty*\n', content)
+        self.assertNotIn('$releasever', content)
+        self.assertEqual(key.name, 'RPM-GPG-KEY-terra45-C2AC02124AF114F086592E3C8DDE7D14C1C23D8C.asc')
+        self.assertIn(['curl', 'https://repos.fyralabs.com/terra45/key.asc'],
+                      [[c[0], c[-1]] for c in self.calls])
+        self.assertIn('ghostty', self.installed)
+
+    def test_terra_without_a_pin_is_not_written_and_other_repositories_install(self):
+        self.release = UNPINNED_RELEASE
+        with self.assertRaisesRegex(apps.ProvisionError, 'No terra signing-key fingerprint is pinned for Fedora 46'):
+            self.provision()
+        self.assertFalse((self.repos / 'terra.repo').exists())
+        self.assertFalse(any('fyralabs' in c[-1] for c in self.calls if c[0] == 'curl'))
+        self.assertTrue({'google-chrome-stable', '1password', '1password-cli', 'chatgpt', 'mise'} <= self.installed)
+        self.assertNotIn('ghostty', self.installed)
+
+    def test_terra_without_a_pin_keeps_an_installed_ghostty(self):
+        self.provision()
+        before = (self.repos / 'terra.repo').read_text()
+        self.release = UNPINNED_RELEASE
+        self.calls.clear()
+        self.provision()
+        self.assertEqual((self.repos / 'terra.repo').read_text(), before)
+        self.assertEqual(self.installs(), [])
+
+    def test_terra_file_for_an_older_release_is_rewritten_once_the_host_release_is_pinned(self):
+        self.provision()
+        old_key, source, _ = self.paths('terra')
+        self.config = copy.deepcopy(CONFIG)
+        declared('terra', self.config)['fingerprints'][str(UNPINNED_RELEASE)] = 'A' * 40
+        self.release = UNPINNED_RELEASE
+        self.bad_key = True
+        with self.assertRaisesRegex(apps.ProvisionError, 'fingerprint mismatch'):
+            self.provision()
+        self.assertIn('terra45', source.read_text())
+        self.bad_key = False
+        self.provision()
+        new_key, source, content = self.paths('terra')
+        self.assertEqual(source.read_text(), content)
+        self.assertIn('baseurl=https://repos.fyralabs.com/terra46\n', content)
+        self.assertEqual(new_key.name, 'RPM-GPG-KEY-terra46-' + 'A' * 40 + '.asc')
+        self.assertTrue(new_key.is_file())
+        self.assertTrue(old_key.is_file())
+
+    def test_terra_file_with_any_other_difference_is_not_overwritten(self):
+        self.provision()
+        _, source, content = self.paths('terra')
+        widened = content.replace('includepkgs=ghostty*\n', '')
+        source.write_text(widened)
+        self.config = copy.deepcopy(CONFIG)
+        declared('terra', self.config)['fingerprints'][str(UNPINNED_RELEASE)] = 'A' * 40
+        for release in (PINNED_RELEASE, UNPINNED_RELEASE):
+            with self.subTest(release=release):
+                self.release = release
+                with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting repository file .*terra.repo'):
+                    self.provision()
+                self.assertEqual(source.read_text(), widened)
+
+    def test_chrome_repository_and_defaults_exist_before_chrome_installs(self):
+        self.provision()
+        self.assertEqual(self.chrome_install_state, (True, 'repo_add_once="false"\n'))
+
+    def test_existing_chrome_defaults_are_left_unchanged(self):
+        defaults = self.root / 'etc/default/google-chrome'
+        defaults.parent.mkdir(parents=True)
+        defaults.write_text('repo_add_once="true"\n')
+        self.provision()
+        self.assertEqual(self.chrome_install_state, (True, 'repo_add_once="true"\n'))
+
+    def test_chatgpt_repository_matches_the_file_the_vendor_package_ships(self):
+        self.provision()
+        self.assertEqual((self.repos / 'chatgpt.repo').read_text(), (
+            '[openai-chatgpt]\n'
+            'name=ChatGPT\n'
+            'baseurl=https://persistent.oaistatic.com/codex-app-prod/linux/rpm/$basearch\n'
+            'enabled=1\n'
+            'type=rpm-md\n'
+            'gpgcheck=1\n'
+            'repo_gpgcheck=1\n'
+            'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-chatgpt-3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4.asc\n'))
+        self.assertTrue((self.root / 'etc/pki/rpm-gpg/'
+                         'RPM-GPG-KEY-chatgpt-3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4.asc').is_file())
+
+    def test_single_repository_mode_writes_and_installs_only_that_repository(self):
+        for _ in range(2):
+            self.provision(repository='mise')
+        self.assertEqual(self.installs(), [['dnf', 'install', '--assumeyes', 'mise']])
+        self.assertEqual([path.name for path in self.repos.iterdir()],
+                         ['_copr:copr.fedorainfracloud.org:jdxcode:mise.repo'])
+        self.assertIn('baseurl=https://download.copr.fedorainfracloud.org/results/jdxcode/mise/'
+                      'fedora-$releasever-$basearch/\n', next(self.repos.iterdir()).read_text())
+        with self.assertRaisesRegex(apps.ProvisionError, 'Unknown repository absent'):
+            self.provision(repository='absent')
 
 
 @unittest.skipUnless(shutil.which('chezmoi'), 'Chezmoi required')
