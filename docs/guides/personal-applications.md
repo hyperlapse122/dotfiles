@@ -166,9 +166,12 @@ To roll Claude back, restore its entry in `home/.chezmoidata/personal-app-lock.j
 ### Automated Updates
 
 A GitHub Actions workflow (**Update personal application pins**) runs daily at 06:23 UTC:
+
 1. Resolves candidate release pins using `secrets.GITHUB_TOKEN`.
-2. Validates new binaries against the native test matrix.
-3. Commits the updated `personal-app-lock.json` directly to `main` if all checks pass.
+2. Refreshes the Synthetic model lock and stages both locks in one immutable candidate.
+3. Commits changed `personal-app-lock.json` and `synthetic-model-lock.json` directly to `main` without running CI validation.
+
+Problems discovered after publication are handled separately.
 
 ---
 

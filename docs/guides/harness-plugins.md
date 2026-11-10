@@ -114,7 +114,8 @@ mise exec -- python scripts/update-harness-plugin-lock.py
 
 ### Automated Updates
 
-A GitHub Actions workflow (**Update harness plugin pins**) runs daily at 06:43 UTC, validating release tags and commit SHAs against the native test matrix before committing to `main`.
+A GitHub Actions workflow (**Update harness plugin pins**) runs daily at 06:43 UTC and commits changed release tags and commit SHAs to `main` after generation without running CI validation.
+Problems discovered after publication are handled separately.
 
 The same script and workflow refresh the korean-skills pin. See [Pin and Refresh](#pin-and-refresh) for the checks that apply only to skill packs.
 
