@@ -15,8 +15,10 @@
     misreport it.
   - A console login leaves /run/intune/<uid>/pwquality, so pam_intune.so still
     loads from the wrapped package.
-  - passwd, run by the user, refuses a new password that breaks the policy
-    and accepts one that meets it.
+  - passwd, run by the user, refuses a new password that lacks a character
+    class or is too short, and accepts one that meets the policy.
+  - The user, who cannot enter a mount namespace without a user namespace,
+    can still start the wrapped intune-agent and dsreg.
 
   /etc/os-release is an absolute symlink, so reading it through
   /proc/<pid>/root would resolve it in the reader's namespace and show NixOS
@@ -30,6 +32,7 @@
 let
   initialPassword = "Initial#Passw0rd-vm";
   weakPassword = "lowercaseonlypassword";
+  shortPassword = "Sh0rt#Pw-vm";
   strongPassword = "Str0ng#Passw0rd-vm2";
 in
 pkgs.testers.nixosTest {
@@ -82,8 +85,14 @@ pkgs.testers.nixosTest {
     machine.send_chars("${initialPassword}\n")
     machine.wait_for_file("/run/intune/1000/pwquality")
 
+    session = "runuser -u h82 -- env XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus "
+    machine.succeed(session + "systemctl --user start intune-agent.service")
+    machine.wait_until_succeeds("journalctl --no-pager _UID=1000 _SYSTEMD_USER_UNIT=intune-agent.service | grep -q 'version='", timeout=30)
+    assert "Device Registration Status" in machine.succeed(session + "dsreg --status")
+
     change = "printf '%s\\n' {} | runuser -u h82 -- passwd"
     machine.fail(change.format("'${initialPassword}' '${weakPassword}' '${weakPassword}'"))
+    machine.fail(change.format("'${initialPassword}' '${shortPassword}' '${shortPassword}'"))
     machine.succeed(change.format("'${initialPassword}' '${strongPassword}' '${strongPassword}'"))
   '';
 }

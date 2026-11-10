@@ -9,7 +9,7 @@ Microsoft supports the Intune app only on Ubuntu Desktop 24.04 LTS and 26.04 LTS
 - The Intune app (`intune-portal`), its agent and daemon, and the Microsoft identity broker, through the `nixpkgs` `services.intune` module.
 - Microsoft Edge in the user environment. Edge signs in through the identity broker, so its session carries the enrolled device's identity. Google Chrome stays the default browser.
 - `intune-daemon.socket` and the hourly `intune-agent.timer`. The upstream module leaves both disabled, so without them the app cannot reach the daemon and the device checks in only while the app is open.
-- A password quality policy. `passwd` rejects a new password shorter than 12 characters or without a digit, an uppercase letter, a lowercase letter, and a symbol. `/etc/pam.d/common-password` declares the same policy, because the Intune agent reads that Ubuntu path. Both come from one definition in `modules/nixos/services/intune.nix`.
+- A password quality policy. `passwd` rejects a new password shorter than 12 characters or without a digit, an uppercase letter, a lowercase letter, and a symbol. `/etc/pam.d/common-password` declares the same policy, because the Intune agent reads that Ubuntu path. Both come from one definition in `modules/nixos/services/intune.nix`. Only `passwd` enforces it: the Users page of KDE System Settings sets a password as root without consulting PAM, so change the login password with `passwd`.
 - `pam_intune.so` in the PAM stack of every service that authenticates with a password. It is Microsoft's module, it receives the password at each authentication, and it records the password's quality in `/run/intune/<uid>/pwquality` for the agent. Ubuntu installs it the same way.
 
 ## The OS identity
@@ -18,7 +18,7 @@ Five executables read `/etc/os-release`: `intune-portal`, `intune-agent`, `micro
 
 `packages/intune-ubuntu-identity.nix` starts each of them through `bubblewrap` in its own mount namespace, where an Ubuntu 24.04 file is bound over `/etc/os-release`. Every other process, and `/etc/os-release` itself, still says NixOS. The namespace keeps all of the host's mounts, because the agent judges disk encryption from its own `/proc/mounts`.
 
-To present Ubuntu 26.04 instead, edit the `osRelease` text in `packages/intune-ubuntu-identity.nix` and update the release the `intune` check and the `intune-os-identity` VM test expect.
+The pinned `intune-portal` is Microsoft's build for Ubuntu 26.04 and the pinned identity broker its build for 24.04; the wrapper presents 24.04 to both. To present Ubuntu 26.04 instead, edit the `osRelease` text in `packages/intune-ubuntu-identity.nix` and update the release the `intune` check and the `intune-os-identity` VM test expect.
 
 ## Enroll
 

@@ -11,10 +11,12 @@
 
   Verifies, per configuration that enables the trait:
   - intune-daemon.service, intune-daemon.socket, and
-    microsoft-identity-device-broker.service are regular system units, and
-    sockets.target.wants holds the socket.
-  - intune-agent.service and intune-agent.timer are regular user units, and
-    graphical-session.target.wants holds the timer.
+    microsoft-identity-device-broker.service are regular system units,
+    sockets.target.wants holds the socket, and the socket still listens on
+    the packaged path.
+  - intune-agent.service and intune-agent.timer are regular user units,
+    graphical-session.target.wants holds the timer, and the timer still
+    carries the packaged schedule.
   - the device broker unit, the agent unit, the session D-Bus service of the
     identity broker, the Intune desktop entry, and bin/dsreg each start an
     executable wrapper that hands over to a real executable, and all five
@@ -122,6 +124,11 @@ let
             if [ ! -e ${esc "${tree}/sockets.target.wants/intune-daemon.socket"} ]; then
               ${fail "${name}: sockets.target.wants does not hold intune-daemon.socket"}
             fi
+            # An override that replaced the packaged unit instead of adding
+            # a drop-in would leave a unit with no socket to listen on.
+            if ! grep -qx 'ListenStream=/run/intune/daemon.socket' ${esc "${tree}/intune-daemon.socket"}; then
+              ${fail "${name}: intune-daemon.socket no longer listens on /run/intune/daemon.socket"}
+            fi
             ${recordEntry name "microsoft-identity-device-broker.service"
               "${tree}/microsoft-identity-device-broker.service"
               "ExecStart"
@@ -136,6 +143,9 @@ let
             ${lib.concatMapStrings (assertUnit name userTree) userUnits}
             if [ ! -e ${esc "${userTree}/graphical-session.target.wants/intune-agent.timer"} ]; then
               ${fail "${name}: graphical-session.target.wants does not hold intune-agent.timer"}
+            fi
+            if ! grep -q '^OnUnitActiveSec=' ${esc "${userTree}/intune-agent.timer"}; then
+              ${fail "${name}: intune-agent.timer no longer carries the packaged check-in schedule"}
             fi
             ${recordEntry name "intune-agent.service" "${userTree}/intune-agent.service" "ExecStart"}
           ''
@@ -266,9 +276,13 @@ let
         (
           unitTree:
           lib.optionalString (unitTree != null) ''
-            if ls ${esc unitTree} | grep -Eq '^(intune|microsoft-identity)'; then
-              ${fail "${name}: an Intune or identity broker unit exists with my.intune.enable off"}
-            fi
+            # A loop, not `ls | grep -q`: under the builder's pipefail an early
+            # grep match kills ls, and the pipeline then reads as no match.
+            for unit in ${esc unitTree}/intune* ${esc unitTree}/microsoft-identity*; do
+              if [ -e "$unit" ]; then
+                ${fail "${name}: an Intune or identity broker unit exists with my.intune.enable off"}
+              fi
+            done
           ''
         )
         [
@@ -285,7 +299,10 @@ let
           failed=1
         fi
       done
-      if [ -e ${esc "${homePath}/bin/microsoft-edge"} ]; then
+      homePath=${esc homePath}
+      if [ -z "$homePath" ]; then
+        ${fail "${name}: the configuration builds no h82 user environment to check for Edge"}
+      elif [ -e "$homePath/bin/microsoft-edge" ]; then
         ${fail "${name}: home.path carries bin/microsoft-edge with my.intune.enable off"}
       fi
     '';
