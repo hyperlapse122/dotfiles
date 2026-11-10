@@ -1,7 +1,7 @@
 """Prove Ghostty installation and native interfaces on disposable hosted runners.
 
 This does not prove graphical launches, password entry, or macOS approval UI.
-Ubuntu account changes use a temporary account; macOS associations are read only.
+Linux account changes use a temporary account; macOS associations are read only.
 """
 
 import argparse
@@ -40,7 +40,7 @@ def target():
 
 
 @contextmanager
-def ubuntu_account(root):
+def disposable_account(root):
     username = "dotfiles-ghostty-" + secrets.token_hex(4)
     home = root / "account"
     run(["sudo", "useradd", "--create-home", "--home-dir", home,
@@ -55,7 +55,7 @@ def as_account(username, home, arguments):
     return ["sudo", "--user", username, "--", "env", "HOME=" + str(home),
             "XDG_CONFIG_HOME=" + str(home / ".config"), "SHELL=/bin/zsh",
             "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-            "XDG_CURRENT_DESKTOP=ubuntu:GNOME", "XDG_SESSION_TYPE=", "XTE_CACHE_ENABLED=0", *arguments]
+            "XDG_CURRENT_DESKTOP=KDE", "XDG_SESSION_TYPE=", *arguments]
 
 
 def verify_terminal_status(status):
@@ -63,7 +63,7 @@ def verify_terminal_status(status):
                if line.startswith("Terminal environment PENDING:")]
     allowed = {
         "Terminal environment PENDING: The systemd user-manager environment is unavailable; verify in a desktop session.",
-        "Terminal environment PENDING: Native GNOME acceptance remains unverified: check Ctrl+Alt+T, the Files terminal action, and a Terminal=true launcher in a fresh desktop session.",
+        "Terminal environment PENDING: Native KDE Plasma acceptance remains unverified: check Default Applications, Ctrl+Alt+T, Dolphin Open Terminal Here, and a Terminal=true launcher in a fresh desktop session.",
     }
     if status.returncode == 0 and not pending:
         return
@@ -71,9 +71,9 @@ def verify_terminal_status(status):
         raise RuntimeError("Unexpected native terminal state:\n" + status.stdout + status.stderr)
 
 
-def ubuntu_smoke(selected, root):
+def fedora_smoke(selected, root):
     run(["python3", REPO / "scripts/linux-platform.py"])
-    version = "26.04"
+    version = platform.freedesktop_os_release()["VERSION_ID"]
     architecture = selected.split("-", 1)[1]
     run(["/bin/sh", REPO / "scripts/install-ghostty.sh", version, architecture])
     ghostty = shutil.which("ghostty")
@@ -94,7 +94,7 @@ def ubuntu_smoke(selected, root):
     root.chmod(0o755)
     helper.chmod(0o644)
     configuration.chmod(0o644)
-    with ubuntu_account(root) as (username, home):
+    with disposable_account(root) as (username, home):
         # Authentication UI is not automated: an administrator changes only the
         # disposable account, then the real non-root reconciler runs as that user.
         run(["sudo", "chsh", "--shell", "/bin/zsh", username])
@@ -108,9 +108,12 @@ def ubuntu_smoke(selected, root):
         status = run(as_account(username, home, [*arguments[:2], "status", *arguments[3:]]),
                      accepted=(0, 2))
         verify_terminal_status(status)
-        desktop_id = run(as_account(username, home, ["xdg-terminal-exec", "--print-id"])).stdout.strip()
-        if desktop_id != DESKTOP_ID:
-            raise RuntimeError(f"Native terminal dispatcher selected {desktop_id!r}")
+        command = next(line[5:] for line in metadata.splitlines() if line.startswith("Exec="))
+        for key, expected in (("TerminalService", DESKTOP_ID), ("TerminalApplication", command)):
+            value = run(as_account(username, home, ["kreadconfig6", "--file", "kdeglobals",
+                                                    "--group", "General", "--key", key])).stdout.strip()
+            if value != expected:
+                raise RuntimeError(f"KDE {key} selected {value!r}")
         print("Native account/default/configuration probes passed; desktop launch remains untested.")
 
 
@@ -143,7 +146,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="ghostty-native-") as temporary:
         root = Path(temporary).resolve()
         if selected.startswith("linux-"):
-            ubuntu_smoke(selected, root)
+            fedora_smoke(selected, root)
         else:
             macos_smoke(root)
 
