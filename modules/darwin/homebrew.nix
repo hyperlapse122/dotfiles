@@ -21,6 +21,10 @@ in
     enable = true;
     taps = lib.unique (map tapOf thirdParty);
     inherit casks;
+    brews = [
+      "aria2"
+      "container"
+    ];
     onActivation = {
       # Apps installed outside the list stay installed.
       cleanup = "none";

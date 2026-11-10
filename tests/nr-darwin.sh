@@ -59,6 +59,7 @@ exec "\$@"
 EOF
 cat >"$system_out/activate" <<EOF
 #!$bash_bin
+[[ \$PWD == "$repo" ]] || exit 98
 printf 'activate %s\n' "\$0" >>"$log"
 EOF
 chmod +x "$stubs/nix" "$stubs/nix-env" "$stubs/sudo" "$system_out/activate"

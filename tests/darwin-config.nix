@@ -1,126 +1,4 @@
-/*
-  Check interface:
-
-    import ./tests/darwin-config.nix { inherit pkgs self linuxFixtures darwinFixtures; }
-
-  `linuxFixtures` and `darwinFixtures` are tests/lib/linux-fixtures.nix and
-  tests/lib/darwin-fixtures.nix. Evaluates the macOS fixture hosts on Linux,
-  where no darwin derivation can be built, and renders what their options say
-  into the builder. The materialized generation is read on a macOS builder by
-  tests/darwin-outputs.nix.
-
-  - Host discovery: every fixture whose host.nix names kind darwin is a macOS
-    fixture and no other kind is; every macOS fixture yields a production and
-    a bootstrap output.
-  - GUI apps (modules/shared/darwin-apps.nix): every package a NixOS user has and no
-    non-NixOS Linux fixture has, plus the 1Password GUI where NixOS enables
-    it, has a macOS decision, and each decision is exactly one of a cask, a
-    Nix package, or left out. The set is derived from the evaluated
-    configurations, so a package added on NixOS fails here until it has one.
-    Telegram maps to the telegram-desktop cask, the NixOS client, and the
-    telegram cask (Telegram for macOS) is absent.
-  - Homebrew: the casks are exactly the mapping's casks plus its macOS-only
-    ones; an apply never removes an unlisted app and upgrades listed ones;
-    every third-party cask's tap is tapped and trusted.
-  - The user environment takes the non-NixOS path: production runs the
-    host-secrets steps and bootstrap runs none; ~/.ssh/config names the host
-    key; `nr` is nr-darwin; the YubiKey pinentry is
-    the darwin filter, with pinentry_mac's Keychain checkbox unticked by
-    default; VSCodium's settings live under Application Support; Ghostty has
-    the NixOS font families and no nixpkgs package.
-  - Containers: both variants init one rootful libkrun Podman machine with
-    the configured memory and CPUs, reconcile an existing machine to them,
-    keep the watchdog's VM alive across an agent reload at interactive
-    priority, export the machine's socket to shells and GUI apps, write
-    auth.json, and link `docker` to Podman; production adds the minikube
-    login agent and bootstrap has none. No OrbStack cask, credHelpers merge,
-    or Docker Hub index alias remains.
-  - Codex: the pinned package is installed, the Codex settings merge runs
-    with `--format toml` on ~/.codex/config.toml after installPackages, and
-    `codex` is among the Compound Engineering peers.
-  - Rust: sccache is installed and the Cargo settings merge runs with
-    `--format toml` on ~/.cargo/config.toml after installPackages.
-  - Compound Engineering peers: a login agent enabled at load runs
-    `/bin/sh -c` with exactly two `/bin/launchctl setenv` lines, which set
-    CROSS_MODEL_PEERS, joined with `,` alone, to the set of peers the
-    installed packages call for (tests/lib/cross-model-peers.nix) and
-    CROSS_MODEL_MAX_PEERS to 2; the session variables carry the same two
-    values.
-  - The system layer turns off store auto-optimisation, installs the shared
-    font list, switches appearance automatically with AppleInterfaceStyle
-    unset, and records the host and variant in /etc/nix-config-host.
-  - Xcode: postActivation installs (mas install, then mas get) or upgrades
-    App Store id 497799835 before Home Manager runs, every mas call runs in
-    the primary user's session with SUDO_UID and SUDO_GID, and every mas,
-    xcode-select, and xcodebuild action sits in an `if !` guard, so none can
-    abort the `set -e` activate script. homebrew.masApps stays empty and
-    programs.mas off.
-  - KakaoTalk: after the Xcode step and before Home Manager, postActivation
-    installs (mas install, then mas get) or upgrades App Store id 869223134
-    through its own wrapper in the primary user's session, every call guarded
-    the same way. A failed install names the App Store sign-in, a failed
-    upgrade names the sign-in and the app bundle; unresolved ids name
-    system.primaryUser.
-  - Flighty: after the KakaoTalk step and before Home Manager, the same
-    App Store step installs or upgrades App Store id 1358823008 the same way,
-    with `flighty:` messages.
-  - Retired casks: after the Flighty step and before Home Manager,
-    postActivation uninstalls the installed grok-bot cask with
-    `brew uninstall --cask --force`, never `--zap`, through the absolute brew
-    path under `sudo --preserve-env=PATH --user` for the primary user with
-    brew's prefix on PATH, the way nix-darwin calls brew bundle, since
-    Homebrew refuses to run as root. Only a `brew list` failure with empty
-    stderr or "Error: Cask 'grok-bot' is not installed." counts as no cask;
-    any other failure prints brew's stderr on one line and skips the
-    uninstall. Every brew call sits in an `if !` guard, each branch prints one
-    line, and none exits, so a failure never aborts the apply. The cask has
-    no entry in modules/shared/darwin-apps.nix.
-  - Android SDK: Home Manager links it at ~/Library/Android/sdk and declares
-    no android-sdk data file; ANDROID_HOME and ANDROID_SDK_ROOT name that
-    path, and the PATH assignment gains its emulator directory; the linked
-    SDK builds one arm64-v8a Google APIs image per pinned platform and no
-    x86_64 image.
-  - Mobile devices: my.mobileDevices defaults to one android and no ios
-    device and rejects an empty model or version; the mobileDevices step runs
-    after linkGeneration and calls the mobile-devices helper only outside a
-    dry run, from an `elif !` condition whose branch only echoes, so a
-    failing helper cannot abort activation. The call passes /usr/bin/xcrun,
-    the SDK root, every declared device, and the newest pinned API with an
-    arm64-v8a image, which tests/lib/android-pin.nix reads from the pin. No
-    non-NixOS Linux fixture has the step.
-
-  - Korean skills: Home Manager links the humanizer, grammar-checker, and
-    style-guide directories of the korean-skills-v1.0.0 tree under
-    ~/.claude/skills, ~/.gemini/antigravity-cli/skills, and ~/.codex/skills,
-    each as exactly one enabled file, and the in-tree test-audit skill
-    directory beside them, plus every skill of the pinned compound-engineering
-    input under ~/.gemini/antigravity-cli/skills, and nothing else under those
-    lands under ~/.agents/skills or ~/.gemini/config/skills.
-
-  - TLS inspection CA: my.tlsInspectionCa.enable defaults to false and the
-    fixture enables it. In production, the bundle step runs before the /etc
-    step with this generation's CA bundle as its base, the CA file, the host
-    identity and its owner, and /etc/ssl/nix-config as its output; the trust
-    step runs after it inside an `if !` guard; shells and nix-daemon name /etc/ssl/nix-config/ca-certificates.crt
-    in all six CA variables, a RunAtLoad login agent sets them for GUI apps,
-    and the trait without a CA file fails an assertion. Bootstrap runs no
-    step, has no agent, and keeps nix-darwin's default bundle.
-  - Network recovery: my.networkRecovery.enable defaults to false and the
-    fixture enables it. In production a root daemon runs the packaged script
-    at load and every 5 seconds with /var/db/network-recovery and the
-    Tailscale app's CLI, logging to /var/log/network-recovery.log, newsyslog
-    rotates that log, and the user's session sets
-    CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS to 60000. Bootstrap has none of it.
-  - Dock: the pinned apps are the shared list in order, with the fixture's
-    my.dock.hostApps between ChatGPT and Discord and T3 Code (Nightly) only
-    with my.t3.desktop; Downloads is the one right-side folder, as a fanned
-    stack sorted by date added; recent apps are hidden, the tile size is 32,
-    and position, auto-hide, magnification, and minimize settings are unset.
-
-  Every comparison is rendered into the builder, so a failure names the
-  fixture and the reason instead of aborting evaluation. No darwin store path
-  is interpolated, so the check builds on Linux.
-*/
+# Evaluate Darwin declarations on Linux; run provisioning against recording stubs.
 {
   pkgs,
   self,
@@ -290,13 +168,6 @@ let
       );
       agents = user.launchd.agents;
       agentConfig = name: agents.${name}.config or { };
-      watchdog = agentConfig "podman-machine-podman-machine-default";
-      minikubeAgent = agentConfig "minikube";
-      minikubeArgs = plain (lib.concatStringsSep " " (minikubeAgent.ProgramArguments or [ ]));
-      minikubePath = plain (minikubeAgent.EnvironmentVariables.PATH or "");
-      guiEnvironment = plain (
-        lib.concatStringsSep " " ((agentConfig "container-environment").ProgramArguments or [ ])
-      );
       peers = expectedPeers user.home.packages;
       peerAgent = agents.cross-model-peers or { };
       peerArgs = map plain (peerAgent.config.ProgramArguments or [ ]);
@@ -323,16 +194,6 @@ let
         in
         if lib.length matches == 1 then lib.last (lib.head matches) else null;
       peerSet = value: if value == null then null else sort (lib.splitString "," value);
-      machinesData = plain (activation.podmanMachines.data or "");
-      machineInits = lib.length (lib.filter lib.isList (builtins.split "machine init " machinesData));
-      resourcesStep = activation.podmanMachineResources or { };
-      # The helper stops the machine, so a dry run must reach only the echo.
-      resourcesBranches = lib.splitString "else" (plain (resourcesStep.data or ""));
-      resourcesGuarded =
-        lib.length resourcesBranches == 2
-        && lib.hasInfix "if [[ -v DRY_RUN ]]; then" (lib.head resourcesBranches)
-        && !lib.hasInfix "podman-machine-resources/bin" (lib.head resourcesBranches)
-        && lib.hasInfix "podman-machine-resources/bin" (lib.last resourcesBranches);
       nixApps = lib.attrNames (lib.filterAttrs (_: app: app ? nix) mapping.apps);
       missingNixApps = lib.filter (
         name: !lib.elem name pnames && (name != "t3code-desktop" || user.my.t3.desktop.enable)
@@ -353,7 +214,6 @@ let
       marker = if markerEntry == null then "" else markerEntry.text or "";
       production = !entry.bootstrap;
       primaryUser = config.system.primaryUser;
-      xcodeId = "497799835";
       kakaoTalkId = "869223134";
       flightyId = "1358823008";
       masExe = plain (lib.getExe entry.host.pkgs.mas);
@@ -367,10 +227,7 @@ let
         prefix:
         ''/bin/launchctl asuser "${prefix}Uid" /usr/bin/env SUDO_UID="${prefix}Uid" SUDO_GID="${prefix}Gid" ${masExe} '';
       masLines = lib.filter (lib.hasInfix masExe) rootLines;
-      masWrappers = [
-        "xcodeMas"
-        "appStoreMas"
-      ];
+      masWrappers = [ "appStoreMas" ];
       masWrapperCalls = lib.filter (
         line:
         lib.any (wrapper: lib.hasInfix "${wrapper} " line && !lib.hasPrefix "${wrapper}()" line) masWrappers
@@ -396,15 +253,8 @@ let
         ''echo "retired casks: removed the grok-bot cask" >&2''
         "fi"
       ];
-      xcodeInstall = "if ! xcodeMas install ${xcodeId} && ! xcodeMas get ${xcodeId}; then";
       kakaoInstall = "if ! appStoreMas install ${kakaoTalkId} && ! appStoreMas get ${kakaoTalkId}; then";
       flightyInstall = "if ! appStoreMas install ${flightyId} && ! appStoreMas get ${flightyId}; then";
-      xcodebuildActions = lib.filter (
-        line:
-        lib.hasInfix "-license accept" line
-        || lib.hasInfix "-runFirstLaunch" line
-        || lib.hasInfix "xcode-select -s" line
-      ) rootLines;
       # Where T3 Code's device hub looks when ANDROID_HOME is unset.
       androidSdkRoot = "${config.my.user.home}/Library/Android/sdk";
       # By target, so an entry renamed onto the path is still found.
@@ -510,6 +360,13 @@ let
       platformCount = platform: lib.length (lib.filter (device: device.platform == platform) devices);
     in
     lib.concatStrings [
+      (check (
+        masLines != [ ]
+        && lib.all (
+          line: lib.hasInfix (masAsUser "$appStore") line && lib.hasSuffix " \"$@\"" line
+        ) masLines
+        && lib.all guarded masWrapperCalls
+      ) "${entry.name}: App Store calls must remain guarded in the primary user's session")
       (check config.homebrew.enable "${entry.name}: homebrew is off, so an apply installs none of the casks")
       (check (sort casks == sort expectedCasks)
         "${entry.name}: homebrew.casks is ${builtins.toJSON (sort casks)}, the mapping gives ${builtins.toJSON (sort expectedCasks)}"
@@ -564,55 +421,15 @@ let
         lib.hasInfix "IdentityFile ${user.my.secrets.sshKey}" sshText
         && !lib.hasInfix "IdentityAgent" sshText
       ) "${entry.name}: ~/.ssh/config must name the host key and no agent socket")
-      (check
-        (
-          machineInits == 1
-          && lib.hasInfix "machine init podman-machine-default " machinesData
-          && lib.hasInfix "--rootful" machinesData
-          && lib.hasInfix "--memory 8192" machinesData
-          && lib.hasInfix "--cpus 4" machinesData
-        )
-        "${entry.name}: activation must init exactly podman-machine-default, rootful, with 8192 MiB and 4 CPUs"
-      )
       (check (
-        (user.services.podman.settings.containers.machine.provider or null) == "libkrun"
-        && activation ? podmanContainersConfig
-      ) "${entry.name}: containers.conf must select the libkrun machine provider")
-      (check
-        (
-          lib.elem "podmanMachines" (resourcesStep.after or [ ])
-          && lib.hasInfix "podman-machine-resources" (plain (resourcesStep.data or ""))
-          && lib.hasInfix "podman-machine-default 8192 4" (plain (resourcesStep.data or ""))
-        )
-        "${entry.name}: activation must reconcile the machine to 8192 MiB and 4 CPUs after podmanMachines"
-      )
-      (check resourcesGuarded "${entry.name}: a dry run must not run the machine reconciliation helper")
-      (check (lib.hasInfix "TMPDIR=$(/usr/bin/getconf DARWIN_USER_TEMP_DIR)" (lib.last resourcesBranches)) "${entry.name}: the reconciliation helper must run with the user's temporary directory")
-      (check
-        (
-          (agents.podman-machine-podman-machine-default.enable or false)
-          && (watchdog.AbandonProcessGroup or null) == true
-          && (watchdog.ProcessType or null) == "Interactive"
-          && (watchdog.RunAtLoad or null) == true
-        )
-        "${entry.name}: the machine watchdog must abandon its process group, run at interactive priority, and start at load"
-      )
-      (check
-        (
-          lib.hasSuffix "podman/podman-machine-default-api.sock" (sessionVariables.DOCKER_HOST or "")
-          && sessionVariables ? REGISTRY_AUTH_FILE
-          && (sessionVariables.TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE or null) == "/var/run/docker.sock"
-          && ryukVariables == [ ]
-        )
-        "${entry.name}: the session must name the machine's socket, auth.json and the VM's Docker socket, and no Ryuk privilege variable"
-      )
-      (check (
-        (agents.container-environment.enable or false)
-        && lib.hasInfix "launchctl setenv DOCKER_HOST" guiEnvironment
-        && lib.hasInfix "podman/podman-machine-default-api.sock" guiEnvironment
-        && lib.hasInfix "launchctl setenv TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE" guiEnvironment
-        && ((agentConfig "container-environment").RunAtLoad or null) == true
-      ) "${entry.name}: a login agent must export the machine's socket to GUI apps")
+        !(user.services.podman.enable or false)
+        && !(agents.minikube.enable or false)
+        && !(agents.podman-machine-podman-machine-default.enable or false)
+        && !(agents.container-environment.enable or false)
+        && !(sessionVariables ? DOCKER_HOST)
+        && !(sessionVariables ? REGISTRY_AUTH_FILE)
+        && !(activation ? containersAuth)
+      ) "${entry.name}: Podman automation reached Darwin")
       (check (
         peers != [ ]
       ) "${entry.name}: no installed package calls for a CE peer, so the peer check would cover none")
@@ -638,28 +455,9 @@ let
         )
         "${entry.name}: the session must set CROSS_MODEL_PEERS to ${lib.concatStringsSep "," peers} and CROSS_MODEL_MAX_PEERS to 2"
       )
-      (check (lib.elem "docker-podman-compat" pnames) "${entry.name}: docker must be the Podman link")
       (check (
-        activation ? containersAuth
-      ) "${entry.name}: containersAuth must be wired; native darwin-outputs verifies its effects")
-      (check (dropIns == [ ]) "${entry.name}: the store-linked registries.conf.d drop-in reached macOS")
-      (check
-        (
-          if production then
-            (agents.minikube.enable or false)
-            && lib.hasInfix "minikube-darwin-start" minikubeArgs
-            # The node gets half of the machine: 4096 MiB and 2 CPUs, last.
-            && lib.hasSuffix " 4096 2" minikubeArgs
-            && (minikubeAgent.RunAtLoad or null) == true
-            && (minikubeAgent.KeepAlive.SuccessfulExit or null) == false
-            && (minikubeAgent.AbandonProcessGroup or null) == true
-            && lib.hasInfix "-podman-" minikubePath
-            && lib.hasInfix "-minikube-" minikubePath
-          else
-            !(agents.minikube.enable or false)
-        )
-        "${entry.name}: the minikube login agent must run in production, retried on failure, and never in bootstrap"
-      )
+        !lib.elem "docker-podman-compat" pnames && lib.elem "kubectl" pnames && lib.elem "minikube" pnames
+      ) "${entry.name}: keep Kubernetes clients without Docker compatibility")
       (check (
         lib.elem "nr-darwin" pnames && !lib.elem "nr" pnames && !lib.elem "nr-linux" pnames
       ) "${entry.name}: nr must be nr-darwin")
@@ -696,33 +494,15 @@ let
         lib.hasInfix "host=${entry.fixture}\n" marker
         && lib.hasInfix "variant=${if entry.bootstrap then "bootstrap" else "production"}\n" marker
       ) "${entry.name}: /etc/nix-config-host must record the host and variant")
-      (check (lib.hasInfix homeManagerCall postActivation && masLines != [ ])
-        "${entry.name}: postActivation must run the Xcode step, with mas, before Home Manager's activation"
-      )
-      (check
-        (lib.all (
-          line: lib.hasInfix (masAsUser "$xcode") line || lib.hasInfix (masAsUser "$appStore") line
-        ) masLines)
-        "${entry.name}: every mas call must run through launchctl asuser with SUDO_UID and SUDO_GID of the primary user"
-      )
+      (check (lib.all (name: lib.elem name (map (brew: brew.name) config.homebrew.brews)) [
+        "aria2"
+        "container"
+      ]) "${entry.name}: missing overlay formula")
       (check (
-        lib.elem "xcodeUid=$(/usr/bin/id -u ${primaryUser} 2>/dev/null) || xcodeUid=" rootLines
-        && lib.elem "xcodeGid=$(/usr/bin/id -g ${primaryUser} 2>/dev/null) || xcodeGid=" rootLines
-      ) "${entry.name}: the Xcode step must resolve the uid and gid of ${primaryUser} at activation time")
-      (check
-        (
-          lib.all (line: lib.hasSuffix " \"$@\"" line) masLines
-          && masWrapperCalls != [ ]
-          && lib.all guarded masWrapperCalls
-        )
-        "${entry.name}: every mas call must be guarded by if !, so a failed App Store call cannot abort activation"
-      )
-      (check (lib.elem xcodeInstall rootLines) "${entry.name}: Xcode (497799835) must be installed with mas install, falling back to mas get")
-      (check (lib.elem "elif ! xcodeMas upgrade ${xcodeId}; then" rootLines) "${entry.name}: an installed Xcode must be upgraded with mas upgrade 497799835")
-      (check (lib.any
-        (line: lib.hasPrefix "echo \"xcode: " line && lib.hasInfix "sign in to the App Store" line)
-        rootLines
-      ) "${entry.name}: a failed Xcode install must print a message naming the App Store sign-in")
+        (lib.any (lib.hasInfix "/bin/macos-xcode") rootLines) == production
+        && !lib.hasInfix "xcodeMas" postActivation
+        && (lib.any (lib.hasInfix "/apple-account.yaml") rootLines) == production
+      ) "${entry.name}: Xcode must use runtime SOPS only in production")
       (check
         (
           lib.elem "appStoreUid=$(/usr/bin/id -u ${primaryUser} 2>/dev/null) || appStoreUid=" rootLines
@@ -742,13 +522,6 @@ let
         )
         "${entry.name}: KakaoTalk must be installed when /Applications/KakaoTalk.app is missing and upgraded with mas upgrade 869223134 otherwise"
       )
-      (check (
-        let
-          xcode = lineIndex xcodeInstall;
-          kakao = lineIndex kakaoInstall;
-        in
-        xcode != null && kakao != null && xcode < kakao
-      ) "${entry.name}: the KakaoTalk step must run after the Xcode step and before Home Manager")
       (check (lib.any
         (line: lib.hasPrefix "echo \"kakaotalk: " line && lib.hasInfix "sign in to the App Store" line)
         rootLines
@@ -817,19 +590,6 @@ let
           line: lib.hasPrefix "echo \"flighty: cannot resolve" line && lib.hasInfix "system.primaryUser" line
         ) rootLines)
         "${entry.name}: unresolved ids must print a Flighty message naming system.primaryUser, not the App Store"
-      )
-      (check
-        (
-          lib.length xcodebuildActions == 3
-          && lib.all (
-            line:
-            guarded line
-            && (lib.hasInfix "/usr/bin/xcodebuild " line || lib.hasInfix "/usr/bin/xcode-select " line)
-          ) xcodebuildActions
-          && lib.elem "if ! /usr/bin/xcodebuild -license check >/dev/null 2>&1; then" rootLines
-          && lib.elem "if ! /usr/bin/xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1; then" rootLines
-        )
-        "${entry.name}: xcode-select, the license, and first launch must run by absolute path, only when pending, guarded by if !"
       )
       (check
         (
@@ -1153,29 +913,24 @@ let
         t3:
         [
           "/Applications/Google Chrome.app"
+          "/System/Applications/App Store.app"
           "/System/Applications/Mail.app"
-          "/System/Applications/Messages.app"
-          "/System/Applications/Phone.app"
-          "/System/Applications/FaceTime.app"
-          "/System/Applications/iPhone Mirroring.app"
           "/System/Applications/Calendar.app"
           "/System/Applications/Reminders.app"
           "/System/Applications/Notes.app"
+          "/System/Applications/Messages.app"
+          "/System/Applications/FaceTime.app"
+          "/System/Applications/Phone.app"
           "/System/Applications/Photos.app"
-          "/Applications/Ghostty.app"
-        ]
-        ++ lib.optional t3 "${home}/Applications/Home Manager Apps/${import ../packages/t3code-app-bundle.nix}"
-        ++ [
-          "${home}/Applications/Home Manager Apps/VSCodium.app"
-          "/Applications/Xcode.app"
-          "/Applications/Claude.app"
-          "/Applications/ChatGPT.app"
+          "/System/Applications/Music.app"
+          "/System/Applications/iPhone Mirroring.app"
         ]
         ++ hostApps
+        ++ [ "/Applications/Ghostty.app" ]
+        ++ lib.optional t3 "${home}/Applications/Home Manager Apps/${import ../packages/t3code-app-bundle.nix}"
         ++ [
-          "/Applications/Discord.app"
-          "/Applications/1Password.app"
-          "/System/Applications/System Settings.app"
+          "/Applications/ChatGPT.app"
+          "/Applications/Claude.app"
         ];
       appsOf =
         c:
@@ -1245,20 +1000,41 @@ let
     ) nixosConfigs)
   ];
 in
-pkgs.runCommand "darwin-config" { } ''
-  fail=0
-  ${lib.optionalString (darwinFixtures == [ ]) (
-    fail "tests/fixtures/hosts holds no macOS fixture host"
-  )}
-  ${assertDiscovery}
-  ${assertNoDevicesElsewhere}
-  ${assertZapFilter}
-  ${assertMapping}
-  ${lib.concatMapStrings assertEntry darwinFixtures}
-  ${lib.concatMapStrings assertTlsInspectionCa darwinFixtures}
-  ${lib.concatMapStrings assertNetworkRecovery darwinFixtures}
-  ${lib.concatMapStrings assertDock darwinFixtures}
-  ${assertMobileDeviceTypes}
-  [ "$fail" = 0 ] || exit 1
-  touch "$out"
-''
+pkgs.runCommand "darwin-config"
+  {
+    nativeBuildInputs = [
+      pkgs.python3
+      pkgs.bash
+      pkgs.jq
+    ];
+  }
+  ''
+    python3 ${./test_darwin_provisioning.py} ${../scripts/macos-xcode.py} ${../scripts/macos-container.sh} ${../scripts/macos-container-state.sh} ${
+      pkgs.writeText "darwin-activation-provisioning.json" (
+        builtins.toJSON (
+          map (entry: {
+            inherit (entry) bootstrap;
+            host = entry.host.config.my.hostName;
+            home = entry.host.config.my.user.home;
+            owner = entry.host.config.my.user.name;
+            text = plain entry.host.config.system.activationScripts.postActivation.text;
+          }) darwinFixtures
+        )
+      )
+    }
+    fail=0
+    ${lib.optionalString (darwinFixtures == [ ]) (
+      fail "tests/fixtures/hosts holds no macOS fixture host"
+    )}
+    ${assertDiscovery}
+    ${assertNoDevicesElsewhere}
+    ${assertZapFilter}
+    ${assertMapping}
+    ${lib.concatMapStrings assertEntry darwinFixtures}
+    ${lib.concatMapStrings assertTlsInspectionCa darwinFixtures}
+    ${lib.concatMapStrings assertNetworkRecovery darwinFixtures}
+    ${lib.concatMapStrings assertDock darwinFixtures}
+    ${assertMobileDeviceTypes}
+    [ "$fail" = 0 ] || exit 1
+    touch "$out"
+  ''

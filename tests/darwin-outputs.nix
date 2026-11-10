@@ -1,92 +1,4 @@
-/*
-  Check interface:
-
-    import ./tests/darwin-outputs.nix { inherit pkgs darwinFixtures darwinConfigurations; }
-
-  `pkgs` is nixpkgs for aarch64-darwin and `darwinFixtures` is
-  tests/lib/darwin-fixtures.nix. Builds on a macOS builder only, and reads
-  what the macOS fixture hosts materialize, both variants, where
-  tests/darwin-config.nix reads their options on Linux:
-
-  - the Home Manager activation script stages host secrets before
-    writeBoundary and publishes them after linkGeneration, in production
-    only;
-  - the session names the Podman machine's API socket and no Ryuk privilege
-    variable, the generation links no containers/ or systemd user file, the
-    containers.conf activation installs selects libkrun, `docker` is the
-    profile's `podman`, the machine watchdog's agent abandons its process
-    group at interactive priority, a login agent exports the socket to GUI
-    apps, and the minikube login agent exists in production only;
-  - the session and a login agent at load set CROSS_MODEL_PEERS to the
-    peers the installed packages call for (tests/lib/cross-model-peers.nix),
-    codex among them, and CROSS_MODEL_MAX_PEERS to 2;
-  - a login agent at load sets CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS
-    to 1 for GUI apps, both variants;
-  - gpg-agent.conf names the darwin pinentry filter, whose proxy delegates to
-    pinentry_mac, with both cache TTLs at 0, and scdaemon.conf is the shared
-    one; activation imports pinentry_mac's defaults with UseKeychain false;
-  - Ghostty's config lists the NixOS font families in order;
-  - `nr` on PATH is nr-darwin;
-  - serve-html on PATH is the packaged helper the shared instructions name;
-  - agy on PATH is the pinned Antigravity CLI, agy_acp_server.par execs the
-    runtime built from packages/antigravity-acp-release.json and sets no
-    SSL_CERT_FILE, because the macOS .par finds its CA bundle itself, and
-    localharness_external beside it is that runtime's;
-  - the VSCodium settings merge targets Application Support;
-  - grok on PATH resolves to the grok-build wrapper, and the profile has no
-    `agent` executable;
-  - sccache is on PATH, and the Cargo settings merge updates
-    ~/.cargo/config.toml with the profile sccache wrapper while preserving
-    unowned state;
-  - ~/Library/Android/sdk holds what T3 Code's device hub needs:
-    cmdline-tools/latest/bin/avdmanager, platform-tools/adb, an arm64-v8a
-    Google APIs system.img for every platform the pin file names, and an
-    emulator/emulator wrapper that defaults ANDROID_HOME and ANDROID_SDK_ROOT
-    to ~/Library/Android/sdk before it execs the store emulator; the session
-    sets ANDROID_HOME and ANDROID_SDK_ROOT to that path, and its PATH
-    assignment gains the emulator directory;
-  - the activation script runs the mobileDevices step after linkGeneration,
-    and it calls the built mobile-devices helper with /usr/bin/xcrun, the SDK
-    root, a --java-home whose bin/java runs, every declared device, and the
-    newest pinned API with an arm64-v8a image;
-  - with my.t3.desktop.enable, the T3 Code nightly bundle is in the profile,
-    its main executable is byte-identical to the release zip's, and a launch
-    agent sets T3CODE_DISABLE_AUTO_UPDATE=1;
-  - the system's nix.conf keeps store auto-optimisation off,
-    /etc/nix-config-host records the host and variant, the Brewfile lists the
-    expected casks, the shared fonts are installed, and activation turns on
-    automatic appearance without pinning AppleInterfaceStyle;
-  - running the activation's user-defaults block with stub commands writes,
-    as the primary user, exactly the Dock's persistent-apps,
-    persistent-others, show-recents, and tilesize, each with the value its
-    option holds, then restarts that user's Dock; nothing else in activation
-    touches com.apple.dock;
-  - the system activate script runs the Xcode step, mas through launchctl
-    asuser for App Store id 497799835, after brew bundle and before the Home
-    Manager activation call, then the KakaoTalk step for App Store id
-    869223134, through its own launchctl asuser wrapper, then the Flighty
-    step for App Store id 1358823008, before that call;
-  - the retired-cask step runs after the Flighty step and before the Home
-    Manager activation call, with every brew call going through /usr/bin/sudo
-    as the primary user with the absolute brew path; it uninstalls the
-    grok-bot and orca casks, then untaps stablyai/orca, which
-    tests/retired-brew-effects.py runs against a recording brew stub;
-  - with the TLS inspection CA trait, production shells and a RunAtLoad
-    login agent set all six CA variables to
-    /etc/ssl/nix-config/ca-certificates.crt, nix-daemon's plist names it, the
-    bundle step runs before /etc and the trust step after; bootstrap keeps
-    the default bundle and has neither step nor agent;
-  - with the network recovery trait, production loads a root daemon at load
-    and every 5 seconds that runs the packaged network-recovery script with
-    /var/db/network-recovery and the Tailscale app's CLI, logging to
-    /var/log/network-recovery.log, which newsyslog rotates; bootstrap has
-    neither the daemon nor the rotation entry;
-  - the nix-homebrew setup script is built with autoMigrate on, so the first
-    apply takes over an existing /opt/homebrew instead of stopping.
-
-  Every comparison is rendered into the builder, so a failure names the
-  fixture and the reason.
-*/
+# Inspect materialized Darwin systems and Home Manager generations on macOS.
 {
   pkgs,
   self,
@@ -254,8 +166,6 @@ let
         assert target.read_bytes() == protected, "Cargo activation altered protected malformed input"
   '';
 
-  authEffects = ./lib/containers-auth-effects.py;
-
   # Runs the activation's user-defaults block with stub commands and compares
   # its Dock writes with the Dock options; tests/darwin-config.nix owns what
   # those options must be.
@@ -344,36 +254,12 @@ let
           || bad "bootstrap must run no host-secrets step"
       fi
       [ "$(step dockerCredHelpers)" = "" ] || bad "the OrbStack credHelpers merge still runs"
-      authBlock=$TMPDIR/containers-auth-$variant.sh
-      stepBlock containersAuth > "$authBlock"
-      if ! python3 ${authEffects} "$authBlock"; then
-        bad "containersAuth effect contract failed"
-      fi
-
-
+      [ "$(step containersAuth)" = "" ] || bad "Podman auth activation reached Darwin"
       vars=$gen/home-path/etc/profile.d/hm-session-vars.sh
-      [ -f "$vars" ] || bad "no hm-session-vars.sh in the profile"
-      grep -q 'DOCKER_HOST=.*podman/podman-machine-default-api.sock' "$vars" \
-        || bad "DOCKER_HOST does not name the Podman machine's API socket"
-      grep -q 'REGISTRY_AUTH_FILE=' "$vars" || bad "REGISTRY_AUTH_FILE is not in the session"
-      grep -q 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=.*/var/run/docker.sock' "$vars" \
-        || bad "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE does not name the VM's Docker socket"
-      for v in TESTCONTAINERS_RYUK_PRIVILEGED TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED; do
-        if grep -q "$v=" "$vars"; then bad "the Linux Ryuk variable $v reached the session"; fi
-      done
-      # The VM mounts ~/.config/containers, where a store link would dangle.
-      [ ! -e "$gen/home-files/.config/containers" ] || bad "store-linked containers/ files reached macOS"
-      [ ! -e "$gen/home-files/.config/systemd" ] || bad "systemd user files reached macOS"
-
-      containersconf=$(grep -o -m1 '/nix/store/[a-z0-9]*-containers.conf' "$gen/activate" || true)
-      if [ -z "$containersconf" ]; then
-        bad "activation installs no containers.conf"
-      else
-        grep -qx 'provider *= *"libkrun"' "$containersconf" \
-          || bad "containers.conf does not select the libkrun machine provider"
+      if grep -Eq '^export (DOCKER_HOST|REGISTRY_AUTH_FILE|TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE)=' "$vars"; then
+        bad "Podman session variables reached Darwin"
       fi
-      [ "$(readlink -f "$gen/home-path/bin/docker")" = "$(readlink -f "$gen/home-path/bin/podman")" ] \
-        || bad "docker on PATH is not the profile's podman"
+      [ ! -e "$gen/home-path/bin/docker" ] || bad "Podman docker wrapper reached Darwin"
 
       if [ -d "$gen/LaunchAgents" ]; then
         if find -L "$gen/LaunchAgents" -type f -iname '*chatgpt*' -print | grep . >/dev/null \
@@ -384,18 +270,8 @@ let
 
       # A plist with its whitespace removed, so a key and its value are adjacent.
       agent() { tr -d ' \t\n' 2>/dev/null < "$gen/LaunchAgents/org.nix-community.home.$1.plist" || true; }
-      watchdog=$(agent podman-machine-podman-machine-default)
-      case $watchdog in *'<key>AbandonProcessGroup</key><true/>'*) ;; *) bad "the machine watchdog does not abandon its process group" ;; esac
-      case $watchdog in *'<key>ProcessType</key><string>Interactive</string>'*) ;; *) bad "the machine watchdog does not run at interactive priority" ;; esac
-      guienv=$(agent container-environment)
-      case $guienv in
-        *'launchctlsetenvDOCKER_HOST'*podman/podman-machine-default-api.sock*) ;;
-        *) bad "no login agent exports the machine's socket to GUI apps" ;;
-      esac
-      case $guienv in
-        *'launchctlsetenvTESTCONTAINERS_DOCKER_SOCKET_OVERRIDE/var/run/docker.sock'*) ;;
-        *) bad "no login agent exports the VM's Docker socket to GUI apps" ;;
-      esac
+      [ -z "$(agent podman-machine-podman-machine-default)" ] || bad "Podman watchdog reached Darwin"
+      [ -z "$(agent container-environment)" ] || bad "Podman GUI agent reached Darwin"
       grep -Fxq 'export CROSS_MODEL_PEERS="${peers}"' "$vars" \
         || bad "the session does not set CROSS_MODEL_PEERS to ${peers}"
       grep -Fxq 'export CROSS_MODEL_MAX_PEERS="2"' "$vars" || bad "the session does not set CROSS_MODEL_MAX_PEERS to 2"
@@ -410,15 +286,8 @@ let
         *'exec/bin/launchctlsetenvCLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS1</string></array>'*'<key>RunAtLoad</key><true/>'*) ;;
         *) bad "no login agent sets CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS to 1 for GUI apps" ;;
       esac
-      minikube=$(agent minikube)
-      if [ "$production" = 1 ]; then
-        case $minikube in *minikube-darwin-start*'<key>RunAtLoad</key><true/>'*) ;; *) bad "the minikube login agent is missing" ;; esac
-        case $minikube in *'<key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>'*) ;; *) bad "the minikube login agent is not retried after a failure" ;; esac
-        case $minikube in *'<key>AbandonProcessGroup</key><true/>'*) ;; *) bad "the minikube login agent does not abandon its process group" ;; esac
-        case $minikube in *'<key>PATH</key><string>/nix/store/'*-podman-*'/bin:/nix/store/'*-minikube-*'/bin:/usr/bin:/bin</string>'*) ;; *) bad "the minikube login agent's PATH lacks podman or minikube" ;; esac
-      else
-        [ -z "$minikube" ] || bad "bootstrap has a minikube login agent"
-      fi
+      [ -z "$(agent minikube)" ] || bad "minikube agent reached Darwin"
+      [ -x "$gen/home-path/bin/kubectl" ] && [ -x "$gen/home-path/bin/minikube" ] || bad "Kubernetes clients missing"
 
       agentconf=$gen/home-files/.gnupg/gpg-agent.conf
       gitgpg=$(${pkgs.git}/bin/git config --file "$gen/home-files/.config/git/config" --get-regexp '^gpg\.(openpgp\.)?program$' | tail -n1 | cut -d' ' -f2- || true)
@@ -685,6 +554,8 @@ let
       if [ -z "$brewfile" ]; then
         bad "the system activation runs no brew bundle"
       else
+        grep -Fxq 'brew "container"' "$brewfile" || bad "container formula missing"
+        grep -Fxq 'brew "aria2"' "$brewfile" || bad "aria2 formula missing"
         casks=$(sed -n 's/^cask "\([^"]*\)".*/\1/p' "$brewfile" | sort | tr '\n' ' ')
         [ "$casks" = ${lib.escapeShellArg "${lib.concatStringsSep " " expectedCasks} "} ] \
           || bad "the Brewfile lists casks: $casks"
@@ -697,11 +568,10 @@ let
         bad "the nix-homebrew setup would stop on an existing Homebrew installation"
       fi
       # The Xcode step runs after brew bundle and before Home Manager, the last
-      # point that still runs as root; mas runs in the primary user's session.
+      # point that still runs as root; xcodes runs as the primary user.
       lineof() { grep -nF -m1 -- "$1" "$sys/activate" | cut -d: -f1 || true; }
       bundleline=$(lineof "brew bundle --file="); bundleline=''${bundleline:-0}
-      masline=$(lineof ${lib.escapeShellArg ''/bin/launchctl asuser "$xcodeUid" /usr/bin/env SUDO_UID="$xcodeUid" SUDO_GID="$xcodeGid" ${masExe} "$@"''}); masline=''${masline:-0}
-      installline=$(lineof 'if ! xcodeMas install 497799835 && ! xcodeMas get 497799835; then'); installline=''${installline:-0}
+      installline=$(lineof '/bin/macos-xcode'); installline=''${installline:-0}
       kakaomasline=$(lineof ${lib.escapeShellArg ''/bin/launchctl asuser "$appStoreUid" /usr/bin/env SUDO_UID="$appStoreUid" SUDO_GID="$appStoreGid" ${masExe} "$@"''}); kakaomasline=''${kakaomasline:-0}
       kakaoline=$(lineof 'if ! appStoreMas install 869223134 && ! appStoreMas get 869223134; then'); kakaoline=''${kakaoline:-0}
       flightyline=$(lineof 'if ! appStoreMas install 1358823008 && ! appStoreMas get 1358823008; then'); flightyline=''${flightyline:-0}
@@ -711,14 +581,15 @@ let
       hmline=$(lineof "echo Activating home-manager configuration for "); hmline=''${hmline:-0}
       if [ "$bundleline" = 0 ] || [ "$hmline" = 0 ]; then
         bad "the system activation has no brew bundle or Home Manager activation call"
-      elif [ "$masline" = 0 ] || [ "$installline" = 0 ]; then
-        bad "the system activation has no Xcode step running mas through launchctl asuser for 497799835"
-      elif ! [ "$bundleline" -lt "$masline" ] || ! [ "$masline" -lt "$installline" ] || ! [ "$installline" -lt "$hmline" ]; then
-        bad "the Xcode step does not run after brew bundle and before Home Manager"
+      fi
+      if [ "$production" = 1 ]; then
+        [ "$installline" -gt "$bundleline" ] && [ "$installline" -lt "$hmline" ] || bad "Xcode ordering is wrong"
+      else
+        [ "$installline" = 0 ] || bad "bootstrap runs Xcode"
       fi
       if [ "$kakaomasline" = 0 ] || [ "$kakaoline" = 0 ]; then
         bad "the system activation has no KakaoTalk step running mas through launchctl asuser for 869223134"
-      elif ! [ "$installline" -lt "$kakaomasline" ] || ! [ "$kakaomasline" -lt "$kakaoline" ] || ! [ "$kakaoline" -lt "$hmline" ]; then
+      elif ! [ "$kakaomasline" -lt "$kakaoline" ] || ! [ "$kakaoline" -lt "$hmline" ]; then
         bad "the KakaoTalk step does not run after the Xcode step and before Home Manager"
       fi
       if [ "$flightyline" = 0 ]; then

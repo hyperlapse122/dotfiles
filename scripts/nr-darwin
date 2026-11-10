@@ -136,4 +136,4 @@ nix_env=$(command -v nix-env) || die 'nix-env is not on PATH'
 
 sudo -v
 sudo -- "$nix_env" -p "$PROFILE" --set "$system_out"
-sudo -- "$system_out/activate"
+(cd -- "$flake_dir" && sudo -- "$system_out/activate")

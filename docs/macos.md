@@ -12,9 +12,9 @@ Before the first setup, have:
 
 - the host directory and its secrets pushed to `main`;
 - an administrator account on the Mac, for `sudo`;
-- an Apple Account for the Mac App Store, which Xcode, KakaoTalk, and Flighty come from;
+- an Apple Account for Xcode downloads and a signed-in Mac App Store for KakaoTalk and Flighty;
 - one of the three YubiKeys and its PIN, for the identity recovery in step 10;
-- network and time for the first apply, which downloads Homebrew, every cask, the Podman machine image, Xcode, KakaoTalk, Flighty, an iOS Simulator runtime, and the Android SDK;
+- network and time for the first apply, which downloads Homebrew, every cask, the Apple container kernel, Xcode (on the production apply), KakaoTalk, Flighty, an iOS Simulator runtime, and the Android SDK;
 - no directory at `~/Library/Android/sdk`, where Android Studio installs its SDK by default. Home Manager links the SDK there and stops the apply when it finds a real directory in the way. Move an existing one aside with `mv ~/Library/Android/sdk ~/Library/Android/sdk.before-nix-config`.
 
 ## What the configuration manages
@@ -25,12 +25,12 @@ The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` 
 - **Host marker.** `/etc/nix-config-host` records the host name and whether the bootstrap or production output is applied. `nr` reads the host from it, so the name macOS shows for the machine does not matter.
 - **Homebrew.** nix-homebrew installs Homebrew on the first apply, or migrates one already at `/opt/homebrew` in place. The casks come from `modules/shared/darwin-apps.nix`: Ghostty, 1Password, Google Chrome, Claude Desktop, ChatGPT, and the other GUI apps, plus Parallels Desktop, which has no NixOS counterpart, and the Tailscale app, which NixOS hosts run as a system service instead. Cleanup is `"none"`, so an app you installed by hand stays installed. Each apply installs missing casks and upgrades outdated ones. Installing Parallels Desktop runs a privileged setup step, so the apply that installs it may ask for your administrator password. Its license is not managed here: enter your key, such as an education key, in Parallels Desktop after that apply. Tailscale installs from a package, so its first apply may also ask for the password. Nothing registers the Mac on the tailnet: open Tailscale, allow its system extension in System Settings → Privacy & Security when macOS asks, and log in in the app. Launch at login, exit nodes, and accepting subnet routes are settings in the app, not in this repository.
 - **Retired casks.** Homebrew cleanup is `"none"`, so dropping a cask from `modules/shared/darwin-apps.nix` leaves it installed. `modules/darwin/retired-casks.nix` is a root step after the Mac App Store app step that uninstalls each retired cask when it is installed, today `grok-bot`. It runs `brew uninstall --cask --force` as the primary user, because Homebrew refuses to run as root, with brew's prefix on a `PATH` that `sudo --preserve-env=PATH` keeps, the way nix-darwin calls `brew bundle`. It never passes `--zap`, so a cask's `~/Library` data stays. Only a `brew list` failure with no error output, or with `Error: Cask '<token>' is not installed.`, counts as the cask being absent; any other failure prints brew's error and the command to run. It prints one line per outcome and never fails the apply. Grok Bot's app data in `~/Library` and `~/.grok` stay in place; delete them manually and revoke the xAI grant if desired.
-- **Xcode.** Xcode is one of the three Mac App Store apps the configuration manages. `modules/darwin/xcode.nix` installs it with `mas` after the casks, or upgrades it when the App Store has a newer version, so the App Store decides the version. When `xcode-select` points at the Command Line Tools or nowhere, the step points it at Xcode. The step also accepts the license and runs first-launch setup when either is pending. It needs the App Store signed in; see step 6.
-- **KakaoTalk and Flighty.** The other two Mac App Store apps. `modules/darwin/app-store.nix` installs each with `mas` after Xcode, KakaoTalk first, or upgrades it when the App Store has a newer version. A copy already installed from the App Store is kept and upgraded in place. Signing in to KakaoTalk or Flighty itself is done in the app. Like Xcode, both need the App Store signed in. To add another App Store app, add its name, App Store id, and message prefix to the list in that file; the name must match the app's bundle in `/Applications`.
+- **Xcode.** Production activation runs the flake-pinned `xcodes` 2.1.0 after Homebrew. It selects the newest Apple Silicon release across stable and prerelease channels from xcodereleases.com, checks the required macOS version, verifies the installed build and signature, completes license and first-launch setup, checks the compiler and SDK, then switches the developer directory. It decrypts `secrets/hosts/<host>/apple-account.yaml` from the applying checkout in memory using the primary user's mode-0600 age identity. Only the installer receives `XCODES_USERNAME` and `XCODES_PASSWORD`; interactive 2FA or administrator prompts may appear. Bootstrap skips this step. Xcode has no second `mas` updater. A failed update stops activation and retains the previous developer selection.
+- **KakaoTalk and Flighty.** The two managed Mac App Store apps. `modules/darwin/app-store.nix` installs each with `mas` after Xcode, KakaoTalk first, or upgrades it when the App Store has a newer version. A copy already installed from the App Store is kept and upgraded in place. Signing in to KakaoTalk or Flighty itself is done in the app. Both need the App Store signed in. To add another App Store app, add its name, App Store id, and message prefix to the list in that file; the name must match the app's bundle in `/Applications`.
 - **Android SDK.** A Mac gets the same pinned Android SDK as a Linux x86_64 host, from `packages/android-sdk.nix`, built for Apple silicon with `arm64-v8a` system images. It sits at `~/Library/Android/sdk`, a read-only link into the Nix store. `ANDROID_HOME` and `ANDROID_SDK_ROOT` point there. An SDK Android Studio already installed at that path must be moved aside before the first apply; see the prerequisites above.
 - **Mobile devices.** The iOS Simulators and Android Virtual Devices listed in `my.mobileDevices`; see [Mobile devices](#mobile-devices).
 - **Nix apps.** VSCodium and the T3 Code desktop app come from Nix. Home Manager copies their bundles into `~/Applications/Home Manager Apps`.
-- **Containers.** One Podman machine, with minikube inside it on production outputs; see [Containers](#containers).
+- **Containers.** Apple's `container` CLI, with no automatic Kubernetes cluster; see [Containers](#containers).
 - **Fonts.** The NixOS font list is installed system-wide.
 - **System defaults.** `modules/darwin/defaults.nix` is where Dock, Finder, trackpad, and keyboard defaults go. It sets none yet.
 - **User environment.** zsh, Git, the development tools, Claude Code and the other agents, configured as on a non-NixOS Linux host.
@@ -83,9 +83,9 @@ Run these steps on the Mac, in order, from a local login session, not over SSH.
 
    It must print exactly one name. When it prints none, the Mac has no host directory yet; see [adding a host](adding-a-host.md#macos-hosts). When it prints more than one, set `host` to the right one by hand.
 
-6. Open the App Store app and sign in with your Apple Account. The apply downloads Xcode, KakaoTalk, and Flighty with the App Store account signed in to your login session, so it cannot install them until you sign in. On a Mac where you already installed any of them from the App Store, apply keeps that copy and upgrades it in place.
+6. Open the App Store app and sign in with your Apple Account. The apply downloads KakaoTalk and Flighty with the App Store account signed in to your login session. Xcode uses the separate encrypted Apple account on the production apply. On a Mac where you already installed either app from the App Store, apply keeps that copy and upgrades it in place.
 
-   Without the sign-in, the apply still succeeds. It prints a line for each app asking you to sign in to the App Store, skips Xcode, KakaoTalk, Flighty, and the iOS Simulators, and sets up everything else, the Android SDK and Android Virtual Devices included. Sign in later and apply again to add them.
+   Without the sign-in, the apply still succeeds. It prints a line for each app asking you to sign in to the App Store, skips KakaoTalk and Flighty, and sets up everything else, the Android SDK and Android Virtual Devices included. Sign in later and apply again to add them.
 
 7. Apply the bootstrap output. `nr` is not installed yet, so run nix-darwin's `darwin-rebuild` from its flake. With `nix.conf` moved aside, flakes are not enabled yet, so the command enables them for this one run:
 
@@ -95,7 +95,7 @@ Run these steps on the Mac, in order, from a local login session, not over SSH.
      switch --flake ".#$host-bootstrap"
    ```
 
-   This apply also installs Homebrew, the casks, Xcode, KakaoTalk, and Flighty, creates the Podman machine, and creates the declared Android Virtual Device, so it takes a while and needs network. It writes `/etc/nix-config-host`, which records the host from now on, and installs GPG, the card tools, `install-user-age-identity`, and `nr`. Open a new terminal afterwards, so they are on `PATH`.
+   This apply also installs Homebrew, the casks, KakaoTalk, and Flighty, prepares the Apple container runtime, and creates the declared Android Virtual Device, so it takes a while and needs network. It writes `/etc/nix-config-host`, which records the host from now on, and installs GPG, the card tools, `install-user-age-identity`, and `nr`. Open a new terminal afterwards, so they are on `PATH`.
 
 8. Give the terminal you apply from the App Management permission, in System Settings > Privacy & Security > App Management. From the second apply on, Home Manager updates the app bundles it copied into `~/Applications/Home Manager Apps`, and its `copyApps` check aborts the activation when the terminal cannot modify them. Apply from a local GUI session, not over SSH: over SSH, the same check aborts unless remote users have Full Disk Access.
 
@@ -230,23 +230,13 @@ The log is `/var/log/network-recovery.log`, rotated by `newsyslog`. Each line na
 
 ## Containers
 
-A Mac runs containers in one Podman machine, `podman-machine-default`: a rootful Fedora CoreOS VM on the libkrun provider with 4 CPUs and an 8 GiB memory cap. Every apply, bootstrap included, creates it when it is missing, and a launch agent starts it at login and whenever it stops. No app needs launching and no account signs in.
+A Mac uses Apple's `container` formula. Explicit activation starts a stopped API with automatic kernel installation disabled, installs the recommended kernel, and registers the Homebrew login service. An already-running API and its kernel stay untouched. A failed kernel preparation leaves a pending marker and fails the apply until it is resolved.
 
-- **Memory.** 8 GiB is a cap, not a reservation. The VM holds host memory only while the guest uses it, and libkrun hands pages the guest frees back to macOS. macOS reclaims them lazily, so Activity Monitor can keep showing the old size until memory gets tight. Changing the cap or the CPUs in `home/h82/dev/containers.nix` reaches the existing machine on the next apply: the apply stops the machine, changes it, and the launch agent starts it again.
-- **minikube.** On a production output, a second launch agent waits until the machine answers, then starts the `minikube` cluster on the Podman driver with containerd, 4 GiB, and 2 CPUs. A failed start is retried every minute; its log is `~/Library/Logs/minikube.log`. A bootstrap output starts no cluster. A cluster that stops mid-session, for example after the machine restarts, comes back at the next login or with `minikube start`.
-- **docker.** `docker` is a link to `podman`, as on NixOS, and `DOCKER_HOST` names the machine's API socket under the per-user temporary directory, for shells and for apps launched from Finder or the Dock. Testcontainers works with no other setting.
-- **Registry credentials.** `~/.config/containers/auth.json` maps `ghcr.io`, `registry.gitlab.com`, and `registry.jpi.app` to `docker-credential-sops`, so `podman pull` and `docker pull` fetch private images with no login (`secrets/README.md` lists the required `read:packages` and `read_registry` token scopes). `docker.io` pulls stay anonymous. A Docker API client that pulls a private image without sending credentials itself makes the VM look for the helper, which only the Mac has, so that pull fails.
-- **Other machines.** The configuration manages only `podman-machine-default`, and every apply deletes any other Podman machine. Create containers, not machines.
+`kubectl`, Helm, and `minikube` remain available as clients. Activation starts no cluster. Apple `container` does not provide the Podman Docker socket or the old `docker` compatibility link, so Docker API clients and Testcontainers need a separately chosen compatible runtime. No existing Podman machines or their data are deleted by this configuration.
 
-### Moving off OrbStack
+Use `container registry login` for Apple's native Keychain credentials. `docker-credential-sops` remains available for explicit Docker-protocol consumers, but Apple `container` does not read the old Podman `auth.json` routing, which activation no longer creates. Existing credential files are left in place.
 
-A Mac set up before this change still has OrbStack installed: the apply no longer lists the cask, and Homebrew cleanup is `"none"`, so nothing removes it. When you no longer need its containers and images, remove it with its data:
-
-```sh
-brew uninstall --zap orbstack
-```
-
-`~/.docker/config.json` stays behind and is harmless: `docker` is Podman now, which reads `auth.json` instead.
+Temporary workloads and their images, volumes, networks, and caches must be removed after use; the runtime API, recommended kernel, and login service are host infrastructure.
 
 ## App notes
 
@@ -279,7 +269,7 @@ To add a device, add an entry to the option's `default` list in `home/h82/dev/mo
 }
 ```
 
-The apply never deletes, erases, or renames a device. A device you remove from the list, or one you created by hand, stays. For explicit unversioned iOS entries, an App Store upgrade of Xcode can cause the next apply to create the listed devices on a newer compatible runtime; existing devices and runtimes stay. Likewise, an unversioned Android entry gets a new AVD when the SDK pin gains a newer API level. Each iOS runtime takes about 8 GB. Remove what you no longer need by hand:
+The apply never deletes, erases, or renames a device. A device you remove from the list, or one you created by hand, stays. For explicit unversioned iOS entries, an Xcode upgrade can cause the next apply to create the listed devices on a newer compatible runtime; existing devices and runtimes stay. Likewise, an unversioned Android entry gets a new AVD when the SDK pin gains a newer API level. Each iOS runtime takes about 8 GB. Remove what you no longer need by hand:
 
 ```sh
 xcrun simctl list devices            # names and UDIDs
@@ -302,13 +292,11 @@ AVDs live in `~/.android/avd` and name their system image by its SDK path. When 
 | `nr: no age identity at …` | The identity is not recovered yet. Run the `recover-age-identity` command the message names, from the clone. |
 | `… is not owned by …`, `… must have mode 0600`, or `cannot decrypt …` during activation | The identity file has the wrong owner or mode, or it is not this host's. Recover it again with the same command. |
 | `nr: not inside a git repository; …` | `nr` was run outside the clone. `cd` into it, or pass `--flake-dir <path>`. |
-| `docker` or `podman` reports that the connection is refused, while `podman machine list` shows the machine running | gvproxy, the machine's network helper, died. Run `podman machine stop`; the launch agent starts the machine again within a minute. |
 | The Mac stays offline after a network switch even with the network recovery trait | Read the last lines of `/var/log/network-recovery.log`. An exhausted episode means every step failed on that network; turn Wi-Fi off and on by hand. A captive or policy result means the network answered with its own page; sign in to the portal. |
-| The first apply stops in `podmanMachines` | `podman machine init` could not download the machine image. Apply again once the network is back. |
 | The second apply aborts in `copyApps` | The terminal lacks the App Management permission, or the apply runs over SSH. See step 8. |
 | The apply stops with `Existing file '…/Library/Android/sdk' would be clobbered` | An SDK, usually Android Studio's, is a real directory at `~/Library/Android/sdk`, where Home Manager links the pinned SDK. Run `mv ~/Library/Android/sdk ~/Library/Android/sdk.before-nix-config` and apply again. Point Android Studio at the linked SDK, or delete the old one once nothing uses it. |
 | `mobile-devices` prints `simctl could not list device types, so the iOS Simulators were skipped` after `CoreSimulator detected version change` | An Xcode upgrade left the old CoreSimulatorService loaded. The helper tries the listing twice, because the first call replaces the service; when both fail, run `xcrun simctl list devicetypes` once and apply again. |
-| The apply prints `xcode: App Store install failed; sign in to the App Store …`, and `mobile-devices` reports that the iOS Simulators were skipped | The App Store is not signed in, so the apply skipped Xcode and the iOS Simulators and set up everything else. Open the App Store, sign in with your Apple Account, and apply again. `xcode: App Store upgrade failed; …` has the same fix; the installed Xcode stays at its version until then. |
+| Xcode provisioning fails | Check the Apple account ciphertext in the applying checkout, the recovered identity owner and mode, network access, the required macOS version, and interactive 2FA prompts; then apply production again. |
 | The apply prints `kakaotalk: App Store install failed; sign in to the App Store …` or `flighty: App Store install failed; …` | The App Store is not signed in, so the apply skipped that app. Sign in to the App Store and apply again. |
 | The apply prints `kakaotalk: App Store upgrade failed; …` or `flighty: App Store upgrade failed; …` | Either the App Store is not signed in, or the app in `/Applications` was installed from a download rather than the App Store, which `mas` cannot upgrade. Sign in to the App Store, or delete the app so the next apply installs it from the App Store. |
 | The apply prints `kakaotalk: cannot resolve the ids of …` or `flighty: cannot resolve the ids of …` | `system.primaryUser`, which comes from `my.user.name` in the host's `default.nix`, does not name an account on this Mac. Fix the account name and apply again. |

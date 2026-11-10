@@ -361,18 +361,20 @@
                   ${pkgs.libsecret}/bin/secret-tool
                 touch $out
               '';
-          podman-machine-resources = pkgs.runCommand "podman-machine-resources-tests" { } ''
-            bash ${./tests/podman-machine-resources.sh} ${
-              pkgs.lib.getExe (import ./packages/podman-machine-resources.nix { inherit pkgs; })
-            }
-            touch $out
-          '';
-          minikube-darwin-start = pkgs.runCommand "minikube-darwin-start-tests" { } ''
-            bash ${./tests/minikube-darwin-start.sh} ${
-              pkgs.lib.getExe (import ./packages/minikube-darwin-start.nix { inherit pkgs; })
-            }
-            touch $out
-          '';
+          darwin-provisioning =
+            pkgs.runCommand "darwin-provisioning-tests"
+              {
+                nativeBuildInputs = [
+                  pkgs.python3
+                  pkgs.bash
+                  pkgs.jq
+                ];
+              }
+              ''
+                python3 ${./tests/test_darwin_provisioning.py} ${./scripts/macos-xcode.py} ${./scripts/macos-container.sh} ${./scripts/macos-container-state.sh}
+                touch "$out"
+              '';
+
           mobile-devices = pkgs.runCommand "mobile-devices-tests" { } ''
             bash ${./tests/mobile-devices.sh} ${
               pkgs.lib.getExe (import ./packages/mobile-devices.nix { inherit pkgs; })

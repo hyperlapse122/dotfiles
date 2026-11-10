@@ -15,7 +15,10 @@ let
 
   # Every TLS stack this host runs reads one of these. NODE_EXTRA_CA_CERTS
   # takes the whole bundle; Node adds it to its own roots.
-  variables = lib.genAttrs [
+  variables = {
+    NODE_USE_SYSTEM_CA = "1";
+  }
+  // lib.genAttrs [
     "SSL_CERT_FILE"
     "NIX_SSL_CERT_FILE"
     "NODE_EXTRA_CA_CERTS"

@@ -9,5 +9,8 @@
   my.dock.hostApps = [
     "/Applications/Microsoft Outlook.app"
     "/Applications/Microsoft Teams.app"
+    "/Applications/Microsoft Word.app"
+    "/Applications/Microsoft Excel.app"
+    "/Applications/Microsoft PowerPoint.app"
   ];
 }

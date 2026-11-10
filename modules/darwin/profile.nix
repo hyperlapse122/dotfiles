@@ -8,6 +8,7 @@
     ./host-marker.nix
     ./defaults.nix
     ./dock.nix
+    ./container.nix
     ./homebrew.nix
     ./fonts.nix
     ./xcode.nix
