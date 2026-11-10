@@ -75,7 +75,8 @@ mise exec -- python scripts/update-font-lock.py
 ```
 
 The dedicated `update-font-lock.yml` workflow supports scheduled and manual refreshes.
-It validates the candidate lock before publishing changed pins.
+It publishes changed pins after generation without running CI validation.
+Problems discovered after publication are handled separately.
 Font refreshes do not change the executable application lock.
 
 Apply the resulting repository changes explicitly to install an updated collection.

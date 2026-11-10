@@ -106,7 +106,7 @@ class SyntheticModelLockTest(unittest.TestCase):
 
 
 class SyntheticPublicationWorkflowTest(unittest.TestCase):
-    def test_catalog_and_application_candidates_share_validation_and_publication(self):
+    def test_catalog_and_application_candidates_share_publication(self):
         refresh = (REPO / '.github/workflows/update-personal-app-lock.yml').read_text()
         self.assertLess(refresh.index('scripts/update-synthetic-model-lock.py'),
                         refresh.index('actions/upload-artifact@'))

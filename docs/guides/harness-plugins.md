@@ -114,7 +114,8 @@ mise exec -- python scripts/update-harness-plugin-lock.py
 
 ### Automated Updates
 
-A GitHub Actions workflow (**Update harness plugin pins**) runs daily at 06:43 UTC, validating release tags and commit SHAs against the native test matrix before committing to `main`.
+A GitHub Actions workflow (**Update harness plugin pins**) runs daily at 06:43 UTC and commits changed release tags and commit SHAs to `main` after generation without running CI validation.
+Problems discovered after publication are handled separately.
 
 The same script and workflow refresh the korean-skills pin. See [Pin and Refresh](#pin-and-refresh) for the checks that apply only to skill packs.
 
@@ -150,7 +151,7 @@ Each skill directory is exact. Apply replaces a same-named directory at a manage
 
 When a rejected pack already has a reviewed pin, the refresh keeps that pin, still writes the CE pin, and exits with status `3`. The daily workflow then publishes the CE pin and fails its run in a separate `report-skill-drift` job, so the change stays visible until someone reviews it. A pack with no reviewed pin yet fails the whole refresh and writes nothing. After reviewing the upstream change, update `harness-skills.json` to match and run the refresh again.
 
-Like CE refreshes, an accepted korean-skills refresh publishes to `main` after the native test matrix passes. Changed instruction text inside an accepted SKILL.md is not reviewed by a person; the checks above cover the capability fields and file types.
+Like CE refreshes, an accepted korean-skills refresh publishes to `main` after generation without running CI validation. Problems discovered after publication are handled separately. Changed instruction text inside an accepted SKILL.md is not reviewed by a person; the checks above cover the capability fields and file types.
 
 ### Exactly-Once Discovery
 

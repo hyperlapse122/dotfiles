@@ -79,16 +79,23 @@ class AreaSelectionTest(unittest.TestCase):
         self.assertTrue(result.wasSuccessful())
 
 
-class FontWorkflowTest(unittest.TestCase):
-    def test_font_candidate_is_validated_before_publication(self):
+class PinUpdateWorkflowTest(unittest.TestCase):
+    def test_generated_candidates_publish_without_validation(self):
         repo = Path(__file__).resolve().parents[1]
-        updater = (repo / ".github/workflows/update-font-lock.yml").read_text()
+        for name in ("font", "harness-plugin", "personal-app"):
+            with self.subTest(updater=name):
+                updater = (repo / f".github/workflows/update-{name}-lock.yml").read_text()
+                self.assertNotRegex(updater, r"(?m)^  validate:")
+                self.assertNotIn("uses: ./.github/workflows/test.yml", updater)
+                publish = updater.split("\n  publish:\n", 1)[1]
+                self.assertRegex(publish, r"\A    needs: resolve\n")
+                self.assertIn("ref: ${{ needs.resolve.outputs.base-sha }}", publish)
+                self.assertIn("artifact-ids: ${{ needs.resolve.outputs.lock-artifact }}", publish)
+                self.assertIn("git diff --quiet", publish)
+
+    def test_reusable_suite_keeps_font_candidate_coverage(self):
+        repo = Path(__file__).resolve().parents[1]
         suite = (repo / ".github/workflows/test.yml").read_text()
-        self.assertIn("needs: [resolve, validate]", updater)
-        self.assertIn("base-sha: ${{ needs.resolve.outputs.base-sha }}", updater)
-        self.assertIn("font-lock-artifact: ${{ needs.resolve.outputs.lock-artifact }}", updater)
-        self.assertIn("lock=home/.chezmoidata/font-lock.json", updater)
-        self.assertIn('git add -- "$lock"', updater)
         self.assertIn("font-lock-artifact:", suite)
         self.assertIn("&download-font-lock", suite)
         self.assertIn("&select-font-lock", suite)
