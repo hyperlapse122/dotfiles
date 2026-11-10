@@ -76,7 +76,24 @@ The native user instruction files select their harness branch from `home/.chezmo
 
 The addition tells Codex, Claude, and pi to use T3's `delegate_task` and related task tools for delegated work, including same-provider children and agents dispatched by CE skills. It explicitly replaces CE's acpx, provider CLI, and launcher-script routes for cross-model review, implementation, and reasoning elevation. Calling a peer a shell-out rather than a subagent does not exempt it. Each delegated child is a separate T3 thread; creating a top-level thread is not a delegation substitute.
 
-CE still decides whether to delegate, which provider/model/effort to select, and how to validate results or recover from failure. Use T3 capability discovery to resolve that target and map its supported settings to `target.options`, without silently inheriting a different model or effort. A retry or replacement delegation also uses T3; CE's permitted inline fallback and skip behavior remain available. The addition introduces no separate failure policy or approval step. Children receive self-contained briefs with the needed context, workspace and artifact paths, restrictions, output contract, and routing policy; further delegation requires authorization in the assigned task.
+CE still decides whether to delegate, which provider to select, and how to validate results or recover from failure. The addition's model ladder decides the child's model, and T3 capability discovery resolves that target and maps its supported settings to `target.options`. A retry or replacement delegation also uses T3; CE's permitted inline fallback and skip behavior remain available. The addition introduces no separate failure policy or approval step. Children receive self-contained briefs with the needed context, workspace and artifact paths, restrictions, output contract, and routing policy; further delegation requires authorization in the assigned task.
+
+CE skills name tiers, not models, and inherit the session model when they know no model names. The addition supplies the names, so a CE child runs on a model sized to its role instead of the orchestrator's model:
+
+| Provider | Orchestrator | Top child rung | Middle rung | Bottom rung |
+|---|---|---|---|---|
+| Claude | Fable | Opus | Sonnet | Haiku |
+| Codex | astra | sol | terra | luna |
+| Synthetic through pi | Kimi | GLM | GLM Flash | DeepSeek Flash |
+| Antigravity | Gemini Argon | Gemini Argon | Gemini Flash | Gemini Flash |
+
+- The top child rung runs the reviewers CE assigns to the session model: `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`.
+- The middle rung runs implementation workers, mid-tier and generation-tier children, and children whose skill names no tier.
+- The bottom rung runs extraction-tier children such as grounding scouts.
+
+Each rung is a model family; the agent picks the newest listed model of that family from T3's catalog, so a new release needs no instruction change. A child never runs above the column of the model that delegates it. A Sonnet session therefore keeps core reviewers on Sonnet, and a cross-provider peer takes the model in the same column of its own provider's row. The agent sets no effort, so T3's per-model default applies; that default differs by provider, for example low for Codex `sol` and high for Claude Sonnet. A model or effort named in the prompt or in CE configuration, such as `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, or `plan_model`, wins over the ladder. When the catalog lacks a rung's family, the agent uses the next lower rung, then its own model, and reports the substitution.
+
+The ladder reaches only Claude, Codex, and pi orchestrators, because only they receive the addition. An Antigravity or Grok orchestrator keeps its current model selection; the Antigravity row applies when a supported orchestrator's CE skill selects Antigravity for a child. Grok has no row. Delegations outside CE skills are unchanged.
 
 T3 task tools replace CE's process runners, polling, cancellation, and transport receipts. The parent must retain substantive scope, integration, and verification checks rather than inventing legacy controller receipts or treating a completed T3 task as a valid CE result. If those checks cannot be satisfied, CE's existing unavailable-route handling applies before incompatible transport machinery starts. A wait timeout leaves the child's state unresolved; follow T3's lifecycle and CE's recovery prerequisites before replacing work.
 
