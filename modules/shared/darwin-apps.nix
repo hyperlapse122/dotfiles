@@ -49,6 +49,7 @@ let
     man-db.leftOut = "Linux man page index; macOS supplies man";
     openjdk.leftOut = "macOS gets Java through home/h82/dev/android.nix under its platform-specific package name";
     nr.leftOut = "the NixOS apply helper; macOS gets nr-darwin";
+    microsoft-edge.leftOut = "installed on NixOS for Intune enrollment; ABM and Intune manage the Mac's applications";
   };
 
   darwinOnly = [

@@ -134,6 +134,7 @@
           "git-lfs"
           "git-trim"
           "gpg-agent-no-cache"
+          "intune"
           "iphone-restore"
           "kde-theme"
           "kernel-sysctl"
@@ -1319,6 +1320,7 @@
           printing = import ./tests/printing.nix { inherit pkgs self; };
           winbox = import ./tests/winbox.nix { inherit pkgs self; };
           wifiman = import ./tests/wifiman.nix { inherit pkgs self; };
+          intune = import ./tests/intune.nix { inherit pkgs self; };
           host-name-guard = import ./tests/host-name-guard.nix { inherit pkgs self; };
           vm-checks-guard = import ./tests/vm-checks-guard.nix {
             inherit pkgs vmChecks;

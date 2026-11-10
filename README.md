@@ -56,6 +56,7 @@ nr switch
 - [Fresh installation (NixOS)](docs/install.md): back up, verify disk IDs, partition with `disko`, install `MS-7D91-bootstrap`, recover the age identity, enroll Secure Boot and TPM2, and switch to `MS-7D91`.
 - [macOS hosts](docs/macos.md): back up, reinstall macOS, install Nix, apply `MacBook-Pro-Mac17-9-bootstrap`, recover the user age identity, and switch to `MacBook-Pro-Mac17-9`.
 - [Updates and recovery](docs/recovery.md): routine switches, rollbacks, LUKS and Secure Boot backup/repair from installation media, YubiKey replacement, desktop SSH key recovery/rotation, host decommission, and iPhone/iPad IPSW restore.
+- [Microsoft Intune on NixOS](docs/intune.md): what `my.intune.enable` installs, how to enroll `MS-7D91`, and what to do when a compliance check fails.
 - [Adding a host](docs/adding-a-host.md): create a NixOS or macOS host directory, its bootstrap age material, per-host secrets, and `.sops.yaml` rules.
 - [Agent routing](docs/agent-routing.md): T3 delegation policy, CE model-selection ladder, and launch-time instruction composition.
 - [Shell configuration](docs/shell.md): Prezto parity, automatic updates, and migration of existing startup files.

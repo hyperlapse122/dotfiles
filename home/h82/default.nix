@@ -67,6 +67,9 @@ in
     ++ lib.optionals (nixos && config.my.wifiman.enable) [
       (import ../../packages/wifiman-desktop.nix { inherit pkgs; })
     ]
+    # Signs in through the identity broker that modules/nixos/services/intune.nix
+    # installs under the same trait.
+    ++ lib.optionals (nixos && config.my.intune.enable) [ pkgs.microsoft-edge ]
     ++ [
       (import ../../packages/claude-code.nix { inherit pkgs; })
       (import ../../packages/codex.nix { inherit pkgs; })
