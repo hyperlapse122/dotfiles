@@ -1,6 +1,0 @@
-# mise writes its lockfile with LF, including on Windows.
-/mise.lock text eol=lf
-# Preserve POSIX shebangs and template output across Windows checkouts.
-/home/** text eol=lf
-/*.sh text eol=lf
-/scripts/*.sh text eol=lf
