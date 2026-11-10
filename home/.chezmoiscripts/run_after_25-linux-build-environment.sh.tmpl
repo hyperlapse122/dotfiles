@@ -1,0 +1,6 @@
+{{ if eq .chezmoi.os "linux" -}}
+#!/bin/sh
+set -eu
+mise --cd '{{ .chezmoi.workingTree | replace "'" "'\\''" }}' run linux-build
+mise --cd '{{ .chezmoi.workingTree | replace "'" "'\\''" }}' run linux-kubernetes
+{{ end -}}

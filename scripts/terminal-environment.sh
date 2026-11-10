@@ -7,18 +7,14 @@ note_pending() { pending=1; printf '%s\n' "Terminal environment PENDING: $*" >&2
 [ "$#" -eq 7 ] || fail 'Expected mode, OS, architecture, release, home, Swift helper, and configuration template.'
 mode=$1 os=$2 architecture=$3 release=$4 home=$5 swift_helper=$6 configuration=$7
 case "$mode" in apply|status) ;; *) fail 'Mode must be apply or status.' ;; esac
-case "$os:$architecture:$release" in linux:amd64:24.04|linux:arm64:24.04|linux:amd64:26.04|linux:arm64:26.04|darwin:arm64:26) ;; *) fail 'Unsupported terminal platform.' ;; esac
+case "$os:$architecture:$release" in linux:amd64:26.04|darwin:arm64:26) ;; *) fail 'Unsupported terminal platform.' ;; esac
 [ -r "$configuration" ] || fail 'Managed Ghostty configuration template is missing.'
 uid=$(id -u)
-[ "$uid" != 0 ] || fail 'Run as the intended non-root user; elevate only native package or alternatives commands.'
+[ "$uid" != 0 ] || fail 'Run as the intended non-root user; elevate only native package commands.'
 user=$(id -un)
 
 if [ "$os" = linux ]; then
-    [ "$(uname -s)" = Linux ] || fail 'Expected Ubuntu Linux.'
-    [ -r '/etc/os-release' ] || fail 'Cannot identify Ubuntu.'
-    . '/etc/os-release'
-    [ "$ID" = ubuntu ] && [ "$VERSION_ID" = "$release" ] || fail 'Unsupported Ubuntu release.'
-    [ "$(dpkg --print-architecture)" = "$architecture" ] || fail 'Architecture mismatch.'
+    python3 "$(dirname "$0")/linux-platform.py" || fail 'Unsupported Ubuntu Studio host; see the host probe blockers.'
     record=$(getent passwd "$uid") || fail 'Cannot read the current account.'
     account_home=$(printf '%s\n' "$record" | awk -F: '{print $6}')
     account_shell=$(printf '%s\n' "$record" | awk -F: '{print $7}')
@@ -100,41 +96,65 @@ if [ "$os" = darwin ]; then
 else
     ghostty=$(command -v ghostty) || fail 'Ghostty is not installed.'
     ghostty --version >/dev/null 2>&1 || fail 'Ghostty executable is not usable.'
-    if [ "$release" = 24.04 ]; then
-        ghostty=$(readlink -f "$ghostty") || fail 'Cannot resolve the installed Ghostty executable.'
-        alternatives=$(update-alternatives --query x-terminal-emulator) || fail 'Cannot inspect the native terminal alternatives.'
-        active=$(printf '%s\n' "$alternatives" | sed -n 's/^Value: //p')
-        if ! dpkg-query -S "$ghostty" >/dev/null 2>&1 ||
-           ! printf '%s\n' "$alternatives" | grep -Fqx "Alternative: $ghostty"; then
-            note_pending 'Ghostty is not a package-registered system terminal alternative; install the supported system package before selecting it.'
-        elif [ "$active" != "$ghostty" ]; then
+    command -v kwriteconfig6 >/dev/null 2>&1 || fail 'KDE kwriteconfig6 is missing.'
+    command -v kreadconfig6 >/dev/null 2>&1 || fail 'KDE kreadconfig6 is missing.'
+    desktop=$(python3 - "$ghostty" "$home" <<'PYTHON'
+import configparser
+import os
+from pathlib import Path
+import shlex
+import shutil
+import sys
+
+binary, home = sys.argv[1:]
+roots = [os.environ.get('XDG_DATA_HOME', home + '/.local/share')]
+roots += os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share:/var/lib/snapd/desktop').split(':')
+seen = set()
+for root in roots:
+    for desktop_id in ('com.mitchellh.ghostty.desktop', 'ghostty_ghostty.desktop'):
+        if desktop_id in seen:
+            continue
+        entry = Path(root) / 'applications' / desktop_id
+        if not entry.is_file():
+            continue
+        seen.add(desktop_id)
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read(entry, encoding='utf-8')
+        if not parser.has_section('Desktop Entry'):
+            continue
+        fields = parser['Desktop Entry']
+        if fields.get('Type') != 'Application' or fields.get('Hidden', '').lower() == 'true':
+            continue
+        command = fields.get('Exec', '')
+        parts = shlex.split(command)
+        if parts and Path(parts[0]).name == 'env':
+            parts.pop(0)
+            while parts and '=' in parts[0]:
+                parts.pop(0)
+        executable = shutil.which(parts[0]) if parts else None
+        if executable and os.path.realpath(executable) == os.path.realpath(binary):
+            print(desktop_id)
+            print(command)
+            sys.exit(0)
+sys.exit('No installed Ghostty desktop entry matches the active executable.')
+PYTHON
+    ) || fail 'Cannot establish the installed Ghostty desktop entry and Exec command.'
+    desktop_id=$(printf '%s\n' "$desktop" | sed -n '1p')
+    desktop_exec=$(printf '%s\n' "$desktop" | sed -n '2p')
+    for key in TerminalApplication TerminalService; do
+        case "$key" in TerminalApplication) expected=$desktop_exec ;; TerminalService) expected=$desktop_id ;; esac
+        selected=$(kreadconfig6 --file kdeglobals --group General --key "$key") || fail "Cannot read KDE $key."
+        if [ "$selected" != "$expected" ]; then
             if [ "$mode" = apply ]; then
-                sudo update-alternatives --set x-terminal-emulator "$ghostty" || fail 'Cannot select Ghostty.'
-                active=$(update-alternatives --query x-terminal-emulator | sed -n 's/^Value: //p')
-                [ "$active" = "$ghostty" ] || fail 'Ghostty is not the effective native terminal alternative.'
+                kwriteconfig6 --file kdeglobals --group General --key "$key" "$expected" || fail "Cannot set KDE $key."
+                selected=$(kreadconfig6 --file kdeglobals --group General --key "$key") || fail "Cannot verify KDE $key."
+                [ "$selected" = "$expected" ] || fail "KDE $key did not converge."
             else
-                note_pending 'The native terminal alternative is not Ghostty; apply again.'
+                note_pending "KDE $key does not select the installed Ghostty entry; apply again."
             fi
         fi
-    else
-        command -v xdg-terminal-exec >/dev/null 2>&1 || fail 'Ubuntu default-terminal dispatcher xdg-terminal-exec is missing.'
-        desktop_id=com.mitchellh.ghostty.desktop
-        if [ "$ghostty" = '/snap/bin/ghostty' ]; then
-            [ -r '/var/lib/snapd/desktop/applications/ghostty_ghostty.desktop' ] || fail 'The installed Ghostty Snap desktop entry is missing.'
-            desktop_id=ghostty_ghostty.desktop
-        fi
-        list="$config_home/ubuntu-xdg-terminals.list"
-        if [ "$mode" = apply ]; then
-            mkdir -p "$config_home"
-            temporary=$(mktemp "$config_home/.ghostty-terminals.XXXXXXXX")
-            { printf '%s\n' "$desktop_id"
-              if [ -f "$list" ]; then grep -Fvx "$desktop_id" "$list" || [ "$?" -eq 1 ]; fi
-            } > "$temporary"
-            if cmp -s "$temporary" "$list"; then rm -f "$temporary"; else mv "$temporary" "$list"; fi
-        fi
-        selected_id=$(XTE_CACHE_ENABLED=0 xdg-terminal-exec --print-id) || fail 'Cannot inspect the effective desktop terminal.'
-        [ "$selected_id" = "$desktop_id" ] || note_pending 'The desktop dispatcher does not select Ghostty; check the Ubuntu GNOME session and apply again.'
-    fi
+    done
+    note_pending 'Native Plasma acceptance remains unverified: check Default Applications, Ctrl+Alt+T, Dolphin Open Terminal Here, and a Terminal=true launcher in a fresh desktop session.'
     manager_available=1
     manager_environment=$(systemctl --user show-environment 2>/dev/null) || manager_available=0
     if [ "$manager_available" -eq 0 ]; then

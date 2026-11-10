@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,7 +12,7 @@ from test_native_ca_shell import find_bash
 
 
 FIXTURE = r'''
-import hashlib, json, os, pathlib, sys
+import json, os, pathlib, shlex, subprocess, sys
 name, *args = sys.argv[1:]
 root = pathlib.Path(os.environ['GHOSTTY_TEST_ROOT'])
 state = json.loads((root/'state.json').read_text())
@@ -22,16 +21,20 @@ if state.get('fail') == name: sys.exit(23)
 if name == 'uname': print(state.get('os', 'Linux'))
 elif name == 'dpkg': print(state.get('arch', 'amd64'))
 elif name in ('ghostty', 'zsh'): sys.exit(0 if state.get(name, False) else 1)
-elif name == 'sha256sum':
-    source = args[0]
-    if os.name == 'nt' and len(source) > 3 and source[0] == '/' and source[2] == '/':
-        source = source[1] + ':' + source[2:]
-    print(hashlib.sha256(pathlib.Path(source).read_bytes()).hexdigest()+'  '+args[0])
-elif name == 'curl':
-    output = args[args.index('--output')+1]
-    if os.name == 'nt' and len(output) > 3 and output[0] == '/' and output[2] == '/':
-        output = output[1] + ':' + output[2:]
-    pathlib.Path(output).write_bytes(b'fixture Debian package')
+elif name == 'dpkg-query':
+    if not state.get('studio',True): sys.exit(1)
+    print('install ok installed')
+elif name == 'python3':
+    import importlib.util
+    spec=importlib.util.spec_from_file_location('probe',os.environ['STUDIO_PROBE'])
+    probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
+    def run_probe(args, **kwargs):
+        command = shlex.join(['bash', (root/'commands'/args[0]).as_posix(), *args[1:]])
+        return subprocess.run([os.environ['FIXTURE_BASH'], '--noprofile', '--norc', '-c', command], **kwargs)
+    report=probe.inspect_host(system=state.get('os','Linux'),
+        os_release={'ID':state.get('distro','ubuntu'),'VERSION_ID':state.get('release','26.04')},
+        run=run_probe)
+    print(json.dumps(report));sys.exit(0 if report['supported'] else 1)
 elif name == 'sudo':
     if args[:3] != ['apt-get', 'install', '-y']: sys.exit(41)
     for item in args[3:]:
@@ -55,9 +58,9 @@ class GhosttyInstallTest(unittest.TestCase):
         self.state = {'zsh': True}
         self.fixture = self.root/'fixture.py'
         self.fixture.write_text(FIXTURE, encoding='utf-8')
-        for name in ('uname', 'dpkg', 'ghostty', 'zsh', 'curl', 'sudo', 'sha256sum'):
+        for name in ('uname', 'dpkg', 'dpkg-query', 'ghostty', 'zsh', 'curl', 'sudo', 'python3'):
             self.wrapper(name)
-        utilities = ('bash', 'mktemp', 'rm', 'awk')
+        utilities = ('bash', 'mktemp', 'rm', 'awk', 'dirname')
         resolved = subprocess.run([find_bash(), '--noprofile', '--norc', '-c',
                                    'PATH=/usr/bin:/bin; command -v ' + ' '.join(utilities)],
                                   capture_output=True, text=True, check=True)
@@ -67,7 +70,9 @@ class GhosttyInstallTest(unittest.TestCase):
             target.chmod(0o755)
         self.env = os.environ.copy()
         self.env.update(HOME=str(self.home), USERPROFILE=str(self.home), TMPDIR=str(self.root),
-                        GHOSTTY_TEST_ROOT=str(self.root), XDG_CONFIG_HOME=str(self.home/'.config'))
+                        GHOSTTY_TEST_ROOT=str(self.root), FIXTURE_BASH=find_bash(),
+                        STUDIO_PROBE=str(self.repo/'scripts/linux-platform.py'),
+                        XDG_CONFIG_HOME=str(self.home/'.config'))
 
     def wrapper(self, name):
         path = self.bin/name
@@ -75,7 +80,7 @@ class GhosttyInstallTest(unittest.TestCase):
                         shlex.quote(self.fixture.as_posix())+' '+shlex.quote(name)+' "$@"\n', encoding='utf-8')
         path.chmod(0o755)
 
-    def run_install(self, release='24.04', arch='amd64', digest=None):
+    def run_install(self, release='26.04', arch='amd64'):
         (self.root/'state.json').write_text(json.dumps(self.state), encoding='utf-8')
         os_release = self.root/'os-release'
         os_release.write_text('ID=ubuntu\nVERSION_ID='+self.state.get('release', release)+'\n')
@@ -85,8 +90,7 @@ class GhosttyInstallTest(unittest.TestCase):
         for native_shell in ("'/bin/zsh'", "'/usr/bin/zsh'"):
             text = text.replace(native_shell, shlex.quote((self.bin/'zsh').as_posix()))
         script.write_text(text, encoding='utf-8')
-        args = [release, arch, 'https://example.invalid/ghostty.deb',
-                digest or hashlib.sha256(b'fixture Debian package').hexdigest()]
+        args = [release, arch]
         command = 'PATH="$(cd "$1" && pwd -P)"; export PATH; shift; exec bash --noprofile --norc "$@"'
         result = subprocess.run([find_bash(), '--noprofile', '--norc', '-c', command, 'fixture',
                                  self.bin.as_posix(), script.as_posix(), *args], env=self.env,
@@ -94,27 +98,28 @@ class GhosttyInstallTest(unittest.TestCase):
         self.state = json.loads((self.root/'state.json').read_text())
         return result
 
+    def test_host_probe_runs_non_executable_shell_fixtures(self):
+        for name in ('dpkg', 'dpkg-query'):
+            (self.bin / name).chmod(0o644)
+        result = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(['dpkg', ['--print-architecture']], self.calls())
+        self.assertIn(['dpkg-query', ['-W', '-f=${Status}', 'ubuntustudio-desktop']], self.calls())
+
     def calls(self):
         path = self.root/'calls.jsonl'
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
-    def test_verified_community_package_installs_and_reapply_is_offline(self):
+    def test_archive_package_installs_and_reapply_is_offline(self):
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(self.state['ghostty'])
-        self.assertTrue(any(name == 'curl' for name, args in self.calls()))
+        self.assertFalse(any(name == 'curl' for name, args in self.calls()))
         before = len(self.calls())
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(any(name in ('curl', 'sudo') for name, args in self.calls()[before:]))
         self.assertFalse(list(self.root.glob('dotfiles-ghostty.*')))
-
-    def test_hash_mismatch_never_installs_unverified_package(self):
-        result = self.run_install(digest='0'*64)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('SHA-256', result.stderr)
-        self.assertFalse(any(name == 'sudo' for name, args in self.calls()))
-        self.assertFalse(self.state.get('ghostty'))
 
     def test_26_archive_and_missing_shell_are_installed_without_download(self):
         self.state['zsh'] = False
@@ -126,10 +131,11 @@ class GhosttyInstallTest(unittest.TestCase):
         self.assertIn(['sudo', ['apt-get', 'install', '-y', 'ghostty']], self.calls())
 
     def test_unsupported_or_mismatched_host_stops_before_install(self):
-        for changes, release, arch in [({'os': 'Darwin'}, '24.04', 'amd64'),
-                                       ({}, '25.10', 'amd64'), ({}, '24.04', '386'),
-                                       ({'arch': 'arm64'}, '24.04', 'amd64'),
-                                       ({'release': '26.04'}, '24.04', 'amd64')]:
+        for changes, release, arch in [({'os':'Darwin'},'26.04','amd64'),
+                                       ({},'24.04','amd64'), ({},'26.04','arm64'),
+                                       ({'arch':'arm64'},'26.04','amd64'),
+                                       ({'release':'24.04'},'26.04','amd64'),
+                                       ({'studio':False},'26.04','amd64')]:
             with self.subTest(changes=changes, release=release, arch=arch):
                 self.state = {'zsh': True, **changes}
                 before = len(self.calls())
@@ -145,19 +151,18 @@ class GhosttyInstallTest(unittest.TestCase):
         shutil.copy2(self.repo/'home/.chezmoiscripts/run_before_16-install-ghostty.sh.tmpl', templates/'install-hook')
         config = self.root/'empty.toml'
         config.write_text('')
-        for os_name, arch, release in [('linux', 'amd64', '24.04'), ('linux', 'arm64', '26.04'),
+        for os_name, arch, release in [('linux', 'amd64', '24.04'), ('linux', 'arm64', '26.04'), ('linux', 'amd64', '26.04'),
                                         ('linux', '386', '24.04'), ('linux', 'amd64', '25.10'),
                                         ('windows', 'amd64', ''), ('darwin', 'arm64', '')]:
             with self.subTest(os=os_name, arch=arch, release=release):
                 data = {'chezmoi': {'os': os_name, 'arch': arch, 'workingTree': str(self.repo),
-                                    'osRelease': {'id': 'ubuntu', 'versionID': release}},
-                        'ghostty': {'ubuntu2404': {arch: {'url': 'https://example.invalid/a.deb', 'sha256': 'a'*64}}}}
+                                    'osRelease': {'id': 'ubuntu', 'versionID': release}}}
                 template = '{{ $data := '+json.dumps(json.dumps(data))+' | fromJson }}{{ includeTemplate "install-hook" $data }}'
                 result = subprocess.run(['chezmoi', '--source', str(source), '--config', str(config),
                                           'execute-template', template], env=self.env, capture_output=True,
                                          text=True, encoding='utf-8', timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                supported = os_name == 'linux' and arch in ('amd64', 'arm64') and release in ('24.04', '26.04')
+                supported = os_name == 'linux' and arch == 'amd64' and release == '26.04'
                 self.assertEqual(bool(result.stdout.strip()), supported)
                 if supported:
                     syntax = subprocess.run([find_bash(), '-n'], input=result.stdout, capture_output=True, text=True)

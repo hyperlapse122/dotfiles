@@ -36,8 +36,7 @@ Confirm `$PSVersionTable.PSEdition` is `Core`, `(Get-Location).Path` is the sele
 
 | Platform | Installation | Native default selection |
 |---|---|---|
-| Ubuntu Desktop 24.04, GNOME, amd64/arm64 | Pinned community Debian package | System-wide `x-terminal-emulator` alternative |
-| Ubuntu Desktop 26.04, GNOME, amd64/arm64 | Official Ubuntu APT package | User `ubuntu-xdg-terminals.list` preference |
+| Ubuntu Studio 26.04 LTS, KDE Plasma, amd64 (26.04.1+ media) | Official Ubuntu APT package | User KDE `kdeglobals` terminal selection |
 | macOS 26+, native Apple Silicon | Homebrew Ghostty cask | Unix-executable application association |
 
 Other Linux distributions, desktop environments, Intel Macs, and headless desktop acceptance are excluded.
@@ -56,7 +55,7 @@ mise run apply
 The installation and terminal hooks run only during explicit application.
 `mise install` prepares the worktree without installing Ghostty, changing the account shell, or changing terminal defaults.
 Do not run the whole application through `sudo`: the terminal helper refuses root and requires the destination to be the applying account's actual home.
-Only package installation and Ubuntu 24.04 alternatives operations use narrow `sudo` commands.
+Only package installation uses narrow `sudo` commands.
 
 Complete any package-manager or `chsh` authentication prompt.
 macOS uses the selected Command Line Tools Swift runtime for its native association helper and may request OS approval in a desktop session.
@@ -72,18 +71,16 @@ Application replaces Ghostty's primary configuration with the repository's share
 It writes `config.ghostty` under `${XDG_CONFIG_HOME:-$HOME/.config}/ghostty` and, on macOS, `~/Library/Application Support/com.mitchellh.ghostty`.
 An existing legacy `config` in either location is reset to the same content, so its later load cannot restore a shell command or included configuration.
 This intentionally replaces personal Ghostty themes, key bindings, and command overrides; save any customization you want to retain before application.
-Other Ghostty appearance settings use its defaults; the repository adds no zsh framework or shell plugins.
+Other Ghostty appearance settings use its defaults. The repository manages pinned Prezto and completion assets for the shared zsh environment.
 
 Ghostty discovers the default shell from the system rather than a managed `command = zsh` override.
 Existing Bash/zsh PATH integration remains in place and honors exported `ZDOTDIR`.
 Unchanged PATH hooks retain their existing change-driven behavior; terminal reconciliation runs on every explicit apply.
 
-Ubuntu 24.04's alternatives choice affects the machine, including other users of `x-terminal-emulator`.
-Only a package-owned Ghostty executable already registered by its package is selected; a retained private build remains pending and is never registered system-wide.
-Ubuntu 26.04 places the installed Ghostty desktop entry first in the effective XDG configuration directory's `ubuntu-xdg-terminals.list`, preserving other entries.
-The APT package uses `com.mitchellh.ghostty.desktop`; a retained `/snap/bin/ghostty` installation uses `ghostty_ghostty.desktop`.
-Native launchers using those mechanisms should select Ghostty, including the corresponding GNOME terminal shortcut.
-Ubuntu 24.04's GNOME-terminal-specific Nautilus extension is not replaced.
+Ubuntu Studio reconciles `TerminalApplication` and `TerminalService` under `[General]` in the user's `kdeglobals` through `kwriteconfig6` and verifies them through `kreadconfig6`.
+It first resolves an installed Ghostty desktop entry whose Exec executable matches the active Ghostty binary, honoring XDG desktop-entry precedence and hidden entries.
+It preserves unrelated KDE settings. It does not install a GNOME dispatcher, change system alternatives or rewrite shortcut bindings.
+Default Applications, Ctrl+Alt+T, Dolphin and `Terminal=true` launch behavior still require native acceptance; recorded preferences alone do not prove those launchers use them.
 
 macOS changes only the `public.unix-executable` association through AppKit.
 It validates the Ghostty bundle identifier and executable before selecting it.
@@ -115,54 +112,26 @@ sh "$PWD/scripts/terminal-environment.sh" status darwin arm64 26 \
   "$PWD/home/.chezmoitemplates/ghostty-config"
 ```
 
-Status returns `0` for ready, `2` for pending user/session/configuration actions, and `1` for an error.
+Status returns `0` when its checks pass, `2` for pending user/session/configuration actions, and `1` for an error. On Linux it always retains pending native Plasma acceptance, even when all inspected settings match.
 It checks the account shell, managed Ghostty files, native default selection, and available session-shell evidence without changing them.
 Ubuntu also checks the systemd user-manager environment; unavailable manager evidence remains pending.
 Status does not prove that a GUI window actually opened or that a file-manager request kept its selected directory.
 
-## Ubuntu 24.04 Package Maintenance
+## Package Maintenance
 
-`home/.chezmoidata/ghostty.yaml` records the community `mkasberg/ghostty-ubuntu` release URLs and SHA-256 values for both architectures.
-The current pin is `1.3.1-0-ppa2`.
-This standalone package is not signed by the Ubuntu archive and does not acquire future Ghostty updates through ordinary `apt upgrade`.
-The repository verifies its reviewed digest before privileged installation; APT resolves dependencies through the configured Ubuntu repositories.
-No persistent third-party PPA or remote installer script is added.
-
-To update the pin, review the community release's supported Ubuntu version, download both architecture assets, verify their hashes, and inspect their package metadata and maintainer scripts before changing the declaration.
-Keep Ubuntu 24.04 runtime compatibility: a newer Ghostty build can require newer GTK libraries than this release supplies.
-Updating the declaration affects missing installations; ordinary reapplication deliberately retains an existing installation.
-
-To intentionally install the repository-pinned version on an existing Ubuntu 24.04 device, run the following from the repository root after reviewing the declaration:
-
-```sh
-(
-  set -eu
-  ghostty_host=$(. /etc/os-release; printf '%s:%s' "$ID" "$VERSION_ID")
-  [ "$ghostty_host" = ubuntu:24.04 ] || { printf '%s\n' 'Requires Ubuntu 24.04.' >&2; exit 1; }
-  ghostty_url=$(mise exec -- chezmoi --config "$PWD/.chezmoi-bootstrap.toml" --source "$PWD" \
-    execute-template '{{ (index .ghostty.ubuntu2404 .chezmoi.arch).url }}')
-  ghostty_sha256=$(mise exec -- chezmoi --config "$PWD/.chezmoi-bootstrap.toml" --source "$PWD" \
-    execute-template '{{ (index .ghostty.ubuntu2404 .chezmoi.arch).sha256 }}')
-  ghostty_stage=$(mktemp -d)
-  trap 'rm -rf -- "$ghostty_stage"' EXIT HUP INT TERM
-  ghostty_package="$ghostty_stage/ghostty.deb"
-  curl --fail --location --proto '=https' --tlsv1.2 --output "$ghostty_package" "$ghostty_url"
-  printf '%s  %s\n' "$ghostty_sha256" "$ghostty_package" | sha256sum --check -
-  sudo apt-get install -y "$ghostty_package"
-)
-```
-
-Ubuntu 26.04 and macOS retain their normal explicit APT/Homebrew update paths.
-This repository's apply operation does not request those upgrades.
+Ubuntu Studio uses the official Ubuntu Ghostty package and normal explicit APT updates.
+macOS retains its explicit Homebrew update path.
+The terminal installation helper retains an existing usable Ghostty installation without forcing an upgrade.
+No community Debian package pin or standalone community installer remains managed.
 
 ## Desktop Acceptance Checklist
 
 After applying and renewing the session:
 
-1. Run status and resolve every pending action or error.
-2. On Ubuntu GNOME, use the native terminal shortcut and confirm Ghostty opens; on macOS, open a suitable Unix executable through its native association and confirm the selected app.
+1. Run status and resolve configuration errors or session actions. Linux native acceptance remains pending in status; record the following GUI observations separately.
+2. On Ubuntu Studio, inspect KDE System Settings > Default Applications and press Ctrl+Alt+T; confirm Ghostty opens. On macOS, open a suitable Unix executable through its native association and confirm the selected app.
 3. In a newly launched Ghostty shell, check `printf '%s\n' "$SHELL"`, `ps -p $$ -o comm=`, and discovery of the repository-managed commands.
-4. Where a native file-manager terminal action uses the managed dispatcher, select a known folder and check `pwd` in the new terminal.
+4. On Ubuntu Studio, select a test folder containing spaces and Korean characters in Dolphin, choose Open Terminal Here, and check `pwd` in Ghostty. Also create a temporary local desktop entry with `Type=Application`, `Terminal=true`, `Exec=/bin/sh -c "pwd; read -r answer"` and `Path=` selecting that test folder. Launch it through KDE and observe that Ghostty opens in the selected directory, then press Enter to close the test shell. Remove only this test launcher and folder afterward. On other platforms, check directory forwarding where the native file-manager action supports the selected terminal.
 5. Repeat the directory check with Ghostty already running, because preference selection alone does not prove existing-instance working-directory forwarding.
 6. Apply again and confirm the intended defaults remain selected without duplicate shell startup entries. On macOS, each full apply also [updates eligible Homebrew packages](../setup/macos.md#preview-and-apply).
 

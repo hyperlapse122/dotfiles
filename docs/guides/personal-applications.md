@@ -17,7 +17,7 @@ Chezmoi provisions prebuilt binaries independently of the repository's mise deve
 | `ghq` | [x-motemen/ghq](https://github.com/x-motemen/ghq) | Archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 | `agy` | [Google Antigravity](https://antigravity.google/) | Official CLI binary or archive member | Windows (x64/ARM64), Linux (x64/ARM64), macOS (ARM64) |
 
-> **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported.
+> **Platform Constraint:** Prebuilt binaries require GNU libc on Linux; Linux musl hosts are not supported. The Linux asset architectures below describe binary availability and compatibility tests. Supported Linux workstation setup is [Ubuntu Studio 26.04 LTS amd64](../setup/ubuntu-studio.md).
 
 Commands are exposed through `~/.local/bin`, including the native Claude Code executable (`claude.exe` on Windows). The Antigravity CLI payload lives in `~/.local/share/dotfiles/antigravity/bin`; its POSIX or Windows `.ps1` launcher selects that absolute path. Run Windows launchers from PowerShell. Provisioning these applications does not require a preinstalled Bun or Python runtime.
 

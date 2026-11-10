@@ -137,7 +137,7 @@ class AgentInstructionsTest(unittest.TestCase):
             expected = instruction_block(self.baselines[os_name]["claude"], RUNTIME_HEADING)
             for harness, rendered in self.baselines[os_name].items():
                 with self.subTest(os=os_name, harness=harness):
-                    self.assertEqual(rendered.count(RUNTIME_HEADING), 0 if os_name == "linux" else 1)
+                    self.assertEqual(rendered.count(RUNTIME_HEADING), 1)
                     self.assertEqual(instruction_block(rendered, RUNTIME_HEADING), expected)
                     if os_name == "darwin":
                         self.assertIn("Apple", expected)
@@ -153,6 +153,9 @@ class AgentInstructionsTest(unittest.TestCase):
                         self.assertNotIn("Apple", rendered)
                         self.assertNotIn("`container`", rendered)
                     else:
+                        for phrase in ("rootless Docker Engine", "Delegate=yes", "/run/user/$UID",
+                                       "smoke_linux_minikube.py", "zero owned volumes", "AppArmor"):
+                            self.assertIn(phrase, expected)
                         for runtime in ("Apple", "`container`", "Podman"):
                             self.assertNotIn(runtime, rendered)
 
@@ -213,6 +216,16 @@ class AgentInstructionsTest(unittest.TestCase):
                 with self.subTest(os=os_name, harness=harness):
                     self.assertNotIn(heading, rendered)
                     self.assertNotIn("delegate_task", rendered)
+
+    def test_linux_guidance_stays_out_of_other_hosts_and_t3(self):
+        for os_name in ('darwin', 'windows'):
+            for text in self.baselines[os_name].values():
+                self.assertNotIn('smoke_linux_minikube.py', text)
+                self.assertNotIn('rootless Docker Engine', text)
+        for additions in self.t3_additions.values():
+            for text in additions.values():
+                self.assertNotIn('smoke_linux_minikube.py', text)
+                self.assertNotIn('rootless Docker Engine', text)
 
 
 if __name__ == "__main__":

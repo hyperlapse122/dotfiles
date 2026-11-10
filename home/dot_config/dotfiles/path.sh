@@ -13,7 +13,7 @@ case ":${PATH-}:" in
 esac
 export PATH
 
-if [ "$(uname -s)" = Darwin ]; then
+case "$(uname -s)" in Darwin|Linux)
     dotfiles_build="$HOME/.local/share/dotfiles/build"
     if [ -r "$dotfiles_build/DOTNET_ROOT" ]; then
         IFS= read -r DOTNET_ROOT < "$dotfiles_build/DOTNET_ROOT"
@@ -37,4 +37,5 @@ if [ "$(uname -s)" = Darwin ]; then
     done
     export PATH
     unset dotfiles_build dotfiles_directory
-fi
+;;
+esac

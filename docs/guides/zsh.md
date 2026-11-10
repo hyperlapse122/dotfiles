@@ -1,6 +1,7 @@
 # Zsh and Prezto
 
-Explicit chezmoi application configures Prezto for Linux AMD64/ARM64 and Apple Silicon macOS.
+Explicit chezmoi application configures Prezto for Ubuntu Studio amd64 and Apple Silicon macOS.
+Shared Linux AMD64/ARM64 assets and CLI compatibility tests remain available, but do not expand the [supported workstation baseline](../setup/ubuntu-studio.md).
 Install zsh through the platform setup first; changing the default login shell is a separate operation.
 
 ```sh

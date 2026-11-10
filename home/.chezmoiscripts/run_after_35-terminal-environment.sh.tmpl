@@ -1,6 +1,6 @@
 {{- $release := get .chezmoi "osRelease" | default dict -}}
 {{- $version := get $release "versionID" | default "" -}}
-{{- $ubuntu := and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (has .chezmoi.arch (list "amd64" "arm64")) (has $version (list "24.04" "26.04")) -}}
+{{- $ubuntu := and (eq .chezmoi.os "linux") (eq (get $release "id") "ubuntu") (eq .chezmoi.arch "amd64") (eq $version "26.04") -}}
 {{- $mac := and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "arm64") -}}
 {{- if or $ubuntu $mac -}}
 #!/bin/sh
