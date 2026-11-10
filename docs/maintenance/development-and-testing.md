@@ -319,7 +319,7 @@ The direct-workflow contracts in `tests/test_ci_workflows.py` cover unfiltered a
 
 ### Check names
 
-Automatic jobs now report directly under `Test`, without the `Validate /` reusable-call prefix. Their names remain `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`; the existing build and control jobs remain intact. Reusable callers can still add their own caller prefix.
+Automatic jobs now report directly under `Test`, without the `Validate /` reusable-call prefix. Their names remain `Unit AREA (RUNNER)` and `Native AREA (RUNNER, TARGET)`, where the Fedora image lane shows `fedora` in place of its host runner label; the existing build and control jobs remain intact. Reusable callers can still add their own caller prefix.
 
 Repository protection settings are not modified by this change. If a ruleset requires a former `Validate / ...` context, update it to the corresponding direct `Test` job context before merging. Admission-only checks never prove that the suite passed.
 

@@ -8,6 +8,13 @@ import sys
 import unittest
 
 
+REPO = Path(__file__).resolve().parents[1]
+PROBE = importlib.util.spec_from_file_location("linux_platform", REPO / "scripts/linux-platform.py")
+linux_platform = importlib.util.module_from_spec(PROBE)
+PROBE.loader.exec_module(linux_platform)
+# The Linux CI image follows the Fedora release the host probe validates.
+FEDORA_IMAGE = f"registry.fedoraproject.org/fedora:{linux_platform.VALIDATED_RELEASE}"
+
 SPEC = importlib.util.spec_from_file_location("test_area_runner", Path(__file__).resolve().parents[1] / "scripts/run-test-area.py")
 runner = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(runner)
@@ -102,7 +109,8 @@ class PinUpdateWorkflowTest(unittest.TestCase):
         self.assertIn("- *download-font-lock", suite)
         self.assertIn("- *select-font-lock", suite)
         self.assertIn("python tests/smoke_fonts.py", suite)
-        self.assertIn("sudo apt-get install -y fontconfig", suite)
+        base = re.search(r"- &fedora-base\n(?:        .*\n)+", suite).group(0)
+        self.assertIn("fontconfig", base)
 
 
 class MacBuildWorkflowTest(unittest.TestCase):
@@ -154,14 +162,37 @@ class GhosttyWorkflowTest(unittest.TestCase):
         for runner_name, target in (("windows-2025", "windows-amd64"),
                                     ("windows-11-arm", "windows-arm64")):
             self.assertIn(f"- area: ghostty\n            platform:\n              runner: {runner_name}\n              target: {target}", native)
-        for runner_name, target in (("ubuntu-24.04", "linux-amd64"),
-                                    ("ubuntu-24.04-arm", "linux-arm64"),
-                                    ("ubuntu-26.04", "linux-amd64"),
-                                    ("ubuntu-26.04-arm", "linux-arm64")):
-            for area in ("ghostty", "t3", "t3-instructions"):
-                self.assertIn(f"- area: {area}\n            platform:\n              runner: {runner_name}\n              target: {target}", native)
+        for area in ("ghostty", "t3", "t3-instructions"):
+            self.assertIn(f"- area: {area}\n            platform:\n              runner: ubuntu-24.04\n"
+                          f"              target: linux-amd64\n              container: {FEDORA_IMAGE}\n", native)
         self.assertIn("python tests/smoke_ghostty.py --expected-target ${{ matrix.platform.target }}", native)
         self.assertIn("matrix.area == 'antigravity'", native)
+
+
+class FedoraImageWorkflowTest(unittest.TestCase):
+    def setUp(self):
+        self.workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/test.yml").read_text()
+
+    def job(self, name):
+        return re.search(rf"(?ms)^  {name}:\n.*?(?=^  \S|\Z)", self.workflow).group(0)
+
+    def test_linux_lanes_run_in_the_validated_fedora_image(self):
+        for name in ("unit", "native", "pinentry"):
+            with self.subTest(job=name):
+                job = self.job(name)
+                self.assertIn("    container: ${{ matrix.platform.container }}\n", job)
+                self.assertEqual(re.findall(r"(?m)^            container: (\S+)$", job.split("exclude:")[0]),
+                                 [FEDORA_IMAGE])
+                steps = job.split("\n    steps:\n", 1)[1]
+                self.assertTrue(steps.startswith("      - &fedora-base\n") or steps.startswith("      - *fedora-base\n"))
+                self.assertLess(steps.index("fedora-base"), steps.index("checkout"))
+
+    def test_linux_lanes_are_amd64_only_and_use_dnf(self):
+        self.assertNotIn("apt-get", self.workflow)
+        self.assertNotIn("ubuntu-26.04", self.workflow)
+        self.assertNotRegex(self.workflow, r"ubuntu-[0-9.]+-arm")
+        self.assertNotIn("linux-arm64", self.workflow)
+        self.assertEqual(set(re.findall(r"runner: (ubuntu-\S+)", self.workflow)), {"ubuntu-24.04"})
 
 
 if __name__ == "__main__":
