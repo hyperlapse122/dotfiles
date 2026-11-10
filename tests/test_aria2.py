@@ -40,23 +40,31 @@ class LinuxAria2Test(unittest.TestCase):
                  ('windows', '', 'amd64', '')]:
                 with self.subTest(os=os_name, distro=distro, arch=arch, version=version):
                     data = {'chezmoi': {'os': os_name, 'arch': arch,
-                                        'osRelease': {'id': distro, 'versionID': version}}}
+                                        'osRelease': {'id': distro, 'versionID': version}, 'workingTree': str(repo)}}
                     template = '{{ $data := ' + json.dumps(json.dumps(data)) + ' | fromJson }}{{ includeTemplate "aria2" $data }}'
                     result = subprocess.run(['chezmoi', '--source', str(root), '--config', str(config),
                                              'execute-template', template], capture_output=True, text=True, check=True)
                     supported = (os_name == 'linux' and distro == 'ubuntu' and
-                                 arch in ('amd64', 'arm64') and version in ('24.04', '26.04'))
+                                 arch == 'amd64' and version == '26.04')
                     self.assertEqual(bool(result.stdout.strip()), supported)
                     if supported:
                         script = result.stdout
             commands = root / 'commands'
             commands.mkdir()
             calls = root / 'calls'
+            python = commands / 'python3'
+            python.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$ARIA2_TEST_PROBE"\nexit "${ARIA2_TEST_PROBE_EXIT:-0}"\n')
+            python.chmod(0o755)
             sudo = commands / 'sudo'
             sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$ARIA2_TEST_CALLS"\n')
             sudo.chmod(0o755)
-            env = dict(os.environ, ARIA2_TEST_CALLS=calls.as_posix())
+            env = dict(os.environ, ARIA2_TEST_CALLS=calls.as_posix(), ARIA2_TEST_PROBE=str(root/'probe-calls'))
             command = 'PATH="$(cd "$1" && pwd -P)"; export PATH; shift; eval "$1"'
+            blocked=subprocess.run([find_bash(), '--noprofile', '--norc', '-c', command,
+                                    'fixture', commands.as_posix(), script],
+                                   env=dict(env,ARIA2_TEST_PROBE_EXIT='1'),capture_output=True,text=True)
+            self.assertNotEqual(blocked.returncode,0)
+            self.assertFalse(calls.exists())
             for _ in range(2):
                 result = subprocess.run([find_bash(), '--noprofile', '--norc', '-c', command,
                                          'fixture', commands.as_posix(), script], env=env,
