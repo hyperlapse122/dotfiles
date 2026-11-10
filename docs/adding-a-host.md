@@ -40,6 +40,7 @@ Traits and shared host options live in `modules/shared/host.nix`:
 
 | Option | Effect |
 | --- | --- |
+| `my.intune.enable` | Installs the Microsoft Intune app, the identity broker, and Microsoft Edge, shows the Intune executables an Ubuntu OS identity, and enforces a password quality policy (`modules/nixos/services/intune.nix`, NixOS; see [Microsoft Intune on NixOS](intune.md)). |
 | `my.nuphyGem80.enable` | Installs the hidraw udev rule granting the local seat access to the NuPhy Gem80 keyboard (NixOS). |
 | `my.sennheiserBtd.enable` | Installs the hidraw udev rule granting the local seat access to the Sennheiser BTD 600 dongle (NixOS). |
 | `my.sshServer.enable` | Enables an OpenSSH server accepting only `my.user.name`, authenticated by the OpenPGP card's authentication subkey from `keys/signing.asc` (NixOS). |
