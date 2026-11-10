@@ -47,6 +47,8 @@ let
   targets = {
     claude = ".claude/CLAUDE.md";
     codex = ".codex/AGENTS.md";
+    grok = ".grok/AGENTS.md";
+    pi = ".pi/agent/AGENTS.md";
     # A directory of rule files; recursive linking lets Home Manager prune
     # the files a later render no longer produces.
     antigravity = ".gemini/config/rules";

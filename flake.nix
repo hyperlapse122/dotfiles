@@ -33,7 +33,7 @@
     # is not a pin -- the agent-plugins check compares this input's locked
     # revision against that recorded value and fails when upstream moves it.
     compound-engineering-plugin = {
-      url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v3.33.1";
+      url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v3.36.1";
       flake = false;
     };
     korean-skills = {
@@ -115,6 +115,7 @@
         hostClosureChecks = [
           "agent-browser-deps"
           "agent-unmanaged"
+          "pi"
           "agent-instructions"
           "android-sdk"
           "antigravity-profiles"
@@ -173,6 +174,7 @@
         }) self.darwinConfigurations;
       };
       checks.aarch64-darwin.darwin-outputs = import ./tests/darwin-outputs.nix {
+        inherit self;
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
         inherit darwinFixtures;
         darwinConfigurations = darwinHosts;
@@ -203,6 +205,8 @@
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
         mise = import ./packages/mise.nix { inherit pkgs; };
+        pi-release = agentTools.piRelease;
+        pi = import ./packages/pi.nix { inherit pkgs; };
         codex-release = agentTools.codexRelease;
         codex = import ./packages/codex.nix { inherit pkgs; };
         grok-build-release = agentTools.grokBuildRelease;
@@ -505,6 +509,8 @@
             fixtures = [ ];
           };
           boot-splash = import ./tests/boot-splash.nix { inherit pkgs self; };
+          pi = import ./tests/pi.nix { inherit pkgs self; };
+          pi-release = pythonScriptCheck "pi-release" ./scripts/pi-release ./tests/test_pi_release.py;
           agent-plugins = import ./tests/agent-plugins.nix { inherit pkgs self; };
           antigravity-skills = import ./tests/antigravity-skills.nix {
             inherit pkgs self;

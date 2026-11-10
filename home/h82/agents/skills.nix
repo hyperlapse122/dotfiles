@@ -18,11 +18,12 @@ let
     ".claude/skills"
     antigravityRoot
     ".codex/skills"
+    ".grok/skills"
+    ".pi/agent/skills"
   ];
 
-  # The ACP runtime loads no plugins, so Antigravity gets the pinned Compound
-  # Engineering skills as plain skill links beside the contributed ones. The
-  # other harnesses install the plugin itself (agent-plugins.nix).
+  # Native plugins own CE skills. Check for collisions with contributed skills
+  # before linking them into a harness root.
   ceSkillsDir = "${inputs.compound-engineering-plugin}/skills";
   ceSkills = lib.filterAttrs (
     name: type: type == "directory" && builtins.pathExists "${ceSkillsDir}/${name}/SKILL.md"
@@ -32,44 +33,6 @@ let
   # Two skills of one name in one root would silently keep only one of them.
   collisions = lib.intersectLists ceSkillNames (lib.attrNames config.my.agentSkills);
 
-  antigravityCli = import ../../../packages/antigravity-cli.nix { inherit pkgs; };
-  home = config.home.homeDirectory;
-  retiredPlugins = "${home}/.gemini/config/plugins";
-
-  # The retired t3code-antigravity-link left unmanaged links from this root
-  # into the plugin copy `agy plugin install` made. Home Manager refuses to
-  # replace a foreign file with a declared skill, so they go before
-  # checkLinkTargets. Nothing here may fail the apply.
-  retireScript = ''
-    skillRoot=${lib.escapeShellArg "${home}/${antigravityRoot}"}
-    retiredPlugins=${lib.escapeShellArg retiredPlugins}
-    if [[ -d $skillRoot ]]; then
-      for entry in "$skillRoot"/* "$skillRoot"/.[!.]*; do
-        [[ -e $entry || -L $entry ]] || continue
-        if [[ -L $entry ]]; then
-          target=$(readlink "$entry") || target=
-          case "$target" in
-            "$retiredPlugins"/*)
-              echo "antigravitySkillsRetire: removing retired link $entry -> $target"
-              run rm -f "$entry" || echo "antigravitySkillsRetire: could not remove $entry" >&2
-              continue
-              ;;
-            /nix/store/*) continue ;;
-          esac
-        fi
-        echo "antigravitySkillsRetire: keeping $entry, which this configuration did not create" >&2
-      done
-    fi
-    if [[ -e $retiredPlugins/compound-engineering || -L $retiredPlugins/compound-engineering ]]; then
-      if [[ -v DRY_RUN ]]; then
-        echo "antigravitySkillsRetire: would run agy plugin uninstall compound-engineering"
-      elif ${antigravityCli}/bin/agy plugin uninstall compound-engineering; then
-        echo "antigravitySkillsRetire: uninstalled the retired compound-engineering Antigravity plugin"
-      else
-        echo "antigravitySkillsRetire: agy plugin uninstall compound-engineering failed with status $?; remove $retiredPlugins/compound-engineering by hand" >&2
-      fi
-    fi
-  '';
 in
 {
   options.my.agentSkills = lib.mkOption {
@@ -85,17 +48,13 @@ in
     type = lib.types.listOf lib.types.str;
     internal = true;
     readOnly = true;
-    default = lib.attrNames config.my.agentSkills ++ ceSkillNames;
+    default = lib.attrNames config.my.agentSkills;
     description = ''
-      Every skill linked into ~/${antigravityRoot}: the contributed skills and
-      the pinned Compound Engineering ones. The Antigravity ACP wrapper links
+      Every contributed skill linked into ~/${antigravityRoot}. The native
+      plugin supplies Compound Engineering. The Antigravity ACP wrapper links
       these into Compound Engineering run homes.
     '';
   };
-
-  config.home.activation.antigravitySkillsRetire = lib.hm.dag.entryBefore [
-    "checkLinkTargets"
-  ] retireScript;
 
   # One link per root and skill, to the skill directory itself: Codex skips a
   # SKILL.md that is a symlink, so the files inside must not be linked one by
@@ -112,10 +71,6 @@ in
             ) config.my.agentSkills
           ) roots
         )
-        // lib.listToAttrs (
-          map (
-            name: lib.nameValuePair "${antigravityRoot}/${name}" { source = "${ceSkillsDir}/${name}"; }
-          ) ceSkillNames
-        )
+
       );
 }

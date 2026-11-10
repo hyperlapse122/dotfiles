@@ -1,0 +1,17 @@
+{
+  "version": "1.5.0",
+  "platforms": {
+    "x86_64-linux": {
+      "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-linux-x64.tar.gz",
+      "hash": "sha256-34cLoONEy3szWNjY8ZOXuLjSJahml4RzataKXCFp1Ts="
+    },
+    "aarch64-linux": {
+      "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-linux-arm64.tar.gz",
+      "hash": "sha256-XVcRtIYAdWRzaC6GNgsCaxGr91keXREutBHU2iwQDZo="
+    },
+    "aarch64-darwin": {
+      "url": "https://github.com/earendil-works/pi/releases/download/v1.5.0/pi-darwin-arm64.tar.gz",
+      "hash": "sha256-qb8NgtWNKn0zf0rkFxtfyev/5CUJUnqDE2TEtlrfLN8="
+    }
+  }
+}

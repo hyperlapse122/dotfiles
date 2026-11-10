@@ -51,7 +51,11 @@
   The builder collects every failure instead of exiting at the first, so one
   red build names every broken assertion across every configuration.
 */
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  entries ? null,
+}:
 let
   inherit (pkgs) lib;
 
@@ -257,6 +261,8 @@ let
         }) harnessChecks;
       }}
     '';
+  userEntries = if entries == null then configurations.userEntries else entries;
+
 in
 pkgs.runCommand "agent-plugins-tests"
   {
@@ -267,7 +273,7 @@ pkgs.runCommand "agent-plugins-tests"
   }
   ''
     set -x
-    ${configurations.userGuard}
+    ${lib.optionalString (entries == null) configurations.userGuard}
     failed=0
 
     # Reads one flag's value out of a rendered activation script. The `|| true`
@@ -320,7 +326,7 @@ pkgs.runCommand "agent-plugins-tests"
       failed=1
     fi
 
-    ${lib.concatMapStringsSep "\n" assertEntry configurations.userEntries}
+    ${lib.concatMapStringsSep "\n" assertEntry userEntries}
 
     if [ "$failed" != "0" ]; then
       exit 1

@@ -178,6 +178,26 @@ let
   # activation. Retire every row of a source together, or split the base.
   stillMember = lib.filter (row: lib.any (member: member.name == row.name) checkedMembership) retired;
 
+  nativeScript = pkgs.writeScript "grok-plugins" (
+    "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../../scripts/grok-plugins
+  );
+  nativePlugins = ''
+    if [[ ! -v DRY_RUN ]]; then
+      ${pkgs.python3}/bin/python3 ${nativeScript} --destination "$HOME" --cli ${
+        (import ../../../packages/grok-build.nix { inherit pkgs; })
+      }/bin/grok --source ${inputs.compound-engineering-plugin}
+      ${
+        (import ../../../packages/antigravity-cli.nix { inherit pkgs; })
+      }/bin/agy plugin validate ${inputs.compound-engineering-plugin}
+      ${
+        (import ../../../packages/antigravity-cli.nix { inherit pkgs; })
+      }/bin/agy plugin install ${inputs.compound-engineering-plugin}
+      ${
+        (import ../../../packages/antigravity-cli.nix { inherit pkgs; })
+      }/bin/agy plugin enable compound-engineering
+    fi
+  '';
+
   syncScript =
     lib.throwIf (stillMember != [ ])
       "agent-plugins: retired row(s) still named in membership, which share its link: ${
@@ -207,5 +227,6 @@ in
   # would not yet exist when the wiring reads it, and creating it here also
   # keeps the superseded version present until the new one is wired.
   home.activation.agentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] syncScript;
+  home.activation.nativeAgentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] nativePlugins;
 
 }

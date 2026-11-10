@@ -11,6 +11,8 @@
     Antigravity CLI, and T3 Code's Antigravity instances
                               ~/.gemini/antigravity-cli/skills/<name>
     Codex                     ~/.codex/skills/<name>
+    Grok                      ~/.grok/skills/<name>
+    Pi                        ~/.pi/agent/skills/<name>
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
   NixOS and non-NixOS Linux user environments are both covered, and the
@@ -30,11 +32,8 @@
     directory itself, never its files with `recursive = true`.
   - no enabled target is ~/.codex/skills/.system or under it, which Codex
     owns.
-  - the other roots declare exactly the three skill directories plus test-audit
-    and the skills tests/pinned-skills.nix checks,
-    and ~/.gemini/antigravity-cli/skills also every skill of the pinned
-    compound-engineering-plugin input (its `skills/<name>` directories that
-    hold a SKILL.md; tests/antigravity-skills.nix checks their content);
+  - every root declares the three Korean skills and the contributed skills;
+    native plugins supply their own skills separately;
   - nothing exists at ~/.agents/skills or ~/.gemini/config/skills in the
     materialized `home-files`: the Antigravity CLI lists skills under
     ~/.gemini/config/skills twice, and ~/.agents/skills is no harness's root
@@ -63,9 +62,10 @@
   red build names every broken assertion across every configuration.
 */
 {
+  entries ? null,
   pkgs,
   self,
-  fixtures,
+  fixtures ? [ ],
 }:
 let
   inherit (pkgs) lib;
@@ -101,20 +101,12 @@ let
     "ux-flows"
   ];
 
-  # Antigravity loads no plugins, so its root also holds the pinned Compound
-  # Engineering skills, named by the pinned input rather than the module.
-  ceRoot = ".gemini/antigravity-cli/skills";
-  ceSkillsDir = "${self.inputs.compound-engineering-plugin}/skills";
-  ceSkillNames = lib.attrNames (
-    lib.filterAttrs (
-      name: type: type == "directory" && builtins.pathExists "${ceSkillsDir}/${name}/SKILL.md"
-    ) (builtins.readDir ceSkillsDir)
-  );
-
   roots = [
     ".claude/skills"
     ".gemini/antigravity-cli/skills"
     ".codex/skills"
+    ".grok/skills"
+    ".pi/agent/skills"
   ];
 
   # Codex keeps its bundled skills here; no declared skill may land on it.
@@ -247,11 +239,7 @@ let
       root:
       let
         found = targetsUnder userConfig root;
-        expected = sorted (
-          map (name: "${root}/${name}") (
-            skillNames ++ otherSkillNames ++ lib.optionals (root == ceRoot) ceSkillNames
-          )
-        );
+        expected = sorted (map (name: "${root}/${name}") (skillNames ++ otherSkillNames));
       in
       lib.optionalString (found != expected) ''
         echo ${esc "~/${root} on ${label} must hold exactly ${lib.concatStringsSep ", " expected}, got: ${lib.concatStringsSep ", " found}"} >&2
@@ -282,10 +270,12 @@ let
         fi
       '') forbiddenRoots
     );
+  userEntries = if entries == null then configurations.userEntries else entries;
+
 in
 pkgs.runCommand "korean-skills-tests" { } ''
   set -x
-  ${configurations.userGuard}
+  ${lib.optionalString (entries == null) configurations.userGuard}
   failed=0
 
   if [ -z ${esc lockedRev} ]; then
@@ -313,7 +303,7 @@ pkgs.runCommand "korean-skills-tests" { } ''
     failed=1
   fi
 
-  ${lib.concatMapStringsSep "\n" assertEntry configurations.userEntries}
+  ${lib.concatMapStringsSep "\n" assertEntry userEntries}
 
   if [ "$failed" != "0" ]; then
     exit 1

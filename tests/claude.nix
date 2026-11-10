@@ -56,7 +56,11 @@
   The builder collects every failure instead of exiting at the first, so one
   red build names every broken assertion across every configuration.
 */
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  entries ? null,
+}:
 let
   inherit (pkgs) lib;
 
@@ -75,7 +79,10 @@ let
   };
 
   settingsTier = {
-    model = "opus[1m]";
+    language = "korean";
+    autoMemoryEnabled = false;
+    syncClaudeAiSkills = false;
+    syncClaudeAiPlugins = false;
     theme = "auto";
     preferredNotifChannel = "ghostty";
     agentPushNotifEnabled = false;
@@ -86,11 +93,38 @@ let
 
   retiredKeys = [
     "advisorModel"
-    "autoCompactWindow"
-    "language"
+  ];
+
+  marketplaceEntries = [
+    {
+      path = [
+        "extraKnownMarketplaces"
+        "compound-engineering-plugin"
+      ];
+      entries.autoUpdate = false;
+      entries.source = {
+        source = "directory";
+        path = toString self.inputs.compound-engineering-plugin;
+      };
+    }
   ];
 
   settingsPaths = [
+    {
+      path = [
+        "enabledPlugins"
+        "compound-engineering@compound-engineering-plugin"
+      ];
+      value = true;
+    }
+
+    {
+      path = [
+        "env"
+        "DISABLE_AUTOUPDATER"
+      ];
+      value = "1";
+    }
     {
       path = [
         "enabledPlugins"
@@ -129,6 +163,7 @@ let
     pkgs.writeText name (
       builtins.toJSON {
         inherit set remove setPaths;
+        ownEntries = marketplaceEntries;
       }
     );
 
@@ -140,6 +175,7 @@ let
         set = settingsTier;
         remove = retiredKeys;
         setPaths = settingsPaths;
+        ownEntries = marketplaceEntries;
       };
       expected = expectedDeclared "claude-expected-settings.json" settingsTier retiredKeys settingsPaths;
     }
@@ -257,7 +293,29 @@ let
             // lib.optionalAttrs (merge.attr == "claudeSettings") {
               seed = {
                 activationUnmanaged = "keep";
-                language = "korean";
+                language = "english";
+                autoMemoryEnabled = true;
+                syncClaudeAiSkills = true;
+                syncClaudeAiPlugins = true;
+                disableClaudeAiConnectors = false;
+                env = {
+                  DISABLE_AUTOUPDATER = "0";
+                  OWNER = "keep";
+                };
+                extraKnownMarketplaces = {
+                  other.source = {
+                    source = "directory";
+                    path = "/keep";
+                  };
+                  compound-engineering-plugin = {
+                    autoUpdate = true;
+                    ownerExtra = "keep";
+                    source = {
+                      source = "github";
+                      repo = "stale/repo";
+                    };
+                  };
+                };
                 advisorModel = "retired";
                 autoCompactWindow = "retired";
                 effortLevel = "retired";
@@ -272,15 +330,37 @@ let
               expected = {
                 activationUnmanaged = "keep";
                 effortLevel = "retired";
-                model = "opus[1m]";
+                autoCompactWindow = "retired";
+                model = "divergent";
+                language = "korean";
+                autoMemoryEnabled = false;
+                syncClaudeAiSkills = false;
+                syncClaudeAiPlugins = false;
                 theme = "auto";
                 preferredNotifChannel = "ghostty";
                 agentPushNotifEnabled = false;
                 inputNeededNotifEnabled = false;
                 cleanupPeriodDays = 30;
                 disableClaudeAiConnectors = true;
+                env = {
+                  DISABLE_AUTOUPDATER = "1";
+                  OWNER = "keep";
+                };
+                extraKnownMarketplaces.other.source = {
+                  source = "directory";
+                  path = "/keep";
+                };
+                extraKnownMarketplaces.compound-engineering-plugin = {
+                  ownerExtra = "keep";
+                  source = {
+                    source = "directory";
+                    path = toString self.inputs.compound-engineering-plugin;
+                  };
+                  autoUpdate = false;
+                };
                 enabledPlugins = {
                   custom = false;
+                  "compound-engineering@compound-engineering-plugin" = true;
                   "cc-plugin-you-should-know@builtin" = true;
                 };
                 worktree = {
@@ -344,15 +424,19 @@ let
       echo 'the managed settings tier must stay unused, but ${entry.name} declares claude-code/managed-settings.json' >&2
       failed=1
     '';
+  userEntries = if entries == null then configurations.userEntries else entries;
+
 in
 pkgs.runCommand "claude-tests" { nativeBuildInputs = [ pkgs.diffutils ]; } ''
   set -x
-  ${configurations.guard}
-  ${configurations.userGuard}
+  ${lib.optionalString (entries == null) configurations.guard}
+  ${lib.optionalString (entries == null) configurations.userGuard}
   failed=0
 
-  ${lib.concatMapStringsSep "\n" assertUser configurations.userEntries}
-  ${lib.concatMapStringsSep "\n" assertManagedUnused configurations.entries}
+  ${lib.concatMapStringsSep "\n" assertUser userEntries}
+  ${lib.concatMapStringsSep "\n" assertManagedUnused (
+    if entries == null then configurations.entries else [ ]
+  )}
 
   if [ "$failed" != "0" ]; then
     exit 1

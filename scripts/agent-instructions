@@ -14,6 +14,8 @@ import tempfile
 DELIVERIES = {
     "claude": ".claude/CLAUDE.md",
     "codex": ".codex/AGENTS.md",
+    "grok": ".grok/AGENTS.md",
+    "pi": ".pi/agent/AGENTS.md",
     "antigravity": ".gemini/config/rules",
 }
 # Antigravity truncates each rule file at 24,000 bytes, so its render is
@@ -122,7 +124,7 @@ def main():
         data = Path(temporary) / "context.json"
         for delivery, target in DELIVERIES.items():
             flags = {name: name == delivery for name in DELIVERIES}
-            data.write_text(json.dumps(context | flags))
+            data.write_text(json.dumps(context | flags | {"t3": False}))
             rendered[target] = subprocess.run(
                 [args.renderer, str(args.template), str(data)],
                 check=True, stdout=subprocess.PIPE,

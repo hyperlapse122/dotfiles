@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""Resolve the newest upstream Pi release from the GitHub releases API.
+
+Reads earendil-works/pi's latest release, requires the per-platform tarball
+for every system a host in this flake can be, reads the release's SHA256SUMS
+asset, and writes or checks the pin file packages/pi.nix consumes, with each
+tarball's URL and SRI hash. Refuses a draft or prerelease, a tag that is not
+v followed by plain dotted numbers, a release missing a target tarball or its
+SHA256SUMS line, a SHA256SUMS that lists one tarball with two different
+digests, an asset whose digest in the API differs from SHA256SUMS, and a
+download URL outside the release. Leaves the pin alone when the resolved
+version is not strictly newer than the one already pinned, so neither an
+incomplete release nor a downgrade ever reaches the pin file.
+"""
+
+import argparse
+import base64
+import json
+import re
+import subprocess
+import sys
+
+REPOSITORY = "earendil-works/pi"
+DEFAULT_SOURCE_URL = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
+SUMS_ASSET = "SHA256SUMS"
+
+# Every system a host in this flake can be, and the release tarball it runs.
+TARGET_ASSETS = {
+    "x86_64-linux": "pi-linux-x64.tar.gz",
+    "aarch64-linux": "pi-linux-arm64.tar.gz",
+    "aarch64-darwin": "pi-darwin-arm64.tar.gz",
+}
+
+TAG_PATTERN = re.compile(r"^v(\d+(?:\.\d+)*)$")
+SHA256_HEX_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def fetch(url):
+    """Fetch one public release resource with curl."""
+    command = ["curl", "-sfL", "--max-time", "60"]
+    proc = subprocess.run(
+        command + [url],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def hex_to_sri(sha256_hex):
+    """Convert a 64-character hex sha256 string to Nix SRI format."""
+    return "sha256-" + base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
+
+
+def parse_sums(content):
+    """Return a map of file name to lowercase hex digest from SHA256SUMS.
+
+    Upstream lists some tarballs twice; a repeated name is accepted only when
+    both lines carry the same digest.
+    """
+    sums = {}
+    for line in content.splitlines():
+        fields = line.split()
+        if len(fields) != 2:
+            continue
+        digest, name = fields
+        name = name.removeprefix("*")
+        if not SHA256_HEX_PATTERN.match(digest):
+            raise Failure(f"{SUMS_ASSET} lists an invalid sha256 for {name}: {digest!r}")
+        digest = digest.lower()
+        if sums.get(name, digest) != digest:
+            raise Failure(f"{SUMS_ASSET} lists {name} with two different digests")
+        sums[name] = digest
+    return sums
+
+
+def resolve(source_url):
+    """Return the pin for the latest Pi release."""
+    try:
+        release = json.loads(fetch(source_url))
+    except json.JSONDecodeError as exc:
+        raise Failure(f"response from {source_url} is not JSON: {exc}") from None
+    if not isinstance(release, dict):
+        raise Failure(f"response from {source_url} is not a JSON object")
+    if release.get("draft") or release.get("prerelease"):
+        raise Failure(f"release {release.get('tag_name')!r} is a draft or prerelease")
+    tag = release.get("tag_name")
+    match = TAG_PATTERN.match(tag) if isinstance(tag, str) else None
+    if not match:
+        raise Failure(f"release tag is not v and a plain version string: {tag!r}")
+    version = match.group(1)
+    prefix = f"https://github.com/{REPOSITORY}/releases/download/{tag}/"
+
+    assets = {}
+    for asset in release.get("assets") or []:
+        if isinstance(asset, dict) and isinstance(asset.get("name"), str):
+            assets[asset["name"]] = asset
+
+    def asset_url(name):
+        asset = assets.get(name)
+        if asset is None:
+            raise Failure(f"release {tag} has no {name}; refusing to write an incomplete pin")
+        url = asset.get("browser_download_url")
+        if url != prefix + name:
+            raise Failure(f"{name} downloads from {url!r}, not {prefix + name!r}")
+        return url
+
+    sums = parse_sums(fetch(asset_url(SUMS_ASSET)))
+    platforms = {}
+    for system, name in TARGET_ASSETS.items():
+        url = asset_url(name)
+        digest = sums.get(name)
+        if digest is None:
+            raise Failure(f"{SUMS_ASSET} of {tag} lists no {name}; refusing to write an incomplete pin")
+        api_digest = assets[name].get("digest")
+        if api_digest is not None and api_digest.lower() != f"sha256:{digest}":
+            raise Failure(f"{name} has digest {api_digest!r} in the release but sha256:{digest} in {SUMS_ASSET}")
+        platforms[system] = {"url": url, "hash": hex_to_sri(digest)}
+    return {"version": version, "platforms": platforms}
+
+
+def version_tuple(version):
+    if not isinstance(version, str):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def pinned_version(path):
+    """Return the version already pinned at path, or None when unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            current = json.load(f)
+        return current.get("version")
+    except Exception:
+        return None
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_SOURCE_URL,
+        help="URL of the GitHub API's latest-release document",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to the pi-release.json pin file to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved pin JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        resolved = resolve(args.source_url)
+        out_json = json.dumps(resolved, indent=2) + "\n"
+
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        current_version = pinned_version(args.output)
+        if current_version is not None:
+            try:
+                is_newer = version_tuple(resolved["version"]) > version_tuple(current_version)
+            except ValueError:
+                is_newer = True
+            if not is_newer:
+                print(
+                    f"{args.output} is already up to date at version {current_version} "
+                    f"(resolved {resolved['version']} is not newer)"
+                )
+                return 0
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(out_json)
+        print(f"updated {args.output} to version {resolved['version']}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"pi-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

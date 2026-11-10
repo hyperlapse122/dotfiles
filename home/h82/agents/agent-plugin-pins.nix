@@ -12,8 +12,8 @@
     # filters on this prefix. Stripping it from `tag` also yields the version
     # segment the materialized path is keyed by.
     tagPrefix = "compound-engineering-";
-    tag = "compound-engineering-v3.33.1";
-    expectedRev = "00d0a5bbf1300b2138b65ce724b325dd4dff77ba";
+    tag = "compound-engineering-v3.36.1";
+    expectedRev = "173bd337fa639aac19ce7363d288836a074231a5";
     # Read from the source's own manifests, never invented here: the install
     # identifier is `<plugin>@<marketplace>`.
     plugin = "compound-engineering";

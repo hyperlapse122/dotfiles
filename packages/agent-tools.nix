@@ -86,6 +86,8 @@ let
 
   # Resolves the latest Codex release and its musl asset digest from the
   # GitHub releases API.
+  piRelease = pythonHelper "pi-release" ../scripts/pi-release;
+
   codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
 
   # Resolves the newest stable Grok Build CLI release and hashes its
@@ -184,6 +186,7 @@ in
     wifimanDesktopRelease
     claudeCodeRelease
     miseRelease
+    piRelease
     codexRelease
     grokBuildRelease
     agentUsage

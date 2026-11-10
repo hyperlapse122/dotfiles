@@ -2,6 +2,7 @@
   config,
   pkgs,
   lib,
+  inputs,
   ...
 }:
 let
@@ -58,7 +59,36 @@ let
   # would drop theirs. To turn a plugin off, set its value to false rather than
   # deleting the entry: the merge only assigns, and retiredKeys can only remove
   # enabledPlugins as a whole.
+  marketplaceEntries = [
+    {
+      path = [
+        "extraKnownMarketplaces"
+        "compound-engineering-plugin"
+      ];
+      entries.autoUpdate = false;
+      entries.source = {
+        source = "directory";
+        path = toString inputs.compound-engineering-plugin;
+      };
+    }
+  ];
+
   settingsPaths = [
+    {
+      path = [
+        "enabledPlugins"
+        "compound-engineering@compound-engineering-plugin"
+      ];
+      value = true;
+    }
+
+    {
+      path = [
+        "env"
+        "DISABLE_AUTOUPDATER"
+      ];
+      value = "1";
+    }
     {
       path = [
         "enabledPlugins"
@@ -90,7 +120,6 @@ let
   # the entry once every host has rebuilt past it.
   retiredKeys = [
     "advisorModel"
-    "autoCompactWindow"
   ];
 
   renderDeclared =
@@ -98,6 +127,7 @@ let
     pkgs.writeText name (
       builtins.toJSON {
         inherit set remove setPaths;
+        ownEntries = marketplaceEntries;
       }
     );
 
@@ -196,7 +226,8 @@ in
       ${merger} \
         --label 'Claude Code' \
         --settings ${config.home.homeDirectory}/.claude/settings.json \
-        --declared ${declared}
+        --declared ${declared} \
+        --ledger ${config.home.homeDirectory}/.claude/settings-ownership.json
     fi
   '';
 

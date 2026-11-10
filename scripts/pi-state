@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Reconcile Pi's native user settings and optional staged authentication."""
+import argparse
+import json
+import os
+from pathlib import Path
+import tempfile
+
+
+def read(path):
+    if not path.exists():
+        return {}
+    if path.is_symlink():
+        raise ValueError('Pi state must be a writable regular file')
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict):
+        raise ValueError('Pi state must contain an object')
+    return value
+
+
+def write(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temporary = tempfile.mkstemp(dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            json.dump(value, stream, indent=2)
+            stream.write('\n')
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--agent', type=Path, required=True)
+    parser.add_argument('--plugin')
+    parser.add_argument('--auth-only', action='store_true')
+    parser.add_argument('--key', type=Path)
+    args = parser.parse_args()
+    agent = args.agent
+    lock = json.loads((agent / 'model-lock.json').read_text())['syntheticModelLocks']
+    ids = sorted(model['id'] for model in lock['models'])
+    if not args.auth_only:
+        value = read(agent / 'settings.json')
+        for name in ('packages', 'extensions'):
+            if not isinstance(value.get(name, []), list):
+                raise ValueError('Pi resources must be lists')
+        # Repair disabled CE filters and previous version-keyed local sources.
+        packages = []
+        for item in value.get('packages', []):
+            source = item.get('source', '') if isinstance(item, dict) else item
+            if not isinstance(source, str):
+                raise ValueError('Pi package source must be a string')
+            local = Path(source)
+            if not local.is_absolute():
+                local = agent / local
+            managed = local.resolve() == Path(args.plugin).resolve()
+            manifest = local / 'package.json'
+            if not managed and manifest.is_file():
+                metadata = json.loads(manifest.read_text())
+                managed = (metadata.get('name') == 'compound-engineering' and
+                           metadata.get('repository') == 'https://github.com/EveryInc/compound-engineering-plugin')
+            if not managed:
+                packages.append(item)
+        value['packages'] = packages + [args.plugin]
+        policy = str(agent / 'dotfiles-policy.ts')
+        value['extensions'] = [item for item in value.get('extensions', []) if item != policy] + [policy]
+        if value.get('defaultProvider') != 'synthetic' or value.get('defaultModel') not in ids:
+            value['defaultModel'] = ids[0]
+        value['defaultProjectTrust'] = 'never'
+        value['defaultProvider'] = 'synthetic'
+        value['enabledModels'] = ['synthetic/*']
+        write(agent / 'settings.json', value)
+    if args.key:
+        key = args.key.read_text().strip()
+        if not key or '\n' in key:
+            raise ValueError('Staged Synthetic credential is invalid')
+        auth = read(agent / 'auth.json')
+        auth['synthetic'] = {'type': 'api_key', 'key': key}
+        write(agent / 'auth.json', auth)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, ValueError, KeyError):
+        raise SystemExit('Cannot reconcile Pi state; check its files and staged credential.') from None

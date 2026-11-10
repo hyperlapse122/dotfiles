@@ -8,6 +8,7 @@
     ./fff.nix
     ./gemini.nix
     ./grok.nix
+    ./pi.nix
     ./instructions
     ./korean-skills.nix
     ./pinned-skills.nix

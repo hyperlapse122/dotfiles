@@ -1,10 +1,5 @@
 /*
-  Read each Home Manager generation's four instruction deliveries: three
-  files and the Antigravity rules directory.
-  Target/enable checks here distinguish a declaration from its delivery.
-  tests/text-template.nix owns the renderer's language and failure contracts.
-  agent-instructions.py also holds docs/agent-routing.md's tables to the
-  template's, and the T3 Code ACP pin to the version the T3 table records.
+  Exercise every instruction delivery and keep the T3 context separate.
   Linux callers supply self/fixtures; native Darwin callers supply explicit
   entries, each { name, user }, from production/bootstrap and fixture hosts.
 */
@@ -23,11 +18,12 @@ let
   deliveries = {
     ".claude/CLAUDE.md" = "claude";
     ".codex/AGENTS.md" = "codex";
+    ".grok/AGENTS.md" = "grok";
+    ".pi/agent/AGENTS.md" = "pi";
     ".gemini/config/rules" = "antigravity";
   };
   deliveryPaths = lib.attrNames deliveries;
   retiredPaths = [
-    ".pi/agent/AGENTS.md"
     ".t3/instructions/claude-code/CLAUDE.md"
     ".gemini/GEMINI.md"
     ".gemini/config/AGENTS.md"

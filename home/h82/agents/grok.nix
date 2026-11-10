@@ -15,6 +15,38 @@ let
   fff = import ./fff-server.nix { inherit pkgs; };
   declared = pkgs.writeText "grok-declared-settings.json" (
     builtins.toJSON {
+      setPaths = [
+        {
+          path = [
+            "cli"
+            "auto_update"
+          ];
+          value = false;
+        }
+      ]
+      ++ (builtins.concatMap
+        (
+          vendor:
+          map
+            (kind: {
+              path = [
+                "compat"
+                vendor
+                kind
+              ];
+              value = false;
+            })
+            [
+              "agents"
+              "rules"
+              "skills"
+            ]
+        )
+        [
+          "claude"
+          "cursor"
+        ]
+      );
       ownEntries = [
         {
           path = [ "mcp_servers" ];

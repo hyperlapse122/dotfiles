@@ -89,6 +89,7 @@
 */
 {
   pkgs,
+  self,
   darwinFixtures,
   darwinConfigurations,
 }:
@@ -136,6 +137,26 @@ let
             subprocess.run(argv, env=env, check=True)
             assert state.read_text() == "60000", "login agent failed to publish the timeout"
   '';
+  agentEntries = map (entry: {
+    inherit (entry) name;
+    user = entry.host.config.home-manager.users.${entry.host.config.my.user.name};
+  }) (darwinFixtures ++ lib.mapAttrsToList (name: host: { inherit name host; }) darwinConfigurations);
+  agentChecks =
+    map
+      (
+        file:
+        import file {
+          inherit pkgs self;
+          entries = agentEntries;
+        }
+      )
+      [
+        ./pi.nix
+        ./claude.nix
+        ./agent-plugins.nix
+        ./korean-skills.nix
+        ./antigravity-skills.nix
+      ];
   instructionDelivery = import ./agent-instructions.nix {
     inherit pkgs;
     entries = map (entry: {
@@ -740,6 +761,7 @@ pkgs.runCommand "darwin-outputs"
     ];
   }
   ''
+    ${lib.concatMapStrings (check: "test -e ${check}\n") agentChecks}
     test -e ${instructionDelivery}
     fail=0
     bad() { echo "$name: $*" >&2; fail=1; }

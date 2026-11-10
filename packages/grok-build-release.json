@@ -1,17 +1,17 @@
 {
-  "version": "1.0.70",
+  "version": "1.0.77",
   "platforms": {
     "x86_64-linux": {
-      "url": "https://x.ai/cli/grok-1.0.70-linux-x86_64",
-      "hash": "sha256-ItKBxZZMVEQUcygJa6KiIfPwh0xoWOJ8glZWqA9uWOk="
+      "url": "https://x.ai/cli/grok-1.0.77-linux-x86_64",
+      "hash": "sha256-twKVCqWCfYVeSTJ4q2IVpOD1vOtbumxiQ6n1XN0UOwo="
     },
     "aarch64-linux": {
-      "url": "https://x.ai/cli/grok-1.0.70-linux-aarch64",
-      "hash": "sha256-OqNog1dLJjCI5a3f/iQfVUMOjaruGgxJNLAhgAB6l2E="
+      "url": "https://x.ai/cli/grok-1.0.77-linux-aarch64",
+      "hash": "sha256-sw7uFKZWEk7zydqFd7Xng+8s/6vrK2ecXEljPnfu1XQ="
     },
     "aarch64-darwin": {
-      "url": "https://x.ai/cli/grok-1.0.70-macos-aarch64",
-      "hash": "sha256-XIpoglG/YeNTcLgotqNTsKIPzD9kAA3oqR1CYDnynOw="
+      "url": "https://x.ai/cli/grok-1.0.77-macos-aarch64",
+      "hash": "sha256-GXxmpj5axG4HRQsMoh0UHOZlBQpBIYDxhdrfrhx6Wyo="
     }
   }
 }
