@@ -1,11 +1,13 @@
+import ast
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+from types import FunctionType, SimpleNamespace
 import unittest
 
 from test_native_ca_shell import find_bash
@@ -66,16 +68,66 @@ elif name == 'python3':
     # Native Windows Python cannot open Git Bash /c/... drive paths. Keep
     # shell-facing values POSIX, translating only this native Python boundary.
     if os.name == 'nt':
+        # Bash launches these extensionless executables; expose that same
+        # lookup capability to native shutil.which without replacing it.
+        os.environ['PATHEXT'] = os.environ.get('PATHEXT', '') + ';.'
         # The production POSIX list splits on colons, so omit the drive and
         # resolve from the scratch directory on that same drive.
         os.environ['XDG_DATA_DIRS'] = (root/'system-data').as_posix()[len(root.drive):]
-        args = [arg[1]+':'+arg[2:] if len(arg)>2 and arg[0]=='/' and
+        # Match the native desktop Exec spelling, including the scratch drive's
+        # case: production deliberately compares realpath strings exactly.
+        args = [(root.drive if arg[1].lower()==root.drive[0].lower() else arg[1]+':')+arg[2:]
+                if len(arg)>2 and arg[0]=='/' and
                 arg[1].isalpha() and arg[2]=='/' else arg for arg in args]
     sys.exit(subprocess.run([sys.executable, *args]).returncode)
 elif name == 'swift':
     if state.get('swift_pending'): sys.exit(2)
     print('Ghostty Unix-executable association is ready.')
 '''
+
+
+class TerminalFixtureWindowsBoundaryTest(unittest.TestCase):
+    def run_boundary(self, root, args, environ=None):
+        # Execute the actual Windows conversion even on non-Windows hosts.
+        branches = [node for node in ast.walk(ast.parse(FIXTURE))
+                    if isinstance(node, ast.If) and ast.unparse(node.test) == "os.name == 'nt'"]
+        self.assertEqual(len(branches), 1)
+        boundary = compile(ast.Module(body=branches[0].body, type_ignores=[]), '<fixture boundary>', 'exec')
+        scope = dict(root=root, args=args, os=SimpleNamespace(environ={} if environ is None else environ))
+        exec(boundary, scope)
+        return scope
+
+    def test_native_arguments_retain_scratch_drive_spelling(self):
+        for drive in ('C:', 'c:', 'D:', 'd:'):
+            with self.subTest(drive=drive):
+                root = PureWindowsPath(drive + "/Users/fixture/terminal 환경 'scratch")
+                suffix = root.as_posix()[len(drive):]
+                literals = ['-f=${Status}', "space 환경 'path", '', '/', '/usr/bin', '/c',
+                            '/1/path', '/cfoo', (root/'commands/ghostty').as_posix()]
+                scope = self.run_boundary(root, ['/'+drive[0].lower()+suffix+'/commands/ghostty',
+                                                '/'+drive[0].upper()+suffix+'/home', '/z/other', *literals])
+                self.assertEqual(scope['args'], [(root/'commands/ghostty').as_posix(),
+                                                 (root/'home').as_posix(), 'z:/other', *literals])
+                data_dirs = scope['os'].environ['XDG_DATA_DIRS']
+                self.assertNotIn(':', data_dirs)
+                self.assertEqual((root/data_dirs).as_posix(), (root/'system-data').as_posix())
+
+    def test_native_lookup_finds_the_extensionless_bash_executable(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            binary = Path(scratch)/'ghostty'
+            binary.write_text('#!/bin/sh\nexit 0\n')
+            binary.chmod(0o755)
+            environ = {'PATHEXT': '.EXE;.CMD'}
+            # Run the real Windows which algorithm against a real local file.
+            # Only platform selection and the environment separator differ.
+            windows_os = SimpleNamespace(**{**vars(os), 'pathsep': ';', 'getenv': environ.get})
+            which = FunctionType(shutil.which.__code__,
+                                 {**shutil.which.__globals__, 'os': windows_os,
+                                  'sys': SimpleNamespace(platform='win32')}, argdefs=shutil.which.__defaults__)
+            self.assertIsNone(which(str(binary)))
+            self.run_boundary(PureWindowsPath('C:/scratch'), [], environ)
+            self.assertEqual(which(str(binary)), str(binary))
+            self.assertIn('.EXE;.CMD', environ['PATHEXT'])
 
 
 @unittest.skipUnless(find_bash(), 'Native Bash or Git Bash required')
@@ -166,8 +218,9 @@ class TerminalEnvironmentTest(unittest.TestCase):
             with self.subTest(status=status):
                 result = subprocess.run(
                     [find_bash(), '--noprofile', '--norc', '-c', command],
-                    input='import json, pathlib, sys; print(json.dumps(sys.argv[1:])); '
-                          'assert pathlib.Path(sys.argv[-1]).is_file(); sys.exit('+str(status)+')',
+                    input='import json, pathlib, shutil, sys; print(json.dumps(sys.argv[1:])); '
+                          'assert pathlib.Path(sys.argv[-1]).is_file(); '
+                          'assert shutil.which(sys.argv[-1]) is not None; sys.exit('+str(status)+')',
                     env=self.env, cwd=self.root, capture_output=True, text=True, encoding='utf-8', timeout=30)
                 self.assertEqual(result.returncode, status, result.stdout+result.stderr)
                 self.assertEqual(json.loads(result.stdout),
