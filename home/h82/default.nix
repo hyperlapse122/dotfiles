@@ -80,7 +80,6 @@ in
         in
         {
           nixos = nixTools.nr;
-          linux = nixTools.nrLinux;
           darwin = nixTools.nrDarwin;
         }
         .${hostKind}

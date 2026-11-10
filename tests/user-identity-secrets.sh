@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks the secret layout of every non-NixOS host (a hosts/<host> directory
+# Checks the secret layout of every Darwin host (a hosts/<host> directory
 # with host.nix) in the tree at ROOT:
 #
 # - secrets/hosts/<host>/ssh.yaml exists and is encrypted to that host's
@@ -11,18 +11,18 @@
 #   the tokens it publishes. The rule alone is not enough: a recipient added to
 #   it without `sops updatekeys` passes the rule and fails at the first apply.
 # - the recipient is in neither the rule nor the encrypted file of wifi.yaml,
-#   tailscale.yaml, and printers.yaml, so a non-NixOS host, whose identity
-#   rests on the distribution's disk encryption, never decrypts the Wi-Fi,
+#   tailscale.yaml, and printers.yaml, so a Darwin host, whose identity
+#   rests on the FileVault, never decrypts the Wi-Fi,
 #   Tailscale, or printer material only NixOS hosts use.
 #
-# usage: linux-host-secrets.sh ROOT
+# usage: user-identity-secrets.sh ROOT
 set -euo pipefail
 
-root=${1:?usage: linux-host-secrets.sh ROOT}
+root=${1:?usage: user-identity-secrets.sh ROOT}
 status=0
 
 fail() {
-  printf 'linux-host-secrets: %s\n' "$*" >&2
+  printf 'user-identity-secrets: %s\n' "$*" >&2
   status=1
 }
 
@@ -74,14 +74,17 @@ for dir in "$root"/hosts/*/; do
   for other in wifi tailscale printers; do
     other_rule_recipients=$(rule_recipients "$other")
     if grep -qxF -- "$recipient" <<<"$other_rule_recipients"; then
-      fail "$host: its recipient is in the $other.yaml rule of .sops.yaml; non-NixOS hosts must not decrypt it"
+      fail "$host: its recipient is in the $other.yaml rule of .sops.yaml; Darwin hosts must not decrypt it"
     fi
     other_file_recipients=$(file_recipients "$other")
     if grep -qxF -- "$recipient" <<<"$other_file_recipients"; then
-      fail "$host: secrets/$other.yaml is encrypted to its recipient; non-NixOS hosts must not decrypt it"
+      fail "$host: secrets/$other.yaml is encrypted to its recipient; Darwin hosts must not decrypt it"
     fi
   done
 done
 
-printf 'linux-host-secrets: checked %d non-NixOS host(s) under %s\n' "$checked" "$root"
+if [[ $checked -eq 0 ]]; then
+  fail 'no Darwin hosts found'
+fi
+printf 'user-identity-secrets: checked %d Darwin host(s) under %s\n' "$checked" "$root"
 exit "$status"

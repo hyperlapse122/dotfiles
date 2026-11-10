@@ -1,8 +1,7 @@
 { lib, ... }:
 {
   # Host facts and traits, declared once and imported by every assembly: the
-  # NixOS system, the Home Manager user inside it, and the standalone Home
-  # Manager and system-manager outputs of a non-NixOS host. Modules and checks
+  # NixOS and Darwin systems and their Home Manager users. Modules and checks
   # branch on these values, never on a host name.
   options.my = {
     bootstrap = lib.mkOption {
@@ -19,11 +18,10 @@
     kind = lib.mkOption {
       type = lib.types.enum [
         "nixos"
-        "linux"
         "darwin"
       ];
       default = "nixos";
-      description = "Whether the host runs NixOS, another Linux distribution, or macOS.";
+      description = "Whether the host runs NixOS or macOS.";
     };
 
     desktopSSH.publicKey = lib.mkOption {

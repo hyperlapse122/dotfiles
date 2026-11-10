@@ -15,12 +15,6 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Applies the system layer of a non-NixOS host: /etc files and systemd
-    # units on a distribution this flake does not own.
-    system-manager = {
-      url = "github:numtide/system-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # Applies the system layer of a macOS host, with Home Manager inside it.
     nix-darwin = {
       url = "github:nix-darwin/nix-darwin/master";
@@ -29,11 +23,6 @@
     # Installs Homebrew itself on a macOS host, so the first apply needs no
     # manual Homebrew install; nix-darwin's homebrew module installs the casks.
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
-    # Boots a foreign distribution's cloud image for the non-NixOS VM check.
-    nix-vm-test = {
-      url = "github:numtide/nix-vm-test";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # Pinned to a release tag rather than a branch, and the registry in
     # home/h82/agents/agent-plugin-pins.nix records the revision that tag is expected to
     # name. A tag is mutable and a relock re-resolves the ref, so the tag alone
@@ -109,22 +98,16 @@
             }
           )) hostNames
         );
-      linuxHosts = variantsOf (import ./lib/linux-host.nix { inherit inputs; }) hosts.linux;
       darwinHosts = variantsOf (import ./lib/darwin-host.nix { inherit inputs; }) hosts.darwin;
       darwinFixtures = import ./tests/lib/darwin-fixtures.nix { inherit inputs; };
 
-      # The non-NixOS fixture hosts build on their own architecture, so each
-      # system's checks carry the fixtures of that system.
-      linuxFixtures = import ./tests/lib/linux-fixtures.nix { inherit inputs; };
-      fixtureChecksFor = import ./tests/lib/fixture-checks.nix { inherit lib linuxFixtures; };
-      vmChecks = import ./tests/vm-checks.nix { inherit pkgs inputs linuxFixtures; };
+      vmChecks = import ./tests/vm-checks.nix { inherit pkgs inputs; };
       checkShards = import ./tests/check-shards.nix {
         inherit pkgs;
         checks = self.checks.${system};
         # The checks whose closure carries a host generation, found by
         # sweeping each check's .drv closure for a NixOS system-path or a Home
-        # Manager or system-manager generation. The fixture checks are listed
-        # through fixtureChecksFor because their names embed a fixture host.
+        # Manager generation.
         hostClosureChecks = [
           "agent-browser-deps"
           "agent-instructions"
@@ -150,7 +133,6 @@
           "minikube-autostart"
           "mise-settings"
           "nix-cleanup"
-          "non-nixos-outputs"
           "omp-models-load"
           "omp-settings"
           "pinned-skills"
@@ -172,31 +154,11 @@
           "winbox"
           "yubikey-fido"
           "zsh-prezto"
-        ]
-        ++ lib.attrNames (fixtureChecksFor system);
+        ];
         lightCount = 3;
       };
     in
     {
-      homeConfigurations = lib.mapAttrs (_: host: host.home) linuxHosts;
-      systemConfigs = lib.mapAttrs (_: host: host.systemManager) linuxHosts;
-      checks.aarch64-linux = fixtureChecksFor "aarch64-linux" // {
-        omp-settings = import ./tests/omp-settings.nix {
-          pkgs = import nixpkgs { system = "aarch64-linux"; };
-          inherit self;
-          fixtures = linuxFixtures;
-        };
-        omp-models-load = import ./tests/omp-models-load.nix {
-          pkgs = import nixpkgs { system = "aarch64-linux"; };
-          inherit self;
-          fixtures = linuxFixtures;
-        };
-        omp-acp = import ./tests/omp-acp.nix {
-          pkgs = import nixpkgs { system = "aarch64-linux"; };
-          inherit self;
-          fixtures = linuxFixtures;
-        };
-      };
       packages.aarch64-linux.omp = import ./packages/omp.nix {
         pkgs = import nixpkgs { system = "aarch64-linux"; };
       };
@@ -287,7 +249,7 @@
         let
           configurations = import ./tests/lib/configurations.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
 
           # Runs `assertConfiguration` over every configuration the flake builds.
@@ -427,7 +389,6 @@
             inherit
               pkgs
               self
-              linuxFixtures
               darwinFixtures
               ;
           };
@@ -461,20 +422,20 @@
           codex = import ./tests/codex.nix { inherit pkgs self; };
           omp-settings = import ./tests/omp-settings.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           omp-models-load = import ./tests/omp-models-load.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           omp-acp = import ./tests/omp-acp.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           codex-settings = import ./tests/codex-settings.nix { inherit pkgs self; };
           cargo-settings = import ./tests/cargo-settings.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           synthetic-models = import ./tests/synthetic-models.nix { inherit pkgs; };
           # The probe needs a signed-in instance home, so no check runs it;
@@ -541,15 +502,15 @@
           grok = import ./tests/grok.nix { inherit pkgs self; };
           ghq = import ./tests/ghq.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           git-lfs = import ./tests/git-lfs.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           git-trim = import ./tests/git-trim.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           antigravity-acp-path = import ./tests/antigravity-acp-path.nix {
             inherit pkgs;
@@ -559,38 +520,38 @@
           shell-utilities = import ./tests/shell-utilities.nix { inherit pkgs self; };
           mise-settings = import ./tests/mise-settings.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           nix-cleanup = import ./tests/nix-cleanup.nix { inherit pkgs self; };
           elf-load-segments = import ./tests/elf-load-segments.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           boot-splash = import ./tests/boot-splash.nix { inherit pkgs self; };
           agent-plugins = import ./tests/agent-plugins.nix { inherit pkgs self; };
           antigravity-skills = import ./tests/antigravity-skills.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           korean-skills = import ./tests/korean-skills.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           test-audit-skill = import ./tests/test-audit-skill.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           pinned-skills = import ./tests/pinned-skills.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           agent-instructions = import ./tests/agent-instructions.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           git-cli-repo-flags = import ./tests/git-cli-repo-flags.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           agent-plugin-sync =
             pythonScriptCheck "agent-plugin-sync" ./scripts/agent-plugin-sync
@@ -745,23 +706,23 @@
           android-sdk = import ./tests/android-sdk.nix { inherit pkgs self; };
           session-variables = import ./tests/session-variables.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           antigravity-profiles = import ./tests/antigravity-profiles.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           serve-html-profiles = import ./tests/serve-html-profiles.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           kubernetes-tools = import ./tests/kubernetes-tools.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           minikube-autostart = import ./tests/minikube-autostart.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
           zsh-prezto =
             let
@@ -1174,15 +1135,6 @@
                   builtins.attrNames (entry.config.systemd.user.services or { })
                 )) "${entry.name} still has Grok Bot user units"}
               '';
-              assertFixture =
-                fixture:
-                let
-                  smConfig = fixture.host.systemManager.config;
-                in
-                ''
-                  ${report (grokNamesOf (builtins.attrNames smConfig.environment.etc)) "the system-manager configuration of ${fixture.name} still writes /etc files for Grok Bot"}
-                  ${report (grokNamesOf (builtins.attrNames smConfig.systemd.services)) "the system-manager configuration of ${fixture.name} still has Grok Bot units"}
-                '';
               # Real Mac hosts and the macOS fixtures alike, read from the
               # evaluated configuration, so a cask, App Store app, or package a
               # module adds outside modules/shared/darwin-apps.nix is caught too.
@@ -1208,21 +1160,12 @@
                     inherit user;
                   }}
                 '';
-              standaloneUsers = lib.mapAttrsToList (name: home: {
-                inherit name;
-                user = home.config;
-              }) self.homeConfigurations;
             in
             pkgs.runCommand "grok-absent" { } ''
               ${configurations.userGuard}
               fail=0
-              ${lib.concatMapStrings assertUser (configurations.userEntries ++ standaloneUsers)}
+              ${lib.concatMapStrings assertUser configurations.userEntries}
               ${lib.concatMapStrings assertNixos configurations.entries}
-              ${lib.optionalString (configurations.linuxFixtures == [ ]) ''
-                echo 'no non-NixOS fixture host of this architecture, so the system-manager side of this check would cover none' >&2
-                fail=1
-              ''}
-              ${lib.concatMapStrings assertFixture configurations.linuxFixtures}
               ${lib.optionalString (darwinFixtures == [ ]) ''
                 echo 'no macOS fixture host, so the evaluated-cask side of this check would cover none' >&2
                 fail=1
@@ -1333,7 +1276,7 @@
               touch $out
             '';
           bootstrap-recipients = import ./tests/bootstrap-recipients.nix { inherit pkgs; };
-          linux-host-secrets = import ./tests/linux-host-secrets.nix { inherit pkgs self; };
+          user-identity-secrets = import ./tests/user-identity-secrets.nix { inherit pkgs self; };
           sops-recipients = import ./tests/sops-recipients.nix { inherit pkgs self; };
           update-dependencies-reconcile =
             pkgs.runCommand "update-dependencies-reconcile-tests"
@@ -1414,7 +1357,6 @@
           network-recovery = import ./tests/network-recovery.nix { inherit pkgs; };
           inherit (import ./tests/non-nixos-scripts.nix { inherit pkgs; })
             install-user-age-identity
-            nr-linux
             nr-darwin
             ;
           nr = import ./tests/nr.nix { inherit pkgs self; };
@@ -1504,16 +1446,11 @@
                   scripts/recover-age-identity scripts/prepare-age-identity
                 touch $out
               '';
-          non-nixos-outputs = import ./tests/non-nixos-outputs.nix {
-            inherit pkgs self;
-            fixtures = linuxFixtures;
-          };
           t3code-traits = import ./tests/t3code-traits.nix {
             inherit pkgs self;
-            fixtures = linuxFixtures;
+            fixtures = [ ];
           };
-        }
-        // fixtureChecksFor system;
+        };
       formatter.${system} = pkgs.nixfmt-tree;
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [

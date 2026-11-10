@@ -1,8 +1,8 @@
 /*
-  CLI credentials and the host SSH key on a non-NixOS host.
+  CLI credentials and the host SSH key on a Darwin host.
 
   NixOS decrypts these with a root-owned identity in a system unit. A
-  non-NixOS host has no such stage, so its production output decrypts them
+  Darwin host has no such stage, so its production output decrypts them
   from the user-owned identity during Home Manager activation, through
   scripts/host-secrets: `stage` runs before writeBoundary and aborts the
   activation before a single link changes when the identity or any secret is
@@ -58,9 +58,8 @@ let
     routingTable = registries;
   };
 
-  # Linux and macOS hosts alike: neither has the NixOS system unit that
-  # decrypts secrets with a root-owned identity.
-  nonNixos = config.my.kind != "nixos";
+  # Darwin decrypts secrets with a user-owned identity.
+  nonNixos = config.my.kind == "darwin";
   active = nonNixos && !config.my.bootstrap;
 in
 {
@@ -107,7 +106,7 @@ in
       assertions = [
         {
           assertion = cfg.tokensFile != null && cfg.sshKeyFile != null;
-          message = "${hostName}: a non-NixOS production output needs secrets/tokens.yaml and secrets/hosts/${hostName}/ssh.yaml; see docs/adding-a-host.md.";
+          message = "${hostName}: a Darwin production output needs secrets/tokens.yaml and secrets/hosts/${hostName}/ssh.yaml; see docs/adding-a-host.md.";
         }
       ];
 

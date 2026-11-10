@@ -14,7 +14,7 @@ let
   sshConfig = marker + "\n" + body;
 
   # Bootstrap keeps the existing agent until host credentials are provisioned.
-  # A non-NixOS host, Linux or macOS, has no 1Password agent the flake sets up:
+  # A Darwin host, has no 1Password agent the flake sets up:
   # it uses its own key, which production activation publishes
   # (non-nixos-secrets.nix).
   body =

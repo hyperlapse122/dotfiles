@@ -3,9 +3,6 @@
 
     configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
-  `fixtures` may also be passed (tests/lib/linux-fixtures.nix), so a caller
-  that already built the fixture hosts does not assemble them again.
-
   Turns `self.nixosConfigurations` into the one list every host-dependent check
   iterates, so a host added under hosts/ is covered the day it is added and no
   check names a host.
@@ -19,8 +16,6 @@
   - `entryOf name host`: the same entry shape for any evaluated host, such as
     one re-evaluated with `extendModules`.
   - `production` and `bootstraps`: `entries` split by `bootstrap`.
-  - `linuxFixtures`: the non-NixOS fixture hosts of the builder's
-    architecture, each `{ name, fixture, bootstrap, host }`.
   - `guard`: a script fragment that fails the builder when `entries` is empty
     or holds no bootstrap output. Every check splices it before its per-entry
     assertions, so an empty list is a failure, never a silent pass.
@@ -54,9 +49,7 @@
 {
   pkgs,
   self,
-  # tests/lib/linux-fixtures.nix. The flake passes the list it already built,
-  # so the fixtures are assembled once per evaluation.
-  fixtures ? import ./linux-fixtures.nix { inherit (self) inputs; },
+  fixtures ? [ ],
 }:
 let
   inherit (pkgs) lib;
@@ -90,22 +83,14 @@ let
       }
     );
 
+  linuxFixtures = [ ];
+
   production = lib.filter (entry: !entry.bootstrap) entries;
 
-  # Only fixtures of the builder's architecture: a check interpolates their
-  # store paths, and another architecture's paths cannot build here.
-  linuxFixtures = lib.filter (entry: entry.host.system == pkgs.stdenv.hostPlatform.system) fixtures;
-
-  userEntries =
-    map (entry: {
-      inherit (entry) name bootstrap user;
-      kind = "nixos";
-    }) entries
-    ++ map (entry: {
-      inherit (entry) name bootstrap;
-      kind = "linux";
-      user = entry.host.home.config;
-    }) linuxFixtures;
+  userEntries = map (entry: {
+    inherit (entry) name bootstrap user;
+    kind = "nixos";
+  }) entries;
 in
 {
   inherit
@@ -122,7 +107,6 @@ in
     let
       missing = lib.filter (kind: !lib.any (entry: entry.kind == kind) userEntries) [
         "nixos"
-        "linux"
       ];
     in
     lib.optionalString (missing != [ ]) ''

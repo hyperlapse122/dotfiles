@@ -42,6 +42,12 @@ let
     desktop-ssh.leftOut = "the NixOS desktop SSH agent; a macOS host uses its own host key";
     dummy-fc-dir1.leftOut = "a fontconfig directory placeholder; macOS fonts go through CoreText";
     dummy-fc-dir2.leftOut = "a fontconfig directory placeholder; macOS fonts go through CoreText";
+    wl-clipboard.leftOut = "Wayland clipboard tools; macOS supplies pbcopy and pbpaste";
+    shared-mime-info.leftOut = "Linux MIME database; macOS supplies its own type database";
+    dummy-xdg-mime-dirs1.leftOut = "Linux MIME directory placeholder";
+    dummy-xdg-mime-dirs2.leftOut = "Linux MIME directory placeholder";
+    man-db.leftOut = "Linux man page index; macOS supplies man";
+    openjdk.leftOut = "macOS gets Java through home/h82/dev/android.nix under its platform-specific package name";
     nr.leftOut = "the NixOS apply helper; macOS gets nr-darwin";
   };
 

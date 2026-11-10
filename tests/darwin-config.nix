@@ -125,7 +125,6 @@
 {
   pkgs,
   self,
-  linuxFixtures,
   darwinFixtures,
 }:
 let
@@ -177,7 +176,12 @@ let
   hosts = import ../lib/hosts.nix { inherit lib; } ./fixtures/hosts;
   kindOf = fixture: (import (./fixtures/hosts + "/${fixture}/host.nix")).kind or null;
 
+  invalidHosts = import ../lib/hosts.nix { inherit lib; } ./fixtures/invalid-kind;
+
   assertDiscovery = lib.concatStrings [
+    (check (
+      !(builtins.tryEval (builtins.length invalidHosts.darwin)).success
+    ) "unsupported host kind was accepted")
     (check (hosts.darwin != [ ]) "tests/fixtures/hosts holds no macOS fixture host")
     (lib.concatMapStrings (
       fixture:
@@ -185,12 +189,6 @@ let
         kindOf fixture == "darwin"
       ) "${fixture}: listed as macOS, but host.nix names kind ${toString (kindOf fixture)}"
     ) hosts.darwin)
-    (lib.concatMapStrings (
-      fixture:
-      check (
-        kindOf fixture != "darwin"
-      ) "${fixture}: host.nix names kind darwin, but it is listed as a Linux host"
-    ) hosts.linux)
     (check (
       lib.sort lib.lessThan (lib.unique (map (e: e.fixture) darwinFixtures))
       == lib.sort lib.lessThan hosts.darwin
@@ -213,11 +211,15 @@ let
   nixosNames = lib.unique (
     lib.concatMap (c: namesOf c.config.home-manager.users.h82.home.packages) nixosConfigs
   );
-  linuxNames = lib.unique (lib.concatMap (e: namesOf e.host.home.config.home.packages) linuxFixtures);
   onePassword = lib.optional (lib.any (
     c: c.config.programs._1password-gui.enable
   ) nixosConfigs) "1password";
-  required = lib.subtractLists linuxNames nixosNames ++ onePassword;
+  darwinNames = lib.unique (
+    lib.concatMap (
+      e: namesOf e.host.config.home-manager.users.${e.host.config.my.user.name}.home.packages
+    ) darwinFixtures
+  );
+  required = lib.subtractLists darwinNames nixosNames ++ onePassword;
 
   mapping = import ../modules/shared/darwin-apps.nix;
   kinds = [
@@ -1235,17 +1237,16 @@ let
       ) "${entry.name}: the Dock must leave ${lib.concatStringsSep ", " unmanaged} to the user")
     ];
 
-  # Device creation is macOS-only; the module must not reach other hosts.
   assertNoDevicesElsewhere = lib.concatStrings [
     (check (
-      linuxFixtures != [ ]
-    ) "no non-NixOS Linux fixture, so the mobileDevices absence check would pass vacuously")
+      nixosConfigs != [ ]
+    ) "no NixOS host, so the mobileDevices absence check would pass vacuously")
     (lib.concatMapStrings (
-      e:
+      host:
       check (
-        !e.host.home.config.home.activation ? mobileDevices
-      ) "${e.name}: a non-NixOS Linux host runs the mobileDevices activation step"
-    ) linuxFixtures)
+        !host.config.home-manager.users.h82.home.activation ? mobileDevices
+      ) "a NixOS host runs the macOS mobileDevices activation step"
+    ) nixosConfigs)
   ];
 in
 pkgs.runCommand "darwin-config" { } ''
@@ -1254,13 +1255,13 @@ pkgs.runCommand "darwin-config" { } ''
     fail "tests/fixtures/hosts holds no macOS fixture host"
   )}
   ${assertDiscovery}
+  ${assertNoDevicesElsewhere}
   ${assertZapFilter}
   ${assertMapping}
   ${lib.concatMapStrings assertEntry darwinFixtures}
   ${lib.concatMapStrings assertTlsInspectionCa darwinFixtures}
   ${lib.concatMapStrings assertNetworkRecovery darwinFixtures}
   ${lib.concatMapStrings assertDock darwinFixtures}
-  ${assertNoDevicesElsewhere}
   ${assertMobileDeviceTypes}
   [ "$fail" = 0 ] || exit 1
   touch "$out"

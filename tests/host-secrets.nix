@@ -5,7 +5,7 @@
 
   Runs the packaged scripts/host-secrets against a scratch HOME and the fake
   secrets from tests/lib/fake-secrets.nix, in the order Home Manager
-  activation runs it on a non-NixOS host:
+  activation runs it on a Darwin host:
 
   - without an identity, `stage` fails, names the identity path and the
     recovery command, and leaves nothing staged or published;

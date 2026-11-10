@@ -561,57 +561,6 @@ let
     ${assertSettingsOn entry}
   '';
 
-  desktopMessage = "the T3 Code desktop app runs on NixOS and macOS only";
-
-  # Home Manager throws on a failed assertion before any part of the output
-  # can be read, so an assembled fixture can only show that evaluation is
-  # refused. The same fixture without the trait must evaluate, so the refusal
-  # is the trait's. Only bootstrap variants are re-assembled: production needs
-  # the fixtures' fake secrets, and without them it fails on its own.
-  evaluates = home: (builtins.tryEval home.config.home.username).success;
-
-  mkLinuxHost = import ../lib/linux-host.nix { inherit (self) inputs; };
-
-  assertFixture =
-    entry:
-    let
-      forced = mkLinuxHost {
-        hostName = entry.fixture;
-        dir = ./fixtures/hosts + "/${entry.fixture}";
-        bootstrap = true;
-        extraModules.home = [ { my.t3.desktop.enable = true; } ];
-      };
-    in
-    lib.concatStrings [
-      (lib.optionalString (!evaluates entry.host.home) (
-        fail "${entry.name}: the fixture as declared does not evaluate"
-      ))
-      (lib.optionalString (evaluates forced.home) (
-        fail "${entry.name} with my.t3.desktop.enable forced on: Home Manager evaluates instead of refusing the desktop app"
-      ))
-    ];
-
-  # The CLI is the T3 Code a non-NixOS host supports, and no fixture of every
-  # architecture enables it, so the merge's positive side is checked on a
-  # bootstrap fixture with the CLI forced on. Only this architecture's
-  # fixtures, because the activation script interpolates their store paths.
-  assertFixtureCli =
-    entry:
-    let
-      forced = mkLinuxHost {
-        hostName = entry.fixture;
-        dir = ./fixtures/hosts + "/${entry.fixture}";
-        bootstrap = true;
-        extraModules.home = [
-          {
-            my.t3.cli.enable = lib.mkForce true;
-            my.t3.desktop.enable = lib.mkForce false;
-          }
-        ];
-      };
-    in
-    assertSettings "${entry.name} with only my.t3.cli.enable forced on" forced.home.config true;
-
   # The module reaches lib.hm, which only Home Manager's extended lib carries.
   hmLib = import "${self.inputs.home-manager}/modules/lib/stdlib-extended.nix" lib;
 
@@ -683,17 +632,10 @@ let
 
   assertModule =
     let
-      linux = moduleOn "linux";
       nixos = moduleOn "nixos";
       darwin = moduleOn "darwin";
     in
     lib.concatStrings [
-      (lib.optionalString (!lib.any (lib.hasInfix desktopMessage) linux.failed) (
-        fail "non-NixOS with my.t3.desktop.enable: no assertion reports that ${desktopMessage}; failed assertions: ${builtins.toJSON linux.failed}"
-      ))
-      (lib.optionalString linux.desktopInstalled (
-        fail "non-NixOS with my.t3.desktop.enable: the T3 Code desktop package is added, so the host fails a build rather than the assertion"
-      ))
       (lib.optionalString (nixos.failed != [ ]) (
         fail "NixOS with my.t3.desktop.enable: assertions fail: ${builtins.toJSON nixos.failed}"
       ))
@@ -723,7 +665,6 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   ${desktopTrait.guard}
   ${bootstrapGuard "my.t3.cli.enable" cliEnabled}
   ${bootstrapGuard "my.t3.desktop.enable" desktopEnabled}
-  ${lib.optionalString (fixtures == [ ]) (fail "tests/fixtures/hosts holds no fixture host")}
 
   # True when $1 exists and resolves into a store path of package $2.
   resolvesInto() {
@@ -844,17 +785,6 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
 
   ${lib.concatMapStrings assertProfile profileEntries}
   ${lib.concatMapStrings assertSettingsOn bothOff}
-  ${lib.concatMapStrings (
-    entry:
-    let
-      home = entry.host.home.config;
-    in
-    assertSettings entry.name home (home.my.t3.cli.enable || home.my.t3.desktop.enable)
-  ) configurations.linuxFixtures}
-  ${lib.concatMapStrings assertFixtureCli (
-    lib.filter (entry: entry.bootstrap) configurations.linuxFixtures
-  )}
-  ${lib.concatMapStrings assertFixture (lib.filter (entry: entry.bootstrap) fixtures)}
   ${assertModule}
 
   [ "$fail" = 0 ] || exit 1

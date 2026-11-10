@@ -1,11 +1,11 @@
 /*
   Check interface:
 
-    import ./tests/linux-host-secrets.nix { inherit pkgs self; }
+    import ./tests/user-identity-secrets.nix { inherit pkgs self; }
 
-  Runs tests/linux-host-secrets.sh over the repository, then over fixture
+  Runs tests/user-identity-secrets.sh over the repository, then over fixture
   trees built here with fake keys, so each rule it enforces is proven to fail
-  when broken even while hosts/ holds no non-NixOS host. Every tree encrypts
+  when broken even while hosts/ holds no Darwin host. Every tree encrypts
   its secret files to the recipients its .sops.yaml rules name, except where a
   mutation makes the two disagree:
 
@@ -19,7 +19,7 @@
   - a wifi.yaml or printers.yaml encrypted to the host while its rule does not name it fails.
 */
 { pkgs, self }:
-pkgs.runCommand "linux-host-secrets-tests"
+pkgs.runCommand "user-identity-secrets-tests"
   {
     nativeBuildInputs = [
       pkgs.age
@@ -30,7 +30,7 @@ pkgs.runCommand "linux-host-secrets-tests"
     ];
   }
   ''
-    check=${./linux-host-secrets.sh}
+    check=${./user-identity-secrets.sh}
 
     bash "$check" ${self}
 
@@ -44,11 +44,11 @@ pkgs.runCommand "linux-host-secrets-tests"
       sops --encrypt --age "$1" --input-type yaml --output-type yaml plain.yaml >"$2"
     }
 
-    # A tree with one non-NixOS host, plus the single mutation named by $1.
+    # A tree with one Darwin host, plus the single mutation named by $1.
     make_tree() {
       local tree=$TMPDIR/tree-$1
       mkdir -p "$tree/hosts/fakehost" "$tree/secrets/bootstrap/fakehost" "$tree/secrets/hosts/fakehost"
-      printf '{ kind = "linux"; system = "x86_64-linux"; }\n' >"$tree/hosts/fakehost/host.nix"
+      printf '{ kind = "darwin"; system = "aarch64-darwin"; }\n' >"$tree/hosts/fakehost/host.nix"
       printf '%s\n' "$host" >"$tree/secrets/bootstrap/fakehost/recipient.txt"
       local tokens_rule="$nixos,$host" tokens_file="$nixos,$host"
       local wifi_rule=$nixos wifi_file=$nixos tailscale_rule=$nixos printers_rule=$nixos printers_file=$nixos ssh=$host
@@ -83,11 +83,11 @@ pkgs.runCommand "linux-host-secrets-tests"
     expect_failure() {
       local mutation=$1 reason=$2
       if bash "$check" "$(make_tree "$mutation")" 2>err; then
-        echo "linux-host-secrets passed a tree with mutation $mutation" >&2
+        echo "user-identity-secrets passed a tree with mutation $mutation" >&2
         exit 1
       fi
       if ! grep -qF -- "$reason" err; then
-        echo "linux-host-secrets failed mutation $mutation for another reason:" >&2
+        echo "user-identity-secrets failed mutation $mutation for another reason:" >&2
         cat err >&2
         exit 1
       fi

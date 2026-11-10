@@ -5,8 +5,7 @@
 
   Scans every ELF file in the closures of every configuration
   `tests/lib/configurations.nix` yields, production and bootstrap alike, and
-  of the non-NixOS fixture hosts' Home Manager and system-manager outputs of
-  the builder's architecture. It fails when any file has overlapping PT_LOAD
+  their system closures. It fails when any file has overlapping PT_LOAD
   segments, the mark patchelf 0.17 and later leave on a prebuilt executable
   they break (packages/patchelf-0-16.nix). Such a binary builds and installs,
   then segfaults on start, so only its program headers show the break.
@@ -24,12 +23,7 @@ let
 
   configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
 
-  roots =
-    map (entry: entry.config.system.build.toplevel) configurations.entries
-    ++ lib.concatMap (entry: [
-      entry.host.home.activationPackage
-      entry.host.systemManager
-    ]) configurations.linuxFixtures;
+  roots = map (entry: entry.config.system.build.toplevel) configurations.entries;
 
   closure = pkgs.closureInfo { rootPaths = roots; };
 in

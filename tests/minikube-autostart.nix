@@ -22,7 +22,7 @@
   wants link, the cpuset delegation, or the MINIKUBE_* settings exist. The
   user@ drop-in exists on every NixOS output (nixpkgs writes
   X-RestartIfChanged there), so the check reads its Delegate line, not the
-  file. No non-NixOS fixture's Home Manager or system-manager output carries
+  file.
   a minikube unit.
 
   A disabled or retargeted /etc entry is read as absent, and every lookup
@@ -50,8 +50,6 @@ let
   # live in the shared profile, so one host proves each.
   forcedOff =
     option: map (configurations.withTraitForcedOff option) (lib.take 1 configurations.production);
-
-  linuxUsers = lib.filter (entry: entry.kind == "linux") configurations.userEntries;
 
   expectedVariables = {
     MINIKUBE_PROFILE = "minikube";
@@ -166,19 +164,6 @@ let
       fi
     '';
 
-  assertLinuxUser = entry: ''
-    if [ ! -d ${esc "${entry.user.home-files or ""}"} ]; then
-      ${fail "${entry.name}: the non-NixOS fixture has no Home Manager home-files"}
-    elif [ -n "$(find ${esc "${entry.user.home-files or ""}/.config/systemd/user"} -name 'minikube*' 2>/dev/null)" ]; then
-      ${fail "${entry.name}: a non-NixOS Home Manager output carries a minikube user unit"}
-    fi
-  '';
-
-  assertLinuxSystem = entry: ''
-    if grep -q minikube ${esc "${entry.host.systemManager}/services/services.json"}; then
-      ${fail "${entry.name}: a non-NixOS system-manager output carries a minikube unit"}
-    fi
-  '';
 in
 pkgs.runCommand "minikube-autostart-tests" { } ''
   ${configurations.guard}
@@ -193,8 +178,6 @@ pkgs.runCommand "minikube-autostart-tests" { } ''
     ++ forcedOff "my.minikube.enable"
     ++ forcedOff "my.podman.enable"
   )}
-  ${lib.concatMapStringsSep "\n" assertLinuxUser linuxUsers}
-  ${lib.concatMapStringsSep "\n" assertLinuxSystem configurations.linuxFixtures}
 
   if [ "$failed" != 0 ]; then
     exit 1

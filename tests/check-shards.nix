@@ -9,7 +9,7 @@
   `nix build .#checkShards.<name>` builds one shard locally.
 
   - `hosts` holds `hostClosureChecks`: the checks whose closure carries a
-    full NixOS system path or a Home Manager or system-manager generation.
+    full NixOS system path or a Home Manager generation.
     Each of them reads every host, so splitting them would make every shard
     that holds one fetch all the host closures again.
   - `light-1` through `light-<lightCount>` split the other checks by
