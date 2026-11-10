@@ -26,4 +26,5 @@
   tailscale-provisioning = import ./tailscale-provisioning.nix { inherit pkgs inputs; };
   podman-registry-auth = import ./podman-registry-auth.nix { inherit pkgs inputs; };
   podman-prune = import ./podman-prune.nix { inherit pkgs; };
+  intune-os-identity = import ./intune-os-identity.nix { inherit pkgs; };
 }

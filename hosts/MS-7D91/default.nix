@@ -4,6 +4,8 @@
     ./hardware.nix
     ./disko.nix
   ];
+  # Enrollment needs a work account, which an installation console never has.
+  my.intune.enable = !config.my.bootstrap;
   my.nuphyGem80.enable = true;
   my.t3.cli.enable = true;
   my.t3.desktop.enable = true;

@@ -61,6 +61,7 @@
       };
     };
 
+    intune.enable = lib.mkEnableOption "Microsoft Intune enrollment: the Intune app, the identity broker, and Microsoft Edge, with an Ubuntu OS identity for the Intune executables (NixOS hosts only)";
     nuphyGem80.enable = lib.mkEnableOption "device access for the NuPhy Gem80 configurator and firmware flashing";
     sshServer.enable = lib.mkEnableOption "an OpenSSH server that accepts only the user, authenticated by the OpenPGP card's authentication subkey (NixOS hosts only)";
     t3.cli.enable = lib.mkEnableOption "the headless T3 Code `t3` CLI";
