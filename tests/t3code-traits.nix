@@ -22,9 +22,8 @@
     script is executed by the shared agent-activation harness against scratch
     files, checking destination/declaration, real file effects, repeat apply,
     dry-run byte protection and refusal propagation. The
-    settings.json declaration names the provider instances' leaves: the
-    enabled Antigravity, Claude, Codex, Grok, and one OMP instance, the
-    disabled Pi and OpenCode instances, the Claude instance's launch arguments emptied,
+    settings.json declaration names enabled Antigravity, Claude, Codex and Grok
+    instances, and the disabled Pi and OpenCode instances, the Claude instance's launch arguments emptied,
     which retires the --add-dir an earlier generation wrote, no environment
     entry upserted, and the Codex instance's launch arguments emptied, which
     retires the developer_instructions override an earlier generation wrote; the
@@ -46,14 +45,9 @@
     home, or declares `managed`, since
     T3 Code's Codex sessions must run on ~/.codex, where the plugin sync and
     the skills land. The Pi instance declares no binaryPath and no launch arguments.
-    The declaration retires providerModelPreferences.opencode, which an
-    earlier generation wrote, and merges "default" into
-    providerModelPreferences.omp.hiddenModels via prefixEntries. On a full
-    configuration, the real merger also runs over a settings.json that holds
-    an enabled opencode instance, that preference, and another provider's:
-    the merged file must hold the instance disabled, the opencode preference
-    gone, the other provider's preference preserved, and omp's hiddenModels
-    carrying "default".
+    The declaration retires the old OpenCode model preference and the OMP
+    provider entries. The real merger runs twice over seeded settings,
+    preserving unrelated user keys while removing the retired entries.
   The same holds on each non-NixOS fixture host of the builder's
   architecture, production and bootstrap, and on each bootstrap fixture
   re-assembled with only the CLI trait forced on, since the CLI is the T3
@@ -161,23 +155,26 @@ let
     removePaths = [
       {
         path = [ "providerInstances" ];
+        key = "omp";
+      }
+      {
+        path = [ "providers" ];
+        key = "omp";
+        prune = true;
+      }
+      {
+        path = [ "providerModelPreferences" ];
+        key = "omp";
+        prune = true;
+      }
+      {
+        path = [ "providerInstances" ];
         key = "omp-codex";
       }
       {
         path = [ "providerModelPreferences" ];
         key = "opencode";
         prune = true;
-      }
-    ];
-    prefixEntries = [
-      {
-        path = [
-          "providerModelPreferences"
-          "omp"
-          "hiddenModels"
-        ];
-        prefix = "default";
-        value = "default";
       }
     ];
     migrateInstances = {
@@ -188,7 +185,6 @@ let
         "claudeAgent"
         "codex"
         "grok"
-        "omp"
         "opencode"
         "pi"
       ];
@@ -306,30 +302,6 @@ let
       {
         path = [
           "providerInstances"
-          "omp"
-          "displayName"
-        ];
-        value = "OMP";
-      }
-      {
-        path = [
-          "providerInstances"
-          "omp"
-          "driver"
-        ];
-        value = "acpRegistry";
-      }
-      {
-        path = [
-          "providerInstances"
-          "omp"
-          "enabled"
-        ];
-        value = true;
-      }
-      {
-        path = [
-          "providerInstances"
           "opencode"
           "driver"
         ];
@@ -416,23 +388,6 @@ let
         value = true;
       }
     ];
-    ownEntries =
-      map
-        (id: {
-          path = [
-            "providerInstances"
-            id
-            "config"
-          ];
-          entries = {
-            source = "local";
-            commandPath = noContext "${import ../packages/omp.nix { inherit pkgs; }}/bin/omp";
-            # omp-acp owns custom selectors, runtime scope and defaults.
-          };
-        })
-        [
-          "omp"
-        ];
     own = {
       defaultModelSelection = {
         instanceId = "claudeAgent";

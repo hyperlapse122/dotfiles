@@ -14,7 +14,6 @@
     ./system/nix-cleanup.nix
     ./system/nix-ld.nix
     ./system/agent-browser-deps.nix
-    ./system/omp.nix
     ./services/podman.nix
     ./services/minikube.nix
     ./services/printing.nix

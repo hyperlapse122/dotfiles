@@ -21,7 +21,6 @@ let
   esc = value: lib.escapeShellArg (toString value);
   fakeKey = "0123456789ABCDEF0123456789ABCDEF01234567";
   deliveries = {
-    ".omp/agent/AGENTS.md" = "omp";
     ".claude/CLAUDE.md" = "claude";
     ".codex/AGENTS.md" = "codex";
     ".gemini/config/rules" = "antigravity";
@@ -29,7 +28,6 @@ let
   deliveryPaths = lib.attrNames deliveries;
   retiredPaths = [
     ".pi/agent/AGENTS.md"
-    ".omp/agent/OMP.md"
     ".t3/instructions/claude-code/CLAUDE.md"
     ".gemini/GEMINI.md"
     ".gemini/config/AGENTS.md"

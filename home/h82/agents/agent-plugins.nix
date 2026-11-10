@@ -26,7 +26,6 @@ let
       exclude = {
         claude = [ ];
         codex = [ ];
-        omp = [ ];
       };
     };
   };
@@ -34,10 +33,6 @@ let
   # Harness membership is declared separately from the source, so adding a
   # plugin to another agent is a row rather than a second source entry.
   membership = [
-    {
-      name = "compound-engineering";
-      harness = "omp";
-    }
     {
       name = "compound-engineering";
       harness = "claude";
@@ -53,8 +48,6 @@ let
   # home.sessionVariables, so Claude Code's declared tier is exported around
   # it; Codex's update overrides travel inside its wrapper.
   harnesses = {
-    # OMP discovers native directories directly; no mutable plugin registry.
-    omp = { };
     claude = {
       cli = "${claudeCode}/bin/claude";
       env = claudeEnv;
@@ -96,7 +89,7 @@ let
     lib.length (
       lib.unique (
         map (row: sources.${name}.exclude.${row.harness} or [ ]) (
-          lib.filter (row: row.name == name && row.harness != "omp") checkedMembership
+          lib.filter (row: row.name == name) checkedMembership
         )
       )
     ) > 1
@@ -122,13 +115,7 @@ let
             ${lib.concatMapStringsSep "\n" (path: "rm -rf $out/${path}") excluded}
           '';
     in
-    if harness == "omp" && name == "compound-engineering" then
-      import ./omp-ce.nix {
-        inherit pkgs;
-        src = tree;
-      }
-    else
-      tree;
+    tree;
 
   # Read the declared values rather than restating them: claude.nix owns this
   # tier, and the activation unit carries neither home.packages on PATH nor
@@ -201,9 +188,7 @@ let
           "agent-plugins: harnesses of ${lib.concatStringsSep ", " divergentExclusions} exclude different paths but share one link"
           (
             lib.concatStringsSep "\n" (
-              map (row: withDryRun (syncInvocation row)) (
-                lib.filter (row: row.harness != "omp") checkedMembership
-              )
+              map (row: withDryRun (syncInvocation row)) checkedMembership
               ++ map (row: withDryRun (retireInvocation row)) retired
             )
           )
@@ -222,13 +207,5 @@ in
   # would not yet exist when the wiring reads it, and creating it here also
   # keeps the superseded version present until the new one is wired.
   home.activation.agentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] syncScript;
-  home.file = lib.listToAttrs (
-    map (row: {
-      name = ".omp/agent/plugins/${row.name}";
-      value.source = treeFor row.name sources.${row.name} row.harness;
-    }) (lib.filter (row: row.harness == "omp") checkedMembership)
-  );
-  my.omp.skillDirectories = map (
-    row: "${config.home.homeDirectory}/.omp/agent/plugins/${row.name}/skills"
-  ) (lib.filter (row: row.harness == "omp") checkedMembership);
+
 }

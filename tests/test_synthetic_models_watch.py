@@ -848,7 +848,7 @@ class CatalogSnapshotTest(WatchTestCase):
                 self.assertIn(GLM, proc.stderr)
                 self.assertEqual(self.out.read_text(), self.SENTINEL)
 
-    def test_pricing_that_omp_cannot_parse_exits_non_zero_and_leaves_the_file(self):
+    def test_pricing_that_the_catalog_cannot_parse_exits_non_zero_and_leaves_the_file(self):
         cases = {
             "no input_cache_writes": lambda p: p.pop("input_cache_writes"),
             "a numeric prompt": lambda p: p.update(prompt=0.0000006),
@@ -872,7 +872,7 @@ class CatalogSnapshotTest(WatchTestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertEqual(self.out.read_text(), self.SENTINEL)
 
-    def test_pricing_keeps_only_the_four_prices_and_accepts_every_shape_omp_parses(self):
+    def test_pricing_keeps_only_the_four_prices_and_accepts_every_supported_shape(self):
         catalog = snapshot()
         pricing = next(m for m in catalog["data"] if m["id"] == GLM)["pricing"]
         pricing.update(prompt="0", completion="$1.5e-6", input_cache_reads="$0.00000003", extra="$9")

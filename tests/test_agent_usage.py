@@ -34,7 +34,7 @@ class UsageTest(unittest.TestCase):
                         CODEX_HOME=str(self.root / ".codex"),
                         GROK_HOME=str(self.root / ".grok"),
                         CLAUDE_CONFIG_DIR=str(self.root / ".claude"),
-                        PI_CODING_AGENT_DIR=str(self.root / ".omp/agent"),
+                        AGENT_USAGE_SYNTHETIC_KEY_FILE=str(self.root / "synthetic-key"),
                         AGENT_USAGE_ANTIGRAVITY_VERSION="9.9.9",
                         PATH=str(self.root) + os.pathsep + os.environ.get("PATH", ""))
         for key in ("XAI_API_KEY", "XAI_BASE_URL", "GROK_BASE_URL", "ANTHROPIC_API_KEY", "GEMINI_HOME"):
@@ -85,9 +85,8 @@ for line in sys.stdin:
   print(json.dumps({'id':r['id'],'result':data['codex']}),flush=True)
 ''')
         self.stub("node", "import json,sys\nif data.get('fail_claude'):\n print(" + repr(TOKEN) + ",file=sys.stderr)\n sys.exit(1)\nprint(json.dumps(data['claude']))")
-        self.stub("omp", "import sys\nsys.exit(1)")
         self.stub("grok", "import sys\nassert sys.argv[1:]==['models']")
-        self.stub("omp-synthetic-key", "print('" + TOKEN + "')")
+        (self.root / "synthetic-key").write_text(TOKEN)
         outer = self
 
         class Handler(http.server.BaseHTTPRequestHandler):

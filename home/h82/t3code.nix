@@ -25,26 +25,6 @@ let
   merger = "${agentTools.agentSettings}/bin/agent-settings";
   t3 = cfg.cli.enable || cfg.desktop.enable;
 
-  omp = import ../../packages/omp.nix { inherit pkgs; };
-  catalogs = import ./agents/omp-model-catalogs.nix;
-  ompRoles = import ./agents/omp-roles.nix;
-  ompScope = pkgs.writeText "omp-t3-OMP.json" (
-    builtins.toJSON {
-      enabledModels = ompPatterns;
-      inherit (catalogs) disabledProviders;
-      ask.enabled = false;
-      todo.reminders = false;
-      inherit (ompRoles)
-        defaultThinkingLevel
-        github
-        modelRoles
-        task
-        ;
-      skills.customDirectories = (config.my.omp or { }).skillDirectories or [ ];
-    }
-  );
-  ompPatterns = catalogs.patterns;
-
   # The runtime of the Antigravity ACP release the pinned T3 Code embeds,
   # which can trail the newest one that packages/antigravity-acp-path.nix puts
   # on PATH. T3 Code resolves an explicit binaryPath before its managed
@@ -54,35 +34,6 @@ let
     inherit pkgs;
     pins = (builtins.fromJSON (builtins.readFile ../../packages/t3code-release.json)).antigravity;
   };
-  openrouterSelectors = map (row: "openrouter/${row.id}") catalogs.openrouter.data;
-  apiSelectors = lib.unique (
-    map (row: "synthetic/${row.id}") catalogs.synthetic.data ++ openrouterSelectors
-  );
-  ompInstances.omp = {
-    driver = "acpRegistry";
-    displayName = "OMP";
-    enabled = true;
-    config = {
-      source = "local";
-      commandPath = "${omp}/bin/omp";
-      commandArgs = [
-        "--mode"
-        "acp"
-        "--config"
-        ompScope
-        "--models"
-        (lib.concatStringsSep "," ompPatterns)
-        # --models otherwise falls back to the first available API model
-        # when the configured Synthetic default has no authentication.
-        "--model"
-        "synthetic/hf:moonshotai/Kimi-K3"
-        "--thinking"
-        "high"
-      ];
-      customModels = apiSelectors;
-    };
-  };
-
   # The settings that differ from the pinned T3 Code's schema defaults; a
   # value left at its default follows T3 Code when that default changes. Each
   # declared provider instance states `enabled`, even where it equals the
@@ -148,7 +99,6 @@ let
         driver = "opencode";
         enabled = false;
       };
-      omp = removeAttrs ompInstances.omp [ "config" ];
       # Keep the instance and its state, but stop offering it for new work.
       pi = {
         driver = "pi";
@@ -179,27 +129,26 @@ let
   retiredPaths = [
     {
       path = [ "providerInstances" ];
+      key = "omp";
+    }
+    {
+      path = [ "providers" ];
+      key = "omp";
+      prune = true;
+    }
+    {
+      path = [ "providerModelPreferences" ];
+      key = "omp";
+      prune = true;
+    }
+    {
+      path = [ "providerInstances" ];
       key = "omp-codex";
     }
     {
       path = [ "providerModelPreferences" ];
       key = "opencode";
       prune = true;
-    }
-  ];
-
-  # T3 Code synthesizes a built-in `default` entry for ACP Registry instances
-  # before discovery completes; prefixEntries hides it without overwriting
-  # other OMP models the user hid in the app.
-  hiddenModels = [
-    {
-      path = [
-        "providerModelPreferences"
-        "omp"
-        "hiddenModels"
-      ];
-      prefix = "default";
-      value = "default";
     }
   ];
 
@@ -277,18 +226,7 @@ let
           owned = modelSelections;
           remove = retiredKeys;
           removePaths = retiredPaths;
-          prefixEntries = hiddenModels;
           migrateInstances = instanceMigration;
-          # Arrays are whole values. The existing ownership ledger replaces
-          # only these config keys and preserves app-owned environment/auth.
-          ownEntries = lib.mapAttrsToList (id: instance: {
-            path = [
-              "providerInstances"
-              id
-              "config"
-            ];
-            entries = instance.config;
-          }) ompInstances;
         })
       );
     };

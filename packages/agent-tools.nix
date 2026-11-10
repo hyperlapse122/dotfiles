@@ -48,10 +48,6 @@ let
   # flake check runs the source copy of the tests under this same interpreter.
   agentSettingsPython = pkgs.python3.withPackages (ps: [ ps.tomlkit ]);
   agentSettings = helperWith "agent-settings" ../scripts/agent-settings agentSettingsPython;
-  # Removes the retired Orca app's hooks, status line, and state from a home.
-  # tomlkit lets it drop Codex's hook trust entries without rewriting the rest
-  # of config.toml.
-  retireOrca = helperWith "retire-orca" ../scripts/retire-orca agentSettingsPython;
   agentInstructions =
     (pythonHelper "agent-instructions" ../scripts/agent-instructions).overrideAttrs
       {
@@ -60,14 +56,6 @@ let
           $out/bin/agent-instructions --help >/dev/null
         '';
       };
-
-  ompConfigPython = pkgs.python3.withPackages (ps: [
-    ps.pyyaml
-    ps.xxhash
-  ]);
-  ompConfigReconcile =
-    helperWith "omp-config-reconcile" ../scripts/omp-config-reconcile
-      ompConfigPython;
 
   # Runs from home activation, where PATH carries neither home.packages nor
   # the login shell's session variables, so the module hands it the agent CLI
@@ -99,7 +87,6 @@ let
   # Resolves the latest Codex release and its musl asset digest from the
   # GitHub releases API.
   codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
-  ompRelease = pythonHelper "omp-release" ../scripts/omp-release;
 
   # Resolves the newest stable Grok Build CLI release and hashes its
   # per-platform binaries, which xAI publishes no checksum for. Its network
@@ -108,9 +95,9 @@ let
   grokBuildRelease = pythonHelper "grok-build-release" ../scripts/grok-build-release;
 
   # Reports every coding-agent provider's usage windows with a shared cache.
-  # Its readers call codex, omp, grok, curl and a Node helper on the Claude
+  # Its readers call codex, grok, curl and a Node helper on the Claude
   # Agent SDK, so the wrapper puts exactly those on PATH. Home Manager
-  # overrides the Synthetic key file per host kind, as omp.nix does. The
+  # overrides the Synthetic key file per host kind. The
   # Antigravity quota service lists Gemini buckets only for a current ACP
   # client, so the wrapper names the pinned ACP runtime's version.
   agentUsage = pkgs.lib.makeOverridable (
@@ -119,12 +106,10 @@ let
     }:
     let
       sdk = import ./claude-agent-sdk.nix { inherit pkgs; };
-      omp = import ./omp.nix { inherit pkgs syntheticKeyFile; };
       runtimePath = pkgs.lib.makeBinPath [
         (import ./codex.nix { inherit pkgs; })
         (import ./claude-code.nix { inherit pkgs; })
         (import ./grok-build.nix { inherit pkgs; })
-        omp
         pkgs.nodejs_24
         pkgs.curl
       ];
@@ -136,6 +121,7 @@ let
           $out/bin/agent-usage-claude.mjs
         wrapProgram $out/bin/agent-usage \
           --prefix PATH : ${runtimePath} \
+          --set AGENT_USAGE_SYNTHETIC_KEY_FILE ${pkgs.lib.escapeShellArg syntheticKeyFile} \
           --set NODE_PATH ${sdk}/lib/node_modules \
           --set AGENT_USAGE_ANTIGRAVITY_VERSION ${(builtins.fromJSON (builtins.readFile ./antigravity-acp-release.json)).version}
       '';
@@ -179,10 +165,6 @@ let
   # Synthetic's catalog, and rewrites the committed Synthetic catalog snapshot.
   syntheticModelsWatch = catalogHelper "synthetic-models-watch" ../scripts/synthetic-models-watch;
 
-  # Rewrites the committed OpenRouter catalog snapshot from OpenRouter's
-  # /models/user endpoint.
-  openrouterCatalogSnapshot = catalogHelper "openrouter-catalog-snapshot" ../scripts/openrouter-catalog-snapshot;
-
   # Pins the Android SDK packages from Google's repository XML. It is Ruby
   # because it vendors nixpkgs' androidenv update.rb, which parses with
   # nokogiri.
@@ -195,8 +177,6 @@ in
     agentSettings
     agentInstructions
     agentSettingsPython
-    ompConfigReconcile
-    ompConfigPython
     agentPluginSync
     agentPluginRelease
     claudeDesktopRelease
@@ -205,7 +185,6 @@ in
     claudeCodeRelease
     miseRelease
     codexRelease
-    ompRelease
     grokBuildRelease
     agentUsage
     npmRelease
@@ -213,9 +192,7 @@ in
     antigravityAcpRelease
     t3codeRelease
     syntheticModelsWatch
-    openrouterCatalogSnapshot
     androidSdkRelease
     serveHtml
-    retireOrca
     ;
 }

@@ -14,7 +14,6 @@ import tempfile
 DELIVERIES = {
     "claude": ".claude/CLAUDE.md",
     "codex": ".codex/AGENTS.md",
-    "omp": ".omp/agent/AGENTS.md",
     "antigravity": ".gemini/config/rules",
 }
 # Antigravity truncates each rule file at 24,000 bytes, so its render is

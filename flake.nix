@@ -114,6 +114,7 @@
         # Manager generation.
         hostClosureChecks = [
           "agent-browser-deps"
+          "agent-unmanaged"
           "agent-instructions"
           "android-sdk"
           "antigravity-profiles"
@@ -138,8 +139,6 @@
           "minikube-autostart"
           "mise-settings"
           "nix-cleanup"
-          "omp-models-load"
-          "omp-settings"
           "pinned-skills"
           "podman-containers"
           "printing"
@@ -164,26 +163,15 @@
       };
     in
     {
-      packages.aarch64-linux.omp = import ./packages/omp.nix {
-        pkgs = import nixpkgs { system = "aarch64-linux"; };
-      };
-      packages.aarch64-darwin.omp = import ./packages/omp.nix {
-        pkgs = import nixpkgs { system = "aarch64-darwin"; };
-      };
-      checks.aarch64-darwin.omp-settings = import ./tests/omp-settings.nix {
-        pkgs = import nixpkgs { system = "aarch64-darwin"; };
-        inherit self;
-      };
-      checks.aarch64-darwin.omp-models-load = import ./tests/omp-models-load.nix {
-        pkgs = import nixpkgs { system = "aarch64-darwin"; };
-        inherit self;
-      };
-      checks.aarch64-darwin.omp-acp = import ./tests/omp-acp.nix {
-        pkgs = import nixpkgs { system = "aarch64-darwin"; };
-        inherit self;
-      };
       # Reads what the macOS fixture hosts materialize, so building it builds
       # both fixture systems; only a macOS builder can.
+      checks.aarch64-darwin.agent-unmanaged = import ./tests/agent-unmanaged.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        entries = nixpkgs.lib.mapAttrsToList (name: host: {
+          inherit name;
+          user = host.config.home-manager.users.${host.config.my.user.name};
+        }) self.darwinConfigurations;
+      };
       checks.aarch64-darwin.darwin-outputs = import ./tests/darwin-outputs.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
         inherit darwinFixtures;
@@ -217,8 +205,6 @@
         mise = import ./packages/mise.nix { inherit pkgs; };
         codex-release = agentTools.codexRelease;
         codex = import ./packages/codex.nix { inherit pkgs; };
-        omp = import ./packages/omp.nix { inherit pkgs; };
-        omp-release = agentTools.ompRelease;
         grok-build-release = agentTools.grokBuildRelease;
         grok-build = import ./packages/grok-build.nix { inherit pkgs; };
         npm-release = agentTools.npmRelease;
@@ -234,7 +220,6 @@
         antigravity-acp-path = import ./packages/antigravity-acp-path.nix { inherit pkgs; };
         t3code-release = agentTools.t3codeRelease;
         synthetic-models-watch = agentTools.syntheticModelsWatch;
-        openrouter-catalog-snapshot = agentTools.openrouterCatalogSnapshot;
         t3code = import ./packages/t3code.nix { inherit pkgs; };
         t3code-cli = import ./packages/t3code-cli.nix { inherit pkgs; };
         android-sdk-release = agentTools.androidSdkRelease;
@@ -423,20 +408,7 @@
               ./tests/restore-age-identity.py;
           boot-layout-invariants = import ./tests/boot-layout-invariants.nix { inherit pkgs; };
           claude = import ./tests/claude.nix { inherit pkgs self; };
-          retire-orca = import ./tests/retire-orca.nix { inherit pkgs self; };
           codex = import ./tests/codex.nix { inherit pkgs self; };
-          omp-settings = import ./tests/omp-settings.nix {
-            inherit pkgs self;
-            fixtures = [ ];
-          };
-          omp-models-load = import ./tests/omp-models-load.nix {
-            inherit pkgs self;
-            fixtures = [ ];
-          };
-          omp-acp = import ./tests/omp-acp.nix {
-            inherit pkgs self;
-            fixtures = [ ];
-          };
           codex-settings = import ./tests/codex-settings.nix { inherit pkgs self; };
           cargo-settings = import ./tests/cargo-settings.nix {
             inherit pkgs self;
@@ -550,6 +522,10 @@
             inherit pkgs self;
             fixtures = [ ];
           };
+          agent-unmanaged = import ./tests/agent-unmanaged.nix {
+            inherit pkgs;
+            entries = configurations.userEntries;
+          };
           agent-instructions = import ./tests/agent-instructions.nix {
             inherit pkgs self;
             fixtures = [ ];
@@ -580,7 +556,6 @@
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
-          omp-release = pythonScriptCheck "omp-release" ./scripts/omp-release ./tests/test_omp_release.py;
           grok-build-release =
             pythonScriptCheck "grok-build-release" ./scripts/grok-build-release
               ./tests/test_grok_build_release.py;
@@ -623,18 +598,6 @@
                 export SYNTHETIC_MODELS_SOURCE_JSON=${realSource}
               '';
             } "synthetic-models-watch" ./scripts/synthetic-models-watch ./tests/test_synthetic_models_watch.py;
-          openrouter-catalog-snapshot =
-            pythonScriptCheckWith
-              {
-                modules = [ ./scripts/catalog_snapshot.py ];
-                setup = ''
-                  mkdir -p tests/fixtures
-                  cp -r ${./tests/fixtures/openrouter-models} tests/fixtures/openrouter-models
-                '';
-              }
-              "openrouter-catalog-snapshot"
-              ./scripts/openrouter-catalog-snapshot
-              ./tests/test_openrouter_catalog_snapshot.py;
           synthetic-models-reconcile =
             pkgs.runCommand "synthetic-models-reconcile-tests"
               {

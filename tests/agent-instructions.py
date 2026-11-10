@@ -14,17 +14,17 @@ from pathlib import Path
 CARD_KEY = "621512777E6933FEB4458FDC4945855D4F283F05"
 FAKE_KEY = "0123456789ABCDEF0123456789ABCDEF01234567"
 ACTION = "{{ .user.gpgKey }}"
-DELIVERIES = ("claude", "codex", "omp", "antigravity")
+DELIVERIES = ("claude", "codex", "antigravity")
 ROUTING_HEADING = "Agent roles and routing"
 CLAUDE_HEADING = "Claude Code role orchestration"
 CODEX_HEADING = "Codex role orchestration"
-OMP_TOOLS_HEADING = "OMP tools and Compound Engineering"
-OMP_ROLE_HEADING = "OMP role orchestration"
+
+
 ANTIGRAVITY_HEADING = "Antigravity harness"
 HARNESS_HEADINGS = {
     "claude": [CLAUDE_HEADING],
     "codex": [CODEX_HEADING],
-    "omp": [OMP_TOOLS_HEADING, OMP_ROLE_HEADING],
+
     "antigravity": [ANTIGRAVITY_HEADING],
 }
 # Antigravity truncates a rule file at 24,000 bytes.
@@ -48,33 +48,31 @@ ROLES = {
 }
 
 # Chain cells: entries joined by " → "; T3 entries name the provider instance.
-KIMI = "`omp` `synthetic/hf:moonshotai/Kimi-K3` `high` (S)"
-GLM = "`omp` `synthetic/hf:zai-org/GLM-5.3` `high` (S)"
-DEEPSEEK = "`omp` `synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash`"
+
+
 T3_ROOTS = {
-    "claude": f"`claudeAgent` `claude-opus-5-5` `medium` → {KIMI} → {GLM}",
+    "claude": f"`claudeAgent` `claude-opus-5-5` `medium`",
     "codex": "`codex` `gpt-6.1-sol` `high` → `codex` `gpt-6.1-sol` `medium` Fast → `codex` `gpt-6.1-sol` `medium`",
-    "omp": KIMI,
+
 }
 T3_CHAINS = {
-    "scout": f"`codex` `gpt-6-luna` `high` Fast → `claudeAgent` `claude-haiku-5-5` `medium` → {DEEPSEEK} `high` (S)",
-    "quick": f"`codex` `gpt-6-luna` `high` Fast → `claudeAgent` `claude-haiku-5-5` `medium` → {DEEPSEEK} `off` (S) → `omp` `synthetic/hf:zai-org/GLM-5.3-Flash` `low` (S)",
+    "scout": f"`codex` `gpt-6-luna` `high` Fast → `claudeAgent` `claude-haiku-5-5` `medium`",
+    "quick": f"`codex` `gpt-6-luna` `high` Fast → `claudeAgent` `claude-haiku-5-5` `medium`",
     "writing": "`antigravity` `gemini-4-argon-low` → `claudeAgent` `claude-opus-5-5` `low`",
-    "visual": f"`antigravity` `gemini-4-argon-low` → `claudeAgent` `claude-fable-5-1` `max` → `claudeAgent` `claude-opus-5-5` `max` → {KIMI}",
-    "implement": f"`claudeAgent` `claude-sonnet-5-5` `medium` → `grok` `grok-4.7` `xhigh` → {GLM} → `codex` `gpt-6.1-sol` `medium` → `antigravity` `gemini-3.8-flash-high`",
-    "implement-high": f"`claudeAgent` `claude-opus-5-5` `medium` → {GLM} → {KIMI} → `codex` `gpt-6.1-sol` `medium` → `antigravity` `gemini-4-argon-high`",
+    "visual": f"`antigravity` `gemini-4-argon-low` → `claudeAgent` `claude-fable-5-1` `max` → `claudeAgent` `claude-opus-5-5` `max`",
+    "implement": f"`claudeAgent` `claude-sonnet-5-5` `medium` → `grok` `grok-4.7` `xhigh` → `codex` `gpt-6.1-sol` `medium` → `antigravity` `gemini-3.8-flash-high`",
+    "implement-high": f"`claudeAgent` `claude-opus-5-5` `medium` → `codex` `gpt-6.1-sol` `medium` → `antigravity` `gemini-4-argon-high`",
     "deep": "`codex` `gpt-6.1-sol` `medium` → `codex` `gpt-6.1-sol` `medium` Fast → `claudeAgent` `claude-opus-5-5` `xhigh`",
     "hard-decision": "`codex` `gpt-6.1-sol` `max` → `claudeAgent` `claude-fable-5-1` `max`",
     "review": "`codex` `gpt-6.1-sol` `medium` → `codex` `gpt-6.1-sol` `high` → `claudeAgent` `claude-opus-5-5` `high`",
     "review-gate": "`codex` `gpt-6.1-sol` `max` → `claudeAgent` `claude-opus-5-5` `max`",
-    "architect": f"`claudeAgent` `claude-fable-5-1` `max` → `claudeAgent` `claude-opus-5-5` `max` → {KIMI} → `codex` `gpt-6.1-sol` `xhigh`",
+    "architect": f"`claudeAgent` `claude-fable-5-1` `max` → `claudeAgent` `claude-opus-5-5` `max` → `codex` `gpt-6.1-sol` `xhigh`",
     "peer": "The external model and effort the owning CE skill selects",
 }
 SOL = "`gpt-6.1-sol`"
 TERRA = "`gpt-6.1-terra`"
-OMP_KIMI = "`synthetic/hf:moonshotai/Kimi-K3` `high` (S)"
-OMP_GLM = "`synthetic/hf:zai-org/GLM-5.3` `high` (S)"
-OMP_DEEPSEEK = "`synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash` `low` (S)"
+
+
 HARNESS_CHAINS = {
     "claude": {
         "root": "`opus` `medium`",
@@ -106,21 +104,8 @@ HARNESS_CHAINS = {
         "architect": f"{SOL} `medium`",
         "peer": "CE selection",
     },
-    "omp": {
-        "root": OMP_KIMI,
-        "scout": OMP_DEEPSEEK,
-        "quick": OMP_DEEPSEEK,
-        "writing": OMP_KIMI,
-        "visual": OMP_KIMI,
-        "implement": OMP_GLM,
-        "implement-high": OMP_GLM,
-        "deep": OMP_GLM,
-        "hard-decision": OMP_KIMI,
-        "review": OMP_GLM,
-        "review-gate": OMP_KIMI,
-        "architect": OMP_KIMI,
-        "peer": "CE selection",
-    },
+
+
 }
 
 
@@ -190,10 +175,10 @@ ROUTING_SENTENCES = [
     "Usage only chooses among a chain's entries: never stop work, defer a delegation, or ask the user because of usage.",
     "Run `agent-usage --json` at most once every 30 minutes and reuse that reading for every delegation in between, parallel batches included.",
     "Work that delegates no model call reads no usage.",
-    "Read each entry under its usage account: `codex` under `codex`, `claudeAgent` under `claude`, `antigravity` under `gemini`, `grok` under `grok`, and `omp` under `synthetic`.",
+    "Read each entry under its usage account: `codex` under `codex`, `claudeAgent` under `claude`, `antigravity` under `gemini`, `grok` under `grok`.",
     "The usage check skips every entry of a provider whose `skip` flag is set, and only the entries of the models listed in its `skipModels`.",
     "A `stale` or `unknown` status alone skips nothing.",
-    "`codex` and `claudeAgent` entries are fast, and `antigravity`, `omp`, and `grok` entries are slow, except that a chain's first entry counts as fast.",
+    "`codex` and `claudeAgent` entries are fast, and `antigravity` and `grok` entries are slow, except that a chain's first entry counts as fast.",
     "Use a slow entry only when every fast entry in the chain is skipped.",
     "Within the tier in use, take the first entry in chain order that is not ahead of pace: its provider's `aheadOfPace` flag is unset and its model is not listed in `aheadModels`.",
     "When every entry of that tier is ahead of pace, take the one with the lowest `overshootPercent`, read from its model's `aheadModels` entry when present and from its provider otherwise.",
@@ -203,14 +188,12 @@ ROUTING_SENTENCES = [
     "Synthetic's weekly allowance is a rolling quota: report its next regeneration time and amount in place of a reset time.",
     "Entries marked (S) are Synthetic and expire after 2026-11-18.",
     "From 2026-11-19 (local date), start no new Synthetic work; tasks already running may finish.",
-    "OMP may use these entries automatically, inside and outside T3 Code.",
     "The other Synthetic models (Qwen 3.8 27B, Nemotron 3 Super 120B, GPT-OSS-120B, GLM-4.7-Flash and the `syn:*` aliases) run only on explicit request, under the same expiry.",
     "`gpt-6.1-sol` at `max` runs automatically only for `hard-decision` and `review-gate`; every other GPT `max` use and every GPT `ultra` use requires the user's explicit request for the affected work.",
-    "OMP entries run at `high` at most, the highest effort T3 Code passes to OMP.",
     "A Codex entry marked Fast runs at `serviceTier` `priority`, and every other Codex entry at `default`.",
     "Never select `ultrafast`.",
     "Formatting errors, transient network failures, busy slots and missing credentials justify neither a higher effort nor another role.",
-    "Set options by the names `orchestrator_capabilities` lists: `effort` for `claudeAgent`, `reasoningEffort` and `serviceTier` for `codex`, `thinking` for `omp`, and the listed effort option for `grok`.",
+    "Set options by the names `orchestrator_capabilities` lists: `effort` for `claudeAgent`, `reasoningEffort` and `serviceTier` for `codex`, and the listed effort option for `grok`.",
     "A `peer` runs the external model and effort the owning CE skill selects.",
     "Dispatch independent delegated tasks in parallel: start all of them before waiting on any, and serialize only a task that needs another task's result.",
     "Give parallel writers disjoint file scopes, and integrate any shared file in the root yourself.",
@@ -257,17 +240,17 @@ def routing_contract(delivery):
 - Never start a replacement while an earlier attempt may still be live: retry an unconfirmed launch with the same request ID. Mention usage only when you pass over a chain's first entry, in one line naming why.
 - Usage only chooses among a chain's entries: never stop work, defer a delegation, or ask the user because of usage.
 - Run `agent-usage --json` at most once every 30 minutes and reuse that reading for every delegation in between, parallel batches included. Work that delegates no model call reads no usage.
-- Read each entry under its usage account: `codex` under `codex`, `claudeAgent` under `claude`, `antigravity` under `gemini`, `grok` under `grok`, and `omp` under `synthetic`. The usage check skips every entry of a provider whose `skip` flag is set, and only the entries of the models listed in its `skipModels`. A `stale` or `unknown` status alone skips nothing.
-- `codex` and `claudeAgent` entries are fast, and `antigravity`, `omp`, and `grok` entries are slow, except that a chain's first entry counts as fast. Use a slow entry only when every fast entry in the chain is skipped.
+- Read each entry under its usage account: `codex` under `codex`, `claudeAgent` under `claude`, `antigravity` under `gemini`, `grok` under `grok`. The usage check skips every entry of a provider whose `skip` flag is set, and only the entries of the models listed in its `skipModels`. A `stale` or `unknown` status alone skips nothing.
+- `codex` and `claudeAgent` entries are fast, and `antigravity` and `grok` entries are slow, except that a chain's first entry counts as fast. Use a slow entry only when every fast entry in the chain is skipped.
 - Within the tier in use, take the first entry in chain order that is not ahead of pace: its provider's `aheadOfPace` flag is unset and its model is not listed in `aheadModels`. When every entry of that tier is ahead of pace, take the one with the lowest `overshootPercent`, read from its model's `aheadModels` entry when present and from its provider otherwise.
 - When the usage check skips every entry the other reasons leave runnable, use the one with the highest `remainingPercent`, read from its model's `skipModels` entry when present and from its provider otherwise. Never revive an entry whose usage is exhausted or that was skipped for any other reason. When no entry of a chain can run, do the work in the root and say that the chain had no runnable entry.
 - Synthetic's weekly allowance is a rolling quota: report its next regeneration time and amount in place of a reset time.
-- Entries marked (S) are Synthetic and expire after 2026-11-18. From 2026-11-19 (local date), start no new Synthetic work; tasks already running may finish. OMP may use these entries automatically, inside and outside T3 Code.
+- Entries marked (S) are Synthetic and expire after 2026-11-18. From 2026-11-19 (local date), start no new Synthetic work; tasks already running may finish.
 - The other Synthetic models (Qwen 3.8 27B, Nemotron 3 Super 120B, GPT-OSS-120B, GLM-4.7-Flash and the `syn:*` aliases) run only on explicit request, under the same expiry.
-- `gpt-6.1-sol` at `max` runs automatically only for `hard-decision` and `review-gate`; every other GPT `max` use and every GPT `ultra` use requires the user's explicit request for the affected work. OMP entries run at `high` at most, the highest effort T3 Code passes to OMP.
+- `gpt-6.1-sol` at `max` runs automatically only for `hard-decision` and `review-gate`; every other GPT `max` use and every GPT `ultra` use requires the user's explicit request for the affected work.
 - A Codex entry marked Fast runs at `serviceTier` `priority`, and every other Codex entry at `default`. Never select `ultrafast`.
 - Run each entry at its listed effort. Formatting errors, transient network failures, busy slots and missing credentials justify neither a higher effort nor another role.
-- Set options by the names `orchestrator_capabilities` lists: `effort` for `claudeAgent`, `reasoningEffort` and `serviceTier` for `codex`, `thinking` for `omp`, and the listed effort option for `grok`.
+- Set options by the names `orchestrator_capabilities` lists: `effort` for `claudeAgent`, `reasoningEffort` and `serviceTier` for `codex`, and the listed effort option for `grok`.
 - A `peer` runs the external model and effort the owning CE skill selects.
 
 ## Parallel work and T3 Code delegation
@@ -362,70 +345,6 @@ CODEX_CONTRACT = """- This section applies only to the active Codex harness, inc
 - Before launch, map the invoked skill's pre-launch failure, started failure, no-review, retry/replacement and local-lens fallback outcomes to the observed T3 states. Keep explicit recipients fixed where required; disclose any permitted replacement before sending. Preserve surviving findings and identify uncovered lenses after partial failure. On abandonment/deadline, cancel owned live work, retain terminal failure classification and perform the skill's scratch cleanup. Parent tools do not authorize answering a child's reserved approval.
 - Outside T3, establish required enforced read-only/tool restrictions before peer egress. Instructions asking a shared-checkout child not to write do not enforce read-only access. If the selected route cannot preserve a required boundary, report that pass unavailable/degraded and use only the owning skill's compatible fallback. Inside T3, the shared prompt-instructed read-only rule applies instead. Track artifact validity, requested-configuration compliance and verified independence separately; no new runner, schema framework, cache edits or paid fallback is authorized."""
 
-OMP_TOOLS_SENTENCES = [
-    "Use native `web_search` for search and `read` with an HTTP URL for fetching.",
-    "Search uses the managed Synthetic credential command; never read or print keys.",
-    "Collect terminal results through `agent://<id>` and inspect `history://<id>` when needed.",
-    "Use `read` with `issue://<N>` and `pr://<N>` (including list query parameters and `pr://<N>/diff`, `/diff/<i>`, `/diff/all`) for viewing or listing issues, pull requests, and PR diffs.",
-    "Use `github` (`xd://github`) for repository summaries (`repo_view`), repository file reads (`file_read`), searches (`search_issues`, `search_prs`, `search_code`, `search_commits`, `search_repos`), Actions run watching (`run_watch`), PR creation (`pr_create`), PR checkout (`pr_checkout`), and pushing `pr_checkout`-managed branches (`pr_push`).",
-    "Retain `gh` CLI and `git push` as the fallback where OMP's GitHub surfaces lack the required operation, flag, freshness, or safety constraint, including `gh issue create/edit/close/comment`, `gh pr comment/review/edit/merge/ready`, `gh api graphql`, `gh --attach`, explicit cross-checkout `--repo HOST/OWNER/REPO` and `--hostname HOST` qualification, repository `<kind>/short-kebab-slug` branch naming, and uncached head-SHA verification with `git push --force-with-lease=<branch>:<sha>`.",
-    "Preserve existing GitLab rules (`glab` and `mr://` diffs).",
-    "Synthetic and OpenRouter models establish no recognized CE host family: for an explicitly requested `ce-code-review` cross-model pass from an OMP session, keep host family `unknown` with `CROSS_MODEL_HOST_HARNESS=omp` and `CROSS_MODEL_EXPLICIT_UNKNOWN_HOST=1` on the worker's `env` prefix for that run only, and keep `independence_verified` `false`.",
-    "The user permits sanctioned OMP cross-model reviews (explicitly requested unknown-host passes) through T3's ordinary delegated permissions without enforced read-only access.",
-    "Tell the reviewer to inspect without editing, and report that this is an instruction rather than a technical restriction.",
-]
-
-OMP_ROLE_SENTENCES = [
-    "This section applies only to the active OMP harness, including OMP-led T3 sessions.",
-    "OMP model execution uses only `synthetic` and `openrouter`; `openai-codex` and `google-antigravity` are disabled.",
-    "Native Codex and Antigravity remain available for sanctioned external reviews.",
-    "Outside T3, delegated roles use the Synthetic models of the OMP table automatically; run `openrouter` models only when the user explicitly requests them.",
-    "Inside T3 Code, the T3 Code table decides.",
-    "From 2026-11-19 (local date), the Synthetic models have expired and standalone OMP has no automatic model: start no new work and ask the user which model to use.",
-    "Kimi K3, GLM 5.3, and GLM 5.3 Flash accept only `low`, `high`, and `max`, and DeepSeek V4.1 Flash accepts `none` through `max`; none of them offers `medium`, so never send `medium` to them.",
-    "Inside T3, use `delegate_task` with the instance, model and options the T3 Code table names, setting `target.model` and `target.options` and comparing the returned selection before counting configuration as applied.",
-    "On `instanceId` `omp` the effort option is `thinking`; do not extrapolate Codex option names (`reasoningEffort`, `serviceTier`) to OMP or other providers.",
-    'Outside T3, route subagents through `task`: `sonic` for `quick`, `scout` and `seance` for `scout`, `writer` for `writing`, `designer` for `visual`, `task` with `effort` `"med"` for `implement`, `implement-high` and `deep`, `reviewer` and `security-reviewer` for `review`, and `architect` for `hard-decision`, `review-gate` and `architect`.',
-    "Keep `tasks[].model` reserved for `seance` consults and `modelRoles.web` as `web/synthetic`.",
-    'On these three-step ladders, `task` maps `effort` `"lo"` to `low`, `"med"` to `high`, and `"hi"` to `max`, which `maxEffort` caps at `high`.',
-    "Preserve CE's conversation-over-checkout-over-project-over-default peer precedence, recipient allowlist (`CROSS_MODEL_PEERS`), prohibitions, checkout egress gate, and disclosure before sending.",
-    "A `peer` retains CE's selected external identity and exact prescribed effort unless the owning skill permits the user's override, and never runs on OMP.",
-]
-
-OMP_TOOLS_CONTRACT = """- Use native `web_search` for search and `read` with an HTTP URL for fetching. Search uses the managed Synthetic credential command; never read or print keys.
-- Use `read history://` for the agent roster and `read history://current/full` for the current transcript. Runtime model and effort evidence comes from the protocol state or captured provider requests; configuration and model prose do not establish the effective runtime selection.
-- Outside T3, native `task` runs CLI children. Read its advertised schema before dispatch: batch calls require `context` and `tasks`, with `agent` per task when selecting a non-default agent. Structured results are enabled; pass the owning workflow's `outputSchema` and collect the child's terminal `yield` rather than accepting a prose summary. Collect terminal results through `agent://<id>` and inspect `history://<id>` when needed. A started job, partial yield, cancellation, or failure is not a completed child; preserve full result artifacts and required schema fields.
-- Inside T3, use the injected app-owned MCP delegation, status, and cancellation tools according to their live descriptions; do not replace app delegation with new top-level conversations.
-
-## GitHub tools
-
-- Use `read` with `issue://<N>` and `pr://<N>` (including list query parameters and `pr://<N>/diff`, `/diff/<i>`, `/diff/all`) for viewing or listing issues, pull requests, and PR diffs.
-- Use `github` (`xd://github`) for repository summaries (`repo_view`), repository file reads (`file_read`), searches (`search_issues`, `search_prs`, `search_code`, `search_commits`, `search_repos`), Actions run watching (`run_watch`), PR creation (`pr_create`), PR checkout (`pr_checkout`), and pushing `pr_checkout`-managed branches (`pr_push`).
-- Retain `gh` CLI and `git push` as the fallback where OMP's GitHub surfaces lack the required operation, flag, freshness, or safety constraint, including `gh issue create/edit/close/comment`, `gh pr comment/review/edit/merge/ready`, `gh api graphql`, `gh --attach`, explicit cross-checkout `--repo HOST/OWNER/REPO` and `--hostname HOST` qualification, repository `<kind>/short-kebab-slug` branch naming, and uncached head-SHA verification with `git push --force-with-lease=<branch>:<sha>`.
-- Preserve existing GitLab rules (`glab` and `mr://` diffs).
-
-## Cross-model review identity and permissions
-
-- Compound Engineering skills live in the complete pinned tree under `~/.omp/agent/plugins/compound-engineering`; read referenced assets relative to that tree and retain each skill's recipient permission, tool restrictions, identity checks, result schema, and lifecycle rules.
-- Synthetic and OpenRouter models establish no recognized CE host family: for an explicitly requested `ce-code-review` cross-model pass from an OMP session, keep host family `unknown` with `CROSS_MODEL_HOST_HARNESS=omp` and `CROSS_MODEL_EXPLICIT_UNKNOWN_HOST=1` on the worker's `env` prefix for that run only, and keep `independence_verified` `false`. Automatic unknown-host review remains skipped; never invent an OMP peer token, export the opt-in as a session default, substitute a recognized family for the serving model, or turn a missing, failed, or cancelled result into a successful empty review.
-- Inside T3, use app-owned delegation instead of launching the CLI peer worker. The user permits sanctioned OMP cross-model reviews (explicitly requested unknown-host passes) through T3's ordinary delegated permissions without enforced read-only access. Tell the reviewer to inspect without editing, and report that this is an instruction rather than a technical restriction. This exception does not change CLI restrictions, recipient consent, or any other agent's review policy. Validate the complete terminal artifact, retain task IDs and requested/returned selection, and keep serving model/effort `unverified` without serving evidence."""
-
-OMP_ROLE_CONTRACT = """- This section applies only to the active OMP harness, including OMP-led T3 sessions.
-- OMP model execution uses only `synthetic` and `openrouter`; `openai-codex` and `google-antigravity` are disabled. Native Codex and Antigravity remain available for sanctioned external reviews.
-- Outside T3, delegated roles use the Synthetic models of the OMP table automatically; run `openrouter` models only when the user explicitly requests them. Inside T3 Code, the T3 Code table decides.
-- From 2026-11-19 (local date), the Synthetic models have expired and standalone OMP has no automatic model: start no new work and ask the user which model to use.
-
-## OMP table
-
-""" + chain_table(HARNESS_CHAINS["omp"]) + """
-
-- Kimi K3, GLM 5.3, and GLM 5.3 Flash accept only `low`, `high`, and `max`, and DeepSeek V4.1 Flash accepts `none` through `max`; none of them offers `medium`, so never send `medium` to them.
-
-## Dispatch and compatibility
-
-- Inside T3, use `delegate_task` with the instance, model and options the T3 Code table names, setting `target.model` and `target.options` and comparing the returned selection before counting configuration as applied. On `instanceId` `omp` the effort option is `thinking`; do not extrapolate Codex option names (`reasoningEffort`, `serviceTier`) to OMP or other providers.
-- Outside T3, route subagents through `task`: `sonic` for `quick`, `scout` and `seance` for `scout`, `writer` for `writing`, `designer` for `visual`, `task` with `effort` `"med"` for `implement`, `implement-high` and `deep`, `reviewer` and `security-reviewer` for `review`, and `architect` for `hard-decision`, `review-gate` and `architect`. Keep `tasks[].model` reserved for `seance` consults and `modelRoles.web` as `web/synthetic`. On these three-step ladders, `task` maps `effort` `"lo"` to `low`, `"med"` to `high`, and `"hi"` to `max`, which `maxEffort` caps at `high`.
-- Preserve CE's conversation-over-checkout-over-project-over-default peer precedence, recipient allowlist (`CROSS_MODEL_PEERS`), prohibitions, checkout egress gate, and disclosure before sending. A `peer` retains CE's selected external identity and exact prescribed effort unless the owning skill permits the user's override, and never runs on OMP."""
 
 ANTIGRAVITY_SENTENCES = [
     "This section applies only to the Antigravity CLI (`agy`).",
@@ -712,14 +631,6 @@ def content_problems(text, key, delivery):
         problems += chain_problems(subsection(body, "Codex table"), HARNESS_CHAINS["codex"], "Codex")
         if body.strip() != CODEX_CONTRACT:
             problems.append("unapproved Codex normative section")
-    elif delivery == "omp":
-        tools_body = sections.get(OMP_TOOLS_HEADING, "")
-        problems += sentence_problems(tools_body, OMP_TOOLS_SENTENCES, "OMP tools")
-        role_body = sections.get(OMP_ROLE_HEADING, "")
-        problems += sentence_problems(role_body, OMP_ROLE_SENTENCES, "OMP role")
-        problems += chain_problems(subsection(role_body, "OMP table"), HARNESS_CHAINS["omp"], "OMP")
-        if tools_body.strip() != OMP_TOOLS_CONTRACT or role_body.strip() != OMP_ROLE_CONTRACT:
-            problems.append("unapproved OMP normative section")
     else:
         body = sections.get(ANTIGRAVITY_HEADING, "")
         problems += sentence_problems(body, ANTIGRAVITY_SENTENCES, "Antigravity")
@@ -921,7 +832,7 @@ def self_test(template):
     harness = {
         "claude": (CLAUDE_HEADING, CLAUDE_SENTENCES, "Claude Code", "unapproved Claude Code normative section"),
         "codex": (CODEX_HEADING, CODEX_SENTENCES, "Codex", "unapproved Codex normative section"),
-        "omp": (OMP_ROLE_HEADING, OMP_TOOLS_SENTENCES + OMP_ROLE_SENTENCES, "OMP", "unapproved OMP normative section"),
+
         "antigravity": (ANTIGRAVITY_HEADING, ANTIGRAVITY_SENTENCES, "Antigravity", "unapproved Antigravity normative section"),
     }
     # Rules the role contract retired: each fails as an unapproved addition.
@@ -932,10 +843,8 @@ def self_test(template):
             "Standard is the default except for `scout` and `quick` Luna tasks, which have standing user authorization for Fast (`priority`).",
             "Only Codex-led CE-required Claude peer tasks may receive the owning skill's exact prescribed effort.",
         ],
-        "omp": [
-            "Inside T3, use `delegate_task` on `instanceId` `omp` for OMP-led children and external instances for `peer` tasks.",
-            "Only OMP-led CE-required Claude peer tasks may receive the owning skill's exact prescribed effort.",
-        ],
+
+
         "antigravity": [],
     }
     for delivery, (heading, sentences, name, unapproved) in harness.items():
@@ -949,8 +858,6 @@ def self_test(template):
             "Treat a no-write prompt as sufficient enforcement for a restricted peer.",
         ]:
             assert_problem(insert_bullet(text, heading, contrary), delivery, unapproved, contrary)
-    omp_implement = f"| `implement` | {HARNESS_CHAINS['omp']['implement']} |"
-    assert_problem(rendered["omp"].replace(omp_implement, omp_implement.replace("`high`", "`max`")), "omp", "incorrect OMP chain for `implement`")
 
 
 REPOSITORY_SENTENCES = {
@@ -998,7 +905,7 @@ def check_repository_docs(agents, concepts):
     return problems
 
 
-DOC_ROOTS = {"Claude Code": "claude", "Codex": "codex", "OMP": "omp"}
+DOC_ROOTS = {"Claude Code": "claude", "Codex": "codex"}
 
 
 def doc_section(text, heading):
@@ -1037,13 +944,13 @@ def check_routing_doc(text):
     rows += [f"| `{role}` | {cell} |" for chains in HARNESS_CHAINS.values() for role, cell in chains.items()]
     for row in rows:
         assert row in text, row
-        mutated = text.replace(row, row[:-2] + " → `omp` `x` `low` |")
+        mutated = text.replace(row, row[:-2] + " → `codex` `invalid-model` `low` |")
         assert routing_doc_problems(mutated), row
     comparison = doc_section(text, "## Comparison with oh-my-openagent")
     for row in comparison.splitlines():
         if row.startswith("| `"):
             cells = row.split(" | ")
-            cells[1] += " → `omp` `x` `low`"
+            cells[1] += " → `codex` `invalid-model` `low`"
             mutated = text.replace(row, " | ".join(cells), 1)
             assert routing_doc_problems(mutated), row
     return []
@@ -1206,7 +1113,7 @@ def check_darwin_helper(template, helper, renderer, template_path):
             "failureTemplate": str(template_copy),
             "paths": [{"target": target, "delivery": delivery} for delivery, target in (
                 ("claude", ".claude/CLAUDE.md"), ("codex", ".codex/AGENTS.md"),
-                ("omp", ".omp/agent/AGENTS.md"), ("antigravity", ".gemini/config/rules"),
+                ("antigravity", ".gemini/config/rules"),
             )],
         }
         check_activation(template, entry)

@@ -19,8 +19,7 @@ in
     description = ''
       Compound Engineering review route tokens (claude, codex, antigravity)
       that CROSS_MODEL_PEERS allows. Each agent module adds the token of the
-      harness it installs. Compound Engineering has no route for OMP, so
-      OMP adds no peer token; explicit reviews follow its own tool guidance.
+      harness it installs.
     '';
   };
 

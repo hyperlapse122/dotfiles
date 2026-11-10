@@ -10,7 +10,6 @@
     Claude Code               ~/.claude/skills/test-audit
     Antigravity CLI, and T3 Code's Antigravity instances
                               ~/.gemini/antigravity-cli/skills/test-audit
-    OMP                       ~/.omp/agent/skills/test-audit
     Codex                     ~/.codex/skills/test-audit
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
@@ -20,7 +19,6 @@
 
   Verifies, per Home Manager user:
   - each delivery has one enabled Home Manager entry found by resolved target;
-    OMP owns its whole root while other harnesses link the skill separately.
   - each target exists in the materialized `home-files`, holds a SKILL.md
     whose frontmatter `name` is test-audit and whose `description` is not
     empty, a CAMPAIGN.md, a references/audit.md, and a LICENSE that starts with
@@ -62,7 +60,6 @@ let
   roots = [
     ".claude/skills"
     ".gemini/antigravity-cli/skills"
-    ".omp/agent/skills"
     ".codex/skills"
   ];
 
@@ -178,9 +175,7 @@ let
       userConfig = entry.user;
       homeFiles = userConfig.home-files or null;
     in
-    lib.concatMapStrings (
-      root: homeFile label userConfig (if root == ".omp/agent/skills" then root else "${root}/${name}")
-    ) roots
+    lib.concatMapStrings (root: homeFile label userConfig "${root}/${name}") roots
     + lib.optionalString (homeFiles == null) ''
       echo ${esc "no materialized home-files on ${label}"} >&2
       failed=1

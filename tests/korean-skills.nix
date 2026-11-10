@@ -10,7 +10,6 @@
     Claude Code               ~/.claude/skills/<name>
     Antigravity CLI, and T3 Code's Antigravity instances
                               ~/.gemini/antigravity-cli/skills/<name>
-    OMP                       ~/.omp/agent/skills/<name>
     Codex                     ~/.codex/skills/<name>
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
@@ -18,9 +17,7 @@
   helper's guard fails the build when that list is empty.
 
   Verifies, per Home Manager user:
-  - each delivery has an enabled Home Manager entry found by resolved target:
-    OMP owns its whole contributed root, and the other harnesses link each
-    skill separately.
+  - each delivery has an enabled Home Manager entry found by resolved target.
   - each target exists in the materialized `home-files`, holds a SKILL.md whose
     frontmatter `name` equals the directory name and whose `description` is
     not empty, holds a LICENSE that starts with "MIT License", and matches the
@@ -38,8 +35,6 @@
     and ~/.gemini/antigravity-cli/skills also every skill of the pinned
     compound-engineering-plugin input (its `skills/<name>` directories that
     hold a SKILL.md; tests/antigravity-skills.nix checks their content);
-    OMP declares only its whole root. Content checks below cover all four
-    delivered skill trees; native OMP checks also exercise discovery.
   - nothing exists at ~/.agents/skills or ~/.gemini/config/skills in the
     materialized `home-files`: the Antigravity CLI lists skills under
     ~/.gemini/config/skills twice, and ~/.agents/skills is no harness's root
@@ -119,7 +114,6 @@ let
   roots = [
     ".claude/skills"
     ".gemini/antigravity-cli/skills"
-    ".omp/agent/skills"
     ".codex/skills"
   ];
 
@@ -247,25 +241,17 @@ let
       homeFiles = userConfig.home-files or null;
     in
     lib.concatMapStrings (
-      root:
-      if root == ".omp/agent/skills" then
-        homeFile label userConfig root
-      else
-        lib.concatMapStrings (name: homeFile label userConfig "${root}/${name}") skillNames
+      root: lib.concatMapStrings (name: homeFile label userConfig "${root}/${name}") skillNames
     ) roots
     + lib.concatMapStrings (
       root:
       let
         found = targetsUnder userConfig root;
-        expected =
-          if root == ".omp/agent/skills" then
-            [ root ]
-          else
-            sorted (
-              map (name: "${root}/${name}") (
-                skillNames ++ otherSkillNames ++ lib.optionals (root == ceRoot) ceSkillNames
-              )
-            );
+        expected = sorted (
+          map (name: "${root}/${name}") (
+            skillNames ++ otherSkillNames ++ lib.optionals (root == ceRoot) ceSkillNames
+          )
+        );
       in
       lib.optionalString (found != expected) ''
         echo ${esc "~/${root} on ${label} must hold exactly ${lib.concatStringsSep ", " expected}, got: ${lib.concatStringsSep ", " found}"} >&2

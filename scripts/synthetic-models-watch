@@ -34,10 +34,10 @@ the fingerprint, the body digest, and the latest catalog notice, and
 
 `--snapshot FILE` rewrites the committed catalog snapshot instead of
 comparing: it keeps every catalog row, `syn:` and alias rows included, sorted
-by `id` and trimmed to the fields OMP's model config renders, in the catalog's
+by `id` and trimmed to the fields the catalog retains, in the catalog's
 own shape, and leaves FILE untouched unless the content changes. `pricing`
-keeps only the four prices OMP's config reads, each a string
-home/h82/agents/omp-declarations.py can parse. A row without
+keeps only the four prices the catalog records, each a string
+the catalog validator can parse. A row without
 `reasoning_parameters` keeps none. A malformed row is skipped with a warning
 naming it on stderr, keeping its previous entry from FILE when one exists
 outside the source IDs. It refuses to write, and exits non-zero, when no row
@@ -96,7 +96,7 @@ NOTICES = {
 
 ID_PATTERN = re.compile(r"hf:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+")
 EFFORT_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
-# The prices home/h82/agents/omp-declarations.py reads, each an optional `$`
+# The prices the catalog validator reads, each an optional `$`
 # and a JSON number without a sign, which is what its per_million parses.
 PRICE_FIELDS = ("prompt", "completion", "input_cache_reads", "input_cache_writes")
 PRICE_PATTERN = re.compile(r"\$?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?")

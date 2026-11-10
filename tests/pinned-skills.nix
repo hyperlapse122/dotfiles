@@ -11,13 +11,11 @@
     Claude Code               ~/.claude/skills/<name>
     Antigravity CLI, and T3 Code's Antigravity instances
                               ~/.gemini/antigravity-cli/skills/<name>
-    OMP                       ~/.omp/agent/skills/<name>
     Codex                     ~/.codex/skills/<name>
 
   Verifies, per Home Manager user:
-  - each delivery outside OMP has exactly one enabled home.file per skill, and
-    OMP has its one whole-root entry; tests/korean-skills.nix owns each root's
-    exact population.
+  - each delivery has one enabled home.file per skill; tests/korean-skills.nix
+    owns each root's exact population.
   - each materialized skill holds a SKILL.md that is not a symlink, whose
     frontmatter `name` equals the directory name and whose `description` is
     not empty.
@@ -127,7 +125,6 @@ let
   roots = [
     ".claude/skills"
     ".gemini/antigravity-cli/skills"
-    ".omp/agent/skills"
     ".codex/skills"
   ];
 
@@ -358,11 +355,7 @@ let
       homeFiles = userConfig.home-files or null;
     in
     lib.concatMapStrings (
-      root:
-      if root == ".omp/agent/skills" then
-        homeFile label userConfig root
-      else
-        lib.concatMapStrings (name: homeFile label userConfig "${root}/${name}") allNames
+      root: lib.concatMapStrings (name: homeFile label userConfig "${root}/${name}") allNames
     ) roots
     + lib.optionalString (homeFiles == null) ''
       echo ${esc "no materialized home-files on ${label}"} >&2

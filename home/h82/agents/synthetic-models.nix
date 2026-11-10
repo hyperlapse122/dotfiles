@@ -1,6 +1,5 @@
 # Each entry:
-# - `id`: the upstream model ID, without the `synthetic/` provider prefix OMP
-#   adds.
+# - `id`: the upstream model ID, without the `synthetic/` provider prefix.
 # - `family`: the family the shared instructions map the ID's org to.
 # - `lineage`: an anchored regular expression, valid for both Nix
 #   `builtins.match` and Python `re.fullmatch`, that matches this ID and newer

@@ -267,7 +267,7 @@ def grok():
 
 
 def synthetic():
-    key = run(['omp-synthetic-key']).strip()
+    key = Path(os.environ.get('AGENT_USAGE_SYNTHETIC_KEY_FILE', '/run/secrets/cli-auth/synthetic_api_key')).read_text().strip()
     status, data = http('https://api.synthetic.new/v2/quotas', key)
     if status != 200:
         raise Unavailable()

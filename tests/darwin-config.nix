@@ -95,7 +95,6 @@
     each as exactly one enabled file, and the in-tree test-audit skill
     directory beside them, plus every skill of the pinned compound-engineering
     input under ~/.gemini/antigravity-cli/skills, and nothing else under those
-    roots; OMP receives its contributed ~/.omp/agent/skills root; nothing
     lands under ~/.agents/skills or ~/.gemini/config/skills.
 
   - TLS inspection CA: my.tlsInspectionCa.enable defaults to false and the
@@ -898,9 +897,6 @@ let
         "${entry.name}: the targets under the skill roots must be exactly ${
           builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets ++ ceTargets)
         }, got ${builtins.toJSON (sort koreanUnderRoots)}"
-      )
-      (check (lib.length (koreanFilesAt ".omp/agent/skills") == 1)
-        "${entry.name}: OMP must receive the contributed skill root; native OMP checks verify its contents"
       )
       (check (koreanElsewhere == [ ])
         "${entry.name}: Korean skills must not be installed under .agents/skills or .gemini/config/skills, got ${builtins.toJSON koreanElsewhere}"
