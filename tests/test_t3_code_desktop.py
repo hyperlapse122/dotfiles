@@ -57,6 +57,12 @@ class T3CodeDesktopTest(unittest.TestCase):
             "XDG_DATA_HOME": str(self.root / "data"),
             "XDG_STATE_HOME": str(self.root / "state"),
         })
+        self.host_report = {"supported": True, "blockers": []}
+        probe_template = self.source / ".chezmoitemplates/t3-code-desktop"
+        native_probe = ('output "mise" "--cd" .chezmoi.workingTree "exec" "python" "--" "python" '
+                        '(joinPath .chezmoi.workingTree "scripts" "linux-apps.py") "--inspect" | fromJson')
+        self.assertIn(native_probe, probe_template.read_text())
+        probe_template.write_text(probe_template.read_text().replace(native_probe, 'get . "fixtureHostReport"'))
         self.release = {"tag_name": "v9.8.7", "assets": [
             {"name": f"T3-Code-9.8.7-{arch}.deb",
              "browser_download_url": f"https://example.invalid/desktop-{arch}.deb",
@@ -66,8 +72,9 @@ class T3CodeDesktopTest(unittest.TestCase):
 
     def render(self, relative, os_name, arch, release=None):
         context = {"chezmoi": {"os": os_name, "arch": arch,
-                              "osRelease": {"id": "ubuntu"},
-                              "destDir": self.home.as_posix(), "workingTree": self.repo.as_posix()},
+                              "osRelease": {"id": "ubuntu", "versionID": "26.04"},
+                              "destDir": self.home.as_posix(), "sourceDir": self.source.as_posix(), "workingTree": self.repo.as_posix()},
+                   "fixtureHostReport": self.host_report,
                    "t3CodeRelease": self.release if release is None else release}
         template = (self.repo / "home" / relative).read_text(encoding="utf-8")
         if relative == ".chezmoitemplates/external-assets/t3-code.toml.tmpl":
@@ -88,7 +95,7 @@ class T3CodeDesktopTest(unittest.TestCase):
             encoding="utf-8", errors="backslashreplace", timeout=60)
 
     def test_ubuntu_selects_architecture_and_enforces_release_integrity(self):
-        for arch, digest in (("amd64", "a"), ("arm64", "b")):
+        for arch, digest in (("amd64", "a"),):
             with self.subTest(arch=arch):
                 result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", "linux", arch)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -106,6 +113,23 @@ class T3CodeDesktopTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SHA-256", result.stdout + result.stderr)
 
+    def test_unsupported_linux_host_does_not_stage_or_install_t3(self):
+        self.host_report = {"supported": False, "blockers": ["Studio required"]}
+        for subject in (".chezmoitemplates/external-assets/t3-code.toml.tmpl",
+                        ".chezmoiscripts/run_onchange_after_30-install-t3-code.sh.tmpl"):
+            rendered = self.render(subject, "linux", "amd64", {"invalid": "must not be examined"})
+            self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+            self.assertEqual(rendered.stdout.strip(), "")
+
+    def test_ignore_gate_tracks_studio_host_eligibility(self):
+        for supported in (True, False):
+            self.host_report = {"supported": supported, "blockers": []}
+            result = self.render(".chezmoiignore", "linux", "amd64")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            ignored = result.stdout.splitlines()
+            self.assertEqual(".t3" in ignored, not supported)
+            self.assertEqual(".local/bin/t3" in ignored, not supported)
+
     def test_installed_ubuntu_package_skips_release_lookup_and_download(self):
         (self.root / "dpkg-status").write_bytes(
             b"Package: t3code\nStatus: install ok installed\n\n")
@@ -116,7 +140,7 @@ class T3CodeDesktopTest(unittest.TestCase):
 
     def test_other_platforms_do_not_stage_a_debian_payload(self):
         for os_name, arch in (("windows", "amd64"), ("windows", "arm64"),
-                              ("darwin", "arm64"), ("darwin", "amd64"), ("linux", "386")):
+                              ("darwin", "arm64"), ("darwin", "amd64"), ("linux", "386"), ("linux", "arm64")):
             with self.subTest(os=os_name, arch=arch):
                 result = self.render(".chezmoitemplates/external-assets/t3-code.toml.tmpl", os_name, arch,
                                      {"invalid": "must not be examined"})

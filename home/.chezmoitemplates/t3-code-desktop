@@ -1,5 +1,10 @@
 {{- $os := .chezmoi.os -}}
 {{- $arch := .chezmoi.arch -}}
 {{- $ubuntu := and (eq $os "linux") (eq (get (get .chezmoi "osRelease" | default dict) "id") "ubuntu") -}}
-{{- $supported := or (and (eq $os "windows") (has $arch (list "amd64" "arm64"))) (and (eq $os "darwin") (eq $arch "arm64")) (and $ubuntu (has $arch (list "amd64" "arm64"))) -}}
+{{- $studio := false -}}
+{{- if and $ubuntu (eq $arch "amd64") -}}
+{{- $host := output "mise" "--cd" .chezmoi.workingTree "exec" "python" "--" "python" (joinPath .chezmoi.workingTree "scripts" "linux-apps.py") "--inspect" | fromJson -}}
+{{- $studio = $host.supported -}}
+{{- end -}}
+{{- $supported := or (and (eq $os "windows") (has $arch (list "amd64" "arm64"))) (and (eq $os "darwin") (eq $arch "arm64")) $studio -}}
 {{- dict "supported" $supported "ubuntu" $ubuntu "stagedDeb" (joinPath .chezmoi.destDir ".cache" "t3-code" "t3code.deb") | toJson -}}
