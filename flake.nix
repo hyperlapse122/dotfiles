@@ -669,48 +669,10 @@
             inherit pkgs self;
             fixtures = [ ];
           };
-          zsh-prezto =
-            let
-              assertConfiguration =
-                entry:
-                let
-                  homeFiles = entry.user.home-files or null;
-                  # A missing file fails inside the builder with its name, rather
-                  # than aborting evaluation on a null coercion.
-                  assertSource =
-                    file: pattern:
-                    let
-                      source = if homeFiles == null then null else "${homeFiles}/${file}";
-                    in
-                    if source == null then
-                      ''
-                        echo 'missing home.file ${file} on ${entry.name}' >&2
-                        fail=1
-                      ''
-                    else
-                      ''
-                        if [ ! -f ${pkgs.lib.escapeShellArg source} ] || ! grep -q ${pkgs.lib.escapeShellArg pattern} ${pkgs.lib.escapeShellArg source}; then
-                          echo ${pkgs.lib.escapeShellArg "${file} does not contain ${pattern} on ${entry.name}"} >&2
-                          fail=1
-                        fi
-                      '';
-                  dotzshenv = if homeFiles == null then "/nonexistent/.zshenv" else "${homeFiles}/.zshenv";
-                  zshenv = "${entry.user.home.homeDirectory or "/nonexistent"}/.config/zsh/.zshenv";
-                in
-                ''
-                  ${assertSource ".config/zsh/.zpreztorc" "zstyle ':prezto:load' pmodule"}
-                  ${assertSource ".config/zsh/.zshenv" "runcoms/zshenv"}
-                  ${assertSource ".config/zsh/.zshrc" "runcoms/zshrc"}
-                  if [ ! -f ${pkgs.lib.escapeShellArg dotzshenv} ] || ! grep -qF ${pkgs.lib.escapeShellArg "source ${zshenv}"} ${pkgs.lib.escapeShellArg dotzshenv}; then
-                    echo ${pkgs.lib.escapeShellArg ".zshenv does not source ${zshenv} on ${entry.name}"} >&2
-                    fail=1
-                  fi
-                '';
-            in
-            pkgs.runCommand "zsh-prezto-tests" { nativeBuildInputs = [ pkgs.gnugrep ]; } ''
-              ${forEveryUser assertConfiguration}
-              touch $out
-            '';
+          zsh-prezto = import ./tests/zsh-prezto.nix {
+            inherit pkgs;
+            entries = configurations.userEntries;
+          };
           ghostty-font =
             let
               assertConfiguration =
