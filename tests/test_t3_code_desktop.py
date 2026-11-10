@@ -44,6 +44,7 @@ class T3CodeDesktopTest(unittest.TestCase):
         self.home.mkdir()
         self.source = self.root / "source"
         self.source.mkdir()
+        (self.source / "private_dot_t3").mkdir()
         shutil.copytree(self.repo / "home/.chezmoitemplates", self.source / ".chezmoitemplates")
         self.config = self.root / "chezmoi.toml"
         self.config.write_text("", encoding="utf-8")
@@ -70,10 +71,17 @@ class T3CodeDesktopTest(unittest.TestCase):
             for arch, digest in (("amd64", "a"), ("arm64", "b"))
         ]}
 
-    def render(self, relative, os_name, arch, release=None):
+    def test_reduced_source_without_host_probe_fails_closed(self):
+        template = self.repo / 'home/.chezmoitemplates/t3-code-desktop'
+        (self.source / '.chezmoitemplates/t3-code-desktop').write_text(template.read_text())
+        result = self.render('.chezmoitemplates/t3-code-desktop', 'linux', 'amd64', working_tree=self.source)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(json.loads(result.stdout)['supported'])
+
+    def render(self, relative, os_name, arch, release=None, working_tree=None):
         context = {"chezmoi": {"os": os_name, "arch": arch,
                               "osRelease": {"id": "ubuntu", "versionID": "26.04"},
-                              "destDir": self.home.as_posix(), "sourceDir": self.source.as_posix(), "workingTree": self.repo.as_posix()},
+                              "destDir": self.home.as_posix(), "sourceDir": self.source.as_posix(), "workingTree": (working_tree or self.repo).as_posix()},
                    "fixtureHostReport": self.host_report,
                    "t3CodeRelease": self.release if release is None else release}
         template = (self.repo / "home" / relative).read_text(encoding="utf-8")

@@ -65,6 +65,8 @@ def verify_terminal_status(status):
         "Terminal environment PENDING: The systemd user-manager environment is unavailable; verify in a desktop session.",
         "Terminal environment PENDING: Native Plasma acceptance remains unverified: check Default Applications, Ctrl+Alt+T, Dolphin Open Terminal Here, and a Terminal=true launcher in a fresh desktop session.",
     }
+    if status.returncode == 0 and not pending:
+        return
     if status.returncode != 2 or not pending or set(pending) - allowed:
         raise RuntimeError("Unexpected native terminal state:\n" + status.stdout + status.stderr)
 

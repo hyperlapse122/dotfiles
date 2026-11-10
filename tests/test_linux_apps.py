@@ -16,6 +16,7 @@ CONFIG = json.loads((REPO / 'home/.chezmoidata/linux.yaml').read_text())['linux'
 SUPPORTED = {'supported': True, 'blockers': []}
 
 
+@unittest.skipIf(os.name == "nt", "Linux startup-policy fixtures require POSIX symlink and signal semantics")
 class LinuxAppsTest(unittest.TestCase):
     def setUp(self):
         scratch = tempfile.TemporaryDirectory()

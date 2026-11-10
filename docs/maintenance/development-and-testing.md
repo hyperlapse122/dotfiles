@@ -75,7 +75,7 @@ mise exec -- python scripts/run-test-area.py --area all --report area-results.js
 | applications | Application/model pins, shared asset preparation, fonts, harnesses, T3 settings, shell profiles and completions | Root mise tools, chezmoi, native shell, Bash and PowerShell where available |
 | security | Encrypted inputs, Git/GPG, pinentry application, SSH identities, scoped CA files, GitHub/GitLab and registry authentication | Root mise tools including glab; native GPG/gpgconf, Git, chezmoi, native shell |
 | platform | Worktree/bootstrap guards, OS provisioning/readiness, Ghostty and terminal integration | Root mise tools; Windows PowerShell and Git for Windows fixture checks; Bash for isolated macOS command doubles |
-| build-contracts | Windows/macOS build contracts, exact test ownership and CI event policy | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles |
+| build-contracts | Windows/macOS/Linux build contracts, exact test ownership and CI event policy | Root mise tools; Windows fixture checks use Windows PowerShell and disposable native doubles |
 
 The manifest contains the complete module assignment. `--list` exposes the current test IDs for each area.
 
@@ -226,10 +226,10 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 
 | Runner Label | Target Platform | Unit Tests | Native Smoke Tests |
 |---|---|---|---|
-| `ubuntu-24.04` | `linux-amd64` | Yes | Yes |
-| `ubuntu-24.04-arm` | `linux-arm64` | Yes | Yes |
-| `ubuntu-26.04` | `linux-amd64` | Yes | Yes |
-| `ubuntu-26.04-arm` | `linux-arm64` | Yes | Yes |
+| `ubuntu-24.04` | `linux-amd64` | Yes | CLI compatibility only |
+| `ubuntu-24.04-arm` | `linux-arm64` | Yes | CLI compatibility only |
+| `ubuntu-26.04` | `linux-amd64` | Yes | CLI compatibility only |
+| `ubuntu-26.04-arm` | `linux-arm64` | Yes | CLI compatibility only |
 | `macos-26` | `darwin-arm64` | Yes | Yes |
 | `windows-2025` | `windows-amd64` | Yes | Yes |
 | `windows-11-arm` | `windows-arm64` | No | All Windows-eligible native smoke areas |
@@ -237,10 +237,15 @@ CI workflows in `.github/workflows/test.yml` run unit and native smoke checks ac
 ### Architecture Principles
 
 - **macOS Apple Silicon Only:** macOS CI uses ARM64 (`darwin-arm64`) runners. Intel Macs are not supported.
-- **Ubuntu LTS Coverage:** Tracks the two most recent Ubuntu LTS releases (`24.04` and `26.04`) across both x64 and ARM64.
+- **Linux runner coverage:** The labels above describe CI runner coverage, not workstation support. Workstation support is native Ubuntu Studio 26.04 LTS amd64 from 26.04.1+ media. Generic Ubuntu and ARM runners cannot provide Studio workstation acceptance.
 - **Windows unit tests:** Run on x64 (`windows-2025`). Windows ARM64 executes all Windows-eligible native smoke areas; this is not an ARM64 build-only lane.
 
 ### Native areas and independent setup
+
+Generic Ubuntu runners exclude Ghostty and desktop-backed T3/instruction lanes because they are not Ubuntu Studio hosts.
+Pi and Grok retain their direct CLI/native CE checks on Linux without installing T3; desktop-backed checks remain on the existing eligible Windows/macOS runners.
+Antigravity runs in its own area so its Linux CLI and native CE proof do not depend on a Studio-only desktop lane.
+Studio desktop, native build and minikube acceptance remain the separate explicit checks in the [Ubuntu Studio setup guide](../setup/ubuntu-studio.md); no hosted Ubuntu result certifies those checks.
 
 The separate **Native macOS ARM64 builds** job explicitly runs `mise run macos-build` with a disposable home and job-owned mise data/cache roots.
 Its provisioning process clears inherited .NET/Rust roots so a runner's preinstalled environment cannot redirect installation into the runner account's tool roots.
@@ -255,12 +260,13 @@ Each area/target pair owns a separate hosted runner. All matrices use `fail-fast
 |---|---|---|
 | apps | `mise exec chezmoi python -- python tests/smoke_personal_apps.py --path-integration --expected-target TARGET` | Pinned apps and disposable PATH/profile fixture |
 | t3 | `mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target TARGET` | Native desktop installation, pinned Codex/Claude and CE acquisition, scoped GitHub token |
+| antigravity | `mise exec chezmoi python -- python tests/smoke_antigravity.py --expected-target TARGET` | Pinned native CLI and CE with isolated provider settings |
 | t3-instructions | `mise exec chezmoi python gh -- python tests/smoke_t3_instructions.py --install-desktop --expected-target TARGET` | Pinned Codex/Claude/Pi, native CE, controlled local model transport and disposable T3 lifecycle fixtures |
 | ce | `mise exec chezmoi python -- python tests/smoke_harness_plugins.py --expected-target TARGET` | Isolated shared CE acquisition and integrity checks |
 | codex | `mise exec chezmoi python -- python tests/smoke_codex.py --expected-target TARGET` | Complete pinned Codex package and isolated native CE state |
 | claude | `mise exec chezmoi python -- python tests/smoke_claude.py --expected-target TARGET` | Pinned Claude binary and isolated native CE, instruction, preference, and memory fixtures |
-| pi | `mise exec chezmoi python gh -- python tests/smoke_pi.py --install-desktop --expected-target TARGET` | Complete pinned Pi distribution, committed Synthetic model lock, native CE and disposable T3 server |
-| grok | `mise exec chezmoi python gh -- python tests/smoke_grok.py --install-desktop --expected-target TARGET` | Pinned Grok, native CE and disposable T3 ACP server |
+| pi | `mise exec chezmoi python gh -- python tests/smoke_pi.py --expected-target TARGET` plus `--install-desktop` on Windows/macOS | Complete pinned Pi distribution, Synthetic model lock and native CE; eligible hosts also prove T3 |
+| grok | `mise exec chezmoi python gh -- python tests/smoke_grok.py --expected-target TARGET` plus `--install-desktop` on Windows/macOS | Pinned Grok and native CE; eligible hosts also prove T3 ACP |
 | github-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_github_auth.py` | Native GPG, pinned gh acquired by fixture, OS credential backend |
 | gitlab-auth | `mise exec chezmoi python uv pipx:keyring -- python tests/smoke_gitlab_auth.py` | Native GPG, pinned glab acquired by fixture, OS credential backend |
 | container-auth | `mise exec chezmoi python podman@6.1.4 -- python tests/smoke_container_auth.py --require-podman` | Official credential helper, declared host-side Podman client and isolated native credential store |
@@ -278,7 +284,7 @@ Unit jobs retain the root mise tool environment because the bootstrap contract r
 
 ### Ghostty native verification
 
-The `ghostty` native area runs on the four supported Ubuntu release/architecture runners and the Apple Silicon macOS runner; it is excluded from Windows.
+The `ghostty` native smoke supports Ubuntu Studio amd64 and Apple Silicon macOS; it is excluded from Windows. A generic Ubuntu runner must not be reported as native Studio desktop acceptance, regardless of the CI matrix label.
 It executes `mise exec chezmoi python -- python tests/smoke_ghostty.py` on disposable hosted machines.
 The smoke verifies actual package installation and version discovery, the Ubuntu native terminal selection interfaces and desktop metadata, a disposable Ubuntu account's shell change, and macOS helper compilation and read-only association lookup.
 It does not change the runner owner's login shell or macOS default-app association.
@@ -332,3 +338,23 @@ The independent-area PR passed all 24 unit jobs, 35 native jobs, and two control
 The 24 unit-report artifacts select the same 236 IDs on all six platforms, exactly once across each platform's four areas. This is the original 220 cases, 15 new CI contracts, and the Developer Mode bootstrap case merged into main independently. Windows retained nine hosted skips. Linux and macOS have one additional skipped case because that new bootstrap case is Windows-only.
 
 Parallel setup reduced this PR's elapsed time but increased its aggregate runner time. The initial push/PR handoff consumed 5106 runner-seconds including canceled work, versus 3131 for the baseline duplicate pair. Do not claim that the opening race saves runner time. Ordinary PR-update admission must be assessed separately from that race.
+
+## Ubuntu Studio Inspection and Native Proof
+
+Linux workstation support targets native Ubuntu Studio 26.04 LTS amd64 installed from 26.04.1 or a later 26.04 point release. Generic Ubuntu runners can provide fixture evidence but cannot certify the Studio desktop, hardware, credentials or daily work. The [migration guide](../setup/ubuntu-studio.md) records the macOS capability inventory, vendor limitations and owner acceptance steps.
+
+`python3 scripts/linux-readiness.py --json` is read-only inspection. Exit `1` reports missing prerequisites or an unsupported host; `2` reports pending native checks; `0` requires all checks to pass. It uses the shared host probe, PATH/file presence and fixed package-inventory queries. It does not execute harnesses or Docker, query secret storage, authenticate, decrypt, start services or create clusters. It publishes fixed diagnostics rather than command output. Native checks remain pending even with all installation fixtures present; there is no acceptance override.
+
+Run its focused fixtures with the prepared repository tools:
+
+```sh
+mise exec -- python -m unittest discover -s tests -p test_linux_readiness.py
+```
+
+These fixtures cover the read-only command allowlist, sanitized/bounded JSON, unsupported release/flavor/architecture, missing prerequisites and pending native acceptance. They do not prove that packages launch or credentials work.
+
+After explicit host application, `mise run linux-build` installs and publishes native build tools, and `mise run linux-kubernetes` publishes minikube/kubectl without starting either runtime or cluster. From a fresh external-directory login shell, run `python3 /absolute/checkout/tests/smoke_linux_build_environment.py --home "$HOME" --report /tmp/dotfiles-linux-build.json`. Require successful native compilation and execution, including vcpkg dependency resolution. This is separate from default inspection and ordinary worktree preparation.
+
+`python3 tests/smoke_linux_minikube.py --report /tmp/dotfiles-linux-minikube.json` is an explicit, runtime-starting native proof. It owns a transient rootless Docker endpoint and isolated minikube/config/state; it builds/runs an image, deploys a workload, verifies host HTTP access and deletes the cluster and task resources. Exit codes are `0` passed, `1` failed/interrupted, `2` unavailable, and `3` cleanup incomplete. Check the report's cleanup result and empty remaining-resource inventories, including volumes, independently of workload success. After forced interruption, recover only its reported endpoint/profile/unit/state; never prune a shared runtime. Measure host disk reclamation separately. Keep native evidence pending when the target host is unavailable.
+
+Shared worktree preparation continues to use the hook-free bootstrap configuration and must not apply personal state. Native tests that install packages or write credentials belong on eligible disposable hosts; fixture tests on macOS are not a workstation-readiness certificate. Consolidating Ubuntu and Studio bootstrap entry points is tracked separately in [issue 120](https://github.com/hyperlapse122/dotfiles/issues/120).

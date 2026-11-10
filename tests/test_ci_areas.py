@@ -139,7 +139,7 @@ class GhosttyWorkflowTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("restricted to disposable GitHub-hosted runners", result.stdout + result.stderr)
 
-    def test_native_matrix_excludes_ghostty_on_both_windows_targets(self):
+    def test_native_matrix_excludes_desktop_work_on_ineligible_targets(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/test.yml").read_text()
         native = workflow.split("\n  native:\n", 1)[1].split("\n  macos-build:\n", 1)[0]
         areas = re.search(r"\barea:\s*\[([^]]+)\]", native).group(1)
@@ -147,7 +147,14 @@ class GhosttyWorkflowTest(unittest.TestCase):
         for runner_name, target in (("windows-2025", "windows-amd64"),
                                     ("windows-11-arm", "windows-arm64")):
             self.assertIn(f"- area: ghostty\n            platform:\n              runner: {runner_name}\n              target: {target}", native)
+        for runner_name, target in (("ubuntu-24.04", "linux-amd64"),
+                                    ("ubuntu-24.04-arm", "linux-arm64"),
+                                    ("ubuntu-26.04", "linux-amd64"),
+                                    ("ubuntu-26.04-arm", "linux-arm64")):
+            for area in ("ghostty", "t3", "t3-instructions"):
+                self.assertIn(f"- area: {area}\n            platform:\n              runner: {runner_name}\n              target: {target}", native)
         self.assertIn("python tests/smoke_ghostty.py --expected-target ${{ matrix.platform.target }}", native)
+        self.assertIn("matrix.area == 'antigravity'", native)
 
 
 if __name__ == "__main__":

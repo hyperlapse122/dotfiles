@@ -131,7 +131,7 @@ class T3CodeSettingsTest(unittest.TestCase):
                        "binaryPath": (self.home / ".local/bin" / executable).as_posix()},
         }
 
-    def render(self, body, os_name, arch, *, existing="", distro="ubuntu", personal_apps=None):
+    def render(self, body, os_name, arch, *, existing="", distro="ubuntu", personal_apps=None, studio=False):
         context = ('(dict "t3CodePreferences" (fromJson ' + json.dumps(json.dumps(self.preferences))
                    + ') "personalApps" (fromJson ' + json.dumps(json.dumps(personal_apps or {}))
                    + ') "chezmoi" (dict "os" ' + json.dumps(os_name)
@@ -139,7 +139,8 @@ class T3CodeSettingsTest(unittest.TestCase):
                    + ' "osRelease" (dict "id" ' + json.dumps(distro) + ')'
                    + ' "destDir" ' + json.dumps(self.home.as_posix())
                    + ' "sourceDir" ' + json.dumps(self.source.as_posix())
-                   + ' "stdin" ' + json.dumps(existing) + '))')
+                   + ' "workingTree" ' + json.dumps(self.source.as_posix())
+                   + ' "stdin" ' + json.dumps(existing) + ') "fixtureHostReport" (dict "supported" ' + ('true' if studio else 'false') + '))')
         wrapper = ('{{ template "fixture" ' + context + ' }}'
                    + '{{ define "fixture" }}' + body + '{{ end }}')
         return self.chez("execute-template", input=wrapper).stdout
@@ -529,16 +530,23 @@ class T3CodeSettingsTest(unittest.TestCase):
 
     def test_actual_managed_targets_respect_platform_and_architecture(self):
         self.install_selection_fixture()
+        probe = self.source / 'scripts/linux-apps.py'
+        probe.parent.mkdir()
+        probe.touch()
+        template = self.source / '.chezmoitemplates/t3-code-desktop'
+        native = ('output "mise" "--cd" .chezmoi.workingTree "exec" "python" "--" "python" '
+                  '(joinPath .chezmoi.workingTree "scripts" "linux-apps.py") "--inspect" | fromJson')
+        template.write_text(template.read_text().replace(native, 'get . "fixtureHostReport"'))
         ignore = (self.repo / "home/.chezmoiignore").read_text(encoding="utf-8")
         cases = (("windows", "amd64", "", True), ("windows", "arm64", "", True),
-                 ("linux", "amd64", "ubuntu", True), ("linux", "arm64", "ubuntu", True),
+                 ("linux", "amd64", "ubuntu", False), ("linux", "arm64", "ubuntu", False),
                  ("darwin", "arm64", "", True), ("darwin", "amd64", "", False),
                  ("linux", "amd64", "debian", False), ("linux", "386", "ubuntu", False),
                  ("windows", "386", "", False), ("freebsd", "amd64", "", False))
-        for os_name, arch, distro, supported in cases:
+        for os_name, arch, distro, supported in (*cases, ("linux", "amd64", "studio", True)):
             with self.subTest(os=os_name, arch=arch, distro=distro):
                 (self.source / ".chezmoiignore").write_text(
-                    self.render(ignore, os_name, arch, distro=distro), encoding="utf-8")
+                    self.render(ignore, os_name, arch, distro="ubuntu" if distro == "studio" else distro, studio=distro == "studio"), encoding="utf-8")
                 managed = set(self.chez("managed", "--path-style=relative", "--exclude=scripts").stdout.replace("\\", "/").splitlines())
                 self.assertEqual(".t3/userdata/settings.json" in managed, supported)
                 self.assertEqual(".t3/userdata/client-settings.json" in managed, supported)

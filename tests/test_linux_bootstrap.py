@@ -104,6 +104,8 @@ class LinuxBootstrapTest(unittest.TestCase):
         for _ in range(2):
             result = self.run_script('bootstrap-ubuntu-studio.sh', self.source)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+            self.assertIn('chezmoi --source', result.stdout)
+            self.assertNotIn('configure-chezmoi.sh', result.stdout)
             self.assertFalse(marker.exists())
             self.assertFalse((self.home/'.fixture').exists())
             self.assertEqual(config.read_text(), text)

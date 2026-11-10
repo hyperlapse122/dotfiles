@@ -2,7 +2,7 @@
 {{- $arch := .chezmoi.arch -}}
 {{- $ubuntu := and (eq $os "linux") (eq (get (get .chezmoi "osRelease" | default dict) "id") "ubuntu") -}}
 {{- $studio := false -}}
-{{- if and $ubuntu (eq $arch "amd64") -}}
+{{- if and $ubuntu (eq $arch "amd64") (stat (joinPath .chezmoi.workingTree "scripts" "linux-apps.py")) -}}
 {{- $host := output "mise" "--cd" .chezmoi.workingTree "exec" "python" "--" "python" (joinPath .chezmoi.workingTree "scripts" "linux-apps.py") "--inspect" | fromJson -}}
 {{- $studio = $host.supported -}}
 {{- end -}}

@@ -293,3 +293,46 @@ Legacy HTTP/HTTPS authentication keys are matched by registry hostname and expli
 The effective `DOCKER_CONFIG` and `REGISTRY_AUTH_FILE` overrides are reconciled alongside the default files. Linux's `XDG_RUNTIME_DIR/containers/auth.json` and persistent `XDG_CONFIG_HOME/containers/auth.json` are both covered so an earlier Podman plaintext entry cannot shadow the managed helper. Use absolute override paths. When Linux has no `XDG_RUNTIME_DIR`, the existing `/run/user/UID` location is covered; otherwise set `REGISTRY_AUTH_FILE` explicitly for nonstandard runtime locations.
 
 Locked or unavailable native storage fails without a plaintext fallback. Rotate credentials by importing the replacement and applying again. No real registry push is part of the smoke tests. `tests/smoke_container_auth.py` writes only synthetic records on disposable GitHub-hosted runners, restoring macOS Keychain selection and erasing its record. CI supplies the mise-pinned Podman 6.1.4 client and requires a real host-side `podman login --get-login` lookup. Remote Podman initializes a connection before this local lookup; a ping-only loopback fixture satisfies that handshake without returning credentials or starting an engine. The account must still come from the official helper and native credential store.
+
+## Ubuntu Studio Native Credential Acceptance
+
+Explicit Linux application installs Secret Service client libraries and `secret-tool`, and uses Qt pinentry for GPG. Ubuntu Studio's existing desktop session must supply the unlocked Secret Service collection. An installed KWallet or gnome-keyring package does not prove that it owns the bus name, provides a default collection or can persist credentials. Application does not start another provider or migrate wallets.
+
+In the owner's native KDE session, check the bus owner without activating a provider:
+
+```sh
+gdbus call --session --dest org.freedesktop.DBus \
+  --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.NameHasOwner \
+  org.freedesktop.secrets
+```
+
+Require `true` before further Secret Service calls. Resolve a missing provider using the desktop's supported configuration and log in again; do not launch a competing daemon for this test. To identify the current owner, call `org.freedesktop.DBus.GetNameOwner` on the same bus object with `org.freedesktop.secrets`, then inspect that unique owner's process in the session. Confirm whether KWallet or gnome-keyring owns it. Only after confirming ownership, inspect the default alias:
+
+```sh
+gdbus call --session --dest org.freedesktop.secrets \
+  --object-path /org/freedesktop/secrets --method org.freedesktop.Secret.Service.ReadAlias default
+```
+
+A `/` result means no default collection. Select the intended existing wallet/collection through its native settings and unlock it interactively. Do not substitute another user's collection. Wallet passwords, login-password synchronization and recovery are owner responsibilities; do not change global trust or bypass a locked store.
+
+Perform this deliberately mutating synthetic test only after confirming the provider and default alias. Use a unique test identifier and a harmless constant, without shell tracing:
+
+```sh
+credential_test_id="dotfiles-acceptance-$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
+printf '%s' 'dotfiles-harmless-test' | secret-tool store \
+  --label='dotfiles temporary acceptance test' dotfiles-acceptance "$credential_test_id"
+credential_test_value=$(secret-tool lookup dotfiles-acceptance "$credential_test_id")
+[ "$credential_test_value" = 'dotfiles-harmless-test' ]
+unset credential_test_value
+secret-tool clear dotfiles-acceptance "$credential_test_id"
+if secret-tool lookup dotfiles-acceptance "$credential_test_id" >/dev/null; then
+  printf '%s\n' 'Test entry remains; remove this test entry in the owning wallet.' >&2
+fi
+unset credential_test_id
+```
+
+Record store, comparison and deletion results separately. If interrupted or a command fails, remove only the uniquely identified test entry through the owning wallet and verify its absence. Do not clear unrelated entries. Repeat the lookup after locking/unlocking the wallet or a fresh login when testing persistence, before deleting the test entry. Never use a real token as the test value.
+
+Open 1Password, sign in and unlock it manually. Enable its supported CLI and browser integration, then verify `op --version`, a native CLI authorization prompt and browser unlock/fill on a harmless account. For SSH, use the enrolled public identity and documented Linux socket; confirm only the selected account is offered. Do not capture vault item values. Complete GPG PIN and ownertrust verification, a disposable signed commit, authorized GitHub/GitLab operations and any enrolled registry lookup in the same desktop session. Confirm missing or locked native storage fails rather than persisting plaintext. The read-only Linux readiness report performs none of these operations.
+
+See the [Studio migration guide](../setup/ubuntu-studio.md) for the full acceptance record and build/runtime boundary.

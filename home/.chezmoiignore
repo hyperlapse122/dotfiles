@@ -70,8 +70,11 @@ Library
 {{ end }}
 {{ $release := get .chezmoi "osRelease" | default dict }}
 {{ $t3Windows := and (eq .chezmoi.os "windows") (has .chezmoi.arch (list "amd64" "arm64")) }}
+{{ $t3Posix := false }}
+{{ if or (stat (joinPath .chezmoi.sourceDir "private_dot_t3")) (stat (joinPath .chezmoi.sourceDir "dot_local" "bin" "executable_t3.tmpl")) }}
 {{ $t3Desktop := includeTemplate "t3-code-desktop" . | fromJson }}
-{{ $t3Posix := and $t3Desktop.supported (ne .chezmoi.os "windows") }}
+{{ $t3Posix = and $t3Desktop.supported (ne .chezmoi.os "windows") }}
+{{ end }}
 {{ if not (or $t3Windows $t3Posix) }}
 .t3
 {{ end }}

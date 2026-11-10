@@ -152,7 +152,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        area: [apps, t3, t3-instructions, ce, codex, claude, pi, grok, github-auth, gitlab-auth, container-auth, fonts, ghostty]
+        area: [apps, t3, t3-instructions, antigravity, ce, codex, claude, pi, grok, github-auth, gitlab-auth, container-auth, fonts, ghostty]
         platform:
           - runner: ubuntu-24.04
             target: linux-amd64
@@ -169,6 +169,54 @@ jobs:
           - runner: macos-26
             target: darwin-arm64
         exclude:
+          - area: ghostty
+            platform:
+              runner: ubuntu-24.04
+              target: linux-amd64
+          - area: ghostty
+            platform:
+              runner: ubuntu-24.04-arm
+              target: linux-arm64
+          - area: ghostty
+            platform:
+              runner: ubuntu-26.04
+              target: linux-amd64
+          - area: ghostty
+            platform:
+              runner: ubuntu-26.04-arm
+              target: linux-arm64
+          - area: t3
+            platform:
+              runner: ubuntu-24.04
+              target: linux-amd64
+          - area: t3
+            platform:
+              runner: ubuntu-24.04-arm
+              target: linux-arm64
+          - area: t3
+            platform:
+              runner: ubuntu-26.04
+              target: linux-amd64
+          - area: t3
+            platform:
+              runner: ubuntu-26.04-arm
+              target: linux-arm64
+          - area: t3-instructions
+            platform:
+              runner: ubuntu-24.04
+              target: linux-amd64
+          - area: t3-instructions
+            platform:
+              runner: ubuntu-24.04-arm
+              target: linux-arm64
+          - area: t3-instructions
+            platform:
+              runner: ubuntu-26.04
+              target: linux-amd64
+          - area: t3-instructions
+            platform:
+              runner: ubuntu-26.04-arm
+              target: linux-arm64
           - area: ghostty
             platform:
               runner: windows-2025
@@ -243,7 +291,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: mise exec chezmoi python gh -- python tests/smoke_t3_code.py --install-desktop --expected-target ${{ matrix.platform.target }}
       - name: Prove Antigravity CLI pins, native CE, and T3 provider separation
-        if: matrix.area == 't3'
+        if: matrix.area == 'antigravity'
         timeout-minutes: 15
         run: mise exec chezmoi python -- python tests/smoke_antigravity.py --expected-target ${{ matrix.platform.target }}
       - name: Apply pinned CE and prove native skill discovery
@@ -263,13 +311,13 @@ jobs:
         timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
-        run: mise exec chezmoi python gh -- python tests/smoke_pi.py --expected-target ${{ matrix.platform.target }} --install-desktop
+        run: mise exec chezmoi python gh -- python tests/smoke_pi.py --expected-target ${{ matrix.platform.target }} ${{ runner.os != 'Linux' && '--install-desktop' || '' }}
       - name: Prove pinned Grok instructions, native CE, and fresh T3 ACP discovery
         if: matrix.area == 'grok'
         timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
-        run: mise exec chezmoi python gh -- python tests/smoke_grok.py --expected-target ${{ matrix.platform.target }} --install-desktop
+        run: mise exec chezmoi python gh -- python tests/smoke_grok.py --expected-target ${{ matrix.platform.target }} ${{ runner.os != 'Linux' && '--install-desktop' || '' }}
       - name: Prove native T3 instruction composition and lifecycle isolation
         if: matrix.area == 't3-instructions'
         timeout-minutes: 15

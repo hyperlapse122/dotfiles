@@ -29,4 +29,4 @@ mise install
 # Install can report postinstall failures as warnings; require the task to pass.
 mise run bootstrap
 printf '%s\n' "Prepared: $destination" 'No personal settings were applied and no global source was registered.'
-printf 'Register explicitly next: sh "%s/configure-chezmoi.sh"\n' "$destination"
+printf 'Register explicitly next: mise --cd "%s" exec -- chezmoi --source "%s" init\n' "$destination" "$destination"
