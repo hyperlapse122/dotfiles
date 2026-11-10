@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
 
-fail() { printf '%s\n' "Ubuntu bootstrap: $*" >&2; exit 1; }
-[ "$#" -le 1 ] || fail 'Usage: bootstrap-ubuntu.sh [permanent-checkout]'
+fail() { printf '%s\n' "Fedora bootstrap: $*" >&2; exit 1; }
+[ "$#" -le 1 ] || fail 'Usage: bootstrap-fedora.sh [permanent-checkout]'
 source=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 [ -f "$source/scripts/linux-platform.py" ] || fail 'Run this entry point from an inspected checkout with scripts/linux-platform.py; a standalone download is insufficient.'
-command -v python3 >/dev/null 2>&1 || fail 'Requires Ubuntu system python3; run provision-ubuntu.sh from an inspected checkout.'
+command -v python3 >/dev/null 2>&1 || fail 'Requires Fedora system python3; run provision-fedora.sh from an inspected checkout.'
 python3 "$source/scripts/linux-platform.py" || fail 'Host prerequisites failed; no checkout or personal settings were changed.'
 for command in git mise; do
-    command -v "$command" >/dev/null 2>&1 || fail "Install $command with provision-ubuntu.sh before bootstrap."
+    command -v "$command" >/dev/null 2>&1 || fail "Install $command with provision-fedora.sh before bootstrap."
 done
 
 destination=${1:-"$HOME/src/github.com/hyperlapse122/dotfiles"}
