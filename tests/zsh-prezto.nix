@@ -3,7 +3,8 @@ let
   manifest = pkgs.writeText "zsh-prezto-profiles.json" (
     builtins.toJSON (
       map (entry: {
-        inherit (entry) name;
+        inherit (entry) name kind;
+        bash = "${pkgs.bashInteractive}/bin/bash";
         profile = entry.user.home.path or "";
         files = entry.user.home-files or "";
         home = entry.user.home.homeDirectory or "";

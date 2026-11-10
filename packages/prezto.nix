@@ -19,19 +19,22 @@ pkgs.stdenvNoCC.mkDerivation {
   pname = "zsh-prezto-pinned";
   version = builtins.substring 0 12 (builtins.head archives).commit;
   dontUnpack = true;
-  nativeBuildInputs = [ pkgs.zsh pkgs.diffutils ];
+  nativeBuildInputs = [
+    pkgs.zsh
+    pkgs.diffutils
+  ];
   installPhase = ''
 
-  mkdir -p $out/share/zsh-prezto
-  cp -r ${unpack (builtins.head archives)}/. $out/share/zsh-prezto/
-  chmod -R u+w $out
-  ${pkgs.lib.concatMapStringsSep "\n" (asset: ''
-    rm -rf $out/share/zsh-prezto/${asset.path}
-    mkdir -p $out/share/zsh-prezto/${asset.path}
-    cp -r ${unpack asset}/. $out/share/zsh-prezto/${asset.path}/
-  '') (builtins.tail archives)}
-  substituteInPlace $out/share/zsh-prezto/runcoms/zshrc \
-    --replace-fail '"''${ZDOTDIR:-$HOME}/.zprezto/' '"'$out'/share/zsh-prezto/'
+    mkdir -p $out/share/zsh-prezto
+    cp -r ${unpack (builtins.head archives)}/. $out/share/zsh-prezto/
+    chmod -R u+w $out
+    ${pkgs.lib.concatMapStringsSep "\n" (asset: ''
+      rm -rf $out/share/zsh-prezto/${asset.path}
+      mkdir -p $out/share/zsh-prezto/${asset.path}
+      cp -r ${unpack asset}/. $out/share/zsh-prezto/${asset.path}/
+    '') (builtins.tail archives)}
+    substituteInPlace $out/share/zsh-prezto/runcoms/zshrc \
+      --replace-fail '"''${ZDOTDIR:-$HOME}/.zprezto/' '"'$out'/share/zsh-prezto/'
   '';
   doInstallCheck = true;
   installCheckPhase = ''

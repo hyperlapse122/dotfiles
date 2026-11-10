@@ -48,7 +48,6 @@ pkgs.runCommand "shell-utilities-tests" { nativeBuildInputs = [ pkgs.python3 ]; 
   checkHost() (
     host=$1 homePath=$2
     fail() { echo "$host: $*" >> "$failures"; }
-    python3 ${./personal-environment.py} shell "$3" || fail "invalid zsh startup"
     "$homePath/bin/dotnet" --list-sdks > sdks
     grep -q "^8\." sdks && grep -q "^10\." sdks || fail "missing .NET SDK"
     for tool in bun bunx rustc cargo cmake ninja vcpkg; do
