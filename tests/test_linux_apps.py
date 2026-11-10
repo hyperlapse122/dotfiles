@@ -1,4 +1,3 @@
-import copy
 import importlib.util
 import json
 import os
@@ -13,12 +12,10 @@ spec = importlib.util.spec_from_file_location('linux_apps', REPO / 'scripts/linu
 apps = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(apps)
 CONFIG = json.loads((REPO / 'home/.chezmoidata/linux.yaml').read_text())['linux']
-PINNED_RELEASE = 45
-UNPINNED_RELEASE = 46
 
 
-def supported(release=PINNED_RELEASE):
-    return {'supported': True, 'blockers': [], 'release': {'host': release}}
+def supported():
+    return {'supported': True, 'blockers': []}
 
 
 def declared(name, config=CONFIG):
@@ -37,7 +34,6 @@ class LinuxAppsTest(unittest.TestCase):
         self.candidates = {}
         self.bad_key = False
         self.config = CONFIG
-        self.release = PINNED_RELEASE
         self.chrome_install_state = None
         self.installer = apps.Installer(root=self.root, run=self.run_command)
 
@@ -62,7 +58,7 @@ class LinuxAppsTest(unittest.TestCase):
         if args[0] == 'gpg':
             if '--show-keys' in args:
                 repo = declared(Path(args[2]).name, self.config)
-                fingerprint = repo.get('fingerprint') or repo['fingerprints'][str(self.release)]
+                fingerprint = repo['fingerprint']
                 if self.bad_key:
                     fingerprint = '0' * 40
                 stdout = f'pub:::::::::\nfpr:::::::::{fingerprint}:\nsub:::::::::\nfpr:::::::::SUBKEY:\n'
@@ -71,11 +67,11 @@ class LinuxAppsTest(unittest.TestCase):
         return subprocess.CompletedProcess(args, 0, stdout, b'')
 
     def provision(self, report=None, **kwargs):
-        report = supported(self.release) if report is None else report
+        report = supported() if report is None else report
         apps.provision(self.config, installer=self.installer, report=report, **kwargs)
 
     def paths(self, name):
-        return self.installer.repository_paths(apps.resolve(declared(name, self.config), self.release))
+        return self.installer.repository_paths(declared(name, self.config))
 
     def installs(self):
         return [c for c in self.calls if c[:2] == ['dnf', 'install']]
@@ -122,7 +118,7 @@ class LinuxAppsTest(unittest.TestCase):
                          'edk2-ovmf'} <= packages)
         self.assertFalse({'ghostty', 'xdg-terminal-exec', 'pinentry-gnome3', 'build-essential'} & packages)
         self.assertEqual([repo['name'] for repo in CONFIG['repositories']],
-                         ['google-chrome', '1password', 'chatgpt', 'mise', 'terra'])
+                         ['google-chrome', '1password', 'chatgpt', 'mise', 'ghostty'])
         vendor_packages = {p for repo in CONFIG['repositories'] for p in repo['packages']}
         self.assertFalse({'claude-desktop', 'docker-ce', 'docker-ce-cli'} & vendor_packages)
         for repo in CONFIG['repositories']:
@@ -195,68 +191,26 @@ class LinuxAppsTest(unittest.TestCase):
         self.assertEqual(len(self.installs()), 1)
         self.assertNotIn('1password', self.installed)
 
-    def test_terra_names_the_pinned_release_and_filters_to_ghostty(self):
+    def test_ghostty_repository_admits_only_ghostty_packages(self):
         self.provision()
-        key, source, _ = self.paths('terra')
+        key, source, _ = self.paths('ghostty')
         content = source.read_text()
-        self.assertIn('baseurl=https://repos.fyralabs.com/terra45\n', content)
+        self.assertEqual(source.name, '_copr:copr.fedorainfracloud.org:scottames:ghostty.repo')
+        self.assertIn('baseurl=https://download.copr.fedorainfracloud.org/results/scottames/ghostty/'
+                      'fedora-$releasever-$basearch/\n', content)
         self.assertIn('includepkgs=ghostty*\n', content)
-        self.assertNotIn('$releasever', content)
-        self.assertEqual(key.name, 'RPM-GPG-KEY-terra45-C2AC02124AF114F086592E3C8DDE7D14C1C23D8C.asc')
-        self.assertIn(['curl', 'https://repos.fyralabs.com/terra45/key.asc'],
-                      [[c[0], c[-1]] for c in self.calls])
+        self.assertIn('skip_if_unavailable=True\n', content)
+        self.assertEqual(key.name, 'RPM-GPG-KEY-ghostty-2DEFB319CCC3F393B6DAEAB297C83CA0FEB5DAFB.asc')
         self.assertIn('ghostty', self.installed)
 
-    def test_terra_without_a_pin_is_not_written_and_other_repositories_install(self):
-        self.release = UNPINNED_RELEASE
-        with self.assertRaisesRegex(apps.ProvisionError, 'No terra signing-key fingerprint is pinned for Fedora 46'):
-            self.provision()
-        self.assertFalse((self.repos / 'terra.repo').exists())
-        self.assertFalse(any('fyralabs' in c[-1] for c in self.calls if c[0] == 'curl'))
-        self.assertTrue({'google-chrome-stable', '1password', '1password-cli', 'chatgpt', 'mise'} <= self.installed)
-        self.assertNotIn('ghostty', self.installed)
-
-    def test_terra_without_a_pin_keeps_an_installed_ghostty(self):
+    def test_widened_ghostty_repository_is_not_overwritten(self):
         self.provision()
-        before = (self.repos / 'terra.repo').read_text()
-        self.release = UNPINNED_RELEASE
-        self.calls.clear()
-        self.provision()
-        self.assertEqual((self.repos / 'terra.repo').read_text(), before)
-        self.assertEqual(self.installs(), [])
-
-    def test_terra_file_for_an_older_release_is_rewritten_once_the_host_release_is_pinned(self):
-        self.provision()
-        old_key, source, _ = self.paths('terra')
-        self.config = copy.deepcopy(CONFIG)
-        declared('terra', self.config)['fingerprints'][str(UNPINNED_RELEASE)] = 'A' * 40
-        self.release = UNPINNED_RELEASE
-        self.bad_key = True
-        with self.assertRaisesRegex(apps.ProvisionError, 'fingerprint mismatch'):
-            self.provision()
-        self.assertIn('terra45', source.read_text())
-        self.bad_key = False
-        self.provision()
-        new_key, source, content = self.paths('terra')
-        self.assertEqual(source.read_text(), content)
-        self.assertIn('baseurl=https://repos.fyralabs.com/terra46\n', content)
-        self.assertEqual(new_key.name, 'RPM-GPG-KEY-terra46-' + 'A' * 40 + '.asc')
-        self.assertTrue(new_key.is_file())
-        self.assertTrue(old_key.is_file())
-
-    def test_terra_file_with_any_other_difference_is_not_overwritten(self):
-        self.provision()
-        _, source, content = self.paths('terra')
+        _, source, content = self.paths('ghostty')
         widened = content.replace('includepkgs=ghostty*\n', '')
         source.write_text(widened)
-        self.config = copy.deepcopy(CONFIG)
-        declared('terra', self.config)['fingerprints'][str(UNPINNED_RELEASE)] = 'A' * 40
-        for release in (PINNED_RELEASE, UNPINNED_RELEASE):
-            with self.subTest(release=release):
-                self.release = release
-                with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting repository file .*terra.repo'):
-                    self.provision()
-                self.assertEqual(source.read_text(), widened)
+        with self.assertRaisesRegex(apps.ProvisionError, 'Conflicting repository file .*ghostty.repo'):
+            self.provision()
+        self.assertEqual(source.read_text(), widened)
 
     def test_chrome_repository_and_defaults_exist_before_chrome_installs(self):
         self.provision()

@@ -39,13 +39,17 @@
         "baseurl": "https://download.copr.fedorainfracloud.org/results/jdxcode/mise/fedora-$releasever-$basearch/",
         "key_url": "https://download.copr.fedorainfracloud.org/results/jdxcode/mise/pubkey.gpg",
         "fingerprint": "9504792D1F9CCA1514FD1DEC8497A816C83E991C",
+        "skip_if_unavailable": true,
         "packages": ["mise"]
       },
       {
-        "name": "terra", "title": "Terra",
-        "baseurl": "https://repos.fyralabs.com/terra{release}",
-        "key_url": "https://repos.fyralabs.com/terra{release}/key.asc",
-        "fingerprints": {"45": "C2AC02124AF114F086592E3C8DDE7D14C1C23D8C"},
+        "name": "ghostty", "id": "copr:copr.fedorainfracloud.org:scottames:ghostty",
+        "file": "_copr:copr.fedorainfracloud.org:scottames:ghostty.repo",
+        "title": "Copr repo for ghostty owned by scottames",
+        "baseurl": "https://download.copr.fedorainfracloud.org/results/scottames/ghostty/fedora-$releasever-$basearch/",
+        "key_url": "https://download.copr.fedorainfracloud.org/results/scottames/ghostty/pubkey.gpg",
+        "fingerprint": "2DEFB319CCC3F393B6DAEAB297C83CA0FEB5DAFB",
+        "skip_if_unavailable": true,
         "includepkgs": "ghostty*",
         "packages": ["ghostty"]
       }

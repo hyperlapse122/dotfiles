@@ -8,7 +8,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
@@ -26,23 +25,6 @@ def inspect_host(**kwargs):
 
 class ProvisionError(RuntimeError):
     pass
-
-
-def resolve(repo, release):
-    """Return the repository as written for this Fedora release, or None when its key has no pin.
-
-    A repository signed with one key per Fedora release declares `fingerprints`
-    and `{release}` placeholders; every other repository is returned unchanged.
-    """
-    pins = repo.get('fingerprints')
-    if pins is None:
-        return repo
-    fingerprint = pins.get(str(release))
-    if fingerprint is None:
-        return None
-    resolved = {field: value.replace('{release}', str(release)) if isinstance(value, str) else value
-                for field, value in repo.items() if field != 'fingerprints'}
-    return dict(resolved, fingerprint=fingerprint, release=str(release), declaration=repo)
 
 
 def identity(content):
@@ -97,31 +79,26 @@ class Installer:
         name = repo['name']
         # Declared file names, repository IDs and key paths match what the vendor's own
         # package writes, so installing that package leaves one source in place.
-        key = self.root / f'etc/pki/rpm-gpg/RPM-GPG-KEY-{name}{repo.get("release", "")}-{repo["fingerprint"]}.asc'
+        key = self.root / f'etc/pki/rpm-gpg/RPM-GPG-KEY-{name}-{repo["fingerprint"]}.asc'
         source = self.root / 'etc/yum.repos.d' / repo.get('file', f'{name}.repo')
         content = (f'[{repo.get("id", name)}]\nname={repo["title"]}\nbaseurl={repo["baseurl"]}\n'
                    'enabled=1\ntype=rpm-md\ngpgcheck=1\n')
         if repo.get('repo_gpgcheck'):
             content += 'repo_gpgcheck=1\n'
         content += f'gpgkey=file:///{key.relative_to(self.root)}\n'
+        if repo.get('skip_if_unavailable'):
+            # A repository built per Fedora release may not exist yet for a newer release;
+            # dnf then skips it instead of failing every transaction.
+            content += 'skip_if_unavailable=True\n'
         if 'includepkgs' in repo:
             content += f'includepkgs={repo["includepkgs"]}\n'
         return key, source, content
-
-    def written_for_another_release(self, repo, existing):
-        if 'release' not in repo:
-            return False
-        placeholder = resolve(dict(repo['declaration'], fingerprints={'@RELEASE@': '@FINGERPRINT@'}), '@RELEASE@')
-        pattern = re.escape(identity(self.repository_paths(placeholder)[2]))
-        pattern = pattern.replace('@RELEASE@', r'\d+').replace('@FINGERPRINT@', '[0-9A-F]{40}')
-        return re.fullmatch(pattern, identity(existing)) is not None
 
     def check_sources(self, repo):
         key, source, content = self.repository_paths(repo)
         if os.path.lexists(source):
             existing = source.read_text() if source.is_file() and not source.is_symlink() else None
-            if existing is None or (identity(existing) != identity(content)
-                                    and not self.written_for_another_release(repo, existing)):
+            if existing is None or identity(existing) != identity(content):
                 raise ProvisionError(f'Conflicting repository file {source}; reconcile it manually before applying.')
         authority = repo['baseurl'].split('://', 1)[1].rstrip('/')
         for candidate in sorted(source.parent.glob('*.repo')) if source.parent.is_dir() else []:
@@ -152,8 +129,7 @@ class Installer:
         key.write_bytes(exported)
         key.chmod(0o644)
         source.parent.mkdir(parents=True, exist_ok=True)
-        # check_sources allows a differing file only when it names another release.
-        if not source.exists() or identity(source.read_text()) != identity(content):
+        if not source.exists():
             source.write_text(content)
             source.chmod(0o644)
         defaults = repo.get('defaults')
@@ -182,15 +158,7 @@ def provision(config, *, installer=None, report=None, repository=None):
         if installer.installed(package):
             raise ProvisionError(f'Conflicting Docker engine package {package}; resolve it manually '
                                  'without removing active work.')
-    release = report['release']['host']
-    repositories = []
-    unpinned = []
-    for repo in declared:
-        resolved = resolve(repo, release)
-        if resolved is None:
-            unpinned.append(repo)
-        else:
-            repositories.append(resolved)
+    repositories = declared
     for repo in repositories:
         installer.check_sources(repo)
     installer.install_missing(packages)
@@ -203,13 +171,6 @@ def provision(config, *, installer=None, report=None, repository=None):
             if not installer.installed(package):
                 installer.verify_candidate(package, repo)
     installer.install_missing([package for repo in repositories for package in repo['packages']])
-    # An existing repository file keeps naming its older release, so installed packages stay as they are.
-    for repo in unpinned:
-        missing = [package for package in repo['packages'] if not installer.installed(package)]
-        if missing:
-            raise ProvisionError(f'No {repo["name"]} signing-key fingerprint is pinned for Fedora {release}; '
-                                 f'{", ".join(missing)} was not installed. Add the pin to '
-                                 'home/.chezmoidata/linux.yaml.')
 
 
 def main():

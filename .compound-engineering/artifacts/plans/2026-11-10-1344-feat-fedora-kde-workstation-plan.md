@@ -52,7 +52,7 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 - **A failed minikube proof on rootless Podman is recorded as a limitation.** Governs R15. (session-settled: user-approved — chosen over falling back to a Docker engine: a fallback would reintroduce the second runtime the owner removed.)
 - **Applications without an official Fedora package are not installed.** Governs R8. (session-settled: user-approved — chosen over unofficial repackaging or converted packages: the repository installs from signed vendor or distribution sources.)
 - **A vendor's own Linux artifact counts as official when no RPM exists.** Governs R8. (session-settled: user-approved — chosen over recording T3 Code as unavailable on Fedora: the owner saw the AppImage plan for T3 Code and named it as the model for the Claude Desktop follow-up in #124.)
-- **Ghostty is the one community-source exception.** Governs R23. (session-settled: user-directed — chosen over using Konsole on Fedora and over building Ghostty from its signed source: the owner accepted either COPR or Terra and asked for the one that follows Ghostty releases fastest.)
+- **Ghostty is the one community-source exception.** Governs R23. (session-settled: user-directed — chosen over using Konsole on Fedora and over building Ghostty from its signed source: the owner accepted either COPR or Terra, asked for the one that follows Ghostty releases fastest, and then named COPR.)
 - **Linux CI runs in a Fedora image.** Governs R24. (session-settled: user-directed — chosen over keeping hosted Ubuntu runners as generic Linux hosts: once Ubuntu stopped being a supported host, the owner asked for CI on Fedora.)
 - **No distribution abstraction layer.** The Linux scripts are rewritten for Fedora in place. (session-settled: user-approved — chosen over a data-driven multi-distribution seam: this is the third target change, but one target is still the scope.)
 
@@ -97,7 +97,7 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 
 **Continuous integration**
 
-- R24. Linux unit and native CI lanes run in a Fedora image of the validated release, and lanes that need a KDE desktop host stay excluded on Linux.
+- R24. Linux unit and native CI lanes run on amd64 in a Fedora image of the validated release, and lanes that need a KDE desktop host stay excluded on Linux.
 
 **Existing hosts**
 
@@ -148,7 +148,7 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 - `scripts/container-auth.py` — already writes `containers/auth.json` and accepts a Podman client, so registry credentials need no new mechanism.
 - `AGENTS.md` — the hook-free bootstrap boundary and the retirement rule behind R6 and R22.
 - External, read 2026-11-10: Fedora 45 released 2026-11-03 with Plasma 6.8, which is Wayland-only.
-- External: [Ghostty binary install docs](https://ghostty.org/docs/install/binary) list only community sources for Fedora, COPR `scottames/ghostty` and Terra.
+- External: [Ghostty binary install docs](https://ghostty.org/docs/install/binary) list only community sources for Fedora, COPR `scottames/ghostty` and Terra. Queried 2026-11-10 for Fedora 45 x86_64: the COPR publishes `ghostty-1.4.0-2`, Terra publishes `ghostty-1.3.1-3`.
 - External: [minikube Podman driver](https://minikube.sigs.k8s.io/docs/drivers/podman/) is labeled experimental; rootless use is `--driver=podman --rootless` with the containerd runtime.
 - External: [Claude Desktop install](https://support.claude.com/en/articles/10065433-install-claude-desktop) covers Ubuntu and Debian only; [ChatGPT for Linux](https://learn.chatgpt.com/docs/linux/linux-app) ships an RPM and a signed dnf repository for Fedora 43 and 44.
 - External: [mise install docs](https://mise.jdx.dev/installing-mise.html) point Fedora at the COPR `jdxcode/mise`, owned by the mise author.
@@ -162,8 +162,8 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 - KTD1. **Identify the edition from `os-release` and the absence of an ostree boot.** The probe requires `ID=fedora`, `VARIANT_ID=kde`, no `/run/ostree-booted`, and RPM architecture `x86_64`. Kinoite reports `VARIANT_ID=kinoite` and boots through ostree, so both tests reject it; a Fedora install that added Plasma to another edition keeps that edition's `VARIANT_ID` and is rejected by R2. Implements R1, R2.
 - KTD2. **Record the last-validated release as one constant in `scripts/linux-platform.py`, set to 45.** Provisioning runs the probe with system `python3` before mise or chezmoi exist, so the value cannot live in chezmoi data. The probe compares the integer `VERSION_ID` to it and reports `validated` or `unvalidated` next to the support verdict. The chezmoi templates gate only on `ID=fedora` and amd64 and leave the release decision to the probe. Implements R3, R4.
 - KTD3. **Rewrite `scripts/linux-apps.py` for dnf and RPM, keeping its fail-closed repository checks.** Installed state comes from `rpm -q`. Each repository is written to `/etc/yum.repos.d/` with `gpgcheck=1` and a `gpgkey=file://` path under `/etc/pki/rpm-gpg/`, after the downloaded key's fingerprint matches the pin. A missing package installs only when its dnf candidate comes from the declared repository. Each repository file takes the name and content the vendor's own package writes, so the package leaves one source in place: ChatGPT's RPM ships `/etc/yum.repos.d/chatgpt.repo` with repository ID `openai-chatgpt` and its key under `/etc/pki/rpm-gpg/`, and Chrome's RPM adds `google-chrome.repo` unless `/etc/default/google-chrome` sets `repo_add_once="false"`. The `policy-rc.d` and unit-mask machinery is removed (see Scope Boundaries). Implements R7.
-- KTD4. **Install Ghostty from Terra, restricted to Ghostty and pinned per Fedora release.** (session-settled: user-directed — chosen over COPR `scottames/ghostty`: the owner asked for the faster source, and Terra's update bot landed Ghostty 1.3.0 on its release day, 2026-03-09, and 1.4.0 on 2026-10-27, one to two days ahead of the COPR builds on 2026-03-11 and 2026-10-29.) Terra signs each Fedora release with a different key, so the declaration maps a release number to a fingerprint, starting with release 45 and `C2AC02124AF114F086592E3C8DDE7D14C1C23D8C`. The written repository names that release literally instead of `$releasever` and carries `includepkgs=ghostty*`. Implements R23.
-- KTD5. **On a release with no pinned Terra key, keep an installed Ghostty and fail a first install.** After an OS upgrade the repository file still names the old release, so system upgrades never meet an unpinned key. A fresh install on an unpinned release fails with a message naming the missing pin, which is the reported vendor-lag failure the Product Contract assumes. Once the host release has a pin, the managed Terra file that names another release is replaced after the new key's fingerprint matches; it is not a conflict. Each release's key is stored under a release-specific file name. Implements R4, R23.
+- KTD4. **Install Ghostty from the COPR `scottames/ghostty`, restricted to Ghostty packages.** (session-settled: user-directed — chosen over Terra: the owner asked for the source that follows Ghostty releases fastest and then named COPR. For Fedora 45 the COPR publishes Ghostty 1.4.0 while Terra still publishes 1.3.1.) The COPR signs every Fedora release with one project key, fingerprint `2DEFB319CCC3F393B6DAEAB297C83CA0FEB5DAFB`, and the Ghostty install docs name it. The repository file carries `includepkgs=ghostty*`. Implements R23.
+- KTD5. **Let dnf skip a COPR that has no build for the host release.** COPR builds per Fedora release, so a newer release can lack the repository for a while. Both COPR entries set `skip_if_unavailable`, so system upgrades proceed and an installed Ghostty or mise stays. A first install on such a release fails with the missing candidate named, which is the reported vendor-lag failure the Product Contract assumes. Implements R4, R23.
 - KTD6. **Provision mise from the COPR `jdxcode/mise` through the same repository writer.** The COPR is the vendor's own Fedora channel, its key is per project and stable across releases, and its fingerprint is `9504792D1F9CCA1514FD1DEC8497A816C83E991C`. `provision-fedora.sh` calls `scripts/linux-apps.py` with system `python3` for this one repository; the script uses only the standard library. Implements R6, R7.
 - KTD7. **Declare the vendor repositories that exist for Fedora and drop the rest.** Chrome, 1Password and ChatGPT keep their current key URLs and fingerprints with RPM base URLs. Claude Desktop has no Fedora package and Docker is removed, so both leave the declaration. Implements R7, R8, R13.
 - KTD8. **Provide Docker compatibility with `podman-docker`, `podman-compose` and the stock user `podman.socket`, left disabled.** The shim needs no socket. The setup guide gives the two commands that start the socket and export `DOCKER_HOST` for one project session. Provisioning fails when a Docker engine package is installed, as it failed on conflicting runtimes before. Implements R10–R13.
@@ -171,7 +171,7 @@ Packages are declared as APT packages and APT repositories, the terminal integra
 - KTD10. **Isolate the minikube proof through Podman's own configuration, not a private daemon.** Podman has no daemon to own. The proof points `CONTAINERS_STORAGE_CONF` and `CONTAINERS_CONF` at files in its temporary state directory, so image storage, run state and network definitions are private, and it removes that state inside `podman unshare`. Implements R14.
 - KTD11. **Restore the KDE terminal selection from PR #121.** `scripts/terminal-environment.sh` writes the two `kdeglobals` keys named in Sources and drops the `xdg-terminal-exec` path. The script accepts any Linux release and leaves the release decision to the probe (KTD2). Implements R16.
 
-- KTD12. **Run Linux CI lanes as container jobs on `registry.fedoraproject.org/fedora`, tagged with the validated release.** GitHub hosts no Fedora runner, so the job keeps an Ubuntu runner label as the container host and every step runs inside the Fedora image. One amd64 and one arm64 lane replace the four Ubuntu 24.04 and 26.04 lanes. A contract test ties the image tag to the probe's validated release so the two move together. The image reports `VARIANT_ID=container`, so the probe rejects it and the Ghostty and desktop-backed T3 lanes stay excluded. The lock-update workflows keep their Ubuntu runners; they run automation, not Linux workstation tests. Implements R24.
+- KTD12. **Run Linux CI lanes as container jobs on `registry.fedoraproject.org/fedora`, tagged with the validated release.** GitHub hosts no Fedora runner, so the job keeps an Ubuntu runner label as the container host and every step runs inside the Fedora image. One amd64 lane replaces the four Ubuntu 24.04 and 26.04 lanes. (session-settled: user-directed — chosen over keeping an arm64 Fedora lane: the workstation target is amd64 only and the owner asked to drop Fedora arm64 from CI.) A contract test ties the image tag to the probe's validated release so the two move together. The image reports `VARIANT_ID=container`, so the probe rejects it and the Ghostty and desktop-backed T3 lanes stay excluded. The lock-update workflows keep their Ubuntu runners; they run automation, not Linux workstation tests. Implements R24.
 
 ### High-Level Technical Design
 
@@ -205,8 +205,8 @@ flowchart TB
 |---|---|---|
 | minikube's Podman driver is experimental | The proof may never pass on the owner's host | R15 and AE4 record the limitation; U7 keeps exit code `2` for unavailable prerequisites |
 | No Fedora host in development or CI | Package names, dnf behavior and KDE integration are unproven until native acceptance | Fixture tests cover every decision; U3 resolves package names in a disposable Fedora container |
-| Terra rotates its key per Fedora release | Ghostty cannot install on a new release until the pin is added | KTD5 keeps an installed Ghostty and reports the missing pin |
-| A community repository on the host | A compromised Terra build or signing key runs package scriptlets as root at install and on every system upgrade | `includepkgs=ghostty*` and the per-release fingerprint pin restrict the repository to Ghostty package names from one signer; they do not lower that package's privilege. The owner accepted this exposure in KTD4 |
+| The Ghostty COPR is one maintainer's project | Builds for a new Fedora release or Ghostty release can lag or stop | KTD5 keeps an installed Ghostty; a first install reports the missing candidate |
+| A community repository on the host | A compromised COPR build or signing key runs package scriptlets as root at install and on every system upgrade | `includepkgs=ghostty*` and the fingerprint pin restrict the repository to Ghostty package names from one signer; they do not lower that package's privilege. The owner accepted this exposure in KTD4 |
 
 ---
 
@@ -279,8 +279,8 @@ flowchart TB
 - **Files:** `home/.chezmoidata/linux.yaml`, `scripts/linux-apps.py`, `home/.chezmoiscripts/run_before_12-install-linux-apps.sh.tmpl`, `home/.chezmoiscripts/run_before_17-install-aria2.sh.tmpl`, `tests/test_linux_apps.py`, `tests/test_aria2.py`.
 - **Approach:**
   1. Replace the package list with Fedora names: `gnupg2`, `pinentry-qt`, `zsh`, `fontconfig`, `gcc`, `gcc-c++`, `make`, `pkgconf-pkg-config`, `tar`, `zip`, `unzip`, `xz`, `libsecret`, `krb5-libs`, `libicu`, `openssl-libs`, `zlib-ng-compat`, `shadow-utils`, `podman`, `podman-docker`, `podman-compose`, `passt`, `slirp4netns`, `fuse-overlayfs`, `aria2`, `qemu-system-x86`, `edk2-ovmf`, `virtiofsd`, plus the entries already shared with Fedora.
-  2. Declare repositories per KTD7 with RPM base URLs: Chrome at `https://dl.google.com/linux/chrome/rpm/stable/x86_64`, 1Password at `https://downloads.1password.com/linux/rpm/stable/$basearch`, ChatGPT at `https://persistent.oaistatic.com/codex-app-prod/linux/rpm/$basearch`, the mise COPR, and Terra per KTD4 with its per-release key map and package filter.
-  3. Rewrite the installer per KTD3, including the vendor-native repository file names and the Chrome defaults file, which is created only when absent and before `google-chrome-stable` installs. Keep the conflict checks for an existing differing repository file, a foreign file naming the same base URL, and a symlinked key, with the Terra release change in KTD5 as the one allowed rewrite.
+  2. Declare repositories per KTD7 with RPM base URLs: Chrome at `https://dl.google.com/linux/chrome/rpm/stable/x86_64`, 1Password at `https://downloads.1password.com/linux/rpm/stable/$basearch`, ChatGPT at `https://persistent.oaistatic.com/codex-app-prod/linux/rpm/$basearch`, the mise COPR, and the Ghostty COPR per KTD4 with its package filter.
+  3. Rewrite the installer per KTD3, including the vendor-native repository file names and the Chrome defaults file, which is created only when absent and before `google-chrome-stable` installs. Keep the conflict checks for an existing differing repository file, a foreign file naming the same base URL, and a symlinked key.
   4. Replace the conflicting-package list with Docker engine packages: `docker-ce`, `docker-ce-cli`, `moby-engine`, `docker`.
   5. Accept a single-repository mode for provisioning (KTD6).
   6. Make the aria2 script verify-and-install through dnf under the `ID=fedora` gate.
@@ -292,16 +292,14 @@ flowchart TB
   - A repository key whose fingerprint differs from the pin → error, and neither the key file nor the repository file is written.
   - An existing repository file with different content, or a symlinked key → error naming the file.
   - A package whose dnf candidate comes from another repository → error, no install.
-  - Terra on a release with a pinned key → the repository file names that release literally and filters to Ghostty packages.
-  - Terra on a release with no pinned key → the Terra repository is not written and the other repositories still install.
-  - An existing managed Terra file for release N and a pin declared for host release N+1 → the file is rewritten for N+1 after the fingerprint check; a Terra file with any other difference still errors.
+  - The Ghostty repository file filters to Ghostty packages and lets dnf skip it when unavailable; a copy with the filter removed is a conflict and is not overwritten.
   - The Chrome repository file and `/etc/default/google-chrome` both exist before the Chrome install command runs, and an existing defaults file is left unchanged.
   - The ChatGPT repository file matches the name, repository ID and key path the vendor RPM ships.
   - Covers AE4. A Docker engine package installed → error telling the owner to resolve it manually, nothing installed.
   - Covers AE3. No command enables or starts a systemd unit, and no command enables linger.
   - Covers AE5. The declaration contains no Claude Desktop entry, no Docker repository and no APT field.
   - An unsupported host → error from the probe blockers before any command runs.
-- **Verification:** `tests/test_linux_apps.py` and `tests/test_aria2.py` pass. Every package name in the Fedora-repository list resolves with `dnf repoquery` in a disposable `fedora:45` container, and `ghostty` and `mise` resolve with their dependencies through the declared Terra and COPR repositories with the package filter applied; the container and its image are removed afterward. Chrome, 1Password and ChatGPT publish x86-64 only and are not resolved there. If the Apple `container` runtime is unavailable, the PR description records this check as pending.
+- **Verification:** `tests/test_linux_apps.py` and `tests/test_aria2.py` pass. Every package name in the Fedora-repository list resolves with `dnf repoquery` in a disposable `fedora:45` container, and `ghostty` and `mise` resolve with their dependencies through the declared COPR repositories with the package filter applied; the container and its image are removed afterward. Chrome, 1Password and ChatGPT publish x86-64 only and are not resolved there. If the Apple `container` runtime is unavailable, the PR description records this check as pending.
 
 ### U4. Ghostty installation
 
@@ -309,11 +307,11 @@ flowchart TB
 - **Requirements:** R23 (KTD4, KTD5).
 - **Dependencies:** U1, U3.
 - **Files:** `scripts/install-ghostty.sh`, `home/.chezmoiscripts/run_before_16-install-ghostty.sh.tmpl`, `tests/test_ghostty_install.py`.
-- **Approach:** U3 installs the `ghostty` package through the Terra repository. This script keeps its two checks: a working system zsh, installed through dnf when missing, and a working `ghostty`. When Ghostty is absent it fails with the message KTD5 defines. The template gates on `ID=fedora` and amd64 and stops passing a release argument the script no longer needs.
+- **Approach:** U3 installs the `ghostty` package through the COPR repository. This script keeps its two checks: a working system zsh, installed through dnf when missing, and a working `ghostty`. When Ghostty is absent it fails and points at the package step. The template gates on `ID=fedora` and amd64 and stops passing a release argument the script no longer needs.
 - **Test scenarios:**
   - Ghostty and zsh present → exit zero, no install command.
   - zsh missing → `dnf install zsh` runs, then the checks pass.
-  - Ghostty missing → error naming the Terra pin for the host release.
+  - Ghostty missing → error pointing at the Ghostty repository and the package step.
   - An unsupported host → error before any command runs.
   - The rendered template is empty on Ubuntu and on arm64 Fedora.
 - **Verification:** `tests/test_ghostty_install.py` passes and the script passes `sh -n`.
@@ -437,7 +435,7 @@ flowchart TB
   1. Rewrite the setup guide for Fedora: the KDE Plasma Desktop ISO and its signed `CHECKSUM` file from fedoraproject.org, verified against the Fedora signing key; the Wayland Plasma session; `dnf` for the manual GPG prerequisites; and the version policy from R3 and R4 with the validated release.
   2. In the capability inventory, map containers to rootless Podman with the compatibility commands from KTD8, and record Claude Desktop as unavailable on Fedora.
   3. Document the cgroup delegation prerequisite for the minikube proof as an owner-approved OS step, and the recorded-limitation outcome from R15.
-  4. In the terminal guide, describe the `kdeglobals` selection, the Terra source with the root-level exposure named in Risks, and the step after an OS upgrade: add the new release's Terra pin and apply again (KTD4, KTD5).
+  4. In the terminal guide, describe the `kdeglobals` selection, the COPR source with the root-level exposure named in Risks, and what happens on a Fedora release the COPR has not built yet (KTD4, KTD5).
   5. In the credentials guide, rename the acceptance section for Fedora and name KWallet as the provider a Plasma session normally supplies.
   6. Update the remaining files' wording and links, and rewrite the CI runner policy in the maintenance guide for the Fedora image lanes from U11.
 - **Test scenarios:** Test expectation: none for prose. `tests/test_agent_instructions.py` and any test that asserts guide paths or wording are updated to the new text.
@@ -450,14 +448,14 @@ flowchart TB
 - **Dependencies:** U1–U9.
 - **Files:** `.github/workflows/test.yml`, `tests/test_ci_areas.py`, `tests/test_ci_workflows.py`.
 - **Approach:**
-  1. In the `unit`, `native` and `pinentry` jobs, replace the four Ubuntu lanes with one amd64 and one arm64 lane that set a job container per KTD12.
+  1. In the `unit`, `native` and `pinentry` jobs, replace the four Ubuntu lanes with one amd64 lane that sets a job container per KTD12. No Linux arm64 lane remains.
   2. Install what the image lacks before checkout and the mise action, and replace each `apt-get` provisioning step with its `dnf` equivalent.
   3. Run the test steps as the account the suite expects; where tests refuse root, create a non-root account with passwordless sudo and run them under it.
   4. Keep the Linux exclusions for Ghostty and the desktop-backed T3 lanes, the job names' shape, the candidate-lock steps, timeouts and `fail-fast: false`.
 - **Execution note:** The proof for this unit is the workflow run on the PR. Before that, run the unit areas inside a disposable Fedora container on the development host to find root, package and path differences, and remove the container and its image afterward.
 - **Test scenarios:**
   - The Linux lanes in each matrix name a Fedora container image whose tag equals the probe's validated release.
-  - No matrix names an Ubuntu 26.04 lane, and the Linux exclusions for Ghostty, T3 and T3 instructions match the new lane keys.
+  - No matrix names an Ubuntu 26.04 lane or a Linux arm64 lane, and the Linux exclusions for Ghostty, T3 and T3 instructions match the new lane keys.
   - No step in the test workflow calls `apt-get`.
   - Windows and macOS lanes and the existing workflow contracts pass unchanged.
 - **Verification:** `tests/test_ci_areas.py` and `tests/test_ci_workflows.py` pass, the unit areas pass in a local Fedora container, and the Linux lanes are green on the PR.
