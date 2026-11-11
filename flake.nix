@@ -105,6 +105,30 @@
       darwinHosts = variantsOf (import ./lib/darwin-host.nix { inherit inputs; }) hosts.darwin;
       darwinFixtures = import ./tests/lib/darwin-fixtures.nix { inherit inputs; };
 
+      darwinChecksFor = pkgs: {
+        darwin-provisioning =
+          pkgs.runCommand "darwin-provisioning-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.python3
+                pkgs.bash
+                pkgs.jq
+              ];
+            }
+            ''
+              python3 ${./tests/test_darwin_provisioning.py} ${./scripts/macos-xcode.py} ${./scripts/macos-container.sh} ${./scripts/macos-container-state.sh}
+              touch "$out"
+            '';
+
+        darwin-config = import ./tests/darwin-config.nix {
+          inherit
+            pkgs
+            self
+            darwinFixtures
+            ;
+        };
+      };
+
       vmChecks = import ./tests/vm-checks.nix { inherit pkgs inputs; };
       checkShards = import ./tests/check-shards.nix {
         inherit pkgs;
@@ -167,8 +191,10 @@
       };
     in
     {
-      # Reads what the macOS fixture hosts materialize, so building it builds
-      # both fixture systems; only a macOS builder can.
+      checks.aarch64-darwin.darwin-config =
+        (darwinChecksFor (import nixpkgs { system = "aarch64-darwin"; })).darwin-config;
+      checks.aarch64-darwin.darwin-provisioning =
+        (darwinChecksFor (import nixpkgs { system = "aarch64-darwin"; })).darwin-provisioning;
       checks.aarch64-darwin.pinentry-keyring = import ./packages/pinentry-keyring.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
       };
@@ -193,6 +219,8 @@
           user = host.config.home-manager.users.${host.config.my.user.name};
         }) darwinHosts;
       };
+      # Reads what the macOS fixture hosts materialize, so building it builds
+      # both fixture systems; only a macOS builder can.
       checks.aarch64-darwin.darwin-outputs = import ./tests/darwin-outputs.nix {
         inherit self;
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
@@ -365,35 +393,15 @@
               ''}
             '';
         in
-        {
+        darwinChecksFor pkgs
+        // {
           pinentry-keyring = import ./packages/pinentry-keyring.nix { inherit pkgs; };
-          darwin-provisioning =
-            pkgs.runCommand "darwin-provisioning-tests"
-              {
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.bash
-                  pkgs.jq
-                ];
-              }
-              ''
-                python3 ${./tests/test_darwin_provisioning.py} ${./scripts/macos-xcode.py} ${./scripts/macos-container.sh} ${./scripts/macos-container-state.sh}
-                touch "$out"
-              '';
-
           mobile-devices = pkgs.runCommand "mobile-devices-tests" { } ''
             bash ${./tests/mobile-devices.sh} ${
               pkgs.lib.getExe (import ./packages/mobile-devices.nix { inherit pkgs; })
             }
             touch $out
           '';
-          darwin-config = import ./tests/darwin-config.nix {
-            inherit
-              pkgs
-              self
-              darwinFixtures
-              ;
-          };
           restore-age-identity =
             pythonScriptCheckWith
               {

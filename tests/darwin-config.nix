@@ -1,4 +1,4 @@
-# Evaluate Darwin declarations on Linux; run provisioning against recording stubs.
+# Evaluate Darwin declarations on either platform; run provisioning against recording stubs.
 {
   pkgs,
   self,

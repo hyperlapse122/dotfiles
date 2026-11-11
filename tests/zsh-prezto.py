@@ -81,6 +81,10 @@ def check(entry):
                          'touch "$HOME/gpg-agent-called"\n'
                          "printf 'GPG_AGENT_INFO=parity-agent:0:1; export GPG_AGENT_INFO\\n'\n")
         agent.chmod(0o755)
+        # No agent is running in this fixture; macOS sandboxes deny real ps probes.
+        processes = local_bin / "ps"
+        processes.write_text(f"#!{entry['bash']}\nexit 0\n")
+        processes.chmod(0o755)
         env = {
             "HOME": temporary,
             "PATH": entry["profile"] + "/bin:" + os.environ["PATH"]
