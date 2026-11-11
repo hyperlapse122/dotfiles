@@ -59,6 +59,12 @@ try {
   assert.match(partial.content[0].text, /https:\/\/example.org\/b/);
   assert.doesNotMatch(JSON.stringify(partial), /SECRET/);
   assert.equal(requests.at(-1).url, 'https://api.exa.ai/contents');
+  response = {results:[{url:'https://example.org/canonical',text:'Redirected content'}],
+    statuses:[{id:'https://example.org/redirect',status:'success'}]};
+  const redirected = await call('web_fetch', {urls:['https://example.org/redirect']});
+  assert.equal(redirected.details.status, 'ok');
+  assert.deepEqual(redirected.details.failures, []);
+  assert.match(redirected.content[0].text, /https:\/\/example.org\/canonical/);
   for (const status of [401,429,500]) {
     globalThis.fetch = async () => new Response('FAKE-rotated raw body', {status});
     const result = await call('web_search', {query:'x'});
