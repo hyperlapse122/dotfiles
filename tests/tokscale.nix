@@ -5,8 +5,8 @@
 
   Asserts that every configuration `tests/lib/configurations.nix` yields gives
   h82 the Tokscale wrapper, the declared settings merge, and the custom pricing
-  file, and that only the production configurations decrypt the Tokscale
-  token. Which side a configuration is on comes from the helper's `bootstrap`
+  file, and that each production configuration decrypts the Tokscale token.
+  Which side a configuration is on comes from the helper's `bootstrap`
   field, never from the sops manifest under test. It reads what the
   generations materialize -- home-path, home-files, the rendered activation
   script and the sops manifests -- rather than the options they come from.

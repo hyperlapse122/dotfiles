@@ -33,8 +33,8 @@ let
   ];
 
   # One production configuration re-evaluated with each key option forced
-  # off, so the check proves the option, not only the bootstrap split, gates
-  # that secret and leaves the other.
+  # off, so the check proves the option gates that secret and leaves the
+  # other.
   keyForcedOff = lib.concatMap (
     secret:
     map (
