@@ -1362,6 +1362,7 @@
             ;
           nr = import ./tests/nr.nix { inherit pkgs self; };
           agent-api-key-secrets = import ./tests/agent-api-key-secrets.nix { inherit pkgs self; };
+          bootstrap-secrets = import ./tests/bootstrap-secrets.nix { inherit pkgs self; };
           text-template = import ./tests/text-template.nix { inherit pkgs; };
           tokscale = import ./tests/tokscale.nix { inherit pkgs self; };
           vscodium = import ./tests/vscodium.nix { inherit pkgs self; };

@@ -94,4 +94,4 @@ Catalog changes publish first, followed by dependency changes through the same v
 
 This workflow replaces `model-catalogs.yml` and `synthetic-models.yml`; external dispatch callers should use the new selection input. The merged `update-dependencies-reconcile` check owns updater, publication, selection, and drift lifecycle coverage, including guard-removal mutations.
 
-Installation, disk partitioning, key enrollment, and host switches are manual owner operations. Never run `disko`, `nixos-install`, `nixos-rebuild switch`, or `nr switch` on a host as a validation step.
+A coding agent runs installation, disk partitioning, key enrollment, or a host switch only when the owner instructs it to in the current session, for the host and steps named; see [Fresh installation](docs/install.md). Never run `disko`, `nixos-install`, `nixos-rebuild switch`, or `nr switch` on a host as a validation step.

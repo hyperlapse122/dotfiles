@@ -5,8 +5,8 @@
 
   Asserts that every configuration `tests/lib/configurations.nix` yields gives
   h82 the Tokscale wrapper, the declared settings merge, and the custom pricing
-  file, and that only the production configurations decrypt the Tokscale
-  token. Which side a configuration is on comes from the helper's `bootstrap`
+  file, and that each production configuration decrypts the Tokscale token.
+  Which side a configuration is on comes from the helper's `bootstrap`
   field, never from the sops manifest under test. It reads what the
   generations materialize -- home-path, home-files, the rendered activation
   script and the sops manifests -- rather than the options they come from.
@@ -24,9 +24,9 @@
   - no Home Manager file targets .config/tokscale/settings.json.
   - .config/tokscale/custom-pricing.json parses to the dotfiles document.
   - a production configuration's sops manifest carries cli-auth/tokscale_token
-    owned by h82 with mode 0400, its gh/glab publisher does not read that
-    token, and a bootstrap configuration's manifests carry no Tokscale secret at
-    all.
+    owned by h82 with mode 0400, and its gh/glab publisher does not read that
+    token. A bootstrap configuration decrypts no sops secret at all, which
+    tests/bootstrap-secrets.nix asserts, so its manifests are not read here.
 
   It also evaluates packages/tokscale.nix directly: a host name or token path
   that could break out of the single quotes the package substitutes them into
@@ -245,38 +245,29 @@ let
           ''
       }
 
-      manifests=$(printf '%s' ${esc installers} | grep -oE '/nix/store/[^[:space:]]+-manifest\.json' || true)
-      if [ -z "$manifests" ]; then
-        fail ${host'}": found no sops manifest"
-      fi
-      tokscaleSecrets=$(python3 - $manifests <<'PY'
-      import json, sys
-      for path in sys.argv[1:]:
-          for secret in json.load(open(path)).get('secrets', []):
-              if 'tokscale' in secret.get("name", "") or 'tokscale' in secret.get("key", ""):
-                  print(secret.get('name'), secret.get('key'), secret.get('owner'), secret.get('mode'))
-      PY
-      )
-      ${
-        if production then
-          ''
-            if [ "$tokscaleSecrets" != "cli-auth/tokscale_token tokscale_token h82 0400" ]; then
-              fail ${host'}": expected cli-auth/tokscale_token owned by h82 with mode 0400, got: '$tokscaleSecrets'"
-            fi
-            publisher=$(printf '%s' ${esc publisher} | grep -oE '/nix/store/[^[:space:]]+/bin/publish-cli-auth' | sed -n '1p' || true)
-            if [ -z "$publisher" ]; then
-              fail ${host'}": sops-install-secrets no longer runs publish-cli-auth"
-            elif grep -q tokscale "$publisher"; then
-              fail ${host'}": publish-cli-auth must not read the Tokscale token"
-            fi
-          ''
-        else
-          ''
-            if [ -n "$tokscaleSecrets" ]; then
-              fail ${host'}": a bootstrap host must not decrypt a Tokscale secret, got: '$tokscaleSecrets'"
-            fi
-          ''
-      }
+      ${lib.optionalString production ''
+        manifests=$(printf '%s' ${esc installers} | grep -oE '/nix/store/[^[:space:]]+-manifest\.json' || true)
+        if [ -z "$manifests" ]; then
+          fail ${host'}": found no sops manifest"
+        fi
+        tokscaleSecrets=$(python3 - $manifests <<'PY'
+        import json, sys
+        for path in sys.argv[1:]:
+            for secret in json.load(open(path)).get('secrets', []):
+                if 'tokscale' in secret.get("name", "") or 'tokscale' in secret.get("key", ""):
+                    print(secret.get('name'), secret.get('key'), secret.get('owner'), secret.get('mode'))
+        PY
+        )
+        if [ "$tokscaleSecrets" != "cli-auth/tokscale_token tokscale_token h82 0400" ]; then
+          fail ${host'}": expected cli-auth/tokscale_token owned by h82 with mode 0400, got: '$tokscaleSecrets'"
+        fi
+        publisher=$(printf '%s' ${esc publisher} | grep -oE '/nix/store/[^[:space:]]+/bin/publish-cli-auth' | sed -n '1p' || true)
+        if [ -z "$publisher" ]; then
+          fail ${host'}": sops-install-secrets no longer runs publish-cli-auth"
+        elif grep -q tokscale "$publisher"; then
+          fail ${host'}": publish-cli-auth must not read the Tokscale token"
+        fi
+      ''}
     '';
 
   seededSettings = {

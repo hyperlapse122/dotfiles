@@ -47,6 +47,9 @@
     cliAuth.enableExaApiKey = lib.mkDefault true;
     cliAuth.enableOpenRouterApiKey = lib.mkDefault true;
     tailscale.enable = lib.mkDefault (!config.my.bootstrap);
+    # A bootstrap install runs before the host's age identity exists, so its
+    # Wi-Fi secrets could not decrypt and activation would log a sops error.
+    wifi.sopsFile = lib.mkIf config.my.bootstrap (lib.mkDefault null);
     protonVpn.enable = lib.mkDefault (!config.my.bootstrap);
     wifiman.enable = lib.mkDefault true;
   };
