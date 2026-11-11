@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, readdirSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -27,4 +27,11 @@ try {
   hooks.session_start({}, {shutdown: () => stopped = true, sessionManager: {getBranch: () => [{type:'model_change', provider:'foreign', modelId:'outside'}, {type:'message'}]}});
   assert(stopped);
   process.exitCode = 0;
-} finally { rmSync(temporary, { recursive: true, force: true }); }
+} finally {
+  // cpSync keeps the store's read-only modes, so rmSync cannot unlink entries
+  // inside copied directories until they are writable again.
+  for (const entry of readdirSync(temporary, { recursive: true, withFileTypes: true }))
+    if (entry.isDirectory()) chmodSync(join(entry.parentPath, entry.name), 0o755);
+  chmodSync(temporary, 0o755);
+  rmSync(temporary, { recursive: true, force: true });
+}
