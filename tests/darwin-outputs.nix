@@ -453,7 +453,7 @@ let
       ${lib.optionalString (t3Desktop != null) ''
         app=${t3Desktop}/Applications/'${import ../packages/t3code-app-bundle.nix}'
         if [ ! -d "$app" ]; then
-          bad "the T3 Code nightly bundle is missing"
+          bad "the T3 Code app bundle is missing"
         else
           exe=$(/usr/bin/plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist" 2>/dev/null \
             || sed -n '/CFBundleExecutable/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "$app/Contents/Info.plist")

@@ -83,7 +83,7 @@ EOF
   printf '{"version": "2026.10.0"}\n' >"$clone/packages/mise-release.json"
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
-  printf '{"version": "0.0.46-nightly.20261003.2600"}\n' >"$clone/packages/t3code-release.json"
+  printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/wifiman-desktop-version.json"
   printf '{"version": "1.4.8", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
   printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
@@ -163,7 +163,7 @@ case "\$*" in
       echo "t3code-release: Antigravity table in the T3 Code CLI does not parse" >&2
       exit 2
     fi
-    printf '{"version": "0.0.47-nightly.20261005.2700"}\n' >packages/t3code-release.json
+    printf '{"version": "0.0.47"}\n' >packages/t3code-release.json
     ;;
   "run .#antigravity-cli-release -- --output packages/antigravity-cli-release.json")
     if [[ " \${FAIL_SOFT:-} " == *" agy-cli "* ]]; then
@@ -261,7 +261,7 @@ grep -q 'tag = "compound-engineering-v2.68.0";' "$clone/home/h82/agents/agent-pl
   fail "update step did not update tag in home/h82/agents/agent-plugin-pins.nix"
 grep -q 'expectedRev = "2222222222222222222222222222222222222222";' "$clone/home/h82/agents/agent-plugin-pins.nix" ||
   fail "update step did not update expectedRev in home/h82/agents/agent-plugin-pins.nix"
-grep -q '0.0.47-nightly.20261005.2700' "$clone/packages/t3code-release.json" ||
+grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
 grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
   fail "update step did not update packages/pi-release.json"
@@ -332,7 +332,7 @@ push_script=$(jq -r '.run // empty' <<<"$push_step")
 
 read -r origin clone <<<"$(setup_clone pin-bumps)"
 base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
-new_t3_version=0.0.46-nightly.20261004.2644
+new_t3_version=0.0.46
 printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >"$clone/packages/prezto-pin.json"
 printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
