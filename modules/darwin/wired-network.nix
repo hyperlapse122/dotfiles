@@ -30,10 +30,9 @@ in
     ];
 
     # Last, after the Homebrew, Xcode, and container steps, so the brief wired
-    # drop a rewrite can cause never interrupts their downloads. The script
-    # warns and exits 0 on every failure, so it never aborts the apply.
+    # drop a rewrite can cause never interrupts their downloads. No echo here:
+    # an unplugged or already matching adapter must leave the switch silent.
     system.activationScripts.postActivation.text = lib.mkAfter ''
-      echo "checking the wired network settings..." >&2
       ${tool} \
         --file ${lib.escapeShellArg "${cfg.file}"} \
         --identity ${lib.escapeShellArg "${config.my.user.home}/.config/nix-config/age/key.txt"} \

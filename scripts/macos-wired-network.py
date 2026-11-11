@@ -28,6 +28,9 @@ import subprocess
 import sys
 
 NAME = 'macos-wired-network'
+# Long enough for a slow sops or configd, short enough that a wedged one
+# never holds the switch.
+TIMEOUT = 60
 MAC_PATTERN = re.compile(r'[0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5}')
 
 
@@ -35,7 +38,7 @@ class Problem(Exception):
     """A condition that leaves the adapter untouched; its text names no value."""
 
 
-def warn(message):
+def say(message):
     print(f'{NAME}: {message}', file=sys.stderr)
 
 
@@ -66,8 +69,11 @@ def check_identity(identity, owner):
 def decrypt(source, identity):
     env = {k: v for k, v in os.environ.items() if not k.startswith('SOPS_AGE_')}
     env['SOPS_AGE_KEY_FILE'] = str(identity)
-    result = subprocess.run(['sops', '--decrypt', '--output-type', 'json', str(source)],
-                            env=env, capture_output=True, check=False)
+    try:
+        result = subprocess.run(['sops', '--decrypt', '--output-type', 'json', str(source)],
+                                env=env, capture_output=True, check=False, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise Problem(f'decrypting {source} timed out') from None
     if result.returncode:
         raise Problem(f'cannot decrypt {source} with the host age identity')
     try:
@@ -124,16 +130,19 @@ def declaration(data):
         if value is None:
             raise Problem(f'the declaration has a missing or invalid {key}')
     servers = data.get('dns_servers')
-    if not isinstance(servers, list) or not servers:
+    addresses = [dns_address(server) for server in servers] if isinstance(servers, list) else []
+    if not addresses or None in addresses:
         raise Problem('the declaration has a missing or invalid dns_servers')
-    declared['dns_servers'] = [dns_address(server) for server in servers]
-    if None in declared['dns_servers']:
-        raise Problem('the declaration has a missing or invalid dns_servers')
+    declared['dns_servers'] = addresses
     return declared
 
 
 def read(tool, *args):
-    result = subprocess.run([tool, *args], capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run([tool, *args], capture_output=True, text=True, check=False,
+                                timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise Problem(f'networksetup {args[0]} timed out') from None
     if result.returncode:
         raise Problem(f'networksetup {args[0]} failed')
     return result.stdout
@@ -177,7 +186,7 @@ def current_state(tool, service):
     dns_output = read(tool, '-getdnsservers', service).splitlines()
     servers = [line.strip() for line in dns_output if dns_address(line.strip())]
     return {
-        'ipv4': manual and (info.get('IP address'), info.get('Subnet mask'), info.get('Router')),
+        'ipv4': (info.get('IP address'), info.get('Subnet mask'), info.get('Router')) if manual else None,
         'dns': servers,
         'ipv6_off': info.get('IPv6') == 'Off',
     }
@@ -194,11 +203,15 @@ def reconcile(tool, service, declared):
     if not state['ipv6_off']:
         writes.append(('IPv6', ['-setv6off', service]))
     for group, args in writes:
-        result = subprocess.run([tool, *args], capture_output=True, check=False)
-        if result.returncode:
-            warn(f'could not set {group} on {service}')
+        try:
+            failed = subprocess.run([tool, *args], capture_output=True, check=False,
+                                    timeout=TIMEOUT).returncode != 0
+        except subprocess.TimeoutExpired:
+            failed = True
+        if failed:
+            say(f'could not set {group} on {service}')
         else:
-            warn(f'set {group} on {service}')
+            say(f'set {group} on {service}')
 
 
 def run(arguments):
@@ -224,7 +237,11 @@ def main():
     try:
         run(arguments)
     except Problem as problem:
-        warn(f'{problem}; the wired adapter was left as it is')
+        say(f'{problem}; the wired adapter was left as it is')
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        # The message of an unexpected error can quote decrypted input, so only
+        # its type is printed.
+        say(f'unexpected {type(error).__name__}; the wired adapter was left as it is')
 
 
 if __name__ == '__main__':

@@ -890,9 +890,9 @@ let
     ];
 
   # The wired network trait: in production, activation runs the packaged
-  # reconciler once, after /etc, with the declaration file, the host identity,
-  # and its owner; bootstrap never runs it, and a production output with the
-  # trait and no file fails an assertion.
+  # reconciler once, after /etc and the Xcode step, with the declaration file,
+  # the host identity, and its owner; bootstrap never runs it, and a
+  # production output with the trait and no file fails an assertion.
   assertWiredNetwork =
     entry:
     let
@@ -902,9 +902,17 @@ let
       beforeEtc = lib.head (lib.splitString "setting up /etc..." script);
       afterEtc = lib.concatStrings (lib.tail (lib.splitString "setting up /etc..." script));
       lines = map lib.trim (lib.splitString "\n" afterEtc);
-      calls = lib.filter (i: lib.hasSuffix "/bin/macos-wired-network \\" (lib.elemAt lines i)) (
-        lib.range 0 (lib.length lines - 1)
-      );
+      indices = lib.range 0 (lib.length lines - 1);
+      # The call line must start with the store path, so an echo, a comment,
+      # or any other prefix that keeps the text but skips the run fails.
+      calls = lib.filter (
+        i:
+        let
+          line = lib.elemAt lines i;
+        in
+        lib.hasPrefix "/nix/store/" line && lib.hasSuffix "/bin/macos-wired-network \\" line
+      ) indices;
+      xcodeCalls = lib.filter (i: lib.hasInfix "/bin/macos-xcode" (lib.elemAt lines i)) indices;
       arguments =
         if lib.length calls == 1 then
           lib.sublist (lib.head calls + 1) 3 lines
@@ -928,11 +936,15 @@ let
       (check
         (
           if production then
-            lib.length calls == 1 && arguments == expected && !hasInfixInLines "macos-wired-network" beforeEtc
+            lib.length calls == 1
+            && arguments == expected
+            && !hasInfixInLines "macos-wired-network" beforeEtc
+            && xcodeCalls != [ ]
+            && lib.all (i: i < lib.head calls) xcodeCalls
           else
             !hasInfixInLines "macos-wired-network" script
         )
-        "${entry.name}: activation must run the wired network reconciler once after /etc with the declaration file, the host identity, and its owner in production, and never in bootstrap"
+        "${entry.name}: activation must run the wired network reconciler once after /etc and after the Xcode step, with the declaration file, the host identity, and its owner in production, and never in bootstrap"
       )
       (check (
         !production || lib.any (lib.hasInfix "my.wiredNetwork.enable needs secrets/hosts/") failing

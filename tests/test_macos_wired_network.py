@@ -260,6 +260,27 @@ class WiredNetwork(unittest.TestCase):
         self.assertIn('dns_servers', result.stderr)
         self.assert_no_network_calls()
 
+    def test_non_contiguous_subnet_mask_warns_naming_the_key(self):
+        result = self.run_tool(secret='wired-network-bad-mask.yaml')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('ipv4_subnet_mask', result.stderr)
+        self.assert_no_network_calls()
+
+    def test_dns_entry_that_is_not_an_address_warns_naming_the_key(self):
+        result = self.run_tool(secret='wired-network-bad-dns.yaml')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('dns_servers', result.stderr)
+        self.assertNotIn('not-an-address', result.stderr)
+        self.assert_no_network_calls()
+
+    def test_unexpected_os_error_warns_and_exits_zero(self):
+        result = self.run_tool(identity=self.identity / 'nested')
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(len(result.stderr.splitlines()), 1)
+        self.assertIn('macos-wired-network:', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assert_no_network_calls()
+
     def test_failed_ipv4_write_warns_and_other_groups_still_reconcile(self):
         self.state['info'][SERVICE] = DHCP_INFO
         self.state['dns'][SERVICE] = NO_DNS
