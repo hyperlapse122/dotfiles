@@ -173,7 +173,7 @@ The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` 
 - `/etc/nix/nix.conf` with the shared Nix settings and `auto-optimise-store = false` (`modules/darwin/nix.nix`).
 - `/etc/nix-config-host` recording `host=<host>` and `variant=bootstrap|production` (`modules/darwin/host-marker.nix`).
 - Homebrew via `nix-homebrew`, the `aria2` and `container` formulae, and the casks from `modules/shared/darwin-apps.nix` with cleanup `"none"` (`modules/darwin/homebrew.nix`), plus retirement of `grok-bot` and `orca` (`modules/darwin/retired-casks.nix`).
-- Xcode provisioning via `xcodes` on production switches (`!config.my.bootstrap`), reading `secrets/hosts/<host>/apple-account.yaml` from the applying checkout (`modules/darwin/xcode.nix`).
+- Xcode provisioning via `xcodes` on production switches (`!config.my.bootstrap`), reading the store copy of `secrets/hosts/<host>/apple-account.yaml` (`my.xcode.appleAccountFile`, `modules/darwin/xcode.nix`).
 - KakaoTalk and Flighty via `mas` (`modules/darwin/app-store.nix`).
 - Apple's `container` runtime setup (`modules/darwin/container.nix`).
 - The macOS Dock (`modules/darwin/dock.nix`) and automatic appearance (`modules/darwin/defaults.nix`).

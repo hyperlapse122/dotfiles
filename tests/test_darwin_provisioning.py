@@ -148,14 +148,16 @@ else: sys.exit(11)
         import re
         for entry in json.loads(ACTIVATIONS.read_text()):
             self.log.write_text('')
-            self.stub('git', 'import os; print(os.environ["HOME"])')
+            # nix-darwin's activate starts with `cd /`, so a step that asks git
+            # for the checkout gets no repository, as the real git reports.
+            self.stub('git', "import os, sys\nfrom pathlib import Path\nd=Path.cwd()\nwhile not (d/'.git').exists():\n if d==d.parent: sys.exit('fatal: not a git repository (or any of the parent directories): .git')\n d=d.parent\nprint(d)")
             self.stub('sudo', "import os, sys\na=sys.argv[1:]\nwhile a and a[0].startswith('--'): a=a[1:]\nos.execvpe(a[0],a,os.environ)")
             self.stub('macos-xcode', "import json,os,sys\nopen(os.environ['LOG'],'a').write(json.dumps(sys.argv[1:])+'\\n')")
             self.stub('container-setup', "import os\nopen(os.environ['LOG'],'a').write('container-setup\\n')")
             lines = entry['text'].splitlines()
             blocks = []
             for i,line in enumerate(lines):
-                if 'xcodeSource=' in line or '/macos-container.sh' in line:
+                if 'xcodeSource=' in line or '/bin/macos-xcode' in line or '/macos-container.sh' in line:
                     if '/macos-container.sh' in line:
                         blocks.append(line)
                     else:
@@ -173,7 +175,7 @@ else: sys.exit(11)
             script=re.sub(r'/nix/store/[^ /]+/bin/macos-xcode', 'macos-xcode', script)
             script=re.sub(r'/bin/sh /nix/store/[^ /]+/macos-container.sh', 'container-setup', script)
             script=re.sub(r'PATH="[^"]+"', 'PATH="'+self.env['PATH']+'"', script)
-            result=subprocess.run(['bash','-euc',script],env=self.env,capture_output=True)
+            result=subprocess.run(['bash','-euc',script],env=self.env,capture_output=True,cwd='/')
             self.assertEqual(result.returncode,0,result.stderr)
             records=self.log.read_text().splitlines()
             self.assertEqual(records.count('container-setup'),1)
@@ -181,7 +183,7 @@ else: sys.exit(11)
             self.assertEqual(len(xcodes),0 if entry['bootstrap'] else 1)
             if xcodes:
                 args=xcodes[0]
-                self.assertEqual(args, ['--source', str(self.root)+'/secrets/hosts/'+entry['host']+'/apple-account.yaml', '--identity', entry['home']+'/.config/nix-config/age/key.txt', '--owner',entry['owner']])
+                self.assertEqual(args, ['--source', entry['source'], '--identity', entry['home']+'/.config/nix-config/age/key.txt', '--owner',entry['owner']])
 
 
 

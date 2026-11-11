@@ -1064,6 +1064,7 @@ pkgs.runCommand "darwin-config"
             host = entry.host.config.my.hostName;
             home = entry.host.config.my.user.home;
             owner = entry.host.config.my.user.name;
+            source = if entry.bootstrap then null else plain "${entry.host.config.my.xcode.appleAccountFile}";
             text = plain entry.host.config.system.activationScripts.postActivation.text;
           }) darwinFixtures
         )
