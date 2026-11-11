@@ -1,4 +1,6 @@
 # Shared API key provisioning, retained from the retired Pi settings check.
+# Covers production configurations only: a bootstrap output decrypts no sops
+# secret at all, which tests/bootstrap-secrets.nix asserts.
 {
   pkgs,
   self,
@@ -69,7 +71,7 @@ let
       ${lib.concatMapStringsSep "\n" (
         secret:
         let
-          decrypts = !entry.bootstrap && forcedOff != secret.option;
+          decrypts = forcedOff != secret.option;
         in
         ''
           secrets=$(python3 - ${secret.match} $manifests <<'PY'
@@ -96,7 +98,7 @@ let
             else
               ''
                 if [ -n "$secrets" ]; then
-                  fail ${host'}": a bootstrap configuration, or one with ${secret.option} off, must not decrypt the ${secret.label} secret, got: '$secrets'"
+                  fail ${host'}": a configuration with ${secret.option} off must not decrypt the ${secret.label} secret, got: '$secrets'"
                 fi
               ''
           }
@@ -112,7 +114,7 @@ pkgs.runCommand "agent-api-key-secrets-tests" { nativeBuildInputs = [ pkgs.pytho
   ''}
   failed=0
   fail() { echo "$1" >&2; failed=1; }
-  ${lib.concatMapStringsSep "\n" assertApiKeys (configurations.entries ++ keyForcedOff)}
+  ${lib.concatMapStringsSep "\n" assertApiKeys (configurations.production ++ keyForcedOff)}
   if [ "$failed" != 0 ]; then exit 1; fi
   touch $out
 ''
