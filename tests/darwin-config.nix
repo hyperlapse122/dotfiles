@@ -516,20 +516,17 @@ let
         && !lib.hasInfix "xcodeMas" postActivation
         && (lib.any (lib.hasInfix "/apple-account.yaml") rootLines) == production
       ) "${entry.name}: Xcode must use runtime SOPS only in production")
-      (check
-        (
-          !production
-          || lib.any (lib.hasInfix "Xcode provisioning needs secrets/hosts/") (
-            map (a: a.message) (
-              lib.filter (a: !a.assertion)
-                (entry.host.extendModules {
-                  modules = [ { my.xcode.appleAccountFile = lib.mkForce null; } ];
-                }).config.assertions
-            )
+      (check (
+        !production
+        || lib.any (lib.hasInfix "Xcode provisioning needs secrets/hosts/") (
+          map (a: a.message) (
+            lib.filter (a: !a.assertion)
+              (entry.host.extendModules {
+                modules = [ { my.xcode.appleAccountFile = lib.mkForce null; } ];
+              }).config.assertions
           )
         )
-        "${entry.name}: a production output with no Apple Account file must fail an assertion"
-      )
+      ) "${entry.name}: a production output with no Apple Account file must fail an assertion")
       (check
         (
           lib.elem "appStoreUid=$(/usr/bin/id -u ${primaryUser} 2>/dev/null) || appStoreUid=" rootLines
