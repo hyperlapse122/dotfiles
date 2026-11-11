@@ -30,6 +30,9 @@ with tempfile.TemporaryDirectory() as directory:
     project = home / 'project'
     extension = project / '.pi/extensions/probe.ts'
     extension.parent.mkdir(parents=True)
+    skill = project / '.pi/skills/project-probe/SKILL.md'
+    skill.parent.mkdir(parents=True)
+    skill.write_text('---\nname: project-probe\ndescription: Disposable project resource probe.\n---\nProbe fixture.\n')
     extension.write_text('import installQuestion from ' + json.dumps(str(agent / 'dotfiles-question.ts')) + ';\n' + '''
     export default function(pi) {
       let question;
@@ -76,6 +79,10 @@ with tempfile.TemporaryDirectory() as directory:
         raise AssertionError('Wrapper RPC timed out')
 
     try:
+        send({'id':'commands','type':'get_commands'})
+        commands = until(lambda event: event.get('id') == 'commands')
+        assert commands['success'], commands
+        assert any(command['name'] == 'skill:project-probe' for command in commands['data']['commands']), commands
         send({'id':'bash','type':'bash','command':'test -z "${EXA_API_KEY+x}" && test "$DOTFILES_PI_EXA_KEY_FILE" = ' + str(exa)})
         response = until(lambda event: event.get('id') == 'bash')
         assert response['success'] and response['data']['exitCode'] == 0, response
@@ -107,6 +114,7 @@ with tempfile.TemporaryDirectory() as directory:
         for path in agent.rglob('*'):
             if path.is_file():
                 assert b'FAKE-exa' not in path.read_bytes(), 'Exa key persisted into Pi state'
+        assert not (agent / 'trust.json').exists(), '--approve persisted a trust decision'
     finally:
         process.stdin.close()
         try:

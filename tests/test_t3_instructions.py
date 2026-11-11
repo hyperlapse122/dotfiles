@@ -82,7 +82,7 @@ class T3InstructionsTest(unittest.TestCase):
         claude = self.module.tokenize(providers['claudeAgent']['config']['launchArgs'])
         self.assertIn('--disallowedTools=Read,Edit,Bash(git *),Agent', claude)
         self.assertEqual(claude[:2], ['--allowedTools', 'Agent'])
-        self.assertEqual(providers['pi']['config']['launchArgs'], '--thinking low')
+        self.assertEqual(self.module.tokenize(providers['pi']['config']['launchArgs']), ['--thinking', 'low', '--approve'])
         before = self.settings.read_bytes()
         self.module.apply(self.home, {})
         self.assertEqual(self.settings.read_bytes(), before)
@@ -169,7 +169,33 @@ class T3InstructionsTest(unittest.TestCase):
             self.assertEqual(saved[name]['baseArgs'], original['providerInstances'][name]['config']['launchArgs'])
             self.assertNotIn('T3_' + ('claude' if name == 'claudeAgent' else name), restored[name]['config']['launchArgs'])
         if 'pi' in original['providerInstances']:
-            self.assertEqual(restored['pi'], original['providerInstances']['pi'])
+            self.assertEqual(self.module.tokenize(restored['pi']['config']['launchArgs']),
+                             self.module.tokenize(original['providerInstances']['pi']['config']['launchArgs']) + ['--approve'])
+
+    def test_pi_approval_ownership_preserves_user_arguments_and_can_be_removed(self):
+        for user_approval in (False, True):
+            with self.subTest(user_approval=user_approval):
+                self.settings.with_name('dotfiles-launch-state.json').unlink(missing_ok=True)
+                base = ['--thinking', 'low', '--session-dir', '/quoted user path'] + (['--approve'] if user_approval else [])
+                self.write({'providerInstances': {'pi': {'custom': True, 'config': {'launchArgs': self.module.join_args(base)}}}})
+                for _ in range(2):
+                    self.module.apply(self.home, {})
+                    provider = self.read()['providerInstances']['pi']
+                    args = self.module.tokenize(provider['config']['launchArgs'])
+                    self.assertEqual(args.count('--approve'), 1)
+                    self.assertEqual(args[:len(base)], base)
+                edited = self.read()
+                edited['providerInstances']['pi']['config']['launchArgs'] += ' --user-flag "quoted edit"'
+                self.write(edited)
+                self.module.apply(self.home, {})
+                self.assertEqual(self.module.tokenize(self.read()['providerInstances']['pi']['config']['launchArgs']).count('--approve'), 1)
+                # Removing the declaration restores only the user's contribution.
+                with patch.dict(self.module.NATIVE_CONTROLS, {'pi': []}):
+                    (self.instructions / 'pi.md').write_text('')
+                    self.module.apply(self.home, {})
+                provider = self.read()['providerInstances']['pi']
+                self.assertEqual(self.module.tokenize(provider['config']['launchArgs']), base + ['--user-flag', 'quoted edit'])
+                self.assertTrue(provider['custom'])
 
     def test_effective_environment_override_is_preserved_and_cannot_hide_the_addition(self):
         original = {'providerInstances': {'codex': {'config': {'launchArgs': '--config model="unused"'},

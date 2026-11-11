@@ -16,6 +16,7 @@ NATIVE_CONTROLS = {
     'codex': [['--disable', feature] for feature in
               ('multi_agent', 'multi_agent_v2', 'multi_agent_v2_dynamic_tools')],
     'claudeAgent': [['--disallowedTools=Agent']],
+    'pi': [['--approve']],
 }
 
 
@@ -287,7 +288,10 @@ def apply(destination, environment=None):
                 arguments += ['--append-system-prompt', CLAUDE_MARKER + '\n' + '\n'.join(preserved)
                               + '\n</dotfiles-preserved-claude-append>']
         else:
-            arguments += ['--append-system-prompt', str(addition_file)]
+            controls = [control for control in controls if control[0] not in arguments]
+            arguments += [value for contribution in controls for value in contribution]
+            if addition.strip():
+                arguments += ['--append-system-prompt', str(addition_file)]
         config['launchArgs'] = join_args(arguments)
         next_records[name] = {'baseArgs': base, 'hadArgs': had_args, 'lastArgs': config['launchArgs'],
                               'controlArgs': controls,

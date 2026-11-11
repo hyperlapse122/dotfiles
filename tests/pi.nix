@@ -36,7 +36,7 @@ pkgs.runCommand "pi-tests"
         node ${./pi-runtime-policy.mjs} ${found} ${entry.user.home-files}/.pi/agent
         node ${./pi-tools.mjs} ${found} ${entry.user.home-files}/.pi/agent
         python3 ${./pi-wrapper.py} ${found}/bin/pi ${entry.user.home-files}/.pi/agent ${keyDirectory}
-        python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state}
+        python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state} ${found} ${./pi-trust.mjs}
         node --experimental-strip-types ${./pi-policy.mjs} ${entry.user.home-files}/.pi/agent
       ''
     ) userEntries}
