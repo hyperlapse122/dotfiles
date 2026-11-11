@@ -10,6 +10,7 @@ applies_when:
   - "A check rewrites a package or module source with builtins.replaceStrings, writes it with builtins.toFile, and imports the result to evaluate it against substitute siblings"
   - "A check passes in a local nix flake check or nix build but CI's eval-only flake-check job fails with error: path '/nix/store/...' is not valid"
   - "Planning a check that needs a module or package evaluated with its sibling files swapped for fixtures"
+  - "A check passes a fixture directory as a path to code that interpolates it into a string and then reads it with builtins.pathExists or builtins.readDir"
 root_cause: wrong_api
 resolution_type: test_fix
 related_components:
@@ -40,6 +41,7 @@ error: path '/nix/store/h99aaqqs6ip7vsgr6f55cb9ajn1qp5h5-antigravity-acp-path.ni
 ## Guidance
 
 - Never `import` (or pass to the module system) a path produced by `builtins.toFile` in anything a flake check evaluates. It works only when the store already holds that exact path.
+- The same failure follows from interpolating a fixture path into a string and then reading it at evaluation time: `builtins.pathExists "${dir}/x"` or `builtins.readDir "${src}/skills"` on a `./fixtures/...` path names a store copy that read-only evaluation never writes. Keep a path value a path (`dir + "/x"`) until it reaches a derivation; `home/h82/agents/plugin-skills.nix` does this for plugin sources, where a flake input arrives as a store path and the test fixture as a repository path.
 - A symlinked fixture directory does not work either: Nix resolves `./sibling` paths inside an imported file against the symlink's target, so the real siblings load, not the fixtures.
 - When the question is which file a source reads, check the source text with `builtins.readFile` and `lib.hasInfix`, and fail inside the builder. Require the expected read expression and reject any mention of the wrong file (shown below on the historical check of `antigravity-acp-path.nix` against the two pin files):
 

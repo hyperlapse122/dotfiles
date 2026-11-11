@@ -16,15 +16,22 @@
 */
 { lib, pkgs }:
 let
+  # A source given as a path, such as a test fixture, stays a path: turning it
+  # into a string copies it to the store, and the read-only evaluation of
+  # nix flake check --no-build computes that copy without writing it, so the
+  # directory reads below would find nothing. A flake input is already in the
+  # store and is used as its string.
+  skillsDir = src: (if builtins.isPath src then src else "${src}") + "/skills";
+
   skillsOf =
     spec:
     let
-      dir = "${spec.src}/skills";
+      dir = skillsDir spec.src;
     in
     lib.optionalAttrs (builtins.pathExists dir) (
-      lib.filterAttrs (name: type: type == "directory" && builtins.pathExists "${dir}/${name}/SKILL.md") (
-        builtins.readDir dir
-      )
+      lib.filterAttrs (
+        name: type: type == "directory" && builtins.pathExists (dir + "/${name}/SKILL.md")
+      ) (builtins.readDir dir)
     );
 
   owners =
@@ -59,7 +66,7 @@ let
       lib.foldl' (
         acc: plugin:
         acc
-        // lib.mapAttrs (name: _: "${args.sources.${plugin}.src}/skills/${name}") (
+        // lib.mapAttrs (name: _: skillsDir args.sources.${plugin}.src + "/${name}") (
           skillsOf args.sources.${plugin}
         )
       ) { } (lib.attrNames args.sources)
