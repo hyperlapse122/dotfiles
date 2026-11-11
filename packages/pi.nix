@@ -8,10 +8,9 @@ let
   inherit (pkgs) lib stdenv;
   source = builtins.fromJSON (builtins.readFile ./pi-release.json);
   runtime = pkgs.callPackage ./pi-runtime.nix {
-    source = pkgs.fetchFromGitHub {
-      owner = "earendil-works";
-      repo = "pi";
-      inherit (source.source) rev sha256;
+    source = builtins.fetchTarball {
+      url = "https://github.com/earendil-works/pi/archive/${source.source.rev}.tar.gz";
+      inherit (source.source) sha256;
     };
     modelLock = ../home/h82/agents/pi-model-lock.json;
     policyPatch = ./pi-model-policy.patch;
