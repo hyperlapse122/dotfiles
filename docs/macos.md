@@ -6,7 +6,7 @@ This guide covers an Apple silicon Mac (`aarch64-darwin`) from an erased machine
 | --- | --- |
 | `MacBook-Pro-Mac17-9` | Apple silicon MacBook Pro (M5 Pro, model identifier `Mac17,9`) |
 
-The repository owner runs every step in this runbook by hand on the Mac from a local GUI login session. No coding agent may erase macOS, install Nix, run `darwin-rebuild`, or run `nr switch` on a host.
+The repository owner runs this runbook on the Mac from a local GUI login session. A coding agent does not erase macOS, install Nix, run `darwin-rebuild`, or run `nr switch` on a host on its own initiative; it runs one of these steps only when the owner instructs it to in the current session, for the host and the steps named. The rule and what stays with the owner are stated in [fresh installation](install.md).
 
 ## Back up before erasing the Mac
 
