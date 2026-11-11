@@ -14,6 +14,7 @@ let
   pi = import ../../../packages/pi.nix {
     inherit pkgs;
     syntheticKeyFile = "${keyDirectory}/synthetic_api_key";
+    exaKeyFile = "${keyDirectory}/exa_api_key";
   };
   state = pkgs.writeScriptBin "pi-state" (
     "#!${pkgs.python3}/bin/python3\n"
@@ -24,6 +25,7 @@ in
   home.packages = [ pi ];
   home.file.".pi/agent/model-lock.json".source = ./pi-model-lock.json;
   home.file.".pi/agent/dotfiles-policy.ts".source = ./pi-policy.ts;
+  home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/models.json".text = builtins.toJSON {
     providers.synthetic = {
       inherit (catalog) api baseUrl models;

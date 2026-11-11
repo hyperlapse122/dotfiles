@@ -62,8 +62,8 @@ def main():
             if not managed:
                 packages.append(item)
         value['packages'] = packages + [args.plugin]
-        policy = str(agent / 'dotfiles-policy.ts')
-        value['extensions'] = [item for item in value.get('extensions', []) if item != policy] + [policy]
+        extensions = [str(agent / name) for name in ('dotfiles-policy.ts', 'dotfiles-web.ts')]
+        value['extensions'] = [item for item in value.get('extensions', []) if item not in extensions] + extensions
         if value.get('defaultProvider') != 'synthetic' or value.get('defaultModel') not in ids:
             value['defaultModel'] = ids[0]
         value['defaultProjectTrust'] = 'never'

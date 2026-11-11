@@ -1,6 +1,7 @@
 {
   pkgs,
   syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
+  exaKeyFile ? "/run/secrets/cli-auth/exa_api_key",
 }:
 
 let
@@ -21,6 +22,8 @@ let
 in
 assert lib.assertMsg (plainPath syntheticKeyFile)
   "pi: syntheticKeyFile '${syntheticKeyFile}' is not a plain absolute path";
+assert lib.assertMsg (plainPath exaKeyFile)
+  "pi: exaKeyFile '${exaKeyFile}' is not a plain absolute path";
 assert lib.assertMsg (
   runtime.version == source.version
 ) "pi: source version does not match the release pin";
@@ -48,7 +51,8 @@ stdenv.mkDerivation {
     substituteInPlace $out/bin/pi-state --replace-fail '/usr/bin/env python3' '${pkgs.python3}/bin/python3'
     substituteInPlace $out/bin/pi \
       --replace-fail '@STATE@' "$out/bin/pi-state" \
-            --replace-fail '@KEY@' '${syntheticKeyFile}'
+      --replace-fail '@KEY@' '${syntheticKeyFile}' \
+      --replace-fail '@EXA_KEY@' '${exaKeyFile}'
     runHook postInstall
   '';
 

@@ -8,8 +8,10 @@ PI='@PI@'
 
 export PI_SKIP_VERSION_CHECK=1
 export PI_TELEMETRY=0
+unset EXA_API_KEY
+export DOTFILES_PI_EXA_KEY_FILE='@EXA_KEY@'
 
 case "$*" in --version|--help) exec "$PI" "$@" ;; esac
 agent="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 '@STATE@' --agent "$agent" --key '@KEY@' --auth-only
-exec "$PI" --extension "$agent/dotfiles-policy.ts" "$@"
+exec "$PI" --extension "$agent/dotfiles-policy.ts" --extension "$agent/dotfiles-web.ts" "$@"
