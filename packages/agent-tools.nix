@@ -181,8 +181,27 @@ let
   antigravityAcpRepack = pythonHelper "antigravity-acp-repack" ../scripts/antigravity-acp-repack;
 
   # Resolves the newest T3 Code nightly and its asset digests from the GitHub
-  # releases API.
-  t3codeRelease = pythonHelper "t3code-release" ../scripts/t3code-release;
+  # releases API, and checks that the repository's runtime rebuild fits the
+  # Antigravity runtime that release embeds. The script finds the rebuild tool
+  # and the overlays by its own path, so they sit under libexec in the
+  # repository's scripts/ and packages/ layout, and bin links to the script.
+  t3codeRelease = pkgs.stdenvNoCC.mkDerivation {
+    pname = "t3code-release";
+    version = "1";
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.python3 ];
+    installPhase = ''
+      root=$out/libexec/t3code-release
+      install -Dm755 ${../scripts/t3code-release} $root/scripts/t3code-release
+      install -Dm755 ${../scripts/antigravity-acp-repack} $root/scripts/antigravity-acp-repack
+      mkdir -p $root/packages
+      cp -r --no-preserve=mode ${../packages/antigravity-acp-overlay} $root/packages/antigravity-acp-overlay
+      patchShebangs $root/scripts
+      mkdir -p $out/bin
+      ln -s ../libexec/t3code-release/scripts/t3code-release $out/bin/t3code-release
+    '';
+    meta.mainProgram = "t3code-release";
+  };
 
   # Compares the Synthetic models in home/h82/agents/synthetic-models.nix with
   # Synthetic's catalog, and rewrites the committed Synthetic catalog snapshot.

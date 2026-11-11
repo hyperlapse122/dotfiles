@@ -599,8 +599,20 @@
               ./scripts/agent-usage
               ./tests/test_agent_usage.py;
           npm-release = pythonScriptCheck "npm-release" ./scripts/npm-release ./tests/test_npm_release.py;
+          # The updater runs the rebuild tool against the overlays and reads the
+          # runtime package's rebuild table, so the sandbox mirrors the
+          # repository layout for all three.
           t3code-release =
-            pythonScriptCheck "t3code-release" ./scripts/t3code-release
+            (pythonScriptCheckWith {
+              modules = [ ./scripts/antigravity-acp-repack ];
+              setup = ''
+                mkdir -p packages
+                cp -r ${./packages/antigravity-acp-overlay} packages/antigravity-acp-overlay
+                cp ${./packages/antigravity-acp.nix} packages/antigravity-acp.nix
+              '';
+            })
+              "t3code-release"
+              ./scripts/t3code-release
               ./tests/test_t3code_release.py;
           synthetic-models-watch =
             let
