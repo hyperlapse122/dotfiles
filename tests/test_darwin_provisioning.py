@@ -90,9 +90,11 @@ print('fake-user fake-password')
             link.symlink_to(identity)
             with self.assertRaises(x.XcodeError):
                 x.read_account(source, link, owner)
-            with self.assertRaises(x.XcodeError):
-                x.read_account(Path('/nix/store/fake/apple-account.yaml'), identity, owner)
             self.assertFalse(self.log.exists())
+            # Activation names the file by its store path; flake evaluation
+            # already copies the ciphertext there.
+            self.assertEqual(x.read_account(Path('/nix/store/fake/apple-account.yaml'), identity, owner),
+                             {'username': 'fake-user', 'password': 'fake-password'})
 
     def test_release_selection_and_first_launch(self):
         def release(n, channel, seq=1):
