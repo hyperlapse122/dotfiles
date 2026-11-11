@@ -22,7 +22,7 @@ let
   };
 
   meta = {
-    description = "Desktop GUI for coding agents like Claude Code and Codex (nightly)";
+    description = "Desktop GUI for coding agents like Claude Code and Codex";
     homepage = "https://github.com/pingdotgg/t3code";
     license = lib.licenses.mit;
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
@@ -30,7 +30,6 @@ let
     mainProgram = pname;
   };
 
-  # Stable beta and nightly artifacts use different signed bundle names.
   appBundle = import ./t3code-app-bundle.nix;
 in
 if pkgs.stdenv.hostPlatform.isDarwin then

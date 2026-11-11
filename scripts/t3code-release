@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Resolve the newest T3 Code nightly release from GitHub's release API.
+"""Resolve the newest stable T3 Code release from GitHub's release API.
 
-Fetches pingdotgg/t3code's recent GitHub releases, keeps only nightlies -- a
-prerelease whose tag has the shape v<semver>-nightly.<YYYYMMDD>.<build>, which
-excludes stable releases (not prereleases) and preview builds (-preview. tags)
--- and picks the newest by (semver, date, build). For that release it reads
-the sha256 digest GitHub records for the desktop app (an AppImage on Linux, a
-zipped app bundle on macOS) and the t3 CLI tarball of each supported system,
-and writes or checks the pin file both T3 Code packages
-consume, so the two artifacts always come from the same nightly. Refuses to write a pin
-for a release missing any of those assets or their digests, or a version that
-is not strictly newer than the one already pinned.
+Fetches pingdotgg/t3code's recent GitHub releases, keeps only stable ones -- a
+release that is neither a draft nor a prerelease and whose tag is exactly
+v<major>.<minor>.<patch>, which excludes nightly (-nightly.), preview
+(-preview.), and Android builds -- and picks the newest by version. For that
+release it reads the sha256 digest GitHub records for the desktop app (an
+AppImage on Linux, a zipped app bundle on macOS) and the t3 CLI tarball of
+each supported system, and writes or checks the pin file both T3 Code
+packages consume, so the two artifacts always come from the same release.
+Refuses to write a pin for a release missing any of those assets or their
+digests, or a version that is not strictly newer than the one already pinned.
+A pinned version that is not plain semver, such as a nightly left from an
+earlier track, counts as older than any stable release.
 
 The pin also carries an `antigravity` section: the Antigravity ACP runtime
 that release's own CLI downloads. The script fetches the x86_64-linux CLI
@@ -102,8 +104,8 @@ TABLE_ENTRY_PATTERN = re.compile(
 )
 TABLE_WINDOW = 1 << 16
 
-TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+-nightly\.\d{8}\.\d+)$")
-VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)-nightly\.(\d{8})\.(\d+)$")
+TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+)$")
+VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 DIGEST_PATTERN = re.compile(r"^sha256:([0-9a-fA-F]{64})$")
 
 
@@ -161,19 +163,15 @@ def hex_to_sri(sha256_hex):
 
 
 def version_key(version):
-    """Order releases by semver, then nightly date/build before the stable release."""
-    stable = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version) if isinstance(version, str) else None
-    if stable:
-        return (tuple(map(int, stable.groups())), float('inf'), 0)
+    """Order stable versions by (major, minor, patch)."""
     match = VERSION_PATTERN.match(version) if isinstance(version, str) else None
     if not match:
-        raise ValueError(f"not a nightly version: {version!r}")
-    major, minor, patch, date, build = (int(part) for part in match.groups())
-    return ((major, minor, patch), date, build)
+        raise ValueError(f"not a stable version: {version!r}")
+    return tuple(int(part) for part in match.groups())
 
 
-def newest_nightly(body):
-    """Return the newest nightly release object in a GitHub release list."""
+def newest_stable(body):
+    """Return the newest stable release object in a GitHub release list."""
     try:
         data = json.loads(body)
     except json.JSONDecodeError as exc:
@@ -181,19 +179,19 @@ def newest_nightly(body):
     if not isinstance(data, list):
         raise Failure("release list response is not a JSON array")
 
-    nightlies = []
+    stables = []
     for entry in data:
         if not isinstance(entry, dict):
             continue
-        if entry.get("prerelease") is not True or entry.get("draft"):
+        if entry.get("prerelease") is not False or entry.get("draft") is not False:
             continue
         tag = entry.get("tag_name")
         match = TAG_PATTERN.match(tag) if isinstance(tag, str) else None
         if match:
-            nightlies.append((version_key(match.group(1)), match.group(1), entry))
-    if not nightlies:
-        raise Failure("the release list holds no nightly release")
-    _, version, entry = max(nightlies, key=lambda item: item[0])
+            stables.append((version_key(match.group(1)), match.group(1), entry))
+    if not stables:
+        raise Failure("the release list holds no stable release")
+    _, version, entry = max(stables, key=lambda item: item[0])
     return version, entry
 
 
@@ -364,7 +362,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        resolved = parse_release(*newest_nightly(fetch(args.source_url)))
+        resolved = parse_release(*newest_stable(fetch(args.source_url)))
         writing = bool(args.output) and not args.dry_run
 
         current_data = pinned_release(args.output) if args.output else None

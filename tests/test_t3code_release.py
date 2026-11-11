@@ -167,7 +167,7 @@ def asset(name, hex_digest):
     }
 
 
-def release(tag, prerelease=True, draft=False, omit=(), duplicate=(), digests=None):
+def release(tag, prerelease=False, draft=False, omit=(), duplicate=(), digests=None):
     """Build one release object shaped like GitHub's REST API response."""
     version = tag[1:]
     assets = [
@@ -191,18 +191,20 @@ def release(tag, prerelease=True, draft=False, omit=(), duplicate=(), digests=No
 
 DEFAULT_LIST_URL = "https://api.github.com/repos/pingdotgg/t3code/releases?per_page=50"
 
-NEWEST = "v0.0.46-nightly.20261004.2644"
+NEWEST = "v0.0.47"
 NEWEST_VERSION = NEWEST[1:]
+OLDER_VERSION = "0.0.46"
 
 
 def release_list(newest=None):
-    """A stable, a newer preview, and two nightlies, newest nightly not first."""
+    """An older stable, then a newer preview, nightly, and Android build, newest stable last."""
     newest = newest if newest is not None else release(NEWEST)
     return json.dumps(
         [
-            release("v0.0.47-preview.20261005.2700"),
-            release("v0.0.46-nightly.20261003.2638"),
-            release("v0.0.47", prerelease=False),
+            release(f"v{OLDER_VERSION}"),
+            release("v0.0.48-preview.20261005.2700", prerelease=True),
+            release("v0.0.48-nightly.20261009.3000", prerelease=True),
+            release("t3code-android-internal-2.3.0-78", prerelease=True),
             newest,
         ]
     )
@@ -340,19 +342,20 @@ class T3codeReleaseTestCase(unittest.TestCase):
         self.assertIn(needle, result.stderr)
         self.assertFalse(self.output.exists())
 
-    def test_picks_the_newest_nightly_over_stable_and_preview(self):
-        self.write_pin("0.0.45-nightly.20261001.1000")
+    def test_picks_the_newest_stable_over_preview_nightly_and_android_builds(self):
+        self.write_pin(OLDER_VERSION)
         result = self.run_release(extra_args=["-o", str(self.output)])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("updated", result.stdout)
         self.assertEqual(json.loads(self.output.read_text()), expected_pin(NEWEST))
-    def test_refuses_a_nightly_missing_the_arm64_appimage(self):
+
+    def test_refuses_a_release_missing_the_arm64_appimage(self):
         name = f"T3-Code-{NEWEST_VERSION}-arm64.AppImage"
         body = release_list(release(NEWEST, omit=(name,)))
         result = self.run_release(body=body, extra_args=["-o", str(self.output)])
         self.assert_refused(result, name)
 
-    def test_refuses_a_nightly_missing_a_darwin_asset(self):
+    def test_refuses_a_release_missing_a_darwin_asset(self):
         for name in [
             f"T3-Code-{NEWEST_VERSION}-arm64.zip",
             f"t3-{NEWEST_VERSION}-darwin-arm64.tar.gz",
@@ -362,7 +365,7 @@ class T3codeReleaseTestCase(unittest.TestCase):
                 result = self.run_release(body=body, extra_args=["-o", str(self.output)])
                 self.assert_refused(result, name)
 
-    def test_refuses_a_nightly_with_a_duplicated_asset(self):
+    def test_refuses_a_release_with_a_duplicated_asset(self):
         name = f"t3-{NEWEST_VERSION}-linux-x64.tar.gz"
         body = release_list(release(NEWEST, duplicate=(name,)))
         result = self.run_release(body=body, extra_args=["-o", str(self.output)])
@@ -401,7 +404,7 @@ class T3codeReleaseTestCase(unittest.TestCase):
         body = release_list(
             release(NEWEST, digests={f"t3-{NEWEST_VERSION}-linux-x64.tar.gz": f"sha256:{sha256_hex(tarball)}"})
         )
-        self.write_pin("0.0.45-nightly.20261001.1000")
+        self.write_pin(OLDER_VERSION)
         result = self.run_release(body=body, tarball=tarball, extra_args=["-o", str(self.output)])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
@@ -416,7 +419,7 @@ class T3codeReleaseTestCase(unittest.TestCase):
         }
         for name, (tarball, needle) in cases.items():
             with self.subTest(case=name):
-                self.write_pin("0.0.45-nightly.20261001.1000")
+                self.write_pin(OLDER_VERSION)
                 before = self.output.read_bytes()
                 digest = f"sha256:{sha256_hex(tarball)}"
                 body = release_list(
@@ -428,7 +431,7 @@ class T3codeReleaseTestCase(unittest.TestCase):
                 self.assertEqual(self.output.read_bytes(), before)
 
     def test_tarball_digest_mismatch_exits_2_and_keeps_the_pin_byte_identical(self):
-        self.write_pin("0.0.45-nightly.20261001.1000")
+        self.write_pin(OLDER_VERSION)
         before = self.output.read_bytes()
         result = self.run_release(
             tarball=cli_tarball(acp_table(version="9.9.9")), extra_args=["-o", str(self.output)]
@@ -445,13 +448,13 @@ class T3codeReleaseTestCase(unittest.TestCase):
         tarball = cli_tarball(table)
         digest = f"sha256:{sha256_hex(tarball)}"
         body = release_list(release(NEWEST, digests={f"t3-{NEWEST_VERSION}-linux-x64.tar.gz": digest}))
-        self.write_pin("0.0.45-nightly.20261001.1000", antigravity=pin_antigravity)
+        self.write_pin(OLDER_VERSION, antigravity=pin_antigravity)
         self.pin_before = self.output.read_bytes()
         self.serve_archives(archives)
         return self.run_release(body=body, tarball=tarball, extra_args=["-o", str(self.output)])
 
     def test_a_changed_runtime_is_rebuilt_from_each_systems_archive_before_the_pin_is_written(self):
-        self.write_pin("0.0.45-nightly.20261001.1000", antigravity=expected_antigravity("1.3.0"))
+        self.write_pin(OLDER_VERSION, antigravity=expected_antigravity("1.3.0"))
         result = self.run_release(extra_args=["-o", str(self.output)])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
@@ -484,7 +487,7 @@ class T3codeReleaseTestCase(unittest.TestCase):
         self.assertEqual(self.output.read_bytes(), self.pin_before)
 
     def test_an_unchanged_runtime_downloads_no_archive(self):
-        self.write_pin("0.0.45-nightly.20261001.1000", antigravity=expected_antigravity())
+        self.write_pin(OLDER_VERSION, antigravity=expected_antigravity())
         result = self.run_release(extra_args=["-o", str(self.output)])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(self.output.read_text())["version"], NEWEST_VERSION)
@@ -517,14 +520,8 @@ class T3codeReleaseTestCase(unittest.TestCase):
         for module, _ in script.EXTENSIONS:
             self.assertTrue((Path(script.OVERLAYS) / f"{module}_overlay.py").is_file())
 
-    def test_same_version_higher_build_is_newer(self):
-        self.write_pin("0.0.46-nightly.20261004.2643")
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.output.read_text())["version"], NEWEST_VERSION)
-
-    def test_stable_pin_is_not_downgraded_by_older_nightlies(self):
-        for version in ('0.1.7', '0.0.46'):
+    def test_a_newer_stable_pin_is_not_downgraded(self):
+        for version in ("0.1.7", "0.0.48"):
             with self.subTest(version=version):
                 self.write_pin(version)
                 before = self.output.read_bytes()
@@ -533,39 +530,25 @@ class T3codeReleaseTestCase(unittest.TestCase):
                 self.assertIn("already up to date", result.stdout)
                 self.assertEqual(self.output.read_bytes(), before)
 
-    def test_lower_date_is_older_even_with_a_higher_build(self):
-        # Pinned build number is higher, but its date is later, so the
-        # resolved nightly is older and must not replace it.
-        self.write_pin("0.0.46-nightly.20261005.2600")
-        before = self.output.read_bytes()
+    def test_a_nightly_pin_is_replaced_by_the_stable_release(self):
+        # Moving off the nightly track: the pin's base version is higher, but a
+        # tag that is not plain semver counts as older than any stable release.
+        self.write_pin("0.0.48-nightly.20261010.4491", antigravity=expected_antigravity())
         result = self.run_release(extra_args=["-o", str(self.output)])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("already up to date", result.stdout)
-        self.assertEqual(self.output.read_bytes(), before)
+        self.assertEqual(json.loads(self.output.read_text()), expected_pin(NEWEST))
 
-    def test_higher_semver_with_an_older_date_is_newer(self):
-        self.write_pin("0.0.45-nightly.20261005.9999")
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.output.read_text())["version"], NEWEST_VERSION)
-
-    def test_selection_compares_dates_not_list_order_or_build_alone(self):
-        body = json.dumps(
-            [
-                release("v0.0.46-nightly.20261003.2900"),
-                release(NEWEST),
-                release("v0.0.45-nightly.20261009.3000"),
-            ]
-        )
+    def test_selection_compares_versions_not_list_order(self):
+        body = json.dumps([release(NEWEST), release("v0.0.9"), release("v0.0.46")])
         result = self.run_release(body=body)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["tag"], NEWEST)
 
-    def test_ignores_drafts_and_nightly_tags_not_marked_prerelease(self):
+    def test_ignores_drafts_and_plain_tags_marked_prerelease(self):
         body = json.dumps(
             [
-                release("v0.0.47-nightly.20261009.3000", draft=True),
-                release("v0.0.47-nightly.20261009.3001", prerelease=False),
+                release("v0.0.48", draft=True),
+                release("v0.0.49", prerelease=True),
                 release(NEWEST),
             ]
         )
@@ -573,12 +556,31 @@ class T3codeReleaseTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["tag"], NEWEST)
 
-    def test_refuses_a_list_without_a_nightly(self):
+    def test_ignores_tags_that_are_not_plain_semver(self):
         body = json.dumps(
-            [release("v0.0.47", prerelease=False), release("v0.0.47-preview.20261005.2700")]
+            [
+                release("v0.0.48-rc.1"),
+                release("v0.0.49-nightly.20261009.3000"),
+                release("0.0.48"),
+                release("v0.1"),
+                release("v1.0.0.1"),
+                release(NEWEST),
+            ]
+        )
+        result = self.run_release(body=body)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["tag"], NEWEST)
+
+    def test_refuses_a_list_without_a_stable_release(self):
+        body = json.dumps(
+            [
+                release("v0.0.47-nightly.20261009.3000", prerelease=True),
+                release("v0.0.47-preview.20261005.2700", prerelease=True),
+                release("v0.0.48", prerelease=True),
+            ]
         )
         result = self.run_release(body=body, extra_args=["-o", str(self.output)])
-        self.assert_refused(result, "no nightly")
+        self.assert_refused(result, "no stable release")
 
     def test_malformed_existing_pin_is_treated_as_absent(self):
         self.output.write_text("{not json")

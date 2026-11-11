@@ -602,7 +602,7 @@ let
         fail "macOS with my.t3.desktop.enable: the T3 Code desktop package is not added"
       ))
       (lib.optionalString (!darwin.updaterOff) (
-        fail "macOS with my.t3.desktop.enable: no launchd agent runs launchctl setenv T3CODE_DISABLE_AUTO_UPDATE 1, so the copied app can update itself off the nightly pin"
+        fail "macOS with my.t3.desktop.enable: no launchd agent runs launchctl setenv T3CODE_DISABLE_AUTO_UPDATE 1, so the copied app can update itself off the pin"
       ))
       (assertSettingsWith false "NixOS module with my.t3.desktop.enable" nixos.config true)
       (assertSettingsWith false "macOS module with my.t3.desktop.enable" darwin.config true)

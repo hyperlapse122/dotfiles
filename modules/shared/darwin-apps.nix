@@ -33,7 +33,7 @@ let
     nixd.nix = "home/h82/dev/vscodium.nix";
     vscodium.nix = "home/h82/dev/vscodium.nix";
     t3code-cli.nix = "home/h82/t3code.nix, the my.t3.cli trait";
-    t3code-desktop.nix = "home/h82/t3code.nix, the my.t3.desktop trait, from the nightly pin";
+    t3code-desktop.nix = "home/h82/t3code.nix, the my.t3.desktop trait, from the stable pin";
 
     kleopatra.leftOut = "a KDE GnuPG front end; gpg on the command line covers macOS";
     ksshaskpass.leftOut = "the KDE askpass; macOS has no KDE session";
