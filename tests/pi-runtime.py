@@ -111,3 +111,28 @@ with tempfile.TemporaryDirectory() as directory:
                 process.kill()
                 process.wait()
             selector.close()
+
+    timestamp = '2026-01-01T00:00:00.000Z'
+    for provider, model_id in [('foreign', 'outside'), ('synthetic', 'removed-model')]:
+        saved = project / 'saved-session.jsonl'
+        saved.write_text('\n'.join(json.dumps(entry) for entry in [
+            {'type':'session','version':3,'id':'restore-probe','timestamp':timestamp,'cwd':str(project)},
+            {'type':'model_change','id':'model','parentId':None,'timestamp':timestamp,
+             'provider':provider,'modelId':model_id},
+            {'type':'message','id':'message','parentId':'model','timestamp':timestamp,
+             'message':{'role':'user','content':'Saved session probe','timestamp':0}},
+        ]) + '\n')
+        restored = subprocess.Popen([sys.argv[1], '--offline', '--approve', '--session', str(saved),
+                                     '--extension', str(agent / 'dotfiles-policy.ts'), '--mode', 'rpc'],
+                                    cwd=project, env=env, stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            restored.wait(timeout=10)
+            _output, error = restored.communicate()
+            assert b'The saved model is unavailable in the managed Synthetic lock.' in error, error
+        except subprocess.TimeoutExpired:
+            raise AssertionError('Pi kept a saved outside-model session open after restoration') from None
+        finally:
+            if restored.poll() is None:
+                restored.kill()
+            restored.communicate()
