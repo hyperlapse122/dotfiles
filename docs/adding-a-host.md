@@ -50,6 +50,7 @@ Traits and shared host options live in `modules/shared/host.nix`:
 | `my.printing.queues` | List of CUPS queue labels decrypted from `secrets/printers.yaml` (NixOS, empty by default). |
 | `my.tlsInspectionCa.enable` | Decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and configures system and tool CA trust (macOS). |
 | `my.networkRecovery.enable` | Runs the `org.nixos.network-recovery` launch daemon and sets `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` (macOS). |
+| `my.wiredNetwork.enable` | Applies the static IPv4, DNS, and IPv6-off settings in `secrets/hosts/<host>/wired-network.yaml` to the wired adapter with the declared MAC on production applies (macOS). |
 | `my.dock.hostApps` | List of `.app` paths inserted into the macOS Dock between ChatGPT and Discord (`modules/darwin/dock.nix`). |
 
 Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from `secrets/tokens.yaml` (see `../secrets/README.md`).
@@ -230,6 +231,7 @@ Run these steps on a machine that already has the checkout and a YubiKey:
    ```
 
 5. **Optional TLS inspection CA.** If the Mac enables `my.tlsInspectionCa.enable = true`, add `^secrets/hosts/<host>/tls-inspection-ca\.yaml$` to `.sops.yaml` and create `secrets/hosts/<host>/tls-inspection-ca.yaml` as shown in [macOS hosts](macos.md#tls-inspection-ca).
+6. **Optional wired network.** If the Mac enables `my.wiredNetwork.enable = true`, add `^secrets/hosts/<host>/wired-network\.yaml$` to `.sops.yaml` and create `secrets/hosts/<host>/wired-network.yaml` as shown in [macOS hosts](macos.md#wired-network).
 
 ### Stage and check the macOS host
 

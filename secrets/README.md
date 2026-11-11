@@ -33,6 +33,8 @@ creation_rules:
     age: <MacBook-Pro-Mac17-9 recipient>
   - path_regex: ^secrets/hosts/MacBook-Pro-Mac17-9/tls-inspection-ca\.yaml$
     age: <MacBook-Pro-Mac17-9 recipient>
+  - path_regex: ^secrets/hosts/MacBook-Pro-Mac17-9/wired-network\.yaml$
+    age: <MacBook-Pro-Mac17-9 recipient>
 ```
 
 Only a host whose recipient appears in a file's rule can decrypt that file:
@@ -147,6 +149,22 @@ certificate: |
 ```
 
 The certificate is not a private key, but its subject identifies an internal corporate server, so it stays encrypted in this public repository. See [macOS hosts](../docs/macos.md#tls-inspection-ca).
+
+### `secrets/hosts/MacBook-Pro-Mac17-9/wired-network.yaml`
+
+A macOS host with `my.wiredNetwork.enable = true` has `secrets/hosts/<host>/wired-network.yaml`, encrypted to that host's recipient alone:
+
+```yaml
+mac: <wired adapter MAC address>
+ipv4_address: <static IPv4 address>
+ipv4_subnet_mask: <subnet mask>
+ipv4_router: <router address>
+dns_servers:
+  - <first DNS server>
+  - <second DNS server>
+```
+
+None of these values is a credential, but together they describe an internal network, so they stay encrypted in this public repository. See [macOS hosts](../docs/macos.md#wired-network).
 
 ## Recovering a host's age identity
 
