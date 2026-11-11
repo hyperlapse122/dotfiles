@@ -36,7 +36,13 @@ def validate(home):
     grok = shlex.split(providers['grok'].get('config', {}).get('launchArgs', ''))
     assert not any('prompt' in arg or 'developer_instructions' in arg for arg in grok)
     assert any(e['name'] == 'GROK_SUBAGENTS' and e['value'] == '0' for e in providers['grok']['environment'])
-    assert providers['antigravity'] == {'driver': 'antigravity', 'enabled': False, 'custom': True}
+    # The declaration turns the owner's disabled instance on and points it at the
+    # wrapper; the owner's own flag survives, and the composer adds nothing.
+    antigravity = providers['antigravity']
+    assert antigravity['driver'] == 'antigravity' and antigravity['enabled'] is True
+    assert antigravity['custom'] is True
+    assert antigravity['config']['binaryPath'].endswith('/bin/agy_acp_server.par')
+    assert set(antigravity) == {'driver', 'enabled', 'custom', 'config'}
     assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
     assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.1-sol', 'options': [{'id': 'reasoningEffort', 'value': 'high'}, {'id': 'serviceTier', 'value': 'default'}]}
     assert settings['fallbackModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5'}
@@ -76,6 +82,7 @@ def main():
             original = settings.read_text()
             mutations = [lambda d: d['providerInstances']['claudeAgent']['config'].update(launchArgs=''),
                          lambda d: d.update(defaultThreadEnvMode='local'),
+                         lambda d: d['providerInstances']['antigravity'].update(enabled=False),
                          lambda d: d['providerInstances']['grok'].update(config={'launchArgs': '--append-system-prompt bad'})]
             for mutate in mutations:
                 document = json.loads(original)

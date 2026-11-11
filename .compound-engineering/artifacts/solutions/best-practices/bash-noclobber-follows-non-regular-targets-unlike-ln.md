@@ -26,7 +26,7 @@ tags:
 
 ## Context
 
-The since-removed `packages/antigravity-acp-path.nix` wrapper seeded `$GEMINI_HOME/antigravity-acp/acp_token.json` from `~/.gemini/antigravity-acp/acp_token.json` when `GEMINI_HOME` was a private Compound Engineering scratch home that held no token yet. Its first implementation checked `if [ -f "$token_target" ] && [ ! -L "$token_target" ]; then return 0; fi` and then relied on bash's `set -C` (`noclobber`) redirection to create the file exclusively:
+An earlier version of the `packages/antigravity-acp-path.nix` wrapper seeded `$GEMINI_HOME/antigravity-acp/acp_token.json` from `~/.gemini/antigravity-acp/acp_token.json` when `GEMINI_HOME` was a private Compound Engineering scratch home that held no token yet. The wrapper no longer copies the token, because Compound Engineering copies its run-home sign-in itself and an activation step in `home/h82/t3code.nix` links `~/.gemini/antigravity-acp/acp_token.json` to the token in T3 Code's instance home. The lesson below applies to any such copy. The first implementation checked `if [ -f "$token_target" ] && [ ! -L "$token_target" ]; then return 0; fi` and then relied on bash's `set -C` (`noclobber`) redirection to create the file exclusively:
 
 ```sh
 if ! (
@@ -71,4 +71,4 @@ fi
 
 - Do not use bash `set -C` (`noclobber`) as a security or exclusivity gate when the destination path could be a symlink to a non-regular file or a FIFO.
 - Stage into the destination directory with `mktemp` under `umask 077`, then publish with `ln "$tmp" "$target"` (when refusing any existing entry) or `mv -f "$tmp" "$target"` (when atomically replacing). Always remove `$tmp` on both success and failure.
-- In wrapper and activation checks (as the since-removed `tests/antigravity-acp-path.nix` did), test planted symlinks to existing regular files, planted symlinks to `/dev/null`, and planted FIFOs under `timeout` alongside dangling symlinks, and assert that no temporary staging file remains after any run.
+- In wrapper and activation checks (as an earlier `tests/antigravity-acp-path.nix` did), test planted symlinks to existing regular files, planted symlinks to `/dev/null`, and planted FIFOs under `timeout` alongside dangling symlinks, and assert that no temporary staging file remains after any run.

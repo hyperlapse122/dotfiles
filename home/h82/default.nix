@@ -78,6 +78,7 @@ in
       (import ../../packages/antigravity-acp-path.nix {
         inherit pkgs;
         skills = config.my.antigravitySkillNames;
+        pluginSkills = config.my.antigravityPluginSkills;
       })
       (import ../../packages/agent-tools.nix { inherit pkgs; }).serveHtml
       (

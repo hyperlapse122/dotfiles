@@ -174,15 +174,22 @@ jobs:
           # 8. Update T3 Code. A nightly can be published before its assets
           # and digests are, so a failure here keeps the current pin and lets
           # the other updates through. Status 2 means the release's embedded
-          # Antigravity table could not be read or trusted; the whole file
-          # stays, so the T3 Code and ACP pins never split.
+          # Antigravity table could not be read or trusted. Status 1 can also
+          # mean the repository's runtime rebuild does not fit that release's
+          # runtime. In both cases the whole file stays, so the T3 Code and
+          # runtime pins never split, and the warning carries the updater's
+          # own message.
           t3code_status=0
-          nix run .#t3code-release -- --output packages/t3code-release.json || t3code_status=$?
+          t3code_log=$(mktemp)
+          nix run .#t3code-release -- --output packages/t3code-release.json 2>"$t3code_log" || t3code_status=$?
+          cat "$t3code_log" >&2
+          t3code_message=$(tail -n 1 "$t3code_log")
+          rm -f "$t3code_log"
           if [ "$t3code_status" -eq 2 ]; then
-            echo "::warning title=T3 Code Antigravity table unreadable::t3code-release could not read or trust the Antigravity table embedded in the T3 Code CLI; keeping the current pin in packages/t3code-release.json."
+            echo "::warning title=T3 Code Antigravity table unreadable::t3code-release could not read or trust the Antigravity table embedded in the T3 Code CLI; keeping the current pin in packages/t3code-release.json. $t3code_message"
             git checkout -- packages/t3code-release.json
           elif [ "$t3code_status" -ne 0 ]; then
-            echo "::warning title=T3 Code update skipped::t3code-release failed; keeping the current pin in packages/t3code-release.json."
+            echo "::warning title=T3 Code update skipped::t3code-release failed; keeping the current pin in packages/t3code-release.json. $t3code_message"
             git checkout -- packages/t3code-release.json
           fi
 
@@ -241,17 +248,7 @@ jobs:
             git checkout -- packages/grok-build-release.json
           fi
 
-          # 15. Update the Antigravity ACP runtime on PATH. Google publishes
-          # no pointer, so the helper probes candidate versions and downloads
-          # only a newer complete release. It writes only the PATH pin; T3
-          # Code's runtime pin comes from t3code-release. A failure keeps the
-          # current pin and lets the other updates through, as T3 Code's does.
-          if ! nix run .#antigravity-acp-release -- --output packages/antigravity-acp-release.json; then
-            echo "::warning title=Antigravity ACP runtime update skipped::antigravity-acp-release failed; keeping the current pin in packages/antigravity-acp-release.json."
-            git checkout -- packages/antigravity-acp-release.json
-          fi
-
-          # 16. Refresh Prezto and every recursively pinned submodule.
+          # 15. Refresh Prezto and every recursively pinned submodule.
           nix run .#prezto-release -- --output packages/prezto-pin.json
 
           if [ -z "$(git status --porcelain)" ]; then
@@ -322,13 +319,6 @@ jobs:
             git add packages/antigravity-cli-release.json
             git commit -m "chore(packages): bump antigravity-cli to $NEW_VER"
           fi
-
-          if [ -n "$(git status --porcelain packages/antigravity-acp-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/antigravity-acp-release.json)
-            git add packages/antigravity-acp-release.json
-            git commit -m "chore(packages): bump antigravity-acp to $NEW_VER"
-          fi
-
 
           if [ -n "$(git status --porcelain packages/chatgpt-version.json)" ]; then
             NEW_VER=$(jq -r .version packages/chatgpt-version.json)

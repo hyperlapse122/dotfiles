@@ -178,6 +178,9 @@ let
   # activation. Retire every row of a source together, or split the base.
   stillMember = lib.filter (row: lib.any (member: member.name == row.name) checkedMembership) retired;
 
+  pluginSkills = import ./plugin-skills.nix { inherit lib pkgs; };
+  agy = "${(import ../../../packages/antigravity-cli.nix { inherit pkgs; })}/bin/agy";
+
   nativeScript = pkgs.writeScript "grok-plugins" (
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../../scripts/grok-plugins
   );
@@ -186,15 +189,7 @@ let
       ${pkgs.python3}/bin/python3 ${nativeScript} --destination "$HOME" --cli ${
         (import ../../../packages/grok-build.nix { inherit pkgs; })
       }/bin/grok --source ${inputs.compound-engineering-plugin}
-      ${
-        (import ../../../packages/antigravity-cli.nix { inherit pkgs; })
-      }/bin/agy plugin validate ${inputs.compound-engineering-plugin}
-      ${
-        (import ../../../packages/antigravity-cli.nix { inherit pkgs; })
-      }/bin/agy plugin install ${inputs.compound-engineering-plugin}
-      ${
-        (import ../../../packages/antigravity-cli.nix { inherit pkgs; })
-      }/bin/agy plugin enable compound-engineering
+      ${pluginSkills.agyInstall { inherit agy sources; }}
     fi
   '';
 
@@ -215,6 +210,18 @@ let
       );
 in
 {
+  options.my.agentPluginSources = lib.mkOption {
+    type = lib.types.attrsOf lib.types.raw;
+    internal = true;
+    readOnly = true;
+    default = sources;
+    description = ''
+      The pinned plugin sources, by plugin name. The plugin skills directory
+      and the Antigravity CLI install both read them, so a plugin added here
+      reaches Antigravity without further wiring.
+    '';
+  };
+
   # Unguarded and after installPackages for the same reasons as the merges in
   # claude.nix and gemini.nix: the tool is a store path built from this module,
   # so a guard could only ever be true, and a refusal ordered before
@@ -226,7 +233,9 @@ in
   # Manager file: this entry runs before linkGeneration, so a declared link
   # would not yet exist when the wiring reads it, and creating it here also
   # keeps the superseded version present until the new one is wired.
-  home.activation.agentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] syncScript;
-  home.activation.nativeAgentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] nativePlugins;
+  config.home.activation.agentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] syncScript;
+  config.home.activation.nativeAgentPlugins = lib.hm.dag.entryAfter [
+    "installPackages"
+  ] nativePlugins;
 
 }

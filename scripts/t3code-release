@@ -22,6 +22,16 @@ from the table, even at an unchanged T3 Code version. A digest mismatch, a
 download URL outside dl.google.com/agy-extensions/releases/, a table that does
 not parse, or a missing supported system exits with status 2 and writes
 nothing; every other refusal exits with status 1.
+
+When the section differs from the pinned one, the script also downloads each
+system's runtime archive, checks it against the table's digest, and runs
+antigravity-acp-repack in check mode with the repository's overlays, because
+packages/antigravity-acp.nix rebuilds that runtime with them. A rebuild that
+does not fit exits with status 1 and `rebuild of <module> does not fit
+<version>`, so the T3 Code pin and the runtime pin stay on the previous
+release together. The rebuild tool and the overlays are found relative to this
+script (scripts/ and packages/ under one root), in the repository and in the
+packaged copy alike.
 """
 
 import argparse
@@ -30,10 +40,12 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import zipfile
 
 DEFAULT_SOURCE_URL = "https://api.github.com/repos/pingdotgg/t3code/releases?per_page=50"
 # Every system a host in this flake can be, and the asset names, keyed by
@@ -63,6 +75,19 @@ TABLE_PLATFORMS = {
 }
 ACP_URL_PREFIX = "https://dl.google.com/agy-extensions/releases/"
 UNREADABLE_TABLE_STATUS = 2
+
+# The rebuild packages/antigravity-acp.nix performs, which the check below must
+# match: the modules it extends, the function each overlay wraps, and each
+# system's page size. A test fails when this table and the package differ.
+MODULE_DIRECTORY = "google3/cloud/developer_experience/antigravity_extensions/acp_server"
+EXTENSIONS = (
+    ("system_prompt", "extract_system_prompt"),
+    ("paths", "global_skills_paths"),
+)
+PAGE_SIZES = {"x86_64-linux": 4096, "aarch64-linux": 4096, "aarch64-darwin": 16384}
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+REPACK = os.path.join(ROOT, "scripts", "antigravity-acp-repack")
+OVERLAYS = os.path.join(ROOT, "packages", "antigravity-acp-overlay")
 
 TABLE_VERSION_PATTERN = re.compile(rb'ANTIGRAVITY_RELEASE_VERSION = "([^"\n]+)";')
 TABLE_START_PATTERN = re.compile(rb"releaseAssets = (?:/\*[^*]*\*/ )?new Map\(\[")
@@ -119,6 +144,15 @@ def download(url, destination):
     )
     if proc.returncode != 0:
         raise Failure(f"downloading {url} failed with status {proc.returncode}")
+
+
+def download_verified(url, destination, label, expected):
+    """Download url to destination and fail unless its sha256 is expected."""
+    download(url, destination)
+    with open(destination, "rb") as f:
+        digest = hashlib.file_digest(f, "sha256").hexdigest()
+    if digest != expected:
+        raise TableFailure(f"{label} has sha256 {digest}, expected {expected}")
 
 
 def hex_to_sri(sha256_hex):
@@ -205,13 +239,7 @@ def embedded_table(resolved):
     )
     with tempfile.TemporaryDirectory(prefix="t3code-release.") as directory:
         archive = os.path.join(directory, cli["asset"])
-        download(url, archive)
-        with open(archive, "rb") as f:
-            digest = hashlib.file_digest(f, "sha256").hexdigest()
-        if digest != cli["sha256"]:
-            raise TableFailure(
-                f"{cli['asset']} has sha256 {digest}, expected {cli['sha256']}"
-            )
+        download_verified(url, archive, cli["asset"], cli["sha256"])
         try:
             # One streaming pass: read the binary when its member comes up.
             binary, count = None, 0
@@ -265,6 +293,47 @@ def parse_table(binary):
             },
         }
     return section
+
+
+def check_rebuild(section):
+    """Fail unless the repository's rebuild fits every system's runtime archive.
+
+    Each archive is downloaded, checked against the table's digest, and its
+    launcher run through the rebuild tool's check mode, which writes nothing.
+    """
+    extend = []
+    for module, function in EXTENSIONS:
+        extend += [
+            "--extend",
+            f"{MODULE_DIRECTORY}/{module}.py",
+            function,
+            os.path.join(OVERLAYS, f"{module}_overlay.py"),
+        ]
+    for system, page_size in PAGE_SIZES.items():
+        record = section[system]
+        with tempfile.TemporaryDirectory(prefix="t3code-release.") as directory:
+            archive = os.path.join(directory, "runtime.zip")
+            download_verified(record["url"], archive, record["url"], record["sha256"])
+            launcher = os.path.join(directory, "launcher")
+            try:
+                with zipfile.ZipFile(archive) as zipped, zipped.open(
+                    record["executable"]["name"]
+                ) as source, open(launcher, "wb") as target:
+                    shutil.copyfileobj(source, target)
+            except (zipfile.BadZipFile, KeyError) as exc:
+                raise TableFailure(f"{record['url']} is not readable: {exc}") from None
+            proc = subprocess.run(
+                [sys.executable, REPACK, "--page-size", str(page_size), *extend, "--check", launcher],
+                capture_output=True,
+                text=True,
+            )
+        if proc.returncode != 0:
+            reason = " ".join(proc.stderr.split()).removeprefix("antigravity-acp-repack: ")
+            modules = [m for m, _ in EXTENSIONS if f"{MODULE_DIRECTORY}/{m}.py" in reason]
+            raise Failure(
+                f"rebuild of {', '.join(modules or [m for m, _ in EXTENSIONS])} does not fit "
+                f"{record['version']} ({system}): {reason}"
+            )
 
 
 def pinned_release(path):
@@ -327,6 +396,12 @@ def main(argv=None):
                 "with a matching antigravity section"
             )
             return 0
+
+        pinned_section = (
+            current_data.get("antigravity") if isinstance(current_data, dict) else None
+        )
+        if resolved["antigravity"] != pinned_section:
+            check_rebuild(resolved["antigravity"])
 
         out_json = json.dumps(resolved, indent=2) + "\n"
 

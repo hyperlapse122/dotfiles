@@ -118,7 +118,8 @@ let
   # Agent SDK, so the wrapper puts exactly those on PATH. Home Manager
   # overrides the Synthetic key file per host kind. The
   # Antigravity quota service lists Gemini buckets only for a current ACP
-  # client, so the wrapper names the pinned ACP runtime's version.
+  # client, so the wrapper names the version of the ACP runtime the pinned
+  # T3 Code embeds.
   agentUsage = pkgs.lib.makeOverridable (
     {
       syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
@@ -142,7 +143,10 @@ let
           --prefix PATH : ${runtimePath} \
           --set AGENT_USAGE_SYNTHETIC_KEY_FILE ${pkgs.lib.escapeShellArg syntheticKeyFile} \
           --set NODE_PATH ${sdk}/lib/node_modules \
-          --set AGENT_USAGE_ANTIGRAVITY_VERSION ${(builtins.fromJSON (builtins.readFile ./antigravity-acp-release.json)).version}
+          --set AGENT_USAGE_ANTIGRAVITY_VERSION ${
+            (builtins.fromJSON (builtins.readFile ./t3code-release.json))
+            .antigravity.${pkgs.stdenv.hostPlatform.system}.version
+          }
       '';
     })
   ) { };
@@ -171,14 +175,56 @@ let
   # from Google's release feed.
   antigravityCliRelease = pythonHelper "antigravity-cli-release" ../scripts/antigravity-cli-release;
 
-  # Resolves the newest complete Antigravity ACP runtime release by probing
-  # candidate versions on Google's download host, and hashes its archives,
-  # which upstream publishes no checksum for.
-  antigravityAcpRelease = pythonHelper "antigravity-acp-release" ../scripts/antigravity-acp-release;
+  # Rebuilds the zip embedded in an Antigravity ACP runtime with the
+  # repository's overlay modules added, keeping the archive's length and
+  # alignment.
+  antigravityAcpRepack = pythonHelper "antigravity-acp-repack" ../scripts/antigravity-acp-repack;
 
   # Resolves the newest T3 Code nightly and its asset digests from the GitHub
-  # releases API.
-  t3codeRelease = pythonHelper "t3code-release" ../scripts/t3code-release;
+  # releases API, and checks that the repository's runtime rebuild fits the
+  # Antigravity runtime that release embeds. The script finds the rebuild tool
+  # and the overlays by its own path, so they sit under libexec in the
+  # repository's scripts/ and packages/ layout, and bin links to the script.
+  t3codeRelease = pkgs.stdenvNoCC.mkDerivation {
+    pname = "t3code-release";
+    version = "1";
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.python3 ];
+    installPhase = ''
+      root=$out/libexec/t3code-release
+      install -Dm755 ${../scripts/t3code-release} $root/scripts/t3code-release
+      install -Dm755 ${../scripts/antigravity-acp-repack} $root/scripts/antigravity-acp-repack
+      mkdir -p $root/packages
+      cp -r --no-preserve=mode ${../packages/antigravity-acp-overlay} $root/packages/antigravity-acp-overlay
+      patchShebangs $root/scripts
+      mkdir -p $out/bin
+      ln -s ../libexec/t3code-release/scripts/t3code-release $out/bin/t3code-release
+    '';
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      python3 -I - $out/bin/t3code-release <<'PY'
+      import importlib.machinery
+      import importlib.util
+      import os
+      import sys
+
+      loader = importlib.machinery.SourceFileLoader("t3code_release", sys.argv[1])
+      spec = importlib.util.spec_from_loader(loader.name, loader)
+      module = importlib.util.module_from_spec(spec)
+      loader.exec_module(module)
+
+      if not (os.path.isfile(module.REPACK) and os.access(module.REPACK, os.X_OK)):
+          sys.exit(f"t3code-release: rebuild tool {module.REPACK} is not an executable file")
+      for name, _ in module.EXTENSIONS:
+          overlay = os.path.join(module.OVERLAYS, f"{name}_overlay.py")
+          if not os.path.isfile(overlay):
+              sys.exit(f"t3code-release: overlay {overlay} is missing")
+      PY
+      runHook postInstallCheck
+    '';
+    meta.mainProgram = "t3code-release";
+  };
 
   # Compares the Synthetic models in home/h82/agents/synthetic-models.nix with
   # Synthetic's catalog, and rewrites the committed Synthetic catalog snapshot.
@@ -210,7 +256,7 @@ in
     agentUsage
     npmRelease
     antigravityCliRelease
-    antigravityAcpRelease
+    antigravityAcpRepack
     t3codeRelease
     syntheticModelsWatch
     androidSdkRelease

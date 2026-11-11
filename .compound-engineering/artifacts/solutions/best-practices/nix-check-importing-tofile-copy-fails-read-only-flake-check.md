@@ -10,6 +10,7 @@ applies_when:
   - "A check rewrites a package or module source with builtins.replaceStrings, writes it with builtins.toFile, and imports the result to evaluate it against substitute siblings"
   - "A check passes in a local nix flake check or nix build but CI's eval-only flake-check job fails with error: path '/nix/store/...' is not valid"
   - "Planning a check that needs a module or package evaluated with its sibling files swapped for fixtures"
+  - "A check passes a fixture directory as a path to code that interpolates it into a string and then reads it with builtins.pathExists or builtins.readDir"
 root_cause: wrong_api
 resolution_type: test_fix
 related_components:
@@ -28,7 +29,7 @@ tags:
 
 ## Context
 
-To prove which pin file a package reads even when both pins name the same release, two checks evaluated a rewritten copy of the source. They read `packages/antigravity-acp-path.nix` (and `home/h82/t3code.nix`), pointed its sibling paths at synthetic pin files with `builtins.replaceStrings`, wrote the result with `builtins.toFile`, and imported it. (`packages/antigravity-acp-path.nix`, `packages/antigravity-acp.nix`, `tests/antigravity-acp-path-profiles.nix`, and `home/h82/t3code.nix`'s Antigravity pin check were later removed when standalone Antigravity ACP packaging was retired; `home/h82/t3code.nix`, `tests/t3code-traits.nix`, and CI's `nix flake check --no-build` gate remain.) Every local `nix flake check` and `nix build .#checks...` passed. CI's `flake-check` job, which runs `nix flake check --no-build` (`.github/workflows/check.yml`), failed at evaluation:
+To prove which pin file a package reads even when both pins name the same release, two checks evaluated a rewritten copy of the source. They read `packages/antigravity-acp-path.nix` (and `home/h82/t3code.nix`), pointed its sibling paths at synthetic pin files with `builtins.replaceStrings`, wrote the result with `builtins.toFile`, and imported it. (`tests/antigravity-acp-path-profiles.nix` and `home/h82/t3code.nix`'s Antigravity pin check were later removed, and `packages/antigravity-acp-release.json`, the second pin they compared, is gone because `packages/t3code-release.json` is now the only pin. `packages/antigravity-acp-path.nix`, `packages/antigravity-acp.nix`, `home/h82/t3code.nix`, `tests/t3code-traits.nix`, and CI's `nix flake check --no-build` gate remain.) Every local `nix flake check` and `nix build .#checks...` passed. CI's `flake-check` job, which runs `nix flake check --no-build` (`.github/workflows/check.yml`), failed at evaluation:
 
 ```text
 … while realising the context of path '/nix/store/h99aaqqs6ip7vsgr6f55cb9ajn1qp5h5-antigravity-acp-path.nix'
@@ -40,8 +41,9 @@ error: path '/nix/store/h99aaqqs6ip7vsgr6f55cb9ajn1qp5h5-antigravity-acp-path.ni
 ## Guidance
 
 - Never `import` (or pass to the module system) a path produced by `builtins.toFile` in anything a flake check evaluates. It works only when the store already holds that exact path.
+- The same failure follows from interpolating a fixture path into a string and then reading it at evaluation time: `builtins.pathExists "${dir}/x"` or `builtins.readDir "${src}/skills"` on a `./fixtures/...` path names a store copy that read-only evaluation never writes. Keep a path value a path (`dir + "/x"`) until it reaches a derivation; `home/h82/agents/plugin-skills.nix` does this for plugin sources, where a flake input arrives as a store path and the test fixture as a repository path.
 - A symlinked fixture directory does not work either: Nix resolves `./sibling` paths inside an imported file against the symlink's target, so the real siblings load, not the fixtures.
-- When the question is which file a source reads, check the source text with `builtins.readFile` and `lib.hasInfix`, and fail inside the builder. Require the expected read expression and reject any mention of the wrong file (shown below on the historical `antigravity-acp-path.nix` check):
+- When the question is which file a source reads, check the source text with `builtins.readFile` and `lib.hasInfix`, and fail inside the builder. Require the expected read expression and reject any mention of the wrong file (shown below on the historical check of `antigravity-acp-path.nix` against the two pin files):
 
 ```nix
 pathPackageSource = builtins.readFile ../packages/antigravity-acp-path.nix;

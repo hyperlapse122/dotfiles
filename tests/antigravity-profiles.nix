@@ -9,11 +9,12 @@
   user's built home.path rather than the home.packages option:
 
   - bin/agy resolves to packages/antigravity-cli.nix, built from its pin;
-  - bin/agy_acp_server.par execs the runtime built from
-    packages/antigravity-acp-release.json, never T3 Code's pin, and links
-    into Compound Engineering run homes exactly the skills the user's
-    home-files puts in ~/.gemini/antigravity-cli/skills: contributed skills
-    only, with Compound Engineering supplied by the native plugin;
+  - bin/agy_acp_server.par execs the runtime rebuilt from the antigravity
+    section of packages/t3code-release.json, exports the generation's plugin
+    skills directory, and links into Compound Engineering run homes exactly
+    the skills the user's home-files puts in ~/.gemini/antigravity-cli/skills:
+    contributed skills only, with Compound Engineering supplied by the native
+    plugin and by that directory;
   - bin/localharness_external, beside it, is that runtime's executable helper.
 
   tests/antigravity-acp-path.nix runs the wrapper itself. macOS users are
@@ -32,17 +33,14 @@ let
   configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
 
   agy = "${import ../packages/antigravity-cli.nix { inherit pkgs; }}/bin/agy";
-  runtimeDir = "${
-    import ../packages/antigravity-acp.nix {
-      inherit pkgs;
-      pins = (builtins.fromJSON (builtins.readFile ../packages/antigravity-acp-release.json)).platforms;
-    }
-  }/libexec/antigravity-acp";
+  runtimeDir = "${import ../packages/antigravity-acp.nix { inherit pkgs; }}/libexec/antigravity-acp";
 
   esc = value: lib.escapeShellArg (toString value);
 
   assertEntry = entry: ''
-    checkUser ${esc entry.name} ${esc (entry.user.home.path or "")} ${esc (entry.user.home-files or "")}
+    checkUser ${esc entry.name} ${esc (entry.user.home.path or "")} ${
+      esc (entry.user.home-files or "")
+    } ${esc (entry.user.my.antigravityPluginSkills or "")}
   '';
 in
 pkgs.runCommand "antigravity-profiles-tests" { } ''
@@ -51,7 +49,7 @@ pkgs.runCommand "antigravity-profiles-tests" { } ''
   : > "$failures"
 
   checkUser() (
-    user=$1 homePath=$2 homeFiles=$3
+    user=$1 homePath=$2 homeFiles=$3 pluginSkills=$4
     fail() { echo "$user: $*" >> "$failures"; }
 
     if [ -z "$homePath" ] || [ ! -d "$homePath/bin" ]; then
@@ -77,6 +75,12 @@ pkgs.runCommand "antigravity-profiles-tests" { } ''
     wrapper=$(readlink -f "$par")
     grep -qxF 'exec ${runtimeDir}/agy_acp_server.par "$@"' "$wrapper" \
       || fail "agy_acp_server.par does not exec the PATH-pinned runtime's .par"
+    if [ -z "$pluginSkills" ] || [ ! -d "$pluginSkills" ]; then
+      fail "home-manager builds no plugin skills directory"
+    else
+      grep -qF "export ANTIGRAVITY_ACP_PLUGIN_SKILLS=$pluginSkills" "$wrapper" \
+        || fail "agy_acp_server.par does not export the generation's plugin skills directory"
+    fi
 
     skillsDir=$homeFiles/.gemini/antigravity-cli/skills
     if [ -z "$homeFiles" ] || [ ! -d "$skillsDir" ]; then
