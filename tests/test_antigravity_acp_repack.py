@@ -276,6 +276,16 @@ class RepackTest(unittest.TestCase):
         # Both decoy archives are untouched.
         self.assertEqual(built[:base], data[:base])
 
+    def test_file_with_two_archives_that_list_the_target_is_refused_and_writes_nothing(self):
+        first = make_zip(entries(), len(PREFIX), 0)
+        second_base = len(PREFIX) + len(first) + len(PREFIX)
+        source = self.dir / "twice.par"
+        source.write_bytes(PREFIX + first + PREFIX + make_zip(entries(), second_base, 0) + SUFFIX)
+        result, output = self.rebuild(source)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"more than one zip archive in the file lists {TARGET}", result.stderr)
+        self.assertFalse(output.exists())
+
     def test_file_with_no_archive_that_lists_the_target_fails(self):
         source = self.dir / "decoy-only.par"
         source.write_bytes(PREFIX + make_zip([("decoy/thing.py", b"x = 1\n", False)], len(PREFIX), 0) + SUFFIX)

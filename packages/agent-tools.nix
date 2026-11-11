@@ -200,6 +200,29 @@ let
       mkdir -p $out/bin
       ln -s ../libexec/t3code-release/scripts/t3code-release $out/bin/t3code-release
     '';
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      python3 -I - $out/bin/t3code-release <<'PY'
+      import importlib.machinery
+      import importlib.util
+      import os
+      import sys
+
+      loader = importlib.machinery.SourceFileLoader("t3code_release", sys.argv[1])
+      spec = importlib.util.spec_from_loader(loader.name, loader)
+      module = importlib.util.module_from_spec(spec)
+      loader.exec_module(module)
+
+      if not (os.path.isfile(module.REPACK) and os.access(module.REPACK, os.X_OK)):
+          sys.exit(f"t3code-release: rebuild tool {module.REPACK} is not an executable file")
+      for name, _ in module.EXTENSIONS:
+          overlay = os.path.join(module.OVERLAYS, f"{name}_overlay.py")
+          if not os.path.isfile(overlay):
+              sys.exit(f"t3code-release: overlay {overlay} is missing")
+      PY
+      runHook postInstallCheck
+    '';
     meta.mainProgram = "t3code-release";
   };
 

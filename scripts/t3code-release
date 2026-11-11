@@ -146,6 +146,15 @@ def download(url, destination):
         raise Failure(f"downloading {url} failed with status {proc.returncode}")
 
 
+def download_verified(url, destination, label, expected):
+    """Download url to destination and fail unless its sha256 is expected."""
+    download(url, destination)
+    with open(destination, "rb") as f:
+        digest = hashlib.file_digest(f, "sha256").hexdigest()
+    if digest != expected:
+        raise TableFailure(f"{label} has sha256 {digest}, expected {expected}")
+
+
 def hex_to_sri(sha256_hex):
     """Convert a 64-character hex sha256 string to Nix SRI format."""
     return "sha256-" + base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
@@ -230,13 +239,7 @@ def embedded_table(resolved):
     )
     with tempfile.TemporaryDirectory(prefix="t3code-release.") as directory:
         archive = os.path.join(directory, cli["asset"])
-        download(url, archive)
-        with open(archive, "rb") as f:
-            digest = hashlib.file_digest(f, "sha256").hexdigest()
-        if digest != cli["sha256"]:
-            raise TableFailure(
-                f"{cli['asset']} has sha256 {digest}, expected {cli['sha256']}"
-            )
+        download_verified(url, archive, cli["asset"], cli["sha256"])
         try:
             # One streaming pass: read the binary when its member comes up.
             binary, count = None, 0
@@ -310,13 +313,7 @@ def check_rebuild(section):
         record = section[system]
         with tempfile.TemporaryDirectory(prefix="t3code-release.") as directory:
             archive = os.path.join(directory, "runtime.zip")
-            download(record["url"], archive)
-            with open(archive, "rb") as f:
-                digest = hashlib.file_digest(f, "sha256").hexdigest()
-            if digest != record["sha256"]:
-                raise TableFailure(
-                    f"{record['url']} has sha256 {digest}, expected {record['sha256']}"
-                )
+            download_verified(record["url"], archive, record["url"], record["sha256"])
             launcher = os.path.join(directory, "launcher")
             try:
                 with zipfile.ZipFile(archive) as zipped, zipped.open(

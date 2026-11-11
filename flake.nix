@@ -573,14 +573,13 @@
           antigravity-acp-repack =
             pythonScriptCheck "antigravity-acp-repack" ./scripts/antigravity-acp-repack
               ./tests/test_antigravity_acp_repack.py;
-          # The overlays run inside the runtime, so the test imports them from
-          # their repository location rather than from scripts/.
           antigravity-acp-overlay =
             pkgs.runCommand "antigravity-acp-overlay-tests" { nativeBuildInputs = [ pkgs.python3 ]; }
               ''
                 export PYTHONDONTWRITEBYTECODE=1
-                mkdir -p packages tests
+                mkdir -p packages scripts tests
                 cp -r ${./packages/antigravity-acp-overlay} packages/antigravity-acp-overlay
+                cp ${./scripts/agent-instructions} scripts/agent-instructions
                 cp ${./tests/test_antigravity_acp_overlay.py} tests/test_antigravity_acp_overlay.py
                 python tests/test_antigravity_acp_overlay.py
                 touch $out
@@ -599,9 +598,6 @@
               ./scripts/agent-usage
               ./tests/test_agent_usage.py;
           npm-release = pythonScriptCheck "npm-release" ./scripts/npm-release ./tests/test_npm_release.py;
-          # The updater runs the rebuild tool against the overlays and reads the
-          # runtime package's rebuild table, so the sandbox mirrors the
-          # repository layout for all three.
           t3code-release =
             (pythonScriptCheckWith {
               modules = [ ./scripts/antigravity-acp-repack ];

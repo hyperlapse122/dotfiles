@@ -369,8 +369,11 @@ let
         if grep -qF SSL_CERT_FILE "$agyPar"; then
           bad "the macOS agy_acp_server.par wrapper sets SSL_CERT_FILE"
         fi
-        grep -qF 'export AGY_ACP_FORCE_FILE_STORAGE=1' "$agyPar" \
-          || bad "the macOS agy_acp_server.par wrapper does not select file token storage"
+        storageGuard=$(grep -A1 -xF ${lib.escapeShellArg "if [ -z \"\${AGY_ACP_FORCE_FILE_STORAGE:-}\" ]; then"} "$agyPar" || true)
+        case $storageGuard in
+          *'export AGY_ACP_FORCE_FILE_STORAGE=1'*) ;;
+          *) bad "the macOS agy_acp_server.par wrapper does not select file token storage only when the caller set none" ;;
+        esac
       fi
       [ "$(readlink -f "$gen/home-path/bin/localharness_external" || true)" = ${lib.escapeShellArg "${antigravityRuntime}/localharness_external"} ] \
         || bad "localharness_external on PATH is not the PATH-pinned runtime's"

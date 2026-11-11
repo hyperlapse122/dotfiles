@@ -7,6 +7,8 @@ function the way it does inside the archive.
 """
 
 import importlib
+import importlib.machinery
+import importlib.util
 import itertools
 import os
 import shutil
@@ -16,7 +18,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-OVERLAYS = Path(__file__).resolve().parents[1] / "packages/antigravity-acp-overlay"
+ROOT = Path(__file__).resolve().parents[1]
+OVERLAYS = ROOT / "packages/antigravity-acp-overlay"
+AGENT_INSTRUCTIONS = ROOT / "scripts/agent-instructions"
 
 FRONTMATTER = "---\ntrigger: always_on\n---\n\n"
 
@@ -119,6 +123,18 @@ class SystemPromptOverlayTest(OverlayCase):
         (self.rules / "nix-config-02.md").write_text(other)
         self.point_at_rules()
         self.assertEqual(self.prompt.extract_system_prompt(None), "# Bare\nbody\n" + other)
+
+
+    def test_frontmatter_matches_the_one_agent_instructions_writes(self):
+        loader = importlib.machinery.SourceFileLoader("agent_instructions", str(AGENT_INSTRUCTIONS))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        instructions = importlib.util.module_from_spec(spec)
+        loader.exec_module(instructions)
+        self.assertEqual(
+            self.prompt.system_prompt_overlay.FRONTMATTER.encode("utf-8"),
+            instructions.RULE_FRONTMATTER,
+            "the overlay's FRONTMATTER differs from RULE_FRONTMATTER in scripts/agent-instructions",
+        )
 
 
 class PathsOverlayTest(OverlayCase):

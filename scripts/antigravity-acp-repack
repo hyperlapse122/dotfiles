@@ -26,6 +26,7 @@ same failures apply.
 
 import argparse
 import ast
+import contextlib
 import mmap
 import os
 import struct
@@ -224,7 +225,7 @@ def layout(entries, archive, page_size):
     end = END_RECORD.pack(
         END_SIGNATURE, 0, 0, len(entries), len(entries), len(directory), len(body), len(archive.comment)
     )  # fmt: skip
-    return bytes(body + directory + end + archive.comment)
+    return b"".join((body, directory, end, archive.comment))
 
 
 def verify(built, entries, archive, page_size):
@@ -281,7 +282,7 @@ def write(source_path, output_path, view, archive, built):
                 raise Failure("written file differs from the rebuilt archive")
         os.replace(staging, output_path)
     except BaseException:
-        if os.path.exists(staging):
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(staging)
         raise
 
@@ -326,10 +327,7 @@ def main(argv):
                 return 0
             verify(built, entries, archive, arguments.page_size)
             write(arguments.input, arguments.output, view, archive, built)
-    except Failure as failure:
-        print(f"antigravity-acp-repack: {failure}", file=sys.stderr)
-        return 1
-    except OSError as error:
+    except (Failure, OSError) as error:
         print(f"antigravity-acp-repack: {error}", file=sys.stderr)
         return 1
     print(f"wrote {arguments.output} with {len(entries)} entries")

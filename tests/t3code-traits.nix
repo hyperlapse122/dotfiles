@@ -390,7 +390,6 @@ let
   # the module would install.
   noContext = builtins.unsafeDiscardStringContext;
 
-  # Declared values that name a binary in the user profile, by placeholder.
   profileBinaries = {
     "@PI@" = "pi";
     "@AGY@" = "agy_acp_server.par";
@@ -479,8 +478,6 @@ let
 
   assertSettings = assertSettingsWith true;
 
-  # The sign-in link is its own activation step, so the trait gate, the order
-  # after the settings merge, and the effect in a scratch home are read here.
   assertSignIn =
     name: user: expected:
     let
@@ -705,8 +702,6 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     checkAntigravityInstance "$name" "$merger" "$declared"
   }
 
-  # The declared Antigravity leaves must land, and a sibling key the owner
-  # set under the instance must stay.
   checkAntigravityInstance() {
     local name=$1 realMerger=$2 declared=$3
     if ! python3 -I ${./t3code-antigravity-instance.py} instance "$realMerger" "$declared" \
@@ -717,8 +712,6 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     fi
   }
 
-  # Fails unless the sign-in link step exists exactly when a T3 Code trait is
-  # on and runs after the settings merge, then executes it in a scratch home.
   checkSignIn() {
     local name=$1 expected=$2 present=$3 after=$5 home=$6
     if [ "$present" != "$expected" ]; then

@@ -58,24 +58,28 @@ def stored_zip(entries, base, page, spare):
     return bytes(body + directory + end)
 
 
-def runtime_archive(key, paths=PATHS):
+def runtime_archive(key, paths=PATHS, system_prompt=SYSTEM_PROMPT, member="agy_acp_server.par"):
     """An invented runtime zip: a launcher holding a stored zip with the two modules, and a helper."""
     prefix = b"stand-in launcher " * 40
     entries = [
-        (f"{MODULE_DIRECTORY}/system_prompt.py", SYSTEM_PROMPT, False),
+        (f"{MODULE_DIRECTORY}/system_prompt.py", system_prompt, False),
         (f"{MODULE_DIRECTORY}/paths.py", paths, False),
         ("fakepkg/native.bin", bytes(range(256)) * 4, True),
     ]
     launcher = prefix + stored_zip(entries, len(prefix), PAGES[key], 4000) + b"stand-in trailer"
     raw = io.BytesIO()
     with zipfile.ZipFile(raw, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("agy_acp_server.par", launcher)
+        archive.writestr(member, launcher)
         archive.writestr("localharness_external", b"helper bytes")
     return raw.getvalue(), len(launcher), len(b"helper bytes")
 
 
 GOOD_ARCHIVES = {key: runtime_archive(key) for key in PAGES}
 LACKING_FUNCTION_ARCHIVES = {key: runtime_archive(key, paths=b"def other(home):\n    pass\n") for key in PAGES}
+LACKING_PROMPT_FUNCTION_ARCHIVES = {
+    key: runtime_archive(key, system_prompt=b"def other(request):\n    pass\n") for key in PAGES
+}
+LACKING_EXECUTABLE_ARCHIVES = {key: runtime_archive(key, member="renamed.par") for key in PAGES}
 
 # key: (directory, file suffix) for every platform the table lists.
 ACP_LAYOUT = {
@@ -461,6 +465,22 @@ class T3codeReleaseTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("t3code-release: rebuild of paths does not fit 1.4.0", result.stderr)
         self.assertIn("no function global_skills_paths", result.stderr)
+        self.assertEqual(self.output.read_bytes(), self.pin_before)
+
+    def test_a_runtime_whose_system_prompt_module_lacks_the_wrapped_function_keeps_the_pin_byte_identical(self):
+        result = self.run_with_table(
+            acp_table(archives=LACKING_PROMPT_FUNCTION_ARCHIVES), LACKING_PROMPT_FUNCTION_ARCHIVES
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("t3code-release: rebuild of system_prompt does not fit 1.4.0", result.stderr)
+        self.assertIn("no function extract_system_prompt", result.stderr)
+        self.assertEqual(self.output.read_bytes(), self.pin_before)
+
+    def test_a_runtime_zip_without_the_executable_exits_2_and_keeps_the_pin_byte_identical(self):
+        result = self.run_with_table(acp_table(archives=LACKING_EXECUTABLE_ARCHIVES), LACKING_EXECUTABLE_ARCHIVES)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("is not readable", result.stderr)
+        self.assertIn("agy_acp_server.par", result.stderr)
         self.assertEqual(self.output.read_bytes(), self.pin_before)
 
     def test_an_unchanged_runtime_downloads_no_archive(self):

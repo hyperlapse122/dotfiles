@@ -158,6 +158,11 @@ case "\$*" in
       echo "t3code-release: rebuild of paths does not fit 1.4.1 (x86_64-linux): paths.py: no function global_skills_paths at module level" >&2
       exit 1
     fi
+    if [[ " \${FAIL_SOFT:-} " == *" t3code-table "* ]]; then
+      printf '{"version": "partial' >packages/t3code-release.json
+      echo "t3code-release: Antigravity table in the T3 Code CLI does not parse" >&2
+      exit 2
+    fi
     printf '{"version": "0.0.47-nightly.20261005.2700"}\n' >packages/t3code-release.json
     ;;
   "run .#antigravity-cli-release -- --output packages/antigravity-cli-release.json")
@@ -297,6 +302,14 @@ grep -q '^::warning title=T3 Code update skipped::.*rebuild of paths does not fi
   packages/antigravity-cli-release.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
 pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, wifiman, pi, acpx, claude-agent-sdk, codex, grok-build) warn, restore their files, and let the step continue'
+
+read -r status clone <<<"$(run_update_step update-t3code-table "FAIL_SOFT=t3code-table")"
+((status == 0)) || fail "an unreadable T3 Code Antigravity table aborted the update step: $(cat "$scratch/update-t3code-table-step.log")"
+grep -q '^::warning title=T3 Code Antigravity table unreadable::.*Antigravity table in the T3 Code CLI does not parse' "$scratch/update-t3code-table-step.log" ||
+  fail "the unreadable-table warning does not carry the updater's message: $(cat "$scratch/update-t3code-table-step.log")"
+[[ -z $("$git_bin" -C "$clone" status --porcelain packages/t3code-release.json) ]] ||
+  fail 'an unreadable T3 Code Antigravity table left a partial packages/t3code-release.json'
+pass 'an unreadable T3 Code Antigravity table (updater status 2) warns with the updater message, restores the pin, and lets the step continue'
 
 read -r status _ <<<"$(run_update_step update-bad-rev "LOCKED_REV=null")"
 ((status != 0)) || fail "update step accepted a non-hex locked revision for compound-engineering-plugin"
