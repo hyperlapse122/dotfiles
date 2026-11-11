@@ -28,7 +28,7 @@ tags:
 
 ## Context
 
-The since-removed `packages/antigravity-acp-path.nix` put `agy_acp_server.par` on PATH as a wrapper that ran `exec <store>/agy_acp_server.par "$@"`. The real `.par` loaded its embedded archive through argv[0], so the wrapper had to hand it the absolute store path. A symlink or `exec -a "$0"` would hand it something else. The former `tests/antigravity-acp-path.nix` check built the package against a stub runtime and ran the wrapper. Its first stub was a `writeShellScript` that printed `argv0=$0`.
+`packages/antigravity-acp-path.nix` puts `agy_acp_server.par` on PATH as a wrapper that runs `exec <store>/agy_acp_server.par "$@"`. The real `.par` loads its embedded archive through argv[0], so the wrapper has to hand it the absolute store path. A symlink or `exec -a "$0"` would hand it something else. `tests/antigravity-acp-path.nix` builds the package against a stub runtime and runs the wrapper. Its first stub was a `writeShellScript` that printed `argv0=$0`.
 
 The mutation `exec -a "$0" ${dir}/${executable.name} "$@"` survived. The assertion `[ "$(field argv0)" = "$runtimePar" ]` passed with the mutation in place.
 
@@ -40,7 +40,7 @@ The same holds for any interpreter stub, Python's `sys.argv[0]` included. Readin
 
 ## The fix: a compiled stub
 
-The stub became a C program, its source a `pkgs.writeText`, compiled by the `pkgs.runCommandCC` that built the stub runtime. It printed `argv[0]`, its PID, `SSL_CERT_FILE`, each argument, and every stdin line (historical `tests/antigravity-acp-path.nix:19-36`). A binary receives the argv[0] its caller passed. With that stub, the `exec -a "$0"` mutation failed with the check's own message, "argv[0] is ..., not ...". The other six wrapper mutations still failed too: CA default removed, preset overwritten, `"$@"` dropped, `exec` dropped, wrong target, helper link dropped.
+The stub became a C program, its source a `pkgs.writeText`, compiled by the `pkgs.runCommandCC` that built the stub runtime. It printed `argv[0]`, its PID, `SSL_CERT_FILE`, each argument, and every stdin line (`stubSource` in `tests/antigravity-acp-path.nix`, which now also prints the rules, plugin skills, and storage variables). A binary receives the argv[0] its caller passed. With that stub, the `exec -a "$0"` mutation failed with the check's own message, "argv[0] is ..., not ...". The other six wrapper mutations still failed too: CA default removed, preset overwritten, `"$@"` dropped, `exec` dropped, wrong target, helper link dropped.
 
 The stub's PID also proved the wrapper execed instead of forking. The check started `bash -c 'echo "outer=$$"; exec "$@"'`, which execed `env -i`, which execed the wrapper. The stub's PID matched only when every step in that chain execed.
 

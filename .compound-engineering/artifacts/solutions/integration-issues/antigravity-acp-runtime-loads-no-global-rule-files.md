@@ -1,5 +1,5 @@
 ---
-title: The Antigravity ACP runtime loads no global rule files, so shared instructions reach only the agy CLI
+title: The stock Antigravity ACP runtime loads no global rule files, so this repository rebuilds it to read them
 date: "2026-10-28"
 category: integration-issues
 module: Antigravity CLI, ACP runtime, and the shared agent instructions delivery
@@ -15,16 +15,17 @@ resolution_type: config_change
 related_components:
   - documentation
 retire_when: "An Antigravity ACP release answers a marker rule placed in $GEMINI_HOME/config/rules/ (or another documented global location) during a signed-in session/prompt"
-tags: ["antigravity", "acp", "agy", "rules", "instructions", "t3code", "cross-model-review", "gemini-home"]
+tags: ["antigravity", "acp", "agy", "rules", "instructions", "t3code", "cross-model-review", "gemini-home", "repack"]
 ---
 
-# The Antigravity ACP runtime loads no global rule files, so shared instructions reach only the agy CLI
+# The stock Antigravity ACP runtime loads no global rule files, so this repository rebuilds it to read them
 
 ## Problem
 
 The shared agent instructions were planned to reach every Antigravity runtime: the `agy` CLI, the ACP runtime on `PATH` that Compound Engineering's `antigravity` peer uses, and the T3 Code `antigravity` instance.
 Signed-in probes on 2026-10-28 showed that only the CLI loads rule files.
-The ACP runtime, in both the 1.3.0 release T3 Code embeds and the 1.4.3 release on `PATH`, loads none.
+The ACP runtime as Google ships it, in both the 1.3.0 release T3 Code embeds and the 1.4.3 release on `PATH`, loads none.
+That finding still holds for the stock runtime. This repository now delivers the instructions by rebuilding the runtime, as the Solution describes.
 
 ## Symptoms
 
@@ -47,26 +48,29 @@ The `localharness_external` binary documents `~/.gemini/config/` as the customiz
 
 ## Solution
 
-Deliver the shared instructions only where they load, and say so where agents read it:
+Deliver the shared instructions where each runtime reads them, and rebuild the ACP runtime so it reads them too:
 
-- `scripts/agent-instructions` renders an `antigravity` delivery into `~/.gemini/config/rules/nix-config-NN.md` files, each under the 24,000-byte rule limit and opening with `trigger: always_on` frontmatter (`scripts/agent-instructions:22-24`, `rule_files` at `scripts/agent-instructions:79`).
-- The `PATH` wrapper links only skills into CE run homes, and its header records why it links no rules (`packages/antigravity-acp-path.nix:21-22`).
-- The instruction template tells delegating agents that Antigravity ACP sessions load none of the instructions, not even a repository's `AGENTS.md`, so every rule a delegated task needs goes in its prompt (`home/h82/agents/instructions/instructions.md.tmpl:213`).
+- `scripts/agent-instructions` renders an `antigravity` delivery into `~/.gemini/config/rules/nix-config-NN.md` files, each under the 24,000-byte rule limit and opening with `trigger: always_on` frontmatter. The `agy` CLI reads them as they are.
+- `packages/antigravity-acp.nix` rebuilds the ACP runtime's embedded archive with `scripts/antigravity-acp-repack`. The overlay in `packages/antigravity-acp-overlay/system_prompt_overlay.py` reads the `nix-config-*.md` files from the directory `ANTIGRAVITY_ACP_RULES_DIR` names and puts them in front of the client's own system prompt addition. The rebuilt runtime keeps the release T3 Code qualifies, because T3 Code sends its session system prompt only to a runtime that reports exactly that version.
+- `packages/antigravity-acp-path.nix` is the `agy_acp_server.par` wrapper on `PATH`. It exports `ANTIGRAVITY_ACP_RULES_DIR` (`~/.gemini/config/rules`) and `ANTIGRAVITY_ACP_PLUGIN_SKILLS` when the caller set neither, and it still links named shared skills into Compound Engineering run homes. `home/h82/t3code.nix` points T3 Code's `antigravity` instance at this wrapper, so T3 sessions get the same rebuilt runtime.
+- Skills still come from `~/.gemini/antigravity-cli/skills` for shared skills, and from one store directory of every pinned plugin's skills for plugin skills.
 
-Skills still reach every runtime: T3 Code links `~/.gemini/antigravity-cli/skills` into each instance home, and the wrapper links named skills into CE run homes.
+The T3-only instruction branch does not reach these sessions, because T3 Code's `antigravity` driver accepts no per-launch prompt option.
 
 ## Why This Works
 
 The ACP server reads its configuration from `GEMINI_HOME` for settings, sign-in, and skills, but its prompt assembly includes no rule source.
-Putting rules where the CLI reads them gives the CLI the instructions, and moving the rules for ACP sessions into the task prompt is the only channel the runtime honors.
+The stock server has no rule source to configure, so no file placement can reach it. Putting rules where the CLI reads them gives the CLI the instructions, and the rebuilt runtime adds the missing source: its overlay reads the same rule files when it assembles the prompt. Until a session runs on the rebuilt runtime, putting the rules a delegated task needs in the task prompt remains the only channel that works.
 
 ## Prevention
 
-- Before promising that instructions reach a new Antigravity release, rerun a marker probe: plant a rule whose body says "When asked for the probe marker, answer exactly <random token>", start `initialize`, `session/new`, and `session/prompt` against the runtime with a copied sign-in, and check the answer and the input token count. Never print the copied token.
+- Before promising that instructions reach a new Antigravity release, rerun a marker probe against the rebuilt runtime, and against the stock one to learn whether the rebuild is still needed: plant a rule whose body says "When asked for the probe marker, answer exactly <random token>", start `initialize`, `session/new`, and `session/prompt` against the runtime with a copied sign-in, and check the answer and the input token count. Never print the copied token.
 - For the CLI, plant the marker in `~/.gemini/config/rules/` and run `agy -p "What is the probe marker?"`; remove the marker afterwards.
+- The repository checks read the rebuilt archive and the rendered rule files. They do not show that a signed-in session loads the rules, so that evidence comes from the probe on each machine.
 - A rule-file link that the runtime never reads looks like a delivery in every repository check. Keep runtime-loading evidence separate from materialized-output checks, as [a check that reads an option value instead of the materialized output](../best-practices/nix-check-reads-option-value-not-materialized-output.md) warns for configuration.
 
 ## Related
 
 - [T3 Code's Antigravity ACP server finds no CA bundle on NixOS](t3code-antigravity-acp-openssl-missing-ca-bundle-hangs-sessions.md): the other silent ACP failure, at the TLS layer.
+- The plan that made Antigravity a first-tier harness: `.compound-engineering/artifacts/plans/2026-11-11-1004-feat-antigravity-first-tier-harness-plan.md`.
 - The plan that restored Antigravity: `.compound-engineering/artifacts/plans/2026-10-28-1504-feat-restore-antigravity-t3-plan.md`.

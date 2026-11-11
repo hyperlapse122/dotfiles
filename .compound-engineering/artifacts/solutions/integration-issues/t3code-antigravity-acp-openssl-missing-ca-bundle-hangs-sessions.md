@@ -24,7 +24,7 @@ tags: ["t3code", "antigravity", "acp", "ssl-cert-file", "ca-bundle", "openssl", 
 
 ## Problem
 
-T3 Code runs its Antigravity provider through an ACP server it downloads itself, `~/.t3/tools/antigravity-acp/linux-x64/versions/<hash>/agy_acp_server.par`. That binary embeds a Python with its own OpenSSL, and the OpenSSL's compiled-in default CA path, `/opt/pyca/cryptography/openssl/cert.pem`, does not exist on NixOS. Every model request fails certificate verification. The server keeps retrying and never reports the failure to T3, so every Antigravity session hangs with no output. (`home/h82/t3code.nix` has since retired `providerInstances.antigravity` in favor of the unified `omp` ACP instance, while `packages/t3code.nix` keeps `SSL_CERT_FILE` in the desktop sandbox so any vendored OpenSSL binary T3 Code downloads or spawns on NixOS still finds the system CA bundle.)
+T3 Code runs its Antigravity provider through an ACP server it downloads itself, `~/.t3/tools/antigravity-acp/linux-x64/versions/<hash>/agy_acp_server.par`. That binary embeds a Python with its own OpenSSL, and the OpenSSL's compiled-in default CA path, `/opt/pyca/cryptography/openssl/cert.pem`, does not exist on NixOS. Every model request fails certificate verification. The server keeps retrying and never reports the failure to T3, so every Antigravity session hangs with no output. (`packages/t3code.nix` keeps `SSL_CERT_FILE` in the desktop sandbox so any vendored OpenSSL binary T3 Code downloads or spawns on NixOS still finds the system CA bundle. `home/h82/t3code.nix` now declares `providerInstances.antigravity` with the repository's rebuilt runtime as `config.binaryPath`, so the instance no longer runs the downloaded server, and that runtime's wrapper sets `SSL_CERT_FILE` on Linux itself.)
 
 ## Symptoms
 
@@ -37,7 +37,7 @@ T3 Code runs its Antigravity provider through an ACP server it downloads itself,
 
 - **Blaming the runtime mode.** The first run used Supervised (`approval-required`), and the hang looked like an approval waiting where nobody could see it. Re-running with Full access hung identically, and the thread's `pendingRequestCount` was 0 throughout.
 - **Blaming Google authentication.** A Google sign-in prompt appeared during debugging and was completed. Sessions still hung afterwards, because `authenticate` had been succeeding all along and the failure came later, at the model call.
-- **Comparing with the `agy` CLI (since removed).** `agy` answered "hi" and listed its conversations, but none from T3. It was a different binary with a different state directory (`~/.gemini/antigravity-cli/`), while T3 pointed the ACP server at its own `GEMINI_HOME` under `~/.t3/userdata/providers/antigravity/<hash>`. A working `agy` said nothing about T3's server.
+- **Comparing with the `agy` CLI.** `agy` answered "hi" and listed its conversations, but none from T3. It was a different binary with a different state directory (`~/.gemini/antigravity-cli/`), while T3 pointed the ACP server at its own `GEMINI_HOME` under `~/.t3/userdata/providers/antigravity/<hash>`. A working `agy` said nothing about T3's server.
 - **Attaching `strace` to the hung server.** `kernel.yama.ptrace_scope = 1` refuses attaching to a process that is not your child, so the CA paths the server tries could not be traced live. Finding the server's open log file descriptors under `/proc/<pid>/fd` led to the glog files instead.
 - **Checking the CA bundle itself.** `openssl s_client` verified the Google endpoint against both `/etc/ssl/certs/ca-certificates.crt` and the `cacerts` file the server extracts next to its logs. The bundle was fine; the server simply never loaded it. Grepping the `.par` for CA paths found `/opt/pyca/cryptography/openssl/cert.pem` alongside `SSL_CERT_FILE`.
 
@@ -55,7 +55,7 @@ extraBwrapArgs = [
 
 Inside the sandbox, `/etc/ssl/certs/ca-certificates.crt` is the host's `/etc/static` symlink (observed through `/proc/<server-pid>/root` in this session), so the server reads the same bundle NixOS builds from `security.pki`. The `t3code` check in `flake.nix` asserts the wrapper sets it (its `expect_setenv SSL_CERT_FILE` assertion). The change takes effect after a rebuild and a T3 Code restart, because providers inherit the environment of the running app.
 
-Historically, when the same runtime was started outside T3 Code from a terminal session, it did not inherit that sandbox: its since-removed `agy_acp_server.par` wrapper on `PATH` (`packages/antigravity-acp-path.nix`) set `SSL_CERT_FILE` on Linux when the caller left it unset, and the former `antigravity-acp-path` check ran that wrapper against a stub runtime.
+When the same runtime is started outside T3 Code from a terminal session, it does not inherit that sandbox: its `agy_acp_server.par` wrapper on `PATH` (`packages/antigravity-acp-path.nix`) sets `SSL_CERT_FILE` on Linux when the caller leaves it unset, and `tests/antigravity-acp-path.nix` runs that wrapper against a stub runtime.
 
 ## Why This Works
 
