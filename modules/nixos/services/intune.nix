@@ -56,6 +56,39 @@ in
     systemd.sockets.intune-daemon.wantedBy = [ "sockets.target" ];
     systemd.user.timers.intune-agent.wantedBy = [ "graphical-session.target" ];
 
+    # The identity broker stores its tokens in the Secret Service collection
+    # aliased "login", which GNOME Keyring creates and KDE's wallet does not.
+    # Without it the sign-in ends in "Missing PRT after a successful
+    # bootstrap". A keyring that already has the alias keeps it.
+    systemd.user.services.intune-keyring-alias = {
+      description = "Alias the login keyring the Microsoft identity broker writes to";
+      wantedBy = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      serviceConfig.Type = "oneshot";
+      path = [ pkgs.systemd ];
+      script = ''
+        service() {
+          busctl --user call org.freedesktop.secrets /org/freedesktop/secrets \
+            org.freedesktop.Secret.Service "$@"
+        }
+        collection() {
+          local reply
+          reply=$(service ReadAlias s "$1")
+          reply=''${reply#o \"}
+          printf '%s\n' "''${reply%\"}"
+        }
+        if [ "$(collection login)" != / ]; then
+          exit 0
+        fi
+        default=$(collection default)
+        if [ "$default" = / ]; then
+          echo "the Secret Service has no default collection to alias as login" >&2
+          exit 1
+        fi
+        service SetAlias so login "$default"
+      '';
+    };
+
     security.pam.services.passwd.rules.password = {
       pwquality = {
         order = config.security.pam.services.passwd.rules.password.unix.order - 10;
