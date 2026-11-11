@@ -17,6 +17,7 @@
     ./tls-inspection-ca.nix
     ./network-recovery.nix
     ./wired-network.nix
+    ./sudo-touch-id.nix
   ];
 
   # nix-darwin applies user-scoped settings, Homebrew included, for this
