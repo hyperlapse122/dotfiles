@@ -9,20 +9,18 @@ try {
   // the store's read-only directory modes, which the cleanup cannot remove.
   for (const name of ['dotfiles-policy.ts', 'model-lock.json', 'models.json'])
     copyFileSync(join(process.argv[2], name), join(temporary, name));
-  // Only the native provider inventory is stubbed; execute the actual policy.
-  const policy = readFileSync(join(temporary, 'dotfiles-policy.ts'), 'utf8')
-    .replace('import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";', 'const getBuiltinProviders = () => ["foreign", "synthetic"];');
+  const policy = readFileSync(join(temporary, 'dotfiles-policy.ts'), 'utf8');
   writeFileSync(join(temporary, 'policy.mjs'), policy);
   const { default: install } = await import(pathToFileURL(join(temporary, 'policy.mjs')));
-  const hooks = {}, providers = {};
-  install({ registerProvider: (id, spec) => providers[id] = spec, on: (event, fn) => hooks[event] = fn });
-  assert.deepEqual(providers.foreign.models, []);
-  const ids = new Set(providers.synthetic.models.map(model => model.id));
+  const hooks = {};
+  install({ on: (event, fn) => hooks[event] = fn });
+  const models = JSON.parse(readFileSync(join(temporary, 'model-lock.json'), 'utf8')).syntheticModelLocks.models;
+  const ids = new Set(models.map(model => model.id));
   for (const model of [{provider: 'foreign', id: 'outside'}, {provider:'synthetic', id:'outside'}, {provider:'synthetic', id:[...ids][0]}]) {
     let stopped = false;
     process.exitCode = 0;
     await hooks.resources_discover({}, { model, shutdown: () => stopped = true,
-      modelRegistry: { refresh: async () => {}, getAll: () => providers.synthetic.models.map(m => ({...m, provider:'synthetic'})) } });
+      modelRegistry: { refresh: async () => {}, getAll: () => models.map(m => ({...m, provider:'synthetic'})) } });
     assert.equal(stopped, !ids.has(model.id));
     process.exitCode = 0;
   }

@@ -31,6 +31,7 @@ pkgs.runCommand "pi-tests"
       + lib.optionalString (found != null) ''
         test -x ${found}/bin/pi
         python3 ${./pi-runtime.py} ${found}/libexec/pi/pi ${entry.user.home-files}/.pi/agent
+        node ${./pi-runtime-policy.mjs} ${found} ${entry.user.home-files}/.pi/agent
         python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state}
         node --experimental-strip-types ${./pi-policy.mjs} ${entry.user.home-files}/.pi/agent
       ''

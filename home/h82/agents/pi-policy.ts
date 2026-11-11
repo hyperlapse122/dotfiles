@@ -2,7 +2,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 
 export default function (pi) {
   const directory = dirname(fileURLToPath(import.meta.url));
@@ -16,19 +15,6 @@ export default function (pi) {
   }
   const ids = new Set(catalog.models.map(model => model.id));
   if (ids.size !== catalog.models.length) throw new Error("Duplicate locked Synthetic model.");
-  const configured = JSON.parse(readFileSync(join(directory, "models.json"), "utf8"));
-  const known = new Set([...getBuiltinProviders(), ...Object.keys(configured.providers ?? {})]);
-  function register(registry) {
-    if (registry) for (const model of registry.getAll()) known.add(model.provider);
-    for (const provider of known) {
-      if (provider !== "synthetic") pi.registerProvider(provider, { models: [] });
-    }
-    pi.registerProvider("synthetic", {
-      baseUrl: catalog.baseUrl, api: catalog.api, models: catalog.models,
-      refreshModels: async () => catalog.models,
-    });
-  }
-  register();
   function stop(context, message) {
     process.stderr.write(message + "\n");
     process.exitCode = 1;
@@ -43,10 +29,8 @@ export default function (pi) {
       stop(context, "The saved model is unavailable in the managed Synthetic lock.");
     }
   });
-  // Other preserved extensions can register providers during session_start.
-  // Resource discovery follows that event, including the native /reload path.
+  // The packaged runtime enforces the catalog before project extensions load.
   pi.on("resources_discover", async (_event, context) => {
-    register(context.modelRegistry);
     await context.modelRegistry.refresh();
     const models = context.modelRegistry.getAll();
     if (models.length !== ids.size || models.some(model => model.provider !== "synthetic" || !ids.has(model.id))) {
