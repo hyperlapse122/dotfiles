@@ -913,11 +913,7 @@ let
         lib.hasPrefix "/nix/store/" line && lib.hasSuffix "/bin/macos-wired-network \\" line
       ) indices;
       xcodeCalls = lib.filter (i: lib.hasInfix "/bin/macos-xcode" (lib.elemAt lines i)) indices;
-      arguments =
-        if lib.length calls == 1 then
-          lib.sublist (lib.head calls + 1) 3 lines
-        else
-          [ ];
+      arguments = if lib.length calls == 1 then lib.sublist (lib.head calls + 1) 3 lines else [ ];
       expected = [
         "--file ${lib.escapeShellArg (plain "${config.my.wiredNetwork.file}")} \\"
         "--identity ${lib.escapeShellArg "${config.my.user.home}/.config/nix-config/age/key.txt"} \\"
@@ -946,9 +942,9 @@ let
         )
         "${entry.name}: activation must run the wired network reconciler once after /etc and after the Xcode step, with the declaration file, the host identity, and its owner in production, and never in bootstrap"
       )
-      (check (
-        !production || lib.any (lib.hasInfix "my.wiredNetwork.enable needs secrets/hosts/") failing
-      ) "${entry.name}: a production output with the trait and no wired network file must fail an assertion")
+      (check (!production || lib.any (lib.hasInfix "my.wiredNetwork.enable needs secrets/hosts/") failing)
+        "${entry.name}: a production output with the trait and no wired network file must fail an assertion"
+      )
     ];
 
   # The Dock pins the shared apps in order with the host's own apps between
