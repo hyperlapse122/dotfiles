@@ -69,5 +69,6 @@
     wifiman.enable = lib.mkEnableOption "UniFi WiFiman Desktop and its root daemon (NixOS hosts only)";
     tlsInspectionCa.enable = lib.mkEnableOption "trust for the TLS inspection CA in secrets/hosts/<host>/tls-inspection-ca.yaml, through a combined CA bundle and macOS admin trust (macOS hosts only)";
     networkRecovery.enable = lib.mkEnableOption "a root daemon that repairs the network after a network switch leaves the Mac offline, and a shorter Claude Code stream idle timeout (macOS hosts only)";
+    wiredNetwork.enable = lib.mkEnableOption "the static IPv4, DNS, and IPv6-off settings in secrets/hosts/<host>/wired-network.yaml for the wired adapter with the declared MAC, reapplied on production switches (macOS hosts only)";
   };
 }

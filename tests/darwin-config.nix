@@ -889,6 +889,56 @@ let
       )
     ];
 
+  # The wired network trait: in production, activation runs the packaged
+  # reconciler once, after /etc, with the declaration file, the host identity,
+  # and its owner; bootstrap never runs it, and a production output with the
+  # trait and no file fails an assertion.
+  assertWiredNetwork =
+    entry:
+    let
+      config = entry.host.config;
+      production = !entry.bootstrap;
+      script = plain config.system.activationScripts.script.text;
+      beforeEtc = lib.head (lib.splitString "setting up /etc..." script);
+      afterEtc = lib.concatStrings (lib.tail (lib.splitString "setting up /etc..." script));
+      lines = map lib.trim (lib.splitString "\n" afterEtc);
+      calls = lib.filter (i: lib.hasSuffix "/bin/macos-wired-network \\" (lib.elemAt lines i)) (
+        lib.range 0 (lib.length lines - 1)
+      );
+      arguments =
+        if lib.length calls == 1 then
+          lib.sublist (lib.head calls + 1) 3 lines
+        else
+          [ ];
+      expected = [
+        "--file ${lib.escapeShellArg (plain "${config.my.wiredNetwork.file}")} \\"
+        "--identity ${lib.escapeShellArg "${config.my.user.home}/.config/nix-config/age/key.txt"} \\"
+        "--owner ${lib.escapeShellArg config.my.user.name}"
+      ];
+      withoutFile = entry.host.extendModules {
+        modules = [ { my.wiredNetwork.file = lib.mkForce null; } ];
+      };
+      failing = map (a: a.message) (lib.filter (a: !a.assertion) withoutFile.config.assertions);
+    in
+    lib.concatStrings [
+      (check config.my.wiredNetwork.enable "${entry.name}: the fixture must enable my.wiredNetwork, or the checks below prove nothing")
+      (check (
+        !entry.host.options.my.wiredNetwork.enable.default
+      ) "${entry.name}: my.wiredNetwork.enable must default to false")
+      (check
+        (
+          if production then
+            lib.length calls == 1 && arguments == expected && !hasInfixInLines "macos-wired-network" beforeEtc
+          else
+            !hasInfixInLines "macos-wired-network" script
+        )
+        "${entry.name}: activation must run the wired network reconciler once after /etc with the declaration file, the host identity, and its owner in production, and never in bootstrap"
+      )
+      (check (
+        !production || lib.any (lib.hasInfix "my.wiredNetwork.enable needs secrets/hosts/") failing
+      ) "${entry.name}: a production output with the trait and no wired network file must fail an assertion")
+    ];
+
   # The Dock pins the shared apps in order with the host's own apps between
   # ChatGPT and Discord, T3 Code only with its trait, Downloads as the one
   # folder, and sets only show-recents and tilesize among the other keys.
@@ -1022,6 +1072,7 @@ pkgs.runCommand "darwin-config"
     ${lib.concatMapStrings assertEntry darwinFixtures}
     ${lib.concatMapStrings assertTlsInspectionCa darwinFixtures}
     ${lib.concatMapStrings assertNetworkRecovery darwinFixtures}
+    ${lib.concatMapStrings assertWiredNetwork darwinFixtures}
     ${lib.concatMapStrings assertDock darwinFixtures}
     ${assertMobileDeviceTypes}
     [ "$fail" = 0 ] || exit 1

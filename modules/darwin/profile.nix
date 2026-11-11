@@ -16,6 +16,7 @@
     ./retired-casks.nix
     ./tls-inspection-ca.nix
     ./network-recovery.nix
+    ./wired-network.nix
   ];
 
   # nix-darwin applies user-scoped settings, Homebrew included, for this
