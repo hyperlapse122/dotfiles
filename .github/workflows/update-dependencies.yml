@@ -171,7 +171,7 @@ jobs:
             git checkout -- packages/chatgpt-version.json
           fi
 
-          # 8. Update T3 Code. A nightly can be published before its assets
+          # 8. Update T3 Code. A release can be published before its assets
           # and digests are, so a failure here keeps the current pin and lets
           # the other updates through. Status 2 means the release's embedded
           # Antigravity table could not be read or trusted. Status 1 can also

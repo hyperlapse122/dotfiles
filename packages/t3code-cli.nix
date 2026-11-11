@@ -106,7 +106,7 @@ pkgs.stdenv.mkDerivation {
   passthru = { inherit platformKey; };
 
   meta = {
-    description = "Headless T3 Code server and CLI (nightly)";
+    description = "Headless T3 Code server and CLI";
     homepage = "https://github.com/pingdotgg/t3code";
     license = lib.licenses.mit;
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];

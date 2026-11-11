@@ -180,9 +180,9 @@ let
   # alignment.
   antigravityAcpRepack = pythonHelper "antigravity-acp-repack" ../scripts/antigravity-acp-repack;
 
-  # Resolves the newest T3 Code nightly and its asset digests from the GitHub
-  # releases API, and checks that the repository's runtime rebuild fits the
-  # Antigravity runtime that release embeds. The script finds the rebuild tool
+  # Resolves the newest stable T3 Code release and its asset digests from the
+  # GitHub releases API, and checks that the repository's runtime rebuild fits
+  # the Antigravity runtime that release embeds. The script finds the rebuild tool
   # and the overlays by its own path, so they sit under libexec in the
   # repository's scripts/ and packages/ layout, and bin links to the script.
   t3codeRelease = pkgs.stdenvNoCC.mkDerivation {
