@@ -49,9 +49,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/updates"
+          if [ -z "${GH_TOKEN_FOR_UPDATES:-}" ]; then
+            echo '::error::Set the GH_TOKEN_FOR_UPDATES repository secret before running maintenance; it must publish commits and open reconciliation PRs.'
+            exit 1
+          fi
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         id: initialize
+        env:
+          GH_TOKEN_FOR_UPDATES: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
       - name: Prepare catalogs candidate
         shell: bash
         run: |

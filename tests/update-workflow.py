@@ -115,13 +115,42 @@ if args[:2] == ['run', '.#synthetic-models-watch']:
         pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new"}]}\n')
     sys.exit(1 if c.get('catalog_fetch_fail') else 0)
 if args and args[0] == 'run': sys.exit(0)
+if args[:2] == ['eval', '--json']:
+    group = args[2].removeprefix('.#')
+    names = {'checks.x86_64-linux': ['light', 'host-a', 'host-b'], 'vmChecks': ['all', 'first', 'second']}[group]
+    print(json.dumps(names))
+    sys.exit(0)
 if args and args[0] in ('fmt', 'flake', 'build'):
-    scope = 'catalogs' if any('checks.x86_64-linux.' in a for a in args) else 'dependencies'
+    scope = 'catalogs' if pathlib.Path.cwd().name == 'catalogs' else 'dependencies'
     if scope == 'catalogs':
         assert {a for a in args if a.startswith('.#')} == {'.#checks.x86_64-linux.pi', '.#checks.x86_64-linux.synthetic-models'}, 'catalog verification targets changed'
     if scope == 'catalogs' or args[0] == 'fmt': count(scope + '-round')
     round = int((root / (scope + '-round')).read_text())
-    event('verify', scope=scope, command=args[0], round=round, sha=git('rev-parse', 'HEAD'))
+    event('verify', scope=scope, command=args[0], args=args, round=round, sha=git('rev-parse', 'HEAD'))
+    if c.get('bounded_disk') and scope == 'dependencies':
+        # Each closure is 12 GiB; the runner has 32 GiB. Aggregate builds
+        # protect every closure, while individual unlinked builds permit GC.
+        gib = 1024 ** 3
+        budget = 32 * gib
+        if args[0] == 'flake' and '--no-build' not in args:
+            print('No space left on device: aggregate flake check roots all closures')
+            sys.exit(1)
+        if args[0] == 'build':
+            targets = [a for a in args if a.startswith('.#')]
+            active = (5 if '.#vmChecks.all' in targets else len(targets)) * 12 * gib
+            disk = root / 'disk-used'
+            used = int(disk.read_text()) if disk.exists() else 0
+            options = dict(zip(args, args[1:]))
+            min_free = int(options.get('min-free', '0'))
+            max_free = int(options.get('max-free', '0'))
+            if budget - used - active < min_free and max_free > min_free:
+                used = 0
+            if used + active > budget:
+                print('No space left on device: completed closures were not reclaimed')
+                sys.exit(1)
+            if '--no-link' not in args:
+                raise SystemExit('verification rooted completed closures')
+            disk.write_text(str(used + active))
     if c.get('timeout_dependency_verify') and scope == 'dependencies':
         os.killpg(os.getpgrp(), signal.SIGKILL)
     if os.environ.get('GH_TOKEN_FOR_UPDATES') or os.environ.get('SYNTHETIC_API_KEY'):
@@ -339,6 +368,13 @@ def behavioral_tests(workflow, publisher, verifier):
             require(f.expression(workflow['jobs']['watch']['if']) == (part == 'drift'), 'drift selection gate is wrong')
         exercise(workflow, publisher, verifier, 'manual ' + part, selection, part=part)
     exercise(workflow, publisher, verifier, 'scheduled all-parts run', happy, part='', event='schedule')
+    def bounded(f):
+        require(f.ok, 'bounded dependency verification exhausted runner disk')
+        builds = [e for e in f.events_of('verify') if e['scope'] == 'dependencies' and e['command'] == 'build']
+        targets = [a for e in builds for a in e['args'] if a.startswith('.#')]
+        require(sorted(targets) == sorted(['.#checks.x86_64-linux.' + n for n in ('light', 'host-a', 'host-b')] + ['.#vmChecks.' + n for n in ('first', 'second')]), 'individual verification skipped or duplicated a check or VM test')
+        verify_before_push(f)
+    exercise(workflow, publisher, verifier, 'all checks and VMs fit a bounded runner disk', bounded, part='dependencies', bounded_disk=True)
     def cancelled(f):
         require(not f.events_of('push-attempt'), 'cancelled run reached publication')
         require(f.steps['prepare_dependencies']['outcome'] == 'skipped', 'cancelled run started another producer')
@@ -365,7 +401,7 @@ def behavioral_tests(workflow, publisher, verifier):
         logs = f.root / 'runner/updates/dependencies-logs/1'
         require('dependencies fmt' in (logs / 'fmt.log').read_text(), 'format log was lost')
         require('dependencies flake' in (logs / 'check.log').read_text(), 'flake log was lost')
-        require('dependencies build' in (logs / 'vm-check.log').read_text() and 'dependencies build' not in (logs / 'check.log').read_text(), 'VM and flake logs were mixed')
+        require('dependencies build' in (logs / 'vmChecks-first.log').read_text() and 'dependencies build' not in (logs / 'check.log').read_text(), 'VM and flake logs were mixed')
     for target in ('fmt', 'flake', 'build'):
         exercise(workflow, publisher, verifier, 'individual dependency verification failure: ' + target, dependency_failure, verify_fail=target)
     exercise(workflow, publisher, verifier, 'catalog/dependency interaction failure retains catalog and reconciles dependencies', dependency_failure, interaction_fail=True)
@@ -432,7 +468,10 @@ def behavioral_tests(workflow, publisher, verifier):
     def no_token(f):
         require(not f.ok, 'missing push token succeeded')
         require(not f.events_of('push-attempt') and 'GH_TOKEN_FOR_UPDATES' in f.log, 'missing token pushed or was not named')
-    exercise(workflow, publisher, verifier, 'missing push token never falls back to job token', no_token, part='catalogs', missing_token=True)
+        require(not f.events_of('verify') and not f.events_of('dependency-update') and not f.events_of('catalog-fetch'), 'missing push token started expensive maintenance')
+        require(not f.events_of('gh'), 'missing push token attempted reconciliation')
+    for part in ('catalogs', 'dependencies', 'all'):
+        exercise(workflow, publisher, verifier, 'missing push token stops ' + part + ' before maintenance', no_token, part=part, missing_token=True)
     def feature(f):
         require(f.ok, 'feature dispatch failed')
         names=f.call('--git-dir',str(f.origin),'ls-tree','--name-only','main').splitlines()

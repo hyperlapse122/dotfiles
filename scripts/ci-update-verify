@@ -23,11 +23,28 @@ check() {
   fi
 }
 
+build_targets() {
+  local group=$1 targets names name
+  targets=$(nix eval --json ".#$group" --apply builtins.attrNames)
+  names=$(jq -r '.[] | select(. != "all")' <<< "$targets")
+  if [ -z "$names" ]; then
+    printf 'No verification targets in %s\n' "$group" >&2
+    exit 1
+  fi
+  while IFS= read -r name; do
+    # Keep only the current closure live so Nix can reclaim earlier builds.
+    check "$group-$name" nix build --no-link --print-build-logs \
+      --option min-free 8589934592 --option max-free 17179869184 \
+      ".#$group.$name"
+  done <<< "$names"
+}
+
 case "$scope" in
   dependencies)
     check fmt nix fmt -- --ci
-    check check nix flake check --print-build-logs
-    check vm-check nix build --no-link --print-build-logs .#vmChecks.all
+    check check nix flake check --no-build --print-build-logs
+    build_targets checks.x86_64-linux
+    build_targets vmChecks
     ;;
   catalogs)
     check catalog nix build --no-link --print-build-logs \
