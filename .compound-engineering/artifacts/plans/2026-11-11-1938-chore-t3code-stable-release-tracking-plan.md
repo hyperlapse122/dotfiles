@@ -163,7 +163,7 @@ The flake cutover seeded the pin at stable `v0.1.7`, but `scripts/t3code-release
 ## Verification Contract
 
 | Check | Proves | Where it runs |
-|---|---|---|
+| --- | --- | --- |
 | `python3 tests/test_t3code_release.py` / `.#checks.<system>.t3code-release` | R1-R4 | macOS locally, Linux in CI |
 | `.#checks.<system>.update-dependencies-reconcile` | R8 reconcile fixtures | locally where it builds, otherwise CI |
 | `.#checks.<system>.t3code` | R5 binaries report `0.1.8` | CI host/closure shard |
