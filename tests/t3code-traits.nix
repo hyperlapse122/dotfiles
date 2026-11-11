@@ -58,6 +58,7 @@ let
   settingsExpectedBase = {
     set = {
       addProjectBaseDirectory = "~/src";
+      ghqCloneLayout = true;
       autoResumeLimitedThreads = true;
       branchNamingMode = "semantic";
       defaultAutoPull = true;

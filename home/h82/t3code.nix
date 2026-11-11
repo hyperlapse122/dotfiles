@@ -48,6 +48,9 @@ let
   '';
   settings = {
     addProjectBaseDirectory = "~/src";
+    # "Clone into host folders": clones land in <host>/<owner>/<repo> under
+    # addProjectBaseDirectory, the way ghq lays them out.
+    ghqCloneLayout = true;
     autoResumeLimitedThreads = true;
     branchNamingMode = "semantic";
     defaultAutoPull = true;
