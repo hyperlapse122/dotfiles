@@ -14,4 +14,4 @@ export DOTFILES_PI_EXA_KEY_FILE='@EXA_KEY@'
 case "$*" in --version|--help) exec "$PI" "$@" ;; esac
 agent="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 '@STATE@' --agent "$agent" --key '@KEY@' --auth-only
-exec "$PI" --extension "$agent/dotfiles-policy.ts" --extension "$agent/dotfiles-web.ts" "$@"
+exec "$PI" --extension "$agent/dotfiles-policy.ts" --extension "$agent/dotfiles-web.ts" --extension "$agent/dotfiles-question.ts" "$@"

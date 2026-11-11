@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run(command, check=True)
         settings = json.loads((agent / 'settings.json').read_text())
         assert settings['packages'] == ['other', str(plugin)]
-        assert settings['extensions'] == ['other.ts', *[str(agent / name) for name in ('dotfiles-policy.ts', 'dotfiles-web.ts')]]
+        assert settings['extensions'] == ['other.ts', *[str(agent / name) for name in ('dotfiles-policy.ts', 'dotfiles-web.ts', 'dotfiles-question.ts')]]
         assert settings['ownerSetting'] is True
         ids = [model['id'] for model in json.loads((agent / 'model-lock.json').read_text())['syntheticModelLocks']['models']]
         assert settings['defaultProvider'] == 'synthetic' and settings['defaultModel'] in ids

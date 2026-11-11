@@ -30,7 +30,19 @@ with tempfile.TemporaryDirectory() as directory:
     project = home / 'project'
     extension = project / '.pi/extensions/probe.ts'
     extension.parent.mkdir(parents=True)
-    extension.write_text('''export default function(pi) {
+    extension.write_text('import installQuestion from ' + json.dumps(str(agent / 'dotfiles-question.ts')) + ';\n' + '''
+    export default function(pi) {
+      let question;
+      installQuestion({registerTool: tool => question = tool});
+      pi.registerCommand("probe-question", {handler: async(args,ctx) => {
+        const result = await question.execute("probe", {question:"Pick a value", options:["A","B"]},
+          undefined, undefined, ctx);
+        ctx.ui.notify(JSON.stringify(result.details));
+      }});
+      pi.registerCommand("probe-tools", {handler: async(_args,ctx) => {
+        ctx.ui.notify(JSON.stringify(pi.getAllTools().map(tool => tool.name)));
+      }});
+      pi.registerCommand("probe-reload", {handler: async(_args,ctx) => {await ctx.reload();}});
       pi.registerCommand("probe-env", {handler: async(_args,ctx) => {
         const result = await pi.exec("sh", ["-c", "test -z \\\"${EXA_API_KEY+x}\\\""]);
         ctx.ui.notify(result.code === 0 ? "extension-env-clear" : "extension-env-leaked");
@@ -70,6 +82,28 @@ with tempfile.TemporaryDirectory() as directory:
         send({'id':'probe','type':'prompt','message':'/probe-env'})
         response = until(lambda event: event.get('type') == 'extension_ui_request' and event.get('method') == 'notify')
         assert response['message'] == 'extension-env-clear', response
+        def notify(event):
+            return event.get('type') == 'extension_ui_request' and event.get('method') == 'notify'
+        for reload in (False, True):
+            if reload:
+                send({'id':'reload','type':'prompt','message':'/probe-reload'})
+                assert until(lambda event: event.get('id') == 'reload')['success']
+            send({'id':'tools','type':'prompt','message':'/probe-tools'})
+            names = json.loads(until(notify)['message'])
+            for name in ('question', 'web_search', 'web_fetch'):
+                assert names.count(name) == 1, names
+        for choice in ('B', 'typed', 'cancelled'):
+            send({'id':'question','type':'prompt','message':'/probe-question'})
+            dialog = until(lambda event: event.get('type') == 'extension_ui_request' and event.get('method') == 'select')
+            assert dialog['title'] == 'Pick a value' and dialog['options'][:2] == ['A','B']
+            answer = {'cancelled':True} if choice == 'cancelled' else {'value': 'B' if choice == 'B' else dialog['options'][-1]}
+            send({'type':'extension_ui_response','id':dialog['id'], **answer})
+            if choice == 'typed':
+                dialog = until(lambda event: event.get('type') == 'extension_ui_request' and event.get('method') == 'input')
+                send({'type':'extension_ui_response','id':dialog['id'],'value':'Exact typed answer'})
+            details = json.loads(until(notify)['message'])
+            assert details['status'] == ('cancelled' if choice == 'cancelled' else 'answered'), details
+            assert details['answer'] == {'B':'B','typed':'Exact typed answer','cancelled':None}[choice], details
         for path in agent.rglob('*'):
             if path.is_file():
                 assert b'FAKE-exa' not in path.read_bytes(), 'Exa key persisted into Pi state'

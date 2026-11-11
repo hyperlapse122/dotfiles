@@ -10,10 +10,10 @@ const core = join(dirname(dirname(launcher)), 'lib/pi/node_modules/@earendil-wor
 const { loadExtensions } = await import(pathToFileURL(join(core, 'extensions/loader.js')));
 const originalFetch = globalThis.fetch;
 try {
-  const loaded = await loadExtensions([join(process.argv[3], 'dotfiles-web.ts')], temporary);
+  const loaded = await loadExtensions(['dotfiles-web.ts', 'dotfiles-question.ts'].map(name => join(process.argv[3], name)), temporary);
   assert.deepEqual(loaded.errors, []);
   const tools = loaded.extensions.flatMap(extension => [...extension.tools.values()].map(tool => tool.definition));
-  assert.deepEqual(tools.map(tool => tool.name).sort(), ['web_fetch', 'web_search']);
+  assert.deepEqual(tools.map(tool => tool.name).sort(), ['question', 'web_fetch', 'web_search']);
   const call = (name, params, signal) => tools.find(tool => tool.name === name).execute('probe', params, signal, undefined, {});
   const keyFile = join(temporary, 'key');
   process.env.DOTFILES_PI_EXA_KEY_FILE = keyFile;
@@ -79,6 +79,34 @@ try {
     abort.abort();
   });
   assert.equal((await call('web_search', {query:'x'}, abort.signal)).details.status, 'cancelled');
+
+  const question = tools.find(tool => tool.name === 'question');
+  assert.equal(question.executionMode, 'sequential');
+  const ask = (params, ui, signal) => question.execute('question', params, signal, undefined, {hasUI: Boolean(ui), ui});
+  assert.equal((await ask({question:'Which?'}, undefined)).details.status, 'ui_unavailable');
+  let options;
+  const selected = await ask({question:'Which?',options:['A','B']}, {
+    select: async (_title, choices) => { options = choices; return 'B'; },
+  });
+  assert.equal(selected.details.answer, 'B');
+  const typed = await ask({question:'Which?',options:['A','B']}, {
+    select: async (_title, choices) => choices.at(-1), input: async () => '  Custom answer  ',
+  });
+  assert.equal(typed.details.answer, '  Custom answer  ');
+  assert.equal((await ask({question:'Explain'}, {input:async () => 'Details'})).details.answer, 'Details');
+  for (const mode of ['select','input']) {
+    const params = {question:'Which?', ...(mode === 'select' ? {options:['A']} : {})};
+    assert.equal((await ask(params, {[mode]:async()=>undefined})).details.status, 'cancelled');
+  }
+  assert.equal((await ask({question:'Explain'}, {input:async()=>''})).details.status, 'empty');
+  const controller = new AbortController();
+  let dismissed = false;
+  const waiting = ask({question:'Explain'}, {input:(_title,_placeholder,{signal}) => new Promise(resolve => {
+    signal.addEventListener('abort', () => {dismissed = true; resolve(undefined);}, {once:true});
+  })}, controller.signal);
+  controller.abort();
+  assert.equal((await waiting).details.status, 'cancelled');
+  assert(dismissed);
 } finally {
   globalThis.fetch = originalFetch;
   delete process.env.DOTFILES_PI_EXA_KEY_FILE;
