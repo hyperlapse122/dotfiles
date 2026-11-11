@@ -24,6 +24,12 @@ let
   agentTools = import ../../packages/agent-tools.nix { inherit pkgs; };
   merger = "${agentTools.agentSettings}/bin/agent-settings";
   t3 = cfg.cli.enable || cfg.desktop.enable;
+  profileDirectory = config.home.profileDirectory or "${config.home.homeDirectory}/.nix-profile";
+
+  # T3 Code keeps an instance's home under the sha256 of its id, and the
+  # runtime stores its Google sign-in in that home.
+  antigravityInstanceId = "antigravity";
+  antigravityInstanceToken = "${config.home.homeDirectory}/.t3/userdata/providers/${antigravityInstanceId}/${builtins.hashString "sha256" antigravityInstanceId}/antigravity-acp/acp_token.json";
 
   # Launch additions share the native account homes and baseline instructions.
   composer = pkgs.writeScriptBin "t3-instructions" (
@@ -98,9 +104,16 @@ let
         driver = "pi";
         enabled = true;
         config.enabled = true;
-        config.binaryPath = "${
-          config.home.profileDirectory or "${config.home.homeDirectory}/.nix-profile"
-        }/bin/pi";
+        config.binaryPath = "${profileDirectory}/bin/pi";
+      };
+      # T3 Code resolves the real path of binaryPath and requires the runtime's
+      # localharness_external beside it, which the rebuilt runtime provides.
+      # The leaves are declared one by one, so keys the owner sets under the
+      # instance survive.
+      ${antigravityInstanceId} = {
+        driver = "antigravity";
+        enabled = true;
+        config.binaryPath = "${profileDirectory}/bin/agy_acp_server.par";
       };
     };
     snoozeLimitedThreads = true;
@@ -306,6 +319,26 @@ in
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory}
             fi
           '';
+    }
+    // {
+      # The standard home's sign-in becomes a link to T3 Code's, so the Compound
+      # Engineering run homes copy a token that exists and agent-usage reads
+      # one. The target may not exist yet: a sign-in in T3 Code creates it. A
+      # regular file is the owner's own sign-in and stays. Nothing here reads
+      # or copies the token. On NixOS this runs only when a new Home Manager
+      # generation activates.
+      antigravitySignIn = lib.hm.dag.entryAfter [ "t3codeSettings" ] ''
+        if [[ ! -v DRY_RUN ]]; then
+          signInHome=${lib.escapeShellArg "${config.home.homeDirectory}/.gemini/antigravity-acp"}
+          signInToken=$signInHome/acp_token.json
+          [[ -d $signInHome ]] || install -d -m 700 "$signInHome"
+          if [[ -L $signInToken || ! -e $signInToken ]]; then
+            ln -sfn ${lib.escapeShellArg antigravityInstanceToken} "$signInToken"
+          else
+            echo "$signInToken holds its own Antigravity sign-in; it is kept and not shared with T3 Code." >&2
+          fi
+        fi
+      '';
     }
     // lib.mapAttrs (
       _: merge:

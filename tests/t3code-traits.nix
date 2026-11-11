@@ -100,6 +100,7 @@ let
       from = "providers";
       to = "providerInstances";
       kinds = [
+        "antigravity"
         "claudeAgent"
         "codex"
         "grok"
@@ -291,6 +292,31 @@ let
       }
       {
         path = [
+          "providerInstances"
+          "antigravity"
+          "driver"
+        ];
+        value = "antigravity";
+      }
+      {
+        path = [
+          "providerInstances"
+          "antigravity"
+          "enabled"
+        ];
+        value = true;
+      }
+      {
+        path = [
+          "providerInstances"
+          "antigravity"
+          "config"
+          "binaryPath"
+        ];
+        value = "@AGY@";
+      }
+      {
+        path = [
           "sourceControlWritingStyle"
           "customInstructions"
         ];
@@ -364,6 +390,12 @@ let
   # the module would install.
   noContext = builtins.unsafeDiscardStringContext;
 
+  # Declared values that name a binary in the user profile, by placeholder.
+  profileBinaries = {
+    "@PI@" = "pi";
+    "@AGY@" = "agy_acp_server.par";
+  };
+
   merges = [
     {
       attr = "t3codeSettings";
@@ -409,12 +441,12 @@ let
                   // {
                     setPaths = map (
                       row:
-                      if row.value == "@PI@" then
+                      if lib.isString row.value && lib.hasAttr row.value profileBinaries then
                         row
                         // {
                           value = noContext "${
                             user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile"
-                          }/bin/pi";
+                          }/bin/${profileBinaries.${row.value}}";
                         }
                       else
                         row
@@ -447,9 +479,25 @@ let
 
   assertSettings = assertSettingsWith true;
 
+  # The sign-in link is its own activation step, so the trait gate, the order
+  # after the settings merge, and the effect in a scratch home are read here.
+  assertSignIn =
+    name: user: expected:
+    let
+      activation = user.home.activation.antigravitySignIn or null;
+    in
+    ''
+      checkSignIn ${esc name} ${lib.boolToString expected} ${
+        lib.boolToString (activation != null)
+      } ${esc (activation.data or "")} ${
+        lib.boolToString (lib.elem "t3codeSettings" (activation.after or [ ]))
+      } ${esc (user.home.homeDirectory or "")}
+    '';
+
   assertSettingsOn =
     entry:
-    assertSettings entry.name entry.user (cliEnabled entry.config || desktopEnabled entry.config);
+    assertSettings entry.name entry.user (cliEnabled entry.config || desktopEnabled entry.config)
+    + assertSignIn entry.name entry.user (cliEnabled entry.config || desktopEnabled entry.config);
 
   assertProfile = entry: ''
     checkProfile ${esc entry.name} ${
@@ -561,133 +609,160 @@ let
       ))
       (assertSettingsWith false "NixOS module with my.t3.desktop.enable" nixos.config true)
       (assertSettingsWith false "macOS module with my.t3.desktop.enable" darwin.config true)
+      (assertSignIn "NixOS module with my.t3.desktop.enable" nixos.config true)
+      (assertSignIn "macOS module with my.t3.desktop.enable" darwin.config true)
     ];
 in
 pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-   fail=0
-   ${configurations.guard}
-   ${cliTrait.guard}
-   ${desktopTrait.guard}
-   ${bootstrapGuard "my.t3.cli.enable" cliEnabled}
-   ${bootstrapGuard "my.t3.desktop.enable" desktopEnabled}
+  fail=0
+  ${configurations.guard}
+  ${cliTrait.guard}
+  ${desktopTrait.guard}
+  ${bootstrapGuard "my.t3.cli.enable" cliEnabled}
+  ${bootstrapGuard "my.t3.desktop.enable" desktopEnabled}
 
-   # True when $1 exists and resolves into a store path of package $2.
-   resolvesInto() {
-     [ -e "$1" ] || return 1
-     case $(readlink -f "$1") in
-       /nix/store/*-"$2"-*) return 0 ;;
-     esac
-     return 1
-   }
+  # True when $1 exists and resolves into a store path of package $2.
+  resolvesInto() {
+    [ -e "$1" ] || return 1
+    case $(readlink -f "$1") in
+      /nix/store/*-"$2"-*) return 0 ;;
+    esac
+    return 1
+  }
 
-   # Fails unless $3 resolving into package $4 matches the trait value $5.
-   expectPresence() {
-     local name=$1 what=$2 path=$3 pkg=$4 expected=$5 trait=$6 present=false
-     resolvesInto "$path" "$pkg" && present=true
-     if [ "$present" != "$expected" ]; then
-       echo "$name: $what is present=$present, $trait is $expected" >&2
-       fail=1
-     fi
-   }
+  # Fails unless $3 resolving into package $4 matches the trait value $5.
+  expectPresence() {
+    local name=$1 what=$2 path=$3 pkg=$4 expected=$5 trait=$6 present=false
+    resolvesInto "$path" "$pkg" && present=true
+    if [ "$present" != "$expected" ]; then
+      echo "$name: $what is present=$present, $trait is $expected" >&2
+      fail=1
+    fi
+  }
 
-   checkProfile() {
-     local name=$1 profile=$2 cli=$3 desktop=$4 target exe
-     if [ -z "$profile" ] || [ ! -d "$profile" ]; then
-       echo "$name: Home Manager renders no home.path" >&2
-       fail=1
-       return
-     fi
+  checkProfile() {
+    local name=$1 profile=$2 cli=$3 desktop=$4 target exe
+    if [ -z "$profile" ] || [ ! -d "$profile" ]; then
+      echo "$name: Home Manager renders no home.path" >&2
+      fail=1
+      return
+    fi
 
-     expectPresence "$name" "bin/t3 from t3code-cli" "$profile/bin/t3" t3code-cli "$cli" my.t3.cli.enable
-     expectPresence "$name" "the t3code.desktop entry" "$profile/share/applications/t3code.desktop" t3code-desktop "$desktop" my.t3.desktop.enable
-     expectPresence "$name" "bin/t3code-desktop" "$profile/bin/t3code-desktop" t3code-desktop "$desktop" my.t3.desktop.enable
+    expectPresence "$name" "bin/t3 from t3code-cli" "$profile/bin/t3" t3code-cli "$cli" my.t3.cli.enable
+    expectPresence "$name" "the t3code.desktop entry" "$profile/share/applications/t3code.desktop" t3code-desktop "$desktop" my.t3.desktop.enable
+    expectPresence "$name" "bin/t3code-desktop" "$profile/bin/t3code-desktop" t3code-desktop "$desktop" my.t3.desktop.enable
 
-     for exe in "$profile"/bin/*; do
-       target=$(readlink -f "$exe")
-       case $target in
-         /nix/store/*-t3code-cli-* | /nix/store/*-t3code-desktop-*)
-           case ''${exe##*/} in
-             t3 | t3code-desktop) ;;
-             *)
-               echo "$name: bin/''${exe##*/} on PATH comes from a T3 Code package ($target)" >&2
-               fail=1
-               ;;
-           esac
-           ;;
-       esac
-     done
-   }
+    for exe in "$profile"/bin/*; do
+      target=$(readlink -f "$exe")
+      case $target in
+        /nix/store/*-t3code-cli-* | /nix/store/*-t3code-desktop-*)
+          case ''${exe##*/} in
+            t3 | t3code-desktop) ;;
+            *)
+              echo "$name: bin/''${exe##*/} on PATH comes from a T3 Code package ($target)" >&2
+              fail=1
+              ;;
+          esac
+          ;;
+      esac
+    done
+  }
 
-   # Trait/order checks stay here; the shared file-effect harness owns settings
-   # invocation, destination/declaration, refusal and dry-run behavior.
-   checkSettings() {
-     local name=$1 attr=$2 expected=$3 present=$4 after=$6 full=$7 merger declared
-     if [ "$present" != "$expected" ]; then
-       echo "$name: home.activation.$attr is present=$present, either T3 Code trait on is $expected" >&2
-       fail=1
-       return
-     fi
-     [ "$present" = true ] || return 0
+  # Trait/order checks stay here; the shared file-effect harness owns settings
+  # invocation, destination/declaration, refusal and dry-run behavior.
+  checkSettings() {
+    local name=$1 attr=$2 expected=$3 present=$4 after=$6 full=$7 merger declared
+    if [ "$present" != "$expected" ]; then
+      echo "$name: home.activation.$attr is present=$present, either T3 Code trait on is $expected" >&2
+      fail=1
+      return
+    fi
+    [ "$present" = true ] || return 0
 
-     if [ "$after" != true ]; then
-       echo "$name: home.activation.$attr must run after installPackages" >&2
-       fail=1
-     fi
+    if [ "$after" != true ]; then
+      echo "$name: home.activation.$attr must run after installPackages" >&2
+      fail=1
+    fi
 
-     printf '%s\n' "$5" > script
-     merger=$(grep -oE '/nix/store/[^[:space:]]+/bin/agent-settings' script | head -n 1 || true)
-     if [ -z "$merger" ]; then
-       echo "$name: the $attr activation names no packaged merger" >&2
-       fail=1
-       return
-     fi
-     declared=$(sed -n 's/.*--declared \([^ ]*\).*/\1/p' script | tr -d "'\"")
-     if [ "$attr" = t3codeSettings ] && [ -n "$declared" ] \
-       && ! python3 -I ${./t3code-codex-home.py} "$declared" 2> codex-home.log; then
-       echo "$name: a declared Codex instance can run outside ~/.codex:" >&2
-       cat codex-home.log >&2
-       fail=1
-     fi
+    printf '%s\n' "$5" > script
+    merger=$(grep -oE '/nix/store/[^[:space:]]+/bin/agent-settings' script | head -n 1 || true)
+    if [ -z "$merger" ]; then
+      echo "$name: the $attr activation names no packaged merger" >&2
+      fail=1
+      return
+    fi
+    declared=$(sed -n 's/.*--declared \([^ ]*\).*/\1/p' script | tr -d "'\"")
+    if [ "$attr" = t3codeSettings ] && [ -n "$declared" ] \
+      && ! python3 -I ${./t3code-codex-home.py} "$declared" 2> codex-home.log; then
+      echo "$name: a declared Codex instance can run outside ~/.codex:" >&2
+      cat codex-home.log >&2
+      fail=1
+    fi
 
-     [ "$attr" = t3codeSettings ] || return 0
-     [ "$full" = true ] || return 0
-     checkOpencodeDisabled "$name" "$merger" "$declared"
-     checkAntigravityInstance "$name" "$merger" "$declared"
-   }
+    [ "$attr" = t3codeSettings ] || return 0
+    [ "$full" = true ] || return 0
+    checkOpencodeDisabled "$name" "$merger" "$declared"
+    checkAntigravityInstance "$name" "$merger" "$declared"
+  }
 
-   # Merging must preserve the user-owned native instance byte for byte.
+  # The declared Antigravity leaves must land, and a sibling key the owner
+  # set under the instance must stay.
   checkAntigravityInstance() {
-     local name=$1 realMerger=$2 declared=$3
-     if ! python3 -I ${./t3code-antigravity-instance.py} "$realMerger" "$declared" \
-  2> antigravity-instance.log; then
-       echo "$name: the merge changed the user-owned native Antigravity instance:" >&2
-       cat antigravity-instance.log >&2
-       fail=1
-     fi
-   }
+    local name=$1 realMerger=$2 declared=$3
+    if ! python3 -I ${./t3code-antigravity-instance.py} instance "$realMerger" "$declared" \
+      2> antigravity-instance.log; then
+      echo "$name: the merge does not set the declared Antigravity instance leaves and keep its siblings:" >&2
+      cat antigravity-instance.log >&2
+      fail=1
+    fi
+  }
 
-   # Merges the declared document into a settings.json that holds an enabled
-   # opencode instance and OpenCode's hidden-model preference with the real
-   # merger: the merged file must hold the instance disabled and the preference
-   # gone, also on a second run, and keep the keys the declaration does not
-   # touch. $2 is the packaged merger and $3 the declaration the activation
-   # passed it.
-   checkOpencodeDisabled() {
-     local name=$1 realMerger=$2 declared=$3
-     if ! python3 -I ${./t3code-opencode-disabled.py} "$realMerger" "$declared" 2> opencode-disabled.log; then
-       echo "$name: the merged settings.json does not hold the opencode instance disabled:" >&2
-       cat opencode-disabled.log >&2
-       fail=1
-     fi
-   }
+  # Fails unless the sign-in link step exists exactly when a T3 Code trait is
+  # on and runs after the settings merge, then executes it in a scratch home.
+  checkSignIn() {
+    local name=$1 expected=$2 present=$3 after=$5 home=$6
+    if [ "$present" != "$expected" ]; then
+      echo "$name: home.activation.antigravitySignIn is present=$present, either T3 Code trait on is $expected" >&2
+      fail=1
+      return
+    fi
+    [ "$present" = true ] || return 0
+
+    if [ "$after" != true ]; then
+      echo "$name: home.activation.antigravitySignIn must run after t3codeSettings" >&2
+      fail=1
+    fi
+    printf '%s\n' "$4" > signin-script
+    if ! python3 -I ${./t3code-antigravity-instance.py} signin signin-script "$home" \
+      2> antigravity-signin.log; then
+      echo "$name: the sign-in activation does not link the standard token path to T3 Code's instance token:" >&2
+      cat antigravity-signin.log >&2
+      fail=1
+    fi
+  }
+
+  # Merges the declared document into a settings.json that holds an enabled
+  # opencode instance and OpenCode's hidden-model preference with the real
+  # merger: the merged file must hold the instance disabled and the preference
+  # gone, also on a second run, and keep the keys the declaration does not
+  # touch. $2 is the packaged merger and $3 the declaration the activation
+  # passed it.
+  checkOpencodeDisabled() {
+    local name=$1 realMerger=$2 declared=$3
+    if ! python3 -I ${./t3code-opencode-disabled.py} "$realMerger" "$declared" 2> opencode-disabled.log; then
+      echo "$name: the merged settings.json does not hold the opencode instance disabled:" >&2
+      cat opencode-disabled.log >&2
+      fail=1
+    fi
+  }
 
 
-   python3 -I ${./t3code-launch.py} ${launchManifest}
-   T3_INSTRUCTIONS_SCRIPT=${../scripts/t3-instructions.py} python3 -I ${./test_t3_instructions.py}
-   ${lib.concatMapStrings assertProfile profileEntries}
-   ${lib.concatMapStrings assertSettingsOn bothOff}
-   ${assertModule}
+  python3 -I ${./t3code-launch.py} ${launchManifest}
+  T3_INSTRUCTIONS_SCRIPT=${../scripts/t3-instructions.py} python3 -I ${./test_t3_instructions.py}
+  ${lib.concatMapStrings assertProfile profileEntries}
+  ${lib.concatMapStrings assertSettingsOn bothOff}
+  ${assertModule}
 
-   [ "$fail" = 0 ] || exit 1
-   touch "$out"
+  [ "$fail" = 0 ] || exit 1
+  touch "$out"
 ''
