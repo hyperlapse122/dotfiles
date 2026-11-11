@@ -214,14 +214,16 @@ let
       marker = if markerEntry == null then "" else markerEntry.text or "";
       # Each pam line with its whitespace collapsed, so the module's column
       # alignment does not matter but the control flag and module do.
-      sudoLocal = map (line: lib.concatStringsSep " " (lib.filter (w: w != "") (lib.splitString " " line))) (
-        lib.splitString "\n" (
-          if import ./lib/etc-file.nix { inherit lib; } config "pam.d/sudo_local" == null then
-            ""
-          else
-            plain (config.environment.etc."pam.d/sudo_local".text or "")
-        )
-      );
+      sudoLocal =
+        map (line: lib.concatStringsSep " " (lib.filter (w: w != "") (lib.splitString " " line)))
+          (
+            lib.splitString "\n" (
+              if import ./lib/etc-file.nix { inherit lib; } config "pam.d/sudo_local" == null then
+                ""
+              else
+                plain (config.environment.etc."pam.d/sudo_local".text or "")
+            )
+          );
       tidLine = lib.findFirst (i: lib.elemAt sudoLocal i == "auth sufficient pam_tid.so") null (
         lib.range 0 (lib.length sudoLocal - 1)
       );
@@ -496,9 +498,9 @@ let
       (check (
         namesOf config.fonts.packages == namesOf (import ../modules/shared/font-packages.nix pkgs)
       ) "${entry.name}: the macOS font list differs from modules/shared/font-packages.nix")
-      (check (
-        tidLine != null && reattachLines != [ ] && lib.all (i: i < tidLine) reattachLines
-      ) "${entry.name}: /etc/pam.d/sudo_local must accept Touch ID for sudo, with pam_reattach first so it works inside tmux")
+      (check (tidLine != null && reattachLines != [ ] && lib.all (i: i < tidLine) reattachLines)
+        "${entry.name}: /etc/pam.d/sudo_local must accept Touch ID for sudo, with pam_reattach first so it works inside tmux"
+      )
       (check (
         config.system.defaults.NSGlobalDomain.AppleInterfaceStyleSwitchesAutomatically == true
         && config.system.defaults.NSGlobalDomain.AppleInterfaceStyle == null
