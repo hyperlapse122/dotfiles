@@ -20,7 +20,7 @@ Before erasing macOS or starting a clean installation, confirm and back up:
 
 ## Prerequisites
 
-A Mac that has no directory under `hosts/` yet needs one first; [adding a host](adding-a-host.md#macos-hosts) creates the host directory, the bootstrap age material, the `secrets/tokens.yaml` recipient, and the per-host secret files (`ssh.yaml`, `apple-account.yaml`, and optional `tls-inspection-ca.yaml`). For `MacBook-Pro-Mac17-9`, all of those files are already committed in this repository.
+A Mac that has no directory under `hosts/` yet needs one first; [adding a host](adding-a-host.md#macos-hosts) creates the host directory, the bootstrap age material, the `secrets/tokens.yaml` recipient, and the per-host secret files (`ssh.yaml`, `apple-account.yaml`, and optional `tls-inspection-ca.yaml` and `wired-network.yaml`). For `MacBook-Pro-Mac17-9`, all of those files are already committed in this repository.
 
 Before starting the setup on the Mac, have:
 
@@ -194,7 +194,8 @@ The user age identity lives at `~/.config/nix-config/age/key.txt`, protected at 
 - `secrets/tokens.yaml` (shared across both hosts);
 - `secrets/hosts/<host>/ssh.yaml` (this Mac's SSH private key);
 - `secrets/hosts/<host>/apple-account.yaml` (this Mac's Apple Account `username` and `password` for `xcodes`);
-- `secrets/hosts/<host>/tls-inspection-ca.yaml` (when `my.tlsInspectionCa.enable = true`).
+- `secrets/hosts/<host>/tls-inspection-ca.yaml` (when `my.tlsInspectionCa.enable = true`);
+- `secrets/hosts/<host>/wired-network.yaml` (when `my.wiredNetwork.enable = true`).
 
 A macOS host is never a recipient of `secrets/wifi.yaml`, `secrets/tailscale.yaml`, or `secrets/printers.yaml`; the `user-identity-secrets` check enforces that boundary. The Mac joins the tailnet through the Tailscale app's interactive login rather than a pre-authentication key.
 
@@ -253,6 +254,30 @@ On a Mac where switching networks can leave traffic wedged until Wi-Fi is cycled
 3. Cycle the network service carrying the default route (such as Wi-Fi or iPhone USB tethering) off and back on, unless the default route is a tunnel.
 
 A captive portal or policy page is logged without triggering repairs. The log is `/var/log/network-recovery.log`, rotated by `newsyslog`. Hosts with `my.networkRecovery.enable` also set `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` in shell and GUI environments on production outputs so stalled streams fail within a minute after a network switch.
+
+## Wired network
+
+A Mac whose wired adapter needs a static address on one network declares it with `my.wiredNetwork.enable = true` (`modules/darwin/wired-network.nix`). The values live in `secrets/hosts/<host>/wired-network.yaml`, encrypted to the host's recipient alone, with the keys `mac`, `ipv4_address`, `ipv4_subnet_mask`, `ipv4_router`, and `dns_servers` (see `../secrets/README.md`).
+
+At the end of each production apply, `macos-wired-network` decrypts that file in memory with `~/.config/nix-config/age/key.txt`, finds the hardware port with the declared MAC address, and brings that port's network service to the declared state:
+
+- a manual IPv4 configuration with the declared address, subnet mask, and router;
+- exactly the declared DNS servers, in order;
+- IPv6 turned off.
+
+It writes only the groups that differ and prints one line per rewritten group, such as `macos-wired-network: set DNS on Thunderbolt Ethernet Slot 0`. A change made in System Settings is reverted on the next production apply. Other network services, such as Wi-Fi and Tailscale, are never touched.
+
+When the adapter is unplugged, macOS lists no port with that MAC address, and the step does nothing and prints nothing. When the identity or the file cannot be read, or a `networksetup` write fails, the step prints one warning and the apply continues; it never prints a declared value. Bootstrap applies skip the step entirely. Turning the trait off, or removing the file, leaves the adapter with its last applied settings rather than resetting it to DHCP.
+
+To create or change the file, add a `.sops.yaml` creation rule for `^secrets/hosts/<host>/wired-network\.yaml$` listing only that host's recipient, then pipe the YAML into `sops` without writing plaintext into the checkout:
+
+```sh
+printf '%s\n' 'mac: <MAC>' 'ipv4_address: <address>' 'ipv4_subnet_mask: <mask>' \
+    'ipv4_router: <router>' 'dns_servers:' '  - <DNS 1>' '  - <DNS 2>' \
+  | sops --encrypt --filename-override secrets/hosts/<host>/wired-network.yaml \
+      --input-type yaml --output-type yaml /dev/stdin \
+  > secrets/hosts/<host>/wired-network.yaml
+```
 
 ## Containers
 

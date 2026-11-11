@@ -20,6 +20,12 @@
     is tls-inspection-ca.pem. tls-inspection-ca-other.yaml holds the same CA
     for other-key.txt only; tls-inspection-ca-key.yaml, -two.yaml, and
     -leaf.yaml hold a private key, two certificates, and a non-CA certificate.
+  - wired-network.yaml: `mac`, `ipv4_address`, `ipv4_subnet_mask`,
+    `ipv4_router`, and `dns_servers` in documentation address ranges.
+    wired-network-other.yaml holds the same values for other-key.txt only;
+    -no-router.yaml lacks `ipv4_router`, -no-dns.yaml has no DNS servers,
+    -bad-mask.yaml has a non-contiguous subnet mask, and -bad-dns.yaml has a
+    DNS entry that is not an address.
 */
 { pkgs }:
 pkgs.runCommand "fake-non-nixos-secrets"
@@ -80,4 +86,31 @@ pkgs.runCommand "fake-non-nixos-secrets"
     sops --encrypt --age "$recipient" --input-type yaml --output-type yaml ca-two.yaml > $out/tls-inspection-ca-two.yaml
     caYaml fake-leaf.pem > ca-leaf.yaml
     sops --encrypt --age "$recipient" --input-type yaml --output-type yaml ca-leaf.yaml > $out/tls-inspection-ca-leaf.yaml
+
+    # The wired network declaration in documentation address ranges with a
+    # locally administered MAC, and failure fixtures: the same file for the
+    # other identity only, one without ipv4_router, one with no DNS servers,
+    # one with a non-contiguous subnet mask, and one with a bad DNS entry.
+    wired() {
+      mask=255.255.255.0
+      [ "$1" = bad-mask ] && mask=255.0.255.0
+      printf 'mac: 02:00:5E:00:53:01\nipv4_address: 192.0.2.100\nipv4_subnet_mask: %s\n' "$mask"
+      [ "$1" = no-router ] || printf 'ipv4_router: 192.0.2.1\n'
+      case $1 in
+        no-dns) printf 'dns_servers: []\n' ;;
+        bad-dns) printf 'dns_servers:\n  - 198.51.100.20\n  - not-an-address\n' ;;
+        *) printf 'dns_servers:\n  - 198.51.100.20\n  - 198.51.100.21\n' ;;
+      esac
+    }
+    wired full > wired.yaml
+    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired.yaml > $out/wired-network.yaml
+    sops --encrypt --age "$other" --input-type yaml --output-type yaml wired.yaml > $out/wired-network-other.yaml
+    wired no-router > wired-no-router.yaml
+    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired-no-router.yaml > $out/wired-network-no-router.yaml
+    wired no-dns > wired-no-dns.yaml
+    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired-no-dns.yaml > $out/wired-network-no-dns.yaml
+    for variant in bad-mask bad-dns; do
+      wired $variant > wired-$variant.yaml
+      sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired-$variant.yaml > $out/wired-network-$variant.yaml
+    done
   ''
