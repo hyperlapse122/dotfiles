@@ -149,6 +149,92 @@ class ParityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("no pinned package is in nixpkgs repo.json to compare", result.stderr)
 
+    def full_image(self, revision, merged_upstream=False):
+        details = {
+            "element-attributes": {"xsi:type": "ns12:sysImgDetailsType"},
+            "api-level:0": "37.0",
+            "extension-level:1": "22",
+            "base-extension:2": "true",
+            "tag:3": {"display:1": "Google APIs", "id:0": "google_apis"},
+            "vendor:4": {"display:1": "Google Inc.", "id:0": "google"},
+            "abi:5": "x86_64",
+        }
+        if merged_upstream:
+            details.update(
+                {
+                    "tag:4": {"display:1": "AI Glasses Compatible", "id:0": "ai_glasses_compatible"},
+                    "vendor:5": {"display:1": "Google Inc.", "id:0": "google"},
+                    "abi:6": "x86_64",
+                }
+            )
+        entry = image(revision)
+        entry["type-details"] = details
+        return entry
+
+    def test_same_revision_with_merged_upstream_type_details_passes(self):
+        result = self.run_parity(
+            repo(self.full_image(8)),
+            repo(self.full_image(8, merged_upstream=True)),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("system-image 37.0 google_apis x86_64", result.stdout)
+
+    def test_merged_upstream_fails_when_pinned_child_or_attrs_differ(self):
+        pin_image = self.full_image(8)
+        pin_image["type-details"]["extension-level:1"] = "21"
+        result = self.run_parity(
+            repo(pin_image),
+            repo(self.full_image(8, merged_upstream=True)),
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("system-image 37.0 google_apis x86_64 differs in type-details", result.stderr)
+
+        pin_attrs = self.full_image(8)
+        pin_attrs["type-details"]["element-attributes"]["xsi:type"] = "ns11:sysImgDetailsType"
+        result = self.run_parity(
+            repo(pin_attrs),
+            repo(self.full_image(8, merged_upstream=True)),
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("system-image 37.0 google_apis x86_64 differs in type-details", result.stderr)
+
+    def test_extra_upstream_child_without_index_collision_fails(self):
+        pin_image = self.full_image(8)
+        upstream_image = self.full_image(8)
+        upstream_image["type-details"]["extra:6"] = "unexpected"
+        result = self.run_parity(repo(pin_image), repo(upstream_image))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("system-image 37.0 google_apis x86_64 differs in type-details", result.stderr)
+
+    def test_truncated_pin_before_upstream_collision_fails(self):
+        pin_image = self.full_image(8)
+        del pin_image["type-details"]["vendor:4"]
+        del pin_image["type-details"]["abi:5"]
+        result = self.run_parity(
+            repo(pin_image),
+            repo(self.full_image(8, merged_upstream=True)),
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("system-image 37.0 google_apis x86_64 differs in type-details", result.stderr)
+
+    def test_merged_residue_not_accepted_on_versioned_package(self):
+        pin_pkg = platform("1")
+        pin_pkg["type-details"] = {"api-level:0": "37.0", "abi:1": "x86_64"}
+        upstream_pkg = platform("1")
+        upstream_pkg["type-details"] = {
+            "api-level:0": "37.0",
+            "abi:1": "x86_64",
+            "tag:1": "extra",
+            "abi:2": "x86_64",
+        }
+        pin = repo(image(6))
+        pin["packages"]["build-tools"] = {"37.0.0": pin_pkg}
+        upstream = repo(image(6))
+        upstream["packages"]["build-tools"] = {"37.0.0": upstream_pkg}
+        result = self.run_parity(pin, upstream)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("build-tools 37.0.0 differs in type-details", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

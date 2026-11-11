@@ -1,6 +1,6 @@
 [tools]
 "npm:@sentry/dotagents" = "latest"
-"npm:markdownlint-cli2" = "0.23.3"
+"npm:markdownlint-cli2" = "0.24.0"
 
 [tasks.lint-staged-markdown]
 run = "scripts/lint-staged-markdown"

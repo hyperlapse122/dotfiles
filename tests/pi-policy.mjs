@@ -1,11 +1,14 @@
-import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, copyFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 const temporary = mkdtempSync(join(tmpdir(), 'pi-policy-'));
 try {
-  cpSync(process.argv[2], temporary, { recursive: true, dereference: true });
+  // Copy only the files the policy reads. Copying the whole agent tree keeps
+  // the store's read-only directory modes, which the cleanup cannot remove.
+  for (const name of ['dotfiles-policy.ts', 'model-lock.json', 'models.json'])
+    copyFileSync(join(process.argv[2], name), join(temporary, name));
   // Only the native provider inventory is stubbed; execute the actual policy.
   const policy = readFileSync(join(temporary, 'dotfiles-policy.ts'), 'utf8')
     .replace('import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";', 'const getBuiltinProviders = () => ["foreign", "synthetic"];');

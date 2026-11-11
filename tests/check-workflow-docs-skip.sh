@@ -45,7 +45,7 @@ def policy(w):
         assert 'if [ "$names" = "[]" ]; then' in script and "exit 1" in script
     shard_script = "\n".join(s.get("run", "") for s in jobs["check-shard-names"]["steps"])
     assert 'builtins.filter (n: builtins.match "light-.*" n != null)' in shard_script
-    assert jobs["build-darwin"]["runs-on"] == "macos-15"
+    assert jobs["build-darwin"]["runs-on"] == "macos-26"
     # Catch future closure jobs as well as the named jobs above.
     for name, job in jobs.items():
         script = "\n".join(s.get("run", "") for s in job["steps"])

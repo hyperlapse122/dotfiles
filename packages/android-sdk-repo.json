@@ -207,7 +207,7 @@
     "build-tools": "37.0.0",
     "cmake": "3.22.1",
     "cmdline-tools": "23.0",
-    "emulator": "37.2.12",
+    "emulator": "37.2.13",
     "ndk": "29.0.14206865",
     "platform-tools": "37.0.1",
     "platforms": "37.0"
@@ -394,45 +394,45 @@
       }
     },
     "emulator": {
-      "37.2.12": {
+      "37.2.13": {
         "archives": [
           {
             "arch": "x64",
             "os": "linux",
-            "sha1": "cd7362ea55dfb86a418958138dc396e74165dd01",
-            "size": 349654171,
-            "url": "https://dl.google.com/android/repository/emulator-linux_x64-16428233.zip"
+            "sha1": "f41f9e31eb5ca64926603c03265c50bbc0ff4172",
+            "size": 349658551,
+            "url": "https://dl.google.com/android/repository/emulator-linux_x64-16740729.zip"
           },
           {
             "arch": "x64",
             "os": "macosx",
-            "sha1": "0c08fc22f41f2e63976f5503d593f821ff11e30b",
-            "size": 488731099,
-            "url": "https://dl.google.com/android/repository/emulator-darwin_x64-16428233.zip"
+            "sha1": "b0c5fdc92430079436e9aec5983f14a5499de9b0",
+            "size": 488733162,
+            "url": "https://dl.google.com/android/repository/emulator-darwin_x64-16740729.zip"
           },
           {
             "arch": "aarch64",
             "os": "macosx",
-            "sha1": "3af4fe44ce82b3d88ae5678a53735f27ad729c15",
-            "size": 416112708,
-            "url": "https://dl.google.com/android/repository/emulator-darwin_aarch64-16428233.zip"
+            "sha1": "6c5e61b873e11c7d1d08683bea089f762baee070",
+            "size": 416113219,
+            "url": "https://dl.google.com/android/repository/emulator-darwin_aarch64-16740729.zip"
           },
           {
             "arch": "x64",
             "os": "windows",
-            "sha1": "488ed747e82de7e9bb5247becd1ac043c7e5e85d",
-            "size": 455342868,
-            "url": "https://dl.google.com/android/repository/emulator-windows_x64-16428233.zip"
+            "sha1": "4d7268aa7787c640ad892844e6c9a5f159e91ad3",
+            "size": 455344678,
+            "url": "https://dl.google.com/android/repository/emulator-windows_x64-16740729.zip"
           }
         ],
         "displayName": "Android Emulator",
         "license": "android-sdk-license",
         "name": "emulator",
         "path": "emulator",
-        "revision": "37.2.12",
+        "revision": "37.2.13",
         "revision-details": {
           "major:0": "37",
-          "micro:2": "12",
+          "micro:2": "13",
           "minor:1": "2"
         },
         "type-details": {

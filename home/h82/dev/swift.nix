@@ -8,7 +8,10 @@
     [
       sourcekit-lsp
       swift
-      swift-format
+      # swift-format 6.4.0's test suite cannot load the swift-testing macro
+      # plugin in the Darwin sandbox, which fails the whole Home Manager path.
+      # The formatter itself builds; only its tests are skipped.
+      (swift-format.overrideAttrs { doCheck = false; })
       swiftpm
     ]
   );

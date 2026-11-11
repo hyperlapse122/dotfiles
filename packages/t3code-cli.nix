@@ -39,9 +39,13 @@ pkgs.stdenv.mkDerivation {
       pkgs.writableTmpDirAsHomeHook
     ];
 
-  # libstdc++, libgcc_s, and libatomic for the Node binary and node-pty; every
-  # other library the binaries need is glibc's.
-  buildInputs = lib.optional isLinux pkgs.stdenv.cc.cc.lib;
+  # libstdc++, libgcc_s, and libatomic for the Node binary and node-pty;
+  # libvulkan.so.1 for @transcribe-cpp/linux-*-cpu-vulkan; every other library
+  # the binaries need is glibc's.
+  buildInputs = lib.optionals isLinux [
+    pkgs.stdenv.cc.cc.lib
+    pkgs.vulkan-loader
+  ];
 
   # `t3` is a Node single-executable application whose bundle lives in the
   # non-allocated `.note.node.sea` section; strip would remove it. patchelf
@@ -57,7 +61,7 @@ pkgs.stdenv.mkDerivation {
 
     # Native addons for musl, and prebuilds for any other platform, would
     # leave autoPatchelf with dependencies glibc does not provide.
-    find node_modules -depth -type d -name '*-musl' -exec rm -rf {} +
+    find node_modules -depth -type d \( -name '*-musl' -o -name 'musl_*' \) -exec rm -rf {} +
     find node_modules -type d -path '*/prebuilds/*' -prune ! -name '${platformKey}' -exec rm -rf {} +
 
     # autoPatchelf skips only ET_EXEC static binaries. On x86_64 the Cursor
