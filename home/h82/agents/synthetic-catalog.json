@@ -72,6 +72,29 @@
       }
     },
     {
+      "id": "hf:moonshotai/Kimi-K3.1-Pro",
+      "display_name": "Kimi K3.1 Pro",
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "context_length": 524288,
+      "max_output_length": 65536,
+      "pricing": {
+        "prompt": "$0.000002",
+        "completion": "$0.00001",
+        "input_cache_reads": "$0.0000002",
+        "input_cache_writes": "0"
+      },
+      "reasoning_parameters": {
+        "efforts": [
+          "low",
+          "high",
+          "max"
+        ]
+      }
+    },
+    {
       "id": "hf:openai/gpt-oss-120b",
       "display_name": "GPT-OSS-120B",
       "input_modalities": [

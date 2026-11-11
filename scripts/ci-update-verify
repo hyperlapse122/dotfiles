@@ -15,23 +15,49 @@ check() {
   set -e
   if [ "$status" -ne 0 ]; then
     failed=1
-    {
-      printf '### %s verification failed\n\n```text\n' "$name"
-      tail -n 80 "$logs/$name.log"
-      printf '```\n'
-    } >> "$GITHUB_STEP_SUMMARY"
+    printf '%s\n' "$name" >> "$logs/failed"
+    if [ ! -f "$GITHUB_STEP_SUMMARY" ] || [ "$(wc -c < "$GITHUB_STEP_SUMMARY")" -lt 900000 ]; then
+      {
+        printf '### %s verification failed\n\n' "$name"
+        tail -n 80 "$logs/$name.log" | tail -c 4096 | sed 's/^/    /'
+        printf '\n\nFull logs: [workflow run](%s/%s/actions/runs/%s).\n' \
+          "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+      } >> "$GITHUB_STEP_SUMMARY"
+    fi
   fi
+  return "$status"
+}
+
+discover_targets() {
+  local group=$1
+  nix eval --json ".#$group" --apply builtins.attrNames |
+    jq -er --arg group "$group" '.[] | select($group != "vmChecks" or . != "all")' \
+      > "$logs/$group.names"
+}
+
+build_targets() {
+  local group=$1 name
+  if ! check "$group-targets" discover_targets "$group"; then
+    return 0
+  fi
+  while IFS= read -r name; do
+    # Keep only the current closure live so Nix can reclaim earlier builds.
+    check "$group-$name" nix build --no-link --print-build-logs \
+      --option min-free 8589934592 --option max-free 17179869184 \
+      ".#$group.$name" || true
+  done < "$logs/$group.names"
 }
 
 case "$scope" in
   dependencies)
-    check fmt nix fmt -- --ci
-    check check nix flake check --print-build-logs
-    check vm-check nix build --no-link --print-build-logs .#vmChecks.all
+    check fmt nix fmt -- --ci || true
+    check check nix flake check --no-build --print-build-logs || true
+    build_targets checks.x86_64-linux
+    build_targets vmChecks
     ;;
   catalogs)
     check catalog nix build --no-link --print-build-logs \
-      .#checks.x86_64-linux.pi .#checks.x86_64-linux.synthetic-models
+      .#checks.x86_64-linux.pi .#checks.x86_64-linux.synthetic-models || true
     ;;
   *) printf 'Unknown verification scope: %s\n' "$scope" >&2; exit 2 ;;
 esac
