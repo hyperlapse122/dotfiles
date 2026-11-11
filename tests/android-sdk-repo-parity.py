@@ -14,9 +14,15 @@ api -> tag -> abi. A package or image the pin carries but nixpkgs does not
 yet list is skipped, since the pin can track a release before nixpkgs picks
 it up. An image key carries no revision, so a newer image revision than
 nixpkgs lists counts as not listed yet; an older one fails, since the pin
-then lags the nixpkgs it builds against. The declared build-tools
-and platforms stay in nixpkgs' repo.json for years, so at least one package
-must be comparable; none would leave the check asserting nothing.
+then lags the nixpkgs it builds against. When nixpkgs updates an entry whose
+key carries no revision (system images and platforms) in place with
+merge_recursively, XML children whose position shifted across revisions stay
+beside the new children under their old :index keys, leaving duplicate child
+indices in type-details or dependencies; those stale keys are ignored only
+when every pinned child matches and nixpkgs' dict itself shows that index
+collision. The declared build-tools and platforms stay in nixpkgs' repo.json
+for years, so at least one package must be comparable; none would leave the
+check asserting nothing.
 """
 
 import json
@@ -71,6 +77,66 @@ def show(numbers):
     return ".".join(map(str, numbers))
 
 
+def indexed_children(doc):
+    """Return ({key: index}, {index: [key, ...]}) for a to_json_collector dict, or None."""
+    key_index = {}
+    by_index = {}
+    for key in doc:
+        if key == "element-attributes":
+            continue
+        name, sep, raw_index = key.rpartition(":")
+        if sep != ":" or not name or not raw_index.isascii() or not raw_index.isdigit():
+            return None
+        index = int(raw_index)
+        if str(index) != raw_index:
+            return None
+        key_index[key] = index
+        by_index.setdefault(index, []).append(key)
+    return key_index, by_index
+
+
+def collector_matches(ours, theirs):
+    """True when ours matches theirs, ignoring stale merge_recursively children in theirs."""
+    if ours == theirs:
+        return True
+    if not isinstance(ours, dict) or not isinstance(theirs, dict):
+        return False
+    if ("element-attributes" in ours) != ("element-attributes" in theirs):
+        return False
+    if ours.get("element-attributes") != theirs.get("element-attributes"):
+        return False
+
+    ours_indexed = indexed_children(ours)
+    theirs_indexed = indexed_children(theirs)
+    if ours_indexed is None or theirs_indexed is None:
+        return False
+    ours_keys, ours_by_index = ours_indexed
+    theirs_keys, theirs_by_index = theirs_indexed
+
+    count = len(ours_keys)
+    if count == 0 or set(ours_by_index) != set(range(count)):
+        return False
+    if set(theirs_by_index) != set(range(len(theirs_by_index))):
+        return False
+    for key in ours_keys:
+        if key not in theirs or not collector_matches(ours[key], theirs[key]):
+            return False
+
+    if not (theirs_keys.keys() - ours_keys.keys()):
+        return True
+    dup_indices = [idx for idx, keys in theirs_by_index.items() if len(keys) > 1]
+    return bool(dup_indices) and min(dup_indices) < count
+
+
+def field_matches(path, key, ours, theirs):
+    if ours == theirs:
+        return True
+    unversioned_key = path[0] == "images" or path[:2] == ("packages", "platforms")
+    if unversioned_key and key in ("type-details", "dependencies"):
+        return collector_matches(ours, theirs)
+    return False
+
+
 def main(pin_path, upstream_path):
     with open(pin_path, encoding="utf-8") as f:
         pin = json.load(f)
@@ -99,12 +165,12 @@ def main(pin_path, upstream_path):
             continue
         theirs = {k: v for k, v in theirs.items() if k != "last-available-day"}
         compared.append(label)
-        if entry != theirs:
-            keys = sorted(
-                k
-                for k in entry.keys() | theirs.keys()
-                if entry.get(k) != theirs.get(k)
-            )
+        keys = sorted(
+            k
+            for k in entry.keys() | theirs.keys()
+            if not field_matches(path, k, entry.get(k), theirs.get(k))
+        )
+        if keys:
             failures.append(f"{label} differs in {', '.join(keys)}")
 
     if not compared:
