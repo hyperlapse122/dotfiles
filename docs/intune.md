@@ -20,6 +20,19 @@ Five executables read `/etc/os-release`: `intune-portal`, `intune-agent`, `micro
 
 The pinned `intune-portal` is Microsoft's build for Ubuntu 26.04 and the pinned identity broker its build for 24.04; the wrapper presents 24.04 to both. To present Ubuntu 26.04 instead, edit the `osRelease` text in `packages/intune-ubuntu-identity.nix` and update the release the `intune` check and the `intune-os-identity` VM test expect.
 
+## The sign-in window
+
+The identity broker shows the work account's sign-in page in a WebKitGTK window. On this host that window needs four things Ubuntu with GNOME supplies by default, and the wrapper sets them for all five executables:
+
+- `GIO_EXTRA_MODULES` names `glib-networking`. Without it WebKitGTK has no TLS backend and every page fails to load.
+- `WEBKIT_DISABLE_DMABUF_RENDERER` and `WEBKIT_DISABLE_COMPOSITING_MODE` are set, because the window stays blank on the proprietary NVIDIA driver otherwise.
+- `GDK_BACKEND=x11`. On the Wayland backend the page lays out in a negative viewport and only its footer paints.
+- An `LD_PRELOAD` library keeps WebKit's default User-Agent. The broker sets a User-Agent that Microsoft's page takes for a passkey-capable browser, and an account that prefers a passkey lands on a FIDO page that WebKitGTK cannot complete.
+
+The window cannot use a passkey or a security key. Sign in with the password and an Authenticator approval.
+
+The broker stores its tokens in the Secret Service collection aliased `login`. GNOME Keyring creates that collection and KWallet does not, so the `intune-keyring-alias` user service points the alias at the default wallet when a graphical session starts and the alias is missing.
+
 ## Enroll
 
 Only the repository owner runs these steps.
@@ -43,7 +56,8 @@ The company's compliance policy decides which checks run, and this repository do
 | The device is not encrypted | The root filesystem is on LUKS2. If the message concerns the exFAT data disk at `/mnt/data`, encrypting or unmounting that disk is a separate decision; this trait changes no disk. |
 | The password does not meet the requirements | Change the login password with `passwd` to one that meets the tenant's rules, then log out and in. If the tenant asks for more than the declared policy, raise `passwordPolicy` in `modules/nixos/services/intune.nix`. |
 | Microsoft Defender for Endpoint is missing, or a custom compliance script fails | Not covered. `nixpkgs` has no Defender package, and this is follow-up work. |
-| Sign-in fails with a keyring or storage error | The identity broker stores tokens in the Secret Service keyring, which KWallet provides here. Microsoft tests only GNOME Keyring; this is follow-up work. |
+| Sign-in ends with error tag `4kv4v` or a keyring or storage error | The broker could not write to the `login` keyring. Run `systemctl --user start intune-keyring-alias.service` and read its journal; see [The sign-in window](#the-sign-in-window). |
+| Sign-in ends with error code 53003 or 530003 | A conditional access policy of the tenant blocks the request. Give the tenant's administrator the correlation ID from the error page; nothing in this repository changes the verdict. |
 | The agent or app logs `PeerValidationFailed` | `intune-daemon` expects its clients under `/opt/microsoft/intune/bin`, and on NixOS they run from the Nix store. This is follow-up work. |
 
 A failing check that this table marks as follow-up work does not mean the trait is broken.
