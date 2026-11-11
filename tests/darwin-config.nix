@@ -212,6 +212,28 @@ let
         lib.attrValues (config.environment.etc or { })
       );
       marker = if markerEntry == null then "" else markerEntry.text or "";
+      # Each pam line with its whitespace collapsed, so the module's column
+      # alignment does not matter but the control flag and module do.
+      sudoLocal =
+        map (line: lib.concatStringsSep " " (lib.filter (w: w != "") (lib.splitString " " line)))
+          (
+            lib.splitString "\n" (
+              if import ./lib/etc-file.nix { inherit lib; } config "pam.d/sudo_local" == null then
+                ""
+              else
+                plain (config.environment.etc."pam.d/sudo_local".text or "")
+            )
+          );
+      tidLine = lib.findFirst (i: lib.elemAt sudoLocal i == "auth sufficient pam_tid.so") null (
+        lib.range 0 (lib.length sudoLocal - 1)
+      );
+      reattachLines = lib.filter (
+        i:
+        let
+          line = lib.elemAt sudoLocal i;
+        in
+        lib.hasPrefix "auth optional /nix/store/" line && lib.hasSuffix "/lib/pam/pam_reattach.so" line
+      ) (lib.range 0 (lib.length sudoLocal - 1));
       production = !entry.bootstrap;
       primaryUser = config.system.primaryUser;
       kakaoTalkId = "869223134";
@@ -476,6 +498,9 @@ let
       (check (
         namesOf config.fonts.packages == namesOf (import ../modules/shared/font-packages.nix pkgs)
       ) "${entry.name}: the macOS font list differs from modules/shared/font-packages.nix")
+      (check (tidLine != null && reattachLines != [ ] && lib.all (i: i < tidLine) reattachLines)
+        "${entry.name}: /etc/pam.d/sudo_local must accept Touch ID for sudo, with pam_reattach first so it works inside tmux"
+      )
       (check (
         config.system.defaults.NSGlobalDomain.AppleInterfaceStyleSwitchesAutomatically == true
         && config.system.defaults.NSGlobalDomain.AppleInterfaceStyle == null
@@ -493,6 +518,17 @@ let
         && !lib.hasInfix "xcodeMas" postActivation
         && (lib.any (lib.hasInfix "/apple-account.yaml") rootLines) == production
       ) "${entry.name}: Xcode must use runtime SOPS only in production")
+      (check (
+        !production
+        || lib.any (lib.hasInfix "Xcode provisioning needs secrets/hosts/") (
+          map (a: a.message) (
+            lib.filter (a: !a.assertion)
+              (entry.host.extendModules {
+                modules = [ { my.xcode.appleAccountFile = lib.mkForce null; } ];
+              }).config.assertions
+          )
+        )
+      ) "${entry.name}: a production output with no Apple Account file must fail an assertion")
       (check
         (
           lib.elem "appStoreUid=$(/usr/bin/id -u ${primaryUser} 2>/dev/null) || appStoreUid=" rootLines
@@ -1064,6 +1100,7 @@ pkgs.runCommand "darwin-config"
             host = entry.host.config.my.hostName;
             home = entry.host.config.my.user.home;
             owner = entry.host.config.my.user.name;
+            source = if entry.bootstrap then null else plain "${entry.host.config.my.xcode.appleAccountFile}";
             text = plain entry.host.config.system.activationScripts.postActivation.text;
           }) darwinFixtures
         )

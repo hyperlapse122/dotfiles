@@ -33,8 +33,6 @@ def read_account(source, identity, owner):
         raise XcodeError("The age identity must be a regular file owned by the primary user.")
     if stat.S_IMODE(metadata.st_mode) != 0o600:
         raise XcodeError("The age identity must have mode 0600.")
-    if str(source).startswith("/nix/store/"):
-        raise XcodeError("Apple account ciphertext must be read from the checkout.")
     env = {k: v for k, v in os.environ.items() if not k.startswith("SOPS_AGE_")}
     env["SOPS_AGE_KEY_FILE"] = str(identity)
     result = subprocess.run(["sops", "--decrypt", "--output-type", "json", str(source)],
