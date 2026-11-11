@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  inputs,
   ...
 }:
 let
@@ -22,16 +21,15 @@ let
     ".pi/agent/skills"
   ];
 
-  # Native plugins own CE skills. Check for collisions with contributed skills
-  # before linking them into a harness root.
-  ceSkillsDir = "${inputs.compound-engineering-plugin}/skills";
-  ceSkills = lib.filterAttrs (
-    name: type: type == "directory" && builtins.pathExists "${ceSkillsDir}/${name}/SKILL.md"
-  ) (builtins.readDir ceSkillsDir);
-  ceSkillNames = lib.attrNames ceSkills;
+  plugin = import ./plugin-skills.nix { inherit lib pkgs; };
 
-  # Two skills of one name in one root would silently keep only one of them.
-  collisions = lib.intersectLists ceSkillNames (lib.attrNames config.my.agentSkills);
+  # Plugin skills reach the Antigravity ACP runtime through one directory.
+  # The CLI gets them from its native plugin install, so they stay out of the
+  # skill roots above.
+  pluginSkills = plugin.skills {
+    sources = config.my.agentPluginSources;
+    sharedNames = lib.attrNames config.my.agentSkills;
+  };
 
 in
 {
@@ -56,21 +54,32 @@ in
     '';
   };
 
+  options.my.antigravityPluginSkills = lib.mkOption {
+    type = lib.types.package;
+    internal = true;
+    readOnly = true;
+    default = plugin.directory pluginSkills;
+    description = ''
+      One store directory holding a link per plugin skill of every pinned
+      plugin, named by skill. The Antigravity ACP wrapper hands it to the
+      runtime as its plugin skills directory.
+    '';
+  };
+
   # One link per root and skill, to the skill directory itself: Codex skips a
   # SKILL.md that is a symlink, so the files inside must not be linked one by
   # one with `recursive = true`.
-  config.home.file =
-    lib.throwIf (collisions != [ ])
-      "skills: Compound Engineering and contributed skills share the name(s) ${lib.concatStringsSep ", " collisions} in ~/${antigravityRoot}"
-      (
-        lib.listToAttrs (
-          lib.concatMap (
-            root:
-            lib.mapAttrsToList (
-              name: source: lib.nameValuePair "${root}/${name}" { inherit source; }
-            ) config.my.agentSkills
-          ) roots
-        )
-
-      );
+  #
+  # The seq makes a name shared by a plugin skill and a contributed skill stop
+  # every evaluation, not only one that reads the plugin skills directory.
+  config.home.file = builtins.seq pluginSkills (
+    lib.listToAttrs (
+      lib.concatMap (
+        root:
+        lib.mapAttrsToList (
+          name: source: lib.nameValuePair "${root}/${name}" { inherit source; }
+        ) config.my.agentSkills
+      ) roots
+    )
+  );
 }
