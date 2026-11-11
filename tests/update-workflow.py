@@ -155,14 +155,19 @@ if args and args[0] in ('fmt', 'flake', 'build'):
             if '--no-link' not in args:
                 raise SystemExit('verification rooted completed closures')
             disk.write_text(str(used + active))
-    if c.get('timeout_dependency_verify') and scope == 'dependencies':
-        os.killpg(os.getpgrp(), signal.SIGKILL)
     if os.environ.get('GH_TOKEN_FOR_UPDATES') or os.environ.get('SYNTHETIC_API_KEY'):
         event('secret-leak')
         sys.exit(95)
     print('verification ' + scope + ' ' + args[0] + ' round ' + str(round))
     if c.get('large_logs'):
-        print('builder diagnostics ' * 6000)
+        print('builder diagnostics ' * c.get('log_repeat', 6000))
+    if c.get('timeout_dependency_verify') and scope == 'dependencies' and (not c.get('late_timeout') or '.#vmChecks.second' in args):
+        print('LATE_TARGET_TIMEOUT_CONTEXT', flush=True)
+        if c.get('late_timeout'):
+            # Leave tee alive to preserve output emitted before termination.
+            os.kill(os.getppid(), signal.SIGKILL)
+            sys.exit(1)
+        os.killpg(os.getpgrp(), signal.SIGKILL)
     fail = c.get('verify_fail')
     if fail == scope or (scope == 'dependencies' and fail == args[0]) or (fail == 'after-rebase' and round > 1): sys.exit(1)
     if c.get('interaction_fail') and scope == 'dependencies' and 'new' in pathlib.Path('home/h82/agents/synthetic-catalog.json').read_text(): sys.exit(1)
@@ -426,8 +431,13 @@ def behavioral_tests(workflow, publisher, verifier):
         require(f.steps['reconcile']['outcome'] == 'success', 'large logs prevented reconciliation')
         body = (f.control / 'pr-body.md').read_text()
         require(len(body) <= 65536 and 'https://github.com/example/dotfiles/actions/runs/1729' in body, 'reconciliation body lost its bound or full-log link')
+        require('Push a fix to this branch' in body, 'truncation removed repair instructions')
+        before_link = body.split('Full logs: [workflow run](')[0]
+        require(sum(line.startswith('```') for line in before_link.splitlines()) % 2 == 0, 'run link is inside an unclosed code fence')
+        summary = f.root / 'summary'
+        require(summary.stat().st_size < 1024 ** 2 and 'workflow run' in summary.read_text(), 'verbose failures overflowed the step summary or lost its run link')
         require(not f.events_of('push-attempt'), 'failed verification published dependencies')
-    exercise(workflow, publisher, verifier, 'large failure logs still open a reconciliation PR', bounded_body, part='dependencies', verify_fail='build', large_logs=True)
+    exercise(workflow, publisher, verifier, 'large failure logs still open a reconciliation PR', bounded_body, part='dependencies', verify_fail='build', large_logs=True, log_repeat=60000)
     def update_failure(f):
         require(not f.ok, 'updater failure was hidden')
         require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'failed updater blocked catalog')
@@ -488,6 +498,12 @@ def behavioral_tests(workflow, publisher, verifier):
         require(f.steps['publish_dependencies']['outputs']['failure_stage'] == 'verification', 'interruption lost its last publication stage')
         require('Failure stage: verification' in (f.control / 'pr-body.md').read_text(), 'interruption was not reported in reconciliation')
     exercise(workflow, publisher, verifier, 'forced termination during dependency verification retains reconciliation', dependency_timeout, part='dependencies', timeout_dependency_verify=True)
+    def late_timeout(f):
+        dependency_timeout(f)
+        body = (f.control / 'pr-body.md').read_text()
+        require('LATE_TARGET_TIMEOUT_CONTEXT' in body, 'passing logs displaced interrupted-target diagnostics')
+        require('Push a fix to this branch' in body and len(body) <= 65536, 'interrupted reconciliation lost its instructions or size bound')
+    exercise(workflow, publisher, verifier, 'late interruption keeps target context after verbose passing checks', late_timeout, part='dependencies', timeout_dependency_verify=True, late_timeout=True, large_logs=True)
     def no_token(f):
         require(not f.ok, 'missing push token succeeded')
         require(not f.events_of('push-attempt') and 'GH_TOKEN_FOR_UPDATES' in f.log, 'missing token pushed or was not named')

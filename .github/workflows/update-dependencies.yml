@@ -410,42 +410,47 @@ jobs:
           open_pr=$(gh pr list --state open --limit 1000 --json number,headRefName \
             --jq 'map(select(.headRefName == "update-dependencies-fix" or (.headRefName | startswith("update-dependencies-fix-")))) | sort_by(.number) | .[0].number // empty')
           body="$RUNNER_TEMP/updates/reconciliation.md"
-          logs=("$LOG_DIR"/*.log)
-          if [ -f "$LOG_DIR/failed" ]; then
-            logs=()
-            while IFS= read -r name; do
-              logs+=("$LOG_DIR/$name.log")
-            done < "$LOG_DIR/failed"
-          fi
-          {
-            echo '## Automated Dependency Update (Reconciliation Required)'
-            echo
-            echo 'The dependency update runs every 30 minutes. Its publication failed; no failing dependency candidate was pushed to main.'
-            echo
-            printf 'Failure stage: %s\n\n' "$FAILURE_STAGE"
-            for log in "${logs[@]}"; do
-              [ -f "$log" ] || continue
-              printf '### %s\n\n```text\n' "${log##*/}"
-              tail -n 80 "$log"
-              printf '```\n'
-            done
-            echo 'Push a fix to this branch; CI runs on each push. This PR waits for you to review and merge it.'
-            if [ -n "$open_pr" ]; then
-              echo 'These logs are from the latest failing run, which left this branch as it was.'
-            fi
-          } > "$body"
-          python3 - "$body" <<'PY'
+          python3 - "$body" "$LOG_DIR" "$open_pr" "$FAILURE_STAGE" <<'PYBODY'
+          from collections import deque
           import os
           from pathlib import Path
           import sys
 
-          path = Path(sys.argv[1])
-          body = path.read_text()
-          if len(body) > 60000:
-              body = body[:60000] + '\n```\n\nAdditional log output omitted.\n'
+          path, directory, open_pr, stage = sys.argv[1:]
+          directory = Path(directory)
+          logs = list(directory.glob('*.log'))
+          failed = directory / 'failed'
+          if failed.exists():
+              selected = [directory / f'{name}.log' for name in failed.read_text().splitlines()]
+              note = 'Failed verification logs follow.'
+          else:
+              newest = max(logs, key=lambda log: log.stat().st_mtime_ns, default=None)
+              selected = ([newest] if newest else []) + [
+                  log for log in logs
+                  if log != newest and (log.name in ('fmt.log', 'check.log') or log.name.endswith('-targets.log'))
+              ]
+              note = f'{len(logs)} verification logs recorded. The most recent log follows first; its target may have been interrupted.'
+          sections = []
+          for log in selected:
+              if not log.is_file():
+                  continue
+              with log.open(errors='replace') as stream:
+                  text = ''.join(deque(stream, maxlen=80))[-8000:]
+              sections.append(f'### {log.name}\n\n' + ''.join('    ' + line + '\n' for line in text.splitlines()) + '\n')
+          excerpt = ''.join(sections)
+          if len(excerpt) > 56000:
+              excerpt = excerpt[:56000] + '\n\nAdditional log output omitted.\n'
           run = f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-          path.write_text(body + f'\nFull logs: [workflow run]({run}).\n')
-          PY
+          body = (
+              '## Automated Dependency Update (Reconciliation Required)\n\n'
+              'The dependency update runs every 30 minutes. Its publication failed; no failing dependency candidate was pushed to main.\n\n'
+              f'Failure stage: {stage}\n\n'
+              'Push a fix to this branch; CI runs on each push. This PR waits for you to review and merge it.\n\n'
+          )
+          if open_pr:
+              body += 'These logs are from the latest failing run, which left this branch as it was.\n\n'
+          Path(path).write_text(body + note + '\n\n' + excerpt + f'\nFull logs: [workflow run]({run}).\n')
+          PYBODY
           if [ -n "$open_pr" ]; then
             gh pr edit "$open_pr" --body-file "$body"
           else

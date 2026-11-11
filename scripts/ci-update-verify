@@ -16,11 +16,14 @@ check() {
   if [ "$status" -ne 0 ]; then
     failed=1
     printf '%s\n' "$name" >> "$logs/failed"
-    {
-      printf '### %s verification failed\n\n```text\n' "$name"
-      tail -n 80 "$logs/$name.log"
-      printf '```\n'
-    } >> "$GITHUB_STEP_SUMMARY"
+    if [ ! -f "$GITHUB_STEP_SUMMARY" ] || [ "$(wc -c < "$GITHUB_STEP_SUMMARY")" -lt 900000 ]; then
+      {
+        printf '### %s verification failed\n\n' "$name"
+        tail -n 80 "$logs/$name.log" | tail -c 4096 | sed 's/^/    /'
+        printf '\n\nFull logs: [workflow run](%s/%s/actions/runs/%s).\n' \
+          "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+      } >> "$GITHUB_STEP_SUMMARY"
+    fi
   fi
   return "$status"
 }
