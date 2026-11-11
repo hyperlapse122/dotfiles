@@ -1,0 +1,125 @@
+--- a/packages/coding-agent/src/core/model-config.ts
++++ b/packages/coding-agent/src/core/model-config.ts
+@@ -0,0 +1 @@
++import dotfilesLock from "./dotfiles-model-lock.ts";
+@@ -168,0 +170,6 @@
++	static managed(): ModelConfig {
++		const document: unknown = { providers: { synthetic: structuredClone(dotfilesLock.syntheticModelLocks) } };
++		if (!validateModelsConfig.Check(document)) throw new Error("Invalid managed Synthetic model lock.");
++		return new ModelConfig(new Map([["synthetic", deepFreeze(document.providers.synthetic)]]));
++	}
++
+--- a/packages/coding-agent/src/core/model-runtime.ts
++++ b/packages/coding-agent/src/core/model-runtime.ts
+@@ -222 +222 @@
+-		const config = await ModelConfig.load(modelsPath);
++		const config = ModelConfig.managed();
+@@ -289,7 +289 @@
+-		return new Set([
+-			...this.builtins.keys(),
+-			...this.nativeExtensionProviders.keys(),
+-			...this.config.getProviderIds(),
+-			...this.extensionProviders.keys(),
+-			...this.virtualModels.keys(),
+-		]);
++		return new Set(["synthetic"]);
+@@ -299,0 +294,4 @@
++		if (providerId !== "synthetic") {
++			this.models.deleteProvider(providerId);
++			return undefined;
++		}
+@@ -301,4 +299 @@
+-		const virtualModels = [...(this.virtualModels.get(providerId)?.values() ?? [])].map((entry) => entry.model);
+-		if (virtualModels.length > 0) this.models.setProvider(withVirtualModels(providerId, provider, virtualModels));
+-		else if (provider) this.models.setProvider(provider);
+-		else this.models.deleteProvider(providerId);
++		if (provider) this.models.setProvider(provider);
+@@ -310,15 +305,2 @@
+-		const base = this.nativeExtensionProviders.get(providerId) ?? this.builtins.get(providerId);
+-		const extension = this.extensionProviders.get(providerId);
+-		if (!this.config.getProvider(providerId) && !extension) {
+-			// No overlays: use the builtin untouched so its auth/login/stream behavior is exact.
+-			this.compositionErrors.delete(providerId);
+-			return base;
+-		}
+-		try {
+-			const provider = composeModelProvider(providerId, base, this.config, extension);
+-			this.compositionErrors.delete(providerId);
+-			return provider;
+-		} catch (error) {
+-			this.compositionErrors.set(providerId, error instanceof Error ? error.message : String(error));
+-			return base;
+-		}
++		if (providerId !== "synthetic") return undefined;
++		return composeModelProvider(providerId, undefined, this.config, undefined);
+@@ -677,0 +660,3 @@
++		const canonical = this.models.getAllModels(model.provider).find((entry) => entry.id === model.id);
++		if (!canonical) throw new ModelsError("provider", "Model is unavailable in the managed Synthetic lock.");
++		model = canonical as TModel;
+@@ -689 +674 @@
+-		const requestModel: TModel = resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model;
++		const requestModel: TModel = model;
+@@ -886 +871 @@
+-		this.config = await ModelConfig.load(this.modelsPath);
++		this.config = ModelConfig.managed();
+@@ -928,12 +913,2 @@
+-	registerNativeProvider(provider: Provider): void {
+-		if (!provider.id.trim()) throw new Error("Provider id must not be empty.");
+-		this.extensionProviders.delete(provider.id);
+-		this.nativeExtensionProviders.set(provider.id, provider);
+-		this.recomposeProvider(provider.id);
+-		this.updateModelSnapshot();
+-		this.markProvisionallyConfigured(
+-			provider.id,
+-			configuredRequestAuthStatus(this.config.getProvider(provider.id), undefined),
+-			provider.auth.oauth && !provider.auth.apiKey ? "oauth" : "api_key",
+-		);
+-		void this.refresh({ allowNetwork: false });
++	registerNativeProvider(_provider: Provider): void {
++		// Managed registrations cannot replace the canonical Synthetic provider.
+@@ -965,21 +940,2 @@
+-	registerProvider(providerId: string, config: ProviderConfigInput): void {
+-		// Validate the incoming registration on its own, like the legacy registry:
+-		// a broken re-registration must throw without touching the stored config.
+-		validateExtensionProvider(providerId, this.builtins.get(providerId), this.config.getProvider(providerId), config);
+-		this.nativeExtensionProviders.delete(providerId);
+-		// Re-registration merges defined values over the previous registration and
+-		// preserves undefined ones, matching the legacy ModelRegistry contract.
+-		const previous = this.extensionProviders.get(providerId);
+-		const effective: ProviderConfigInput = { ...previous };
+-		for (const [key, value] of Object.entries(config)) {
+-			if (value !== undefined) (effective as Record<string, unknown>)[key] = value;
+-		}
+-		this.extensionProviders.set(providerId, effective);
+-		this.recomposeProvider(providerId);
+-		this.updateModelSnapshot();
+-		this.markProvisionallyConfigured(
+-			providerId,
+-			configuredRequestAuthStatus(this.config.getProvider(providerId), effective),
+-			effective.oauth && !effective.apiKey ? "oauth" : "api_key",
+-		);
+-		void this.refresh({ allowNetwork: false });
++	registerProvider(_providerId: string, _config: ProviderConfigInput): void {
++		// The compiled model lock owns provider and model definitions.
+@@ -1001,19 +957,2 @@
+-	registerVirtualModel(definition: VirtualModelDefinition): void {
+-		const { provider: providerId, id } = definition;
+-		if (!providerId.trim() || !id.trim()) throw new Error("Virtual model provider and id must not be empty.");
+-		const existing = this.models.getModel(providerId, id);
+-		if (existing && !isVirtualModel(existing)) {
+-			throw new Error(`Virtual model ${providerId}/${id} conflicts with a physical model.`);
+-		}
+-		const models = this.virtualModels.get(providerId) ?? new Map<string, RegisteredVirtualModel>();
+-		models.set(id, { model: createVirtualModel(definition), route: (request) => definition.route(request) });
+-		this.virtualModels.set(providerId, models);
+-		if (!this.recomposeProvider(providerId) && !this.snapshot.configuredProviders.has(providerId)) {
+-			// A provider of only virtual models needs no credentials. Mark it configured now: session
+-			// restore checks auth before the refresh below lands.
+-			const auth = new Map(this.snapshot.auth).set(providerId, { type: "api_key", source: "virtual" });
+-			const configuredProviders = new Set(this.snapshot.configuredProviders).add(providerId);
+-			this.snapshot = { ...this.snapshot, auth, configuredProviders };
+-		}
+-		this.updateModelSnapshot();
+-		void this.refresh({ allowNetwork: false });
++	registerVirtualModel(_definition: VirtualModelDefinition): void {
++		// Virtual registrations cannot add routes outside the compiled catalog.

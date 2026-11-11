@@ -27,6 +27,8 @@ SYSTEMS = {
     "aarch64-linux": "pi-linux-arm64.tar.gz",
     "aarch64-darwin": "pi-darwin-arm64.tar.gz",
 }
+SOURCE_REVISION = '1234567890abcdef1234567890abcdef12345678'
+SOURCE_HASH = '0' * 52
 
 
 def sri(hex_digest):
@@ -80,6 +82,9 @@ class PiReleaseTestCase(unittest.TestCase):
         self.fetch = root / "curl"
         self.fetch.write_text(FAKE_FETCH)
         self.fetch.chmod(0o755)
+        prefetch = root / 'nix-prefetch-url'
+        prefetch.write_text(FAKE_FETCH)
+        prefetch.chmod(0o755)
         self.served = root / "served"
         self.served.mkdir()
         self.output = root / "pi-release.json"
@@ -87,6 +92,10 @@ class PiReleaseTestCase(unittest.TestCase):
     def serve(self, doc=None, body=None):
         if doc is not None:
             (self.served / "latest").write_text(json.dumps(doc))
+            tag = doc.get('tag_name', '')
+            if '/' not in tag:
+                (self.served / tag).write_text(json.dumps({'sha': SOURCE_REVISION}))
+            (self.served / (SOURCE_REVISION + '.tar.gz')).write_text(SOURCE_HASH)
         if body is not None:
             (self.served / "SHA256SUMS").write_text(body)
 
@@ -111,6 +120,7 @@ class PiReleaseTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         pin = json.loads(self.output.read_text())
         self.assertEqual(pin["version"], "1.4.0")
+        self.assertEqual(pin['source'], {'rev': SOURCE_REVISION, 'sha256': SOURCE_HASH})
         self.assertEqual(
             pin["platforms"],
             {
@@ -231,6 +241,21 @@ class PiReleaseTestCase(unittest.TestCase):
         proc = self.run_release()
         self.assertEqual(proc.returncode, 1)
         self.assertIn(f"fetching {SOURCE_URL} failed", proc.stderr)
+
+    def test_refuses_a_missing_source_revision(self):
+        self.serve(release(), sums())
+        (self.served / 'v1.4.0').write_text('{}')
+        self.assert_refused('contains no source revision')
+
+    def test_refuses_an_invalid_source_revision(self):
+        self.serve(release(), sums())
+        (self.served / 'v1.4.0').write_text('{"sha":"main"}')
+        self.assert_refused('contains an invalid source revision')
+
+    def test_source_hash_failure_preserves_the_pin(self):
+        self.serve(release(), sums())
+        (self.served / (SOURCE_REVISION + '.tar.gz')).unlink()
+        self.assert_refused('cannot hash Pi source archive')
 
     def test_dry_run_prints_json_and_writes_nothing(self):
         self.serve(release(), sums())

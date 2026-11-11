@@ -32,6 +32,7 @@ def validate(home):
     pi = shlex.split(providers['pi']['config']['launchArgs'])
     assert Path(pi[pi.index('--append-system-prompt') + 1]).read_text() == addition
     assert providers['pi']['enabled'] is True
+    assert pi.count('--approve') == 1
     assert providers['pi']['config']['binaryPath'].endswith('/bin/pi')
     grok = shlex.split(providers['grok'].get('config', {}).get('launchArgs', ''))
     assert not any('prompt' in arg or 'developer_instructions' in arg for arg in grok)
@@ -81,6 +82,7 @@ def main():
             # changed defaults, or a Grok prompt must fail these assertions.
             original = settings.read_text()
             mutations = [lambda d: d['providerInstances']['claudeAgent']['config'].update(launchArgs=''),
+                         lambda d: d['providerInstances']['pi']['config'].update(launchArgs=d['providerInstances']['pi']['config']['launchArgs'].replace('--approve', '')),
                          lambda d: d.update(defaultThreadEnvMode='local'),
                          lambda d: d['providerInstances']['antigravity'].update(enabled=False),
                          lambda d: d['providerInstances']['grok'].update(config={'launchArgs': '--append-system-prompt bad'})]
