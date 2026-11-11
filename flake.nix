@@ -241,6 +241,7 @@
         antigravity-cli-release = agentTools.antigravityCliRelease;
         antigravity-cli = import ./packages/antigravity-cli.nix { inherit pkgs; };
         antigravity-acp-release = agentTools.antigravityAcpRelease;
+        antigravity-acp-repack = agentTools.antigravityAcpRepack;
         antigravity-acp = import ./packages/antigravity-acp.nix {
           inherit pkgs;
           pins = (builtins.fromJSON (builtins.readFile ./packages/antigravity-acp-release.json)).platforms;
@@ -576,6 +577,21 @@
           antigravity-acp-release =
             pythonScriptCheck "antigravity-acp-release" ./scripts/antigravity-acp-release
               ./tests/test_antigravity_acp_release.py;
+          antigravity-acp-repack =
+            pythonScriptCheck "antigravity-acp-repack" ./scripts/antigravity-acp-repack
+              ./tests/test_antigravity_acp_repack.py;
+          # The overlays run inside the runtime, so the test imports them from
+          # their repository location rather than from scripts/.
+          antigravity-acp-overlay =
+            pkgs.runCommand "antigravity-acp-overlay-tests" { nativeBuildInputs = [ pkgs.python3 ]; }
+              ''
+                export PYTHONDONTWRITEBYTECODE=1
+                mkdir -p packages tests
+                cp -r ${./packages/antigravity-acp-overlay} packages/antigravity-acp-overlay
+                cp ${./tests/test_antigravity_acp_overlay.py} tests/test_antigravity_acp_overlay.py
+                python tests/test_antigravity_acp_overlay.py
+                touch $out
+              '';
           # The Claude helper runs against the pinned SDK with real Node, so the
           # check carries both instead of letting that test skip.
           agent-usage =

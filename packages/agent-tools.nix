@@ -176,6 +176,11 @@ let
   # which upstream publishes no checksum for.
   antigravityAcpRelease = pythonHelper "antigravity-acp-release" ../scripts/antigravity-acp-release;
 
+  # Rebuilds the zip embedded in an Antigravity ACP runtime with the
+  # repository's overlay modules added, keeping the archive's length and
+  # alignment.
+  antigravityAcpRepack = pythonHelper "antigravity-acp-repack" ../scripts/antigravity-acp-repack;
+
   # Resolves the newest T3 Code nightly and its asset digests from the GitHub
   # releases API.
   t3codeRelease = pythonHelper "t3code-release" ../scripts/t3code-release;
@@ -211,6 +216,7 @@ in
     npmRelease
     antigravityCliRelease
     antigravityAcpRelease
+    antigravityAcpRepack
     t3codeRelease
     syntheticModelsWatch
     androidSdkRelease

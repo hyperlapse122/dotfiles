@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+"""Rebuild the zip embedded in an Antigravity ACP runtime with added modules.
+
+The runtime, agy_acp_server.par, is Google's launcher with a stored zip of
+Python modules in one section of the file. The launcher finds that zip by its
+end record and maps some entries (native modules) straight from the file at
+page-aligned offsets, so the rebuilt zip has to keep the original length, sit
+at the original offset, and keep those entries page-aligned. Nothing in the
+launcher changes, so one tool serves the ELF build and the Mach-O build.
+
+Each --extend names a shipped module, a function in it, and an overlay file.
+The tool adds the overlay beside the module, appends a line to the module that
+imports it, and drops the module's cached bytecode, because the launcher runs
+cached bytecode without checking the source. The rebuilt zip is written in
+name order, with zero bytes before aligned entries and before the central
+directory. The tool fails when the result would be longer than the original.
+
+The archive is located by its end record and central directory: of every zip
+end record in the file, the one whose central directory lists the target
+modules. Its offset is the central directory's position minus the offset the
+end record states.
+
+With --check nothing is written; the rebuild is planned in memory and the
+same failures apply.
+"""
+
+import argparse
+import ast
+import mmap
+import os
+import struct
+import sys
+import tempfile
+import zipfile
+import zlib
+from io import BytesIO
+from typing import NamedTuple
+
+END_SIGNATURE = b"PK\x05\x06"
+END_SIZE = 22
+DIRECTORY_SIGNATURE = b"PK\x01\x02"
+DIRECTORY_HEADER = struct.Struct("<4sHHHHHHIIIHHHHHII")
+LOCAL_SIGNATURE = 0x04034B50
+LOCAL_HEADER = struct.Struct("<IHHHHHIIIHH")
+END_RECORD = struct.Struct("<4sHHHHIIH")
+# 1980-01-01 in DOS date format, for the files this tool adds.
+NEW_ENTRY_DATE = 0x21
+CHUNK = 16 * 1024 * 1024
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+class Entry:
+    def __init__(self, name, data, record, align, crc):
+        self.name = name
+        self.data = data
+        self.record = record
+        self.align = align
+        self.crc = crc
+
+
+class Record(NamedTuple):
+    """The central directory fields a rebuilt entry keeps."""
+
+    made_by: int
+    needed: int
+    time: int
+    date: int
+    attributes: int
+
+
+class Archive(NamedTuple):
+    base: int
+    length: int
+    comment: bytes
+    entries: list
+
+
+class Extension(NamedTuple):
+    target: str
+    function: str
+    overlay_path: str
+
+
+def parse_directory(view, start, end, count):
+    """The central directory records between start and end, or None when they do not parse."""
+    records = []
+    position = start
+    for _ in range(count):
+        if position + DIRECTORY_HEADER.size > end:
+            return None
+        fields = DIRECTORY_HEADER.unpack_from(view, position)
+        if fields[0] != DIRECTORY_SIGNATURE:
+            return None
+        name_length, extra_length, comment_length = fields[10], fields[11], fields[12]
+        name_start = position + DIRECTORY_HEADER.size
+        name_end = name_start + name_length
+        if name_end + extra_length + comment_length > end:
+            return None
+        records.append((fields, bytes(view[name_start:name_end]).decode("utf-8", "surrogateescape"), extra_length))
+        position = name_end + extra_length + comment_length
+    return records if position == end else None
+
+
+def locate(view, targets):
+    """The archive whose central directory lists every target, as (base, end record offset, records)."""
+    found = []
+    position = view.find(END_SIGNATURE)
+    while position >= 0:
+        if position + END_SIZE <= len(view):
+            _, disk, directory_disk, _, count, size, offset, comment_length = END_RECORD.unpack_from(view, position)
+            start = position - size
+            base = start - offset
+            if (
+                disk == directory_disk == 0
+                and start >= 0
+                and base >= 0
+                and position + END_SIZE + comment_length <= len(view)
+            ):
+                records = parse_directory(view, start, position, count)
+                if records is not None and set(targets) <= {name for _, name, _ in records}:
+                    found.append((base, position, records))
+        position = view.find(END_SIGNATURE, position + 1)
+    if not found:
+        raise Failure(f"no zip archive in the file lists {', '.join(sorted(targets))}")
+    if len(found) > 1:
+        raise Failure(f"more than one zip archive in the file lists {', '.join(sorted(targets))}")
+    return found[0]
+
+
+def read_archive(view, page_size, targets):
+    base, end, records = locate(view, targets)
+    comment_length = END_RECORD.unpack_from(view, end)[7]
+    entries = []
+    for fields, name, extra_length in records:
+        (_, made_by, needed, flags, method, time, date, crc, compressed, size, *_, attributes, offset) = fields
+        if method != 0 or flags != 0 or extra_length != 0 or compressed != size:
+            raise Failure(
+                f"{name}: not a plain stored entry "
+                f"(compression {method}, flags {flags}, extra field {extra_length} bytes)"
+            )
+        local = base + offset
+        name_length, local_extra = struct.unpack_from("<HH", view, local + 26)
+        data_start = local + LOCAL_HEADER.size + name_length + local_extra
+        entries.append(
+            Entry(
+                name,
+                view[data_start : data_start + size],
+                Record(made_by, needed, time, date, attributes),
+                data_start % page_size == 0,
+                crc,
+            )
+        )
+    comment = bytes(view[end + END_SIZE : end + END_SIZE + comment_length])
+    return Archive(base, end + END_SIZE + comment_length - base, comment, entries)
+
+
+def defines_function(source, name):
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return False
+    return any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name for node in tree.body
+    )
+
+
+def apply_extensions(archive, extensions):
+    """The archive's entries with each overlay added and each target changed."""
+    by_name = {entry.name: entry for entry in archive.entries}
+    for extension in extensions:
+        if not defines_function(bytes(by_name[extension.target].data), extension.function):
+            raise Failure(f"{extension.target}: no function {extension.function} at module level")
+    entries = list(archive.entries)
+    for extension in extensions:
+        directory, _, module = extension.target.rpartition("/")
+        overlay_name = os.path.basename(extension.overlay_path)
+        with open(extension.overlay_path, "rb") as handle:
+            overlay = handle.read()
+        package = directory.replace("/", ".")
+        line = f"from {package} import {overlay_name.removesuffix('.py')}\n".encode()
+        target = by_name[extension.target]
+        data = bytes(target.data)
+        if not data.endswith(b"\n"):
+            data += b"\n"
+        target.data = data + line
+        target.crc = zlib.crc32(target.data)
+        cache_prefix = f"{directory}/__pycache__/{module.removesuffix('.py')}."
+        entries = [
+            entry for entry in entries if not (entry.name.startswith(cache_prefix) and entry.name.endswith(".pyc"))
+        ]
+        record = target.record._replace(time=0, date=NEW_ENTRY_DATE)
+        entries.append(Entry(f"{directory}/{overlay_name}", overlay, record, False, zlib.crc32(overlay)))
+    return sorted(entries, key=lambda entry: entry.name.encode())
+
+
+def layout(entries, archive, page_size):
+    """The rebuilt archive bytes, or the number of bytes it is too long by."""
+    body = bytearray()
+    directory = bytearray()
+    for entry in entries:
+        name = entry.name.encode()
+        if entry.align:
+            body += b"\0" * (-(archive.base + len(body) + LOCAL_HEADER.size + len(name)) % page_size)
+        record = entry.record
+        size = len(entry.data)
+        body += LOCAL_HEADER.pack(
+            LOCAL_SIGNATURE, record.needed, 0, 0, record.time, record.date, entry.crc, size, size, len(name), 0
+        )  # fmt: skip
+        directory += DIRECTORY_HEADER.pack(
+            DIRECTORY_SIGNATURE, record.made_by, record.needed, 0, 0, record.time, record.date,
+            entry.crc, size, size, len(name), 0, 0, 0, 0, record.attributes, len(body) - LOCAL_HEADER.size,
+        )  # fmt: skip
+        directory += name
+        body += name
+        body += entry.data
+    trailer = END_SIZE + len(archive.comment)
+    spare = archive.length - len(body) - len(directory) - trailer
+    if spare < 0:
+        return -spare
+    body += b"\0" * spare
+    end = END_RECORD.pack(
+        END_SIGNATURE, 0, 0, len(entries), len(entries), len(directory), len(body), len(archive.comment)
+    )  # fmt: skip
+    return bytes(body + directory + end + archive.comment)
+
+
+def verify(built, entries, archive, page_size):
+    """Reopen the rebuilt archive bytes and check every entry against the plan."""
+    if len(built) != archive.length:
+        raise Failure(f"rebuilt archive is {len(built)} bytes, expected {archive.length}")
+    try:
+        reopened = zipfile.ZipFile(BytesIO(built))
+        broken = reopened.testzip()
+    except zipfile.BadZipFile as error:
+        raise Failure(f"rebuilt archive does not open: {error}") from None
+    if broken is not None:
+        raise Failure(f"{broken}: rebuilt entry fails its checksum")
+    if [info.filename for info in reopened.infolist()] != [entry.name for entry in entries]:
+        raise Failure("rebuilt archive lists different entries than planned")
+    for entry, info in zip(entries, reopened.infolist()):
+        local = info.header_offset
+        name_length, extra_length = struct.unpack_from("<HH", built, local + 26)
+        data_start = local + LOCAL_HEADER.size + name_length + extra_length
+        if built[data_start : data_start + info.file_size] != entry.data:
+            raise Failure(f"{entry.name}: rebuilt entry differs from the plan")
+        if entry.align and (archive.base + data_start) % page_size != 0:
+            raise Failure(f"{entry.name}: rebuilt entry is not page-aligned")
+
+
+def plan(view, page_size, extensions):
+    targets = [extension.target for extension in extensions]
+    archive = read_archive(view, page_size, targets)
+    entries = apply_extensions(archive, extensions)
+    built = layout(entries, archive, page_size)
+    if isinstance(built, int):
+        raise Failure(
+            f"{', '.join(targets)}: the overlays do not fit, "
+            f"the rebuilt archive needs {built} more bytes than the original holds"
+        )
+    return archive, entries, built
+
+
+def write(source_path, output_path, view, archive, built):
+    """Write the output beside its destination, reopen it, then move it into place."""
+    directory = os.path.dirname(os.path.abspath(output_path))
+    descriptor, staging = tempfile.mkstemp(prefix=".antigravity-acp-repack-", dir=directory)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            for start in range(0, archive.base, CHUNK):
+                handle.write(view[start : min(start + CHUNK, archive.base)])
+            handle.write(built)
+            end = archive.base + archive.length
+            for start in range(end, len(view), CHUNK):
+                handle.write(view[start : min(start + CHUNK, len(view))])
+        os.chmod(staging, os.stat(source_path).st_mode & 0o7777)
+        with open(staging, "rb") as handle, mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as written:
+            if written[archive.base : archive.base + archive.length] != built or len(written) != len(view):
+                raise Failure("written file differs from the rebuilt archive")
+        os.replace(staging, output_path)
+    except BaseException:
+        if os.path.exists(staging):
+            os.unlink(staging)
+        raise
+
+
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser(
+        description="Rebuild the zip embedded in an Antigravity ACP runtime with added modules.",
+    )
+    parser.add_argument(
+        "--page-size", type=int, required=True, help="page size of the target system: 4096 on Linux, 16384 on macOS"
+    )
+    parser.add_argument(
+        "--extend",
+        nargs=3,
+        action="append",
+        required=True,
+        metavar=("MODULE", "FUNCTION", "OVERLAY"),
+        help="shipped module path in the archive, the function the overlay wraps, "
+        "and the overlay file to add beside the module; repeatable",
+    )
+    parser.add_argument(
+        "--check", action="store_true", help="plan the rebuild and report failures without writing anything"
+    )
+    parser.add_argument("input", help="the runtime to read")
+    parser.add_argument("output", nargs="?", help="where to write the rebuilt runtime; may equal input")
+    arguments = parser.parse_args(argv)
+    if arguments.page_size <= 0:
+        parser.error("--page-size must be positive")
+    if arguments.check == (arguments.output is not None):
+        parser.error("give an output path, or --check without one")
+    return arguments
+
+
+def main(argv):
+    arguments = parse_arguments(argv)
+    extensions = [Extension(*values) for values in arguments.extend]
+    try:
+        with open(arguments.input, "rb") as handle, mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as view:
+            archive, entries, built = plan(view, arguments.page_size, extensions)
+            if arguments.check:
+                print(f"ok: {arguments.input} can be rebuilt with {len(entries)} entries")
+                return 0
+            verify(built, entries, archive, arguments.page_size)
+            write(arguments.input, arguments.output, view, archive, built)
+    except Failure as failure:
+        print(f"antigravity-acp-repack: {failure}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"antigravity-acp-repack: {error}", file=sys.stderr)
+        return 1
+    print(f"wrote {arguments.output} with {len(entries)} entries")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
