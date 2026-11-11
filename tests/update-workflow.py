@@ -77,6 +77,8 @@ if name == 'gh':
         print(subprocess.check_output(['jq', '-r', args[args.index('--jq') + 1]], input=json.dumps(prs), text=True).strip())
     elif args[:2] in (['pr', 'create'], ['pr', 'edit']):
         body = pathlib.Path(args[args.index('--body-file') + 1]).read_text()
+        if len(body) > 65536:
+            raise SystemExit('GitHub PR body exceeds 65536 characters')
         (root / 'pr-body.md').write_text(body)
     else:
         raise SystemExit('unexpected gh operation: ' + repr(args))
@@ -115,19 +117,57 @@ if args[:2] == ['run', '.#synthetic-models-watch']:
         pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new"}]}\n')
     sys.exit(1 if c.get('catalog_fetch_fail') else 0)
 if args and args[0] == 'run': sys.exit(0)
+if args[:2] == ['eval', '--json']:
+    group = args[2].removeprefix('.#')
+    if c.get('eval_fail') == group:
+        raise SystemExit('target discovery failed for ' + group)
+    names = {'checks.x86_64-linux': ['light', 'host-a', 'host-b'], 'vmChecks': ['all', 'first', 'second']}[group]
+    print(json.dumps(names))
+    sys.exit(0)
 if args and args[0] in ('fmt', 'flake', 'build'):
-    scope = 'catalogs' if any('checks.x86_64-linux.' in a for a in args) else 'dependencies'
+    scope = 'catalogs' if pathlib.Path.cwd().name == 'catalogs' else 'dependencies'
     if scope == 'catalogs':
         assert {a for a in args if a.startswith('.#')} == {'.#checks.x86_64-linux.pi', '.#checks.x86_64-linux.synthetic-models'}, 'catalog verification targets changed'
     if scope == 'catalogs' or args[0] == 'fmt': count(scope + '-round')
     round = int((root / (scope + '-round')).read_text())
-    event('verify', scope=scope, command=args[0], round=round, sha=git('rev-parse', 'HEAD'))
-    if c.get('timeout_dependency_verify') and scope == 'dependencies':
-        os.killpg(os.getpgrp(), signal.SIGKILL)
+    event('verify', scope=scope, command=args[0], args=args, round=round, sha=git('rev-parse', 'HEAD'))
+    if c.get('bounded_disk') and scope == 'dependencies':
+        # Each closure is 12 GiB; the runner has 32 GiB. Aggregate builds
+        # protect every closure, while individual unlinked builds permit GC.
+        gib = 1024 ** 3
+        budget = 32 * gib
+        if args[0] == 'flake' and '--no-build' not in args:
+            print('No space left on device: aggregate flake check roots all closures')
+            sys.exit(1)
+        if args[0] == 'build':
+            targets = [a for a in args if a.startswith('.#')]
+            active = (5 if '.#vmChecks.all' in targets else len(targets)) * 12 * gib
+            disk = root / 'disk-used'
+            used = int(disk.read_text()) if disk.exists() else 0
+            options = dict(zip(args, args[1:]))
+            min_free = int(options.get('min-free', '0'))
+            max_free = int(options.get('max-free', '0'))
+            if min_free > 0 and budget - used - active < min_free and max_free > min_free:
+                used = min(used, max(0, budget - max_free))
+            if used + active > budget:
+                print('No space left on device: completed closures were not reclaimed')
+                sys.exit(1)
+            if '--no-link' not in args:
+                raise SystemExit('verification rooted completed closures')
+            disk.write_text(str(used + active))
     if os.environ.get('GH_TOKEN_FOR_UPDATES') or os.environ.get('SYNTHETIC_API_KEY'):
         event('secret-leak')
         sys.exit(95)
     print('verification ' + scope + ' ' + args[0] + ' round ' + str(round))
+    if c.get('large_logs'):
+        print('builder diagnostics ' * c.get('log_repeat', 6000))
+    if c.get('timeout_dependency_verify') and scope == 'dependencies' and (not c.get('late_timeout') or '.#vmChecks.second' in args):
+        print('LATE_TARGET_TIMEOUT_CONTEXT', flush=True)
+        if c.get('late_timeout'):
+            # Leave tee alive to preserve output emitted before termination.
+            os.kill(os.getppid(), signal.SIGKILL)
+            sys.exit(1)
+        os.killpg(os.getpgrp(), signal.SIGKILL)
     fail = c.get('verify_fail')
     if fail == scope or (scope == 'dependencies' and fail == args[0]) or (fail == 'after-rebase' and round > 1): sys.exit(1)
     if c.get('interaction_fail') and scope == 'dependencies' and 'new' in pathlib.Path('home/h82/agents/synthetic-catalog.json').read_text(): sys.exit(1)
@@ -323,6 +363,14 @@ def verify_before_push(f):
             require(catalog or dependencies, 'pushed SHA was not verified')
 
 
+def bounded_verification(f):
+    require(f.ok, 'bounded dependency verification exhausted runner disk')
+    builds = [e for e in f.events_of('verify') if e['scope'] == 'dependencies' and e['command'] == 'build']
+    targets = [a for e in builds for a in e['args'] if a.startswith('.#')]
+    require(sorted(targets) == sorted(['.#checks.x86_64-linux.' + n for n in ('light', 'host-a', 'host-b')] + ['.#vmChecks.' + n for n in ('first', 'second')]), 'individual verification skipped or duplicated a check or VM test')
+    verify_before_push(f)
+
+
 def behavioral_tests(workflow, publisher, verifier):
     def happy(f):
         require(f.ok, 'successful workflow failed')
@@ -339,6 +387,7 @@ def behavioral_tests(workflow, publisher, verifier):
             require(f.expression(workflow['jobs']['watch']['if']) == (part == 'drift'), 'drift selection gate is wrong')
         exercise(workflow, publisher, verifier, 'manual ' + part, selection, part=part)
     exercise(workflow, publisher, verifier, 'scheduled all-parts run', happy, part='', event='schedule')
+    exercise(workflow, publisher, verifier, 'all checks and VMs fit a bounded runner disk', bounded_verification, part='dependencies', bounded_disk=True)
     def cancelled(f):
         require(not f.events_of('push-attempt'), 'cancelled run reached publication')
         require(f.steps['prepare_dependencies']['outcome'] == 'skipped', 'cancelled run started another producer')
@@ -365,10 +414,30 @@ def behavioral_tests(workflow, publisher, verifier):
         logs = f.root / 'runner/updates/dependencies-logs/1'
         require('dependencies fmt' in (logs / 'fmt.log').read_text(), 'format log was lost')
         require('dependencies flake' in (logs / 'check.log').read_text(), 'flake log was lost')
-        require('dependencies build' in (logs / 'vm-check.log').read_text() and 'dependencies build' not in (logs / 'check.log').read_text(), 'VM and flake logs were mixed')
+        require('dependencies build' in (logs / 'vmChecks-first.log').read_text() and 'dependencies build' not in (logs / 'check.log').read_text(), 'VM and flake logs were mixed')
+        require(len([e for e in f.events_of('verify') if e['scope'] == 'dependencies' and e['command'] == 'build']) == 5, 'a failed check skipped remaining checks or VM tests')
     for target in ('fmt', 'flake', 'build'):
         exercise(workflow, publisher, verifier, 'individual dependency verification failure: ' + target, dependency_failure, verify_fail=target)
     exercise(workflow, publisher, verifier, 'catalog/dependency interaction failure retains catalog and reconciles dependencies', dependency_failure, interaction_fail=True)
+    def discovery_failure(f):
+        require(not f.ok, 'target discovery failure was hidden')
+        marker = 'target discovery failed for ' + f.controls['eval_fail']
+        require(marker in (f.control / 'pr-body.md').read_text() and marker in (f.root / 'summary').read_text(), 'target discovery error was omitted from failure reports')
+        require(any(e['command'] == 'build' for e in f.events_of('verify')), 'target discovery failure skipped the independent verification group')
+        require(not f.events_of('push-attempt'), 'target discovery failure published dependencies')
+    for group in ('checks.x86_64-linux', 'vmChecks'):
+        exercise(workflow, publisher, verifier, 'target discovery failure is reported: ' + group, discovery_failure, part='dependencies', eval_fail=group)
+    def bounded_body(f):
+        require(f.steps['reconcile']['outcome'] == 'success', 'large logs prevented reconciliation')
+        body = (f.control / 'pr-body.md').read_text()
+        require(len(body) <= 65536 and 'https://github.com/example/dotfiles/actions/runs/1729' in body, 'reconciliation body lost its bound or full-log link')
+        require('Push a fix to this branch' in body, 'truncation removed repair instructions')
+        before_link = body.split('Full logs: [workflow run](')[0]
+        require(sum(line.startswith('```') for line in before_link.splitlines()) % 2 == 0, 'run link is inside an unclosed code fence')
+        summary = f.root / 'summary'
+        require(summary.stat().st_size < 1024 ** 2 and 'workflow run' in summary.read_text(), 'verbose failures overflowed the step summary or lost its run link')
+        require(not f.events_of('push-attempt'), 'failed verification published dependencies')
+    exercise(workflow, publisher, verifier, 'large failure logs still open a reconciliation PR', bounded_body, part='dependencies', verify_fail='build', large_logs=True, log_repeat=60000)
     def update_failure(f):
         require(not f.ok, 'updater failure was hidden')
         require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'failed updater blocked catalog')
@@ -429,10 +498,19 @@ def behavioral_tests(workflow, publisher, verifier):
         require(f.steps['publish_dependencies']['outputs']['failure_stage'] == 'verification', 'interruption lost its last publication stage')
         require('Failure stage: verification' in (f.control / 'pr-body.md').read_text(), 'interruption was not reported in reconciliation')
     exercise(workflow, publisher, verifier, 'forced termination during dependency verification retains reconciliation', dependency_timeout, part='dependencies', timeout_dependency_verify=True)
+    def late_timeout(f):
+        dependency_timeout(f)
+        body = (f.control / 'pr-body.md').read_text()
+        require('LATE_TARGET_TIMEOUT_CONTEXT' in body, 'passing logs displaced interrupted-target diagnostics')
+        require('Push a fix to this branch' in body and len(body) <= 65536, 'interrupted reconciliation lost its instructions or size bound')
+    exercise(workflow, publisher, verifier, 'late interruption keeps target context after verbose passing checks', late_timeout, part='dependencies', timeout_dependency_verify=True, late_timeout=True, large_logs=True)
     def no_token(f):
         require(not f.ok, 'missing push token succeeded')
         require(not f.events_of('push-attempt') and 'GH_TOKEN_FOR_UPDATES' in f.log, 'missing token pushed or was not named')
-    exercise(workflow, publisher, verifier, 'missing push token never falls back to job token', no_token, part='catalogs', missing_token=True)
+        require(not f.events_of('verify') and not f.events_of('dependency-update') and not f.events_of('catalog-fetch'), 'missing push token started expensive maintenance')
+        require(not f.events_of('gh'), 'missing push token attempted reconciliation')
+    for part in ('catalogs', 'dependencies', 'all'):
+        exercise(workflow, publisher, verifier, 'missing push token stops ' + part + ' before maintenance', no_token, part=part, missing_token=True)
     def feature(f):
         require(f.ok, 'feature dispatch failed')
         names=f.call('--git-dir',str(f.origin),'ls-tree','--name-only','main').splitlines()
@@ -469,6 +547,13 @@ def mutation_tests(workflow, publisher, verifier):
     def selected_only(f):
         require(not f.events_of('catalog-fetch'), 'manual dependencies ran catalogs')
 
+    for name, before, after, expected in [
+        ('aggregate flake build', 'check --no-build', 'check', 'bounded dependency verification exhausted runner disk'),
+        ('GC threshold removed', 'min-free 8589934592', 'min-free 0', 'bounded dependency verification exhausted runner disk'),
+        ('VM group skipped', '    build_targets vmChecks', '    :', 'individual verification skipped or duplicated'),
+    ]:
+        require(before in verifier, 'missing bounded verification mutation anchor: ' + name)
+        caught(name, workflow, publisher, verifier.replace(before, after, 1), bounded_verification, expected, part='dependencies', bounded_disk=True)
     initial = 'verify\nsync_main\n'
     require(initial in publisher, 'missing initial verification mutation anchor')
     caught('initial verification removed', workflow, publisher.replace(initial, 'sync_main\n', 1), verifier, verify_before_push, 'pushed SHA was not verified', part='catalogs')
