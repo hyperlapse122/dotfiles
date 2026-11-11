@@ -16,6 +16,8 @@ with tempfile.TemporaryDirectory() as directory:
     (agent / 'settings.json').write_text(json.dumps({'defaultProvider': 'foreign', 'defaultModel': 'bad',
         'packages': ['other'], 'extensions': ['other.ts'], 'ownerSetting': True}))
     (agent / 'auth.json').write_text('{"other":{"type":"api_key","key":"FAKE-other"}}')
+    trust = '{"/remembered/project":true}'
+    (agent / 'trust.json').write_text(trust)
     key = Path(directory) / 'key'
     key.write_text('FAKE-synthetic\n')
     plugin = Path(directory) / 'pinned-source'
@@ -26,13 +28,16 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run(command, check=True)
         settings = json.loads((agent / 'settings.json').read_text())
         assert settings['packages'] == ['other', str(plugin)]
-        assert settings['extensions'] == ['other.ts', str(agent / 'dotfiles-policy.ts')]
+        assert settings['extensions'] == ['other.ts', *[str(agent / name) for name in ('dotfiles-policy.ts', 'dotfiles-web.ts', 'dotfiles-question.ts')]]
         assert settings['ownerSetting'] is True
+        assert settings['defaultProjectTrust'] == 'ask'
+        assert (agent / 'trust.json').read_text() == trust
         ids = [model['id'] for model in json.loads((agent / 'model-lock.json').read_text())['syntheticModelLocks']['models']]
         assert settings['defaultProvider'] == 'synthetic' and settings['defaultModel'] in ids
         auth = json.loads((agent / 'auth.json').read_text())
         assert auth == {'other': {'type': 'api_key', 'key': 'FAKE-other'}, 'synthetic': {'type': 'api_key', 'key': 'FAKE-synthetic'}}
         assert (agent / 'auth.json').stat().st_mode & 0o777 == 0o600
+    subprocess.run(['node', sys.argv[4], sys.argv[3], str(agent)], check=True)
     (agent / 'auth.json').write_text('[]')
     assert subprocess.run(command, capture_output=True).returncode != 0
     assert (agent / 'auth.json').read_text() == '[]'

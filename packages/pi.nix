@@ -1,45 +1,37 @@
 {
   pkgs,
   syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
+  exaKeyFile ? "/run/secrets/cli-auth/exa_api_key",
 }:
 
 let
   inherit (pkgs) lib stdenv;
   source = builtins.fromJSON (builtins.readFile ./pi-release.json);
-  system = stdenv.hostPlatform.system;
-  pin =
-    source.platforms.${system} or (throw "packages/pi-release.json pins no pi asset for ${system}");
+  runtime = pkgs.callPackage ./pi-runtime.nix {
+    source = builtins.fetchTarball {
+      url = "https://github.com/earendil-works/pi/archive/${source.source.rev}.tar.gz";
+      inherit (source.source) sha256;
+    };
+    modelLock = ../home/h82/agents/pi-model-lock.json;
+    policyPatch = ./pi-model-policy.patch;
+  };
   # Each path lands inside single quotes in a shell script or in a JavaScript
   # string literal.
   plainPath = path: builtins.match "/[A-Za-z0-9._/+-]+" path != null;
 in
 assert lib.assertMsg (plainPath syntheticKeyFile)
   "pi: syntheticKeyFile '${syntheticKeyFile}' is not a plain absolute path";
+assert lib.assertMsg (plainPath exaKeyFile)
+  "pi: exaKeyFile '${exaKeyFile}' is not a plain absolute path";
+assert lib.assertMsg (
+  runtime.version == source.version
+) "pi: source version does not match the release pin";
 stdenv.mkDerivation {
   pname = "pi";
   inherit (source) version;
 
-  src = pkgs.fetchurl { inherit (pin) url hash; };
-
-  # Each tarball holds one pi/ directory: the binary and the themes, docs,
-  # wasm, and native addons it resolves from its own directory, so the
-  # directory is installed whole.
-  sourceRoot = "pi";
-
-  # Pi is a Bun-compiled executable whose JavaScript payload rides at the end
-  # of the file, so stripping it leaves the bare Bun runtime. On Linux it and
-  # its X11 clipboard addon are patched to the store's loader. On macOS
-  # nothing is fixed up, so the binary's code signature stays valid.
-  dontStrip = true;
-  dontFixup = stdenv.hostPlatform.isDarwin;
-  nativeBuildInputs = [
-    pkgs.writableTmpDirAsHomeHook
-  ]
-  ++ lib.optional stdenv.hostPlatform.isLinux pkgs.autoPatchelfHook;
-  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [
-    stdenv.cc.cc.lib
-    pkgs.libxcb
-  ];
+  dontUnpack = true;
+  nativeBuildInputs = [ pkgs.writableTmpDirAsHomeHook ];
 
   dontConfigure = true;
   dontBuild = true;
@@ -47,8 +39,8 @@ stdenv.mkDerivation {
   installPhase = ''
     runHook preInstall
 
-    mkdir -p $out/libexec
-    cp -R . $out/libexec/pi
+    mkdir -p $out/libexec/pi
+    ln -s ${runtime}/bin/pi $out/libexec/pi/pi
     install -Dm755 ${../scripts/pi} $out/bin/pi
     substituteInPlace $out/bin/pi \
       --replace-fail '@PI@' "$out/libexec/pi/pi"
@@ -58,7 +50,8 @@ stdenv.mkDerivation {
     substituteInPlace $out/bin/pi-state --replace-fail '/usr/bin/env python3' '${pkgs.python3}/bin/python3'
     substituteInPlace $out/bin/pi \
       --replace-fail '@STATE@' "$out/bin/pi-state" \
-            --replace-fail '@KEY@' '${syntheticKeyFile}'
+      --replace-fail '@KEY@' '${syntheticKeyFile}' \
+      --replace-fail '@EXA_KEY@' '${exaKeyFile}'
     runHook postInstall
   '';
 
@@ -70,7 +63,7 @@ stdenv.mkDerivation {
     description = "Minimal terminal coding agent";
     homepage = "https://github.com/earendil-works/pi";
     license = lib.licenses.mit;
-    sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
+    sourceProvenance = runtime.meta.sourceProvenance;
     platforms = lib.attrNames source.platforms;
     mainProgram = "pi";
   };

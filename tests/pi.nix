@@ -23,6 +23,8 @@ pkgs.runCommand "pi-tests"
       entry:
       let
         found = lib.findFirst (p: (p.pname or "") == "pi") null entry.user.home.packages;
+        keyDirectory =
+          if entry.user.my.kind == "nixos" then "/run/secrets/cli-auth" else entry.user.my.secrets.stateDir;
       in
       lib.optionalString (found == null || (found.version or "") != pin.version) ''
         echo "Pi missing or wrong version on ${entry.name}" >&2
@@ -31,7 +33,10 @@ pkgs.runCommand "pi-tests"
       + lib.optionalString (found != null) ''
         test -x ${found}/bin/pi
         python3 ${./pi-runtime.py} ${found}/libexec/pi/pi ${entry.user.home-files}/.pi/agent
-        python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state}
+        node ${./pi-runtime-policy.mjs} ${found} ${entry.user.home-files}/.pi/agent
+        node ${./pi-tools.mjs} ${found} ${entry.user.home-files}/.pi/agent
+        python3 ${./pi-wrapper.py} ${found}/bin/pi ${entry.user.home-files}/.pi/agent ${keyDirectory}
+        python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state} ${found} ${./pi-trust.mjs}
         node --experimental-strip-types ${./pi-policy.mjs} ${entry.user.home-files}/.pi/agent
       ''
     ) userEntries}

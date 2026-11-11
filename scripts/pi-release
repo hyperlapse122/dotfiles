@@ -121,7 +121,23 @@ def resolve(source_url):
         if api_digest is not None and api_digest.lower() != f"sha256:{digest}":
             raise Failure(f"{name} has digest {api_digest!r} in the release but sha256:{digest} in {SUMS_ASSET}")
         platforms[system] = {"url": url, "hash": hex_to_sri(digest)}
-    return {"version": version, "platforms": platforms}
+    revision_url = f"https://api.github.com/repos/{REPOSITORY}/commits/{tag}"
+    try:
+        revision = json.loads(fetch(revision_url))["sha"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        raise Failure(f"{revision_url} contains no source revision") from None
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise Failure(f"{revision_url} contains an invalid source revision")
+    archive = f"https://github.com/{REPOSITORY}/archive/{revision}.tar.gz"
+    prefetched = subprocess.run(
+        ["nix-prefetch-url", "--unpack", "--type", "sha256", archive],
+        capture_output=True, text=True, stdin=subprocess.DEVNULL,
+    )
+    source_hash = prefetched.stdout.strip()
+    if prefetched.returncode or not re.fullmatch(r"[0-9abcdfghijklmnpqrsvwxyz]{52}", source_hash):
+        raise Failure(f"cannot hash Pi source archive {archive}")
+    return {"version": version, "platforms": platforms,
+            "source": {"rev": revision, "sha256": source_hash}}
 
 
 def version_tuple(version):

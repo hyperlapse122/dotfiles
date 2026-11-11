@@ -13,5 +13,9 @@
       "url": "https://github.com/earendil-works/pi/releases/download/v1.5.2/pi-darwin-arm64.tar.gz",
       "hash": "sha256-VrXhlNSFztVVZnuLoydhV6gnLp7N6eAB5CivgJhb3Zs="
     }
+  },
+  "source": {
+    "rev": "b4afdddf44e059c67ccf5097e5317d913521b470",
+    "sha256": "0b4phii0ay2cykfc6dxyl0r9r75fp7dwk3j52y5z0zia2h0avlni"
   }
 }
