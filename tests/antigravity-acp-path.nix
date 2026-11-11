@@ -7,7 +7,8 @@
   built against a stub runtime whose .par prints what it was started with. The
   real runtime needs network and a Google sign-in, so its behavior through the
   wrapper is verified by hand; this check proves what the wrapper itself does,
-  and that every scratch prefix under which the pinned Compound Engineering
+  including the rules directory, plugin skills directory, and token storage
+  variables it hands the runtime, and that every scratch prefix under which the pinned Compound Engineering
   plugin creates an Antigravity run home is one the wrapper links into. The
   build sandbox has no /etc/ssl, so the CA bundle the runtime gets here is the
   nixpkgs fallback.
@@ -33,10 +34,16 @@ let
 
     int main(int argc, char **argv) {
       const char *cert = getenv("SSL_CERT_FILE");
+      const char *rules = getenv("ANTIGRAVITY_ACP_RULES_DIR");
+      const char *plugin = getenv("ANTIGRAVITY_ACP_PLUGIN_SKILLS");
+      const char *storage = getenv("AGY_ACP_FORCE_FILE_STORAGE");
       char line[4096];
       printf("argv0=%s\n", argv[0]);
       printf("pid=%ld\n", (long)getpid());
       printf("cert=%s\n", cert ? cert : "<unset>");
+      printf("rules=%s\n", rules ? rules : "<unset>");
+      printf("plugin=%s\n", plugin ? plugin : "<unset>");
+      printf("storage=%s\n", storage ? storage : "<unset>");
       for (int i = 1; i < argc; i++) printf("arg=%s\n", argv[i]);
       while (fgets(line, sizeof line, stdin)) printf("stdin=%s", line);
       return 0;
@@ -74,10 +81,16 @@ let
     "test-audit"
   ];
 
+  # Stands in for the generation's plugin skills directory.
+  pluginSkills = pkgs.runCommand "plugin-skills-fixture" { } "mkdir -p $out/ce-plan";
+
   pathPackage = import ../packages/antigravity-acp-path.nix {
-    inherit pkgs skills;
+    inherit pkgs skills pluginSkills;
     runtime = stubRuntime;
   };
+
+  # The Mac wrapper selects file token storage; the Linux one leaves it alone.
+  expectedStorage = if pkgs.stdenv.hostPlatform.isDarwin then "1" else "<unset>";
 in
 pkgs.runCommand "antigravity-acp-path-tests" { } ''
   failures=$PWD/failures
@@ -151,7 +164,7 @@ pkgs.runCommand "antigravity-acp-path-tests" { } ''
   expected=$(printf 'arg=--uid=\narg=a b\nstdin=one line')
   actual=$(grep -E '^(arg|stdin)=' out || true)
   [ "$actual" = "$expected" ] || fail "arguments or stdin changed on the way: $actual"
-  unexpected=$(grep -vE '^(outer|argv0|pid|cert|arg|stdin)=' out || true)
+  unexpected=$(grep -vE '^(outer|argv0|pid|cert|rules|plugin|storage|arg|stdin)=' out || true)
   [ -z "$unexpected" ] || fail "the wrapper wrote to stdout: $unexpected"
   [ ! -s stderr ] || fail "the wrapper wrote to stderr: $(cat stderr)"
 
@@ -197,7 +210,7 @@ pkgs.runCommand "antigravity-acp-path-tests" { } ''
 
   # assert_linked <label> <home> [home-dir]: the named skills that exist are
   # linked to the fake HOME's, in private directories, and the HOME's rule
-  # directory is not linked, because the ACP runtime never reads it.
+  # directory is not linked: the runtime reads it through the environment.
   assert_linked() {
     local label=$1 home=$2 src=''${3:-$fakeHome}
     for skill in grammar-checker humanizer test-audit; do
@@ -281,6 +294,35 @@ pkgs.runCommand "antigravity-acp-path-tests" { } ''
   assert_untouched "symlinked parent" "$real/gemini-home"
 
   run_home "GEMINI_HOME unset" HOME="$fakeHome"
+
+  # The runtime's inputs: the rules directory the CLI already reads, and the
+  # generation's plugin skills, whatever GEMINI_HOME is.
+  pluginDirectory=${pluginSkills}
+  assert_inputs() {
+    local label=$1 rules=$2 plugin=$3 storage=$4
+    [ "$(field rules)" = "$rules" ] || fail "$label: ANTIGRAVITY_ACP_RULES_DIR is '$(field rules)', not '$rules'"
+    [ "$(field plugin)" = "$plugin" ] || fail "$label: ANTIGRAVITY_ACP_PLUGIN_SKILLS is '$(field plugin)', not '$plugin'"
+    [ "$(field storage)" = "$storage" ] || fail "$label: AGY_ACP_FORCE_FILE_STORAGE is '$(field storage)', not '$storage'"
+  }
+
+  home=$(make_ce_home "$tmpdir/xmodel-cr-scratch-XXXXXX")
+  run_home "inputs in a run home" HOME="$fakeHome" GEMINI_HOME="$home"
+  assert_inputs "inputs in a run home" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
+
+  run_home "inputs in T3 instance home" HOME="$fakeHome" GEMINI_HOME="$t3Home"
+  assert_inputs "inputs in T3 instance home" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
+
+  run_home "inputs without GEMINI_HOME" HOME="$fakeHome"
+  assert_inputs "inputs without GEMINI_HOME" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
+
+  run_home "caller inputs" HOME="$fakeHome" GEMINI_HOME="$t3Home" \
+    ANTIGRAVITY_ACP_RULES_DIR=/caller/rules ANTIGRAVITY_ACP_PLUGIN_SKILLS=/caller/skills \
+    AGY_ACP_FORCE_FILE_STORAGE=caller
+  assert_inputs "caller inputs" /caller/rules /caller/skills caller
+
+  # With no HOME there is no rules directory to name.
+  run_home "inputs without HOME" GEMINI_HOME="$t3Home"
+  assert_inputs "inputs without HOME" '<unset>' "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
 
   home=$(make_ce_home "$tmpdir/xmodel-cr-scratch-XXXXXX")
   run_home "HOME unset" GEMINI_HOME="$home"

@@ -240,12 +240,8 @@
         tanstack-intent = import ./packages/tanstack-intent.nix { inherit pkgs; };
         antigravity-cli-release = agentTools.antigravityCliRelease;
         antigravity-cli = import ./packages/antigravity-cli.nix { inherit pkgs; };
-        antigravity-acp-release = agentTools.antigravityAcpRelease;
         antigravity-acp-repack = agentTools.antigravityAcpRepack;
-        antigravity-acp = import ./packages/antigravity-acp.nix {
-          inherit pkgs;
-          pins = (builtins.fromJSON (builtins.readFile ./packages/antigravity-acp-release.json)).platforms;
-        };
+        antigravity-acp = import ./packages/antigravity-acp.nix { inherit pkgs; };
         antigravity-acp-path = import ./packages/antigravity-acp-path.nix { inherit pkgs; };
         t3code-release = agentTools.t3codeRelease;
         synthetic-models-watch = agentTools.syntheticModelsWatch;
@@ -574,9 +570,6 @@
           antigravity-cli-release =
             pythonScriptCheck "antigravity-cli-release" ./scripts/antigravity-cli-release
               ./tests/test_antigravity_cli_release.py;
-          antigravity-acp-release =
-            pythonScriptCheck "antigravity-acp-release" ./scripts/antigravity-acp-release
-              ./tests/test_antigravity_acp_release.py;
           antigravity-acp-repack =
             pythonScriptCheck "antigravity-acp-repack" ./scripts/antigravity-acp-repack
               ./tests/test_antigravity_acp_repack.py;

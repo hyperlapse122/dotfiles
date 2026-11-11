@@ -118,7 +118,8 @@ let
   # Agent SDK, so the wrapper puts exactly those on PATH. Home Manager
   # overrides the Synthetic key file per host kind. The
   # Antigravity quota service lists Gemini buckets only for a current ACP
-  # client, so the wrapper names the pinned ACP runtime's version.
+  # client, so the wrapper names the version of the ACP runtime the pinned
+  # T3 Code embeds.
   agentUsage = pkgs.lib.makeOverridable (
     {
       syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
@@ -142,7 +143,10 @@ let
           --prefix PATH : ${runtimePath} \
           --set AGENT_USAGE_SYNTHETIC_KEY_FILE ${pkgs.lib.escapeShellArg syntheticKeyFile} \
           --set NODE_PATH ${sdk}/lib/node_modules \
-          --set AGENT_USAGE_ANTIGRAVITY_VERSION ${(builtins.fromJSON (builtins.readFile ./antigravity-acp-release.json)).version}
+          --set AGENT_USAGE_ANTIGRAVITY_VERSION ${
+            (builtins.fromJSON (builtins.readFile ./t3code-release.json))
+            .antigravity.${pkgs.stdenv.hostPlatform.system}.version
+          }
       '';
     })
   ) { };
@@ -170,11 +174,6 @@ let
   # Resolves the latest Antigravity CLI release and its per-platform digests
   # from Google's release feed.
   antigravityCliRelease = pythonHelper "antigravity-cli-release" ../scripts/antigravity-cli-release;
-
-  # Resolves the newest complete Antigravity ACP runtime release by probing
-  # candidate versions on Google's download host, and hashes its archives,
-  # which upstream publishes no checksum for.
-  antigravityAcpRelease = pythonHelper "antigravity-acp-release" ../scripts/antigravity-acp-release;
 
   # Rebuilds the zip embedded in an Antigravity ACP runtime with the
   # repository's overlay modules added, keeping the archive's length and
@@ -215,7 +214,6 @@ in
     agentUsage
     npmRelease
     antigravityCliRelease
-    antigravityAcpRelease
     antigravityAcpRepack
     t3codeRelease
     syntheticModelsWatch

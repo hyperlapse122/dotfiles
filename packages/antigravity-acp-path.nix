@@ -18,12 +18,18 @@
   runtime reads skills only from GEMINI_HOME, so when GEMINI_HOME is such a
   run home the wrapper links into it each skill in `skills` that exists under
   ~/.gemini/antigravity-cli/skills/. Home Manager passes the names
-  home/h82/agents/skills.nix links there. The ACP runtime loads no global
-  rule files from any location, so the shared rules are not linked. Any
-  other GEMINI_HOME, such as T3 Code's instance homes, is left alone.
+  home/h82/agents/skills.nix links there. Any other GEMINI_HOME, such as T3 Code's instance homes, is left alone.
 
-  The runtime defaults to packages/antigravity-acp-release.json, which
-  scripts/antigravity-acp-release keeps at Google's newest complete release.
+  The runtime is the rebuild in packages/antigravity-acp.nix, which reads the
+  shared agent instructions and the plugin skills from two directories the
+  wrapper names for every launch, each only when the caller set none:
+  ANTIGRAVITY_ACP_RULES_DIR is ~/.gemini/config/rules, the files the Antigravity
+  CLI reads, and ANTIGRAVITY_ACP_PLUGIN_SKILLS is `pluginSkills`, the
+  generation's store directory of plugin skills. On macOS the wrapper also sets
+  AGY_ACP_FORCE_FILE_STORAGE, so a run home reads the sign-in file
+  Compound Engineering copied in instead of a Keychain item the re-signed
+  runtime cannot read.
+
   tests/antigravity-acp-path.nix passes a stub runtime instead: the real one
   is about 1 GB unpacked and needs network and a Google sign-in to run, so only
   a stub can report the argv[0], pid, and environment the wrapper execs it with.
@@ -31,10 +37,8 @@
 {
   pkgs,
   skills ? [ ],
-  runtime ? import ./antigravity-acp.nix {
-    inherit pkgs;
-    pins = (builtins.fromJSON (builtins.readFile ./antigravity-acp-release.json)).platforms;
-  },
+  pluginSkills ? null,
+  runtime ? import ./antigravity-acp.nix { inherit pkgs; },
 }:
 
 let
@@ -73,6 +77,19 @@ let
             break
           fi
         done
+      fi
+    ''}
+    if [ -z "''${ANTIGRAVITY_ACP_RULES_DIR:-}" ] && [ -n "''${HOME:-}" ]; then
+      export ANTIGRAVITY_ACP_RULES_DIR="$HOME/.gemini/config/rules"
+    fi
+    ${lib.optionalString (pluginSkills != null) ''
+      if [ -z "''${ANTIGRAVITY_ACP_PLUGIN_SKILLS:-}" ]; then
+        export ANTIGRAVITY_ACP_PLUGIN_SKILLS=${lib.escapeShellArg pluginSkills}
+      fi
+    ''}
+    ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+      if [ -z "''${AGY_ACP_FORCE_FILE_STORAGE:-}" ]; then
+        export AGY_ACP_FORCE_FILE_STORAGE=1
       fi
     ''}
     strip_slashes() {

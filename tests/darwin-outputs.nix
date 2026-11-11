@@ -206,10 +206,7 @@ let
       serveHtml = lib.optionalString (serveHtmlPackage != null) (lib.getExe serveHtmlPackage);
       agy = "${import ../packages/antigravity-cli.nix { inherit (entry.host) pkgs; }}/bin/agy";
       antigravityRuntime = "${
-        import ../packages/antigravity-acp.nix {
-          inherit (entry.host) pkgs;
-          pins = (builtins.fromJSON (builtins.readFile ../packages/antigravity-acp-release.json)).platforms;
-        }
+        import ../packages/antigravity-acp.nix { inherit (entry.host) pkgs; }
       }/libexec/antigravity-acp";
       # Only these four Dock keys may be written; the rest stay the user's.
       expectedDock = pkgs.writeText "expected-dock.json" (
@@ -372,6 +369,8 @@ let
         if grep -qF SSL_CERT_FILE "$agyPar"; then
           bad "the macOS agy_acp_server.par wrapper sets SSL_CERT_FILE"
         fi
+        grep -qF 'export AGY_ACP_FORCE_FILE_STORAGE=1' "$agyPar" \
+          || bad "the macOS agy_acp_server.par wrapper does not select file token storage"
       fi
       [ "$(readlink -f "$gen/home-path/bin/localharness_external" || true)" = ${lib.escapeShellArg "${antigravityRuntime}/localharness_external"} ] \
         || bad "localharness_external on PATH is not the PATH-pinned runtime's"
