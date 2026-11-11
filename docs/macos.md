@@ -330,7 +330,17 @@ avdmanager delete avd -n <name>
 
 ## Verification
 
-Repository checks evaluate the macOS configuration on Linux (`darwin-config`) and build the `darwinConfigurations` closures on CI's `macos-26` runner when triggered (`main` push, manual dispatch, or `full-ci` label). Neither activates a Mac. Confirm hardware and GUI behavior on the Mac itself after applying and report live Mac checks separately from repository checks.
+`darwin-config` and `darwin-provisioning` run on both Linux and Apple silicon macOS. They evaluate declarations and exercise provisioning with fake tools. Run them locally from the checkout:
+
+```sh
+nix build --no-link --print-build-logs \
+  .#checks.aarch64-darwin.darwin-config \
+  .#checks.aarch64-darwin.darwin-provisioning
+```
+
+Run `nix flake check` on the Mac to build all declared macOS checks, including `darwin-outputs`, which builds the fixture systems. CI also builds every production and bootstrap `darwinConfigurations` closure on its `macos-26` runner when triggered (`main` push, manual dispatch, or `full-ci` label).
+
+These checks do not activate a Mac. Confirm hardware and GUI behavior on the Mac itself after applying and report live Mac checks separately from repository checks.
 
 ## Losing or retiring the Mac
 
