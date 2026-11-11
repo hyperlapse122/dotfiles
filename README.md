@@ -84,7 +84,7 @@ done
 ### Continuous integration (`.github/workflows/check.yml`)
 
 - **Every pull request** runs `fmt` (`nix fmt -- --ci`), path classification (`changes` via `scripts/ci-docs-only-paths`), `markdown-lint` (standalone on docs-only pull requests), `flake-check` (`nix flake check --no-build`), and the `light-*` shards of `checkShards` (`tests/check-shards.nix`).
-- **Heavy closure builds** — `host-checks` (`.#checkShards.hosts`), `vm-checks` (`.#vmChecks.*`), `build` (`.#nixosConfigurations.<host>.config.system.build.toplevel`), and `build-darwin` (`.#darwinConfigurations.<host>.system` and `.#checks.aarch64-darwin.*` on `macos-15`) — run only on a push to `main`, a manual `workflow_dispatch`, or a pull request carrying the `full-ci` label.
+- **Heavy closure builds** — `host-checks` (`.#checkShards.hosts`), `vm-checks` (`.#vmChecks.*`), `build` (`.#nixosConfigurations.<host>.config.system.build.toplevel`), and `build-darwin` (`.#darwinConfigurations.<host>.system` and `.#checks.aarch64-darwin.*` on `macos-26`) — run only on a push to `main`, a manual `workflow_dispatch`, or a pull request carrying the `full-ci` label.
 
 ### Scheduled maintenance (`.github/workflows/update-dependencies.yml`)
 
