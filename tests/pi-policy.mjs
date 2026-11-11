@@ -1,11 +1,14 @@
-import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, readdirSync, chmodSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, copyFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 const temporary = mkdtempSync(join(tmpdir(), 'pi-policy-'));
 try {
-  cpSync(process.argv[2], temporary, { recursive: true, dereference: true });
+  // Copy only the files the policy reads. Copying the whole agent tree keeps
+  // the store's read-only directory modes, which the cleanup cannot remove.
+  for (const name of ['dotfiles-policy.ts', 'model-lock.json', 'models.json'])
+    copyFileSync(join(process.argv[2], name), join(temporary, name));
   // Only the native provider inventory is stubbed; execute the actual policy.
   const policy = readFileSync(join(temporary, 'dotfiles-policy.ts'), 'utf8')
     .replace('import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";', 'const getBuiltinProviders = () => ["foreign", "synthetic"];');
@@ -27,11 +30,4 @@ try {
   hooks.session_start({}, {shutdown: () => stopped = true, sessionManager: {getBranch: () => [{type:'model_change', provider:'foreign', modelId:'outside'}, {type:'message'}]}});
   assert(stopped);
   process.exitCode = 0;
-} finally {
-  // cpSync keeps the store's read-only modes, so rmSync cannot unlink entries
-  // inside copied directories until they are writable again.
-  for (const entry of readdirSync(temporary, { recursive: true, withFileTypes: true }))
-    if (entry.isDirectory()) chmodSync(join(entry.parentPath, entry.name), 0o755);
-  chmodSync(temporary, 0o755);
-  rmSync(temporary, { recursive: true, force: true });
-}
+} finally { rmSync(temporary, { recursive: true, force: true }); }
