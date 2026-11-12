@@ -27,8 +27,9 @@
     -bad-mask.yaml has a non-contiguous subnet mask, and -bad-dns.yaml has a
     DNS entry that is not an address. Each of these alone differs from the
     valid file: -router-outside.yaml has a router outside the address's
-    network, -ipv6-dns.yaml has an IPv6 DNS server, -prefix-0.yaml and
-    -prefix-32.yaml have an all-zero and an all-ones subnet mask, and
+    network, -ipv6-dns.yaml has an IPv6 DNS server, -prefix-0.yaml,
+    -prefix-31.yaml, and -prefix-32.yaml have a /0, a /31, and a /32 subnet
+    mask, and
     -bad-mac.yaml has a malformed MAC address.
 */
 { pkgs }:
@@ -93,8 +94,7 @@ pkgs.runCommand "fake-non-nixos-secrets"
 
     # The wired network declaration in documentation address ranges with a
     # locally administered MAC, and failure fixtures: the same file for the
-    # other identity only, and one variant per rule that rejects a value. The
-    # prefix variants put the router on the address itself, so the router stays
+    # other identity only, and the variants below. The prefix variants put the router on the address itself, so the router stays
     # inside whatever network the mask makes and only the mask is wrong.
     wired() {
       mask=255.255.255.0
@@ -105,6 +105,7 @@ pkgs.runCommand "fake-non-nixos-secrets"
         bad-mask) mask=255.0.255.0 ;;
         router-outside) router=203.0.113.1 ;;
         prefix-0) mask=0.0.0.0; router=192.0.2.100 ;;
+        prefix-31) mask=255.255.255.254; router=192.0.2.100 ;;
         prefix-32) mask=255.255.255.255; router=192.0.2.100 ;;
         bad-mac) mac='02:00:5E:00:53:0G' ;;
         ipv6-dns) dns='  - 198.51.100.20\n  - 2001:db8::53\n' ;;
@@ -122,11 +123,7 @@ pkgs.runCommand "fake-non-nixos-secrets"
     wired full > wired.yaml
     sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired.yaml > $out/wired-network.yaml
     sops --encrypt --age "$other" --input-type yaml --output-type yaml wired.yaml > $out/wired-network-other.yaml
-    wired no-router > wired-no-router.yaml
-    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired-no-router.yaml > $out/wired-network-no-router.yaml
-    wired no-dns > wired-no-dns.yaml
-    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired-no-dns.yaml > $out/wired-network-no-dns.yaml
-    for variant in bad-mask bad-dns router-outside ipv6-dns prefix-0 prefix-32 bad-mac; do
+    for variant in no-router no-dns bad-mask bad-dns router-outside ipv6-dns prefix-0 prefix-31 prefix-32 bad-mac; do
       wired $variant > wired-$variant.yaml
       sops --encrypt --age "$recipient" --input-type yaml --output-type yaml wired-$variant.yaml > $out/wired-network-$variant.yaml
     done

@@ -178,7 +178,7 @@ pkgs.testers.nixosTest {
               "journalctl -u nixos-wired-network.service -p warning --no-pager -o cat"
           )
 
-      def ssh_from_server(machine, address):
+      def ssh_from_server(address):
           server.succeed(ssh + "root@" + address + " true")
 
       def eth2_address(machine):
@@ -224,7 +224,7 @@ pkgs.testers.nixosTest {
           machine.fail("test -e " + keyfile)
           dns = machine.succeed("nmcli -t -f IP4.DNS device show eth2")
           assert "192.168.2.53" not in dns and "192.168.2.54" not in dns, dns
-          ssh_from_server(machine, eth2_address(machine))
+          ssh_from_server(eth2_address(machine))
 
       def verify_unit_failed_open(machine):
           machine.succeed("systemctl is-active nixos-wired-network.service")
@@ -246,7 +246,7 @@ pkgs.testers.nixosTest {
       with subtest("the declared adapter carries the declared address after boot and reboot"):
           verify_static(valid)
           verify_profile_files(valid, macs["valid"])
-          ssh_from_server(valid, "192.168.2.100")
+          ssh_from_server("192.168.2.100")
           verify_unit_failed_open(valid)
           assert warnings(valid) == "", warnings(valid)
           verify_other_secret_installed(valid)
@@ -255,7 +255,7 @@ pkgs.testers.nixosTest {
           valid.wait_for_unit("multi-user.target")
           verify_static(valid)
           verify_profile_files(valid, macs["valid"])
-          ssh_from_server(valid, "192.168.2.100")
+          ssh_from_server("192.168.2.100")
 
       with subtest("a malformed declaration leaves the host on DHCP and reachable"):
           verify_dhcp(malformed)
@@ -294,6 +294,6 @@ pkgs.testers.nixosTest {
           assert valid.succeed("stat -c %i " + keyfile) == inode
           verify_static(valid)
           valid.succeed("ping -c 1 -W 5 192.168.2.1")
-          ssh_from_server(valid, "192.168.2.100")
+          ssh_from_server("192.168.2.100")
     '';
 }

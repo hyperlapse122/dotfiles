@@ -15,6 +15,8 @@
   - its ExecStart runs the packaged nixos-wired-network with an encrypted
     wired-network.yaml from the store and writes into NetworkManager's
     runtime connection directory.
+  - its PATH holds nmcli, which the tool needs to reload NetworkManager on a
+    switch.
   - NetworkManager.service wants it, so a NetworkManager start pulls it in.
 
   Verifies, on every bootstrap configuration and on every production
@@ -74,11 +76,24 @@ let
         ${fail "${entry.name}: ${unitName} is missing or does not order itself before NetworkManager.service"}
       fi
       exec_start=$(sed -n 's/^ExecStart=//p' ${esc unit})
-      if ! printf '%s\n' "$exec_start" | grep -Eq '^/nix/store/[^ ]+/bin/nixos-wired-network --file /nix/store/[^ ]+-wired-network\.yaml '; then
+      if ! grep -Eq '^/nix/store/[^ ]+/bin/nixos-wired-network --file /nix/store/[^ ]+-wired-network\.yaml ' <<<"$exec_start"; then
         ${fail "${entry.name}: ${unitName} does not run nixos-wired-network on an encrypted wired-network.yaml"}
       fi
-      if ! printf '%s\n' "$exec_start" | grep -Fq -- '--output-dir /run/NetworkManager/system-connections'; then
+      if ! grep -Fq -- '--output-dir /run/NetworkManager/system-connections' <<<"$exec_start"; then
         ${fail "${entry.name}: ${unitName} does not write into /run/NetworkManager/system-connections"}
+      fi
+      # The tool reloads NetworkManager through nmcli on a switch, and skips the
+      # reload when nmcli is not on its PATH.
+      unit_path=$(sed -n 's/^Environment="PATH=\(.*\)"$/\1/p' ${esc unit})
+      has_nmcli=0
+      IFS=: read -ra path_dirs <<<"$unit_path"
+      for dir in "''${path_dirs[@]}"; do
+        if [ -x "$dir/nmcli" ]; then
+          has_nmcli=1
+        fi
+      done
+      if [ "$has_nmcli" != 1 ]; then
+        ${fail "${entry.name}: ${unitName} has no nmcli on its PATH"}
       fi
       if [ ! -e ${esc "${units}/NetworkManager.service.wants/${unitName}"} ]; then
         ${fail "${entry.name}: NetworkManager.service does not want ${unitName}"}

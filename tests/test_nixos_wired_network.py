@@ -29,8 +29,9 @@ WARNING = '<4>nixos-wired-network: '
 KEYFILE = 'wired-static.nmconnection'
 
 STUB = r'''import os, sys
+keyfile = os.path.exists(os.environ['KEYFILE'])
 with open(os.environ['CALLS'], 'a') as log:
-    log.write(' '.join(sys.argv[1:]) + '\n')
+    log.write(' '.join(sys.argv[1:]) + (' (keyfile present)' if keyfile else '') + '\n')
 sys.exit(1 if os.environ.get('NMCLI_FAILS') else 0)
 '''
 
@@ -50,6 +51,7 @@ REJECTED = {
     'wired-network-ipv6-dns.yaml': 'dns_servers',
     'wired-network-bad-mask.yaml': 'ipv4_subnet_mask',
     'wired-network-prefix-0.yaml': 'ipv4_subnet_mask',
+    'wired-network-prefix-31.yaml': 'ipv4_subnet_mask',
     'wired-network-prefix-32.yaml': 'ipv4_subnet_mask',
     'wired-network-bad-mac.yaml': 'mac',
 }
@@ -75,7 +77,8 @@ class WiredNetwork(unittest.TestCase):
         self.out = self.run_dir / 'system-connections'
         env = {k: v for k, v in os.environ.items() if not k.startswith('SOPS_')}
         self.env = env | {'PATH': str(bin_dir) + ':' + os.environ['PATH'],
-                          'CALLS': str(self.calls), 'HOME': str(self.root)}
+                          'CALLS': str(self.calls), 'HOME': str(self.root),
+                          'KEYFILE': str(self.out / KEYFILE)}
 
     def run_tool(self, secret='wired-network.yaml', identity=None, owner=None, fail_nmcli=False):
         self.calls.write_text('')
@@ -116,7 +119,7 @@ class WiredNetwork(unittest.TestCase):
         parser.read(self.keyfile())
         self.assertEqual({s: dict(parser[s]) for s in parser.sections()}, EXPECTED)
         self.assertEqual(stat.S_IMODE(self.keyfile().stat().st_mode), 0o600)
-        self.assertEqual(self.nmcli_calls(), ['connection reload'])
+        self.assertEqual(self.nmcli_calls(), ['connection reload (keyfile present)'])
 
     def test_output_directories_are_created_with_their_modes(self):
         self.run_tool()
@@ -165,6 +168,15 @@ class WiredNetwork(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout + result.stderr, '')
         self.assertTrue(self.keyfile().exists())
+
+    def test_failed_write_leaves_no_temporary_file(self):
+        self.out.mkdir(parents=True)
+        self.keyfile().mkdir()
+        result = self.run_tool()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(len(result.stderr.splitlines()), 1, result.stderr)
+        self.assertEqual([p.name for p in self.out.iterdir()], [KEYFILE])
+        self.assertEqual(self.nmcli_calls(), [])
 
     def test_missing_identity_warns_and_writes_nothing(self):
         self.assert_untouched(self.run_tool(identity=self.root / 'absent.txt'), 'missing')
