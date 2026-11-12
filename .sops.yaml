@@ -9,6 +9,8 @@ creation_rules:
     age: age1s9qs3km4wy0zt4g7tf0jc60fr2nhmr73kmsruj4y9h5wvmppxc9se70rcm
   - path_regex: secrets/hosts/MS-7D91/ssh\.yaml$
     age: age1p69vw02h473d7qfr0xh86kw0nv0tldnx0g9qqt9e5ard3mk5zs0sr92pew
+  - path_regex: secrets/hosts/MS-7D91/wired-network\.yaml$
+    age: age1p69vw02h473d7qfr0xh86kw0nv0tldnx0g9qqt9e5ard3mk5zs0sr92pew
   - path_regex: secrets/tokens\.yaml$
     age: age1p69vw02h473d7qfr0xh86kw0nv0tldnx0g9qqt9e5ard3mk5zs0sr92pew,age1s9qs3km4wy0zt4g7tf0jc60fr2nhmr73kmsruj4y9h5wvmppxc9se70rcm
   - path_regex: secrets/wifi\.yaml$
