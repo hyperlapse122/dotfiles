@@ -5,12 +5,15 @@
 
   Runs tests/user-identity-secrets.sh over the repository, then over fixture
   trees built here with fake keys, so each rule it enforces is proven to fail
-  when broken even while hosts/ holds no Darwin host. Every tree encrypts
+  when broken even while hosts/ holds no Darwin host. Every tree holds a
+  Darwin host and a NixOS host (a directory without host.nix), and encrypts
   its secret files to the recipients its .sops.yaml rules name, except where a
   mutation makes the two disagree:
 
   - a well-formed tree passes;
   - a host SSH file encrypted to a second recipient fails;
+  - a NixOS host's per-host file encrypted to a second recipient, with its
+    rule naming it too, fails, and a NixOS host without a recorded recipient fails;
   - a missing host SSH file, or a missing recorded recipient, fails;
   - a host recipient missing from the tokens.yaml rule fails;
   - a tokens.yaml rule that names the host while the file was never re-keyed
@@ -44,16 +47,22 @@ pkgs.runCommand "user-identity-secrets-tests"
       sops --encrypt --age "$1" --input-type yaml --output-type yaml plain.yaml >"$2"
     }
 
-    # A tree with one Darwin host, plus the single mutation named by $1.
+    # A tree with one Darwin host and one NixOS host, plus the single mutation
+    # named by $1. The NixOS host's recipient is the $nixos key.
     make_tree() {
       local tree=$TMPDIR/tree-$1
       mkdir -p "$tree/hosts/fakehost" "$tree/secrets/bootstrap/fakehost" "$tree/secrets/hosts/fakehost"
+      mkdir -p "$tree/hosts/fakenixos" "$tree/secrets/bootstrap/fakenixos" "$tree/secrets/hosts/fakenixos"
       printf '{ kind = "darwin"; system = "aarch64-darwin"; }\n' >"$tree/hosts/fakehost/host.nix"
+      printf '{ }\n' >"$tree/hosts/fakenixos/default.nix"
       printf '%s\n' "$host" >"$tree/secrets/bootstrap/fakehost/recipient.txt"
+      printf '%s\n' "$nixos" >"$tree/secrets/bootstrap/fakenixos/recipient.txt"
       local tokens_rule="$nixos,$host" tokens_file="$nixos,$host"
       local wifi_rule=$nixos wifi_file=$nixos tailscale_rule=$nixos printers_rule=$nixos printers_file=$nixos ssh=$host
+      local nixos_wired_rule=$nixos nixos_wired_file=$nixos
       case $1 in
         second-recipient) ssh="$host,$nixos" ;;
+        nixos-second-recipient) nixos_wired_rule="$nixos,$host" nixos_wired_file="$nixos,$host" ;;
         not-in-tokens-rule) tokens_rule=$nixos tokens_file=$nixos ;;
         tokens-not-rekeyed) tokens_file=$nixos ;;
         in-wifi-rule) wifi_rule="$nixos,$host" wifi_file="$nixos,$host" ;;
@@ -63,16 +72,19 @@ pkgs.runCommand "user-identity-secrets-tests"
         wifi-file-only) wifi_file="$nixos,$host" ;;
         printers-file-only) printers_file="$nixos,$host" ;;
       esac
-      printf 'creation_rules:\n  - path_regex: secrets/tokens\\.yaml$\n    age: %s\n  - path_regex: secrets/wifi\\.yaml$\n    age: %s\n  - path_regex: secrets/tailscale\\.yaml$\n    age: %s\n  - path_regex: secrets/printers\\.yaml$\n    age: %s\n' \
-        "$tokens_rule" "$wifi_rule" "$tailscale_rule" "$printers_rule" >"$tree/.sops.yaml"
+      printf 'creation_rules:\n  - path_regex: secrets/tokens\\.yaml$\n    age: %s\n  - path_regex: secrets/wifi\\.yaml$\n    age: %s\n  - path_regex: secrets/tailscale\\.yaml$\n    age: %s\n  - path_regex: secrets/printers\\.yaml$\n    age: %s\n  - path_regex: secrets/hosts/fakenixos/ssh\\.yaml$\n    age: %s\n  - path_regex: secrets/hosts/fakenixos/wired-network\\.yaml$\n    age: %s\n' \
+        "$tokens_rule" "$wifi_rule" "$tailscale_rule" "$printers_rule" "$nixos" "$nixos_wired_rule" >"$tree/.sops.yaml"
       encrypt "$tokens_file" "$tree/secrets/tokens.yaml"
       encrypt "$wifi_file" "$tree/secrets/wifi.yaml"
       encrypt "$tailscale_rule" "$tree/secrets/tailscale.yaml"
       encrypt "$printers_file" "$tree/secrets/printers.yaml"
       encrypt "$ssh" "$tree/secrets/hosts/fakehost/ssh.yaml"
+      encrypt "$nixos" "$tree/secrets/hosts/fakenixos/ssh.yaml"
+      encrypt "$nixos_wired_file" "$tree/secrets/hosts/fakenixos/wired-network.yaml"
       case $1 in
         missing-ssh) rm "$tree/secrets/hosts/fakehost/ssh.yaml" ;;
         missing-recipient) rm "$tree/secrets/bootstrap/fakehost/recipient.txt" ;;
+        nixos-missing-recipient) rm "$tree/secrets/bootstrap/fakenixos/recipient.txt" ;;
       esac
       printf '%s\n' "$tree"
     }
@@ -93,7 +105,9 @@ pkgs.runCommand "user-identity-secrets-tests"
       fi
     }
 
-    expect_failure second-recipient 'recipient alone'
+    expect_failure second-recipient 'fakehost: secrets/hosts/fakehost/ssh.yaml must be encrypted to this host'
+    expect_failure nixos-second-recipient 'fakenixos: secrets/hosts/fakenixos/wired-network.yaml must be encrypted to this host'
+    expect_failure nixos-missing-recipient 'fakenixos: secrets/bootstrap/fakenixos/recipient.txt is missing'
     expect_failure missing-ssh 'ssh.yaml is missing'
     expect_failure missing-recipient 'recipient.txt is missing'
     expect_failure not-in-tokens-rule 'tokens.yaml rule'
