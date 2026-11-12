@@ -259,6 +259,8 @@ A captive portal or policy page is logged without triggering repairs. The log is
 
 A Mac whose wired adapter needs a static address on one network declares it with `my.wiredNetwork.enable = true` (`modules/darwin/wired-network.nix`). The values live in `secrets/hosts/<host>/wired-network.yaml`, encrypted to the host's recipient alone, with the keys `mac`, `ipv4_address`, `ipv4_subnet_mask`, `ipv4_router`, and `dns_servers` (see `../secrets/README.md`).
 
+NixOS hosts use the same trait and file schema with a different mechanism and stricter rules; see [Wired network](install.md#wired-network).
+
 At the end of each production apply, `macos-wired-network` decrypts that file in memory with `~/.config/nix-config/age/key.txt`, finds the hardware port with the declared MAC address, and brings that port's network service to the declared state:
 
 - a manual IPv4 configuration with the declared address, subnet mask, and router;

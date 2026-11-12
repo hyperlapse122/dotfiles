@@ -11,6 +11,7 @@
   my.t3.desktop.enable = true;
   my.printing.queues = [ "office" ];
   my.tailscale.advertiseRoutes = !config.my.bootstrap;
+  my.wiredNetwork.enable = true;
   fileSystems."/mnt/data" = {
     device = "/dev/disk/by-id/ata-ST2000DM008-2UB102_ZK30PHAD-part1";
     fsType = "exfat";

@@ -23,6 +23,7 @@
   desktop-ssh-integration = import ./desktop-ssh-integration.nix { inherit pkgs; };
   desktop-ssh-session = import ./desktop-ssh-session.nix { inherit pkgs inputs; };
   wifi-provisioning = import ./wifi-provisioning.nix { inherit pkgs inputs; };
+  wired-network-provisioning = import ./wired-network-provisioning.nix { inherit pkgs inputs; };
   tailscale-provisioning = import ./tailscale-provisioning.nix { inherit pkgs inputs; };
   podman-registry-auth = import ./podman-registry-auth.nix { inherit pkgs inputs; };
   podman-prune = import ./podman-prune.nix { inherit pkgs; };

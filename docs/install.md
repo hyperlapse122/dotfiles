@@ -107,7 +107,7 @@ unset pw
 
 The layout in `hosts/<host>/disko.nix` creates a 2 GiB ESP (`/boot`, partition label `disk-main-ESP`) and a LUKS2 container (`cryptroot`, partition label `disk-main-luks`) holding a Btrfs filesystem with `/root` (`/`), `/home`, `/nix`, `/log` (`/var/log`), and `/swap` subvolumes. The `/swap` subvolume holds a 64 GiB swapfile; no hibernation resume offset is configured. Disks other than `device` in `hosts/<host>/disko.nix` are not partitioned or formatted by `disko`.
 
-The bootstrap output needs neither decrypted sops secrets nor `/var/lib/sbctl`. It declares no sops secret, so its install logs no `sops-install-secrets` error. It has no Wi-Fi profiles, so a host without a wired link joins a network by hand from Plasma, and it runs no SSH server, so a remote operator loses access at the first reboot into it. Steps that must stay remote therefore run from the installer, as the remote path does.
+The bootstrap output needs neither decrypted sops secrets nor `/var/lib/sbctl`. It declares no sops secret, so its install logs no `sops-install-secrets` error. It has no Wi-Fi profiles and no wired static profile, so the wired adapter stays on DHCP; the declared address arrives only with the production output. A host without a wired link joins a network by hand from Plasma. The bootstrap output runs no SSH server, so a remote operator loses access at the first reboot into it. Steps that must stay remote therefore run from the installer, as the remote path does.
 
 Continue on one of the two paths below.
 
@@ -221,5 +221,43 @@ MSI MS-7D91 desktop workstation (Intel i7-13700F, NVIDIA GeForce RTX 3060, KDE P
 - The secondary 2 TB SATA HDD (`/dev/disk/by-id/ata-ST2000DM008-2UB102_ZK30PHAD-part1`) is not touched by `disko`; `hosts/MS-7D91/default.nix` mounts it read-write at `/mnt/data` as `exfat` with `nofail` and owner `h82` (`uid=1000`, `gid=100`).
 - `hosts/MS-7D91/hardware.nix` enables Intel CPU microcode, the proprietary NVIDIA driver (`hardware.nvidia.open = false`, `modesetting.enable = true`), `nvidia-container-toolkit`, and loads `nvidia`, `nvidia_modeset`, and `nvidia_drm` in the initrd on the production output so the Plymouth boot splash has KMS early.
 - `hosts/MS-7D91/default.nix` enables `my.nuphyGem80.enable` (udev access for the NuPhy Gem80 keyboard), `my.t3.cli.enable`, `my.t3.desktop.enable`, `my.printing.queues = [ "office" ]`, `my.tailscale.advertiseRoutes = !config.my.bootstrap`, and `my.intune.enable = !config.my.bootstrap`.
+- `hosts/MS-7D91/default.nix` also enables `my.wiredNetwork.enable`, which gives the wired adapter its static address on the office network; see [Wired network](#wired-network).
 - After the production switch, enroll the machine in Microsoft Intune by following [Microsoft Intune on NixOS](intune.md). Enrollment is interactive and is not part of the switch.
 - In MSI Click BIOS, enter Secure Boot Setup Mode through the firmware's Secure Boot settings before running `sudo sbctl enroll-keys --microsoft`.
+
+#### Wired network
+
+`MS-7D91` declares its wired static address in `secrets/hosts/MS-7D91/wired-network.yaml`, encrypted to the host's recipient alone, with the keys `mac`, `ipv4_address`, `ipv4_subnet_mask`, `ipv4_router`, and `dns_servers` (see [`secrets/README.md`](../secrets/README.md#secretshostshostwired-networkyaml)). The file holds no credential, but it describes an internal network, so it stays encrypted. `mac` is the adapter's permanent hardware address; the host's second onboard Ethernet port has a different address and never receives the static address.
+
+On the production output, `nixos-wired-network.service` runs before NetworkManager, decrypts the file in memory with `/var/lib/sops-nix/key.txt`, and writes the NetworkManager profile `wired-static` (IPv4 manual, IPv6 off) to `/run/NetworkManager/system-connections/`. Because `/run` is a tmpfs, the profile exists only while the trait is on and the unit succeeds. The bootstrap output renders nothing and stays on DHCP.
+
+Beyond the macOS rules, the NixOS tool requires IPv4 DNS servers only, a prefix length from 1 to 30, and a router inside the address's network. A file that cannot be decrypted or breaks a rule writes nothing, and the unit still exits 0; a production output with the trait on and no file fails to build. At boot the host then falls back to DHCP, or to the hand-made wired profile while that profile still exists. A bad update during a running boot keeps the current connection until the next boot. The warning names the field, never the value:
+
+```sh
+journalctl -b -p warning -u nixos-wired-network
+```
+
+Verify the live adapter with `nmcli -f NAME,DEVICE connection show --active`. If the age identity is restored later in the same boot, run `sudo systemctl restart nixos-wired-network` or reboot. If no adapter matches `mac`, NetworkManager activates nothing for the profile and raises no warning; compare the declared address with `ip link` and check the journal for the unit.
+
+##### First switch on the live host
+
+The owner runs these steps; an agent never runs `nr switch` on `MS-7D91` unprompted.
+
+1. Run `nr switch`. NetworkManager keeps its current connection through the switch, so the new profile is not applied yet.
+2. Reboot, or run `nmcli connection up wired-static` from the local console or over Tailscale. A session over the office LAN may drop while the address changes.
+3. Check `nmcli -f NAME,DEVICE connection show --active`. `wired-static` must be active on the wired adapter, and the office network must be reachable.
+4. Delete the hand-made wired profile with `nmcli connection delete <profile name>`. Activation never deletes profiles it did not create.
+
+##### Change a value
+
+When the office network changes, re-encrypt the file with the recipe in [`secrets/README.md`](../secrets/README.md#secretshostshostwired-networkyaml), run `nr switch`, then run `nmcli connection up wired-static` or reboot. A reload alone does not reapply a profile to a device that is already active.
+
+##### Valid values on the wrong network
+
+Values that pass every rule but do not fit the network the host is plugged into give a dead link. Any of these recovers it:
+
+- Plug the cable into the second onboard port, which uses NetworkManager's DHCP.
+- Run `nmcli connection down wired-static` from the console.
+- Edit the file and run `nr switch`, then bring the profile up again or reboot.
+
+Turning `my.wiredNetwork.enable` off removes the profile at the next boot, since nothing writes it into `/run` anymore. This differs from macOS, where the adapter keeps its last applied settings.

@@ -167,6 +167,7 @@
           "minikube-autostart"
           "mise-settings"
           "nix-cleanup"
+          "nixos-wired-network-config"
           "pinned-skills"
           "podman-containers"
           "printing"
@@ -1369,6 +1370,8 @@
           tls-inspection-ca = import ./tests/tls-inspection-ca.nix { inherit pkgs; };
           network-recovery = import ./tests/network-recovery.nix { inherit pkgs; };
           macos-wired-network = import ./tests/macos-wired-network.nix { inherit pkgs; };
+          nixos-wired-network = import ./tests/nixos-wired-network.nix { inherit pkgs; };
+          nixos-wired-network-config = import ./tests/nixos-wired-network-config.nix { inherit pkgs self; };
           inherit (import ./tests/non-nixos-scripts.nix { inherit pkgs; })
             install-user-age-identity
             nr-darwin

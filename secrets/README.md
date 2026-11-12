@@ -27,6 +27,8 @@ creation_rules:
     age: <MS-7D91 recipient>
   - path_regex: ^secrets/hosts/MS-7D91/ssh\.yaml$
     age: <MS-7D91 recipient>
+  - path_regex: ^secrets/hosts/MS-7D91/wired-network\.yaml$
+    age: <MS-7D91 recipient>
   - path_regex: ^secrets/hosts/MacBook-Pro-Mac17-9/ssh\.yaml$
     age: <MacBook-Pro-Mac17-9 recipient>
   - path_regex: ^secrets/hosts/MacBook-Pro-Mac17-9/apple-account\.yaml$
@@ -150,9 +152,9 @@ certificate: |
 
 The certificate is not a private key, but its subject identifies an internal corporate server, so it stays encrypted in this public repository. See [macOS hosts](../docs/macos.md#tls-inspection-ca).
 
-### `secrets/hosts/MacBook-Pro-Mac17-9/wired-network.yaml`
+### `secrets/hosts/<host>/wired-network.yaml`
 
-A macOS host with `my.wiredNetwork.enable = true` has `secrets/hosts/<host>/wired-network.yaml`, encrypted to that host's recipient alone:
+A host of either kind (`MS-7D91` on NixOS, `MacBook-Pro-Mac17-9` on macOS) with `my.wiredNetwork.enable = true` has `secrets/hosts/<host>/wired-network.yaml`, encrypted to that host's recipient alone:
 
 ```yaml
 mac: <wired adapter MAC address>
@@ -164,7 +166,19 @@ dns_servers:
   - <second DNS server>
 ```
 
-None of these values is a credential, but together they describe an internal network, so they stay encrypted in this public repository. See [macOS hosts](../docs/macos.md#wired-network).
+None of these values is a credential, so there is nothing to rotate, but together they describe an internal network, so they stay encrypted in this public repository. `mac` is the adapter's permanent hardware address, not a randomized one.
+
+On NixOS (`modules/nixos/wired-network.nix`), `nixos-wired-network.service` decrypts the file in memory with `/var/lib/sops-nix/key.txt` before NetworkManager starts and writes the `wired-static` profile, bound to the adapter with that MAC address, under `/run/NetworkManager/system-connections/`. The file stays outside `sops-install-secrets`, so a bad file cannot stop other secrets from installing. The NixOS tool applies stricter rules than macOS: `dns_servers` are IPv4 only, the prefix length from `ipv4_subnet_mask` is 1 to 30, and `ipv4_router` lies inside the address's network. A file that cannot be decrypted or breaks a rule writes nothing and the unit still exits 0; the host then falls back to DHCP, or to the hand-made wired profile while that profile exists. A production output with the trait on and no file fails to build. The bootstrap output renders nothing and stays on DHCP. See [wired network on NixOS](../docs/install.md#wired-network) and [macOS hosts](../docs/macos.md#wired-network).
+
+To create or change the file, add the `.sops.yaml` rule shown above, then encrypt the YAML from standard input so no plaintext reaches the checkout:
+
+```sh
+printf '%s\n' 'mac: <MAC>' 'ipv4_address: <address>' 'ipv4_subnet_mask: <mask>' \
+    'ipv4_router: <router>' 'dns_servers:' '  - <DNS 1>' '  - <DNS 2>' \
+  | sops --encrypt --filename-override secrets/hosts/<host>/wired-network.yaml \
+      --input-type yaml --output-type yaml /dev/stdin \
+  > secrets/hosts/<host>/wired-network.yaml
+```
 
 ## Recovering a host's age identity
 

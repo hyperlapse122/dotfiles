@@ -26,6 +26,7 @@
     ./system/secrets.nix
     ./system/desktop-ssh.nix
     ./wifi.nix
+    ./wired-network.nix
     ./hardware/yubikey.nix
     ./hardware/nuphy-gem80.nix
     ./hardware/sennheiser-btd.nix

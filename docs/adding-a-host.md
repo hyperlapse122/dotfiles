@@ -50,7 +50,7 @@ Traits and shared host options live in `modules/shared/host.nix`:
 | `my.printing.queues` | List of CUPS queue labels decrypted from `secrets/printers.yaml` (NixOS, empty by default). |
 | `my.tlsInspectionCa.enable` | Decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and configures system and tool CA trust (macOS). |
 | `my.networkRecovery.enable` | Runs the `org.nixos.network-recovery` launch daemon and sets `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` (macOS). |
-| `my.wiredNetwork.enable` | Applies the static IPv4, DNS, and IPv6-off settings in `secrets/hosts/<host>/wired-network.yaml` to the wired adapter with the declared MAC on production applies (macOS). |
+| `my.wiredNetwork.enable` | Applies the static IPv4, DNS, and IPv6-off settings in `secrets/hosts/<host>/wired-network.yaml` to the wired adapter with the declared MAC on production applies (macOS), or renders the `wired-static` NetworkManager profile from the same file before NetworkManager starts on a production output (NixOS). |
 | `my.dock.hostApps` | List of `.app` paths inserted into the macOS Dock between ChatGPT and Discord (`modules/darwin/dock.nix`). |
 
 Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from `secrets/tokens.yaml` (see `../secrets/README.md`).
@@ -127,6 +127,21 @@ nix develop
 
 Verify that `grep 'recipient:'` prints only `<host>`'s recipient. On NixOS desktops, `desktop-ssh-provision.service` protects the working copy at `~/.ssh/id_ed25519_nix_config` with a random KWallet passphrase (see [desktop SSH recovery](recovery.md#restore-or-rotate-a-desktop-ssh-key)). On macOS, `host-secrets` installs the key at `~/.ssh/id_ed25519_nix_config` (`0600`), protected by FileVault. Register `secrets/hosts/<host>/ssh.pub` on GitHub and any server the host must reach.
 
+## Optional wired network
+
+A NixOS host whose wired adapter needs a static address on one network sets `my.wiredNetwork.enable = true` in `hosts/<host>/default.nix`. A production output with the trait on and no file fails to build.
+
+1. Add a creation rule listing only `<host>`'s recipient to `.sops.yaml`:
+
+   ```yaml
+     - path_regex: ^secrets/hosts/<host>/wired-network\.yaml$
+       age: <the value from secrets/bootstrap/<host>/recipient.txt>
+   ```
+
+2. Create `secrets/hosts/<host>/wired-network.yaml` with the recipe in [secrets/README.md](../secrets/README.md#secretshostshostwired-networkyaml). `mac` is the adapter's permanent hardware address, `dns_servers` must be IPv4 addresses, the prefix length must be 1 to 30, and the router must lie inside the address's network.
+
+`nixos-wired-network.service` renders the `wired-static` profile before NetworkManager starts on production outputs only; the bootstrap output stays on DHCP. See [Wired network](install.md#wired-network) for the first switch, updates, and recovery from a wrong network.
+
 ## Stage the new files
 
 A Nix flake sees only paths tracked by Git. Stage the new host and secret files before evaluating or checking the flake:
@@ -155,6 +170,7 @@ These checks guard host onboarding:
 
 - `bootstrap-recipients` (`tests/bootstrap-recipients.nix`) pairs `hosts/` with `secrets/bootstrap/` and verifies that every recorded recipient appears in `.sops.yaml`.
 - `sops-recipients` (`tests/sops-recipients.nix`) verifies that every encrypted YAML file's recipient metadata matches its `.sops.yaml` creation rule.
+- `user-identity-secrets` (`tests/user-identity-secrets.nix`) verifies that every file under `secrets/hosts/<host>/` lists only `<host>`'s recipient.
 - `boot-layout-invariants` (`tests/boot-layout-invariants.nix`) checks each NixOS host's `disko.nix` for the ESP (`disk-main-ESP`), LUKS2 container (`cryptroot`, `disk-main-luks`), Btrfs subvolumes, and swapfile that `modules/nixos/system/boot.nix` expects.
 - `boot-splash` (`tests/boot-splash.nix`) checks that production NixOS outputs include a KMS driver in `boot.initrd.kernelModules`.
 - `host-name-guard` (`tests/host-name-guard.nix`) fails when any host directory name appears in shared code.
@@ -252,8 +268,8 @@ nix build --no-link .#darwinConfigurations.<host>-bootstrap.system
 These checks guard a macOS host:
 
 - `bootstrap-recipients` (`tests/bootstrap-recipients.nix`) checks `secrets/bootstrap/<host>/` and `.sops.yaml`.
-- `user-identity-secrets` (`tests/user-identity-secrets.nix`) checks that `secrets/hosts/<host>/ssh.yaml` exists and lists only `<host>`'s recipient, that `<host>`'s recipient is on `secrets/tokens.yaml`, and that it is absent from `secrets/wifi.yaml` and `secrets/tailscale.yaml`.
-- `sops-recipients` (`tests/sops-recipients.nix`) checks that every encrypted file under `secrets/hosts/<host>/` (including `apple-account.yaml` and `tls-inspection-ca.yaml`) matches its `.sops.yaml` rule.
+- `user-identity-secrets` (`tests/user-identity-secrets.nix`) checks that `secrets/hosts/<host>/ssh.yaml` exists, that every file under `secrets/hosts/<host>/` lists only `<host>`'s recipient, that `<host>`'s recipient is on `secrets/tokens.yaml`, and that it is absent from `secrets/wifi.yaml` and `secrets/tailscale.yaml`.
+- `sops-recipients` (`tests/sops-recipients.nix`) checks that every encrypted file under `secrets/hosts/<host>/` (including `apple-account.yaml`, `tls-inspection-ca.yaml`, and `wired-network.yaml`) matches its `.sops.yaml` rule.
 - `host-name-guard` (`tests/host-name-guard.nix`) checks that `<host>` does not appear in shared code.
 
 ### First setup on the Mac

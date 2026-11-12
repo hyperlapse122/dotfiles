@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# Checks the secret layout of every Darwin host (a hosts/<host> directory
-# with host.nix) in the tree at ROOT:
+# Checks the secret layout of the tree at ROOT.
 #
-# - secrets/hosts/<host>/ssh.yaml exists and is encrypted to that host's
-#   recorded recipient alone, read from the encrypted file itself: a rule in
-#   .sops.yaml only applies when a file is created or re-keyed, so the file is
-#   the authority on who can decrypt it.
+# For every host (a hosts/<host> directory), of either kind:
+#
+# - secrets/bootstrap/<host>/recipient.txt exists, and every
+#   secrets/hosts/<host>/*.yaml is encrypted to that recorded recipient alone,
+#   read from the encrypted file itself: a rule in .sops.yaml only applies when
+#   a file is created or re-keyed, so the file is the authority on who can
+#   decrypt it.
+#
+# For every Darwin host (a directory with host.nix), also:
+#
+# - secrets/hosts/<host>/ssh.yaml exists.
 # - the host's recipient is in the tokens.yaml rule and among the recipients
 #   secrets/tokens.yaml is actually encrypted to, so production can decrypt
 #   the tokens it publishes. The rule alone is not enough: a recipient added to
@@ -40,10 +46,11 @@ file_recipients() {
   yq -r '.sops.age[].recipient' "$file"
 }
 
+shopt -s nullglob
 checked=0
+darwin=0
 for dir in "$root"/hosts/*/; do
   host=$(basename -- "$dir")
-  [[ -f $dir/host.nix ]] || continue
   checked=$((checked + 1))
 
   recipient_file=$root/secrets/bootstrap/$host/recipient.txt
@@ -53,14 +60,18 @@ for dir in "$root"/hosts/*/; do
   fi
   recipient=$(tr -d '[:space:]' <"$recipient_file")
 
-  ssh_file=$root/secrets/hosts/$host/ssh.yaml
-  if [[ ! -f $ssh_file ]]; then
-    fail "$host: secrets/hosts/$host/ssh.yaml is missing"
-  else
-    actual=$(yq -r '.sops.age[].recipient' "$ssh_file" | sort -u)
+  for host_file in "$root/secrets/hosts/$host"/*.yaml; do
+    actual=$(yq -r '.sops.age[].recipient' "$host_file" | sort -u)
     if [[ $actual != "$recipient" ]]; then
-      fail "$host: secrets/hosts/$host/ssh.yaml must be encrypted to this host's recipient alone, but lists: $(tr '\n' ' ' <<<"$actual")"
+      fail "$host: secrets/hosts/$host/$(basename -- "$host_file") must be encrypted to this host's recipient alone, but lists: $(tr '\n' ' ' <<<"$actual")"
     fi
+  done
+
+  [[ -f $dir/host.nix ]] || continue
+  darwin=$((darwin + 1))
+
+  if [[ ! -f $root/secrets/hosts/$host/ssh.yaml ]]; then
+    fail "$host: secrets/hosts/$host/ssh.yaml is missing"
   fi
 
   tokens_rule_recipients=$(rule_recipients tokens)
@@ -83,8 +94,8 @@ for dir in "$root"/hosts/*/; do
   done
 done
 
-if [[ $checked -eq 0 ]]; then
+if [[ $darwin -eq 0 ]]; then
   fail 'no Darwin hosts found'
 fi
-printf 'user-identity-secrets: checked %d Darwin host(s) under %s\n' "$checked" "$root"
+printf 'user-identity-secrets: checked %d host(s), %d of them Darwin, under %s\n' "$checked" "$darwin" "$root"
 exit "$status"
