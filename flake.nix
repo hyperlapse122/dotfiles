@@ -1333,6 +1333,7 @@
           desktop-ssh = import ./tests/desktop-ssh.nix { inherit pkgs self; };
           plasma-taskbar = import ./tests/plasma-taskbar.nix { inherit pkgs self; };
           kde-theme = import ./tests/kde-theme.nix { inherit pkgs self; };
+          kde-power = import ./tests/kde-power.nix { inherit pkgs self; };
           baloo-extractor = import ./tests/baloo-extractor.nix { inherit pkgs self; };
           emoji-font = import ./tests/emoji-font.nix { inherit pkgs self; };
           user-avatar = import ./tests/user-avatar.nix { inherit pkgs self; };
