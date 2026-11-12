@@ -74,7 +74,7 @@ Total tokens are mostly cached input. Uncached input was 0.6 M for the ten defau
 
 The plan's rule changes the effort for Codex children when the default arm has at least one give-up and the raised arm has at most half as many, over the three shapes combined. The counts are 1 and 0, so the rule applies, and the T3-only instructions now pass `high` for a ladder-selected Codex child.
 
-The evidence for that change is one event in 30 runs. It cannot separate a real difference from chance, and the measured briefs, which each named an output file, did not reproduce the give-up rate of the session record (22 of 140 `gpt-6.1-terra` children at default effort). The cost is certain: about eight times the tokens and six times the wall time on an open-ended review. Read the decision as "the pre-agreed threshold was met", not as "high effort is shown to prevent give-ups".
+The evidence for that change is one event in 30 runs. It cannot separate a real difference from chance, and the measured briefs, which each named an output file, did not reproduce the give-up rate of the session record (22 of 140 `gpt-6.1-terra` children at default effort, counted by a wording match on each child's final message and not checked by hand). The cost is certain: about eight times the tokens and six times the wall time on an open-ended review. Read the decision as "the pre-agreed threshold was met", not as "high effort is shown to prevent give-ups".
 
 ## Why This Matters
 
