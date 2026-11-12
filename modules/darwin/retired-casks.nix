@@ -21,7 +21,12 @@ in
   # grok-bot cask declares only `app "Grok Bot.app"` and a `zap trash:` list
   # of ~/Library paths, and no `uninstall` stanza (homebrew-cask
   # Casks/g/grok-bot.rb at 37b48ceb2d85), so uninstall removes the app bundle
-  # and Homebrew's own records and nothing under ~/Library. Orca is no longer
+  # and Homebrew's own records and nothing under ~/Library. The wifiman
+  # cask's uninstall stanza unloads the wifiman-desktop launchd job, removes
+  # the files of its ui.wifiman.com and WiFimanNetworkHelper pkg receipts,
+  # and deletes /Applications/WiFiman Desktop.app; its ~/Library paths are
+  # listed only under `zap trash:` (homebrew-cask Casks/w/wifiman.rb at
+  # 73f9e052fa66). Orca is no longer
   # managed, and its user data is preserved. The orca cask is
   # named by its bare token, the name its Caskroom directory carries, and is
   # uninstalled before its stablyai/orca tap is removed. --force only

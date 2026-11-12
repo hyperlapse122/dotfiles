@@ -200,8 +200,7 @@ jobs:
             git checkout -- packages/antigravity-cli-release.json
           fi
 
-
-          # 11. Update Pi. A release can be published before every platform
+          # 10. Update Pi. A release can be published before every platform
           # tarball or its SHA256SUMS line, so a failure keeps the current pin
           # and lets the other updates through, as T3 Code's does.
           if ! nix run .#pi-release -- --output packages/pi-release.json; then
@@ -209,7 +208,7 @@ jobs:
             git checkout -- packages/pi-release.json
           fi
 
-          # 12. Update the npm packages: the shared ACP client and the Claude
+          # 11. Update the npm packages: the shared ACP client and the Claude
           # Agent SDK that agent-usage reads Claude limits through. Each pin
           # moves with its regenerated lock file, so a failure restores both
           # and lets the other updates through, as Pi's does.
@@ -226,7 +225,7 @@ jobs:
             fi
           done
 
-          # 13. Update Codex. A release can be published before every platform
+          # 12. Update Codex. A release can be published before every platform
           # tarball or its digest, so a failure keeps the current pin and lets
           # the other updates through, as Pi's does.
           if ! nix run .#codex-release -- --output packages/codex-release.json; then
@@ -234,7 +233,7 @@ jobs:
             git checkout -- packages/codex-release.json
           fi
 
-          # 14. Update Grok Build. The stable pointer can move before every
+          # 13. Update Grok Build. The stable pointer can move before every
           # platform's binary is published, so a failure keeps the current pin
           # and lets the other updates through, as Codex's does.
           if ! nix run .#grok-build-release -- --output packages/grok-build-release.json; then
@@ -242,7 +241,7 @@ jobs:
             git checkout -- packages/grok-build-release.json
           fi
 
-          # 15. Refresh Prezto and every recursively pinned submodule.
+          # 14. Refresh Prezto and every recursively pinned submodule.
           nix run .#prezto-release -- --output packages/prezto-pin.json
 
           if [ -z "$(git status --porcelain)" ]; then
@@ -318,7 +317,6 @@ jobs:
             git add packages/chatgpt-version.json
             git commit -m "chore(packages): bump chatgpt to $NEW_VER"
           fi
-
 
           if [ -n "$(git status --porcelain packages/mise-release.json)" ]; then
             NEW_VER=$(jq -r .version packages/mise-release.json)

@@ -172,7 +172,6 @@ case "\$*" in
     fi
     printf '{"version": "1.5.0", "platforms": {}}\n' >packages/antigravity-cli-release.json
     ;;
-
   "run .#overlay-release -- --output packages/bun-pin.json"|"run .#overlay-release -- --output packages/overlay-fonts.json")
     echo "\$*" >>"$clone/overlay-calls.log"
     ;;
