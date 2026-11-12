@@ -46,7 +46,6 @@ Traits and shared host options live in `modules/shared/host.nix`:
 | `my.sshServer.enable` | Enables an OpenSSH server accepting only `my.user.name`, authenticated by the OpenPGP card's authentication subkey from `keys/signing.asc` (NixOS). |
 | `my.t3.cli.enable` | Installs the headless T3 Code server, `t3` (`packages/t3code-cli.nix`), on NixOS or macOS. |
 | `my.t3.desktop.enable` | Installs the T3 Code desktop app (`packages/t3code.nix`) on NixOS or macOS. |
-| `my.wifiman.enable` | Installs UniFi WiFiman Desktop (`packages/wifiman-desktop.nix`) and its root daemon (`modules/nixos/services/wifiman.nix`) on NixOS (on by default; macOS always installs the `wifiman` cask). |
 | `my.printing.queues` | List of CUPS queue labels decrypted from `secrets/printers.yaml` (NixOS, empty by default). |
 | `my.tlsInspectionCa.enable` | Decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and configures system and tool CA trust (macOS). |
 | `my.networkRecovery.enable` | Runs the `org.nixos.network-recovery` launch daemon and sets `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` (macOS). |

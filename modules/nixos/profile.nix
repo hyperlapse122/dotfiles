@@ -21,7 +21,6 @@
     ./services/tailscale.nix
     ./services/proton-vpn.nix
     ./services/resolved.nix
-    ./services/wifiman.nix
     ./services/ssh-server.nix
     ./system/secrets.nix
     ./system/desktop-ssh.nix
@@ -52,6 +51,5 @@
     # Wi-Fi secrets could not decrypt and activation would log a sops error.
     wifi.sopsFile = lib.mkIf config.my.bootstrap (lib.mkDefault null);
     protonVpn.enable = lib.mkDefault (!config.my.bootstrap);
-    wifiman.enable = lib.mkDefault true;
   };
 }

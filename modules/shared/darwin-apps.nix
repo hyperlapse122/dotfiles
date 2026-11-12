@@ -26,7 +26,6 @@ let
     google-chrome.cask = "google-chrome";
     libreoffice.cask = "libreoffice";
     telegram-desktop.cask = "telegram-desktop";
-    wifiman-desktop.cask = "wifiman";
     yubioath-flutter.cask = "yubico-authenticator";
 
     code.nix = "home/h82/dev/vscodium.nix";

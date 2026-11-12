@@ -183,7 +183,6 @@
           "udev-device-access"
           "user-avatar"
           "vscodium"
-          "wifiman"
           "winbox"
           "yubikey-fido"
           "zsh-prezto"
@@ -248,8 +247,6 @@
         chatgpt = import ./packages/chatgpt.nix { inherit pkgs; };
         claude-desktop-release = agentTools.claudeDesktopRelease;
         claude-desktop = import ./packages/claude-desktop.nix { inherit pkgs; };
-        wifiman-desktop-release = agentTools.wifimanDesktopRelease;
-        wifiman-desktop = import ./packages/wifiman-desktop.nix { inherit pkgs; };
         claude-code-release = agentTools.claudeCodeRelease;
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
@@ -560,9 +557,6 @@
           claude-desktop-release =
             pythonScriptCheck "claude-desktop-release" ./scripts/claude-desktop-release
               ./tests/test_claude_desktop_release.py;
-          wifiman-desktop-release =
-            pythonScriptCheck "wifiman-desktop-release" ./scripts/wifiman-desktop-release
-              ./tests/test_wifiman_desktop_release.py;
           claude-code-release =
             pythonScriptCheck "claude-code-release" ./scripts/claude-code-release
               ./tests/test_claude_code_release.py;
@@ -1350,7 +1344,6 @@
           proton-vpn = import ./tests/proton-vpn.nix { inherit pkgs self; };
           printing = import ./tests/printing.nix { inherit pkgs self; };
           winbox = import ./tests/winbox.nix { inherit pkgs self; };
-          wifiman = import ./tests/wifiman.nix { inherit pkgs self; };
           intune = import ./tests/intune.nix { inherit pkgs self; };
           host-name-guard = import ./tests/host-name-guard.nix { inherit pkgs self; };
           vm-checks-guard = import ./tests/vm-checks-guard.nix {
