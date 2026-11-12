@@ -200,12 +200,6 @@ jobs:
             git checkout -- packages/antigravity-cli-release.json
           fi
 
-          # 10. Update WiFiman Desktop. An API failure keeps the current pin
-          # and lets the other updates through, as T3 Code's does.
-          if ! nix run .#wifiman-desktop-release -- --output packages/wifiman-desktop-version.json; then
-            echo "::warning title=WiFiman Desktop update skipped::wifiman-desktop-release failed; keeping the current pin in packages/wifiman-desktop-version.json."
-            git checkout -- packages/wifiman-desktop-version.json
-          fi
 
           # 11. Update Pi. A release can be published before every platform
           # tarball or its SHA256SUMS line, so a failure keeps the current pin
@@ -294,7 +288,6 @@ jobs:
             git commit -m "chore(packages): bump grok-build to $NEW_VER"
           fi
 
-
           if [ -n "$(git status --porcelain packages/pi-release.json)" ]; then
             NEW_VER=$(jq -r .version packages/pi-release.json)
             git add packages/pi-release.json
@@ -326,11 +319,6 @@ jobs:
             git commit -m "chore(packages): bump chatgpt to $NEW_VER"
           fi
 
-          if [ -n "$(git status --porcelain packages/wifiman-desktop-version.json)" ]; then
-            NEW_VER=$(jq -r .version packages/wifiman-desktop-version.json)
-            git add packages/wifiman-desktop-version.json
-            git commit -m "chore(packages): bump wifiman-desktop to $NEW_VER"
-          fi
 
           if [ -n "$(git status --porcelain packages/mise-release.json)" ]; then
             NEW_VER=$(jq -r .version packages/mise-release.json)

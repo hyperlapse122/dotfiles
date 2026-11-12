@@ -29,6 +29,7 @@ retiredBrew() {
   case "$1" in
     list)
       case "$*" in
+        *wifiman*) [ "$WIFIMAN" = installed ] ;;
         *orca*)
           case "$ORCA" in
             installed) return 0 ;;
@@ -51,7 +52,7 @@ def run(**overrides):
     with tempfile.TemporaryDirectory() as scratch:
         calls = Path(scratch) / 'calls'
         calls.touch()
-        env = dict(os.environ, CALLS=str(calls), ORCA='absent', TAPPED='0', FAIL='')
+        env = dict(os.environ, CALLS=str(calls), ORCA='absent', WIFIMAN='absent', TAPPED='0', FAIL='')
         env.update(overrides)
         result = subprocess.run(['bash', '-e', '-c', STUB + block], env=env, capture_output=True, text=True)
         assert result.returncode == 0, ('retirement failed the apply', overrides, result.stderr)
@@ -60,11 +61,11 @@ def run(**overrides):
 
 calls, log = run(ORCA='installed', TAPPED='1')
 assert calls == [
-    'list --cask grok-bot', 'list --cask orca', 'uninstall --cask --force orca', 'tap', 'untap stablyai/orca',
+    'list --cask grok-bot', 'list --cask orca', 'uninstall --cask --force orca', 'list --cask wifiman', 'tap', 'untap stablyai/orca',
 ], 'an installed orca cask is not uninstalled before its tap is removed'
 assert 'removed the orca cask' in log and 'removed the stablyai/orca tap' in log, log
 calls, _ = run()
-assert calls == ['list --cask grok-bot', 'list --cask orca', 'tap'], 'an absent cask or tap was still removed'
+assert calls == ['list --cask grok-bot', 'list --cask orca', 'list --cask wifiman', 'tap'], 'an absent cask or tap was still removed'
 calls, log = run(ORCA='broken')
 assert 'untap stablyai/orca' not in calls, 'a tap that is not listed was untapped'
 assert 'could not tell whether orca is installed: boom' in log, log
@@ -74,3 +75,6 @@ _, log = run(TAPPED='1', FAIL='untap')
 assert 'untapping stablyai/orca failed' in log, log
 calls, log = run(TAPPED='1', FAIL='tap')
 assert 'untap stablyai/orca' not in calls and 'could not list taps: nope' in log, 'a failed tap listing still untapped'
+
+calls, _ = run(WIFIMAN='installed')
+assert 'uninstall --cask --force wifiman' in calls, calls

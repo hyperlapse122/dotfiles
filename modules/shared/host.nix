@@ -66,7 +66,6 @@
     sshServer.enable = lib.mkEnableOption "an OpenSSH server that accepts only the user, authenticated by the OpenPGP card's authentication subkey (NixOS hosts only)";
     t3.cli.enable = lib.mkEnableOption "the headless T3 Code `t3` CLI";
     t3.desktop.enable = lib.mkEnableOption "the T3 Code desktop app (NixOS and macOS hosts only)";
-    wifiman.enable = lib.mkEnableOption "UniFi WiFiman Desktop and its root daemon (NixOS hosts only)";
     tlsInspectionCa.enable = lib.mkEnableOption "trust for the TLS inspection CA in secrets/hosts/<host>/tls-inspection-ca.yaml, through a combined CA bundle and macOS admin trust (macOS hosts only)";
     networkRecovery.enable = lib.mkEnableOption "a root daemon that repairs the network after a network switch leaves the Mac offline, and a shorter Claude Code stream idle timeout (macOS hosts only)";
     wiredNetwork.enable = lib.mkEnableOption "the static IPv4, DNS, and IPv6-off settings in secrets/hosts/<host>/wired-network.yaml for the wired adapter with the declared MAC, applied on production outputs: rendered into a NetworkManager profile on NixOS, reapplied on every switch on macOS";

@@ -72,10 +72,6 @@ let
   # Resolves the latest release of Claude Desktop from the Debian APT repository.
   claudeDesktopRelease = pythonHelper "claude-desktop-release" ../scripts/claude-desktop-release;
 
-  # Resolves the latest WiFiman Desktop release from Ubiquiti's releases API
-  # and hashes its .deb, which upstream publishes no checksum for.
-  wifimanDesktopRelease = pythonHelper "wifiman-desktop-release" ../scripts/wifiman-desktop-release;
-
   # Resolves the latest claude-code release manifest from Anthropic's own
   # release endpoints.
   claudeCodeRelease = pythonHelper "claude-code-release" ../scripts/claude-code-release;
@@ -246,7 +242,6 @@ in
     agentPluginRelease
     claudeDesktopRelease
     chatgptRelease
-    wifimanDesktopRelease
     claudeCodeRelease
     miseRelease
     preztoRelease

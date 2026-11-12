@@ -6,6 +6,7 @@ let
   retired = [
     "grok-bot"
     "orca"
+    "wifiman"
   ];
   # Taps whose every cask is retired. Taps stay mutable (homebrew.nix), so
   # nothing else removes one the configuration stops naming. The tap list is

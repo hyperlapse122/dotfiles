@@ -62,11 +62,6 @@ in
       (import ../../packages/claude-desktop.nix { inherit pkgs; })
       (import ../../packages/chatgpt.nix { inherit pkgs; })
     ]
-    # Its root daemon comes from modules/nixos/services/wifiman.nix under the
-    # same trait.
-    ++ lib.optionals (nixos && config.my.wifiman.enable) [
-      (import ../../packages/wifiman-desktop.nix { inherit pkgs; })
-    ]
     # Signs in through the identity broker that modules/nixos/services/intune.nix
     # installs under the same trait.
     ++ lib.optionals (nixos && config.my.intune.enable) [ pkgs.microsoft-edge ]

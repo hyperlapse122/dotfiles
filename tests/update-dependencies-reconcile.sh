@@ -84,7 +84,6 @@ EOF
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
-  printf '{"version": "1.0.0"}\n' >"$clone/packages/wifiman-desktop-version.json"
   printf '{"version": "1.4.8", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
   printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
   printf '{"version": "0.20.0"}\n' >"$clone/packages/acpx-release.json"
@@ -173,14 +172,7 @@ case "\$*" in
     fi
     printf '{"version": "1.5.0", "platforms": {}}\n' >packages/antigravity-cli-release.json
     ;;
-  "run .#wifiman-desktop-release -- --output packages/wifiman-desktop-version.json")
-    if [[ " \${FAIL_SOFT:-} " == *" wifiman "* ]]; then
-      printf '{"version": "partial' >packages/wifiman-desktop-version.json
-      echo "wifiman-desktop-release: API failure" >&2
-      exit 1
-    fi
-    printf '{"version": "1.1.0"}\n' >packages/wifiman-desktop-version.json
-    ;;
+
   "run .#overlay-release -- --output packages/bun-pin.json"|"run .#overlay-release -- --output packages/overlay-fonts.json")
     echo "\$*" >>"$clone/overlay-calls.log"
     ;;
@@ -280,9 +272,9 @@ grep -q '"9.9.9"' "$clone/packages/claude-agent-sdk-release.json" &&
 [[ $(wc -l <"$clone/overlay-calls.log") == 2 ]] || fail 'missing imported pin updater'
 pass 'the update step runs flake update, compound-engineering-plugin pin/lock update, and all release updaters'
 
-read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code agy-cli wifiman pi acpx claude-agent-sdk codex grok")"
+read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code agy-cli pi acpx claude-agent-sdk codex grok")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
-for title in "ChatGPT update skipped" "T3 Code update skipped" "WiFiman Desktop update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped" "Grok Build update skipped" "Antigravity CLI update skipped"; do
+for title in "ChatGPT update skipped" "T3 Code update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped" "Grok Build update skipped" "Antigravity CLI update skipped"; do
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
@@ -291,7 +283,6 @@ grep -q '^::warning title=T3 Code update skipped::.*rebuild of paths does not fi
 [[ -z $("$git_bin" -C "$clone" status --porcelain \
   packages/chatgpt-version.json \
   packages/t3code-release.json \
-  packages/wifiman-desktop-version.json \
   packages/pi-release.json \
   packages/acpx-release.json \
   packages/acpx/package-lock.json \
@@ -301,7 +292,7 @@ grep -q '^::warning title=T3 Code update skipped::.*rebuild of paths does not fi
   packages/grok-build-release.json \
   packages/antigravity-cli-release.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
-pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, wifiman, pi, acpx, claude-agent-sdk, codex, grok-build) warn, restore their files, and let the step continue'
+pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, pi, acpx, claude-agent-sdk, codex, grok-build) warn, restore their files, and let the step continue'
 
 read -r status clone <<<"$(run_update_step update-t3code-table "FAIL_SOFT=t3code-table")"
 ((status == 0)) || fail "an unreadable T3 Code Antigravity table aborted the update step: $(cat "$scratch/update-t3code-table-step.log")"
@@ -363,6 +354,5 @@ for expected in \
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
 pass 'the Prezto, t3code, antigravity-cli, pi, acpx, grok-build, and compound-engineering changes each land as their own commit with only their files'
-
 
 python3 "$runner" "$workflow" "$publisher" "$verifier"
