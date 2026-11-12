@@ -12,7 +12,7 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
               'pi': '.pi/agent/AGENTS.md'}
 # Independent content receipts: negation, repetition, deletion and foreign text
 # all change the complete normative body, including its order.
-EXPECTED = {'darwin': '8df40f92f4a4d315efc01fa32f682de5b458801e179750cf6ef80e6b2d5aef09', 'nixos': '3f3236cbbf17e0224c219631a036cdaaa2a1ac29aa518cb870b7addbd1e69a59'}
+EXPECTED = {'darwin': '8df40f92f4a4d315efc01fa32f682de5b458801e179750cf6ef80e6b2d5aef09', 'nixos': '3f3236cbbf17e0224c219631a036cdaaa2a1ac29aa518cb870b7addbd1e69a59', 't3': '48ab445d0c747243b3a79c3d750f2604707c6bbb21a0385f363f6e0097c500e9'}
 
 
 def body(home, harness):
@@ -32,6 +32,17 @@ def receipt(text, kind):
     assert hashlib.sha256(text.encode()).hexdigest() == EXPECTED[kind], kind
 
 
+def check_receipt(text, kind):
+    receipt(text, kind)
+    for bad in (text + '\nForeign instructions.\n', 'Do not ' + text, text + text):
+        try:
+            receipt(bad, kind)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError('policy mutation escaped validation')
+
+
 def exercise(template, helper, renderer, kind):
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -48,15 +59,8 @@ def exercise(template, helper, renderer, kind):
         render()
         for harness in DELIVERIES:
             text = body(root, harness)
-            receipt(text, kind)
+            check_receipt(text, kind)
             assert 'T3 delegation' not in text
-            for bad in (text + '\nForeign instructions.\n', 'Do not ' + text, text + text):
-                try:
-                    receipt(bad, kind)
-                except AssertionError:
-                    pass
-                else:
-                    raise AssertionError('policy mutation escaped validation')
         source.write_text(template + '\n# Branch probe\n' + ''.join(
             '{{ if .' + harness + ' }}\n' + harness + '-only\n{{ end }}' for harness in DELIVERIES))
         render()
@@ -68,6 +72,7 @@ def exercise(template, helper, renderer, kind):
         source.write_text(template)
         t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
         assert 'T3 delegation' in t3 and 'Writing skills' not in t3
+        check_receipt(t3, 't3')
 
 
 def main():

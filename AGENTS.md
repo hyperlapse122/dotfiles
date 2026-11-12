@@ -194,6 +194,8 @@ Before changing the shared agent instructions template, its renderer in `package
 
 Before changing which model or reasoning effort a cross-model review peer runs on, or ranking Synthetic models as reviewers, read [benchmark a cross-model review peer in T3 Code before changing its model or effort, and never rank models on one sample](.compound-engineering/artifacts/solutions/best-practices/benchmark-cross-model-review-peers-in-t3-code-before-changing-them.md).
 
+Before changing the reasoning effort of delegated Codex children, or treating a delegated child's summary as proof of its output, read [delegated Codex children gave up once in 30 runs at T3's default effort and never at high](.compound-engineering/artifacts/solutions/best-practices/codex-child-give-up-rate-by-reasoning-effort.md).
+
 Before proposing the Codex `priority` service tier (fast mode) for the review peer or another delegated Codex role, or budgeting Codex usage for a peer benchmark, read [the Codex priority service tier costs 2.5x subscription usage, so the review peer stays on the default tier](.compound-engineering/artifacts/solutions/best-practices/codex-priority-tier-costs-2-5x-subscription-usage-for-review-peer.md).
 
 Before promising that shared instructions reach a new Antigravity release, changing the runtime rebuild, or adding a rule-file link for an Antigravity runtime, read [the Antigravity ACP runtime loads no global rule files, so this repository rebuilds it to read them](.compound-engineering/artifacts/solutions/integration-issues/antigravity-acp-runtime-loads-no-global-rule-files.md).
