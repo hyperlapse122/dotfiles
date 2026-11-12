@@ -190,7 +190,7 @@
     FreeFloating=true
     historyBehavior=ImmediateCompletion
 
-    [Runners/krunner_kill]
+    [Runners][krunner_kill]
     sorting=1
     triggerWord=kill
     useTriggerWord=true
