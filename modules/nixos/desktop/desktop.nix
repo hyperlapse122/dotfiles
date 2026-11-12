@@ -159,16 +159,22 @@
     loginMode=emptySession
   '';
 
+  # KConfig nests groups only as [Parent][Child]; [AC/Display] would name an
+  # unrelated top-level group that PowerDevil never reads.
   environment.etc."xdg/powerdevilrc".text = ''
-    [AC/Display]
+    [AC][Display]
     DimDisplayIdleTimeoutSec=-1
     DimDisplayWhenIdle=false
+    TurnOffDisplayWhenIdle=false
 
-    [Battery/Display]
+    [AC][SuspendAndShutdown]
+    AutoSuspendAction=0
+
+    [Battery][Display]
     DimDisplayIdleTimeoutSec=120
     DimDisplayWhenIdle=true
 
-    [LowBattery/Display]
+    [LowBattery][Display]
     DimDisplayIdleTimeoutSec=60
     DimDisplayWhenIdle=true
   '';
@@ -184,7 +190,7 @@
     FreeFloating=true
     historyBehavior=ImmediateCompletion
 
-    [Runners/krunner_kill]
+    [Runners][krunner_kill]
     sorting=1
     triggerWord=kill
     useTriggerWord=true
