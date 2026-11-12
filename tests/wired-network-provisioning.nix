@@ -178,8 +178,11 @@ pkgs.testers.nixosTest {
               "journalctl -u nixos-wired-network.service -p warning --no-pager -o cat"
           )
 
+      # ssh sets O_NONBLOCK on the descriptors it inherits. Left on the
+      # driver's console, that can drop the driver's output line and hang the
+      # test, so ssh gets /dev/null and the command's pipe instead.
       def ssh_from_server(address):
-          server.succeed(ssh + "root@" + address + " true")
+          server.succeed("timeout 60 " + ssh + "-n root@" + address + " true 2>&1")
 
       def eth2_address(machine):
           machine.wait_until_succeeds("ip -4 -o addr show dev eth2 | grep -q 'inet '")
