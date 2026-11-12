@@ -45,8 +45,6 @@ in
       before = [ "NetworkManager.service" ];
       after = [ "local-fs.target" ];
       unitConfig.RequiresMountsFor = [ (dirOf identity) ];
-      # The tool reloads NetworkManager's connections when it is already
-      # running, as it is on a switch.
       path = [ config.networking.networkmanager.package ];
       serviceConfig = {
         Type = "oneshot";

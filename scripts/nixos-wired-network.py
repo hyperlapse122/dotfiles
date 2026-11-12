@@ -39,7 +39,6 @@ def say(message):
 
 
 def validated(declared):
-    """The declaration with the extra rules a keyfile needs, as canonical text."""
     if any(ipaddress.ip_address(server).version != 4 for server in declared['dns_servers']):
         raise Problem('the declaration has a missing or invalid dns_servers')
     mask = ipaddress.IPv4Network(f'0.0.0.0/{declared["ipv4_subnet_mask"]}')

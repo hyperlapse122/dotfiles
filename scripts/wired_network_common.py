@@ -16,7 +16,7 @@ MAC_PATTERN = re.compile(r'[0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5}')
 
 
 class Problem(Exception):
-    """A condition that leaves the adapter untouched; its text names no value."""
+    pass
 
 
 def check_identity(identity, owner):
@@ -108,7 +108,6 @@ def declaration(data):
 
 
 def guarded(say, outcome, action):
-    """Run action, turning every failure into one warning and a normal return."""
     try:
         action()
     except Problem as problem:
