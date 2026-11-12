@@ -23,7 +23,7 @@ systemctl status sops-install-secrets.service --no-pager
 sudo journalctl -u sops-install-secrets.service -b --no-pager
 ```
 
-Check logs for secrets before sharing them. If the local age identity is missing or corrupt, repeat [secret recovery](../secrets/README.md) with `./scripts/recover-age-identity` (or `./scripts/recover-age-identity --user --host <host>` on macOS) and run the switch again. From the NixOS installation media or inside `nixos-enter`, the hostname is the installer image's rather than `<host>`, so pass `--host <host>` explicitly. Running the switch again also restores manually deleted `gh` and `glab` configuration files.
+Check logs for secrets before sharing them. If the local age identity is missing or corrupt, repeat [secret recovery](../secrets/README.md) with `./scripts/recover-age-identity` (or `./scripts/recover-age-identity --user --host <host>` on macOS) and run the switch again. From the NixOS installation media or inside `nixos-enter`, the hostname is the installer image's rather than `<host>`, so pass `--host <host>` explicitly. Running the switch again also restores manually deleted `gh` and `glab` configuration files. On a NixOS host with `my.wiredNetwork.enable`, an identity restored after boot also needs `sudo systemctl restart nixos-wired-network` (or a reboot), because the wired profile is rendered once per boot; see [Wired network](install.md#wired-network).
 
 A failed NixOS switch does not transactionally roll back all system changes. If token publication updated only some files, fix the cause and run the switch again. Do not ignore the error or treat provisioning as complete.
 
@@ -204,8 +204,8 @@ The repository's `.sops.yaml` splits secret recipients across the two hosts as f
 
 - `secrets/tokens.yaml`: encrypted to both `MS-7D91` and `MacBook-Pro-Mac17-9`.
 - `secrets/wifi.yaml`, `secrets/tailscale.yaml`, `secrets/printers.yaml`: encrypted to `MS-7D91` only (`user-identity-secrets` forbids any `darwin` host recipient on these rules).
-- `secrets/hosts/MS-7D91/ssh.yaml`: encrypted to `MS-7D91` only.
-- `secrets/hosts/MacBook-Pro-Mac17-9/ssh.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/apple-account.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/tls-inspection-ca.yaml`: encrypted to `MacBook-Pro-Mac17-9` only.
+- `secrets/hosts/MS-7D91/ssh.yaml` and `secrets/hosts/MS-7D91/wired-network.yaml`: encrypted to `MS-7D91` only.
+- `secrets/hosts/MacBook-Pro-Mac17-9/ssh.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/apple-account.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/tls-inspection-ca.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/wired-network.yaml`: encrypted to `MacBook-Pro-Mac17-9` only.
 
 Follow these steps in order when a host is lost, compromised, or retired. Treat every file whose `.sops.yaml` rule lists that host's recipient as exposed:
 
@@ -231,6 +231,8 @@ Follow these steps in order when a host is lost, compromised, or retired. Treat 
 
    Keep steps 2 and 3 in this exact order: `sops set` encrypts to the recipients currently on the file, and `sops updatekeys` alone keeps the previous data key until `sops rotate -i` replaces it.
 4. Delete `secrets/hosts/<host>/`, `secrets/bootstrap/<host>/`, `hosts/<host>/`, and the per-host creation rules under `^secrets/hosts/<host>/` in `.sops.yaml`.
+
+`wired-network.yaml` holds no credential, so compromise or decommission rotates nothing for it; the file only reveals the shape of an internal network. A NixOS host restored from a generation that predates the wired network feature comes up on DHCP; applying the current production output restores the static address.
 
 ### Historical note on the retired VM identity
 
