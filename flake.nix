@@ -1320,12 +1320,16 @@
             pkgs.runCommand "ci-workflow-docs-skip-tests"
               {
                 nativeBuildInputs = [
+                  pkgs.actionlint
                   pkgs.gnugrep
                   (pkgs.python3.withPackages (p: [ p.pyyaml ]))
                   pkgs.nix
                 ];
               }
               ''
+                # GitHub reports an invalid concurrency or if expression only
+                # when the workflow runs.
+                actionlint -shellcheck= -pyflakes= ${./.github/workflows/check.yml}
                 bash ${./tests/check-workflow-docs-skip.sh} ${./.github/workflows/check.yml}
                 touch $out
               '';

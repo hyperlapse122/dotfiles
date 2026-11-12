@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Structural policy, event truth table, and workflow mutation tests.
+# Structural policy, event truth table, concurrency groups, and workflow
+# mutation tests.
 set -euo pipefail
 python3 - "$@" <<'PY'
 import copy
+import itertools
 import json
 from pathlib import Path
 import re
@@ -13,10 +15,8 @@ import tempfile
 import yaml
 
 workflow = yaml.safe_load(Path(sys.argv[1]).read_text())
-light = "!cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
-full = "!cancelled() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-ci'))) && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')"
-docs = "!cancelled() && github.event_name == 'pull_request' && needs.changes.result == 'success' && needs.changes.outputs.docs_only == 'true'"
 heavy = {"host-checks", "hosts", "build", "build-darwin", "vm-check-names", "vm-checks"}
+light = {"flake-check", "check-shard-names", "check-shards"}
 
 def policy(w):
     triggers = w.get("on", w.get(True))
@@ -25,12 +25,9 @@ def policy(w):
     assert set(triggers["pull_request"]["types"]) == {"opened", "synchronize", "reopened", "labeled"}
     jobs = w["jobs"]
     assert "build-linux" not in jobs
-    assert "if" not in jobs["fmt"] and "needs" not in jobs["fmt"]
-    assert jobs["changes"]["if"] == "github.event_name == 'pull_request'"
-    for name in heavy | {"flake-check", "check-shard-names", "check-shards", "markdown-lint"}:
-        j = jobs[name]
-        assert j["if"] == (full if name in heavy else docs if name == "markdown-lint" else light), name
-        needs = j["needs"]
+    assert "needs" not in jobs["fmt"]
+    for name in heavy | light | {"markdown-lint"}:
+        needs = jobs[name]["needs"]
         assert "changes" in ([needs] if isinstance(needs, str) else needs), name
     for consumer, producer, output, key in [
         ("build", "hosts", "targets", "target"),
@@ -46,62 +43,128 @@ def policy(w):
     shard_script = "\n".join(s.get("run", "") for s in jobs["check-shard-names"]["steps"])
     assert 'builtins.filter (n: builtins.match "light-.*" n != null)' in shard_script
     assert jobs["build-darwin"]["runs-on"] == "macos-26"
-    # Catch future closure jobs as well as the named jobs above.
+    # A future closure job must join the heavy set so the truth table gates it.
     for name, job in jobs.items():
         script = "\n".join(s.get("run", "") for s in job["steps"])
         if re.search(r"checkShards\.hosts|nixosConfigurations|darwinConfigurations|vmChecks", script):
-            assert job.get("if") == full, name
+            assert name in heavy, name
+
+def evaluate(condition, ctx):
+    """Evaluate a GitHub Actions expression over a flat context."""
+    expression = condition.replace("!cancelled()", "True")
+    expression = expression.replace(
+        "contains(github.event.pull_request.labels.*.name, 'full-ci')", repr(ctx["has_label"]))
+    for name in ["github.event.label.name", "github.event.action", "github.event_name",
+                 "github.workflow", "github.ref", "github.run_id",
+                 "needs.changes.result", "needs.changes.outputs.docs_only"]:
+        expression = expression.replace(name, repr(ctx[name]))
+    expression = expression.replace("&&", " and ").replace("||", " or ")
+    assert "!" not in expression.replace("!=", ""), expression
+    scope = {"format": lambda template, *args: template.format(*args)}
+    return eval(expression, {"__builtins__": {}}, scope)
+
+def interpolate(template, ctx):
+    return re.sub(r"\$\{\{(.*?)\}\}", lambda m: str(evaluate(m[1].strip(), ctx)), template)
+
+def context(event, action="", added="", has_label=False, result="skipped", docs="", ref="refs/pull/7/merge", run_id="1"):
+    return {
+        "github.event_name": event, "github.event.action": action, "github.event.label.name": added,
+        "has_label": has_label, "needs.changes.result": result, "needs.changes.outputs.docs_only": docs,
+        "github.workflow": "Nix", "github.ref": ref, "github.run_id": run_id,
+    }
+
+def runs(job, ctx):
+    return evaluate(job["if"], ctx) if "if" in job else True
+
+def behavior(w):
+    jobs = w["jobs"]
+    cases = [("push", ""), ("workflow_dispatch", "")] + [
+        ("pull_request", a) for a in ["opened", "synchronize", "reopened", "labeled"]]
+    for (event, action), added, has_label, result, docs in itertools.product(
+            cases, ["full-ci", "bug"], [False, True], ["success", "failure", "skipped"], ["true", "false", ""]):
+        if action != "labeled" and added != "full-ci":
+            continue
+        if action == "labeled" and added == "full-ci" and not has_label:
+            continue
+        ctx = context(event, action, added if action == "labeled" else "", has_label, result, docs)
+        pr = event == "pull_request"
+        label_event = pr and action == "labeled"
+        docs_skip = pr and result == "success" and docs == "true"
+        closure = (not pr or (label_event and added == "full-ci")
+                   or (action in {"synchronize", "reopened"} and has_label))
+        want = {"changes": pr and (not label_event or added == "full-ci"),
+                "fmt": not label_event,
+                "markdown-lint": not label_event and docs_skip}
+        want.update({name: not label_event and not docs_skip for name in light})
+        want.update({name: closure and not docs_skip for name in heavy})
+        assert set(jobs) == set(want), sorted(set(jobs) ^ set(want))
+        for name, expected in want.items():
+            assert runs(jobs[name], ctx) == expected, (name, event, action, added, has_label, result, docs)
+
+    concurrency = w["concurrency"]
+    assert concurrency["cancel-in-progress"] is True
+    group = lambda **kw: interpolate(concurrency["group"], context(**kw))
+    pr_groups = {action: group(event="pull_request", action=action) for action in ["opened", "synchronize", "reopened"]}
+    # A push replaces any earlier non-label run on the ref.
+    assert len(set(pr_groups.values())) == 1, pr_groups
+    assert group(event="pull_request", action="synchronize", run_id="1") == group(event="pull_request", action="synchronize", run_id="2")
+    # A label run neither cancels nor is cancelled by any other run.
+    labeled = [group(event="pull_request", action="labeled", added=a, run_id=r) for a, r in [("full-ci", "1"), ("full-ci", "2"), ("bug", "3")]]
+    assert len(set(labeled)) == 3, labeled
+    assert not set(labeled) & set(pr_groups.values()), labeled
+    assert group(event="push", ref="refs/heads/main") == "Nix-refs/heads/main"
+    assert group(event="push", ref="refs/heads/main", run_id="9") == group(event="workflow_dispatch", ref="refs/heads/main")
 
 policy(workflow)
-# Every heavy gate must reject classifier failures too on an unlabelled PR.
-def evaluate(condition, event, label, result, only_docs, action="synchronize", added=""):
-    expression = condition.replace("!cancelled()", "True")
-    for old, new in [
-        ("contains(github.event.pull_request.labels.*.name, 'full-ci')", str(label)),
-        ("github.event.action", repr(action)),
-        ("github.event.label.name", repr(added)),
-        ("github.event_name", repr(event)),
-        ("needs.changes.result", repr(result)),
-        ("needs.changes.outputs.docs_only", repr(only_docs)),
-        ("&&", " and "), ("||", " or "),
-    ]:
-        expression = expression.replace(old, new)
-    return eval(expression, {"__builtins__": {}}, {})
+behavior(workflow)
 
-for event in ["push", "workflow_dispatch", "pull_request"]:
-    for label in [False, True]:
-        for result in ["success", "failure", "skipped"]:
-            for only_docs in ["true", "false", ""]:
-                skip = event == "pull_request" and result == "success" and only_docs == "true"
-                for name, job in workflow["jobs"].items():
-                    if name in heavy:
-                        want = (event != "pull_request" or label) and not skip
-                    elif name in {"flake-check", "check-shard-names", "check-shards"}:
-                        want = not skip
-                    elif name == "markdown-lint":
-                        want = skip
-                    else:
-                        continue
-                    assert evaluate(job["if"], event, label, result, only_docs) == want, name
+def mutate(edit):
+    mutant = copy.deepcopy(workflow)
+    edit(mutant)
+    assert mutant != workflow, "mutation changed nothing"
+    return mutant
 
-for name in heavy:
-    condition = workflow["jobs"][name]["if"]
-    assert evaluate(condition, "pull_request", True, "success", "false", "labeled", "unrelated")
-    assert not evaluate(condition, "pull_request", False, "success", "false", "labeled", "unrelated")
-    assert evaluate(condition, "pull_request", True, "success", "false", "labeled", "full-ci")
-    old_label_gate = full.replace(
-        "contains(github.event.pull_request.labels.*.name, 'full-ci')",
-        "contains(github.event.pull_request.labels.*.name, 'full-ci') && (github.event.action != 'labeled' || github.event.label.name == 'full-ci')",
-    )
-    for replacement in [light, "True", old_label_gate]:
-        mutant = copy.deepcopy(workflow)
-        mutant["jobs"][name]["if"] = replacement
-        try:
-            policy(mutant)
-        except AssertionError:
-            pass
+def replace_in(names, old, new):
+    def edit(w):
+        for name in names:
+            assert old in w["jobs"][name]["if"], (name, old)
+            w["jobs"][name]["if"] = w["jobs"][name]["if"].replace(old, new)
+    return edit
+
+def set_key(path, value):
+    def edit(w):
+        node = w
+        for key in path[:-1]:
+            node = node[key]
+        if value is None:
+            del node[path[-1]]
         else:
-            raise AssertionError("survived broken full-ci gate: " + name)
+            node[path[-1]] = value
+    return edit
+
+closure_actions = "(github.event.action == 'synchronize' || github.event.action == 'reopened')"
+label_gate = "(github.event.action == 'labeled' && github.event.label.name == 'full-ci')"
+mutants = {
+    "group without run id": set_key(["concurrency", "group"], "${{ github.workflow }}-${{ github.ref }}"),
+    "group without action condition": set_key(["concurrency", "group"], "${{ github.workflow }}-${{ github.ref }}-labeled-${{ github.run_id }}"),
+    "no cancel-in-progress": set_key(["concurrency", "cancel-in-progress"], False),
+    "closure jobs on opened": replace_in(heavy, closure_actions, "github.event.action != 'labeled'"),
+    "closure jobs on any label": replace_in(heavy, label_gate, "github.event.action == 'labeled'"),
+    "light jobs on label runs": replace_in(light, "github.event.action != 'labeled' && ", ""),
+    "markdown-lint on label runs": replace_in(["markdown-lint"], "github.event.action != 'labeled' && ", ""),
+    "fmt on label runs": set_key(["jobs", "fmt", "if"], None),
+    "changes on every label": set_key(["jobs", "changes", "if"], "github.event_name == 'pull_request'"),
+}
+for name in heavy:
+    mutants["unlabelled closure: " + name] = replace_in([name], label_gate, "github.event_name == 'pull_request'")
+for label, edit in mutants.items():
+    try:
+        behavior(mutate(edit))
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("survived mutation: " + label)
+
 mutant = copy.deepcopy(workflow)
 for step in mutant["jobs"]["check-shard-names"]["steps"]:
     if "run" in step:
@@ -138,5 +201,5 @@ with tempfile.TemporaryDirectory() as tmp:
         args = record.read_bytes().decode().split("\0")[:-1]
         assert [a for a in args if a.startswith(".#")] == expected
 
-print("check-workflow-docs-skip: all event, matrix, and mutation assertions passed")
+print("check-workflow-docs-skip: all event, concurrency, matrix, and mutation assertions passed")
 PY
