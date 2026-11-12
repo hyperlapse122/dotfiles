@@ -16,26 +16,20 @@ No declared value is ever printed, and networksetup's own error output is
 dropped because it can repeat the arguments it rejected.
 """
 import argparse
-import ipaddress
-import json
 import os
 from pathlib import Path
-import pwd
 import re
 import shutil
-import stat
 import subprocess
 import sys
+
+from wired_network_common import (Problem, check_identity, declaration, decrypt, dns_address,
+                                  guarded, normalize_mac)
 
 NAME = 'macos-wired-network'
 # Long enough for a slow sops or configd, short enough that a wedged one
 # never holds the switch.
 TIMEOUT = 60
-MAC_PATTERN = re.compile(r'[0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5}')
-
-
-class Problem(Exception):
-    """A condition that leaves the adapter untouched; its text names no value."""
 
 
 def say(message):
@@ -47,94 +41,6 @@ def networksetup():
     if not found:
         raise Problem('networksetup was not found')
     return found
-
-
-def check_identity(identity, owner):
-    try:
-        metadata = identity.lstat()
-    except FileNotFoundError:
-        raise Problem(f'the age identity {identity} is missing') from None
-    if not stat.S_ISREG(metadata.st_mode):
-        raise Problem(f'the age identity {identity} must be a regular file')
-    try:
-        owner_uid = pwd.getpwnam(owner).pw_uid
-    except KeyError:
-        raise Problem(f'the identity owner {owner} does not exist') from None
-    if metadata.st_uid != owner_uid:
-        raise Problem(f'the age identity {identity} must be owned by {owner}')
-    if stat.S_IMODE(metadata.st_mode) != 0o600:
-        raise Problem(f'the age identity {identity} must have mode 0600')
-
-
-def decrypt(source, identity):
-    env = {k: v for k, v in os.environ.items() if not k.startswith('SOPS_AGE_')}
-    env['SOPS_AGE_KEY_FILE'] = str(identity)
-    try:
-        result = subprocess.run(['sops', '--decrypt', '--output-type', 'json', str(source)],
-                                env=env, capture_output=True, check=False, timeout=TIMEOUT)
-    except subprocess.TimeoutExpired:
-        raise Problem(f'decrypting {source} timed out') from None
-    if result.returncode:
-        raise Problem(f'cannot decrypt {source} with the host age identity')
-    try:
-        data = json.loads(result.stdout)
-    except ValueError:
-        raise Problem(f'{source} does not decrypt to a map') from None
-    if not isinstance(data, dict):
-        raise Problem(f'{source} does not decrypt to a map')
-    return data
-
-
-def normalize_mac(value):
-    if not isinstance(value, str):
-        return None
-    mac = value.strip().lower().replace('-', ':')
-    if not MAC_PATTERN.fullmatch(mac):
-        return None
-    return ':'.join(part.zfill(2) for part in mac.split(':'))
-
-
-def ipv4(value):
-    try:
-        return str(ipaddress.IPv4Address(value))
-    except (ValueError, TypeError):
-        return None
-
-
-def subnet_mask(value):
-    address = ipv4(value)
-    if address is None:
-        return None
-    try:
-        ipaddress.IPv4Network(f'0.0.0.0/{address}')
-    except ValueError:
-        return None
-    return address
-
-
-def dns_address(value):
-    try:
-        return str(ipaddress.ip_address(value))
-    except (ValueError, TypeError):
-        return None
-
-
-def declaration(data):
-    declared = {
-        'mac': normalize_mac(data.get('mac')),
-        'ipv4_address': ipv4(data.get('ipv4_address')),
-        'ipv4_subnet_mask': subnet_mask(data.get('ipv4_subnet_mask')),
-        'ipv4_router': ipv4(data.get('ipv4_router')),
-    }
-    for key, value in declared.items():
-        if value is None:
-            raise Problem(f'the declaration has a missing or invalid {key}')
-    servers = data.get('dns_servers')
-    addresses = [dns_address(server) for server in servers] if isinstance(servers, list) else []
-    if not addresses or None in addresses:
-        raise Problem('the declaration has a missing or invalid dns_servers')
-    declared['dns_servers'] = addresses
-    return declared
 
 
 def read(tool, *args):
@@ -217,7 +123,7 @@ def reconcile(tool, service, declared):
 def run(arguments):
     identity = Path(arguments.identity)
     check_identity(identity, arguments.owner)
-    declared = declaration(decrypt(Path(arguments.file), identity))
+    declared = declaration(decrypt(Path(arguments.file), identity, TIMEOUT))
     tool = networksetup()
     device = device_for_mac(tool, declared['mac'])
     if device is None:
@@ -234,14 +140,7 @@ def main():
     parser.add_argument('--identity', required=True)
     parser.add_argument('--owner', required=True)
     arguments = parser.parse_args()
-    try:
-        run(arguments)
-    except Problem as problem:
-        say(f'{problem}; the wired adapter was left as it is')
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        # The message of an unexpected error can quote decrypted input, so only
-        # its type is printed.
-        say(f'unexpected {type(error).__name__}; the wired adapter was left as it is')
+    guarded(say, 'the wired adapter was left as it is', lambda: run(arguments))
 
 
 if __name__ == '__main__':
