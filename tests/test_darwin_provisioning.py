@@ -125,25 +125,45 @@ if a == ['system','status','--format','json']:
 if a == ['system','start','--disable-kernel-install']: p.touch()
 elif a != ['system','kernel','set','--recommended','--force']: sys.exit(10)
 ''')
+        self.stub('launchctl', '''import os, sys
+with open(os.environ['LOG'], 'a') as f: f.write('launchctl ' + ' '.join(sys.argv[1:]) + '\\n')
+assert sys.argv[1:] == ['print', 'gui/' + str(os.getuid())]
+sys.exit(0 if os.environ['GUI_PRESENT'] == '1' else 1)
+''')
         self.stub('brew', '''import json, os, sys
 from pathlib import Path
 p=Path(os.environ['HOME'])/'registered'
 a=sys.argv[1:]
-with open(os.environ['LOG'], 'a') as f: f.write('brew '+ ' '.join(a)+'\\n')
+with open(os.environ['LOG'], 'a') as f: f.write('brew '+ ' '.join(a)+' SUDO_USER=' + ('set' if 'SUDO_USER' in os.environ else 'unset') + '\\n')
 if a == ['services','info','container','--json']: print(json.dumps([{'name':'container','registered':p.exists()}]))
 elif a == ['services','start','container']: p.touch()
 else: sys.exit(11)
 ''')
-        result = subprocess.run(['sh', str(script)], env=self.env, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        log = self.log.read_text()
-        self.assertIn('container system start --disable-kernel-install', log)
-        self.assertIn('container system kernel set --recommended --force', log)
-        self.assertIn('brew services start container', log)
-        self.log.write_text('')
-        result = subprocess.run(['sh', str(script)], env=self.env, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.log.read_text().splitlines(), ['container system status --format json', 'brew services info container --json', 'container system status --format json'])
+        for gui in (True, False):
+            for registered in (False, True):
+                for running in (False, True):
+                    with self.subTest(gui=gui, registered=registered, running=running):
+                        for name, present in [('registered', registered), ('running', running)]:
+                            path = self.root / name
+                            path.unlink(missing_ok=True)
+                            if present: path.touch()
+                        self.log.write_text('')
+                        env = self.env | {'SUDO_USER': 'invoker', 'GUI_PRESENT': str(int(gui))}
+                        result = subprocess.run(['sh', str(script)], env=env, capture_output=True)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        log = self.log.read_text().splitlines()
+                        marker = 'unset' if gui else 'set'
+                        expected = [f'launchctl print gui/{os.getuid()}',
+                                    'container system status --format json',
+                                    f'brew services info container --json SUDO_USER={marker}']
+                        if not running:
+                            expected += ['container system start --disable-kernel-install',
+                                         'container system kernel set --recommended --force']
+                        if not registered:
+                            expected += [f'brew services start container SUDO_USER={marker}',
+                                         f'brew services info container --json SUDO_USER={marker}']
+                        expected += ['container system status --format json']
+                        self.assertEqual(log, expected)
 
     @unittest.skipUnless(ACTIVATIONS, 'activation declarations supplied by darwin-config')
     def test_activation_calls(self):
@@ -156,6 +176,8 @@ else: sys.exit(11)
             self.stub('sudo', "import os, sys\na=sys.argv[1:]\nwhile a and a[0].startswith('--'): a=a[1:]\nos.execvpe(a[0],a,os.environ)")
             self.stub('macos-xcode', "import json,os,sys\nopen(os.environ['LOG'],'a').write(json.dumps(sys.argv[1:])+'\\n')")
             self.stub('container-setup', "import os\nopen(os.environ['LOG'],'a').write('container-setup\\n')")
+            self.stub('launchctl', "import os, sys\na=sys.argv[1:]\nassert a[:2] == ['asuser', '501']\nopen(os.environ['LOG'],'a').write('launchctl asuser 501\\n')\nos.execvpe(a[2], a[2:], os.environ)")
+            self.stub('id', "import os, sys\nassert sys.argv[1:] == ['-u', '--', os.environ['EXPECTED_OWNER']]\nprint('501')")
             lines = entry['text'].splitlines()
             blocks = []
             for i,line in enumerate(lines):
@@ -172,15 +194,18 @@ else: sys.exit(11)
                         blocks.append('\n'.join(block))
             script='\n'.join(blocks)
             script=re.sub(r'/nix/store/[^ /]+/bin/git', 'git', script)
+            script=script.replace('/bin/launchctl', 'launchctl')
             script=script.replace('/usr/bin/sudo', 'sudo')
             script=script.replace('/usr/bin/env', 'env')
             script=re.sub(r'/nix/store/[^ /]+/bin/macos-xcode', 'macos-xcode', script)
             script=re.sub(r'/bin/sh /nix/store/[^ /]+/macos-container.sh', 'container-setup', script)
             script=re.sub(r'PATH="[^"]+"', 'PATH="'+self.env['PATH']+'"', script)
-            result=subprocess.run(['bash','-euc',script],env=self.env,capture_output=True,cwd='/')
+            result=subprocess.run(['bash','-euc',script],env=self.env | {'EXPECTED_OWNER': entry['owner']},capture_output=True,cwd='/')
             self.assertEqual(result.returncode,0,result.stderr)
             records=self.log.read_text().splitlines()
+            self.assertEqual(records.count('launchctl asuser 501'),1)
             self.assertEqual(records.count('container-setup'),1)
+            self.assertLess(records.index('launchctl asuser 501'), records.index('container-setup'))
             xcodes=[json.loads(line) for line in records if line.startswith('[')]
             self.assertEqual(len(xcodes),0 if entry['bootstrap'] else 1)
             if xcodes:

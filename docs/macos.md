@@ -291,6 +291,8 @@ During activation, `macos-container.sh` checks `container system status`:
 - If the runtime API is already running, activation leaves the running API and its kernel untouched.
 - If the API is stopped, activation runs `container system start --disable-kernel-install`, sets the recommended default kernel (`container system kernel set --recommended`) when none is configured yet, and registers the Homebrew login service (`brew services start container`). A failed kernel step records `~/.local/state/dotfiles/apple-container-kernel-pending` so the next apply retries it, and exits non-zero so the apply fails visibly.
 
+When the user's GUI launchd domain exists, Homebrew registers the login service in `gui/<uid>`. A switch without a GUI session, such as over SSH with nobody logged in at the console, keeps Homebrew's `user/<uid>` behavior and its warning.
+
 `kubectl`, `kubernetes-helm`, and `minikube` remain installed as client binaries on `PATH`, without an automatic cluster. Because Apple `container` does not expose a Docker-compatible socket or `docker` CLI alias, tools that require the Docker Engine API (such as Testcontainers) need an explicit alternative agreed with the owner. Existing Podman machines or credential files on disk are not deleted. Use `container registry login` for registry credentials stored in the macOS Keychain; `docker-credential-sops` remains on `PATH` for tools that speak the Docker credential helper protocol directly.
 
 Remove temporary containers, images, volumes, networks, and build caches as soon as a task finishes; the `container` system service and default kernel are host infrastructure and stay running.
