@@ -1,6 +1,8 @@
 # Agent routing
 
-The ordinary user instruction files share writing and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, Grok, and Pi each receive their own render.
+The ordinary user instruction files share web development, writing, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, Grok, and Pi each receive their own render.
+
+For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive this common rule through their normal baseline instruction paths.
 
 The shared template retains the following T3 context separately for launch-time attachment. Ordinary instruction files do not include it.
 
