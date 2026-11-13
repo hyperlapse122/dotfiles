@@ -16,6 +16,7 @@ in
   # and the minimize settings, are never written and stay the user's.
   config.system.defaults.dock = {
     persistent-apps = [
+      "/System/Applications/Apps.app"
       "/Applications/Google Chrome.app"
       "/System/Applications/App Store.app"
       "/System/Applications/Mail.app"
@@ -23,6 +24,8 @@ in
       "/System/Applications/Reminders.app"
       "/System/Applications/Notes.app"
       "/System/Applications/Messages.app"
+      "/Applications/KakaoTalk.app"
+      "/Applications/Telegram Desktop.app"
       "/System/Applications/FaceTime.app"
       "/System/Applications/Phone.app"
       "/System/Applications/Photos.app"

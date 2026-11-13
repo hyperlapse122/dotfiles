@@ -986,8 +986,8 @@ let
       )
     ];
 
-  # The Dock pins the shared apps in order with the host's own apps between
-  # ChatGPT and Discord, T3 Code only with its trait, Downloads as the one
+  # The Dock pins the shared apps in order with the host's own apps before
+  # Ghostty, T3 Code only with its trait, Downloads as the one
   # folder, and sets only show-recents and tilesize among the other keys.
   assertDock =
     entry:
@@ -998,6 +998,7 @@ let
       expected =
         t3:
         [
+          "/System/Applications/Apps.app"
           "/Applications/Google Chrome.app"
           "/System/Applications/App Store.app"
           "/System/Applications/Mail.app"
@@ -1005,6 +1006,8 @@ let
           "/System/Applications/Reminders.app"
           "/System/Applications/Notes.app"
           "/System/Applications/Messages.app"
+          "/Applications/KakaoTalk.app"
+          "/Applications/Telegram Desktop.app"
           "/System/Applications/FaceTime.app"
           "/System/Applications/Phone.app"
           "/System/Applications/Photos.app"
