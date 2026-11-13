@@ -50,7 +50,7 @@ Traits and shared host options live in `modules/shared/host.nix`:
 | `my.tlsInspectionCa.enable` | Decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and configures system and tool CA trust (macOS). |
 | `my.networkRecovery.enable` | Runs the `org.nixos.network-recovery` launch daemon and sets `CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS=60000` (macOS). |
 | `my.wiredNetwork.enable` | Applies the static IPv4, DNS, and IPv6-off settings in `secrets/hosts/<host>/wired-network.yaml` to the wired adapter with the declared MAC on production applies (macOS), or renders the `wired-static` NetworkManager profile from the same file before NetworkManager starts on a production output (NixOS). |
-| `my.dock.hostApps` | List of `.app` paths inserted into the macOS Dock between ChatGPT and Discord (`modules/darwin/dock.nix`). |
+| `my.dock.hostApps` | List of `.app` paths inserted into the macOS Dock after the personal apps and before Ghostty (`modules/darwin/dock.nix`). |
 
 Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from `secrets/tokens.yaml` (see `../secrets/README.md`).
 
