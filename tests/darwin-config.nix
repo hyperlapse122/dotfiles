@@ -299,6 +299,8 @@ let
         ".claude/skills"
         ".gemini/antigravity-cli/skills"
         ".codex/skills"
+        ".grok/skills"
+        ".pi/agent/skills"
       ];
       koreanNames = [
         "humanizer"
@@ -315,6 +317,7 @@ let
       pinnedTargets = lib.concatMap (
         root:
         map (name: "${root}/${name}") [
+          "modern-web-guidance"
           "frontend-design"
           "web-design-guidelines"
           "vercel-react-best-practices"

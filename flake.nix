@@ -48,6 +48,10 @@
       url = "github:anthropics/skills/dbd4588f9e1033efb41dad4bef2f7947c8993d44";
       flake = false;
     };
+    modern-web-guidance = {
+      url = "github:GoogleChrome/modern-web-guidance/v1.0.0";
+      flake = false;
+    };
     vercel-agent-skills = {
       url = "github:vercel-labs/agent-skills/agent-skills-1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62";
       flake = false;
