@@ -359,7 +359,10 @@ let
       ];
       xcodeStep = name: activation.${name} or { };
       xcodeLines =
-        name: lib.filter (line: line != "") (map lib.trim (lib.splitString "\n" (plain ((xcodeStep name).data or ""))));
+        name:
+        lib.filter (line: line != "") (
+          map lib.trim (lib.splitString "\n" (plain ((xcodeStep name).data or "")))
+        );
       xcodeCall =
         name:
         let
@@ -379,9 +382,12 @@ let
         && lib.hasSuffix "; then" call
         && builtins.match ''echo "[^"]*" >&2'' (lib.elemAt lines 3) != null
         && lib.elemAt lines 4 == "fi";
-      xcodeArgs = name: lib.all (
-        root: lib.hasInfix ("--root " + lib.escapeShellArg "${user.home.homeDirectory}/${root}") (xcodeCall name)
-      ) xcodeRoots;
+      xcodeArgs =
+        name:
+        lib.all (
+          root:
+          lib.hasInfix ("--root " + lib.escapeShellArg "${user.home.homeDirectory}/${root}") (xcodeCall name)
+        ) xcodeRoots;
       devicesStep = activation.mobileDevices or { };
       devicesData = plain (devicesStep.data or "");
       # The helper creates devices, so a dry run must reach only the echo:
@@ -759,17 +765,35 @@ let
         else
           !(activation ? xcodeSkillsInstall)
       ) "${entry.name}: xcode skills install must follow linkGeneration and be absent on bootstrap")
-      (check (!production || lib.all xcodeGuarded [ "xcodeSkillsRelease" "xcodeSkillsInstall" ])
-        "${entry.name}: xcode skills calls must be dry-run guarded and fail open"
-      )
       (check (
-        !production || (
+        !production
+        || lib.all xcodeGuarded [
+          "xcodeSkillsRelease"
+          "xcodeSkillsInstall"
+        ]
+      ) "${entry.name}: xcode skills calls must be dry-run guarded and fail open")
+      (check (
+        !production
+        || (
           xcodeArgs "xcodeSkillsRelease"
           && xcodeArgs "xcodeSkillsInstall"
           && lib.hasInfix "--xcrun /usr/bin/xcrun" (xcodeCall "xcodeSkillsInstall")
           && user.my.agentSkills != { }
-          && lib.all (name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")) (lib.attrNames user.my.agentSkills)
-          && lib.all (name: lib.hasInfix ("--state " + lib.escapeShellArg "${user.home.homeDirectory}/.local/state/nix-config/xcode-skills") (xcodeCall name)) [ "xcodeSkillsRelease" "xcodeSkillsInstall" ]
+          && lib.all (
+            name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")
+          ) (lib.attrNames user.my.agentSkills)
+          &&
+            lib.all
+              (
+                name:
+                lib.hasInfix (
+                  "--state " + lib.escapeShellArg "${user.home.homeDirectory}/.local/state/nix-config/xcode-skills"
+                ) (xcodeCall name)
+              )
+              [
+                "xcodeSkillsRelease"
+                "xcodeSkillsInstall"
+              ]
         )
       ) "${entry.name}: xcode skills calls lack required roots, state, names or xcrun")
       (check (
