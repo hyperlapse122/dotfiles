@@ -12,9 +12,9 @@
   - bin/agy_acp_server.par execs the runtime rebuilt from the antigravity
     section of packages/t3code-release.json, exports the generation's plugin
     skills directory, and links into Compound Engineering run homes exactly
-    the skills the user's home-files puts in ~/.gemini/antigravity-cli/skills:
-    contributed skills only, with Compound Engineering supplied by the native
-    plugin and by that directory;
+    the contributed skills the user's home-files puts in
+    ~/.gemini/antigravity-cli/skills. That root also holds every plugin
+    skill, which a run home gets from the plugin skills directory instead;
   - bin/localharness_external, beside it, is that runtime's executable helper.
 
   tests/antigravity-acp-path.nix runs the wrapper itself. macOS users are
@@ -88,7 +88,19 @@ pkgs.runCommand "antigravity-profiles-tests" { } ''
       exit
     fi
     work=$(mktemp -d)
-    ls -A "$skillsDir" | sort > "$work/linked"
+    # The root also holds every plugin skill, for T3 Code's skill menu. A run
+    # home gets those from the plugin skills directory, so the wrapper links
+    # only the rest.
+    ls -A "$skillsDir" | sort > "$work/root"
+    if [ -d "$pluginSkills" ]; then
+      ls -A "$pluginSkills" | sort > "$work/plugin"
+    else
+      : > "$work/plugin"
+    fi
+    missing=$(comm -13 "$work/root" "$work/plugin" | tr '\n' ' ')
+    [ -z "$missing" ] \
+      || fail "~/.gemini/antigravity-cli/skills lacks plugin skills: $missing"
+    comm -23 "$work/root" "$work/plugin" > "$work/linked"
     loops=$(grep -cE '^ *for skill in .*; do$' "$wrapper" || true)
     if [ "$loops" != 1 ]; then
       fail "agy_acp_server.par has $loops skill loops, not 1"
@@ -99,7 +111,7 @@ pkgs.runCommand "antigravity-profiles-tests" { } ''
     eval "set -- ''${loop%; do}"
     printf '%s\n' "$@" | sort > "$work/wrapper"
     cmp -s "$work/linked" "$work/wrapper" \
-      || fail "agy_acp_server.par links other skills than ~/.gemini/antigravity-cli/skills holds: $(diff "$work/linked" "$work/wrapper" | grep '^[<>]' | tr '\n' ' ')"
+      || fail "agy_acp_server.par links other skills than the contributed ones ~/.gemini/antigravity-cli/skills holds: $(diff "$work/linked" "$work/wrapper" | grep '^[<>]' | tr '\n' ' ')"
     if grep -qE '^ce-' "$work/wrapper"; then
       fail "agy_acp_server.par links native Compound Engineering skills as contributed skills"
     fi

@@ -240,7 +240,12 @@ let
       root:
       let
         found = targetsUnder userConfig root;
-        expected = sorted (map (name: "${root}/${name}") (skillNames ++ otherSkillNames));
+        # The Antigravity root also holds every plugin skill, which
+        # tests/antigravity-skills.nix owns; the other roots hold none.
+        pluginNames = lib.optionals (root == ".gemini/antigravity-cli/skills") (
+          lib.subtractLists (lib.attrNames userConfig.my.agentSkills) userConfig.my.antigravityRootSkillNames
+        );
+        expected = sorted (map (name: "${root}/${name}") (skillNames ++ otherSkillNames ++ pluginNames));
       in
       lib.optionalString (found != expected) ''
         echo ${esc "~/${root} on ${label} must hold exactly ${lib.concatStringsSep ", " expected}, got: ${lib.concatStringsSep ", " found}"} >&2

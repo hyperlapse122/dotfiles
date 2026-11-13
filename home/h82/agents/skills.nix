@@ -6,12 +6,13 @@
 }:
 let
   # Each root is a directory one harness reads skills from. Claude Code reads
-  # ~/.claude/skills. The Antigravity CLI and T3 Code's Antigravity instances
-  # read ~/.gemini/antigravity-cli/skills; not ~/.gemini/config/skills, which
-  # the CLI lists twice. Codex reads
-  # ~/.codex/skills; not ~/.agents/skills, which no harness here owns. Codex
-  # lists a skill it reaches through more than one root once, because every
-  # root's link resolves to the same store directory.
+  # ~/.claude/skills. The Antigravity CLI reads
+  # ~/.gemini/antigravity-cli/skills, and T3 Code builds its Antigravity skill
+  # menu from that directory and ~/.gemini/config/skills, which agy 1.5.8
+  # makes one directory by replacing the former with a link to the latter.
+  # Codex reads ~/.codex/skills; not ~/.agents/skills, which no harness here
+  # owns. A harness lists a skill it reaches through more than one root once,
+  # because every root's link resolves to the same store directory.
   antigravityRoot = ".gemini/antigravity-cli/skills";
   roots = [
     ".claude/skills"
@@ -23,9 +24,10 @@ let
 
   plugin = import ./plugin-skills.nix { inherit lib pkgs; };
 
-  # Plugin skills reach the Antigravity ACP runtime through one directory.
-  # The CLI gets them from its native plugin install, so they stay out of the
-  # skill roots above.
+  # Plugin skills are linked into the Antigravity root only, which is where
+  # T3 Code's skill menu finds them. The Antigravity ACP runtime also receives
+  # them as one store directory, for Compound Engineering run homes, and the
+  # CLI gets them from its native plugin install.
   pluginSkills = plugin.skills {
     sources = config.my.agentPluginSources;
     sharedNames = lib.attrNames config.my.agentSkills;
@@ -58,10 +60,17 @@ in
     readOnly = true;
     default = lib.attrNames config.my.agentSkills;
     description = ''
-      Every contributed skill linked into ~/${antigravityRoot}. The native
-      plugin supplies Compound Engineering. The Antigravity ACP wrapper links
-      these into Compound Engineering run homes.
+      Shared skill names the Antigravity ACP wrapper links into Compound
+      Engineering run homes. Plugin skills reach those homes separately.
     '';
+  };
+
+  options.my.antigravityRootSkillNames = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    internal = true;
+    readOnly = true;
+    default = lib.attrNames (config.my.agentSkills // pluginSkills);
+    description = "All shared and plugin skill names declared in the Antigravity root.";
   };
 
   options.my.antigravityPluginSkills = lib.mkOption {
@@ -90,6 +99,9 @@ in
           name: source: lib.nameValuePair "${root}/${name}" { inherit source; }
         ) config.my.agentSkills
       ) roots
+      ++ lib.mapAttrsToList (
+        name: source: lib.nameValuePair "${antigravityRoot}/${name}" { inherit source; }
+      ) pluginSkills
     )
   );
 }
