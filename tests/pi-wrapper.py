@@ -15,6 +15,11 @@ with tempfile.TemporaryDirectory() as directory:
     shutil.copytree(sys.argv[2], agent, symlinks=False)
     for path in [agent, *agent.rglob('*')]:
         path.chmod(path.stat().st_mode | 0o200)
+    # Preserve the policy's installed symlink target: its relative imports must
+    # work through Home Manager's store layout, not only from copied files.
+    policy = agent / 'dotfiles-policy.ts'
+    policy.unlink()
+    policy.symlink_to((Path(sys.argv[2]) / 'dotfiles-policy.ts').resolve())
     synthetic = home / 'synthetic'
     exa = home / 'exa'
     synthetic.write_text('FAKE-synthetic')
