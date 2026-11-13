@@ -147,6 +147,7 @@
           "pi"
           "agent-instructions"
           "android-sdk"
+          "flutter"
           "antigravity-profiles"
           "antigravity-skills"
           "baloo-extractor"
@@ -687,6 +688,7 @@
               ./tests/test_docker_credential_sops.py;
           podman-containers = import ./tests/podman-containers.nix { inherit pkgs self; };
           android-sdk = import ./tests/android-sdk.nix { inherit pkgs self; };
+          flutter = import ./tests/flutter.nix { inherit pkgs self; };
           session-variables = import ./tests/session-variables.nix {
             inherit pkgs self;
             fixtures = [ ];
