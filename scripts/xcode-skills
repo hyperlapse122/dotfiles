@@ -39,8 +39,12 @@ own() {
   target=$(realpath -m -- "$target") || return 1
   case "$target" in "$state"/*) return 0 ;; *) return 1 ;; esac
 }
+# A skill is a directory that holds SKILL.md.
+is_skill() {
+  [ -d "$1" ] && [ -f "$1/SKILL.md" ]
+}
 work() {
-  local root name entry fresh backup found
+  local root name entry fresh backup have_skill conflict
   if [ "$mode" = release ]; then
     for root in "${roots[@]}"; do
       for name in "${names[@]}"; do
@@ -63,11 +67,11 @@ work() {
     warn "skills export failed (exit status $export_status)"
     return 0
   fi
-  found=0
+  have_skill=0
   for entry in "$fresh"/*; do
-    if [ -d "$entry" ] && [ -f "$entry/SKILL.md" ]; then found=1; fi
+    if is_skill "$entry"; then have_skill=1; fi
   done
-  if [ "$found" = 0 ]; then
+  if [ "$have_skill" = 0 ]; then
     rm -rf -- "$fresh"
     warn 'skills export contained no skills'
     return 0
@@ -88,23 +92,23 @@ work() {
     mkdir -p -- "$root" || return 1
     for entry in "$root"/*; do
       name=${entry##*/}
-      if own "$entry" && { [ ! -d "$state/$name" ] || [ ! -f "$state/$name/SKILL.md" ]; }; then rm -- "$entry" || return 1; fi
+      if own "$entry" && ! is_skill "$state/$name"; then rm -- "$entry" || return 1; fi
     done
   done
   for entry in "$state"/*; do
-    [ -d "$entry" ] && [ -f "$entry/SKILL.md" ] || continue
+    is_skill "$entry" || continue
     name=${entry##*/}
-    found=0
+    conflict=0
     for root in "${roots[@]}"; do
       if own "$root/$name"; then
         if [ "$(readlink -- "$root/$name")" != "$entry" ]; then rm -- "$root/$name" && ln -s -- "$entry" "$root/$name" || return 1; fi
       elif [ -e "$root/$name" ] || [ -L "$root/$name" ]; then
-        found=1
+        conflict=1
       else
         ln -s -- "$entry" "$root/$name" || return 1
       fi
     done
-    if [ "$found" = 1 ]; then warn "skill $name is already present"; fi
+    if [ "$conflict" = 1 ]; then warn "skill $name is already present"; fi
   done
 }
 if ! work; then warn 'could not reconcile skills'; fi

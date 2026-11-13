@@ -30,7 +30,7 @@ in
   # are exported on the machine at activation and never enter the store.
   # Home Manager on nix-darwin activates on every apply, after the system
   # step that installs Xcode, so an Xcode upgrade with no Nix change still
-  # refreshes the skills. The helper reports its own failures and exits 0.
+  # refreshes the skills.
   #
   # The release entry runs first: a declared skill that takes the name of an
   # installed Xcode skill would otherwise meet a foreign symlink at its link
