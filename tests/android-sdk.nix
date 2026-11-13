@@ -95,7 +95,7 @@ let
     ''export ANDROID_HOME="${sdkRoot}"''
     ''export ANDROID_NDK_HOME="${sdkRoot}/ndk/${ndk}"''
     ''export ANDROID_SDK_ROOT="${sdkRoot}"''
-    ''export PATH="''${PATH:+$PATH:}${sdkRoot}/cmdline-tools/${cmdlineTools}/bin:${sdkRoot}/platform-tools"''
+    ''export PATH="''${PATH:+$PATH:}${sdkRoot}/cmdline-tools/${cmdlineTools}/bin:${sdkRoot}/platform-tools:${sdkRoot}/emulator"''
   ];
 
   environmentLines = [

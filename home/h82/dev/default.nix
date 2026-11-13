@@ -5,6 +5,7 @@
     ./containers.nix
     ./cpp.nix
     ./dotnet.nix
+    ./flutter.nix
     ./ghq.nix
     ./git.nix
     ./kubernetes.nix

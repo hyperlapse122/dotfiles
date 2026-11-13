@@ -48,7 +48,7 @@ lib.mkIf (pkgs.stdenv.hostPlatform.isx86_64 || isDarwin) (
       # also ships sqlite3 and mke2fs, which must not shadow the system's.
       # The agent-device CLI looks for emulator beside adb on PATH.
       home.sessionVariablesExtra = ''
-        export PATH="''${PATH:+$PATH:}${cmdlineTools}/bin:${sdkRoot}/platform-tools${lib.optionalString isDarwin ":${sdkRoot}/emulator"}"
+        export PATH="''${PATH:+$PATH:}${cmdlineTools}/bin:${sdkRoot}/platform-tools:${sdkRoot}/emulator"
       '';
 
       # The Android CLI reads its default flags from this file.

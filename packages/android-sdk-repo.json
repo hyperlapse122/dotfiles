@@ -2,6 +2,106 @@
   "addons": {},
   "extras": {},
   "images": {
+    "35": {
+      "google_apis": {
+        "arm64-v8a": {
+          "archives": [
+            {
+              "arch": "all",
+              "os": "all",
+              "sha1": "16f5bceca236b2737008977c4aaf826e46a8de7d",
+              "size": 1778933980,
+              "url": "https://dl.google.com/android/repository/sys-img/google_apis/arm64-v8a-35_r09.zip"
+            }
+          ],
+          "dependencies": {
+            "dependency:0": {
+              "element-attributes": {
+                "path": "emulator"
+              },
+              "min-revision:0": {
+                "major:0": "33",
+                "micro:2": "24",
+                "minor:1": "1"
+              }
+            }
+          },
+          "displayName": "Google APIs ARM 64 v8a System Image",
+          "license": "android-sdk-arm-dbt-license",
+          "name": "system-image-35-google_apis-arm64-v8a",
+          "path": "system-images/android-35/google_apis/arm64-v8a",
+          "revision": "35-google_apis-arm64-v8a",
+          "revision-details": {
+            "major:0": "9"
+          },
+          "type-details": {
+            "abi:5": "arm64-v8a",
+            "api-level:0": "35",
+            "base-extension:2": "true",
+            "element-attributes": {
+              "xsi:type": "ns12:sysImgDetailsType"
+            },
+            "extension-level:1": "13",
+            "tag:3": {
+              "display:1": "Google APIs",
+              "id:0": "google_apis"
+            },
+            "vendor:4": {
+              "display:1": "Google Inc.",
+              "id:0": "google"
+            }
+          }
+        },
+        "x86_64": {
+          "archives": [
+            {
+              "arch": "all",
+              "os": "all",
+              "sha1": "0103e6dab21290c4b9d16550a3ce99476f884eef",
+              "size": 1738815903,
+              "url": "https://dl.google.com/android/repository/sys-img/google_apis/x86_64-35_r09.zip"
+            }
+          ],
+          "dependencies": {
+            "dependency:0": {
+              "element-attributes": {
+                "path": "emulator"
+              },
+              "min-revision:0": {
+                "major:0": "33",
+                "micro:2": "24",
+                "minor:1": "1"
+              }
+            }
+          },
+          "displayName": "Google APIs Intel x86_64 Atom System Image",
+          "license": "android-sdk-license",
+          "name": "system-image-35-google_apis-x86_64",
+          "path": "system-images/android-35/google_apis/x86_64",
+          "revision": "35-google_apis-x86_64",
+          "revision-details": {
+            "major:0": "9"
+          },
+          "type-details": {
+            "abi:5": "x86_64",
+            "api-level:0": "35",
+            "base-extension:2": "true",
+            "element-attributes": {
+              "xsi:type": "ns12:sysImgDetailsType"
+            },
+            "extension-level:1": "13",
+            "tag:3": {
+              "display:1": "Google APIs",
+              "id:0": "google_apis"
+            },
+            "vendor:4": {
+              "display:1": "Google Inc.",
+              "id:0": "google"
+            }
+          }
+        }
+      }
+    },
     "36": {
       "google_apis": {
         "arm64-v8a": {
@@ -443,6 +543,46 @@
       }
     },
     "ndk": {
+      "28.2.13676358": {
+        "archives": [
+          {
+            "arch": "all",
+            "os": "linux",
+            "sha1": "a7b54a5de87fecd125a17d54f73c446199e72a64",
+            "size": 722261334,
+            "url": "https://dl.google.com/android/repository/android-ndk-r28c-linux.zip"
+          },
+          {
+            "arch": "all",
+            "os": "macosx",
+            "sha1": "fc20a6bf15a30fb3428c9b60a7308793a362dc6d",
+            "size": 952495160,
+            "url": "https://dl.google.com/android/repository/android-ndk-r28c-darwin.zip"
+          },
+          {
+            "arch": "all",
+            "os": "windows",
+            "sha1": "086bba43ff2f5eb0e387b15c8278bb4e0d89ba1d",
+            "size": 748118221,
+            "url": "https://dl.google.com/android/repository/android-ndk-r28c-windows.zip"
+          }
+        ],
+        "displayName": "NDK (Side by side) 28.2.13676358",
+        "license": "android-sdk-license",
+        "name": "ndk",
+        "path": "ndk/28.2.13676358",
+        "revision": "28.2.13676358",
+        "revision-details": {
+          "major:0": "28",
+          "micro:2": "13676358",
+          "minor:1": "2"
+        },
+        "type-details": {
+          "element-attributes": {
+            "xsi:type": "ns5:genericDetailsType"
+          }
+        }
+      },
       "29.0.14206865": {
         "archives": [
           {
@@ -527,6 +667,38 @@
       }
     },
     "platforms": {
+      "35": {
+        "archives": [
+          {
+            "arch": "all",
+            "os": "all",
+            "sha1": "0bb560a90a7a2cbd0dd8348224d518b638fe7949",
+            "size": 64273788,
+            "url": "https://dl.google.com/android/repository/platform-35_r02.zip"
+          }
+        ],
+        "displayName": "Android SDK Platform 35",
+        "license": "android-sdk-license",
+        "name": "platforms",
+        "path": "platforms/android-35",
+        "revision": "35",
+        "revision-details": {
+          "major:0": "2"
+        },
+        "type-details": {
+          "api-level:0": "35",
+          "base-extension:2": "true",
+          "element-attributes": {
+            "xsi:type": "ns11:platformDetailsType"
+          },
+          "extension-level:1": "13",
+          "layoutlib:3": {
+            "element-attributes": {
+              "api": "15"
+            }
+          }
+        }
+      },
       "36": {
         "archives": [
           {

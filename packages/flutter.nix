@@ -1,4 +1,9 @@
-{ pkgs }:
+{
+  pkgs,
+  androidSdk,
+  javaHome,
+  chromeExecutable,
+}:
 let
   inherit (pkgs) lib;
   release = lib.importJSON ./flutter-release.json;
@@ -25,11 +30,17 @@ sdk.overrideAttrs (old: {
   nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.jq ];
   # symlinkJoin uses buildCommand rather than the generic install phases.
   buildCommand = old.buildCommand + ''
+    wrapProgram "$out/bin/flutter" \
+      --set-default ANDROID_HOME ${lib.escapeShellArg androidSdk.sdkRoot} \
+      --set-default ANDROID_SDK_ROOT ${lib.escapeShellArg androidSdk.sdkRoot} \
+      --set-default ANDROID_NDK_HOME ${lib.escapeShellArg "${androidSdk.sdkRoot}/ndk/${androidSdk.repo.latest.ndk}"} \
+      --set-default JAVA_HOME ${lib.escapeShellArg javaHome} \
+      --set-default CHROME_EXECUTABLE ${lib.escapeShellArg chromeExecutable}
     runHook postInstallCheck
   '';
   postInstallCheck = ''
     mkdir -p "$TMPDIR/flutter-home"
-    env HOME="$TMPDIR/flutter-home" FLUTTER_SUPPRESS_ANALYTICS=true \
+    env HOME="$TMPDIR/flutter-home" XDG_CONFIG_HOME="$TMPDIR/flutter-home/.config" FLUTTER_SUPPRESS_ANALYTICS=true \
       "$out/bin/flutter" --version --machine > flutter-version.json
     jq -e --arg flutter ${lib.escapeShellArg sdk.version} \
       --arg dart ${lib.escapeShellArg sdk.dart.version} \
