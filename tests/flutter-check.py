@@ -46,7 +46,7 @@ for entry in entries:
     if darwin:
         artifacts += [
             "bin/cache/artifacts/engine/ios/Flutter.xcframework/Info.plist",
-            "bin/cache/artifacts/engine/darwin-arm64/FlutterMacOS.xcframework/Info.plist",
+            "bin/cache/artifacts/engine/darwin-x64/FlutterMacOS.xcframework/Info.plist",
         ]
         assert (profile / "bin/pod").is_file(), f"{name}: missing CocoaPods fallback"
     else:
