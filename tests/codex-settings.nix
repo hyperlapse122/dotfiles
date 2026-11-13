@@ -51,7 +51,7 @@ let
       }
       {
         path = [ "model_reasoning_effort" ];
-        value = "high";
+        value = "xhigh";
       }
       {
         path = [ "service_tier" ];
@@ -169,7 +169,7 @@ let
   '';
   applied = {
     model = "gpt-6.1-sol";
-    model_reasoning_effort = "high";
+    model_reasoning_effort = "xhigh";
     service_tier = "default";
     unrelated = "keep me";
     agents = {

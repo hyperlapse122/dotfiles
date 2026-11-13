@@ -45,7 +45,7 @@ def validate(home):
     assert antigravity['config']['binaryPath'].endswith('/bin/agy_acp_server.par')
     assert set(antigravity) == {'driver', 'enabled', 'custom', 'config'}
     assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
-    assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.1-sol', 'options': [{'id': 'reasoningEffort', 'value': 'high'}, {'id': 'serviceTier', 'value': 'default'}]}
+    assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.1-sol', 'options': [{'id': 'reasoningEffort', 'value': 'xhigh'}, {'id': 'serviceTier', 'value': 'default'}]}
     assert settings['fallbackModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5'}
     assert settings['textGenerationModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6-luna'}
     assert settings['defaultThreadEnvMode'] == 'worktree'
