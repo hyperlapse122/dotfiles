@@ -404,6 +404,12 @@
             }
             touch $out
           '';
+          xcode-skills = pkgs.runCommand "xcode-skills-tests" { } ''
+            bash ${./tests/xcode-skills.sh} ${
+              pkgs.lib.getExe (import ./packages/xcode-skills.nix { inherit pkgs; })
+            }
+            touch $out
+          '';
           restore-age-identity =
             pythonScriptCheckWith
               {

@@ -1,0 +1,80 @@
+mode='' xcrun='' state=''
+roots=() names=()
+usage() { echo 'usage: xcode-skills --install|--release --state DIR [--xcrun PATH] --root DIR... [--name NAME...]' >&2; exit 2; }
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --install|--release) [ -z "$mode" ] || usage; mode=${1#--}; shift ;;
+    --xcrun|--state|--root|--name)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage
+      case "$1" in
+        --xcrun) xcrun=$2 ;; --state) state=$2 ;; --root) roots+=("$2") ;; --name) names+=("$2") ;;
+      esac
+      shift 2 ;;
+    *) usage ;;
+  esac
+done
+[ -n "$mode" ] && [ -n "$state" ] && [ "${#roots[@]}" -gt 0 ] || usage
+[ "$mode" != install ] || { [ -n "$xcrun" ] && [ "${#names[@]}" -eq 0 ]; } || usage
+for name in "${names[@]}"; do case "$name" in */*|.|..) usage ;; esac; done
+warn() { printf 'xcode-skills: %s\n' "$1" >&2; }
+state=$(realpath -m -- "$state") || { warn 'could not resolve state directory'; exit 0; }
+own() {
+  [ -L "$1" ] || return 1
+  local target
+  target=$(readlink -- "$1") || return 1
+  case "$target" in /*) ;; *) target=$(dirname -- "$1")/$target ;; esac
+  target=$(realpath -m -- "$target") || return 1
+  case "$target" in "$state"/*) return 0 ;; *) return 1 ;; esac
+}
+work() {
+  local root name entry fresh backup found
+  if [ "$mode" = release ]; then
+    for root in "${roots[@]}"; do
+      for name in "${names[@]}"; do
+        entry=$root/$name
+        if own "$entry"; then rm -- "$entry" || return 1; fi
+      done
+    done
+    return 0
+  fi
+  if [ ! -x "$xcrun" ]; then warn 'xcrun is missing'; return 0; fi
+  mkdir -p -- "$(dirname -- "$state")" || return 1
+  fresh=$(mktemp -d "${state}.export.XXXXXXXX") || return 1
+  if ! "$xcrun" agent skills export --output-dir "$fresh" >/dev/null 2>&1; then
+    rm -rf -- "$fresh"; warn 'skills export failed'; return 0
+  fi
+  found=0
+  for entry in "$fresh"/*; do
+    if [ -d "$entry" ] && [ -f "$entry/SKILL.md" ]; then found=1; fi
+  done
+  if [ "$found" = 0 ]; then rm -rf -- "$fresh"; warn 'skills export contained no skills'; return 0; fi
+  backup=$(mktemp -d "${state}.old.XXXXXXXX") || { rm -rf -- "$fresh"; return 1; }
+  rmdir -- "$backup" || return 1
+  if [ -e "$state" ] || [ -L "$state" ]; then mv -- "$state" "$backup" || return 1; fi
+  if ! mv -- "$fresh" "$state"; then
+    if [ -e "$backup" ]; then mv -- "$backup" "$state" || true; fi
+    rm -rf -- "$fresh"; return 1
+  fi
+  rm -rf -- "$backup" || return 1
+  for root in "${roots[@]}"; do
+    mkdir -p -- "$root" || return 1
+    for entry in "$root"/*; do
+      name=${entry##*/}
+      if own "$entry" && { [ ! -d "$state/$name" ] || [ ! -f "$state/$name/SKILL.md" ]; }; then rm -- "$entry" || return 1; fi
+    done
+  done
+  for entry in "$state"/*; do
+    [ -d "$entry" ] && [ -f "$entry/SKILL.md" ] || continue
+    name=${entry##*/}; found=0
+    for root in "${roots[@]}"; do
+      if own "$root/$name"; then
+        if [ "$(readlink -- "$root/$name")" != "$entry" ]; then rm -- "$root/$name" && ln -s -- "$entry" "$root/$name" || return 1; fi
+      elif [ -e "$root/$name" ] || [ -L "$root/$name" ]; then found=1
+      else ln -s -- "$entry" "$root/$name" || return 1
+      fi
+    done
+    if [ "$found" = 1 ]; then warn "skill $name is already present"; fi
+  done
+}
+if ! work; then warn 'could not reconcile skills'; fi
+exit 0
