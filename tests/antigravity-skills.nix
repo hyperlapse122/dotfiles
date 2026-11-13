@@ -111,7 +111,12 @@ let
     ''
       # The wrapper directory and Home Manager links have separate consumers.
       directory=${userConfig.my.antigravityPluginSkills}
-      expected=$(printf '%s\n' ${lib.escapeShellArgs (lib.attrNames realSkills)} | sed '/^$/d' | sort)
+      # Listed from the plugin sources on disk, not through the enumeration
+      # under test, so a skill that function drops fails the comparison.
+      expected=$(find ${
+        lib.concatMapStringsSep " " (name: esc "${sources.${name}.src}/skills") (lib.attrNames sources)
+      } -mindepth 2 -maxdepth 2 -name SKILL.md \
+        | awk -F/ '{print $(NF-1)}' | sort)
       actual=$(ls -1A "$directory" | sort)
       if [ -z "$expected" ]; then
         echo 'the pinned plugin sources hold no skills on ${entry.name}' >&2

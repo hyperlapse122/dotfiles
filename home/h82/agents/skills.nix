@@ -5,10 +5,14 @@
   ...
 }:
 let
-  # T3 Code scans both ~/.gemini/antigravity-cli/skills and
-  # ~/.gemini/config/skills. On macOS, agy 1.5.8 migrated the former to a
-  # symlink to the latter. Codex reads ~/.codex/skills; not ~/.agents/skills,
-  # which no harness here owns. Each root holds links to skill directories.
+  # Each root is a directory one harness reads skills from. Claude Code reads
+  # ~/.claude/skills. The Antigravity CLI reads
+  # ~/.gemini/antigravity-cli/skills, and T3 Code builds its Antigravity skill
+  # menu from that directory and ~/.gemini/config/skills, which agy 1.5.8
+  # makes one directory by replacing the former with a link to the latter.
+  # Codex reads ~/.codex/skills; not ~/.agents/skills, which no harness here
+  # owns. A harness lists a skill it reaches through more than one root once,
+  # because every root's link resolves to the same store directory.
   antigravityRoot = ".gemini/antigravity-cli/skills";
   roots = [
     ".claude/skills"
@@ -20,8 +24,10 @@ let
 
   plugin = import ./plugin-skills.nix { inherit lib pkgs; };
 
-  # The runtime also receives plugin skills through one store directory, and
-  # the CLI gets them from its native plugin install.
+  # Plugin skills are linked into the Antigravity root only, which is where
+  # T3 Code's skill menu finds them. The Antigravity ACP runtime also receives
+  # them as one store directory, for Compound Engineering run homes, and the
+  # CLI gets them from its native plugin install.
   pluginSkills = plugin.skills {
     sources = config.my.agentPluginSources;
     sharedNames = lib.attrNames config.my.agentSkills;
