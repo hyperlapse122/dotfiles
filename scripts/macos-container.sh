@@ -4,8 +4,25 @@ set -eu
 fail() { printf '%s\n' "macOS container: $*" >&2; exit 1; }
 . "$(dirname "$0")/macos-container-state.sh"
 
+if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
+    gui_present=true
+else
+    gui_present=false
+fi
+
+# Homebrew registers a login service in user/<uid> instead of gui/<uid>, with a
+# warning, whenever it sees SUDO_USER. Activation reaches this script through
+# sudo, so hide the variable while a GUI domain exists to register in.
+brew_services() {
+    if [ "$gui_present" = true ]; then
+        env -u SUDO_USER brew services "$@"
+    else
+        brew services "$@"
+    fi
+}
+
 login_registration() {
-    service_json=$(brew services info container --json) || fail 'Cannot inspect the container login service.'
+    service_json=$(brew_services info container --json) || fail 'Cannot inspect the container login service.'
     registered=$(printf '%s\n' "$service_json" | jq -er '
         if type == "array" and length == 1 and .[0].name == "container"
            and (.[0].registered | type) == "boolean"
@@ -37,7 +54,7 @@ fi
 if [ "$registered" = false ]; then
     # Homebrew start bootstraps its login launcher. The native container start
     # command bootstraps an already loaded API without bootout or kickstart.
-    brew services start container ||
+    brew_services start container ||
         fail 'Cannot register the container login service. Check `brew services info container --json` and reapply.'
     login_registration
     [ "$registered" = true ] || fail 'Container login registration did not persist; check `brew services info container --json`.'

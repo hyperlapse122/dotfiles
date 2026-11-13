@@ -11,8 +11,8 @@
     evaluation when two plugins, or a plugin and a shared skill, use one name.
   - `problems { sources, sharedNames }`: the messages `skills` stops with.
   - `directory skills`: one store directory holding a link per skill.
-  - `agyInstall { agy, sources }`: the Antigravity CLI validate, install, and
-    enable commands, once per plugin.
+  - `agyInstall { agy, sources }`: the Antigravity CLI installation and enable
+    commands for each plugin.
 */
 { lib, pkgs }:
 let
@@ -85,10 +85,19 @@ in
       plugin:
       let
         spec = sources.${plugin};
+        tree = toString (spec.antigravityTree or spec.src);
       in
       ''
-        ${agy} plugin validate ${lib.escapeShellArg "${spec.src}"}
-        ${agy} plugin install ${lib.escapeShellArg "${spec.src}"}
+        record="$HOME/.local/state/nix-config/antigravity-plugins/"${lib.escapeShellArg plugin}
+        if [[ -f "$record" && "$(cat "$record")" == ${lib.escapeShellArg tree} && -f "$HOME/.gemini/config/plugins/"${lib.escapeShellArg spec.plugin}/plugin.json ]]; then
+          echo ${lib.escapeShellArg "Skipping unchanged Antigravity plugin ${spec.plugin}"}
+        else
+          rm -f "$record"
+          ${agy} plugin validate ${lib.escapeShellArg tree}
+          ${agy} plugin install ${lib.escapeShellArg tree}
+          mkdir -p "$(dirname "$record")"
+          printf '%s\n' ${lib.escapeShellArg tree} > "$record"
+        fi
         ${agy} plugin enable ${lib.escapeShellArg spec.plugin}''
     ) (lib.attrNames sources);
 }

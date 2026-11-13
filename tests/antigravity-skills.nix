@@ -43,10 +43,16 @@ let
         sourceSet:
         pkgs.writeText "plugins.json" (
           builtins.toJSON (
-            map (name: {
-              plugin = sourceSet.${name}.plugin;
-              source = "${sourceSet.${name}.src}";
-            }) (lib.attrNames sourceSet)
+            map (
+              name:
+              {
+                plugin = sourceSet.${name}.plugin;
+                source = toString (sourceSet.${name}.antigravityTree or sourceSet.${name}.src);
+              }
+              // lib.optionalAttrs (sourceSet.${name} ? antigravityTree) {
+                pinned = toString sourceSet.${name}.src;
+              }
+            ) (lib.attrNames sourceSet)
           )
         );
       twinSources = {

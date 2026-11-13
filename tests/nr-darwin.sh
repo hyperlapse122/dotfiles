@@ -54,6 +54,7 @@ cat >"$stubs/sudo" <<EOF
 #!$bash_bin
 printf 'sudo %s\n' "\$*" >>"$log"
 [[ \$1 == -v ]] && exit 0
+[[ \$1 == -H ]] && shift
 [[ \$1 == -- ]] && shift
 exec "\$@"
 EOF
@@ -145,7 +146,7 @@ nix_env=$stubs/nix-env
 apply switch >/dev/null 2>&1 || fail "switch with stubs failed: $(cat "$log")"
 expected="nix build --no-link --print-out-paths $repo#darwinConfigurations.fixturehost.system
 sudo -v
-sudo -- $nix_env -p $profile --set $system_out
+sudo -H -- $nix_env -p $profile --set $system_out
 nix-env -p $profile --set $system_out
 sudo -- $system_out/activate
 activate $system_out/activate"
@@ -153,9 +154,13 @@ activate $system_out/activate"
 pass 'switch builds once, registers the system profile under sudo, then activates under sudo'
 
 apply switch --bootstrap >/dev/null 2>&1 || fail "switch --bootstrap with stubs failed: $(cat "$log")"
-[[ $(head -n1 "$log") == *"#darwinConfigurations.fixturehost-bootstrap.system" ]] ||
-  fail "switch --bootstrap did not build the bootstrap output: $(cat "$log")"
-grep -q "activate $system_out/activate" "$log" || fail "switch --bootstrap did not activate: $(cat "$log")"
+expected="nix build --no-link --print-out-paths $repo#darwinConfigurations.fixturehost-bootstrap.system
+sudo -v
+sudo -H -- $nix_env -p $profile --set $system_out
+nix-env -p $profile --set $system_out
+sudo -- $system_out/activate
+activate $system_out/activate"
+[[ $(<"$log") == "$expected" ]] || fail "switch --bootstrap ran the wrong sequence: $(cat "$log")"
 pass 'switch --bootstrap targets <host>-bootstrap'
 
 apply build >/dev/null 2>&1 || fail "build with stubs failed: $(cat "$log")"
