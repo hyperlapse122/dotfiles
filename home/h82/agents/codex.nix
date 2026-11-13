@@ -27,7 +27,7 @@ let
     }
     {
       path = [ "model_reasoning_effort" ];
-      value = "high";
+      value = "xhigh";
     }
     {
       path = [ "service_tier" ];

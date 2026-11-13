@@ -331,7 +331,7 @@ let
         options = [
           {
             id = "reasoningEffort";
-            value = "high";
+            value = "xhigh";
           }
           {
             id = "serviceTier";
