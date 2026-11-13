@@ -11,7 +11,7 @@ let
     root: "--root ${lib.escapeShellArg "${config.home.homeDirectory}/${root}"}"
   ) config.my.agentSkillRoots;
   names = lib.concatMapStringsSep " " (name: "--name ${lib.escapeShellArg name}") (
-    lib.attrNames config.my.agentSkills
+    config.my.antigravityRootSkillNames
   );
 in
 {

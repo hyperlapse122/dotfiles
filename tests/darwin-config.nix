@@ -336,6 +336,13 @@ let
           "ux-flows"
         ]
       ) koreanRoots;
+      pluginSkillNames = lib.attrNames (
+        (import ../home/h82/agents/plugin-skills.nix { inherit lib pkgs; }).skills {
+          sources = user.my.agentPluginSources;
+          sharedNames = lib.attrNames user.my.agentSkills;
+        }
+      );
+      pluginTargets = map (name: ".gemini/antigravity-cli/skills/${name}") pluginSkillNames;
       # Resolved targets of enabled entries, not attribute names. The source is
       # compared as a string with its context dropped, so no darwin derivation
       # is built, and the store path is never interpolated.
@@ -719,9 +726,12 @@ let
           )
           "${entry.name}: ${target} must be exactly one enabled home.file whose source is the in-tree test-audit skill directory, got ${builtins.toJSON (map koreanSourceOf files)}"
       ) testAuditTargets)
-      (check (sort koreanUnderRoots == sort (koreanTargets ++ testAuditTargets ++ pinnedTargets))
+      (check
+        (
+          sort koreanUnderRoots == sort (koreanTargets ++ testAuditTargets ++ pinnedTargets ++ pluginTargets)
+        )
         "${entry.name}: the targets under the skill roots must be exactly ${
-          builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets)
+          builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets ++ pluginTargets)
         }, got ${builtins.toJSON (sort koreanUnderRoots)}"
       )
       (check (koreanElsewhere == [ ])
@@ -782,6 +792,9 @@ let
           && lib.all (
             name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")
           ) (lib.attrNames user.my.agentSkills)
+          && lib.all (
+            name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")
+          ) pluginSkillNames
           &&
             lib.all
               (

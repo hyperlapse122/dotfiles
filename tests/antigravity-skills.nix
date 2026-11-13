@@ -59,46 +59,111 @@ let
         first = secondPlugin;
         second = secondPlugin;
       };
-      sharedTargets = lib.concatMap (
-        file:
-        let
-          prefix = ".gemini/antigravity-cli/skills/";
-        in
-        lib.optional (lib.hasPrefix prefix (file.target or "")) (lib.removePrefix prefix file.target)
-      ) (lib.attrValues userConfig.home.file);
-      pinnedSource = "${sources.compound-engineering.src}";
+      targets = userConfig.home.file;
+      hasLink =
+        files: root: name: source:
+        lib.any (
+          file:
+          (file.enable or true)
+          && (file.target or "") == "${root}/${name}"
+          && toString (file.source or "") == toString source
+        ) (lib.attrValues files);
+      hasTarget =
+        files: root: name:
+        lib.any (file: (file.enable or true) && (file.target or "") == "${root}/${name}") (
+          lib.attrValues files
+        );
+      otherRoots = [
+        ".claude/skills"
+        ".codex/skills"
+        ".grok/skills"
+        ".pi/agent/skills"
+      ];
+      fixture = lib.evalModules {
+        specialArgs = { inherit pkgs; };
+        modules = [
+          ../home/h82/agents/skills.nix
+          ({ lib, ... }: {
+            options.my.agentPluginSources = lib.mkOption { type = lib.types.attrsOf lib.types.raw; };
+            options.home.file = lib.mkOption {
+              type = lib.types.attrsOf (
+                lib.types.submodule (
+                  { name, ... }: {
+                    options.target = lib.mkOption {
+                      type = lib.types.str;
+                      default = name;
+                    };
+                    options.source = lib.mkOption { type = lib.types.path; };
+                    options.enable = lib.mkOption {
+                      type = lib.types.bool;
+                      default = true;
+                    };
+                  }
+                )
+              );
+              default = { };
+            };
+            config.my.agentPluginSources = grown;
+          })
+        ];
+      };
     in
     ''
-      # The directory the wrapper receives holds one link per Compound
-      # Engineering skill, and no name that ~/.gemini/antigravity-cli/skills
-      # also receives.
+      # The wrapper directory and Home Manager links have separate consumers.
       directory=${userConfig.my.antigravityPluginSkills}
-      expected=$(find ${pinnedSource}/skills -mindepth 2 -maxdepth 2 -name SKILL.md \
-        | awk -F/ '{print $(NF-1)}' | sort)
+      expected=$(printf '%s\n' ${lib.escapeShellArgs (lib.attrNames realSkills)} | sed '/^$/d' | sort)
       actual=$(ls -1A "$directory" | sort)
       if [ -z "$expected" ]; then
-        echo 'the pinned Compound Engineering source holds no skills on ${entry.name}' >&2
+        echo 'the pinned plugin sources hold no skills on ${entry.name}' >&2
         failed=1
       fi
       if [ "$actual" != "$expected" ]; then
-        echo 'the plugin skills directory must hold exactly the Compound Engineering skills on ${entry.name}' >&2
+        echo 'the plugin skills directory must hold exactly the pinned plugin skills on ${entry.name}' >&2
         failed=1
       fi
-      for name in $actual; do
-        if [ "$(readlink "$directory/$name")" != ${pinnedSource}/skills/$name ]; then
-          echo "plugin skill $name must link to its source directory on ${entry.name}" >&2
-          failed=1
-        fi
-      done
-      printf '%s\n' ${lib.escapeShellArgs sharedTargets} | sed '/^$/d' | sort > shared-names
-      if ! grep -q . shared-names; then
-        echo '~/.gemini/antigravity-cli/skills receives no shared skills on ${entry.name}' >&2
+      ${lib.concatStrings (
+        lib.mapAttrsToList (name: source: ''
+          if [ "$(readlink "$directory/${name}")" != ${esc source} ]; then
+            echo 'plugin skill ${name} must link to its source directory in the store on ${entry.name}' >&2
+            failed=1
+          fi
+        '') realSkills
+      )}
+      # BEGIN link assertions
+      ${lib.concatStrings (
+        lib.mapAttrsToList (name: source: ''
+          if [ ${
+            lib.boolToString (hasLink targets ".gemini/antigravity-cli/skills" name source)
+          } != true ]; then
+            echo 'plugin skill ${name} must link to its source in the Antigravity root on ${entry.name}' >&2
+            failed=1
+          fi
+          if [ ${lib.boolToString (lib.any (root: hasTarget targets root name) otherRoots)} != false ]; then
+            echo 'plugin skill ${name} must not be linked into other roots on ${entry.name}' >&2
+            failed=1
+          fi
+        '') realSkills
+      )}
+      ${lib.concatStrings (
+        lib.mapAttrsToList (name: source: ''
+          if [ ${
+            lib.boolToString (hasLink targets ".gemini/antigravity-cli/skills" name source)
+          } != true ]; then
+            echo 'shared skill ${name} must link to its source in the Antigravity root on ${entry.name}' >&2
+            failed=1
+          fi
+        '') userConfig.my.agentSkills
+      )}
+      if [ ${
+        lib.boolToString (
+          hasLink fixture.config.home.file ".gemini/antigravity-cli/skills" "second-skill"
+            withSecond.second-skill
+        )
+      } != true ]; then
+        echo 'second-skill must link to its source in the Antigravity root on ${entry.name}' >&2
         failed=1
       fi
-      if [ -n "$(comm -12 shared-names - <<< "$actual")" ]; then
-        echo 'a plugin skill is also linked into ~/.gemini/antigravity-cli/skills on ${entry.name}' >&2
-        failed=1
-      fi
+      # END link assertions
 
       # The real activation step installs every pinned plugin.
       python3 ${./native-plugins.py} ${pkgs.writeText "agent-plugins.sh" userConfig.home.activation.nativeAgentPlugins.data} ${pluginsJson sources}
