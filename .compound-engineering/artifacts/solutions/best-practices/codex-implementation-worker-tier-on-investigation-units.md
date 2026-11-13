@@ -77,14 +77,14 @@ wide failure's four calls, 203 reasoning tokens, and 250,396 total tokens.
 All six cells contain five valid runs. No run was replaced. Wide catalog-only
 failures were zero in every cell.
 
-| Brief | Setting | Valid | Success | No file | Copy only | Median seconds | Calls | Reasoning tokens | Total tokens |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| wide | terra/high | 5 | 0 | 5 | 0 | 31.947 | 5 | 186 | 300,976 |
-| wide | terra/xhigh | 5 | 4 | 1 | 0 | 579.378 | 56 | 4,105 | 7,033,080 |
-| wide | sol/high | 5 | 5 | 0 | 0 | 511.448 | 30 | 3,693 | 3,692,598 |
-| narrow | terra/high | 5 | 0 | 0 | 5 | 133.567 | 15 | 358 | 757,493 |
-| narrow | terra/xhigh | 5 | 5 | 0 | 0 | 287.662 | 26 | 1,647 | 1,956,552 |
-| narrow | sol/high | 5 | 5 | 0 | 0 | 329.935 | 18 | 1,803 | 1,415,947 |
+| Brief | Setting | Valid | Success | No file | Copy only | Wide catalog only | Median seconds | Calls | Reasoning tokens | Total tokens |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| wide | terra/high | 5 | 0 | 5 | 0 | 0 | 31.947 | 5 | 186 | 300,976 |
+| wide | terra/xhigh | 5 | 4 | 1 | 0 | 0 | 579.378 | 56 | 4,105 | 7,033,080 |
+| wide | sol/high | 5 | 5 | 0 | 0 | 0 | 511.448 | 30 | 3,693 | 3,692,598 |
+| narrow | terra/high | 5 | 0 | 0 | 5 | N/A | 133.567 | 15 | 358 | 757,493 |
+| narrow | terra/xhigh | 5 | 5 | 0 | 0 | N/A | 287.662 | 26 | 1,647 | 1,956,552 |
+| narrow | sol/high | 5 | 5 | 0 | 0 | N/A | 329.935 | 18 | 1,803 | 1,415,947 |
 
 | Setting | Success / 10 | Median total tokens | Selection |
 | --- | ---: | ---: | --- |
