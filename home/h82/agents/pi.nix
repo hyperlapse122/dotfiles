@@ -9,6 +9,12 @@ let
   lock = builtins.fromJSON (builtins.readFile ./pi-model-lock.json);
   catalog = lock.syntheticModelLocks;
   agent = "${config.home.homeDirectory}/.pi/agent";
+  # Pi resolves extension symlinks before evaluating import.meta.url.
+  policy = pkgs.runCommand "pi-policy" { } ''
+    mkdir -p $out
+    cp ${./pi-policy.ts} $out/dotfiles-policy.ts
+    cp ${./pi-model-lock.json} $out/model-lock.json
+  '';
   keyDirectory =
     if config.my.kind == "nixos" then "/run/secrets/cli-auth" else config.my.secrets.stateDir;
   pi = import ../../../packages/pi.nix {
@@ -24,7 +30,7 @@ in
 {
   home.packages = [ pi ];
   home.file.".pi/agent/model-lock.json".source = ./pi-model-lock.json;
-  home.file.".pi/agent/dotfiles-policy.ts".source = ./pi-policy.ts;
+  home.file.".pi/agent/dotfiles-policy.ts".source = "${policy}/dotfiles-policy.ts";
   home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/dotfiles-question.ts".source = ./pi-question.ts;
   home.file.".pi/agent/models.json".text = builtins.toJSON {
