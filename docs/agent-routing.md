@@ -30,7 +30,7 @@ When a CE skill delegates a child, choose the child's model from the ladder of t
 | Claude | Fable | Opus | Sonnet | Haiku |
 | Codex | astra | sol | terra | luna |
 | Synthetic through pi | Kimi | GLM | GLM Flash | DeepSeek Flash |
-| Antigravity | Gemini Argon | Gemini Argon | Gemini Flash | Gemini Flash |
+| Antigravity | Gemini Carbon | Gemini Carbon | Gemini Hydrogen | Gemini Hydrogen |
 
 - Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`, and CE's cross-model review peers.
 - Middle rung: implementation workers, CE's mid-tier and generation-tier children, and any CE child whose skill names no tier.
@@ -44,6 +44,24 @@ For a middle-rung Codex implementation worker, pass `reasoningEffort` `xhigh` in
 A model or effort that the user's prompt or CE configuration names for a child wins over this section; pass a named effort in `target.options`. CE configuration includes `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, `work_engine_effort`, `plan_model`, and `brainstorm_model`.
 
 If the catalog lists no model for a rung, use the next lower rung of the same provider. If none is listed, use the next higher rung of that provider within the limit above, and only then the delegating model. Name the substitution in your report. Providers without a row and delegations outside CE skills keep their current model selection.
+
+### Gemini selection evidence
+
+On 2026-11-14, each setting below ran the same repository-grounding and Python settings-repair task twice in fresh T3 child threads, one at a time. Completion time runs from T3's `startedAt` to `completedAt`, including tool use and answer generation. A repair passes only when all 16 behavioral checks pass. All ten runs completed normally and answered the four grounding questions correctly.
+
+| Requested model and thinking level | Completion times (seconds) | Repairs passing all 16 checks |
+| --- | --- | --- |
+| Gemini 4 Carbon high | 260.7, 262.0 | 2/2 |
+| Gemini 4 Argon high | 40.4, 48.7 | 0/2 |
+| Gemini 3.8 Flash high | 47.4, 51.6 | 0/2 |
+| Gemini 4 Hydrogen high | 51.0, 50.9 | 1/2 |
+| Gemini 4 Hydrogen xhigh | 58.8, 76.7 | 1/2 |
+
+The repairs that failed changed their result on a second application when a managed object replaced a scalar and defaults supplied sibling keys. That check was added after the first outputs exposed the gap, then applied to every repair without changing the task prompt. These are two samples of one bounded task, not estimates of general accuracy or failure rates; long-running orchestration and full diff reviews were not measured. T3 recorded the requested models and options, but supplied no independent serving-model attestation. Token use and subscription consumption were not measured.
+
+The results support trying Carbon for planning and demanding reviews, where its longer completion time can be acceptable, and Hydrogen for implementation and extraction. Hydrogen high took about as long as Flash in this task; xhigh took longer without increasing the number of fully passing repairs. The ladder keeps effort unset for Antigravity children; the discovered T3 default was high for both Carbon and Hydrogen. An explicit xhigh request still takes precedence. Google's [Carbon model card](https://deepmind.google/models/model-cards/gemini-4-carbon/) describes long-horizon reasoning, while the [Hydrogen model card](https://deepmind.google/models/model-cards/gemini-4-hydrogen/) describes rapid execution and sub-agent use.
+
+The first Hydrogen xhigh request was rejected before launch because T3 listed only low, medium, and high. After the error, a fresh capability lookup listed xhigh and both measured xhigh runs launched successfully. The rejected preflight is excluded from the table. Refresh capability evidence after a rejection before concluding that a UI-visible option is unavailable.
 
 ## Native T3 launches
 
