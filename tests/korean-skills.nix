@@ -82,6 +82,7 @@ let
   # these; tests/test-audit-skill.nix and tests/pinned-skills.nix check their
   # content.
   otherSkillNames = [
+    "modern-web-guidance"
     "test-audit"
     "frontend-design"
     "web-design-guidelines"

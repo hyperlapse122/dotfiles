@@ -12,6 +12,8 @@
     Antigravity CLI, and T3 Code's Antigravity instances
                               ~/.gemini/antigravity-cli/skills/<name>
     Codex                     ~/.codex/skills/<name>
+    Grok                      ~/.grok/skills/<name>
+    Pi                        ~/.pi/agent/skills/<name>
 
   Verifies, per Home Manager user:
   - each delivery has one enabled home.file per skill; tests/korean-skills.nix
@@ -62,6 +64,7 @@ let
   sorted = lib.sort lib.lessThan;
 
   publishedNames = [
+    "modern-web-guidance"
     "frontend-design"
     "web-design-guidelines"
     "vercel-react-best-practices"
@@ -126,6 +129,8 @@ let
     ".claude/skills"
     ".gemini/antigravity-cli/skills"
     ".codex/skills"
+    ".grok/skills"
+    ".pi/agent/skills"
   ];
 
   registry = import ../home/h82/agents/pinned-skills-pin.nix;

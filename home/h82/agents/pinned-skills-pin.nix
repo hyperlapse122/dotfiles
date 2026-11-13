@@ -13,6 +13,18 @@
 {
   upstreams = [
     {
+      input = "modern-web-guidance";
+      ref = "v1.0.0";
+      expectedRev = "4dd968349e54ca45a05dd5c818fb035c9054b022";
+      skills = [
+        {
+          name = "modern-web-guidance";
+          path = "skills/modern-web-guidance";
+          license = "LICENSE";
+        }
+      ];
+    }
+    {
       input = "anthropic-skills";
       ref = "dbd4588f9e1033efb41dad4bef2f7947c8993d44";
       expectedRev = "dbd4588f9e1033efb41dad4bef2f7947c8993d44";
