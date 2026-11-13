@@ -16,7 +16,7 @@ let
 
   pins = import ./agent-plugin-pins.nix;
 
-  sources = {
+  declaredSources = {
     compound-engineering = pins.compound-engineering // {
       src = inputs.compound-engineering-plugin;
 
@@ -26,6 +26,10 @@ let
       exclude = {
         claude = [ ];
         codex = [ ];
+        antigravity = [
+          "AGENTS.md"
+          "GEMINI.md"
+        ];
       };
     };
   };
@@ -116,6 +120,10 @@ let
           '';
     in
     tree;
+
+  sources = lib.mapAttrs (
+    name: spec: spec // { antigravityTree = treeFor name spec "antigravity"; }
+  ) declaredSources;
 
   # Read the declared values rather than restating them: claude.nix owns this
   # tier, and the activation unit carries neither home.packages on PATH nor
