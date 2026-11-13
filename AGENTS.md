@@ -203,6 +203,8 @@ Before proposing the Codex `priority` service tier (fast mode) for the review pe
 
 Before promising that shared instructions reach a new Antigravity release, changing the runtime rebuild, or adding a rule-file link for an Antigravity runtime, read [the Antigravity ACP runtime loads no global rule files, so this repository rebuilds it to read them](.compound-engineering/artifacts/solutions/integration-issues/antigravity-acp-runtime-loads-no-global-rule-files.md).
 
+Before changing which skills reach an Antigravity session, or what T3 Code lists in its Antigravity skill menu, read [T3 Code builds its Antigravity skill menu from the ~/.gemini skill directories, not from the runtime](.compound-engineering/artifacts/solutions/integration-issues/t3code-antigravity-skill-menu-reads-gemini-skill-directories.md).
+
 Before promising that a declared MCP server reaches a T3 Code provider, read [T3 Code's ACP agent sessions ignore user-level MCP config](.compound-engineering/artifacts/solutions/integration-issues/t3-acp-sessions-ignore-user-mcp-config.md).
 
 Before writing any agent rule that waits on a T3 Code task, read [T3 Code delegated waits end the turn because t3_thread_wait cannot carry them in-turn](.compound-engineering/artifacts/solutions/integration-issues/t3-thread-wait-cannot-carry-in-turn-delegation-waits-alone.md).
