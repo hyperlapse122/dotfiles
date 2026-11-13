@@ -12,7 +12,7 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
               'pi': '.pi/agent/AGENTS.md'}
 # Independent content receipts: negation, repetition, deletion and foreign text
 # all change the complete normative body, including its order.
-EXPECTED = {'darwin': 'eea4ef18f0090e057aa5b379bc8b4c55ba4710bb299d37f804ca08db88e66596', 'nixos': '09f985b3011090be41e6b772e24380dad935de2a469853dad1ba312fff25d86a', 't3': '48ab445d0c747243b3a79c3d750f2604707c6bbb21a0385f363f6e0097c500e9'}
+EXPECTED = {'darwin': 'eea4ef18f0090e057aa5b379bc8b4c55ba4710bb299d37f804ca08db88e66596', 'nixos': '09f985b3011090be41e6b772e24380dad935de2a469853dad1ba312fff25d86a', 't3': '99531dd6e2d6bee34124504d0ba8f91932d11092bcade2d2643144cf5f62007a'}
 
 
 def body(home, harness):

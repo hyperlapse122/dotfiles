@@ -196,6 +196,8 @@ Before changing which model or reasoning effort a cross-model review peer runs o
 
 Before changing the reasoning effort of delegated Codex children, or treating a delegated child's summary as proof of its output, read [delegated Codex children gave up once in 30 runs at T3's default effort and never at high](.compound-engineering/artifacts/solutions/best-practices/codex-child-give-up-rate-by-reasoning-effort.md).
 
+Before changing the model or effort of a delegated Codex implementation worker, read [the 30-run replay that selected Terra at xhigh](.compound-engineering/artifacts/solutions/best-practices/codex-implementation-worker-tier-on-investigation-units.md), including its preparation requirements and limits.
+
 Before proposing the Codex `priority` service tier (fast mode) for the review peer or another delegated Codex role, or budgeting Codex usage for a peer benchmark, read [the Codex priority service tier costs 2.5x subscription usage, so the review peer stays on the default tier](.compound-engineering/artifacts/solutions/best-practices/codex-priority-tier-costs-2-5x-subscription-usage-for-review-peer.md).
 
 Before promising that shared instructions reach a new Antigravity release, changing the runtime rebuild, or adding a rule-file link for an Antigravity runtime, read [the Antigravity ACP runtime loads no global rule files, so this repository rebuilds it to read them](.compound-engineering/artifacts/solutions/integration-issues/antigravity-acp-runtime-loads-no-global-rule-files.md).
