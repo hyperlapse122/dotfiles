@@ -10,6 +10,9 @@ else
     gui_present=false
 fi
 
+# Homebrew registers a login service in user/<uid> instead of gui/<uid>, with a
+# warning, whenever it sees SUDO_USER. Activation reaches this script through
+# sudo, so hide the variable while a GUI domain exists to register in.
 brew_services() {
     if [ "$gui_present" = true ]; then
         env -u SUDO_USER brew services "$@"

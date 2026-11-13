@@ -103,8 +103,7 @@ if os.path.basename(sys.argv[0]) == 'agy' and args[:2] == ['plugin', 'install']:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls(), [['plugin', 'enable', p['plugin']] for p in plugins])
         for p in plugins:
-            self.assertIn(p['plugin'], result.stdout)
-        self.assertIn('skip', result.stdout.lower())
+            self.assertIn(f"Skipping unchanged Antigravity plugin {p['plugin']}", result.stdout)
 
     def test_changed_tree(self):
         self.assertEqual(self.run_activation().returncode, 0)

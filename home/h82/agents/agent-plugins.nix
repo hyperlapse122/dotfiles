@@ -21,8 +21,9 @@ let
       src = inputs.compound-engineering-plugin;
 
       # Repository-relative path prefixes withheld from a given harness; an
-      # empty list offers the whole tree. The field exists from the outset
-      # because one harness can misclassify a tree another accepts.
+      # empty list offers the whole tree. The Antigravity CLI loads rules only
+      # from rules/ and warns about root AGENTS.md and GEMINI.md on every
+      # validate.
       exclude = {
         claude = [ ];
         codex = [ ];

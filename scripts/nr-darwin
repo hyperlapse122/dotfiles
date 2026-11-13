@@ -134,6 +134,8 @@ nix_env=$(command -v nix-env) || die 'nix-env is not on PATH'
 # a GC root, and a rollback target; without it nix-darwin's boot-time
 # activation would point /run/current-system back at the old profile.
 
+# -H gives root its own HOME: with the invoking user's, Nix warns on every
+# switch that HOME is not owned by root.
 sudo -v
 sudo -H -- "$nix_env" -p "$PROFILE" --set "$system_out"
 (cd -- "$flake_dir" && sudo -- "$system_out/activate")

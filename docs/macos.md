@@ -289,7 +289,7 @@ macOS hosts use Apple's `container` CLI (`modules/darwin/container.nix`), instal
 During activation, `macos-container.sh` checks `container system status`:
 
 - If the runtime API is already running, activation leaves the running API and its kernel untouched.
-- If the API is stopped, activation runs `container system start --disable-kernel-install`, sets the recommended default kernel (`container system kernel set --recommended`) when none is configured yet, and registers the Homebrew login service (`brew services start container`). A failed kernel step records `~/.local/state/dotfiles/apple-container-kernel-pending` so the next apply retries it, and exits non-zero so the apply fails visibly.
+- If the API is stopped, activation runs `container system start --disable-kernel-install`, sets the recommended default kernel (`container system kernel set --recommended`) when none is configured yet, and registers the Homebrew login service (`brew services start container`). A failed kernel step records `~/.local/state/dotfiles/container-kernel-pending` so the next apply retries it, and exits non-zero so the apply fails visibly.
 
 When the user's GUI launchd domain exists, Homebrew registers the login service in `gui/<uid>`. A switch without a GUI session, such as over SSH with nobody logged in at the console, keeps Homebrew's `user/<uid>` behavior and its warning.
 
