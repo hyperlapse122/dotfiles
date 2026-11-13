@@ -51,6 +51,7 @@ let
   '';
   agentEntries = map (entry: {
     inherit (entry) name;
+    bootstrap = entry.host.config.my.bootstrap;
     user = entry.host.config.home-manager.users.${entry.host.config.my.user.name};
   }) (darwinFixtures ++ lib.mapAttrsToList (name: host: { inherit name host; }) darwinConfigurations);
   agentChecks =
@@ -68,6 +69,7 @@ let
         ./agent-plugins.nix
         ./korean-skills.nix
         ./antigravity-skills.nix
+        ./flutter.nix
       ];
   instructionDelivery = import ./agent-instructions.nix {
     inherit pkgs;
