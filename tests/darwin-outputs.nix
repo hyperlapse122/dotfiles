@@ -251,6 +251,32 @@ let
         [ "$stage" = 0 ] && [ "$publish" = 0 ] \
           || bad "bootstrap must run no host-secrets step"
       fi
+      release=$(step xcodeSkillsRelease); release=''${release:-0}
+      install=$(step xcodeSkillsInstall); install=''${install:-0}
+      targets=$(step checkLinkTargets); targets=''${targets:-0}
+      if [ "$production" = 1 ]; then
+        [ "$release" -gt 0 ] && [ "$targets" -gt "$release" ] || bad "xcode skills release must precede checkLinkTargets"
+        [ "$install" -gt "$link" ] || bad "xcode skills install must follow linkGeneration"
+        call=$(stepBlock xcodeSkillsInstall | grep 'elif ! /nix/store/[^ ]*/bin/xcode-skills --install ' || true)
+        exe=$(grep -o '/nix/store/[^ ]*/bin/xcode-skills' <<<"$call" || true)
+        [ -n "$exe" ] && [ -x "$exe" ] || bad "activation must call the built xcode-skills helper"
+        for arg in '--xcrun /usr/bin/xcrun' ${
+          lib.escapeShellArgs (
+            map (root: "--root ${lib.escapeShellArg "${user.home.homeDirectory}/${root}"}") [
+              ".claude/skills"
+              ".gemini/antigravity-cli/skills"
+              ".codex/skills"
+              ".grok/skills"
+              ".pi/agent/skills"
+            ]
+          )
+        }; do
+          case $call in *"$arg"*) ;; *) bad "xcode skills install lacks $arg" ;; esac
+        done
+        stepBlock xcodeSkillsRelease | grep -q 'elif ! /nix/store/[^ ]*/bin/xcode-skills --release ' || bad "activation must call xcode skills release"
+      else
+        if grep -q '/bin/xcode-skills --' "$gen/activate"; then bad "bootstrap calls xcode-skills"; fi
+      fi
       [ "$(step dockerCredHelpers)" = "" ] || bad "the OrbStack credHelpers merge still runs"
       [ "$(step containersAuth)" = "" ] || bad "Podman auth activation reached Darwin"
       vars=$gen/home-path/etc/profile.d/hm-session-vars.sh

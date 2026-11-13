@@ -350,6 +350,44 @@ let
       koreanElsewhere = lib.filter (
         target: underDir ".agents/skills" target || underDir ".gemini/config/skills" target
       ) enabledTargets;
+      xcodeRoots = [
+        ".claude/skills"
+        ".gemini/antigravity-cli/skills"
+        ".codex/skills"
+        ".grok/skills"
+        ".pi/agent/skills"
+      ];
+      xcodeStep = name: activation.${name} or { };
+      xcodeLines =
+        name:
+        lib.filter (line: line != "") (
+          map lib.trim (lib.splitString "\n" (plain ((xcodeStep name).data or "")))
+        );
+      xcodeCall =
+        name:
+        let
+          lines = xcodeLines name;
+        in
+        if lib.length lines == 5 then lib.elemAt lines 2 else "";
+      xcodeGuarded =
+        name:
+        let
+          lines = xcodeLines name;
+          call = xcodeCall name;
+        in
+        lib.length lines == 5
+        && lib.head lines == "if [[ -v DRY_RUN ]]; then"
+        && builtins.match ''echo "[^"]*"'' (lib.elemAt lines 1) != null
+        && lib.hasPrefix "elif ! " call
+        && lib.hasSuffix "; then" call
+        && builtins.match ''echo "[^"]*" >&2'' (lib.elemAt lines 3) != null
+        && lib.elemAt lines 4 == "fi";
+      xcodeArgs =
+        name:
+        lib.all (
+          root:
+          lib.hasInfix ("--root " + lib.escapeShellArg "${user.home.homeDirectory}/${root}") (xcodeCall name)
+        ) xcodeRoots;
       devicesStep = activation.mobileDevices or { };
       devicesData = plain (devicesStep.data or "");
       # The helper creates devices, so a dry run must reach only the echo:
@@ -713,6 +751,51 @@ let
         )
         "${entry.name}: the Android SDK must build one arm64-v8a Google APIs image per pinned platform and no x86_64 image, got ${builtins.toJSON androidImages}"
       )
+      (check (
+        if production then
+          xcodeStep "xcodeSkillsRelease" != { }
+          && lib.elem "checkLinkTargets" ((xcodeStep "xcodeSkillsRelease").before or [ ])
+        else
+          !(activation ? xcodeSkillsRelease)
+      ) "${entry.name}: xcode skills release must precede checkLinkTargets and be absent on bootstrap")
+      (check (
+        if production then
+          xcodeStep "xcodeSkillsInstall" != { }
+          && lib.elem "linkGeneration" ((xcodeStep "xcodeSkillsInstall").after or [ ])
+        else
+          !(activation ? xcodeSkillsInstall)
+      ) "${entry.name}: xcode skills install must follow linkGeneration and be absent on bootstrap")
+      (check (
+        !production
+        || lib.all xcodeGuarded [
+          "xcodeSkillsRelease"
+          "xcodeSkillsInstall"
+        ]
+      ) "${entry.name}: xcode skills calls must be dry-run guarded and fail open")
+      (check (
+        !production
+        || (
+          xcodeArgs "xcodeSkillsRelease"
+          && xcodeArgs "xcodeSkillsInstall"
+          && lib.hasInfix "--xcrun /usr/bin/xcrun" (xcodeCall "xcodeSkillsInstall")
+          && user.my.agentSkills != { }
+          && lib.all (
+            name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")
+          ) (lib.attrNames user.my.agentSkills)
+          &&
+            lib.all
+              (
+                name:
+                lib.hasInfix (
+                  "--state " + lib.escapeShellArg "${user.home.homeDirectory}/.local/state/nix-config/xcode-skills"
+                ) (xcodeCall name)
+              )
+              [
+                "xcodeSkillsRelease"
+                "xcodeSkillsInstall"
+              ]
+        )
+      ) "${entry.name}: xcode skills calls lack required roots, state, names or xcrun")
       (check (
         devicesStep != { } && lib.elem "linkGeneration" (devicesStep.after or [ ])
       ) "${entry.name}: activation must run the mobileDevices step after linkGeneration")
@@ -1085,6 +1168,8 @@ let
       host:
       check (
         !host.config.home-manager.users.h82.home.activation ? mobileDevices
+        && !host.config.home-manager.users.h82.home.activation ? xcodeSkillsRelease
+        && !host.config.home-manager.users.h82.home.activation ? xcodeSkillsInstall
       ) "a NixOS host runs the macOS mobileDevices activation step"
     ) nixosConfigs)
   ];

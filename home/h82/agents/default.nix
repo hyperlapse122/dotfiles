@@ -18,5 +18,6 @@
     ./tokscale.nix
     ./usage.nix
     ./ux-flows.nix
+    ./xcode-skills.nix
   ];
 }

@@ -33,6 +33,16 @@ let
 
 in
 {
+  options.my.agentSkillRoots = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    internal = true;
+    readOnly = true;
+    default = roots;
+    description = ''
+      Every harness's skill root, relative to the home directory.
+    '';
+  };
+
   options.my.agentSkills = lib.mkOption {
     type = lib.types.attrsOf lib.types.path;
     internal = true;

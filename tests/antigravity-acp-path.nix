@@ -86,6 +86,7 @@ let
 
   pathPackage = import ../packages/antigravity-acp-path.nix {
     inherit pkgs skills pluginSkills;
+    xcodeSkillsStateDir = ".local/state/nix-config/xcode-skills";
     runtime = stubRuntime;
   };
 
@@ -239,6 +240,28 @@ pkgs.runCommand "antigravity-acp-path-tests" { } ''
     run_home "$prefix" HOME="$fakeHome" GEMINI_HOME="$home"
     assert_linked "$prefix" "$home"
   done
+
+  # Exported skills appear alongside declared skills, without replacing them.
+  state=$fakeHome/.local/state/nix-config/xcode-skills
+  mkdir -p "$state/first" "$state/second" "$state/humanizer" "$state/incomplete"
+  touch "$state/first/SKILL.md" "$state/second/SKILL.md" "$state/humanizer/SKILL.md"
+  home=$(make_ce_home "$tmpdir/xmodel-cr-scratch-XXXXXX")
+  run_home "exported skills" HOME="$fakeHome" GEMINI_HOME="$home"
+  assert_linked "exported skills" "$home"
+  for skill in first second; do
+    link=$home/antigravity-cli/skills/$skill
+    [ -L "$link" ] && [ "$(readlink "$link")" = "$state/$skill" ] || fail "exported skills: $skill missing or wrong target"
+  done
+  [ ! -e "$home/antigravity-cli/skills/incomplete" ] || fail "exported skills: incomplete skill linked"
+  other=$tmpdir/ordinary-home
+  mkdir -p "$other"
+  run_home "ordinary home with exports" HOME="$fakeHome" GEMINI_HOME="$other"
+  assert_untouched "ordinary home with exports" "$other"
+  rm -r "$state"
+  home=$(make_ce_home "$tmpdir/xmodel-cr-scratch-XXXXXX")
+  run_home "missing export directory" HOME="$fakeHome" GEMINI_HOME="$home"
+  assert_linked "missing export directory" "$home"
+  [ "$(find "$home/antigravity-cli/skills" -mindepth 1 -maxdepth 1 | wc -l)" -eq 3 ] || fail "missing export directory: unexpected links"
 
   # Redundant and trailing slashes still name the same run home.
   home=$(make_ce_home "$tmpdir/xmodel-doc-peer-slash")

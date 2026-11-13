@@ -18,7 +18,9 @@
   runtime reads skills only from GEMINI_HOME, so when GEMINI_HOME is such a
   run home the wrapper links into it each skill in `skills` that exists under
   ~/.gemini/antigravity-cli/skills/. Home Manager passes the names
-  home/h82/agents/skills.nix links there. Any other GEMINI_HOME, such as T3 Code's instance homes, is left alone.
+  home/h82/agents/skills.nix links there. It then links skills containing
+  SKILL.md from the optional HOME-relative Xcode state directory, leaving
+  existing names intact. Other GEMINI_HOME paths are left alone.
 
   The runtime is the rebuild in packages/antigravity-acp.nix, which reads the
   shared agent instructions and the plugin skills from two directories the
@@ -38,6 +40,7 @@
   pkgs,
   skills ? [ ],
   pluginSkills ? null,
+  xcodeSkillsStateDir ? null,
   runtime ? import ./antigravity-acp.nix { inherit pkgs; },
 }:
 
@@ -141,6 +144,16 @@ let
             ${coreutils}/ln -s "$src" "$dest" || true
           fi
         done
+        ${lib.optionalString (xcodeSkillsStateDir != null) ''
+          state_dir="$HOME"/${lib.escapeShellArg xcodeSkillsStateDir}
+          for src in "$state_dir"/*; do
+            [ -d "$src" ] && [ -f "$src/SKILL.md" ] || continue
+            dest=$skills_dir/''${src##*/}
+            if [ ! -e "$dest" ] && [ ! -L "$dest" ]; then
+              ${coreutils}/ln -s "$src" "$dest" || true
+            fi
+          done
+        ''}
       ) 2>/dev/null || true
     }
 
