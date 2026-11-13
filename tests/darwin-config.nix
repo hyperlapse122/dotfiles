@@ -767,6 +767,7 @@ let
           xcodeArgs "xcodeSkillsRelease"
           && xcodeArgs "xcodeSkillsInstall"
           && lib.hasInfix "--xcrun /usr/bin/xcrun" (xcodeCall "xcodeSkillsInstall")
+          && user.my.agentSkills != { }
           && lib.all (name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")) (lib.attrNames user.my.agentSkills)
           && lib.all (name: lib.hasInfix ("--state " + lib.escapeShellArg "${user.home.homeDirectory}/.local/state/nix-config/xcode-skills") (xcodeCall name)) [ "xcodeSkillsRelease" "xcodeSkillsInstall" ]
         )

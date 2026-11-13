@@ -10,8 +10,9 @@ trap 'rm -rf "$tmp"' EXIT
 # A bare assertion that fails stops the script under set -e; name where.
 trap 'echo "xcode-skills test: scenario $scenario failed at line $LINENO" >&2' ERR
 export STUB=$tmp
-cat >"$tmp/xcrun" <<'STUB'
-#!/usr/bin/env bash
+# The stub names bash by its real path: a build sandbox has no /usr/bin/env.
+printf '#!%s\n' "$BASH" >"$tmp/xcrun"
+cat >>"$tmp/xcrun" <<'STUB'
 [ "$1 $2 $3 $4" = 'agent skills export --output-dir' ] || exit 2
 case $(cat "$STUB/mode") in
   fail) exit 1 ;;
@@ -105,6 +106,11 @@ root)
   run
   [ -d "$tmp/r1" ] && [ -d "$tmp/r2" ] || exit 1
   ;;
-usage) if "$helper" --bogus >/dev/null 2>&1; then exit 1; fi ;;
+usage)
+  status=0
+  "$helper" --bogus >"$tmp/out" 2>"$tmp/err" || status=$?
+  [ "$status" = 2 ] || { echo "expected a usage error to exit 2, got $status" >&2; exit 1; }
+  grep -q '^usage: ' "$tmp/err" || { echo "expected a usage line on stderr" >&2; exit 1; }
+  ;;
 esac
 echo "$scenario passed"
