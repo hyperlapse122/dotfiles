@@ -66,6 +66,8 @@ let
     sidebarAutoSettleKeepPullRequests = true;
     enableAgentDeviceAccess = true;
     enableDeviceSupport = true;
+    linkedEnvironmentsEnabled = true;
+    promptSuggestionsEnabled = true;
     providerInstances = {
       claudeAgent = {
         driver = "claudeAgent";
