@@ -12,6 +12,7 @@ import tomllib
 CODEX_MARKER = '<dotfiles-t3-developer-instructions>'
 CLAUDE_MARKER = '<dotfiles-preserved-claude-append>'
 OVERRIDE = 'T3CODE_CODEX_LAUNCH_ARGS'
+ANTIGRAVITY_ADDITION = 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE'
 NATIVE_CONTROLS = {
     'codex': [['--disable', feature] for feature in
               ('multi_agent', 'multi_agent_v2', 'multi_agent_v2_dynamic_tools')],
@@ -305,6 +306,14 @@ def apply(destination, environment=None):
         if native.get('config', {}).get('commandPath') != legacy:
             raise ValueError('Move the custom ACP Registry provider to another ID before applying.')
         del providers['antigravity']
+        changed = True
+    elif native.get('driver') == 'antigravity':
+        entries = native.get('environment', [])
+        if not isinstance(entries, list) or any(not isinstance(e, dict) or not isinstance(e.get('name'), str) for e in entries):
+            raise ValueError('Antigravity environment must contain named entries.')
+        native['environment'] = [e for e in entries if environment_key(e['name']) != ANTIGRAVITY_ADDITION]
+        native['environment'].append({'name': ANTIGRAVITY_ADDITION,
+            'value': str(settings_path.parent / 'instructions/antigravity.md'), 'sensitive': False})
         changed = True
     grok = providers.get('grok')
     if grok is not None:

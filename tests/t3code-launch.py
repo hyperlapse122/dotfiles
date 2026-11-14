@@ -38,12 +38,16 @@ def validate(home):
     assert not any('prompt' in arg or 'developer_instructions' in arg for arg in grok)
     assert any(e['name'] == 'GROK_SUBAGENTS' and e['value'] == '0' for e in providers['grok']['environment'])
     # The declaration turns the owner's disabled instance on and points it at the
-    # wrapper; the owner's own flag survives, and the composer adds nothing.
+    # wrapper; the owner's own flag survives alongside the T3 instruction input.
     antigravity = providers['antigravity']
     assert antigravity['driver'] == 'antigravity' and antigravity['enabled'] is True
     assert antigravity['custom'] is True
     assert antigravity['config']['binaryPath'].endswith('/bin/agy_acp_server.par')
-    assert set(antigravity) == {'driver', 'enabled', 'custom', 'config'}
+    t3_files = [entry['value'] for entry in antigravity['environment']
+                if entry['name'] == 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE']
+    assert t3_files == [str(home / '.t3/userdata/instructions/antigravity.md')]
+    assert Path(t3_files[0]).read_text() == addition
+    assert set(antigravity) == {'driver', 'enabled', 'custom', 'config', 'environment'}
     assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
     assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.1-sol', 'options': [{'id': 'reasoningEffort', 'value': 'xhigh'}, {'id': 'serviceTier', 'value': 'default'}]}
     assert settings['fallbackModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5'}
@@ -85,6 +89,7 @@ def main():
                          lambda d: d['providerInstances']['pi']['config'].update(launchArgs=d['providerInstances']['pi']['config']['launchArgs'].replace('--approve', '')),
                          lambda d: d.update(defaultThreadEnvMode='local'),
                          lambda d: d['providerInstances']['antigravity'].update(enabled=False),
+                         lambda d: d['providerInstances']['antigravity'].update(environment=[]),
                          lambda d: d['providerInstances']['grok'].update(config={'launchArgs': '--append-system-prompt bad'})]
             for mutate in mutations:
                 document = json.loads(original)

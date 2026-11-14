@@ -68,11 +68,12 @@ def exercise(template, helper, renderer, kind):
             text = body(root, harness)
             assert harness + '-only' in text
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
-        context.write_text(json.dumps({'t3': True}))
         source.write_text(template)
-        t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
-        assert 'T3 delegation' in t3 and 'Writing skills' not in t3
-        check_receipt(t3, 't3')
+        for harness in (None, 'antigravity'):
+            context.write_text(json.dumps({'t3': True, **({harness: True} if harness else {})}))
+            t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
+            assert 'T3 delegation' in t3 and 'Writing skills' not in t3
+            check_receipt(t3, 't3')
 
 
 def main():
