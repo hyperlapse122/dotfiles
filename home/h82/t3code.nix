@@ -38,11 +38,12 @@ let
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
   additions = pkgs.runCommand "t3-instruction-additions" { } ''
     mkdir -p "$out"
-    for harness in claude codex pi; do
-      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s}' \
+    for harness in claude codex pi antigravity; do
+      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s,"antigravity":%s}' \
         "$([ "$harness" = claude ] && echo true || echo false)" \
         "$([ "$harness" = codex ] && echo true || echo false)" \
-        "$([ "$harness" = pi ] && echo true || echo false)" > context.json
+        "$([ "$harness" = pi ] && echo true || echo false)" \
+        "$([ "$harness" = antigravity ] && echo true || echo false)" > context.json
       ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/$harness.md"
     done
   '';
@@ -316,7 +317,7 @@ in
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"
-              for harness in claude codex pi; do
+              for harness in claude codex pi antigravity; do
                 install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
               done
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory}

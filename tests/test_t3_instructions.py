@@ -24,7 +24,7 @@ class T3InstructionsTest(unittest.TestCase):
         self.settings = self.home / '.t3/userdata/settings.json'
         self.instructions = self.settings.parent / 'instructions'
         self.instructions.mkdir(parents=True)
-        for name in ('codex', 'claude', 'pi'):
+        for name in ('codex', 'claude', 'pi', 'antigravity'):
             (self.instructions / (name + '.md')).write_text('T3_' + name + '\nQuoted "text", apostrophe\'s.\n')
 
     def write(self, value):
@@ -54,7 +54,9 @@ class T3InstructionsTest(unittest.TestCase):
         native = {'driver': 'antigravity', 'config': {'binaryPath': '/custom/runtime'}}
         self.write({'providerInstances': {'antigravity': native}})
         self.module.apply(self.home, {})
-        self.assertEqual(self.read()['providerInstances']['antigravity'], native)
+        self.assertEqual(self.read()['providerInstances']['antigravity'], {
+            **native, 'environment': [{'name': 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE',
+                'value': str(self.instructions / 'antigravity.md'), 'sensitive': False}]})
         self.write({'providerInstances': {'antigravity': {'driver': 'acpRegistry', 'config': {
             'commandPath': str(self.home / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp')}}}})
         self.module.apply(self.home, {})
@@ -65,6 +67,28 @@ class T3InstructionsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.module.apply(self.home, {})
         self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_antigravity_t3_file_selection_preserves_other_environment_and_settings(self):
+        owned = 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE'
+        unrelated = {'name': 'KEEP', 'secretRef': 'retain-reference'}
+        custom = {'driver': 'antigravity', 'config': {'binaryPath': '/custom/runtime'},
+                  'environment': [{'name': owned, 'value': '/owner/other.md'}]}
+        self.write({'unrelated': True, 'providerInstances': {
+            'antigravity': {'driver': 'antigravity', 'config': {'binaryPath': '/managed/runtime'},
+                'custom': True, 'environment': [unrelated, {'name': owned, 'value': '/stale/path'},
+                                               {'name': owned, 'value': '/duplicate/path'}]},
+            'owner-antigravity': custom}})
+        for text in ('first render', 'updated render'):
+            (self.instructions / 'antigravity.md').write_text(text)
+            for _ in range(2):
+                self.module.apply(self.home, {})
+                document = self.read()
+                provider = document['providerInstances']['antigravity']
+                self.assertEqual(provider, {'driver': 'antigravity', 'config': {'binaryPath': '/managed/runtime'},
+                    'custom': True, 'environment': [unrelated, {'name': owned,
+                        'value': str(self.instructions / 'antigravity.md'), 'sensitive': False}]})
+                self.assertEqual(document['providerInstances']['owner-antigravity'], custom)
+                self.assertTrue(document['unrelated'])
 
     def test_native_controls_survive_empty_prompts_and_preserve_user_denials(self):
         for file in self.instructions.iterdir():

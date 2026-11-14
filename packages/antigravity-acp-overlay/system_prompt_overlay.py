@@ -35,6 +35,11 @@ def _rules():
 def extract_system_prompt(kwargs):
     append = _shipped(kwargs)
     rules = _rules()
+    addition_path = os.environ.get("ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE")
+    if addition_path:
+        with open(addition_path, encoding="utf-8") as handle:
+            addition = handle.read()
+        rules = rules.rstrip("\n") + "\n\n" + addition if rules else addition
     if not rules:
         return append
     return rules.rstrip("\n") + "\n\n" + append if append else rules
