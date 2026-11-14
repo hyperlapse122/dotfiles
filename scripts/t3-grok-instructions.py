@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Attach the managed T3 policy to Grok's ACP task context."""
-
 import json
 import os
 from pathlib import Path
@@ -45,7 +43,7 @@ def main():
         with selectors.DefaultSelector() as selector:
             selector.register(sys.stdin.buffer, selectors.EVENT_READ, 'input')
             selector.register(child.stdout, selectors.EVENT_READ, 'output')
-            pending = b''
+            pending = []
             running = True
             while running:
                 for key, _ in selector.select():
@@ -57,15 +55,20 @@ def main():
                         sys.stdout.buffer.write(data)
                         sys.stdout.buffer.flush()
                         continue
-                    pending += data
-                    while b'\n' in pending:
-                        line, pending = pending.split(b'\n', 1)
+                    parts = data.split(b'\n')
+                    for part in parts[:-1]:
+                        pending.append(part)
+                        line = b''.join(pending) + b'\n'
+                        pending.clear()
                         if line.strip():
-                            child.stdin.write(with_instructions(line + b'\n'))
+                            child.stdin.write(with_instructions(line))
                             child.stdin.flush()
+                    if parts[-1]:
+                        pending.append(parts[-1])
                     if not data:
-                        if pending.strip():
-                            child.stdin.write(with_instructions(pending))
+                        line = b''.join(pending)
+                        if line.strip():
+                            child.stdin.write(with_instructions(line))
                             child.stdin.flush()
                         child.stdin.close()
                         selector.unregister(key.fileobj)
