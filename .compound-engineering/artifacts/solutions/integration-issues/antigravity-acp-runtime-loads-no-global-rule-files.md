@@ -55,7 +55,7 @@ Deliver the shared instructions where each runtime reads them, and rebuild the A
 - `packages/antigravity-acp-path.nix` is the `agy_acp_server.par` wrapper on `PATH`. It exports `ANTIGRAVITY_ACP_RULES_DIR` (`~/.gemini/config/rules`) and `ANTIGRAVITY_ACP_PLUGIN_SKILLS` when the caller set neither, and it still links named shared skills into Compound Engineering run homes. `home/h82/t3code.nix` points T3 Code's `antigravity` instance at this wrapper, so T3 sessions get the same rebuilt runtime.
 - Shared and pinned plugin skills are linked into `~/.gemini/antigravity-cli/skills`, which T3 Code scans for its Antigravity skill menu. The rebuilt runtime also receives one store directory of every pinned plugin's skills, including for Compound Engineering run homes.
 
-The T3-only instruction branch does not reach these sessions, because T3 Code's `antigravity` driver accepts no per-launch prompt option.
+The repository-managed T3 Code `antigravity` provider also supplies `ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE`, naming the T3-only render under `~/.t3/userdata/instructions/`. T3 Code 0.1.9 passes that provider environment entry to the runtime, whose overlay puts the selected file between the baseline rules and the client addition. The shared wrapper leaves this input unset by default, keeping `agy` CLI and non-T3 ACP launches on baseline instructions.
 
 ## Why This Works
 
