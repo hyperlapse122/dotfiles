@@ -23,12 +23,14 @@ let
       # Repository-relative path prefixes withheld from a given harness; an
       # empty list offers the whole tree. The Antigravity CLI loads rules only
       # from rules/ and warns about root AGENTS.md and GEMINI.md on every
-      # validate.
+      # validate. CLAUDE.md is a symlink to AGENTS.md, so it goes too: a
+      # dangling link makes `agy plugin install` fail to copy the tree.
       exclude = {
         claude = [ ];
         codex = [ ];
         antigravity = [
           "AGENTS.md"
+          "CLAUDE.md"
           "GEMINI.md"
         ];
       };
@@ -118,6 +120,14 @@ let
             cp -r ${spec.src} $out
             chmod -R u+w $out
             ${lib.concatMapStringsSep "\n" (path: "rm -rf $out/${path}") excluded}
+            # A link left pointing at a pruned path makes the harness's plugin
+            # install fail at switch time; fail the build here instead.
+            dangling=$(find $out -type l ! -exec test -e {} \; -print)
+            if [ -n "$dangling" ]; then
+              echo "${name}-${harness}-tree: exclusions leave dangling links:" >&2
+              echo "$dangling" >&2
+              exit 1
+            fi
           '';
     in
     tree;
