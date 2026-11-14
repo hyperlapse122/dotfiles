@@ -48,7 +48,8 @@ class OverlayCase(unittest.TestCase):
         environment = mock.patch.dict(os.environ)
         environment.start()
         self.addCleanup(environment.stop)
-        for name in ("ANTIGRAVITY_ACP_RULES_DIR", "ANTIGRAVITY_ACP_PLUGIN_SKILLS"):
+        for name in ("ANTIGRAVITY_ACP_RULES_DIR", "ANTIGRAVITY_ACP_PLUGIN_SKILLS",
+                     "ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE"):
             os.environ.pop(name, None)
 
     def load(self, module, stand_in):
@@ -99,10 +100,35 @@ class SystemPromptOverlayTest(OverlayCase):
         self.assertEqual(self.prompt.extract_system_prompt({}), "# One\nfirst\n")
         self.assertEqual(self.prompt.extract_system_prompt(None), "# One\nfirst\n")
 
+    def test_t3_file_composes_with_baseline_and_client_additions(self):
+        addition = self.dir / "antigravity.md"
+        addition.write_text("# T3 delegation\nt3 policy\n")
+        os.environ["ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE"] = str(addition)
+        (self.rules / "nix-config-01.md").write_text(FRONTMATTER + "baseline\n")
+        for baseline in (False, True):
+            for client in (None, "client line one\n\n  indented line two"):
+                with self.subTest(baseline=baseline, client=client):
+                    if baseline:
+                        self.point_at_rules()
+                    else:
+                        os.environ.pop("ANTIGRAVITY_ACP_RULES_DIR", None)
+                    expected = ("baseline\n\n" if baseline else "") + addition.read_text()
+                    if client:
+                        expected = expected.rstrip("\n") + "\n\n" + client
+                    self.assertEqual(self.prompt.extract_system_prompt({"append": client}), expected)
+
+    def test_configured_missing_t3_file_raises_instead_of_omitting_it(self):
+        os.environ["ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE"] = str(self.dir / "missing.md")
+        with self.assertRaises(FileNotFoundError):
+            self.prompt.extract_system_prompt({"append": "client text"})
+
     def test_unset_variable_keeps_the_shipped_result_without_a_warning(self):
-        with self.assertNoLogs(level="WARNING"):
-            self.assertEqual(self.prompt.extract_system_prompt({"append": "client text"}), "client text")
-            self.assertIsNone(self.prompt.extract_system_prompt({}))
+        for value in (None, ""):
+            with self.subTest(t3_file=value), self.assertNoLogs(level="WARNING"):
+                if value is not None:
+                    os.environ["ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE"] = value
+                self.assertEqual(self.prompt.extract_system_prompt({"append": "client text"}), "client text")
+                self.assertIsNone(self.prompt.extract_system_prompt({}))
 
     def test_missing_directory_keeps_the_shipped_result_and_warns_once(self):
         os.environ["ANTIGRAVITY_ACP_RULES_DIR"] = str(self.dir / "absent")
