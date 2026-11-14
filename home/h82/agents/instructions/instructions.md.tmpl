@@ -3,13 +3,13 @@
 # T3 delegation
 
 When delegating work in T3 Code, use T3 Code's `delegate_task` and related task tools instead of native subagent tools. This includes same-provider children and agents dispatched by skills, such as Compound Engineering (CE) scouts and reviewers.
-For CE cross-model review, implementation, and reasoning elevation, replace its explicit acpx, provider CLI, and launcher-script instructions with T3 delegation. A CE call described as a shell-out rather than a subagent is still covered. Follow higher-priority host constraints, such as permission denials. T3 Code's own guidance to use a native subagent tool for same-provider children does not apply: these sessions disable that tool on purpose, so this routing takes precedence.
+For CE cross-model review, implementation, and reasoning elevation, replace its explicit acpx, provider CLI, and launcher-script instructions with T3 delegation. A CE call described as a shell-out rather than a subagent is still covered. Follow higher-priority host constraints, such as permission denials. This routing takes precedence over T3 Code's own guidance to use a native subagent tool for same-provider children.
 
-Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. Choose the child's model and effort as the T3 CE model selection section says. Use T3 capability discovery to resolve the selected target and supported `target.options`. Give each child a self-contained brief with the required context, accessible workspace/artifact paths, and this routing policy. Authorize further delegation only when its assigned CE task requires it.
+Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. Choose the child's model and effort as the T3 CE model selection section says. Use T3 capability discovery to resolve the selected target and supported `target.options`. Give each child a self-contained brief with the goal, completion standard, required context, accessible workspace/artifact paths, and this routing policy. Add no prohibition the task does not need. Authorize further delegation only when its assigned CE task requires it.
 
 Run `ce-code-review` and `ce-simplify-code` in your own context, and delegate only the reviewers and other leaves those skills dispatch; never hand either skill whole to a child. In the brief of a child that runs verification, tell it to wait for a slow command to finish and never to interrupt it. Tell every child that evidence this machine cannot produce, such as a Darwin build on Linux, is recorded as deferred to CI, never as passed, and does not make its return incomplete.
 
-Use T3's task lifecycle in place of CE's process runners, polling, cancellation, and transport receipts. Do not run the legacy transport alongside a T3 task. Do not fabricate controller receipts or treat task completion as proof of CE validation or serving-model identity. Retain substantive scope, integration, and verification checks; if their contract cannot be satisfied, use CE's existing unavailable-route handling before starting incompatible transport machinery.
+Use T3's task lifecycle in place of CE's process runners, polling, cancellation, and transport receipts. Do not run the legacy transport alongside a T3 task. Do not fabricate controller receipts or treat task completion as proof of CE validation or serving-model identity. The scope, integration, and verification checks a CE skill prescribes still apply under T3 transport; if their contract cannot be satisfied, use CE's existing unavailable-route handling before starting incompatible transport machinery.
 
 These sessions disable the native subagent tool on purpose. Wherever a CE rule depends on whether a subagent tool is available, `delegate_task` is that tool. When it is deferred, load it and the related task tools through the host's tool discovery, such as ToolSearch, before concluding that no subagent is available. Take CE's inline fallback for missing subagents only when `delegate_task` is still unavailable or the delegation fails. This rule does not authorize further delegation: a child whose brief says to do the work itself still does it itself.
 
@@ -41,6 +41,20 @@ If the catalog lists no model for a rung, use the next lower rung of the same pr
 
 {{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}
+# Scope and verification
+
+Deliver what was asked, at the scope intended. A task is done when the change is in place and one check at the narrowest scope that shows it works has passed.
+
+What the user, the project's instructions, or a loaded skill asks for still applies in full, including checks they say to repeat, content they require in a plan, and reviews they dispatch. The rest of this section limits only what you add on your own initiative:
+
+- One narrow check is enough. Do not rerun a check that passed while the code is unchanged.
+- Keep the change to the request. Offer a test, guard, fallback, refactor, or extra verification step that nobody asked for in one line of the final report instead of doing it.
+- In a plan or document, leave out requirements, verification steps, and constraints that the request does not need.
+- A delegation brief states the goal, the completion standard, and the invariants that apply to that task. Leave out rules the child already receives, and do not start a child only to re-check your work.
+- Do not add a verification rule or caution to an instruction file, plan, or project document.
+
+Confirmation before destructive or irreversible actions, and the protection of secrets and stored data, are unchanged.
+
 # Web development skills
 
 Before starting HTML, CSS, web UI, or browser-side JavaScript work, load and follow the `modern-web-guidance` skill first. This includes web platform code inside frameworks. Use its guidance alongside other applicable design and framework skills.
@@ -68,11 +82,10 @@ Before sending in-scope prose, run the writing skills for its dominant language.
 Use container runtimes and local Kubernetes clusters only for temporary development and testing. Cleanup is part of the task, not optional follow-up work.
 
 - Before creating resources, identify the local runtime or cluster endpoint and distinguish this task's resources from those used by other active tasks. Track the resources you create or download so they can all be removed.
-- As soon as their use ends, delete the task's clusters, containers, images, volumes, networks, build caches, and temporary data. Stopping containers or pruning only unused resources is not sufficient. Volumes are temporary: do not retain them for reuse or debugging, or merely because they already existed.
-- Protect resources used by other active tasks, whether run by a user or an agent; their owning tasks must clean them up when finished. Do not use a global prune or runtime reset that would remove those resources. Do not delete remote resources, installed runtime binaries, credentials, or unrelated host files.
-- Clean up after success, failure, and orderly cancellation. After a forced interruption, check for and remove leftover task resources when work resumes. Do not leave development deployments running after the task ends.
-- Verify that no task-owned disposable resources remain, including zero task-owned volumes, before reporting cleanup complete. If deletion fails or ownership cannot be established, report the remaining resources and the reason instead of claiming success.
-- Check host disk-space reclamation separately from resource deletion. Before stopping a shared runtime or compacting its disk, establish that no other user or agent work depends on it. If that cannot be established, leave the runtime running and report the unreclaimed space. Do not shut down unrelated virtual machines. Report any unfinished cleanup.
+- As soon as their use ends, including after success, failure, or orderly cancellation, delete the task's clusters, containers, images, volumes, networks, build caches, and temporary data; stopping containers or pruning unused resources is insufficient. Do not retain volumes for reuse or debugging, even if they already existed, or leave development deployments running after the task ends. After a forced interruption, check for and remove leftover task resources when work resumes.
+- Protect resources used by other active tasks, whether run by a user or an agent; their owners must clean them up. Do not use a global prune or runtime reset that would remove those resources, or delete remote resources, installed runtime binaries, credentials, or unrelated host files.
+- Before reporting cleanup complete, verify that no task-owned disposable resources remain, including zero task-owned volumes. Report any unfinished cleanup; if deletion fails or ownership cannot be established, report the remaining resources and the reason.
+- Check host disk-space reclamation separately from resource deletion. Before stopping a shared runtime or compacting its disk, establish that no other user or agent work depends on it; otherwise leave the runtime running and report the unreclaimed space. Do not shut down unrelated virtual machines.
 
 {{ if eq .kind "darwin" -}}
 # Container runtime
@@ -85,6 +98,6 @@ Use container runtimes and local Kubernetes clusters only for temporary developm
 
 - Use rootless Podman for temporary NixOS development, with minikube's Podman driver when a task requires Kubernetes.
 - Identify the user's Podman socket and keep each task's containers, images, volumes, networks, minikube profile, and kubeconfig separate from other work.
-- Close port-forward processes before deleting the owned profile and enumerated resources. Never use global prune or all-profile deletion. Verify zero owned volumes and report disk-space reclamation separately.
+- Close port-forward processes before deleting the owned profile and enumerated resources. Never use global prune or all-profile deletion.
 {{ end -}}
 {{ end -}}
