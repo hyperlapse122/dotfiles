@@ -70,6 +70,8 @@ let
       sidebarAutoSettleKeepPullRequests = true;
       enableAgentDeviceAccess = true;
       enableDeviceSupport = true;
+      linkedEnvironmentsEnabled = true;
+      promptSuggestionsEnabled = true;
       snoozeLimitedThreads = true;
     };
     remove = [ ];
