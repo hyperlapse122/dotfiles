@@ -49,29 +49,6 @@
       }
     },
     {
-      "id": "hf:moonshotai/Kimi-K3",
-      "display_name": "Kimi K3",
-      "input_modalities": [
-        "text",
-        "image"
-      ],
-      "context_length": 524288,
-      "max_output_length": 65536,
-      "pricing": {
-        "prompt": "$0.000003",
-        "completion": "$0.000015",
-        "input_cache_reads": "$0.00000045",
-        "input_cache_writes": "0"
-      },
-      "reasoning_parameters": {
-        "efforts": [
-          "low",
-          "high",
-          "max"
-        ]
-      }
-    },
-    {
       "id": "hf:moonshotai/Kimi-K3.1-Pro",
       "display_name": "Kimi K3.1 Pro",
       "input_modalities": [
@@ -245,9 +222,9 @@
       "context_length": 524288,
       "max_output_length": 65536,
       "pricing": {
-        "prompt": "$0.000003",
-        "completion": "$0.000015",
-        "input_cache_reads": "$0.00000045",
+        "prompt": "$0.000002",
+        "completion": "$0.00001",
+        "input_cache_reads": "$0.0000002",
         "input_cache_writes": "0"
       },
       "reasoning_parameters": {
