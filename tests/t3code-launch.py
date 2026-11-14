@@ -36,6 +36,12 @@ def validate(home):
     assert providers['pi']['config']['binaryPath'].endswith('/bin/pi')
     grok = shlex.split(providers['grok'].get('config', {}).get('launchArgs', ''))
     assert not any('prompt' in arg or 'developer_instructions' in arg for arg in grok)
+    adapter = providers['grok'].get('config', {}).get('binaryPath', '')
+    assert adapter.endswith('/bin/t3-grok-instructions') and Path(adapter).is_file()
+    grok_addition = home / '.t3/userdata/instructions/grok.md'
+    assert grok_addition.is_file() and grok_addition.read_text() == addition
+    assert providers['grok']['config']['userFlag'] is True
+    assert any(e['name'] == 'KEEP' and e['value'] == 'yes' for e in providers['grok']['environment'])
     assert any(e['name'] == 'GROK_SUBAGENTS' and e['value'] == '0' for e in providers['grok']['environment'])
     # The declaration turns the owner's disabled instance on and points it at the
     # wrapper; the owner's own flag survives alongside the T3 instruction input.
@@ -66,13 +72,15 @@ def main():
             settings = home / '.t3/userdata/settings.json'
             settings.parent.mkdir(parents=True)
             settings.write_text(json.dumps({'unrelated': {'keep': True}, 'providerInstances': {
-                'omp': {'enabled': True}, 'antigravity': {'driver': 'antigravity', 'enabled': False, 'custom': True}}}))
+                'omp': {'enabled': True}, 'antigravity': {'driver': 'antigravity', 'enabled': False, 'custom': True},
+                'grok': {'config': {'userFlag': True}, 'environment': [{'name': 'KEEP', 'value': 'yes'}]}}}))
             (settings.parent / 'client-settings.json').write_text(json.dumps({'providerModelPreferences': {'pi': {'hiddenModels': ['user-hidden']}}}))
             context = home / 'context.json'
             context.write_text(json.dumps({'kind': 'darwin', 'locale': {'name': 'C.UTF-8', 'language': 'en'}}))
             subprocess.run([sys.executable, entry['helper'], '--context', str(context), '--template', entry['template'],
                             '--renderer', entry['renderer'], '--home', scratch], check=True)
             baseline = (home / '.claude/CLAUDE.md').read_bytes()
+            grok_baseline = (home / '.grok/AGENTS.md').read_bytes()
             # Pin the normal branch, not merely the absence of a marker.
             assert hashlib.sha256(baseline).hexdigest() == entry['baselineHash']
             script = '\n'.join(entry['scripts']).replace(entry['home'], scratch)
@@ -82,15 +90,16 @@ def main():
                 subprocess.run(['bash', '-eu', '-c', 'run() { "$@"; };\n' + script], env=env, check=True)
                 validate(home)
                 assert (home / '.claude/CLAUDE.md').read_bytes() == baseline
+                assert (home / '.grok/AGENTS.md').read_bytes() == grok_baseline
             # Mutation witnesses: dropping delivery, baseline contamination,
-            # changed defaults, or a Grok prompt must fail these assertions.
+            # changed defaults, or bypassing Grok's adapter must fail.
             original = settings.read_text()
             mutations = [lambda d: d['providerInstances']['claudeAgent']['config'].update(launchArgs=''),
                          lambda d: d['providerInstances']['pi']['config'].update(launchArgs=d['providerInstances']['pi']['config']['launchArgs'].replace('--approve', '')),
                          lambda d: d.update(defaultThreadEnvMode='local'),
                          lambda d: d['providerInstances']['antigravity'].update(enabled=False),
                          lambda d: d['providerInstances']['antigravity'].update(environment=[]),
-                         lambda d: d['providerInstances']['grok'].update(config={'launchArgs': '--append-system-prompt bad'})]
+                         lambda d: d['providerInstances']['grok']['config'].update(binaryPath='/bin/grok')]
             for mutate in mutations:
                 document = json.loads(original)
                 mutate(document)
@@ -102,6 +111,20 @@ def main():
                 else:
                     raise AssertionError('launch mutation escaped validation')
             settings.write_text(original)
+            addition_file = home / '.t3/userdata/instructions/grok.md'
+            original_addition = addition_file.read_bytes()
+            for wrong in (None, baseline):
+                if wrong is None:
+                    addition_file.unlink()
+                else:
+                    addition_file.write_bytes(wrong)
+                try:
+                    validate(home)
+                except AssertionError:
+                    pass
+                else:
+                    raise AssertionError('Grok instruction mutation escaped validation')
+                addition_file.write_bytes(original_addition)
     print('T3 launch activation, instruction files, preferences, and mutation witnesses passed')
 
 
