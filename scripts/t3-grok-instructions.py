@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+from collections import deque
 from pathlib import Path
 import selectors
 import signal
@@ -43,10 +44,25 @@ def main():
         with selectors.DefaultSelector() as selector:
             selector.register(sys.stdin.buffer, selectors.EVENT_READ, 'input')
             selector.register(child.stdout, selectors.EVENT_READ, 'output')
+            os.set_blocking(child.stdin.fileno(), False)
             pending = []
+            outgoing = deque()
+            input_open = True
+            writing = False
             running = True
             while running:
                 for key, _ in selector.select():
+                    if key.data == 'write':
+                        written = os.write(key.fd, outgoing[0])
+                        outgoing[0] = outgoing[0][written:]
+                        if not outgoing[0]:
+                            outgoing.popleft()
+                        if not outgoing:
+                            selector.unregister(child.stdin)
+                            writing = False
+                            if not input_open:
+                                child.stdin.close()
+                        continue
                     data = os.read(key.fd, 65536)
                     if key.data == 'output':
                         if not data:
@@ -61,17 +77,20 @@ def main():
                         line = b''.join(pending) + b'\n'
                         pending.clear()
                         if line.strip():
-                            child.stdin.write(with_instructions(line))
-                            child.stdin.flush()
+                            outgoing.append(memoryview(with_instructions(line)))
                     if parts[-1]:
                         pending.append(parts[-1])
                     if not data:
                         line = b''.join(pending)
                         if line.strip():
-                            child.stdin.write(with_instructions(line))
-                            child.stdin.flush()
-                        child.stdin.close()
+                            outgoing.append(memoryview(with_instructions(line)))
+                        input_open = False
                         selector.unregister(key.fileobj)
+                        if not outgoing:
+                            child.stdin.close()
+                    if outgoing and not writing:
+                        selector.register(child.stdin, selectors.EVENT_WRITE, 'write')
+                        writing = True
     except BrokenPipeError:
         pass
     except (OSError, ValueError, KeyError, TypeError):

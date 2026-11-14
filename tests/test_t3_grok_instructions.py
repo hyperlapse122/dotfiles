@@ -145,6 +145,32 @@ class TransportTests(unittest.TestCase):
         process.send_signal(signal.SIGTERM)
         self.assertEqual(process.wait(timeout=5), -signal.SIGTERM)
 
+    def test_large_input_and_output_can_overlap(self):
+        (self.bin / 'grok').write_text('#!' + sys.executable + '\n' + '''import json, sys
+first = sys.stdin.buffer.read(1)
+print(json.dumps({'method': 'session/update', 'params': {'text': 'N' * 1048576}}), flush=True)
+sys.stdout.buffer.write(first + sys.stdin.buffer.readline())
+sys.stdout.buffer.flush()
+''')
+        process = subprocess.Popen([sys.executable, ADAPTER, 'agent', 'stdio'],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   cwd=self.home, env=self.env, start_new_session=True)
+        original = {'type': 'image', 'data': 'A' * 1048576, 'mimeType': 'image/png'}
+        request = {'method': 'session/prompt', 'params': {'prompt': [original]}}
+        try:
+            output, error = process.communicate(json.dumps(request).encode() + b'\n', timeout=5)
+            self.assertEqual(process.returncode, 0, error)
+            notification, forwarded = map(json.loads, output.splitlines())
+            self.assertEqual(len(notification['params']['text']), 1048576)
+            self.assertEqual(forwarded['params']['prompt'][0], original)
+            self.assertEqual(forwarded['params']['prompt'][1]['resource']['uri'], URI)
+        finally:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate()
+
 
 if __name__ == '__main__':
     unittest.main()
