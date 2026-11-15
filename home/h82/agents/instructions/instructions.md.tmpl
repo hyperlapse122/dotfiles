@@ -77,6 +77,21 @@ Before sending in-scope prose, run the writing skills for its dominant language.
 - Apply the skills silently. Deliver only the corrected text, without the skills' analysis or change reports, and do not pause for confirmation inside a skill.
 - These rules add to project instructions. When a project instruction names another writing skill, apply both.
 
+# Language
+
+{{ if not .claude -}}
+Converse with the user in Korean unless the user or the project's instructions name another conversation language. This covers every message addressed to the user, including questions, progress notes, answers, and final reports. The language the user writes in is not such an instruction.
+
+{{ end -}}
+Write artifacts in English unless another language applies. Artifacts are persistent output: documents, code comments and docstrings, commit messages, PR descriptions, issues, and user-facing strings in code. Choose the language from the first source that applies:
+
+1. A language instruction in the conversation.
+2. A language instruction in the project's instructions.
+3. The language of the existing content you are editing. For a new file or a commit message, the language the repository mainly uses.
+4. Otherwise, English.
+
+This rule decides the language of artifacts, including code comments, even when a harness setting names a conversation language or asks for comments in it. Text exchanged only between agents, such as delegation briefs and the reports a subagent returns to its caller, falls under neither rule.
+
 # Temporary containers and local Kubernetes
 
 Use container runtimes and local Kubernetes clusters only for temporary development and testing. Cleanup is part of the task, not optional follow-up work.

@@ -11,8 +11,10 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
               'antigravity': '.gemini/config/rules', 'grok': '.grok/AGENTS.md',
               'pi': '.pi/agent/AGENTS.md'}
 # Independent content receipts: negation, repetition, deletion and foreign text
-# all change the complete normative body, including its order.
-EXPECTED = {'darwin': '578b05be3798d43240cbd94fe0668f3ac599af2f63b265a4c665f4f712857d76', 'nixos': '157ba5f1eb6ea06fb45c8b9e177158145a18fdee0b7b75b879dcc7a18aed5f55', 't3': '9418baa686ff75f5097a6fa2d29f2f885f081016e6459376ce55691eed6261d3'}
+# all change the complete normative body, including its order. Claude Code gets
+# its conversation language from its own settings, so its render has a receipt
+# of its own.
+EXPECTED = {'darwin': '6da4756ef8245041f986a91474de911074dd9f26a996279da28bcdad26ec6cea', 'darwin-claude': '7479bcddff277ac5029cb25c75e4b2abc77685bfeee5e6e0e227f7aad3406873', 'nixos': '20814d4190f7d04749a5c46d0a7ed59d53551d8d133517c99fcfc0106b09918a', 'nixos-claude': '7754bcc8d0247964a399650a5f9a5d81daca20b2336f8920e675961091612536', 't3': '9418baa686ff75f5097a6fa2d29f2f885f081016e6459376ce55691eed6261d3'}
 
 
 def body(home, harness):
@@ -28,15 +30,16 @@ def body(home, harness):
     return result
 
 
-def receipt(text, kind):
-    assert hashlib.sha256(text.encode()).hexdigest() == EXPECTED[kind], kind
+def receipt(text, kind, harness=None):
+    key = kind + '-claude' if harness == 'claude' else kind
+    assert hashlib.sha256(text.encode()).hexdigest() == EXPECTED[key], key
 
 
-def check_receipt(text, kind):
-    receipt(text, kind)
+def check_receipt(text, kind, harness=None):
+    receipt(text, kind, harness)
     for bad in (text + '\nForeign instructions.\n', 'Do not ' + text, text + text):
         try:
-            receipt(bad, kind)
+            receipt(bad, kind, harness)
         except AssertionError:
             pass
         else:
@@ -59,7 +62,7 @@ def exercise(template, helper, renderer, kind):
         render()
         for harness in DELIVERIES:
             text = body(root, harness)
-            check_receipt(text, kind)
+            check_receipt(text, kind, harness)
             assert 'T3 delegation' not in text
         source.write_text(template + '\n# Branch probe\n' + ''.join(
             '{{ if .' + harness + ' }}\n' + harness + '-only\n{{ end }}' for harness in DELIVERIES))
@@ -84,7 +87,7 @@ def main():
     for entry in json.loads(Path(sys.argv[2]).read_text()):
         if entry['kind'] == 'linux':
             for item in entry['paths']:
-                receipt(body(Path(item['path']).parents[len(Path(item['target']).parts)-1], item['delivery']), entry['kind'])
+                receipt(body(Path(item['path']).parents[len(Path(item['target']).parts)-1], item['delivery']), entry['kind'], item['delivery'])
             continue
         assert entry['key'] in Path(entry['git']).read_text(), entry['name']
         with tempfile.TemporaryDirectory() as directory:
@@ -94,7 +97,7 @@ def main():
             env.pop('DRY_RUN', None)
             subprocess.run(['bash', '-eu', '-c', script], env=env, check=True)
             for harness in DELIVERIES:
-                receipt(body(home, harness), entry['kind'])
+                receipt(body(home, harness), entry['kind'], harness)
 
 
 if __name__ == '__main__':
