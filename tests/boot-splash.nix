@@ -1,60 +1,16 @@
 /*
-  Check interface:
-
-    import ./tests/boot-splash.nix { inherit pkgs self; }
-
-  Asserts that every production configuration `tests/lib/configurations.nix`
-  yields boots silently and graphically, and that no bootstrap configuration
-  does. Expectations come from each configuration's `my.bootstrap` and its GPU
-  driver choice, never from the options the module under test sets.
-
-  Every assertion reads what the machine boots from: the initrd's materialised
-  /etc tree (its systemd unit tree, Plymouth configuration and themes,
-  modules-load and modprobe files), the loader.conf lanzaboote installs, and the
-  systemd-boot builder the bootstrap output installs with. Kernel parameters
-  are the one exception: the toplevel's kernel-params file and the bootspec
-  both copy `boot.kernelParams` verbatim, and building either here would build
-  each configuration's kernel and initrd that the CI build job already builds.
-  They are read from the option, and production and bootstrap must disagree on
-  them, so the assertion cannot fold to a constant.
-
-  Verifies, on every production configuration:
-  - the initrd wires plymouth-start.service into sysinit.target.wants, and the
-    wired unit starts plymouthd rather than being masked to /dev/null.
-  - the initrd Plymouth configuration selects the bgrt theme, and the initrd
-    ships that theme.
-  - the wired plymouth-start.service pulls in the Plymouth password agent's
-    path unit, which watches for password requests and is not masked, and the
-    agent service forwards them to Plymouth, so a failed TPM2 unlock asks for
-    the passphrase on the splash.
-  - lanzaboote's loader.conf sets `timeout 0`, so systemd-boot skips its menu
-    unless a key is held.
-  - the kernel command line carries every quiet-boot parameter.
-  - the initrd loads at least one KMS driver, so Plymouth has a native display
-    before switch-root instead of waiting out its simpledrm timeout.
-  - a configuration that drives its GPU with the NVIDIA driver and modesetting
-    loads nvidia, nvidia_modeset and nvidia_drm in the initrd, leaves
-    nvidia_uvm to its post-load softdep, and passes nvidia-drm modeset=1 there.
-    Any other configuration loads no nvidia module in the initrd.
-
-  Verifies, on every bootstrap configuration:
-  - the initrd carries no Plymouth configuration, starts no plymouth-start, and
-    loads no KMS driver.
-  - systemd-boot is not installed with a zero timeout.
-  - the kernel command line carries none of the quiet-boot parameters.
-
-  The check fails when no production configuration uses NVIDIA. When none
-  uses another driver, the other branch runs on each production configuration
-  re-evaluated with an Intel KMS driver in place of NVIDIA, so neither branch
-  of the GPU assertions passes vacuously.
-  Failures are collected instead of exiting at the first, so one red build
-  names every broken assertion across every configuration.
+  Checks the materialized boot display, password-agent fallback, boot menus,
+  and early GPU loading for every production and bootstrap configuration.
+  Bootvine must run in both initrd and real root, with upstream defaults and
+  shutdown wiring; Plymouth must be absent. GPU coverage retains the existing
+  Intel variant when every production host uses NVIDIA.
 */
 { pkgs, self }:
 let
   inherit (pkgs) lib;
 
   configurations = import ./lib/configurations.nix { inherit pkgs self; };
+  etcFile = import ./lib/etc-file.nix { inherit lib; };
 
   # Every message and path below is text spliced into a shell script; escape it
   # rather than trusting the values to be quote-free.
@@ -125,53 +81,88 @@ let
     config:
     pkgs.writeText "kernel-params" (lib.concatMapStrings (p: "${p}\n") config.boot.kernelParams);
 
+  assertBootvine =
+    entry:
+    let
+      inherit (entry) config name;
+      fail' = message: fail "${name}: ${message}";
+      initrdUnits = initrdFile config "/etc/systemd/system";
+      systemUnits = etcFile config "systemd/system";
+      trees = [
+        {
+          label = "initrd";
+          path = initrdUnits;
+        }
+        {
+          label = "real root";
+          path = systemUnits;
+        }
+      ];
+    in
+    ''
+      ${lib.concatMapStrings (
+        tree:
+        lib.optionalString (tree.path == null) (fail' "${tree.label} has no systemd unit tree")
+        + lib.optionalString (tree.path != null) ''
+          start=${tree.path}/sysinit.target.wants/bootvine.service
+          if ! grep -Eq '^ExecStart=@/nix/store/[^ ]+/bin/bootvine @bootvine([[:space:]]|$)' "$start"; then
+            ${fail' "${tree.label} does not start bootvine with switch-root survival"}
+          fi
+          if ! grep -Fxq 'TTYPath=/dev/tty12' "$start"; then
+            ${fail' "${tree.label} bootvine has no dedicated console"}
+          fi
+          if ! grep -Eq '^IgnoreOnIsolate=(yes|true)$' "$start"; then
+            ${fail' "${tree.label} bootvine does not survive target isolation"}
+          fi
+          if grep -q -- '--config' "$start"; then
+            ${fail' "${tree.label} bootvine overrides its default configuration"}
+          fi
+          if [ -e ${tree.path}/sysinit.target.wants/plymouth-start.service ]; then
+            ${fail' "${tree.label} still starts Plymouth"}
+          fi
+        ''
+      ) trees}
+
+      ${lib.optionalString (initrdFile config "/etc/plymouth/plymouthd.conf" != null) (
+        fail' "the initrd still carries Plymouth configuration"
+      )}
+      ${lib.optionalString (initrdUnits != null) ''
+        if ! grep -Fxq 'DirectoryNotEmpty=/run/systemd/ask-password' ${initrdUnits}/sysinit.target.wants/systemd-ask-password-console.path; then
+          ${fail' "the initrd has no console password-request watcher"}
+        fi
+        if ! grep -Eq '^ExecStart=.*systemd-tty-ask-password-agent.*--console' ${initrdUnits}/systemd-ask-password-console.service; then
+          ${fail' "the initrd has no working console password-agent fallback"}
+        fi
+      ''}
+      ${lib.optionalString (systemUnits != null) ''
+        shutdown=${systemUnits}/shutdown.target.wants/bootvine-shutdown.service
+        if ! grep -Eq '^ExecStart=.*/bin/bootvine --shutdown([[:space:]]|$)' "$shutdown"; then
+          ${fail' "shutdown.target does not start bootvine in shutdown mode"}
+        fi
+        if ! grep -Fxq 'TTYPath=/dev/tty12' "$shutdown"; then
+          ${fail' "shutdown bootvine has no dedicated console"}
+        fi
+      ''}
+
+      for param in ${lib.escapeShellArgs quietParams}; do
+        if grep -Fxq -- "$param" ${paramsFile config}; then
+          report ${esc name}": the kernel command line still carries $param"
+        fi
+      done
+    '';
+
   assertProduction =
     entry:
     let
       inherit (entry) config name;
       fail' = message: fail "${name}: ${message}";
 
-      units = initrdFile config "/etc/systemd/system";
-      plymouthConf = initrdFile config "/etc/plymouth/plymouthd.conf";
-      themes = initrdFile config "/etc/plymouth/themes";
       modulesLoad = initrdFile config "/etc/modules-load.d/nixos.conf";
       modprobe = initrdFile config "/etc/modprobe.d/nixos.conf";
       installCommand = config.boot.lanzaboote.installCommand or null;
       nvidia = usesNvidia config;
     in
     ''
-      ${lib.optionalString (units == null) (fail' "the initrd materialises no systemd unit tree")}
-      ${lib.optionalString (units != null) ''
-        start=${units}/sysinit.target.wants/plymouth-start.service
-        if [ ! -e "$start" ]; then
-          ${fail' "the initrd does not wire plymouth-start.service into sysinit.target.wants"}
-        elif ! grep -q '^ExecStart=.*plymouthd' "$start"; then
-          ${fail' "the initrd plymouth-start.service does not start plymouthd; it may be masked"}
-        fi
-        if ! grep -qs '^Wants=.*systemd-ask-password-plymouth\.path' "$start"; then
-          ${fail' "the initrd plymouth-start.service does not pull in the Plymouth password agent's path unit"}
-        fi
-        if ! grep -Fxqs 'DirectoryNotEmpty=/run/systemd/ask-password' ${units}/systemd-ask-password-plymouth.path; then
-          ${fail' "the initrd Plymouth password agent's path unit watches no password requests; it may be masked"}
-        fi
-        if ! grep -qs '^ExecStart=.*systemd-tty-ask-password-agent.*--plymouth' ${units}/systemd-ask-password-plymouth.service; then
-          ${fail' "the initrd carries no Plymouth password agent, so a failed TPM2 unlock cannot prompt on the splash"}
-        fi
-      ''}
-
-      ${lib.optionalString (plymouthConf == null) (fail' "the initrd carries no Plymouth configuration")}
-      ${lib.optionalString (plymouthConf != null) ''
-        if ! grep -Fxq 'Theme=bgrt' ${plymouthConf}; then
-          ${fail' "the initrd Plymouth configuration does not select the bgrt theme"}
-        fi
-      ''}
-      ${lib.optionalString (themes == null) (fail' "the initrd ships no Plymouth themes")}
-      ${lib.optionalString (themes != null) ''
-        if [ ! -f ${themes}/bgrt/bgrt.plymouth ]; then
-          ${fail' "the initrd does not ship the bgrt Plymouth theme"}
-        fi
-      ''}
-
       ${lib.optionalString (installCommand == null) (
         fail' "the production configuration has no lanzaboote install command"
       )}
@@ -184,12 +175,6 @@ let
         fi
       ''}
 
-      for param in ${lib.escapeShellArgs quietParams}; do
-        if ! grep -Fxq -- "$param" ${paramsFile config}; then
-          report ${esc name}": the kernel command line lacks $param"
-        fi
-      done
-
       ${lib.optionalString (modulesLoad == null) (
         fail' "the initrd loads no kernel modules through modules-load.d"
       )}
@@ -201,7 +186,7 @@ let
           fi
         done
         if [ "$found" = 0 ]; then
-          ${fail' "the initrd loads no KMS driver, so Plymouth has no native display before switch-root"}
+          ${fail' "the production initrd loads no early KMS driver"}
         fi
         ${
           if nvidia then
@@ -239,22 +224,10 @@ let
       inherit (entry) config name;
       fail' = message: fail "${name}: ${message}";
 
-      units = initrdFile config "/etc/systemd/system";
       modulesLoad = initrdFile config "/etc/modules-load.d/nixos.conf";
       installer = config.system.build.installBootLoader or null;
     in
     ''
-      ${lib.optionalString (initrdFile config "/etc/plymouth/plymouthd.conf" != null) (
-        fail' "the bootstrap initrd carries a Plymouth configuration"
-      )}
-      ${lib.optionalString (units == null) (
-        fail' "the bootstrap initrd materialises no systemd unit tree"
-      )}
-      ${lib.optionalString (units != null) ''
-        if [ -e ${units}/sysinit.target.wants/plymouth-start.service ]; then
-          ${fail' "the bootstrap initrd starts plymouth-start.service"}
-        fi
-      ''}
       ${lib.optionalString (modulesLoad != null) ''
         for driver in ${lib.escapeShellArgs kmsDrivers}; do
           if grep -Fxq -- "$driver" ${modulesLoad}; then
@@ -277,11 +250,6 @@ let
         fi
       ''}
 
-      for param in ${lib.escapeShellArgs quietParams}; do
-        if grep -Fxq -- "$param" ${paramsFile config}; then
-          report ${esc name}": the bootstrap kernel command line carries $param"
-        fi
-      done
     '';
 in
 pkgs.runCommand "boot-splash-tests"
@@ -307,6 +275,7 @@ pkgs.runCommand "boot-splash-tests"
     ${lib.optionalString (lib.all (entry: usesNvidia entry.config) production) (
       fail "every production configuration uses the NVIDIA driver, even the one re-evaluated with the Intel driver, so the assertion that others load no nvidia module would cover nothing"
     )}
+    ${lib.concatMapStringsSep "\n" assertBootvine (production ++ configurations.bootstraps)}
     ${lib.concatMapStringsSep "\n" assertProduction production}
     ${lib.concatMapStringsSep "\n" assertBootstrap configurations.bootstraps}
 
