@@ -16,7 +16,7 @@ Use the machine's distinctive model identifier, such as the DMI product name (`M
 
 A directory under `hosts/` without a `host.nix` file (or with `kind = "nixos"`) is a NixOS host. Create `hosts/<host>/` with three files:
 
-- `hardware.nix`: kernel modules, firmware, CPU microcode, and graphics drivers. The production Plymouth boot splash requires the GPU's KMS driver in the initrd: add it (for example `i915`, `amdgpu`, or `nvidia` / `nvidia_modeset` / `nvidia_drm`) to `boot.initrd.kernelModules` under `lib.mkIf (!config.my.bootstrap)`; the `boot-splash` check (`tests/boot-splash.nix`) fails otherwise. Start from `nixos-generate-config --no-filesystems --show-hardware-config` run on the target from the installation media, then keep only what the machine needs.
+- `hardware.nix`: kernel modules, firmware, CPU microcode, and graphics drivers. The production configuration loads the GPU's KMS driver early: add it (for example `i915`, `amdgpu`, or `nvidia` / `nvidia_modeset` / `nvidia_drm`) to `boot.initrd.kernelModules` under `lib.mkIf (!config.my.bootstrap)`; the `boot-splash` check (`tests/boot-splash.nix`) fails otherwise. Start from `nixos-generate-config --no-filesystems --show-hardware-config` run on the target from the installation media, then keep only what the machine needs.
 - `disko.nix`: the disk layout. Copy `hosts/MS-7D91/disko.nix` to keep the shared layout (a 2 GiB ESP with partlabel `disk-main-ESP`, then a LUKS2 `cryptroot` container with partlabel `disk-main-luks` holding Btrfs subvolumes for `/root` (`/`), `/home`, `/nix`, `/log` (`/var/log`), and `/swap` with a 64 GiB swapfile), and change only `device` to the target disk's `/dev/disk/by-id/` path.
 - `default.nix`: imports `./hardware.nix` and `./disko.nix` and declares the host's traits and any machine-specific mounts or options.
 
@@ -171,7 +171,7 @@ These checks guard host onboarding:
 - `sops-recipients` (`tests/sops-recipients.nix`) verifies that every encrypted YAML file's recipient metadata matches its `.sops.yaml` creation rule.
 - `user-identity-secrets` (`tests/user-identity-secrets.nix`) verifies that every file under `secrets/hosts/<host>/` lists only `<host>`'s recipient.
 - `boot-layout-invariants` (`tests/boot-layout-invariants.nix`) checks each NixOS host's `disko.nix` for the ESP (`disk-main-ESP`), LUKS2 container (`cryptroot`, `disk-main-luks`), Btrfs subvolumes, and swapfile that `modules/nixos/system/boot.nix` expects.
-- `boot-splash` (`tests/boot-splash.nix`) checks that production NixOS outputs include a KMS driver in `boot.initrd.kernelModules`.
+- `boot-splash` (`tests/boot-splash.nix`) checks bootvine startup and shutdown wiring for production and bootstrap NixOS outputs, the console password-agent fallback, their boot-menu policies, and production early KMS loading.
 - `host-name-guard` (`tests/host-name-guard.nix`) fails when any host directory name appears in shared code.
 - `desktop-ssh` (`tests/desktop-ssh.nix`) verifies `secrets/hosts/<host>/{ssh.yaml,ssh.pub}` and the `desktop-ssh` services on NixOS hosts.
 

@@ -151,6 +151,7 @@
           "antigravity-profiles"
           "antigravity-skills"
           "baloo-extractor"
+          "boot-splash"
           "cargo-settings"
           "desktop-autostart"
           "desktop-ssh"

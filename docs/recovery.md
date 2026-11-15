@@ -29,7 +29,7 @@ A failed NixOS switch does not transactionally roll back all system changes. If 
 
 ## Roll back a boot generation
 
-On NixOS, select a working previous generation from the boot menu. Production outputs hide the menu behind the Plymouth boot splash: hold Space at power-on until the menu appears, or press Esc during the splash to inspect the boot log. If the system can boot to a shell, roll back with:
+On NixOS, select a working previous generation from the boot menu. Production outputs hide the menu: hold Space at power-on until it appears. Bootstrap outputs keep the menu visible. Bootvine shows service progress on both outputs; press Esc to leave the tree and inspect systemd status lines. If the system can boot to a shell, roll back with:
 
 ```sh
 sudo nixos-rebuild switch --rollback
