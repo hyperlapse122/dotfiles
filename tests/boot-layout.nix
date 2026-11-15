@@ -74,6 +74,7 @@ let
   testSystem = {
     imports = [
       bootModule
+      ../modules/nixos/system/boot-splash.nix
       inputs.lanzaboote.nixosModules.lanzaboote
     ];
     options.my.bootstrap = lib.mkOption {
@@ -94,6 +95,7 @@ diskoLib.testLib.makeDiskoTest {
     machine.send_chars("secretsecret\n")
   '';
   extraTestScript = ''
+    machine.wait_until_succeeds("journalctl -b -u bootvine.service -o cat | grep -F ' in Initrd '", timeout=30)
     machine.succeed("cryptsetup isLuks /dev/vda2")
     machine.succeed("cryptsetup luksDump /dev/vda2 | grep -q 'Version:.*2'")
     machine.succeed("btrfs subvolume list / | grep -qs 'path root$'")
