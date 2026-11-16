@@ -50,7 +50,7 @@ The change is repository-managed instruction text and its existing delivery rece
 ### Key Technical Decisions
 
 - KTD1. Add a T3 babysitting section to `home/h82/agents/instructions/instructions.md.tmpl` and mirror it in `docs/agent-routing.md`; the existing renderer already isolates T3 additions from CLI baselines.
-- KTD3. For GitLab, require fresh forge reads and head-scoped records of feedback decisions, claimed actions, handled checks, and unresolved blockers across T3 wakes; pass that evidence and the GitLab override into delegated feedback work. This replaces the GitHub-only snapshot and review-helper path without adding scripts.
+- KTD3. For GitLab, require fresh forge reads and persistent feedback IDs and source revisions, with head-scoped CI and action marks and unresolved decisions across T3 wakes; pass that evidence and the GitLab override into delegated feedback work. This replaces the GitHub-only snapshot and review-helper path without adding scripts.
 - KTD2. Update only the T3 content hash in `tests/agent-instructions.py`; its existing materialized-render coverage owns policy bytes and branch isolation.
 
 ### Assumptions
