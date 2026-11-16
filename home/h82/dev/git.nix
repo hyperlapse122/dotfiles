@@ -2,6 +2,11 @@
 {
   home.packages = [ pkgs.git-trim ];
 
+  xdg.dataFile."gh/extensions/gh-stack/gh-stack" = {
+    source = "${pkgs.gh-stack}/bin/gh-stack";
+    force = true;
+  };
+
   programs.git = {
     enable = true;
     lfs.enable = true;
