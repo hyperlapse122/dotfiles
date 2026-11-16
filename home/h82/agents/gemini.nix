@@ -15,6 +15,7 @@ let
   # declared keys instead and leaves everything the agent wrote alone.
   antigravityTier = {
     disableAutoGenerateMemories = true;
+    allowNonWorkspaceAccess = true;
   };
 
   # Keys this repository used to declare and has since retired. The merge only
@@ -37,6 +38,10 @@ let
   acpDeclared = pkgs.writeText "antigravity-acp-declared-settings.json" (
     builtins.toJSON {
       setPaths = [
+        {
+          path = [ "allowNonWorkspaceAccess" ];
+          value = true;
+        }
         {
           path = [
             "auth"
