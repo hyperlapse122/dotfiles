@@ -52,6 +52,10 @@ let
       module = "tool_filter";
       function = "_tool_name_to_builtin";
     }
+    {
+      module = "server";
+      function = "_view_file_scope_policy";
+    }
   ];
   extendArgs = lib.concatMapStringsSep " " (
     e:

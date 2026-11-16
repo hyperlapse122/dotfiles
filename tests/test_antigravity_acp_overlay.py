@@ -10,6 +10,7 @@ import importlib
 import importlib.machinery
 import importlib.util
 import itertools
+import json
 import os
 import shutil
 import sys
@@ -107,15 +108,17 @@ class OverlayCase(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
         for name in ("ANTIGRAVITY_ACP_RULES_DIR", "ANTIGRAVITY_ACP_PLUGIN_SKILLS",
-                     "ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE"):
+                     "ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE", "ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE"):
             os.environ.pop(name, None)
 
-    def load(self, module, stand_in):
+    def load(self, module, stand_in, dependencies=None):
         """Import a stand-in shipped module whose tail imports its overlay."""
         package = f"stand_in_{next(counter)}"
         root = self.dir / "modules" / package
         root.mkdir(parents=True)
         (root / "__init__.py").write_text("")
+        for name, source in (dependencies or {}).items():
+            (root / f"{name}.py").write_text(source)
         (root / f"{module}.py").write_text(stand_in + f"\nfrom . import {module}_overlay\n")
         shutil.copy(OVERLAYS / f"{module}_overlay.py", root)
         sys.path.insert(0, str(root.parent))
@@ -275,6 +278,130 @@ class ToolFilterOverlayTest(OverlayCase):
         config = self.filters.ToolFilterConfig(enabled_tools=("view_file",))
         config.resolve_disabled_builtins()
         self.assertEqual(config.to_dict(), {"enabledTools": ["view_file"]})
+
+
+STAND_IN_SERVER = '''
+import types
+from pathlib import Path
+
+
+def _view_file_scope_policy(allowed_dirs):
+    return lambda path: any(Path(path).is_relative_to(root) for root in allowed_dirs)
+
+
+def make_client_tool(client, workspace_paths, *, defer_scope=False):
+    def tool(path, content=None, approved=False):
+        if not defer_scope and not any(Path(path).is_relative_to(root) for root in workspace_paths):
+            raise PermissionError("outside workspace")
+        if content is not None:
+            if client.mode != "yolo" and not approved:
+                return "approval required"
+            Path(path).write_text(content)
+        return Path(path).read_text()
+    return tool
+
+
+tools = types.SimpleNamespace(
+    make_client_view_file=make_client_tool,
+    make_client_create_file=make_client_tool,
+    make_client_edit_file=make_client_tool,
+)
+policy = types.SimpleNamespace(allow=lambda name: lambda path: True)
+sdk_types_module = types.SimpleNamespace(
+    BuiltinTools=types.SimpleNamespace(VIEW_FILE=types.SimpleNamespace(value="view_file")))
+'''
+
+STAND_IN_PROXY = '''
+import types
+
+
+class LocalConnectionStrategy:
+    def _build_harness_config(self):
+        return types.SimpleNamespace(
+            workspaces=["/workspace"],
+            policy_config=types.SimpleNamespace(workspace_containment=0),
+            models=["existing model"],
+        )
+
+
+localharness_pb2 = types.SimpleNamespace(
+    PolicyConfig=types.SimpleNamespace(WORKSPACE_CONTAINMENT_DISABLED=1))
+'''
+
+STAND_IN_SETTINGS = '''
+import json as hjson
+import os
+
+_TOP_LEVEL_KEYS = ("auth", "gcp")
+
+
+def settings_path():
+    return os.path.join(os.environ["GEMINI_HOME"], "antigravity-acp", "settings.json")
+'''
+
+
+class FileAccessOverlayTest(OverlayCase):
+    def setUp(self):
+        super().setUp()
+        import types
+        self.client = types.SimpleNamespace(mode="default")
+        self.workspace = self.dir / "workspace"
+        self.workspace.mkdir()
+        self.external = self.dir / "Downloads" / "file.txt"
+        self.external.parent.mkdir()
+        self.external.write_text("outside content")
+        self.settings = self.dir / "shared-settings.json"
+        os.environ["ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE"] = str(self.settings)
+        self.server = self.load("server", STAND_IN_SERVER, {
+            "settings": STAND_IN_SETTINGS, "proxy_agent_config": STAND_IN_PROXY})
+        self.proxy = importlib.import_module(self.server.__package__ + ".proxy_agent_config")
+
+    def write_setting(self, value):
+        self.settings.write_text(json.dumps({"allowNonWorkspaceAccess": value}))
+
+    def test_enabled_access_keeps_client_approval_behavior_in_every_mode(self):
+        self.write_setting(True)
+        self.assertTrue(self.server._view_file_scope_policy([self.workspace])(self.external))
+        for mode in ("default", "auto_edit", "yolo", "plan"):
+            self.client.mode = mode
+            with self.subTest(mode=mode):
+                reader = self.server.tools.make_client_view_file(self.client, [self.workspace])
+                self.assertEqual(reader(self.external), "outside content")
+                for name in ("make_client_create_file", "make_client_edit_file"):
+                    editor = getattr(self.server.tools, name)(self.client, [self.workspace])
+                    expected = "changed" if mode == "yolo" else "approval required"
+                    self.assertEqual(editor(self.external, "changed"), expected)
+                    self.assertEqual(editor(self.external, "outside content", approved=True), "outside content")
+
+    def test_native_containment_changes_without_changing_workspace_or_models(self):
+        self.write_setting(True)
+        config = self.proxy.LocalConnectionStrategy()._build_harness_config()
+        self.assertEqual(config.policy_config.workspace_containment, 1)
+        self.assertEqual(config.workspaces, ["/workspace"])
+        self.assertEqual(config.models, ["existing model"])
+
+    def test_disabled_or_unusable_setting_retains_scope(self):
+        for contents in (None, "{}", "{bad json", "[]", '{"allowNonWorkspaceAccess": false}',
+                         '{"allowNonWorkspaceAccess": "true"}', '{"allowNonWorkspaceAccess": 1}'):
+            with self.subTest(contents=contents):
+                if contents is None:
+                    self.settings.unlink(missing_ok=True)
+                else:
+                    self.settings.write_text(contents)
+                self.assertFalse(self.server._view_file_scope_policy([self.workspace])(self.external))
+                reader = self.server.tools.make_client_view_file(self.client, [self.workspace])
+                with self.assertRaises(PermissionError):
+                    reader(self.external)
+                self.assertEqual(self.proxy.LocalConnectionStrategy()._build_harness_config()
+                                 .policy_config.workspace_containment, 0)
+
+    def test_without_shared_file_entry_uses_the_current_profile(self):
+        os.environ.pop("ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE")
+        os.environ["GEMINI_HOME"] = str(self.dir / "profile")
+        path = Path(os.environ["GEMINI_HOME"]) / "antigravity-acp" / "settings.json"
+        path.parent.mkdir(parents=True)
+        path.write_text('{"allowNonWorkspaceAccess": true}')
+        self.assertTrue(self.server._view_file_scope_policy([self.workspace])(self.external))
 
 
 if __name__ == "__main__":

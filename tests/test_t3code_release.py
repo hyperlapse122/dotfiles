@@ -35,6 +35,7 @@ MODULE_DIRECTORY = "google3/cloud/developer_experience/antigravity_extensions/ac
 SYSTEM_PROMPT = b"def extract_system_prompt(request):\n    return request\n"
 PATHS = b"def global_skills_paths(home):\n    return [home]\n"
 TOOL_FILTER = b"def _tool_name_to_builtin(name):\n    return None\n"
+SERVER = b"def _view_file_scope_policy(allowed_dirs):\n    return None\n"
 PAGES = {"linux-x64": 4096, "linux-arm64": 4096, "darwin-arm64": 16384}
 
 
@@ -66,6 +67,7 @@ def runtime_archive(key, paths=PATHS, system_prompt=SYSTEM_PROMPT, member="agy_a
         (f"{MODULE_DIRECTORY}/system_prompt.py", system_prompt, False),
         (f"{MODULE_DIRECTORY}/paths.py", paths, False),
         (f"{MODULE_DIRECTORY}/tool_filter.py", TOOL_FILTER, False),
+        (f"{MODULE_DIRECTORY}/server.py", SERVER, False),
         ("fakepkg/native.bin", bytes(range(256)) * 4, True),
     ]
     launcher = prefix + stored_zip(entries, len(prefix), PAGES[key], 8000) + b"stand-in trailer"
