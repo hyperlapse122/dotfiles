@@ -14,7 +14,7 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # all change the complete normative body, including its order. Claude Code gets
 # its conversation language from its own settings, so its render has a receipt
 # of its own.
-EXPECTED = {'darwin': '0d0e238eddb0d9ccd9e5b7cc168ddac42ce3324fcb5df3b23ff15f25fb770236', 'darwin-claude': 'c4da0fcf3cb14b5b8e2cbbd79232ff99dd675d75c02d3d5bfbfb3bf86b866b2c', 'nixos': 'c67e4297c6dfc1ecd492ae6ee70a5e8b228392a259bbe9abcda439f4cdd6df90', 'nixos-claude': 'c16f0173e7f6304cdb8e05b21b2d768e9b51e9d370f8c0cf8b9effe35bac9ad4', 't3': '5aa319399c0782ad7668a3c8de0f8b2c88c1a4d8d0ffecc53d3dbda65985acfd'}
+EXPECTED = {'darwin': '0d0e238eddb0d9ccd9e5b7cc168ddac42ce3324fcb5df3b23ff15f25fb770236', 'darwin-claude': 'c4da0fcf3cb14b5b8e2cbbd79232ff99dd675d75c02d3d5bfbfb3bf86b866b2c', 'nixos': 'c67e4297c6dfc1ecd492ae6ee70a5e8b228392a259bbe9abcda439f4cdd6df90', 'nixos-claude': 'c16f0173e7f6304cdb8e05b21b2d768e9b51e9d370f8c0cf8b9effe35bac9ad4', 't3': 'd10fd856c9f5c4049e33e9447371261a49d2b65b388dc05a2461ab61ea12520b'}
 
 
 def body(home, harness):
