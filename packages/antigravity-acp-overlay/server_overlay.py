@@ -1,5 +1,3 @@
-"""Honor the non-workspace file access setting in the ACP runtime."""
-
 import functools
 import os
 
