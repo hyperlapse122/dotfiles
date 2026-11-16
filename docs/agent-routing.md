@@ -25,14 +25,14 @@ Keep CE's existing retry, recovery, inline fallback, skip, and reporting behavio
 
 ## T3 CE model selection
 
-When a CE skill delegates a child, choose the child's model from the ladder of the provider the child runs on. Each rung names a model family; use the newest listed model of that family from T3 capability discovery. A family named without `Flash` excludes Flash models.
+When a CE skill delegates a child, choose the child's model from the ladder of the provider the child runs on. Each rung names a model family; use the newest listed model of that family from T3 capability discovery. A family named without `Flash` excludes Flash models, and a family named with `Pro` includes only Pro models.
 
 | Provider | Orchestrator | Top child rung | Middle rung | Bottom rung |
 | --- | --- | --- | --- | --- |
 | Claude | Fable | Opus | Sonnet | Haiku |
 | Codex | astra | sol | terra | luna |
-| Synthetic through pi | Kimi | GLM | GLM Flash | DeepSeek Flash |
-| Antigravity | Gemini Carbon | Gemini Carbon | Gemini Hydrogen | Gemini Hydrogen |
+| Synthetic through pi | Kimi | Kimi Pro | GLM | GLM Flash |
+| Antigravity | Gemini Carbon | Gemini Hydrogen | Gemini Hydrogen | Gemini Hydrogen |
 
 - Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`, and CE's cross-model review peers.
 - Middle rung: implementation workers, CE's mid-tier and generation-tier children, and any CE child whose skill names no tier.
@@ -42,6 +42,7 @@ Where a CE skill says to inherit the session or parent model, or to omit the mod
 
 Set no effort for a ladder-selected child, so T3's default for that model applies. A Codex child is the exception: pass `reasoningEffort` `high` in `target.options`. An effort that a CE skill suggests by default is not a named effort.
 For a middle-rung Codex implementation worker, pass `reasoningEffort` `xhigh` instead; every other Codex child's effort stays `high`.
+An Antigravity child is also an exception: pass `thinking_level` `xhigh` for a top-rung child, `high` for a middle-rung child, and `medium` for a bottom-rung child in `target.options`.
 
 A model or effort that the user's prompt or CE configuration names for a child wins over this section; pass a named effort in `target.options`. CE configuration includes `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, `work_engine_effort`, `plan_model`, and `brainstorm_model`.
 
@@ -61,9 +62,24 @@ On 2026-11-14, each setting below ran the same repository-grounding and Python s
 
 The repairs that failed changed their result on a second application when a managed object replaced a scalar and defaults supplied sibling keys. That check was added after the first outputs exposed the gap, then applied to every repair without changing the task prompt. These are two samples of one bounded task, not estimates of general accuracy or failure rates; long-running orchestration and full diff reviews were not measured. T3 recorded the requested models and options, but supplied no independent serving-model attestation. Token use and subscription consumption were not measured.
 
-The results support trying Carbon for planning and demanding reviews, where its longer completion time can be acceptable, and Hydrogen for implementation and extraction. Hydrogen high took about as long as Flash in this task; xhigh took longer without increasing the number of fully passing repairs. The ladder keeps effort unset for Antigravity children; the discovered T3 default was high for both Carbon and Hydrogen. An explicit xhigh request still takes precedence. Google's [Carbon model card](https://deepmind.google/models/model-cards/gemini-4-carbon/) describes long-horizon reasoning, while the [Hydrogen model card](https://deepmind.google/models/model-cards/gemini-4-hydrogen/) describes rapid execution and sub-agent use.
+The results support trying Carbon for planning and demanding reviews, where its longer completion time can be acceptable, and Hydrogen for implementation and extraction. Hydrogen high took about as long as Flash in this task; xhigh took longer without increasing the number of fully passing repairs. At the time, the ladder left Antigravity effort unset and the discovered T3 default was high for both Carbon and Hydrogen. Google's [Carbon model card](https://deepmind.google/models/model-cards/gemini-4-carbon/) describes long-horizon reasoning, while the [Hydrogen model card](https://deepmind.google/models/model-cards/gemini-4-hydrogen/) describes rapid execution and sub-agent use.
 
 The first Hydrogen xhigh request was rejected before launch because T3 listed only low, medium, and high. After the error, a fresh capability lookup listed xhigh and both measured xhigh runs launched successfully. The rejected preflight is excluded from the table. Refresh capability evidence after a rejection before concluding that a UI-visible option is unavailable.
+
+### Antigravity and Synthetic ladder evidence
+
+On 2026-11-16 the owner retuned the Antigravity and Synthetic rows against the Artificial Analysis Intelligence Index v5.0.1 chart dated 15 Nov '26, which covered the models this machine can reach. No new local benchmark ran for this change.
+
+| Rung | Before | After | AA score after (before) | Local timing |
+| --- | --- | --- | --- | --- |
+| Antigravity top | Gemini 4 Carbon high | Gemini 4 Hydrogen xhigh | 54 (60) | 58.8 s, 76.7 s on the 2026-11-14 task (Carbon: 260.7 s, 262.0 s) |
+| Antigravity middle | Gemini 4 Hydrogen at the T3 default | Gemini 4 Hydrogen high | 51 (54 at xhigh) | 51.0 s, 50.9 s on the 2026-11-14 task |
+| Antigravity bottom | Gemini 4 Hydrogen at the T3 default | Gemini 4 Hydrogen medium | 41 (54 at xhigh) | Not measured |
+| Synthetic top | GLM-5.3 | Kimi K3.1 Pro | 46 (32 at max) | Not measured; Kimi K3 high took 10-14 min as a review peer on 2026-10-21 |
+| Synthetic middle | GLM-5.3 Flash | GLM-5.3 | 32 at max (28) | Not measured at Pi's default; 24-25 min at max and 20.5 min at high as a review peer on 2026-10-21 |
+| Synthetic bottom | DeepSeek V4.1 Flash 1017 | GLM-5.3 Flash | 28 (29 at high) | 10-19 min at high as a review peer on 2026-10-21 (DeepSeek: 48 min at max, 101 min at high) |
+
+By 2026-11-16 T3 listed xhigh as Hydrogen's default `thinking_level`, so middle and bottom children that left effort unset had been running at xhigh. The ladder now names each Antigravity level, so a later change to that default does not move it. Synthetic children keep effort unset: Pi lists `thinking` levels only up to high, so the chart's max scores are upper bounds, not the configured setting. The Synthetic middle rung trades GLM-5.3 Flash's speed for GLM-5.3's higher score, and the bottom rung drops DeepSeek, the slowest Synthetic model measured.
 
 ## T3 PR and MR babysitting
 
