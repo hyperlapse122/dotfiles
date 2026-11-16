@@ -13,8 +13,9 @@
   original length: packages/antigravity-acp-overlay/ adds the shared agent
   instructions to the client's system prompt and the plugin skills directory to
   the skill path, and disables the built-in start_subagent tool in every
-  session, so agents delegate only through the client. On macOS the build then
-  signs the result ad hoc, because the rewrite invalidates Google's signature
+  session, so agents delegate only through the client. The server overlay adds
+  the non-workspace access setting without replacing approval policies. On macOS
+  the build then signs the result ad hoc, because the rewrite invalidates Google's signature
   and library validation under Google's hardened-runtime flag would refuse the
   runtime's own Google-signed native modules once the launcher has no Team ID.
 
