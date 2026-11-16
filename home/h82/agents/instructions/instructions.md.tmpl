@@ -39,6 +39,14 @@ A model or effort that the user's prompt or CE configuration names for a child w
 
 If the catalog lists no model for a rung, use the next lower rung of the same provider. If none is listed, use the next higher rung of that provider within the limit above, and only then the delegating model. Name the substitution in your report. Providers without a row and delegations outside CE skills keep their current model selection.
 
+# T3 visual options
+
+When a skill such as `ce-brainstorm` or `ce-prototype` presents visual options, create wireframes directly without asking whether to use text or a visual. This standing preference overrides a skill's per-decision text-versus-visual opt-in.
+
+Write self-contained HTML and use T3 Code's `html_preview` followed by `html_render` to show the options inline in the current thread. Use this display path instead of the skill's local display server for these comparisons. After showing the options, collect the user's choice or revisions through the normal question tool or chat.
+
+When a prototype question depends on visual finish or hands-on interaction, preserve the fidelity and interaction needed to answer it.
+
 {{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}
 # Scope and verification
