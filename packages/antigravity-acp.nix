@@ -52,6 +52,10 @@ let
       module = "tool_filter";
       function = "_tool_name_to_builtin";
     }
+    {
+      module = "server";
+      function = "_view_file_scope_policy";
+    }
   ];
   extendArgs = lib.concatMapStringsSep " " (
     e:
@@ -173,6 +177,16 @@ pkgs.stdenvNoCC.mkDerivation {
             echo "the runtime still carries the hardened-runtime flag" >&2
             exit 1
           fi
+
+          cp ${../tests/antigravity-acp-approval.py} approval_check.py
+          antigravity-acp-repack --page-size ${toString pageSize} \
+            --extend ${moduleDirectory}/server.py _view_file_scope_policy \
+            approval_check.py "$par" approval-check.par
+          rcodesign sign --code-signature-flags linker-signed \
+            approval-check.par approval-check-signed.par
+          chmod +x approval-check-signed.par
+          GEMINI_HOME="$HOME/approval-home" \
+            timeout 120 "$PWD/approval-check-signed.par"
 
           # The runtime finds its archive through argv[0], so it starts by
           # absolute path.

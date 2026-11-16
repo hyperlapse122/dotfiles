@@ -87,6 +87,7 @@ let
                 file = ".gemini/antigravity-cli/settings.json";
                 declared = {
                   set.disableAutoGenerateMemories = true;
+                  set.allowNonWorkspaceAccess = true;
                   remove = [ ];
                 };
               };
@@ -116,6 +117,10 @@ let
                 file = acpSettingsFile;
                 declared.setPaths = [
                   {
+                    path = [ "allowNonWorkspaceAccess" ];
+                    value = true;
+                  }
+                  {
                     path = [
                       "auth"
                       "type"
@@ -124,6 +129,7 @@ let
                   }
                 ];
                 seed = {
+                  allowNonWorkspaceAccess = false;
                   auth = {
                     type = "gemini-api-key";
                     project = "kept";
@@ -131,6 +137,7 @@ let
                   model = "kept";
                 };
                 expected = {
+                  allowNonWorkspaceAccess = true;
                   auth = {
                     type = "oauth-personal";
                     project = "kept";

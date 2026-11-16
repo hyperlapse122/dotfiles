@@ -3,7 +3,7 @@
 
     import ./tests/antigravity-acp-path.nix { inherit pkgs; pluginSource = inputs.compound-engineering-plugin; }
 
-  Runs the Linux agy_acp_server.par wrapper from packages/antigravity-acp-path.nix,
+  Runs the native agy_acp_server.par wrapper from packages/antigravity-acp-path.nix,
   built against a stub runtime whose .par prints what it was started with. The
   real runtime needs network and a Google sign-in, so its behavior through the
   wrapper is verified by hand; this check proves what the wrapper itself does,
@@ -37,6 +37,7 @@ let
       const char *rules = getenv("ANTIGRAVITY_ACP_RULES_DIR");
       const char *plugin = getenv("ANTIGRAVITY_ACP_PLUGIN_SKILLS");
       const char *storage = getenv("AGY_ACP_FORCE_FILE_STORAGE");
+      const char *settings = getenv("ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE");
       char line[4096];
       printf("argv0=%s\n", argv[0]);
       printf("pid=%ld\n", (long)getpid());
@@ -44,6 +45,7 @@ let
       printf("rules=%s\n", rules ? rules : "<unset>");
       printf("plugin=%s\n", plugin ? plugin : "<unset>");
       printf("storage=%s\n", storage ? storage : "<unset>");
+      printf("settings=%s\n", settings ? settings : "<unset>");
       for (int i = 1; i < argc; i++) printf("arg=%s\n", argv[i]);
       while (fgets(line, sizeof line, stdin)) printf("stdin=%s", line);
       return 0;
@@ -145,11 +147,21 @@ pkgs.runCommand "antigravity-acp-path-tests" { } ''
   for mode in unset empty; do
     run $mode > out || fail "$mode SSL_CERT_FILE: the wrapper exited $?"
     cert=$(field cert)
-    if [ -z "$cert" ] || [ "$cert" = '<unset>' ]; then
-      fail "$mode SSL_CERT_FILE: the runtime got no CA bundle"
-    elif [ ! -f "$cert" ]; then
-      fail "$mode SSL_CERT_FILE: the runtime got $cert, which is not a file"
-    fi
+    ${
+      if pkgs.stdenv.hostPlatform.isLinux then
+        ''
+          if [ -z "$cert" ] || [ "$cert" = '<unset>' ]; then
+            fail "$mode SSL_CERT_FILE: the runtime got no CA bundle"
+          elif [ ! -f "$cert" ]; then
+            fail "$mode SSL_CERT_FILE: the runtime got $cert, which is not a file"
+          fi
+        ''
+      else
+        ''
+          [ -z "$cert" ] || [ "$cert" = '<unset>' ] \
+            || fail "$mode SSL_CERT_FILE: the native wrapper unexpectedly set $cert"
+        ''
+    }
   done
 
   preset=$PWD/preset.pem
@@ -165,7 +177,7 @@ pkgs.runCommand "antigravity-acp-path-tests" { } ''
   expected=$(printf 'arg=--uid=\narg=a b\nstdin=one line')
   actual=$(grep -E '^(arg|stdin)=' out || true)
   [ "$actual" = "$expected" ] || fail "arguments or stdin changed on the way: $actual"
-  unexpected=$(grep -vE '^(outer|argv0|pid|cert|rules|plugin|storage|arg|stdin)=' out || true)
+  unexpected=$(grep -vE '^(outer|argv0|pid|cert|rules|plugin|storage|settings|arg|stdin)=' out || true)
   [ -z "$unexpected" ] || fail "the wrapper wrote to stdout: $unexpected"
   [ ! -s stderr ] || fail "the wrapper wrote to stderr: $(cat stderr)"
 
@@ -322,30 +334,31 @@ pkgs.runCommand "antigravity-acp-path-tests" { } ''
   # generation's plugin skills, whatever GEMINI_HOME is.
   pluginDirectory=${pluginSkills}
   assert_inputs() {
-    local label=$1 rules=$2 plugin=$3 storage=$4
+    local label=$1 rules=$2 plugin=$3 storage=$4 settings=$5
     [ "$(field rules)" = "$rules" ] || fail "$label: ANTIGRAVITY_ACP_RULES_DIR is '$(field rules)', not '$rules'"
     [ "$(field plugin)" = "$plugin" ] || fail "$label: ANTIGRAVITY_ACP_PLUGIN_SKILLS is '$(field plugin)', not '$plugin'"
     [ "$(field storage)" = "$storage" ] || fail "$label: AGY_ACP_FORCE_FILE_STORAGE is '$(field storage)', not '$storage'"
+    [ "$(field settings)" = "$settings" ] || fail "$label: shared settings file is '$(field settings)', not '$settings'"
   }
 
   home=$(make_ce_home "$tmpdir/xmodel-cr-scratch-XXXXXX")
   run_home "inputs in a run home" HOME="$fakeHome" GEMINI_HOME="$home"
-  assert_inputs "inputs in a run home" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
+  assert_inputs "inputs in a run home" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage} "$fakeHome/.gemini/antigravity-acp/settings.json"
 
   run_home "inputs in T3 instance home" HOME="$fakeHome" GEMINI_HOME="$t3Home"
-  assert_inputs "inputs in T3 instance home" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
+  assert_inputs "inputs in T3 instance home" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage} "$fakeHome/.gemini/antigravity-acp/settings.json"
 
   run_home "inputs without GEMINI_HOME" HOME="$fakeHome"
-  assert_inputs "inputs without GEMINI_HOME" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
+  assert_inputs "inputs without GEMINI_HOME" "$fakeHome/.gemini/config/rules" "$pluginDirectory" ${lib.escapeShellArg expectedStorage} "$fakeHome/.gemini/antigravity-acp/settings.json"
 
   run_home "caller inputs" HOME="$fakeHome" GEMINI_HOME="$t3Home" \
     ANTIGRAVITY_ACP_RULES_DIR=/caller/rules ANTIGRAVITY_ACP_PLUGIN_SKILLS=/caller/skills \
-    AGY_ACP_FORCE_FILE_STORAGE=caller
-  assert_inputs "caller inputs" /caller/rules /caller/skills caller
+    AGY_ACP_FORCE_FILE_STORAGE=caller ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE=/caller/settings.json
+  assert_inputs "caller inputs" /caller/rules /caller/skills caller /caller/settings.json
 
   # With no HOME there is no rules directory to name.
   run_home "inputs without HOME" GEMINI_HOME="$t3Home"
-  assert_inputs "inputs without HOME" '<unset>' "$pluginDirectory" ${lib.escapeShellArg expectedStorage}
+  assert_inputs "inputs without HOME" '<unset>' "$pluginDirectory" ${lib.escapeShellArg expectedStorage} '<unset>'
 
   home=$(make_ce_home "$tmpdir/xmodel-cr-scratch-XXXXXX")
   run_home "HOME unset" GEMINI_HOME="$home"

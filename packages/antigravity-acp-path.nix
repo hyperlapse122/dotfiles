@@ -27,7 +27,9 @@
   wrapper names for every launch, each only when the caller set none:
   ANTIGRAVITY_ACP_RULES_DIR is ~/.gemini/config/rules, the files the Antigravity
   CLI reads, and ANTIGRAVITY_ACP_PLUGIN_SKILLS is `pluginSkills`, the
-  generation's store directory of plugin skills. On macOS the wrapper also sets
+  generation's store directory of plugin skills. ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE
+  names ~/.gemini/antigravity-acp/settings.json for the shared access setting,
+  independently of the caller's GEMINI_HOME. On macOS the wrapper also sets
   AGY_ACP_FORCE_FILE_STORAGE, so a run home reads the sign-in file
   Compound Engineering copied in instead of a Keychain item the re-signed
   runtime cannot read.
@@ -84,6 +86,9 @@ let
     ''}
     if [ -z "''${ANTIGRAVITY_ACP_RULES_DIR:-}" ] && [ -n "''${HOME:-}" ]; then
       export ANTIGRAVITY_ACP_RULES_DIR="$HOME/.gemini/config/rules"
+    fi
+    if [ -z "''${ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE:-}" ] && [ -n "''${HOME:-}" ]; then
+      export ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE="$HOME/.gemini/antigravity-acp/settings.json"
     fi
     ${lib.optionalString (pluginSkills != null) ''
       if [ -z "''${ANTIGRAVITY_ACP_PLUGIN_SKILLS:-}" ]; then
