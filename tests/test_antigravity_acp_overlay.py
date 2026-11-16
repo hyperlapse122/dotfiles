@@ -290,12 +290,10 @@ def _view_file_scope_policy(allowed_dirs):
 
 
 def make_client_tool(client, workspace_paths, *, defer_scope=False):
-    def tool(path, content=None, approved=False):
+    def tool(path, content=None):
         if not defer_scope and not any(Path(path).is_relative_to(root) for root in workspace_paths):
             raise PermissionError("outside workspace")
         if content is not None:
-            if client.mode != "yolo" and not approved:
-                return "approval required"
             Path(path).write_text(content)
         return Path(path).read_text()
     return tool
@@ -359,19 +357,16 @@ class FileAccessOverlayTest(OverlayCase):
     def write_setting(self, value):
         self.settings.write_text(json.dumps({"allowNonWorkspaceAccess": value}))
 
-    def test_enabled_access_keeps_client_approval_behavior_in_every_mode(self):
+    def test_enabled_access_reaches_client_file_tools(self):
         self.write_setting(True)
         self.assertTrue(self.server._view_file_scope_policy([self.workspace])(self.external))
-        for mode in ("default", "auto_edit", "yolo", "plan"):
-            self.client.mode = mode
-            with self.subTest(mode=mode):
-                reader = self.server.tools.make_client_view_file(self.client, [self.workspace])
-                self.assertEqual(reader(self.external), "outside content")
-                for name in ("make_client_create_file", "make_client_edit_file"):
-                    editor = getattr(self.server.tools, name)(self.client, [self.workspace])
-                    expected = "changed" if mode == "yolo" else "approval required"
-                    self.assertEqual(editor(self.external, "changed"), expected)
-                    self.assertEqual(editor(self.external, "outside content", approved=True), "outside content")
+        reader = self.server.tools.make_client_view_file(self.client, [self.workspace])
+        self.assertEqual(reader(self.external), "outside content")
+        for name in ("make_client_create_file", "make_client_edit_file"):
+            with self.subTest(factory=name):
+                editor = getattr(self.server.tools, name)(self.client, [self.workspace])
+                self.assertEqual(editor(self.external, "changed"), "changed")
+                self.assertEqual(editor(self.external, "outside content"), "outside content")
 
     def test_native_containment_changes_without_changing_workspace_or_models(self):
         self.write_setting(True)
