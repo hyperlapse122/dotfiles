@@ -37,6 +37,64 @@ def global_skills_paths():
     return ("/home/stand-in/config/skills", "/home/stand-in/antigravity-cli/skills")
 """
 
+STAND_IN_TOOL_FILTER = '''
+import dataclasses
+import enum
+import types
+
+
+class BuiltinTools(enum.Enum):
+    RUN_COMMAND = "run_command"
+    VIEW_FILE = "view_file"
+    START_SUBAGENT = "start_subagent"
+
+    @classmethod
+    def all_tools(cls):
+        return list(cls)
+
+
+sdk_types_module = types.SimpleNamespace(BuiltinTools=BuiltinTools)
+
+
+def _tool_name_to_builtin(name):
+    try:
+        return sdk_types_module.BuiltinTools(name.strip())
+    except ValueError:
+        return None
+
+
+@dataclasses.dataclass(frozen=True)
+class ToolFilterConfig:
+    enabled_tools: tuple = None
+    disabled_tools: tuple = None
+
+    def is_empty(self):
+        return self.enabled_tools is None and self.disabled_tools is None
+
+    def to_dict(self):
+        result = {}
+        if self.enabled_tools is not None:
+            result["enabledTools"] = list(self.enabled_tools)
+        if self.disabled_tools is not None:
+            result["disabledTools"] = list(self.disabled_tools)
+        return result
+
+    @classmethod
+    def from_dict(cls, data):
+        def names(value):
+            return None if value is None else tuple(value)
+        return cls(enabled_tools=names(data.get("enabledTools")), disabled_tools=names(data.get("disabledTools")))
+
+    def resolve_disabled_builtins(self):
+        if self.is_empty():
+            return set()
+        if self.enabled_tools is not None:
+            allowed = {_tool_name_to_builtin(n) for n in self.enabled_tools} - {None}
+            allowed -= {_tool_name_to_builtin(n) for n in self.disabled_tools or ()}
+            return set(sdk_types_module.BuiltinTools.all_tools()) - allowed
+        return {_tool_name_to_builtin(n) for n in self.disabled_tools or ()} - {None}
+'''
+
 counter = itertools.count()
 
 
@@ -183,6 +241,40 @@ class PathsOverlayTest(OverlayCase):
         (self.dir / "file").write_text("")
         os.environ["ANTIGRAVITY_ACP_PLUGIN_SKILLS"] = str(self.dir / "file")
         self.assertEqual(self.paths.global_skills_paths(), self.SHIPPED)
+
+
+class ToolFilterOverlayTest(OverlayCase):
+    def setUp(self):
+        super().setUp()
+        self.filters = self.load("tool_filter", STAND_IN_TOOL_FILTER)
+        self.tools = self.filters.BuiltinTools
+
+    def disabled(self, **fields):
+        return self.filters.ToolFilterConfig(**fields).resolve_disabled_builtins()
+
+    def test_no_filter_disables_only_start_subagent(self):
+        self.assertEqual(self.disabled(), {self.tools.START_SUBAGENT})
+
+    def test_a_denylist_keeps_its_tools_and_adds_start_subagent(self):
+        self.assertEqual(
+            self.disabled(disabled_tools=("run_command",)),
+            {self.tools.RUN_COMMAND, self.tools.START_SUBAGENT},
+        )
+
+    def test_an_allowlist_naming_start_subagent_still_disables_it(self):
+        self.assertEqual(
+            self.disabled(enabled_tools=("start_subagent", "view_file")),
+            {self.tools.RUN_COMMAND, self.tools.START_SUBAGENT},
+        )
+
+    def test_a_filter_restored_from_session_metadata_disables_start_subagent(self):
+        restored = self.filters.ToolFilterConfig.from_dict({"disabledTools": []})
+        self.assertEqual(restored.resolve_disabled_builtins(), {self.tools.START_SUBAGENT})
+
+    def test_the_stored_filter_stays_as_the_client_sent_it(self):
+        config = self.filters.ToolFilterConfig(enabled_tools=("view_file",))
+        config.resolve_disabled_builtins()
+        self.assertEqual(config.to_dict(), {"enabledTools": ["view_file"]})
 
 
 if __name__ == "__main__":

@@ -12,10 +12,11 @@
   scripts/antigravity-acp-repack rewrites the .par's embedded archive at its
   original length: packages/antigravity-acp-overlay/ adds the shared agent
   instructions to the client's system prompt and the plugin skills directory to
-  the skill path. On macOS the build then signs the result ad hoc, because the
-  rewrite invalidates Google's signature and library validation under Google's
-  hardened-runtime flag would refuse the runtime's own Google-signed native
-  modules once the launcher has no Team ID.
+  the skill path, and disables the built-in start_subagent tool in every
+  session, so agents delegate only through the client. On macOS the build then
+  signs the result ad hoc, because the rewrite invalidates Google's signature
+  and library validation under Google's hardened-runtime flag would refuse the
+  runtime's own Google-signed native modules once the launcher has no Team ID.
 
   Fixup stays off: stripping or patching would break the embedded archive.
   NixOS runs the unpatched binaries through nix-ld. Linux cannot start the
@@ -44,6 +45,12 @@ let
     {
       module = "paths";
       function = "global_skills_paths";
+    }
+    # The overlay rebinds ToolFilterConfig.resolve_disabled_builtins. The repack
+    # tool only checks a module-level function, so this names one beside it.
+    {
+      module = "tool_filter";
+      function = "_tool_name_to_builtin";
     }
   ];
   extendArgs = lib.concatMapStringsSep " " (
