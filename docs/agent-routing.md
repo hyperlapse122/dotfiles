@@ -65,6 +65,26 @@ The results support trying Carbon for planning and demanding reviews, where its 
 
 The first Hydrogen xhigh request was rejected before launch because T3 listed only low, medium, and high. After the error, a fresh capability lookup listed xhigh and both measured xhigh runs launched successfully. The rejected preflight is excluded from the table. Refresh capability evidence after a rejection before concluding that a UI-visible option is unavailable.
 
+## T3 PR and MR babysitting
+
+When `ce-babysit-pr` runs in T3 Code, directly or through another skill, use `watch_pull_request` and `unwatch_pull_request` for its watch lifecycle. This replaces `pr-snapshot watch`, CLI `--watch` commands, polling loops, background detectors, and scheduled wakeups. Keep `gh` for GitHub and `glab` for GitLab reads and authorized mutations.
+
+Handle existing feedback and failures before the first wait, and refresh the target before waiting again so work arriving during a tick is handled. Arm the T3 watch with the full PR or MR URL and end the turn. It stays active across wakes and pushes; resume the skill's tick on fresh state without re-arming unless T3 reports that the watch stopped. Call `unwatch_pull_request` at a true stop, when changing the watched target, or before handing the work back to the user.
+
+Resolve the forge from the target URL or repository remote. Apply the babysit workflow to GitHub PRs and GitLab MRs; for GitLab, replace the GitHub-only entry gates in `ce-babysit-pr` and its delegated skills with the corresponding GitLab operations. Use `glab mr` and `glab api` for state, logs, replies, discussion resolution, and authorized changes.
+
+For GitLab, replace GitHub-only snapshot and feedback helpers with fresh reads of the head SHA, discussions and notes with their revisions, pipelines and jobs, approvals, mergeability, and base and branch state. Persist feedback IDs and source revisions, head-scoped CI marks and action claims, typed feedback decisions, and residuals across T3 wakes. Pass the relevant state and this forge substitution to delegated feedback and CI work.
+
+The watcher supplies wakeups; the skill still owns feedback-before-CI ordering, stale-head handling, action claims, readiness, budgets, and mutation authority. Preserve those rules with forge-equivalent evidence and operations, including positively confirmed stack management where required. Report a required evidence or operation gap as a blocker rather than treating it as satisfied or dropping the rule.
+
+## T3 visual options
+
+When a skill such as `ce-brainstorm` or `ce-prototype` presents visual options, create wireframes directly without asking whether to use text or a visual. This standing preference overrides a skill's per-decision text-versus-visual opt-in.
+
+Write self-contained HTML and use T3 Code's `html_preview` followed by `html_render` to show the options inline in the current thread. Use this display path instead of the skill's local display server for these comparisons. After showing the options, collect the user's choice or revisions through the normal question tool or chat.
+
+When a prototype question depends on visual finish or hands-on interaction, preserve the fidelity and interaction needed to answer it.
+
 ## Native T3 launches
 
 `home/h82/t3code.nix` merges the captured server and client preferences into writable T3 settings. New threads use Codex `gpt-6.1-sol` at xhigh effort, with Claude Opus 5.5 as fallback and `gpt-6-luna` for text generation. Threads start with full access in a worktree. Inactive worktree cleanup uses five days. The interface uses Pretendard Variable; code and terminals use Jetendard. Baseline-only settings remain declared unless the overlay replaces them, and unrelated user settings survive application.
