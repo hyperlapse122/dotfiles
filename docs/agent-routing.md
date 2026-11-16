@@ -1,6 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, Grok, and Pi each receive their own render.
+The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, Grok, and Pi each receive their own render.
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
@@ -76,6 +76,10 @@ Resolve the forge from the target URL or repository remote. Apply the babysit wo
 For GitLab, replace GitHub-only snapshot and feedback helpers with fresh reads of the head SHA, discussions and notes with their revisions, pipelines and jobs, approvals, mergeability, and base and branch state. Persist feedback IDs and source revisions, head-scoped CI marks and action claims, typed feedback decisions, and residuals across T3 wakes. Pass the relevant state and this forge substitution to delegated feedback and CI work.
 
 The watcher supplies wakeups; the skill still owns feedback-before-CI ordering, stale-head handling, action claims, readiness, budgets, and mutation authority. Preserve those rules with forge-equivalent evidence and operations, including positively confirmed stack management where required. Report a required evidence or operation gap as a blocker rather than treating it as satisfied or dropping the rule.
+
+## T3 multi-PR threads
+
+T3 Code auto-settles a thread once all of its linked pull requests have merged, which can happen between one merge and the next pull request of a multi-PR plan. When the plan for a task has more than one pull or merge request, pin the thread with `t3_thread_organize` (`action: pin`) when you create the first one. Auto-settle skips pinned threads; settling or snoozing does not keep the thread active. After the last planned pull or merge request merges, unpin the thread (`action: unpin`), but only if you pinned it. T3 Code does not report whether a thread is already pinned, so leave it pinned when the user says they pinned it. When you hand the work back while planned pull or merge requests remain, leave the thread pinned and say so in your report.
 
 ## T3 visual options
 
