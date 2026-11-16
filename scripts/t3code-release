@@ -85,6 +85,7 @@ MODULE_DIRECTORY = "google3/cloud/developer_experience/antigravity_extensions/ac
 EXTENSIONS = (
     ("system_prompt", "extract_system_prompt"),
     ("paths", "global_skills_paths"),
+    ("tool_filter", "_tool_name_to_builtin"),
 )
 PAGE_SIZES = {"x86_64-linux": 4096, "aarch64-linux": 4096, "aarch64-darwin": 16384}
 ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
