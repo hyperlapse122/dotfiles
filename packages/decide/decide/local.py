@@ -1,4 +1,3 @@
-"""Conversion shared by the reviewed Clef decision-head loaders."""
 import asyncio
 import base64
 import importlib.util

@@ -1,4 +1,3 @@
-"""MLX Clef-Flash native decision head."""
 from .local import Local, MAX_TOKENS, reviewed_module, snapshot
 
 MODEL = 'mlx-community/clef-flash-8bit'

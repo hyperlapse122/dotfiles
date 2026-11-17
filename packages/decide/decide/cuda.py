@@ -1,4 +1,3 @@
-"""CUDA Clef-Flash native decision head with INT8 CPU offload."""
 from .core import error
 from .local import Local, MAX_TOKENS, reviewed_module, snapshot
 

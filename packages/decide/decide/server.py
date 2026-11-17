@@ -1,4 +1,3 @@
-"""Private HTTP-over-Unix service for a shared Judge."""
 import asyncio
 import errno
 import fcntl

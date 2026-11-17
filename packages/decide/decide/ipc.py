@@ -1,4 +1,3 @@
-"""Socket discovery and the Decisions HTTP client."""
 import asyncio
 import os
 from pathlib import Path
