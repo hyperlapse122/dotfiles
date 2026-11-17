@@ -32,8 +32,8 @@ When a CE skill delegates a child, choose the child's model from the ladder of t
 
 Where a CE skill says to inherit the session or parent model, or to omit the model override because model names are unknown, use the ladder instead. A child never runs above the column of the model that delegates it: a role placed higher runs on the delegating model, or on another provider's model in that same column. A child that delegates further applies these rules with its own model as the limit.
 
-Set no effort for a ladder-selected child, so T3's default for that model applies. A Codex child is the exception: pass `reasoningEffort` `high` in `target.options`. An effort that a CE skill suggests by default is not a named effort.
-For a middle-rung Codex implementation worker, pass `reasoningEffort` `xhigh` instead; every other Codex child's effort stays `high`.
+Set no effort for a ladder-selected child, so T3's default for that model applies. An effort that a CE skill suggests by default is not a named effort.
+For a Codex child, pass `reasoningEffort` in `target.options`: use `xhigh` for every Terra child regardless of role and for every middle-rung implementation worker; use `high` for other Codex children.
 An Antigravity child is also an exception: pass `thinking_level` `xhigh` for a top-rung child, `high` for a middle-rung child, and `medium` for a bottom-rung child in `target.options`.
 
 T3 Code lists a Gemini model's `thinking_level` values only after a session on that model has run, so Gemini Hydrogen can lack `xhigh` in `orchestrator_capabilities`, and `delegate_task` rejects a value the list lacks. When a child needs Hydrogen at `xhigh` and the list lacks it, refresh the list yourself without asking the user: start one probe child on Gemini Hydrogen at the lowest listed `thinking_level`, or with no options when none is listed, with `mode` `wait` and a task that only replies `OK`, then call `orchestrator_capabilities` again. Delegate at `xhigh` when it is now listed; otherwise delegate at the highest listed level and name the substitution in your report, as for a missing model.
