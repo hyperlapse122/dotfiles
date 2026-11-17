@@ -60,6 +60,15 @@ class Local(unittest.IsolatedAsyncioTestCase):
         self.assertLess(record['state'].index('앞'), record['state'].index('Image 1'))
         self.assertLess(record['state'].index('Image 1'), record['state'].index('뒤'))
         self.assertLess(record['state'].index('뒤'), record['state'].index('Image 2'))
+        animated = io.BytesIO()
+        Image.new('RGB', (2, 2), 'red').save(animated, 'GIF', save_all=True,
+                                           append_images=[Image.new('RGB', (2, 2), 'blue')])
+        request['assets'] = {}
+        request['state'] = [{'type': 'image_url', 'image_url': {
+            'url': 'data:image/gif;base64,' + base64.b64encode(animated.getvalue()).decode()}}]
+        with self.assertRaises(DecisionError) as caught:
+            await Judge(backend).judge(request)
+        self.assertEqual(caught.exception.status, 400)
 
     async def test_unsupported_requests_never_load(self):
         cases = []

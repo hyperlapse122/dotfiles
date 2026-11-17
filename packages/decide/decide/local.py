@@ -29,6 +29,8 @@ def _image(data):
     from PIL import Image
     try:
         image = Image.open(io.BytesIO(data))
+        if getattr(image, 'is_animated', False):
+            raise error(400, 'Animated images are not supported by this backend')
         image.load()
         return image.convert('RGB')
     except (ValueError, OSError) as exc:
