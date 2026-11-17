@@ -91,7 +91,9 @@ curl --unix-socket /private/user/directory/decide.sock \
   http://localhost/api/alpha/decisions
 ```
 
-Inference is serialized in the service. A client disconnect or timeout does not establish that inference, a model download or remote billing stopped. Requests are not automatically retried.
+The documented `HTTP-Referer`, `X-OpenRouter-Title`, `X-OpenRouter-Categories` and `x-session-id` headers pass through IPC to OpenRouter. CLI users can repeat `--header 'NAME: VALUE'` on `decide judge`. Native backends accept this attribution metadata without using it for inference.
+
+Inference is serialized in the service. Queued requests whose connections have closed are dropped before execution. Once execution starts, a client disconnect or timeout does not establish that inference, a model download or remote billing stopped. Requests are not automatically retried. Remote image downloads on native backends have a 30-second total deadline and stream into temporary storage.
 
 ## Evidence and follow-up
 

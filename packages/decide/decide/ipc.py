@@ -15,11 +15,11 @@ def default_socket():
     return str(base / 'decide' / 'decide.sock')
 
 
-async def request(socket, document, timeout):
+async def request(socket, document, timeout, *, headers=None):
     try:
         async with aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=socket),
                                          timeout=aiohttp.ClientTimeout(total=timeout)) as session:
-            async with session.post('http://localhost' + PATH, json=document) as response:
+            async with session.post('http://localhost' + PATH, json=document, headers=headers) as response:
                 try:
                     body = await response.json(content_type=None)
                 except (ValueError, UnicodeDecodeError):

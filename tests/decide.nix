@@ -7,7 +7,16 @@ let
   inherit (pkgs) lib;
   darwin = pkgs.stdenv.hostPlatform.isDarwin;
   configurations = import ./lib/configurations.nix { inherit pkgs self; };
-  traits = configurations.withTrait "my.cuda.enable" (config: config.my.cuda.enable);
+  cudaDefault =
+    drivers:
+    (import (pkgs.path + "/nixos/lib/eval-config.nix") {
+      system = pkgs.stdenv.hostPlatform.system;
+      modules = [
+        ../modules/shared/host.nix
+        ../modules/nixos/hardware/nvidia.nix
+        { services.xserver.videoDrivers = lib.mkForce drivers; }
+      ];
+    }).config.my.cuda.enable;
   withoutNvidia = map (
     entry:
     configurations.entryOf "${entry.name} without NVIDIA" (
@@ -16,27 +25,42 @@ let
       }
     )
   ) configurations.entries;
+  overrides = lib.concatMap (
+    entry:
+    map
+      (
+        case:
+        configurations.entryOf "${entry.name} CUDA override ${toString case.cuda}" (
+          self.nixosConfigurations.${entry.name}.extendModules {
+            modules = [
+              {
+                services.xserver.videoDrivers = lib.mkForce case.drivers;
+                my.cuda.enable = lib.mkForce case.cuda;
+              }
+            ];
+          }
+        )
+      )
+      [
+        {
+          drivers = [ "nvidia" ];
+          cuda = false;
+        }
+        {
+          drivers = [ ];
+          cuda = true;
+        }
+      ]
+  ) configurations.production;
   linuxEntries = map (entry: {
     inherit (entry) name bootstrap;
     kind = "nixos";
     backend = if entry.config.my.cuda.enable then "cuda" else "openrouter";
-    defaultCorrect =
-      entry.config.my.cuda.enable == lib.elem "nvidia" entry.config.services.xserver.videoDrivers;
     path = "${entry.user.home.path}";
     files = "${entry.user.home-files}";
     key = "/run/secrets/cli-auth/openrouter_api_key";
     ca = "/etc/ssl/certs/ca-certificates.crt";
-  }) (configurations.entries ++ withoutNvidia);
-  forcedEntries = map (entry: {
-    inherit (entry) name bootstrap;
-    kind = "nixos";
-    backend = if entry.config.my.cuda.enable then "cuda" else "openrouter";
-    defaultCorrect = true;
-    path = "${entry.user.home.path}";
-    files = "${entry.user.home-files}";
-    key = "/run/secrets/cli-auth/openrouter_api_key";
-    ca = "/etc/ssl/certs/ca-certificates.crt";
-  }) (traits.enabled ++ traits.disabled);
+  }) (configurations.entries ++ withoutNvidia ++ overrides);
   darwinEntries =
     map
       (
@@ -49,7 +73,6 @@ let
           inherit (entry) name bootstrap;
           kind = "darwin";
           backend = "mlx";
-          defaultCorrect = true;
           generation = "${user.home.activationPackage}";
           key = "${user.my.secrets.stateDir}/openrouter_api_key";
           ca =
@@ -66,7 +89,15 @@ let
           bootstrap = host.config.my.bootstrap;
         }) self.darwinConfigurations
       );
-  entries = if darwin then darwinEntries else linuxEntries ++ forcedEntries;
+  entries = if darwin then darwinEntries else linuxEntries;
+  defaults =
+    if darwin then
+      [ ]
+    else
+      [
+        (cudaDefault [ ])
+        (cudaDefault [ "nvidia" ])
+      ];
   script = pkgs.writeText "decide-assembly.py" ''
     import ast, configparser, json, os, pathlib, plistlib, re, subprocess, sys, tempfile
 
@@ -74,9 +105,9 @@ let
     assert entries and {e['bootstrap'] for e in entries} == {False, True}
     if entries[0]['kind'] == 'nixos':
         assert {e['backend'] for e in entries} == {'cuda', 'openrouter'}
+        assert json.loads(pathlib.Path(sys.argv[2]).read_text()) == [False, True]
     for entry in entries:
         try:
-            assert entry['defaultCorrect'], 'CUDA default differs from NVIDIA driver'
             if entry['kind'] == 'darwin':
                 generation = pathlib.Path(entry['generation'])
                 binary = generation / 'home-path/bin/decide'
@@ -129,7 +160,7 @@ let
   '';
 in
 pkgs.runCommand "decide-assembly" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-  ${lib.optionalString (!darwin) (configurations.guard + traits.guard)}
-  python3 ${script} ${pkgs.writeText "decide-entries.json" (builtins.toJSON entries)}
+  ${lib.optionalString (!darwin) configurations.guard}
+  python3 ${script} ${pkgs.writeText "decide-entries.json" (builtins.toJSON entries)} ${pkgs.writeText "decide-defaults.json" (builtins.toJSON defaults)}
   touch "$out"
 ''

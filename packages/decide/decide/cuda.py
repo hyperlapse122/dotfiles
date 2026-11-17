@@ -1,8 +1,8 @@
 from .core import error
-from .local import Local, MAX_TOKENS, reviewed_module, snapshot
+from .local import Local, MAX_TOKENS, NATIVE_MODELS, reviewed_module, snapshot
 
-MODEL = 'Cloudflare/clef-flash'
-REVISION = '22b75507981345858dd152fbd9a6f8c0c4068b0a'
+MODEL = NATIVE_MODELS['linux']['model']
+REVISION = NATIVE_MODELS['linux']['revision']
 
 
 class CUDA(Local):

@@ -156,6 +156,7 @@
           "cargo-settings"
           "desktop-autostart"
           "desktop-ssh"
+          "decide"
           "elf-load-segments"
           "emoji-font"
           "gemini"

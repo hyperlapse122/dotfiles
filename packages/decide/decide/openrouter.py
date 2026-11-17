@@ -4,7 +4,7 @@ from pathlib import Path
 
 import aiohttp
 
-from .core import DecisionError, error
+from .core import DecisionError, error, operation_headers
 
 
 class OpenRouter:
@@ -25,7 +25,7 @@ class OpenRouter:
             await self.session.close()
             self.session = None
 
-    async def judge(self, request):
+    async def judge(self, request, *, headers=None):
         try:
             key = self.api_key if self.api_key is not None else self.key_file.read_text().strip()
         except (OSError, AttributeError):
@@ -34,7 +34,7 @@ class OpenRouter:
             raise error(401, 'OpenRouter credential is unavailable; check the configured key file')
         async def send(session):
             async with session.post(self.endpoint, json=request,
-                                    headers={'Authorization': f'Bearer {key}'}) as response:
+                                    headers={**operation_headers(headers), 'Authorization': f'Bearer {key}'}) as response:
                 try:
                     body = json.loads(await response.read())
                 except (ValueError, UnicodeDecodeError):

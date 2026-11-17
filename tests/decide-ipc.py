@@ -34,9 +34,11 @@ class Backend:
         self.started = asyncio.Event()
         self.release = asyncio.Event()
         self.last_request = None
+        self.requests = []
 
-    async def judge(self, request):
+    async def judge(self, request, *, headers=None):
         self.last_request = request
+        self.requests.append(request)
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         try:
@@ -124,6 +126,62 @@ class IPC(unittest.IsolatedAsyncioTestCase):
     async def test_large_request(self):
         status, body = await self.post(dict(REQUEST, state='x' * (1024 * 1024 + 1)))
         self.assertEqual((status, body), (200, RESPONSE))
+
+    async def test_operation_metadata_from_ipc_and_cli(self):
+        metadata = {'HTTP-Referer': 'https://example.com', 'X-OpenRouter-Title': 'test harness',
+                    'X-OpenRouter-Categories': 'developer-tools', 'x-session-id': 'session-test'}
+        received = []
+
+        async def handler(request):
+            received.append(({name: request.headers.get(name) for name in metadata},
+                             request.headers.get('Authorization')))
+            return web.json_response(RESPONSE)
+
+        app = web.Application()
+        app.router.add_post('/decisions', handler)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '127.0.0.1', 0)
+        await site.start()
+        port = site._server.sockets[0].getsockname()[1]
+        try:
+            await self.service.close()
+            self.service = Service(Judge(OpenRouter(api_key='test-key',
+                endpoint=f'http://127.0.0.1:{port}/decisions')), self.socket)
+            await self.service.start()
+            async with self.client.post('http://localhost/api/alpha/decisions', json=REQUEST,
+                                        headers={**metadata, 'Authorization': 'must-not-forward'}) as response:
+                self.assertEqual(response.status, 200)
+                await response.read()
+            args = [value for name, content in metadata.items() for value in ('--header', name + ': ' + content)]
+            code, _, err = await self.cli('judge', '--socket', self.socket, *args, '-', input=json.dumps(REQUEST).encode())
+            self.assertEqual(code, 0, err)
+            self.assertEqual(received, [(metadata, 'Bearer test-key')] * 2)
+        finally:
+            await self.service.close()
+            await runner.cleanup()
+
+    async def test_abandoned_queued_request_never_executes(self):
+        first = asyncio.create_task(self.post(dict(REQUEST, state='wait')))
+        await self.backend.started.wait()
+        _, writer = await asyncio.open_unix_connection(self.socket)
+        document = json.dumps(dict(REQUEST, state='abandon')).encode()
+        writer.write(b'POST /api/alpha/decisions HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: '
+                     + str(len(document)).encode() + b'\r\n\r\n' + document)
+        await writer.drain()
+
+        async def queued():
+            while len(self.service.tasks) != 2:
+                await asyncio.sleep(.01)
+
+        await asyncio.wait_for(queued(), 5)
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(.05)
+        self.backend.release.set()
+        self.assertEqual((await first)[0], 200)
+        self.assertEqual((await self.post(REQUEST))[0], 200)
+        self.assertNotIn('abandon', [request['state'] for request in self.backend.requests])
 
     async def test_malformed_missing_and_unexpected_errors(self):
         async with self.client.post('http://localhost/api/alpha/decisions', data='{') as response:

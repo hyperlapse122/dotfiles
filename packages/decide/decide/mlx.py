@@ -1,7 +1,7 @@
-from .local import Local, MAX_TOKENS, reviewed_module, snapshot
+from .local import Local, MAX_TOKENS, NATIVE_MODELS, reviewed_module, snapshot
 
-MODEL = 'mlx-community/clef-flash-8bit'
-REVISION = '5a195dc147926b63b1d139691ed4480ca9f92c0e'
+MODEL = NATIVE_MODELS['darwin']['model']
+REVISION = NATIVE_MODELS['darwin']['revision']
 
 
 class MLX(Local):

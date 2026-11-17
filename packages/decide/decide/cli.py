@@ -7,7 +7,7 @@ import signal
 import sys
 
 from .config import load_config
-from .core import DecisionError, Judge
+from .core import DecisionError, Judge, OPERATION_HEADERS, operation_headers
 from .ipc import default_socket, request
 from .server import Service
 
@@ -15,6 +15,14 @@ try:
     from ._package import BACKEND, MODEL, LOADER, KEY_FILE
 except ImportError:
     BACKEND, MODEL, LOADER, KEY_FILE = 'openrouter', 'typesafe/jev-1.14', None, None
+
+
+def metadata_header(value):
+    name, separator, content = value.partition(':')
+    headers = operation_headers({name.strip(): content.strip()})
+    if not separator or not headers or '\r' in value or '\n' in value:
+        raise argparse.ArgumentTypeError('Use NAME: VALUE with ' + ', '.join(OPERATION_HEADERS))
+    return next(iter(headers.items()))
 
 
 def parser():
@@ -30,6 +38,8 @@ def parser():
         command.add_argument('--timeout', type=float, help='Request timeout in seconds')
         command.add_argument('--model', help='Override the request model')
         if name == 'judge':
+            command.add_argument('-H', '--header', type=metadata_header, action='append', default=[],
+                                 help='Pass Decisions metadata as NAME: VALUE (repeatable)')
             command.add_argument('--json', action='store_true', help='Print the complete JSON response')
             command.add_argument('file', help='JSON request file, or - for stdin')
     return p
@@ -96,7 +106,7 @@ async def run(args):
             document.setdefault('model', config.model)
     if sys.stderr.isatty() and not args.json:
         print('Waiting for the Decisions service…', file=sys.stderr)
-    result = await request(config.socket, document, config.timeout)
+    result = await request(config.socket, document, config.timeout, headers=dict(args.header))
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:

@@ -8,7 +8,7 @@ import stat
 
 from aiohttp import web
 
-from .core import DecisionError, error
+from .core import DecisionError, error, operation_headers
 from .ipc import PATH
 
 
@@ -104,9 +104,11 @@ class Service:
             await self.close()
             raise
 
-    async def _execute(self, document):
+    async def _execute(self, document, headers, transport):
         async with self.serial:
-            return await self.judge.judge(document)
+            if transport is None or transport.is_closing():
+                raise asyncio.CancelledError
+            return await self.judge.judge(document, headers=headers)
 
     async def _handle(self, request):
         try:
@@ -114,7 +116,7 @@ class Service:
                 document = await request.json()
             except (ValueError, UnicodeDecodeError):
                 raise error(400, 'Invalid JSON request') from None
-            task = asyncio.create_task(self._execute(document))
+            task = asyncio.create_task(self._execute(document, operation_headers(request.headers), request.transport))
             self.tasks.add(task)
             task.add_done_callback(self.tasks.discard)
             task.add_done_callback(_finished)

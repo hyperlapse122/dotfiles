@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aiohttp import web
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'packages' / 'decide'))
 from decide.core import DecisionError, Judge
 from decide.mlx import MLX
@@ -32,6 +33,52 @@ class Head:
             'usage': {'input_tokens': 17, 'output_tokens': 0}}
 
 class Local(unittest.IsolatedAsyncioTestCase):
+    async def test_remote_image_deadline_and_recovery(self):
+        from PIL import Image
+        image = io.BytesIO()
+        Image.new('RGB', (2, 2), 'red').save(image, 'PNG')
+        disconnected = asyncio.Event()
+        completed = []
+
+        async def slow(request):
+            response = web.StreamResponse()
+            await response.prepare(request)
+            try:
+                for _ in range(100):
+                    await response.write(b'x')
+                    await asyncio.sleep(.01)
+                completed.append(True)
+            except ConnectionResetError:
+                pass
+            finally:
+                disconnected.set()
+            return response
+
+        app = web.Application()
+        app.router.add_get('/slow', slow)
+        app.router.add_get('/image', lambda request: web.Response(body=image.getvalue()))
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '127.0.0.1', 0)
+        await site.start()
+        url = 'http://127.0.0.1:' + str(site._server.sockets[0].getsockname()[1])
+        backend = MLX('/missing')
+        backend._head = Head()
+        request = copy.deepcopy(REQUEST)
+        try:
+            request['state'] = [{'type': 'image_url', 'image_url': {'url': url + '/slow'}}]
+            with patch('decide.local.IMAGE_TIMEOUT', .15, create=True):
+                with self.assertRaises(DecisionError) as caught:
+                    await asyncio.wait_for(Judge(backend).judge(request), 5)
+            self.assertEqual(caught.exception.status, 400)
+            await asyncio.wait_for(disconnected.wait(), 5)
+            self.assertEqual(completed, [], 'The deadline must close a still-streaming response')
+            request['state'][0]['image_url']['url'] = url + '/image'
+            await Judge(backend).judge(request)
+            self.assertEqual(len(backend._head.calls[0][0]['images']), 1)
+        finally:
+            await runner.cleanup()
+
     async def test_structured_guidance_and_actual_usage(self):
         head = Head()
         backend = MLX('/reviewed/clef_mlx.py')

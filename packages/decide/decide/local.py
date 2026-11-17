@@ -3,12 +3,21 @@ import base64
 import importlib.util
 import io
 import json
+from pathlib import Path
 import sys
-import urllib.request
+import tempfile
+
+import aiohttp
 
 from .core import DecisionError, error
 
 MAX_TOKENS = 16384
+IMAGE_TIMEOUT = 30
+
+try:
+    from ._package import NATIVE_MODELS
+except ImportError:
+    NATIVE_MODELS = json.loads((Path(__file__).resolve().parents[2] / 'decide-runtime-pins.json').read_text())
 
 
 def reviewed_module(path, name):
@@ -27,7 +36,7 @@ def snapshot(model, revision):
 def _image(data):
     from PIL import Image
     try:
-        image = Image.open(io.BytesIO(data))
+        image = Image.open(io.BytesIO(data) if isinstance(data, bytes) else data)
         if getattr(image, 'is_animated', False):
             raise error(400, 'Animated images are not supported by this backend')
         image.load()
@@ -36,14 +45,24 @@ def _image(data):
         raise error(400, 'Invalid image data') from exc
 
 
+async def _download_image(url):
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=IMAGE_TIMEOUT), trust_env=True) as session:
+        async with session.get(url) as response:
+            response.raise_for_status()
+            with tempfile.TemporaryFile() as image:
+                async for chunk in response.content.iter_chunked(65536):
+                    image.write(chunk)
+                image.seek(0)
+                return _image(image)
+
+
 def _url_image(url):
     try:
         if url.startswith('data:image/') and ';base64,' in url:
             return _image(base64.b64decode(url.split(',', 1)[1], validate=True))
         if url.startswith(('http://', 'https://')):
-            with urllib.request.urlopen(url, timeout=30) as response:
-                return _image(response.read())
-    except (ValueError, OSError) as exc:
+            return asyncio.run(_download_image(url))
+    except (ValueError, OSError, aiohttp.ClientError, asyncio.TimeoutError) as exc:
         raise error(400, 'Could not read image') from exc
     raise error(400, 'Unsupported image URL')
 
@@ -130,7 +149,7 @@ class Local:
         self.loader_path = loader_path
         self._head = None
 
-    async def judge(self, request):
+    async def judge(self, request, *, headers=None):
         try:
             record = await asyncio.to_thread(convert, request, self.model)
             return await asyncio.to_thread(self._judge, record)

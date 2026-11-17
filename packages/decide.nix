@@ -7,10 +7,12 @@
 let
   lib = pkgs.lib;
   runtime = import ./decide-runtime.nix { inherit pkgs backend; };
+  pins = builtins.fromJSON (builtins.readFile ./decide-runtime-pins.json);
+  nativeModels = lib.mapAttrs (_: pin: { inherit (pin) model revision; }) pins;
   model =
     {
-      mlx = "mlx-community/clef-flash-8bit";
-      cuda = "Cloudflare/clef-flash";
+      mlx = pins.darwin.model;
+      cuda = pins.linux.model;
       openrouter = "typesafe/jev-1.14";
     }
     .${backend};
@@ -42,6 +44,7 @@ pkgs.stdenvNoCC.mkDerivation {
     MODEL = ${pythonLiteral model}
     LOADER = ${pythonLiteral (if backend == "openrouter" then null else loader)}
     KEY_FILE = ${pythonLiteral openrouterKeyFile}
+    NATIVE_MODELS = ${builtins.toJSON nativeModels}
     EOF
     makeWrapper ${runtime.python}/bin/python3 "$out/bin/decide" \
       --prefix PYTHONPATH : "$out/lib/decide" --add-flags "-m decide"
