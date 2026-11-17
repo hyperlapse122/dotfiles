@@ -1,0 +1,31 @@
+{
+  "darwin": {
+    "model": "mlx-community/clef-flash-8bit",
+    "revision": "5a195dc147926b63b1d139691ed4480ca9f92c0e",
+    "loader": {
+      "url": "https://huggingface.co/mlx-community/clef-flash-8bit/resolve/5a195dc147926b63b1d139691ed4480ca9f92c0e/clef_mlx.py",
+      "sha256": "852223c944819a32fad5cf798d9d1dff30419820eaf5ad1f10cb9698afec97d5"
+    },
+    "license": {
+      "url": "https://huggingface.co/mlx-community/clef-flash-8bit/resolve/5a195dc147926b63b1d139691ed4480ca9f92c0e/LICENSE",
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+    }
+  },
+  "linux": {
+    "model": "Cloudflare/clef-flash",
+    "revision": "22b75507981345858dd152fbd9a6f8c0c4068b0a",
+    "loader": {
+      "url": "https://huggingface.co/Cloudflare/clef-flash/resolve/22b75507981345858dd152fbd9a6f8c0c4068b0a/joint_schema_model.py",
+      "sha256": "0e304cf7c6500e8bb59bef7e2afd2c6373f82596dfb3b57d1aa93c175e2dc3a3"
+    },
+    "license": {
+      "url": "https://huggingface.co/Cloudflare/clef-flash/resolve/22b75507981345858dd152fbd9a6f8c0c4068b0a/LICENSE",
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+    },
+    "clefLocal": {
+      "revision": "ae54c872be10b13cdf55b5d56466d37eecdc061c",
+      "url": "https://codeload.github.com/MiguelCarrascoB/clef/tar.gz/ae54c872be10b13cdf55b5d56466d37eecdc061c",
+      "sha256": "f3789e123a095bbe8619eb08a70c910f9c80eb7b79c56fe405648ed2750cc181"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+torch==2.11.0+cu128
+torchvision==0.26.0+cu128
+torchao==0.17.0
+transformers==5.10.2
+accelerate
+pillow
+imageio
+imageio-ffmpeg
+numpy
+safetensors
+huggingface-hub
+einops
+psutil
+flash-linear-attention
+nvidia-ml-py
+aiohttp==3.14.5
+jsonschema==4.26.0
