@@ -206,6 +206,7 @@ let
       serveHtmlPackage =
         (import ../packages/agent-tools.nix { inherit (entry.host) pkgs; }).serveHtml or null;
       serveHtml = lib.optionalString (serveHtmlPackage != null) (lib.getExe serveHtmlPackage);
+      acpx = lib.getExe (import ../packages/acpx.nix { inherit (entry.host) pkgs; });
       agy = "${import ../packages/antigravity-cli.nix { inherit (entry.host) pkgs; }}/bin/agy";
       antigravityRuntime = "${
         import ../packages/antigravity-acp.nix { inherit (entry.host) pkgs; }
@@ -386,6 +387,8 @@ let
         bad "serve-html on PATH is not the packaged helper"
       fi
 
+      [ "$(readlink -f "$gen/home-path/bin/acpx" || true)" = ${lib.escapeShellArg acpx} ] \
+        || bad "acpx on PATH is not the packaged binary"
       [ "$(readlink -f "$gen/home-path/bin/agy" || true)" = ${lib.escapeShellArg agy} ] \
         || bad "agy on PATH is not the pinned Antigravity CLI"
       agyPar=$(readlink -f "$gen/home-path/bin/agy_acp_server.par" || true)

@@ -142,6 +142,7 @@
         # Manager generation.
         hostClosureChecks = [
           "nvidia-closure"
+          "acpx-delivery"
           "agent-browser-deps"
           "agent-unmanaged"
           "pi"
@@ -705,6 +706,10 @@
             fixtures = [ ];
           };
           serve-html-profiles = import ./tests/serve-html-profiles.nix {
+            inherit pkgs self;
+            fixtures = [ ];
+          };
+          acpx-delivery = import ./tests/acpx-delivery.nix {
             inherit pkgs self;
             fixtures = [ ];
           };
