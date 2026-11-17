@@ -1,0 +1,5 @@
+mlx==0.32.3
+mlx-lm==0.32.0
+mlx-vlm==0.7.4
+aiohttp==3.14.5
+jsonschema==4.26.0

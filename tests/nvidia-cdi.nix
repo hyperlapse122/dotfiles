@@ -28,7 +28,10 @@ in
 pkgs.testers.nixosTest {
   name = "nvidia-cdi";
   nodes.machine = {
-    imports = [ ../modules/nixos/hardware/nvidia.nix ];
+    imports = [
+      ../modules/shared/host.nix
+      ../modules/nixos/hardware/nvidia.nix
+    ];
     hardware.nvidia.package = driver;
     hardware.nvidia-container-toolkit = {
       enable = true;

@@ -156,6 +156,7 @@
           "cargo-settings"
           "desktop-autostart"
           "desktop-ssh"
+          "decide"
           "elf-load-segments"
           "emoji-font"
           "gemini"
@@ -202,6 +203,13 @@
         (darwinChecksFor (import nixpkgs { system = "aarch64-darwin"; })).darwin-config;
       checks.aarch64-darwin.darwin-provisioning =
         (darwinChecksFor (import nixpkgs { system = "aarch64-darwin"; })).darwin-provisioning;
+      checks.aarch64-darwin.decide = import ./tests/decide.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        inherit self darwinFixtures;
+      };
+      packages.aarch64-darwin.decide = import ./packages/decide.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+      };
       checks.aarch64-darwin.pinentry-keyring = import ./packages/pinentry-keyring.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
       };
@@ -246,6 +254,7 @@
           )) hosts.nixos
         );
       packages.${system} = {
+        decide = import ./packages/decide.nix { inherit pkgs; };
         disko = inputs.disko.packages.${system}.disko;
         # Exposed so the release-tracking workflow invokes the packaged helper
         # rather than running scripts/ with whatever interpreter the runner has.
@@ -1377,6 +1386,7 @@
             inherit (checkShards) members;
           };
           host-options = import ./tests/host-options.nix { inherit pkgs self; };
+          decide = import ./tests/decide.nix { inherit pkgs self darwinFixtures; };
           host-secrets = import ./tests/host-secrets.nix { inherit pkgs; };
           tls-inspection-ca = import ./tests/tls-inspection-ca.nix { inherit pkgs; };
           network-recovery = import ./tests/network-recovery.nix { inherit pkgs; };
