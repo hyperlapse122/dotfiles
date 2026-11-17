@@ -48,11 +48,19 @@ let
       pkgs.makeWrapper
     ]
     ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.autoPatchelfHook ];
-    buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-      pkgs.stdenv.cc.cc.lib
-      pkgs.zlib
-      pkgs.glib
-    ];
+    buildInputs =
+      lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        pkgs.stdenv.cc.cc.lib
+        pkgs.zlib
+        pkgs.glib
+      ]
+      ++ lib.optionals (backend == "cuda") [
+        pkgs.openmpi
+        pkgs.ucx
+        pkgs.libfabric
+        pkgs.rdma-core
+        pkgs.pmix
+      ];
     # The driver is supplied by the running NVIDIA host, not the wheel closure.
     autoPatchelfIgnoreMissingDeps = [ "libcuda.so.1" ];
     installPhase = ''
