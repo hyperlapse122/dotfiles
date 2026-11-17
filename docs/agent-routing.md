@@ -1,10 +1,42 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, Grok, and Pi each receive their own render.
+The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, video analysis, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, Grok, and Pi each receive their own render.
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
 For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive this common rule through their normal baseline instruction paths.
+
+## Video analysis
+
+When a session outside T3 Code needs the content of a local video file and cannot view video natively, the baseline instructions direct it to run `acpx` non-interactively against the `antigravity` agent:
+
+```sh
+acpx --timeout 300 --approve-reads --non-interactive-permissions deny --model <model> antigravity exec --config-option mode=default --config-option thinking_level=high <prompt>
+```
+
+Agents try `gemini-4-argon`, then `gemini-4-carbon`, and then `gemini-4-hydrogen`, moving on when a model fails. A session running `gemini-4-argon`, `gemini-4-carbon`, or `gemini-4-hydrogen` opens the video directly with its own file-viewing tool instead of invoking `acpx`, preventing recursive calls inside `agy` CLI and `acpx`-spawned `agy_acp_server.par` children. Prompts must pass the video's absolute path and ask for changes at one-second resolution, because `agy_acp_server.par` presents one timestamped frame per second and drops any trailing partial second. Frame-extraction fallbacks (`ffmpeg`, other converters) and `agy -p` are prohibited; if `acpx` fails, times out, or is missing from `PATH`, the agent reports the failure directly to the user.
+
+Shared Home Manager configuration installs `packages/acpx.nix` (`0.22.0`) unconditionally in `home.packages` on both NixOS and macOS hosts. `packages/acpx.nix` patches `loadResolvedConfig` so project-local `.acpxrc.json` files are ignored (`void 0` in place of `readConfigFile(projectPath)`). User-level `~/.acpx/config.json` remains active, so an `agents.antigravity` override there would redirect `acpx` away from `agy_acp_server.par`.
+
+### acpx video trial evidence
+
+On 2026-11-17 on NixOS (`MS-7D91`), the built `.#acpx` (`0.22.0`) binary ran non-interactively against `/etc/profiles/per-user/h82/bin/agy_acp_server.par` (`antigravity-acp` `1.4.5`) with `--approve-reads --non-interactive-permissions deny --timeout 300 --format json --config-option mode=default --config-option thinking_level=high`. Host prerequisites were `~/.acpx/config.json` absent and `~/.gemini/antigravity-acp/settings.json` configured with `auth.type = "oauth-personal"` and `allowNonWorkspaceAccess = true`; T3-inherited `GEMINI_*` and `ANTIGRAVITY_*` variables were cleared to match an ordinary CLI shell. Each model inspected a synthetic `4.04`-second, `24` fps, `640x360` H.264 clip placed outside `--cwd` and was scored against independently extracted PNG frames at `0`, `1`, `2`, and `3` seconds.
+
+| Model | Elapsed (seconds) | Score (of 4) | Contradicted claims | Tool transcript |
+| --- | --- | --- | --- | --- |
+| `gemini-4-argon` | 34.89 | 4 | none | 1 `view_file` read of external clip; 0 shell commands |
+| `gemini-4-carbon` | 46.07 | 4 | none | 1 `view_file` read of external clip; 0 shell commands |
+| `gemini-4-hydrogen` | 23.79 | 4 | none | 1 `view_file` read of external clip; 0 shell commands |
+
+All three models passed `4/4` with zero contradictions and preserve the Argon, Carbon, Hydrogen order from T3 video delegation. JSONL logs showed `agy_acp_server.par` ignoring `_meta.claudeCode.options.model` on `session/new` (starting on `gemini-3.8-flash`), after which `acpx` applied `--model`, `mode=default`, and `thinking_level=high` via `session/set_config_option` before sending `session/prompt`.
+
+Three edge checks confirmed the transport contract without leaving stray `agy_acp_server.par` or `localharness_external` processes behind:
+
+- Setting invalid `GEMINI_API_KEY` and `GOOGLE_API_KEY` environment variables still exited `0` under existing OAuth credentials.
+- Removing `agy_acp_server.par` from `PATH` exited `1` with `AGENT_SPAWN_ENOENT`.
+- Requesting a nonexistent clip failed cleanly in `view_file` without running shell commands.
+
+Live `acpx` trials ran only on Linux (`MS-7D91`) without running `nr switch`. On macOS, `acpx` packaging (`tests/darwin-config.nix`, `tests/darwin-outputs.nix`) and `antigravity-acp-path.nix` settings (`AGY_ACP_FORCE_FILE_STORAGE=1`, `["agy_acp_server.par"]`) are verified by Nix evaluation and deferred to CI `build-darwin` rather than tested live.
 
 The shared template retains the following T3 context separately for launch-time attachment. Ordinary instruction files do not include it.
 
@@ -109,7 +141,7 @@ When a prototype question depends on visual finish or hands-on interaction, pres
 
 ## T3 video analysis
 
-When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis with `delegate_task` to the `antigravity` provider. Use Gemini Argon first, then Gemini Carbon, then Gemini Hydrogen, each the newest listed model of its family, moving on when a model is not listed or its child fails. Pass `thinking_level` `high` in `target.options`. A Gemini Argon, Carbon, or Hydrogen session opens the video itself instead of delegating.
+In T3 Code, these rules replace the baseline `acpx` video instructions, covering both the delegation transport and the model and self-reading scope. When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis with `delegate_task` to the `antigravity` provider instead of invoking `acpx`. Use Gemini Argon first, then Gemini Carbon, then Gemini Hydrogen, each the newest listed model of its family, moving on when a model is not listed or its child fails. Pass `thinking_level` `high` in `target.options`. A Gemini Argon, Carbon, or Hydrogen session opens the video itself instead of delegating.
 
 Give the child the video's absolute path and tell it to open the file with its own file-viewing tool, without shell commands or frame extraction. The runtime shows the model one timestamped frame per second, so ask about scenes and changes at one-second resolution; the model does not see motion between those frames or a final partial second.
 

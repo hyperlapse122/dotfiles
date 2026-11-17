@@ -68,7 +68,7 @@ When a prototype question depends on visual finish or hands-on interaction, pres
 
 # T3 video analysis
 
-When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis with `delegate_task` to the `antigravity` provider. Use Gemini Argon first, then Gemini Carbon, then Gemini Hydrogen, each the newest listed model of its family, moving on when a model is not listed or its child fails. Pass `thinking_level` `high` in `target.options`. A Gemini Argon, Carbon, or Hydrogen session opens the video itself instead of delegating.
+In T3 Code, these rules replace the baseline `acpx` video instructions, covering both the delegation transport and the model and self-reading scope. When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis with `delegate_task` to the `antigravity` provider instead of invoking `acpx`. Use Gemini Argon first, then Gemini Carbon, then Gemini Hydrogen, each the newest listed model of its family, moving on when a model is not listed or its child fails. Pass `thinking_level` `high` in `target.options`. A Gemini Argon, Carbon, or Hydrogen session opens the video itself instead of delegating.
 
 Give the child the video's absolute path and tell it to open the file with its own file-viewing tool, without shell commands or frame extraction. The runtime shows the model one timestamped frame per second, so ask about scenes and changes at one-second resolution; the model does not see motion between those frames or a final partial second.
 
@@ -109,6 +109,18 @@ Plan issue work so that a pull or merge request closes the issue:
 Before starting HTML, CSS, web UI, or browser-side JavaScript work, load and follow the `modern-web-guidance` skill first. This includes web platform code inside frameworks. Use its guidance alongside other applicable design and framework skills.
 
 Follow the skill's trigger and exclusion rules. Backend-only, infrastructure, tooling-only, and native-only tasks do not require it.
+
+# Video analysis
+
+When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis non-interactively through `acpx`:
+
+```sh
+acpx --timeout 300 --approve-reads --non-interactive-permissions deny --model <model> antigravity exec --config-option mode=default --config-option thinking_level=high <prompt>
+```
+
+Try `gemini-4-argon` first, then `gemini-4-carbon`, then `gemini-4-hydrogen`, moving on when a model fails. A session running `gemini-4-argon`, `gemini-4-carbon`, or `gemini-4-hydrogen` opens the local video directly with its own file-viewing tool instead of invoking `acpx`.
+
+Give the child the video's absolute path and tell it to open the file with its own file-viewing tool, without shell commands or frame extraction. The runtime shows the model one timestamped frame per second, so ask about scenes and changes at one-second resolution; the model does not see motion between those frames or a final partial second. Never fall back to `ffmpeg`, other frame or conversion tools, or `agy -p`; when `acpx` fails, times out, or is missing from `PATH`, report the failure directly to the user.
 
 # Writing skills
 

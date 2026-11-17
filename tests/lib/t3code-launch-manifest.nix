@@ -14,7 +14,7 @@ pkgs.writeText "t3code-launch-manifest.json" (
       helper = ../../scripts/agent-instructions;
       template = ../../home/h82/agents/instructions/instructions.md.tmpl;
       renderer = "${renderer}/bin/text-template";
-      baselineHash = "c4da0fcf3cb14b5b8e2cbbd79232ff99dd675d75c02d3d5bfbfb3bf86b866b2c";
+      baselineHash = "32ce19ad264121665936d01a83c7383c5a50a3e722b3f9331a545495561fe002";
     }) users
   )
 )
