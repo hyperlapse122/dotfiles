@@ -108,13 +108,13 @@ class Contract(unittest.IsolatedAsyncioTestCase):
     async def test_config_keeps_packaged_backend_and_runtime_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'config.toml'
-            path.write_text('model = "file/model"\nsocket = "/file.sock"\ntimeout = 9\n')
+            path.write_text('model = "file/model"\nsocket = "/file.sock"\ntimeout = 9\nopenrouter_key_file = "/configured-key"\n')
             with patch.dict(os.environ, {'DECIDE_MODEL': 'env/model'}, clear=True):
                 config = load_config(backend='native', model='default/model', socket='/default.sock',
                                      openrouter_key_file='/key', path=path)
         self.assertEqual((config.backend, config.model, config.socket, config.timeout,
                           config.openrouter_key_file),
-                         ('native', 'env/model', '/file.sock', 9.0, '/key'))
+                         ('native', 'env/model', '/file.sock', 9.0, '/configured-key'))
 
 
 if __name__ == '__main__':
