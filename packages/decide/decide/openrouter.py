@@ -1,5 +1,3 @@
-"""OpenRouter Decisions transport."""
-
 import asyncio
 import json
 from pathlib import Path

@@ -1,5 +1,3 @@
-"""Validate against the vendored OpenRouter Decisions operation."""
-
 import json
 from pathlib import Path
 
@@ -22,10 +20,10 @@ _RESPONSE = _validator('DecisionsResponse')
 
 
 def validate_request(document):
-    if next(_REQUEST.iter_errors(document), None) is not None:
+    if not _REQUEST.is_valid(document):
         raise error(400, 'Invalid Decisions request')
 
 
 def validate_response(document):
-    if next(_RESPONSE.iter_errors(document), None) is not None:
+    if not _RESPONSE.is_valid(document):
         raise error(502, 'Invalid Decisions response from backend')

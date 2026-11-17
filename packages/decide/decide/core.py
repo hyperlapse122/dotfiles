@@ -1,5 +1,3 @@
-"""Validate Decisions documents around a stateless backend."""
-
 from typing import Any, Mapping, Protocol
 
 

@@ -1,5 +1,3 @@
-"""Runtime settings; the active backend is supplied by the package."""
-
 from dataclasses import dataclass
 import os
 from pathlib import Path
