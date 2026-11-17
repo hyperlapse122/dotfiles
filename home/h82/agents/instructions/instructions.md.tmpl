@@ -66,6 +66,12 @@ Write self-contained HTML and use T3 Code's `html_preview` followed by `html_ren
 
 When a prototype question depends on visual finish or hands-on interaction, preserve the fidelity and interaction needed to answer it.
 
+# T3 video analysis
+
+When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis with `delegate_task` to the `antigravity` provider. Use Gemini Argon first, then Gemini Carbon, then Gemini Hydrogen, each the newest listed model of its family, moving on when a model is not listed or its child fails. Pass `thinking_level` `high` in `target.options`. A Gemini Argon, Carbon, or Hydrogen session opens the video itself instead of delegating.
+
+Give the child the video's absolute path and tell it to open the file with its own file-viewing tool, without shell commands or frame extraction. The runtime shows the model one timestamped frame per second, so ask about scenes and changes at one-second resolution; the model does not see motion between those frames or a final partial second.
+
 {{ else -}}
 {{/* Common instructions for every managed harness go here. */ -}}
 # Scope and verification

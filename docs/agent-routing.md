@@ -107,6 +107,24 @@ Write self-contained HTML and use T3 Code's `html_preview` followed by `html_ren
 
 When a prototype question depends on visual finish or hands-on interaction, preserve the fidelity and interaction needed to answer it.
 
+## T3 video analysis
+
+When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis with `delegate_task` to the `antigravity` provider. Use Gemini Argon first, then Gemini Carbon, then Gemini Hydrogen, each the newest listed model of its family, moving on when a model is not listed or its child fails. Pass `thinking_level` `high` in `target.options`. A Gemini Argon, Carbon, or Hydrogen session opens the video itself instead of delegating.
+
+Give the child the video's absolute path and tell it to open the file with its own file-viewing tool, without shell commands or frame extraction. The runtime shows the model one timestamped frame per second, so ask about scenes and changes at one-second resolution; the model does not see motion between those frames or a final partial second.
+
+### Video trial evidence
+
+On 2026-11-17, Gemini 4 Carbon, Argon, and Hydrogen each ran three times at `thinking_level` `high` as T3 children on the `antigravity` provider. Every child received the absolute path of the same 4.04-second, 24 fps, 854x480 H.264 clip and opened it with the runtime's file-viewing tool. Each transcript shows that one read and no shell command or converter. In every run the runtime delivered the clip as four timestamped frames, at 0, 1, 2, and 3 seconds, so the scoring used those four points. A reference built from frames extracted independently at the same timestamps scored each run one point per correctly described point, minus one per contradicted claim. A run passed at three or more with no contradicted claim about the overall sequence: right profile, turn toward the camera, then a closed-mouth smile.
+
+| Model | Scores (of 4) | Completion times (seconds) | Contradicted claims |
+| --- | --- | --- | --- |
+| Gemini 4 Argon high | 4, 4, 4 | 38.3, 25.1, 90.7 | none |
+| Gemini 4 Carbon high | 4, 4, 4 | 163.4, 113.8, 222.7 | none |
+| Gemini 4 Hydrogen high | 3, 3, 3 | 42.0, 34.0, 46.5 | teeth shown at 3 s; torso facing screen left at 1 s; lips parted at 1 s |
+
+All nine runs passed. Argon and Carbon tied on score, and Argon finished faster, so it comes first. No model saw the last 1.04 seconds of the clip, and none could describe the half-second intervals between frames. The clip has no audio track, so audio handling was not tested. These are three samples of one short clip; T3 recorded the requested models but supplied no independent serving-model attestation.
+
 ## Native T3 launches
 
 `home/h82/t3code.nix` merges the captured server and client preferences into writable T3 settings. New threads use Codex `gpt-6.1-sol` at xhigh effort, with Claude Opus 5.5 as fallback and `gpt-6-luna` for text generation. Threads start with full access in a worktree. Inactive worktree cleanup uses five days. The interface uses Pretendard Variable; code and terminals use Jetendard. Baseline-only settings remain declared unless the overlay replaces them, and unrelated user settings survive application.
