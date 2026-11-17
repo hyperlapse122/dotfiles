@@ -18,7 +18,7 @@ pkgs.buildNpmPackage (
     postPatch = npmRelease.attrs.postPatch + ''
 
       substituteInPlace dist/cli.js \
-        --replace-fail 'readConfigFile(projectPath),' '{ config: void 0, exists: false },'
+        --replace-fail 'readConfigFile(projectPath),' 'void 0,'
     '';
 
     doInstallCheck = true;
