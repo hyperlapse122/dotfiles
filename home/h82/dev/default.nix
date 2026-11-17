@@ -4,6 +4,7 @@
     ./android.nix
     ./containers.nix
     ./cpp.nix
+    ./decide.nix
     ./dotnet.nix
     ./flutter.nix
     ./ghq.nix

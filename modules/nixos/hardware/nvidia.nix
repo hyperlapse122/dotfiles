@@ -9,6 +9,7 @@ let
 in
 {
   config = lib.mkMerge [
+    { my.cuda.enable = lib.mkDefault (lib.elem "nvidia" config.services.xserver.videoDrivers); }
     (lib.mkIf (lib.elem "nvidia" config.services.xserver.videoDrivers) {
       # patchelf 0.19 leaves nvidia-smi, nvidia-powerd, and
       # nvidia-cuda-mps-control segfaulting on start (NixOS/nixpkgs#576412). The
