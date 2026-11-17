@@ -17,32 +17,39 @@ import time
 
 
 def interactive(zsh, arguments, code, env, trace=False):
-    pid, terminal = pty.fork()
-    if pid == 0:
-        os.execve(zsh, [zsh, *arguments, code], env)
-    output = bytearray()
-    deadline = time.monotonic() + 30
-    try:
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                os.killpg(pid, signal.SIGKILL)
-                raise AssertionError("interactive shell timed out")
-            ready, _, _ = select.select([terminal], [], [], remaining)
-            if not ready:
-                continue
-            try:
-                chunk = os.read(terminal, 65536)
-            except OSError as error:
-                if error.errno == errno.EIO:
+    # SIGCHLD can interrupt xtrace writes to a full PTY and abort shell startup.
+    with tempfile.TemporaryFile() as trace_output:
+        pid, terminal = pty.fork()
+        if pid == 0:
+            if trace:
+                os.dup2(trace_output.fileno(), 2)
+            os.execve(zsh, [zsh, *arguments, code], env)
+        output = bytearray()
+        deadline = time.monotonic() + 30
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    os.killpg(pid, signal.SIGKILL)
+                    raise AssertionError("interactive shell timed out")
+                ready, _, _ = select.select([terminal], [], [], remaining)
+                if not ready:
+                    continue
+                try:
+                    chunk = os.read(terminal, 65536)
+                except OSError as error:
+                    if error.errno == errno.EIO:
+                        break
+                    raise
+                if not chunk:
                     break
-                raise
-            if not chunk:
-                break
-            output.extend(chunk)
-    finally:
-        os.close(terminal)
-        _, status = os.waitpid(pid, 0)
+                output.extend(chunk)
+        finally:
+            os.close(terminal)
+            _, status = os.waitpid(pid, 0)
+        if trace:
+            trace_output.seek(0)
+            output = trace_output.read() + output
     text = output.decode(errors="replace").replace("\r", "")
     assert os.waitstatus_to_exitcode(status) == 0, text[-8000:]
     # Terminal-title control sequences are normal; diagnostic text is not.
