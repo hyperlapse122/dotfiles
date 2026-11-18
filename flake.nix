@@ -153,8 +153,6 @@
           "agent-instructions"
           "android-sdk"
           "flutter"
-          "antigravity-profiles"
-          "antigravity-skills"
           "baloo-extractor"
           "boot-splash"
           "cargo-settings"
@@ -163,7 +161,6 @@
           "decide"
           "elf-load-segments"
           "emoji-font"
-          "gemini"
           "ghostty-font"
           "ghostty-service"
           "ghq"
@@ -285,8 +282,6 @@
         npm-release = agentTools.npmRelease;
         acpx = import ./packages/acpx.nix { inherit pkgs; };
         tanstack-intent = import ./packages/tanstack-intent.nix { inherit pkgs; };
-        antigravity-cli-release = agentTools.antigravityCliRelease;
-        antigravity-cli = import ./packages/antigravity-cli.nix { inherit pkgs; };
         t3code-release = agentTools.t3codeRelease;
         synthetic-models-watch = agentTools.syntheticModelsWatch;
         t3code = import ./packages/t3code.nix { inherit pkgs; };
@@ -502,7 +497,6 @@
 
               touch $out
             '';
-          gemini = import ./tests/gemini.nix { inherit pkgs self; };
           ghq = import ./tests/ghq.nix {
             inherit pkgs self;
             fixtures = [ ];
@@ -515,7 +509,6 @@
             inherit pkgs self;
             fixtures = [ ];
           };
-          antigravity-cli-sources = pinnedSources "antigravity-cli-sources" ./packages/antigravity-cli-release.json;
           shell-utilities = import ./tests/shell-utilities.nix { inherit pkgs self; };
           mise-settings = import ./tests/mise-settings.nix {
             inherit pkgs self;
@@ -533,10 +526,6 @@
               ./tests/test_overlay_release.py;
           pi-release = pythonScriptCheck "pi-release" ./scripts/pi-release ./tests/test_pi_release.py;
           agent-plugins = import ./tests/agent-plugins.nix { inherit pkgs self; };
-          antigravity-skills = import ./tests/antigravity-skills.nix {
-            inherit pkgs self;
-            fixtures = [ ];
-          };
           korean-skills = import ./tests/korean-skills.nix {
             inherit pkgs self;
             fixtures = [ ];
@@ -592,9 +581,6 @@
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
-          antigravity-cli-release =
-            pythonScriptCheck "antigravity-cli-release" ./scripts/antigravity-cli-release
-              ./tests/test_antigravity_cli_release.py;
           # The Claude helper runs against the pinned SDK with real Node, so the
           # check carries both instead of letting that test skip.
           agent-usage =
@@ -684,10 +670,6 @@
           android-sdk = import ./tests/android-sdk.nix { inherit pkgs self; };
           flutter = import ./tests/flutter.nix { inherit pkgs self; };
           session-variables = import ./tests/session-variables.nix {
-            inherit pkgs self;
-            fixtures = [ ];
-          };
-          antigravity-profiles = import ./tests/antigravity-profiles.nix {
             inherit pkgs self;
             fixtures = [ ];
           };

@@ -6,7 +6,6 @@
     ./codex.nix
     ./cross-model-peers.nix
     ./fff.nix
-    ./gemini.nix
     ./pi.nix
     ./instructions
     ./korean-skills.nix

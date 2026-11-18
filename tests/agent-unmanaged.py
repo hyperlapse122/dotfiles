@@ -23,7 +23,9 @@ assert entries, 'no host configurations checked'
 for entry in entries:
     assert not any(mentions(name) for name in entry['packages']), entry['name']
     assert not any(mentions(name) for name in entry['modules']), entry['name']
-    assert not (Path(entry['profile']) / 'bin/omp').exists(), entry['name']
+    for name in ('omp', 'agy', 'agy_acp_server.par', 'localharness_external'):
+        binary = Path(entry['profile']) / 'bin' / name
+        assert not binary.exists() and not binary.is_symlink(), (entry['name'], str(binary))
     for activation in entry['activations']:
         path = Path(activation)
         if path.is_dir():
@@ -31,6 +33,8 @@ for entry in entries:
         assert not mentions(path.read_text()), (entry['name'], str(path))
     files = Path(entry['files'])
     assert files.is_dir(), entry['name']
+    gemini = files / '.gemini'
+    assert not gemini.exists() and not gemini.is_symlink(), (entry['name'], str(gemini))
     for path in files.rglob('*'):
         relative = str(path.relative_to(files))
         assert not mentions(relative), (entry['name'], relative)

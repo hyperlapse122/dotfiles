@@ -16,24 +16,9 @@ let
 
   pins = import ./agent-plugin-pins.nix;
 
-  declaredSources = {
+  sources = {
     compound-engineering = pins.compound-engineering // {
       src = inputs.compound-engineering-plugin;
-
-      # Repository-relative path prefixes withheld from a given harness; an
-      # empty list offers the whole tree. The Antigravity CLI loads rules only
-      # from rules/ and warns about root AGENTS.md and GEMINI.md on every
-      # validate. CLAUDE.md is a symlink to AGENTS.md, so it goes too: a
-      # dangling link makes `agy plugin install` fail to copy the tree.
-      exclude = {
-        claude = [ ];
-        codex = [ ];
-        antigravity = [
-          "AGENTS.md"
-          "CLAUDE.md"
-          "GEMINI.md"
-        ];
-      };
     };
   };
 
@@ -86,55 +71,9 @@ let
 
   baseDir = "${config.home.homeDirectory}/.local/share/agent-plugins";
 
-  # CLI-synchronized rows of a source share one version-keyed link under
-  # baseDir. Rows with different exclusions would each re-point it at their
-  # own pruned tree, and Claude Code, which records the link path, would read
-  # whichever ran last. Differing exclusions stop evaluation until the base
-  # is split per harness.
-  divergentExclusions = lib.filter (
-    name:
-    lib.length (
-      lib.unique (
-        map (row: sources.${name}.exclude.${row.harness} or [ ]) (
-          lib.filter (row: row.name == name) checkedMembership
-        )
-      )
-    ) > 1
-  ) (lib.attrNames sources);
-
   # A source's segment is its tag without the train prefix, the same version
   # the materialized path is keyed by.
   segmentOf = spec: lib.removePrefix spec.tagPrefix spec.tag;
-
-  # A harness with exclusions gets its own pruned tree; one without reads the
-  # pinned source directly, so the ordinary case adds no derivation.
-  treeFor =
-    name: spec: harness:
-    let
-      excluded = spec.exclude.${harness} or [ ];
-      tree =
-        if excluded == [ ] then
-          spec.src
-        else
-          pkgs.runCommand "${name}-${harness}-tree" { } ''
-            cp -r ${spec.src} $out
-            chmod -R u+w $out
-            ${lib.concatMapStringsSep "\n" (path: "rm -rf $out/${path}") excluded}
-            # A link left pointing at a pruned path makes the harness's plugin
-            # install fail at switch time; fail the build here instead.
-            dangling=$(find $out -type l ! -exec test -e {} \; -print)
-            if [ -n "$dangling" ]; then
-              echo "${name}-${harness}-tree: exclusions leave dangling links:" >&2
-              echo "$dangling" >&2
-              exit 1
-            fi
-          '';
-    in
-    tree;
-
-  sources = lib.mapAttrs (
-    name: spec: spec // { antigravityTree = treeFor name spec "antigravity"; }
-  ) declaredSources;
 
   # Read the declared values rather than restating them: claude.nix owns this
   # tier, and the activation unit carries neither home.packages on PATH nor
@@ -157,7 +96,7 @@ let
       env ${harness.env} ${syncTool} \
         --harness ${row.harness} \
         --cli ${harness.cli} \
-        --source ${treeFor row.name spec row.harness} \
+        --source ${spec.src} \
         --base ${lib.escapeShellArg "${baseDir}/${row.name}"} \
         --segment ${lib.escapeShellArg (segmentOf spec)} \
         --plugin ${lib.escapeShellArg spec.plugin} \
@@ -197,58 +136,25 @@ let
   # activation. Retire every row of a source together, or split the base.
   stillMember = lib.filter (row: lib.any (member: member.name == row.name) checkedMembership) retired;
 
-  pluginSkills = import ./plugin-skills.nix { inherit lib; };
-  agy = "${(import ../../../packages/antigravity-cli.nix { inherit pkgs; })}/bin/agy";
-
-  nativePlugins = ''
-    if [[ ! -v DRY_RUN ]]; then
-      ${pluginSkills.agyInstall { inherit agy sources; }}
-    fi
-  '';
-
   syncScript =
     lib.throwIf (stillMember != [ ])
       "agent-plugins: retired row(s) still named in membership, which share its link: ${
         lib.concatMapStringsSep ", " (row: "${row.name} (${row.harness})") stillMember
       }"
       (
-        lib.throwIf (divergentExclusions != [ ])
-          "agent-plugins: harnesses of ${lib.concatStringsSep ", " divergentExclusions} exclude different paths but share one link"
-          (
-            lib.concatStringsSep "\n" (
-              map (row: withDryRun (syncInvocation row)) checkedMembership
-              ++ map (row: withDryRun (retireInvocation row)) retired
-            )
-          )
+        lib.concatStringsSep "\n" (
+          map (row: withDryRun (syncInvocation row)) checkedMembership
+          ++ map (row: withDryRun (retireInvocation row)) retired
+        )
       );
 in
 {
-  options.my.agentPluginSources = lib.mkOption {
-    type = lib.types.attrsOf lib.types.raw;
-    internal = true;
-    readOnly = true;
-    default = sources;
-    description = ''
-      The pinned plugin sources, by plugin name. The plugin skills directory
-      and the Antigravity CLI install both read them, so a plugin added here
-      reaches Antigravity without further wiring.
-    '';
-  };
-
-  # Unguarded and after installPackages for the same reasons as the merges in
-  # claude.nix and gemini.nix: the tool is a store path built from this module,
-  # so a guard could only ever be true, and a refusal ordered before
-  # installPackages would strand it. Note that linkGeneration sits behind these
-  # entries in the built activation script, so this position keeps a refusal
-  # from stranding installPackages but not from stranding linkGeneration.
+  # Run after installPackages so a sync failure cannot prevent package
+  # installation. linkGeneration runs later.
   #
   # The version-keyed path is created here rather than declared as a Home
   # Manager file: this entry runs before linkGeneration, so a declared link
   # would not yet exist when the wiring reads it, and creating it here also
   # keeps the superseded version present until the new one is wired.
-  config.home.activation.agentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] syncScript;
-  config.home.activation.nativeAgentPlugins = lib.hm.dag.entryAfter [
-    "installPackages"
-  ] nativePlugins;
-
+  home.activation.agentPlugins = lib.hm.dag.entryAfter [ "installPackages" ] syncScript;
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Set declared keys in a coding agent's user settings file. Run as the target user.
 
-Claude Code, Codex, and the Antigravity CLI each own their settings file and
+Claude Code and Codex each own their settings file and
 rewrite it whenever a setting changes at runtime, so Home Manager cannot place a read-only
 store symlink there.  Activation assigns the declared top-level keys, drops the
 ones this repository has retired, and leaves every other key exactly as the
@@ -733,8 +733,7 @@ def read_text(settings):
 
 def read_settings(settings):
     text = read_text(settings)
-    # An empty file holds nothing to keep. The Antigravity CLI creates its MCP
-    # config as a 0-byte file, which json.loads rejects.
+    # An empty settings file has no values to preserve.
     if text is None or not text.strip():
         return {}
     try:

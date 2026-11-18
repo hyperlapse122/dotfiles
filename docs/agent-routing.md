@@ -1,6 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, and Pi each receive their own render.
+The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, and Pi each receive their own render.
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
@@ -96,7 +96,7 @@ Claude uses idle compaction before the cache expires. The T3 provider uses Claud
 
 Activation removes the retired Grok Build launch configuration and disables the default Grok instance. T3 Code 0.1.9 can otherwise restore the instance from session history.
 
-The repository's Compound Engineering review peers are Claude and Codex. The Antigravity CLI uses its own rules and plugin installation. Activation disables the former managed Antigravity provider and retires its launch override. Existing Antigravity ACP credentials and conversations stay on disk.
+The repository's Compound Engineering review peers are Claude and Codex. Activation disables the former managed Antigravity ACP provider and removes its launch override on upgrade. Saved credentials and conversations stay on disk.
 
 T3 cannot enforce a read-only delegate. A read-only brief or worktree isolation does not supply that guarantee; CE workflows requiring enforced read-only access use their existing unavailable-route handling.
 

@@ -68,7 +68,6 @@ let
         ./claude.nix
         ./agent-plugins.nix
         ./korean-skills.nix
-        ./antigravity-skills.nix
         ./flutter.nix
       ];
   instructionDelivery = import ./agent-instructions.nix {
@@ -206,7 +205,6 @@ let
         (import ../packages/agent-tools.nix { inherit (entry.host) pkgs; }).serveHtml or null;
       serveHtml = lib.optionalString (serveHtmlPackage != null) (lib.getExe serveHtmlPackage);
       acpx = lib.getExe (import ../packages/acpx.nix { inherit (entry.host) pkgs; });
-      agy = "${import ../packages/antigravity-cli.nix { inherit (entry.host) pkgs; }}/bin/agy";
       # Only these four Dock keys may be written; the rest stay the user's.
       expectedDock = pkgs.writeText "expected-dock.json" (
         builtins.toJSON {
@@ -263,7 +261,6 @@ let
           lib.escapeShellArgs (
             map (root: "--root ${lib.escapeShellArg "${user.home.homeDirectory}/${root}"}") [
               ".claude/skills"
-              ".gemini/antigravity-cli/skills"
               ".codex/skills"
               ".pi/agent/skills"
             ]
@@ -383,12 +380,6 @@ let
 
       [ "$(readlink -f "$gen/home-path/bin/acpx" || true)" = ${lib.escapeShellArg acpx} ] \
         || bad "acpx on PATH is not the packaged binary"
-      [ "$(readlink -f "$gen/home-path/bin/agy" || true)" = ${lib.escapeShellArg agy} ] \
-        || bad "agy on PATH is not the pinned Antigravity CLI"
-      for binary in agy_acp_server.par localharness_external; do
-        [ ! -e "$gen/home-path/bin/$binary" ] && [ ! -L "$gen/home-path/bin/$binary" ] \
-          || bad "retired Antigravity runtime executable $binary is on PATH"
-      done
 
       codexBlock=$TMPDIR/codex-settings-$variant.sh
       stepBlock codexSettings > "$codexBlock"

@@ -9,8 +9,6 @@
   flake builds (`userEntries` from tests/lib/configurations.nix), unchanged:
 
     Claude Code               ~/.claude/skills/<name>
-    Antigravity CLI, and T3 Code's Antigravity instances
-                              ~/.gemini/antigravity-cli/skills/<name>
     Codex                     ~/.codex/skills/<name>
     Pi                        ~/.pi/agent/skills/<name>
 
@@ -128,7 +126,6 @@ let
 
   roots = [
     ".claude/skills"
-    ".gemini/antigravity-cli/skills"
     ".codex/skills"
     ".pi/agent/skills"
   ];

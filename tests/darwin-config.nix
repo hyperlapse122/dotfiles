@@ -297,7 +297,6 @@ let
       # literals, so a mutated registry or root cannot move the expectation.
       koreanRoots = [
         ".claude/skills"
-        ".gemini/antigravity-cli/skills"
         ".codex/skills"
         ".pi/agent/skills"
       ];
@@ -337,13 +336,6 @@ let
           "ux-flows"
         ]
       ) koreanRoots;
-      pluginSkillNames = lib.attrNames (
-        (import ../home/h82/agents/plugin-skills.nix { inherit lib; }).skills {
-          sources = user.my.agentPluginSources;
-          sharedNames = lib.attrNames user.my.agentSkills;
-        }
-      );
-      pluginTargets = map (name: ".gemini/antigravity-cli/skills/${name}") pluginSkillNames;
       # Resolved targets of enabled entries, not attribute names. The source is
       # compared as a string with its context dropped, so no darwin derivation
       # is built, and the store path is never interpolated.
@@ -355,12 +347,9 @@ let
       koreanUnderRoots = lib.filter (
         target: lib.any (root: underDir root target) koreanRoots
       ) enabledTargets;
-      koreanElsewhere = lib.filter (
-        target: underDir ".agents/skills" target || underDir ".gemini/config/skills" target
-      ) enabledTargets;
+      koreanElsewhere = lib.filter (underDir ".agents/skills") enabledTargets;
       xcodeRoots = [
         ".claude/skills"
-        ".gemini/antigravity-cli/skills"
         ".codex/skills"
         ".pi/agent/skills"
       ];
@@ -726,16 +715,13 @@ let
           )
           "${entry.name}: ${target} must be exactly one enabled home.file whose source is the in-tree test-audit skill directory, got ${builtins.toJSON (map koreanSourceOf files)}"
       ) testAuditTargets)
-      (check
-        (
-          sort koreanUnderRoots == sort (koreanTargets ++ testAuditTargets ++ pinnedTargets ++ pluginTargets)
-        )
+      (check (sort koreanUnderRoots == sort (koreanTargets ++ testAuditTargets ++ pinnedTargets))
         "${entry.name}: the targets under the skill roots must be exactly ${
-          builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets ++ pluginTargets)
+          builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets)
         }, got ${builtins.toJSON (sort koreanUnderRoots)}"
       )
       (check (koreanElsewhere == [ ])
-        "${entry.name}: Korean skills must not be installed under .agents/skills or .gemini/config/skills, got ${builtins.toJSON koreanElsewhere}"
+        "${entry.name}: Korean skills must not be installed under .agents/skills, got ${builtins.toJSON koreanElsewhere}"
       )
       (check (androidSdkFile != null && androidDataFiles == [ ])
         "${entry.name}: the Android SDK must be linked at ~/Library/Android/sdk, and no android-sdk data file declared"
@@ -792,9 +778,6 @@ let
           && lib.all (
             name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")
           ) (lib.attrNames user.my.agentSkills)
-          && lib.all (
-            name: lib.hasInfix ("--name " + lib.escapeShellArg name) (xcodeCall "xcodeSkillsRelease")
-          ) pluginSkillNames
           &&
             lib.all
               (

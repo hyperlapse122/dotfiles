@@ -8,8 +8,6 @@
   revision this repository expects:
 
     Claude Code               ~/.claude/skills/<name>
-    Antigravity CLI, and T3 Code's Antigravity instances
-                              ~/.gemini/antigravity-cli/skills/<name>
     Codex                     ~/.codex/skills/<name>
     Pi                        ~/.pi/agent/skills/<name>
 
@@ -33,10 +31,7 @@
     owns.
   - every root declares the three Korean skills and the contributed skills;
     native plugins supply their own skills separately;
-  - nothing exists at ~/.agents/skills or ~/.gemini/config/skills in the
-    materialized `home-files`: the Antigravity CLI lists skills under
-    ~/.gemini/config/skills twice, and ~/.agents/skills is no harness's root
-    here.
+  - no shared skills are delivered to ~/.agents/skills.
 
   The pin assertion compares two genuinely separate sources: `flake.lock`,
   which Nix writes, and the pin file in home/h82/agents/korean-skills-pin.nix,
@@ -105,7 +100,6 @@ let
 
   roots = [
     ".claude/skills"
-    ".gemini/antigravity-cli/skills"
     ".codex/skills"
     ".pi/agent/skills"
   ];
@@ -115,7 +109,6 @@ let
 
   forbiddenRoots = [
     ".agents/skills"
-    ".gemini/config/skills"
   ];
 
   registry = import ../home/h82/agents/korean-skills-pin.nix;
@@ -240,12 +233,7 @@ let
       root:
       let
         found = targetsUnder userConfig root;
-        # The Antigravity root also holds every plugin skill, which
-        # tests/antigravity-skills.nix owns; the other roots hold none.
-        pluginNames = lib.optionals (root == ".gemini/antigravity-cli/skills") (
-          lib.subtractLists (lib.attrNames userConfig.my.agentSkills) userConfig.my.antigravityRootSkillNames
-        );
-        expected = sorted (map (name: "${root}/${name}") (skillNames ++ otherSkillNames ++ pluginNames));
+        expected = sorted (map (name: "${root}/${name}") (skillNames ++ otherSkillNames));
       in
       lib.optionalString (found != expected) ''
         echo ${esc "~/${root} on ${label} must hold exactly ${lib.concatStringsSep ", " expected}, got: ${lib.concatStringsSep ", " found}"} >&2
