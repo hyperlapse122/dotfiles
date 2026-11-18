@@ -97,6 +97,8 @@ let
     "playwright-best-practices"
     "ux-writing"
     "cli-design"
+    "untangle-codebase"
+    "prune-tests"
     "design-lenses"
     "ux-flows"
   ];

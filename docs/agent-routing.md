@@ -6,6 +6,8 @@ The language rules make Korean the default conversation language and English the
 
 For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive this common rule through their normal baseline instruction paths.
 
+Nix installs `untangle-codebase` and `prune-tests` in all four user skill roots. The shared instructions direct agents to read `untangle-codebase` for structural refactoring and `prune-tests` alongside `test-audit` for test audits and cleanup. `untangle-codebase` retains the upstream model-invocation opt-out. Agents can read its criteria directly within the scope of the request.
+
 Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both NixOS and macOS. The package honors user-level `~/.acpx/config.json` and skips project-local `.acpxrc.json` when resolving configuration.
 
 The shared template retains the following T3 context separately for launch-time attachment. Ordinary instruction files do not include it.

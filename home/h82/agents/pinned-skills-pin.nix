@@ -125,6 +125,22 @@
         }
       ];
     }
+    {
+      input = "caldo-skills";
+      ref = "d5b68dace378219890d821adb3685538e2c69b04";
+      expectedRev = "d5b68dace378219890d821adb3685538e2c69b04";
+      skills =
+        map
+          (name: {
+            inherit name;
+            path = "skills/${name}";
+            license = "LICENSE";
+          })
+          [
+            "untangle-codebase"
+            "prune-tests"
+          ];
+    }
   ];
 
   # impeccable contributes only its lens references, from the tree its build

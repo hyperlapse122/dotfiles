@@ -40,7 +40,7 @@
       url = "github:DaleSeo/korean-skills/v1.0.0";
       flake = false;
     };
-    # Published design and stack skills, installed unchanged. Each is pinned to
+    # Published skills, installed unchanged. Each is pinned to
     # a tag where upstream has one and to a commit otherwise; the registry in
     # home/h82/agents/pinned-skills-pin.nix records the revision each must
     # resolve to, and the pinned-skills check compares it with flake.lock.
@@ -70,6 +70,10 @@
     };
     kergoth-dotfiles = {
       url = "github:kergoth/dotfiles/7f61f919d27e3016b64c37ce09b7006199ad7878";
+      flake = false;
+    };
+    caldo-skills = {
+      url = "github:caldoai/skills/d5b68dace378219890d821adb3685538e2c69b04";
       flake = false;
     };
     impeccable = {

@@ -34,6 +34,23 @@
         "type": "github"
       }
     },
+    "caldo-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794983989,
+        "narHash": "sha256-VkGhevHArTXRUV87vR5stCIOb6hPqTRJFIOsvwB68Lg=",
+        "owner": "caldoai",
+        "repo": "skills",
+        "rev": "d5b68dace378219890d821adb3685538e2c69b04",
+        "type": "github"
+      },
+      "original": {
+        "owner": "caldoai",
+        "repo": "skills",
+        "rev": "d5b68dace378219890d821adb3685538e2c69b04",
+        "type": "github"
+      }
+    },
     "compound-engineering-plugin": {
       "flake": false,
       "locked": {
@@ -351,6 +368,7 @@
     "root": {
       "inputs": {
         "anthropic-skills": "anthropic-skills",
+        "caldo-skills": "caldo-skills",
         "compound-engineering-plugin": "compound-engineering-plugin",
         "disko": "disko",
         "expo-skills": "expo-skills",
