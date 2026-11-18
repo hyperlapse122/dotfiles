@@ -127,17 +127,6 @@ let
         prune = true;
       }
     ];
-    removeEntries = [
-      {
-        path = [
-          "providerInstances"
-          "antigravity"
-          "environment"
-        ];
-        key = "value";
-        values = [ "@RETIRED-AGY-INSTRUCTIONS@" ];
-      }
-    ];
     migrateInstances = {
       from = "providers";
       to = "providerInstances";
@@ -464,9 +453,15 @@ let
                       else
                         row
                     ) merge.contract.removePaths;
-                    removeEntries = map (
-                      row: row // { values = [ "${user.home.homeDirectory}/.t3/userdata/instructions/antigravity.md" ]; }
-                    ) merge.contract.removeEntries;
+                    migrateInstances = merge.contract.migrateInstances // {
+                      retireAntigravity = {
+                        profileBinary = noContext "${
+                          user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile"
+                        }/bin/agy_acp_server.par";
+                        registryCommand = "${user.home.homeDirectory}/.local/share/dotfiles/antigravity-acp/bin/antigravity-acp";
+                        instructions = "${user.home.homeDirectory}/.t3/userdata/instructions/antigravity.md";
+                      };
+                    };
                     setPaths = map (
                       row:
                       if lib.isString row.value && lib.hasAttr row.value profileBinaries then

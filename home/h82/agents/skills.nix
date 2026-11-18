@@ -21,7 +21,6 @@ let
 
   plugin = import ./plugin-skills.nix { inherit lib; };
 
-  # Link pinned plugin skills into Antigravity's CLI skill root.
   pluginSkills = plugin.skills {
     sources = config.my.agentPluginSources;
     sharedNames = lib.attrNames config.my.agentSkills;

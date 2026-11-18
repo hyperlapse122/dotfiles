@@ -5,7 +5,6 @@ import copy
 import json
 import os
 from pathlib import Path
-import re
 import tempfile
 import tomllib
 
@@ -177,39 +176,6 @@ def publish(path, document):
         Path(temporary).unlink(missing_ok=True)
 
 
-def retire_antigravity(home, profile_binary):
-    settings_path = home / '.t3/userdata/settings.json'
-    if settings_path.is_symlink():
-        raise ValueError('T3 settings must be a regular file.')
-    settings = read_mapping(settings_path)
-    providers = settings.get('providerInstances', {})
-    provider = providers.get('antigravity')
-    if not provider:
-        return
-    config = provider.get('config', {})
-    if provider.get('driver') == 'acpRegistry':
-        legacy = home / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp'
-        if config.get('commandPath') != str(legacy):
-            return
-        del providers['antigravity']
-    elif provider.get('driver') == 'antigravity':
-        binary = config.get('binaryPath')
-        # Before the profile wrapper, the managed instance used the rebuilt
-        # package directly. Its store hash varies by generation and platform.
-        old_store_path = isinstance(binary, str) and re.fullmatch(
-            r'/nix/store/[0-9a-df-np-sv-z]{32}-antigravity-acp-[^/]+/libexec/antigravity-acp/agy_acp_server\.par',
-            binary,
-        )
-        if binary != profile_binary and not old_store_path:
-            return
-        provider['enabled'] = False
-        if old_store_path:
-            del config['binaryPath']
-    else:
-        return
-    publish(settings_path, settings)
-
-
 def apply(destination, environment=None, hidden_models=()):
     environment = {environment_key(key): value for key, value in
                    (os.environ if environment is None else environment).items()}
@@ -365,12 +331,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--destination', required=True)
     parser.add_argument('--hide-model', action='append', default=[])
-    parser.add_argument('--retire-antigravity-binary')
     args = parser.parse_args()
     try:
-        if args.retire_antigravity_binary:
-            retire_antigravity(Path(args.destination), args.retire_antigravity_binary)
-        else:
-            apply(args.destination, hidden_models=args.hide_model)
+        apply(args.destination, hidden_models=args.hide_model)
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         raise SystemExit('T3 instruction reconciliation failed. Check launch options, writable settings, and absolute append-file paths.') from None

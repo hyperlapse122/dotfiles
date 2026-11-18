@@ -207,13 +207,17 @@ class T3codeReleaseTestCase(unittest.TestCase):
                 result = self.run_release(body=body, extra_args=["-o", str(self.output)])
                 self.assert_refused(result, "digest")
 
-    def test_current_pin_equal_to_newest_writes_nothing(self):
+    def test_current_pin_at_newest_version_writes_nothing(self):
         self.output.write_text(json.dumps(expected_pin(NEWEST)))
         before = self.output.read_bytes()
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("already up to date", result.stdout)
-        self.assertEqual(self.output.read_bytes(), before)
+        desktop = f"T3-Code-{NEWEST_VERSION}-x86_64.AppImage"
+        for digests in ({}, {desktop: "sha256:" + OTHER_HEX}):
+            with self.subTest(digests=digests):
+                body = release_list(release(NEWEST, digests=digests))
+                result = self.run_release(body=body, extra_args=["-o", str(self.output)])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("already up to date", result.stdout)
+                self.assertEqual(self.output.read_bytes(), before)
 
     def test_a_newer_stable_pin_is_not_downgraded(self):
         for version in ("0.1.7", "0.0.48"):

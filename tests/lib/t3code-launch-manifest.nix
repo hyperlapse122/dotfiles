@@ -8,7 +8,6 @@ pkgs.writeText "t3code-launch-manifest.json" (
       home = user.home.homeDirectory;
       profile = user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile";
       scripts = map (name: user.home.activation.${name}.data or "") [
-        "t3codeRetireAntigravity"
         "t3codeSettings"
         "t3codeClientSettings"
         "t3codeInstructions"

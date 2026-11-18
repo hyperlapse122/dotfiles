@@ -71,10 +71,13 @@ The declared document is a JSON object with up to ten fields:
                                     every entry an earlier apply wrote that
                                     the declaration no longer names is
                                     removed; entries no apply wrote stay
-  migrateInstances {from: name, to: name, kinds: [name]}
+  migrateInstances {from: name, to: name, kinds: [name],
+                    retireAntigravity: {profileBinary, registryCommand, instructions}}
                                     T3 Code's move of a retired per-kind
                                     block into provider instances, run before
-                                    the rest; see migrate() below
+                                    the rest. The optional retirement disables
+                                    the former managed Antigravity instance and
+                                    removes its launch entries in the same write.
 
 `own` is for a top-level key nobody else writes -- a named entry beside the
 ones the agent or another tool maintains -- so replacing its whole value
@@ -107,6 +110,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 
@@ -442,7 +446,8 @@ def entry_ids(key, entries):
 def instance_migration(entry, assign, retire, owned, declared):
     if entry is None:
         return None
-    if (not isinstance(entry, dict) or set(entry) != {'from', 'to', 'kinds'}
+    required = {'from', 'to', 'kinds'}
+    if (not isinstance(entry, dict) or not required <= set(entry) <= required | {'retireAntigravity'}
             or not isinstance(entry['from'], str) or not isinstance(entry['to'], str)
             or entry['from'] == entry['to']
             or not isinstance(entry['kinds'], list)
@@ -453,7 +458,53 @@ def instance_migration(entry, assign, retire, owned, declared):
     for name in (entry['from'], entry['to']):
         if name in assign or name in retire or name in owned:
             raise ValueError('migrated key is also set, removed, or owned: {}'.format(name))
-    return entry['from'], entry['to'], entry['kinds']
+    retirement = entry.get('retireAntigravity')
+    if retirement is not None and (
+            not isinstance(retirement, dict)
+            or set(retirement) != {'profileBinary', 'registryCommand', 'instructions'}
+            or not all(isinstance(path, str) and path for path in retirement.values())):
+        raise ValueError('declared "retireAntigravity" must name the former managed paths: {}'.format(declared))
+    return entry['from'], entry['to'], entry['kinds'], retirement
+
+
+def retire_antigravity(instances, retirement):
+    if retirement is None or not isinstance(instances, dict):
+        return
+    provider = instances.get('antigravity')
+    if not isinstance(provider, dict):
+        return
+    config = provider.get('config')
+    if not isinstance(config, dict):
+        config = {}
+    if provider.get('driver') == 'acpRegistry':
+        if config.get('commandPath') == retirement['registryCommand']:
+            provider['enabled'] = False
+            del config['commandPath']
+        return
+    if provider.get('driver') != 'antigravity':
+        return
+
+    binary = config.get('binaryPath')
+    # Before the profile wrapper, the binary pointed directly to a Nix store
+    # output. Its hash varies by generation and platform.
+    old_store_path = isinstance(binary, str) and re.fullmatch(
+        r'/nix/store/[0-9a-df-np-sv-z]{32}-antigravity-acp-[^/]+/libexec/antigravity-acp/agy_acp_server\.par',
+        binary,
+    )
+    # The settings transaction must publish the disable with path retirement:
+    # an enabled T3 provider with no override can use its downloaded runtime.
+    if binary == retirement['profileBinary'] or old_store_path:
+        provider['enabled'] = False
+        if old_store_path:
+            del config['binaryPath']
+    environment = provider.get('environment')
+    if isinstance(environment, list):
+        environment[:] = [
+            item for item in environment
+            if not (isinstance(item, dict)
+                    and item.get('name') == 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE'
+                    and item.get('value') == retirement['instructions'])
+        ]
 
 
 def migrate(merged, migration):
@@ -470,7 +521,8 @@ def migrate(merged, migration):
     """
     if migration is None:
         return
-    source, target, kinds = migration
+    source, target, kinds, retirement = migration
+    retire_antigravity(merged.get(target), retirement)
     legacy = merged.get(source)
     if not isinstance(legacy, dict):
         return

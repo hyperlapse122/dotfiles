@@ -190,7 +190,6 @@ let
   # from Google's release feed.
   antigravityCliRelease = pythonHelper "antigravity-cli-release" ../scripts/antigravity-cli-release;
 
-  # Resolves the stable T3 Code release and its desktop and CLI asset digests.
   t3codeRelease = pythonHelper "t3code-release" ../scripts/t3code-release;
 
   # Compares the Synthetic models in home/h82/agents/synthetic-models.nix with

@@ -10,7 +10,7 @@ AppImage on Linux, a zipped app bundle on macOS) and the t3 CLI tarball of
 each supported system, and writes or checks the pin file both T3 Code
 packages consume, so the two artifacts always come from the same release.
 Refuses to write a pin for a release missing any of those assets or their
-digests, and keeps a pinned stable version if the feed lists an older one.
+digests, and keeps a pinned stable version until the feed lists a newer one.
 A pinned version that is not plain semver, such as a nightly left from an
 earlier track, counts as older than any stable release.
 """
@@ -177,10 +177,10 @@ def main(argv=None):
         )
         if current_version is not None:
             try:
-                older = version_key(resolved["version"]) < version_key(current_version)
+                newer = version_key(resolved["version"]) > version_key(current_version)
             except ValueError:
-                older = False
-            if older or current_data == resolved:
+                newer = True
+            if not newer:
                 print(f"{args.output} is already up to date at version {current_version}")
                 return 0
 

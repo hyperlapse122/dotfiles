@@ -64,8 +64,10 @@ def run_activation(entry, home, check=True):
 def exercise_retirement(entry):
     with tempfile.TemporaryDirectory() as scratch:
         home = Path(scratch)
-        run_activation(entry, home)
         settings = home / '.t3/userdata/settings.json'
+        settings.parent.mkdir(parents=True)
+        settings.write_text(' \n')
+        run_activation(entry, home)
         providers = json.loads(settings.read_text())['providerInstances']
         assert 'antigravity' not in providers, 'fresh settings declare an Antigravity provider'
         assert not (settings.parent / 'instructions/antigravity.md').exists()
@@ -77,6 +79,8 @@ def exercise_retirement(entry):
                  'value': str(Path(entry['home']) / '.t3/userdata/instructions/antigravity.md'),
                  'sensitive': False}
         kept = {'name': 'KEEP', 'value': 'user'}
+        shared_file = {'name': 'OWNER_PROMPT_FILE', 'value': owned['value']}
+        custom_prompt = {'name': owned['name'], 'value': '/owner/custom/prompt'}
         custom = {'driver': 'antigravity', 'enabled': True,
                   'config': {'binaryPath': '/owner/custom/runtime'}}
         account = home / '.gemini/antigravity-acp'
@@ -89,7 +93,7 @@ def exercise_retirement(entry):
                 'claudeAgent': {'config': {'launchArgs': '--append-system-prompt-file /missing/append.md'}},
                 'antigravity': {'driver': 'antigravity', 'enabled': True,
                                 'config': {'binaryPath': binary, 'enabled': True},
-                                'environment': [kept, owned], 'custom': True},
+                                'environment': [kept, owned, shared_file, custom_prompt], 'custom': True},
                 'owner-antigravity': custom,
             }}))
             failure = run_activation(entry, home, check=False)
@@ -98,7 +102,7 @@ def exercise_retirement(entry):
             providers = document['providerInstances']
             assert providers['antigravity'] == {
                 'driver': 'antigravity', 'enabled': False, 'config': {'enabled': True},
-                'environment': [kept], 'custom': True,
+                'environment': [kept, shared_file, custom_prompt], 'custom': True,
             }
             assert providers['owner-antigravity'] == custom
             assert token.read_text() == 'fake-token'
@@ -107,16 +111,22 @@ def exercise_retirement(entry):
             run_activation(entry, home)
             assert json.loads(settings.read_text())['providerInstances']['antigravity'] == providers['antigravity']
 
-        custom_registry = {'driver': 'acpRegistry', 'enabled': True, 'config': {'commandPath': '/owner/custom/adapter'}}
+        custom_registry = {'driver': 'acpRegistry', 'enabled': True, 'config': {'commandPath': '/owner/custom/adapter'},
+                           'environment': [shared_file]}
         for instance in (custom, custom_registry):
             settings.write_text(json.dumps({'providerInstances': {'antigravity': instance}}))
             run_activation(entry, home)
             assert json.loads(settings.read_text())['providerInstances']['antigravity'] == instance
-        legacy_path = home / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp'
-        legacy = {'driver': 'acpRegistry', 'enabled': True, 'config': {'commandPath': str(legacy_path)}}
+        legacy_path = Path(entry['home']) / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp'
+        legacy = {'driver': 'acpRegistry', 'enabled': True,
+                  'config': {'commandPath': str(legacy_path), 'launchArgs': '--user-arg'},
+                  'environment': [shared_file]}
         settings.write_text(json.dumps({'providerInstances': {'antigravity': legacy}}))
-        run_activation(entry, home)
-        assert 'antigravity' not in json.loads(settings.read_text())['providerInstances']
+        legacy['enabled'] = False
+        del legacy['config']['commandPath']
+        for _ in range(2):
+            run_activation(entry, home)
+            assert json.loads(settings.read_text())['providerInstances']['antigravity'] == legacy
 
 
 def main():

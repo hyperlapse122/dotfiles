@@ -193,18 +193,6 @@ let
     }
   ];
 
-  retiredEntries = [
-    {
-      path = [
-        "providerInstances"
-        "antigravity"
-        "environment"
-      ];
-      key = "value";
-      values = [ "${config.home.homeDirectory}/.t3/userdata/instructions/antigravity.md" ];
-    }
-  ];
-
   # providers is the retired per-kind block T3 Code moves into
   # providerInstances on load, but only into an instance that does not exist
   # yet. The instances declared above would make it skip theirs and drop the
@@ -214,6 +202,11 @@ let
     from = "providers";
     to = "providerInstances";
     kinds = lib.remove "grok" (lib.attrNames settings.providerInstances);
+    retireAntigravity = {
+      profileBinary = retiredAntigravityBinary;
+      registryCommand = "${config.home.homeDirectory}/.local/share/dotfiles/antigravity-acp/bin/antigravity-acp";
+      instructions = "${config.home.homeDirectory}/.t3/userdata/instructions/antigravity.md";
+    };
   };
 
   # T3 Code writes a model selection whole, with options that belong to the
@@ -270,7 +263,6 @@ let
       owned ? { },
       remove ? [ ],
       removePaths ? [ ],
-      removeEntries ? [ ],
       prefixEntries ? [ ],
       migrateInstances ? null,
       ownEntries ? [ ],
@@ -282,7 +274,6 @@ let
       own = owned;
     }
     // lib.optionalAttrs (removePaths != [ ]) { inherit removePaths; }
-    // lib.optionalAttrs (removeEntries != [ ]) { inherit removeEntries; }
     // lib.optionalAttrs (prefixEntries != [ ]) { inherit prefixEntries; }
     // lib.optionalAttrs (ownEntries != [ ]) { inherit ownEntries; }
     // lib.optionalAttrs (migrateInstances != null) { inherit migrateInstances; };
@@ -296,7 +287,6 @@ let
           owned = modelSelections;
           remove = retiredKeys;
           removePaths = retiredPaths;
-          removeEntries = retiredEntries;
           migrateInstances = instanceMigration;
         })
       );
@@ -361,28 +351,19 @@ in
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory} ${hiddenPiModelArgs}
             fi
           '';
-      # Disable the former managed instance before its binary override is
-      # retired. T3 can select its downloaded runtime if it is still enabled.
-      t3codeRetireAntigravity = lib.hm.dag.entryAfter [ "installPackages" ] ''
-        run ${composer}/bin/t3-instructions \
-          --destination ${lib.escapeShellArg config.home.homeDirectory} \
-          --retire-antigravity-binary ${lib.escapeShellArg retiredAntigravityBinary}
-      '';
     }
     // lib.mapAttrs (
-      name: merge:
-      lib.hm.dag.entryAfter
-        ([ "installPackages" ] ++ lib.optional (name == "t3codeSettings") "t3codeRetireAntigravity")
-        ''
-          run ${merger} \
-            --label 'T3 Code' \
-            --settings ${config.home.homeDirectory}/.t3/userdata/${merge.file} \
-            --declared ${merge.declared} ${
-              lib.optionalString (
-                merge ? ledger
-              ) "\\\n          --ledger ${config.home.homeDirectory}/.t3/userdata/${merge.ledger}"
-            }
-        ''
+      _: merge:
+      lib.hm.dag.entryAfter [ "installPackages" ] ''
+        run ${merger} \
+          --label 'T3 Code' \
+          --settings ${config.home.homeDirectory}/.t3/userdata/${merge.file} \
+          --declared ${merge.declared} ${
+            lib.optionalString (
+              merge ? ledger
+            ) "\\\n          --ledger ${config.home.homeDirectory}/.t3/userdata/${merge.ledger}"
+          }
+      ''
     ) merges
   );
 }
