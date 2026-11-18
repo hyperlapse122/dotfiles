@@ -18,7 +18,7 @@ class CUDA(Local):
         device = detect('cuda')
         module = reviewed_module(self.loader_path, 'decide_reviewed_joint_schema_model')
         path = snapshot(MODEL, REVISION)
-        cfg = Config(model_path=path, device='cuda', dtype='bf16', quant='int8',
+        cfg = Config(model_path=path, device='cuda', dtype='bfloat16', quant='int8',
                      quant_backend='torchao', offload='cpu', max_tokens=2**31 - 1,
                      max_device_memory_gb=0, preflight=True, mask_free=False, fast_head=False,
                      api_key=None, api_keys_raw=None)
