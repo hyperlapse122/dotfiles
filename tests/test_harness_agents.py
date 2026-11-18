@@ -56,6 +56,11 @@ mod built_in {
 mod tests;
 """
 PI_BUILTINS = """
+import codemodeExtension from "./codemode/index.ts";
+import llamaExtension from "./llama/index.ts";
+import mcpExtension from "./mcp/index.ts";
+import toolSearchExtension from "./tool-search/index.ts";
+
 export const builtInExtensions: InlineExtension[] = [
     { name: "llama.cpp", factory: llamaExtension, builtin: true },
     { name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true },
@@ -63,6 +68,7 @@ export const builtInExtensions: InlineExtension[] = [
     { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true },
 ];
 """
+PI_README = "Pi ships with powerful defaults but skips features like sub-agents and plan mode."
 
 
 class HarnessAgentsTest(unittest.TestCase):
@@ -96,6 +102,19 @@ class HarnessAgentsTest(unittest.TestCase):
             text=True,
         )
 
+    def assert_catalog_kept(self, harness, error):
+        output = self.root / "catalog.json"
+        output.write_text("previous catalog")
+        result = self.run_catalog(harness, "-o", str(output))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(error, result.stderr)
+        self.assertEqual(output.read_text(), "previous catalog")
+
+    def pi_source(self, *, readme=PI_README, builtins=PI_BUILTINS):
+        self.fixture("packages/coding-agent/package.json", '{"version":"1.2.3"}')
+        self.fixture("packages/coding-agent/README.md", readme)
+        self.fixture("packages/coding-agent/src/extensions/index.ts", builtins)
+
     def test_codex_role_settings_and_inheritance(self):
         self.codex_source()
         result = self.run_catalog("codex")
@@ -113,27 +132,37 @@ class HarnessAgentsTest(unittest.TestCase):
 
     def test_codex_unknown_registration_does_not_replace_previous_catalog(self):
         self.codex_source(REGISTRY.replace(ROLE, ROLE + "                dynamic_role(),\n"))
-        output = self.root / "catalog.json"
-        output.write_text("previous catalog")
-        result = self.run_catalog("codex", "-o", str(output))
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("dynamic_role", result.stderr)
-        self.assertEqual(output.read_text(), "previous catalog")
+        self.assert_catalog_kept("codex", "dynamic_role")
+
+    def test_codex_raw_description_cannot_hide_an_unsupported_role(self):
+        unknown = ROLE.replace("nickname_candidates: None,", "nickname_candidates: Some(vec![]),")
+        second = ROLE.replace('"researcher".to_string()', '"second".to_string()')
+        self.codex_source(REGISTRY.replace(ROLE, unknown + second))
+        self.assert_catalog_kept("codex", "unsupported declaration")
+
+    def test_codex_unknown_role_setting_keeps_previous_catalog(self):
+        self.codex_source()
+        self.fixture(
+            "codex-rs/core/assets/agent/builtins/researcher.toml",
+            'unknown_setting = "a new policy"\n',
+        )
+        self.assert_catalog_kept("codex", "unknown_setting")
 
     def test_pi_new_builtin_requires_roster_verification(self):
-        self.fixture("packages/coding-agent/package.json", '{"version":"1.2.3"}')
-        self.fixture(
-            "packages/coding-agent/README.md",
-            "Pi ships with powerful defaults but skips features like sub-agents and plan mode.",
+        self.pi_source(
+            builtins=PI_BUILTINS.replace("];", '    { name: "delegation", factory: delegate, builtin: true },\n];'),
         )
-        self.fixture(
-            "packages/coding-agent/src/extensions/index.ts",
-            PI_BUILTINS.replace("];", '    { name: "delegation", factory: delegate, builtin: true },\n];'),
+        self.assert_catalog_kept("pi", "built-in extensions changed")
+
+    def test_pi_changed_factory_keeps_previous_catalog(self):
+        self.pi_source(
+            builtins=PI_BUILTINS.replace("./codemode/index.ts", "../../examples/extensions/subagent/index.ts"),
         )
-        result = self.run_catalog("pi")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("built-in extensions changed", result.stderr)
-        self.assertEqual(result.stdout, "")
+        self.assert_catalog_kept("pi", "built-in extensions changed")
+
+    def test_pi_missing_absence_statement_keeps_previous_catalog(self):
+        self.pi_source(readme="Pi ships with powerful defaults.")
+        self.assert_catalog_kept("pi", "no longer confirms the absence")
 
 
 if __name__ == "__main__":

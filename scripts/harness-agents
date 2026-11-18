@@ -15,14 +15,18 @@ class Failure(Exception):
     """The source does not establish a complete catalog."""
 
 
-# Parse the complete supported registry, not occurrences of AgentRoleConfig.
-# A new registration mechanism must be understood before publishing a catalog.
-RUST_STRING = r'(?:r#*".*?"#*|"(?:[^"\\]|\\.)*")'
+def rust_string_pattern(delimiter):
+    return (
+        rf'(?:r(?P<{delimiter}>#*)"(?:(?!"(?P={delimiter})).)*"(?P={delimiter})'
+        r'|"(?:[^"\\]|\\.)*")'
+    )
+
+
 RUST_TOKEN = re.compile(
-    r'(?P<string>r(?P<hashes>#*)".*?"(?P=hashes)|"(?:[^"\\]|\\.)*")'
-    r'|//[^\n]*|/\*.*?\*/',
+    rf'(?P<string>{rust_string_pattern("token_hashes")})|//[^\n]*|/\*.*?\*/',
     re.DOTALL,
 )
+# Match the whole registry so a changed registration cannot silently shrink the catalog.
 CODEX_REGISTRY = re.compile(
     r"\s*use super::\*;\s*"
     r"pub\(super\) fn configs\(\) -> &'static BTreeMap<String, AgentRoleConfig> \{\s*"
@@ -33,8 +37,9 @@ CODEX_REGISTRY = re.compile(
     re.DOTALL,
 )
 CODEX_ROLE = re.compile(
-    rf'\s*\(\s*(?P<name>DEFAULT_ROLE_NAME|{RUST_STRING})\.to_string\(\),\s*'
-    rf'AgentRoleConfig\s*\{{\s*description:\s*(?:None|Some\((?P<purpose>{RUST_STRING})\.to_string\(\)\)),\s*'
+    rf'\s*\(\s*(?P<name>DEFAULT_ROLE_NAME|{rust_string_pattern("name_hashes")})\.to_string\(\),\s*'
+    r'AgentRoleConfig\s*\{\s*description:\s*'
+    rf'(?:None|Some\((?P<purpose>{rust_string_pattern("purpose_hashes")})\.to_string\(\)\)),\s*'
     r'config_file:\s*(?:None|Some\("(?P<file>[a-zA-Z0-9_.-]+\.toml)"'
     r'\.to_string\(\)\.parse\(\)\.unwrap_or_default\(\)\)),\s*'
     r'nickname_candidates:\s*None,\s*\},?\s*\)\s*(?:,|$)',
@@ -46,9 +51,16 @@ CODEX_INCLUDE = re.compile(
 CODEX_CONFIG_FILE = re.compile(r'\s*"(?P<file>[^"\n]+)" => Some\((?P<name>[A-Z_]+)\),\s*')
 
 PI_ABSENCE = "Pi ships with powerful defaults but skips features like sub-agents and plan mode."
-PI_EXTENSIONS = {"llama.cpp", "codemode", "tool-search", "mcp"}
+PI_EXTENSIONS = {
+    "llama.cpp": "./llama/index.ts",
+    "codemode": "./codemode/index.ts",
+    "tool-search": "./tool-search/index.ts",
+    "mcp": "./mcp/index.ts",
+}
+PI_IMPORT = re.compile(r'(?m)^\s*import (?P<factory>\w+) from "(?P<module>[^"\n]+)";\s*$')
 PI_EXTENSION_ROW = re.compile(
-    r'\s*\{ name: "([a-z.-]+)", factory: \w+, (?:replaceable: true, )?builtin: true \},\s*',
+    r'\s*\{ name: "(?P<name>[a-z.-]+)", factory: (?P<factory>\w+), '
+    r'(?:replaceable: true, )?builtin: true \},\s*',
 )
 
 
@@ -165,8 +177,16 @@ def pi_agents(source, version):
     )
     if registry is None:
         raise Failure("unsupported Pi built-in extension registry")
-    names = [item[1] for item in rows(PI_EXTENSION_ROW, registry[1], "Pi built-in extensions")]
-    if len(names) != len(PI_EXTENSIONS) or set(names) != PI_EXTENSIONS:
+    imports = {}
+    for found in PI_IMPORT.finditer(extensions[:registry.start()]):
+        imports.setdefault(found["factory"], []).append(found["module"])
+    actual = []
+    for item in rows(PI_EXTENSION_ROW, registry[1], "Pi built-in extensions"):
+        modules = imports.get(item["factory"], [])
+        if len(modules) != 1:
+            raise Failure(f"Pi built-in extensions changed; cannot resolve {item['factory']}")
+        actual.append((item["name"], modules[0]))
+    if sorted(actual) != sorted(PI_EXTENSIONS.items()):
         raise Failure("Pi built-in extensions changed; verify the subagent roster before updating")
     return []
 
