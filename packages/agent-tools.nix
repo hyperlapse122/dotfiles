@@ -93,6 +93,23 @@ let
         '';
       });
 
+  harnessAgents =
+    harness: repository: manifest:
+    let
+      pin = builtins.fromJSON (builtins.readFile manifest);
+      source = import ./harness-source.nix {
+        inherit repository;
+        inherit (pin) source;
+      };
+    in
+    pkgs.writeShellScriptBin "${harness}-agents" ''
+      exec ${pkgs.python3}/bin/python3 ${../scripts/harness-agents} ${harness} \
+        --source ${source} --pin ${manifest} "$@"
+    '';
+
+  codexAgents = harnessAgents "codex" "openai/codex" ./codex-release.json;
+  piAgents = harnessAgents "pi" "earendil-works/pi" ./pi-release.json;
+
   # Resolves the latest mise release from the SHASUMS256.txt asset of its
   # latest GitHub release.
   miseRelease = pythonHelper "mise-release" ../scripts/mise-release;
@@ -250,6 +267,8 @@ in
     chatgptRelease
     claudeCodeRelease
     claudeCodeAgents
+    codexAgents
+    piAgents
     miseRelease
     preztoRelease
     piRelease

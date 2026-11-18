@@ -1,5 +1,9 @@
 {
   "version": "0.169.0",
+  "source": {
+    "rev": "d32063f96c2dff1dc96af839b3952abb6acfeda4",
+    "sha256": "1q4zwbz8ppkxbdyn4svdq96cx88k193lcgwrvzcg7fdwbg8p1id7"
+  },
   "platforms": {
     "x86_64-linux": {
       "codex": {

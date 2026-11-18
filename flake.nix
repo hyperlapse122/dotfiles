@@ -273,8 +273,10 @@
           "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ./scripts/overlay-release
         );
         pi-release = agentTools.piRelease;
+        pi-agents = agentTools.piAgents;
         pi = import ./packages/pi.nix { inherit pkgs; };
         codex-release = agentTools.codexRelease;
+        codex-agents = agentTools.codexAgents;
         codex = import ./packages/codex.nix { inherit pkgs; };
         npm-release = agentTools.npmRelease;
         acpx = import ./packages/acpx.nix { inherit pkgs; };
@@ -583,6 +585,9 @@
           claude-code-agents =
             pythonScriptCheck "claude-code-agents" ./scripts/claude-code-agents
               ./tests/test_claude_code_agents.py;
+          harness-agents =
+            pythonScriptCheck "harness-agents" ./scripts/harness-agents
+              ./tests/test_harness_agents.py;
           mise-release = pythonScriptCheck "mise-release" ./scripts/mise-release ./tests/test_mise_release.py;
           prezto-release =
             pythonScriptCheck "prezto-release" ./scripts/prezto-release
@@ -1130,6 +1135,13 @@
               echo 'packages/claude-code-agents.json differs from the catalog extracted from the pinned claude-code' >&2
               exit 1
             fi
+            touch $out
+          '';
+          harness-agents-catalog = pkgs.runCommand "harness-agents-catalog-tests" { } ''
+            ${pkgs.lib.getExe agentTools.codexAgents} --output "$TMPDIR/codex.json"
+            diff -u ${./packages/codex-agents.json} "$TMPDIR/codex.json"
+            ${pkgs.lib.getExe agentTools.piAgents} --output "$TMPDIR/pi.json"
+            diff -u ${./packages/pi-agents.json} "$TMPDIR/pi.json"
             touch $out
           '';
           grok-absent =
