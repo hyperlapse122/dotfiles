@@ -1,42 +1,12 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, video analysis, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, and Pi each receive their own render.
+The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Antigravity, and Pi each receive their own render.
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
 For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive this common rule through their normal baseline instruction paths.
 
-## Video analysis
-
-When a session outside T3 Code needs the content of a local video file and cannot view video natively, the baseline instructions direct it to run `acpx` non-interactively against the `antigravity` agent:
-
-```sh
-acpx --timeout 300 --approve-reads --non-interactive-permissions deny --model <model> antigravity exec --config-option mode=default --config-option thinking_level=high <prompt>
-```
-
-Agents try `gemini-4-argon`, then `gemini-4-carbon`, and then `gemini-4-hydrogen`, moving on when a model fails. A session running `gemini-4-argon`, `gemini-4-carbon`, or `gemini-4-hydrogen` opens the video directly with its own file-viewing tool instead of invoking `acpx`, preventing recursive calls inside `agy` CLI and `acpx`-spawned `agy_acp_server.par` children. Prompts must pass the video's absolute path and ask for changes at one-second resolution, because `agy_acp_server.par` presents one timestamped frame per second and drops any trailing partial second. Frame-extraction fallbacks (`ffmpeg`, other converters) and `agy -p` are prohibited; if `acpx` fails, times out, or is missing from `PATH`, the agent reports the failure directly to the user.
-
-Shared Home Manager configuration installs `packages/acpx.nix` (`0.22.0`) unconditionally in `home.packages` on both NixOS and macOS hosts. `packages/acpx.nix` patches `loadResolvedConfig` so project-local `.acpxrc.json` files are ignored (`void 0` in place of `readConfigFile(projectPath)`). User-level `~/.acpx/config.json` remains active, so an `agents.antigravity` override there would redirect `acpx` away from `agy_acp_server.par`.
-
-### acpx video trial evidence
-
-On 2026-11-17 on NixOS (`MS-7D91`), the built `.#acpx` (`0.22.0`) binary ran non-interactively against `/etc/profiles/per-user/h82/bin/agy_acp_server.par` (`antigravity-acp` `1.4.5`) with `--approve-reads --non-interactive-permissions deny --timeout 300 --format json --config-option mode=default --config-option thinking_level=high`. Host prerequisites were `~/.acpx/config.json` absent and `~/.gemini/antigravity-acp/settings.json` configured with `auth.type = "oauth-personal"` and `allowNonWorkspaceAccess = true`; T3-inherited `GEMINI_*` and `ANTIGRAVITY_*` variables were cleared to match an ordinary CLI shell. Each model inspected a synthetic `4.04`-second, `24` fps, `640x360` H.264 clip placed outside `--cwd` and was scored against independently extracted PNG frames at `0`, `1`, `2`, and `3` seconds.
-
-| Model | Elapsed (seconds) | Score (of 4) | Contradicted claims | Tool transcript |
-| --- | --- | --- | --- | --- |
-| `gemini-4-argon` | 34.89 | 4 | none | 1 `view_file` read of external clip; 0 shell commands |
-| `gemini-4-carbon` | 46.07 | 4 | none | 1 `view_file` read of external clip; 0 shell commands |
-| `gemini-4-hydrogen` | 23.79 | 4 | none | 1 `view_file` read of external clip; 0 shell commands |
-
-All three models passed `4/4` with zero contradictions and preserve the Argon, Carbon, Hydrogen order from T3 video delegation. JSONL logs showed `agy_acp_server.par` ignoring `_meta.claudeCode.options.model` on `session/new` (starting on `gemini-3.8-flash`), after which `acpx` applied `--model`, `mode=default`, and `thinking_level=high` via `session/set_config_option` before sending `session/prompt`.
-
-Three edge checks confirmed the transport contract without leaving stray `agy_acp_server.par` or `localharness_external` processes behind:
-
-- Setting invalid `GEMINI_API_KEY` and `GOOGLE_API_KEY` environment variables still exited `0` under existing OAuth credentials.
-- Removing `agy_acp_server.par` from `PATH` exited `1` with `AGENT_SPAWN_ENOENT`.
-- Requesting a nonexistent clip failed cleanly in `view_file` without running shell commands.
-
-Live `acpx` trials ran only on Linux (`MS-7D91`) without running `nr switch`. On macOS, `acpx` packaging (`tests/darwin-config.nix`, `tests/darwin-outputs.nix`) and `antigravity-acp-path.nix` settings (`AGY_ACP_FORCE_FILE_STORAGE=1`, `["agy_acp_server.par"]`) are verified by Nix evaluation and deferred to CI `build-darwin` rather than tested live.
+Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both NixOS and macOS. The package honors user-level `~/.acpx/config.json` and skips project-local `.acpxrc.json` when resolving configuration.
 
 The shared template retains the following T3 context separately for launch-time attachment. Ordinary instruction files do not include it.
 
@@ -64,7 +34,6 @@ When a CE skill uses `delegate_task`, choose the child's model from the ladder o
 | Claude | Fable | Opus | Sonnet | Haiku |
 | Codex | astra | sol | terra | luna |
 | Synthetic through pi | Kimi | Kimi Pro | GLM | GLM Flash |
-| Antigravity | Gemini Carbon | Gemini Hydrogen | Gemini Hydrogen | Gemini Hydrogen |
 
 - Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`, and CE's cross-model review peers.
 - Middle rung: implementation workers, CE's mid-tier and generation-tier children, and any CE child whose skill names no tier.
@@ -74,46 +43,22 @@ Where a CE skill says to inherit the session or parent model, or to omit the mod
 
 Set no effort for a ladder-selected child, so T3's default for that model applies. An effort that a CE skill suggests by default is not a named effort.
 For a Codex child, pass `reasoningEffort` in `target.options`: use `xhigh` for every Terra child regardless of role and for every middle-rung implementation worker; use `high` for other Codex children.
-An Antigravity child is also an exception: pass `thinking_level` `xhigh` for a top-rung child, `high` for a middle-rung child, and `medium` for a bottom-rung child in `target.options`.
-
-T3 Code lists a Gemini model's `thinking_level` values only after a session on that model has run, so Gemini Hydrogen can lack `xhigh` in `orchestrator_capabilities`, and `delegate_task` rejects a value the list lacks. When a child needs Hydrogen at `xhigh` and the list lacks it, refresh the list yourself without asking the user: start one probe child on Gemini Hydrogen at the lowest listed `thinking_level`, or with no options when none is listed, with `mode` `wait` and a task that only replies `OK`, then call `orchestrator_capabilities` again. Delegate at `xhigh` when it is now listed; otherwise delegate at the highest listed level and name the substitution in your report, as for a missing model.
 
 A model or effort that the user's prompt or CE configuration names for a child wins over this section; pass a named effort in `target.options`. CE configuration includes `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, `work_engine_effort`, `plan_model`, and `brainstorm_model`.
 
 If the catalog lists no model for a rung, use the next lower rung of the same provider. If none is listed, use the next higher rung of that provider within the limit above, and only then the delegating model. Name the substitution in your report. Providers without a row and delegations outside CE skills keep their current model selection.
 
-### Gemini selection evidence
+### Synthetic ladder evidence
 
-On 2026-11-14, each setting below ran the same repository-grounding and Python settings-repair task twice in fresh T3 child threads, one at a time. Completion time runs from T3's `startedAt` to `completedAt`, including tool use and answer generation. A repair passes only when all 16 behavioral checks pass. All ten runs completed normally and answered the four grounding questions correctly.
-
-| Requested model and thinking level | Completion times (seconds) | Repairs passing all 16 checks |
-| --- | --- | --- |
-| Gemini 4 Carbon high | 260.7, 262.0 | 2/2 |
-| Gemini 4 Argon high | 40.4, 48.7 | 0/2 |
-| Gemini 3.8 Flash high | 47.4, 51.6 | 0/2 |
-| Gemini 4 Hydrogen high | 51.0, 50.9 | 1/2 |
-| Gemini 4 Hydrogen xhigh | 58.8, 76.7 | 1/2 |
-
-The repairs that failed changed their result on a second application when a managed object replaced a scalar and defaults supplied sibling keys. That check was added after the first outputs exposed the gap, then applied to every repair without changing the task prompt. These are two samples of one bounded task, not estimates of general accuracy or failure rates; long-running orchestration and full diff reviews were not measured. T3 recorded the requested models and options, but supplied no independent serving-model attestation. Token use and subscription consumption were not measured.
-
-The results support trying Carbon for planning and demanding reviews, where its longer completion time can be acceptable, and Hydrogen for implementation and extraction. Hydrogen high took about as long as Flash in this task; xhigh took longer without increasing the number of fully passing repairs. At the time, the ladder left Antigravity effort unset and the discovered T3 default was high for both Carbon and Hydrogen. Google's [Carbon model card](https://deepmind.google/models/model-cards/gemini-4-carbon/) describes long-horizon reasoning, while the [Hydrogen model card](https://deepmind.google/models/model-cards/gemini-4-hydrogen/) describes rapid execution and sub-agent use.
-
-The first Hydrogen xhigh request was rejected before launch because T3 listed only low, medium, and high. After the error, a fresh capability lookup listed xhigh and both measured xhigh runs launched successfully. The rejected preflight is excluded from the table. T3 Code's server explains the gap: it records a Gemini model's `thinking_level` values only from a session on that model, and gives a model it has not observed the current session model's list. A rejected option does not refresh that list, so the T3 instructions start a short Hydrogen probe child to record Hydrogen's levels before delegating at xhigh.
-
-### Antigravity and Synthetic ladder evidence
-
-On 2026-11-16 the owner retuned the Antigravity and Synthetic rows against the Artificial Analysis Intelligence Index v5.0.1 chart dated 15 Nov '26, which covered the models this machine can reach. No new local benchmark ran for this change.
+On 2026-11-16 the owner retuned the Synthetic row against the Artificial Analysis Intelligence Index v5.0.1 chart dated 15 Nov '26, which covered the models this machine can reach. No new local benchmark ran for this change.
 
 | Rung | Before | After | AA score after (before) | Local timing |
 | --- | --- | --- | --- | --- |
-| Antigravity top | Gemini 4 Carbon high | Gemini 4 Hydrogen xhigh | 54 (60) | 58.8 s, 76.7 s on the 2026-11-14 task (Carbon: 260.7 s, 262.0 s) |
-| Antigravity middle | Gemini 4 Hydrogen at the T3 default | Gemini 4 Hydrogen high | 51 (54 at xhigh) | 51.0 s, 50.9 s on the 2026-11-14 task |
-| Antigravity bottom | Gemini 4 Hydrogen at the T3 default | Gemini 4 Hydrogen medium | 41 (54 at xhigh) | Not measured |
 | Synthetic top | GLM-5.3 | Kimi K3.1 Pro | 46 (32 at max) | Not measured; Kimi K3 high took 10-14 min as a review peer on 2026-10-21 |
 | Synthetic middle | GLM-5.3 Flash | GLM-5.3 | 32 at max (28) | Not measured at Pi's default; 24-25 min at max and 20.5 min at high as a review peer on 2026-10-21 |
 | Synthetic bottom | DeepSeek V4.1 Flash 1017 | GLM-5.3 Flash | 28 (29 at high) | 10-19 min at high as a review peer on 2026-10-21 (DeepSeek: 48 min at max, 101 min at high) |
 
-By 2026-11-16 T3 listed xhigh as Hydrogen's default `thinking_level`, so middle and bottom children that left effort unset had been running at xhigh. The ladder now names each Antigravity level, so a later change to that default does not move it. Synthetic children keep effort unset: Pi lists `thinking` levels only up to high, so the chart's max scores are upper bounds, not the configured setting. The Synthetic middle rung trades GLM-5.3 Flash's speed for GLM-5.3's higher score, and the bottom rung drops DeepSeek, the slowest Synthetic model measured.
+Synthetic children keep effort unset: Pi lists `thinking` levels only up to high, so the chart's max scores are upper bounds, not the configured setting. The Synthetic middle rung trades GLM-5.3 Flash's speed for GLM-5.3's higher score, and the bottom rung drops DeepSeek, the slowest Synthetic model measured.
 
 ## T3 PR and MR babysitting
 
@@ -139,24 +84,6 @@ Write self-contained HTML and use T3 Code's `html_preview` followed by `html_ren
 
 When a prototype question depends on visual finish or hands-on interaction, preserve the fidelity and interaction needed to answer it.
 
-## T3 video analysis
-
-In T3 Code, these rules replace the baseline `acpx` video instructions, covering both the delegation transport and the model and self-reading scope. When a task needs the content of a local video file and you cannot view video yourself, delegate the analysis with `delegate_task` to the `antigravity` provider instead of invoking `acpx`. Use Gemini Argon first, then Gemini Carbon, then Gemini Hydrogen, each the newest listed model of its family, moving on when a model is not listed or its child fails. Pass `thinking_level` `high` in `target.options`. A Gemini Argon, Carbon, or Hydrogen session opens the video itself instead of delegating.
-
-Give the child the video's absolute path and tell it to open the file with its own file-viewing tool, without shell commands or frame extraction. The runtime shows the model one timestamped frame per second, so ask about scenes and changes at one-second resolution; the model does not see motion between those frames or a final partial second.
-
-### Video trial evidence
-
-On 2026-11-17, Gemini 4 Carbon, Argon, and Hydrogen each ran three times at `thinking_level` `high` as T3 children on the `antigravity` provider. Every child received the absolute path of the same 4.04-second, 24 fps, 854x480 H.264 clip and opened it with the runtime's file-viewing tool. Each transcript shows that one read and no shell command or converter. In every run the runtime delivered the clip as four timestamped frames, at 0, 1, 2, and 3 seconds, so the scoring used those four points. A reference built from frames extracted independently at the same timestamps scored each run one point per correctly described point, minus one per contradicted claim. A run passed at three or more with no contradicted claim about the overall sequence: right profile, turn toward the camera, then a closed-mouth smile.
-
-| Model | Scores (of 4) | Completion times (seconds) | Contradicted claims |
-| --- | --- | --- | --- |
-| Gemini 4 Argon high | 4, 4, 4 | 38.3, 25.1, 90.7 | none |
-| Gemini 4 Carbon high | 4, 4, 4 | 163.4, 113.8, 222.7 | none |
-| Gemini 4 Hydrogen high | 3, 3, 3 | 42.0, 34.0, 46.5 | teeth shown at 3 s; torso facing screen left at 1 s; lips parted at 1 s |
-
-All nine runs passed. Argon and Carbon tied on score, and Argon finished faster, so it comes first. No model saw the last 1.04 seconds of the clip, and none could describe the half-second intervals between frames. The clip has no audio track, so audio handling was not tested. These are three samples of one short clip; T3 recorded the requested models but supplied no independent serving-model attestation.
-
 ## Native T3 launches
 
 `home/h82/t3code.nix` merges the captured server and client preferences into writable T3 settings. New threads use Codex `gpt-6.2-sol` at `high` effort, with Claude Opus 5.5 as fallback and `gpt-6-luna` for text generation. Threads start with full access in a worktree. Inactive worktree cleanup uses five days. The interface uses Pretendard Variable; code and terminals use Jetendard. Baseline-only settings remain declared unless the overlay replaces them, and unrelated user settings survive application.
@@ -167,13 +94,7 @@ Claude uses idle compaction before the cache expires. The T3 provider uses Claud
 
 Activation removes the retired Grok Build launch configuration and disables the default Grok instance. T3 Code 0.1.9 can otherwise restore the instance from session history.
 
-Antigravity sessions in T3 Code run the ACP runtime that `packages/antigravity-acp.nix` rebuilds. The rebuild adds the shared instructions from `~/.gemini/config/rules/` ahead of the client's system prompt addition and supplies pinned plugin skills, including for Compound Engineering run homes. The runtime's native filter applies client tool settings, including to its subagent tools. Plugin skills are also linked into `~/.gemini/antigravity-cli/skills`, which T3 Code scans for its skill menu. The retired third-party Antigravity adapter is removed only when its command path matches the old managed adapter. A custom adapter under that ID causes a refusal.
-
-The repository-managed `antigravity` provider receives its T3 addition through `ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE`, reconciled by `scripts/t3-instructions.py` to the absolute path of `~/.t3/userdata/instructions/antigravity.md`. T3 Code 0.1.9 passes provider environment entries to the ACP runtime even though its Antigravity driver exposes no native prompt option. The overlay composes baseline rules, the selected file, and the client's system prompt addition in that order. An explicitly selected unreadable file fails prompt assembly. The shared wrapper supplies no T3 file by default, so `agy` CLI and non-T3 ACP launches keep the baseline only. Reapplication replaces the owned environment entry while preserving other entries and settings; owner-created provider instances retain their own configuration.
-
-Antigravity CLI and ACP both receive `allowNonWorkspaceAccess = true` through their mutable user settings. The ACP wrapper supplies `ANTIGRAVITY_ACP_SHARED_SETTINGS_FILE`, defaulting to `~/.gemini/antigravity-acp/settings.json`, so T3 provider instance homes and CE private run homes receive the same access setting while retaining their own authentication and conversations. An explicit shared-file path takes precedence; without one, the runtime reads its current ACP settings file.
-
-The ACP server overlay applies the boolean setting to native harness containment, native `view_file`, and the client file tools. Enabling it permits reads and edits outside workspace folders in every session mode, while the existing approval policies still decide whether commands and file changes need approval. Workspace metadata stays intact. A false, absent, malformed, or unreadable setting keeps the runtime's existing workspace boundary.
+The repository's Compound Engineering review peers are Claude and Codex. The Antigravity CLI uses its own rules and plugin installation. Activation disables the former managed Antigravity provider and retires its launch override. Existing Antigravity ACP credentials and conversations stay on disk.
 
 T3 cannot enforce a read-only delegate. A read-only brief or worktree isolation does not supply that guarantee; CE workflows requiring enforced read-only access use their existing unavailable-route handling.
 

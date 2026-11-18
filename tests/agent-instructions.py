@@ -14,7 +14,7 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # all change the complete normative body, including its order. Claude Code gets
 # its conversation language from its own settings, so its render has a receipt
 # of its own.
-EXPECTED = {'darwin': '22dc750d6c26a91e60ca1606ed3240adea8ff9d9cf5e86610651b8a28d12ac14', 'darwin-claude': '32ce19ad264121665936d01a83c7383c5a50a3e722b3f9331a545495561fe002', 'nixos': 'a0e48cc77d546426604ad491ebe69db64fb74b34254dd46c584699ab39facdfa', 'nixos-claude': '202e0c3ecc257fa9f0e8b6454a5b8f549c4812c98fea711bf4127bf9f52868f2', 't3': '24c9a89e1bac22056ae6556a50ef89dbadb6908d50055ecb3699e29f36309079'}
+EXPECTED = {'darwin': '0d0e238eddb0d9ccd9e5b7cc168ddac42ce3324fcb5df3b23ff15f25fb770236', 'darwin-claude': 'c4da0fcf3cb14b5b8e2cbbd79232ff99dd675d75c02d3d5bfbfb3bf86b866b2c', 'nixos': 'c67e4297c6dfc1ecd492ae6ee70a5e8b228392a259bbe9abcda439f4cdd6df90', 'nixos-claude': 'c16f0173e7f6304cdb8e05b21b2d768e9b51e9d370f8c0cf8b9effe35bac9ad4', 't3': 'a8f041277add6e5aac8ce490dcc347d17353e8919dd522b47e5442e68c41e811'}
 
 
 def body(home, harness):
@@ -72,7 +72,7 @@ def exercise(template, helper, renderer, kind):
             assert harness + '-only' in text
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
         source.write_text(template)
-        for harness in (None, 'antigravity'):
+        for harness in (None, 'claude', 'codex', 'pi'):
             context.write_text(json.dumps({'t3': True, **({harness: True} if harness else {})}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
             assert 'T3 delegation' in t3 and 'Writing skills' not in t3

@@ -303,7 +303,6 @@ Remove temporary containers, images, volumes, networks, and build caches as soon
 - The T3 Code desktop app is the flake's pinned release (`0.1.8`, `T3 Code (Beta).app`). A launchd agent sets `T3CODE_DISABLE_AUTO_UPDATE=1` at login so the app does not self-update off the pin.
 - Every package in the NixOS user environment must have a corresponding decision in `modules/shared/darwin-apps.nix` (Homebrew cask, Nix package, or explicit exclusion reason); the `darwin-config` check enforces this.
 - T3 Code finds the Android SDK at `~/Library/Android/sdk` when launched from Finder or the Dock.
-- T3 Code's `antigravity` instance runs the Antigravity ACP runtime that `packages/antigravity-acp.nix` rebuilds, through the `agy_acp_server.par` wrapper in the user profile. The rebuild invalidates Google's signature, so the build signs the runtime ad hoc without the hardened-runtime flag and starts it once during its install check. The re-signed runtime cannot read Keychain items the Google-signed one wrote, so the wrapper sets `AGY_ACP_FORCE_FILE_STORAGE=1` and the runtime keeps its sign-in in a file. Sign in to Antigravity once through T3 Code; activation links `~/.gemini/antigravity-acp/acp_token.json` to the token T3 Code stores for the instance, and keeps a regular file already at that path. Only CI's build has run this runtime on macOS, so confirm a signed-in session on the Mac itself.
 
 ### Xcode agent skills
 

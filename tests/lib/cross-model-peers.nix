@@ -7,8 +7,7 @@
   The Compound Engineering review tokens a user environment must allow,
   sorted, derived from the `pname`s of its installed `packages` rather than
   from my.agents.crossModelPeers, so a module that installs a peer harness
-  but drops its token fails. Antigravity's token follows the ACP runtime
-  on PATH, which Compound Engineering's Antigravity route runs.
+  but drops its token fails.
 */
 { lib }:
 packages:
@@ -16,7 +15,6 @@ let
   tokens = {
     claude-code = "claude";
     codex = "codex";
-    antigravity-acp-path = "antigravity";
   };
   pnames = map (p: p.pname or (lib.getName p)) packages;
 in
