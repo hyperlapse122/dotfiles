@@ -1184,6 +1184,7 @@ pkgs.runCommand "darwin-config"
         builtins.toJSON (
           map (entry: {
             inherit (entry) bootstrap;
+            tlsInspection = entry.host.config.my.tlsInspectionCa.enable;
             host = entry.host.config.my.hostName;
             home = entry.host.config.my.user.home;
             owner = entry.host.config.my.user.name;
