@@ -87,11 +87,13 @@ EOF
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
   printf '{"version": "1.4.8", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
   printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
+  printf '{"version": "1.4.0", "agents": []}\n' >"$clone/packages/pi-agents.json"
   printf '{"version": "0.20.0"}\n' >"$clone/packages/acpx-release.json"
   printf '{"lockfileVersion": 3, "name": "acpx"}\n' >"$clone/packages/acpx/package-lock.json"
   printf '{"version": "0.3.311"}\n' >"$clone/packages/claude-agent-sdk-release.json"
   printf '{"lockfileVersion": 3, "name": "claude-agent-sdk"}\n' >"$clone/packages/claude-agent-sdk/package-lock.json"
   printf '{"version": "0.50.0"}\n' >"$clone/packages/codex-release.json"
+  printf '{"version": "0.50.0", "agents": []}\n' >"$clone/packages/codex-agents.json"
   printf 'base\n' >"$clone/tracked.txt"
   "$git_bin" -C "$clone" add -A
   "$git_bin" -C "$clone" commit -qm init
@@ -199,6 +201,7 @@ case "\$*" in
       echo "pi-release: release v1.5.0 has no pi-linux-arm64" >&2
       exit 1
     fi
+    if [[ " \${UNCHANGED:-} " == *" pi "* ]]; then exit 0; fi
     printf '{"version": "1.5.0", "platforms": {}}\n' >packages/pi-release.json
     ;;
   "run .#npm-release -- --package acpx --output packages/acpx-release.json --lock packages/acpx/package-lock.json")
@@ -229,7 +232,21 @@ case "\$*" in
       echo "codex-release: missing darwin asset" >&2
       exit 1
     fi
+    if [[ " \${UNCHANGED:-} " == *" codex "* ]]; then exit 0; fi
     printf '{"version": "0.51.0"}\n' >packages/codex-release.json
+    ;;
+  "run .#codex-agents -- --output packages/codex-agents.json"|"run .#pi-agents -- --output packages/pi-agents.json")
+    catalog=\$5
+    harness=\${catalog#packages/}
+    harness=\${harness%-agents.json}
+    echo "\$harness" >>"$clone/harness-catalog-calls.log"
+    if [[ " \${FAIL_SOFT:-} " == *" \$harness-agents "* ]]; then
+      printf '{"version": "partial' >"\$catalog"
+      echo "\$harness-agents: unsupported registry" >&2
+      exit 1
+    fi
+    version=\$(jq -r .version "packages/\$harness-release.json")
+    printf '{"version": "%s", "agents": []}\n' "\$version" >"\$catalog"
     ;;
   *)
     echo "unexpected nix invocation: \$*" >&2
@@ -269,6 +286,9 @@ grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
 grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
   fail "update step did not update packages/pi-release.json"
+grep -q '"1.5.0"' "$clone/packages/pi-agents.json" &&
+  grep -q '"0.51.0"' "$clone/packages/codex-agents.json" ||
+  fail "update step did not regenerate the Codex and Pi catalogs"
 grep -q '"1.5.0"' "$clone/packages/antigravity-cli-release.json" ||
   fail "update step did not update packages/antigravity-cli-release.json"
 grep -q '"9.9.9"' "$clone/packages/acpx-release.json" &&
@@ -324,6 +344,32 @@ read -r status clone <<<"$(run_update_step update-claude-code-unchanged "UNCHANG
   fail 'the agent catalog was extracted although the Claude Code pin did not change'
 pass 'an unchanged Claude Code pin skips the agent catalog extraction'
 
+for harness in codex pi; do
+  title=Codex
+  other=pi
+  other_version=1.5.0
+  if [[ $harness == pi ]]; then
+    title=Pi
+    other=codex
+    other_version=0.51.0
+  fi
+  read -r status clone <<<"$(run_update_step "update-$harness-agents-failure" "FAIL_SOFT=$harness-agents")"
+  ((status == 0)) || fail "a failing $harness catalog aborted the update step"
+  grep -q "^::warning title=$title update skipped::.*$harness-agents: unsupported registry" "$scratch/update-$harness-agents-failure-step.log" ||
+    fail "the $harness warning did not report the extraction error"
+  [[ -z $("$git_bin" -C "$clone" status --porcelain "packages/$harness-release.json" "packages/$harness-agents.json") ]] ||
+    fail "a failing $harness catalog changed its pin or catalog"
+  [[ $(jq -r .version "$clone/packages/$other-agents.json") == "$other_version" ]] ||
+    fail "a failing $harness catalog prevented the $other update"
+done
+pass 'Codex and Pi catalog failures restore their own files while the independent update proceeds'
+
+read -r status clone <<<"$(run_update_step update-harness-pins-unchanged "UNCHANGED=codex pi")"
+((status == 0)) || fail "unchanged Codex and Pi pins aborted the update step"
+[[ ! -e $clone/harness-catalog-calls.log ]] ||
+  fail 'a native agent catalog was extracted although its pin did not change'
+pass 'unchanged Codex and Pi pins skip their catalog extractions'
+
 read -r status clone <<<"$(run_update_step update-t3code-table "FAIL_SOFT=t3code-table")"
 ((status == 0)) || fail "an unreadable T3 Code Antigravity table aborted the update step: $(cat "$scratch/update-t3code-table-step.log")"
 grep -q '^::warning title=T3 Code Antigravity table unreadable::.*Antigravity table in the T3 Code CLI does not parse' "$scratch/update-t3code-table-step.log" ||
@@ -357,6 +403,9 @@ new_t3_version=0.0.46
 printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >"$clone/packages/prezto-pin.json"
 printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
+printf '{"version": "1.5.0", "agents": []}\n' >"$clone/packages/pi-agents.json"
+printf '{"version": "0.51.0"}\n' >"$clone/packages/codex-release.json"
+printf '{"version": "0.51.0", "agents": []}\n' >"$clone/packages/codex-agents.json"
 printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
 printf '{"version": "2.1.0"}\n' >"$clone/packages/claude-code-manifest.json"
@@ -369,10 +418,11 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
   fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
 commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 7 ]] || fail "expected 7 per-pin commits, found: $commits"
+[[ $(wc -l <<<"$commits") == 8 ]] || fail "expected 8 per-pin commits, found: $commits"
 for expected in \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
-  'chore(packages): bump pi to 1.5.0|packages/pi-release.json' \
+  'chore(packages): bump pi to 1.5.0|packages/pi-agents.json packages/pi-release.json' \
+  'chore(packages): bump codex to 0.51.0|packages/codex-agents.json packages/codex-release.json' \
   'chore(packages): bump claude-code to 2.1.0|packages/claude-code-agents.json packages/claude-code-manifest.json' \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
