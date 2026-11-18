@@ -111,6 +111,11 @@ pkgs.runCommand "agent-instructions-tests" { nativeBuildInputs = [ pkgs.python3 
   ''}
   failed=0
   ${lib.concatMapStrings assertEntry userEntries}
+  ${lib.concatMapStrings (entry: ''
+    if ! cmp ${esc "${entry.user.home-files}/.local/share/nix-config/claude-code-agents.json"} ${../packages/claude-code-agents.json}; then
+      failed=1
+    fi
+  '') presentEntries}
   ${lib.optionalString
     (entries == null && !(lib.any (entry: (entry.user.my.user.gpgKey or null) == fakeKey) userEntries))
     ''

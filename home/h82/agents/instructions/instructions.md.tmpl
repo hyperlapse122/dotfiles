@@ -84,6 +84,16 @@ Read the first relevant CI failure before choosing what to inspect. If the evide
 
 If the failure already identifies the next check, run it directly. If the failing step or error is missing, retrieve it first. Treat the answer as a lead and verify it against the logs, code, or configuration. If the tool is unavailable, fails, or gives no usable lead, continue the investigation. Follow the existing verification and approval rules.
 
+# Decide for subagent roles
+
+After the workflow decides to delegate, keep its launch route, permissions, provider, model, and effort. If a role is required, follow the existing path without calling `judge`. Otherwise, consider roles the current session can select through that route. Apply each role's stated purpose, conditions on use, tool restrictions, and model and effort defaults before counting it as eligible. If one role qualifies, select it directly.
+{{ if .claude }}
+For Claude Code's built-in roles, start with `~/.local/share/nix-config/claude-code-agents.json`. Confirm availability in the current session and use its effective role definitions when they differ from the pinned catalog.
+{{ end }}
+If two or more roles qualify, ask the `decide` MCP server's `judge` tool once. Use a `choice` question with the eligible role identifiers, their short descriptions, and `insufficient_evidence`. Summarize the task by purpose and tool needs. Send only information permitted for the configured backend. When the backend is unknown, use information permitted to leave the machine.
+
+Pass a returned eligible role to the existing launcher's role selector. Follow the existing selection path if the session has no selectable role, the request cannot be sent, or `judge` fails, abstains, or returns an ineligible role.
+
 # Issues in pull and merge requests
 
 When you create a pull request or merge request, link the issues it addresses in its description.
