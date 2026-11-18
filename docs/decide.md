@@ -34,6 +34,8 @@ cat request.json | decide judge -
 
 The CLI fills in the configured model when the document omits it. `--model` overrides the document's model. A `noul` answer is a numeric probability; a score uses the ordered levels in its criteria. `--json` prints the complete response, including optional fields. API errors go to stderr, with their full JSON body when `--json` is set; failures have a nonzero exit status.
 
+Press Ctrl+C to cancel `decide judge`. The CLI closes its connection, reports the interruption on stderr and exits with status 130. With `--json`, stderr contains a JSON error with code 130.
+
 The managed user environment installs and starts the service. To try the package before applying a host configuration, run `nix run .#decide -- serve` in a separate terminal. `decide serve` runs in the foreground and refuses to replace an existing live service.
 
 ## Inspect a model
@@ -109,7 +111,9 @@ curl --unix-socket /private/user/directory/decide.sock \
 
 The documented `HTTP-Referer`, `X-OpenRouter-Title`, `X-OpenRouter-Categories` and `x-session-id` headers pass through IPC to OpenRouter. CLI users can repeat `--header 'NAME: VALUE'` on `decide judge`. Native backends accept this attribution metadata without using it for inference.
 
-Inference is serialized in the service. Queued requests whose connections have closed are dropped before execution. Once execution starts, a client disconnect or timeout does not establish that inference, a model download or remote billing stopped. Requests are not automatically retried. Remote image downloads on native backends have a 30-second total deadline and stream into temporary storage.
+Inference is serialized in the service. To cancel a request, close its socket connection. The service drops queued requests and closes in-flight OpenRouter connections. Local work that has already started finishes before the next request runs. Requests are not automatically retried. Remote image downloads on native backends have a 30-second total deadline and stream into temporary storage.
+
+OpenRouter [documents stream cancellation](https://openrouter.ai/docs/api_reference/streaming#stream-cancellation) for providers that support it. The Decisions endpoint returns a single JSON response, and closing its connection can leave provider processing and billing in progress.
 
 ## Evidence and follow-up
 

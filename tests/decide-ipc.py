@@ -80,12 +80,15 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         async with self.client.post('http://localhost/api/alpha/decisions', json=data) as response:
             return response.status, await response.json()
 
-    async def cli(self, *args, input=None):
+    async def start_cli(self, *args):
         executable = os.environ.get('DECIDE_TEST_CLI')
         command = [executable] if executable else [sys.executable, '-m', 'decide']
         env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path))
-        process = await asyncio.create_subprocess_exec(*command, *args, stdout=asyncio.subprocess.PIPE,
+        return await asyncio.create_subprocess_exec(*command, *args, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, stdin=asyncio.subprocess.PIPE, env=env)
+
+    async def cli(self, *args, input=None):
+        process = await self.start_cli(*args)
         out, err = await process.communicate(input)
         return process.returncode, out.decode(), err.decode()
 
@@ -389,6 +392,59 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.post(dict(REQUEST, state='fail')))[0], 401)
         self.assertEqual((await self.post(REQUEST))[0], 200)
         self.assertEqual(self.backend.max_active, 1)
+
+    async def test_cli_interrupt_closes_openrouter_response(self):
+        started = asyncio.Event()
+        disconnected = asyncio.Event()
+        release = asyncio.Event()
+
+        async def upstream(request):
+            document = await request.json()
+            if document['state'] != 'wait':
+                return web.json_response(RESPONSE)
+            response = web.StreamResponse(headers={'Content-Type': 'application/json'})
+            await response.prepare(request)
+            await response.write(b'{')
+            started.set()
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                disconnected.set()
+                raise
+            return response
+
+        app = web.Application()
+        app.router.add_post('/decisions', upstream)
+        runner = web.AppRunner(app, handler_cancellation=True)
+        await runner.setup()
+        self.addAsyncCleanup(runner.cleanup)
+        site = web.TCPSite(runner, '127.0.0.1', 0)
+        await site.start()
+        endpoint = f'http://127.0.0.1:{runner.addresses[0][1]}/decisions'
+        backend = OpenRouter(api_key='fake-key', endpoint=endpoint)
+        remote_socket = str(Path(self.temp.name) / 'remote.sock')
+        service = Service(Judge(backend), remote_socket)
+        await service.start()
+        self.addAsyncCleanup(service.close)
+
+        document = Path(self.temp.name) / 'cancel-request.json'
+        document.write_text(json.dumps(dict(REQUEST, state='wait')))
+        process = await self.start_cli('judge', '--socket', remote_socket, '--json', str(document))
+        try:
+            await asyncio.wait_for(started.wait(), 5)
+            process.send_signal(signal.SIGINT)
+            out, err = await asyncio.wait_for(process.communicate(), 5)
+            await asyncio.wait_for(disconnected.wait(), 2)
+            self.assertEqual((process.returncode, out), (130, b''))
+            self.assertEqual(json.loads(err)['error']['message'], 'Request cancelled')
+            code, out, err = await self.cli('judge', '--socket', remote_socket, '--json', '-',
+                                            input=json.dumps(REQUEST).encode())
+            self.assertEqual((code, json.loads(out)), (0, RESPONSE), err)
+        finally:
+            release.set()
+            if process.returncode is None:
+                process.kill()
+                await process.communicate()
 
 class RemoteLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_session_reuse_and_key_rotation(self):
