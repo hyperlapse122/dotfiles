@@ -333,16 +333,6 @@
           userPackageOf =
             pname: entry: pkgs.lib.lists.findFirst (p: (p.pname or "") == pname) null (userPackagesOf entry);
 
-          # Fetches every platform a release pin names, not only this system's,
-          # so a wrong URL or hash for a platform no Linux job builds fails on
-          # the x86_64 updater before the pin reaches main.
-          pinnedSources =
-            name: pinFile:
-            pkgs.linkFarm name (
-              pkgs.lib.mapAttrs (_: platform: pkgs.fetchurl { inherit (platform) url hash; })
-                (builtins.fromJSON (builtins.readFile pinFile)).platforms
-            );
-
           # Home Manager file targets of one user environment.
           homeFileTargets =
             entry: map (file: file.target or "") (builtins.attrValues (entry.user.home.file or { }));

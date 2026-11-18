@@ -306,7 +306,7 @@ Remove temporary containers, images, volumes, networks, and build caches as soon
 
 ### Xcode agent skills
 
-Every production apply exports the selected Xcode's agent skills after the Xcode step. The export is stored in `~/.local/state/nix-config/xcode-skills` and linked into all four agent skill roots. If export fails or is empty, activation warns once, keeps the previous skills, and retries on the next apply. A declared skill wins a name collision, which produces one warning.
+Every production apply exports the selected Xcode's agent skills after the Xcode step. The export is stored in `~/.local/state/nix-config/xcode-skills` and linked into all three managed skill roots. If export fails or is empty, activation warns once, keeps the previous skills, and retries on the next apply. A declared skill wins a name collision, which produces one warning.
 
 To remove the skills by hand, delete the links pointing into the state directory from `~/.claude/skills`, `~/.codex/skills`, and `~/.pi/agent/skills`, then delete the state directory. The next production apply reinstalls them.
 

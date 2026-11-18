@@ -733,7 +733,6 @@ def read_text(settings):
 
 def read_settings(settings):
     text = read_text(settings)
-    # An empty settings file has no values to preserve.
     if text is None or not text.strip():
         return {}
     try:
