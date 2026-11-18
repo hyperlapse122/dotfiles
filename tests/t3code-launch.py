@@ -55,7 +55,7 @@ def validate(home):
     assert Path(t3_files[0]).read_text() == addition
     assert set(antigravity) == {'driver', 'enabled', 'custom', 'config', 'environment'}
     assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
-    assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.1-sol', 'options': [{'id': 'reasoningEffort', 'value': 'xhigh'}, {'id': 'serviceTier', 'value': 'default'}]}
+    assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.2-sol', 'options': [{'id': 'reasoningEffort', 'value': 'high'}, {'id': 'serviceTier', 'value': 'default'}]}
     assert settings['fallbackModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5'}
     assert settings['textGenerationModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6-luna'}
     assert settings['defaultThreadEnvMode'] == 'worktree'
