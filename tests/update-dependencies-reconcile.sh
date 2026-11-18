@@ -79,6 +79,7 @@ EOF
 EOF
   printf '{"version": "1.0.0"}\n' >"$clone/packages/claude-desktop-version.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/claude-code-manifest.json"
+  printf '{"version": "1.0.0", "agents": []}\n' >"$clone/packages/claude-code-agents.json"
   printf '{"latest": {"cmdline-tools": "19.0"}}\n' >"$clone/packages/android-sdk-repo.json"
   printf '{"version": "2026.10.0"}\n' >"$clone/packages/mise-release.json"
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
@@ -131,7 +132,25 @@ case "\$*" in
     printf '{"version": "1.1.0"}\n' >packages/claude-desktop-version.json
     ;;
   "run .#claude-code-release -- --output packages/claude-code-manifest.json")
+    if [[ " \${FAIL_SOFT:-} " == *" claude-code "* ]]; then
+      printf '{"version": "partial' >packages/claude-code-manifest.json
+      echo "claude-code-release: manifest for 2.1.0 lacks linux-arm64" >&2
+      exit 1
+    fi
+    if [[ " \${UNCHANGED:-} " == *" claude-code "* ]]; then
+      echo "claude-code-release: already up to date" >&2
+      exit 0
+    fi
     printf '{"version": "2.1.0"}\n' >packages/claude-code-manifest.json
+    ;;
+  "run .#claude-code-agents -- --output packages/claude-code-agents.json")
+    echo "claude-code-agents" >>"$clone/claude-code-agents-calls.log"
+    if [[ " \${FAIL_SOFT:-} " == *" claude-code-agents "* ]]; then
+      printf '{"version": "partial' >packages/claude-code-agents.json
+      echo "claude-code-agents: Explore: disallowedTools: ft: exported by 2 modules" >&2
+      exit 1
+    fi
+    printf '{"version": "2.1.0", "agents": [{"agentType": "Explore"}]}\n' >packages/claude-code-agents.json
     ;;
   "run .#android-sdk-release -- --output packages/android-sdk-repo.json")
     printf '{"latest": {"cmdline-tools": "20.0", "platform-tools": "36.0.0"}}\n' >packages/android-sdk-repo.json
@@ -252,6 +271,9 @@ grep -q 'tag = "compound-engineering-v2.68.0";' "$clone/home/h82/agents/agent-pl
   fail "update step did not update tag in home/h82/agents/agent-plugin-pins.nix"
 grep -q 'expectedRev = "2222222222222222222222222222222222222222";' "$clone/home/h82/agents/agent-plugin-pins.nix" ||
   fail "update step did not update expectedRev in home/h82/agents/agent-plugin-pins.nix"
+grep -q '"2.1.0"' "$clone/packages/claude-code-manifest.json" &&
+  grep -q '"Explore"' "$clone/packages/claude-code-agents.json" ||
+  fail "update step did not update the Claude Code pin and its agent catalog together"
 grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
 grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
@@ -293,6 +315,25 @@ grep -q '^::warning title=T3 Code update skipped::.*rebuild of paths does not fi
   fail "soft-failing updaters left partial changes in their pin or lock files"
 pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, pi, acpx, claude-agent-sdk, codex, grok-build) warn, restore their files, and let the step continue'
 
+for failing in claude-code:claude-code-release claude-code-agents:claude-code-agents; do
+  command=${failing#*:} failing=${failing%%:*}
+  read -r status clone <<<"$(run_update_step "update-$failing-failure" "FAIL_SOFT=$failing")"
+  ((status == 0)) || fail "a failing $failing aborted the update step: $(cat "$scratch/update-$failing-failure-step.log")"
+  grep -q "^::warning title=Claude Code update skipped::.*$command: " "$scratch/update-$failing-failure-step.log" ||
+    fail "the Claude Code warning does not carry the $failing message: $(cat "$scratch/update-$failing-failure-step.log")"
+  [[ -z $("$git_bin" -C "$clone" status --porcelain packages/claude-code-manifest.json packages/claude-code-agents.json) ]] ||
+    fail "a failing $failing left the Claude Code pin or agent catalog changed"
+  grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
+    fail "a failing $failing stopped the updates after it"
+done
+pass 'a failing Claude Code release or agent extraction warns with its message, restores both files, and lets the step continue'
+
+read -r status clone <<<"$(run_update_step update-claude-code-unchanged "UNCHANGED=claude-code")"
+((status == 0)) || fail "an unchanged Claude Code pin aborted the update step: $(cat "$scratch/update-claude-code-unchanged-step.log")"
+[[ ! -e $clone/claude-code-agents-calls.log ]] ||
+  fail 'the agent catalog was extracted although the Claude Code pin did not change'
+pass 'an unchanged Claude Code pin skips the agent catalog extraction'
+
 read -r status clone <<<"$(run_update_step update-t3code-table "FAIL_SOFT=t3code-table")"
 ((status == 0)) || fail "an unreadable T3 Code Antigravity table aborted the update step: $(cat "$scratch/update-t3code-table-step.log")"
 grep -q '^::warning title=T3 Code Antigravity table unreadable::.*Antigravity table in the T3 Code CLI does not parse' "$scratch/update-t3code-table-step.log" ||
@@ -329,6 +370,8 @@ printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.js
 printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
 printf '{"version": "1.0.71", "platforms": {}}\n' >"$clone/packages/grok-build-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
+printf '{"version": "2.1.0"}\n' >"$clone/packages/claude-code-manifest.json"
+printf '{"version": "2.1.0", "agents": [{"agentType": "Explore"}]}\n' >"$clone/packages/claude-code-agents.json"
 printf '{"lockfileVersion": 3, "name": "acpx", "new": true}\n' >"$clone/packages/acpx/package-lock.json"
 sed -i 's/compound-engineering-v2.67.0/compound-engineering-v2.68.0/' \
   "$clone/flake.nix" "$clone/home/h82/agents/agent-plugin-pins.nix"
@@ -337,10 +380,11 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
   fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
 commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 7 ]] || fail "expected 7 per-pin commits, found: $commits"
+[[ $(wc -l <<<"$commits") == 8 ]] || fail "expected 8 per-pin commits, found: $commits"
 for expected in \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
   'chore(packages): bump pi to 1.5.0|packages/pi-release.json' \
+  'chore(packages): bump claude-code to 2.1.0|packages/claude-code-agents.json packages/claude-code-manifest.json' \
   'chore(packages): bump grok-build to 1.0.71|packages/grok-build-release.json' \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
@@ -352,6 +396,6 @@ for expected in \
   files=$("$git_bin" -C "$clone" show --format= --name-only "$sha" | sort | paste -sd ' ')
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
-pass 'the Prezto, t3code, antigravity-cli, pi, acpx, grok-build, and compound-engineering changes each land as their own commit with only their files'
+pass 'the Prezto, claude-code, t3code, antigravity-cli, pi, acpx, grok-build, and compound-engineering changes each land as their own commit with only their files'
 
 python3 "$runner" "$workflow" "$publisher" "$verifier"

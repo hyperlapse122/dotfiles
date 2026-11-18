@@ -155,8 +155,24 @@ jobs:
           # 3. Update Claude Desktop
           nix run .#claude-desktop-release -- --output packages/claude-desktop-version.json
 
-          # 4. Update Claude Code
-          nix run .#claude-code-release -- --output packages/claude-code-manifest.json
+          # 4. Update Claude Code. A new pin carries the catalog of built-in
+          # agents extracted from the binary that pin installs, so the two
+          # files move together. When the release or the extraction fails,
+          # both keep their current contents, the warning carries the
+          # failing command's message, and the other updates go through.
+          claude_code_status=0
+          claude_code_log=$(mktemp)
+          nix run .#claude-code-release -- --output packages/claude-code-manifest.json 2>"$claude_code_log" || claude_code_status=$?
+          if [ "$claude_code_status" -eq 0 ] && [ -n "$(git status --porcelain packages/claude-code-manifest.json)" ]; then
+            nix run .#claude-code-agents -- --output packages/claude-code-agents.json 2>>"$claude_code_log" || claude_code_status=$?
+          fi
+          cat "$claude_code_log" >&2
+          claude_code_message=$(tail -n 1 "$claude_code_log")
+          rm -f "$claude_code_log"
+          if [ "$claude_code_status" -ne 0 ]; then
+            echo "::warning title=Claude Code update skipped::Claude Code release or agent catalog extraction failed; keeping the current pins in packages/claude-code-manifest.json and packages/claude-code-agents.json. $claude_code_message"
+            git checkout -- packages/claude-code-manifest.json packages/claude-code-agents.json
+          fi
 
           # 5. Update the Android SDK pin
           nix run .#android-sdk-release -- --output packages/android-sdk-repo.json
@@ -271,7 +287,7 @@ jobs:
 
           if [ -n "$(git status --porcelain packages/claude-code-manifest.json)" ]; then
             NEW_VER=$(jq -r .version packages/claude-code-manifest.json)
-            git add packages/claude-code-manifest.json
+            git add packages/claude-code-manifest.json packages/claude-code-agents.json
             git commit -m "chore(packages): bump claude-code to $NEW_VER"
           fi
 
