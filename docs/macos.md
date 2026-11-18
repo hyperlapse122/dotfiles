@@ -48,7 +48,7 @@ The flake builds two outputs for each macOS host, `darwinConfigurations.<host>` 
 - **Containers.** Apple's `container` CLI (`modules/darwin/container.nix`), with no Podman machine and no automatic minikube cluster; see [Containers](#containers).
 - **Fonts.** The shared font list (`modules/shared/font-packages.nix` and `packages/overlay-fonts.nix`, including Pretendard, Jetendard, D2Coding, Monoplex KR, Noto CJK, and Twemoji) is installed system-wide.
 - **Dock and system defaults.** `modules/darwin/defaults.nix` enables automatic light/dark appearance (`AppleInterfaceStyleSwitchesAutomatically = true`). `modules/darwin/dock.nix` sets tile size `32`, hides recent applications (`show-recents = false`), pins `~/Downloads` on the right side of the Dock, and replaces `persistent-apps` on each apply. The Dock starts with the system-owned Finder, Apps, Google Chrome, and App Store. Its personal apps include Messages, KakaoTalk, Telegram Desktop, FaceTime, and Phone in that order. The host's `my.dock.hostApps` follow the personal apps and precede Ghostty; T3 Code follows Ghostty when `my.t3.desktop.enable` is on, followed by ChatGPT and Claude. The module defines the complete ordered list.
-- **User environment.** zsh (Prezto modules and completions), Ghostty (`Jetendard`), Git with YubiKey OpenPGP signing via `gpg-git` and `dotfiles-pinentry`, `.NET` 8 and 10, Rust (`rustup`), C++/CMake/Ninja/`vcpkg`, Bun, `mise`, `gh`, `glab`, `tokscale`, T3 Code `0.1.8`, and the managed coding agents (Claude Code, Codex, Pi `1.5.0`, and the standalone Antigravity CLI `agy`). See [App notes](#app-notes).
+- **User environment.** zsh (Prezto modules and completions), Ghostty (`Jetendard`), Git with YubiKey OpenPGP signing via `gpg-git` and `dotfiles-pinentry`, `.NET` 8 and 10, Rust (`rustup`), C++/CMake/Ninja/`vcpkg`, Bun, `mise`, `gh`, `glab`, `tokscale`, T3 Code `0.1.8`, and the managed coding agents (Claude Code, Codex, and Pi `1.5.0`). See [App notes](#app-notes).
 
 ChatGPT is available from `/Applications` on production and bootstrap outputs; open it and sign in manually.
 
@@ -306,9 +306,9 @@ Remove temporary containers, images, volumes, networks, and build caches as soon
 
 ### Xcode agent skills
 
-Every production apply exports the selected Xcode's agent skills after the Xcode step. The export is stored in `~/.local/state/nix-config/xcode-skills` and linked into all four agent skill roots. If export fails or is empty, activation warns once, keeps the previous skills, and retries on the next apply. A declared skill wins a name collision, which produces one warning.
+Every production apply exports the selected Xcode's agent skills after the Xcode step. The export is stored in `~/.local/state/nix-config/xcode-skills` and linked into all three managed skill roots. If export fails or is empty, activation warns once, keeps the previous skills, and retries on the next apply. A declared skill wins a name collision, which produces one warning.
 
-To remove the skills by hand, delete the links pointing into the state directory from each of `~/.claude/skills`, `~/.gemini/antigravity-cli/skills`, `~/.codex/skills`, and `~/.pi/agent/skills`, then delete the state directory. The next production apply reinstalls them.
+To remove the skills by hand, delete the links pointing into the state directory from `~/.claude/skills`, `~/.codex/skills`, and `~/.pi/agent/skills`, then delete the state directory. The next production apply reinstalls them.
 
 Repository checks cover the helper and its wiring. Check on the Mac that a signed-in harness session lists the skills, including once with the Xcode app closed.
 

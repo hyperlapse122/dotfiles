@@ -30,13 +30,11 @@ let
     ".claude/CLAUDE.md" = "claude";
     ".codex/AGENTS.md" = "codex";
     ".pi/agent/AGENTS.md" = "pi";
-    ".gemini/config/rules" = "antigravity";
   };
   deliveryPaths = lib.attrNames deliveries;
   retiredPaths = [
+    ".gemini/config/rules"
     ".t3/instructions/claude-code/CLAUDE.md"
-    ".gemini/GEMINI.md"
-    ".gemini/config/AGENTS.md"
     ".grok/AGENTS.md"
     ".grok/rules/instructions.md"
   ];

@@ -218,17 +218,10 @@ jobs:
             git checkout -- packages/t3code-release.json
           fi
 
-          # 9. Update the Antigravity CLI. A feed failure keeps the current
-          # pin and lets the other updates through, as T3 Code's does.
-          if ! nix run .#antigravity-cli-release -- --output packages/antigravity-cli-release.json; then
-            echo "::warning title=Antigravity CLI update skipped::antigravity-cli-release failed; keeping the current pin in packages/antigravity-cli-release.json."
-            git checkout -- packages/antigravity-cli-release.json
-          fi
-
-          # 10. Update Pi and verify its native roster from the new source pin.
+          # 9. Update Pi and verify its native roster from the new source pin.
           update_harness_catalog pi Pi
 
-          # 11. Update the npm packages: the shared ACP client and the Claude
+          # 10. Update the npm packages: the shared ACP client and the Claude
           # Agent SDK that agent-usage reads Claude limits through. Each pin
           # moves with its regenerated lock file, so a failure restores both
           # and lets the other updates through, as Pi's does.
@@ -245,10 +238,10 @@ jobs:
             fi
           done
 
-          # 12. Update Codex and extract the roster from the new source pin.
+          # 11. Update Codex and extract the roster from the new source pin.
           update_harness_catalog codex Codex
 
-          # 13. Refresh Prezto and every recursively pinned submodule.
+          # 12. Refresh Prezto and every recursively pinned submodule.
           nix run .#prezto-release -- --output packages/prezto-pin.json
 
           if [ -z "$(git status --porcelain)" ]; then
@@ -305,12 +298,6 @@ jobs:
             NEW_VER=$(jq -r .version packages/t3code-release.json)
             git add packages/t3code-release.json
             git commit -m "chore(packages): bump t3code to $NEW_VER"
-          fi
-
-          if [ -n "$(git status --porcelain packages/antigravity-cli-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/antigravity-cli-release.json)
-            git add packages/antigravity-cli-release.json
-            git commit -m "chore(packages): bump antigravity-cli to $NEW_VER"
           fi
 
           if [ -n "$(git status --porcelain packages/chatgpt-version.json)" ]; then

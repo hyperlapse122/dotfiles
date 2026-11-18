@@ -126,22 +126,6 @@ let
         lib.attrValues (userConfig.home.file or { })
       );
 
-      # agy copies the plugin there and replaces the whole tree on each
-      # install, so a Home Manager link there would be overwritten or block
-      # the install. Targets are relative to the home directory.
-      agyInstallDir = ".gemini/config/plugins/${pluginName}";
-      agyInstallTargeted = lib.any (
-        file:
-        let
-          target = file.target or "";
-        in
-        # A link on the directory, inside it, or on an ancestor such as
-        # ~/.gemini/config/plugins all put a store path where agy installs.
-        target == agyInstallDir
-        || lib.hasPrefix "${agyInstallDir}/" target
-        || (target != "" && lib.hasPrefix "${target}/" agyInstallDir)
-      ) (lib.attrValues (userConfig.home.file or { }));
-
       activationAbsent = lib.optionalString (activation == null) ''
         echo 'missing home.activation.agentPlugins on ${hostName}' >&2
         failed=1
@@ -239,13 +223,9 @@ let
         echo 'Home Manager must not link ${destination} on ${hostName}; the activation entry owns it' >&2
         failed=1
       '';
-      agyLinkPresent = lib.optionalString agyInstallTargeted ''
-        echo 'Home Manager must not link ~/${agyInstallDir} on ${hostName}; agy owns its installed copy' >&2
-        failed=1
-      '';
     in
     ''
-      ${activationAbsent}${activationPresent}${symlinkPresent}${agyLinkPresent}
+      ${activationAbsent}${activationPresent}${symlinkPresent}
       ${executeActivation {
         mode = "plugins";
         inherit script;

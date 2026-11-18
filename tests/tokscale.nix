@@ -33,7 +33,7 @@
   must fail evaluation, and the shapes host names take must still build. Those
   fixtures use role names, never a real host's name.
 
-  The wrapper's run-time behaviour (token precedence, Antigravity
+  The wrapper's run-time behaviour (token precedence, caller-supplied
   directories, exit status) is covered by the tokscale-wrapper check. This
   check never runs bun or Tokscale.
 
@@ -87,12 +87,6 @@ let
     {
       "$schema": "https://tokscale.ai/custom-pricing.schema.json",
       "models": {
-        "gemini-3.1-pro": {
-          "input_cost_per_million_tokens": 4,
-          "output_cost_per_million_tokens": 18,
-          "cache_read_input_token_cost_per_million_tokens": 0.4,
-          "cache_creation_input_token_cost_per_million_tokens": 0.375
-        },
         "claude-fable-5-1": {
           "input_cost_per_million_tokens": 10,
           "output_cost_per_million_tokens": 50,

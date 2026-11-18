@@ -138,8 +138,6 @@ let
   codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
 
   # Home Manager overrides the Synthetic key file per host kind.
-  # The Antigravity quota service lists Gemini buckets only for a current ACP
-  # client, so the wrapper names the ACP runtime version pinned by T3 Code.
   agentUsage = pkgs.lib.makeOverridable (
     {
       syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
@@ -186,10 +184,6 @@ let
     meta.mainProgram = "npm-release";
   };
 
-  # Resolves the latest Antigravity CLI release and its per-platform digests
-  # from Google's release feed.
-  antigravityCliRelease = pythonHelper "antigravity-cli-release" ../scripts/antigravity-cli-release;
-
   t3codeRelease = pythonHelper "t3code-release" ../scripts/t3code-release;
 
   # Compares the Synthetic models in home/h82/agents/synthetic-models.nix with
@@ -222,7 +216,6 @@ in
     codexRelease
     agentUsage
     npmRelease
-    antigravityCliRelease
     t3codeRelease
     syntheticModelsWatch
     androidSdkRelease

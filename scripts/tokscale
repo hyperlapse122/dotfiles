@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Runs the latest Tokscale through bun with the device name, the API token,
-# and the Antigravity ACP session directories supplied. The Nix package
-# replaces the @...@ constants. Builtins only apart from bun, so
-# the wrapper needs nothing else on PATH.
+# Runs the latest Tokscale through bun with the device name and API token.
+# The Nix package replaces the @...@ constants. The wrapper uses only shell
+# builtins and bun.
 set -euo pipefail
 
 HOST_NAME='@HOST_NAME@'
@@ -30,38 +29,6 @@ if [[ -z ${TOKSCALE_API_TOKEN:-} ]]; then
     export TOKSCALE_API_TOKEN=$token
   fi
   unset token
-fi
-
-# The Antigravity ACP server (T3 Code gives each provider instance its own
-# GEMINI_HOME) keeps sessions where Tokscale does not look. The ACP
-# conversations share the Antigravity CLI's format.
-extra_dirs=()
-add_dirs() {
-  local client=$1 dir
-  shift
-  for dir in "$@"; do
-    # TOKSCALE_EXTRA_DIRS is comma-separated, so a path holding a comma
-    # would split into two bogus entries and is skipped.
-    [[ -d $dir && $dir != *,* ]] || continue
-    extra_dirs+=("$client:$dir")
-  done
-}
-if [[ -n ${HOME:-} ]]; then
-  shopt -s nullglob
-  add_dirs antigravity-cli \
-    "$HOME"/.t3/userdata/providers/antigravity/*/antigravity-acp/conversations \
-    "$HOME"/.gemini/antigravity-acp/conversations
-  shopt -u nullglob
-fi
-if [[ ${#extra_dirs[@]} -gt 0 ]]; then
-  joined=$(
-    IFS=,
-    printf '%s' "${extra_dirs[*]}"
-  )
-  if [[ -n ${TOKSCALE_EXTRA_DIRS:-} ]]; then
-    joined=$TOKSCALE_EXTRA_DIRS,$joined
-  fi
-  export TOKSCALE_EXTRA_DIRS=$joined
 fi
 
 export TOKSCALE_DEVICE_NAME=$HOST_NAME

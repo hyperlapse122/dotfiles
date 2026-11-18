@@ -8,7 +8,6 @@ import sys
 import tempfile
 
 DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
-              'antigravity': '.gemini/config/rules',
               'pi': '.pi/agent/AGENTS.md'}
 # Independent content receipts: negation, repetition, deletion and foreign text
 # all change the complete normative body, including its order. Claude Code gets
@@ -18,16 +17,7 @@ EXPECTED = {'darwin': 'a4d958ed51ad5df0379b3cdf4c2f403a180173aead41fb83275547514
 
 
 def body(home, harness):
-    path = home / DELIVERIES[harness]
-    if harness != 'antigravity':
-        return path.read_text()
-    result = ''
-    for item in sorted(path.glob('nix-config-*.md')):
-        text = item.read_text()
-        assert text.startswith('---\ntrigger: always_on\n---\n\n')
-        assert len(item.read_bytes()) < 24000
-        result += text.split('---\n\n', 1)[1]
-    return result
+    return (home / DELIVERIES[harness]).read_text()
 
 
 def receipt(text, kind, harness=None):
@@ -60,6 +50,7 @@ def exercise(template, helper, renderer, kind):
             subprocess.run([sys.executable, helper, '--context', str(context), '--template', str(source),
                             '--renderer', renderer, '--home', str(root), '--kreadconfig', str(kread)], check=True)
         render()
+        assert not (root / '.gemini').exists(), 'retired Gemini instructions were delivered'
         for harness in DELIVERIES:
             text = body(root, harness)
             check_receipt(text, kind, harness)
