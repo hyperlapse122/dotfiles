@@ -20,6 +20,8 @@ Once a workflow has decided to delegate, the parent uses the role selector on th
 
 The parent checks role purpose, conditions, tools, and compatibility with required launch settings before asking. Claude Code starts with the pinned catalog at `~/.local/share/nix-config/claude-code-agents.json` and applies the session's effective definitions. The request contains a short task summary and eligible role descriptions that the configured backend may receive. It includes an `insufficient_evidence` option. [Pinned catalog](../packages/claude-code-agents.json) · [Decide backends](decide.md#backends-and-models)
 
+A Claude Code `fork` uses the parent's model and full conversation. It qualifies only when the workflow permits those effective settings. [Claude Code fork behavior](https://code.claude.com/docs/en/sub-agents#how-forks-differ-from-other-subagents)
+
 T3 0.1.9's `delegate_task` applies its `role` as guidance in the child prompt. Provider, model, effort, and tool access come from the launch route. A native launch inside T3 uses the harness's own selector when available. [T3 child prompt construction](https://github.com/pingdotgg/t3code/blob/v0.1.9/apps/server/src/mcp/delegatedTaskModes.ts#L90-L94)
 
 ### Session checks

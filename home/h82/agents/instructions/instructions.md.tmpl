@@ -86,7 +86,7 @@ If the failure already identifies the next check, run it directly. If the failin
 
 # Decide for subagent roles
 
-After the workflow decides to delegate, keep its launch route, permissions, provider, model, and effort. If a role is required, follow the existing path without calling `judge`. Otherwise, consider roles the current session can select through that route. Apply each role's stated purpose, conditions on use, tool restrictions, and model and effort defaults before counting it as eligible. If one role qualifies, select it directly.
+After the workflow decides to delegate, keep its launch route, permissions, provider, model, effort, and context limits. If a role is required, follow the existing path without calling `judge`. Otherwise, consider roles the current session can select through that route. Check each role's purpose, conditions on use, tool restrictions, and effective launch behavior, including any settings it overrides or ignores. If one role qualifies, select it directly.
 {{ if .claude }}
 For Claude Code's built-in roles, start with `~/.local/share/nix-config/claude-code-agents.json`. Confirm availability in the current session and use its effective role definitions when they differ from the pinned catalog.
 {{ end }}
