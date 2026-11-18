@@ -2,6 +2,8 @@
 
 The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, and Pi each receive their own render.
 
+The shared instructions call for one `decide` judgment during CI triage when the failure evidence leaves multiple plausible read-only checks and the answer would change which check runs first. The agent verifies the suggested lead and continues the investigation if the tool yields no usable answer. [Decide MCP tool](decide.md#use-the-mcp-tool)
+
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
 For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive this common rule through their normal baseline instruction paths.
