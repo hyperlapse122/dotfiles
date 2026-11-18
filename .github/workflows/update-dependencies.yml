@@ -123,6 +123,23 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
 
+          update_harness_catalog() {
+            local harness=$1 label=$2 pin="packages/$1-release.json" catalog="packages/$1-agents.json"
+            local log status=0 message
+            log=$(mktemp)
+            nix run ".#$harness-release" -- --output "$pin" 2>"$log" || status=$?
+            if [ "$status" -eq 0 ] && [ -n "$(git status --porcelain "$pin")" ]; then
+              nix run ".#$harness-agents" -- --output "$catalog" 2>>"$log" || status=$?
+            fi
+            cat "$log" >&2
+            message=$(tail -n 1 "$log")
+            rm -f "$log"
+            if [ "$status" -ne 0 ]; then
+              echo "::warning title=$label update skipped::$label release or agent catalog extraction failed. Keeping $pin and $catalog. $message"
+              git checkout -- "$pin" "$catalog"
+            fi
+          }
+
           # 1. Update flake inputs
           nix flake update
 
@@ -216,13 +233,8 @@ jobs:
             git checkout -- packages/antigravity-cli-release.json
           fi
 
-          # 10. Update Pi. A release can be published before every platform
-          # tarball or its SHA256SUMS line, so a failure keeps the current pin
-          # and lets the other updates through, as T3 Code's does.
-          if ! nix run .#pi-release -- --output packages/pi-release.json; then
-            echo "::warning title=Pi update skipped::pi-release failed; keeping the current pin in packages/pi-release.json."
-            git checkout -- packages/pi-release.json
-          fi
+          # 10. Update Pi and verify its native roster from the new source pin.
+          update_harness_catalog pi Pi
 
           # 11. Update the npm packages: the shared ACP client and the Claude
           # Agent SDK that agent-usage reads Claude limits through. Each pin
@@ -241,13 +253,8 @@ jobs:
             fi
           done
 
-          # 12. Update Codex. A release can be published before every platform
-          # tarball or its digest, so a failure keeps the current pin and lets
-          # the other updates through, as Pi's does.
-          if ! nix run .#codex-release -- --output packages/codex-release.json; then
-            echo "::warning title=Codex update skipped::codex-release failed; keeping the current pin in packages/codex-release.json."
-            git checkout -- packages/codex-release.json
-          fi
+          # 12. Update Codex and extract the roster from the new source pin.
+          update_harness_catalog codex Codex
 
           # 13. Refresh Prezto and every recursively pinned submodule.
           nix run .#prezto-release -- --output packages/prezto-pin.json
@@ -285,13 +292,13 @@ jobs:
 
           if [ -n "$(git status --porcelain packages/codex-release.json)" ]; then
             NEW_VER=$(jq -r .version packages/codex-release.json)
-            git add packages/codex-release.json
+            git add packages/codex-release.json packages/codex-agents.json
             git commit -m "chore(packages): bump codex to $NEW_VER"
           fi
 
           if [ -n "$(git status --porcelain packages/pi-release.json)" ]; then
             NEW_VER=$(jq -r .version packages/pi-release.json)
-            git add packages/pi-release.json
+            git add packages/pi-release.json packages/pi-agents.json
             git commit -m "chore(packages): bump pi to $NEW_VER"
           fi
 

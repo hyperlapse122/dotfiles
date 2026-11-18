@@ -84,9 +84,15 @@ def sri(hex_digest):
 
 
 DEFAULT_URL = "https://api.github.com/repos/openai/codex/releases/latest"
+SOURCE_REPO = "https://api.github.com/repos/openai/codex/commits/"
+SOURCE_REV = "a" * 40
+SOURCE_HASH = "0" * 52
 
 FAKE_CURL = """#!{python}
-import os, sys
+import json, os, sys
+if sys.argv[1:] == ['-sfL', '--max-time', '60', '{source_repo}rust-v0.159.3']:
+    print(json.dumps({{'sha': '{rev}'}}))
+    sys.exit(0)
 expected = ['-sfL', '--max-time', '60', os.environ['FAKE_EXPECTED_URL']]
 if sys.argv[1:] != expected:
     sys.stderr.write(f'unexpected curl argv: {{sys.argv[1:]!r}} != {{expected!r}}\\n')
@@ -95,6 +101,15 @@ status = int(os.environ.get('FAKE_STATUS', '0'))
 if status:
     sys.exit(status)
 sys.stdout.write(os.environ.get('FAKE_BODY', ''))
+"""
+
+FAKE_PREFETCH = """#!{python}
+import os, sys
+if sys.argv[1:] != ['--unpack', '--type', 'sha256', 'https://github.com/openai/codex/archive/{rev}.tar.gz']:
+    sys.exit(99)
+if os.environ.get('FAKE_PREFETCH_FAIL'):
+    sys.exit(1)
+print('{digest}')
 """
 
 
@@ -106,11 +121,18 @@ class CodexReleaseTestCase(unittest.TestCase):
         self.bin_dir = root / "bin"
         self.bin_dir.mkdir()
         curl = self.bin_dir / "curl"
-        curl.write_text(FAKE_CURL.format(python=sys.executable))
+        curl.write_text(FAKE_CURL.format(
+            python=sys.executable, source_repo=SOURCE_REPO, rev=SOURCE_REV,
+        ))
         curl.chmod(0o755)
+        prefetch = self.bin_dir / "nix-prefetch-url"
+        prefetch.write_text(FAKE_PREFETCH.format(
+            python=sys.executable, rev=SOURCE_REV, digest=SOURCE_HASH,
+        ))
+        prefetch.chmod(0o755)
         self.output = root / "codex-release.json"
 
-    def run_release(self, body=None, extra_args=None, status=0):
+    def run_release(self, body=None, extra_args=None, status=0, prefetch_fail=False):
         if body is None:
             body = release("0.159.3")
         env = dict(os.environ)
@@ -118,6 +140,8 @@ class CodexReleaseTestCase(unittest.TestCase):
         env["FAKE_EXPECTED_URL"] = DEFAULT_URL
         env["FAKE_BODY"] = body
         env["FAKE_STATUS"] = str(status)
+        if prefetch_fail:
+            env["FAKE_PREFETCH_FAIL"] = "1"
         args = [sys.executable, str(SCRIPT)]
         args.extend(extra_args if extra_args is not None else ["--dry-run"])
         return subprocess.run(args, capture_output=True, text=True, env=env)
@@ -142,6 +166,7 @@ class CodexReleaseTestCase(unittest.TestCase):
             json.loads(self.output.read_text()),
             {
                 "version": "0.159.3",
+                "source": {"rev": SOURCE_REV, "sha256": SOURCE_HASH},
                 "platforms": {
                     "x86_64-linux": {
                         "codex": {"asset": TARGET, "sha256": MUSL_HEX, "hash": sri(MUSL_HEX)},
@@ -174,6 +199,14 @@ class CodexReleaseTestCase(unittest.TestCase):
                 },
             },
         )
+
+    def test_unavailable_source_keeps_previous_pin(self):
+        self.write_pin("0.159.2")
+        previous = self.output.read_bytes()
+        result = self.run_release(extra_args=["-o", str(self.output)], prefetch_fail=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("source archive", result.stderr)
+        self.assertEqual(self.output.read_bytes(), previous)
 
     def test_refuses_a_release_without_the_aarch64_musl_asset(self):
         result = self.run_release(

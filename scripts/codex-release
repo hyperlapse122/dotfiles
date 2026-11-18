@@ -5,7 +5,8 @@ Fetches openai/codex's latest GitHub release, reads the version from its
 rust-v tag and the sha256 digest GitHub records for each tarball
 packages/codex.nix installs on each supported system -- the codex binary and
 the codex-code-mode-host it spawns -- and writes or checks the pin file that
-package consumes. Refuses to write a pin for a prerelease, a release missing
+package consumes. Pins the corresponding source for the agent catalog.
+Refuses to write a pin for a prerelease, a release missing its source or
 any of those tarballs or their digests, or a version that is not strictly
 newer than the one already pinned, so neither an incomplete release nor a
 downgrade ever reaches the pin file.
@@ -114,6 +115,28 @@ def version_tuple(version):
     return tuple(int(part) for part in version.split("."))
 
 
+def resolve_source(version):
+    url = f"https://api.github.com/repos/openai/codex/commits/{TAG_PREFIX}{version}"
+    try:
+        revision = json.loads(fetch(url))["sha"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        raise Failure(f"{url} contains no source revision") from None
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise Failure(f"{url} contains an invalid source revision")
+
+    archive = f"https://github.com/openai/codex/archive/{revision}.tar.gz"
+    result = subprocess.run(
+        ["nix-prefetch-url", "--unpack", "--type", "sha256", archive],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    source_hash = result.stdout.strip()
+    if result.returncode or not re.fullmatch(r"[0-9abcdfghijklmnpqrsvwxyz]{52}", source_hash):
+        raise Failure(f"cannot hash Codex source archive {archive}")
+    return {"rev": revision, "sha256": source_hash}
+
+
 def pinned_version(path):
     """Return the version already pinned at path, or None when unreadable."""
     try:
@@ -145,13 +168,7 @@ def main(argv=None):
 
     try:
         resolved = parse_release(fetch(args.source_url))
-        out_json = json.dumps(resolved, indent=2) + "\n"
-
-        if args.dry_run or not args.output:
-            sys.stdout.write(out_json)
-            return 0
-
-        current_version = pinned_version(args.output)
+        current_version = pinned_version(args.output) if args.output and not args.dry_run else None
         if current_version is not None:
             try:
                 is_newer = version_tuple(resolved["version"]) > version_tuple(current_version)
@@ -163,6 +180,12 @@ def main(argv=None):
                     f"(resolved {resolved['version']} is not newer)"
                 )
                 return 0
+
+        resolved["source"] = resolve_source(resolved["version"])
+        out_json = json.dumps(resolved, indent=2) + "\n"
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
 
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(out_json)
