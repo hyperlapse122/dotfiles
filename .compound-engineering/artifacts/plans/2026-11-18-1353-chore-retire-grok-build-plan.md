@@ -31,7 +31,7 @@ The Grok Build subscription is ending. The hosts still manage the tool and T3 pr
 
 ### Requirements
 
-- R1. End Grok Build installation and reconciliation by the repository. Remove its managed T3 instance from existing settings and omit it from fresh settings.
+- R1. End Grok Build installation and reconciliation by the repository. Retire the managed T3 launch configuration and keep the default Grok instance disabled on fresh and upgraded hosts.
 - R2. Remove Grok usage collection and the Grok entry from both text and JSON output. Continue reporting usage for the other providers.
 - R3. Preserve existing Grok files, credentials, plugin state, and session history. Preserve unrelated T3 settings and shared agent integrations.
 
@@ -39,7 +39,7 @@ The Grok Build subscription is ending. The hosts still manage the tool and T3 pr
 
 ### Key Technical Decisions
 
-- KTD1. Remove the Grok-only modules, packages, pins, helpers, and updater steps. Use the existing `agent-settings` retirement entries for the managed T3 instance and legacy Grok settings that can recreate it. Keep historical documentation and the separate Grok Bot retirement behavior.
+- KTD1. Remove the Grok-only modules, packages, pins, helpers, and updater steps. Use `agent-settings` retirement entries to clear Grok launch settings and the legacy provider entry. Keep an explicit disabled default instance because T3 Code 0.1.9 restores a missing Grok instance from session history. Keep historical documentation and the separate Grok Bot retirement behavior.
 - KTD2. Remove the Grok reader and its authentication, refresh, and cache identity code from `agent-usage`. The reader registry drives both output modes. Leave existing cache files on disk.
 
 ## Implementation Units
@@ -49,7 +49,7 @@ The Grok Build subscription is ending. The hosts still manage the tool and T3 pr
 - **Goal and requirements.** Remove active management on both hosts and reconcile existing T3 settings (R1, R3).
 - **Files.** `flake.nix`, `home/h82/agents/`, `home/h82/t3code.nix`, Grok-specific packages and scripts, `.github/workflows/update-dependencies.yml`, affected tests, and active repository documentation.
 - **Approach.** Apply KTD1. Remove Grok from the shared instruction and plugin consumers and their tests while retaining the shared assets. Update active docs and the workflow fixture.
-- **Test scenarios.** Exercise fresh and previously managed T3 settings, including the legacy per-driver config. Assert that activation removes the managed entries and preserves unrelated settings and existing Grok files.
+- **Test scenarios.** Exercise fresh and previously managed T3 settings, including the legacy per-driver config. Assert that activation disables the default Grok instance, removes its launch settings, and preserves unrelated settings and existing Grok files.
 - **Verification.** Build the existing T3 launch, agent instruction, and update reconciliation checks on Linux. Verify Darwin outputs in CI.
 
 ### U2. Remove Grok subscription usage

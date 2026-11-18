@@ -76,8 +76,18 @@ let
     remove = [ ];
     removePaths = [
       {
-        path = [ "providerInstances" ];
-        key = "grok";
+        path = [
+          "providerInstances"
+          "grok"
+        ];
+        key = "config";
+      }
+      {
+        path = [
+          "providerInstances"
+          "grok"
+        ];
+        key = "environment";
       }
       {
         path = [ "providers" ];
@@ -169,6 +179,22 @@ let
           "enabled"
         ];
         value = true;
+      }
+      {
+        path = [
+          "providerInstances"
+          "grok"
+          "driver"
+        ];
+        value = "grok";
+      }
+      {
+        path = [
+          "providerInstances"
+          "grok"
+          "enabled"
+        ];
+        value = false;
       }
       {
         path = [

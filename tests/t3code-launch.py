@@ -17,7 +17,7 @@ def validate(home):
     assert '# T3 CE model selection' not in baseline
     assert 'writing' in baseline.lower()
     providers = settings['providerInstances']
-    assert 'grok' not in providers, 'managed Grok provider still exists'
+    assert providers.get('grok') == {'driver': 'grok', 'enabled': False}
     assert 'grok' not in settings.get('providers', {}), 'legacy Grok provider still exists'
     assert not (home / '.t3/userdata/instructions/grok.md').exists()
     args = shlex.split(providers['claudeAgent']['config']['launchArgs'])
@@ -73,7 +73,9 @@ def main():
                 'providerInstances': {
                     'omp': {'enabled': True},
                     'antigravity': {'driver': 'antigravity', 'enabled': False, 'custom': True},
-                    'grok': {'driver': 'grok', 'enabled': True},
+                    'grok': {'driver': 'grok', 'enabled': True,
+                             'config': {'binaryPath': '/old/t3-grok-instructions'},
+                             'environment': [{'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1'}]},
                     'custom-grok': {'driver': 'grok', 'enabled': False},
                 },
             }))
@@ -98,14 +100,14 @@ def main():
                 assert (home / '.claude/CLAUDE.md').read_bytes() == baseline
                 assert grok_instructions.read_text() == 'Existing Grok instructions\n'
             # Mutation witnesses: dropping delivery, baseline contamination,
-            # changed defaults, or restoring the retired provider must fail.
+            # changed defaults, or losing the explicit Grok disable must fail.
             original = settings.read_text()
             mutations = [lambda d: d['providerInstances']['claudeAgent']['config'].update(launchArgs=''),
                          lambda d: d['providerInstances']['pi']['config'].update(launchArgs=d['providerInstances']['pi']['config']['launchArgs'].replace('--approve', '')),
                          lambda d: d.update(defaultThreadEnvMode='local'),
                          lambda d: d['providerInstances']['antigravity'].update(enabled=False),
                          lambda d: d['providerInstances']['antigravity'].update(environment=[]),
-                         lambda d: d['providerInstances'].update(grok={'driver': 'grok', 'enabled': True})]
+                         lambda d: d['providerInstances'].pop('grok')]
             for mutate in mutations:
                 document = json.loads(original)
                 mutate(document)

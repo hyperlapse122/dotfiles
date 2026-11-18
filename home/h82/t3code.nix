@@ -94,6 +94,12 @@ let
           setupMode = "existing";
         };
       };
+      # T3 Code recreates an enabled Grok instance from session history when
+      # the default instance is absent. Keep an explicit disable here.
+      grok = {
+        driver = "grok";
+        enabled = false;
+      };
       # OpenCode is gone, but the merge keeps undeclared fields, so this stays
       # declared to turn off the instance an earlier generation enabled.
       opencode = {
@@ -139,12 +145,21 @@ let
   # the entry once every host has rebuilt past it.
   retiredKeys = [ ];
 
-  # Nested entries that used to be declared, retired the same way. An earlier
-  # generation hid OpenCode's text-generation alias here; prune drops the
+  # Nested entries previously written by this module.
   retiredPaths = [
     {
-      path = [ "providerInstances" ];
-      key = "grok";
+      path = [
+        "providerInstances"
+        "grok"
+      ];
+      key = "config";
+    }
+    {
+      path = [
+        "providerInstances"
+        "grok"
+      ];
+      key = "environment";
     }
     {
       path = [ "providers" ];
@@ -184,7 +199,7 @@ let
   instanceMigration = {
     from = "providers";
     to = "providerInstances";
-    kinds = lib.attrNames settings.providerInstances;
+    kinds = lib.remove "grok" (lib.attrNames settings.providerInstances);
   };
 
   # T3 Code writes a model selection whole, with options that belong to the

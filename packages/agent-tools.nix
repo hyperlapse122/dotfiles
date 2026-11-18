@@ -120,13 +120,9 @@ let
 
   codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
 
-  # Reports every coding-agent provider's usage windows with a shared cache.
-  # Its readers call codex, curl and a Node helper on the Claude
-  # Agent SDK, so the wrapper puts exactly those on PATH. Home Manager
-  # overrides the Synthetic key file per host kind. The
-  # Antigravity quota service lists Gemini buckets only for a current ACP
-  # client, so the wrapper names the version of the ACP runtime the pinned
-  # T3 Code embeds.
+  # Home Manager overrides the Synthetic key file per host kind.
+  # The Antigravity quota service lists Gemini buckets only for a current ACP
+  # client, so the wrapper names the ACP runtime version pinned by T3 Code.
   agentUsage = pkgs.lib.makeOverridable (
     {
       syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
