@@ -299,7 +299,6 @@ let
         ".claude/skills"
         ".gemini/antigravity-cli/skills"
         ".codex/skills"
-        ".grok/skills"
         ".pi/agent/skills"
       ];
       koreanNames = [
@@ -361,7 +360,6 @@ let
         ".claude/skills"
         ".gemini/antigravity-cli/skills"
         ".codex/skills"
-        ".grok/skills"
         ".pi/agent/skills"
       ];
       xcodeStep = name: activation.${name} or { };

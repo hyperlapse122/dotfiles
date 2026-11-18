@@ -313,18 +313,6 @@ def apply(destination, environment=None):
         native['environment'].append({'name': ANTIGRAVITY_ADDITION,
             'value': str(settings_path.parent / 'instructions/antigravity.md'), 'sensitive': False})
         changed = True
-    grok = providers.get('grok')
-    if grok is not None:
-        entries = grok.get('environment', [])
-        if not isinstance(entries, list) or any(not isinstance(e, dict) or not isinstance(e.get('name'), str) for e in entries):
-            raise ValueError('Grok environment must contain named entries.')
-        legacy_grok = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
-        updater = {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}
-        if not state.get('grokSubagentsRetired', False) and updater in entries and entries.count(legacy_grok) == 1:
-            entries = [e for e in entries if e != legacy_grok]
-        grok['environment'] = [e for e in entries if e['name'].upper() != 'GROK_DISABLE_AUTOUPDATER']
-        grok['environment'].append(updater)
-        changed = True
     client_path = settings_path.with_name('client-settings.json')
     client = read_mapping(client_path)
     preferences = client.setdefault('providerModelPreferences', {}).setdefault('pi', {})
@@ -337,8 +325,7 @@ def apply(destination, environment=None):
     if changed:
         had_state = state_path.is_file()
         try:
-            publish(state_path, {'schema': 1, 'providers': next_records,
-                                 'grokSubagentsRetired': state.get('grokSubagentsRetired', False) or grok is not None})
+            publish(state_path, {'schema': 1, 'providers': next_records})
             publish(settings_path, settings)
         except (OSError, KeyboardInterrupt):
             # An interruption can arrive after the settings rename as well.

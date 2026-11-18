@@ -200,14 +200,8 @@ let
   pluginSkills = import ./plugin-skills.nix { inherit lib pkgs; };
   agy = "${(import ../../../packages/antigravity-cli.nix { inherit pkgs; })}/bin/agy";
 
-  nativeScript = pkgs.writeScript "grok-plugins" (
-    "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../../scripts/grok-plugins
-  );
   nativePlugins = ''
     if [[ ! -v DRY_RUN ]]; then
-      ${pkgs.python3}/bin/python3 ${nativeScript} --destination "$HOME" --cli ${
-        (import ../../../packages/grok-build.nix { inherit pkgs; })
-      }/bin/grok --source ${inputs.compound-engineering-plugin}
       ${pluginSkills.agyInstall { inherit agy sources; }}
     fi
   '';

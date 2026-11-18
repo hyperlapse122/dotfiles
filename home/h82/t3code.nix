@@ -35,17 +35,15 @@ let
   composer = pkgs.writeScriptBin "t3-instructions" (
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../scripts/t3-instructions.py
   );
-  grokAdapter = import ../../packages/t3-grok-instructions.nix { inherit pkgs; };
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
   additions = pkgs.runCommand "t3-instruction-additions" { } ''
     mkdir -p "$out"
-    for harness in claude codex pi antigravity grok; do
-      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s,"antigravity":%s,"grok":%s}' \
+    for harness in claude codex pi antigravity; do
+      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s,"antigravity":%s}' \
         "$([ "$harness" = claude ] && echo true || echo false)" \
         "$([ "$harness" = codex ] && echo true || echo false)" \
         "$([ "$harness" = pi ] && echo true || echo false)" \
-        "$([ "$harness" = antigravity ] && echo true || echo false)" \
-        "$([ "$harness" = grok ] && echo true || echo false)" > context.json
+        "$([ "$harness" = antigravity ] && echo true || echo false)" > context.json
       ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/$harness.md"
     done
   '';
@@ -96,12 +94,6 @@ let
           setupMode = "existing";
         };
       };
-      # The Grok Build CLI is installed by home/h82/agents/grok.nix.
-      grok = {
-        driver = "grok";
-        enabled = true;
-        config.binaryPath = "${grokAdapter}/bin/t3-grok-instructions";
-      };
       # OpenCode is gone, but the merge keeps undeclared fields, so this stays
       # declared to turn off the instance an earlier generation enabled.
       opencode = {
@@ -150,6 +142,15 @@ let
   # Nested entries that used to be declared, retired the same way. An earlier
   # generation hid OpenCode's text-generation alias here; prune drops the
   retiredPaths = [
+    {
+      path = [ "providerInstances" ];
+      key = "grok";
+    }
+    {
+      path = [ "providers" ];
+      key = "grok";
+      prune = true;
+    }
     {
       path = [ "providerInstances" ];
       key = "omp";
@@ -322,7 +323,7 @@ in
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"
-              for harness in claude codex pi antigravity grok; do
+              for harness in claude codex pi antigravity; do
                 install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
               done
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory}

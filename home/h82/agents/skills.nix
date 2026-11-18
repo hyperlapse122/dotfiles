@@ -18,7 +18,6 @@ let
     ".claude/skills"
     antigravityRoot
     ".codex/skills"
-    ".grok/skills"
     ".pi/agent/skills"
   ];
 

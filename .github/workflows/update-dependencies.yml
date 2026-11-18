@@ -249,15 +249,7 @@ jobs:
             git checkout -- packages/codex-release.json
           fi
 
-          # 13. Update Grok Build. The stable pointer can move before every
-          # platform's binary is published, so a failure keeps the current pin
-          # and lets the other updates through, as Codex's does.
-          if ! nix run .#grok-build-release -- --output packages/grok-build-release.json; then
-            echo "::warning title=Grok Build update skipped::grok-build-release failed; keeping the current pin in packages/grok-build-release.json."
-            git checkout -- packages/grok-build-release.json
-          fi
-
-          # 14. Refresh Prezto and every recursively pinned submodule.
+          # 13. Refresh Prezto and every recursively pinned submodule.
           nix run .#prezto-release -- --output packages/prezto-pin.json
 
           if [ -z "$(git status --porcelain)" ]; then
@@ -295,12 +287,6 @@ jobs:
             NEW_VER=$(jq -r .version packages/codex-release.json)
             git add packages/codex-release.json
             git commit -m "chore(packages): bump codex to $NEW_VER"
-          fi
-
-          if [ -n "$(git status --porcelain packages/grok-build-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/grok-build-release.json)
-            git add packages/grok-build-release.json
-            git commit -m "chore(packages): bump grok-build to $NEW_VER"
           fi
 
           if [ -n "$(git status --porcelain packages/pi-release.json)" ]; then

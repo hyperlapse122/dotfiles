@@ -14,13 +14,11 @@ import selectors
 import subprocess
 import tempfile
 import time
-import tomllib
 import urllib.parse
 
 
 class Unavailable(Exception):
-    def __init__(self, exhausted=False, reason=None):
-        self.exhausted = exhausted
+    def __init__(self, reason=None):
         self.reason = reason
 
 
@@ -200,20 +198,6 @@ def gemini():
     return credential['project_id'], windows
 
 
-def grok_entry():
-    home = Path(os.environ.get('GROK_HOME', Path.home() / '.grok'))
-    auth = load(home / 'auth.json')
-    return auth.get('https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828',
-                    auth.get('https://accounts.x.ai/sign-in', {}))
-
-
-def custom_endpoint(config):
-    if not isinstance(config, dict):
-        return False
-    return any((key in ('base_url', 'baseUrl', 'api_base_url', 'endpoint') and bool(value))
-               or custom_endpoint(value) for key, value in config.items())
-
-
 def http(url, token, data=None, headers=(), bearer=True):
     # curl's config comes over stdin: the bearer and any request body that
     # carries a credential never appear in argv or logs.
@@ -233,37 +217,6 @@ def http(url, token, data=None, headers=(), bearer=True):
     if int(status) != 200:
         return int(status), {}
     return 200, json.loads(body)
-
-
-def grok():
-    entry = grok_entry()
-    home = Path(os.environ.get('GROK_HOME', Path.home() / '.grok'))
-    config = load(home / 'config.json')
-    try:
-        with (home / 'config.toml').open('rb') as source:
-            toml_config = tomllib.load(source)
-    except FileNotFoundError:
-        toml_config = {}
-    if (os.environ.get('XAI_API_KEY') or entry.get('auth_mode') == 'api_key'
-            or any(os.environ.get(key) for key in ('XAI_BASE_URL', 'GROK_BASE_URL', 'GROK_API_BASE_URL'))
-            or custom_endpoint(config) or custom_endpoint(toml_config)):
-        raise Unavailable()
-    url = 'https://cli-chat-proxy.grok.com/v1/billing?format=credits'
-    status, data = http(url, entry.get('key'))
-    if status == 401:
-        run(['grok', 'models'])
-        entry = grok_entry()
-        status, data = http(url, entry.get('key'))
-    if status != 200:
-        raise Unavailable(exhausted=status == 402)
-    config = data['config']
-    period = config['currentPeriod']
-    label = period['type'].removeprefix('USAGE_PERIOD_TYPE_').lower()
-    duration = {}
-    if period.get('start') is not None:
-        duration['durationMins'] = (timestamp(period['end']) - timestamp(period['start'])) / 60
-    return entry.get('email'), [window(label, config.get('creditUsagePercent', 0), period['end'],
-                                       **duration)]
 
 
 def synthetic():
@@ -286,7 +239,7 @@ def synthetic():
     return 'default', windows
 
 
-READERS = dict(codex=codex, claude=claude, gemini=gemini, grok=grok, synthetic=synthetic)
+READERS = dict(codex=codex, claude=claude, gemini=gemini, synthetic=synthetic)
 
 
 def identity_stamp(provider):
@@ -297,8 +250,6 @@ def identity_stamp(provider):
         'claude': [home / '.claude.json', Path(os.environ.get('CLAUDE_CONFIG_DIR', home / '.claude')) / '.claude.json',
                    Path(os.environ.get('CLAUDE_CONFIG_DIR', home / '.claude')) / '.credentials.json'],
         'gemini': [antigravity_credential_path()],
-        'grok': [Path(os.environ.get('GROK_HOME', home / '.grok')) / name
-                 for name in ('auth.json', 'config.json', 'config.toml')],
         'synthetic': [],
     }[provider]
     stamp = []
@@ -310,7 +261,6 @@ def identity_stamp(provider):
             stamp.append([str(path), None])
     # Presence is enough: key-based sessions do not have subscription limits.
     stamp.append([bool(os.environ.get(key)) for key in (
-        'XAI_API_KEY', 'XAI_BASE_URL', 'GROK_BASE_URL', 'GROK_API_BASE_URL',
         'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL')])
     return stamp
 
@@ -318,8 +268,6 @@ def identity_stamp(provider):
 def account_hint(provider):
     if provider == 'synthetic':
         return 'default'
-    if provider == 'grok':
-        return grok_entry().get('email')
     if provider == 'codex':
         auth = load(Path(os.environ.get('CODEX_HOME', Path.home() / '.codex')) / 'auth.json')
         return (auth.get('tokens') or {}).get('account_id')
@@ -344,8 +292,6 @@ def fetch(provider):
     except Exception as exc:
         # Provider stderr and exception messages can hold credentials.
         result = dict(status='unknown', windows=[], fetchedAt=time.time())
-        if isinstance(exc, Unavailable) and exc.exhausted:
-            result['exhausted'] = True
         if isinstance(exc, Unavailable) and exc.reason:
             result['reason'] = exc.reason
     if account:
@@ -355,8 +301,6 @@ def fetch(provider):
 
 def cache_view(record):
     current = record['result']
-    if current.get('exhausted'):
-        return current
     if current['status'] != 'ok':
         success = record.get('lastSuccess')
         if success and time.time() - success['fetchedAt'] < 86400:
@@ -497,7 +441,7 @@ def main():
         return judge(result)
 
     # Providers have separate cache files and locks, so they are read at once;
-    # a cold run then waits for the slowest provider, not the sum of all five.
+    # a cold run then waits for the slowest provider, not the sum of their durations.
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(READERS)) as pool:
         reports = pool.map(report, READERS)
         providers = dict(zip(READERS, reports))

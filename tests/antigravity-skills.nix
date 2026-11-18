@@ -76,7 +76,6 @@ let
       otherRoots = [
         ".claude/skills"
         ".codex/skills"
-        ".grok/skills"
         ".pi/agent/skills"
       ];
       fixture = lib.evalModules {
@@ -194,7 +193,7 @@ let
             sources = grown;
           }
         )
-      } ${pluginsJson grown} --agy-only
+      } ${pluginsJson grown} --bare-installer
 
       # One skill name in two plugins, or in a plugin and the shared skills,
       # stops evaluation and names every owner.

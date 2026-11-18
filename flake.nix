@@ -276,8 +276,6 @@
         pi = import ./packages/pi.nix { inherit pkgs; };
         codex-release = agentTools.codexRelease;
         codex = import ./packages/codex.nix { inherit pkgs; };
-        grok-build-release = agentTools.grokBuildRelease;
-        grok-build = import ./packages/grok-build.nix { inherit pkgs; };
         npm-release = agentTools.npmRelease;
         acpx = import ./packages/acpx.nix { inherit pkgs; };
         tanstack-intent = import ./packages/tanstack-intent.nix { inherit pkgs; };
@@ -502,7 +500,6 @@
               touch $out
             '';
           gemini = import ./tests/gemini.nix { inherit pkgs self; };
-          grok = import ./tests/grok.nix { inherit pkgs self; };
           ghq = import ./tests/ghq.nix {
             inherit pkgs self;
             fixtures = [ ];
@@ -593,9 +590,6 @@
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
-          grok-build-release =
-            pythonScriptCheck "grok-build-release" ./scripts/grok-build-release
-              ./tests/test_grok_build_release.py;
           antigravity-cli-release =
             pythonScriptCheck "antigravity-cli-release" ./scripts/antigravity-cli-release
               ./tests/test_antigravity_cli_release.py;
@@ -1147,8 +1141,7 @@
               grokNamesOf =
                 names: lib.unique (builtins.filter (name: isGrokName name && !lib.elem name allowed) names);
               # A package counts by its pname or its name, so a renamed wrapper
-              # such as grok-bot-cli is caught as well as grok-bot. Grok Build is
-              # installed on purpose and is not matched.
+              # such as grok-bot-cli is caught as well as grok-bot.
               grokPackagesOf =
                 packages:
                 grokNamesOf (

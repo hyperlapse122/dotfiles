@@ -202,7 +202,6 @@ let
       masExe = lib.getExe entry.host.pkgs.mas;
       brewExe = "${config.homebrew.prefix}/bin/brew";
       peers = lib.concatStringsSep "," (expectedPeers user.home.packages);
-      grokPkg = import ../packages/grok-build.nix { inherit (entry.host) pkgs; };
       serveHtmlPackage =
         (import ../packages/agent-tools.nix { inherit (entry.host) pkgs; }).serveHtml or null;
       serveHtml = lib.optionalString (serveHtmlPackage != null) (lib.getExe serveHtmlPackage);
@@ -269,7 +268,6 @@ let
               ".claude/skills"
               ".gemini/antigravity-cli/skills"
               ".codex/skills"
-              ".grok/skills"
               ".pi/agent/skills"
             ]
           )
@@ -367,9 +365,8 @@ let
         bad "no Ghostty config"
       fi
 
-      grok=$(readlink -f "$gen/home-path/bin/grok" || true)
-      if [ -z "$grok" ] || [ "$grok" != ${lib.escapeShellArg "${grokPkg}/bin/grok"} ]; then
-        bad "grok on PATH is not the grok-build wrapper"
+      if [ -e "$gen/home-path/bin/grok" ]; then
+        bad "Grok Build remains in the managed home profile"
       fi
       if [ -e "$gen/home-path/bin/agent" ] || [ -L "$gen/home-path/bin/agent" ]; then
         bad "the profile puts an agent executable on PATH"

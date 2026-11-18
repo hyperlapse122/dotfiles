@@ -14,7 +14,6 @@ import tempfile
 DELIVERIES = {
     "claude": ".claude/CLAUDE.md",
     "codex": ".codex/AGENTS.md",
-    "grok": ".grok/AGENTS.md",
     "pi": ".pi/agent/AGENTS.md",
     "antigravity": ".gemini/config/rules",
 }
