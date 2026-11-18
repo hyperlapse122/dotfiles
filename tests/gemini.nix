@@ -17,11 +17,6 @@
     executed in a scratch HOME through tests/lib/agent-activation.nix, sets
     disableAutoGenerateMemories = true in that file while keeping the keys
     the CLI wrote, and does not swallow a merger refusal.
-  - home.activation.antigravityAcpSettings runs after installPackages and,
-    executed in a scratch HOME through tests/lib/agent-activation.nix, sets
-    auth.type = "oauth-personal" in ~/.gemini/antigravity-acp/settings.json
-    while keeping the keys the runtime wrote, so the ACP runtime asks for the
-    Google sign-in Compound Engineering's Antigravity route expects.
   - home.activation.antigravityMcpConfig runs after installPackages and,
     executed in a scratch HOME, adds the fff MCP server by its store path to
     ~/.gemini/config/mcp_config.json while keeping a server `agy mcp add`
@@ -34,8 +29,6 @@ let
   configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   executeActivation = import ./lib/agent-activation.nix { inherit pkgs; };
-
-  acpSettingsFile = ".gemini/antigravity-acp/settings.json";
 
   assertHost =
     entry:
@@ -94,59 +87,6 @@ let
             }}
           '';
 
-      acpActivation = userConfig.home.activation.antigravityAcpSettings or null;
-      acpRunsAfterPackages = lib.elem "installPackages" (
-        if acpActivation == null then [ ] else (acpActivation.after or [ ])
-      );
-      acpSettings =
-        if acpActivation == null then
-          ''
-            echo 'missing home.activation.antigravityAcpSettings on ${hostName}' >&2
-            failed=1
-          ''
-        else
-          ''
-            if [ ${lib.boolToString acpRunsAfterPackages} != true ]; then
-              echo 'home.activation.antigravityAcpSettings must run after installPackages on ${hostName}' >&2
-              failed=1
-            fi
-            ${executeActivation {
-              script = acpActivation.data or "";
-              home = userConfig.home.homeDirectory or "";
-              contract = {
-                file = acpSettingsFile;
-                declared.setPaths = [
-                  {
-                    path = [ "allowNonWorkspaceAccess" ];
-                    value = true;
-                  }
-                  {
-                    path = [
-                      "auth"
-                      "type"
-                    ];
-                    value = "oauth-personal";
-                  }
-                ];
-                seed = {
-                  allowNonWorkspaceAccess = false;
-                  auth = {
-                    type = "gemini-api-key";
-                    project = "kept";
-                  };
-                  model = "kept";
-                };
-                expected = {
-                  allowNonWorkspaceAccess = true;
-                  auth = {
-                    type = "oauth-personal";
-                    project = "kept";
-                  };
-                  model = "kept";
-                };
-              };
-            }}
-          '';
       mcpActivation = userConfig.home.activation.antigravityMcpConfig or null;
       mcpRunsAfterPackages = lib.elem "installPackages" (
         if mcpActivation == null then [ ] else (mcpActivation.after or [ ])
@@ -197,7 +137,6 @@ let
       ${geminiDelivery}
       ${symlinkPresent}
       ${cliSettings}
-      ${acpSettings}
       ${mcpConfig}
     '';
 in

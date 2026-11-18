@@ -197,7 +197,7 @@ let
   # activation. Retire every row of a source together, or split the base.
   stillMember = lib.filter (row: lib.any (member: member.name == row.name) checkedMembership) retired;
 
-  pluginSkills = import ./plugin-skills.nix { inherit lib pkgs; };
+  pluginSkills = import ./plugin-skills.nix { inherit lib; };
   agy = "${(import ../../../packages/antigravity-cli.nix { inherit pkgs; })}/bin/agy";
 
   nativePlugins = ''

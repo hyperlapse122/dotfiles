@@ -9,7 +9,7 @@ let
   configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
   userEntries = if entries == null then configurations.userEntries else entries;
 
-  pluginSkills = import ../home/h82/agents/plugin-skills.nix { inherit lib pkgs; };
+  pluginSkills = import ../home/h82/agents/plugin-skills.nix { inherit lib; };
   esc = value: lib.escapeShellArg (toString value);
 
   # A second plugin joins the pinned ones through the same function the
@@ -38,7 +38,6 @@ let
         sources = grown;
         inherit sharedNames;
       };
-      withSecondDirectory = pluginSkills.directory withSecond;
       pluginsJson =
         sourceSet:
         pkgs.writeText "plugins.json" (
@@ -108,31 +107,21 @@ let
       };
     in
     ''
-      # The wrapper directory and Home Manager links have separate consumers.
-      directory=${userConfig.my.antigravityPluginSkills}
       # Listed from the plugin sources on disk, not through the enumeration
       # under test, so a skill that function drops fails the comparison.
       expected=$(find ${
         lib.concatMapStringsSep " " (name: esc "${sources.${name}.src}/skills") (lib.attrNames sources)
       } -mindepth 2 -maxdepth 2 -name SKILL.md \
         | awk -F/ '{print $(NF-1)}' | sort)
-      actual=$(ls -1A "$directory" | sort)
+      actual=${esc (lib.concatStringsSep "\n" (lib.attrNames realSkills))}
       if [ -z "$expected" ]; then
         echo 'the pinned plugin sources hold no skills on ${entry.name}' >&2
         failed=1
       fi
       if [ "$actual" != "$expected" ]; then
-        echo 'the plugin skills directory must hold exactly the pinned plugin skills on ${entry.name}' >&2
+        echo 'the CLI skill enumeration must match the pinned plugin sources on ${entry.name}' >&2
         failed=1
       fi
-      ${lib.concatStrings (
-        lib.mapAttrsToList (name: source: ''
-          if [ "$(readlink "$directory/${name}")" != ${esc source} ]; then
-            echo 'plugin skill ${name} must link to its source directory in the store on ${entry.name}' >&2
-            failed=1
-          fi
-        '') realSkills
-      )}
       # BEGIN link assertions
       ${lib.concatStrings (
         lib.mapAttrsToList (name: source: ''
@@ -172,18 +161,13 @@ let
       # The real activation step installs every pinned plugin.
       python3 ${./native-plugins.py} ${pkgs.writeText "agent-plugins.sh" userConfig.home.activation.nativeAgentPlugins.data} ${pluginsJson sources}
 
-      # A second plugin reaches the directory and the Antigravity CLI install
-      # without any change to either.
+      # A second plugin reaches the Antigravity CLI install through its source declaration.
       if [ ${esc (lib.concatStringsSep " " (lib.attrNames withSecond))} != ${
         esc (
           lib.concatStringsSep " " (lib.sort lib.lessThan (lib.attrNames realSkills ++ [ "second-skill" ]))
         )
       } ]; then
         echo 'the second plugin must add exactly second-skill to the enumeration on ${entry.name}' >&2
-        failed=1
-      fi
-      if [ ! -f ${withSecondDirectory}/second-skill/SKILL.md ]; then
-        echo 'the plugin skills directory must hold second-skill on ${entry.name}' >&2
         failed=1
       fi
       python3 ${./native-plugins.py} ${

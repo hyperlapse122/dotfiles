@@ -3,18 +3,16 @@
 
   `sources` is an attribute set of plugin name to `{ src, plugin, ... }`, the
   shape `agent-plugins.nix` declares. Every consumer reads these functions, so
-  a plugin added to the sources reaches the plugin skills directory and the
-  Antigravity CLI install without Antigravity-specific work.
+  a plugin added to the sources reaches the Antigravity CLI skill root and plugin install without Antigravity-specific work.
 
   - `skills { sources, sharedNames }`: skill name to store path for every
     plugin. A directory counts as a skill when it holds `SKILL.md`. Stops
     evaluation when two plugins, or a plugin and a shared skill, use one name.
   - `problems { sources, sharedNames }`: the messages `skills` stops with.
-  - `directory skills`: one store directory holding a link per skill.
   - `agyInstall { agy, sources }`: the Antigravity CLI installation and enable
     commands for each plugin.
 */
-{ lib, pkgs }:
+{ lib }:
 let
   # A source given as a path, such as a test fixture, stays a path: turning it
   # into a string copies it to the store, and the read-only evaluation of
@@ -74,10 +72,6 @@ let
 in
 {
   inherit problems skills;
-
-  directory =
-    found:
-    pkgs.linkFarm "plugin-skills" (lib.mapAttrsToList (name: path: { inherit name path; }) found);
 
   agyInstall =
     { agy, sources }:

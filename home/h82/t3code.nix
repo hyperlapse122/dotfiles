@@ -32,10 +32,7 @@ let
     ]) (import ./agents/pi-hidden-models.nix)
   );
 
-  # T3 Code keeps an instance's home under the sha256 of its id, and the
-  # runtime stores its Google sign-in in that home.
-  antigravityInstanceId = "antigravity";
-  antigravityInstanceToken = "${config.home.homeDirectory}/.t3/userdata/providers/${antigravityInstanceId}/${builtins.hashString "sha256" antigravityInstanceId}/antigravity-acp/acp_token.json";
+  retiredAntigravityBinary = "${profileDirectory}/bin/agy_acp_server.par";
 
   # Launch additions share the native account homes and baseline instructions.
   composer = pkgs.writeScriptBin "t3-instructions" (
@@ -44,12 +41,11 @@ let
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
   additions = pkgs.runCommand "t3-instruction-additions" { } ''
     mkdir -p "$out"
-    for harness in claude codex pi antigravity; do
-      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s,"antigravity":%s}' \
+    for harness in claude codex pi; do
+      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s}' \
         "$([ "$harness" = claude ] && echo true || echo false)" \
         "$([ "$harness" = codex ] && echo true || echo false)" \
-        "$([ "$harness" = pi ] && echo true || echo false)" \
-        "$([ "$harness" = antigravity ] && echo true || echo false)" > context.json
+        "$([ "$harness" = pi ] && echo true || echo false)" > context.json
       ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/$harness.md"
     done
   '';
@@ -119,15 +115,6 @@ let
         config.enabled = true;
         config.binaryPath = "${profileDirectory}/bin/pi";
       };
-      # T3 Code resolves the real path of binaryPath and requires the runtime's
-      # localharness_external beside it, which the rebuilt runtime provides.
-      # The leaves are declared one by one, so keys the owner sets under the
-      # instance survive.
-      ${antigravityInstanceId} = {
-        driver = "antigravity";
-        enabled = true;
-        config.binaryPath = "${profileDirectory}/bin/agy_acp_server.par";
-      };
     };
     snoozeLimitedThreads = true;
     sourceControlWritingStyle = {
@@ -153,6 +140,15 @@ let
 
   # Nested entries previously written by this module.
   retiredPaths = [
+    {
+      path = [
+        "providerInstances"
+        "antigravity"
+        "config"
+      ];
+      key = "binaryPath";
+      value = retiredAntigravityBinary;
+    }
     {
       path = [
         "providerInstances"
@@ -194,6 +190,18 @@ let
       path = [ "providerModelPreferences" ];
       key = "opencode";
       prune = true;
+    }
+  ];
+
+  retiredEntries = [
+    {
+      path = [
+        "providerInstances"
+        "antigravity"
+        "environment"
+      ];
+      key = "value";
+      values = [ "${config.home.homeDirectory}/.t3/userdata/instructions/antigravity.md" ];
     }
   ];
 
@@ -262,6 +270,7 @@ let
       owned ? { },
       remove ? [ ],
       removePaths ? [ ],
+      removeEntries ? [ ],
       prefixEntries ? [ ],
       migrateInstances ? null,
       ownEntries ? [ ],
@@ -273,6 +282,7 @@ let
       own = owned;
     }
     // lib.optionalAttrs (removePaths != [ ]) { inherit removePaths; }
+    // lib.optionalAttrs (removeEntries != [ ]) { inherit removeEntries; }
     // lib.optionalAttrs (prefixEntries != [ ]) { inherit prefixEntries; }
     // lib.optionalAttrs (ownEntries != [ ]) { inherit ownEntries; }
     // lib.optionalAttrs (migrateInstances != null) { inherit migrateInstances; };
@@ -286,6 +296,7 @@ let
           owned = modelSelections;
           remove = retiredKeys;
           removePaths = retiredPaths;
+          removeEntries = retiredEntries;
           migrateInstances = instanceMigration;
         })
       );
@@ -344,45 +355,34 @@ in
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"
-              for harness in claude codex pi antigravity; do
+              for harness in claude codex pi; do
                 install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
               done
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory} ${hiddenPiModelArgs}
             fi
           '';
-    }
-    // {
-      # The standard home's sign-in becomes a link to T3 Code's, so the Compound
-      # Engineering run homes copy a token that exists and agent-usage reads
-      # one. The target may not exist yet: a sign-in in T3 Code creates it. A
-      # regular file is the owner's own sign-in and stays. Nothing here reads
-      # or copies the token. On NixOS this runs only when a new Home Manager
-      # generation activates.
-      antigravitySignIn = lib.hm.dag.entryAfter [ "t3codeSettings" ] ''
-        if [[ ! -v DRY_RUN ]]; then
-          signInHome=${lib.escapeShellArg "${config.home.homeDirectory}/.gemini/antigravity-acp"}
-          signInToken=$signInHome/acp_token.json
-          [[ -d $signInHome ]] || install -d -m 700 "$signInHome"
-          if [[ -L $signInToken || ! -e $signInToken ]]; then
-            ln -sfn ${lib.escapeShellArg antigravityInstanceToken} "$signInToken"
-          else
-            echo "$signInToken holds its own Antigravity sign-in; it is kept and not shared with T3 Code." >&2
-          fi
-        fi
+      # Disable the former managed instance before its binary override is
+      # retired. T3 can select its downloaded runtime if it is still enabled.
+      t3codeRetireAntigravity = lib.hm.dag.entryAfter [ "installPackages" ] ''
+        run ${composer}/bin/t3-instructions \
+          --destination ${lib.escapeShellArg config.home.homeDirectory} \
+          --retire-antigravity-binary ${lib.escapeShellArg retiredAntigravityBinary}
       '';
     }
     // lib.mapAttrs (
-      _: merge:
-      lib.hm.dag.entryAfter [ "installPackages" ] ''
-        run ${merger} \
-          --label 'T3 Code' \
-          --settings ${config.home.homeDirectory}/.t3/userdata/${merge.file} \
-          --declared ${merge.declared} ${
-            lib.optionalString (
-              merge ? ledger
-            ) "\\\n          --ledger ${config.home.homeDirectory}/.t3/userdata/${merge.ledger}"
-          }
-      ''
+      name: merge:
+      lib.hm.dag.entryAfter
+        ([ "installPackages" ] ++ lib.optional (name == "t3codeSettings") "t3codeRetireAntigravity")
+        ''
+          run ${merger} \
+            --label 'T3 Code' \
+            --settings ${config.home.homeDirectory}/.t3/userdata/${merge.file} \
+            --declared ${merge.declared} ${
+              lib.optionalString (
+                merge ? ledger
+              ) "\\\n          --ledger ${config.home.homeDirectory}/.t3/userdata/${merge.ledger}"
+            }
+        ''
     ) merges
   );
 }

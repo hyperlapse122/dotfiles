@@ -283,9 +283,6 @@
         tanstack-intent = import ./packages/tanstack-intent.nix { inherit pkgs; };
         antigravity-cli-release = agentTools.antigravityCliRelease;
         antigravity-cli = import ./packages/antigravity-cli.nix { inherit pkgs; };
-        antigravity-acp-repack = agentTools.antigravityAcpRepack;
-        antigravity-acp = import ./packages/antigravity-acp.nix { inherit pkgs; };
-        antigravity-acp-path = import ./packages/antigravity-acp-path.nix { inherit pkgs; };
         t3code-release = agentTools.t3codeRelease;
         synthetic-models-watch = agentTools.syntheticModelsWatch;
         t3code = import ./packages/t3code.nix { inherit pkgs; };
@@ -514,10 +511,6 @@
             inherit pkgs self;
             fixtures = [ ];
           };
-          antigravity-acp-path = import ./tests/antigravity-acp-path.nix {
-            inherit pkgs;
-            pluginSource = inputs.compound-engineering-plugin;
-          };
           antigravity-cli-sources = pinnedSources "antigravity-cli-sources" ./packages/antigravity-cli-release.json;
           shell-utilities = import ./tests/shell-utilities.nix { inherit pkgs self; };
           mise-settings = import ./tests/mise-settings.nix {
@@ -598,20 +591,6 @@
           antigravity-cli-release =
             pythonScriptCheck "antigravity-cli-release" ./scripts/antigravity-cli-release
               ./tests/test_antigravity_cli_release.py;
-          antigravity-acp-repack =
-            pythonScriptCheck "antigravity-acp-repack" ./scripts/antigravity-acp-repack
-              ./tests/test_antigravity_acp_repack.py;
-          antigravity-acp-overlay =
-            pkgs.runCommand "antigravity-acp-overlay-tests" { nativeBuildInputs = [ pkgs.python3 ]; }
-              ''
-                export PYTHONDONTWRITEBYTECODE=1
-                mkdir -p packages scripts tests
-                cp -r ${./packages/antigravity-acp-overlay} packages/antigravity-acp-overlay
-                cp ${./scripts/agent-instructions} scripts/agent-instructions
-                cp ${./tests/test_antigravity_acp_overlay.py} tests/test_antigravity_acp_overlay.py
-                python tests/test_antigravity_acp_overlay.py
-                touch $out
-              '';
           # The Claude helper runs against the pinned SDK with real Node, so the
           # check carries both instead of letting that test skip.
           agent-usage =
@@ -627,16 +606,7 @@
               ./tests/test_agent_usage.py;
           npm-release = pythonScriptCheck "npm-release" ./scripts/npm-release ./tests/test_npm_release.py;
           t3code-release =
-            (pythonScriptCheckWith {
-              modules = [ ./scripts/antigravity-acp-repack ];
-              setup = ''
-                mkdir -p packages
-                cp -r ${./packages/antigravity-acp-overlay} packages/antigravity-acp-overlay
-                cp ${./packages/antigravity-acp.nix} packages/antigravity-acp.nix
-              '';
-            })
-              "t3code-release"
-              ./scripts/t3code-release
+            pythonScriptCheck "t3code-release" ./scripts/t3code-release
               ./tests/test_t3code_release.py;
           synthetic-models-watch =
             let
