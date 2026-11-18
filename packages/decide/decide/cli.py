@@ -1,14 +1,12 @@
-from dataclasses import replace
 import json
-import math
 import sys
 
 import click
 
 try:
-    from ._package import BACKEND, MODEL, LOADER, KEY_FILE
+    from ._package import LOADER
 except ImportError:
-    BACKEND, MODEL, LOADER, KEY_FILE = 'openrouter', 'typesafe/jev-1.14', None, None
+    LOADER = None
 
 
 def metadata_header(value):
@@ -177,18 +175,6 @@ def display_info(result):
                                          for kind, support in result['decision_types'].items()))
 
 
-def command_config(config, **overrides):
-    from .config import load_config
-    from .ipc import default_socket
-
-    config = load_config(backend=BACKEND, model=MODEL, socket=default_socket(),
-                         openrouter_key_file=KEY_FILE, path=config)
-    config = replace(config, **{name: value for name, value in overrides.items() if value is not None})
-    if not math.isfinite(config.timeout) or config.timeout <= 0:
-        raise ValueError('Timeout must be greater than zero')
-    return config
-
-
 async def print_model(config, json_output):
     result = await inspect_model(config)
     if json_output:
@@ -230,6 +216,7 @@ async def judge_request(config, file, headers, model_override, json_output):
 def run_command(operation, overrides, *, json_output=False, cancel_request=False):
     import asyncio
 
+    from .config import command_config
     from .core import DecisionError
 
     try:

@@ -136,6 +136,7 @@ let
   # ownEntries upserts only the servers named here and leaves the ones the
   # user adds with `claude mcp add -s user`.
   fff = import ./fff-server.nix { inherit pkgs; };
+  decide = import ./decide-server.nix { inherit config pkgs; };
   declaredGlobalConfig = pkgs.writeText "claude-declared-global-config.json" (
     builtins.toJSON {
       set = globalConfigTier;
@@ -145,6 +146,10 @@ let
           entries.fff = {
             type = "stdio";
             inherit (fff) command args;
+          };
+          entries.decide = {
+            type = "stdio";
+            inherit (decide) command;
           };
         }
       ];

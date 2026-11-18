@@ -43,7 +43,7 @@ let
 
   settingsFile = ".codex/config.toml";
 
-  declared = {
+  declared = decide: {
     setPaths = [
       {
         path = [ "model" ];
@@ -137,11 +137,10 @@ let
           command = "${pkgs.fff-mcp}/bin/fff-mcp";
           args = [ "--no-update-check" ];
         };
+        entries.decide = decide;
       }
     ];
   };
-  expected = pkgs.writeText "codex-expected-settings.json" (builtins.toJSON declared);
-
   seed = ''
     # user comment survives
     model = "old-model"
@@ -167,7 +166,7 @@ let
     [mcp_servers.local]
     command = "local-mcp-server"
   '';
-  applied = {
+  applied = decide: {
     model = "gpt-6.2-sol";
     model_reasoning_effort = "high";
     service_tier = "default";
@@ -185,6 +184,7 @@ let
     };
     mcp_servers = {
       local.command = "local-mcp-server";
+      inherit decide;
       fff = {
         command = "${pkgs.fff-mcp}/bin/fff-mcp";
         args = [ "--no-update-check" ];
@@ -204,6 +204,22 @@ let
     let
       hostName = entry.name;
       userConfig = entry.user;
+      decide = lib.findFirst (package: (package.pname or "") == "decide") null (
+        userConfig.home.packages or [ ]
+      );
+      decideEntry = {
+        command = if decide == null then "/missing/bin/decide-mcp" else "${decide}/bin/decide-mcp";
+        tool_timeout_sec = 1800;
+        env_vars = [
+          "XDG_RUNTIME_DIR"
+          "XDG_CACHE_HOME"
+          "XDG_CONFIG_HOME"
+          "DECIDE_SOCKET"
+          "DECIDE_MODEL"
+          "DECIDE_TIMEOUT"
+        ];
+      };
+      expected = pkgs.writeText "codex-expected-settings.json" (builtins.toJSON (declared decideEntry));
       activation = userConfig.home.activation.codexSettings or null;
       script = if activation == null then "" else (activation.data or "");
       runsAfterPackages = lib.elem "installPackages" (
@@ -273,9 +289,9 @@ let
         contract = {
           file = settingsFile;
           format = "toml";
-          inherit declared;
+          declared = declared decideEntry;
           inherit seed;
-          expected = applied;
+          expected = applied decideEntry;
         };
       }}
       if [ ${esc (lib.boolToString targeted)} != "false" ]; then

@@ -6,18 +6,7 @@
 }:
 let
   darwin = config.my.kind == "darwin";
-  backend =
-    if darwin then
-      "mlx"
-    else if config.my.cuda.enable then
-      "cuda"
-    else
-      "openrouter";
-  keyDirectory = if darwin then config.my.secrets.stateDir else "/run/secrets/cli-auth";
-  decide = import ../../../packages/decide.nix {
-    inherit pkgs backend;
-    openrouterKeyFile = "${keyDirectory}/openrouter_api_key";
-  };
+  decide = import ./decide-package.nix { inherit config pkgs; };
   ca =
     if darwin && config.my.tlsInspectionCa.enable && !config.my.bootstrap then
       "/etc/ssl/nix-config/ca-certificates.crt"

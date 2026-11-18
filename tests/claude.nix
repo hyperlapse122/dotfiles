@@ -147,13 +147,17 @@ let
 
   # The user-scope fff MCP server, by its store path so a GUI or T3 Code
   # session that lacks the login PATH still starts it.
-  globalConfigEntries = [
+  globalConfigEntries = decideCommand: [
     {
       path = [ "mcpServers" ];
       entries.fff = {
         type = "stdio";
         command = "${pkgs.fff-mcp}/bin/fff-mcp";
         args = [ "--no-update-check" ];
+      };
+      entries.decide = {
+        type = "stdio";
+        command = decideCommand;
       };
     }
   ];
@@ -167,7 +171,7 @@ let
       }
     );
 
-  merges = [
+  merges = decideCommand: [
     {
       attr = "claudeSettings";
       file = ".claude/settings.json";
@@ -184,12 +188,12 @@ let
       file = ".claude.json";
       declared = {
         set = globalConfigTier;
-        ownEntries = globalConfigEntries;
+        ownEntries = globalConfigEntries decideCommand;
       };
       expected = pkgs.writeText "claude-expected-global-config.json" (
         builtins.toJSON {
           set = globalConfigTier;
-          ownEntries = globalConfigEntries;
+          ownEntries = globalConfigEntries decideCommand;
         }
       );
     }
@@ -200,6 +204,10 @@ let
     let
       hostName = entry.name;
       userConfig = entry.user;
+      decide = lib.findFirst (package: (package.pname or "") == "decide") null (
+        userConfig.home.packages or [ ]
+      );
+      decideCommand = if decide == null then "/missing/bin/decide-mcp" else "${decide}/bin/decide-mcp";
       sessionVariables = userConfig.home.sessionVariables or { };
 
       environmentChecks = lib.concatStringsSep "\n" (
@@ -410,7 +418,7 @@ let
     in
     ''
       ${environmentChecks}
-      ${lib.concatMapStringsSep "\n" mergeChecks merges}
+      ${lib.concatMapStringsSep "\n" mergeChecks (merges decideCommand)}
     '';
 
   # environment.etc exists only on a NixOS system configuration, so this one

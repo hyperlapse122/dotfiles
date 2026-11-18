@@ -121,6 +121,7 @@ let
   # `codex mcp add` write there, so ownEntries upserts only the declared ones.
   # The T3 Code Codex instance shares this file through homePath ~/.codex.
   fff = import ./fff-server.nix { inherit pkgs; };
+  decide = import ./decide-server.nix { inherit config pkgs; };
 
   declared = pkgs.writeText "codex-declared-settings.json" (
     builtins.toJSON {
@@ -130,6 +131,20 @@ let
         {
           path = [ "mcp_servers" ];
           entries.fff = { inherit (fff) command args; };
+          entries.decide = {
+            inherit (decide) command;
+            tool_timeout_sec = decide.timeout;
+            # Codex filters the environment of stdio servers. These variables
+            # select the same socket and client settings as the human CLI.
+            env_vars = [
+              "XDG_RUNTIME_DIR"
+              "XDG_CACHE_HOME"
+              "XDG_CONFIG_HOME"
+              "DECIDE_SOCKET"
+              "DECIDE_MODEL"
+              "DECIDE_TIMEOUT"
+            ];
+          };
         }
       ];
     }
