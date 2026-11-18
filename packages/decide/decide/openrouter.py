@@ -41,6 +41,8 @@ async def model_metadata(model, timeout):
 
 
 class OpenRouter:
+    cancel_on_disconnect = True
+
     def __init__(self, *, api_key=None, key_file=None,
                  endpoint='https://openrouter.ai/api/alpha/decisions', timeout=120):
         self.api_key = api_key

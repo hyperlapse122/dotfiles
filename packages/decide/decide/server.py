@@ -89,7 +89,7 @@ class Service:
             app = web.Application(middlewares=[_http_errors], client_max_size=0)
             app.router.add_post(PATH, self._handle)
             app.router.add_get(INFO_PATH, self._status)
-            self.runner = web.AppRunner(app, access_log=None)
+            self.runner = web.AppRunner(app, access_log=None, handler_cancellation=True)
             await self.runner.setup()
             self.site = web.UnixSite(self.runner, str(self.path))
             old_umask = os.umask(0o177)
@@ -105,10 +105,11 @@ class Service:
             await self.close()
             raise
 
-    async def _execute(self, document, headers, transport):
+    async def _execute(self, document, headers, transport, started):
         async with self.serial:
             if transport is None or transport.is_closing():
                 raise asyncio.CancelledError
+            started.set()
             return await self.judge.judge(document, headers=headers)
 
     async def _status(self, request):
@@ -120,11 +121,19 @@ class Service:
                 document = await request.json()
             except (ValueError, UnicodeDecodeError):
                 raise error(400, 'Invalid JSON request') from None
-            task = asyncio.create_task(self._execute(document, operation_headers(request.headers), request.transport))
+            started = asyncio.Event()
+            task = asyncio.create_task(self._execute(
+                document, operation_headers(request.headers), request.transport, started))
             self.tasks.add(task)
             task.add_done_callback(self.tasks.discard)
             task.add_done_callback(_finished)
-            result = await asyncio.shield(task)
+            try:
+                result = await asyncio.shield(task)
+            except asyncio.CancelledError:
+                # A running native worker must keep the lock until its thread finishes.
+                if not started.is_set() or getattr(self.judge.backend, 'cancel_on_disconnect', False):
+                    task.cancel()
+                raise
             return web.json_response(result)
         except web.HTTPException:
             raise

@@ -34,6 +34,8 @@ cat request.json | decide judge -
 
 The CLI fills in the configured model when the document omits it. `--model` overrides the document's model. A `noul` answer is a numeric probability; a score uses the ordered levels in its criteria. `--json` prints the complete response, including optional fields. API errors go to stderr, with their full JSON body when `--json` is set; failures have a nonzero exit status.
 
+Press Ctrl+C to cancel `decide judge`. The CLI closes its connection, reports the interruption on stderr and exits with status 130. With `--json`, stderr contains a JSON error with code 130.
+
 The managed user environment installs and starts the service. To try the package before applying a host configuration, run `nix run .#decide -- serve` in a separate terminal. `decide serve` runs in the foreground and refuses to replace an existing live service.
 
 ## Inspect a model
@@ -44,11 +46,13 @@ decide info --json
 decide info --model typesafe/jev-1.14
 ```
 
-`info` shows the backend and model that `judge` would use for a request without a model field. It accepts the same `--config`, `--socket`, `--timeout` and `--model` flags. `--json` reports the same facts as the plain-text output. Each decision type has a `supported`, `unsupported` or `unknown` value.
+`info` shows the backend and model that `judge` would use for a request without a model field. It accepts the same `--config`, `--socket`, `--timeout` and `--model` flags. Plain text labels each decision type as `supported`, `unsupported` or `unknown`.
+
+In `--json` output, `decision_types` is an array of confirmed supported types. Its entries can be `noul`, `choice`, `score` or `box`. Scripts can check array membership to test support. An empty array (`[]`) means the command could confirm no supported types.
 
 For MLX and CUDA, the report includes the bundled model and its pinned revision. A running service can report whether it has finished loading the model. If the socket cannot provide status, `info` shows the package's model information with an unknown load state. When the selected model differs from the bundled model, the local backend cannot serve that selection.
 
-For OpenRouter, `info` looks up the selected model in the live [Decisions model catalog](https://openrouter.ai/docs/guides/overview/models#endpoints). If a model is missing from the response or the lookup fails, the report marks its decision types unknown. The catalog confirms API routing and does not list question types. The command uses the [documented adapter capabilities](https://openrouter.ai/docs/guides/community/multimodal-decisions#what-each-endpoint-accepts) for types it can confirm. `info` does not submit a judgment or load model weights, and it can return partial information with a successful exit status.
+For OpenRouter, `info` looks up the selected model in the live [Decisions model catalog](https://openrouter.ai/docs/guides/overview/models#endpoints). If a model is missing from the response or the lookup fails, plain text marks its decision types unknown and JSON returns an empty `decision_types` array. The catalog confirms API routing and does not list question types. The command uses the [documented adapter capabilities](https://openrouter.ai/docs/guides/community/multimodal-decisions#what-each-endpoint-accepts) for types it can confirm. `info` does not submit a judgment or load model weights, and it can return partial information with a successful exit status.
 
 ## Backends and models
 
@@ -107,7 +111,9 @@ curl --unix-socket /private/user/directory/decide.sock \
 
 The documented `HTTP-Referer`, `X-OpenRouter-Title`, `X-OpenRouter-Categories` and `x-session-id` headers pass through IPC to OpenRouter. CLI users can repeat `--header 'NAME: VALUE'` on `decide judge`. Native backends accept this attribution metadata without using it for inference.
 
-Inference is serialized in the service. Queued requests whose connections have closed are dropped before execution. Once execution starts, a client disconnect or timeout does not establish that inference, a model download or remote billing stopped. Requests are not automatically retried. Remote image downloads on native backends have a 30-second total deadline and stream into temporary storage.
+Inference is serialized in the service. To cancel a request, close its socket connection. The service drops queued requests and closes in-flight OpenRouter connections. Local work that has already started finishes before the next request runs. Requests are not automatically retried. Remote image downloads on native backends have a 30-second total deadline and stream into temporary storage.
+
+OpenRouter [documents stream cancellation](https://openrouter.ai/docs/api_reference/streaming#stream-cancellation) for providers that support it. The Decisions endpoint returns a single JSON response, and closing its connection can leave provider processing and billing in progress.
 
 ## Evidence and follow-up
 
