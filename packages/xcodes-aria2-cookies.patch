@@ -1,0 +1,131 @@
+--- a/Sources/XcodesKit/Services/Aria2DownloadService.swift
++++ b/Sources/XcodesKit/Services/Aria2DownloadService.swift
+@@ -14,8 +14,16 @@
+         unauthorizedError: (@Sendable () -> Error)? = nil
+     ) -> AsyncThrowingStream<Progress, Error> {
++        let environment = ProcessInfo.processInfo.environment
++        let cookieFile: URL?
++        do {
++            cookieFile = try makeCookieFile(cookies, parent: environment["XCODES_ARIA2_COOKIE_DIR"])
++        } catch {
++            return AsyncThrowingStream { $0.finish(throwing: error) }
++        }
++
+         let process = Process()
+         process.executableURL = aria2Path.url
+-        process.arguments = [
+-            "--header=Cookie: \(cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; "))",
++        var arguments = [
++            "--no-conf",
+             "--max-connection-per-server=16",
+             "--split=16",
+@@ -25,6 +33,14 @@
+             "--out=\(destination.basename())",
+             "--human-readable=false",
+-            url.absoluteString,
+         ]
++        if let cookieFile {
++            arguments.append("--load-cookies=\(cookieFile.path)")
++        }
++        if let ca = environment["SSL_CERT_FILE"], !ca.isEmpty {
++            arguments.append("--ca-certificate=\(ca)")
++        }
++
++        arguments.append(url.absoluteString)
++        process.arguments = arguments
+
+         let state = UnauthorizedState()
+@@ -56,8 +72,46 @@
+                 }
+                 return nil
++            },
++            cleanup: {
++                if let cookieFile {
++                    try? FileManager.default.removeItem(at: cookieFile.deletingLastPathComponent())
++                }
+             }
+         )
+
+         return runner.stream()
++    }
++
++    private func makeCookieFile(_ cookies: [HTTPCookie], parent: String?) throws -> URL? {
++        guard !cookies.isEmpty else { return nil }
++
++        let separators = CharacterSet(charactersIn: "\t\r\n")
++        let lines = try cookies.map { cookie in
++            let fields = [
++                cookie.domain,
++                cookie.domain.hasPrefix(".") ? "TRUE" : "FALSE",
++                cookie.path,
++                cookie.isSecure ? "TRUE" : "FALSE",
++                cookie.expiresDate.map { String(Int($0.timeIntervalSince1970)) } ?? "0",
++                cookie.name,
++                cookie.value,
++            ]
++            guard fields.allSatisfy({ $0.rangeOfCharacter(from: separators) == nil }) else {
++                throw XcodesKitError("Cannot prepare the download cookies.")
++            }
++            return fields.joined(separator: "\t")
++        }
++
++        let files = FileManager.default
++        let root = parent.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? files.temporaryDirectory
++        let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
++        try files.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
++        let file = directory.appendingPathComponent("cookies.txt")
++        let contents = Data((lines.joined(separator: "\n") + "\n").utf8)
++        guard files.createFile(atPath: file.path, contents: contents, attributes: [.posixPermissions: 0o600]) else {
++            try? files.removeItem(at: directory)
++            throw XcodesKitError("Cannot create the download cookie file.")
++        }
++        return file
+     }
+ }
+--- a/Sources/XcodesKit/Shell/ProcessProgressStream.swift
++++ b/Sources/XcodesKit/Shell/ProcessProgressStream.swift
+@@ -12,4 +12,5 @@
+     private let failureHandler: FailureHandler
+     private let successHandler: SuccessHandler
++    private let cleanup: @Sendable () -> Void
+     private let continuation = OSAllocatedUnfairLock<AsyncThrowingStream<Progress, Error>.Continuation?>(initialState: nil)
+
+@@ -19,5 +20,6 @@
+         outputHandler: @escaping OutputHandler,
+         failureHandler: @escaping FailureHandler,
+-        successHandler: @escaping SuccessHandler = { nil }
++        successHandler: @escaping SuccessHandler = { nil },
++        cleanup: @escaping @Sendable () -> Void = {}
+     ) {
+         self.process = process
+@@ -26,4 +28,5 @@
+         self.failureHandler = failureHandler
+         self.successHandler = successHandler
++        self.cleanup = cleanup
+     }
+
+@@ -87,6 +90,6 @@
+         }
+         clearHandlers()
+-        continuation.withLock {
+-            $0 = nil
++        if takeContinuation() != nil {
++            cleanup()
+         }
+     }
+@@ -107,9 +110,12 @@
+         }
+
+-        takeContinuation()?.finish()
++        finish()
+     }
+
+-    private func finish(throwing error: Error) {
++    private func finish(throwing error: Error? = nil) {
+         clearHandlers()
+-        takeContinuation()?.finish(throwing: error)
++        if let continuation = takeContinuation() {
++            cleanup()
++            continuation.finish(throwing: error)
++        }
+     }
