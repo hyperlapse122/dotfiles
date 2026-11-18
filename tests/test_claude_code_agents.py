@@ -153,6 +153,10 @@ class ClaudeCodeAgentsTestCase(unittest.TestCase):
         catalog = self.catalog(module(factory + BASE + ",s=" + style))
         self.assertEqual(len(catalog["agents"]), 3)
 
+    def test_agent_from_another_source_is_not_listed(self):
+        plugin = agent('"plugin-agent"').replace('source:"built-in"', 'source:"plugin"')
+        self.assert_fails("4 built-in agent markers but 3 agents parsed", module(BASE + ",p=" + plugin))
+
     def test_output_omits_system_prompts(self):
         self.catalog(module(BASE))
         self.assertNotIn("secret prompt", self.output.read_text())
