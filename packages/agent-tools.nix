@@ -76,6 +76,23 @@ let
   # release endpoints.
   claudeCodeRelease = pythonHelper "claude-code-release" ../scripts/claude-code-release;
 
+  # Extracts the catalog of subagents built into the Claude Code binary. The
+  # wrapper puts the claude-code package built from the current manifest on
+  # PATH, so the updater reads exactly the binary a new pin installs.
+  claudeCodeAgents =
+    (pythonHelper "claude-code-agents" ../scripts/claude-code-agents).overrideAttrs
+      (old: {
+        nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
+        installPhase = old.installPhase + ''
+          wrapProgram $out/bin/claude-code-agents \
+            --prefix PATH : ${pkgs.lib.makeBinPath [ (import ./claude-code.nix { inherit pkgs; }) ]}
+        '';
+        doInstallCheck = true;
+        installCheckPhase = ''
+          $out/bin/claude-code-agents --help >/dev/null
+        '';
+      });
+
   # Resolves the latest mise release from the SHASUMS256.txt asset of its
   # latest GitHub release.
   miseRelease = pythonHelper "mise-release" ../scripts/mise-release;
@@ -243,6 +260,7 @@ in
     claudeDesktopRelease
     chatgptRelease
     claudeCodeRelease
+    claudeCodeAgents
     miseRelease
     preztoRelease
     piRelease

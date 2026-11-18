@@ -264,6 +264,7 @@
         claude-desktop-release = agentTools.claudeDesktopRelease;
         claude-desktop = import ./packages/claude-desktop.nix { inherit pkgs; };
         claude-code-release = agentTools.claudeCodeRelease;
+        claude-code-agents = agentTools.claudeCodeAgents;
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
         prezto-release = agentTools.preztoRelease;
@@ -582,6 +583,9 @@
           claude-code-release =
             pythonScriptCheck "claude-code-release" ./scripts/claude-code-release
               ./tests/test_claude_code_release.py;
+          claude-code-agents =
+            pythonScriptCheck "claude-code-agents" ./scripts/claude-code-agents
+              ./tests/test_claude_code_agents.py;
           mise-release = pythonScriptCheck "mise-release" ./scripts/mise-release ./tests/test_mise_release.py;
           prezto-release =
             pythonScriptCheck "prezto-release" ./scripts/prezto-release
@@ -1122,6 +1126,18 @@
               ${forEveryConfiguration assertConfiguration}
               touch $out
             '';
+          # Re-extracts the built-in agent catalog from the pinned claude-code
+          # package and fails on any difference from the committed file, so a
+          # pin bump without a regenerated catalog, a hand edit, or an extractor
+          # change without regeneration cannot reach main.
+          claude-code-agents-catalog = pkgs.runCommand "claude-code-agents-catalog-tests" { } ''
+            ${pkgs.lib.getExe agentTools.claudeCodeAgents} --output "$TMPDIR/extracted.json"
+            if ! diff -u ${./packages/claude-code-agents.json} "$TMPDIR/extracted.json"; then
+              echo 'packages/claude-code-agents.json differs from the catalog extracted from the pinned claude-code' >&2
+              exit 1
+            fi
+            touch $out
+          '';
           grok-absent =
             let
               inherit (pkgs) lib;
