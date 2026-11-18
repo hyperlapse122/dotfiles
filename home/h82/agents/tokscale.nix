@@ -65,12 +65,6 @@ let
   customPricing = {
     "$schema" = "https://tokscale.ai/custom-pricing.schema.json";
     models = {
-      "gemini-3.1-pro" = {
-        input_cost_per_million_tokens = 4;
-        output_cost_per_million_tokens = 18;
-        cache_read_input_token_cost_per_million_tokens = 0.4;
-        cache_creation_input_token_cost_per_million_tokens = 0.375;
-      };
       "claude-fable-5-1" = {
         input_cost_per_million_tokens = 10;
         output_cost_per_million_tokens = 50;

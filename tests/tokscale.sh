@@ -250,48 +250,19 @@ if [[ $mode == source ]]; then
   echo 0 >"$scratch/status"
 fi
 
-# --- Antigravity ACP conversation directories --------------------------------
+# --- Caller-supplied history directories -------------------------------------
 
-providers=$home/.t3/userdata/providers/antigravity
-acp_default=$home/.gemini/antigravity-acp/conversations
+mkdir -p "$home/.t3/userdata/providers/antigravity/old/antigravity-acp/conversations" \
+  "$home/.gemini/antigravity-acp/conversations"
 
 run
-if [[ -f $rec/extra ]]; then fail "TOKSCALE_EXTRA_DIRS was set to '$(recorded extra)'"; fi
+[[ ! -f $rec/extra ]] || fail "TOKSCALE_EXTRA_DIRS was set to '$(recorded extra)'"
 caller=$'claude:/a b,  trailing,\ttab'
 run TOKSCALE_EXTRA_DIRS="$caller"
 [[ $(recorded extra) == "$caller" ]] || fail "the caller value changed: '$(recorded extra)'"
 run TOKSCALE_EXTRA_DIRS=
 [[ -f $rec/extra && -z $(recorded extra) ]] || fail 'an empty caller value was not kept'
-[[ $rc -eq 0 ]] || fail "with no conversations directory the wrapper exited $rc"
-pass 'with no conversations directory TOKSCALE_EXTRA_DIRS is untouched'
-
-mkdir -p "$providers/empty" "$providers/filed/antigravity-acp" "$home/.gemini/antigravity-acp"
-touch "$providers/filed/antigravity-acp/conversations" "$acp_default"
-run
-if [[ -f $rec/extra ]]; then fail "TOKSCALE_EXTRA_DIRS was set to '$(recorded extra)'"; fi
-pass 'a provider without a conversations directory, or a file in its place, adds nothing'
-rm -f -- "$acp_default"
-
-mkdir -p "$providers/first/antigravity-acp/conversations" "$providers/second/antigravity-acp/conversations"
-run TOKSCALE_EXTRA_DIRS=claude:/x
-want="claude:/x,antigravity-cli:$providers/first/antigravity-acp/conversations,antigravity-cli:$providers/second/antigravity-acp/conversations"
-[[ $(recorded extra) == "$want" ]] || fail "extra dirs '$(recorded extra)', want '$want'"
-pass 'each T3 Antigravity conversations directory is appended after the caller value'
-
-mkdir -p "$providers/a,b/antigravity-acp/conversations"
-run
-want="antigravity-cli:$providers/first/antigravity-acp/conversations,antigravity-cli:$providers/second/antigravity-acp/conversations"
-[[ $(recorded extra) == "$want" ]] || fail "a path with a comma was not skipped: '$(recorded extra)'"
-pass 'a T3 conversations path containing a comma is skipped'
-
-run TOKSCALE_EXTRA_DIRS=
-[[ $(recorded extra) == "$want" ]] || fail "an empty caller value left a leading comma: '$(recorded extra)'"
-pass 'with an empty caller value only the conversations directories are listed'
-
-mkdir -p "$acp_default"
-run
-want+=",antigravity-cli:$acp_default"
-[[ $(recorded extra) == "$want" ]] || fail "extra dirs '$(recorded extra)', want '$want'"
-pass 'the standalone ACP conversations directory follows the T3 ones'
+[[ $rc -eq 0 ]] || fail "the wrapper exited $rc with prior ACP directories present"
+pass 'existing Antigravity ACP directories do not alter TOKSCALE_EXTRA_DIRS'
 
 printf 'tokscale: all checks passed (%s)\n' "$mode"
