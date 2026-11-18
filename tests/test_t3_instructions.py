@@ -44,8 +44,8 @@ class T3InstructionsTest(unittest.TestCase):
             grok = self.read()['providerInstances']['grok']
             self.assertEqual(grok['config'], {'local': True})
             self.assertEqual(grok['environment'], [
+                {'name': 'grok_subagents', 'value': '1'},
                 {'name': 'KEEP', 'value': 'yes'},
-                {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False},
                 {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}])
             self.assertEqual(json.loads(client.read_text())['providerModelPreferences']['pi'], {
                 'hiddenModels': ['user-hidden', 'default'], 'order': ['custom']})
@@ -90,63 +90,104 @@ class T3InstructionsTest(unittest.TestCase):
                 self.assertEqual(document['providerInstances']['owner-antigravity'], custom)
                 self.assertTrue(document['unrelated'])
 
-    def test_native_controls_survive_empty_prompts_and_preserve_user_denials(self):
+    def test_fresh_launches_and_claude_depth_respect_user_settings(self):
         for file in self.instructions.iterdir():
             file.write_text('')
         self.write({'providerInstances': {
-            'codex': {'config': {'launchArgs': '--enable multi_agent -c features.multi_agent_v2=true'}},
-            'claudeAgent': {'config': {'launchArgs': '--disallowedTools Read Edit --disallowed-tools="Bash(git *)" --allowedTools Agent'}},
+            'codex': {'config': {'launchArgs': '--disable multi_agent'}},
+            'claudeAgent': {'config': {'launchArgs': '--disallowedTools Read Edit'}},
             'pi': {'config': {'launchArgs': '--thinking low'}},
         }})
-        self.module.apply(self.home, {})
+        self.module.apply(self.home, {'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH': '1'})
         providers = self.read()['providerInstances']
-        codex = self.module.tokenize(providers['codex']['config']['launchArgs'])
-        for feature in ('multi_agent', 'multi_agent_v2', 'multi_agent_v2_dynamic_tools'):
-            self.assertTrue(any(codex[i:i + 2] == ['--disable', feature] for i in range(len(codex) - 1)))
-        claude = self.module.tokenize(providers['claudeAgent']['config']['launchArgs'])
-        self.assertIn('--disallowedTools=Read,Edit,Bash(git *),Agent', claude)
-        self.assertEqual(claude[:2], ['--allowedTools', 'Agent'])
+        self.assertEqual(providers['codex']['config']['launchArgs'], '--disable multi_agent')
+        self.assertEqual(providers['claudeAgent']['config']['launchArgs'], '--disallowedTools Read Edit')
+        self.assertEqual(providers['claudeAgent']['environment'], [
+            {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '', 'sensitive': False}])
         self.assertEqual(self.module.tokenize(providers['pi']['config']['launchArgs']), ['--thinking', 'low', '--approve'])
-        before = self.settings.read_bytes()
+        providers['claudeAgent']['environment'] = [{'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '3'}]
+        self.write({'providerInstances': providers})
         self.module.apply(self.home, {})
-        self.assertEqual(self.settings.read_bytes(), before)
-        for file in self.instructions.iterdir():
-            file.unlink()
-        self.module.apply(self.home, {})
-        self.assertEqual(self.settings.read_bytes(), before)
+        self.assertEqual(self.read()['providerInstances']['claudeAgent']['environment'],
+                         [{'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '3'}])
 
-    def test_later_user_edits_do_not_accumulate_managed_native_controls(self):
-        self.write({'providerInstances': {'codex': {'config': {}}, 'claudeAgent': {'config': {}}}})
-        self.module.apply(self.home, {})
-        for file in self.instructions.iterdir():
-            file.write_text('')
-        edited = self.read()
-        edited['providerInstances']['codex']['config']['launchArgs'] += ' --enable user-feature'
-        edited['providerInstances']['claudeAgent']['config']['launchArgs'] += ' --disallowedTools Edit'
-        self.write(edited)
-        self.module.apply(self.home, {})
-        providers = self.read()['providerInstances']
-        self.assertEqual(self.module.tokenize(providers['codex']['config']['launchArgs']).count('--disable'), 3)
-        self.assertIn('--disallowedTools=Edit,Agent', self.module.tokenize(providers['claudeAgent']['config']['launchArgs']))
-        self.assertIn('--enable', self.module.tokenize(providers['codex']['config']['launchArgs']))
+    def test_schema_one_migration_preserves_user_controls_and_later_duplicates(self):
+        for name, base, managed, later in (
+            ('codex', ['--disable', 'multi_agent'], ['--disable', 'multi_agent_v2'], ['--disable', 'multi_agent_v2']),
+            ('claudeAgent', ['--disallowedTools', 'Read'], ['--disallowedTools=Read,Agent'], ['--disallowedTools=Read,Agent']),
+        ):
+            for edited in (False, True):
+                with self.subTest(name=name, edited=edited):
+                    if name == 'codex':
+                        old_args = base + managed + ['-c', 'developer_instructions=' + json.dumps(
+                            '<dotfiles-t3-developer-instructions>\nPrevious policy\n</dotfiles-t3-developer-instructions>')]
+                    else:
+                        old_args = managed + ['--append-system-prompt-file', str(self.instructions / 'claude.md')]
+                    current = old_args + (later if edited else [])
+                    self.write({'providerInstances': {name: {'config': {'launchArgs': self.module.join_args(current)}}}})
+                    self.settings.with_name('dotfiles-launch-state.json').write_text(json.dumps({'schema': 1, 'providers': {name: {
+                        'baseArgs': self.module.join_args(base), 'lastArgs': self.module.join_args(old_args), 'hadArgs': True,
+                        'controlArgs': [managed], 'controlBaseArgs': base if name == 'claudeAgent' else [],
+                        'baseEnvironment': [], 'lastEnvironment': [], 'hadEnvironment': False}}}))
+                    self.module.apply(self.home, {})
+                    args = self.module.tokenize(self.read()['providerInstances'][name]['config']['launchArgs'])
+                    self.assertEqual(args[:len(base) + (len(later) if edited else 0)], base + (later if edited else []))
 
-    def test_schema_one_records_and_preexisting_controls_preserve_the_user_base(self):
-        base = '--disable multi_agent --enable user-feature'
-        self.write({'providerInstances': {'codex': {'config': {'launchArgs': base}}}})
-        state_path = self.settings.with_name('dotfiles-launch-state.json')
-        state_path.write_text(json.dumps({'schema': 1, 'providers': {'codex': {
-            'baseArgs': base, 'lastArgs': base, 'hadArgs': True,
+    def test_ambiguous_old_control_is_preserved(self):
+        current = '--disallowedTools=Agent --disallowedTools=Agent'
+        self.write({'providerInstances': {'claudeAgent': {'config': {'launchArgs': current}}}})
+        self.settings.with_name('dotfiles-launch-state.json').write_text(json.dumps({'schema': 1, 'providers': {'claudeAgent': {
+            'baseArgs': '', 'lastArgs': '--disallowedTools=Agent', 'hadArgs': False,
+            'controlArgs': [['--disallowedTools=Agent']], 'controlBaseArgs': [],
             'baseEnvironment': [], 'lastEnvironment': [], 'hadEnvironment': False}}}))
         self.module.apply(self.home, {})
-        edited = self.read()
-        edited['providerInstances']['codex']['config']['launchArgs'] += ' --config model=fixture'
-        self.write(edited)
+        args = self.module.tokenize(self.read()['providerInstances']['claudeAgent']['config']['launchArgs'])
+        self.assertEqual(args.count('--disallowedTools=Agent'), 2)
+
+    def test_grok_legacy_entry_is_retired_only_once(self):
+        managed = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
+        updater = {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}
+        self.write({'providerInstances': {'grok': {'environment': [managed, updater]}}})
         self.module.apply(self.home, {})
-        args = self.module.tokenize(self.read()['providerInstances']['codex']['config']['launchArgs'])
-        self.assertEqual(args.count('--disable'), 4)
-        self.assertIn('model=fixture', args)
-        saved = json.loads(state_path.read_text())['providers']['codex']
-        self.assertEqual(self.module.tokenize(saved['baseArgs'])[:4], ['--disable', 'multi_agent', '--enable', 'user-feature'])
+        document = self.read()
+        self.assertNotIn(managed, document['providerInstances']['grok']['environment'])
+        document['providerInstances']['grok']['environment'].append(managed)
+        self.write(document)
+        self.module.apply(self.home, {})
+        self.assertIn(managed, self.read()['providerInstances']['grok']['environment'])
+
+    def test_grok_explicit_opt_out_without_the_legacy_pair_is_preserved(self):
+        user_entry = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
+        self.write({'providerInstances': {'grok': {'environment': [user_entry]}}})
+        for _ in range(2):
+            self.module.apply(self.home, {})
+            self.assertIn(user_entry, self.read()['providerInstances']['grok']['environment'])
+
+    def test_grok_migration_retries_after_an_interrupted_publication(self):
+        legacy = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
+        updater = {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}
+        publish = self.module.publish
+        for settings_written in (False, True):
+            with self.subTest(settings_written=settings_written):
+                self.settings.with_name('dotfiles-launch-state.json').unlink(missing_ok=True)
+                self.write({'providerInstances': {'grok': {'environment': [legacy, updater]}}})
+
+                def interrupt_settings(path, document):
+                    if path != self.settings or settings_written:
+                        publish(path, document)
+                    if path == self.settings:
+                        raise KeyboardInterrupt
+
+                with patch.object(self.module, 'publish', interrupt_settings), self.assertRaises(KeyboardInterrupt):
+                    self.module.apply(self.home, {})
+                if settings_written:
+                    # A user can opt out again once the migration took effect.
+                    document = self.read()
+                    document['providerInstances']['grok']['environment'].append(legacy)
+                    self.write(document)
+                self.module.apply(self.home, {})
+                environment = self.read()['providerInstances']['grok']['environment']
+                self.assertEqual(legacy in environment, settings_written)
 
     def test_existing_context_is_composed_once_and_removal_restores_user_settings(self):
         codex = self.home / '.codex'
@@ -186,12 +227,8 @@ class T3InstructionsTest(unittest.TestCase):
             file.write_text('')
         self.module.apply(self.home, {})
         restored = self.read()['providerInstances']
-        saved = json.loads(self.settings.with_name('dotfiles-launch-state.json').read_text())['providers']
         for name in ('codex', 'claudeAgent'):
-            if name not in original['providerInstances']:
-                continue
-            self.assertEqual(saved[name]['baseArgs'], original['providerInstances'][name]['config']['launchArgs'])
-            self.assertNotIn('T3_' + ('claude' if name == 'claudeAgent' else name), restored[name]['config']['launchArgs'])
+            self.assertEqual(restored[name]['config'], original['providerInstances'][name]['config'])
         if 'pi' in original['providerInstances']:
             self.assertEqual(self.module.tokenize(restored['pi']['config']['launchArgs']),
                              self.module.tokenize(original['providerInstances']['pi']['config']['launchArgs']) + ['--approve'])
@@ -238,14 +275,7 @@ class T3InstructionsTest(unittest.TestCase):
         (self.instructions / 'codex.md').write_text('')
         self.module.apply(self.home, {})
         restored = self.read()['providerInstances']
-        saved = json.loads(self.settings.with_name('dotfiles-launch-state.json').read_text())['providers']
-        for name in ('codex', 'claudeAgent'):
-            if name not in original['providerInstances']:
-                continue
-            self.assertEqual(saved[name]['baseArgs'], original['providerInstances'][name]['config']['launchArgs'])
-            self.assertNotIn('T3_' + ('claude' if name == 'claudeAgent' else name), restored[name]['config']['launchArgs'])
-        if 'pi' in original['providerInstances']:
-            self.assertEqual(restored['pi'], original['providerInstances']['pi'])
+        self.assertEqual(restored['codex'], original['providerInstances']['codex'])
 
     def test_unresolvable_relative_claude_file_preserves_all_existing_settings(self):
         self.write({'providerInstances': {'claudeAgent': {'config': {
@@ -275,8 +305,7 @@ class T3InstructionsTest(unittest.TestCase):
         result = self.read()['providerInstances']['codex']
         self.assertEqual(self.module.tokenize(result['config']['launchArgs'])[:4],
                          ['--config', 'model=fixture', '--enable', 'user-feature'])
-        self.assertIn({'name': 'NEW_USER_VARIABLE', 'value': 'preserve'}, result['environment'])
-        self.assertEqual(next(x['value'] for x in result['environment'] if x['name'] == 'T3CODE_CODEX_LAUNCH_ARGS'), '')
+        self.assertEqual(result['environment'], [{'name': 'NEW_USER_VARIABLE', 'value': 'preserve'}])
 
     def test_environment_names_follow_native_platform_case_rules(self):
         # Patch the existing runtime platform seam; production has no test-only switch.
@@ -314,7 +343,7 @@ class T3InstructionsTest(unittest.TestCase):
         result = self.read()['providerInstances']['codex']
         self.assertEqual(self.module.tokenize(result['config']['launchArgs'])[:2], ['--enable', 'user-feature'])
         self.assertNotIn(self.module.CODEX_MARKER, result['config']['launchArgs'])
-        self.assertIn('multi_agent', self.module.tokenize(result['config']['launchArgs']))
+        self.assertNotIn('multi_agent', self.module.tokenize(result['config']['launchArgs']))
 
 
 if __name__ == '__main__':
