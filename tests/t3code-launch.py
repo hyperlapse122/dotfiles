@@ -56,7 +56,11 @@ def validate(home):
     assert settings['textGenerationModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6-luna'}
     assert settings['defaultThreadEnvMode'] == 'worktree'
     client = json.loads((home / '.t3/userdata/client-settings.json').read_text())
-    assert client['providerModelPreferences']['pi']['hiddenModels'] == ['user-hidden', 'default']
+    assert client['providerModelPreferences']['pi']['hiddenModels'] == [
+        'user-hidden', 'default', 'synthetic/infinite:small:vision',
+        'synthetic/syn:large:text', 'synthetic/syn:large:vision',
+        'synthetic/syn:small:text', 'synthetic/syn:small:vision',
+    ]
     assert client['fontFamilyCode'] == client['fontFamilyTerminal'] == 'Jetendard'
 
 

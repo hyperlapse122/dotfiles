@@ -13,7 +13,8 @@ with tempfile.TemporaryDirectory() as directory:
     # A copy of a store tree keeps its read-only modes.
     for path in [agent, *agent.rglob('*')]:
         path.chmod(path.stat().st_mode | 0o200)
-    (agent / 'settings.json').write_text(json.dumps({'defaultProvider': 'foreign', 'defaultModel': 'bad',
+    hidden = 'syn:small:vision'
+    (agent / 'settings.json').write_text(json.dumps({'defaultProvider': 'synthetic', 'defaultModel': hidden,
         'packages': ['other'], 'extensions': ['other.ts'], 'ownerSetting': True}))
     (agent / 'auth.json').write_text('{"other":{"type":"api_key","key":"FAKE-other"}}')
     trust = '{"/remembered/project":true}'
@@ -23,7 +24,8 @@ with tempfile.TemporaryDirectory() as directory:
     plugin = Path(directory) / 'pinned-source'
     plugin.mkdir()
     (plugin / 'package.json').write_text(json.dumps({'name': 'compound-engineering', 'repository': 'https://github.com/EveryInc/compound-engineering-plugin'}))
-    command = [sys.executable, sys.argv[2], '--agent', str(agent), '--plugin', str(plugin), '--key', str(key)]
+    command = [sys.executable, sys.argv[2], '--agent', str(agent), '--plugin', str(plugin),
+               '--key', str(key), '--hide-model', f'synthetic/{hidden}']
     for _ in range(2):
         subprocess.run(command, check=True)
         settings = json.loads((agent / 'settings.json').read_text())
@@ -33,7 +35,9 @@ with tempfile.TemporaryDirectory() as directory:
         assert settings['defaultProjectTrust'] == 'ask'
         assert (agent / 'trust.json').read_text() == trust
         ids = [model['id'] for model in json.loads((agent / 'model-lock.json').read_text())['syntheticModelLocks']['models']]
-        assert settings['defaultProvider'] == 'synthetic' and settings['defaultModel'] in ids
+        assert hidden in ids
+        assert settings['defaultProvider'] == 'synthetic' and settings['defaultModel'] == min(set(ids) - {hidden})
+        assert settings['enabledModels'] == [f'synthetic/{model}' for model in ids if model != hidden]
         auth = json.loads((agent / 'auth.json').read_text())
         assert auth == {'other': {'type': 'api_key', 'key': 'FAKE-other'}, 'synthetic': {'type': 'api_key', 'key': 'FAKE-synthetic'}}
         assert (agent / 'auth.json').stat().st_mode & 0o777 == 0o600

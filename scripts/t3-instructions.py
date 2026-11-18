@@ -177,7 +177,7 @@ def publish(path, document):
         Path(temporary).unlink(missing_ok=True)
 
 
-def apply(destination, environment=None):
+def apply(destination, environment=None, hidden_models=()):
     environment = {environment_key(key): value for key, value in
                    (os.environ if environment is None else environment).items()}
     home = Path(destination)
@@ -319,8 +319,9 @@ def apply(destination, environment=None):
     hidden = preferences.get('hiddenModels', [])
     if not isinstance(hidden, list):
         raise ValueError('Pi hiddenModels must be a list.')
-    if 'default' not in hidden:
-        preferences['hiddenModels'] = hidden + ['default']
+    missing = [model for model in dict.fromkeys(('default', *hidden_models)) if model not in hidden]
+    if missing:
+        preferences['hiddenModels'] = hidden + missing
         publish(client_path, client)
     if changed:
         had_state = state_path.is_file()
@@ -345,8 +346,9 @@ def apply(destination, environment=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--destination', required=True)
+    parser.add_argument('--hide-model', action='append', default=[])
     args = parser.parse_args()
     try:
-        apply(args.destination)
+        apply(args.destination, hidden_models=args.hide_model)
     except (OSError, ValueError, TypeError, KeyError):
         raise SystemExit('T3 instruction reconciliation failed. Check launch options, writable settings, and absolute append-file paths.') from None

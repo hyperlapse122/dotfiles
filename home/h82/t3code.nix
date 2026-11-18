@@ -25,6 +25,12 @@ let
   merger = "${agentTools.agentSettings}/bin/agent-settings";
   t3 = cfg.cli.enable || cfg.desktop.enable;
   profileDirectory = config.home.profileDirectory or "${config.home.homeDirectory}/.nix-profile";
+  hiddenPiModelArgs = lib.escapeShellArgs (
+    lib.concatMap (model: [
+      "--hide-model"
+      model
+    ]) (import ./agents/pi-hidden-models.nix)
+  );
 
   # T3 Code keeps an instance's home under the sha256 of its id, and the
   # runtime stores its Google sign-in in that home.
@@ -341,7 +347,7 @@ in
               for harness in claude codex pi antigravity; do
                 install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
               done
-              ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory}
+              ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory} ${hiddenPiModelArgs}
             fi
           '';
     }

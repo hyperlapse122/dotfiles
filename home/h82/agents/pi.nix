@@ -8,6 +8,12 @@
 let
   lock = builtins.fromJSON (builtins.readFile ./pi-model-lock.json);
   catalog = lock.syntheticModelLocks;
+  hiddenModelArgs = lib.escapeShellArgs (
+    lib.concatMap (model: [
+      "--hide-model"
+      model
+    ]) (import ./pi-hidden-models.nix)
+  );
   agent = "${config.home.homeDirectory}/.pi/agent";
   # Pi resolves extension symlinks before evaluating import.meta.url.
   policy = pkgs.runCommand "pi-policy" { } ''
@@ -41,7 +47,7 @@ in
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
-      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin}
+      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} ${hiddenModelArgs}
     fi
   '';
   home.activation.piAuth = lib.mkIf (!config.my.bootstrap) (
