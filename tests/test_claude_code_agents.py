@@ -173,6 +173,10 @@ class ClaudeCodeAgentsTestCase(unittest.TestCase):
         body = 'var ft="Agent";function z(){ft="Other"}' + BASE.replace('["Edit"]', "[ft]")
         self.assert_fails("ft: defined 2 times in one module", module(body))
 
+    def test_imported_name_also_assigned_locally_is_ambiguous(self):
+        body = 'import{q as ft}from"/$bunfs/root/chunk-x.js";function z(){let ft;ft="Other"}' + BASE.replace('["Edit"]', "[ft]")
+        self.assert_fails("ft: imported and also assigned locally", module('var x="Agent";export{x as q};'), module(body))
+
     def test_missing_required_agent_fails(self):
         self.assert_fails("built-in agents not found: Plan", module(BASE.replace('"Plan"', '"Planner"')))
 

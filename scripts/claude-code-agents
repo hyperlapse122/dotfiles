@@ -295,6 +295,10 @@ class Binary:
         found = module.local_definitions(name)
         if len(found) > 1:
             raise Failure(f"{name}: defined {len(found)} times in one module")
+        if found and name in module.imports:
+            # An imported binding cannot be reassigned, so a local assignment
+            # belongs to a nested scope and says nothing about the import.
+            raise Failure(f"{name}: imported and also assigned locally")
         if found:
             start = found[0]
             return index, module.text[start:expression_end(module.text, start)].strip()
