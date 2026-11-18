@@ -135,6 +135,90 @@
         "maxTokens": 65536,
         "name": "GLM 5.3 Flash",
         "reasoning": true
+      },
+      {
+        "contextWindow": 524288,
+        "cost": {
+          "cacheRead": 0.0,
+          "cacheWrite": 0.0,
+          "input": 0.0,
+          "output": 0.0
+        },
+        "id": "infinite:small:vision",
+        "input": [
+          "text",
+          "image"
+        ],
+        "maxTokens": 65536,
+        "name": "DeepSeek V4.1 Flash 10/17",
+        "reasoning": true
+      },
+      {
+        "contextWindow": 524288,
+        "cost": {
+          "cacheRead": 0.03,
+          "cacheWrite": 0.0,
+          "input": 0.6,
+          "output": 1.2
+        },
+        "id": "syn:large:text",
+        "input": [
+          "text",
+          "image"
+        ],
+        "maxTokens": 65536,
+        "name": "syn:large:text",
+        "reasoning": true
+      },
+      {
+        "contextWindow": 524288,
+        "cost": {
+          "cacheRead": 0.45,
+          "cacheWrite": 0.0,
+          "input": 3.0,
+          "output": 15.0
+        },
+        "id": "syn:large:vision",
+        "input": [
+          "text",
+          "image"
+        ],
+        "maxTokens": 65536,
+        "name": "syn:large:vision",
+        "reasoning": true
+      },
+      {
+        "contextWindow": 196608,
+        "cost": {
+          "cacheRead": 0.02,
+          "cacheWrite": 0.0,
+          "input": 0.1,
+          "output": 0.5
+        },
+        "id": "syn:small:text",
+        "input": [
+          "text"
+        ],
+        "maxTokens": 65536,
+        "name": "syn:small:text",
+        "reasoning": true
+      },
+      {
+        "contextWindow": 524288,
+        "cost": {
+          "cacheRead": 0.03,
+          "cacheWrite": 0.0,
+          "input": 0.6,
+          "output": 1.2
+        },
+        "id": "syn:small:vision",
+        "input": [
+          "text",
+          "image"
+        ],
+        "maxTokens": 65536,
+        "name": "syn:small:vision",
+        "reasoning": true
       }
     ],
     "provider": "synthetic"

@@ -35,12 +35,14 @@ class T3InstructionsTest(unittest.TestCase):
 
     def test_client_hidden_choices_preserve_user_state(self):
         client = self.settings.with_name('client-settings.json')
+        kept = 'synthetic/syn:small:vision'
+        added = 'synthetic/infinite:small:vision'
         client.write_text(json.dumps({'providerModelPreferences': {'pi': {
-            'hiddenModels': ['user-hidden'], 'order': ['custom']}}}))
+            'hiddenModels': ['user-hidden', kept], 'modelOrder': ['custom']}}}))
         for _ in range(2):
-            self.module.apply(self.home, {})
+            self.module.apply(self.home, {}, hidden_models=[kept, added])
             self.assertEqual(json.loads(client.read_text())['providerModelPreferences']['pi'], {
-                'hiddenModels': ['user-hidden', 'default'], 'order': ['custom']})
+                'hiddenModels': ['user-hidden', kept, 'default', added], 'modelOrder': ['custom']})
 
     def test_only_the_retired_managed_antigravity_adapter_is_removed(self):
         native = {'driver': 'antigravity', 'config': {'binaryPath': '/custom/runtime'}}
