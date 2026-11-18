@@ -5,7 +5,9 @@ REVISION = NATIVE_MODELS['darwin']['revision']
 
 
 class MLX(Local):
+    backend = 'mlx'
     model = MODEL
+    revision = REVISION
 
     def _load(self):
         module = reviewed_module(self.loader_path, 'decide_reviewed_clef_mlx')

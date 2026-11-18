@@ -6,7 +6,9 @@ REVISION = NATIVE_MODELS['linux']['revision']
 
 
 class CUDA(Local):
+    backend = 'cuda'
     model = MODEL
+    revision = REVISION
 
     def _load(self):
         import torch

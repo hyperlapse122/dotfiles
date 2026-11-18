@@ -25,6 +25,8 @@ def error(status: int, message: str) -> DecisionError:
 class Backend(Protocol):
     """Honor the requested model or raise a capability error; never substitute it."""
 
+    def status(self) -> dict[str, Any]: ...
+
     async def judge(self, request: Mapping[str, Any], *, headers=None) -> dict[str, Any]: ...
 
 

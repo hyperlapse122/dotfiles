@@ -8,7 +8,7 @@ import sys
 
 from .config import load_config
 from .core import DecisionError, Judge, OPERATION_HEADERS, operation_headers
-from .ipc import default_socket, request
+from .ipc import default_socket, request, service_status
 from .server import Service
 
 try:
@@ -27,20 +27,22 @@ def metadata_header(value):
 
 def parser():
     p = argparse.ArgumentParser(prog='decide', allow_abbrev=False,
-        description='Submit a Decisions request to your private service.',
-        epilog='Examples:\n  decide serve\n  decide judge request.json\n  cat request.json | decide judge --json -',
+        description='Inspect models and submit requests to your private Decisions service.',
+        epilog='Examples:\n  decide info\n  decide judge request.json\n  cat request.json | decide judge --json -',
         formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest='command')
-    for name, help_text in [('judge', 'Submit a JSON request'), ('serve', 'Run the service for a supervisor')]:
+    for name, help_text in [('judge', 'Submit a JSON request'), ('info', 'Show model and decision type information'),
+                            ('serve', 'Run the service for a supervisor')]:
         command = sub.add_parser(name, help=help_text, allow_abbrev=False)
         command.add_argument('--config', help='TOML configuration file')
         command.add_argument('--socket', help='Unix socket path')
         command.add_argument('--timeout', type=float, help='Request timeout in seconds')
         command.add_argument('--model', help='Override the request model')
+        if name in ('judge', 'info'):
+            command.add_argument('--json', action='store_true', help='Print the complete result as JSON')
         if name == 'judge':
             command.add_argument('-H', '--header', type=metadata_header, action='append', default=[],
                                  help='Pass Decisions metadata as NAME: VALUE (repeatable)')
-            command.add_argument('--json', action='store_true', help='Print the complete JSON response')
             command.add_argument('file', help='JSON request file, or - for stdin')
     return p
 
@@ -79,6 +81,63 @@ def display(result):
         print(f'{name} ({kind}): {value}')
 
 
+async def inspect_model(config):
+    if not isinstance(config.model, str) or not config.model.strip():
+        raise ValueError('Model must be a non-empty string')
+    status = await service_status(config.socket, min(config.timeout, 2))
+    result = {'model': config.model, 'backend_source': 'service' if status else 'package'}
+    if status is None:
+        status = {'backend': config.backend}
+        if config.backend != 'openrouter':
+            status = backend(config).packaged_status()
+    result.update(status)
+
+    if status['backend'] == 'openrouter':
+        from .openrouter import BOX_MODELS, ROUTED_DECISION_TYPES, model_metadata
+
+        catalog_status, remote_model = await model_metadata(config.model, config.timeout)
+        supported = ROUTED_DECISION_TYPES if catalog_status == 'matched' else ()
+        if remote_model is not None:
+            result['remote_model'] = remote_model
+            # OpenRouter documents Box for this model in its Multimodal Decisions guide.
+            if remote_model.get('id') in BOX_MODELS:
+                supported += ('box',)
+        result['catalog_status'] = catalog_status
+        default_support = 'unknown'
+    else:
+        from .local import LOCAL_DECISION_TYPES
+
+        supported = LOCAL_DECISION_TYPES if config.model == status['local_model']['id'] else ()
+        default_support = 'unsupported'
+
+    result['decision_types'] = {kind: 'supported' if kind in supported else default_support
+                                for kind in ('noul', 'choice', 'score', 'box')}
+    return result
+
+
+def display_info(result):
+    print(f"Model: {result['model']}")
+    print(f"Backend: {result['backend']} ({result['backend_source']})")
+    if local := result.get('local_model'):
+        print(f"Bundled model: {local['id']}")
+        print(f"Revision: {local['revision']}")
+        print(f"Load state: {local['load_state']}")
+        if result['model'] != local['id']:
+            print('The selected model is unavailable on this backend.')
+    else:
+        catalog = result['catalog_status']
+        print('OpenRouter catalog: ' + catalog.replace('_', ' '))
+        if remote := result.get('remote_model'):
+            if remote.get('id') and remote['id'] != result['model']:
+                print(f"Catalog model ID: {remote['id']}")
+            if 'name' in remote:
+                print(f"Model name: {remote['name']}")
+            if 'context_length' in remote:
+                print(f"Context length: {remote['context_length']} tokens")
+    print('Decision types: ' + ', '.join(f'{kind} ({support})'
+                                         for kind, support in result['decision_types'].items()))
+
+
 async def run(args):
     config = load_config(backend=BACKEND, model=MODEL, socket=default_socket(),
                          openrouter_key_file=KEY_FILE, path=args.config)
@@ -88,6 +147,13 @@ async def run(args):
         raise ValueError('Timeout must be greater than zero')
     if args.command == 'serve':
         await serve(config)
+        return
+    if args.command == 'info':
+        result = await inspect_model(config)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            display_info(result)
         return
     if args.file == '-' and sys.stdin.isatty():
         raise ValueError('Provide a JSON request on stdin or pass a request file')

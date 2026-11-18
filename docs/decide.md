@@ -36,6 +36,20 @@ The CLI fills in the configured model when the document omits it. `--model` over
 
 The managed user environment installs and starts the service. To try the package before applying a host configuration, run `nix run .#decide -- serve` in a separate terminal. `decide serve` runs in the foreground and refuses to replace an existing live service.
 
+## Inspect a model
+
+```sh
+decide info
+decide info --json
+decide info --model typesafe/jev-1.14
+```
+
+`info` shows the backend and model that `judge` would use for a request without a model field. It accepts the same `--config`, `--socket`, `--timeout` and `--model` flags. `--json` reports the same facts as the plain-text output. Each decision type has a `supported`, `unsupported` or `unknown` value.
+
+For MLX and CUDA, the report includes the bundled model and its pinned revision. A running service can report whether it has finished loading the model. If the socket cannot provide status, `info` shows the package's model information with an unknown load state. When the selected model differs from the bundled model, the local backend cannot serve that selection.
+
+For OpenRouter, `info` looks up the selected model in the live [Decisions model catalog](https://openrouter.ai/docs/guides/overview/models#endpoints). If a model is missing from the response or the lookup fails, the report marks its decision types unknown. The catalog confirms API routing and does not list question types. The command uses the [documented adapter capabilities](https://openrouter.ai/docs/guides/community/multimodal-decisions#what-each-endpoint-accepts) for types it can confirm. `info` does not submit a judgment or load model weights, and it can return partial information with a successful exit status.
+
 ## Backends and models
 
 | Environment | Backend | Initial model |
@@ -48,7 +62,7 @@ The CUDA trait defaults from the NixOS NVIDIA driver declaration. Backend select
 
 Local Clef supports `noul`, `choice` and `score`, with text and static images placed directly in the top-level state array. Image asset references can appear as whole state items. Images retain their order and numbered associations. Nested image positions, animated images, video, audio, files, `box` questions and provider preferences are unsupported on the current local adapter. Unsupported requests fail before model loading.
 
-OpenRouter receives the complete request, including structured instructions and criteria, assets, provider preferences and metadata. Its selected model and endpoint determine the available primitives and media forms. For example, [Jev 1.14](https://openrouter.ai/typesafe/jev-1.14) accepts text and images and supports `box`; [Gemini Decision 1](https://openrouter.ai/google/gemini-decision-1) accepts audio, video and supported documents as well as images, and supports the other three primitives. See the [multimodal Decisions guide](https://openrouter.ai/docs/guides/community/multimodal-decisions) for each endpoint's forms and limits.
+OpenRouter receives the complete request, including structured instructions and criteria, assets, provider preferences and metadata. Its selected model and endpoint determine the available primitives and media forms. [Jev 1.14](https://openrouter.ai/typesafe/jev-1.14) accepts text and images and supports `box`. [Gemini Decision 1](https://openrouter.ai/google/gemini-decision-1) accepts audio, video and supported documents as well as images. See the [multimodal Decisions guide](https://openrouter.ai/docs/guides/community/multimodal-decisions) for each endpoint's forms and limits.
 
 The local code and dependencies are fixed Nix sources. Weights load lazily from the user's Hugging Face cache at these immutable revisions:
 
