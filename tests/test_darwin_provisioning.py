@@ -54,7 +54,8 @@ print(json.dumps({'username': 'fake-user', 'password': 'fake-password'}))
 assert os.environ['XCODES_USERNAME'] == 'fake-user'
 assert os.environ['XCODES_PASSWORD'] == 'fake-password'
 assert all('fake-' not in a for a in sys.argv)
-open(os.environ['LOG'], 'w').write(json.dumps(sys.argv[1:]))
+cookie_directory = os.environ.get('XCODES_ARIA2_COOKIE_DIR')
+open(os.environ['LOG'], 'w').write(json.dumps({'args': sys.argv[1:], 'cookie_directory': cookie_directory}))
 # Deliberately echo the fake credentials to test redaction.
 print('fake-user fake-password')
 ''')
@@ -74,9 +75,21 @@ print('fake-user fake-password')
             with contextlib.redirect_stdout(out), patch.object(x, 'fetch_catalog', return_value=[release]), patch.object(x, 'host_version', return_value='26.0'), patch.object(x, 'installed_candidate', side_effect=[None, candidate]), patch.object(x, 'verify_candidate') as verify, patch.object(x, 'run_command', return_value=subprocess.CompletedProcess([], 0, str(candidate / 'Contents/Developer'))):
                 x.update(source, identity, owner)
                 verify.assert_called_once_with(candidate)
-            self.assertEqual(json.loads(self.log.read_text())[:2], ['install', '27.0 Beta 2'])
+            install_call = json.loads(self.log.read_text())
+            self.assertEqual(install_call['args'][:2], ['install', '27.0 Beta 2'])
+            self.assertNotIn('--no-aria2', install_call['args'])
+            self.assertFalse(Path(install_call['cookie_directory']).exists())
             self.assertNotIn('fake-password', out.getvalue())
             self.assertNotIn('fake-user', out.getvalue())
+            def interrupt(args, *, env, secrets):
+                directory = Path(env['XCODES_ARIA2_COOKIE_DIR'])
+                (directory / 'cookies').write_text('fake-cookie')
+                raise KeyboardInterrupt
+
+            with patch.object(x, 'fetch_catalog', return_value=[release]), patch.object(x, 'host_version', return_value='26.0'), patch.object(x, 'installed_candidate', return_value=None), patch.object(x, 'run_interactive', side_effect=interrupt) as install:
+                with contextlib.redirect_stdout(out), self.assertRaises(KeyboardInterrupt):
+                    x.update(source, identity, owner)
+            self.assertFalse(Path(install.call_args.kwargs['env']['XCODES_ARIA2_COOKIE_DIR']).exists())
             self.log.unlink()
             for mode in (0o644, 0o400):
                 identity.chmod(mode)
@@ -174,7 +187,10 @@ else: sys.exit(11)
             # for the checkout gets no repository, as the real git reports.
             self.stub('git', "import os, sys\nfrom pathlib import Path\nd=Path.cwd()\nwhile not (d/'.git').exists():\n if d==d.parent: sys.exit('fatal: not a git repository (or any of the parent directories): .git')\n d=d.parent\nprint(d)")
             self.stub('sudo', "import os, sys\na=sys.argv[1:]\nwhile a and a[0].startswith('--'): a=a[1:]\nos.execvpe(a[0],a,os.environ)")
-            self.stub('macos-xcode', "import json,os,sys\nopen(os.environ['LOG'],'a').write(json.dumps(sys.argv[1:])+'\\n')")
+            self.stub('macos-xcode', '''import json, os, sys
+with open(os.environ['LOG'], 'a') as log:
+    print(json.dumps({'args': sys.argv[1:], 'ca': os.environ.get('SSL_CERT_FILE')}), file=log)
+''')
             self.stub('container-setup', "import os\nopen(os.environ['LOG'],'a').write('container-setup\\n')")
             self.stub('launchctl', "import os, sys\na=sys.argv[1:]\nassert a[:2] == ['asuser', '501']\nopen(os.environ['LOG'],'a').write('launchctl asuser 501\\n')\nos.execvpe(a[2], a[2:], os.environ)")
             self.stub('id', "import os, sys\nassert sys.argv[1:] == ['-u', '--', os.environ['EXPECTED_OWNER']]\nprint('501')")
@@ -200,16 +216,19 @@ else: sys.exit(11)
             script=re.sub(r'/nix/store/[^ /]+/bin/macos-xcode', 'macos-xcode', script)
             script=re.sub(r'/bin/sh /nix/store/[^ /]+/macos-container.sh', 'container-setup', script)
             script=re.sub(r'PATH="[^"]+"', 'PATH="'+self.env['PATH']+'"', script)
-            result=subprocess.run(['bash','-euc',script],env=self.env | {'EXPECTED_OWNER': entry['owner']},capture_output=True,cwd='/')
+            env = self.env | {'EXPECTED_OWNER': entry['owner']}
+            env.pop('SSL_CERT_FILE', None)
+            result=subprocess.run(['bash','-euc',script],env=env,capture_output=True,cwd='/')
             self.assertEqual(result.returncode,0,result.stderr)
             records=self.log.read_text().splitlines()
             self.assertEqual(records.count('launchctl asuser 501'),1)
             self.assertEqual(records.count('container-setup'),1)
             self.assertLess(records.index('launchctl asuser 501'), records.index('container-setup'))
-            xcodes=[json.loads(line) for line in records if line.startswith('[')]
+            xcodes=[json.loads(line) for line in records if line.startswith('{')]
             self.assertEqual(len(xcodes),0 if entry['bootstrap'] else 1)
             if xcodes:
-                args=xcodes[0]
+                args=xcodes[0]['args']
+                self.assertEqual(xcodes[0]['ca'], '/etc/ssl/nix-config/ca-certificates.crt' if entry['tlsInspection'] else None)
                 self.assertEqual(args, ['--source', entry['source'], '--identity', entry['home']+'/.config/nix-config/age/key.txt', '--owner',entry['owner']])
 
 

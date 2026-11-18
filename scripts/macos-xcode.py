@@ -10,6 +10,7 @@ import plistlib
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
 import pwd
@@ -248,8 +249,10 @@ def update(source, identity, owner):
             env.pop(name, None)
         env.update({'XCODES_USERNAME': account['username'], 'XCODES_PASSWORD': account['password']})
         print('Installing Xcode ' + version + ' (' + release['version']['build'] + ').', flush=True)
-        run_interactive(['xcodes', 'install', version, '--update', '--directory', str(APPLICATIONS), '--no-aria2', '--no-color'],
-                        env=env, secrets=account.values())
+        with tempfile.TemporaryDirectory(prefix='xcodes-aria2-') as cookie_directory:
+            env['XCODES_ARIA2_COOKIE_DIR'] = cookie_directory
+            run_interactive(['xcodes', 'install', version, '--update', '--directory', str(APPLICATIONS), '--no-color'],
+                            env=env, secrets=account.values())
         app = installed_candidate(release)
         if app is None:
             raise XcodeError('The installed Xcode does not match the selected release build.')
