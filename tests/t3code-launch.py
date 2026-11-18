@@ -22,13 +22,14 @@ def validate(home):
     assert '# T3 delegation' in addition and '# T3 CE model selection' in addition
     assert '| Codex | astra | sol | terra | luna |' in addition
     assert 'writing' not in addition.lower()
-    assert 'Agent' in next(a for a in args if a.startswith('--disallowedTools='))
+    assert not any(a.startswith('--disallowedTools') for a in args)
+    assert {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '', 'sensitive': False} in providers['claudeAgent']['environment']
     # Native discovery reads CLAUDE.md in both launch modes. Only the T3
     # arguments attach an extra file; no native config or CLI wrapper is changed.
     assert baseline + addition != baseline
     codex = shlex.split(providers['codex']['config']['launchArgs'])
     assert 'developer_instructions=' in codex[codex.index('-c') + 1]
-    assert '--disable' in codex
+    assert '--disable' not in codex
     pi = shlex.split(providers['pi']['config']['launchArgs'])
     assert Path(pi[pi.index('--append-system-prompt') + 1]).read_text() == addition
     assert providers['pi']['enabled'] is True
@@ -42,7 +43,8 @@ def validate(home):
     assert grok_addition.is_file() and grok_addition.read_text() == addition
     assert providers['grok']['config']['userFlag'] is True
     assert any(e['name'] == 'KEEP' and e['value'] == 'yes' for e in providers['grok']['environment'])
-    assert any(e['name'] == 'GROK_SUBAGENTS' and e['value'] == '0' for e in providers['grok']['environment'])
+    assert not any(e['name'] == 'GROK_SUBAGENTS' for e in providers['grok']['environment'])
+    assert any(e['name'] == 'GROK_DISABLE_AUTOUPDATER' and e['value'] == '1' for e in providers['grok']['environment'])
     # The declaration turns the owner's disabled instance on and points it at the
     # wrapper; the owner's own flag survives alongside the T3 instruction input.
     antigravity = providers['antigravity']

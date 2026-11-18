@@ -13,12 +13,8 @@ CODEX_MARKER = '<dotfiles-t3-developer-instructions>'
 CLAUDE_MARKER = '<dotfiles-preserved-claude-append>'
 OVERRIDE = 'T3CODE_CODEX_LAUNCH_ARGS'
 ANTIGRAVITY_ADDITION = 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE'
-NATIVE_CONTROLS = {
-    'codex': [['--disable', feature] for feature in
-              ('multi_agent', 'multi_agent_v2', 'multi_agent_v2_dynamic_tools')],
-    'claudeAgent': [['--disallowedTools=Agent']],
-    'pi': [['--approve']],
-}
+NATIVE_CONTROLS = {'pi': [['--approve']]}
+CLAUDE_DEPTH = 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH'
 
 
 def environment_key(name):
@@ -117,13 +113,7 @@ def instruction_config(home, provider, arguments, environment):
     return developer
 
 
-def clean_owned(arguments, addition_file, controls=(), control_base=()):
-    arguments = list(arguments)
-    for contribution in reversed(controls):
-        for index in range(len(arguments) - len(contribution), -1, -1):
-            if arguments[index:index + len(contribution)] == contribution:
-                arguments[index:index + len(contribution)] = control_base
-                break
+def clean_owned(arguments, addition_file):
     result = []
     index = 0
     while index < len(arguments):
@@ -141,26 +131,27 @@ def clean_owned(arguments, addition_file, controls=(), control_base=()):
     return result
 
 
-def claude_controls(arguments):
-    remaining, original, denied = [], [], []
-    index = 0
-    while index < len(arguments):
-        argument = arguments[index]
-        name, separator, value = argument.partition('=')
-        if name not in ('--disallowedTools', '--disallowed-tools'):
-            remaining.append(argument)
-            index += 1
-            continue
-        original.append(argument)
-        if separator:
-            denied.append(value)
-        index += 1
-        while index < len(arguments) and not arguments[index].startswith('-'):
-            original.append(arguments[index])
-            denied.append(arguments[index])
-            index += 1
-    controls = [['--disallowedTools=' + ','.join([*denied, 'Agent'])]]
-    return remaining, original, controls
+def restore_arguments(current, old, addition_file):
+    arguments = tokenize(current)
+    previous = tokenize(old.get('lastArgs', ''))
+    matches = [i for i in range(len(arguments) - len(previous) + 1)
+               if previous and arguments[i:i + len(previous)] == previous]
+    if len(matches) == 1:
+        index = matches[0]
+        arguments[index:index + len(previous)] = tokenize(old['baseArgs'])
+    else:
+        # A control duplicated in the baseline or current arguments has no
+        # unambiguous owner once the recorded launch has been edited.
+        baseline = tokenize(old.get('baseArgs', ''))
+        for control in old.get('controlArgs', []):
+            locations = [i for i in range(len(arguments) - len(control) + 1)
+                         if arguments[i:i + len(control)] == control]
+            in_base = any(baseline[i:i + len(control)] == control
+                          for i in range(len(baseline) - len(control) + 1))
+            if len(locations) == 1 and not in_base:
+                index = locations[0]
+                arguments[index:index + len(control)] = old.get('controlBaseArgs', [])
+    return clean_owned(arguments, addition_file)
 
 
 def read_mapping(path):
@@ -208,12 +199,20 @@ def apply(destination, environment=None):
         provider = providers[name]
         if not isinstance(provider, dict) or not isinstance(provider.get('config', {}), dict):
             raise ValueError('Native provider configuration must be an object.')
-        config = provider.setdefault('config', {})
+        config = provider.get('config', {})
         addition_file = settings_path.parent / 'instructions' / (harness + '.md')
         addition = addition_file.read_text(encoding='utf-8') if addition_file.is_file() else ''
         old = records.get(name, {})
         controls = NATIVE_CONTROLS.get(name, [])
-        control_base = []
+        if name == 'claudeAgent':
+            entries = provider.get('environment', [])
+            if not isinstance(entries, list) or any(not isinstance(e, dict) or not isinstance(e.get('name'), str) for e in entries):
+                raise ValueError('Native provider environment must contain named entries.')
+            # Claude treats an empty depth as unset, so it uses its default
+            # instead of the standalone cap inherited from the shell.
+            if not any(environment_key(e['name']) == CLAUDE_DEPTH for e in entries):
+                provider['environment'] = entries + [{'name': CLAUDE_DEPTH, 'value': '', 'sensitive': False}]
+                changed = True
         if not addition.strip() and not old and not controls:
             continue
         current = config.get('launchArgs', '')
@@ -221,8 +220,7 @@ def apply(destination, environment=None):
             base = old['baseArgs']
             had_args = old['hadArgs']
         else:
-            base = join_args(clean_owned(tokenize(current), addition_file, old.get('controlArgs', []),
-                                         old.get('controlBaseArgs', [])))
+            base = join_args(restore_arguments(current, old, addition_file))
             had_args = 'launchArgs' in config
             if tokenize(base) == tokenize(current):
                 base = current
@@ -249,6 +247,11 @@ def apply(destination, environment=None):
                 config['launchArgs'] = base
             else:
                 config.pop('launchArgs', None)
+            if name == 'codex':
+                if had_environment:
+                    provider['environment'] = base_environment
+                else:
+                    provider.pop('environment', None)
             changed = True
             continue
         arguments = tokenize(base)
@@ -262,19 +265,15 @@ def apply(destination, environment=None):
             override = effective.get(OVERRIDE, '')
             if override.strip():
                 arguments = clean_owned(tokenize(override), addition_file)
-            arguments += [value for contribution in controls for value in contribution]
-            if addition.strip():
-                developer = instruction_config(home, provider, arguments, effective)
-                combined = '\n\n'.join(value for value in (developer, CODEX_MARKER + '\n' + addition.rstrip()
-                    + '\n</dotfiles-t3-developer-instructions>') if value)
-                arguments += ['-c', 'developer_instructions=' + json.dumps(combined, ensure_ascii=False)]
+            developer = instruction_config(home, provider, arguments, effective)
+            combined = '\n\n'.join(value for value in (developer, CODEX_MARKER + '\n' + addition.rstrip()
+                + '\n</dotfiles-t3-developer-instructions>') if value)
+            arguments += ['-c', 'developer_instructions=' + json.dumps(combined, ensure_ascii=False)]
             provider['environment'] = [entry for entry in base_environment if environment_key(entry['name']) != OVERRIDE]
             provider['environment'].append({'name': OVERRIDE, 'value': '', 'sensitive': False})
         elif name == 'claudeAgent':
-            arguments, control_base, controls = claude_controls(arguments)
-            arguments += [value for contribution in controls for value in contribution]
-            files = flag_values(arguments, ('--append-system-prompt-file',)) if addition.strip() else []
-            inline = flag_values(arguments, ('--append-system-prompt',)) if addition.strip() else []
+            files = flag_values(arguments, ('--append-system-prompt-file',))
+            inline = flag_values(arguments, ('--append-system-prompt',))
             preserved = []
             if files:
                 path = Path(files[-1])
@@ -283,9 +282,8 @@ def apply(destination, environment=None):
                 preserved.append(path.read_text(encoding='utf-8').removesuffix('\n').removesuffix('\r'))
             if inline:
                 preserved.append(inline[-1])
-            if addition.strip():
-                arguments += ['--append-system-prompt-file', str(addition_file)]
-            if preserved and addition.strip():
+            arguments += ['--append-system-prompt-file', str(addition_file)]
+            if preserved:
                 arguments += ['--append-system-prompt', CLAUDE_MARKER + '\n' + '\n'.join(preserved)
                               + '\n</dotfiles-preserved-claude-append>']
         else:
@@ -293,10 +291,10 @@ def apply(destination, environment=None):
             arguments += [value for contribution in controls for value in contribution]
             if addition.strip():
                 arguments += ['--append-system-prompt', str(addition_file)]
+        provider['config'] = config
         config['launchArgs'] = join_args(arguments)
         next_records[name] = {'baseArgs': base, 'hadArgs': had_args, 'lastArgs': config['launchArgs'],
                               'controlArgs': controls,
-                              'controlBaseArgs': control_base,
                               'baseEnvironment': base_environment, 'hadEnvironment': had_environment,
                               'lastEnvironment': copy.deepcopy(provider.get('environment', []))}
         changed = True
@@ -320,10 +318,12 @@ def apply(destination, environment=None):
         entries = grok.get('environment', [])
         if not isinstance(entries, list) or any(not isinstance(e, dict) or not isinstance(e.get('name'), str) for e in entries):
             raise ValueError('Grok environment must contain named entries.')
-        grok['environment'] = [e for e in entries if e['name'].upper() not in
-                               ('GROK_SUBAGENTS', 'GROK_DISABLE_AUTOUPDATER')]
-        grok['environment'] += [{'name': key, 'value': value, 'sensitive': False} for key, value in
-                                (('GROK_SUBAGENTS', '0'), ('GROK_DISABLE_AUTOUPDATER', '1'))]
+        legacy_grok = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
+        updater = {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}
+        if not state.get('grokSubagentsRetired', False) and updater in entries and entries.count(legacy_grok) == 1:
+            entries = [e for e in entries if e != legacy_grok]
+        grok['environment'] = [e for e in entries if e['name'].upper() != 'GROK_DISABLE_AUTOUPDATER']
+        grok['environment'].append(updater)
         changed = True
     client_path = settings_path.with_name('client-settings.json')
     client = read_mapping(client_path)
@@ -336,7 +336,8 @@ def apply(destination, environment=None):
         publish(client_path, client)
     if changed:
         had_state = state_path.is_file()
-        publish(state_path, {'schema': 1, 'providers': next_records})
+        publish(state_path, {'schema': 1, 'providers': next_records,
+                             'grokSubagentsRetired': state.get('grokSubagentsRetired', False) or grok is not None})
         try:
             publish(settings_path, settings)
         except OSError:
