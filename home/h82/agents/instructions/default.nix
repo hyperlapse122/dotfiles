@@ -51,7 +51,11 @@ let
   };
 in
 {
-  home.file =
+  home.file = {
+    ".local/share/nix-config/claude-code-agents.json".source =
+      ../../../../packages/claude-code-agents.json;
+  }
+  // (
     if live then
       { ".local/share/nix-config/refresh-agent-instructions".source = refresh; }
     else
@@ -61,7 +65,8 @@ in
           inherit target;
           source = "${rendered}/${target}";
         }
-      ) targets;
+      ) targets
+  );
 
   home.activation.agentInstructions = lib.mkIf live (
     lib.hm.dag.entryAfter
