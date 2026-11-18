@@ -11,6 +11,7 @@ class Config:
     socket: str
     timeout: float = 120
     openrouter_key_file: str | None = None
+    preload: bool = False
 
 
 def load_config(*, backend: str, model: str, socket: str,
@@ -32,10 +33,14 @@ def load_config(*, backend: str, model: str, socket: str,
         timeout = float(os.environ.get('DECIDE_TIMEOUT', settings.get('timeout', 120)))
     except (TypeError, ValueError):
         raise ValueError('Timeout must be a number of seconds') from None
+    preload = settings.get('preload', False)
+    if not isinstance(preload, bool):
+        raise ValueError('Set preload to true or false')
     return Config(
         backend=backend,
         model=os.environ.get('DECIDE_MODEL', settings.get('model', model)),
         socket=os.environ.get('DECIDE_SOCKET', settings.get('socket', socket)),
         timeout=timeout,
         openrouter_key_file=settings.get('openrouter_key_file', openrouter_key_file),
+        preload=preload,
     )

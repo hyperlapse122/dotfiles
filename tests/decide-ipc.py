@@ -92,6 +92,19 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         out, err = await process.communicate(input)
         return process.returncode, out.decode(), err.decode()
 
+    async def test_cli_help_shows_commands_examples_and_scoped_options(self):
+        code, out, err = await self.cli()
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('Commands:', out)
+        self.assertIn('decide judge request.json', out)
+
+        for name, option in [('judge', '--header'), ('info', '--json'), ('serve', '--preload')]:
+            with self.subTest(command=name):
+                code, out, err = await self.cli(name, '-h')
+                self.assertEqual((code, err), (0, ''))
+                self.assertIn(f'decide {name}', out)
+                self.assertIn(option, out)
+
     async def test_independent_client_and_human_cli(self):
         status, body = await self.post(REQUEST)
         self.assertEqual((status, body), (200, RESPONSE))
@@ -135,7 +148,7 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         status, body = await self.post(dict(REQUEST, state='x' * (1024 * 1024 + 1)))
         self.assertEqual((status, body), (200, RESPONSE))
 
-    async def test_service_info_observes_local_head_without_loading(self):
+    async def test_service_info_observes_lazy_and_preloaded_local_models(self):
         calls = []
 
         class TestMLX(MLX):
@@ -147,23 +160,28 @@ class IPC(unittest.IsolatedAsyncioTestCase):
                 calls.append('infer')
                 return dict(RESPONSE, model=record['model'])
 
-        await self.service.close()
-        self.service = Service(Judge(TestMLX('/unused')), self.socket)
-        await self.service.start()
-
         async def info():
             async with self.client.get('http://localhost/info') as response:
                 self.assertEqual(response.status, 200)
                 return await response.json()
 
-        expected = {'backend': 'mlx', 'local_model': {
-            'id': MLX.model, 'revision': REVISION, 'load_state': 'unloaded'}}
-        self.assertEqual(await info(), expected)
-        self.assertEqual(calls, [])
-        self.assertEqual((await self.post(dict(REQUEST, model=MLX.model)))[0], 200)
-        expected['local_model']['load_state'] = 'loaded'
-        self.assertEqual(await info(), expected)
-        self.assertEqual(calls, ['load', 'infer'])
+        for preload in (False, True):
+            with self.subTest(preload=preload):
+                calls.clear()
+                await self.service.close()
+                self.service = Service(Judge(TestMLX('/unused')), self.socket)
+                if preload:
+                    await self.service.start(preload=True)
+                else:
+                    await self.service.start()
+                expected = {'backend': 'mlx', 'local_model': {
+                    'id': MLX.model, 'revision': REVISION, 'load_state': 'loaded' if preload else 'unloaded'}}
+                self.assertEqual(await info(), expected)
+                self.assertEqual(calls, ['load'] if preload else [])
+                self.assertEqual((await self.post(dict(REQUEST, model=MLX.model)))[0], 200)
+                expected['local_model']['load_state'] = 'loaded'
+                self.assertEqual(await info(), expected)
+                self.assertEqual(calls, ['load', 'infer'])
 
     async def test_info_cli_reports_selected_and_local_models(self):
         class StatusMLX(MLX):
@@ -201,7 +219,7 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         await self.service.close()
         out = io.StringIO()
         with patch.object(cli, 'BACKEND', 'mlx'), redirect_stdout(out):
-            await cli.run(cli.parser().parse_args([*args, '--json']))
+            self.assertEqual(await asyncio.to_thread(cli.main, [*args, '--json']), 0)
         result = json.loads(out.getvalue())
         self.assertEqual(result['backend_source'], 'package')
         self.assertEqual(result['local_model']['load_state'], 'unknown')
@@ -237,7 +255,7 @@ class IPC(unittest.IsolatedAsyncioTestCase):
             args = ['info', '--socket', self.socket, '--model', model, '--json']
             out = io.StringIO()
             with patch('decide.openrouter.MODELS_URL', f'http://127.0.0.1:{port}/models', create=True), redirect_stdout(out):
-                await cli.run(cli.parser().parse_args(args))
+                self.assertEqual(await asyncio.to_thread(cli.main, args), 0)
             return json.loads(out.getvalue())
 
         result = await info('cloudflare/clef-flash')

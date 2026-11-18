@@ -162,6 +162,12 @@ class Local:
     def status(self):
         return self.packaged_status('unloaded' if self._head is None else 'loaded')
 
+    async def preload(self):
+        try:
+            await asyncio.to_thread(self._ensure_loaded)
+        except Exception as exc:
+            raise error(502, 'Could not load the local model. Check the model cache and native runtime.') from exc
+
     async def judge(self, request, *, headers=None):
         try:
             record = await asyncio.to_thread(convert, request, self.model)
@@ -173,7 +179,10 @@ class Local:
                 raise error(413, 'Maximum context length exceeded') from exc
             raise error(502, 'Local inference failed; check the model cache and native runtime') from exc
 
-    def _judge(self, record):
+    def _ensure_loaded(self):
         if self._head is None:
             self._head = self._load()
+
+    def _judge(self, record):
+        self._ensure_loaded()
         return self._infer(record)

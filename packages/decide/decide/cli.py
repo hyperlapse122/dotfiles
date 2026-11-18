@@ -1,15 +1,9 @@
-import argparse
-import asyncio
 from dataclasses import replace
 import json
 import math
-import signal
 import sys
 
-from .config import load_config
-from .core import DecisionError, Judge, OPERATION_HEADERS, operation_headers
-from .ipc import default_socket, request, service_status
-from .server import Service
+import click
 
 try:
     from ._package import BACKEND, MODEL, LOADER, KEY_FILE
@@ -18,33 +12,70 @@ except ImportError:
 
 
 def metadata_header(value):
+    from .core import OPERATION_HEADERS, operation_headers
+
     name, separator, content = value.partition(':')
     headers = operation_headers({name.strip(): content.strip()})
     if not separator or not headers or '\r' in value or '\n' in value:
-        raise argparse.ArgumentTypeError('Use NAME: VALUE with ' + ', '.join(OPERATION_HEADERS))
+        raise click.BadParameter('Use NAME: VALUE with ' + ', '.join(OPERATION_HEADERS))
     return next(iter(headers.items()))
 
 
-def parser():
-    p = argparse.ArgumentParser(prog='decide', allow_abbrev=False,
-        description='Inspect models and submit requests to your private Decisions service.',
-        epilog='Examples:\n  decide info\n  decide judge request.json\n  cat request.json | decide judge --json -',
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = p.add_subparsers(dest='command')
-    for name, help_text in [('judge', 'Submit a JSON request'), ('info', 'Show model and decision type information'),
-                            ('serve', 'Run the service for a supervisor')]:
-        command = sub.add_parser(name, help=help_text, allow_abbrev=False)
-        command.add_argument('--config', help='TOML configuration file')
-        command.add_argument('--socket', help='Unix socket path')
-        command.add_argument('--timeout', type=float, help='Request timeout in seconds')
-        command.add_argument('--model', help='Override the request model')
-        if name in ('judge', 'info'):
-            command.add_argument('--json', action='store_true', help='Print the complete result as JSON')
-        if name == 'judge':
-            command.add_argument('-H', '--header', type=metadata_header, action='append', default=[],
-                                 help='Pass Decisions metadata as NAME: VALUE (repeatable)')
-            command.add_argument('file', help='JSON request file, or - for stdin')
-    return p
+def connection_options(command):
+    options = (
+        click.option('--config', type=click.Path(readable=False), help='Read settings from this TOML file.'),
+        click.option('--socket', type=click.Path(readable=False), help='Use this Unix socket path.'),
+        click.option('--timeout', type=float, metavar='SECONDS', help='Override the request timeout.'),
+        click.option('--model', help='Override the request model.'),
+    )
+    for option in reversed(options):
+        command = option(command)
+    return command
+
+
+@click.group(invoke_without_command=True, context_settings={'help_option_names': ['-h', '--help']})
+@click.pass_context
+def cli(ctx):
+    """Inspect models and submit requests to your private Decisions service.
+
+    \b
+    Examples:
+      decide info
+      decide judge request.json
+      cat request.json | decide judge --json -
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@cli.command('judge')
+@click.argument('file', type=click.Path(readable=False, allow_dash=True))
+@click.option('--json', 'json_output', is_flag=True, help='Print the full response as JSON.')
+@click.option('-H', '--header', 'headers', multiple=True, type=metadata_header, metavar='NAME: VALUE',
+              help='Send a Decisions metadata header. Repeat for multiple headers.')
+@connection_options
+def judge_command(file, json_output, headers, **overrides):
+    """Submit a JSON request. Use - for standard input."""
+    return run_command(
+        lambda config: judge_request(config, file, dict(headers), overrides['model'], json_output),
+        overrides, json_output=json_output, cancel_request=True,
+    )
+
+
+@cli.command('info')
+@click.option('--json', 'json_output', is_flag=True, help='Print model information as JSON.')
+@connection_options
+def info_command(json_output, **overrides):
+    """Show model and decision type information."""
+    return run_command(lambda config: print_model(config, json_output), overrides, json_output=json_output)
+
+
+@cli.command('serve')
+@click.option('--preload/--no-preload', default=None, help='Load the local model before accepting requests.')
+@connection_options
+def serve_command(**overrides):
+    """Run the service in the foreground."""
+    return run_command(serve, overrides)
 
 
 def backend(config):
@@ -59,8 +90,14 @@ def backend(config):
 
 
 async def serve(config):
+    import asyncio
+    import signal
+
+    from .core import Judge
+    from .server import Service
+
     service = Service(Judge(backend(config)), config.socket)
-    await service.start()
+    await service.start(preload=config.preload)
     stopped = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -82,6 +119,8 @@ def display(result):
 
 
 async def inspect_model(config):
+    from .ipc import service_status
+
     if not isinstance(config.model, str) or not config.model.strip():
         raise ValueError('Model must be a non-empty string')
     status = await service_status(config.socket, min(config.timeout, 2))
@@ -138,69 +177,74 @@ def display_info(result):
                                          for kind, support in result['decision_types'].items()))
 
 
-async def run(args):
+def command_config(config, **overrides):
+    from .config import load_config
+    from .ipc import default_socket
+
     config = load_config(backend=BACKEND, model=MODEL, socket=default_socket(),
-                         openrouter_key_file=KEY_FILE, path=args.config)
-    config = replace(config, **{name: getattr(args, name) for name in ('model', 'socket', 'timeout')
-                                if getattr(args, name) is not None})
+                         openrouter_key_file=KEY_FILE, path=config)
+    config = replace(config, **{name: value for name, value in overrides.items() if value is not None})
     if not math.isfinite(config.timeout) or config.timeout <= 0:
         raise ValueError('Timeout must be greater than zero')
-    if args.command == 'serve':
-        await serve(config)
-        return
-    if args.command == 'info':
-        result = await inspect_model(config)
-        if args.json:
-            result['decision_types'] = [
-                kind for kind, support in result['decision_types'].items() if support == 'supported'
-            ]
-            print(json.dumps(result, ensure_ascii=False))
-        else:
-            display_info(result)
-        return
-    if args.file == '-' and sys.stdin.isatty():
+    return config
+
+
+async def print_model(config, json_output):
+    result = await inspect_model(config)
+    if json_output:
+        result['decision_types'] = [
+            kind for kind, support in result['decision_types'].items() if support == 'supported'
+        ]
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        display_info(result)
+
+
+async def judge_request(config, file, headers, model_override, json_output):
+    from .ipc import request
+
+    if file == '-' and sys.stdin.isatty():
         raise ValueError('Provide a JSON request on stdin or pass a request file')
     try:
-        if args.file == '-':
+        if file == '-':
             document = json.load(sys.stdin)
         else:
-            with open(args.file, encoding='utf-8') as source:
+            with open(file, encoding='utf-8') as source:
                 document = json.load(source)
     except (json.JSONDecodeError, UnicodeDecodeError):
         raise ValueError('Request must contain valid JSON') from None
     if isinstance(document, dict):
-        if args.model is not None:
-            document['model'] = args.model
+        if model_override is not None:
+            document['model'] = model_override
         else:
             document.setdefault('model', config.model)
-    if sys.stderr.isatty() and not args.json:
+    if sys.stderr.isatty() and not json_output:
         print('Waiting for the Decisions service…', file=sys.stderr)
-    result = await request(config.socket, document, config.timeout, headers=dict(args.header))
-    if args.json:
+    result = await request(config.socket, document, config.timeout, headers=headers)
+    if json_output:
         print(json.dumps(result, ensure_ascii=False))
     else:
         display(result)
 
 
-def main():
-    p = parser()
-    args = p.parse_args()
-    if not args.command:
-        print('Submit a Decisions request.\nExample: decide judge request.json\nRun decide --help for options.')
-        return 0
+def run_command(operation, overrides, *, json_output=False, cancel_request=False):
+    import asyncio
+
+    from .core import DecisionError
+
     try:
-        asyncio.run(run(args))
+        asyncio.run(operation(command_config(**overrides)))
         return 0
     except KeyboardInterrupt:
-        if args.command != 'judge':
+        if not cancel_request:
             raise
         message = 'Request cancelled'
-        if args.json:
+        if json_output:
             message = json.dumps({'error': {'code': 130, 'message': message}})
         print(message, file=sys.stderr)
         return 130
     except DecisionError as exc:
-        if getattr(args, 'json', False):
+        if json_output:
             print(json.dumps(exc.body, ensure_ascii=False), file=sys.stderr)
             return 1
         message = exc.body.get('error', {}).get('message', 'Decisions request failed') if isinstance(exc.body, dict) else 'Decisions request failed'
@@ -210,6 +254,17 @@ def main():
         # File paths and request content may contain sensitive data.
         print(f'Error: {exc}' if isinstance(exc, ValueError) else 'Error: Cannot read the file or start the service; check paths and permissions', file=sys.stderr)
         return 2
+
+
+def main(args=None):
+    try:
+        return cli.main(args, prog_name='decide', standalone_mode=False) or 0
+    except click.ClickException as exc:
+        exc.show()
+        return exc.exit_code
+    except click.Abort:
+        return 130
+
 
 if __name__ == '__main__':
     sys.exit(main())

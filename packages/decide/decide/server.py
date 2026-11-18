@@ -83,9 +83,14 @@ class Service:
             raise OSError('Socket changed while checking ownership')
         self.path.unlink()
 
-    async def start(self):
+    async def start(self, *, preload=False):
+        backend = self.judge.backend
+        if preload and not hasattr(backend, 'preload'):
+            raise ValueError('Model preloading requires the MLX or CUDA backend')
         try:
             self._claim()
+            if preload:
+                await backend.preload()
             app = web.Application(middlewares=[_http_errors], client_max_size=0)
             app.router.add_post(PATH, self._handle)
             app.router.add_get(INFO_PATH, self._status)
@@ -98,7 +103,6 @@ class Service:
             finally:
                 os.umask(old_umask)
             self.endpoint = self.path.lstat()
-            backend = self.judge.backend
             if hasattr(backend, 'start'):
                 await backend.start()
         except BaseException:
