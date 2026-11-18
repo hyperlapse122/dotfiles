@@ -5,6 +5,39 @@ from pathlib import Path
 import aiohttp
 
 from .core import DecisionError, error, operation_headers
+from .ipc import PATH
+
+MODELS_URL = 'https://openrouter.ai/api/v1/models'
+ROUTED_DECISION_TYPES = ('noul', 'choice', 'score')
+BOX_MODELS = {'typesafe/jev-1.14'}
+
+
+async def model_metadata(model, timeout):
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+            async with session.get(MODELS_URL, params={'endpoints': PATH}, allow_redirects=False) as response:
+                if response.status != 200:
+                    return 'unavailable', None
+                document = await response.json()
+    except (aiohttp.ClientError, TimeoutError, ValueError):
+        return 'unavailable', None
+    if not isinstance(document, dict) or not isinstance(document.get('data'), list):
+        return 'unavailable', None
+
+    entries = [entry for entry in document['data'] if isinstance(entry, dict)]
+    selected = next((entry for entry in entries if model == entry.get('id')), None)
+    if selected is None:
+        selected = next((entry for entry in entries if model == entry.get('canonical_slug')), None)
+    if selected is None:
+        return 'not_listed', None
+
+    alias = selected.get('alias_target')
+    slug = alias.get('slug') if isinstance(alias, dict) else None
+    if isinstance(slug, str):
+        selected = next((entry for entry in entries if entry.get('id') == slug), selected)
+    return 'matched', {key: selected[key] for key, value_type in
+                       (('id', str), ('name', str), ('context_length', int))
+                       if isinstance(selected.get(key), value_type)}
 
 
 class OpenRouter:
@@ -15,6 +48,9 @@ class OpenRouter:
         self.endpoint = endpoint
         self.timeout = timeout
         self.session = None
+
+    def status(self):
+        return {'backend': 'openrouter'}
 
     async def start(self):
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout),

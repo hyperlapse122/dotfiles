@@ -47,7 +47,7 @@ pkgs.stdenvNoCC.mkDerivation {
     NATIVE_MODELS = ${builtins.toJSON nativeModels}
     EOF
     makeWrapper ${runtime.python}/bin/python3 "$out/bin/decide" \
-      --prefix PYTHONPATH : "$out/lib/decide" --add-flags "-m decide"
+      --prefix PYTHONPATH : "$out/lib/decide" --add-flags "-P -m decide"
     runHook postInstall
   '';
   doInstallCheck = true;

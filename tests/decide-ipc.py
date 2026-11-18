@@ -1,4 +1,6 @@
 import asyncio
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
@@ -8,6 +10,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from aiohttp import ClientSession, UnixConnector, web
 
@@ -15,6 +18,8 @@ source = Path(__file__).resolve().parents[1] / 'packages' / 'decide'
 if source.exists():
     sys.path.insert(0, str(source))
 from decide.core import DecisionError, Judge, error
+from decide import cli
+from decide.mlx import MLX, REVISION
 from decide.server import Service
 from decide.openrouter import OpenRouter
 
@@ -126,6 +131,127 @@ class IPC(unittest.IsolatedAsyncioTestCase):
     async def test_large_request(self):
         status, body = await self.post(dict(REQUEST, state='x' * (1024 * 1024 + 1)))
         self.assertEqual((status, body), (200, RESPONSE))
+
+    async def test_service_info_observes_local_head_without_loading(self):
+        calls = []
+
+        class TestMLX(MLX):
+            def _load(self):
+                calls.append('load')
+                return object()
+
+            def _infer(self, record):
+                calls.append('infer')
+                return dict(RESPONSE, model=record['model'])
+
+        await self.service.close()
+        self.service = Service(Judge(TestMLX('/unused')), self.socket)
+        await self.service.start()
+
+        async def info():
+            async with self.client.get('http://localhost/info') as response:
+                self.assertEqual(response.status, 200)
+                return await response.json()
+
+        expected = {'backend': 'mlx', 'local_model': {
+            'id': MLX.model, 'revision': REVISION, 'load_state': 'unloaded'}}
+        self.assertEqual(await info(), expected)
+        self.assertEqual(calls, [])
+        self.assertEqual((await self.post(dict(REQUEST, model=MLX.model)))[0], 200)
+        expected['local_model']['load_state'] = 'loaded'
+        self.assertEqual(await info(), expected)
+        self.assertEqual(calls, ['load', 'infer'])
+
+    async def test_info_cli_reports_selected_and_local_models(self):
+        class StatusMLX(MLX):
+            def status(self):
+                return dict(super().status(), model='daemon/default', backend_source='package')
+
+        await self.service.close()
+        self.service = Service(Judge(StatusMLX('/unused')), self.socket)
+        await self.service.start()
+        config = Path(self.temp.name) / 'config.toml'
+        config.write_text(f'model = "{MLX.model}"\n')
+        args = ('info', '--config', str(config), '--socket', self.socket)
+
+        code, out, err = await self.cli(*args)
+        self.assertEqual(code, 0, err)
+        for value in ('mlx', MLX.model, REVISION, 'unloaded', 'noul', 'choice', 'score'):
+            self.assertIn(value, out)
+
+        code, out, err = await self.cli(*args, '--json')
+        self.assertEqual(code, 0, err)
+        result = json.loads(out)
+        self.assertEqual(result['model'], MLX.model)
+        self.assertEqual(result['backend_source'], 'service')
+        self.assertEqual(result['local_model']['load_state'], 'unloaded')
+        self.assertEqual(result['decision_types'], {
+            'noul': 'supported', 'choice': 'supported', 'score': 'supported', 'box': 'unsupported'})
+
+        code, out, err = await self.cli(*args, '--json', '--model', 'other/model')
+        self.assertEqual(code, 0, err)
+        result = json.loads(out)
+        self.assertEqual(result['model'], 'other/model')
+        self.assertEqual(result['local_model']['id'], MLX.model)
+        self.assertEqual(set(result['decision_types'].values()), {'unsupported'})
+
+        await self.service.close()
+        out = io.StringIO()
+        with patch.object(cli, 'BACKEND', 'mlx'), redirect_stdout(out):
+            await cli.run(cli.parser().parse_args([*args, '--json']))
+        result = json.loads(out.getvalue())
+        self.assertEqual(result['backend_source'], 'package')
+        self.assertEqual(result['local_model']['load_state'], 'unknown')
+
+    async def test_info_uses_public_decisions_catalog(self):
+        matched = {'id': 'cloudflare/clef-flash', 'canonical_slug': 'cloudflare/clef-flash',
+                   'name': 'Clef Flash', 'context_length': 24576}
+        alias = {'id': '~typesafe/jev-latest', 'alias_target': {'slug': 'typesafe/jev-1.14'}}
+        jev = {'id': 'typesafe/jev-1.14', 'canonical_slug': 'typesafe/jev-1.14-20261014'}
+        calls = []
+        fail = False
+
+        async def catalog(request):
+            calls.append((request.query.get('endpoints'), request.headers.get('Authorization'),
+                          await request.read()))
+            if fail:
+                return web.Response(status=503)
+            return web.json_response({'data': [matched, alias, jev]})
+
+        app = web.Application()
+        app.router.add_get('/models', catalog)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        self.addAsyncCleanup(runner.cleanup)
+        site = web.TCPSite(runner, '127.0.0.1', 0)
+        await site.start()
+        port = runner.addresses[0][1]
+        await self.service.close()
+        self.service = Service(Judge(OpenRouter(api_key='test-key')), self.socket)
+        await self.service.start()
+
+        async def info(model):
+            args = ['info', '--socket', self.socket, '--model', model, '--json']
+            out = io.StringIO()
+            with patch('decide.openrouter.MODELS_URL', f'http://127.0.0.1:{port}/models', create=True), redirect_stdout(out):
+                await cli.run(cli.parser().parse_args(args))
+            return json.loads(out.getvalue())
+
+        result = await info('cloudflare/clef-flash')
+        self.assertEqual(result['remote_model']['context_length'], 24576)
+        self.assertEqual(result['decision_types'], {
+            'noul': 'supported', 'choice': 'supported', 'score': 'supported', 'box': 'unknown'})
+        result = await info('~typesafe/jev-latest')
+        self.assertEqual(result['remote_model']['id'], 'typesafe/jev-1.14')
+        self.assertEqual(result['decision_types']['box'], 'supported')
+        result = await info('unlisted/model')
+        self.assertEqual(result['catalog_status'], 'not_listed')
+        self.assertEqual(set(result['decision_types'].values()), {'unknown'})
+        fail = True
+        result = await info('cloudflare/clef-flash')
+        self.assertEqual(result['catalog_status'], 'unavailable')
+        self.assertEqual(set(result['decision_types'].values()), {'unknown'})
+        self.assertEqual(calls, [('/api/alpha/decisions', None, b'')] * 4)
 
     async def test_operation_metadata_from_ipc_and_cli(self):
         metadata = {'HTTP-Referer': 'https://example.com', 'X-OpenRouter-Title': 'test harness',

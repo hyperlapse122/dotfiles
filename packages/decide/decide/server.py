@@ -9,7 +9,7 @@ import stat
 from aiohttp import web
 
 from .core import DecisionError, error, operation_headers
-from .ipc import PATH
+from .ipc import INFO_PATH, PATH
 
 
 def _private_directory(path):
@@ -88,6 +88,7 @@ class Service:
             self._claim()
             app = web.Application(middlewares=[_http_errors], client_max_size=0)
             app.router.add_post(PATH, self._handle)
+            app.router.add_get(INFO_PATH, self._status)
             self.runner = web.AppRunner(app, access_log=None)
             await self.runner.setup()
             self.site = web.UnixSite(self.runner, str(self.path))
@@ -109,6 +110,9 @@ class Service:
             if transport is None or transport.is_closing():
                 raise asyncio.CancelledError
             return await self.judge.judge(document, headers=headers)
+
+    async def _status(self, request):
+        return web.json_response(self.judge.backend.status())
 
     async def _handle(self, request):
         try:

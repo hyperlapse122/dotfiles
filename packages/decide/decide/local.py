@@ -13,6 +13,7 @@ from .core import DecisionError, error
 
 MAX_TOKENS = 16384
 IMAGE_TIMEOUT = 30
+LOCAL_DECISION_TYPES = ('noul', 'choice', 'score')
 
 try:
     from ._package import NATIVE_MODELS
@@ -79,7 +80,7 @@ def convert(request, model):
         raise error(400, 'At least one question is required')
     native_questions = {}
     for key, q in questions.items():
-        if not key.strip() or q['type'] not in ('noul', 'choice', 'score'):
+        if not key.strip() or q['type'] not in LOCAL_DECISION_TYPES:
             raise error(400, 'Unsupported question')
         if set(q) - {'type', 'instructions', 'criteria'}:
             raise error(400, 'Unsupported question fields')
@@ -143,11 +144,23 @@ def convert(request, model):
 
 
 class Local:
+    backend = ''
     model = ''
+    revision = ''
 
     def __init__(self, loader_path):
         self.loader_path = loader_path
         self._head = None
+
+    @classmethod
+    def packaged_status(cls, load_state='unknown'):
+        return {
+            'backend': cls.backend,
+            'local_model': {'id': cls.model, 'revision': cls.revision, 'load_state': load_state},
+        }
+
+    def status(self):
+        return self.packaged_status('unloaded' if self._head is None else 'loaded')
 
     async def judge(self, request, *, headers=None):
         try:
