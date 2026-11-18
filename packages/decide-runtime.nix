@@ -24,6 +24,7 @@ let
   python = pkgs.python312;
   commonPython = python.withPackages (p: [
     p.aiohttp
+    p.click
     p.jsonschema
   ]);
   # Nixpkgs disables MLX Metal. Keep the publisher's Metal-enabled wheels
@@ -74,6 +75,9 @@ let
       done
       uv pip install --offline --no-deps --link-mode copy --python "$out/bin/python3" \
         "$TMPDIR/wheels/"*.whl
+      ${lib.optionalString (backend == "mlx") ''
+        "$out/bin/python3" -I -m compileall -q --invalidation-mode unchecked-hash "$out/${python.sitePackages}"
+      ''}
       ${lib.optionalString (backend == "cuda") ''
         for directory in "$out"/lib/python3.12/site-packages/nvidia/*/lib; do
           if [ -d "$directory" ]; then

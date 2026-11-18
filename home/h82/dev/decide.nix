@@ -32,6 +32,13 @@ let
 in
 {
   home.packages = [ decide ];
+  programs.zsh.initContent = lib.mkAfter ''
+    # Prezto can reuse a completion cache from before decide was installed.
+    if (( $+functions[compdef] && ! $+_comps[decide] )); then
+      autoload -Uz _decide
+      compdef _decide decide
+    fi
+  '';
   systemd.user.services.decide = lib.mkIf (!darwin) {
     Unit.Description = "Decisions service";
     Service = {

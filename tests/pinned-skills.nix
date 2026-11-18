@@ -3,7 +3,7 @@
 
     import ./tests/pinned-skills.nix { inherit pkgs self fixtures; }
 
-  Asserts that the published design and stack skills, the local design-lenses
+  Asserts that the published skills, the local design-lenses
   wrapper with impeccable's lens references, and the local ux-flows skill reach
   every harness for user `h82` on every Home Manager user environment this
   flake builds (`userEntries` from tests/lib/configurations.nix), unchanged:
@@ -78,6 +78,8 @@ let
     "playwright-best-practices"
     "ux-writing"
     "cli-design"
+    "untangle-codebase"
+    "prune-tests"
   ];
 
   lensReferences = [

@@ -20,15 +20,20 @@ let
   pythonLiteral = value: if value == null then "None" else builtins.toJSON (toString value);
   testPython = pkgs.python312.withPackages (p: [
     p.aiohttp
+    p.click
     p.jsonschema
     p.pillow
   ]);
+  usage = lib.getExe pkgs.usage;
 in
 pkgs.stdenvNoCC.mkDerivation {
   pname = "decide";
   version = "1";
   src = lib.cleanSource ./decide;
-  nativeBuildInputs = [ pkgs.makeWrapper ];
+  nativeBuildInputs = [
+    pkgs.installShellFiles
+    pkgs.makeWrapper
+  ];
   dontBuild = true;
   installPhase = ''
     runHook preInstall
@@ -46,8 +51,17 @@ pkgs.stdenvNoCC.mkDerivation {
     KEY_FILE = ${pythonLiteral openrouterKeyFile}
     NATIVE_MODELS = ${builtins.toJSON nativeModels}
     EOF
+    ${runtime.python}/bin/python3 -I -m compileall -q --invalidation-mode unchecked-hash "$out/lib/decide"
     makeWrapper ${runtime.python}/bin/python3 "$out/bin/decide" \
       --prefix PYTHONPATH : "$out/lib/decide" --add-flags "-P -m decide"
+
+    mkdir -p "$out/share/decide"
+    spec="$out/share/decide/decide.usage.kdl"
+    PYTHONPATH="$out/lib/decide" ${runtime.python}/bin/python3 -B -P usage-spec.py > "$spec"
+    for shell in bash zsh; do
+      ${usage} generate completion "$shell" decide --file "$spec" --usage-bin ${usage} > "decide.$shell"
+    done
+    installShellCompletion --cmd decide --bash decide.bash --zsh decide.zsh
     runHook postInstall
   '';
   doInstallCheck = true;
@@ -57,6 +71,11 @@ pkgs.stdenvNoCC.mkDerivation {
     export PYTHONPATH="$out/lib/decide" DECIDE_TEST_CLI="$out/bin/decide"
     mkdir -p "$HOME"
     "$out/bin/decide" --help > /dev/null
+    test -s "$out/share/bash-completion/completions/decide.bash"
+    test -s "$out/share/zsh/site-functions/_decide"
+    spec="$out/share/decide/decide.usage.kdl"
+    test "$(${usage} complete-word --file "$spec" -- decide ju)" = judge
+    test "$(${usage} complete-word --file "$spec" -- decide serve --no-p)" = --no-preload
     ${testPython}/bin/python3 ${../tests/decide-contract.py}
     ${testPython}/bin/python3 ${../tests/decide-local.py}
     ${testPython}/bin/python3 ${../tests/decide-ipc.py}
