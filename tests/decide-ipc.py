@@ -163,8 +163,12 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, ['load', 'infer'])
 
     async def test_info_cli_reports_selected_and_local_models(self):
+        class StatusMLX(MLX):
+            def status(self):
+                return dict(super().status(), model='daemon/default', backend_source='package')
+
         await self.service.close()
-        self.service = Service(Judge(MLX('/unused')), self.socket)
+        self.service = Service(Judge(StatusMLX('/unused')), self.socket)
         await self.service.start()
         config = Path(self.temp.name) / 'config.toml'
         config.write_text(f'model = "{MLX.model}"\n')

@@ -30,7 +30,8 @@ async def service_status(socket, timeout):
                         if (isinstance(model, dict) and isinstance(model.get('id'), str)
                                 and isinstance(model.get('revision'), str)
                                 and model.get('load_state') in ('loaded', 'unloaded')):
-                            return status
+                            return {'backend': status['backend'], 'local_model': {
+                                key: model[key] for key in ('id', 'revision', 'load_state')}}
     except (aiohttp.ClientError, TimeoutError, ValueError):
         return None
 
