@@ -14,6 +14,26 @@ Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both 
 
 The shared template retains the following T3 context separately for launch-time attachment. Ordinary instruction files do not include it.
 
+## Decide for subagent roles
+
+Once a workflow has decided to delegate, the parent uses the role selector on the existing launch route. A required role or a sole eligible role goes directly to the launcher. With two or more eligible roles, the parent asks `judge` once using `choice` and passes the selected role to the launcher. The existing selection path handles sessions without a role choice and any unavailable or unusable judgment.
+
+The parent checks role purpose, conditions, tools, and compatibility with required launch settings before asking. Claude Code starts with the pinned catalog at `~/.local/share/nix-config/claude-code-agents.json` and applies the session's effective definitions. The request contains a short task summary and eligible role descriptions that the configured backend may receive. It includes an `insufficient_evidence` option. [Pinned catalog](../packages/claude-code-agents.json) · [Decide backends](decide.md#backends-and-models)
+
+T3 0.1.9's `delegate_task` applies its `role` as guidance in the child prompt. Provider, model, effort, and tool access come from the launch route. A native launch inside T3 uses the harness's own selector when available. [T3 child prompt construction](https://github.com/pingdotgg/t3code/blob/v0.1.9/apps/server/src/mcp/delegatedTaskModes.ts#L90-L94)
+
+### Session checks
+
+These checks used the pinned harnesses, staged policy, synthetic Markdown fixtures, and local MLX judgments on macOS. Role availability depends on the active launch tool and session permissions.
+
+| Harness | Standalone | Managed T3 Code |
+| --- | --- | --- |
+| Claude Code | The parent sent `Explore` and `general-purpose` for a native file lookup. `judge` chose `Explore`, and the launch passed `subagent_type: Explore`. | The native planning task sent `Plan` and `general-purpose`. `judge` chose `Plan`, and the launch passed `subagent_type: Plan`. |
+| Codex | The tested `spawn_agent` exposed no role selector. It launched through its default path without judgment. | The tested native tool exposed no role selector. On a task routed to `delegate_task`, `judge` chose `research` from `general` and `research`, and the launch passed `role: research`. |
+| Pi | Pi has no configured subagents or native role selector. | On a task routed to `delegate_task`, `judge` chose `research` from `general` and `research`, and the launch passed `role: research`. |
+
+Each recorded judgment included `insufficient_evidence`. Claude also launched a required `Explore` role and a sole eligible `Explore` role without judgment. When the session denied the MCP call, Claude used its default selection path and completed the task.
+
 ## T3 delegation
 
 Follow T3 Code's orchestration guidance when choosing a delegation tool. Use a provider's native tool for same-provider foreground work when it can carry the required model, settings, and access. Use `delegate_task` for another provider, a worktree, background work, or a task that requests it.
