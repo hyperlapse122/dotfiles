@@ -163,6 +163,32 @@ class T3InstructionsTest(unittest.TestCase):
             self.module.apply(self.home, {})
             self.assertIn(user_entry, self.read()['providerInstances']['grok']['environment'])
 
+    def test_grok_migration_retries_after_an_interrupted_publication(self):
+        legacy = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
+        updater = {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}
+        publish = self.module.publish
+        for settings_written in (False, True):
+            with self.subTest(settings_written=settings_written):
+                self.settings.with_name('dotfiles-launch-state.json').unlink(missing_ok=True)
+                self.write({'providerInstances': {'grok': {'environment': [legacy, updater]}}})
+
+                def interrupt_settings(path, document):
+                    if path != self.settings or settings_written:
+                        publish(path, document)
+                    if path == self.settings:
+                        raise KeyboardInterrupt
+
+                with patch.object(self.module, 'publish', interrupt_settings), self.assertRaises(KeyboardInterrupt):
+                    self.module.apply(self.home, {})
+                if settings_written:
+                    # A user can opt out again once the migration took effect.
+                    document = self.read()
+                    document['providerInstances']['grok']['environment'].append(legacy)
+                    self.write(document)
+                self.module.apply(self.home, {})
+                environment = self.read()['providerInstances']['grok']['environment']
+                self.assertEqual(legacy in environment, settings_written)
+
     def test_existing_context_is_composed_once_and_removal_restores_user_settings(self):
         codex = self.home / '.codex'
         codex.mkdir()

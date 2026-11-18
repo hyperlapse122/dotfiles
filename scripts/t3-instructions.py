@@ -336,15 +336,22 @@ def apply(destination, environment=None):
         publish(client_path, client)
     if changed:
         had_state = state_path.is_file()
-        publish(state_path, {'schema': 1, 'providers': next_records,
-                             'grokSubagentsRetired': state.get('grokSubagentsRetired', False) or grok is not None})
         try:
+            publish(state_path, {'schema': 1, 'providers': next_records,
+                                 'grokSubagentsRetired': state.get('grokSubagentsRetired', False) or grok is not None})
             publish(settings_path, settings)
-        except OSError:
-            if had_state:
-                publish(state_path, state)
-            else:
-                state_path.unlink(missing_ok=True)
+        except (OSError, KeyboardInterrupt):
+            # An interruption can arrive after the settings rename as well.
+            # Keep the new ownership record only if those settings are live.
+            try:
+                settings_written = read_mapping(settings_path) == settings
+            except (OSError, ValueError):
+                settings_written = False
+            if not settings_written:
+                if had_state:
+                    publish(state_path, state)
+                else:
+                    state_path.unlink(missing_ok=True)
             raise
 
 
