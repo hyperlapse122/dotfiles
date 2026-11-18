@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import redirect_stdout
+from contextlib import asynccontextmanager, redirect_stdout
 import io
 import json
 import os
@@ -13,12 +13,13 @@ import unittest
 from unittest.mock import patch
 
 from aiohttp import ClientSession, UnixConnector, web
+from jsonschema import Draft202012Validator
 
 source = Path(__file__).resolve().parents[1] / 'packages' / 'decide'
 if source.exists():
     sys.path.insert(0, str(source))
 from decide.core import DecisionError, Judge, error
-from decide import cli
+from decide import cli, config as decide_config
 from decide.mlx import MLX, REVISION
 from decide.server import Service
 from decide.openrouter import OpenRouter
@@ -91,6 +92,89 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         process = await self.start_cli(*args)
         out, err = await process.communicate(input)
         return process.returncode, out.decode(), err.decode()
+
+    @asynccontextmanager
+    async def mcp(self, socket):
+        command = [os.environ['DECIDE_TEST_MCP']] if 'DECIDE_TEST_MCP' in os.environ else [
+            sys.executable, '-m', 'decide.mcp']
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path), DECIDE_SOCKET=socket,
+                   DECIDE_MODEL='configured/model')
+        process = await asyncio.create_subprocess_exec(
+            *command, env=env, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE)
+        sequence = 0
+
+        async def send(method, params=None, *, notification=False):
+            nonlocal sequence
+            message = {'jsonrpc': '2.0', 'method': method}
+            if params is not None:
+                message['params'] = params
+            if not notification:
+                sequence += 1
+                message['id'] = sequence
+            process.stdin.write((json.dumps(message) + '\n').encode())
+            await process.stdin.drain()
+            if not notification:
+                line = await asyncio.wait_for(process.stdout.readline(), timeout=10)
+                self.assertTrue(line, 'MCP server exited before replying')
+                reply = json.loads(line)
+                self.assertEqual(reply.get('id'), sequence, reply)
+                self.assertIn('result', reply, reply)
+                return reply['result']
+
+        try:
+            await send('initialize', {'protocolVersion': '2025-11-25', 'capabilities': {},
+                                      'clientInfo': {'name': 'decide-test', 'version': '1'}})
+            await send('notifications/initialized', notification=True)
+            yield send
+        finally:
+            process.stdin.close()
+            try:
+                await asyncio.wait_for(process.communicate(), timeout=10)
+            except TimeoutError:
+                process.kill()
+                await process.wait()
+                raise
+
+    async def test_mcp_judge_shares_the_cli_service(self):
+        async with self.mcp(self.socket) as first, self.mcp(self.socket) as second:
+            tools = (await first('tools/list'))['tools']
+            self.assertEqual([tool['name'] for tool in tools], ['judge'])
+            schema = tools[0]['inputSchema']
+            self.assertEqual(set(schema['required']), {'state', 'questions'})
+            self.assertIn('assets', schema['properties'])
+            self.assertIn('provider', schema['properties'])
+
+            request = dict(REQUEST, trace={'name': 'mcp-test'}, state={'signal': '안녕하세요'})
+            without_model = {name: value for name, value in request.items() if name != 'model'}
+            Draft202012Validator(schema).validate(without_model)
+            code, out, err = await self.cli('judge', '--socket', self.socket, '--json', '-',
+                                            input=json.dumps(REQUEST).encode())
+            self.assertEqual((code, json.loads(out)), (0, RESPONSE), err)
+            for client, arguments in ((first, without_model), (second, request)):
+                result = await client('tools/call', {'name': 'judge', 'arguments': arguments})
+                self.assertFalse(result.get('isError', False), result)
+                self.assertEqual(result['structuredContent'], RESPONSE)
+                self.assertEqual(json.loads(result['content'][0]['text']), RESPONSE)
+            self.assertEqual(self.backend.requests, [
+                REQUEST, dict(request, model='configured/model'), request,
+            ])
+
+    async def test_mcp_judge_preserves_tool_errors(self):
+        async with self.mcp(self.socket) as client:
+            result = await client('tools/call', {'name': 'judge',
+                                               'arguments': dict(REQUEST, state='quota')})
+        self.assertTrue(result['isError'])
+        self.assertEqual(result['structuredContent'], {'error': {
+            'code': 429, 'message': 'quota exceeded', 'metadata': {'provider': 'remote'},
+        }})
+        self.assertEqual(json.loads(result['content'][0]['text']), result['structuredContent'])
+
+        missing = str(Path(self.temp.name) / 'missing.sock')
+        async with self.mcp(missing) as client:
+            result = await client('tools/call', {'name': 'judge', 'arguments': REQUEST})
+        self.assertTrue(result['isError'])
+        self.assertEqual(result['structuredContent']['error']['code'], 503)
 
     async def test_cli_help_shows_commands_examples_and_scoped_options(self):
         code, out, err = await self.cli()
@@ -218,7 +302,7 @@ class IPC(unittest.IsolatedAsyncioTestCase):
 
         await self.service.close()
         out = io.StringIO()
-        with patch.object(cli, 'BACKEND', 'mlx'), redirect_stdout(out):
+        with patch.object(decide_config, 'BACKEND', 'mlx'), redirect_stdout(out):
             self.assertEqual(await asyncio.to_thread(cli.main, [*args, '--json']), 0)
         result = json.loads(out.getvalue())
         self.assertEqual(result['backend_source'], 'package')

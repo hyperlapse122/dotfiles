@@ -18,6 +18,10 @@ let
     .${backend};
   loader = if backend == "mlx" then runtime.loaders.darwin else runtime.loaders.linux;
   pythonLiteral = value: if value == null then "None" else builtins.toJSON (toString value);
+  mcpPython = pkgs.python312.withPackages (p: [
+    p.aiohttp
+    p.mcp
+  ]);
   testPython = pkgs.python312.withPackages (p: [
     p.aiohttp
     p.click
@@ -54,6 +58,8 @@ pkgs.stdenvNoCC.mkDerivation {
     ${runtime.python}/bin/python3 -I -m compileall -q --invalidation-mode unchecked-hash "$out/lib/decide"
     makeWrapper ${runtime.python}/bin/python3 "$out/bin/decide" \
       --prefix PYTHONPATH : "$out/lib/decide" --add-flags "-P -m decide"
+    makeWrapper ${mcpPython}/bin/python3 "$out/bin/decide-mcp" \
+      --prefix PYTHONPATH : "$out/lib/decide" --add-flags "-P -m decide.mcp"
 
     mkdir -p "$out/share/decide"
     spec="$out/share/decide/decide.usage.kdl"
@@ -68,7 +74,7 @@ pkgs.stdenvNoCC.mkDerivation {
   installCheckPhase = ''
     runHook preInstallCheck
     export HOME="$TMPDIR/home" XDG_CONFIG_HOME="$TMPDIR/config" PYTHONDONTWRITEBYTECODE=1
-    export PYTHONPATH="$out/lib/decide" DECIDE_TEST_CLI="$out/bin/decide"
+    export PYTHONPATH="$out/lib/decide" DECIDE_TEST_CLI="$out/bin/decide" DECIDE_TEST_MCP="$out/bin/decide-mcp"
     mkdir -p "$HOME"
     "$out/bin/decide" --help > /dev/null
     test -s "$out/share/bash-completion/completions/decide.bash"

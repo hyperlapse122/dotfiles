@@ -32,6 +32,24 @@ let
     "#!${pkgs.python3}/bin/python3\n"
     + lib.removePrefix "#!/usr/bin/env python3\n" (builtins.readFile ../../../scripts/pi-state)
   );
+  decide = import ./decide-server.nix { inherit config pkgs; };
+  merger = "${
+    (import ../../../packages/agent-tools.nix { inherit pkgs; }).agentSettings
+  }/bin/agent-settings";
+  mcpSettings = pkgs.writeText "pi-declared-mcp.json" (
+    builtins.toJSON {
+      ownEntries = [
+        {
+          path = [ "mcpServers" ];
+          entries.decide = {
+            type = "stdio";
+            inherit (decide) command timeout;
+            exposure = "direct";
+          };
+        }
+      ];
+    }
+  );
 in
 {
   home.packages = [ pi ];
@@ -48,6 +66,14 @@ in
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
       ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} ${hiddenModelArgs}
+    fi
+  '';
+  home.activation.piMcpSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
+    if [[ ! -v DRY_RUN ]]; then
+      ${merger} --label Pi \
+        --settings ${lib.escapeShellArg "${agent}/mcp.json"} \
+        --declared ${mcpSettings} \
+        --ledger ${lib.escapeShellArg "${agent}/mcp-ownership.json"}
     fi
   '';
   home.activation.piAuth = lib.mkIf (!config.my.bootstrap) (
