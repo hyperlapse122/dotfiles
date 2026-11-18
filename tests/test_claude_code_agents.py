@@ -116,6 +116,29 @@ class ClaudeCodeAgentsTestCase(unittest.TestCase):
         self.assertEqual(entry["tools"], {"conditional": True})
         self.assertEqual(entry["model"], {"conditional": True})
 
+    def test_computed_values_are_recorded_as_conditional(self):
+        worker = agent('"worker"', 'tools:f()?["Read"]:["Glob"],model:f()?"haiku":"sonnet",')
+        catalog = self.catalog(module(BASE + ",d=" + worker))
+        entry = self.entry(catalog, "worker")
+        self.assertEqual(entry["tools"], {"conditional": True})
+        self.assertEqual(entry["model"], {"conditional": True})
+
+    def test_member_reference_resolves_through_the_referenced_agent(self):
+        catalog = self.catalog(module(BASE.replace("tools:b.tools,", "disallowedTools:b.disallowedTools,")))
+        self.assertEqual(self.entry(catalog, "Plan")["disallowedTools"], ["Edit"])
+
+    def test_decodes_escapes_and_skips_code_in_other_members(self):
+        tricky = agent('"tricky"').replace('whenToUse:"use it"', r'whenToUse:"Fork \u2014 a\nb \x41 \u{1F600}"').replace(
+            'getSystemPrompt:()=>"secret prompt"',
+            "getSystemPrompt(){/* } */let r=/[}]/g;return x/2}",
+        )
+        catalog = self.catalog(module(BASE + ",d=" + tricky))
+        self.assertEqual(self.entry(catalog, "tricky")["whenToUse"]["text"], "Fork \u2014 a\nb A \U0001F600")
+
+    def test_spread_in_an_agent_literal_fails(self):
+        spread = agent('"spread"', "...base,")
+        self.assert_fails("built-in agent markers but", module(BASE + ",d=" + spread))
+
     def test_interpolated_description_keeps_its_placeholder(self):
         guide = agent('"claude-code-guide"').replace('whenToUse:"use it"', "whenToUse:`continue it via ${Mn}.`")
         catalog = self.catalog(module('var Mn="SendMessage";' + BASE + ",d=" + guide))

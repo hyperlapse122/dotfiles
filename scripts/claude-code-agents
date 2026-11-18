@@ -17,6 +17,8 @@ by agent type. System prompts are not extracted.
 """
 
 import argparse
+import bisect
+import functools
 import json
 import mmap
 import os
@@ -30,8 +32,11 @@ BUILT_IN_MARKER = re.compile(rb'baseDir:"built-in"')
 VERSION_LINE = re.compile(rb"// Version: ([0-9][0-9A-Za-z.+-]*)")
 AGENT_START = re.compile(r"\{agentType:")
 IMPORT = re.compile(r"import\{([^}]*)\}from\"[^\"]*\"")
-EXPORT = re.compile(r"export\{([^}]*)\}")
-IDENT = re.compile(r"[A-Za-z_$][\w$]*")
+EXPORT = re.compile(rb"export\{([^}]*)\}")
+IDENT_SOURCE = r"[A-Za-z_$][\w$]*"
+IDENT = re.compile(IDENT_SOURCE)
+MEMBER = re.compile(rf"({IDENT_SOURCE})\.({IDENT_SOURCE})")
+REGEX_PRECEDERS = set("(,=:[!&|?{};+-*%<>~^")
 REQUIRED_AGENTS = ("general-purpose", "Explore", "Plan")
 FIELDS = ("whenToUse", "tools", "disallowedTools", "model")
 CONDITIONAL = {"conditional": True}
@@ -40,9 +45,6 @@ MAX_DEPTH = 32
 
 class Failure(Exception):
     """A refusal that should stop the caller with a readable message."""
-
-
-# ---------------------------------------------------------------- tokenizer
 
 
 def skip_string(text, i):
@@ -75,9 +77,6 @@ def skip_template(text, i):
             continue
         i += 1
     raise Failure("unterminated template literal")
-
-
-REGEX_PRECEDERS = set("(,=:[!&|?{};+-*%<>~^")
 
 
 def skip_regex(text, i):
@@ -200,18 +199,19 @@ def parse_object(text):
     properties = {}
     for part in split_top_level(text, 1, len(text) - 1, ","):
         if part.startswith("..."):
-            properties.setdefault("...", []).append(part[3:])
-            continue
-        match = re.match(r"(get|set)\s+([A-Za-z_$][\w$]*)\s*\(", part)
+            # A spread could supply any field, so the object cannot be read
+            # field by field.
+            raise Failure(f"spread in object literal: {part[:40]!r}")
+        match = re.match(rf"(get|set)\s+({IDENT_SOURCE})\s*\(", part)
         if match:
             properties[match.group(2)] = ("getter", part)
             continue
-        match = re.match(r"([A-Za-z_$][\w$]*|\"[^\"]*\")\s*:", part)
+        match = re.match(rf"({IDENT_SOURCE}|\"[^\"]*\")\s*:", part)
         if match:
             key = match.group(1).strip('"')
             properties[key] = ("value", part[match.end():].strip())
             continue
-        match = re.match(r"(async\s+)?([A-Za-z_$][\w$]*)\s*\(", part)
+        match = re.match(rf"(async\s+)?({IDENT_SOURCE})\s*\(", part)
         if match:
             properties[match.group(2)] = ("method", part)
             continue
@@ -219,21 +219,23 @@ def parse_object(text):
     return properties
 
 
-# ---------------------------------------------------------------- binary model
-
-
 class Module:
-    def __init__(self, text):
-        self.text = text
-        self._imports = None
+    def __init__(self, data, start, end):
+        self.data, self.start, self.end = data, start, end
 
+    @functools.cached_property
+    def text(self):
+        # latin-1 keeps byte offsets equal to string offsets; strings are
+        # re-decoded as UTF-8 when emitted.
+        return self.data[self.start:self.end].decode("latin-1")
+
+    @functools.cached_property
     def imports(self):
-        if self._imports is None:
-            self._imports = {}
-            for names in IMPORT.findall(self.text):
-                for local, public in specifiers(names, "import"):
-                    self._imports.setdefault(local, set()).add(public)
-        return self._imports
+        imports = {}
+        for names in IMPORT.findall(self.text):
+            for local, public in specifiers(names, "import"):
+                imports.setdefault(local, set()).add(public)
+        return imports
 
     def local_definitions(self, name):
         pattern = re.compile(r"(?<![\w$.])" + re.escape(name) + r"=(?![=>])")
@@ -260,23 +262,33 @@ class Binary:
         starts = [m.start() for m in MODULE_HEADER.finditer(data)]
         if not starts:
             raise Failure("no embedded Bun modules found")
-        bounds = list(zip(starts, starts[1:] + [len(data)]))
-        # latin-1 keeps byte offsets equal to string offsets; strings are
-        # re-decoded as UTF-8 when emitted.
-        self.modules = [Module(data[s:e].decode("latin-1")) for s, e in bounds]
+        self.starts = starts
+        self.modules = [Module(data, s, e) for s, e in zip(starts, starts[1:] + [len(data)])]
         self.exports = {}
-        for index, module in enumerate(self.modules):
-            for names in EXPORT.findall(module.text):
-                for local, public in specifiers(names, "export"):
-                    self.exports.setdefault(public, []).append((index, local))
+        for match in EXPORT.finditer(data):
+            index = self.module_at(match.start())
+            for local, public in specifiers(match.group(1).decode("latin-1"), "export"):
+                self.exports.setdefault(public, []).append((index, local))
         versions = {m.group(1) for m in VERSION_LINE.finditer(data)}
         if len(versions) != 1:
             raise Failure(f"expected one embedded version, found {sorted(v.decode() for v in versions)}")
         self.version = versions.pop().decode("ascii")
-        self.built_in_markers = len(BUILT_IN_MARKER.findall(data))
+        markers = [m.start() for m in BUILT_IN_MARKER.finditer(data)]
+        self.built_in_markers = len(markers)
+        self.agent_modules = sorted({self.module_at(offset) for offset in markers})
+        self._definitions = {}
+
+    def module_at(self, offset):
+        return bisect.bisect_right(self.starts, offset) - 1
 
     def definition(self, index, name, depth=0):
         """Return (module index, expression source) that defines name in module index."""
+        key = (index, name)
+        if key not in self._definitions:
+            self._definitions[key] = self._resolve(index, name, depth)
+        return self._definitions[key]
+
+    def _resolve(self, index, name, depth):
         if depth > MAX_DEPTH:
             raise Failure(f"{name}: reference chain too deep")
         module = self.modules[index]
@@ -286,7 +298,7 @@ class Binary:
         if found:
             start = found[0]
             return index, module.text[start:expression_end(module.text, start)].strip()
-        publics = module.imports().get(name)
+        publics = module.imports.get(name)
         if not publics:
             raise Failure(f"{name}: no definition or import")
         if len(publics) > 1:
@@ -297,9 +309,6 @@ class Binary:
             raise Failure(f"{name}: exported by {len(owners)} modules")
         owner, local = owners[0]
         return self.definition(owner, local, depth + 1)
-
-
-# ---------------------------------------------------------------- evaluation
 
 
 def js_string(source):
@@ -345,6 +354,10 @@ def is_string_literal(source):
 
 def is_template_literal(source):
     return len(source) >= 2 and source[0] == "`" and skip_template(source, 0) == len(source)
+
+
+def literal_like(source):
+    return bool(is_string_literal(source) or is_template_literal(source) or IDENT.fullmatch(source))
 
 
 class Evaluator:
@@ -408,30 +421,26 @@ class Evaluator:
         kind, source = entry
         if kind != "value":
             return CONDITIONAL
-        member = re.fullmatch(r"([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)", source)
+        member = MEMBER.fullmatch(source)
         if member:
             owner, referenced = self.agent_object(index, member.group(1))
             return self.field(owner, referenced, member.group(2))
+        if key in ("whenToUse", "model") and not literal_like(source):
+            return CONDITIONAL
         if key == "whenToUse":
-            return self.text(index, source) if self.literal_like(source) else CONDITIONAL
+            return self.text(index, source)
         if key == "model":
-            if not self.literal_like(source):
-                return CONDITIONAL
             return self.name(index, source)
         if source.startswith("[") or IDENT.fullmatch(source):
             return self.names(index, source)
         return CONDITIONAL
 
-    @staticmethod
-    def literal_like(source):
-        return bool(is_string_literal(source) or is_template_literal(source) or IDENT.fullmatch(source))
-
 
 def agents(binary):
     evaluator = Evaluator(binary)
     catalog = {}
-    for index, module in enumerate(binary.modules):
-        text = module.text
+    for index in binary.agent_modules:
+        text = binary.modules[index].text
         for match in AGENT_START.finditer(text):
             start = match.start()
             try:
@@ -443,7 +452,7 @@ def agents(binary):
                 continue
             if properties.get("baseDir") != ("value", '"built-in"'):
                 continue
-            kind, type_source = properties["agentType"]
+            _, type_source = properties["agentType"]
             try:
                 agent_type = evaluator.name(index, type_source)
             except Failure as error:
@@ -467,9 +476,6 @@ def agents(binary):
     return [catalog[name] for name in sorted(catalog)]
 
 
-# ---------------------------------------------------------------- entry point
-
-
 def binary_path():
     claude = shutil.which("claude")
     if claude is None:
@@ -484,7 +490,7 @@ def extract(path):
     with open(path, "rb") as handle:
         with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as data:
             binary = Binary(data)
-    return {"version": binary.version, "agents": agents(binary)}
+            return {"version": binary.version, "agents": agents(binary)}
 
 
 def write_json(path, value):

@@ -326,6 +326,8 @@ for failing in claude-code:claude-code-release claude-code-agents:claude-code-ag
   grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
     fail "a failing $failing stopped the updates after it"
 done
+[[ ! -e $scratch/update-claude-code-failure-clone/claude-code-agents-calls.log ]] ||
+  fail 'the agent catalog was extracted after the Claude Code release failed'
 pass 'a failing Claude Code release or agent extraction warns with its message, restores both files, and lets the step continue'
 
 read -r status clone <<<"$(run_update_step update-claude-code-unchanged "UNCHANGED=claude-code")"
