@@ -50,12 +50,18 @@ assert os.environ['SOPS_AGE_KEY_FILE'].endswith('/key.txt')
 assert 'XCODES_PASSWORD' not in os.environ
 print(json.dumps({'username': 'fake-user', 'password': 'fake-password'}))
 ''')
-        self.stub('xcodes', '''import json, os, sys
+        self.stub('xcodes', '''import json, os, signal, sys, time
+from pathlib import Path
 assert os.environ['XCODES_USERNAME'] == 'fake-user'
 assert os.environ['XCODES_PASSWORD'] == 'fake-password'
 assert all('fake-' not in a for a in sys.argv)
 cookie_directory = os.environ.get('XCODES_ARIA2_COOKIE_DIR')
-open(os.environ['LOG'], 'w').write(json.dumps({'args': sys.argv[1:], 'cookie_directory': cookie_directory}))
+with open(os.environ['LOG'], 'w') as log:
+    json.dump({'args': sys.argv[1:], 'cookie_directory': cookie_directory, 'pid': os.getpid()}, log)
+if os.environ.get('INTERRUPT_XCODES_INSTALL') == '1':
+    (Path(cookie_directory) / 'cookies').write_text('fake-cookie')
+    os.kill(os.getppid(), signal.SIGTERM)
+    time.sleep(3)
 # Deliberately echo the fake credentials to test redaction.
 print('fake-user fake-password')
 ''')
@@ -81,15 +87,19 @@ print('fake-user fake-password')
             self.assertFalse(Path(install_call['cookie_directory']).exists())
             self.assertNotIn('fake-password', out.getvalue())
             self.assertNotIn('fake-user', out.getvalue())
-            def interrupt(args, *, env, secrets):
-                directory = Path(env['XCODES_ARIA2_COOKIE_DIR'])
-                (directory / 'cookies').write_text('fake-cookie')
-                raise KeyboardInterrupt
-
-            with patch.object(x, 'fetch_catalog', return_value=[release]), patch.object(x, 'host_version', return_value='26.0'), patch.object(x, 'installed_candidate', return_value=None), patch.object(x, 'run_interactive', side_effect=interrupt) as install:
-                with contextlib.redirect_stdout(out), self.assertRaises(KeyboardInterrupt):
-                    x.update(source, identity, owner)
-            self.assertFalse(Path(install.call_args.kwargs['env']['XCODES_ARIA2_COOKIE_DIR']).exists())
+            with (
+                patch.dict(os.environ, {'INTERRUPT_XCODES_INSTALL': '1'}),
+                patch.object(x, 'fetch_catalog', return_value=[release]),
+                patch.object(x, 'host_version', return_value='26.0'),
+                patch.object(x, 'installed_candidate', return_value=None),
+                contextlib.redirect_stdout(out),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                x.update(source, identity, owner)
+            interrupted_call = json.loads(self.log.read_text())
+            self.assertFalse(Path(interrupted_call['cookie_directory']).exists())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(interrupted_call['pid'], 0)
             self.log.unlink()
             for mode in (0o644, 0o400):
                 identity.chmod(mode)
