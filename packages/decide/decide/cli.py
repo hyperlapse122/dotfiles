@@ -151,6 +151,9 @@ async def run(args):
     if args.command == 'info':
         result = await inspect_model(config)
         if args.json:
+            result['decision_types'] = [
+                kind for kind, support in result['decision_types'].items() if support == 'supported'
+            ]
             print(json.dumps(result, ensure_ascii=False))
         else:
             display_info(result)

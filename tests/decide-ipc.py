@@ -176,7 +176,8 @@ class IPC(unittest.IsolatedAsyncioTestCase):
 
         code, out, err = await self.cli(*args)
         self.assertEqual(code, 0, err)
-        for value in ('mlx', MLX.model, REVISION, 'unloaded', 'noul', 'choice', 'score'):
+        for value in ('mlx', MLX.model, REVISION, 'unloaded', 'noul (supported)',
+                      'choice (supported)', 'score (supported)', 'box (unsupported)'):
             self.assertIn(value, out)
 
         code, out, err = await self.cli(*args, '--json')
@@ -185,15 +186,14 @@ class IPC(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['model'], MLX.model)
         self.assertEqual(result['backend_source'], 'service')
         self.assertEqual(result['local_model']['load_state'], 'unloaded')
-        self.assertEqual(result['decision_types'], {
-            'noul': 'supported', 'choice': 'supported', 'score': 'supported', 'box': 'unsupported'})
+        self.assertEqual(result['decision_types'], ['noul', 'choice', 'score'])
 
         code, out, err = await self.cli(*args, '--json', '--model', 'other/model')
         self.assertEqual(code, 0, err)
         result = json.loads(out)
         self.assertEqual(result['model'], 'other/model')
         self.assertEqual(result['local_model']['id'], MLX.model)
-        self.assertEqual(set(result['decision_types'].values()), {'unsupported'})
+        self.assertEqual(result['decision_types'], [])
 
         await self.service.close()
         out = io.StringIO()
@@ -239,18 +239,17 @@ class IPC(unittest.IsolatedAsyncioTestCase):
 
         result = await info('cloudflare/clef-flash')
         self.assertEqual(result['remote_model']['context_length'], 24576)
-        self.assertEqual(result['decision_types'], {
-            'noul': 'supported', 'choice': 'supported', 'score': 'supported', 'box': 'unknown'})
+        self.assertEqual(result['decision_types'], ['noul', 'choice', 'score'])
         result = await info('~typesafe/jev-latest')
         self.assertEqual(result['remote_model']['id'], 'typesafe/jev-1.14')
-        self.assertEqual(result['decision_types']['box'], 'supported')
+        self.assertEqual(result['decision_types'], ['noul', 'choice', 'score', 'box'])
         result = await info('unlisted/model')
         self.assertEqual(result['catalog_status'], 'not_listed')
-        self.assertEqual(set(result['decision_types'].values()), {'unknown'})
+        self.assertEqual(result['decision_types'], [])
         fail = True
         result = await info('cloudflare/clef-flash')
         self.assertEqual(result['catalog_status'], 'unavailable')
-        self.assertEqual(set(result['decision_types'].values()), {'unknown'})
+        self.assertEqual(result['decision_types'], [])
         self.assertEqual(calls, [('/api/alpha/decisions', None, b'')] * 4)
 
     async def test_operation_metadata_from_ipc_and_cli(self):

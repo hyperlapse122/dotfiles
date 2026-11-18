@@ -44,11 +44,13 @@ decide info --json
 decide info --model typesafe/jev-1.14
 ```
 
-`info` shows the backend and model that `judge` would use for a request without a model field. It accepts the same `--config`, `--socket`, `--timeout` and `--model` flags. `--json` reports the same facts as the plain-text output. Each decision type has a `supported`, `unsupported` or `unknown` value.
+`info` shows the backend and model that `judge` would use for a request without a model field. It accepts the same `--config`, `--socket`, `--timeout` and `--model` flags. Plain text labels each decision type as `supported`, `unsupported` or `unknown`.
+
+In `--json` output, `decision_types` is an array of confirmed supported types. Its entries can be `noul`, `choice`, `score` or `box`. Scripts can check array membership to test support. An empty array (`[]`) means the command could confirm no supported types.
 
 For MLX and CUDA, the report includes the bundled model and its pinned revision. A running service can report whether it has finished loading the model. If the socket cannot provide status, `info` shows the package's model information with an unknown load state. When the selected model differs from the bundled model, the local backend cannot serve that selection.
 
-For OpenRouter, `info` looks up the selected model in the live [Decisions model catalog](https://openrouter.ai/docs/guides/overview/models#endpoints). If a model is missing from the response or the lookup fails, the report marks its decision types unknown. The catalog confirms API routing and does not list question types. The command uses the [documented adapter capabilities](https://openrouter.ai/docs/guides/community/multimodal-decisions#what-each-endpoint-accepts) for types it can confirm. `info` does not submit a judgment or load model weights, and it can return partial information with a successful exit status.
+For OpenRouter, `info` looks up the selected model in the live [Decisions model catalog](https://openrouter.ai/docs/guides/overview/models#endpoints). If a model is missing from the response or the lookup fails, plain text marks its decision types unknown and JSON returns an empty `decision_types` array. The catalog confirms API routing and does not list question types. The command uses the [documented adapter capabilities](https://openrouter.ai/docs/guides/community/multimodal-decisions#what-each-endpoint-accepts) for types it can confirm. `info` does not submit a judgment or load model weights, and it can return partial information with a successful exit status.
 
 ## Backends and models
 
