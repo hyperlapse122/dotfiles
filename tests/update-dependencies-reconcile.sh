@@ -174,13 +174,8 @@ case "\$*" in
   "run .#t3code-release -- --output packages/t3code-release.json")
     if [[ " \${FAIL_SOFT:-} " == *" t3code "* ]]; then
       printf '{"version": "partial' >packages/t3code-release.json
-      echo "t3code-release: rebuild of paths does not fit 1.4.1 (x86_64-linux): paths.py: no function global_skills_paths at module level" >&2
+      echo "t3code-release: release v0.0.47 lists 0 t3-0.0.47-linux-arm64.tar.gz assets" >&2
       exit 1
-    fi
-    if [[ " \${FAIL_SOFT:-} " == *" t3code-table "* ]]; then
-      printf '{"version": "partial' >packages/t3code-release.json
-      echo "t3code-release: Antigravity table in the T3 Code CLI does not parse" >&2
-      exit 2
     fi
     printf '{"version": "0.0.47"}\n' >packages/t3code-release.json
     ;;
@@ -308,7 +303,7 @@ for title in "ChatGPT update skipped" "T3 Code update skipped" "Pi update skippe
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
-grep -q '^::warning title=T3 Code update skipped::.*rebuild of paths does not fit 1.4.1' "$scratch/update-soft-fail-step.log" ||
+grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm64.tar.gz assets' "$scratch/update-soft-fail-step.log" ||
   fail "the T3 Code warning does not carry the updater's message: $(cat "$scratch/update-soft-fail-step.log")"
 [[ -z $("$git_bin" -C "$clone" status --porcelain \
   packages/chatgpt-version.json \
@@ -369,14 +364,6 @@ read -r status clone <<<"$(run_update_step update-harness-pins-unchanged "UNCHAN
 [[ ! -e $clone/harness-catalog-calls.log ]] ||
   fail 'a native agent catalog was extracted although its pin did not change'
 pass 'unchanged Codex and Pi pins skip their catalog extractions'
-
-read -r status clone <<<"$(run_update_step update-t3code-table "FAIL_SOFT=t3code-table")"
-((status == 0)) || fail "an unreadable T3 Code Antigravity table aborted the update step: $(cat "$scratch/update-t3code-table-step.log")"
-grep -q '^::warning title=T3 Code Antigravity table unreadable::.*Antigravity table in the T3 Code CLI does not parse' "$scratch/update-t3code-table-step.log" ||
-  fail "the unreadable-table warning does not carry the updater's message: $(cat "$scratch/update-t3code-table-step.log")"
-[[ -z $("$git_bin" -C "$clone" status --porcelain packages/t3code-release.json) ]] ||
-  fail 'an unreadable T3 Code Antigravity table left a partial packages/t3code-release.json'
-pass 'an unreadable T3 Code Antigravity table (updater status 2) warns with the updater message, restores the pin, and lets the step continue'
 
 read -r status _ <<<"$(run_update_step update-bad-rev "LOCKED_REV=null")"
 ((status != 0)) || fail "update step accepted a non-hex locked revision for compound-engineering-plugin"

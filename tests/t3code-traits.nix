@@ -78,6 +78,15 @@ let
       {
         path = [
           "providerInstances"
+          "antigravity"
+          "config"
+        ];
+        key = "binaryPath";
+        value = "@RETIRED-AGY@";
+      }
+      {
+        path = [
+          "providerInstances"
           "grok"
         ];
         key = "config";
@@ -122,7 +131,6 @@ let
       from = "providers";
       to = "providerInstances";
       kinds = [
-        "antigravity"
         "claudeAgent"
         "codex"
         "opencode"
@@ -313,31 +321,6 @@ let
       }
       {
         path = [
-          "providerInstances"
-          "antigravity"
-          "driver"
-        ];
-        value = "antigravity";
-      }
-      {
-        path = [
-          "providerInstances"
-          "antigravity"
-          "enabled"
-        ];
-        value = true;
-      }
-      {
-        path = [
-          "providerInstances"
-          "antigravity"
-          "config"
-          "binaryPath"
-        ];
-        value = "@AGY@";
-      }
-      {
-        path = [
           "sourceControlWritingStyle"
           "customInstructions"
         ];
@@ -413,7 +396,6 @@ let
 
   profileBinaries = {
     "@PI@" = "pi";
-    "@AGY@" = "agy_acp_server.par";
   };
 
   merges = [
@@ -459,6 +441,27 @@ let
                 if merge.attr == "t3codeSettings" then
                   merge.contract
                   // {
+                    removePaths = map (
+                      row:
+                      if (row.value or null) == "@RETIRED-AGY@" then
+                        row
+                        // {
+                          value = noContext "${
+                            user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile"
+                          }/bin/agy_acp_server.par";
+                        }
+                      else
+                        row
+                    ) merge.contract.removePaths;
+                    migrateInstances = merge.contract.migrateInstances // {
+                      retireAntigravity = {
+                        profileBinary = noContext "${
+                          user.home.profileDirectory or "${user.home.homeDirectory}/.nix-profile"
+                        }/bin/agy_acp_server.par";
+                        registryCommand = "${user.home.homeDirectory}/.local/share/dotfiles/antigravity-acp/bin/antigravity-acp";
+                        instructions = "${user.home.homeDirectory}/.t3/userdata/instructions/antigravity.md";
+                      };
+                    };
                     setPaths = map (
                       row:
                       if lib.isString row.value && lib.hasAttr row.value profileBinaries then
@@ -499,23 +502,9 @@ let
 
   assertSettings = assertSettingsWith true;
 
-  assertSignIn =
-    name: user: expected:
-    let
-      activation = user.home.activation.antigravitySignIn or null;
-    in
-    ''
-      checkSignIn ${esc name} ${lib.boolToString expected} ${
-        lib.boolToString (activation != null)
-      } ${esc (activation.data or "")} ${
-        lib.boolToString (lib.elem "t3codeSettings" (activation.after or [ ]))
-      } ${esc (user.home.homeDirectory or "")}
-    '';
-
   assertSettingsOn =
     entry:
-    assertSettings entry.name entry.user (cliEnabled entry.config || desktopEnabled entry.config)
-    + assertSignIn entry.name entry.user (cliEnabled entry.config || desktopEnabled entry.config);
+    assertSettings entry.name entry.user (cliEnabled entry.config || desktopEnabled entry.config);
 
   assertProfile = entry: ''
     checkProfile ${esc entry.name} ${
@@ -563,6 +552,10 @@ let
               options.home.homeDirectory = lib.mkOption {
                 type = lib.types.str;
                 default = "/home/probe";
+              };
+              options.home.profileDirectory = lib.mkOption {
+                type = lib.types.str;
+                default = "/t3-probe-profile";
               };
               config.my = {
                 hostName = "probe";
@@ -627,8 +620,6 @@ let
       ))
       (assertSettingsWith false "NixOS module with my.t3.desktop.enable" nixos.config true)
       (assertSettingsWith false "macOS module with my.t3.desktop.enable" darwin.config true)
-      (assertSignIn "NixOS module with my.t3.desktop.enable" nixos.config true)
-      (assertSignIn "macOS module with my.t3.desktop.enable" darwin.config true)
     ];
 in
 pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
@@ -720,39 +711,6 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     [ "$attr" = t3codeSettings ] || return 0
     [ "$full" = true ] || return 0
     checkOpencodeDisabled "$name" "$merger" "$declared"
-    checkAntigravityInstance "$name" "$merger" "$declared"
-  }
-
-  checkAntigravityInstance() {
-    local name=$1 realMerger=$2 declared=$3
-    if ! python3 -I ${./t3code-antigravity-instance.py} instance "$realMerger" "$declared" \
-      2> antigravity-instance.log; then
-      echo "$name: the merge does not set the declared Antigravity instance leaves and keep its siblings:" >&2
-      cat antigravity-instance.log >&2
-      fail=1
-    fi
-  }
-
-  checkSignIn() {
-    local name=$1 expected=$2 present=$3 after=$5 home=$6
-    if [ "$present" != "$expected" ]; then
-      echo "$name: home.activation.antigravitySignIn is present=$present, either T3 Code trait on is $expected" >&2
-      fail=1
-      return
-    fi
-    [ "$present" = true ] || return 0
-
-    if [ "$after" != true ]; then
-      echo "$name: home.activation.antigravitySignIn must run after t3codeSettings" >&2
-      fail=1
-    fi
-    printf '%s\n' "$4" > signin-script
-    if ! python3 -I ${./t3code-antigravity-instance.py} signin signin-script "$home" \
-      2> antigravity-signin.log; then
-      echo "$name: the sign-in activation does not link the standard token path to T3 Code's instance token:" >&2
-      cat antigravity-signin.log >&2
-      fail=1
-    fi
   }
 
   # Merges the declared document into a settings.json that holds an enabled

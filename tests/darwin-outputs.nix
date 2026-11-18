@@ -207,9 +207,6 @@ let
       serveHtml = lib.optionalString (serveHtmlPackage != null) (lib.getExe serveHtmlPackage);
       acpx = lib.getExe (import ../packages/acpx.nix { inherit (entry.host) pkgs; });
       agy = "${import ../packages/antigravity-cli.nix { inherit (entry.host) pkgs; }}/bin/agy";
-      antigravityRuntime = "${
-        import ../packages/antigravity-acp.nix { inherit (entry.host) pkgs; }
-      }/libexec/antigravity-acp";
       # Only these four Dock keys may be written; the rest stay the user's.
       expectedDock = pkgs.writeText "expected-dock.json" (
         builtins.toJSON {
@@ -388,23 +385,10 @@ let
         || bad "acpx on PATH is not the packaged binary"
       [ "$(readlink -f "$gen/home-path/bin/agy" || true)" = ${lib.escapeShellArg agy} ] \
         || bad "agy on PATH is not the pinned Antigravity CLI"
-      agyPar=$(readlink -f "$gen/home-path/bin/agy_acp_server.par" || true)
-      if [ -z "$agyPar" ] || [ ! -x "$agyPar" ]; then
-        bad "no agy_acp_server.par on PATH"
-      else
-        grep -qxF ${lib.escapeShellArg "exec ${antigravityRuntime}/agy_acp_server.par \"$@\""} "$agyPar" \
-          || bad "agy_acp_server.par does not exec the PATH-pinned runtime's .par"
-        if grep -qF SSL_CERT_FILE "$agyPar"; then
-          bad "the macOS agy_acp_server.par wrapper sets SSL_CERT_FILE"
-        fi
-        storageGuard=$(grep -A1 -xF ${lib.escapeShellArg "if [ -z \"\${AGY_ACP_FORCE_FILE_STORAGE:-}\" ]; then"} "$agyPar" || true)
-        case $storageGuard in
-          *'export AGY_ACP_FORCE_FILE_STORAGE=1'*) ;;
-          *) bad "the macOS agy_acp_server.par wrapper does not select file token storage only when the caller set none" ;;
-        esac
-      fi
-      [ "$(readlink -f "$gen/home-path/bin/localharness_external" || true)" = ${lib.escapeShellArg "${antigravityRuntime}/localharness_external"} ] \
-        || bad "localharness_external on PATH is not the PATH-pinned runtime's"
+      for binary in agy_acp_server.par localharness_external; do
+        [ ! -e "$gen/home-path/bin/$binary" ] && [ ! -L "$gen/home-path/bin/$binary" ] \
+          || bad "retired Antigravity runtime executable $binary is on PATH"
+      done
 
       codexBlock=$TMPDIR/codex-settings-$variant.sh
       stepBlock codexSettings > "$codexBlock"

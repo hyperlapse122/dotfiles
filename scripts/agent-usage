@@ -14,7 +14,6 @@ import selectors
 import subprocess
 import tempfile
 import time
-import urllib.parse
 
 
 class Unavailable(Exception):
@@ -150,69 +149,13 @@ def claude():
     return None, windows
 
 
-def antigravity_credential_path():
-    return Path(os.environ.get('GEMINI_HOME', Path.home() / '.gemini')) / 'antigravity-acp/acp_token.json'
-
-
-ANTIGRAVITY_WINDOWS = {'weekly': WEEK, '5h': 300}
-
-
-def gemini():
-    # The Antigravity ACP runtime's own OAuth credential reads the quota
-    # summary its clients show; refreshing it mints an access token only.
-    credential = load(antigravity_credential_path())
-    if not credential:
-        raise Unavailable(reason='no Antigravity ACP sign-in')
-    version = os.environ.get('AGENT_USAGE_ANTIGRAVITY_VERSION')
-    if not version or any(char in version for char in '\r\n"\\'):
-        raise Unavailable(reason='no Antigravity ACP version')
-    fields = ('client_id', 'client_secret', 'refresh_token', 'project_id')
-    if (credential.get('token_uri') != 'https://oauth2.googleapis.com/token'
-            or not all(isinstance(credential.get(field), str) and credential[field] for field in fields)):
+def http(url, token):
+    # Pass the bearer in curl's stdin config to keep it out of argv.
+    if not token or any(char in token for char in '\r\n"\\'):
         raise Unavailable()
-    form = urllib.parse.urlencode(dict(client_id=credential['client_id'], client_secret=credential['client_secret'],
-                                       refresh_token=credential['refresh_token'], grant_type='refresh_token'))
-    status, token = http(credential['token_uri'], None, data=form, bearer=False)
-    if status != 200:
-        raise Unavailable()
-    # The service rejects a User-Agent that does not name Antigravity, and
-    # omits the Gemini buckets unless it names a current ACP client version.
-    status, data = http('https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary',
-                        token.get('access_token'), data=json.dumps({'project': credential['project_id']}),
-                        headers=['Content-Type: application/json',
-                                 f'User-Agent: antigravity/acp/{version} (aidev_client)'])
-    if status != 200:
-        raise Unavailable()
-    windows = []
-    for group in data.get('groups', []):
-        for bucket in group.get('buckets', []):
-            # Claude and GPT share separate 3p- buckets; only gemini- buckets
-            # meter the Gemini models routed here.
-            if bucket.get('disabled') or not bucket.get('bucketId', '').startswith('gemini-'):
-                continue
-            duration = ANTIGRAVITY_WINDOWS.get(bucket.get('window'))
-            windows.append(window(bucket.get('window', bucket['bucketId']), 100 * (1 - bucket['remainingFraction']),
-                                  bucket.get('resetTime'), **({'durationMins': duration} if duration else {})))
-    if not windows:
-        raise Unavailable()
-    return credential['project_id'], windows
-
-
-def http(url, token, data=None, headers=(), bearer=True):
-    # curl's config comes over stdin: the bearer and any request body that
-    # carries a credential never appear in argv or logs.
-    config = [f'header = "{header}"\n' for header in headers]
-    if bearer:
-        if not token or any(char in token for char in '\r\n"\\'):
-            raise Unavailable()
-        config.append(f'header = "Authorization: Bearer {token}"\n')
-    if data is not None:
-        if any(char in data for char in '\r\n'):
-            raise Unavailable()
-        config.append('data = "' + data.replace('\\', '\\\\').replace('"', '\\"') + '"\n')
     output = run(['curl', '--config', '-', '--silent', '--max-time', '15',
                   '--write-out', '\n%{http_code}', url],
-                 input=''.join(config))
+                 input=f'header = "Authorization: Bearer {token}"\n')
     body, status = output.rsplit('\n', 1)
     if int(status) != 200:
         return int(status), {}
@@ -239,7 +182,7 @@ def synthetic():
     return 'default', windows
 
 
-READERS = dict(codex=codex, claude=claude, gemini=gemini, synthetic=synthetic)
+READERS = dict(codex=codex, claude=claude, synthetic=synthetic)
 
 
 def identity_stamp(provider):
@@ -249,7 +192,6 @@ def identity_stamp(provider):
         'codex': [Path(os.environ.get('CODEX_HOME', home / '.codex')) / 'auth.json'],
         'claude': [home / '.claude.json', Path(os.environ.get('CLAUDE_CONFIG_DIR', home / '.claude')) / '.claude.json',
                    Path(os.environ.get('CLAUDE_CONFIG_DIR', home / '.claude')) / '.credentials.json'],
-        'gemini': [antigravity_credential_path()],
         'synthetic': [],
     }[provider]
     stamp = []

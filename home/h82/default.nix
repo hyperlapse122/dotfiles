@@ -70,13 +70,6 @@ in
       (import ../../packages/codex.nix { inherit pkgs; })
       (import ../../packages/antigravity-cli.nix { inherit pkgs; })
       (import ../../packages/acpx.nix { inherit pkgs; })
-      # Compound Engineering's Antigravity route finds the runtime on PATH.
-      (import ../../packages/antigravity-acp-path.nix {
-        inherit pkgs;
-        skills = config.my.antigravitySkillNames;
-        xcodeSkillsStateDir = config.my.xcodeSkillsStateDir;
-        pluginSkills = config.my.antigravityPluginSkills;
-      })
       (import ../../packages/agent-tools.nix { inherit pkgs; }).serveHtml
       (
         let

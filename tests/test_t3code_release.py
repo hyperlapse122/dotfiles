@@ -1,20 +1,10 @@
 import base64
-import gzip
-import hashlib
-import importlib.machinery
-import importlib.util
-import io
 import json
 import os
-import re
-import struct
 import subprocess
 import sys
-import tarfile
 import tempfile
 import unittest
-import zipfile
-import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,118 +20,7 @@ CLI_DARWIN_HEX = "02c191e2a3ed5c3d8c9808d6039884cda18e72426130d062bfbd1b024a5dc3
 OTHER_HEX = "6ec2232f168c00aa108c04218e92666a7df2f4c2b71c1e93c734294ae71359d0"
 
 
-ACP_PREFIX = "https://dl.google.com/agy-extensions/releases/"
-MODULE_DIRECTORY = "google3/cloud/developer_experience/antigravity_extensions/acp_server"
-SYSTEM_PROMPT = b"def extract_system_prompt(request):\n    return request\n"
-PATHS = b"def global_skills_paths(home):\n    return [home]\n"
-SERVER = b"def _view_file_scope_policy(allowed_dirs):\n    return None\n"
-PAGES = {"linux-x64": 4096, "linux-arm64": 4096, "darwin-arm64": 16384}
-
-
-def stored_zip(entries, base, page, spare):
-    """A stored zip, placed at `base` in its file, with each aligned entry on a page."""
-    body, directory = bytearray(), bytearray()
-    for name, data, aligned in sorted(entries):
-        encoded = name.encode()
-        if aligned:
-            body += b"\0" * (-(base + len(body) + 30 + len(encoded)) % page)
-        crc = zlib.crc32(data)
-        directory += struct.pack(
-            "<IHHHHHHIIIHHHHHII",
-            0x02014B50, (3 << 8) | 20, 20, 0, 0, 0, 0x21, crc, len(data), len(data),
-            len(encoded), 0, 0, 0, 0, 0o100644 << 16, len(body),
-        ) + encoded  # fmt: skip
-        body += struct.pack(
-            "<IHHHHHIIIHH", 0x04034B50, 20, 0, 0, 0, 0x21, crc, len(data), len(data), len(encoded), 0
-        ) + encoded + data  # fmt: skip
-    body += b"\0" * spare
-    end = struct.pack("<IHHHHIIH", 0x06054B50, 0, 0, len(entries), len(entries), len(directory), len(body), 0)
-    return bytes(body + directory + end)
-
-
-def runtime_archive(key, paths=PATHS, system_prompt=SYSTEM_PROMPT, member="agy_acp_server.par"):
-    """An invented runtime zip: a launcher holding a stored zip with the extended modules, and a helper."""
-    prefix = b"stand-in launcher " * 40
-    entries = [
-        (f"{MODULE_DIRECTORY}/system_prompt.py", system_prompt, False),
-        (f"{MODULE_DIRECTORY}/paths.py", paths, False),
-        (f"{MODULE_DIRECTORY}/server.py", SERVER, False),
-        ("fakepkg/native.bin", bytes(range(256)) * 4, True),
-    ]
-    launcher = prefix + stored_zip(entries, len(prefix), PAGES[key], 8000) + b"stand-in trailer"
-    raw = io.BytesIO()
-    with zipfile.ZipFile(raw, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(member, launcher)
-        archive.writestr("localharness_external", b"helper bytes")
-    return raw.getvalue(), len(launcher), len(b"helper bytes")
-
-
-GOOD_ARCHIVES = {key: runtime_archive(key) for key in PAGES}
-LACKING_FUNCTION_ARCHIVES = {key: runtime_archive(key, paths=b"def other(home):\n    pass\n") for key in PAGES}
-LACKING_PROMPT_FUNCTION_ARCHIVES = {
-    key: runtime_archive(key, system_prompt=b"def other(request):\n    pass\n") for key in PAGES
-}
-LACKING_EXECUTABLE_ARCHIVES = {key: runtime_archive(key, member="renamed.par") for key in PAGES}
-
-# key: (directory, file suffix) for every platform the table lists.
-ACP_LAYOUT = {
-    "darwin-arm64": ("macos", "darwin-arm64"),
-    "darwin-x64": ("macos", "darwin-x86_64"),
-    "linux-x64": ("linux", "linux-x86_64"),
-    "linux-arm64": ("linux", "linux-arm64"),
-    "win32-x64": ("windows", "windows-x86_64"),
-}
-# The platforms the updater never downloads carry made-up digests and sizes.
-OTHER_FACTS = {"darwin-x64": ("b2" * 32, 112, 223, 334), "win32-x64": ("e5" * 32, 115, 226, 337)}
-
-
-def archive_facts(archives, key):
-    if key not in archives:
-        return OTHER_FACTS[key]
-    data, executable, harness = archives[key]
-    return hashlib.sha256(data).hexdigest(), len(data), executable, harness
-
-
-def acp_table(version="1.4.0", url_prefix=ACP_PREFIX, keys=None, variable="releaseAssets", archives=None):
-    """Render the bundler's `releaseAssets` literal the way the CLI embeds it."""
-    archives = GOOD_ARCHIVES if archives is None else archives
-    entries = []
-    for key, (directory, suffix) in ACP_LAYOUT.items():
-        if keys is not None and key not in keys:
-            continue
-        sha, archive, exe, harness = archive_facts(archives, key)
-        entries.append(
-            f'\t\t["{key}", {{\n\t\t\tversion: ANTIGRAVITY_RELEASE_VERSION,\n'
-            f'\t\t\turl: "{url_prefix}{directory}/agy-acp-server-{version}-{suffix}.zip",\n'
-            f'\t\t\tsha256: "{sha}",\n\t\t\tarchiveBytes: {archive},\n'
-            f'\t\t\texecutable: {{\n\t\t\t\tname: "agy_acp_server.par",\n\t\t\t\tbytes: {exe}\n\t\t\t}},\n'
-            f'\t\t\tharness: {{\n\t\t\t\tname: "localharness_external",\n\t\t\t\tbytes: {harness}\n\t\t\t}}\n\t\t}}]'
-        )
-    return (
-        f'var ANTIGRAVITY_RELEASE_VERSION, {variable};\n'
-        f'\tANTIGRAVITY_RELEASE_VERSION = "{version}";\n'
-        f'\t{variable} = /* @__PURE__ */ new Map([\n' + ",\n".join(entries) + "\n\t]);\n"
-    )
-
-
-def cli_tarball(table):
-    """A CLI tarball whose `t3` binary embeds the given table among other bytes."""
-    binary = b"\x7fELF\x00junk" + table.encode() + b"\x00trailing"
-    raw = io.BytesIO()
-    with tarfile.open(fileobj=raw, mode="w") as tar:
-        info = tarfile.TarInfo("t3-x/t3")
-        info.size = len(binary)
-        info.mtime = 0
-        tar.addfile(info, io.BytesIO(binary))
-    return gzip.compress(raw.getvalue(), mtime=0)
-
-
-def sha256_hex(data):
-    return hashlib.sha256(data).hexdigest()
-
-
-DEFAULT_TARBALL = cli_tarball(acp_table())
-CLI_X64_HEX = sha256_hex(DEFAULT_TARBALL)
+CLI_X64_HEX = "1234" * 16
 
 
 def target_assets(version):
@@ -212,28 +91,6 @@ def release_list(newest=None):
     )
 
 
-def expected_antigravity(version="1.4.0"):
-    section = {}
-    for system, key in {
-        "x86_64-linux": "linux-x64",
-        "aarch64-linux": "linux-arm64",
-        "aarch64-darwin": "darwin-arm64",
-    }.items():
-        directory, suffix = ACP_LAYOUT[key]
-        sha, archive, exe, harness = archive_facts(GOOD_ARCHIVES, key)
-        section[system] = {
-            "platform": key,
-            "version": version,
-            "url": f"{ACP_PREFIX}{directory}/agy-acp-server-{version}-{suffix}.zip",
-            "sha256": sha,
-            "hash": sri(sha),
-            "archiveBytes": archive,
-            "executable": {"name": "agy_acp_server.par", "bytes": exe},
-            "harness": {"name": "localharness_external", "bytes": harness},
-        }
-    return section
-
-
 def expected_pin(tag):
     version = tag[1:]
     return {
@@ -246,7 +103,6 @@ def expected_pin(tag):
             }
             for system, components in target_assets(version).items()
         },
-        "antigravity": expected_antigravity(),
     }
 
 
@@ -256,20 +112,6 @@ def sri(hex_digest):
 
 FAKE_CURL = """#!{python}
 import json, os, sys
-if '-o' in sys.argv:
-    # An asset download: -sfL --max-time N -o DEST URL
-    if sys.argv[1:4] != ['-sfL', '--max-time', '900'] or sys.argv[4] != '-o' or len(sys.argv) != 7:
-        sys.stderr.write(f'unexpected curl argv: {{sys.argv[1:]!r}}\\n')
-        sys.exit(99)
-    with open(os.environ['FAKE_ARGS_LOG'], 'a') as f:
-        f.write(json.dumps(sys.argv[1:]) + '\\n')
-    source = os.environ['FAKE_TARBALL']
-    for name in os.listdir(os.environ['FAKE_ARCHIVES']):
-        if sys.argv[6].endswith('-' + name):
-            source = os.path.join(os.environ['FAKE_ARCHIVES'], name)
-    with open(source, 'rb') as src, open(sys.argv[5], 'wb') as dst:
-        dst.write(src.read())
-    sys.exit(0)
 if sys.argv[1:6] != ['-sfL', '--max-time', '60', '-H', '@-'] or len(sys.argv) != 7:
     sys.stderr.write(f'unexpected curl argv: {{sys.argv[1:]!r}}\\n')
     sys.exit(99)
@@ -298,14 +140,7 @@ class T3codeReleaseTestCase(unittest.TestCase):
         self.args_log = root / "args.log"
         self.output = root / "t3code-release.json"
 
-    def serve_archives(self, archives):
-        """Make the curl stub serve these runtime archives, keyed by platform."""
-        directory = Path(self.tmp.name) / "archives"
-        directory.mkdir(exist_ok=True)
-        for key, (data, _, _) in archives.items():
-            (directory / f"{ACP_LAYOUT[key][1]}.zip").write_bytes(data)
-
-    def run_release(self, body=None, extra_args=None, status=0, token=None, tarball=None):
+    def run_release(self, body=None, extra_args=None, status=0, token=None):
         if body is None:
             body = release_list()
         env = dict(os.environ)
@@ -315,12 +150,6 @@ class T3codeReleaseTestCase(unittest.TestCase):
         env["PATH"] = f"{self.bin_dir}:{env.get('PATH', '')}"
         env["FAKE_BODY"] = body
         env["FAKE_STATUS"] = str(status)
-        tarball_path = Path(self.tmp.name) / "cli.tar.gz"
-        tarball_path.write_bytes(DEFAULT_TARBALL if tarball is None else tarball)
-        env["FAKE_TARBALL"] = str(tarball_path)
-        if not (Path(self.tmp.name) / "archives").exists():
-            self.serve_archives(GOOD_ARCHIVES)
-        env["FAKE_ARCHIVES"] = str(Path(self.tmp.name) / "archives")
         env["FAKE_STDIN_LOG"] = str(self.stdin_log)
         env["FAKE_ARGS_LOG"] = str(self.args_log)
         args = [sys.executable, str(SCRIPT)]
@@ -332,11 +161,8 @@ class T3codeReleaseTestCase(unittest.TestCase):
             return []
         return [json.loads(line)[-1] for line in self.args_log.read_text().splitlines()]
 
-    def write_pin(self, version, antigravity=None):
-        payload = {"version": version, "tag": f"v{version}"}
-        if antigravity is not None:
-            payload["antigravity"] = antigravity
-        self.output.write_text(json.dumps(payload))
+    def write_pin(self, version):
+        self.output.write_text(json.dumps({"version": version, "tag": f"v{version}"}))
 
     def assert_refused(self, result, needle):
         self.assertEqual(result.returncode, 1)
@@ -381,146 +207,17 @@ class T3codeReleaseTestCase(unittest.TestCase):
                 result = self.run_release(body=body, extra_args=["-o", str(self.output)])
                 self.assert_refused(result, "digest")
 
-    def test_current_pin_equal_to_newest_writes_nothing(self):
-        self.write_pin(NEWEST_VERSION, antigravity=expected_antigravity())
+    def test_current_pin_at_newest_version_writes_nothing(self):
+        self.output.write_text(json.dumps(expected_pin(NEWEST)))
         before = self.output.read_bytes()
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("already up to date", result.stdout)
-        self.assertEqual(self.output.read_bytes(), before)
-
-    def test_unchanged_version_without_an_antigravity_section_writes_it(self):
-        self.write_pin(NEWEST_VERSION)
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.output.read_text()), expected_pin(NEWEST))
-
-    def test_unchanged_version_with_a_stale_antigravity_section_rewrites_it(self):
-        self.write_pin(NEWEST_VERSION, antigravity=expected_antigravity("1.3.0"))
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.output.read_text())["antigravity"], expected_antigravity())
-
-    def test_new_acp_version_in_the_bundle_reaches_the_pin(self):
-        tarball = cli_tarball(acp_table(version="1.5.0"))
-        body = release_list(
-            release(NEWEST, digests={f"t3-{NEWEST_VERSION}-linux-x64.tar.gz": f"sha256:{sha256_hex(tarball)}"})
-        )
-        self.write_pin(OLDER_VERSION)
-        result = self.run_release(body=body, tarball=tarball, extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            json.loads(self.output.read_text())["antigravity"], expected_antigravity("1.5.0")
-        )
-
-    def test_unreadable_table_exits_2_and_keeps_the_pin_byte_identical(self):
-        cases = {
-            "renamed variable": (cli_tarball(acp_table(variable="assets")), "no Antigravity release table"),
-            "missing system": (cli_tarball(acp_table(keys=("darwin-arm64", "linux-x64"))), "linux-arm64"),
-            "foreign host": (cli_tarball(acp_table(url_prefix="https://example.invalid/")), "outside"),
-        }
-        for name, (tarball, needle) in cases.items():
-            with self.subTest(case=name):
-                self.write_pin(OLDER_VERSION)
-                before = self.output.read_bytes()
-                digest = f"sha256:{sha256_hex(tarball)}"
-                body = release_list(
-                    release(NEWEST, digests={f"t3-{NEWEST_VERSION}-linux-x64.tar.gz": digest})
-                )
-                result = self.run_release(body=body, tarball=tarball, extra_args=["-o", str(self.output)])
-                self.assertEqual(result.returncode, 2, result.stderr)
-                self.assertIn(needle, result.stderr)
+        desktop = f"T3-Code-{NEWEST_VERSION}-x86_64.AppImage"
+        for digests in ({}, {desktop: "sha256:" + OTHER_HEX}):
+            with self.subTest(digests=digests):
+                body = release_list(release(NEWEST, digests=digests))
+                result = self.run_release(body=body, extra_args=["-o", str(self.output)])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("already up to date", result.stdout)
                 self.assertEqual(self.output.read_bytes(), before)
-
-    def test_tarball_digest_mismatch_exits_2_and_keeps_the_pin_byte_identical(self):
-        self.write_pin(OLDER_VERSION)
-        before = self.output.read_bytes()
-        result = self.run_release(
-            tarball=cli_tarball(acp_table(version="9.9.9")), extra_args=["-o", str(self.output)]
-        )
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("expected", result.stderr)
-        self.assertEqual(self.output.read_bytes(), before)
-
-    def archive_urls(self):
-        return [url for url in self.fetched_urls() if url.startswith(ACP_PREFIX)]
-
-    def run_with_table(self, table, archives, pin_antigravity=None):
-        """Run a write against a release whose CLI embeds `table`, serving `archives`."""
-        tarball = cli_tarball(table)
-        digest = f"sha256:{sha256_hex(tarball)}"
-        body = release_list(release(NEWEST, digests={f"t3-{NEWEST_VERSION}-linux-x64.tar.gz": digest}))
-        self.write_pin(OLDER_VERSION, antigravity=pin_antigravity)
-        self.pin_before = self.output.read_bytes()
-        self.serve_archives(archives)
-        return self.run_release(body=body, tarball=tarball, extra_args=["-o", str(self.output)])
-
-    def test_a_changed_runtime_is_rebuilt_from_each_systems_archive_before_the_pin_is_written(self):
-        self.write_pin(OLDER_VERSION, antigravity=expected_antigravity("1.3.0"))
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            self.archive_urls(),
-            [record["url"] for record in expected_antigravity().values()],
-        )
-        self.assertEqual(json.loads(self.output.read_text()), expected_pin(NEWEST))
-
-    def test_a_runtime_whose_module_lacks_the_wrapped_function_keeps_the_pin_byte_identical(self):
-        result = self.run_with_table(acp_table(archives=LACKING_FUNCTION_ARCHIVES), LACKING_FUNCTION_ARCHIVES)
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertIn("t3code-release: rebuild of paths does not fit 1.4.0", result.stderr)
-        self.assertIn("no function global_skills_paths", result.stderr)
-        self.assertEqual(self.output.read_bytes(), self.pin_before)
-
-    def test_a_runtime_whose_system_prompt_module_lacks_the_wrapped_function_keeps_the_pin_byte_identical(self):
-        result = self.run_with_table(
-            acp_table(archives=LACKING_PROMPT_FUNCTION_ARCHIVES), LACKING_PROMPT_FUNCTION_ARCHIVES
-        )
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertIn("t3code-release: rebuild of system_prompt does not fit 1.4.0", result.stderr)
-        self.assertIn("no function extract_system_prompt", result.stderr)
-        self.assertEqual(self.output.read_bytes(), self.pin_before)
-
-    def test_a_runtime_zip_without_the_executable_exits_2_and_keeps_the_pin_byte_identical(self):
-        result = self.run_with_table(acp_table(archives=LACKING_EXECUTABLE_ARCHIVES), LACKING_EXECUTABLE_ARCHIVES)
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("is not readable", result.stderr)
-        self.assertIn("agy_acp_server.par", result.stderr)
-        self.assertEqual(self.output.read_bytes(), self.pin_before)
-
-    def test_an_unchanged_runtime_downloads_no_archive(self):
-        self.write_pin(OLDER_VERSION, antigravity=expected_antigravity())
-        result = self.run_release(extra_args=["-o", str(self.output)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.output.read_text())["version"], NEWEST_VERSION)
-        self.assertEqual(self.archive_urls(), [])
-
-    def test_an_archive_that_differs_from_the_table_fails_before_the_rebuild_check(self):
-        # The served archive would also fail the rebuild; the digest is checked first.
-        result = self.run_with_table(acp_table(), LACKING_FUNCTION_ARCHIVES)
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("expected", result.stderr)
-        self.assertNotIn("does not fit", result.stderr)
-        self.assertEqual(self.output.read_bytes(), self.pin_before)
-
-    def test_rebuild_inputs_match_the_runtime_package(self):
-        loader = importlib.machinery.SourceFileLoader("t3code_release", str(SCRIPT))
-        script = importlib.util.module_from_spec(importlib.util.spec_from_loader("t3code_release", loader))
-        loader.exec_module(script)
-        package = (ROOT / "packages/antigravity-acp.nix").read_text()
-        self.assertEqual(
-            re.findall(r'moduleDirectory = "([^"]+)";', package), [script.MODULE_DIRECTORY]
-        )
-        self.assertEqual(
-            tuple(re.findall(r'module = "(\w+)";\s*function = "(\w+)";', package)), script.EXTENSIONS
-        )
-        linux, darwin = re.search(r"if isDarwin then (\d+) else (\d+)", package).groups()[::-1]
-        self.assertEqual(
-            script.PAGE_SIZES,
-            {"x86_64-linux": int(linux), "aarch64-linux": int(linux), "aarch64-darwin": int(darwin)},
-        )
-        for module, _ in script.EXTENSIONS:
-            self.assertTrue((Path(script.OVERLAYS) / f"{module}_overlay.py").is_file())
 
     def test_a_newer_stable_pin_is_not_downgraded(self):
         for version in ("0.1.7", "0.0.48"):
@@ -535,7 +232,7 @@ class T3codeReleaseTestCase(unittest.TestCase):
     def test_a_nightly_pin_is_replaced_by_the_stable_release(self):
         # Moving off the nightly track: the pin's base version is higher, but a
         # tag that is not plain semver counts as older than any stable release.
-        self.write_pin("0.0.48-nightly.20261010.4491", antigravity=expected_antigravity())
+        self.write_pin("0.0.48-nightly.20261010.4491")
         result = self.run_release(extra_args=["-o", str(self.output)])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(self.output.read_text()), expected_pin(NEWEST))

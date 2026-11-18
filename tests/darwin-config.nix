@@ -336,7 +336,7 @@ let
         ]
       ) koreanRoots;
       pluginSkillNames = lib.attrNames (
-        (import ../home/h82/agents/plugin-skills.nix { inherit lib pkgs; }).skills {
+        (import ../home/h82/agents/plugin-skills.nix { inherit lib; }).skills {
           sources = user.my.agentPluginSources;
           sharedNames = lib.attrNames user.my.agentSkills;
         }

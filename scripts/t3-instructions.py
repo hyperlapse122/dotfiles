@@ -12,7 +12,6 @@ import tomllib
 CODEX_MARKER = '<dotfiles-t3-developer-instructions>'
 CLAUDE_MARKER = '<dotfiles-preserved-claude-append>'
 OVERRIDE = 'T3CODE_CODEX_LAUNCH_ARGS'
-ANTIGRAVITY_ADDITION = 'ANTIGRAVITY_ACP_T3_INSTRUCTIONS_FILE'
 NATIVE_CONTROLS = {'pi': [['--approve']]}
 CLAUDE_DEPTH = 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH'
 
@@ -298,21 +297,6 @@ def apply(destination, environment=None, hidden_models=()):
                               'baseEnvironment': base_environment, 'hadEnvironment': had_environment,
                               'lastEnvironment': copy.deepcopy(provider.get('environment', []))}
         changed = True
-    native = providers.get('antigravity', {})
-    if native.get('driver') == 'acpRegistry':
-        legacy = str(home / '.local/share/dotfiles/antigravity-acp/bin/antigravity-acp')
-        if native.get('config', {}).get('commandPath') != legacy:
-            raise ValueError('Move the custom ACP Registry provider to another ID before applying.')
-        del providers['antigravity']
-        changed = True
-    elif native.get('driver') == 'antigravity':
-        entries = native.get('environment', [])
-        if not isinstance(entries, list) or any(not isinstance(e, dict) or not isinstance(e.get('name'), str) for e in entries):
-            raise ValueError('Antigravity environment must contain named entries.')
-        native['environment'] = [e for e in entries if environment_key(e['name']) != ANTIGRAVITY_ADDITION]
-        native['environment'].append({'name': ANTIGRAVITY_ADDITION,
-            'value': str(settings_path.parent / 'instructions/antigravity.md'), 'sensitive': False})
-        changed = True
     client_path = settings_path.with_name('client-settings.json')
     client = read_mapping(client_path)
     preferences = client.setdefault('providerModelPreferences', {}).setdefault('pi', {})
@@ -350,5 +334,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         apply(args.destination, hidden_models=args.hide_model)
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
         raise SystemExit('T3 instruction reconciliation failed. Check launch options, writable settings, and absolute append-file paths.') from None
