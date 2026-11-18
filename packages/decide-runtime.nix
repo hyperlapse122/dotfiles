@@ -83,7 +83,7 @@ let
         addAutoPatchelfSearchPath "$out/lib/python3.12/site-packages/torch/lib"
         wrapProgram "$out/bin/python" \
           --prefix PYTHONPATH : ${clefLocal}/src \
-          --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib \
+          --prefix LD_LIBRARY_PATH : "/run/opengl-driver/lib:$out/${python.sitePackages}/nvidia/cudnn/lib" \
           --prefix PATH : ${
             lib.makeBinPath [
               pkgs.stdenv.cc
