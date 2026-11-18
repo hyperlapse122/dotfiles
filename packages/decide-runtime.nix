@@ -21,7 +21,7 @@ let
     tar -xzf ${clefLocalArchive} --strip-components=1 -C "$out"
   '';
   lib = pkgs.lib;
-  python = pkgs.python312;
+  python = pkgs.python314;
   commonPython = python.withPackages (p: [
     p.aiohttp
     p.click
@@ -79,12 +79,12 @@ let
         "$out/bin/python3" -I -m compileall -q --invalidation-mode unchecked-hash "$out/${python.sitePackages}"
       ''}
       ${lib.optionalString (backend == "cuda") ''
-        for directory in "$out"/lib/python3.12/site-packages/nvidia/*/lib; do
+        for directory in "$out/${python.sitePackages}"/nvidia/*/lib; do
           if [ -d "$directory" ]; then
             addAutoPatchelfSearchPath "$directory"
           fi
         done
-        addAutoPatchelfSearchPath "$out/lib/python3.12/site-packages/torch/lib"
+        addAutoPatchelfSearchPath "$out/${python.sitePackages}/torch/lib"
         wrapProgram "$out/bin/python" \
           --prefix PYTHONPATH : ${clefLocal}/src \
           --prefix LD_LIBRARY_PATH : "/run/opengl-driver/lib:$out/${python.sitePackages}/nvidia/cudnn/lib" \

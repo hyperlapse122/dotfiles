@@ -18,11 +18,11 @@ let
     .${backend};
   loader = if backend == "mlx" then runtime.loaders.darwin else runtime.loaders.linux;
   pythonLiteral = value: if value == null then "None" else builtins.toJSON (toString value);
-  mcpPython = pkgs.python312.withPackages (p: [
+  mcpPython = pkgs.python314.withPackages (p: [
     p.aiohttp
     p.mcp
   ]);
-  testPython = pkgs.python312.withPackages (p: [
+  testPython = pkgs.python314.withPackages (p: [
     p.aiohttp
     p.click
     p.jsonschema
