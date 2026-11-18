@@ -95,7 +95,11 @@ diskoLib.testLib.makeDiskoTest {
     machine.send_chars("secretsecret\n")
   '';
   extraTestScript = ''
-    machine.wait_until_succeeds("journalctl -b -u bootvine.service -o cat | grep -F ' in Initrd '", timeout=30)
+    # Bootvine records the boot phase in a journal field since 0.1.4.
+    machine.wait_until_succeeds(
+        "journalctl -b -u bootvine.service PHASE=Initrd -o cat | grep -Fx 'watching the boot'",
+        timeout=30,
+    )
     machine.succeed("cryptsetup isLuks /dev/vda2")
     machine.succeed("cryptsetup luksDump /dev/vda2 | grep -q 'Version:.*2'")
     machine.succeed("btrfs subvolume list / | grep -qs 'path root$'")
