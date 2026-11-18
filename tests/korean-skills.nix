@@ -11,7 +11,6 @@
     Antigravity CLI, and T3 Code's Antigravity instances
                               ~/.gemini/antigravity-cli/skills/<name>
     Codex                     ~/.codex/skills/<name>
-    Grok                      ~/.grok/skills/<name>
     Pi                        ~/.pi/agent/skills/<name>
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
@@ -106,7 +105,6 @@ let
     ".claude/skills"
     ".gemini/antigravity-cli/skills"
     ".codex/skills"
-    ".grok/skills"
     ".pi/agent/skills"
   ];
 

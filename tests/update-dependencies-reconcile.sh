@@ -92,7 +92,6 @@ EOF
   printf '{"version": "0.3.311"}\n' >"$clone/packages/claude-agent-sdk-release.json"
   printf '{"lockfileVersion": 3, "name": "claude-agent-sdk"}\n' >"$clone/packages/claude-agent-sdk/package-lock.json"
   printf '{"version": "0.50.0"}\n' >"$clone/packages/codex-release.json"
-  printf '{"version": "1.0.62", "platforms": {}}\n' >"$clone/packages/grok-build-release.json"
   printf 'base\n' >"$clone/tracked.txt"
   "$git_bin" -C "$clone" add -A
   "$git_bin" -C "$clone" commit -qm init
@@ -232,14 +231,6 @@ case "\$*" in
     fi
     printf '{"version": "0.51.0"}\n' >packages/codex-release.json
     ;;
-  "run .#grok-build-release -- --output packages/grok-build-release.json")
-    if [[ " \${FAIL_SOFT:-} " == *" grok "* ]]; then
-      printf '{"version": "partial' >packages/grok-build-release.json
-      echo "grok-build-release: 1.0.71 is not published for aarch64-darwin" >&2
-      exit 1
-    fi
-    printf '{"version": "1.0.71", "platforms": {}}\n' >packages/grok-build-release.json
-    ;;
   *)
     echo "unexpected nix invocation: \$*" >&2
     exit 99
@@ -278,8 +269,6 @@ grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
 grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
   fail "update step did not update packages/pi-release.json"
-grep -q '"1.0.71"' "$clone/packages/grok-build-release.json" ||
-  fail "update step did not update packages/grok-build-release.json"
 grep -q '"1.5.0"' "$clone/packages/antigravity-cli-release.json" ||
   fail "update step did not update packages/antigravity-cli-release.json"
 grep -q '"9.9.9"' "$clone/packages/acpx-release.json" &&
@@ -293,9 +282,9 @@ grep -q '"9.9.9"' "$clone/packages/claude-agent-sdk-release.json" &&
 [[ $(wc -l <"$clone/overlay-calls.log") == 2 ]] || fail 'missing imported pin updater'
 pass 'the update step runs flake update, compound-engineering-plugin pin/lock update, and all release updaters'
 
-read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code agy-cli pi acpx claude-agent-sdk codex grok")"
+read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code agy-cli pi acpx claude-agent-sdk codex")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
-for title in "ChatGPT update skipped" "T3 Code update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped" "Grok Build update skipped" "Antigravity CLI update skipped"; do
+for title in "ChatGPT update skipped" "T3 Code update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped" "Antigravity CLI update skipped"; do
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
@@ -310,10 +299,9 @@ grep -q '^::warning title=T3 Code update skipped::.*rebuild of paths does not fi
   packages/claude-agent-sdk-release.json \
   packages/claude-agent-sdk/package-lock.json \
   packages/codex-release.json \
-  packages/grok-build-release.json \
   packages/antigravity-cli-release.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
-pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, pi, acpx, claude-agent-sdk, codex, grok-build) warn, restore their files, and let the step continue'
+pass 'soft-failing updaters (chatgpt, t3code, antigravity-cli, pi, acpx, claude-agent-sdk, codex) warn, restore their files, and let the step continue'
 
 for failing in claude-code:claude-code-release claude-code-agents:claude-code-agents; do
   command=${failing#*:} failing=${failing%%:*}
@@ -370,7 +358,6 @@ printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222
 printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
 printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
-printf '{"version": "1.0.71", "platforms": {}}\n' >"$clone/packages/grok-build-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/antigravity-cli-release.json"
 printf '{"version": "2.1.0"}\n' >"$clone/packages/claude-code-manifest.json"
 printf '{"version": "2.1.0", "agents": [{"agentType": "Explore"}]}\n' >"$clone/packages/claude-code-agents.json"
@@ -382,12 +369,11 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
   fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
 commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 8 ]] || fail "expected 8 per-pin commits, found: $commits"
+[[ $(wc -l <<<"$commits") == 7 ]] || fail "expected 7 per-pin commits, found: $commits"
 for expected in \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
   'chore(packages): bump pi to 1.5.0|packages/pi-release.json' \
   'chore(packages): bump claude-code to 2.1.0|packages/claude-code-agents.json packages/claude-code-manifest.json' \
-  'chore(packages): bump grok-build to 1.0.71|packages/grok-build-release.json' \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
   'chore(packages): bump antigravity-cli to 1.5.0|packages/antigravity-cli-release.json' \
@@ -398,6 +384,6 @@ for expected in \
   files=$("$git_bin" -C "$clone" show --format= --name-only "$sha" | sort | paste -sd ' ')
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
-pass 'the Prezto, claude-code, t3code, antigravity-cli, pi, acpx, grok-build, and compound-engineering changes each land as their own commit with only their files'
+pass 'the Prezto, claude-code, t3code, antigravity-cli, pi, acpx, and compound-engineering changes each land as their own commit with only their files'
 
 python3 "$runner" "$workflow" "$publisher" "$verifier"

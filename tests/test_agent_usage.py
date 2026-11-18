@@ -32,17 +32,14 @@ class UsageTest(unittest.TestCase):
         self.env = dict(os.environ, HOME=str(self.root),
                         XDG_CACHE_HOME=str(self.root / "cache"),
                         CODEX_HOME=str(self.root / ".codex"),
-                        GROK_HOME=str(self.root / ".grok"),
                         CLAUDE_CONFIG_DIR=str(self.root / ".claude"),
                         AGENT_USAGE_SYNTHETIC_KEY_FILE=str(self.root / "synthetic-key"),
                         AGENT_USAGE_ANTIGRAVITY_VERSION="9.9.9",
                         PATH=str(self.root) + os.pathsep + os.environ.get("PATH", ""))
-        for key in ("XAI_API_KEY", "XAI_BASE_URL", "GROK_BASE_URL", "ANTHROPIC_API_KEY", "GEMINI_HOME"):
+        for key in ("ANTHROPIC_API_KEY", "GEMINI_HOME"):
             self.env.pop(key, None)
         self.write(".codex/auth.json", {"tokens": {"account_id": "codex-account"}})
         self.write(".claude.json", {"oauthAccount": {"accountUuid": "claude-account"}})
-        self.write(".grok/auth.json", {"https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828": {
-            "key": TOKEN, "email": "example@example.invalid"}})
         reset = int(time.time()) + 7200
         self.write(".gemini/antigravity-acp/acp_token.json", {
             "client_id": "antigravity-client", "client_secret": TOKEN, "refresh_token": TOKEN,
@@ -61,8 +58,6 @@ class UsageTest(unittest.TestCase):
                     {"bucketId": "gemini-5h", "window": "5h", "resetTime": reset_time, "remainingFraction": .9}]},
                 {"displayName": "Claude and GPT models", "buckets": [
                     {"bucketId": "3p-weekly", "window": "weekly", "resetTime": reset_time, "remainingFraction": .01}]}]},
-            "grok": {"config": {"creditUsagePercent": 10, "currentPeriod": {
-                "type": "USAGE_PERIOD_TYPE_WEEKLY", "start": reset - 604800, "end": reset}}},
             "synthetic": {"subscription": {"limit": 100, "requests": 30, "renewsAt": reset},
                 "search": {"hourly": {"limit": 10, "requests": 2, "renewsAt": reset}},
                 "planWeeklyLimit": {"percentRemaining": 20, "nextRegenAt": reset, "nextRegenPercent": 5}},
@@ -85,19 +80,16 @@ for line in sys.stdin:
   print(json.dumps({'id':r['id'],'result':data['codex']}),flush=True)
 ''')
         self.stub("node", "import json,sys\nif data.get('fail_claude'):\n print(" + repr(TOKEN) + ",file=sys.stderr)\n sys.exit(1)\nprint(json.dumps(data['claude']))")
-        self.stub("grok", "import sys\nassert sys.argv[1:]==['models']")
         (self.root / "synthetic-key").write_text(TOKEN)
         outer = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 outer.assertEqual(self.headers['Authorization'], 'Bearer ' + TOKEN)
-                provider = 'grok' if self.path.startswith('/v1/billing') else 'synthetic'
-                statuses = outer.data.get('grok_statuses', []) if provider == 'grok' else []
-                status = statuses.pop(0) if statuses else 200
-                self.send_response(status)
+                outer.assertEqual(self.path, '/v2/quotas')
+                self.send_response(200)
                 self.end_headers()
-                self.wfile.write(json.dumps(outer.data[provider]).encode())
+                self.wfile.write(json.dumps(outer.data['synthetic']).encode())
 
             def log_message(self, *args):
                 pass
@@ -126,7 +118,7 @@ if url=='https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaS
  print(json.dumps(data['antigravity'])+'\\n200',end='')
  sys.exit()
 assert 'Bearer {TOKEN}' in config
-assert url in ['https://cli-chat-proxy.grok.com/v1/billing?format=credits','https://api.synthetic.new/v2/quotas']
+assert url == 'https://api.synthetic.new/v2/quotas'
 req=urllib.request.Request('http://127.0.0.1:{server.server_port}/'+url.split('/',3)[3],headers={{'Authorization':'Bearer {TOKEN}'}})
 try: response=urllib.request.urlopen(req)
 except urllib.error.HTTPError as exc: response=exc
@@ -160,62 +152,34 @@ sys.stdout.buffer.write(response.read()+b'\\n'+str(response.code).encode())
         return (self.root / 'calls').read_text().splitlines().count(name)
 
     def test_readers_preserve_provider_and_model_windows(self):
+        self.write('cache/agent-usage/grok-current', {
+            'result': {'status': 'ok', 'windows': [], 'fetchedAt': time.time()}})
         result = self.invoke()
+        self.assertEqual(set(result), {'codex', 'claude', 'gemini', 'synthetic'})
         self.assertEqual(result['codex']['windows'][1]['remainingPercent'], 20)
         self.assertEqual(result['claude']['windows'][-1]['model'], 'Fable')
         weekly = result['synthetic']['windows'][-1]
         self.assertEqual(weekly['remainingPercent'], 20)
         self.assertEqual(weekly['nextRegenPercent'], 5)
         self.assertNotIn('resetsAt', weekly)
-        self.assertEqual(result['grok']['windows'][0]['usedPercent'], 10)
 
     def test_default_output_is_readable_usage_and_regeneration(self):
         result = subprocess.run([sys.executable, str(SCRIPT)], env=self.env,
                                 capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('codex: ok', result.stdout)
+        self.assertNotIn('grok:', result.stdout)
         self.assertIn('% used', result.stdout)
         self.assertIn('regenerates 5%', result.stdout)
         self.assertIn('% elapsed, within pace', result.stdout)
         self.assertNotIn(TOKEN, result.stdout + result.stderr)
 
-    def test_grok_refresh_and_provider_failure_isolation(self):
-        self.data['grok_statuses'] = [401, 200]
+    def test_provider_failure_isolation(self):
         self.data['fail_claude'] = True
         self.save()
         result = self.invoke()
-        self.assertEqual(result['grok']['status'], 'ok')
-        self.assertEqual(self.calls('grok'), 1)
         self.assertEqual(result['claude']['status'], 'unknown')
         self.assertEqual(result['codex']['status'], 'ok')
-
-    def test_grok_second_401_and_402(self):
-        for statuses, exhausted in [([401, 401], False), ([402], True)]:
-            with self.subTest(statuses=statuses):
-                self.data['grok_statuses'] = statuses
-                result = self.invoke('--refresh')['grok']
-                self.assertEqual(result['status'], 'unknown')
-                self.assertEqual(result.get('exhausted', False), exhausted)
-
-    def test_grok_api_key_and_custom_endpoint_are_unknown(self):
-        for key in ('XAI_API_KEY', 'XAI_BASE_URL'):
-            self.env[key] = 'custom'
-            self.assertEqual(self.invoke('--refresh')['grok']['status'], 'unknown')
-            del self.env[key]
-        (self.root / '.grok/config.toml').write_text('[api]\nbase_url = "https://custom.invalid"\n')
-        self.assertEqual(self.invoke('--refresh')['grok']['status'], 'unknown')
-
-    def test_grok_legacy_auth_missing_percentage_and_api_key_mode(self):
-        auth = self.root / '.grok/auth.json'
-        self.write('.grok/auth.json', {'https://accounts.x.ai/sign-in': {
-            'key': TOKEN, 'email': 'legacy@example.invalid'}})
-        del self.data['grok']['config']['creditUsagePercent']
-        self.save()
-        self.assertEqual(self.invoke()['grok']['windows'][0]['remainingPercent'], 100)
-        entry = json.loads(auth.read_text())
-        entry['https://accounts.x.ai/sign-in']['auth_mode'] = 'api_key'
-        auth.write_text(json.dumps(entry))
-        self.assertEqual(self.invoke()['grok']['status'], 'unknown')
 
     def test_claude_nested_model_windows(self):
         self.data['claude']['rate_limits']['model_scoped'] = self.data['claude'].pop('model_scoped')
@@ -424,15 +388,11 @@ closed()
 
     def test_rolling_and_unknown_length_windows_use_the_floor_alone(self):
         self.data['synthetic']['planWeeklyLimit']['percentRemaining'] = 8
-        self.data['grok']['config']['currentPeriod'].pop('start')
-        self.data['grok']['config']['creditUsagePercent'] = 95
         self.save()
         result = self.invoke()
         self.assertEqual(result['synthetic']['skipReason'], 'below floor')
-        self.assertEqual(result['grok']['skipReason'], 'below floor')
-        for provider in ('synthetic', 'grok'):
-            for entry in result[provider]['windows']:
-                self.assertIsNone(entry['elapsedPercent'])
+        for entry in result['synthetic']['windows']:
+            self.assertIsNone(entry['elapsedPercent'])
         self.data['synthetic']['planWeeklyLimit']['percentRemaining'] = 30
         self.save()
         self.assertFalse(self.invoke('--refresh')['synthetic']['skip'])
@@ -445,7 +405,6 @@ closed()
         durations = {w['label']: w.get('durationMins') for w in result['claude']['windows']}
         self.assertEqual(durations, {'five_hour': 300, 'seven_day': 10080,
                                      'seven_day_opus': 10080, 'Fable': 10080})
-        self.assertEqual(result['grok']['windows'][0]['durationMins'], 10080)
         for entry in result['synthetic']['windows']:
             self.assertNotIn('durationMins', entry)
 

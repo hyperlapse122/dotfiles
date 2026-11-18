@@ -35,17 +35,15 @@ let
   composer = pkgs.writeScriptBin "t3-instructions" (
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../scripts/t3-instructions.py
   );
-  grokAdapter = import ../../packages/t3-grok-instructions.nix { inherit pkgs; };
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
   additions = pkgs.runCommand "t3-instruction-additions" { } ''
     mkdir -p "$out"
-    for harness in claude codex pi antigravity grok; do
-      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s,"antigravity":%s,"grok":%s}' \
+    for harness in claude codex pi antigravity; do
+      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s,"antigravity":%s}' \
         "$([ "$harness" = claude ] && echo true || echo false)" \
         "$([ "$harness" = codex ] && echo true || echo false)" \
         "$([ "$harness" = pi ] && echo true || echo false)" \
-        "$([ "$harness" = antigravity ] && echo true || echo false)" \
-        "$([ "$harness" = grok ] && echo true || echo false)" > context.json
+        "$([ "$harness" = antigravity ] && echo true || echo false)" > context.json
       ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/$harness.md"
     done
   '';
@@ -96,11 +94,11 @@ let
           setupMode = "existing";
         };
       };
-      # The Grok Build CLI is installed by home/h82/agents/grok.nix.
+      # T3 Code recreates an enabled Grok instance from session history when
+      # the default instance is absent. Keep an explicit disable here.
       grok = {
         driver = "grok";
-        enabled = true;
-        config.binaryPath = "${grokAdapter}/bin/t3-grok-instructions";
+        enabled = false;
       };
       # OpenCode is gone, but the merge keeps undeclared fields, so this stays
       # declared to turn off the instance an earlier generation enabled.
@@ -147,9 +145,27 @@ let
   # the entry once every host has rebuilt past it.
   retiredKeys = [ ];
 
-  # Nested entries that used to be declared, retired the same way. An earlier
-  # generation hid OpenCode's text-generation alias here; prune drops the
+  # Nested entries previously written by this module.
   retiredPaths = [
+    {
+      path = [
+        "providerInstances"
+        "grok"
+      ];
+      key = "config";
+    }
+    {
+      path = [
+        "providerInstances"
+        "grok"
+      ];
+      key = "environment";
+    }
+    {
+      path = [ "providers" ];
+      key = "grok";
+      prune = true;
+    }
     {
       path = [ "providerInstances" ];
       key = "omp";
@@ -183,7 +199,7 @@ let
   instanceMigration = {
     from = "providers";
     to = "providerInstances";
-    kinds = lib.attrNames settings.providerInstances;
+    kinds = lib.remove "grok" (lib.attrNames settings.providerInstances);
   };
 
   # T3 Code writes a model selection whole, with options that belong to the
@@ -322,7 +338,7 @@ in
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"
-              for harness in claude codex pi antigravity grok; do
+              for harness in claude codex pi antigravity; do
                 install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
               done
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory}

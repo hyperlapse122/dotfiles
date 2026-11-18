@@ -8,7 +8,7 @@ import sys
 import tempfile
 
 DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
-              'antigravity': '.gemini/config/rules', 'grok': '.grok/AGENTS.md',
+              'antigravity': '.gemini/config/rules',
               'pi': '.pi/agent/AGENTS.md'}
 # Independent content receipts: negation, repetition, deletion and foreign text
 # all change the complete normative body, including its order. Claude Code gets

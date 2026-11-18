@@ -12,7 +12,6 @@
     Antigravity CLI, and T3 Code's Antigravity instances
                               ~/.gemini/antigravity-cli/skills/<name>
     Codex                     ~/.codex/skills/<name>
-    Grok                      ~/.grok/skills/<name>
     Pi                        ~/.pi/agent/skills/<name>
 
   Verifies, per Home Manager user:
@@ -129,7 +128,6 @@ let
     ".claude/skills"
     ".gemini/antigravity-cli/skills"
     ".codex/skills"
-    ".grok/skills"
     ".pi/agent/skills"
   ];
 

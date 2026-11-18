@@ -120,19 +120,9 @@ let
 
   codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
 
-  # Resolves the newest stable Grok Build CLI release and hashes its
-  # per-platform binaries, which xAI publishes no checksum for. Its network
-  # calls go through overridable commands so the sandboxed repository check
-  # can drive it with fixtures.
-  grokBuildRelease = pythonHelper "grok-build-release" ../scripts/grok-build-release;
-
-  # Reports every coding-agent provider's usage windows with a shared cache.
-  # Its readers call codex, grok, curl and a Node helper on the Claude
-  # Agent SDK, so the wrapper puts exactly those on PATH. Home Manager
-  # overrides the Synthetic key file per host kind. The
-  # Antigravity quota service lists Gemini buckets only for a current ACP
-  # client, so the wrapper names the version of the ACP runtime the pinned
-  # T3 Code embeds.
+  # Home Manager overrides the Synthetic key file per host kind.
+  # The Antigravity quota service lists Gemini buckets only for a current ACP
+  # client, so the wrapper names the ACP runtime version pinned by T3 Code.
   agentUsage = pkgs.lib.makeOverridable (
     {
       syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
@@ -142,7 +132,6 @@ let
       runtimePath = pkgs.lib.makeBinPath [
         (import ./codex.nix { inherit pkgs; })
         (import ./claude-code.nix { inherit pkgs; })
-        (import ./grok-build.nix { inherit pkgs; })
         pkgs.nodejs_24
         pkgs.curl
       ];
@@ -265,7 +254,6 @@ in
     preztoRelease
     piRelease
     codexRelease
-    grokBuildRelease
     agentUsage
     npmRelease
     antigravityCliRelease

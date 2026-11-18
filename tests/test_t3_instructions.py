@@ -33,20 +33,12 @@ class T3InstructionsTest(unittest.TestCase):
     def read(self):
         return json.loads(self.settings.read_text())
 
-    def test_grok_controls_and_client_hidden_choices_preserve_user_state(self):
-        self.write({'providerInstances': {'grok': {'config': {'local': True}, 'environment': [
-            {'name': 'grok_subagents', 'value': '1'}, {'name': 'KEEP', 'value': 'yes'}]}}})
+    def test_client_hidden_choices_preserve_user_state(self):
         client = self.settings.with_name('client-settings.json')
         client.write_text(json.dumps({'providerModelPreferences': {'pi': {
             'hiddenModels': ['user-hidden'], 'order': ['custom']}}}))
         for _ in range(2):
             self.module.apply(self.home, {})
-            grok = self.read()['providerInstances']['grok']
-            self.assertEqual(grok['config'], {'local': True})
-            self.assertEqual(grok['environment'], [
-                {'name': 'grok_subagents', 'value': '1'},
-                {'name': 'KEEP', 'value': 'yes'},
-                {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}])
             self.assertEqual(json.loads(client.read_text())['providerModelPreferences']['pi'], {
                 'hiddenModels': ['user-hidden', 'default'], 'order': ['custom']})
 
@@ -143,51 +135,6 @@ class T3InstructionsTest(unittest.TestCase):
         self.module.apply(self.home, {})
         args = self.module.tokenize(self.read()['providerInstances']['claudeAgent']['config']['launchArgs'])
         self.assertEqual(args.count('--disallowedTools=Agent'), 2)
-
-    def test_grok_legacy_entry_is_retired_only_once(self):
-        managed = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
-        updater = {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}
-        self.write({'providerInstances': {'grok': {'environment': [managed, updater]}}})
-        self.module.apply(self.home, {})
-        document = self.read()
-        self.assertNotIn(managed, document['providerInstances']['grok']['environment'])
-        document['providerInstances']['grok']['environment'].append(managed)
-        self.write(document)
-        self.module.apply(self.home, {})
-        self.assertIn(managed, self.read()['providerInstances']['grok']['environment'])
-
-    def test_grok_explicit_opt_out_without_the_legacy_pair_is_preserved(self):
-        user_entry = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
-        self.write({'providerInstances': {'grok': {'environment': [user_entry]}}})
-        for _ in range(2):
-            self.module.apply(self.home, {})
-            self.assertIn(user_entry, self.read()['providerInstances']['grok']['environment'])
-
-    def test_grok_migration_retries_after_an_interrupted_publication(self):
-        legacy = {'name': 'GROK_SUBAGENTS', 'value': '0', 'sensitive': False}
-        updater = {'name': 'GROK_DISABLE_AUTOUPDATER', 'value': '1', 'sensitive': False}
-        publish = self.module.publish
-        for settings_written in (False, True):
-            with self.subTest(settings_written=settings_written):
-                self.settings.with_name('dotfiles-launch-state.json').unlink(missing_ok=True)
-                self.write({'providerInstances': {'grok': {'environment': [legacy, updater]}}})
-
-                def interrupt_settings(path, document):
-                    if path != self.settings or settings_written:
-                        publish(path, document)
-                    if path == self.settings:
-                        raise KeyboardInterrupt
-
-                with patch.object(self.module, 'publish', interrupt_settings), self.assertRaises(KeyboardInterrupt):
-                    self.module.apply(self.home, {})
-                if settings_written:
-                    # A user can opt out again once the migration took effect.
-                    document = self.read()
-                    document['providerInstances']['grok']['environment'].append(legacy)
-                    self.write(document)
-                self.module.apply(self.home, {})
-                environment = self.read()['providerInstances']['grok']['environment']
-                self.assertEqual(legacy in environment, settings_written)
 
     def test_existing_context_is_composed_once_and_removal_restores_user_settings(self):
         codex = self.home / '.codex'

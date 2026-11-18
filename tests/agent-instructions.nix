@@ -29,7 +29,6 @@ let
   deliveries = {
     ".claude/CLAUDE.md" = "claude";
     ".codex/AGENTS.md" = "codex";
-    ".grok/AGENTS.md" = "grok";
     ".pi/agent/AGENTS.md" = "pi";
     ".gemini/config/rules" = "antigravity";
   };
@@ -38,6 +37,7 @@ let
     ".t3/instructions/claude-code/CLAUDE.md"
     ".gemini/GEMINI.md"
     ".gemini/config/AGENTS.md"
+    ".grok/AGENTS.md"
     ".grok/rules/instructions.md"
   ];
   homeFile =

@@ -1,6 +1,6 @@
 """Exercise native plugin activation in a disposable home.
 
-usage: native-plugins.py SCRIPT PLUGINS_JSON [--agy-only] [TEST ...]
+usage: native-plugins.py SCRIPT PLUGINS_JSON [--bare-installer] [TEST ...]
 PLUGINS_JSON contains plugin, source, and optionally pinned source paths.
 """
 import json
@@ -15,8 +15,8 @@ import unittest
 
 script = Path(sys.argv[1]).read_text()
 plugins = json.loads(Path(sys.argv[2]).read_text())
-agy_only = '--agy-only' in sys.argv[3:]
-sys.argv = [sys.argv[0]] + [arg for arg in sys.argv[3:] if arg != '--agy-only']
+bare_installer = '--bare-installer' in sys.argv[3:]
+sys.argv = [sys.argv[0]] + [arg for arg in sys.argv[3:] if arg != '--bare-installer']
 
 
 class NativePlugins(unittest.TestCase):
@@ -24,14 +24,14 @@ class NativePlugins(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
-        stub = self.home / 'native'
+        stub = self.home / 'agy'
         stub.write_text(f'#!{sys.executable}\n' + '''import json, os, pathlib, sys
 args = sys.argv[1:]
-with open(os.environ['CALLS_' + os.path.basename(sys.argv[0]).upper()], 'a') as stream:
+with open(os.environ['CALLS_AGY'], 'a') as stream:
     stream.write(json.dumps(args) + '\\n')
 if args[-2:] == ['list', '--json']: print('[]')
-if os.path.basename(sys.argv[0]) == 'agy': print('agy output: ' + ' '.join(args))
-if os.path.basename(sys.argv[0]) == 'agy' and args[:2] == ['plugin', 'install']:
+print('agy output: ' + ' '.join(args))
+if args[:2] == ['plugin', 'install']:
     if os.environ.get('FAIL_INSTALL'): sys.exit(1)
     name = json.loads(os.environ['PLUGIN_NAMES'])[args[2]]
     dest = pathlib.Path(os.environ['HOME']) / '.gemini/config/plugins' / name
@@ -39,12 +39,8 @@ if os.path.basename(sys.argv[0]) == 'agy' and args[:2] == ['plugin', 'install']:
     (dest / 'plugin.json').write_text('{}')
 ''')
         stub.chmod(0o755)
-        self.script = script
-        for cli in ('grok', 'agy'):
-            (self.home / cli).symlink_to(stub)
-            self.script = re.sub(rf'/nix/store/[^\s]+/bin/{cli}\b', str(self.home / cli), self.script)
+        self.script = re.sub(r'/nix/store/[^\s]+/bin/agy\b', str(stub), script)
         self.env = dict(os.environ, HOME=str(self.home),
-                        CALLS_GROK=str(self.home / 'grok-calls'),
                         CALLS_AGY=str(self.home / 'agy-calls'),
                         PLUGIN_NAMES=json.dumps({p['source']: p['plugin'] for p in plugins}))
         self.env.pop('DRY_RUN', None)
@@ -55,8 +51,8 @@ if os.path.basename(sys.argv[0]) == 'agy' and args[:2] == ['plugin', 'install']:
         return subprocess.run(['bash', '-eu', '-c', script or self.script],
                               env=dict(self.env, **env), text=True, capture_output=True)
 
-    def calls(self, cli='agy'):
-        path = self.home / f'{cli}-calls'
+    def calls(self):
+        path = self.home / 'agy-calls'
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
     def clear_calls(self):
@@ -79,9 +75,6 @@ if os.path.basename(sys.argv[0]) == 'agy' and args[:2] == ['plugin', 'install']:
             self.assertIn('agy output: ' + ' '.join(call), result.stdout)
         for p in plugins:
             self.assertTrue(self.record(p['source']), p)
-        if not agy_only:
-            self.assertTrue(any(c[:3] == ['plugin', 'install', '--trust'] for c in self.calls('grok')))
-            self.assertIn(['plugin', 'enable', 'compound-engineering'], self.calls('grok'))
 
     def test_tree_contents(self):
         for p in plugins:
@@ -154,7 +147,7 @@ if os.path.basename(sys.argv[0]) == 'agy' and args[:2] == ['plugin', 'install']:
         self.assertFalse(self.record(p['source']))
         self.assertFalse(self.record(changed))
 
-    @unittest.skipIf(agy_only, 'dry-run guard belongs to the activation wrapper')
+    @unittest.skipIf(bare_installer, 'dry-run guard belongs to the activation wrapper')
     def test_dry_run(self):
         result = self.run_activation(DRY_RUN='1')
         self.assertEqual(result.returncode, 0, result.stderr)

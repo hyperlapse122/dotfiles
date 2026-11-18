@@ -13,7 +13,6 @@
 let
   inherit (pkgs) lib;
   executeActivation = import ./lib/agent-activation.nix { inherit pkgs; };
-  grokAdapter = import ../packages/t3-grok-instructions.nix { inherit pkgs; };
 
   configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
 
@@ -77,6 +76,25 @@ let
     remove = [ ];
     removePaths = [
       {
+        path = [
+          "providerInstances"
+          "grok"
+        ];
+        key = "config";
+      }
+      {
+        path = [
+          "providerInstances"
+          "grok"
+        ];
+        key = "environment";
+      }
+      {
+        path = [ "providers" ];
+        key = "grok";
+        prune = true;
+      }
+      {
         path = [ "providerInstances" ];
         key = "omp";
       }
@@ -107,7 +125,6 @@ let
         "antigravity"
         "claudeAgent"
         "codex"
-        "grok"
         "opencode"
         "pi"
       ];
@@ -177,16 +194,7 @@ let
           "grok"
           "enabled"
         ];
-        value = true;
-      }
-      {
-        path = [
-          "providerInstances"
-          "grok"
-          "config"
-          "binaryPath"
-        ];
-        value = noContext "${grokAdapter}/bin/t3-grok-instructions";
+        value = false;
       }
       {
         path = [
