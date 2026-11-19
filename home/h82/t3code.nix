@@ -153,6 +153,12 @@ let
       mode = "conventional_commits";
       customInstructions = "";
     };
+    threadTitleInstructions = ''
+      Write the title as a Conventional Commit subject: type(scope): description or type: description.
+      Use a lowercase type and a short imperative description of the thread's goal, with no trailing period.
+      Examples: fix(auth): refresh expired tokens; chore: update dependencies.
+      When regenerating a title, correct the format even if the previous title names the right subject.
+    '';
     storageCleanup = {
       browserArtifactsAfterDays = 8;
       logsAfterDays = 8;
@@ -259,8 +265,19 @@ let
       model = "claude-opus-5-5";
     };
     textGenerationModelSelection = {
-      instanceId = "codex";
-      model = "gpt-6-luna";
+      instanceId = "opencode";
+      model = "anthropic/claude-haiku-5-5";
+      options = [
+        {
+          id = "variant";
+          value = "low";
+        }
+      ];
+    };
+    # Review guides require read-only checkout access, which OpenCode text generation lacks.
+    reviewGuideModelSelection = {
+      instanceId = "claudeAgent";
+      model = "claude-haiku-5-5";
     };
   };
 

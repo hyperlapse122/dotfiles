@@ -72,6 +72,12 @@ let
       linkedEnvironmentsEnabled = true;
       promptSuggestionsEnabled = true;
       snoozeLimitedThreads = true;
+      threadTitleInstructions = ''
+        Write the title as a Conventional Commit subject: type(scope): description or type: description.
+        Use a lowercase type and a short imperative description of the thread's goal, with no trailing period.
+        Examples: fix(auth): refresh expired tokens; chore: update dependencies.
+        When regenerating a title, correct the format even if the previous title names the right subject.
+      '';
     };
     remove = [ ];
     removePaths = [
@@ -360,8 +366,18 @@ let
         model = "claude-opus-5-5";
       };
       textGenerationModelSelection = {
-        instanceId = "codex";
-        model = "gpt-6-luna";
+        instanceId = "opencode";
+        model = "anthropic/claude-haiku-5-5";
+        options = [
+          {
+            id = "variant";
+            value = "low";
+          }
+        ];
+      };
+      reviewGuideModelSelection = {
+        instanceId = "claudeAgent";
+        model = "claude-haiku-5-5";
       };
     };
   };
@@ -378,13 +394,45 @@ let
       ];
       staleField = "remove me";
     };
-    textGenerationModelSelection = settingsExpectedBase.own.textGenerationModelSelection;
+    textGenerationModelSelection = {
+      instanceId = "codex";
+      model = "gpt-6-luna";
+      options = [
+        {
+          id = "reasoningEffort";
+          value = "high";
+        }
+      ];
+    };
+    reviewGuideModelSelection = {
+      instanceId = "claudeAgent";
+      model = "claude-opus-5-5";
+      options = [
+        {
+          id = "effort";
+          value = "max";
+        }
+      ];
+    };
+    threadTitleInstructions = "Use title case.";
+    sourceControlWriterModelSelection = {
+      instanceId = "claudeAgent";
+      model = "claude-opus-5-5";
+    };
+    speechPostProcessingModelSelection = {
+      instanceId = "codex";
+      model = "gpt-6-luna";
+    };
+    reviewGuidesEnabled = false;
     unrelated.keep = true;
     providerInstances.codex.config.env.KEEP = "yes";
-    projectSettingsOverrides.scratch.defaultModelSelection = {
-      instanceId = "codex";
-      model = "gpt-6.1-sol";
-      options = [ ];
+    projectSettingsOverrides.scratch = {
+      defaultModelSelection = {
+        instanceId = "codex";
+        model = "gpt-6.1-sol";
+        options = [ ];
+      };
+      threadTitleInstructions = "Use sentence case.";
     };
   };
 
@@ -511,9 +559,12 @@ let
             }
             // lib.optionalAttrs (merge.attr == "t3codeSettings") {
               seed = selectionSeed;
-              preservePaths = [
-                [ "unrelated" ]
-                [ "projectSettingsOverrides" ]
+               preservePaths = [
+                 [ "unrelated" ]
+                 [ "projectSettingsOverrides" ]
+                 [ "sourceControlWriterModelSelection" ]
+                 [ "speechPostProcessingModelSelection" ]
+                 [ "reviewGuidesEnabled" ]
                 [
                   "providerInstances"
                   "codex"

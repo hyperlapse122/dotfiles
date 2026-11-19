@@ -52,7 +52,6 @@ def validate(home):
     assert providers['custom-grok'] == {'driver': 'grok', 'enabled': False}
     assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.2-sol', 'options': [{'id': 'reasoningEffort', 'value': 'high'}, {'id': 'serviceTier', 'value': 'default'}]}
     assert settings['fallbackModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5'}
-    assert settings['textGenerationModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6-luna'}
     assert settings['defaultThreadEnvMode'] == 'worktree'
     client = json.loads((home / '.t3/userdata/client-settings.json').read_text())
     assert client['providerModelPreferences']['pi']['hiddenModels'] == [
