@@ -21,11 +21,16 @@ with tempfile.TemporaryDirectory() as directory:
     (agent / 'trust.json').write_text(trust)
     key = Path(directory) / 'key'
     key.write_text('FAKE-synthetic\n')
+    openai = Path(directory) / 'openai-key'
+    openai.write_text('FAKE-openai\n')
+    anthropic = Path(directory) / 'anthropic-key'
+    anthropic.write_text('FAKE-anthropic\n')
     plugin = Path(directory) / 'pinned-source'
     plugin.mkdir()
     (plugin / 'package.json').write_text(json.dumps({'name': 'compound-engineering', 'repository': 'https://github.com/EveryInc/compound-engineering-plugin'}))
     command = [sys.executable, sys.argv[2], '--agent', str(agent), '--plugin', str(plugin),
-               '--key', str(key), '--hide-model', f'synthetic/{hidden}']
+               '--key', str(key), '--credential', f'openai={openai}', '--credential', f'anthropic={anthropic}',
+               '--hide-model', f'synthetic/{hidden}']
     for _ in range(2):
         subprocess.run(command, check=True)
         settings = json.loads((agent / 'settings.json').read_text())
@@ -37,11 +42,44 @@ with tempfile.TemporaryDirectory() as directory:
         ids = [model['id'] for model in json.loads((agent / 'model-lock.json').read_text())['syntheticModelLocks']['models']]
         assert hidden in ids
         assert settings['defaultProvider'] == 'synthetic' and settings['defaultModel'] == min(set(ids) - {hidden})
-        assert settings['enabledModels'] == [f'synthetic/{model}' for model in ids if model != hidden]
+        assert settings['enabledModels'] == [f'synthetic/{model}' for model in ids if model != hidden] + ['openai/*', 'anthropic/*']
         auth = json.loads((agent / 'auth.json').read_text())
-        assert auth == {'other': {'type': 'api_key', 'key': 'FAKE-other'}, 'synthetic': {'type': 'api_key', 'key': 'FAKE-synthetic'}}
+        assert auth == {'other': {'type': 'api_key', 'key': 'FAKE-other'}, 'synthetic': {'type': 'api_key', 'key': 'FAKE-synthetic'},
+                        'openai': {'type': 'api_key', 'key': 'FAKE-openai'}, 'anthropic': {'type': 'api_key', 'key': 'FAKE-anthropic'}}
         assert (agent / 'auth.json').stat().st_mode & 0o777 == 0o600
     subprocess.run(['node', sys.argv[4], sys.argv[3], str(agent)], check=True)
+
+    plain = [sys.executable, sys.argv[2], '--agent', str(agent), '--plugin', str(plugin)]
+    subprocess.run(plain, check=True)
+    assert json.loads((agent / 'settings.json').read_text())['enabledModels'] == ['synthetic/*', 'openai/*', 'anthropic/*']
+
+    openai.unlink()
+    anthropic.write_text('FAKE-anthropic-rotated\n')
+    subprocess.run([sys.executable, sys.argv[2], '--agent', str(agent), '--auth-only', '--key', str(key),
+                    '--credential', f'openai={openai}', '--credential', f'anthropic={anthropic}'], check=True)
+    auth = json.loads((agent / 'auth.json').read_text())
+    assert auth['openai'] == {'type': 'api_key', 'key': 'FAKE-openai'}
+    assert auth['anthropic'] == {'type': 'api_key', 'key': 'FAKE-anthropic-rotated'}
+    assert auth['other'] == {'type': 'api_key', 'key': 'FAKE-other'}
+
+    before = (agent / 'auth.json').read_text()
+    for invalid in ('', 'two\nlines\n'):
+        anthropic.write_text(invalid)
+        failed = subprocess.run([sys.executable, sys.argv[2], '--agent', str(agent), '--auth-only', '--key', str(key),
+                                 '--credential', f'anthropic={anthropic}'], capture_output=True)
+        assert failed.returncode != 0
+        assert (agent / 'auth.json').read_text() == before
+    for malformed in ('openai', '=file', 'open/ai=file'):
+        failed = subprocess.run([sys.executable, sys.argv[2], '--agent', str(agent), '--auth-only', '--key', str(key),
+                                 '--credential', malformed], capture_output=True)
+        assert failed.returncode != 0, malformed
+        assert (agent / 'auth.json').read_text() == before
+    key.write_text('FAKE-synthetic-rotated\n')
+    anthropic.write_text('FAKE-anthropic-rotated\n')
+    subprocess.run([sys.executable, sys.argv[2], '--agent', str(agent), '--auth-only', '--key', str(key),
+                    '--credential', f'anthropic={anthropic}'], check=True)
+    assert json.loads((agent / 'auth.json').read_text())['synthetic'] == {'type': 'api_key', 'key': 'FAKE-synthetic-rotated'}
+
     (agent / 'auth.json').write_text('[]')
     assert subprocess.run(command, capture_output=True).returncode != 0
     assert (agent / 'auth.json').read_text() == '[]'
