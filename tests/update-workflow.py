@@ -116,6 +116,11 @@ if args[:2] == ['run', '.#synthetic-models-watch']:
     if c.get('catalog_change', True):
         pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new"}]}\n')
     sys.exit(1 if c.get('catalog_fetch_fail') else 0)
+if args[:2] == ['run', '.#opencode-go-models-watch']:
+    event('go-catalog-fetch')
+    if c.get('go_catalog_change', False):
+        pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new-go"}]}\n')
+    sys.exit(1 if c.get('go_catalog_fetch_fail') else 0)
 if args and args[0] == 'run': sys.exit(0)
 if args[:2] == ['eval', '--json']:
     group = args[2].removeprefix('.#')
@@ -127,7 +132,7 @@ if args[:2] == ['eval', '--json']:
 if args and args[0] in ('fmt', 'flake', 'build'):
     scope = 'catalogs' if pathlib.Path.cwd().name == 'catalogs' else 'dependencies'
     if scope == 'catalogs':
-        assert {a for a in args if a.startswith('.#')} == {'.#checks.x86_64-linux.pi', '.#checks.x86_64-linux.synthetic-models'}, 'catalog verification targets changed'
+        assert {a for a in args if a.startswith('.#')} == {'.#checks.x86_64-linux.pi', '.#checks.x86_64-linux.synthetic-models', '.#checks.x86_64-linux.opencode-go-models-watch'}, 'catalog verification targets changed'
     if scope == 'catalogs' or args[0] == 'fmt': count(scope + '-round')
     round = int((root / (scope + '-round')).read_text())
     event('verify', scope=scope, command=args[0], args=args, round=round, sha=git('rev-parse', 'HEAD'))
@@ -205,6 +210,7 @@ class Fixture:
             'tracked.txt': 'base dependency\n',
             'flake.nix': '{\n  inputs.compound-engineering-plugin.url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v2.67.0";\n}\n',
             'home/h82/agents/synthetic-catalog.json': '{"data":[{"id":"old"}]}\n',
+            'home/h82/agents/opencode-go-catalog.json': '{"data":[{"id":"old-go"}]}\n',
             'scripts/ci-update-publish': publisher,
             'scripts/ci-update-verify': verifier,
         }
@@ -384,6 +390,7 @@ def behavioral_tests(workflow, publisher, verifier):
             other = 'dependency-update' if selected == 'catalog-fetch' else 'catalog-fetch'
             require(bool(f.events_of(selected)) if selected else not f.job_ran, 'manual selection did not run its part')
             require(not f.events_of(other), 'manual selection ran another producer')
+            require(bool(f.events_of('go-catalog-fetch')) == (part == 'catalogs'), 'the Go catalog refresh follows the catalogs selection')
             require(f.expression(workflow['jobs']['watch']['if']) == (part == 'drift'), 'drift selection gate is wrong')
         exercise(workflow, publisher, verifier, 'manual ' + part, selection, part=part)
     exercise(workflow, publisher, verifier, 'scheduled all-parts run', happy, part='', event='schedule')
@@ -403,6 +410,31 @@ def behavioral_tests(workflow, publisher, verifier):
     exercise(workflow, publisher, verifier, 'catalog fetch failure does not block dependencies', catalog_failure, catalog_fetch_fail=True)
     exercise(workflow, publisher, verifier, 'missing catalog key does not block dependencies', catalog_failure, missing_catalog_key=True)
     exercise(workflow, publisher, verifier, 'catalog verification failure does not block dependencies', catalog_failure, verify_fail='catalogs')
+    def go_catalog_published(f):
+        require(f.ok, 'a successful Go catalog refresh failed the workflow')
+        require('new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'Go snapshot was not published')
+        require('old' in f.remote('home/h82/agents/synthetic-catalog.json'), 'an unchanged Synthetic snapshot was rewritten')
+        require(f.events_of('go-catalog-fetch') and f.events_of('verify'), 'Go snapshot change was not verified')
+        require(any('opencode-go-models-watch' in a for e in f.events_of('verify') if e['scope'] == 'catalogs' for a in e['args']), 'Go check is not a catalog verification target')
+        verify_before_push(f)
+    exercise(workflow, publisher, verifier, 'a Go snapshot change alone publishes after verification', go_catalog_published, part='catalogs', catalog_change=False, deps_change=False, go_catalog_change=True)
+    def both_catalogs(f):
+        require(f.ok, 'both catalog refreshes failed the workflow')
+        require('new' in f.remote('home/h82/agents/synthetic-catalog.json') and 'new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'a catalog snapshot was not published')
+        log = f.call('--git-dir', str(f.origin), 'log', '--format=%s', f'{f.base}..main').splitlines()
+        require('chore(agents): refresh the synthetic catalog snapshot' in log and 'chore(agents): refresh the opencode go catalog snapshot' in log, 'each snapshot needs its own commit')
+        verify_before_push(f)
+    exercise(workflow, publisher, verifier, 'both catalog snapshots publish as separate commits', both_catalogs, part='catalogs', go_catalog_change=True)
+    def go_catalog_failure(f):
+        require(not f.ok, 'Go catalog failure was hidden')
+        require('old-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'failed Go catalog leaked')
+        require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'Go catalog failure blocked the Synthetic snapshot')
+        require('updated dependency' in f.remote('tracked.txt'), 'Go catalog failure blocked dependency publication')
+    exercise(workflow, publisher, verifier, 'Go catalog failure does not block the other updates', go_catalog_failure, go_catalog_fetch_fail=True, go_catalog_change=True)
+    def synthetic_failure_keeps_go(f):
+        require(not f.ok, 'catalog failure was hidden')
+        require('new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'Synthetic failure blocked the Go snapshot')
+    exercise(workflow, publisher, verifier, 'Synthetic failure does not block the Go snapshot', synthetic_failure_keeps_go, part='catalogs', catalog_fetch_fail=True, go_catalog_change=True)
     def dependency_failure(f):
         require(not f.ok, 'dependency failure was hidden')
         require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'dependency failure blocked catalog publication')
@@ -545,7 +577,7 @@ def mutation_tests(workflow, publisher, verifier):
     def no_duplicate_push(f):
         require(not f.events_of('push-attempt'), 'already-applied snapshot reached push')
     def selected_only(f):
-        require(not f.events_of('catalog-fetch'), 'manual dependencies ran catalogs')
+        require(not f.events_of('catalog-fetch') and not f.events_of('go-catalog-fetch'), 'manual dependencies ran catalogs')
 
     for name, before, after, expected in [
         ('aggregate flake build', 'check --no-build', 'check', 'bounded dependency verification exhausted runner disk'),

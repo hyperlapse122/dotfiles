@@ -30,6 +30,12 @@ let
       file = "openrouter_api_key";
       option = "my.cliAuth.enableOpenRouterApiKey";
     }
+    {
+      label = "OpenCode Go";
+      match = "opencode_go";
+      file = "opencode_go_api_key";
+      option = "my.cliAuth.enableOpencodeGoApiKey";
+    }
   ];
 
   # One production configuration re-evaluated with each key option forced

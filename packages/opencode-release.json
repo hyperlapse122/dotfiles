@@ -1,0 +1,15 @@
+{
+  "version": "2.3.2",
+  "platforms": {
+    "x86_64-linux": {
+      "asset": "opencode-linux-x64.tar.gz",
+      "sha256": "563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0",
+      "hash": "sha256-VjtdZjY3ImtuO7S7aAMoG8ObDSzYjbBtZ0tkIKqwCbA="
+    },
+    "aarch64-darwin": {
+      "asset": "opencode-darwin-arm64.zip",
+      "sha256": "31ab5a06a29edc7e49b895f35c2b64ebfe7c7f0437b0f2581b006efcd79fee1a",
+      "hash": "sha256-MataBqKe3H5JuJXzXCtk6/58fwQ3sPJYGwBu/Nef7ho="
+    }
+  }
+}

@@ -23,7 +23,7 @@ let
 
   pythonHelper = name: src: helperWith name src pkgs.python3;
 
-  # The two catalog scripts import scripts/catalog_snapshot.py from their own
+  # The catalog scripts import scripts/catalog_snapshot.py from their own
   # directory, so each is installed beside it under libexec and linked into
   # bin.
   catalogHelper =
@@ -137,6 +137,12 @@ let
 
   codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
 
+  # Resolves the newest stable OpenCode v2 release from the GitHub release list.
+  opencodeRelease = pythonHelper "opencode-release" ../scripts/opencode-release;
+
+  # Seeds OpenCode's credential store from the published API key files.
+  opencodeAuthSync = pythonHelper "opencode-auth-sync" ../scripts/opencode-auth-sync;
+
   # Home Manager overrides the Synthetic key file per host kind.
   agentUsage = pkgs.lib.makeOverridable (
     {
@@ -190,6 +196,10 @@ let
   # Synthetic's catalog, and rewrites the committed Synthetic catalog snapshot.
   syntheticModelsWatch = catalogHelper "synthetic-models-watch" ../scripts/synthetic-models-watch;
 
+  # Rewrites the committed OpenCode Go catalog snapshot from Go's public model
+  # list.
+  opencodeGoModelsWatch = catalogHelper "opencode-go-models-watch" ../scripts/opencode-go-models-watch;
+
   # Pins the Android SDK packages from Google's repository XML. It is Ruby
   # because it vendors nixpkgs' androidenv update.rb, which parses with
   # nokogiri.
@@ -214,10 +224,13 @@ in
     preztoRelease
     piRelease
     codexRelease
+    opencodeRelease
+    opencodeAuthSync
     agentUsage
     npmRelease
     t3codeRelease
     syntheticModelsWatch
+    opencodeGoModelsWatch
     androidSdkRelease
     serveHtml
     ;

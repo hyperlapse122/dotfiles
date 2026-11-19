@@ -30,6 +30,7 @@ let
     ".claude/CLAUDE.md" = "claude";
     ".codex/AGENTS.md" = "codex";
     ".pi/agent/AGENTS.md" = "pi";
+    ".config/opencode/AGENTS.md" = "opencode";
   };
   deliveryPaths = lib.attrNames deliveries;
   retiredPaths = [

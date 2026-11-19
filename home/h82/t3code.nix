@@ -2,7 +2,8 @@
   T3 Code, one artifact per trait: my.t3.cli.enable installs the
   headless `t3` CLI and my.t3.desktop.enable the desktop app. Its Claude
   and Codex sessions run the flake's own claude and codex with their
-  user-level settings, so nothing here adds a copy of either. The T3 Code
+  user-level settings, so nothing here adds a copy of either. OpenCode and Pi
+  run the flake's own builds through the user profile. The T3 Code
   declared settings are merged into its
   own settings files on activation.
 
@@ -34,20 +35,49 @@ let
 
   retiredAntigravityBinary = "${profileDirectory}/bin/agy_acp_server.par";
 
+  # OpenCode has no launch option for extra instructions, and a global
+  # `instructions` entry would reach sessions outside T3 Code. T3 Code starts
+  # its server with OPENCODE_CONFIG_CONTENT taken from the instance's
+  # environment, so the T3-only branch is listed there, which only T3 sessions
+  # see. The merge replaces this one entry by name and keeps the instance's
+  # other environment entries.
+  opencodeInstructions = {
+    path = [
+      "providerInstances"
+      "opencode"
+      "environment"
+    ];
+    key = "name";
+    value = {
+      name = "OPENCODE_CONFIG_CONTENT";
+      value = builtins.toJSON {
+        instructions = [ "${config.home.homeDirectory}/.t3/userdata/instructions/opencode.md" ];
+      };
+      sensitive = false;
+    };
+  };
+
   # Launch additions share the native account homes and baseline instructions.
   composer = pkgs.writeScriptBin "t3-instructions" (
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../scripts/t3-instructions.py
   );
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
+  harnesses = [
+    "claude"
+    "codex"
+    "pi"
+    "opencode"
+  ];
   additions = pkgs.runCommand "t3-instruction-additions" { } ''
     mkdir -p "$out"
-    for harness in claude codex pi; do
-      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s}' \
-        "$([ "$harness" = claude ] && echo true || echo false)" \
-        "$([ "$harness" = codex ] && echo true || echo false)" \
-        "$([ "$harness" = pi ] && echo true || echo false)" > context.json
-      ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/$harness.md"
-    done
+    ${lib.concatMapStrings (harness: ''
+      printf '%s' ${
+        lib.escapeShellArg (
+          builtins.toJSON ({ t3 = true; } // lib.genAttrs harnesses (name: name == harness))
+        )
+      } > context.json
+      ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/${harness}.md"
+    '') harnesses}
   '';
   settings = {
     addProjectBaseDirectory = "~/src";
@@ -102,11 +132,13 @@ let
         driver = "grok";
         enabled = false;
       };
-      # OpenCode is gone, but the merge keeps undeclared fields, so this stays
-      # declared to turn off the instance an earlier generation enabled.
+      # The managed build in the shared user profile, not whichever opencode
+      # comes first on PATH.
       opencode = {
         driver = "opencode";
-        enabled = false;
+        enabled = true;
+        config.enabled = true;
+        config.binaryPath = "${profileDirectory}/bin/opencode";
       };
       # Pi resolves to the restored native wrapper in the shared user profile.
       pi = {
@@ -186,11 +218,6 @@ let
       path = [ "providerInstances" ];
       key = "omp-codex";
     }
-    {
-      path = [ "providerModelPreferences" ];
-      key = "opencode";
-      prune = true;
-    }
   ];
 
   # providers is the retired per-kind block T3 Code moves into
@@ -264,6 +291,7 @@ let
       remove ? [ ],
       removePaths ? [ ],
       prefixEntries ? [ ],
+      upsertPaths ? [ ],
       migrateInstances ? null,
       ownEntries ? [ ],
     }:
@@ -275,6 +303,7 @@ let
     }
     // lib.optionalAttrs (removePaths != [ ]) { inherit removePaths; }
     // lib.optionalAttrs (prefixEntries != [ ]) { inherit prefixEntries; }
+    // lib.optionalAttrs (upsertPaths != [ ]) { inherit upsertPaths; }
     // lib.optionalAttrs (ownEntries != [ ]) { inherit ownEntries; }
     // lib.optionalAttrs (migrateInstances != null) { inherit migrateInstances; };
   merges = {
@@ -287,6 +316,7 @@ let
           owned = modelSelections;
           remove = retiredKeys;
           removePaths = retiredPaths;
+          upsertPaths = [ opencodeInstructions ];
           migrateInstances = instanceMigration;
         })
       );
@@ -345,7 +375,7 @@ in
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"
-              for harness in claude codex pi; do
+              for harness in ${toString harnesses}; do
                 install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
               done
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory} ${hiddenPiModelArgs}

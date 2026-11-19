@@ -94,6 +94,11 @@ in
       default = false;
       description = "Decrypt openrouter_api_key from secrets/tokens.yaml for Pi's OpenRouter provider, which reads it at run time.";
     };
+    enableOpencodeGoApiKey = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Decrypt opencode_go_api_key from secrets/tokens.yaml for OpenCode's OpenCode Go provider, which activation imports into OpenCode's credential store.";
+    };
   };
   config = lib.mkMerge [
     {
@@ -151,6 +156,7 @@ in
                   ++ lib.optional cfg.enableSyntheticApiKey "synthetic_api_key"
                   ++ lib.optional cfg.enableExaApiKey "exa_api_key"
                   ++ lib.optional cfg.enableOpenRouterApiKey "openrouter_api_key"
+                  ++ lib.optional cfg.enableOpencodeGoApiKey "opencode_go_api_key"
                 ))
                 (name: {
                   key = lib.removePrefix "cli-auth/" name;

@@ -11,6 +11,7 @@
     Claude Code               ~/.claude/skills/<name>
     Codex                     ~/.codex/skills/<name>
     Pi                        ~/.pi/agent/skills/<name>
+    OpenCode                  ~/.config/opencode/skills/<name>
 
   Verifies, per Home Manager user:
   - each delivery has one enabled home.file per skill; tests/korean-skills.nix
@@ -128,6 +129,7 @@ let
     ".claude/skills"
     ".codex/skills"
     ".pi/agent/skills"
+    ".config/opencode/skills"
   ];
 
   registry = import ../home/h82/agents/pinned-skills-pin.nix;

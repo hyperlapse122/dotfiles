@@ -279,11 +279,14 @@
         codex-release = agentTools.codexRelease;
         codex-agents = agentTools.codexAgents;
         codex = import ./packages/codex.nix { inherit pkgs; };
+        opencode-release = agentTools.opencodeRelease;
+        opencode = import ./packages/opencode.nix { inherit pkgs; };
         npm-release = agentTools.npmRelease;
         acpx = import ./packages/acpx.nix { inherit pkgs; };
         tanstack-intent = import ./packages/tanstack-intent.nix { inherit pkgs; };
         t3code-release = agentTools.t3codeRelease;
         synthetic-models-watch = agentTools.syntheticModelsWatch;
+        opencode-go-models-watch = agentTools.opencodeGoModelsWatch;
         t3code = import ./packages/t3code.nix { inherit pkgs; };
         t3code-cli = import ./packages/t3code-cli.nix { inherit pkgs; };
         android-sdk-release = agentTools.androidSdkRelease;
@@ -422,6 +425,7 @@
           claude = import ./tests/claude.nix { inherit pkgs self; };
           codex = import ./tests/codex.nix { inherit pkgs self; };
           codex-settings = import ./tests/codex-settings.nix { inherit pkgs self; };
+          opencode = import ./tests/opencode.nix { inherit pkgs self; };
           cargo-settings = import ./tests/cargo-settings.nix {
             inherit pkgs self;
             fixtures = [ ];
@@ -571,6 +575,12 @@
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
+          opencode-release =
+            pythonScriptCheck "opencode-release" ./scripts/opencode-release
+              ./tests/test_opencode_release.py;
+          opencode-auth-sync =
+            pythonScriptCheck "opencode-auth-sync" ./scripts/opencode-auth-sync
+              ./tests/test_opencode_auth_sync.py;
           # The Claude helper runs against the pinned SDK with real Node, so the
           # check carries both instead of letting that test skip.
           agent-usage =
@@ -604,6 +614,18 @@
                 export SYNTHETIC_MODELS_SOURCE_JSON=${realSource}
               '';
             } "synthetic-models-watch" ./scripts/synthetic-models-watch ./tests/test_synthetic_models_watch.py;
+          opencode-go-models-watch =
+            pythonScriptCheckWith
+              {
+                modules = [ ./scripts/catalog_snapshot.py ];
+                setup = ''
+                  mkdir -p home/h82/agents
+                  cp ${./home/h82/agents/opencode-go-catalog.json} home/h82/agents/opencode-go-catalog.json
+                '';
+              }
+              "opencode-go-models-watch"
+              ./scripts/opencode-go-models-watch
+              ./tests/test_opencode_go_models_watch.py;
           # Drives the packaged helper, so a package that lost nokogiri from its
           # interpreter fails here rather than in the update workflow.
           android-sdk-release =

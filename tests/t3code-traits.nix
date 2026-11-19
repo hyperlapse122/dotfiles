@@ -121,11 +121,6 @@ let
         path = [ "providerInstances" ];
         key = "omp-codex";
       }
-      {
-        path = [ "providerModelPreferences" ];
-        key = "opencode";
-        prune = true;
-      }
     ];
     migrateInstances = {
       from = "providers";
@@ -218,7 +213,25 @@ let
           "opencode"
           "enabled"
         ];
-        value = false;
+        value = true;
+      }
+      {
+        path = [
+          "providerInstances"
+          "opencode"
+          "config"
+          "enabled"
+        ];
+        value = true;
+      }
+      {
+        path = [
+          "providerInstances"
+          "opencode"
+          "config"
+          "binaryPath"
+        ];
+        value = "@OPENCODE@";
       }
       {
         path = [
@@ -396,6 +409,7 @@ let
 
   profileBinaries = {
     "@PI@" = "pi";
+    "@OPENCODE@" = "opencode";
   };
 
   merges = [
@@ -453,6 +467,23 @@ let
                       else
                         row
                     ) merge.contract.removePaths;
+                    upsertPaths = [
+                      {
+                        path = [
+                          "providerInstances"
+                          "opencode"
+                          "environment"
+                        ];
+                        key = "name";
+                        value = {
+                          name = "OPENCODE_CONFIG_CONTENT";
+                          value = builtins.toJSON {
+                            instructions = [ "${user.home.homeDirectory}/.t3/userdata/instructions/opencode.md" ];
+                          };
+                          sensitive = false;
+                        };
+                      }
+                    ];
                     migrateInstances = merge.contract.migrateInstances // {
                       retireAntigravity = {
                         profileBinary = noContext "${
@@ -710,20 +741,14 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
 
     [ "$attr" = t3codeSettings ] || return 0
     [ "$full" = true ] || return 0
-    checkOpencodeDisabled "$name" "$merger" "$declared"
+    checkOpencodeEnabled "$name" "$merger" "$declared"
   }
 
-  # Merges the declared document into a settings.json that holds an enabled
-  # opencode instance and OpenCode's hidden-model preference with the real
-  # merger: the merged file must hold the instance disabled and the preference
-  # gone, also on a second run, and keep the keys the declaration does not
-  # touch. $2 is the packaged merger and $3 the declaration the activation
-  # passed it.
-  checkOpencodeDisabled() {
+  checkOpencodeEnabled() {
     local name=$1 realMerger=$2 declared=$3
-    if ! python3 -I ${./t3code-opencode-disabled.py} "$realMerger" "$declared" 2> opencode-disabled.log; then
-      echo "$name: the merged settings.json does not hold the opencode instance disabled:" >&2
-      cat opencode-disabled.log >&2
+    if ! python3 -I ${./t3code-opencode-enabled.py} "$realMerger" "$declared" 2> opencode-enabled.log; then
+      echo "$name: the merged settings.json does not hold the opencode instance enabled:" >&2
+      cat opencode-enabled.log >&2
       fail=1
     fi
   }

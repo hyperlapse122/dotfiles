@@ -85,6 +85,7 @@ EOF
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
+  printf '{"version": "2.3.1", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
   printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
   printf '{"version": "1.4.0", "agents": []}\n' >"$clone/packages/pi-agents.json"
   printf '{"version": "0.20.0"}\n' >"$clone/packages/acpx-release.json"
@@ -178,6 +179,14 @@ case "\$*" in
     fi
     printf '{"version": "0.0.47"}\n' >packages/t3code-release.json
     ;;
+  "run .#opencode-release -- --output packages/opencode-release.json")
+    if [[ " \${FAIL_SOFT:-} " == *" opencode "* ]]; then
+      printf '{"version": "partial' >packages/opencode-release.json
+      echo "opencode-release: release v2.3.3 lists 0 opencode-linux-x64.tar.gz assets" >&2
+      exit 1
+    fi
+    printf '{"version": "2.3.2", "platforms": {}}\n' >packages/opencode-release.json
+    ;;
   "run .#overlay-release -- --output packages/bun-pin.json"|"run .#overlay-release -- --output packages/overlay-fonts.json")
     echo "\$*" >>"$clone/overlay-calls.log"
     ;;
@@ -270,6 +279,8 @@ grep -q '"2.1.0"' "$clone/packages/claude-code-manifest.json" &&
   fail "update step did not update the Claude Code pin and its agent catalog together"
 grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
+grep -q '"2.3.2"' "$clone/packages/opencode-release.json" ||
+  fail "update step did not update packages/opencode-release.json"
 grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
   fail "update step did not update packages/pi-release.json"
 grep -q '"1.5.0"' "$clone/packages/pi-agents.json" &&
@@ -286,9 +297,9 @@ grep -q '"9.9.9"' "$clone/packages/claude-agent-sdk-release.json" &&
 [[ $(wc -l <"$clone/overlay-calls.log") == 2 ]] || fail 'missing imported pin updater'
 pass 'the update step runs flake update, compound-engineering-plugin pin/lock update, and all release updaters'
 
-read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code pi acpx claude-agent-sdk codex")"
+read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code opencode pi acpx claude-agent-sdk codex")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
-for title in "ChatGPT update skipped" "T3 Code update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped"; do
+for title in "ChatGPT update skipped" "T3 Code update skipped" "OpenCode update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped"; do
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
@@ -297,6 +308,7 @@ grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm6
 [[ -z $("$git_bin" -C "$clone" status --porcelain \
   packages/chatgpt-version.json \
   packages/t3code-release.json \
+  packages/opencode-release.json \
   packages/pi-release.json \
   packages/acpx-release.json \
   packages/acpx/package-lock.json \
@@ -304,7 +316,7 @@ grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm6
   packages/claude-agent-sdk/package-lock.json \
   packages/codex-release.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
-pass 'soft-failing updaters (chatgpt, t3code, pi, acpx, claude-agent-sdk, codex) warn, restore their files, and let the step continue'
+pass 'soft-failing updaters (chatgpt, t3code, opencode, pi, acpx, claude-agent-sdk, codex) warn, restore their files, and let the step continue'
 
 for failing in claude-code:claude-code-release claude-code-agents:claude-code-agents; do
   command=${failing#*:} failing=${failing%%:*}
@@ -382,6 +394,7 @@ printf '{"version": "1.5.0", "agents": []}\n' >"$clone/packages/pi-agents.json"
 printf '{"version": "0.51.0"}\n' >"$clone/packages/codex-release.json"
 printf '{"version": "0.51.0", "agents": []}\n' >"$clone/packages/codex-agents.json"
 printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
+printf '{"version": "2.3.2", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
 printf '{"version": "2.1.0"}\n' >"$clone/packages/claude-code-manifest.json"
 printf '{"version": "2.1.0", "agents": [{"agentType": "Explore"}]}\n' >"$clone/packages/claude-code-agents.json"
 printf '{"lockfileVersion": 3, "name": "acpx", "new": true}\n' >"$clone/packages/acpx/package-lock.json"
@@ -392,7 +405,7 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
   fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
 commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 7 ]] || fail "expected 7 per-pin commits, found: $commits"
+[[ $(wc -l <<<"$commits") == 8 ]] || fail "expected 8 per-pin commits, found: $commits"
 for expected in \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
   'chore(packages): bump pi to 1.5.0|packages/pi-agents.json packages/pi-release.json' \
@@ -400,6 +413,7 @@ for expected in \
   'chore(packages): bump claude-code to 2.1.0|packages/claude-code-agents.json packages/claude-code-manifest.json' \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
+  'chore(packages): bump opencode to 2.3.2|packages/opencode-release.json' \
   'chore(agents): bump compound-engineering to compound-engineering-v2.68.0|flake.lock flake.nix home/h82/agents/agent-plugin-pins.nix'; do
   subject=${expected%%|*} want=${expected#*|}
   sha=$(awk -v s="$subject" '{ sha = $1; sub(/^[^ ]+ /, "") } $0 == s { print sha }' <<<"$commits")
@@ -407,6 +421,6 @@ for expected in \
   files=$("$git_bin" -C "$clone" show --format= --name-only "$sha" | sort | paste -sd ' ')
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
-pass 'the Prezto, claude-code, t3code, pi, acpx, and compound-engineering changes each land as their own commit with only their files'
+pass 'the Prezto, claude-code, t3code, opencode, pi, acpx, and compound-engineering changes each land as their own commit with only their files'
 
 python3 "$runner" "$workflow" "$publisher" "$verifier"

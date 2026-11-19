@@ -299,6 +299,7 @@ let
         ".claude/skills"
         ".codex/skills"
         ".pi/agent/skills"
+        ".config/opencode/skills"
       ];
       koreanNames = [
         "humanizer"
@@ -352,6 +353,7 @@ let
         ".claude/skills"
         ".codex/skills"
         ".pi/agent/skills"
+        ".config/opencode/skills"
       ];
       xcodeStep = name: activation.${name} or { };
       xcodeLines =

@@ -38,6 +38,16 @@ def validate(home):
     assert providers['pi']['enabled'] is True
     assert pi.count('--approve') == 1
     assert providers['pi']['config']['binaryPath'].endswith('/bin/pi')
+    opencode = providers['opencode']
+    assert opencode['enabled'] is True and opencode['config']['enabled'] is True
+    assert opencode['config']['binaryPath'].endswith('/bin/opencode')
+    assert 'launchArgs' not in opencode['config'], 'OpenCode has no launch option for the additions'
+    content = [e for e in opencode['environment'] if e['name'] == 'OPENCODE_CONFIG_CONTENT']
+    assert len(content) == 1 and content[0]['sensitive'] is False
+    listed = json.loads(content[0]['value'])['instructions']
+    relative = '.t3/userdata/instructions/opencode.md'
+    assert len(listed) == 1 and listed[0].endswith('/' + relative), listed
+    assert (home / relative).read_text() == addition
     assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
     assert providers['custom-grok'] == {'driver': 'grok', 'enabled': False}
     assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.2-sol', 'options': [{'id': 'reasoningEffort', 'value': 'high'}, {'id': 'serviceTier', 'value': 'default'}]}

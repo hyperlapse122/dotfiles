@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Snapshot the OpenCode Go model catalog.
+
+Fetches OpenCode Go's public model list, which answers without a key, and
+prints a snapshot to stdout, or with `--snapshot FILE` rewrites the committed
+snapshot and leaves FILE untouched unless the content changes. The snapshot
+keeps every well-formed row, sorted by `id`, trimmed to the fields the
+provider render reads: `id`, `name`, `limit`, and the text prices of `cost`
+(input, output, and cache read) when the row has one. A row whose `cost` lacks
+a numeric price the render needs is malformed, so it never reaches the
+snapshot and breaks evaluation of every host that reads it.
+
+A malformed row is skipped with a warning naming it on stderr, keeping its
+previous entry from FILE when one exists. A fetch that fails is retried once
+after a wait. It refuses to write, and exits non-zero, when the fetch fails
+twice, when no row is left, or when the valid rows shrink below the retention
+floor of FILE.
+
+`--catalog FILE` reads the list from a JSON file instead of fetching it.
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+
+# The shared module sits beside this script, also when a test loads it by
+# path or Python runs it isolated.
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from catalog_snapshot import (  # noqa: E402
+    Failure,
+    check_shrink_floor,
+    existing_rows,
+    is_int,
+    read_json,
+    run_fetch,
+    write_if_changed,
+)
+
+DEFAULT_URL = "https://opencode.ai/inference/go/v1/models"
+DEFAULT_RETRY_WAIT = 30
+
+
+def fetch(url, retry_wait):
+    """Return the catalog body, retrying once after a wait."""
+    for attempt in (1, 2):
+        proc = run_fetch(url, "", "OPENCODE_GO_API_KEY")
+        if proc.returncode == 0:
+            try:
+                return json.loads(proc.stdout)
+            except json.JSONDecodeError:
+                problem = "a body that is not JSON"
+        else:
+            problem = f"status {proc.returncode}"
+            reason = proc.stderr.strip().splitlines()[-1:] if proc.stderr else []
+            if reason:
+                problem += f" ({reason[0]})"
+        print(f"opencode-go-models-watch: fetching {url} attempt {attempt}: {problem}", file=sys.stderr)
+        if attempt == 1:
+            time.sleep(retry_wait)
+    raise Failure(f"fetching {url} failed twice")
+
+
+def is_price(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def text_cost(model_id, cost):
+    """The input, output, and cache-read prices of a row's text cost."""
+    text = cost.get("text") if isinstance(cost, dict) else None
+    source_in = text.get("input") if isinstance(text, dict) else None
+    source_out = text.get("output") if isinstance(text, dict) else None
+    if not isinstance(source_in, dict) or not is_price(source_in.get("price")):
+        raise Failure(f"catalog entry {model_id} has no numeric text input price")
+    if not isinstance(source_out, dict) or not is_price(source_out.get("price")):
+        raise Failure(f"catalog entry {model_id} has no numeric text output price")
+    kept = {"input": {"price": source_in["price"]}, "output": {"price": source_out["price"]}}
+    cache = source_in.get("cache")
+    if cache is not None:
+        if not isinstance(cache, dict) or not is_price(cache.get("read")):
+            raise Failure(f"catalog entry {model_id} has no numeric text cache read price")
+        kept["input"]["cache"] = {"read": cache["read"]}
+    return kept
+
+
+def snapshot_row(row):
+    """The trimmed row for one catalog entry, or a Failure naming the bad field."""
+    model_id = row.get("id") if isinstance(row, dict) else None
+    if not isinstance(model_id, str) or model_id == "":
+        raise Failure(f"catalog entry {json.dumps(row)[:120]} has no valid id")
+    name = row.get("name")
+    if not isinstance(name, str) or name == "":
+        raise Failure(f"catalog entry {model_id} has no valid name")
+    limit = row.get("limit")
+    if not isinstance(limit, dict) or not is_int(limit.get("context")) or not is_int(limit.get("output")):
+        raise Failure(f"catalog entry {model_id} has no valid limit")
+    kept = {
+        "id": model_id,
+        "name": name,
+        "limit": {"context": limit["context"], "output": limit["output"]},
+    }
+    cost = row.get("cost")
+    if cost is not None:
+        kept["cost"] = {"text": text_cost(model_id, cost)}
+    return kept
+
+
+def catalog_snapshot(catalog, previous=None):
+    """The snapshot text for every well-formed catalog row."""
+    data = catalog.get("data") if isinstance(catalog, dict) else None
+    if not isinstance(data, list):
+        raise Failure("the catalog has no data list")
+    previous = previous or {}
+    kept, fresh = {}, set()
+    for row in data:
+        try:
+            entry = snapshot_row(row)
+        except Failure as exc:
+            model_id = row.get("id") if isinstance(row, dict) else None
+            if isinstance(model_id, str) and model_id in previous:
+                kept.setdefault(model_id, previous[model_id])
+            print(f"opencode-go-models-watch: skipping {exc}", file=sys.stderr)
+            continue
+        kept[entry["id"]] = entry
+        fresh.add(entry["id"])
+    if not fresh:
+        raise Failure("the catalog lists no well-formed models")
+    check_shrink_floor(len(fresh), len(previous))
+    return json.dumps({"data": [kept[i] for i in sorted(kept)]}, indent=2) + "\n"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--url", default=DEFAULT_URL, help="Catalog URL (default: %(default)s)")
+    parser.add_argument("--catalog", help="Read the catalog from this JSON file instead of fetching it")
+    parser.add_argument("--snapshot", metavar="FILE", help="Rewrite this snapshot instead of printing it")
+    parser.add_argument(
+        "--retry-wait",
+        type=float,
+        default=DEFAULT_RETRY_WAIT,
+        help="Seconds to wait before the one retry (default: %(default)s)",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        catalog = read_json(args.catalog) if args.catalog else fetch(args.url, args.retry_wait)
+        previous = existing_rows(args.snapshot, snapshot_row) if args.snapshot else {}
+        text = catalog_snapshot(catalog, previous)
+        if args.snapshot:
+            write_if_changed(args.snapshot, text)
+        else:
+            sys.stdout.write(text)
+        return 0
+    except (Failure, OSError) as exc:
+        print(f"opencode-go-models-watch: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

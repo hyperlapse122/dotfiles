@@ -48,6 +48,7 @@ let
     claude = ".claude/CLAUDE.md";
     codex = ".codex/AGENTS.md";
     pi = ".pi/agent/AGENTS.md";
+    opencode = ".config/opencode/AGENTS.md";
   };
 in
 {

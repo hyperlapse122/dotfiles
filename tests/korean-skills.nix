@@ -10,6 +10,7 @@
     Claude Code               ~/.claude/skills/<name>
     Codex                     ~/.codex/skills/<name>
     Pi                        ~/.pi/agent/skills/<name>
+    OpenCode                  ~/.config/opencode/skills/<name>
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
   NixOS and non-NixOS Linux user environments are both covered, and the
@@ -102,6 +103,7 @@ let
     ".claude/skills"
     ".codex/skills"
     ".pi/agent/skills"
+    ".config/opencode/skills"
   ];
 
   # Codex keeps its bundled skills here; no declared skill may land on it.

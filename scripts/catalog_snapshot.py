@@ -1,4 +1,4 @@
-"""What synthetic-models-watch and openrouter-catalog-snapshot share.
+"""What synthetic-models-watch, opencode-go-models-watch, and openrouter-catalog-snapshot share.
 
 Each script keeps its own row validation, defaults, retries, and rule for a
 missing key; this module holds the JSON I/O, the snapshot write and shrink

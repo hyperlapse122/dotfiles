@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Resolve the newest stable OpenCode v2 release from GitHub's release list.
+
+Fetches anomalyco/opencode's release list, takes the highest non-prerelease
+v2.x.y tag, reads the sha256 digest GitHub records for each archive
+packages/opencode.nix installs on each supported system, and writes or checks
+the pin file that package consumes. The repository publishes a v1 line and
+unrelated process-daemon tags beside v2, and releases/latest points at v1, so
+the list is read instead. Refuses to write a pin for a release missing any of
+those archives or their digests, or a version that is not strictly newer than
+the one already pinned, so neither an incomplete release nor a downgrade ever
+reaches the pin file.
+"""
+
+import argparse
+import base64
+import json
+import re
+import subprocess
+import sys
+
+DEFAULT_SOURCE_URL = "https://api.github.com/repos/anomalyco/opencode/releases?per_page=100"
+
+# Every system a host in this flake can be, and the archive installed on it.
+TARGET_ASSETS = {
+    "x86_64-linux": "opencode-linux-x64.tar.gz",
+    "aarch64-darwin": "opencode-darwin-arm64.zip",
+}
+
+TAG_PATTERN = re.compile(r"^v(2\.\d+\.\d+)$")
+DIGEST_PATTERN = re.compile(r"^sha256:([0-9a-fA-F]{64})$")
+
+
+class Failure(Exception):
+    """A refusal that should stop the caller with a readable message."""
+
+
+def fetch(url):
+    """Fetch one URL with curl and return the raw body."""
+    proc = subprocess.run(
+        ["curl", "-sfL", "--max-time", "60", url],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"fetching {url} failed with status {proc.returncode}")
+    return proc.stdout
+
+
+def hex_to_sri(sha256_hex):
+    """Convert a 64-character hex sha256 string to Nix SRI format."""
+    return "sha256-" + base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
+
+
+def version_tuple(version):
+    if not isinstance(version, str):
+        raise ValueError(f"not a version string: {version!r}")
+    return tuple(int(part) for part in version.split("."))
+
+
+def newest_v2(releases):
+    """Return (version, release) for the highest stable v2.x.y release."""
+    found = []
+    for item in releases:
+        if not isinstance(item, dict) or item.get("prerelease") is not False or item.get("draft"):
+            continue
+        tag = item.get("tag_name")
+        match = TAG_PATTERN.match(tag) if isinstance(tag, str) else None
+        if match:
+            found.append((version_tuple(match.group(1)), match.group(1), item))
+    if not found:
+        raise Failure("the release list holds no stable v2 release")
+    _, version, item = max(found, key=lambda entry: entry[0])
+    return version, item
+
+
+def parse_releases(body):
+    """Return the pin for the newest stable v2 release in a release list."""
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise Failure(f"release response is not JSON: {exc}") from None
+    if not isinstance(data, list):
+        raise Failure("release response is not a JSON list")
+
+    version, item = newest_v2(data)
+    tag = item["tag_name"]
+    assets = item.get("assets")
+    assets = assets if isinstance(assets, list) else []
+    platforms = {}
+    for system, name in TARGET_ASSETS.items():
+        matches = [a for a in assets if isinstance(a, dict) and a.get("name") == name]
+        if len(matches) != 1:
+            raise Failure(
+                f"release {tag} lists {len(matches)} {name} assets, "
+                "expected exactly one; refusing to write an incomplete pin"
+            )
+        digest = matches[0].get("digest")
+        match = DIGEST_PATTERN.match(digest) if isinstance(digest, str) else None
+        if not match:
+            raise Failure(f"invalid sha256 digest for {name} in {tag}: {digest!r}")
+        sha256_hex = match.group(1).lower()
+        platforms[system] = {"asset": name, "sha256": sha256_hex, "hash": hex_to_sri(sha256_hex)}
+    return {"version": version, "platforms": platforms}
+
+
+def pinned_version(path):
+    """Return the version already pinned at path, or None when unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f).get("version")
+    except Exception:
+        return None
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source-url",
+        default=DEFAULT_SOURCE_URL,
+        help="URL of the GitHub API release list",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Path to the opencode-release.json pin file to write or update",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the resolved pin JSON to stdout without modifying files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        resolved = parse_releases(fetch(args.source_url))
+        current_version = pinned_version(args.output) if args.output and not args.dry_run else None
+        if current_version is not None:
+            try:
+                is_newer = version_tuple(resolved["version"]) > version_tuple(current_version)
+            except ValueError:
+                is_newer = True
+            if not is_newer:
+                print(
+                    f"{args.output} is already up to date at version {current_version} "
+                    f"(resolved {resolved['version']} is not newer)"
+                )
+                return 0
+
+        out_json = json.dumps(resolved, indent=2) + "\n"
+        if args.dry_run or not args.output:
+            sys.stdout.write(out_json)
+            return 0
+
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(out_json)
+        print(f"updated {args.output} to version {resolved['version']}")
+        return 0
+
+    except (Failure, OSError) as exc:
+        print(f"opencode-release: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
