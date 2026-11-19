@@ -296,6 +296,10 @@ let
           "synthetic=${keyDirectory}/synthetic_api_key"
           "--credential"
           "opencode-go=${keyDirectory}/opencode_go_api_key"
+          "--credential"
+          "openai=${keyDirectory}/openai_api_key"
+          "--credential"
+          "anthropic=${keyDirectory}/anthropic_api_key"
         ] hostName}
         ${lib.concatMapStringsSep "\n" (dependency: ''
           if [ ${esc (lib.boolToString (lib.elem dependency (afterOf auth)))} != true ]; then
@@ -305,6 +309,45 @@ let
         '') authAfter}
       ''}
     '';
+
+  assertNixosRotation =
+    entry:
+    let
+      unit = text: lib.splitString "\n" (builtins.unsafeDiscardStringContext text);
+      readUnit = host: unit host.config.systemd.units."home-manager-h82.service".text;
+      field = name: lib.findFirst (lib.hasPrefix "${name}=") null;
+      withManifest =
+        revision:
+        readUnit (
+          self.nixosConfigurations.${entry.name}.extendModules {
+            modules = [
+              {
+                my.cliAuth.sopsFile = lib.mkForce (builtins.toFile "tokens.yaml" revision);
+              }
+            ];
+          }
+        );
+      before = withManifest "fake encrypted manifest before rotation";
+      after = withManifest "fake encrypted manifest after rotation";
+      beforeTrigger = field "X-Restart-Triggers" before;
+      afterTrigger = field "X-Restart-Triggers" after;
+      ordering = field "After" after;
+    in
+    lib.optionalString
+      (
+        beforeTrigger == null
+        || afterTrigger == null
+        || beforeTrigger == afterTrigger
+        || field "ExecStart" before != field "ExecStart" after
+        || ordering == null
+        || !lib.elem "sops-install-secrets.service" (
+          lib.splitString " " (lib.removePrefix "After=" ordering)
+        )
+      )
+      ''
+        echo 'a token-only rotation must restart Home Manager after SOPS on ${entry.name}' >&2
+        failed=1
+      '';
 in
 pkgs.runCommand "opencode-tests"
   {
@@ -318,6 +361,7 @@ pkgs.runCommand "opencode-tests"
     failed=0
 
     ${lib.concatMapStringsSep "\n" assertHost configurations.userEntries}
+    ${lib.concatMapStringsSep "\n" assertNixosRotation configurations.production}
 
     if [ "$failed" != "0" ]; then
       exit 1

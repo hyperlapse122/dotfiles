@@ -13,10 +13,9 @@ let
         age-keygen -o $out/key.txt
         recipient=$(age-keygen -y $out/key.txt)
         # tokscale_token, synthetic_api_key, exa_api_key,
-        # openrouter_api_key, and opencode_go_api_key carry a space,
-        # which publish-cli-auth rejects, so gh and glab publication fails here
-        # if the publisher ever starts reading any of them.
-        printf 'github_token: FAKE_github\ngitlab_token: FAKE_gitlab\njpi_token: FAKE_jpi\ntokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\n' > plain.yaml
+        # Agent API keys carry a space, which publish-cli-auth rejects if it
+        # ever starts reading them while publishing gh and glab credentials.
+        printf 'github_token: FAKE_github\ngitlab_token: FAKE_gitlab\njpi_token: FAKE_jpi\ntokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\nopenai_api_key: FAKE openai\nanthropic_api_key: FAKE anthropic\n' > plain.yaml
         sops --encrypt --age "$recipient" --input-type yaml --output-type yaml plain.yaml > $out/tokens.yaml
       '';
 in
@@ -54,6 +53,8 @@ pkgs.testers.nixosTest {
       enableExaApiKey = true;
       enableOpenRouterApiKey = true;
       enableOpencodeGoApiKey = true;
+      enableOpenaiApiKey = true;
+      enableAnthropicApiKey = true;
     };
     # Deliberately public fake key. Production never embeds a real key in the store.
     system.activationScripts.fixture = ''
@@ -108,6 +109,10 @@ pkgs.testers.nixosTest {
         opencode_go = "/run/secrets/cli-auth/opencode_go_api_key"
         machine.succeed("runuser -u h82 -- cat " + opencode_go + " | grep -qx 'FAKE opencode go'")
         machine.succeed("test $(stat -L -c '%a:%U' " + opencode_go + ") = 400:h82")
+        for provider in ("openai", "anthropic"):
+            key = "/run/secrets/cli-auth/" + provider + "_api_key"
+            machine.succeed(f"runuser -u h82 -- cat {key} | grep -qx 'FAKE {provider}'")
+            machine.succeed(f"test $(stat -L -c '%a:%U' {key}) = 400:h82")
     verify()
     machine.succeed(switch)
     verify()
@@ -142,5 +147,6 @@ pkgs.testers.nixosTest {
     assert "FAKE pi" not in journal_output
     assert "FAKE exa" not in journal_output
     assert "FAKE openrouter" not in journal_output
+    assert "FAKE openai" not in journal_output and "FAKE anthropic" not in journal_output
   '';
 }

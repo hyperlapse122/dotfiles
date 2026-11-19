@@ -6,8 +6,8 @@ ignores any key written into its configuration, so activation imports them
 with `opencode auth import`. That command skips a credential that is already
 stored, even when its key has changed, so this script reads the stored
 credentials back first and logs out an account whose key differs before it
-imports the new one. An account whose stored key already matches is left
-alone, and accounts under other labels are never touched.
+imports the new one. Rotation preserves the active account. An account whose
+stored key already matches is left alone.
 
 Each `--credential INTEGRATION=KEYFILE` names an integration and the file that
 holds its key. The keys are read from those files and handed over in a
@@ -55,8 +55,8 @@ def read_key(path):
     return key
 
 
-def stored_keys(binary, label):
-    """{integration: key} for the accounts stored under label."""
+def stored_accounts(binary, label):
+    """Return the managed API-key account for each integration."""
     try:
         exported = json.loads(opencode(binary, "export") or "[]")
     except json.JSONDecodeError:
@@ -69,17 +69,17 @@ def stored_keys(binary, label):
             continue
         value = entry.get("value")
         if entry.get("label") == label and isinstance(value, dict) and value.get("type") == "key":
-            found[entry.get("integrationID")] = value.get("key")
+            found[entry.get("integrationID")] = entry
     return found
 
 
 def sync(binary, label, credentials):
     keys = {integration: read_key(path) for integration, path in credentials}
-    stored = stored_keys(binary, label)
-    stale = [i for i in keys if i in stored and stored[i] != keys[i]]
+    stored = stored_accounts(binary, label)
+    changed = [i for i, key in keys.items() if stored.get(i, {}).get("value", {}).get("key") != key]
+    stale = [i for i in changed if i in stored]
     for integration in stale:
         opencode(binary, "logout", integration, label)
-    changed = [i for i in keys if stored.get(i) != keys[i]]
     if not changed:
         return
     with tempfile.TemporaryDirectory(prefix="opencode-auth-") as directory:
@@ -101,6 +101,9 @@ def sync(binary, label, credentials):
                 f,
             )
         opencode(binary, "import", path)
+    for integration in stale:
+        if stored[integration].get("active"):
+            opencode(binary, "switch", integration, label)
 
 
 def credential(text):

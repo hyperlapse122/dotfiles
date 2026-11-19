@@ -36,6 +36,18 @@ let
       file = "opencode_go_api_key";
       option = "my.cliAuth.enableOpencodeGoApiKey";
     }
+    {
+      label = "OpenAI";
+      match = "openai_api";
+      file = "openai_api_key";
+      option = "my.cliAuth.enableOpenaiApiKey";
+    }
+    {
+      label = "Anthropic";
+      match = "anthropic_api";
+      file = "anthropic_api_key";
+      option = "my.cliAuth.enableAnthropicApiKey";
+    }
   ];
 
   # One production configuration re-evaluated with each key option forced

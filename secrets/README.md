@@ -63,15 +63,17 @@ synthetic_api_key: <Synthetic API key>    # NixOS opt-in: my.cliAuth.enableSynth
 exa_api_key: <Exa API key>                # NixOS opt-in: my.cliAuth.enableExaApiKey
 openrouter_api_key: <OpenRouter API key>  # NixOS opt-in: my.cliAuth.enableOpenRouterApiKey
 opencode_go_api_key: <OpenCode Go API key>  # NixOS opt-in: my.cliAuth.enableOpencodeGoApiKey
+openai_api_key: <OpenAI API key>            # NixOS opt-in: my.cliAuth.enableOpenaiApiKey
+anthropic_api_key: <Anthropic API key>      # NixOS opt-in: my.cliAuth.enableAnthropicApiKey
 ```
 
-On NixOS (`modules/nixos/system/secrets.nix`), `github_token`, `gitlab_token`, and `jpi_token` are always decrypted into `/run/secrets/cli-auth/` when `my.cliAuth.enable` is true, and the shared NixOS profile (`modules/nixos/profile.nix`) enables `enableTokscaleToken`, `enableSyntheticApiKey`, `enableExaApiKey`, `enableOpenRouterApiKey`, and `enableOpencodeGoApiKey` by default on production outputs.
+On NixOS (`modules/nixos/system/secrets.nix`), `github_token`, `gitlab_token`, and `jpi_token` are always decrypted into `/run/secrets/cli-auth/` when `my.cliAuth.enable` is true. The shared NixOS profile (`modules/nixos/profile.nix`) enables every opt-in listed above except `enableDockerToken` by default on production outputs.
 
-On macOS (`home/h82/security/non-nixos-secrets.nix` and `scripts/host-secrets`), production activation always decrypts `github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, and `opencode_go_api_key` into `~/.local/state/cli-auth/` (and removes any retired key files), failing activation before any symlink changes if any required key is missing or invalid. It never decrypts `docker_token`.
+On macOS (`home/h82/security/non-nixos-secrets.nix` and `scripts/host-secrets`), production activation decrypts every key above except `docker_token` into `~/.local/state/cli-auth/` and removes any retired key files. It fails before any symlink changes if a required key is missing or invalid.
 
 `synthetic_api_key` backs Pi (`home/h82/agents/pi.nix` and `packages/pi.nix`): activation writes the `synthetic` credential in `~/.pi/agent/auth.json` via `pi-state`, which reads the published key file. It also backs OpenCode's `synthetic` credential.
 
-`opencode_go_api_key` backs OpenCode's `opencode-go` credential. `opencode-auth-sync` (`scripts/opencode-auth-sync`) imports each published key into OpenCode's credential store under the label `nix-config`, and logs out an account whose stored key no longer matches, because `opencode auth import` skips a stored account even when its key changed. Like Pi's credential, it runs during Home Manager activation, so a rotated key reaches OpenCode on the next activation.
+`opencode_go_api_key`, `openai_api_key`, and `anthropic_api_key` back OpenCode's `opencode-go`, `openai`, and `anthropic` credentials. `opencode-auth-sync` imports the published keys during Home Manager activation under the label `nix-config`. If a key changes, the helper replaces that account and keeps the previous account selection. On NixOS, a change to the encrypted token file triggers Home Manager activation even when the Home Manager generation is unchanged.
 
 For container pulls through `docker-credential-sops`, `github_token` must carry `read:packages` (or `write:packages`) and `gitlab_token` must carry `read_registry` (or `write_registry`). The public accounts declared in `modules/shared/cli-accounts.nix` are `hyperlapse122` on GitHub and `hyperlapse` on GitLab.com and `git.jpi.app`.
 

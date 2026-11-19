@@ -99,6 +99,8 @@ in
       default = false;
       description = "Decrypt opencode_go_api_key from secrets/tokens.yaml for OpenCode's OpenCode Go provider, which activation imports into OpenCode's credential store.";
     };
+    enableOpenaiApiKey = lib.mkEnableOption "decryption of the OpenAI API key for OpenCode";
+    enableAnthropicApiKey = lib.mkEnableOption "decryption of the Anthropic API key for OpenCode";
   };
   config = lib.mkMerge [
     {
@@ -157,6 +159,8 @@ in
                   ++ lib.optional cfg.enableExaApiKey "exa_api_key"
                   ++ lib.optional cfg.enableOpenRouterApiKey "openrouter_api_key"
                   ++ lib.optional cfg.enableOpencodeGoApiKey "opencode_go_api_key"
+                  ++ lib.optional cfg.enableOpenaiApiKey "openai_api_key"
+                  ++ lib.optional cfg.enableAnthropicApiKey "anthropic_api_key"
                 ))
                 (name: {
                   key = lib.removePrefix "cli-auth/" name;
