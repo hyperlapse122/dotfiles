@@ -559,12 +559,12 @@ let
             }
             // lib.optionalAttrs (merge.attr == "t3codeSettings") {
               seed = selectionSeed;
-               preservePaths = [
-                 [ "unrelated" ]
-                 [ "projectSettingsOverrides" ]
-                 [ "sourceControlWriterModelSelection" ]
-                 [ "speechPostProcessingModelSelection" ]
-                 [ "reviewGuidesEnabled" ]
+              preservePaths = [
+                [ "unrelated" ]
+                [ "projectSettingsOverrides" ]
+                [ "sourceControlWriterModelSelection" ]
+                [ "speechPostProcessingModelSelection" ]
+                [ "reviewGuidesEnabled" ]
                 [
                   "providerInstances"
                   "codex"
