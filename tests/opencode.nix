@@ -36,7 +36,11 @@
 
   The builder collects every failure instead of exiting at the first.
 */
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  entries ? null,
+}:
 let
   inherit (pkgs) lib;
 
@@ -45,7 +49,7 @@ let
 
   esc = value: lib.escapeShellArg (toString value);
 
-  opencode = self.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
+  opencode = import ../packages/opencode.nix { inherit pkgs; };
   pinnedVersion = (builtins.fromJSON (builtins.readFile ../packages/opencode-release.json)).version;
   settingsFile = ".config/opencode/opencode.json";
 
@@ -214,19 +218,11 @@ let
       package = lib.lists.findFirst (p: (p.pname or "") == "opencode") null (
         userConfig.home.packages or [ ]
       );
-      keyDirectory =
-        if entry.kind == "nixos" then
-          "/run/secrets/cli-auth"
-        else
-          "${userConfig.my.secrets.stateDir or ""}";
+      keyDirectory = userConfig.my.secrets.stateDir or "";
       targeted = lib.any (file: (file.target or "") == settingsFile) (
         lib.attrValues (userConfig.home.file or { })
       );
-      authExpected = !entry.bootstrap;
-      authAfter = [
-        "opencodeSettings"
-      ]
-      ++ lib.optional (entry.kind == "darwin") "nixConfigSecretsPublish";
+      authExpected = entry.kind == "darwin" && !entry.bootstrap;
     in
     ''
       ${lib.optionalString (package == null) ''
@@ -285,7 +281,7 @@ let
         failed=1
       ''}
       ${lib.optionalString (!authExpected && auth != null) ''
-        echo 'bootstrap output ${hostName} must not import credentials: it holds no published keys' >&2
+        echo 'unexpected Home Manager credential import on ${hostName}' >&2
         failed=1
       ''}
       ${lib.optionalString (authExpected && auth != null) ''
@@ -296,15 +292,18 @@ let
           "synthetic=${keyDirectory}/synthetic_api_key"
           "--credential"
           "opencode-go=${keyDirectory}/opencode_go_api_key"
+          "--credential"
+          "openai=${keyDirectory}/openai_api_key"
+          "--credential"
+          "anthropic=${keyDirectory}/anthropic_api_key"
         ] hostName}
-        ${lib.concatMapStringsSep "\n" (dependency: ''
-          if [ ${esc (lib.boolToString (lib.elem dependency (afterOf auth)))} != true ]; then
-            echo 'opencodeAuth must run after ${dependency} on ${hostName}' >&2
-            failed=1
-          fi
-        '') authAfter}
+        if [ ${esc (lib.boolToString (lib.elem "nixConfigSecretsPublish" (afterOf auth)))} != true ]; then
+          echo 'opencodeAuth must run after nixConfigSecretsPublish on ${hostName}' >&2
+          failed=1
+        fi
       ''}
     '';
+
 in
 pkgs.runCommand "opencode-tests"
   {
@@ -314,10 +313,12 @@ pkgs.runCommand "opencode-tests"
     ];
   }
   ''
-    ${configurations.userGuard}
+    ${lib.optionalString (entries == null) configurations.userGuard}
     failed=0
 
-    ${lib.concatMapStringsSep "\n" assertHost configurations.userEntries}
+    ${lib.concatMapStringsSep "\n" assertHost (
+      if entries == null then configurations.userEntries else entries
+    )}
 
     if [ "$failed" != "0" ]; then
       exit 1

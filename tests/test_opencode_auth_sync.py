@@ -37,28 +37,43 @@ if os.environ.get('FAKE_FAIL') == args[1]:
 if args[:2] == ['auth', 'export']:
     print(json.dumps(store))
 elif args[:2] == ['auth', 'logout']:
-    store = [e for e in store if not (e['integrationID'] == args[2] and e['label'] == args[3])]
+    removed_active = any(e['integrationID'] == args[2] and e['id'] == args[3] and e['active'] for e in store)
+    store = [e for e in store if not (e['integrationID'] == args[2] and e['id'] == args[3])]
+    if removed_active:
+        for e in store:
+            if e['integrationID'] == args[2]:
+                e['active'] = True
+                break
     json.dump(store, open(store_path, 'w'))
 elif args[:2] == ['auth', 'import']:
     added = 0
     for entry in json.load(open(args[2])):
-        if any(e['id'] == entry['id'] and e['label'] == entry['label'] for e in store):
+        if any(e['id'] == entry['id'] or (e['integrationID'] == entry['integrationID'] and e['label'] == entry['label']) for e in store):
             continue
+        if any(e['integrationID'] == entry['integrationID'] and e['active'] for e in store):
+            entry['active'] = False
         store.append(entry)
         added += 1
     json.dump(store, open(store_path, 'w'))
     print('Imported %d credentials' % added)
+elif args[:2] == ['auth', 'switch']:
+    if not any(e['integrationID'] == args[2] and e['id'] == args[3] for e in store):
+        sys.exit(4)
+    for e in store:
+        if e['integrationID'] == args[2]:
+            e['active'] = e['id'] == args[3]
+    json.dump(store, open(store_path, 'w'))
 else:
     sys.exit(9)
 """
 
 
-def account(integration, key, label="nix-config"):
+def account(integration, key, label="nix-config", active=True, credential_id=None):
     return {
-        "id": integration,
+        "id": credential_id or integration,
         "integrationID": integration,
         "label": label,
-        "active": True,
+        "active": active,
         "value": {"type": "key", "key": key},
     }
 
@@ -86,7 +101,13 @@ class OpencodeAuthSyncTestCase(unittest.TestCase):
         args = [sys.executable, str(SCRIPT), "--opencode", str(self.binary)]
         for integration, path in credentials:
             args += ["--credential", f"{integration}={path}"]
-        full_env = dict(os.environ, FAKE_STORE=str(self.store), FAKE_LOG=str(self.log), **(env or {}))
+        full_env = dict(
+            os.environ,
+            FAKE_STORE=str(self.store),
+            FAKE_LOG=str(self.log),
+            XDG_STATE_HOME=str(self.root / "state"),
+            **(env or {}),
+        )
         return subprocess.run(args, capture_output=True, text=True, env=full_env)
 
     def calls(self):
@@ -101,7 +122,7 @@ class OpencodeAuthSyncTestCase(unittest.TestCase):
     def test_a_fresh_store_gets_both_credentials_through_a_private_file(self):
         proc = self.run_sync()
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(self.verbs(), ["export", "import"])
+        self.assertEqual(self.verbs(), ["export", "import", "export"])
         self.assertEqual(
             sorted((e["integrationID"], e["value"]["key"]) for e in self.stored()),
             [("opencode-go", GO_KEY), ("synthetic", SYNTHETIC_KEY)],
@@ -130,8 +151,8 @@ class OpencodeAuthSyncTestCase(unittest.TestCase):
         self.store.write_text(json.dumps([account("synthetic", "old key"), account("opencode-go", GO_KEY)]))
         proc = self.run_sync()
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(self.verbs(), ["export", "logout", "import"])
-        self.assertEqual(self.calls()[1]["argv"][2:4], ["synthetic", "nix-config"])
+        self.assertEqual(self.verbs(), ["export", "logout", "import", "export"])
+        self.assertEqual(self.calls()[1]["argv"][2:4], ["synthetic", "synthetic"])
         keys = {e["integrationID"]: e["value"]["key"] for e in self.stored()}
         self.assertEqual(keys, {"synthetic": SYNTHETIC_KEY, "opencode-go": GO_KEY})
         self.assertEqual(len(self.stored()), 2)
@@ -144,6 +165,33 @@ class OpencodeAuthSyncTestCase(unittest.TestCase):
         self.assertNotIn("logout", self.verbs())
         self.assertIn(other, self.stored())
         self.assertEqual(len(self.stored()), 3)
+
+    def test_rotation_keeps_the_selected_account(self):
+        key = self.write_key("openai_api_key", "FAKE-CANARY new OpenAI key")
+        for managed_active in (True, False):
+            with self.subTest(managed_active=managed_active):
+                other = account(
+                    "openai", "personal key", label="personal", active=not managed_active, credential_id="personal-id"
+                )
+                self.store.write_text(json.dumps([account("openai", "old key", active=managed_active), other]))
+                proc = self.run_sync([("openai", key)])
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertCountEqual(
+                    self.stored(),
+                    [account("openai", "FAKE-CANARY new OpenAI key", active=managed_active), other],
+                )
+
+    def test_retry_restores_selection_after_an_import_or_switch_failure(self):
+        key = self.write_key("openai_api_key", "FAKE-CANARY new OpenAI key")
+        for verb in ("import", "switch"):
+            with self.subTest(verb=verb):
+                other = account("openai", "personal key", label="personal", active=False, credential_id="personal-id")
+                self.store.write_text(json.dumps([account("openai", "old key"), other]))
+                proc = self.run_sync([("openai", key)], {"FAKE_FAIL": verb})
+                self.assertEqual(proc.returncode, 1, proc.stderr)
+                proc = self.run_sync([("openai", key)])
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertCountEqual(self.stored(), [account("openai", "FAKE-CANARY new OpenAI key"), other])
 
     def test_a_missing_or_empty_key_file_stops_before_opencode_runs(self):
         missing = self.root / "absent"

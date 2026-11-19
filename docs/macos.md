@@ -143,7 +143,7 @@ Run these steps on the Mac, in order, from a local GUI login session, never over
     The production switch:
     - decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and ensures macOS admin SSL trust when `my.tlsInspectionCa.enable` is on (approve the macOS authorization dialog if prompted);
     - installs and selects Xcode through `xcodes` using the Apple Account decrypted in memory from `secrets/hosts/<host>/apple-account.yaml` (complete any interactive Apple Account 2FA or `sudo` prompt if asked);
-    - stages and publishes the CLI tokens (`~/.local/state/cli-auth/`), `gh` and `glab` configuration, Pi's Synthetic API key (`~/.pi/agent/auth.json`), OpenCode's Synthetic and OpenCode Go credentials (its own credential store), and the host SSH key (`~/.ssh/id_ed25519_nix_config`) from `secrets/tokens.yaml` and `secrets/hosts/<host>/ssh.yaml`;
+    - publishes the CLI tokens, `gh` and `glab` configuration, Pi's Synthetic key, OpenCode's Synthetic, OpenCode Go, OpenAI, and Anthropic keys, and the host SSH key (see [Secrets and authentication](#secrets-and-authentication));
     - records `variant=production` in `/etc/nix-config-host`.
 
 13. **Exclude the host SSH private key from Time Machine by path.** Because `host-secrets` replaces `~/.ssh/id_ed25519_nix_config` atomically on every apply, a sticky file exclusion would be lost on the next switch; use a fixed-path exclusion (`-p`) with `sudo`:
@@ -203,9 +203,9 @@ A macOS host is never a recipient of `secrets/wifi.yaml`, `secrets/tailscale.yam
 Production activation publishes:
 
 - `gh` and `glab` configuration under `~/.config/gh` and `~/.config/glab-cli`;
-- CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, `opencode_go_api_key`);
+- CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, `opencode_go_api_key`, `openai_api_key`, `anthropic_api_key`);
 - the `synthetic` provider key in `~/.pi/agent/auth.json`;
-- the `synthetic` and `opencode-go` credentials in OpenCode's credential store, under the label `nix-config`;
+- the `synthetic`, `opencode-go`, `openai`, and `anthropic` credentials in OpenCode's credential store, under the label `nix-config`;
 - the host SSH private key at `~/.ssh/id_ed25519_nix_config`.
 
 ### YubiKey PIN

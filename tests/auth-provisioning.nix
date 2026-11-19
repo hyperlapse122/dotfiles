@@ -13,11 +13,12 @@ let
         age-keygen -o $out/key.txt
         recipient=$(age-keygen -y $out/key.txt)
         # tokscale_token, synthetic_api_key, exa_api_key,
-        # openrouter_api_key, and opencode_go_api_key carry a space,
-        # which publish-cli-auth rejects, so gh and glab publication fails here
-        # if the publisher ever starts reading any of them.
-        printf 'github_token: FAKE_github\ngitlab_token: FAKE_gitlab\njpi_token: FAKE_jpi\ntokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\n' > plain.yaml
+        # Agent API keys carry a space, which publish-cli-auth rejects if it
+        # ever starts reading them while publishing gh and glab credentials.
+        printf 'github_token: FAKE_github\ngitlab_token: FAKE_gitlab\njpi_token: FAKE_jpi\ntokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\nopenai_api_key: FAKE openai\nanthropic_api_key: FAKE anthropic\n' > plain.yaml
         sops --encrypt --age "$recipient" --input-type yaml --output-type yaml plain.yaml > $out/tokens.yaml
+        sed 's/^openai_api_key:.*/openai_api_key: FAKE rotated openai/' plain.yaml > rotated.yaml
+        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml rotated.yaml > $out/rotated.yaml
       '';
 in
 pkgs.testers.nixosTest {
@@ -35,7 +36,7 @@ pkgs.testers.nixosTest {
       sopsFile = null;
     };
   };
-  nodes.machine = { ... }: {
+  nodes.machine = { lib, ... }: {
     imports = [
       inputs.sops-nix.nixosModules.sops
       ../modules/nixos/system/secrets.nix
@@ -54,7 +55,10 @@ pkgs.testers.nixosTest {
       enableExaApiKey = true;
       enableOpenRouterApiKey = true;
       enableOpencodeGoApiKey = true;
+      enableOpenaiApiKey = true;
+      enableAnthropicApiKey = true;
     };
+    specialisation.rotated.configuration.my.cliAuth.sopsFile = lib.mkForce "${fixtures}/rotated.yaml";
     # Deliberately public fake key. Production never embeds a real key in the store.
     system.activationScripts.fixture = ''
       install -d -m 0700 /var/lib/sops-nix
@@ -69,6 +73,7 @@ pkgs.testers.nixosTest {
       pkgs.python3
       pkgs.gh
       pkgs.glab
+      (import ../packages/opencode.nix { inherit pkgs; })
     ];
     virtualisation.memorySize = 1536;
   };
@@ -108,6 +113,10 @@ pkgs.testers.nixosTest {
         opencode_go = "/run/secrets/cli-auth/opencode_go_api_key"
         machine.succeed("runuser -u h82 -- cat " + opencode_go + " | grep -qx 'FAKE opencode go'")
         machine.succeed("test $(stat -L -c '%a:%U' " + opencode_go + ") = 400:h82")
+        for provider in ("openai", "anthropic"):
+            key = "/run/secrets/cli-auth/" + provider + "_api_key"
+            machine.succeed(f"runuser -u h82 -- cat {key} | grep -qx 'FAKE {provider}'")
+            machine.succeed(f"test $(stat -L -c '%a:%U' {key}) = 400:h82")
     verify()
     machine.succeed(switch)
     verify()
@@ -142,5 +151,20 @@ pkgs.testers.nixosTest {
     assert "FAKE pi" not in journal_output
     assert "FAKE exa" not in journal_output
     assert "FAKE openrouter" not in journal_output
+    assert "FAKE openai" not in journal_output and "FAKE anthropic" not in journal_output
+    def assert_openai_key(expected):
+        records = json.loads(machine.succeed("runuser -u h82 -- opencode auth export --standalone"))
+        keys = [entry["value"]["key"] for entry in records
+                if entry["integrationID"] == "openai" and entry["label"] == "nix-config"]
+        assert keys == [expected], "SOPS publication did not import the expected fixture"
+
+    assert_openai_key("FAKE openai")
+    rotate = "/run/current-system/specialisation/rotated/bin/switch-to-configuration switch"
+    machine.succeed("mv /var/lib/sops-nix/key.txt /var/lib/sops-nix/key.backup")
+    machine.fail(rotate)
+    assert_openai_key("FAKE openai")
+    machine.succeed("install -m 0600 /var/lib/sops-nix/key.backup /var/lib/sops-nix/key.txt")
+    machine.succeed(rotate)
+    assert_openai_key("FAKE rotated openai")
   '';
 }

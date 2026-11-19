@@ -11,8 +11,7 @@ let
   authSync = "${tools.opencodeAuthSync}/bin/opencode-auth-sync";
   settingsFile = "${config.home.homeDirectory}/.config/opencode/opencode.json";
 
-  keyDirectory =
-    if config.my.kind == "nixos" then "/run/secrets/cli-auth" else config.my.secrets.stateDir;
+  keyDirectory = config.my.secrets.stateDir;
 
   # Synthetic shows the models Pi shows: the lock minus Pi's hidden set.
   # Every other model either source names is disabled, so a catalog that
@@ -141,16 +140,16 @@ in
     fi
   '';
 
-  # Bootstrap generations hold no published keys, as with Pi's credential.
-  home.activation.opencodeAuth = lib.mkIf (!config.my.bootstrap) (
-    lib.hm.dag.entryAfter
-      ([ "opencodeSettings" ] ++ lib.optional (config.my.kind == "darwin") "nixConfigSecretsPublish")
-      ''
-        if [[ ! -v DRY_RUN ]]; then
-          ${authSync} --opencode ${opencode}/bin/opencode \
-            --credential synthetic=${lib.escapeShellArg "${keyDirectory}/synthetic_api_key"} \
-            --credential opencode-go=${lib.escapeShellArg "${keyDirectory}/opencode_go_api_key"}
-        fi
-      ''
+  # NixOS imports after SOPS publication, without waiting for Home Manager.
+  home.activation.opencodeAuth = lib.mkIf (config.my.kind == "darwin" && !config.my.bootstrap) (
+    lib.hm.dag.entryAfter [ "nixConfigSecretsPublish" ] ''
+      if [[ ! -v DRY_RUN ]]; then
+        ${authSync} --opencode ${opencode}/bin/opencode \
+          --credential synthetic=${lib.escapeShellArg "${keyDirectory}/synthetic_api_key"} \
+          --credential opencode-go=${lib.escapeShellArg "${keyDirectory}/opencode_go_api_key"} \
+          --credential openai=${lib.escapeShellArg "${keyDirectory}/openai_api_key"} \
+          --credential anthropic=${lib.escapeShellArg "${keyDirectory}/anthropic_api_key"}
+      fi
+    ''
   );
 }
