@@ -279,6 +279,8 @@
         codex-release = agentTools.codexRelease;
         codex-agents = agentTools.codexAgents;
         codex = import ./packages/codex.nix { inherit pkgs; };
+        opencode-release = agentTools.opencodeRelease;
+        opencode = import ./packages/opencode.nix { inherit pkgs; };
         npm-release = agentTools.npmRelease;
         acpx = import ./packages/acpx.nix { inherit pkgs; };
         tanstack-intent = import ./packages/tanstack-intent.nix { inherit pkgs; };
@@ -571,6 +573,9 @@
           codex-release =
             pythonScriptCheck "codex-release" ./scripts/codex-release
               ./tests/test_codex_release.py;
+          opencode-release =
+            pythonScriptCheck "opencode-release" ./scripts/opencode-release
+              ./tests/test_opencode_release.py;
           # The Claude helper runs against the pinned SDK with real Node, so the
           # check carries both instead of letting that test skip.
           agent-usage =

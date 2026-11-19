@@ -137,6 +137,9 @@ let
 
   codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
 
+  # Resolves the newest stable OpenCode v2 release from the GitHub release list.
+  opencodeRelease = pythonHelper "opencode-release" ../scripts/opencode-release;
+
   # Home Manager overrides the Synthetic key file per host kind.
   agentUsage = pkgs.lib.makeOverridable (
     {
@@ -214,6 +217,7 @@ in
     preztoRelease
     piRelease
     codexRelease
+    opencodeRelease
     agentUsage
     npmRelease
     t3codeRelease
