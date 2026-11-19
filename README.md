@@ -89,7 +89,7 @@ done
 
 ### Scheduled maintenance (`.github/workflows/update-dependencies.yml`)
 
-One workflow runs dependency updates, Synthetic catalog refreshes, and drift reporting every 30 minutes, at :07 and :37. Manual dispatch selects `all` (the default), `dependencies`, `catalogs`, or `drift`.
+One workflow runs dependency updates, Synthetic, OpenCode Go, and Pi OpenAI and Anthropic catalog refreshes, and drift reporting every 30 minutes, at :07 and :37. The Pi OpenAI and Anthropic refreshes need the `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` Actions secrets and keep the committed snapshot when one is missing. Manual dispatch selects `all` (the default), `dependencies`, `catalogs`, or `drift`.
 
 Catalog changes publish first, followed by dependency changes through the same verification and push helper. A failure in one part does not stop the other selected parts. Changed candidates pass their applicable checks before publication and again after a rebase onto changed `main`; unchanged candidates skip heavy verification. Dependency failures retain reconciliation PRs, and drift reporting retains its issue lifecycle without repeated writes for unchanged results. The separate drift job holds no push token.
 
