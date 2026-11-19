@@ -23,7 +23,7 @@ jobs:
   update-dependencies:
     if: "!cancelled() && (github.event_name == 'schedule' || inputs.part != 'drift')"
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 250
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -95,13 +95,35 @@ jobs:
         timeout-minutes: 20
         env:
           SYNTHETIC_API_KEY: ${{ secrets.SYNTHETIC_API_KEY }}
+      - name: Refresh the OpenCode Go catalog snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot=home/h82/agents/opencode-go-catalog.json
+          if ! nix run .#opencode-go-models-watch -- --snapshot "$snapshot"; then
+            git restore -- "$snapshot"
+            echo '::warning::OpenCode Go catalog refresh failed; keeping the committed snapshot.'
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
+            git add -- "$snapshot"
+            git commit -m 'chore(agents): refresh the opencode go catalog snapshot' -- "$snapshot"
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+        id: go_catalog
+        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/catalogs
+        timeout-minutes: 10
       - name: Publish verified catalogs
         shell: bash
         run: |
           set -euo pipefail
           bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$RUNNER_TEMP/updates/catalogs-logs"
         id: publish_catalogs
-        if: "!cancelled() && steps.catalog.outcome == 'success' && steps.catalog.outputs.changed == 'true'"
+        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true')"
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 40
@@ -241,7 +263,15 @@ jobs:
           # 11. Update Codex and extract the roster from the new source pin.
           update_harness_catalog codex Codex
 
-          # 12. Refresh Prezto and every recursively pinned submodule.
+          # 12. Update OpenCode. A release can be listed before its archives
+          # and digests are, so a failure keeps the current pin and lets the
+          # other updates through.
+          if ! nix run .#opencode-release -- --output packages/opencode-release.json; then
+            echo "::warning title=OpenCode update skipped::opencode-release failed; keeping the current pin in packages/opencode-release.json."
+            git checkout -- packages/opencode-release.json
+          fi
+
+          # 13. Refresh Prezto and every recursively pinned submodule.
           nix run .#prezto-release -- --output packages/prezto-pin.json
 
           if [ -z "$(git status --porcelain)" ]; then
@@ -298,6 +328,12 @@ jobs:
             NEW_VER=$(jq -r .version packages/t3code-release.json)
             git add packages/t3code-release.json
             git commit -m "chore(packages): bump t3code to $NEW_VER"
+          fi
+
+          if [ -n "$(git status --porcelain packages/opencode-release.json)" ]; then
+            NEW_VER=$(jq -r .version packages/opencode-release.json)
+            git add packages/opencode-release.json
+            git commit -m "chore(packages): bump opencode to $NEW_VER"
           fi
 
           if [ -n "$(git status --porcelain packages/chatgpt-version.json)" ]; then
@@ -453,9 +489,10 @@ jobs:
           {
             echo '## Maintenance results'
             printf 'Catalog refresh: %s; changed: %s; publication: %s\n' "$CATALOG" "$CATALOG_CHANGED" "$CATALOG_PUSH"
+            printf 'OpenCode Go catalog refresh: %s; changed: %s\n' "$GO_CATALOG" "$GO_CATALOG_CHANGED"
             printf 'Dependencies: %s; changed: %s; publication: %s; reconciliation: %s\n' "$DEPENDENCIES" "$DEPENDENCIES_CHANGED" "$DEPENDENCIES_PUSH" "$RECONCILE"
           } >> "$GITHUB_STEP_SUMMARY"
-          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
+          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
             if [ "$outcome" = failure ] || [ "$outcome" = cancelled ]; then
               exit 1
             fi
@@ -466,6 +503,8 @@ jobs:
           PREPARE_DEPENDENCIES: ${{ steps.prepare_dependencies.outcome }}
           CATALOG: ${{ steps.catalog.outcome }}
           CATALOG_CHANGED: ${{ steps.catalog.outputs.changed }}
+          GO_CATALOG: ${{ steps.go_catalog.outcome }}
+          GO_CATALOG_CHANGED: ${{ steps.go_catalog.outputs.changed }}
           CATALOG_PUSH: ${{ steps.publish_catalogs.outcome }}
           DEPENDENCIES: ${{ steps.update.outcome }}
           DEPENDENCIES_CHANGED: ${{ steps.update.outputs.changed }}

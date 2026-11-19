@@ -286,6 +286,7 @@
         tanstack-intent = import ./packages/tanstack-intent.nix { inherit pkgs; };
         t3code-release = agentTools.t3codeRelease;
         synthetic-models-watch = agentTools.syntheticModelsWatch;
+        opencode-go-models-watch = agentTools.opencodeGoModelsWatch;
         t3code = import ./packages/t3code.nix { inherit pkgs; };
         t3code-cli = import ./packages/t3code-cli.nix { inherit pkgs; };
         android-sdk-release = agentTools.androidSdkRelease;
@@ -609,6 +610,18 @@
                 export SYNTHETIC_MODELS_SOURCE_JSON=${realSource}
               '';
             } "synthetic-models-watch" ./scripts/synthetic-models-watch ./tests/test_synthetic_models_watch.py;
+          opencode-go-models-watch =
+            pythonScriptCheckWith
+              {
+                modules = [ ./scripts/catalog_snapshot.py ];
+                setup = ''
+                  mkdir -p home/h82/agents
+                  cp ${./home/h82/agents/opencode-go-catalog.json} home/h82/agents/opencode-go-catalog.json
+                '';
+              }
+              "opencode-go-models-watch"
+              ./scripts/opencode-go-models-watch
+              ./tests/test_opencode_go_models_watch.py;
           # Drives the packaged helper, so a package that lost nokogiri from its
           # interpreter fails here rather than in the update workflow.
           android-sdk-release =
