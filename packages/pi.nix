@@ -2,6 +2,8 @@
   pkgs,
   syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
   exaKeyFile ? "/run/secrets/cli-auth/exa_api_key",
+  openaiKeyFile ? "/run/secrets/cli-auth/openai_api_key",
+  anthropicKeyFile ? "/run/secrets/cli-auth/anthropic_api_key",
 }:
 
 let
@@ -12,7 +14,9 @@ let
       repository = "earendil-works/pi";
       inherit (source) source;
     };
-    modelLock = ../home/h82/agents/pi-model-lock.json;
+    modelLock = pkgs.writeText "pi-model-lock.json" (
+      builtins.toJSON (import ../home/h82/agents/pi-locks.nix)
+    );
     policyPatch = ./pi-model-policy.patch;
   };
   # Each path lands inside single quotes in a shell script or in a JavaScript
@@ -23,6 +27,10 @@ assert lib.assertMsg (plainPath syntheticKeyFile)
   "pi: syntheticKeyFile '${syntheticKeyFile}' is not a plain absolute path";
 assert lib.assertMsg (plainPath exaKeyFile)
   "pi: exaKeyFile '${exaKeyFile}' is not a plain absolute path";
+assert lib.assertMsg (plainPath openaiKeyFile)
+  "pi: openaiKeyFile '${openaiKeyFile}' is not a plain absolute path";
+assert lib.assertMsg (plainPath anthropicKeyFile)
+  "pi: anthropicKeyFile '${anthropicKeyFile}' is not a plain absolute path";
 assert lib.assertMsg (
   runtime.version == source.version
 ) "pi: source version does not match the release pin";
@@ -51,7 +59,9 @@ stdenv.mkDerivation {
     substituteInPlace $out/bin/pi \
       --replace-fail '@STATE@' "$out/bin/pi-state" \
       --replace-fail '@KEY@' '${syntheticKeyFile}' \
-      --replace-fail '@EXA_KEY@' '${exaKeyFile}'
+      --replace-fail '@EXA_KEY@' '${exaKeyFile}' \
+      --replace-fail '@OPENAI_KEY@' '${openaiKeyFile}' \
+      --replace-fail '@ANTHROPIC_KEY@' '${anthropicKeyFile}'
     runHook postInstall
   '';
 

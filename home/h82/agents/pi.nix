@@ -6,7 +6,8 @@
   ...
 }:
 let
-  lock = builtins.fromJSON (builtins.readFile ./pi-model-lock.json);
+  lock = import ./pi-locks.nix;
+  lockFile = pkgs.writeText "pi-model-lock.json" (builtins.toJSON lock);
   catalog = lock.syntheticModelLocks;
   hiddenModelArgs = lib.escapeShellArgs (
     lib.concatMap (model: [
@@ -19,7 +20,7 @@ let
   policy = pkgs.runCommand "pi-policy" { } ''
     mkdir -p $out
     cp ${./pi-policy.ts} $out/dotfiles-policy.ts
-    cp ${./pi-model-lock.json} $out/model-lock.json
+    cp ${lockFile} $out/model-lock.json
   '';
   keyDirectory =
     if config.my.kind == "nixos" then "/run/secrets/cli-auth" else config.my.secrets.stateDir;
@@ -27,6 +28,8 @@ let
     inherit pkgs;
     syntheticKeyFile = "${keyDirectory}/synthetic_api_key";
     exaKeyFile = "${keyDirectory}/exa_api_key";
+    openaiKeyFile = "${keyDirectory}/openai_api_key";
+    anthropicKeyFile = "${keyDirectory}/anthropic_api_key";
   };
   state = pkgs.writeScriptBin "pi-state" (
     "#!${pkgs.python3}/bin/python3\n"
@@ -53,7 +56,7 @@ let
 in
 {
   home.packages = [ pi ];
-  home.file.".pi/agent/model-lock.json".source = ./pi-model-lock.json;
+  home.file.".pi/agent/model-lock.json".source = lockFile;
   home.file.".pi/agent/dotfiles-policy.ts".source = "${policy}/dotfiles-policy.ts";
   home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/dotfiles-question.ts".source = ./pi-question.ts;
@@ -81,7 +84,10 @@ in
       ([ "piSettings" ] ++ lib.optional (config.my.kind == "darwin") "nixConfigSecretsPublish")
       ''
         if [[ ! -v DRY_RUN ]]; then
-          ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --auth-only --key ${lib.escapeShellArg "${keyDirectory}/synthetic_api_key"}
+          ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --auth-only \
+            --key ${lib.escapeShellArg "${keyDirectory}/synthetic_api_key"} \
+            --credential ${lib.escapeShellArg "openai=${keyDirectory}/openai_api_key"} \
+            --credential ${lib.escapeShellArg "anthropic=${keyDirectory}/anthropic_api_key"}
         fi
       ''
   );

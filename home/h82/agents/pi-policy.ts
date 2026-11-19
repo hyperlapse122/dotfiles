@@ -12,8 +12,21 @@ export default function (pi) {
       !Array.isArray(catalog.models) || !catalog.models.length) {
     throw new Error("The managed Synthetic model lock is unavailable.");
   }
-  const ids = new Set(catalog.models.map(model => model.id));
-  if (ids.size !== catalog.models.length) throw new Error("Duplicate locked Synthetic model.");
+  function lockedIds(lock, provider) {
+    if (!lock || lock.provider !== provider || !Array.isArray(lock.models) || !lock.models.length) {
+      throw new Error(`The managed ${provider} model lock is unavailable.`);
+    }
+    const ids = new Set(lock.models.map(model => model.id));
+    if (ids.size !== lock.models.length) throw new Error(`Duplicate locked ${provider} model.`);
+    return ids;
+  }
+  const locks = new Map([
+    ["synthetic", lockedIds(catalog, "synthetic")],
+    ["openai", lockedIds(document.openaiModelLocks, "openai")],
+    ["anthropic", lockedIds(document.anthropicModelLocks, "anthropic")],
+  ]);
+  const synthetic = locks.get("synthetic");
+  const allowed = (provider, id) => locks.get(provider)?.has(id) === true;
   function stop(context, message) {
     process.stderr.write(message + "\n");
     process.exitCode = 1;
@@ -24,19 +37,24 @@ export default function (pi) {
     const selected = [...branch].reverse().find(entry => entry.type === "model_change");
     // Native Pi otherwise resumes a removed selection using its default model.
     if (branch.some(entry => entry.type === "message") && selected &&
-        (selected.provider !== "synthetic" || !ids.has(selected.modelId))) {
-      stop(context, "The saved model is unavailable in the managed Synthetic lock.");
+        !allowed(selected.provider, selected.modelId)) {
+      stop(context, "The saved model is unavailable in the managed model lock.");
     }
   });
   // The packaged runtime enforces the catalog before project extensions load.
+  // A locked built-in provider may list fewer models than its lock, because
+  // the lock can name a model Pi's catalog does not define; Synthetic's must
+  // match its lock exactly.
   pi.on("resources_discover", async (_event, context) => {
     await context.modelRegistry.refresh();
     const models = context.modelRegistry.getAll();
-    if (models.length !== ids.size || models.some(model => model.provider !== "synthetic" || !ids.has(model.id))) {
-      stop(context, "The effective model catalog violates the managed Synthetic policy.");
+    const syntheticModels = models.filter(model => model.provider === "synthetic");
+    if (syntheticModels.length !== synthetic.size ||
+        models.some(model => !allowed(model.provider, model.id))) {
+      stop(context, "The effective model catalog violates the managed model lock.");
     }
-    if (context.model && (context.model.provider !== "synthetic" || !ids.has(context.model.id))) {
-      stop(context, "The selected model is not in the managed Synthetic lock.");
+    if (context.model && !allowed(context.model.provider, context.model.id)) {
+      stop(context, "The selected model is not in the managed model lock.");
     }
   });
 }

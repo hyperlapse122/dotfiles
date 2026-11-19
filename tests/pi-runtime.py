@@ -17,18 +17,30 @@ with tempfile.TemporaryDirectory() as directory:
     extra = dict(configured['providers']['synthetic']['models'][0], id='unlocked-model')
     configured['providers']['synthetic']['models'].append(extra)
     configured['providers']['foreign'] = dict(configured['providers']['synthetic'], models=[extra])
+    # A models.json entry cannot add a model to a locked provider.
+    configured['providers']['openai'] = dict(configured['providers']['synthetic'], models=[extra])
     (agent / 'models.json').write_text(json.dumps(configured))
     (agent / 'auth.json').write_text(json.dumps({
-        provider: {'type': 'api_key', 'key': 'FAKE'} for provider in ('synthetic', 'foreign')
+        provider: {'type': 'api_key', 'key': 'FAKE'}
+        for provider in ('synthetic', 'openai', 'anthropic', 'google', 'foreign')
     }))
+    lock = json.loads((agent / 'model-lock.json').read_text())
+    locked = {(provider, model['id']) for provider, key in [('openai', 'openaiModelLocks'), ('anthropic', 'anthropicModelLocks')]
+              for model in lock[key]['models']}
     env = dict(os.environ, HOME=directory, PI_CODING_AGENT_DIR=directory, PI_OFFLINE='1')
     result = subprocess.run([sys.argv[1], '--offline', '--no-extensions', '--extension',
                              str(agent / 'dotfiles-policy.ts'), '--list-models'],
                             env=env, capture_output=True, text=True, check=True)
     assert not result.stderr.strip(), result.stderr
     rows = [line.split()[:2] for line in result.stdout.splitlines()[1:] if line.strip()]
-    expected = json.loads((agent / 'model-lock.json').read_text())['syntheticModelLocks']['models']
-    assert sorted(rows) == sorted([['synthetic', model['id']] for model in expected]), result.stdout
+    expected = lock['syntheticModelLocks']['models']
+    wanted_rows = sorted([['synthetic', model['id']] for model in expected])
+    assert sorted(row for row in rows if row[0] == 'synthetic') == wanted_rows, result.stdout
+    # A locked provider lists models of its lock, and only those. Its lock can
+    # name a model Pi does not define, so the lock is an upper bound.
+    others = {(provider, model) for provider, model in rows if provider != 'synthetic'}
+    assert others and others <= locked, others - locked
+    assert {provider for provider, _model in others} == {'openai', 'anthropic'}, others
 
     project = agent / 'project'
     extensions = project / '.pi/extensions'
@@ -90,10 +102,16 @@ with tempfile.TemporaryDirectory() as directory:
             assert response['success'], response
             actual = {(model['provider'],model['id']) for model in response['data']['models']}
             wanted = {('synthetic',model['id']) for model in expected}
-            assert actual == wanted, f'Trusted project {stage} widened catalog: {actual-wanted}'
+            assert wanted <= actual, f'Trusted project {stage} dropped a Synthetic model: {wanted-actual}'
+            assert actual - wanted <= locked, f'Trusted project {stage} widened catalog: {actual-wanted-locked}'
+            assert {provider for provider, _model in actual - wanted} == {'openai', 'anthropic'}, actual - wanted
             for model in response['data']['models']:
-                assert model['baseUrl'] == configured['providers']['synthetic']['baseUrl'], model
-            for provider, model in [('foreign','unlocked-model'),('foreign','virtual'),('synthetic','unlocked-model')]:
+                if model['provider'] == 'synthetic':
+                    assert model['baseUrl'] == configured['providers']['synthetic']['baseUrl'], model
+                else:
+                    assert 'wrong.invalid' not in model['baseUrl'] and model['id'] != 'unlocked-model', model
+            for provider, model in [('foreign','unlocked-model'),('foreign','virtual'),('synthetic','unlocked-model'),
+                                    ('openai','unlocked-model'),('anthropic','unlocked-model'),('google','gemini-2.5-pro')]:
                 assert not rpc({'type':'set_model','provider':provider,'modelId':model})['success']
             assert rpc({'type':'set_model','provider':'synthetic','modelId':expected[0]['id']})['success']
 
@@ -113,7 +131,8 @@ with tempfile.TemporaryDirectory() as directory:
             selector.close()
 
     timestamp = '2026-01-01T00:00:00.000Z'
-    for provider, model_id in [('foreign', 'outside'), ('synthetic', 'removed-model')]:
+    for provider, model_id in [('foreign', 'outside'), ('synthetic', 'removed-model'),
+                               ('openai', 'removed-model'), ('anthropic', 'removed-model')]:
         saved = project / 'saved-session.jsonl'
         saved.write_text('\n'.join(json.dumps(entry) for entry in [
             {'type':'session','version':3,'id':'restore-probe','timestamp':timestamp,'cwd':str(project)},
@@ -129,7 +148,7 @@ with tempfile.TemporaryDirectory() as directory:
         try:
             restored.wait(timeout=10)
             _output, error = restored.communicate()
-            assert b'The saved model is unavailable in the managed Synthetic lock.' in error, error
+            assert b'The saved model is unavailable in the managed model lock.' in error, error
         except subprocess.TimeoutExpired:
             raise AssertionError('Pi kept a saved outside-model session open after restoration') from None
         finally:
