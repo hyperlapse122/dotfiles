@@ -9,6 +9,28 @@ let
   accounts = import ../../shared/cli-accounts.nix;
   available = cfg.sopsFile != null;
   publisher = import ../../../packages/publish-cli-auth.nix { inherit pkgs; };
+  opencode = import ../../../packages/opencode.nix { inherit pkgs; };
+  agentTools = import ../../../packages/agent-tools.nix { inherit pkgs; };
+  opencodeCredentials =
+    lib.optional cfg.enableSyntheticApiKey "synthetic=/run/secrets/cli-auth/synthetic_api_key"
+    ++ lib.optional cfg.enableOpencodeGoApiKey "opencode-go=/run/secrets/cli-auth/opencode_go_api_key"
+    ++ lib.optional cfg.enableOpenaiApiKey "openai=/run/secrets/cli-auth/openai_api_key"
+    ++ lib.optional cfg.enableAnthropicApiKey "anthropic=/run/secrets/cli-auth/anthropic_api_key";
+  opencodeCommand = lib.escapeShellArgs (
+    [
+      "${pkgs.util-linux}/bin/runuser"
+      "-u"
+      "h82"
+      "--"
+      "${agentTools.opencodeAuthSync}/bin/opencode-auth-sync"
+      "--opencode"
+      "${opencode}/bin/opencode"
+    ]
+    ++ lib.concatMap (spec: [
+      "--credential"
+      spec
+    ]) opencodeCredentials
+  );
   publishCommand = lib.escapeShellArgs [
     "${pkgs.util-linux}/bin/runuser"
     "-u"
@@ -168,7 +190,10 @@ in
                   mode = "0400";
                 });
           };
-          systemd.services.sops-install-secrets.serviceConfig.ExecStartPost = publishCommand;
+          systemd.services.sops-install-secrets.serviceConfig.ExecStartPost = [
+            publishCommand
+          ]
+          ++ lib.optional (opencodeCredentials != [ ]) opencodeCommand;
         })
         (lib.mkIf (!available) {
           systemd.services.sops-install-secrets.serviceConfig.ExecStart =

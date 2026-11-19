@@ -56,13 +56,4 @@
     protonVpn.enable = lib.mkDefault (!config.my.bootstrap);
   };
 
-  # A token-only switch does not otherwise change the Home Manager generation.
-  config.systemd.services.home-manager-h82 =
-    let
-      cfg = config.my.cliAuth;
-    in
-    lib.mkIf (!config.my.bootstrap && cfg.enable && cfg.sopsFile != null) {
-      after = [ "sops-install-secrets.service" ];
-      restartTriggers = [ "${cfg.sopsFile}" ];
-    };
 }

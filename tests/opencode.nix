@@ -36,7 +36,11 @@
 
   The builder collects every failure instead of exiting at the first.
 */
-{ pkgs, self }:
+{
+  pkgs,
+  self,
+  entries ? null,
+}:
 let
   inherit (pkgs) lib;
 
@@ -45,7 +49,7 @@ let
 
   esc = value: lib.escapeShellArg (toString value);
 
-  opencode = self.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
+  opencode = import ../packages/opencode.nix { inherit pkgs; };
   pinnedVersion = (builtins.fromJSON (builtins.readFile ../packages/opencode-release.json)).version;
   settingsFile = ".config/opencode/opencode.json";
 
@@ -214,19 +218,11 @@ let
       package = lib.lists.findFirst (p: (p.pname or "") == "opencode") null (
         userConfig.home.packages or [ ]
       );
-      keyDirectory =
-        if entry.kind == "nixos" then
-          "/run/secrets/cli-auth"
-        else
-          "${userConfig.my.secrets.stateDir or ""}";
+      keyDirectory = userConfig.my.secrets.stateDir or "";
       targeted = lib.any (file: (file.target or "") == settingsFile) (
         lib.attrValues (userConfig.home.file or { })
       );
-      authExpected = !entry.bootstrap;
-      authAfter = [
-        "opencodeSettings"
-      ]
-      ++ lib.optional (entry.kind == "darwin") "nixConfigSecretsPublish";
+      authExpected = entry.kind == "darwin" && !entry.bootstrap;
     in
     ''
       ${lib.optionalString (package == null) ''
@@ -285,7 +281,7 @@ let
         failed=1
       ''}
       ${lib.optionalString (!authExpected && auth != null) ''
-        echo 'bootstrap output ${hostName} must not import credentials: it holds no published keys' >&2
+        echo 'unexpected Home Manager credential import on ${hostName}' >&2
         failed=1
       ''}
       ${lib.optionalString (authExpected && auth != null) ''
@@ -301,53 +297,13 @@ let
           "--credential"
           "anthropic=${keyDirectory}/anthropic_api_key"
         ] hostName}
-        ${lib.concatMapStringsSep "\n" (dependency: ''
-          if [ ${esc (lib.boolToString (lib.elem dependency (afterOf auth)))} != true ]; then
-            echo 'opencodeAuth must run after ${dependency} on ${hostName}' >&2
-            failed=1
-          fi
-        '') authAfter}
+        if [ ${esc (lib.boolToString (lib.elem "nixConfigSecretsPublish" (afterOf auth)))} != true ]; then
+          echo 'opencodeAuth must run after nixConfigSecretsPublish on ${hostName}' >&2
+          failed=1
+        fi
       ''}
     '';
 
-  assertNixosRotation =
-    entry:
-    let
-      unit = text: lib.splitString "\n" (builtins.unsafeDiscardStringContext text);
-      readUnit = host: unit host.config.systemd.units."home-manager-h82.service".text;
-      field = name: lib.findFirst (lib.hasPrefix "${name}=") null;
-      withManifest =
-        revision:
-        readUnit (
-          self.nixosConfigurations.${entry.name}.extendModules {
-            modules = [
-              {
-                my.cliAuth.sopsFile = lib.mkForce (builtins.toFile "tokens.yaml" revision);
-              }
-            ];
-          }
-        );
-      before = withManifest "fake encrypted manifest before rotation";
-      after = withManifest "fake encrypted manifest after rotation";
-      beforeTrigger = field "X-Restart-Triggers" before;
-      afterTrigger = field "X-Restart-Triggers" after;
-      ordering = field "After" after;
-    in
-    lib.optionalString
-      (
-        beforeTrigger == null
-        || afterTrigger == null
-        || beforeTrigger == afterTrigger
-        || field "ExecStart" before != field "ExecStart" after
-        || ordering == null
-        || !lib.elem "sops-install-secrets.service" (
-          lib.splitString " " (lib.removePrefix "After=" ordering)
-        )
-      )
-      ''
-        echo 'a token-only rotation must restart Home Manager after SOPS on ${entry.name}' >&2
-        failed=1
-      '';
 in
 pkgs.runCommand "opencode-tests"
   {
@@ -357,11 +313,12 @@ pkgs.runCommand "opencode-tests"
     ];
   }
   ''
-    ${configurations.userGuard}
+    ${lib.optionalString (entries == null) configurations.userGuard}
     failed=0
 
-    ${lib.concatMapStringsSep "\n" assertHost configurations.userEntries}
-    ${lib.concatMapStringsSep "\n" assertNixosRotation configurations.production}
+    ${lib.concatMapStringsSep "\n" assertHost (
+      if entries == null then configurations.userEntries else entries
+    )}
 
     if [ "$failed" != "0" ]; then
       exit 1

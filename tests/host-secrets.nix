@@ -131,6 +131,10 @@ pkgs.runCommand "host-secrets-tests"
         [ "$(stat -c %a "$HOME/.local/state/cli-auth/$token")" = 400 ] || fail "$round: $token is not 0400"
       done
       [ "$(stat -c %a "$HOME/.local/state/cli-auth")" = 700 ] || fail "$round: the token directory is not 0700"
+      for provider in openai anthropic; do
+        grep -qx "FAKE-CANARY $provider" "$HOME/.local/state/cli-auth/$provider"_api_key ||
+          fail "$round: $provider did not receive its API key"
+      done
       grep -q FAKE-CANARY-github "$HOME/.config/gh/hosts.yml" || fail "$round: gh did not receive the token"
       [ "$(ssh-keygen -y -f "$HOME/.ssh/id_ed25519_nix_config" | cut -d' ' -f1,2)" = "$(cut -d' ' -f1,2 ${secrets}/ssh.pub)" ] ||
         fail "$round: the published SSH key is not the host key"

@@ -73,7 +73,7 @@ On macOS (`home/h82/security/non-nixos-secrets.nix` and `scripts/host-secrets`),
 
 `synthetic_api_key` backs Pi (`home/h82/agents/pi.nix` and `packages/pi.nix`): activation writes the `synthetic` credential in `~/.pi/agent/auth.json` via `pi-state`, which reads the published key file. It also backs OpenCode's `synthetic` credential.
 
-`opencode_go_api_key`, `openai_api_key`, and `anthropic_api_key` back OpenCode's `opencode-go`, `openai`, and `anthropic` credentials. `opencode-auth-sync` imports the published keys during Home Manager activation under the label `nix-config`. If a key changes, the helper replaces that account and keeps the previous account selection. On NixOS, a change to the encrypted token file triggers Home Manager activation even when the Home Manager generation is unchanged.
+`opencode_go_api_key`, `openai_api_key`, and `anthropic_api_key` back OpenCode's `opencode-go`, `openai`, and `anthropic` credentials. `opencode-auth-sync` imports the published keys under the label `nix-config` after SOPS publication on NixOS and during Home Manager activation on macOS. If a key changes, the helper replaces that account and keeps the previous account selection.
 
 For container pulls through `docker-credential-sops`, `github_token` must carry `read:packages` (or `write:packages`) and `gitlab_token` must carry `read_registry` (or `write_registry`). The public accounts declared in `modules/shared/cli-accounts.nix` are `hyperlapse122` on GitHub and `hyperlapse` on GitLab.com and `git.jpi.app`.
 

@@ -70,6 +70,10 @@ let
         ./korean-skills.nix
         ./flutter.nix
       ];
+  opencodeCheck = import ./opencode.nix {
+    inherit pkgs self;
+    entries = map (entry: entry // { kind = "darwin"; }) agentEntries;
+  };
   instructionDelivery = import ./agent-instructions.nix {
     inherit pkgs;
     entries = map (entry: {
@@ -646,6 +650,7 @@ pkgs.runCommand "darwin-outputs"
   }
   ''
     ${lib.concatMapStrings (check: "test -e ${check}\n") agentChecks}
+    test -e ${opencodeCheck}
     test -e ${instructionDelivery}
     fail=0
     bad() { echo "$name: $*" >&2; fail=1; }

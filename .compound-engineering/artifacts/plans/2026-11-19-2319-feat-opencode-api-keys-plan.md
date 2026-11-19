@@ -43,8 +43,8 @@ The owner has entered the keys securely, but the managed OpenCode setup does not
 ### Key Technical Decisions
 
 - KTD1. Add the two encrypted fields to the existing NixOS and Darwin publication paths, then pass their file paths to `opencode-auth-sync` using the built-in `openai` and `anthropic` integration IDs. The owner-supplied keys are already encrypted in `secrets/tokens.yaml`; keep that change intact.
-- KTD2. Tie the production NixOS Home Manager activation service to the encrypted manifest so a key-only rotation reruns the importer after SOPS publishes. Do not pass decrypted values through evaluation.
-- KTD3. Preserve the account already selected when the shared importer rotates a managed key. Restore the managed selection only if it was active before replacement and leave other accounts alone.
+- KTD2. On NixOS, invoke the importer as the user only after successful SOPS publication. This also covers a switch retried after decryption fails, without requiring a Home Manager generation change. On Darwin keep the Home Manager hook after secret publication.
+- KTD3. Preserve the account selected when the shared importer rotates a managed key, including after an interrupted import. Verify that the registered key matches and use an ID distinct from existing accounts for a first import.
 
 ## Implementation Units
 
@@ -54,7 +54,7 @@ The owner has entered the keys securely, but the managed OpenCode setup does not
 - **Requirements:** R1–R3.
 - **Files:** `modules/nixos/{profile.nix,system/secrets.nix}`, `scripts/{host-secrets,opencode-auth-sync}`, `home/h82/agents/opencode.nix`, `secrets/tokens.yaml`, `secrets/README.md`, `docs/macos.md`, and the existing publication and activation checks and fixtures.
 - **Approach:** Follow KTD1–KTD3 and update the macOS first-switch walkthrough and credential inventory.
-- **Test scenarios:** Exercise both keys in the existing fake-secret publication fixtures. Check production activation passes both provider IDs and matching files to the importer and bootstrap does not run it. On NixOS, change only the encrypted test manifest and verify activation is triggered. Exercise rotation with two accounts for the same provider, starting with the managed account selected and with the other account selected.
+- **Test scenarios:** Exercise both keys in the existing fake-secret publication fixtures. Check that production activates the correct credentials and bootstrap does not publish them. On NixOS, make the first rotation switch fail decryption and then check that retrying the same switch imports the new key. Check that rotating a managed key preserves the selected account, including when import or selection must be retried.
 - **Verification:** Run the affected publication and OpenCode checks supported by the local builder. Record platform checks that require CI separately.
 
 ## Verification Contract
