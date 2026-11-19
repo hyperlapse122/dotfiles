@@ -10,7 +10,7 @@ import sys
 import tempfile
 
 
-def validate(home):
+def validate(home, expected_opencode_addition):
     settings = json.loads((home / '.t3/userdata/settings.json').read_text())
     baseline = (home / '.claude/CLAUDE.md').read_text()
     assert '# T3 delegation' not in baseline
@@ -47,8 +47,7 @@ def validate(home):
     listed = json.loads(content[0]['value'])['instructions']
     relative = '.t3/userdata/instructions/opencode.md'
     assert len(listed) == 1 and listed[0].endswith('/' + relative), listed
-    opencode_addition = (home / relative).read_text()
-    assert '# T3 delegation' in opencode_addition and opencode_addition != addition
+    assert (home / relative).read_text() == expected_opencode_addition
     assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
     assert providers['custom-grok'] == {'driver': 'grok', 'enabled': False}
     assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.2-sol', 'options': [{'id': 'reasoningEffort', 'value': 'high'}, {'id': 'serviceTier', 'value': 'default'}]}
@@ -164,6 +163,9 @@ def main():
             context.write_text(json.dumps({'kind': 'darwin', 'locale': {'name': 'C.UTF-8', 'language': 'en'}}))
             subprocess.run([sys.executable, entry['helper'], '--context', str(context), '--template', entry['template'],
                             '--renderer', entry['renderer'], '--home', scratch], check=True)
+            context.write_text(json.dumps({'t3': True, 'opencode': True}))
+            expected_opencode_addition = subprocess.check_output(
+                [entry['renderer'], entry['template'], str(context)], text=True)
             baseline = (home / '.claude/CLAUDE.md').read_bytes()
             grok_instructions = home / '.grok/AGENTS.md'
             assert not grok_instructions.exists()
@@ -173,7 +175,7 @@ def main():
             assert hashlib.sha256(baseline).hexdigest() == entry['baselineHash']
             for _ in range(2):
                 run_activation(entry, home)
-                validate(home)
+                validate(home, expected_opencode_addition)
                 assert (home / '.claude/CLAUDE.md').read_bytes() == baseline
                 assert grok_instructions.read_text() == 'Existing Grok instructions\n'
             # Mutation witnesses: dropping delivery, baseline contamination,
@@ -188,7 +190,7 @@ def main():
                 mutate(document)
                 settings.write_text(json.dumps(document))
                 try:
-                    validate(home)
+                    validate(home, expected_opencode_addition)
                 except (AssertionError, ValueError):
                     pass
                 else:
