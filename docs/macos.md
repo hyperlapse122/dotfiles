@@ -143,7 +143,7 @@ Run these steps on the Mac, in order, from a local GUI login session, never over
     The production switch:
     - decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and ensures macOS admin SSL trust when `my.tlsInspectionCa.enable` is on (approve the macOS authorization dialog if prompted);
     - installs and selects Xcode through `xcodes` using the Apple Account decrypted in memory from `secrets/hosts/<host>/apple-account.yaml` (complete any interactive Apple Account 2FA or `sudo` prompt if asked);
-    - stages and publishes the CLI tokens (`~/.local/state/cli-auth/`), `gh` and `glab` configuration, Pi's Synthetic API key (`~/.pi/agent/auth.json`), and the host SSH key (`~/.ssh/id_ed25519_nix_config`) from `secrets/tokens.yaml` and `secrets/hosts/<host>/ssh.yaml`;
+    - stages and publishes the CLI tokens (`~/.local/state/cli-auth/`), `gh` and `glab` configuration, Pi's Synthetic API key (`~/.pi/agent/auth.json`), OpenCode's Synthetic and OpenCode Go credentials (its own credential store), and the host SSH key (`~/.ssh/id_ed25519_nix_config`) from `secrets/tokens.yaml` and `secrets/hosts/<host>/ssh.yaml`;
     - records `variant=production` in `/etc/nix-config-host`.
 
 13. **Exclude the host SSH private key from Time Machine by path.** Because `host-secrets` replaces `~/.ssh/id_ed25519_nix_config` atomically on every apply, a sticky file exclusion would be lost on the next switch; use a fixed-path exclusion (`-p`) with `sudo`:
@@ -205,6 +205,7 @@ Production activation publishes:
 - `gh` and `glab` configuration under `~/.config/gh` and `~/.config/glab-cli`;
 - CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, `opencode_go_api_key`);
 - the `synthetic` provider key in `~/.pi/agent/auth.json`;
+- the `synthetic` and `opencode-go` credentials in OpenCode's credential store, under the label `nix-config`;
 - the host SSH private key at `~/.ssh/id_ed25519_nix_config`.
 
 ### YubiKey PIN
@@ -306,9 +307,9 @@ Remove temporary containers, images, volumes, networks, and build caches as soon
 
 ### Xcode agent skills
 
-Every production apply exports the selected Xcode's agent skills after the Xcode step. The export is stored in `~/.local/state/nix-config/xcode-skills` and linked into all three managed skill roots. If export fails or is empty, activation warns once, keeps the previous skills, and retries on the next apply. A declared skill wins a name collision, which produces one warning.
+Every production apply exports the selected Xcode's agent skills after the Xcode step. The export is stored in `~/.local/state/nix-config/xcode-skills` and linked into all four managed skill roots. If export fails or is empty, activation warns once, keeps the previous skills, and retries on the next apply. A declared skill wins a name collision, which produces one warning.
 
-To remove the skills by hand, delete the links pointing into the state directory from `~/.claude/skills`, `~/.codex/skills`, and `~/.pi/agent/skills`, then delete the state directory. The next production apply reinstalls them.
+To remove the skills by hand, delete the links pointing into the state directory from `~/.claude/skills`, `~/.codex/skills`, `~/.pi/agent/skills`, and `~/.config/opencode/skills`, then delete the state directory. The next production apply reinstalls them.
 
 Repository checks cover the helper and its wiring. Check on the Mac that a signed-in harness session lists the skills, including once with the Xcode app closed.
 
