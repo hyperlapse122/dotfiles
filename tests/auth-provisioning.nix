@@ -40,6 +40,9 @@ pkgs.testers.nixosTest {
     imports = [
       inputs.sops-nix.nixosModules.sops
       ../modules/nixos/system/secrets.nix
+      # The OpenCode release is a dynamically linked binary that the
+      # production profile runs through nix-ld.
+      ../modules/nixos/system/nix-ld.nix
     ];
     system.switch.enable = true;
     boot.loader.grub.enable = pkgs.lib.mkForce false;
