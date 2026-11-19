@@ -162,7 +162,10 @@ pkgs.testers.nixosTest {
         assert keys == [expected], "SOPS publication did not import the expected fixture"
 
     assert_openai_key("FAKE openai")
-    rotate = "/run/current-system/specialisation/rotated/bin/switch-to-configuration switch"
+    # A failed switch still repoints /run/current-system at the specialisation,
+    # which holds no nested one, so resolve it before the first attempt.
+    rotated = machine.succeed("readlink -f /run/current-system/specialisation/rotated").strip()
+    rotate = rotated + "/bin/switch-to-configuration switch"
     machine.succeed("mv /var/lib/sops-nix/key.txt /var/lib/sops-nix/key.backup")
     machine.fail(rotate)
     assert_openai_key("FAKE openai")
