@@ -203,7 +203,7 @@ A macOS host is never a recipient of `secrets/wifi.yaml`, `secrets/tailscale.yam
 Production activation publishes:
 
 - `gh` and `glab` configuration under `~/.config/gh` and `~/.config/glab-cli`;
-- CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`);
+- CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, `opencode_go_api_key`);
 - the `synthetic` provider key in `~/.pi/agent/auth.json`;
 - the host SSH private key at `~/.ssh/id_ed25519_nix_config`.
 

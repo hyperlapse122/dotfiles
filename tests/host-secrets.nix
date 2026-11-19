@@ -127,7 +127,7 @@ pkgs.runCommand "host-secrets-tests"
       for file in .config/gh/hosts.yml .config/glab-cli/config.yml .ssh/id_ed25519_nix_config; do
         [ "$(stat -c %a "$HOME/$file")" = 600 ] || fail "$round: $file is not 0600"
       done
-      for token in github_token gitlab_token jpi_token tokscale_token synthetic_api_key exa_api_key openrouter_api_key; do
+      for token in github_token gitlab_token jpi_token tokscale_token synthetic_api_key exa_api_key openrouter_api_key opencode_go_api_key; do
         [ "$(stat -c %a "$HOME/.local/state/cli-auth/$token")" = 400 ] || fail "$round: $token is not 0400"
       done
       [ "$(stat -c %a "$HOME/.local/state/cli-auth")" = 700 ] || fail "$round: the token directory is not 0700"

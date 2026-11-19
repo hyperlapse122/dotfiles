@@ -62,11 +62,12 @@ tokscale_token: <Tokscale API token>      # NixOS opt-in: my.cliAuth.enableToksc
 synthetic_api_key: <Synthetic API key>    # NixOS opt-in: my.cliAuth.enableSyntheticApiKey
 exa_api_key: <Exa API key>                # NixOS opt-in: my.cliAuth.enableExaApiKey
 openrouter_api_key: <OpenRouter API key>  # NixOS opt-in: my.cliAuth.enableOpenRouterApiKey
+opencode_go_api_key: <OpenCode Go API key>  # NixOS opt-in: my.cliAuth.enableOpencodeGoApiKey
 ```
 
-On NixOS (`modules/nixos/system/secrets.nix`), `github_token`, `gitlab_token`, and `jpi_token` are always decrypted into `/run/secrets/cli-auth/` when `my.cliAuth.enable` is true, and the shared NixOS profile (`modules/nixos/profile.nix`) enables `enableTokscaleToken`, `enableSyntheticApiKey`, `enableExaApiKey`, and `enableOpenRouterApiKey` by default on production outputs.
+On NixOS (`modules/nixos/system/secrets.nix`), `github_token`, `gitlab_token`, and `jpi_token` are always decrypted into `/run/secrets/cli-auth/` when `my.cliAuth.enable` is true, and the shared NixOS profile (`modules/nixos/profile.nix`) enables `enableTokscaleToken`, `enableSyntheticApiKey`, `enableExaApiKey`, `enableOpenRouterApiKey`, and `enableOpencodeGoApiKey` by default on production outputs.
 
-On macOS (`home/h82/security/non-nixos-secrets.nix` and `scripts/host-secrets`), production activation always decrypts `github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, and `openrouter_api_key` into `~/.local/state/cli-auth/` (and removes any retired key files), failing activation before any symlink changes if any required key is missing or invalid. It never decrypts `docker_token`.
+On macOS (`home/h82/security/non-nixos-secrets.nix` and `scripts/host-secrets`), production activation always decrypts `github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, and `opencode_go_api_key` into `~/.local/state/cli-auth/` (and removes any retired key files), failing activation before any symlink changes if any required key is missing or invalid. It never decrypts `docker_token`.
 
 `synthetic_api_key` backs Pi (`home/h82/agents/pi.nix` and `packages/pi.nix`): activation writes the `synthetic` credential in `~/.pi/agent/auth.json` via `pi-state`, which reads the published key file.
 
