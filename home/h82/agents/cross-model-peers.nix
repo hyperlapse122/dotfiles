@@ -17,7 +17,7 @@ in
     type = lib.types.listOf lib.types.str;
     default = [ ];
     description = ''
-      Compound Engineering review route tokens (claude, codex)
+      Compound Engineering review route tokens (claude, codex, opencode)
       that CROSS_MODEL_PEERS allows. Each agent module adds the token of the
       harness it installs.
     '';
