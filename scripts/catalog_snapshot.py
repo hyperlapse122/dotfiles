@@ -87,11 +87,12 @@ def child_env(key_variable):
     return env
 
 
-def run_fetch(url, key, key_variable):
+def run_fetch(url, key, key_variable, headers=None, extra_args=()):
     """Run curl once; a non-empty key goes only on its stdin, never in its argv."""
+    lines = headers if headers is not None else ["Authorization: Bearer {key}"]
     return subprocess.run(
-        DEFAULT_FETCH + (["-H", "@-"] if key else []) + [url],
-        input=f"Authorization: Bearer {key}\n" if key else "",
+        DEFAULT_FETCH + list(extra_args) + (["-H", "@-"] if key else []) + [url],
+        input="".join(line.format(key=key) + "\n" for line in lines) if key else "",
         capture_output=True,
         text=True,
         env=child_env(key_variable),

@@ -23,7 +23,7 @@ jobs:
   update-dependencies:
     if: "!cancelled() && (github.event_name == 'schedule' || inputs.part != 'drift')"
     runs-on: ubuntu-24.04
-    timeout-minutes: 250
+    timeout-minutes: 260
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -117,13 +117,69 @@ jobs:
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 10
+      - name: Refresh the Pi OpenAI model lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot=home/h82/agents/pi-openai-model-lock.json
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo '::warning::OPENAI_API_KEY is not set; keeping the current Pi OpenAI model lock.'
+            exit 1
+          fi
+          if ! nix run .#pi-provider-locks-watch -- --provider openai --snapshot "$snapshot"; then
+            git restore -- "$snapshot"
+            echo '::warning::Pi OpenAI model lock refresh failed; keeping the committed snapshot.'
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
+            git add -- "$snapshot"
+            git commit -m 'chore(agents): refresh the pi openai model lock' -- "$snapshot"
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+        id: pi_openai_lock
+        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/catalogs
+        timeout-minutes: 5
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Refresh the Pi Anthropic model lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot=home/h82/agents/pi-anthropic-model-lock.json
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo '::warning::ANTHROPIC_API_KEY is not set; keeping the current Pi Anthropic model lock.'
+            exit 1
+          fi
+          if ! nix run .#pi-provider-locks-watch -- --provider anthropic --snapshot "$snapshot"; then
+            git restore -- "$snapshot"
+            echo '::warning::Pi Anthropic model lock refresh failed; keeping the committed snapshot.'
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
+            git add -- "$snapshot"
+            git commit -m 'chore(agents): refresh the pi anthropic model lock' -- "$snapshot"
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+        id: pi_anthropic_lock
+        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/updates/catalogs
+        timeout-minutes: 5
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       - name: Publish verified catalogs
         shell: bash
         run: |
           set -euo pipefail
           bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$RUNNER_TEMP/updates/catalogs-logs"
         id: publish_catalogs
-        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true')"
+        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true' || steps.pi_openai_lock.outputs.changed == 'true' || steps.pi_anthropic_lock.outputs.changed == 'true')"
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 40
@@ -490,9 +546,11 @@ jobs:
             echo '## Maintenance results'
             printf 'Catalog refresh: %s; changed: %s; publication: %s\n' "$CATALOG" "$CATALOG_CHANGED" "$CATALOG_PUSH"
             printf 'OpenCode Go catalog refresh: %s; changed: %s\n' "$GO_CATALOG" "$GO_CATALOG_CHANGED"
+            printf 'Pi OpenAI model lock refresh: %s; changed: %s\n' "$PI_OPENAI_LOCK" "$PI_OPENAI_LOCK_CHANGED"
+            printf 'Pi Anthropic model lock refresh: %s; changed: %s\n' "$PI_ANTHROPIC_LOCK" "$PI_ANTHROPIC_LOCK_CHANGED"
             printf 'Dependencies: %s; changed: %s; publication: %s; reconciliation: %s\n' "$DEPENDENCIES" "$DEPENDENCIES_CHANGED" "$DEPENDENCIES_PUSH" "$RECONCILE"
           } >> "$GITHUB_STEP_SUMMARY"
-          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
+          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$PI_OPENAI_LOCK" "$PI_ANTHROPIC_LOCK" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
             if [ "$outcome" = failure ] || [ "$outcome" = cancelled ]; then
               exit 1
             fi
@@ -505,6 +563,10 @@ jobs:
           CATALOG_CHANGED: ${{ steps.catalog.outputs.changed }}
           GO_CATALOG: ${{ steps.go_catalog.outcome }}
           GO_CATALOG_CHANGED: ${{ steps.go_catalog.outputs.changed }}
+          PI_OPENAI_LOCK: ${{ steps.pi_openai_lock.outcome }}
+          PI_OPENAI_LOCK_CHANGED: ${{ steps.pi_openai_lock.outputs.changed }}
+          PI_ANTHROPIC_LOCK: ${{ steps.pi_anthropic_lock.outcome }}
+          PI_ANTHROPIC_LOCK_CHANGED: ${{ steps.pi_anthropic_lock.outputs.changed }}
           CATALOG_PUSH: ${{ steps.publish_catalogs.outcome }}
           DEPENDENCIES: ${{ steps.update.outcome }}
           DEPENDENCIES_CHANGED: ${{ steps.update.outputs.changed }}

@@ -11,10 +11,33 @@
 +
 --- a/packages/coding-agent/src/core/model-runtime.ts
 +++ b/packages/coding-agent/src/core/model-runtime.ts
-@@ -222 +222 @@
+@@ -33,0 +34 @@
++	isModelType,
+@@ -72,0 +74 @@
++import dotfilesLock from "./dotfiles-model-lock.ts";
+@@ -170,0 +173,18 @@
++}
++
++const LOCKED_BUILTIN_PROVIDERS = ["openai", "anthropic"];
++const MANAGED_PROVIDERS = new Set(["synthetic", ...LOCKED_BUILTIN_PROVIDERS]);
++
++/** A built-in provider as shipped, limited to the chat models of its compiled lock, with no catalog refresh. */
++function lockedBuiltinProvider(providerId: string): Provider | undefined {
++	const lock = (dotfilesLock as Record<string, { models: { id: string }[] } | undefined>)[`${providerId}ModelLocks`];
++	const base = builtinProviderCatalog.builtinProviders().find((provider) => provider.id === providerId);
++	if (!lock || !base) return undefined;
++	const ids = new Set(lock.models.map((model) => model.id));
++	const allowed = (model: AnyModel) => isModelType(model, "chat") && ids.has(model.id);
++	const { refreshModels: _refreshModels, refreshModelsAuth: _refreshModelsAuth, ...shipped } = base;
++	return {
++		...shipped,
++		getModels: () => base.getModels().filter(allowed),
++		getAllModels: () => (base.getAllModels?.() ?? base.getModels()).filter(allowed),
++	};
+@@ -222 +242 @@
 -		const config = await ModelConfig.load(modelsPath);
 +		const config = ModelConfig.managed();
-@@ -289,7 +289 @@
+@@ -289,7 +309 @@
 -		return new Set([
 -			...this.builtins.keys(),
 -			...this.nativeExtensionProviders.keys(),
@@ -22,19 +45,19 @@
 -			...this.extensionProviders.keys(),
 -			...this.virtualModels.keys(),
 -		]);
-+		return new Set(["synthetic"]);
-@@ -299,0 +294,4 @@
-+		if (providerId !== "synthetic") {
++		return new Set(MANAGED_PROVIDERS);
+@@ -299,0 +314,4 @@
++		if (!MANAGED_PROVIDERS.has(providerId)) {
 +			this.models.deleteProvider(providerId);
 +			return undefined;
 +		}
-@@ -301,4 +299 @@
+@@ -301,4 +319 @@
 -		const virtualModels = [...(this.virtualModels.get(providerId)?.values() ?? [])].map((entry) => entry.model);
 -		if (virtualModels.length > 0) this.models.setProvider(withVirtualModels(providerId, provider, virtualModels));
 -		else if (provider) this.models.setProvider(provider);
 -		else this.models.deleteProvider(providerId);
 +		if (provider) this.models.setProvider(provider);
-@@ -310,15 +305,2 @@
+@@ -310,15 +325,2 @@
 -		const base = this.nativeExtensionProviders.get(providerId) ?? this.builtins.get(providerId);
 -		const extension = this.extensionProviders.get(providerId);
 -		if (!this.config.getProvider(providerId) && !extension) {
@@ -50,19 +73,19 @@
 -			this.compositionErrors.set(providerId, error instanceof Error ? error.message : String(error));
 -			return base;
 -		}
-+		if (providerId !== "synthetic") return undefined;
-+		return composeModelProvider(providerId, undefined, this.config, undefined);
-@@ -677,0 +660,3 @@
++		if (providerId === "synthetic") return composeModelProvider(providerId, undefined, this.config, undefined);
++		return lockedBuiltinProvider(providerId);
+@@ -677,0 +680,3 @@
 +		const canonical = this.models.getAllModels(model.provider).find((entry) => entry.id === model.id);
-+		if (!canonical) throw new ModelsError("provider", "Model is unavailable in the managed Synthetic lock.");
++		if (!canonical) throw new ModelsError("provider", "Model is unavailable in the managed model lock.");
 +		model = canonical as TModel;
-@@ -689 +674 @@
+@@ -689 +694 @@
 -		const requestModel: TModel = resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model;
 +		const requestModel: TModel = model;
-@@ -886 +871 @@
+@@ -886 +891 @@
 -		this.config = await ModelConfig.load(this.modelsPath);
 +		this.config = ModelConfig.managed();
-@@ -928,12 +913,2 @@
+@@ -928,12 +933,2 @@
 -	registerNativeProvider(provider: Provider): void {
 -		if (!provider.id.trim()) throw new Error("Provider id must not be empty.");
 -		this.extensionProviders.delete(provider.id);
@@ -76,8 +99,8 @@
 -		);
 -		void this.refresh({ allowNetwork: false });
 +	registerNativeProvider(_provider: Provider): void {
-+		// Managed registrations cannot replace the canonical Synthetic provider.
-@@ -965,21 +940,2 @@
++		// Managed registrations cannot replace a locked provider.
+@@ -965,21 +960,2 @@
 -	registerProvider(providerId: string, config: ProviderConfigInput): void {
 -		// Validate the incoming registration on its own, like the legacy registry:
 -		// a broken re-registration must throw without touching the stored config.
@@ -101,7 +124,7 @@
 -		void this.refresh({ allowNetwork: false });
 +	registerProvider(_providerId: string, _config: ProviderConfigInput): void {
 +		// The compiled model lock owns provider and model definitions.
-@@ -1001,19 +957,2 @@
+@@ -1001,19 +977,2 @@
 -	registerVirtualModel(definition: VirtualModelDefinition): void {
 -		const { provider: providerId, id } = definition;
 -		if (!providerId.trim() || !id.trim()) throw new Error("Virtual model provider and id must not be empty.");

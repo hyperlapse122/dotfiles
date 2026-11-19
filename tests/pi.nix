@@ -26,6 +26,7 @@ pkgs.runCommand "pi-tests"
       let
         found = lib.findFirst (p: (p.pname or "") == "pi") null entry.user.home.packages;
         decide = lib.findFirst (p: (p.pname or "") == "decide") null entry.user.home.packages;
+        authActivation = entry.user.home.activation.piAuth or null;
         keyDirectory =
           if entry.user.my.kind == "nixos" then "/run/secrets/cli-auth" else entry.user.my.secrets.stateDir;
       in
@@ -41,6 +42,13 @@ pkgs.runCommand "pi-tests"
         python3 ${./pi-wrapper.py} ${found}/bin/pi ${entry.user.home-files}/.pi/agent ${keyDirectory}
         python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state} ${found} ${./pi-trust.mjs}
         node --experimental-strip-types ${./pi-policy.mjs} ${entry.user.home-files}/.pi/agent
+      ''
+      + lib.optionalString (authActivation == null && !entry.user.my.bootstrap) ''
+        echo "missing home.activation.piAuth on production output ${entry.name}" >&2
+        failed=1
+      ''
+      + lib.optionalString (authActivation != null) ''
+        python3 ${./pi-activation.py} ${pkgs.writeText "pi-auth-block.sh" authActivation.data} ${entry.user.home.homeDirectory} ${keyDirectory} ${entry.user.home-files}/.pi/agent/model-lock.json || failed=1
       ''
       + executeActivation {
         script = entry.user.home.activation.piMcpSettings.data or "";

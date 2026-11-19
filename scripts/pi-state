@@ -30,12 +30,20 @@ def write(path, value):
         Path(temporary).unlink(missing_ok=True)
 
 
+def staged_key(path, label):
+    key = path.read_text().strip()
+    if not key or '\n' in key:
+        raise ValueError(f'Staged {label} credential is invalid')
+    return key
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--agent', type=Path, required=True)
     parser.add_argument('--plugin')
     parser.add_argument('--auth-only', action='store_true')
     parser.add_argument('--key', type=Path)
+    parser.add_argument('--credential', action='append', default=[], metavar='PROVIDER=FILE')
     parser.add_argument('--hide-model', action='append', default=[])
     args = parser.parse_args()
     agent = args.agent
@@ -71,14 +79,24 @@ def main():
             value['defaultModel'] = min(visible_ids)
         value['defaultProjectTrust'] = 'ask'
         value['defaultProvider'] = 'synthetic'
-        value['enabledModels'] = [f'synthetic/{model}' for model in visible_ids] if hidden_models else ['synthetic/*']
+        synthetic = [f'synthetic/{model}' for model in visible_ids] if hidden_models else ['synthetic/*']
+        value['enabledModels'] = synthetic + ['openai/*', 'anthropic/*']
         write(agent / 'settings.json', value)
+    updates = {}
     if args.key:
-        key = args.key.read_text().strip()
-        if not key or '\n' in key:
-            raise ValueError('Staged Synthetic credential is invalid')
+        updates['synthetic'] = staged_key(args.key, 'Synthetic')
+    for item in args.credential:
+        provider, _, path = item.partition('=')
+        if not provider or not path or '/' in provider:
+            raise ValueError('Credential must be PROVIDER=FILE')
+        try:
+            updates[provider] = staged_key(Path(path), provider)
+        except FileNotFoundError:
+            pass
+    if updates:
         auth = read(agent / 'auth.json')
-        auth['synthetic'] = {'type': 'api_key', 'key': key}
+        for provider, key in updates.items():
+            auth[provider] = {'type': 'api_key', 'key': key}
         write(agent / 'auth.json', auth)
 
 
