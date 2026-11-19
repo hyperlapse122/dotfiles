@@ -8,6 +8,7 @@ let
     ".claude/skills"
     ".codex/skills"
     ".pi/agent/skills"
+    ".config/opencode/skills"
   ];
 in
 {

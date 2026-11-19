@@ -3,12 +3,13 @@
 
     import ./tests/test-audit-skill.nix { inherit pkgs self fixtures; }
 
-  Asserts that the vendored test-audit skill reaches Claude Code and Codex for user
+  Asserts that the vendored test-audit skill reaches Claude Code, Codex, and OpenCode for user
   `h82` on every host this flake declares, and that its text stays
   generalized and attributed:
 
     Claude Code               ~/.claude/skills/test-audit
     Codex                     ~/.codex/skills/test-audit
+    OpenCode                  ~/.config/opencode/skills/test-audit
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
   NixOS and non-NixOS Linux user environments are both covered, and the
@@ -58,6 +59,7 @@ let
   roots = [
     ".claude/skills"
     ".codex/skills"
+    ".config/opencode/skills"
   ];
 
   upstream = "openclaw/openclaw";
