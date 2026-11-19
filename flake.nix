@@ -425,6 +425,7 @@
           claude = import ./tests/claude.nix { inherit pkgs self; };
           codex = import ./tests/codex.nix { inherit pkgs self; };
           codex-settings = import ./tests/codex-settings.nix { inherit pkgs self; };
+          opencode = import ./tests/opencode.nix { inherit pkgs self; };
           cargo-settings = import ./tests/cargo-settings.nix {
             inherit pkgs self;
             fixtures = [ ];
@@ -577,6 +578,9 @@
           opencode-release =
             pythonScriptCheck "opencode-release" ./scripts/opencode-release
               ./tests/test_opencode_release.py;
+          opencode-auth-sync =
+            pythonScriptCheck "opencode-auth-sync" ./scripts/opencode-auth-sync
+              ./tests/test_opencode_auth_sync.py;
           # The Claude helper runs against the pinned SDK with real Node, so the
           # check carries both instead of letting that test skip.
           agent-usage =

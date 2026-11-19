@@ -140,6 +140,9 @@ let
   # Resolves the newest stable OpenCode v2 release from the GitHub release list.
   opencodeRelease = pythonHelper "opencode-release" ../scripts/opencode-release;
 
+  # Seeds OpenCode's credential store from the published API key files.
+  opencodeAuthSync = pythonHelper "opencode-auth-sync" ../scripts/opencode-auth-sync;
+
   # Home Manager overrides the Synthetic key file per host kind.
   agentUsage = pkgs.lib.makeOverridable (
     {
@@ -222,6 +225,7 @@ in
     piRelease
     codexRelease
     opencodeRelease
+    opencodeAuthSync
     agentUsage
     npmRelease
     t3codeRelease
