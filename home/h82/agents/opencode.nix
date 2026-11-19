@@ -115,6 +115,7 @@ let
 in
 {
   home.packages = [ opencode ];
+  my.agents.crossModelPeers = [ "opencode" ];
 
   # OpenCode rewrites its own config (`plugin add` and the settings it saves),
   # so activation assigns the declared keys and leaves the rest as it wrote

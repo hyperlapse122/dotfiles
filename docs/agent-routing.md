@@ -12,7 +12,9 @@ Nix installs `untangle-codebase` and `prune-tests` in all four user skill roots.
 
 Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both NixOS and macOS. The package honors user-level `~/.acpx/config.json` and skips project-local `.acpxrc.json` when resolving configuration.
 
-The shared template retains the following T3 context separately for launch-time attachment. Ordinary instruction files do not include it.
+## OpenCode review recipients
+
+The shared `CROSS_MODEL_PEERS` list includes `claude`, `codex`, and `opencode` where those harnesses are installed. This makes the OpenCode route selectable in standalone and T3 sessions without changing the default peer in other harnesses. Before either CE review skill uses OpenCode, it must select an exact `provider/model` and disclose the recipients. If the allowlist is set, the OpenCode token authorizes the route, not the downstream provider. Direct Anthropic and OpenAI calls also need `claude` and `codex`, respectively. An unknown or unauthorized route is unavailable.
 
 ## Decide for subagent roles
 
@@ -38,12 +40,22 @@ Each recorded judgment included `insufficient_evidence`. Claude also launched a 
 
 ## T3 delegation
 
+The shared template renders these rules separately for T3 launch-time attachment. Ordinary instruction files do not include them.
+
 Follow T3 Code's orchestration guidance when choosing a delegation tool. Use a provider's native tool for same-provider foreground work when it can carry the required model, settings, and access. Use `delegate_task` for another provider, a worktree, background work, or a task that requests it.
 For CE cross-model review, implementation, and reasoning elevation, use T3 delegation in place of explicit acpx, provider CLI, and launcher-script calls. A CE call described as a shell-out is still covered.
 
 Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. The cross-model review exception below applies to access restrictions only. For T3 delegation, choose the child's model and effort as the T3 CE model selection section says and use T3 capability discovery to resolve the target and supported `target.options`. Give each child a self-contained brief with the goal, completion standard, required context, and accessible workspace or artifact paths. Include delegation guidance for children that need it.
 
 CE cross-model review peers (`ce-doc-review`, `ce-code-review`, and similar skills) require an isolated process: an empty workspace, read-only controls, restricted tool access, and no project context or MCP servers. `delegate_task` cannot enforce that isolation, and the owner accepts the risk. Never skip, downgrade, or declare a peer unavailable because the isolation cannot be provided. Run the peer through `delegate_task` with normal workspace and tool access, a self-contained brief that carries the reviewed material, and an instruction not to modify files. State in the review's coverage that isolation was not enforced. This waives only the isolation: the disclosure of what leaves the machine, an explicit user prohibition on external review, `cross_model_review_mode: off`, and CE's allowlist and route choice still apply.
+
+### OpenCode cross-model reviews
+
+In T3 OpenCode, `ce-doc-review` and `ce-code-review` use the current OpenCode instance for cross-model peers unless a preference explicitly binds a different harness or route. The skills retain their preference order. An explicit CE target such as `cross_model_peer: codex` keeps its CE route; a request for a GPT model only selects the family. An OpenCode target without a pin uses the first eligible family in CE's default order that the instance offers. An unavailable same-instance route does not automatically fall back to another harness.
+
+Pass the current instance and a catalog-qualified model to `delegate_task`. For example, an OpenAI host can request `anthropic/claude-opus-5-5` through the same OpenCode instance. Claude and GPT models use their respective ladder rows for model selection. OpenCode supplies the supported options and the default effort unless a pin names a supported setting. A model alias must identify one eligible catalog entry.
+
+T3's requested model is not evidence of what ran. If T3 has no executed model, use the completed OpenCode assistant message for that run. In OpenCode 2.3.2, the native message ID in T3 activity matches a `session_message` row with model and usage metadata. Read only those fields. For verified direct first-party routes, the record establishes the serving family, not the exact model returned by the provider. Without usable host evidence, skip automatic routing; without peer evidence, do not count agreement as independently verified.
 
 Run `ce-code-review` and `ce-simplify-code` in your own context, and delegate only the reviewers and other leaves those skills dispatch; never hand either skill whole to a child. In the brief of a child that runs verification, tell it to wait for a slow command to finish and never to interrupt it. Tell every child that evidence this machine cannot produce, such as a Darwin build on Linux, is recorded as deferred to CI, never as passed, and does not make its return incomplete.
 
@@ -122,7 +134,7 @@ Claude uses idle compaction before the cache expires. The T3 provider uses Claud
 
 Activation removes the retired Grok Build launch configuration and disables the default Grok instance. T3 Code 0.1.9 can otherwise restore the instance from session history.
 
-The repository's Compound Engineering review peers are Claude and Codex. Activation disables the former managed Antigravity ACP provider and removes its launch override on upgrade. Saved credentials and conversations stay on disk.
+Activation disables the former managed Antigravity ACP provider and removes its launch override on upgrade. Saved credentials and conversations stay on disk.
 
 T3 cannot enforce a read-only delegate. A read-only brief or worktree isolation does not supply that guarantee; CE workflows requiring enforced read-only access use their existing unavailable-route handling.
 

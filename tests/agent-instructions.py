@@ -12,8 +12,15 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # Independent content receipts: negation, repetition, deletion and foreign text
 # all change the complete normative body, including its order. Claude Code gets
 # its conversation language from its own settings, so its render has a receipt
-# of its own.
-EXPECTED = {'darwin': '5b0126eedb8a214d7fc77ae85c741653c8c6029d5bea6d6f5d4f823de5c1f435', 'darwin-claude': 'c5e836fe14c7a5e749ca3e902ec07006254eba107c9d40e7a71ee593554beea5', 'nixos': '999d7b38a709f0806c7bcbea3bbc88edafa69c451fb8a330a60cffc1f58fab9d', 'nixos-claude': 'b8301363dc5afa8808c5273270213855d050e085861cfd33542c5603a271464b', 't3': 'a8f041277add6e5aac8ce490dcc347d17353e8919dd522b47e5442e68c41e811'}
+# of its own. T3 OpenCode also has a distinct render for the review route.
+EXPECTED = {
+    'darwin': 'bfed80a9ad6039a0e9363c648bc484e48ee6ad53ef5642537492800d3feb2f6e',
+    'darwin-claude': 'c9b10b4f8133b3852564dbd652eb0a184f11be59df36f32b74bfc4cdf8496339',
+    'nixos': '0ee17abd2f6e8115307a6153676717e5470e24d175f9cc07c159f7d10b1c6982',
+    'nixos-claude': '329166aaa40790ea1c62b29b72f4e07ed3009f5737bf220729131c2555db5139',
+    't3': 'a8f041277add6e5aac8ce490dcc347d17353e8919dd522b47e5442e68c41e811',
+    't3-opencode': '5d7c65af6c88a9d09437ebad5fb82824a1e220ed6f703c142e16d0474261204e',
+}
 
 
 def body(home, harness):
@@ -21,7 +28,8 @@ def body(home, harness):
 
 
 def receipt(text, kind, harness=None):
-    key = kind + '-claude' if harness == 'claude' else kind
+    variant = f'{kind}-{harness}'
+    key = variant if variant in EXPECTED else kind
     assert hashlib.sha256(text.encode()).hexdigest() == EXPECTED[key], key
 
 
@@ -64,10 +72,10 @@ def exercise(template, helper, renderer, kind):
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
         source.write_text(template)
         for harness in (None, 'claude', 'codex', 'pi', 'opencode'):
-            context.write_text(json.dumps({'t3': True, **({harness: True} if harness else {})}))
+            context.write_text(json.dumps({'t3': True, **{name: name == harness for name in DELIVERIES}}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
             assert 'T3 delegation' in t3 and 'Writing skills' not in t3
-            check_receipt(t3, 't3')
+            check_receipt(t3, 't3', harness)
 
 
 def main():
