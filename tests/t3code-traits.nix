@@ -467,9 +467,6 @@ let
                       else
                         row
                     ) merge.contract.removePaths;
-                    # T3 Code starts OpenCode's server with this entry as
-                    # OPENCODE_CONFIG_CONTENT, so only T3 sessions list the
-                    # T3-only instruction file.
                     upsertPaths = [
                       {
                         path = [
@@ -747,13 +744,6 @@ pkgs.runCommand "t3code-traits" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     checkOpencodeEnabled "$name" "$merger" "$declared"
   }
 
-  # Merges the declared document into a settings.json that holds a disabled
-  # opencode instance with environment entries of its own, using the real
-  # merger: the merged file must hold the instance enabled with the T3-only
-  # instruction entry, also on a second run, and keep the instance's other
-  # entries, another provider's preference, and the keys the declaration does
-  # not touch. $2 is the packaged merger and $3 the declaration the activation
-  # passed it.
   checkOpencodeEnabled() {
     local name=$1 realMerger=$2 declared=$3
     if ! python3 -I ${./t3code-opencode-enabled.py} "$realMerger" "$declared" 2> opencode-enabled.log; then

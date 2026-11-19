@@ -22,8 +22,6 @@ PROTOCOL_BASES = {
     "generate-content": "https://opencode.ai/inference/go/google/v1",
 }
 
-# Answers from a queue of outcomes: an integer exits with that status the way
-# `curl -f` does, anything else is written to stdout as the response body.
 FAKE_CURL = """#!{python}
 import json, os, sys
 log = os.environ['FAKE_LOG']

@@ -23,7 +23,7 @@ let
 
   pythonHelper = name: src: helperWith name src pkgs.python3;
 
-  # The two catalog scripts import scripts/catalog_snapshot.py from their own
+  # The catalog scripts import scripts/catalog_snapshot.py from their own
   # directory, so each is installed beside it under libexec and linked into
   # bin.
   catalogHelper =

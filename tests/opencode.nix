@@ -10,15 +10,16 @@
   Verifies, per Home Manager user environment:
   - `opencode` is in user packages as the package this flake builds, at the
     version `packages/opencode-release.json` pins.
-  - `opencodeSettings` runs after installPackages, runs the packaged merger on
-    ~/.config/opencode/opencode.json without swallowing its exit status, and no
-    Home Manager file targets that path, which OpenCode rewrites.
+  - `opencodeSettings` runs after installPackages, and no Home Manager file
+    targets ~/.config/opencode/opencode.json, which OpenCode rewrites.
   - Applied in a scratch HOME over a seed that holds the owner's unpinned
     Compound Engineering plugin entry, another plugin, a user key, and a user
     model, the merge sets `update` to `disable`, leaves one pinned Compound
     Engineering entry beside the other plugin, writes the Synthetic models Pi
     shows with the rest disabled, writes every model of the Go snapshot, and
-    keeps the user's key and model. The expected values are computed here from
+    keeps the user's key and model. Running the activation in the scratch HOME
+    also proves the merger is aimed at that file and that a merger refusal fails
+    the activation. The expected values are computed here from
     the raw lock, hidden list, and catalog files, not from the module.
   - `opencodePlugin` runs after the settings and installs exactly the pinned
     spec.
@@ -233,17 +234,6 @@ let
       ${lib.optionalString (settings != null) ''
         if [ ${esc (lib.boolToString (lib.elem "installPackages" (afterOf settings)))} != true ]; then
           echo 'opencodeSettings must run after installPackages on ${hostName}' >&2
-          failed=1
-        fi
-        if printf '%s' ${esc (scriptOf settings)} | grep -v '^[[:space:]]*#' \
-          | grep -E '(\|\|[[:space:]]*(true|:|echo)|;[[:space:]]*true|set \+e)' >/dev/null; then
-          echo 'opencodeSettings must not swallow the merger exit status on ${hostName}' >&2
-          failed=1
-        fi
-        settingsArg=$(printf '%s' ${esc (scriptOf settings)} | tr '\n' ' ' \
-          | grep -oE -- '--settings[[:space:]]+[^[:space:]]+' | sed -n '1p' | awk '{print $2}' || true)
-        if [ "$settingsArg" != ${esc "${home}/${settingsFile}"} ]; then
-          echo "opencodeSettings must point the merger at ~/${settingsFile} on ${hostName}, got: '$settingsArg'" >&2
           failed=1
         fi
         ${executeActivation {

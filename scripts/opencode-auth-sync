@@ -39,7 +39,6 @@ def opencode(binary, *args):
         text=True,
     )
     if proc.returncode != 0:
-        # Stderr can echo the import path, never a key, but trim it anyway.
         detail = proc.stderr.strip().splitlines()[-1:] or [f"status {proc.returncode}"]
         raise Failure(f"opencode auth {args[0]} failed: {detail[0][:200]}")
     return proc.stdout
@@ -66,13 +65,10 @@ def stored_keys(binary, label):
         raise Failure("opencode auth export printed no list")
     found = {}
     for entry in exported:
-        value = entry.get("value") if isinstance(entry, dict) else None
-        if (
-            isinstance(entry, dict)
-            and entry.get("label") == label
-            and isinstance(value, dict)
-            and value.get("type") == "key"
-        ):
+        if not isinstance(entry, dict):
+            continue
+        value = entry.get("value")
+        if entry.get("label") == label and isinstance(value, dict) and value.get("type") == "key":
             found[entry.get("integrationID")] = value.get("key")
     return found
 

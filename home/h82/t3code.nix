@@ -62,16 +62,22 @@ let
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../../scripts/t3-instructions.py
   );
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
+  harnesses = [
+    "claude"
+    "codex"
+    "pi"
+    "opencode"
+  ];
   additions = pkgs.runCommand "t3-instruction-additions" { } ''
     mkdir -p "$out"
-    for harness in claude codex pi opencode; do
-      printf '{"t3":true,"claude":%s,"codex":%s,"pi":%s,"opencode":%s}' \
-        "$([ "$harness" = claude ] && echo true || echo false)" \
-        "$([ "$harness" = codex ] && echo true || echo false)" \
-        "$([ "$harness" = pi ] && echo true || echo false)" \
-        "$([ "$harness" = opencode ] && echo true || echo false)" > context.json
-      ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/$harness.md"
-    done
+    ${lib.concatMapStrings (harness: ''
+      printf '%s' ${
+        lib.escapeShellArg (
+          builtins.toJSON ({ t3 = true; } // lib.genAttrs harnesses (name: name == harness))
+        )
+      } > context.json
+      ${renderer}/bin/text-template ${./agents/instructions/instructions.md.tmpl} context.json > "$out/${harness}.md"
+    '') harnesses}
   '';
   settings = {
     addProjectBaseDirectory = "~/src";
@@ -126,10 +132,8 @@ let
         driver = "grok";
         enabled = false;
       };
-      # OpenCode resolves to the managed build in the shared user profile, not
-      # to whichever opencode comes first on PATH. It reads the baseline from
-      # ~/.config/opencode/AGENTS.md; the T3 additions arrive through the
-      # instance environment (see opencodeInstructions below).
+      # The managed build in the shared user profile, not whichever opencode
+      # comes first on PATH.
       opencode = {
         driver = "opencode";
         enabled = true;
@@ -371,7 +375,7 @@ in
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"
-              for harness in claude codex pi opencode; do
+              for harness in ${toString harnesses}; do
                 install -m 600 "${additions}/$harness.md" "${config.home.homeDirectory}/.t3/userdata/instructions/$harness.md"
               done
               ${composer}/bin/t3-instructions --destination ${lib.escapeShellArg config.home.homeDirectory} ${hiddenPiModelArgs}
