@@ -8,7 +8,7 @@ import sys
 import tempfile
 
 DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
-              'pi': '.pi/agent/AGENTS.md'}
+              'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md'}
 # Independent content receipts: negation, repetition, deletion and foreign text
 # all change the complete normative body, including its order. Claude Code gets
 # its conversation language from its own settings, so its render has a receipt
@@ -63,7 +63,7 @@ def exercise(template, helper, renderer, kind):
             assert harness + '-only' in text
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
         source.write_text(template)
-        for harness in (None, 'claude', 'codex', 'pi'):
+        for harness in (None, 'claude', 'codex', 'pi', 'opencode'):
             context.write_text(json.dumps({'t3': True, **({harness: True} if harness else {})}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
             assert 'T3 delegation' in t3 and 'Writing skills' not in t3
