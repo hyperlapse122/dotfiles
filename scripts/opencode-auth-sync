@@ -113,7 +113,6 @@ def credential(text):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--opencode", required=True, help="the opencode binary to run")
-    parser.add_argument("--label", default=LABEL, help="the account label this script owns (default: %(default)s)")
     parser.add_argument(
         "--credential",
         action="append",
@@ -124,7 +123,7 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     try:
-        sync(args.opencode, args.label, args.credential)
+        sync(args.opencode, LABEL, args.credential)
     except Failure as exc:
         print(f"opencode-auth-sync: {exc}", file=sys.stderr)
         return 1

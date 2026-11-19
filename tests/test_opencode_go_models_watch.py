@@ -15,12 +15,6 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/opencode-go-models-watch"
 URL = "https://opencode.ai/inference/go/v1/models"
-PROTOCOL_BASES = {
-    "chat-completions": "https://opencode.ai/inference/go/openai/v1",
-    "responses": "https://opencode.ai/inference/go/openai/v1",
-    "messages": "https://opencode.ai/inference/go/anthropic/v1",
-    "generate-content": "https://opencode.ai/inference/go/google/v1",
-}
 
 FAKE_CURL = """#!{python}
 import json, os, sys
@@ -37,20 +31,14 @@ sys.stdout.write(outcome)
 """
 
 
-def row(model_id, protocol="chat-completions", cost=True, **extra):
+def row(model_id, cost=True, **extra):
     entry = {
         "id": model_id,
         "object": "model",
         "name": model_id.title(),
         "type": "chat",
-        "recommended_api": protocol,
-        "api": {
-            protocol: {
-                "base_url": PROTOCOL_BASES[protocol],
-                "sdk": {"aisdk": "@ai-sdk/openai-compatible"},
-                "capabilities": {"tools": {"choice": ["auto"]}},
-            }
-        },
+        "recommended_api": "chat-completions",
+        "api": {"chat-completions": {"base_url": "https://opencode.ai/inference/go/openai/v1"}},
         "limit": {"context": 200000, "output": 64000},
     }
     if cost:
@@ -104,22 +92,22 @@ class OpencodeGoWatchTestCase(unittest.TestCase):
                 {
                     "id": "alpha",
                     "name": "Alpha",
-                    "recommended_api": "chat-completions",
-                    "api": {"chat-completions": {"base_url": PROTOCOL_BASES["chat-completions"]}},
                     "limit": {"context": 200000, "output": 64000},
                     "cost": {"text": {"input": {"price": 1.5, "cache": {"read": 0.15}}, "output": {"price": 6}}},
                 }
             ],
         )
 
-    def test_every_protocol_kind_validates_and_keeps_its_base_url(self):
-        body = catalog(*[row(f"model-{p}", protocol=p) for p in PROTOCOL_BASES])
-        data = {m["id"]: m for m in self.snapshot_of(body)["data"]}
-        self.assertEqual(len(data), 4)
-        for protocol, base in PROTOCOL_BASES.items():
-            entry = data[f"model-{protocol}"]
-            self.assertEqual(entry["recommended_api"], protocol)
-            self.assertEqual(entry["api"], {protocol: {"base_url": base}})
+    def test_a_row_served_over_any_protocol_is_kept(self):
+        other = row("responses-model", recommended_api="responses", api={"responses": {"base_url": "http://x"}})
+        data = self.snapshot_of(catalog(row("alpha"), other))["data"]
+        self.assertEqual([m["id"] for m in data], ["alpha", "responses-model"])
+
+    def test_a_cost_without_a_cache_keeps_no_cache(self):
+        entry = row("nocache")
+        del entry["cost"]["text"]["input"]["cache"]
+        data = self.snapshot_of(catalog(entry))["data"]
+        self.assertEqual(data[0]["cost"], {"text": {"input": {"price": 1.5}, "output": {"price": 6}}})
 
     def test_a_row_without_cost_keeps_none(self):
         data = self.snapshot_of(catalog(row("free", cost=False)))["data"]
@@ -160,8 +148,8 @@ class OpencodeGoWatchTestCase(unittest.TestCase):
 
     def test_a_malformed_row_is_skipped_and_its_previous_entry_survives(self):
         self.snapshot_of(catalog(row("alpha"), row("beta")))
-        broken = row("beta", protocol="messages")
-        broken["api"]["messages"]["base_url"] = "http://insecure.example"
+        broken = row("beta")
+        del broken["limit"]
         proc = self.run_watch(
             [json.dumps(catalog(row("alpha"), broken, row("gamma")))],
             ["--snapshot", str(self.snapshot)],
@@ -170,7 +158,7 @@ class OpencodeGoWatchTestCase(unittest.TestCase):
         self.assertIn("skipping catalog entry beta", proc.stderr)
         data = {m["id"]: m for m in json.loads(self.snapshot.read_text())["data"]}
         self.assertEqual(sorted(data), ["alpha", "beta", "gamma"])
-        self.assertEqual(data["beta"]["recommended_api"], "chat-completions")
+        self.assertEqual(data["beta"]["limit"], {"context": 200000, "output": 64000})
 
     def test_each_malformed_shape_is_skipped(self):
         def mutate(change):
@@ -179,12 +167,15 @@ class OpencodeGoWatchTestCase(unittest.TestCase):
             return entry
 
         shapes = {
-            "unknown protocol": lambda e: e["api"].update({"carrier-pigeon": {"base_url": "https://x"}}),
-            "recommends an absent protocol": lambda e: e.update({"recommended_api": "responses"}),
             "no limit": lambda e: e.pop("limit"),
             "string context": lambda e: e["limit"].update({"context": "big"}),
             "no name": lambda e: e.pop("name"),
             "cost without text": lambda e: e.update({"cost": {}}),
+            "cost without an input price": lambda e: e["cost"]["text"]["input"].pop("price"),
+            "cost without an output price": lambda e: e["cost"]["text"].pop("output"),
+            "string price": lambda e: e["cost"]["text"]["output"].update({"price": "6"}),
+            "boolean price": lambda e: e["cost"]["text"]["output"].update({"price": True}),
+            "cache without a read price": lambda e: e["cost"]["text"]["input"]["cache"].pop("read"),
         }
         for label, change in shapes.items():
             with self.subTest(label):

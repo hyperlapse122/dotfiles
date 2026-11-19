@@ -129,6 +129,18 @@ class OpencodeReleaseTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["version"], "2.3.10")
 
+    def test_a_release_candidate_tag_is_never_resolved(self):
+        body = releases(release("v2.4.0-rc1"), release("v2.3.2"))
+        result = self.run_release(body)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["version"], "2.3.2")
+
+    def test_a_corrupt_pin_file_is_replaced_by_the_resolved_release(self):
+        self.output.write_text("not json")
+        result = self.run_release(releases(release("v2.3.2")), ["-o", str(self.output)])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.output.read_text())["version"], "2.3.2")
+
     def test_skips_a_v2_prerelease_and_a_v2_draft(self):
         body = releases(
             release("v2.4.0", prerelease=True),

@@ -3,12 +3,6 @@
     {
       "id": "beam-free",
       "name": "Beam Free",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 131072
@@ -30,12 +24,6 @@
     {
       "id": "claude-haiku-5-5",
       "name": "Claude Haiku 5.5",
-      "recommended_api": "messages",
-      "api": {
-        "messages": {
-          "base_url": "https://opencode.ai/inference/go/anthropic/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 128000
@@ -45,36 +33,11 @@
           "input": {
             "price": 0.1,
             "cache": {
-              "read": 0.01,
-              "write": 0.125
-            },
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 100000
-                  }
-                },
-                "price": 0.5,
-                "cache": {
-                  "read": 0.05,
-                  "write": 0.625
-                }
-              }
-            ]
+              "read": 0.01
+            }
           },
           "output": {
-            "price": 0.5,
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 100000
-                  }
-                },
-                "price": 2.5
-              }
-            ]
+            "price": 0.5
           }
         }
       }
@@ -82,12 +45,6 @@
     {
       "id": "deepseek-v4-pro",
       "name": "DeepSeek V4 Pro",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 384000
@@ -109,12 +66,6 @@
     {
       "id": "deepseek-v4.1-flash",
       "name": "DeepSeek V4.1 Flash 1017",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 384000
@@ -136,12 +87,6 @@
     {
       "id": "gemini-4-argon",
       "name": "Gemini 4 Argon",
-      "recommended_api": "generate-content",
-      "api": {
-        "generate-content": {
-          "base_url": "https://opencode.ai/inference/go/google/v1beta"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 65536
@@ -163,12 +108,6 @@
     {
       "id": "glm-5.3",
       "name": "GLM-5.3",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 131072
@@ -190,12 +129,6 @@
     {
       "id": "glm-5.3-flash",
       "name": "GLM-5.3-Flash",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 131072
@@ -217,12 +150,6 @@
     {
       "id": "gpt-5.6-luna",
       "name": "GPT-5.6 Luna",
-      "recommended_api": "responses",
-      "api": {
-        "responses": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1050000,
         "output": 128000
@@ -232,42 +159,11 @@
           "input": {
             "price": 0.2,
             "cache": {
-              "read": 0.02,
-              "write": {
-                "30m": 0.25,
-                "12h": 0.5
-              }
-            },
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 272000
-                  }
-                },
-                "price": 0.4,
-                "cache": {
-                  "read": 0.04,
-                  "write": {
-                    "30m": 0.5,
-                    "12h": 1
-                  }
-                }
-              }
-            ]
+              "read": 0.02
+            }
           },
           "output": {
-            "price": 1.2,
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 272000
-                  }
-                },
-                "price": 1.8
-              }
-            ]
+            "price": 1.2
           }
         }
       }
@@ -275,12 +171,6 @@
     {
       "id": "gpt-6-luna",
       "name": "GPT-6 Luna",
-      "recommended_api": "responses",
-      "api": {
-        "responses": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1050000,
         "output": 128000
@@ -290,42 +180,11 @@
           "input": {
             "price": 0.1,
             "cache": {
-              "read": 0.01,
-              "write": {
-                "30m": 0.125,
-                "12h": 0.25
-              }
-            },
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 272000
-                  }
-                },
-                "price": 0.2,
-                "cache": {
-                  "read": 0.02,
-                  "write": {
-                    "30m": 0.25,
-                    "12h": 0.5
-                  }
-                }
-              }
-            ]
+              "read": 0.01
+            }
           },
           "output": {
-            "price": 0.5,
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 272000
-                  }
-                },
-                "price": 0.75
-              }
-            ]
+            "price": 0.5
           }
         }
       }
@@ -333,12 +192,6 @@
     {
       "id": "grok-4.7",
       "name": "Grok 4.7",
-      "recommended_api": "responses",
-      "api": {
-        "responses": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 500000,
         "output": 500000
@@ -349,33 +202,10 @@
             "price": 2,
             "cache": {
               "read": 0.5
-            },
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 200000
-                  }
-                },
-                "price": 4,
-                "cache": {
-                  "read": 1
-                }
-              }
-            ]
+            }
           },
           "output": {
-            "price": 6,
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 200000
-                  }
-                },
-                "price": 12
-              }
-            ]
+            "price": 6
           }
         }
       }
@@ -383,12 +213,6 @@
     {
       "id": "hy3",
       "name": "Hy3",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 256000,
         "output": 128000
@@ -410,12 +234,6 @@
     {
       "id": "hy4",
       "name": "Hy4",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 65536
@@ -437,12 +255,6 @@
     {
       "id": "hy4-flash-free",
       "name": "Hy4 flash Free",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 65536
@@ -464,12 +276,6 @@
     {
       "id": "hy4-preview",
       "name": "Hy4 preview",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1024000,
         "output": 64000
@@ -491,12 +297,6 @@
     {
       "id": "iceman-contributor-free",
       "name": "Iceman Contributor Free",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 262144,
         "output": 131072
@@ -518,12 +318,6 @@
     {
       "id": "kimi-k2.7-code",
       "name": "Kimi K2.7 Code",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 262144,
         "output": 262144
@@ -545,12 +339,6 @@
     {
       "id": "kimi-k3",
       "name": "Kimi K3",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 1048576
@@ -560,8 +348,7 @@
           "input": {
             "price": 3,
             "cache": {
-              "read": 0.3,
-              "write": 3
+              "read": 0.3
             }
           },
           "output": {
@@ -573,12 +360,6 @@
     {
       "id": "kimi-k3.1-pro",
       "name": "Kimi K3.1 Pro",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 1048576
@@ -588,8 +369,7 @@
           "input": {
             "price": 2,
             "cache": {
-              "read": 0.2,
-              "write": 2
+              "read": 0.2
             }
           },
           "output": {
@@ -601,12 +381,6 @@
     {
       "id": "longcat-2.0",
       "name": "LongCat-2.0",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 131072
@@ -628,12 +402,6 @@
     {
       "id": "longcat-2.5-free",
       "name": "LongCat 2.5 Free",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 262144
@@ -655,12 +423,6 @@
     {
       "id": "mimo-v2.6-flash",
       "name": "MiMo-V2.6-Flash",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 131072
@@ -682,12 +444,6 @@
     {
       "id": "mimo-v2.6-pro",
       "name": "MiMo-V2.6-Pro",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 131072
@@ -709,12 +465,6 @@
     {
       "id": "minimax-m3",
       "name": "MiniMax-M3",
-      "recommended_api": "messages",
-      "api": {
-        "messages": {
-          "base_url": "https://opencode.ai/inference/go/anthropic/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 131072
@@ -725,33 +475,10 @@
             "price": 0.3,
             "cache": {
               "read": 0.06
-            },
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 512000
-                  }
-                },
-                "price": 0.6,
-                "cache": {
-                  "read": 0.12
-                }
-              }
-            ]
+            }
           },
           "output": {
-            "price": 1.2,
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 512000
-                  }
-                },
-                "price": 2.4
-              }
-            ]
+            "price": 1.2
           }
         }
       }
@@ -759,12 +486,6 @@
     {
       "id": "minimax-m3.1-flash",
       "name": "MiniMax M3.1 Flash",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 512000
@@ -786,12 +507,6 @@
     {
       "id": "muse-spark-1.2-contributor",
       "name": "Muse Spark 1.2 Contributor",
-      "recommended_api": "responses",
-      "api": {
-        "responses": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 131072
@@ -813,12 +528,6 @@
     {
       "id": "muse-spark-1.3-contributor",
       "name": "Muse Spark 1.3 Contributor",
-      "recommended_api": "responses",
-      "api": {
-        "responses": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1048576,
         "output": 131072
@@ -840,12 +549,6 @@
     {
       "id": "qwen3.7-plus",
       "name": "Qwen3.7 Plus",
-      "recommended_api": "messages",
-      "api": {
-        "messages": {
-          "base_url": "https://opencode.ai/inference/go/anthropic/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 65536
@@ -855,36 +558,11 @@
           "input": {
             "price": 0.4,
             "cache": {
-              "read": 0.04,
-              "write": 0.5
-            },
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 256000
-                  }
-                },
-                "price": 1.2,
-                "cache": {
-                  "read": 0.12,
-                  "write": 1.5
-                }
-              }
-            ]
+              "read": 0.04
+            }
           },
           "output": {
-            "price": 1.6,
-            "overrides": [
-              {
-                "when": {
-                  "context": {
-                    "gt": 256000
-                  }
-                },
-                "price": 4.8
-              }
-            ]
+            "price": 1.6
           }
         }
       }
@@ -892,12 +570,6 @@
     {
       "id": "qwen3.8-flash",
       "name": "Qwen3.8 Flash",
-      "recommended_api": "messages",
-      "api": {
-        "messages": {
-          "base_url": "https://opencode.ai/inference/go/anthropic/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 131072
@@ -907,8 +579,7 @@
           "input": {
             "price": 0.15,
             "cache": {
-              "read": 0.016,
-              "write": 0.2
+              "read": 0.016
             }
           },
           "output": {
@@ -920,12 +591,6 @@
     {
       "id": "qwen3.8-max",
       "name": "Qwen3.8 Max",
-      "recommended_api": "messages",
-      "api": {
-        "messages": {
-          "base_url": "https://opencode.ai/inference/go/anthropic/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 131072
@@ -935,8 +600,7 @@
           "input": {
             "price": 2,
             "cache": {
-              "read": 0.25,
-              "write": 2.5
+              "read": 0.25
             }
           },
           "output": {
@@ -948,12 +612,6 @@
     {
       "id": "qwen4-max",
       "name": "Qwen4 Max",
-      "recommended_api": "messages",
-      "api": {
-        "messages": {
-          "base_url": "https://opencode.ai/inference/go/anthropic/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 262144
@@ -963,11 +621,7 @@
           "input": {
             "price": 1.5,
             "cache": {
-              "read": 0.075,
-              "write": {
-                "5m": 1.875,
-                "1h": 3
-              }
+              "read": 0.075
             }
           },
           "output": {
@@ -979,12 +633,6 @@
     {
       "id": "step-5-preview",
       "name": "Step 5 Preview",
-      "recommended_api": "chat-completions",
-      "api": {
-        "chat-completions": {
-          "base_url": "https://opencode.ai/inference/go/openai/v1"
-        }
-      },
       "limit": {
         "context": 1000000,
         "output": 65536

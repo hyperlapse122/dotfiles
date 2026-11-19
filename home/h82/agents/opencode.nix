@@ -130,11 +130,14 @@ in
   '';
 
   # Installs the pinned plugin into OpenCode's cache now, instead of leaving
-  # the first session to fetch it in the background. The entry is already in
-  # the config, so this only reports that and installs.
+  # the first session to fetch it in the background. It fetches from GitHub,
+  # so a failure warns and the switch goes on; OpenCode installs the plugin
+  # itself on first use.
   home.activation.opencodePlugin = lib.hm.dag.entryAfter [ "opencodeSettings" ] ''
     if [[ ! -v DRY_RUN ]]; then
-      ${opencode}/bin/opencode plugin add ${lib.escapeShellArg pluginSpec}
+      if ! ${opencode}/bin/opencode plugin add ${lib.escapeShellArg pluginSpec}; then
+        echo 'opencodePlugin: could not pre-install the pinned plugin; OpenCode installs it on first use.' >&2
+      fi
     fi
   '';
 

@@ -21,11 +21,14 @@
     also proves the merger is aimed at that file and that a merger refusal fails
     the activation. The expected values are computed here from
     the raw lock, hidden list, and catalog files, not from the module.
-  - `opencodePlugin` runs after the settings and installs exactly the pinned
-    spec.
-  - `opencodeAuth` exists on production outputs and not on bootstrap ones, runs
-    after the settings (and after secret publication on macOS), and names the
-    published key file of each integration without any key text.
+  - `opencodePlugin` runs after the settings. Executed against a recording
+    stub, it passes exactly `plugin add <pinned spec>`, does nothing on a dry
+    run, and warns without failing when the install fails.
+  - `opencodeAuth` exists on production outputs and not on bootstrap ones and
+    runs after the settings (and after secret publication on macOS). Executed
+    against a recording stub, it passes the managed binary and the published
+    key file of each integration, does nothing on a dry run, and fails when the
+    sync fails. No key text appears in it.
 
   Every lookup carries an `or` fallback and every conditional block sits behind
   `lib.optionalString`, so a removed declaration fails inside the builder
@@ -109,6 +112,20 @@ let
       };
     }) goRows
   );
+
+  authSync = "${
+    (import ../packages/agent-tools.nix { inherit pkgs; }).opencodeAuthSync
+  }/bin/opencode-auth-sync";
+
+  # Runs an activation block against recording stubs for the tools it names.
+  runBlock = mode: activation: home: expected: hostName: ''
+    if ! python3 ${./opencode-activation.py} ${mode} ${
+      pkgs.writeText "opencode-${mode}-block.sh" (activation.data or "")
+    } ${esc home} ${opencode}/bin/opencode ${authSync} ${pkgs.writeText "opencode-${mode}-expected.json" (builtins.toJSON expected)}; then
+      echo 'the opencode ${mode} activation did not run as expected on ${hostName}' >&2
+      failed=1
+    fi
+  '';
 
   repository = "compound-engineering@git+https://github.com/${pin.upstream}";
   pinnedSpec = "${repository}.git#${pin.expectedRev}";
@@ -260,10 +277,7 @@ let
           echo 'opencodePlugin must run after opencodeSettings on ${hostName}' >&2
           failed=1
         fi
-        if ! printf '%s' ${esc (scriptOf plugin)} | grep -qF -- ${esc "plugin add '${pinnedSpec}'"}; then
-          echo 'opencodePlugin must install exactly the pinned plugin spec on ${hostName}' >&2
-          failed=1
-        fi
+        ${runBlock "plugin" plugin home [ "plugin" "add" pinnedSpec ] hostName}
       ''}
 
       ${lib.optionalString (authExpected && auth == null) ''
@@ -275,16 +289,14 @@ let
         failed=1
       ''}
       ${lib.optionalString (authExpected && auth != null) ''
-        script=${esc (scriptOf auth)}
-        for want in \
-          ${esc "--credential synthetic=${keyDirectory}/synthetic_api_key"} \
-          ${esc "--credential opencode-go=${keyDirectory}/opencode_go_api_key"} \
-          ${esc "--opencode ${opencode}/bin/opencode"}; do
-          if ! printf '%s' "$script" | tr '\n\\' '  ' | grep -qF -- "$want"; then
-            echo "opencodeAuth on ${hostName} lacks: $want" >&2
-            failed=1
-          fi
-        done
+        ${runBlock "auth" auth home [
+          "--opencode"
+          "${opencode}/bin/opencode"
+          "--credential"
+          "synthetic=${keyDirectory}/synthetic_api_key"
+          "--credential"
+          "opencode-go=${keyDirectory}/opencode_go_api_key"
+        ] hostName}
         ${lib.concatMapStringsSep "\n" (dependency: ''
           if [ ${esc (lib.boolToString (lib.elem dependency (afterOf auth)))} != true ]; then
             echo 'opencodeAuth must run after ${dependency} on ${hostName}' >&2
@@ -294,15 +306,22 @@ let
       ''}
     '';
 in
-pkgs.runCommand "opencode-tests" { nativeBuildInputs = [ pkgs.diffutils ]; } ''
-  ${configurations.userGuard}
-  failed=0
+pkgs.runCommand "opencode-tests"
+  {
+    nativeBuildInputs = [
+      pkgs.diffutils
+      pkgs.python3
+    ];
+  }
+  ''
+    ${configurations.userGuard}
+    failed=0
 
-  ${lib.concatMapStringsSep "\n" assertHost configurations.userEntries}
+    ${lib.concatMapStringsSep "\n" assertHost configurations.userEntries}
 
-  if [ "$failed" != "0" ]; then
-    exit 1
-  fi
+    if [ "$failed" != "0" ]; then
+      exit 1
+    fi
 
-  touch $out
-''
+    touch $out
+  ''

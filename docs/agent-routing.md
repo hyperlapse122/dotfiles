@@ -1,6 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, and Pi each receive their own render.
+The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
 
 The shared instructions call for one `decide` judgment during CI triage when the failure evidence leaves multiple plausible read-only checks and the answer would change which check runs first. The agent verifies the suggested lead and continues the investigation if the tool yields no usable answer. [Decide MCP tool](decide.md#use-the-mcp-tool)
 

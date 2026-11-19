@@ -5,10 +5,10 @@ Fetches OpenCode Go's public model list, which answers without a key, and
 prints a snapshot to stdout, or with `--snapshot FILE` rewrites the committed
 snapshot and leaves FILE untouched unless the content changes. The snapshot
 keeps every well-formed row, sorted by `id`, trimmed to the fields the
-provider render reads: `id`, `name`, `recommended_api`, the `api` base URL of
-each protocol the model is served over, `limit`, and the text `cost` when the
-row has one. The endpoint serves four protocols (chat-completions, responses,
-messages, generate-content), and a row naming any other is malformed.
+provider render reads: `id`, `name`, `limit`, and the text prices of `cost`
+(input, output, and cache read) when the row has one. A row whose `cost` lacks
+a numeric price the render needs is malformed, so it never reaches the
+snapshot and breaks evaluation of every host that reads it.
 
 A malformed row is skipped with a warning naming it on stderr, keeping its
 previous entry from FILE when one exists. A fetch that fails is retried once
@@ -40,7 +40,6 @@ from catalog_snapshot import (  # noqa: E402
 
 DEFAULT_URL = "https://opencode.ai/inference/go/v1/models"
 DEFAULT_RETRY_WAIT = 30
-PROTOCOLS = ("chat-completions", "responses", "messages", "generate-content")
 
 
 def fetch(url, retry_wait):
@@ -63,6 +62,28 @@ def fetch(url, retry_wait):
     raise Failure(f"fetching {url} failed twice")
 
 
+def is_price(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def text_cost(model_id, cost):
+    """The input, output, and cache-read prices of a row's text cost."""
+    text = cost.get("text") if isinstance(cost, dict) else None
+    source_in = text.get("input") if isinstance(text, dict) else None
+    source_out = text.get("output") if isinstance(text, dict) else None
+    if not isinstance(source_in, dict) or not is_price(source_in.get("price")):
+        raise Failure(f"catalog entry {model_id} has no numeric text input price")
+    if not isinstance(source_out, dict) or not is_price(source_out.get("price")):
+        raise Failure(f"catalog entry {model_id} has no numeric text output price")
+    kept = {"input": {"price": source_in["price"]}, "output": {"price": source_out["price"]}}
+    cache = source_in.get("cache")
+    if cache is not None:
+        if not isinstance(cache, dict) or not is_price(cache.get("read")):
+            raise Failure(f"catalog entry {model_id} has no numeric text cache read price")
+        kept["input"]["cache"] = {"read": cache["read"]}
+    return kept
+
+
 def snapshot_row(row):
     """The trimmed row for one catalog entry, or a Failure naming the bad field."""
     model_id = row.get("id") if isinstance(row, dict) else None
@@ -71,34 +92,17 @@ def snapshot_row(row):
     name = row.get("name")
     if not isinstance(name, str) or name == "":
         raise Failure(f"catalog entry {model_id} has no valid name")
-    api = row.get("api")
-    if not isinstance(api, dict) or not api:
-        raise Failure(f"catalog entry {model_id} has no valid api")
-    urls = {}
-    for protocol, block in api.items():
-        base_url = block.get("base_url") if isinstance(block, dict) else None
-        if protocol not in PROTOCOLS or not isinstance(base_url, str) or not base_url.startswith("https://"):
-            raise Failure(f"catalog entry {model_id} has no valid {protocol} api block")
-        urls[protocol] = {"base_url": base_url}
-    recommended = row.get("recommended_api")
-    if recommended not in urls:
-        raise Failure(f"catalog entry {model_id} recommends a protocol its api lacks")
     limit = row.get("limit")
     if not isinstance(limit, dict) or not is_int(limit.get("context")) or not is_int(limit.get("output")):
         raise Failure(f"catalog entry {model_id} has no valid limit")
     kept = {
         "id": model_id,
         "name": name,
-        "recommended_api": recommended,
-        "api": {protocol: urls[protocol] for protocol in sorted(urls)},
         "limit": {"context": limit["context"], "output": limit["output"]},
     }
     cost = row.get("cost")
     if cost is not None:
-        text = cost.get("text") if isinstance(cost, dict) else None
-        if not isinstance(text, dict):
-            raise Failure(f"catalog entry {model_id} has a cost without a text block")
-        kept["cost"] = {"text": text}
+        kept["cost"] = {"text": text_cost(model_id, cost)}
     return kept
 
 

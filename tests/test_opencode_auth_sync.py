@@ -165,6 +165,28 @@ class OpencodeAuthSyncTestCase(unittest.TestCase):
         imported = self.calls()[-1]
         self.assertFalse(Path(imported["path"]).parent.exists())
 
+    def test_a_failed_export_stops_before_any_logout_or_import(self):
+        self.store.write_text(json.dumps([account("synthetic", "old key")]))
+        proc = self.run_sync(env={"FAKE_FAIL": "export"})
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("opencode auth export failed", proc.stderr)
+        self.assertEqual(self.verbs(), ["export"])
+
+    def test_a_failed_logout_stops_before_the_import(self):
+        self.store.write_text(json.dumps([account("synthetic", "old key")]))
+        proc = self.run_sync(env={"FAKE_FAIL": "logout"})
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("opencode auth logout failed", proc.stderr)
+        self.assertEqual(self.verbs(), ["export", "logout"])
+        self.assertEqual(self.stored()[0]["value"]["key"], "old key")
+
+    def test_an_export_that_is_not_a_list_is_refused(self):
+        self.store.write_text(json.dumps({"not": "a list"}))
+        proc = self.run_sync()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("printed no list", proc.stderr)
+        self.assertEqual(self.verbs(), ["export"])
+
     def test_a_malformed_credential_argument_is_refused(self):
         proc = subprocess.run(
             [sys.executable, str(SCRIPT), "--opencode", str(self.binary), "--credential", "no-equals-sign"],
