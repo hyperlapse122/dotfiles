@@ -42,9 +42,7 @@ export default function (pi) {
     }
   });
   // The packaged runtime enforces the catalog before project extensions load.
-  // A locked built-in provider may list fewer models than its lock, because
-  // the lock can name a model Pi's catalog does not define; Synthetic's must
-  // match its lock exactly.
+  // A built-in provider's lock can name a model Pi's catalog does not define.
   pi.on("resources_discover", async (_event, context) => {
     await context.modelRegistry.refresh();
     const models = context.modelRegistry.getAll();

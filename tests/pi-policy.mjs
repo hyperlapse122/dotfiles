@@ -35,9 +35,7 @@ try {
                        {provider: 'openai', id: 'outside'}, {provider: 'anthropic', id: 'outside'}])
     assert.equal(await discover(locked, model), true, `${model.provider}/${model.id} must be refused`);
 
-  // A locked provider may list fewer models than its lock, and none at all.
   assert.equal(await discover(synthetic, synthetic[0]), false);
-  // Synthetic must match its lock exactly, and no provider may add a model.
   assert.equal(await discover(synthetic.slice(1), undefined), true);
   assert.equal(await discover([...locked, {provider: 'openai', id: 'outside'}], undefined), true);
   assert.equal(await discover([...locked, {provider: 'foreign', id: 'outside'}], undefined), true);

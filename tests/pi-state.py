@@ -49,12 +49,10 @@ with tempfile.TemporaryDirectory() as directory:
         assert (agent / 'auth.json').stat().st_mode & 0o777 == 0o600
     subprocess.run(['node', sys.argv[4], sys.argv[3], str(agent)], check=True)
 
-    # Without a hidden model every Synthetic model is enabled by wildcard.
     plain = [sys.executable, sys.argv[2], '--agent', str(agent), '--plugin', str(plugin)]
     subprocess.run(plain, check=True)
     assert json.loads((agent / 'settings.json').read_text())['enabledModels'] == ['synthetic/*', 'openai/*', 'anthropic/*']
 
-    # A host that publishes no key for a provider keeps that entry as it was.
     openai.unlink()
     anthropic.write_text('FAKE-anthropic-rotated\n')
     subprocess.run([sys.executable, sys.argv[2], '--agent', str(agent), '--auth-only', '--key', str(key),
@@ -64,7 +62,6 @@ with tempfile.TemporaryDirectory() as directory:
     assert auth['anthropic'] == {'type': 'api_key', 'key': 'FAKE-anthropic-rotated'}
     assert auth['other'] == {'type': 'api_key', 'key': 'FAKE-other'}
 
-    # A published key that is empty or spans lines fails the run before any write.
     before = (agent / 'auth.json').read_text()
     for invalid in ('', 'two\nlines\n'):
         anthropic.write_text(invalid)
@@ -72,7 +69,11 @@ with tempfile.TemporaryDirectory() as directory:
                                  '--credential', f'anthropic={anthropic}'], capture_output=True)
         assert failed.returncode != 0
         assert (agent / 'auth.json').read_text() == before
-    # A later valid run still succeeds.
+    for malformed in ('openai', '=file', 'open/ai=file'):
+        failed = subprocess.run([sys.executable, sys.argv[2], '--agent', str(agent), '--auth-only', '--key', str(key),
+                                 '--credential', malformed], capture_output=True)
+        assert failed.returncode != 0, malformed
+        assert (agent / 'auth.json').read_text() == before
     key.write_text('FAKE-synthetic-rotated\n')
     anthropic.write_text('FAKE-anthropic-rotated\n')
     subprocess.run([sys.executable, sys.argv[2], '--agent', str(agent), '--auth-only', '--key', str(key),

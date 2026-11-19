@@ -17,7 +17,6 @@ try {
   const coreOf = root => join(root, '@earendil-works/pi-coding-agent/dist/core');
   const real = JSON.parse(readFileSync(join(process.argv[3], 'model-lock.json'), 'utf8'));
 
-  // The compiled lock is the combined lock the home files carry.
   const compiled = readFileSync(join(coreOf(modules), 'dotfiles-model-lock.js'), 'utf8');
   assert.deepEqual(JSON.parse(compiled.slice(compiled.indexOf('{'), compiled.lastIndexOf('};') + 1)), real);
 
@@ -61,13 +60,11 @@ try {
     assert.deepEqual(identities(await candidate.getAllAvailable()), expected);
   };
   await everything(runtime);
-  // gpt-6-luna names a chat model and a classifier model; only the chat model is offered.
   assert.equal(runtime.getAllModels('openai').filter(model => model.id === 'gpt-6-luna').length, 1);
   assert.equal(runtime.getModel('openai', 'gpt-6-luna').api, 'openai-responses');
   assert.equal(runtime.getModel('openai', 'gpt-4'), undefined, 'a built-in model outside the lock is offered');
   assert.equal(runtime.getModel('openai', 'unknown-to-pi'), undefined);
   assert.equal(runtime.getModel('google', 'gemini-2.5-pro'), undefined);
-  // The lock governs what Pi offers; Anthropic's own fallback list stays on the model.
   const fallbacks = runtime.getModel('anthropic', 'claude-fable-5').compat.allowedFallbackModels.map(entry => entry.model);
   assert(fallbacks.length > 0 && fallbacks.some(id => !fixture.anthropicModelLocks.models.some(model => model.id === id)), fallbacks);
 
@@ -93,7 +90,6 @@ try {
   assert.equal(runtime.getPhysicalModel('foreign', 'virtual'), undefined);
   assert.equal(runtime.getPhysicalModel('openai', 'virtual'), undefined);
 
-  // models.json cannot add to or redefine a locked provider.
   const overlay = join(temporary, 'models.json');
   writeFileSync(overlay, JSON.stringify({providers: {
     openai: {baseUrl: 'https://wrong.invalid', models: [{id: 'overlay-model', name: 'Overlay'}],
@@ -105,7 +101,6 @@ try {
   await everything(overlaid);
   assert.deepEqual(overlaid.getModel('openai', 'gpt-5.5'), original.openai);
 
-  // Starting with network refresh allowed asks neither pi.dev nor a provider for a model list.
   const urls = [];
   globalThis.fetch = async input => { urls.push(String(input)); throw new Error('no network'); };
   delete process.env.PI_OFFLINE;
@@ -135,7 +130,6 @@ try {
   assert(requested.some(url => url.startsWith(original.openai.baseUrl)), requested);
   assert(requested.some(url => url.startsWith(original.anthropic.baseUrl)), requested);
 
-  // Synthetic still routes to its locked chat-completions endpoint.
   const sse = 'data: {"id":"probe","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}\n\n'
     + 'data: {"id":"probe","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
   const syntheticUrls = [];

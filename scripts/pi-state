@@ -89,9 +89,10 @@ def main():
         provider, _, path = item.partition('=')
         if not provider or not path or '/' in provider:
             raise ValueError('Credential must be PROVIDER=FILE')
-        # A host that publishes no key for a provider leaves its entry alone.
-        if Path(path).exists():
+        try:
             updates[provider] = staged_key(Path(path), provider)
+        except FileNotFoundError:
+            pass
     if updates:
         auth = read(agent / 'auth.json')
         for provider, key in updates.items():

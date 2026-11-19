@@ -446,15 +446,16 @@ def behavioral_tests(workflow, publisher, verifier):
         require(not f.ok, 'catalog failure was hidden')
         require('new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'Synthetic failure blocked the Go snapshot')
     exercise(workflow, publisher, verifier, 'Synthetic failure does not block the Go snapshot', synthetic_failure_keeps_go, part='catalogs', catalog_fetch_fail=True, go_catalog_change=True)
-    def pi_lock_published(f):
-        require(f.ok, 'a successful Pi lock refresh failed the workflow')
-        require('new-openai' in f.remote('home/h82/agents/pi-openai-model-lock.json'), 'the OpenAI lock was not published')
-        require('old-anthropic' in f.remote('home/h82/agents/pi-anthropic-model-lock.json'), 'an unchanged Anthropic lock was rewritten')
-        require(any('pi-provider-locks-watch' in a for e in f.events_of('verify') if e['scope'] == 'catalogs' for a in e['args']), 'the Pi lock check is not a catalog verification target')
-        log = f.call('--git-dir', str(f.origin), 'log', '--format=%s', f'{f.base}..main').splitlines()
-        require(log == ['chore(agents): refresh the pi openai model lock'], 'the OpenAI lock needs its own commit: ' + repr(log))
-        verify_before_push(f)
-    exercise(workflow, publisher, verifier, 'one Pi lock change alone publishes after verification', pi_lock_published, part='catalogs', catalog_change=False, deps_change=False, pi_openai_change=True)
+    for changed, untouched in (('openai', 'anthropic'), ('anthropic', 'openai')):
+        def pi_lock_published(f, changed=changed, untouched=untouched):
+            require(f.ok, 'a successful Pi lock refresh failed the workflow')
+            require('new-' + changed in f.remote(f'home/h82/agents/pi-{changed}-model-lock.json'), f'the {changed} lock was not published')
+            require('old-' + untouched in f.remote(f'home/h82/agents/pi-{untouched}-model-lock.json'), f'an unchanged {untouched} lock was rewritten')
+            require(any('pi-provider-locks-watch' in a for e in f.events_of('verify') if e['scope'] == 'catalogs' for a in e['args']), 'the Pi lock check is not a catalog verification target')
+            log = f.call('--git-dir', str(f.origin), 'log', '--format=%s', f'{f.base}..main').splitlines()
+            require(log == [f'chore(agents): refresh the pi {changed} model lock'], f'the {changed} lock needs its own commit: ' + repr(log))
+            verify_before_push(f)
+        exercise(workflow, publisher, verifier, f'a {changed} Pi lock change alone publishes after verification', pi_lock_published, part='catalogs', catalog_change=False, deps_change=False, **{f'pi_{changed}_change': True})
     def pi_missing_anthropic(f):
         require(not f.ok, 'a missing Anthropic secret was hidden')
         require('new-openai' in f.remote('home/h82/agents/pi-openai-model-lock.json'), 'a missing Anthropic secret blocked the OpenAI lock')

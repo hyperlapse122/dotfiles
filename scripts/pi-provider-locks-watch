@@ -60,7 +60,6 @@ PROVIDERS = {
 
 
 def fetch(url, retry_wait, key="", key_variable="", headers=None, redirects=True):
-    """Return the parsed JSON body, retrying once after a wait."""
     extra = () if redirects else ("--max-redirs", "0")
     for attempt in (1, 2):
         proc = run_fetch(url, key, key_variable, headers, extra)
@@ -81,7 +80,6 @@ def fetch(url, retry_wait, key="", key_variable="", headers=None, redirects=True
 
 
 def listed_ids(provider, body):
-    """The IDs of the models a provider's list response names."""
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, list):
         raise Failure(f"the {provider} list has no data list")
@@ -100,7 +98,6 @@ def listed_ids(provider, body):
 
 
 def pi_catalog(retry_wait, release_path):
-    """Pi's built-in catalog at the revision the release pin names."""
     rev = read_json(release_path).get("source", {}).get("rev")
     if not isinstance(rev, str) or not rev:
         raise Failure(f"{release_path} names no source revision")
@@ -112,7 +109,6 @@ def pi_catalog(retry_wait, release_path):
 
 
 def chat_ids(provider, catalog):
-    """The distinct chat model IDs Pi's catalog defines for a provider."""
     rows = catalog.get(provider) if isinstance(catalog, dict) else None
     if not isinstance(rows, list):
         raise Failure(f"Pi's catalog has no {provider} models")

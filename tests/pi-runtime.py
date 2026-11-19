@@ -17,7 +17,6 @@ with tempfile.TemporaryDirectory() as directory:
     extra = dict(configured['providers']['synthetic']['models'][0], id='unlocked-model')
     configured['providers']['synthetic']['models'].append(extra)
     configured['providers']['foreign'] = dict(configured['providers']['synthetic'], models=[extra])
-    # A models.json entry cannot add a model to a locked provider.
     configured['providers']['openai'] = dict(configured['providers']['synthetic'], models=[extra])
     (agent / 'models.json').write_text(json.dumps(configured))
     (agent / 'auth.json').write_text(json.dumps({
@@ -36,8 +35,6 @@ with tempfile.TemporaryDirectory() as directory:
     expected = lock['syntheticModelLocks']['models']
     wanted_rows = sorted([['synthetic', model['id']] for model in expected])
     assert sorted(row for row in rows if row[0] == 'synthetic') == wanted_rows, result.stdout
-    # A locked provider lists models of its lock, and only those. Its lock can
-    # name a model Pi does not define, so the lock is an upper bound.
     others = {(provider, model) for provider, model in rows if provider != 'synthetic'}
     assert others and others <= locked, others - locked
     assert {provider for provider, _model in others} == {'openai', 'anthropic'}, others

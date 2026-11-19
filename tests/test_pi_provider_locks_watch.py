@@ -27,6 +27,9 @@ outcome = outcomes[min(len(calls), len(outcomes)) - 1]
 if isinstance(outcome, int):
     sys.stderr.write('curl: (22) The requested URL returned error: 503\\n')
     sys.exit(outcome)
+if isinstance(outcome, dict):
+    sys.stderr.write(outcome['stderr'] + '\\n')
+    sys.exit(outcome['status'])
 sys.stdout.write(outcome)
 """
 
@@ -242,6 +245,13 @@ class WatchTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 1)
         self.assertIn("failed twice", proc.stderr)
         self.assertEqual(self.snapshot.read_bytes(), before)
+
+    def test_a_key_echoed_in_curl_stderr_is_not_logged(self):
+        leak = {"status": 22, "stderr": "curl: (22) rejected key FAKE-KEY"}
+        proc = self.run_watch("openai", [leak, leak], ["--release", str(self.release)])
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("failed twice", proc.stderr)
+        self.assertNotIn("FAKE-KEY", proc.stderr)
 
     def test_a_body_without_a_data_list_is_refused(self):
         proc = self.run_offline("openai", {"models": []}, pi_catalog("openai", ("a", "chat")))
