@@ -23,7 +23,7 @@ def validate(home, expected_opencode_addition):
     args = shlex.split(providers['claudeAgent']['config']['launchArgs'])
     addition = Path(args[args.index('--append-system-prompt-file') + 1]).read_text()
     assert '# T3 delegation' in addition and '# T3 CE model selection' in addition
-    assert '| Codex | astra | sol | terra | luna |' in addition
+    assert '| GPT | astra | sol | terra | luna |' in addition
     assert 'writing' not in addition.lower()
     assert not any(a.startswith('--disallowedTools') for a in args)
     assert {'name': 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', 'value': '', 'sensitive': False} in providers['claudeAgent']['environment']
