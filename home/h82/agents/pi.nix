@@ -6,9 +6,38 @@
   ...
 }:
 let
-  lock = import ./pi-locks.nix;
-  lockFile = pkgs.writeText "pi-model-lock.json" (builtins.toJSON lock);
-  catalog = lock.syntheticModelLocks;
+  catalog = (builtins.fromJSON (builtins.readFile ./pi-model-lock.json)).syntheticModelLocks;
+  # The committed lists for the built-in providers. A declared row replaces
+  # the model of the same id in Pi's own catalog and drops that model's compat,
+  # thinking-level, and cache settings, so models.json declares only the
+  # listed models the compiled catalog lacks (`pi-catalog-gaps.json`, which the
+  # Pi runtime test keeps equal to that set). Each row names the API it is
+  # served over and leaves the provider's endpoint and credentials alone.
+  gaps = builtins.fromJSON (builtins.readFile ./pi-catalog-gaps.json);
+  providerRows =
+    provider: (builtins.fromJSON (builtins.readFile (./. + "/${provider}-models.json"))).models;
+  providerModels =
+    provider: api:
+    map (model: model // { inherit api; }) (
+      builtins.filter (model: builtins.elem model.id gaps.${provider}) (providerRows provider)
+    );
+  openaiModels = providerModels "openai" "openai-responses";
+  anthropicModels = providerModels "anthropic" "anthropic-messages";
+  # Cycling and startup selection cover every listed model, declared or not.
+  enabledModelArgs = lib.escapeShellArgs (
+    lib.concatMap
+      (
+        provider:
+        lib.concatMap (model: [
+          "--model"
+          "${provider}/${model.id}"
+        ]) (providerRows provider)
+      )
+      [
+        "openai"
+        "anthropic"
+      ]
+  );
   hiddenModelArgs = lib.escapeShellArgs (
     lib.concatMap (model: [
       "--hide-model"
@@ -16,12 +45,6 @@ let
     ]) (import ./pi-hidden-models.nix)
   );
   agent = "${config.home.homeDirectory}/.pi/agent";
-  # Pi resolves extension symlinks before evaluating import.meta.url.
-  policy = pkgs.runCommand "pi-policy" { } ''
-    mkdir -p $out
-    cp ${./pi-policy.ts} $out/dotfiles-policy.ts
-    cp ${lockFile} $out/model-lock.json
-  '';
   keyDirectory =
     if config.my.kind == "nixos" then "/run/secrets/cli-auth" else config.my.secrets.stateDir;
   pi = import ../../../packages/pi.nix {
@@ -56,19 +79,21 @@ let
 in
 {
   home.packages = [ pi ];
-  home.file.".pi/agent/model-lock.json".source = lockFile;
-  home.file.".pi/agent/dotfiles-policy.ts".source = "${policy}/dotfiles-policy.ts";
   home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/dotfiles-question.ts".source = ./pi-question.ts;
   home.file.".pi/agent/models.json".text = builtins.toJSON {
-    providers.synthetic = {
-      inherit (catalog) api baseUrl models;
+    providers = {
+      synthetic = {
+        inherit (catalog) api baseUrl models;
+      };
+      openai.models = openaiModels;
+      anthropic.models = anthropicModels;
     };
   };
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
-      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} ${hiddenModelArgs}
+      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} ${hiddenModelArgs} ${enabledModelArgs}
     fi
   '';
   home.activation.piMcpSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''

@@ -15,11 +15,8 @@ with tempfile.TemporaryDirectory() as directory:
     shutil.copytree(sys.argv[2], agent, symlinks=False)
     for path in [agent, *agent.rglob('*')]:
         path.chmod(path.stat().st_mode | 0o200)
-    # Preserve the policy's installed symlink target: its relative imports must
-    # work through Home Manager's store layout, not only from copied files.
-    policy = agent / 'dotfiles-policy.ts'
-    policy.unlink()
-    policy.symlink_to((Path(sys.argv[2]) / 'dotfiles-policy.ts').resolve())
+    assert not (agent / 'dotfiles-policy.ts').exists(), 'the policy extension is still installed'
+    assert b'dotfiles-policy' not in Path(sys.argv[1]).read_bytes(), 'the wrapper still loads the policy extension'
     synthetic = home / 'synthetic'
     exa = home / 'exa'
     synthetic.write_text('FAKE-synthetic')

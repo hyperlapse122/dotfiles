@@ -1,0 +1,7 @@
+{
+  "anthropic": [],
+  "openai": [
+    "gpt-6.2-astra",
+    "gpt-6.2-sol"
+  ]
+}
