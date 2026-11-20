@@ -1,0 +1,47 @@
+diff --git a/packages/coding-agent/src/core/model-config.ts b/packages/coding-agent/src/core/model-config.ts
+--- a/packages/coding-agent/src/core/model-config.ts
++++ b/packages/coding-agent/src/core/model-config.ts
+@@ -80,6 +80,9 @@ const ModelOverrideSchema = Type.Object({
+ 	contextWindow: Type.Optional(
+ 		Type.Number({ exclusiveMinimum: 0, description: ModelFieldDescriptions.contextWindow }),
+ 	),
++	contextWindowCap: Type.Optional(
++		Type.Integer({ minimum: 1, description: "Maximum effective context window in tokens." }),
++	),
+ 	maxTokens: Type.Optional(Type.Number({ exclusiveMinimum: 0, description: ModelFieldDescriptions.maxTokens })),
+ 	samplingParams: Type.Optional(SamplingParamsFieldSchema),
+ 	samplingParamsByThinkingLevel: Type.Optional(SamplingParamsByThinkingLevelSchema),
+diff --git a/packages/coding-agent/src/core/provider-composer.ts b/packages/coding-agent/src/core/provider-composer.ts
+--- a/packages/coding-agent/src/core/provider-composer.ts
++++ b/packages/coding-agent/src/core/provider-composer.ts
+@@ -558,9 +558,10 @@ export function composeModelProvider(
+ 	// models.json modelOverrides are the topmost user-config layer: they apply once,
+ 	// after custom-model upserts, extension model replacement, and legacy OAuth projection.
+ 	const getAllModels = (): AnyModel[] => {
++		const catalogModels = getAllProviderModels(base);
+ 		let models = applyExtension(
+ 			providerId,
+-			applyModelsJson(providerId, getAllProviderModels(base), config),
++			applyModelsJson(providerId, catalogModels, config),
+ 			currentExtension(),
+ 		);
+ 		if (extensionOAuthCredential && extension?.oauth?.modifyModels) {
+@@ -575,7 +576,17 @@ export function composeModelProvider(
+ 		}
+ 		return models.map((model) => {
+ 			const override = config?.modelOverrides?.[model.id];
+-			return override && isModelType(model, "chat") ? applyModelOverride(model, override) : model;
++			if (!override || !isModelType(model, "chat")) return model;
++			const configured = applyModelOverride(model, override);
++			if (override.contextWindowCap === undefined) return configured;
++			// A custom row can replace a model that appeared in a catalog refresh.
++			const catalogWindow = catalogModels.find(
++				(entry): entry is Model<Api> => isModelType(entry, "chat") && entry.id === model.id,
++			)?.contextWindow;
++			return {
++				...configured,
++				contextWindow: Math.min(configured.contextWindow, override.contextWindowCap, catalogWindow ?? Infinity),
++			};
+ 		});
+ 	};
+ 	// Validate eagerly so registration/reload reports structural errors immediately.

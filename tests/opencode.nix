@@ -99,14 +99,14 @@ let
   # The OpenAI and Anthropic lists Pi declares, as OpenCode shows them. No
   # entry is disabled: OpenCode's own catalog keeps every other model.
   expectedList =
-    file:
+    file: contextWindow:
     builtins.listToAttrs (
       map (model: {
         name = model.id;
         value = {
           name = model.name;
           limit = {
-            context = model.contextWindow;
+            context = contextWindow model.contextWindow;
             output = model.maxTokens;
           };
           cost = {
@@ -120,8 +120,8 @@ let
         };
       }) (builtins.fromJSON (builtins.readFile (agents + "/${file}"))).models
     );
-  expectedOpenai = expectedList "openai-models.json";
-  expectedAnthropic = expectedList "anthropic-models.json";
+  expectedOpenai = expectedList "openai-models.json" (lib.min 272000);
+  expectedAnthropic = expectedList "anthropic-models.json" lib.id;
 
   expectedGo = builtins.listToAttrs (
     map (row: {

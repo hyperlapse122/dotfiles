@@ -34,6 +34,7 @@ let
     pname = "pi-workspace-packages";
     inherit (packageJson) version;
     src = source;
+    patches = [ ./pi-context-window-cap.patch ];
 
     npmDeps = importNpmLock { npmRoot = source; };
     npmRebuildFlags = [ "--ignore-scripts" ];

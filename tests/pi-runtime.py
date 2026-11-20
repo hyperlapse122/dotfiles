@@ -10,12 +10,17 @@ import time
 
 pi, installed, agents = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 PROVIDERS = {'openai': 'openai-responses', 'anthropic': 'anthropic-messages'}
+OPENAI_CAP = 272000
 
 
-def available(directory, models_json):
+def available(directory, models_json, cached_openai=()):
     """The models Pi offers with fake credentials for every provider, as its RPC reports them."""
     agent = Path(tempfile.mkdtemp(dir=directory))
     (agent / 'models.json').write_text(json.dumps(models_json))
+    if cached_openai:
+        (agent / 'models-store.json').write_text(json.dumps({
+            'openai': {'lastModified': 4102444800000, 'models': cached_openai}
+        }))
     (agent / 'auth.json').write_text(json.dumps({
         provider: {'type': 'api_key', 'key': 'FAKE'} for provider in ('synthetic', *PROVIDERS)
     }))
@@ -71,8 +76,25 @@ with tempfile.TemporaryDirectory() as directory:
             assert (provider, row['id']) in offered, f'Pi does not offer {provider}/{row["id"]}'
     for provider, model in (('openai', 'gpt-6.2-sol'), ('openai', 'gpt-6.2-astra')):
         assert (provider, model) not in compiled and (provider, model) in offered, (provider, model)
+    openai_limits = {row['id']: min(row['contextWindow'], OPENAI_CAP) for row in snapshots['openai']}
     for key, model in compiled.items():
-        assert offered[key] == model, f'declaring the lists changed the catalog model {key}'
-    declared_ids = {(provider, row['id']) for provider in PROVIDERS for row in configured['providers'][provider]['models']}
-    for key in declared_ids:
-        assert offered[key]['contextWindow'] > 0 and offered[key]['maxTokens'] > 0, key
+        expected = model
+        if key[0] == 'openai' and key[1] in openai_limits:
+            expected = dict(model, contextWindow=min(model['contextWindow'], openai_limits[key[1]]))
+        assert offered[key] == expected, f'declaring the lists changed the catalog model {key}'
+    for provider in PROVIDERS:
+        for row in configured['providers'][provider]['models']:
+            model = offered[provider, row['id']]
+            expected_context = openai_limits[row['id']] if provider == 'openai' else row['contextWindow']
+            assert model['contextWindow'] == expected_context, (provider, row['id'], model['contextWindow'])
+            assert model['maxTokens'] == row['maxTokens'], (provider, row['id'])
+
+    # A newer cached catalog can change a built-in model's limit or add a model
+    # that models.json still supplies because the pinned catalog lacks it.
+    base = compiled['openai', 'gpt-6.1-sol']
+    cached = available(directory, configured, [
+        dict(base, contextWindow=400000),
+        dict(base, id='gpt-6.2-sol', contextWindow=200000),
+    ])
+    assert cached['openai', 'gpt-6.1-sol'] == dict(base, contextWindow=OPENAI_CAP)
+    assert cached['openai', 'gpt-6.2-sol'] == dict(offered['openai', 'gpt-6.2-sol'], contextWindow=200000)

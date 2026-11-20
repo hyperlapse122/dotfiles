@@ -18,6 +18,7 @@ let
     openai = "openai-responses";
     anthropic = "anthropic-messages";
   };
+  openaiContextCap = import ./openai-context-window-cap.nix;
   providerRows = lib.mapAttrs (
     provider: _: (builtins.fromJSON (builtins.readFile (./. + "/${provider}-models.json"))).models
   ) providerApis;
@@ -39,12 +40,15 @@ let
           --slurpfile catalog ${pi.modelCatalog} \
           --slurpfile synthetic "$syntheticPath" \
           --slurpfile apis "$apisPath" \
-          --slurpfile rows "$rowsPath" '
+          --slurpfile rows "$rowsPath" \
+          --argjson openaiCap ${toString openaiContextCap} '
           def defined($p): [$catalog[0][$p][]? | select((.type // "chat") == "chat") | .id];
           {providers: ({synthetic: $synthetic[0]} + ($apis[0] | with_entries(
-            .key as $p | .value as $api | {key: $p, value: {models: [
+            .key as $p | .value as $api | {key: $p, value: ({models: [
               $rows[0][$p][] | select(.id as $id | (defined($p) | index($id)) == null) | . + {api: $api}
-            ]}})))}' > $out
+            ]} + if $p == "openai" then {modelOverrides: ($rows[0][$p] | map({
+              key: .id, value: {contextWindowCap: ([.contextWindow, $openaiCap] | min)}
+            }) | from_entries)} else {} end)})))}' > $out
       '';
   # Cycling and startup selection cover every listed model, declared or not.
   enabledModelArgs = lib.escapeShellArgs (
