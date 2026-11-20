@@ -12,7 +12,9 @@ two files was written from a different upstream archive.
 The same holds for the pinned system images, which both files key
 api -> tag -> abi. A package or image the pin carries but nixpkgs does not
 yet list is skipped, since the pin can track a release before nixpkgs picks
-it up. An image key carries no revision, so a newer image revision than
+it up. So is a revision nixpkgs recorded under the preview license while
+the pin carries Google's later stable release of it, whose archives Google
+rebuilds. An image key carries no revision, so a newer image revision than
 nixpkgs lists counts as not listed yet; an older one fails, since the pin
 then lags the nixpkgs it builds against. When nixpkgs updates an entry whose
 key carries no revision (system images and platforms) in place with
@@ -57,6 +59,19 @@ def revision(entry):
         return tuple(name for name, _ in ordered), tuple(int(value) for _, value in ordered)
     except (IndexError, TypeError, ValueError):
         return None
+
+
+PREVIEW_LICENSE = "android-sdk-preview-license"
+
+
+def preview_only_upstream(entry, theirs):
+    """True when nixpkgs recorded this revision while it was a preview.
+
+    Google can promote a preview revision to the stable channel with rebuilt
+    archives under the stable license; until nixpkgs refreshes its record,
+    the pinned stable release is one nixpkgs does not list yet.
+    """
+    return theirs.get("license") == PREVIEW_LICENSE and entry.get("license") != PREVIEW_LICENSE
 
 
 def ordered_revisions(entry, theirs):
@@ -149,6 +164,9 @@ def main(pin_path, upstream_path):
         theirs = lookup(upstream, path)
         if theirs is None:
             print(f"skip {label}: not in nixpkgs repo.json")
+            continue
+        if preview_only_upstream(entry, theirs):
+            print(f"skip {label}: nixpkgs repo.json lists only its preview release")
             continue
         revisions = ordered_revisions(entry, theirs)
         ours_revision, their_revision = revisions or (None, None)

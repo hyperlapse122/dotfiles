@@ -307,9 +307,9 @@
     "build-tools": "37.0.0",
     "cmake": "3.22.1",
     "cmdline-tools": "23.0",
-    "emulator": "37.2.13",
+    "emulator": "37.3.10",
     "ndk": "29.0.14206865",
-    "platform-tools": "37.0.1",
+    "platform-tools": "37.0.3",
     "platforms": "37.0"
   },
   "licenses": {
@@ -494,46 +494,46 @@
       }
     },
     "emulator": {
-      "37.2.13": {
+      "37.3.10": {
         "archives": [
           {
             "arch": "x64",
             "os": "linux",
-            "sha1": "f41f9e31eb5ca64926603c03265c50bbc0ff4172",
-            "size": 349658551,
-            "url": "https://dl.google.com/android/repository/emulator-linux_x64-16740729.zip"
+            "sha1": "5f7314368fc6c05c937f6991bb4106214dc389e7",
+            "size": 350068887,
+            "url": "https://dl.google.com/android/repository/emulator-linux_x64-16970787.zip"
           },
           {
             "arch": "x64",
             "os": "macosx",
-            "sha1": "b0c5fdc92430079436e9aec5983f14a5499de9b0",
-            "size": 488733162,
-            "url": "https://dl.google.com/android/repository/emulator-darwin_x64-16740729.zip"
+            "sha1": "8845fc2dd60325425e3013dd0ed2c50e0beb68c0",
+            "size": 487638528,
+            "url": "https://dl.google.com/android/repository/emulator-darwin_x64-16970787.zip"
           },
           {
             "arch": "aarch64",
             "os": "macosx",
-            "sha1": "6c5e61b873e11c7d1d08683bea089f762baee070",
-            "size": 416113219,
-            "url": "https://dl.google.com/android/repository/emulator-darwin_aarch64-16740729.zip"
+            "sha1": "3ec739595d44092e835f006d806dd380bc8d6dd7",
+            "size": 420629851,
+            "url": "https://dl.google.com/android/repository/emulator-darwin_aarch64-16970787.zip"
           },
           {
             "arch": "x64",
             "os": "windows",
-            "sha1": "4d7268aa7787c640ad892844e6c9a5f159e91ad3",
-            "size": 455344678,
-            "url": "https://dl.google.com/android/repository/emulator-windows_x64-16740729.zip"
+            "sha1": "7599293267e61ce67423f87848ff8219da09258b",
+            "size": 456613348,
+            "url": "https://dl.google.com/android/repository/emulator-windows_x64-16970787.zip"
           }
         ],
         "displayName": "Android Emulator",
         "license": "android-sdk-license",
         "name": "emulator",
         "path": "emulator",
-        "revision": "37.2.13",
+        "revision": "37.3.10",
         "revision-details": {
           "major:0": "37",
-          "micro:2": "13",
-          "minor:1": "2"
+          "micro:2": "10",
+          "minor:1": "3"
         },
         "type-details": {
           "element-attributes": {
@@ -625,38 +625,38 @@
       }
     },
     "platform-tools": {
-      "37.0.1": {
+      "37.0.3": {
         "archives": [
           {
             "arch": "all",
             "os": "linux",
-            "sha1": "477254aa5f903c15cf51001717bdf347fb6b53e0",
-            "size": 9054187,
-            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-linux.zip"
+            "sha1": "e1579b288a7ae4e9bc28dedec6a154d78b3c04ed",
+            "size": 9571024,
+            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.3-linux.zip"
           },
           {
             "arch": "all",
             "os": "macosx",
-            "sha1": "6ae73f4de6452dc57e62ec02b68eed92a4c21661",
-            "size": 16110554,
-            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-darwin.zip"
+            "sha1": "d48920e2650321710b4d15d3acd9e277d59cd55b",
+            "size": 16597626,
+            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.3-darwin.zip"
           },
           {
             "arch": "all",
             "os": "windows",
-            "sha1": "e03e78b1d80b396f1c3358e31251cb31740e1110",
-            "size": 8044989,
-            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip"
+            "sha1": "7fea85bc18d0480bc81d3603952d666f49496e5a",
+            "size": 8188601,
+            "url": "https://dl.google.com/android/repository/platform-tools_r37.0.3-win.zip"
           }
         ],
         "displayName": "Android SDK Platform-Tools",
         "license": "android-sdk-license",
         "name": "platform-tools",
         "path": "platform-tools",
-        "revision": "37.0.1",
+        "revision": "37.0.3",
         "revision-details": {
           "major:0": "37",
-          "micro:2": "1",
+          "micro:2": "3",
           "minor:1": "0"
         },
         "type-details": {
