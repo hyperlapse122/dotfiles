@@ -12,14 +12,13 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # Independent content receipts: negation, repetition, deletion and foreign text
 # all change the complete normative body, including its order. Claude Code gets
 # its conversation language from its own settings, so its render has a receipt
-# of its own. T3 OpenCode also has a distinct render for the review route.
+# of its own. Every harness receives the same T3 render.
 EXPECTED = {
     'darwin': 'bfed80a9ad6039a0e9363c648bc484e48ee6ad53ef5642537492800d3feb2f6e',
     'darwin-claude': 'c9b10b4f8133b3852564dbd652eb0a184f11be59df36f32b74bfc4cdf8496339',
     'nixos': '0ee17abd2f6e8115307a6153676717e5470e24d175f9cc07c159f7d10b1c6982',
     'nixos-claude': '329166aaa40790ea1c62b29b72f4e07ed3009f5737bf220729131c2555db5139',
-    't3': 'a8f041277add6e5aac8ce490dcc347d17353e8919dd522b47e5442e68c41e811',
-    't3-opencode': '5d7c65af6c88a9d09437ebad5fb82824a1e220ed6f703c142e16d0474261204e',
+    't3': 'bbf932cf77a01a4da3649661e5f8e99658eb897a4625bb6f27cfdd4c32ddaf3b',
 }
 
 

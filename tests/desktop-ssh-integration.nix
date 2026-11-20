@@ -34,7 +34,7 @@ let
     fallback_path = runtime / "fallback.sock"
     config_dir.joinpath("config.json").write_text(json.dumps({
         "public_key": str(public), "key_file": str(runtime / "protected"),
-        "fallback_socket": str(fallback_path)}))
+        "fallback_agents": [{"socket": str(fallback_path), "timeout": .3}]}))
     primary = lib.FakeAgent(primary_path, [primary_key])
     fallback = None
     authorized = Path("/tmp/desktop-ssh-authorized")

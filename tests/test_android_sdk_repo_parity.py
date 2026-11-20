@@ -142,6 +142,34 @@ class ParityTests(unittest.TestCase):
         self.assertIn("skip emulator 37.2.12: not in nixpkgs repo.json", result.stdout)
         self.assertNotIn("emulator", result.stdout.splitlines()[-1])
 
+    def test_stable_release_of_a_revision_nixpkgs_lists_as_preview_is_skipped(self):
+        pin_pkg = platform()
+        pin_pkg["license"] = "android-sdk-license"
+        upstream_pkg = platform()
+        upstream_pkg["license"] = "android-sdk-preview-license"
+        upstream_pkg["archives"][0]["sha1"] = "preview-build"
+        pin = repo(image(6))
+        pin["packages"]["platform-tools"] = {"37.0.3": pin_pkg}
+        upstream = repo(image(6))
+        upstream["packages"]["platform-tools"] = {"37.0.3": upstream_pkg}
+        result = self.run_parity(pin, upstream)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("skip platform-tools 37.0.3: nixpkgs repo.json lists only its preview release", result.stdout)
+
+    def test_preview_license_on_both_sides_is_compared(self):
+        pin_pkg = platform()
+        pin_pkg["license"] = "android-sdk-preview-license"
+        upstream_pkg = platform()
+        upstream_pkg["license"] = "android-sdk-preview-license"
+        upstream_pkg["archives"][0]["sha1"] = "drifted"
+        pin = repo(image(6))
+        pin["packages"]["platform-tools"] = {"37.0.3": pin_pkg}
+        upstream = repo(image(6))
+        upstream["packages"]["platform-tools"] = {"37.0.3": upstream_pkg}
+        result = self.run_parity(pin, upstream)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("platform-tools 37.0.3 differs in archives", result.stderr)
+
     def test_only_skipped_entries_assert_nothing(self):
         pin = repo(image(8))
         del pin["packages"]

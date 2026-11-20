@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Print the provider and model that served an OpenCode session.
+
+Reads OpenCode's own session record, never the model's claim about itself:
+the latest completed assistant message with token usage in
+~/.local/share/opencode/opencode.db. The session comes from --session, from
+the session that owns a --message native message ID, or from
+OPENCODE_SESSION_ID, which OpenCode exports to its shell tool.
+"""
+
+import argparse
+import json
+import os
+import sqlite3
+import sys
+from pathlib import Path
+
+# Only direct first-party providers identify the vendor that answered. An
+# intermediary such as opencode-go or a custom endpoint does not.
+FAMILIES = {"anthropic": "claude", "openai": "codex"}
+
+
+def fail(message):
+    print(f"opencode-serving-model: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("--session", help="OpenCode session ID")
+    target.add_argument("--message", help="native message ID whose session to read")
+    parser.add_argument(
+        "--family",
+        action="store_true",
+        help="print the CE family token (claude, codex, or unknown) instead of provider/model",
+    )
+    args = parser.parse_args()
+
+    db = Path.home() / ".local/share/opencode/opencode.db"
+    if not db.is_file():
+        fail(f"no OpenCode database at {db}")
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    except sqlite3.Error as error:
+        fail(f"cannot open {db}: {error}")
+
+    session = args.session
+    if args.message:
+        row = conn.execute("SELECT session_id FROM session_message WHERE id = ?", (args.message,)).fetchone()
+        if row is None:
+            fail(f"no message {args.message}")
+        session = row[0]
+    session = session or os.environ.get("OPENCODE_SESSION_ID")
+    if not session:
+        fail("no session: pass --session or --message, or run inside OpenCode")
+
+    rows = conn.execute(
+        "SELECT data FROM session_message WHERE session_id = ? AND type = 'assistant' ORDER BY seq DESC",
+        (session,),
+    )
+    for (data,) in rows:
+        message = json.loads(data)
+        model = message.get("model") or {}
+        if (
+            (message.get("time") or {}).get("completed")
+            and isinstance(message.get("tokens"), dict)
+            and model.get("providerID")
+            and model.get("id")
+        ):
+            provider = model["providerID"]
+            print(FAMILIES.get(provider, "unknown") if args.family else f"{provider}/{model['id']}")
+            return
+    fail(f"no completed assistant message with usage in session {session}")
+
+
+if __name__ == "__main__":
+    main()

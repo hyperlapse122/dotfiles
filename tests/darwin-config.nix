@@ -204,6 +204,31 @@ let
       routingTable = credentialHelper.routingTable or { };
       codex = lib.findFirst (p: (p.pname or "") == "codex") null user.home.packages;
       sshText = plain user.my.ssh.configFile.drvAttrs.text;
+      home = config.my.user.home;
+      # Each config line without indentation, past the managed-file marker.
+      sshLines = lib.filter (line: line != "" && !lib.hasPrefix "#" line) (
+        map lib.trim (lib.splitString "\n" sshText)
+      );
+      launchLines =
+        name:
+        map lib.trim (
+          lib.splitString "\n" (plain (lib.last (agentConfig name).ProgramArguments or [ "" ]))
+        );
+      muxLines = launchLines "ssh-agent-mux";
+      hostKeyLines = launchLines "ssh-host-key-agent";
+      muxLaunch = lib.lists.findFirstIndex (
+        line:
+        lib.hasSuffix "/bin/gpgconf --launch gpg-agent || echo \"ssh-agent-mux: gpg-agent did not start\" >&2" line
+      ) null muxLines;
+      muxExec = lib.lists.findFirstIndex (lib.hasPrefix "exec ") null muxLines;
+      muxExpected = "exec ${plain (lib.getExe entry.host.pkgs.ssh-agent-mux)} --config /dev/null --listen ${
+        lib.escapeShellArgs [
+          "${home}/.ssh/ssh-agent-mux.sock"
+          "${home}/.ssh/host-key-agent.sock"
+          "${home}/.gnupg/S.gpg-agent.ssh"
+          "${home}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+        ]
+      }";
       pinentry = user.services.gpg-agent.pinentry.package;
       vscodiumData = plain (activation.vscodiumSettings.data or "");
       codexData = plain (activation.codexSettings.data or "");
@@ -468,10 +493,48 @@ let
         && activation ? nixConfigSecretsPublish == production
       ) "${entry.name}: the host-secrets steps must run in production and never in bootstrap")
       (check (!activation ? dockerCredHelpers) "${entry.name}: the OrbStack credHelpers merge still runs")
+      (check
+        (
+          sshLines == [
+            "Host *"
+            "IdentityFile ${home}/.ssh/id_ed25519_nix_config"
+          ]
+          ++ lib.optional production "IdentityAgent ${home}/.ssh/ssh-agent-mux.sock"
+        )
+        "${entry.name}: ~/.ssh/config must name the host key, plus the ssh-agent-mux socket in production only"
+      )
+      (check
+        (
+          (agents.ssh-agent-mux.enable or false) == production
+          && (agents.ssh-host-key-agent.enable or false) == production
+        )
+        "${entry.name}: ssh-agent-mux and the host-key agent must run in production and never in bootstrap"
+      )
+      (check
+        (
+          !production
+          || (
+            muxLaunch != null
+            && muxExec != null
+            && muxLaunch < muxExec
+            && lib.elemAt muxLines muxExec == muxExpected
+          )
+        )
+        "${entry.name}: ssh-agent-mux must start gpg-agent, then offer the host-key agent, gpg-agent, and 1Password in that order"
+      )
       (check (
-        lib.hasInfix "IdentityFile ${user.my.secrets.sshKey}" sshText
-        && !lib.hasInfix "IdentityAgent" sshText
-      ) "${entry.name}: ~/.ssh/config must name the host key and no agent socket")
+        !production
+        || (
+          lib.elem "socket=${lib.escapeShellArg "${home}/.ssh/host-key-agent.sock"}" hostKeyLines
+          && lib.any (lib.hasInfix "/bin/ssh-agent -D -a \"$socket\"") hostKeyLines
+          && lib.any (lib.hasInfix "/bin/ssh-add -q ${lib.escapeShellArg "${home}/.ssh/id_ed25519_nix_config"}") hostKeyLines
+        )
+      ) "${entry.name}: the host-key agent must load the host key on the socket ssh-agent-mux asks first")
+      # A launchd job holding S.gpg-agent would answer every client, so no
+      # client-started agent would ever create the SSH socket.
+      (check (
+        agents ? gpg-agent && !agents.gpg-agent.enable
+      ) "${entry.name}: the gpg-agent launchd job must be off so a client-started agent serves SSH")
       (check (
         !(user.services.podman.enable or false)
         && !(agents.minikube.enable or false)

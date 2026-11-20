@@ -36,7 +36,7 @@ Jobs that a finished run skips by design, such as the Nix jobs on a docs-only ch
 
 ## Desktop SSH
 
-**Primary SSH key** — the host's own SSH identity on a NixOS desktop, offered ahead of every key the fallback agent holds and used only inside an active desktop session. Its public half is declared in the repository; its private half lives on disk encrypted with a random password that only the desktop wallet stores, and is re-derived from an encrypted recovery copy when that pair is missing or does not match. Signing with it therefore needs the wallet to be open and reachable, and when it is not, the agent refuses the primary key while keys from the fallback agent still work, so a signing failure that names the declared public key points at the wallet path rather than at the key itself.
+**Primary SSH key** — the host's own SSH identity on a NixOS desktop, offered ahead of every key the fallback agents hold (the YubiKey through gpg-agent, then 1Password) and used only inside an active desktop session. Its public half is declared in the repository; its private half lives on disk encrypted with a random password that only the desktop wallet stores, and is re-derived from an encrypted recovery copy when that pair is missing or does not match. Signing with it therefore needs the wallet to be open and reachable, and when it is not, the agent refuses the primary key while keys from the fallback agents still work, so a signing failure that names the declared public key points at the wallet path rather than at the key itself.
 
 ## FIDO credentials
 

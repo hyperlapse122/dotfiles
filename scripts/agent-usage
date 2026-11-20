@@ -109,7 +109,7 @@ def codex():
         for name in ('primary', 'secondary'):
             entry = snapshot.get(name)
             if entry:
-                model = snapshot.get('limitName') if limit_id not in ('default', 'codex') else None
+                model = (snapshot.get('limitName') or limit_id) if limit_id not in ('default', 'codex') else None
                 windows.append(window(name, entry['usedPercent'], entry.get('resetsAt'),
                                       model=model, durationMins=entry.get('windowDurationMins')))
     return data.get('accountId'), windows
@@ -306,61 +306,12 @@ def cached(provider, refresh):
         return cache_view(record)
 
 
-PACE_TOLERANCE = 25
-FLOOR = 10
-
-
-def scope_state(entries):
-    overshoots = [e['overshootPercent'] for e in entries if e['overshootPercent'] is not None]
-    remaining = [e['remainingPercent'] for e in entries if e['remainingPercent'] is not None]
-    return dict(overshootPercent=max(overshoots, default=None),
-                remainingPercent=min(remaining, default=None))
-
-
-def skip_reason(state):
-    if state['remainingPercent'] is not None and state['remainingPercent'] < FLOOR:
-        return 'below floor'
-    return None
-
-
-def ahead_of_pace(state):
-    return state['overshootPercent'] is not None and state['overshootPercent'] > 0
-
-
-def judge(result):
+def normalize(result):
     result = copy.deepcopy(result)
-    now = time.time()
-    # Only inference windows participate in routing and fallback scoring.
     result['resources'] = [entry for entry in result['windows'] if entry.get('resource')]
     result['windows'] = [entry for entry in result['windows'] if not entry.get('resource')]
-    for entry in result['windows']:
-        if result['status'] == 'stale' and entry.get('resetsAt', float('inf')) <= now:
-            entry['historicalRemainingPercent'] = entry['remainingPercent']
-            entry['remainingPercent'] = None
-        remaining, duration = entry['remainingPercent'], entry.get('durationMins')
-        elapsed = None
-        if remaining is not None and duration and duration > 0 and entry.get('resetsAt') is not None:
-            left = 100 * (entry['resetsAt'] - now) / (duration * 60)
-            elapsed = min(100, max(0, 100 - left))
-        overshoot = None if elapsed is None else entry['usedPercent'] - elapsed - PACE_TOLERANCE
-        entry.update(elapsedPercent=elapsed, overshootPercent=overshoot,
-                     aheadOfPace=overshoot is not None and overshoot > 0,
-                     belowFloor=remaining is not None and remaining < FLOOR)
-    provider = scope_state([e for e in result['windows'] if not e.get('model')])
-    result.update(provider, skipReason=skip_reason(provider))
-    result['skip'] = result['skipReason'] is not None
-    result['aheadOfPace'] = ahead_of_pace(provider)
-    result['skipModels'] = {}
-    result['aheadModels'] = {}
-    for model in sorted({e['model'] for e in result['windows'] if e.get('model')}):
-        state = scope_state([e for e in result['windows'] if e.get('model') == model])
-        # The root ranks a model's entries by these values alone, so they
-        # fold in the provider-wide windows the entries are also subject to.
-        combined = scope_state([state, provider])
-        if skip_reason(combined):
-            result['skipModels'][model] = dict(combined, skipReason=skip_reason(combined))
-        elif ahead_of_pace(state):
-            result['aheadModels'][model] = combined
+    for entry in result['windows'] + result['resources']:
+        entry['scope'] = 'resource' if entry.get('resource') else 'model' if entry.get('model') else 'account'
     return result
 
 
@@ -380,7 +331,7 @@ def main():
             result = cached(provider, args.refresh)
         except (OSError, ValueError, KeyError, TypeError):
             result = fetch(provider)
-        return judge(result)
+        return normalize(result)
 
     # Providers have separate cache files and locks, so they are read at once;
     # a cold run then waits for the slowest provider, not the sum of their durations.
@@ -391,19 +342,23 @@ def main():
         print(json.dumps({'providers': providers}))
     else:
         for provider, result in providers.items():
-            print(f"{provider}: {result['status']}" + (f" ({result['reason']})" if result.get('reason') else ''))
+            reason = f" ({result['reason']})" if result.get('reason') else ''
+            observation = ('unavailable' if result['status'] == 'unknown'
+                           else display_time(result['fetchedAt']))
+            print(f"{provider}: {result['status']}{reason}; observation={observation}")
             for entry in result['windows'] + result['resources']:
-                timing = (f"regenerates {entry.get('nextRegenPercent')}% at {display_time(entry['nextRegenAt'])}"
-                          if 'nextRegenAt' in entry else f"resets at {display_time(entry.get('resetsAt'))}")
+                if 'nextRegenAt' in entry:
+                    amount = entry.get('nextRegenPercent')
+                    amount = 'unknown' if amount is None else f'{amount}%'
+                    timing = f"regenerates {amount} at {display_time(entry['nextRegenAt'])}"
+                else:
+                    timing = f"resets at {display_time(entry.get('resetsAt'))}"
+                scope = entry['scope']
+                identity = f" {scope}={entry[scope]}" if scope != 'account' else ''
                 remaining = entry['remainingPercent']
                 allowance = 'unknown' if remaining is None else f'{remaining:g}%'
-                pace = ''
-                if entry.get('elapsedPercent') is not None:
-                    state = 'ahead of pace' if entry['aheadOfPace'] else 'within pace'
-                    pace = f"; {entry['elapsedPercent']:.0f}% elapsed, {state}"
-                if entry.get('belowFloor'):
-                    pace += '; below floor'
-                print(f"  {entry['label']}: {entry['usedPercent']:g}% used, {allowance} remaining; {timing}{pace}")
+                print(f"  {entry['label']} [scope={scope}{identity}]: "
+                      f"{entry['usedPercent']:g}% used, {allowance} remaining; {timing}")
 
 
 if __name__ == '__main__':

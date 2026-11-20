@@ -146,7 +146,13 @@ def configuration(entry, root):
             require([value for name, value in options if name == "identityagent"] ==
                     [f"/run/user/{os.getuid()}/desktop-ssh/agent.sock"], "incorrect effective primary IdentityAgent")
             require(config.get("key_file") == entry["home"] + "/.ssh/id_ed25519_nix_config", "incorrect working key")
-            require(config.get("fallback_socket") == entry["home"] + "/.1password/agent.sock", "incorrect fallback socket")
+            require(config.get("fallback_agents") == [
+                {"socket": "/run/user/%i/gnupg/S.gpg-agent.ssh", "timeout": 2},
+                {"socket": entry["home"] + "/.1password/agent.sock", "timeout": 0.3}],
+                "fallback agents must be gpg-agent, then 1Password")
+            gpg_socket = files / ".config/systemd/user/gpg-agent-ssh.socket" if files else Path("/absent-socket")
+            require(gpg_socket.is_file() and "ListenStream=%t/gnupg/S.gpg-agent.ssh" in gpg_socket.read_text(),
+                    "gpg-agent does not listen on the SSH socket desktop-ssh asks")
             require(Path(config.get("public_key", "")).is_file(), "missing public metadata")
             actual = serialization.load_ssh_public_key(Path(config["public_key"]).read_bytes())
             declared = serialization.load_ssh_public_key(
