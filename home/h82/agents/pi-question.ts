@@ -7,13 +7,14 @@ export default function (pi) {
     promptSnippet: "Ask the user a question through a native dialog.",
     executionMode: "sequential",
     parameters: Type.Object({ question: Type.String({ minLength: 1 }),
-      options: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 10, uniqueItems: true })) }),
+      options: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 10 })) }),
     async execute(_id, { question, options = [] }, signal, _update, ctx) {
       const finish = (status, answer = null) => ({
         content: [{ type: "text", text: JSON.stringify({ status, question, answer }) }],
         details: { status, question, answer },
       });
       if (signal?.aborted) return finish("cancelled");
+      if (new Set(options).size !== options.length) throw new Error("Choices must be distinct.");
       if (!ctx.hasUI) return finish("ui_unavailable");
       let answer;
       if (options.length) {
