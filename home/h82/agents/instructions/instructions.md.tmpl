@@ -7,6 +7,8 @@ For CE cross-model review, implementation, and reasoning elevation, use T3 deleg
 
 Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. The cross-model review exception below applies to access restrictions only. For T3 delegation, choose the child's route as this section says, its model and effort as the T3 CE model selection section says, and use T3 capability discovery to resolve the target and supported `target.options`. Give each child a self-contained brief with the goal, completion standard, required context, and accessible workspace or artifact paths. Include delegation guidance for children that need it.
 
+For the current environment, call `orchestrator_capabilities({})` for the short list or `orchestrator_capabilities({"search":"terra"})` to find a model by name. Omit unused fields; an empty string is a value, not an omission. To query another host, pass its `environmentId` from `t3_environment_links`, not a guessed name such as `local` or `self`.
+
 | Model class | Native route | Fallback order |
 | --- | --- | --- |
 | Claude | Claude Code (`claudeAgent`) | current instance, Pi, OpenCode |
