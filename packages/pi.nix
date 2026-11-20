@@ -14,10 +14,6 @@ let
       repository = "earendil-works/pi";
       inherit (source) source;
     };
-    modelLock = pkgs.writeText "pi-model-lock.json" (
-      builtins.toJSON (import ../home/h82/agents/pi-locks.nix)
-    );
-    policyPatch = ./pi-model-policy.patch;
   };
   # Each path lands inside single quotes in a shell script or in a JavaScript
   # string literal.
@@ -68,6 +64,8 @@ stdenv.mkDerivation {
   doInstallCheck = true;
   nativeInstallCheckInputs = [ pkgs.versionCheckHook ];
   versionCheckKeepEnvironment = [ "HOME" ];
+
+  passthru = { inherit (runtime) modelCatalog; };
 
   meta = {
     description = "Minimal terminal coding agent";

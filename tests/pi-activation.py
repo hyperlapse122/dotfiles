@@ -2,12 +2,11 @@
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
 
-block_path, original_home, original_keys, lock = sys.argv[1:]
+block_path, original_home, original_keys = sys.argv[1:]
 script = Path(block_path).read_text()
 assert original_keys in script and original_home in script, 'activation does not name the published keys or the home'
 
@@ -18,7 +17,6 @@ with tempfile.TemporaryDirectory() as directory:
     agent = home / '.pi/agent'
     agent.mkdir(parents=True)
     keys.mkdir()
-    shutil.copyfile(lock, agent / 'model-lock.json')
     for name, value in [('synthetic', 'FAKE-synthetic'), ('openai', 'FAKE-openai'), ('anthropic', 'FAKE-anthropic')]:
         (keys / f'{name}_api_key').write_text(value + '\n')
     (agent / 'auth.json').write_text(json.dumps({'other': {'type': 'api_key', 'key': 'FAKE-other'}}))

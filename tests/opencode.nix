@@ -16,7 +16,7 @@
     Compound Engineering plugin entry, another plugin, a user key, and a user
     model, the merge sets `update` to `disable`, leaves one pinned Compound
     Engineering entry beside the other plugin, writes the Synthetic models Pi
-    shows with the rest disabled, writes every model of the Go snapshot, and
+    shows with the rest disabled, writes every model of the Go snapshot and of the OpenAI and Anthropic lists (disabling none), and
     keeps the user's key and model. Running the activation in the scratch HOME
     also proves the merger is aimed at that file and that a merger refusal fails
     the activation. The expected values are computed here from
@@ -95,6 +95,33 @@ let
       }) hiddenSynthetic
     );
 
+  # The OpenAI and Anthropic lists Pi declares, as OpenCode shows them. No
+  # entry is disabled: OpenCode's own catalog keeps every other model.
+  expectedList =
+    file:
+    builtins.listToAttrs (
+      map (model: {
+        name = model.id;
+        value = {
+          name = model.name;
+          limit = {
+            context = model.contextWindow;
+            output = model.maxTokens;
+          };
+          cost = {
+            input = model.cost.input;
+            output = model.cost.output;
+            cache = {
+              read = model.cost.cacheRead;
+              write = model.cost.cacheWrite;
+            };
+          };
+        };
+      }) (builtins.fromJSON (builtins.readFile (agents + "/${file}"))).models
+    );
+  expectedOpenai = expectedList "openai-models.json";
+  expectedAnthropic = expectedList "anthropic-models.json";
+
   expectedGo = builtins.listToAttrs (
     map (row: {
       name = row.id;
@@ -160,6 +187,22 @@ let
         ];
         entries = expectedGo;
       }
+      {
+        path = [
+          "providers"
+          "openai"
+          "models"
+        ];
+        entries = expectedOpenai;
+      }
+      {
+        path = [
+          "providers"
+          "anthropic"
+          "models"
+        ];
+        entries = expectedAnthropic;
+      }
     ];
   };
 
@@ -183,6 +226,10 @@ let
         "hf:moonshotai/Kimi-K3".name = "stale name";
         my-own-model = userModel;
       };
+      openai.models = {
+        "gpt-6.2-sol".name = "stale name";
+        my-own-openai = userModel;
+      };
       custom.models.tiny.name = "Tiny";
     };
   };
@@ -199,6 +246,10 @@ let
         my-own-model = userModel;
       };
       opencode-go.models = expectedGo;
+      openai.models = expectedOpenai // {
+        my-own-openai = userModel;
+      };
+      anthropic.models = expectedAnthropic;
       custom.models.tiny.name = "Tiny";
     };
   };

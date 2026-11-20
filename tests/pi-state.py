@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory() as directory:
         path.chmod(path.stat().st_mode | 0o200)
     hidden = 'syn:small:vision'
     (agent / 'settings.json').write_text(json.dumps({'defaultProvider': 'synthetic', 'defaultModel': hidden,
-        'packages': ['other'], 'extensions': ['other.ts'], 'ownerSetting': True}))
+        'packages': ['other'], 'extensions': ['other.ts', str(agent / 'dotfiles-policy.ts')], 'ownerSetting': True}))
     (agent / 'auth.json').write_text('{"other":{"type":"api_key","key":"FAKE-other"}}')
     trust = '{"/remembered/project":true}'
     (agent / 'trust.json').write_text(trust)
@@ -30,19 +30,21 @@ with tempfile.TemporaryDirectory() as directory:
     (plugin / 'package.json').write_text(json.dumps({'name': 'compound-engineering', 'repository': 'https://github.com/EveryInc/compound-engineering-plugin'}))
     command = [sys.executable, sys.argv[2], '--agent', str(agent), '--plugin', str(plugin),
                '--key', str(key), '--credential', f'openai={openai}', '--credential', f'anthropic={anthropic}',
-               '--hide-model', f'synthetic/{hidden}']
+               '--hide-model', f'synthetic/{hidden}', '--model', 'openai/model-one', '--model', 'anthropic/model-two']
     for _ in range(2):
         subprocess.run(command, check=True)
         settings = json.loads((agent / 'settings.json').read_text())
         assert settings['packages'] == ['other', str(plugin)]
-        assert settings['extensions'] == ['other.ts', *[str(agent / name) for name in ('dotfiles-policy.ts', 'dotfiles-web.ts', 'dotfiles-question.ts')]]
+        # The retired policy extension is dropped, and the managed ones follow the user's own.
+        assert settings['extensions'] == ['other.ts', *[str(agent / name) for name in ('dotfiles-web.ts', 'dotfiles-question.ts')]]
         assert settings['ownerSetting'] is True
         assert settings['defaultProjectTrust'] == 'ask'
         assert (agent / 'trust.json').read_text() == trust
-        ids = [model['id'] for model in json.loads((agent / 'model-lock.json').read_text())['syntheticModelLocks']['models']]
+        ids = [model['id'] for model in json.loads((agent / 'models.json').read_text())['providers']['synthetic']['models']]
         assert hidden in ids
         assert settings['defaultProvider'] == 'synthetic' and settings['defaultModel'] == min(set(ids) - {hidden})
-        assert settings['enabledModels'] == [f'synthetic/{model}' for model in ids if model != hidden] + ['openai/*', 'anthropic/*']
+        assert settings['enabledModels'] == [f'synthetic/{model}' for model in ids if model != hidden] + ['openai/model-one', 'anthropic/model-two']
+        assert not (agent / 'model-lock.json').exists() and not (agent / 'dotfiles-policy.ts').exists()
         auth = json.loads((agent / 'auth.json').read_text())
         assert auth == {'other': {'type': 'api_key', 'key': 'FAKE-other'}, 'synthetic': {'type': 'api_key', 'key': 'FAKE-synthetic'},
                         'openai': {'type': 'api_key', 'key': 'FAKE-openai'}, 'anthropic': {'type': 'api_key', 'key': 'FAKE-anthropic'}}
@@ -51,7 +53,7 @@ with tempfile.TemporaryDirectory() as directory:
 
     plain = [sys.executable, sys.argv[2], '--agent', str(agent), '--plugin', str(plugin)]
     subprocess.run(plain, check=True)
-    assert json.loads((agent / 'settings.json').read_text())['enabledModels'] == ['synthetic/*', 'openai/*', 'anthropic/*']
+    assert json.loads((agent / 'settings.json').read_text())['enabledModels'] == ['synthetic/*']
 
     openai.unlink()
     anthropic.write_text('FAKE-anthropic-rotated\n')

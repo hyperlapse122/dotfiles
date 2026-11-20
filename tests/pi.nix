@@ -36,19 +36,18 @@ pkgs.runCommand "pi-tests"
       ''
       + lib.optionalString (found != null) ''
         test -x ${found}/bin/pi
-        python3 ${./pi-runtime.py} ${found}/libexec/pi/pi ${entry.user.home-files}/.pi/agent
-        node ${./pi-runtime-policy.mjs} ${found} ${entry.user.home-files}/.pi/agent
+        python3 ${./pi-runtime.py} ${found}/libexec/pi/pi ${entry.user.home-files}/.pi/agent ${../home/h82/agents}
         node ${./pi-tools.mjs} ${found} ${entry.user.home-files}/.pi/agent
         python3 ${./pi-wrapper.py} ${found}/bin/pi ${entry.user.home-files}/.pi/agent ${keyDirectory}
         python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state} ${found} ${./pi-trust.mjs}
-        node --experimental-strip-types ${./pi-policy.mjs} ${entry.user.home-files}/.pi/agent
+        python3 ${./pi-settings.py} ${pkgs.writeText "pi-settings-block.sh" entry.user.home.activation.piSettings.data} ${../scripts/pi-state} ${entry.user.home-files}/.pi/agent ${../home/h82/agents}
       ''
       + lib.optionalString (authActivation == null && !entry.user.my.bootstrap) ''
         echo "missing home.activation.piAuth on production output ${entry.name}" >&2
         failed=1
       ''
       + lib.optionalString (authActivation != null) ''
-        python3 ${./pi-activation.py} ${pkgs.writeText "pi-auth-block.sh" authActivation.data} ${entry.user.home.homeDirectory} ${keyDirectory} ${entry.user.home-files}/.pi/agent/model-lock.json || failed=1
+        python3 ${./pi-activation.py} ${pkgs.writeText "pi-auth-block.sh" authActivation.data} ${entry.user.home.homeDirectory} ${keyDirectory} || failed=1
       ''
       + executeActivation {
         script = entry.user.home.activation.piMcpSettings.data or "";

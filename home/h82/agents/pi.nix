@@ -6,9 +6,56 @@
   ...
 }:
 let
-  lock = import ./pi-locks.nix;
-  lockFile = pkgs.writeText "pi-model-lock.json" (builtins.toJSON lock);
-  catalog = lock.syntheticModelLocks;
+  catalog = (builtins.fromJSON (builtins.readFile ./pi-model-lock.json)).syntheticModelLocks;
+  # The committed lists for the built-in providers. A declared row replaces
+  # the model of the same id in Pi's own catalog and drops that model's compat,
+  # thinking-level, and cache settings, so models.json declares only the
+  # listed models the compiled catalog lacks. That set is computed from the
+  # catalog the Pi build pins, so a refreshed list or a Pi bump needs no edit.
+  # Each declared row names the API it is served over and leaves the
+  # provider's endpoint and credentials alone.
+  providerApis = {
+    openai = "openai-responses";
+    anthropic = "anthropic-messages";
+  };
+  providerRows = lib.mapAttrs (
+    provider: _: (builtins.fromJSON (builtins.readFile (./. + "/${provider}-models.json"))).models
+  ) providerApis;
+  modelsJson =
+    pkgs.runCommand "pi-models.json"
+      {
+        nativeBuildInputs = [ pkgs.jq ];
+        synthetic = builtins.toJSON { inherit (catalog) api baseUrl models; };
+        apis = builtins.toJSON providerApis;
+        rows = builtins.toJSON providerRows;
+        passAsFile = [
+          "synthetic"
+          "apis"
+          "rows"
+        ];
+      }
+      ''
+        jq -n \
+          --slurpfile catalog ${pi.modelCatalog} \
+          --slurpfile synthetic "$syntheticPath" \
+          --slurpfile apis "$apisPath" \
+          --slurpfile rows "$rowsPath" '
+          def defined($p): [$catalog[0][$p][]? | select((.type // "chat") == "chat") | .id];
+          {providers: ({synthetic: $synthetic[0]} + ($apis[0] | with_entries(
+            .key as $p | .value as $api | {key: $p, value: {models: [
+              $rows[0][$p][] | select(.id as $id | (defined($p) | index($id)) == null) | . + {api: $api}
+            ]}})))}' > $out
+      '';
+  # Cycling and startup selection cover every listed model, declared or not.
+  enabledModelArgs = lib.escapeShellArgs (
+    lib.concatMap (
+      provider:
+      lib.concatMap (model: [
+        "--model"
+        "${provider}/${model.id}"
+      ]) providerRows.${provider}
+    ) (lib.attrNames providerApis)
+  );
   hiddenModelArgs = lib.escapeShellArgs (
     lib.concatMap (model: [
       "--hide-model"
@@ -16,12 +63,6 @@ let
     ]) (import ./pi-hidden-models.nix)
   );
   agent = "${config.home.homeDirectory}/.pi/agent";
-  # Pi resolves extension symlinks before evaluating import.meta.url.
-  policy = pkgs.runCommand "pi-policy" { } ''
-    mkdir -p $out
-    cp ${./pi-policy.ts} $out/dotfiles-policy.ts
-    cp ${lockFile} $out/model-lock.json
-  '';
   keyDirectory =
     if config.my.kind == "nixos" then "/run/secrets/cli-auth" else config.my.secrets.stateDir;
   pi = import ../../../packages/pi.nix {
@@ -56,19 +97,13 @@ let
 in
 {
   home.packages = [ pi ];
-  home.file.".pi/agent/model-lock.json".source = lockFile;
-  home.file.".pi/agent/dotfiles-policy.ts".source = "${policy}/dotfiles-policy.ts";
   home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/dotfiles-question.ts".source = ./pi-question.ts;
-  home.file.".pi/agent/models.json".text = builtins.toJSON {
-    providers.synthetic = {
-      inherit (catalog) api baseUrl models;
-    };
-  };
+  home.file.".pi/agent/models.json".source = modelsJson;
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
-      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} ${hiddenModelArgs}
+      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} ${hiddenModelArgs} ${enabledModelArgs}
     fi
   '';
   home.activation.piMcpSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''

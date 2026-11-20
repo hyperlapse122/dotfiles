@@ -1,154 +1,78 @@
-"""Probe provider registration in the packaged Pi runtime without network access."""
+"""Probe the packaged Pi runtime's model list against the declared OpenAI and Anthropic lists, offline."""
 import json
 import os
 from pathlib import Path
-import shutil
-import selectors
+import select
 import subprocess
 import sys
 import tempfile
 import time
 
-with tempfile.TemporaryDirectory() as directory:
-    agent = Path(directory)
-    for name in ('dotfiles-policy.ts', 'model-lock.json', 'models.json'):
-        shutil.copyfile(Path(sys.argv[2]) / name, agent / name)
-    configured = json.loads((agent / 'models.json').read_text())
-    extra = dict(configured['providers']['synthetic']['models'][0], id='unlocked-model')
-    configured['providers']['synthetic']['models'].append(extra)
-    configured['providers']['foreign'] = dict(configured['providers']['synthetic'], models=[extra])
-    configured['providers']['openai'] = dict(configured['providers']['synthetic'], models=[extra])
-    (agent / 'models.json').write_text(json.dumps(configured))
+pi, installed, agents = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+PROVIDERS = {'openai': 'openai-responses', 'anthropic': 'anthropic-messages'}
+
+
+def available(directory, models_json):
+    """The models Pi offers with fake credentials for every provider, as its RPC reports them."""
+    agent = Path(tempfile.mkdtemp(dir=directory))
+    (agent / 'models.json').write_text(json.dumps(models_json))
     (agent / 'auth.json').write_text(json.dumps({
-        provider: {'type': 'api_key', 'key': 'FAKE'}
-        for provider in ('synthetic', 'openai', 'anthropic', 'google', 'foreign')
+        provider: {'type': 'api_key', 'key': 'FAKE'} for provider in ('synthetic', *PROVIDERS)
     }))
-    lock = json.loads((agent / 'model-lock.json').read_text())
-    locked = {(provider, model['id']) for provider, key in [('openai', 'openaiModelLocks'), ('anthropic', 'anthropicModelLocks')]
-              for model in lock[key]['models']}
-    env = dict(os.environ, HOME=directory, PI_CODING_AGENT_DIR=directory, PI_OFFLINE='1')
-    result = subprocess.run([sys.argv[1], '--offline', '--no-extensions', '--extension',
-                             str(agent / 'dotfiles-policy.ts'), '--list-models'],
-                            env=env, capture_output=True, text=True, check=True)
-    assert not result.stderr.strip(), result.stderr
-    rows = [line.split()[:2] for line in result.stdout.splitlines()[1:] if line.strip()]
-    expected = lock['syntheticModelLocks']['models']
-    wanted_rows = sorted([['synthetic', model['id']] for model in expected])
-    assert sorted(row for row in rows if row[0] == 'synthetic') == wanted_rows, result.stdout
-    others = {(provider, model) for provider, model in rows if provider != 'synthetic'}
-    assert others and others <= locked, others - locked
-    assert {provider for provider, _model in others} == {'openai', 'anthropic'}, others
-
-    project = agent / 'project'
-    extensions = project / '.pi/extensions'
-    extensions.mkdir(parents=True)
-    foreign = dict(configured['providers']['synthetic'], models=[extra])
-    source = ('import { builtinProviders } from "@earendil-works/pi-ai/providers/all";\n'
-              'export default function(pi) {\n'
-              f'const foreign = {json.dumps(foreign)};\n'
-              'const inject = () => {\n'
-              'pi.registerProvider("foreign", foreign);\n'
-              'pi.registerProvider("synthetic", {...foreign, baseUrl:"https://wrong.invalid"});\n'
-              'pi.registerProvider(builtinProviders().find(p => p.id === "anthropic"));\n'
-              'try { pi.registerVirtualModel({provider:"foreign",id:"virtual",name:"Virtual",'
-              'route:async()=>({model:{provider:"foreign",id:"unlocked-model"},thinkingLevel:"off"})}); } catch {}\n'
-              '};\n'
-              'INJECT\n'
-              'pi.registerCommand("inject", {handler:async(_args,ctx)=>{inject(); await ctx.modelRegistry.refresh();}});\n'
-              'pi.registerCommand("reload-fixture", {handler:async(_args,ctx)=>{await ctx.reload();}});\n'
-              '}\n')
-    auth = json.loads((agent / 'auth.json').read_text())
-    auth['anthropic'] = {'type':'api_key','key':'FAKE-anthropic'}
-    (agent / 'auth.json').write_text(json.dumps(auth))
-    (project / '.pi/settings.json').write_text(json.dumps({
-        'defaultProvider':'foreign','defaultModel':'unlocked-model','enabledModels':['foreign/*']}))
-    for stage in ('factory', 'session_start', 'resources_discover'):
-        injection = 'inject();' if stage == 'factory' else f'pi.on("{stage}", inject);'
-        (extensions / 'providers.ts').write_text(source.replace('INJECT', injection))
-        process = subprocess.Popen(
-            [sys.argv[1], '--offline', '--approve', '--no-session', '--extension',
-             str(agent / 'dotfiles-policy.ts'), '--mode', 'rpc'],
-            cwd=project, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
-        selector = selectors.DefaultSelector()
-        selector.register(process.stdout, selectors.EVENT_READ)
+    env = dict(os.environ, HOME=str(agent), PI_CODING_AGENT_DIR=str(agent), PI_OFFLINE='1')
+    process = subprocess.Popen([pi, '--offline', '--no-extensions', '--no-session', '--mode', 'rpc'],
+                               cwd=agent, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    try:
+        process.stdin.write((json.dumps({'id': 'models', 'type': 'get_available_models'}) + '\n').encode())
+        process.stdin.flush()
         pending = b''
-        serial = 0
-
-        def rpc(command):
-            global pending, serial
-            serial += 1
-            request = dict(command, id=str(serial))
-            process.stdin.write((json.dumps(request) + '\n').encode())
-            process.stdin.flush()
-            deadline = time.monotonic() + 20
-            while time.monotonic() < deadline:
-                while b'\n' in pending:
-                    line, pending = pending.split(b'\n', 1)
-                    event = json.loads(line)
-                    if event.get('id') == request['id']:
-                        return event
-                assert selector.select(max(0, deadline-time.monotonic())), 'Pi RPC response timed out'
-                chunk = os.read(process.stdout.fileno(), 65536)
-                assert chunk, 'Pi exited before its response: ' + process.stderr.read().decode()
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                event = json.loads(line)
+                if event.get('id') == 'models':
+                    assert event['success'], event
+                    return {(model['provider'], model['id']): model for model in event['data']['models']}
+            if select.select([process.stdout], [], [], 1)[0]:
+                chunk = os.read(process.stdout.fileno(), 1 << 20)
+                assert chunk, 'Pi exited before listing models: ' + process.stderr.read().decode()
                 pending += chunk
-            raise AssertionError('Pi RPC response timed out')
+        raise AssertionError('Pi did not list its models in time')
+    finally:
+        process.stdin.close()
+        process.kill()
+        process.wait()
 
-        def assert_catalog():
-            response = rpc({'type':'get_available_models'})
-            assert response['success'], response
-            actual = {(model['provider'],model['id']) for model in response['data']['models']}
-            wanted = {('synthetic',model['id']) for model in expected}
-            assert wanted <= actual, f'Trusted project {stage} dropped a Synthetic model: {wanted-actual}'
-            assert actual - wanted <= locked, f'Trusted project {stage} widened catalog: {actual-wanted-locked}'
-            assert {provider for provider, _model in actual - wanted} == {'openai', 'anthropic'}, actual - wanted
-            for model in response['data']['models']:
-                if model['provider'] == 'synthetic':
-                    assert model['baseUrl'] == configured['providers']['synthetic']['baseUrl'], model
-                else:
-                    assert 'wrong.invalid' not in model['baseUrl'] and model['id'] != 'unlocked-model', model
-            for provider, model in [('foreign','unlocked-model'),('foreign','virtual'),('synthetic','unlocked-model'),
-                                    ('openai','unlocked-model'),('anthropic','unlocked-model'),('google','gemini-2.5-pro')]:
-                assert not rpc({'type':'set_model','provider':provider,'modelId':model})['success']
-            assert rpc({'type':'set_model','provider':'synthetic','modelId':expected[0]['id']})['success']
 
-        try:
-            assert_catalog()
-            for command in ('/inject', '/reload-fixture'):
-                response = rpc({'type':'prompt','message':command})
-                assert response['success'], response
-                assert_catalog()
-        finally:
-            process.stdin.close()
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-            selector.close()
+with tempfile.TemporaryDirectory() as directory:
+    configured = json.loads((installed / 'models.json').read_text())
+    synthetic = {'synthetic': configured['providers']['synthetic']}
+    snapshots = {provider: json.loads((agents / f'{provider}-models.json').read_text())['models']
+                 for provider in PROVIDERS}
 
-    timestamp = '2026-01-01T00:00:00.000Z'
-    for provider, model_id in [('foreign', 'outside'), ('synthetic', 'removed-model'),
-                               ('openai', 'removed-model'), ('anthropic', 'removed-model')]:
-        saved = project / 'saved-session.jsonl'
-        saved.write_text('\n'.join(json.dumps(entry) for entry in [
-            {'type':'session','version':3,'id':'restore-probe','timestamp':timestamp,'cwd':str(project)},
-            {'type':'model_change','id':'model','parentId':None,'timestamp':timestamp,
-             'provider':provider,'modelId':model_id},
-            {'type':'message','id':'message','parentId':'model','timestamp':timestamp,
-             'message':{'role':'user','content':'Saved session probe','timestamp':0}},
-        ]) + '\n')
-        restored = subprocess.Popen([sys.argv[1], '--offline', '--approve', '--session', str(saved),
-                                     '--extension', str(agent / 'dotfiles-policy.ts'), '--mode', 'rpc'],
-                                    cwd=project, env=env, stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            restored.wait(timeout=10)
-            _output, error = restored.communicate()
-            assert b'The saved model is unavailable in the managed model lock.' in error, error
-        except subprocess.TimeoutExpired:
-            raise AssertionError('Pi kept a saved outside-model session open after restoration') from None
-        finally:
-            if restored.poll() is None:
-                restored.kill()
-            restored.communicate()
+    # Pi's compiled catalog alone, then with the installed models.json.
+    compiled = available(directory, {'providers': synthetic})
+    offered = available(directory, configured)
+
+    # The installed models.json declares exactly the listed models Pi's compiled catalog lacks, because a
+    # declared row replaces a catalog model and would drop its compat, thinking-level, and cache settings.
+    for provider, api in PROVIDERS.items():
+        missing = sorted(row['id'] for row in snapshots[provider] if (provider, row['id']) not in compiled)
+        declared = configured['providers'][provider]['models']
+        assert sorted(row['id'] for row in declared) == missing, (provider, declared)
+        assert all(row['api'] == api and 'baseUrl' not in row for row in declared), declared
+        assert 'baseUrl' not in configured['providers'][provider] and 'apiKey' not in configured['providers'][provider]
+
+    # Every listed model is offered once: the declared ones from models.json, the rest from the catalog.
+    for provider in PROVIDERS:
+        for row in snapshots[provider]:
+            assert (provider, row['id']) in offered, f'Pi does not offer {provider}/{row["id"]}'
+    for provider, model in (('openai', 'gpt-6.2-sol'), ('openai', 'gpt-6.2-astra')):
+        assert (provider, model) not in compiled and (provider, model) in offered, (provider, model)
+    for key, model in compiled.items():
+        assert offered[key] == model, f'declaring the lists changed the catalog model {key}'
+    declared_ids = {(provider, row['id']) for provider in PROVIDERS for row in configured['providers'][provider]['models']}
+    for key in declared_ids:
+        assert offered[key]['contextWindow'] > 0 and offered[key]['maxTokens'] > 0, key

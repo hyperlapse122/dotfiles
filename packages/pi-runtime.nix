@@ -10,8 +10,6 @@
   nodejs_22,
   ripgrep,
   source,
-  modelLock,
-  policyPatch,
   stdenv,
   wl-clipboard,
   xclip,
@@ -36,12 +34,6 @@ let
     pname = "pi-workspace-packages";
     inherit (packageJson) version;
     src = source;
-    patches = [ policyPatch ];
-    postPatch = ''
-      printf 'export default ' > packages/coding-agent/src/core/dotfiles-model-lock.ts
-      cat ${modelLock} >> packages/coding-agent/src/core/dotfiles-model-lock.ts
-      printf ';\n' >> packages/coding-agent/src/core/dotfiles-model-lock.ts
-    '';
 
     npmDeps = importNpmLock { npmRoot = source; };
     npmRebuildFlags = [ "--ignore-scripts" ];
@@ -174,6 +166,9 @@ stdenv.mkDerivation {
       "require('$out/lib/pi/node_modules/@silvia-odwyer/photon-node')"
     runHook postInstallCheck
   '';
+
+  # The compiled catalog, so a consumer can tell which models Pi already defines.
+  passthru = { inherit modelCatalog; };
 
   meta = {
     description = packageJson.description;

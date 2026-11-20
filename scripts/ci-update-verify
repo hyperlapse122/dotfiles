@@ -59,7 +59,7 @@ case "$scope" in
     check catalog nix build --no-link --print-build-logs \
       .#checks.x86_64-linux.pi .#checks.x86_64-linux.synthetic-models \
       .#checks.x86_64-linux.opencode-go-models-watch \
-      .#checks.x86_64-linux.pi-provider-locks-watch || true
+      .#checks.x86_64-linux.provider-models-watch || true
     ;;
   *) printf 'Unknown verification scope: %s\n' "$scope" >&2; exit 2 ;;
 esac
