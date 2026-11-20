@@ -79,7 +79,7 @@ let
         When regenerating a title, correct the format even if the previous title names the right subject.
       '';
     };
-    remove = [ ];
+    remove = [ "reviewGuideModelSelection" ];
     removePaths = [
       {
         path = [
@@ -366,16 +366,6 @@ let
         model = "claude-opus-5-5";
       };
       textGenerationModelSelection = {
-        instanceId = "opencode";
-        model = "anthropic/claude-haiku-5-5";
-        options = [
-          {
-            id = "variant";
-            value = "low";
-          }
-        ];
-      };
-      reviewGuideModelSelection = {
         instanceId = "claudeAgent";
         model = "claude-haiku-5-5";
       };
