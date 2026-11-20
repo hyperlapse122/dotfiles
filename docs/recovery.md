@@ -165,6 +165,8 @@ Three YubiKeys carry the same OpenPGP key, so losing one card does not lose the 
 
 Provision a replacement card from the offline signing-key backup, never from another card (private keys cannot be extracted from a YubiKey). Restore the backup into a tmpfs `GNUPGHOME`, configure `ed25519` and `cv25519` key attributes on the new card, move the subkeys onto it with `keytocard`, and set its own User and Admin PINs. Because all three cards hold the same encryption subkey, the replacement card decrypts every existing `secrets/bootstrap/<host>/age-key.asc` and external backup without re-encryption.
 
+The SSH public key derived from the authentication subkey (`gpg --export-ssh-key 621512777E6933FEB4458FDC4945855D4F283F05`) also stays the same, so servers that trust it need no change.
+
 Clear the lost card's stored PIN from the OS keyring on each host with `dotfiles-pinentry forget <lost-card-serial>`. The replacement card stores its own PIN under `yubikey:<new-serial>:user` on its first qualifying prompt.
 
 Losing the offline signing-key backup is a different failure: the remaining cards are then the last copies of the key. While a working card remains, generate a new OpenPGP key, re-encrypt every `secrets/bootstrap/<host>/age-key.asc` and external backup to it, update `keys/signing.asc` and the fingerprint in `modules/shared/host.nix`, update GitHub/GitLab verification keys, and revoke the old key.
@@ -178,7 +180,7 @@ systemctl --no-ask-password start desktop-ssh-provision.service
 systemctl --user status desktop-ssh-agent.service
 ```
 
-`desktop-ssh-provision.service` decrypts `secrets/hosts/<host>/ssh.yaml` via systemd credentials, generates a fresh random passphrase in `kdewallet` (folder `nix-config SSH`, entry keyed by the public fingerprint) when needed, and writes `~/.ssh/id_ed25519_nix_config` (`0600`) with the same public key so remote `authorized_keys` and GitHub registrations keep working. Selected 1Password SSH keys remain available as fallback through `~/.1password/agent.sock`.
+`desktop-ssh-provision.service` decrypts `secrets/hosts/<host>/ssh.yaml` via systemd credentials, generates a fresh random passphrase in `kdewallet` (folder `nix-config SSH`, entry keyed by the public fingerprint) when needed, and writes `~/.ssh/id_ed25519_nix_config` (`0600`) with the same public key so remote `authorized_keys` and GitHub registrations keep working. After the host key, `desktop-ssh` offers the YubiKey's authentication subkey through gpg-agent (`/run/user/<uid>/gnupg/S.gpg-agent.ssh`) and then the selected 1Password SSH keys through `~/.1password/agent.sock`. Each of those agents is skipped on its own when it is missing or does not answer in time.
 
 To rotate a desktop SSH key intentionally:
 

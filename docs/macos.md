@@ -224,6 +224,24 @@ ssh-keygen -y -f ~/.ssh/id_ed25519_nix_config
 
 Register it as an authentication key on GitHub (Settings > SSH and GPG keys) and in `~/.ssh/authorized_keys` on any server the Mac must reach. Git commit and tag signing always uses the YubiKey OpenPGP key.
 
+On a production Mac, `~/.ssh/config` also points `IdentityAgent` at `ssh-agent-mux` (`~/.ssh/ssh-agent-mux.sock`), which offers keys in this order:
+
+1. the host key, loaded at login by the `ssh-host-key-agent` launchd agent;
+2. the YubiKey's OpenPGP authentication subkey, through gpg-agent (`~/.gnupg/S.gpg-agent.ssh`), whenever a card is inserted;
+3. the 1Password SSH keys that `config/1password/agent.toml` selects.
+
+A missing card or a 1Password app that is not running is skipped. The 1Password keys appear only after you turn on the SSH agent in 1Password's settings (Settings > Developer > Use the SSH agent); the repository cannot turn it on. When the mux is down, the `IdentityFile` entry still offers the host key. After rotating the host key, restart its agent so it offers the new key first:
+
+```sh
+launchctl kickstart -k "gui/$(id -u)/org.nix-community.home.ssh-host-key-agent"
+```
+
+All three YubiKeys carry the same authentication subkey, so they share one SSH public key. Print it and register it wherever you want to log in with the card:
+
+```sh
+gpg --export-ssh-key 621512777E6933FEB4458FDC4945855D4F283F05
+```
+
 ### Apple account for Xcode
 
 `modules/darwin/xcode.nix` passes the store copy of `secrets/hosts/<host>/apple-account.yaml` (`my.xcode.appleAccountFile`) to `macos-xcode`; a production output without that file fails evaluation. The encrypted YAML holds two string keys, `username` and `password`, encrypted to `<host>`'s age recipient alone. See [adding a host](adding-a-host.md#create-the-apple-account-secret) for creating or rotating that file without writing plaintext into the checkout.
