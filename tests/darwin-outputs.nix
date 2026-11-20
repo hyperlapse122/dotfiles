@@ -323,6 +323,8 @@ let
       for mode in git terminal gpg; do
         python3 ${./personal-environment.py} "$mode" "$gen/home-files" || bad "invalid $mode configuration"
       done
+      cmp -s "$gen/home-files/.config/1Password/ssh/agent.toml" ${../config/1password/agent.toml} \
+        || bad "1Password does not select the same SSH keys as on NixOS"
       "$gen/home-path/bin/dotnet" --list-sdks > sdks
       grep -q '^8\.' sdks && grep -q '^10\.' sdks || bad "missing .NET SDK"
       if [ ! -f "$agentconf" ]; then

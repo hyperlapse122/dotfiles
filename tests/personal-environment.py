@@ -27,6 +27,8 @@ def check(mode, root):
         assert re.search(r'^max-cache-ttl 0$', text, re.M)
         # The card's authentication subkey is offered as an SSH key.
         assert re.search(r'^enable-ssh-support$', text, re.M)
+        # gpg-agent joins the SSH key chain without becoming the session's agent.
+        assert not (root / '.config/systemd/user/set-SSH_AUTH_SOCK.service').exists()
     else:
         raise ValueError(mode)
 

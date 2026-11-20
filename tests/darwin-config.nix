@@ -229,9 +229,6 @@ let
           "${home}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
         ]
       }";
-      onePasswordFile = lib.findFirst (
-        file: file.enable && file.target == ".config/1Password/ssh/agent.toml"
-      ) null (lib.attrValues user.home.file);
       pinentry = user.services.gpg-agent.pinentry.package;
       vscodiumData = plain (activation.vscodiumSettings.data or "");
       codexData = plain (activation.codexSettings.data or "");
@@ -533,15 +530,11 @@ let
           && lib.any (lib.hasInfix "/bin/ssh-add -q ${lib.escapeShellArg "${home}/.ssh/id_ed25519_nix_config"}") hostKeyLines
         )
       ) "${entry.name}: the host-key agent must load the host key on the socket ssh-agent-mux asks first")
+      # A launchd job holding S.gpg-agent would answer every client, so no
+      # client-started agent would ever create the SSH socket.
       (check (
-        (onePasswordFile.source or null) == ../config/1password/agent.toml
-      ) "${entry.name}: 1Password must select the same SSH keys as on NixOS")
-      # The supervised launchd agent never receives a launchd SSH socket, so
-      # SSH comes from the client-started agent instead (enable-ssh-support
-      # in gpg-agent.conf, checked by darwin-outputs).
-      (check (
-        !((agentConfig "gpg-agent").Sockets ? Ssh) && !((agentConfig "gpg-agent").RunAtLoad or false)
-      ) "${entry.name}: the gpg-agent launchd job must not declare an SSH socket or run at load")
+        agents ? gpg-agent && !agents.gpg-agent.enable
+      ) "${entry.name}: the gpg-agent launchd job must be off so a client-started agent serves SSH")
       (check (
         !(user.services.podman.enable or false)
         && !(agents.minikube.enable or false)

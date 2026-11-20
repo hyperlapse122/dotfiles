@@ -52,9 +52,9 @@ in
     enable = true;
     pinentry.package = gpgTools.pinentryKeyring;
     # Off Darwin this also adds the systemd socket the supervised agent serves
-    # SSH on. On Darwin the launchd socket it would add never reaches the agent
-    # (gpg-agent --supervised takes only systemd's sockets), so a client-started
-    # agent serves SSH there and the ssh-agent-mux launcher starts it.
+    # SSH on. On Darwin, gpg-agent --supervised takes only systemd's sockets,
+    # so launchd cannot hand it an SSH socket; a client-started agent serves
+    # SSH there instead, and the ssh-agent-mux launcher starts it.
     enableSshSupport = config.my.kind != "darwin";
     # zsh exports GPG_TTY itself (shell.nix). With SSH support, this hook
     # would also run updatestartuptty from every shell, starting an agent
@@ -74,6 +74,11 @@ in
   # D-Bus. gpg-agent is one member of the SSH key chain that ~/.ssh/config and
   # desktop-ssh assemble, so it must not replace the session's agent.
   sshAuthSock.enable = lib.mkForce false;
+
+  # While launchd holds S.gpg-agent, every gpg client connects to the
+  # supervised agent, so none ever starts the daemon that creates the SSH
+  # socket. Without the job, the first client starts that daemon.
+  launchd.agents.gpg-agent.enable = lib.mkIf (config.my.kind == "darwin") (lib.mkForce false);
 
   home.file.".gnupg/scdaemon.conf" = {
     text = ''

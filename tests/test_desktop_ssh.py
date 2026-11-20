@@ -558,6 +558,23 @@ class ProtocolTests(unittest.TestCase):
         self.addCleanup(other.close)
         self.assertEqual(other.handle(self.binding()), b"\x1c")
 
+    def test_identity_cap_counts_every_agent_together(self):
+        self.backend("primary", [self.primary_key])
+        filling = [Ed25519PrivateKey.generate() for _ in range(desktop_ssh.MAX_IDENTITIES - 1)]
+        self.backend("fallback", filling)
+        self.backend("second", [self.second_key])
+        items = desktop_ssh.identities(self.proxy.handle(b"\x0b"))
+        self.assertEqual([blob for blob, _ in items], self.blobs(self.primary_key, *filling))
+        self.assertEqual(self.proxy.handle(self.sign(self.blobs(self.second_key)[0])), b"\x05")
+
+    def test_session_binding_skips_a_missing_fallback_without_retrying_it(self):
+        second = self.backend("second", [self.second_key])
+        self.assertEqual(self.proxy.handle(self.binding()), b"\x06")
+        fallback = self.backend("fallback", [self.fallback_key])
+        self.assertEqual(self.proxy.handle(self.binding()), b"\x06")
+        self.assertEqual(fallback.connections, [])
+        self.assertEqual(second.requests, [self.binding(), self.binding()])
+
     def test_config_orders_fallback_agents_and_expands_the_uid(self):
         path = self.root / "config.json"
         path.write_text(json.dumps({
