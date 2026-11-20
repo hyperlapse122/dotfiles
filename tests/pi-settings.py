@@ -16,18 +16,35 @@ assert call[0].endswith('/bin/pi-state'), call
 
 with tempfile.TemporaryDirectory() as directory:
     agent = Path(directory) / 'agent'
-    shutil.copytree(installed, agent, symlinks=False)
-    for path in [agent, *agent.rglob('*')]:
-        path.chmod(path.stat().st_mode | 0o200)
+    agent.mkdir()
+    shutil.copyfile(installed / 'models.json', agent / 'models.json')
+    (agent / 'pi-subagents').symlink_to(installed / 'pi-subagents')
     plugin = Path(directory) / 'plugin'
     plugin.mkdir()
     call[0] = state
+    subagents = agent / 'pi-subagents'
+    assert Path(call[call.index('--subagents') + 1]) == Path(call[call.index('--agent') + 1]) / subagents.name
     call[call.index('--agent') + 1] = str(agent)
     call[call.index('--plugin') + 1] = str(plugin)
-    subprocess.run([sys.executable, *call], check=True)
+    call[call.index('--subagents') + 1] = str(subagents)
+    settings_path = agent / 'settings.json'
+    unrelated = {'source': 'npm:other', 'extensions': []}
+    legacy = agent / 'old-subagents'
+    legacy.mkdir()
+    manifest = legacy / 'package.json'
+    manifest.write_text(json.dumps({'name': 'pi-subagents',
+        'repository': {'url': 'git+https://github.com/nicobailon/pi-subagents.git'}}))
+    settings_path.write_text(json.dumps({'packages': [unrelated, 'npm:pi-subagents',
+        {'source': 'npm:pi-subagents@0.80.0'}, str(legacy), str(installed / 'pi-subagents')]}))
+    for _ in range(2):
+        subprocess.run([sys.executable, *call], check=True)
+        settings = json.loads(settings_path.read_text())
+        assert settings['packages'] == [unrelated, str(plugin), str(subagents)], settings['packages']
+        assert json.loads((subagents / 'package.json').read_text())['name'] == 'pi-subagents'
+        assert manifest.is_file()
 
     listed = [f'{provider}/{row["id"]}'
               for provider in ('openai', 'anthropic')
               for row in json.loads((agents / f'{provider}-models.json').read_text())['models']]
-    selected = json.loads((agent / 'settings.json').read_text())['enabledModels']
+    selected = settings['enabledModels']
     assert sorted(model for model in selected if not model.startswith('synthetic/')) == sorted(listed), selected

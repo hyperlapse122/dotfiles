@@ -34,7 +34,7 @@ These checks used the pinned harnesses, staged policy, synthetic Markdown fixtur
 | --- | --- | --- |
 | Claude Code | The parent sent `Explore` and `general-purpose` for a native file lookup. `judge` chose `Explore`, and the launch passed `subagent_type: Explore`. | The native planning task sent `Plan` and `general-purpose`. `judge` chose `Plan`, and the launch passed `subagent_type: Plan`. |
 | Codex | The tested `spawn_agent` exposed no role selector. It launched through its default path without judgment. | The tested native tool exposed no role selector. On a task routed to `delegate_task`, `judge` chose `research` from `general` and `research`, and the launch passed `role: research`. |
-| Pi | Pi has no configured subagents or native role selector. | On a task routed to `delegate_task`, `judge` chose `research` from `general` and `research`, and the launch passed `role: research`. |
+| Pi | The managed `pi-subagents` extension offers named agents in terminal Pi and full-access T3 Pi. | On a task routed to `delegate_task`, `judge` chose `research` from `general` and `research`, and the launch passed `role: research`. |
 
 Each recorded judgment included `insufficient_evidence`. Claude also launched a required `Explore` role and a sole eligible `Explore` role without judgment. When the session denied the MCP call, Claude used its default selection path and completed the task.
 
@@ -158,5 +158,9 @@ The shared `~/.pi/agent/` contains the repository-owned `question`, `web_search`
 The wrapper clears inherited `EXA_API_KEY` and exports only `DOTFILES_PI_EXA_KEY_FILE`, pointing to the existing published `exa_api_key`. The extension reads the file on each call. It does not copy the key into Pi settings, authentication, arguments, or subprocess environments. A missing key disables web calls without preventing Pi or questions from working. Trusted extensions can still read files accessible to the user.
 
 T3's launch composer adds `--approve` for Pi and preserves user-added arguments through its ownership ledger. Approval applies to that run and does not update remembered project decisions. Terminal Pi uses native per-project trust prompts, preserving previous decisions. T3 project resources and web queries carry the code-execution and disclosure risks accepted in issue [#139](https://github.com/hyperlapse122/dotfiles/issues/139).
+
+Home Manager registers the pinned `pi-subagents` package in the shared Pi home. Start a fresh session after applying the configuration. Its commands and tools are available in terminal Pi and in T3 Pi sessions that report full access. T3's discovery process and restricted sessions do not load the plugin. This is separate from T3's `delegate_task`: T3 does not supervise plugin-managed runs, including background runs and external runners. The plugin keeps its upstream child trust behavior: a child can reuse its parent's project trust in another directory. Use a child directory only if you trust its project configuration.
+
+The managed package does not disable extensions installed outside Pi's package list. If you previously ran `npx pi-subagents`, move that copy out of `~/.pi/agent/extensions/` before relying on the managed package's T3 restriction. Activation leaves manually installed files untouched.
 
 Repository checks exercise materialized files for both host kinds, packaged CLI and SDK model paths, native RPC dialogs, subprocess environments, and project skill discovery. These checks use fake credentials. They do not establish the live T3 dialog experience, signed-in Exa calls, or either host's installed generation; those require post-switch evidence from the owner.

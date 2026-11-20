@@ -9,7 +9,7 @@ import tempfile
 
 with tempfile.TemporaryDirectory() as directory:
     agent = Path(directory) / 'agent'
-    shutil.copytree(sys.argv[1], agent, symlinks=False)
+    shutil.copytree(sys.argv[1], agent, ignore=shutil.ignore_patterns('pi-subagents'))
     # A copy of a store tree keeps its read-only modes.
     for path in [agent, *agent.rglob('*')]:
         path.chmod(path.stat().st_mode | 0o200)
