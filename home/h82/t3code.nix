@@ -174,7 +174,10 @@ let
   # assigns, so dropping a key from settings alone would leave its last
   # written value on every machine forever. Move it here instead, and delete
   # the entry once every host has rebuilt past it.
-  retiredKeys = [ ];
+  retiredKeys = [
+    # Review guides follow the shared text generation selection.
+    "reviewGuideModelSelection"
+  ];
 
   # Nested entries previously written by this module.
   retiredPaths = [
@@ -265,17 +268,6 @@ let
       model = "claude-opus-5-5";
     };
     textGenerationModelSelection = {
-      instanceId = "opencode";
-      model = "anthropic/claude-haiku-5-5";
-      options = [
-        {
-          id = "variant";
-          value = "low";
-        }
-      ];
-    };
-    # Review guides require read-only checkout access, which OpenCode text generation lacks.
-    reviewGuideModelSelection = {
       instanceId = "claudeAgent";
       model = "claude-haiku-5-5";
     };
