@@ -143,6 +143,10 @@ let
   # Seeds OpenCode's credential store from the published API key files.
   opencodeAuthSync = pythonHelper "opencode-auth-sync" ../scripts/opencode-auth-sync;
 
+  # Names the provider and model that served an OpenCode session, from
+  # OpenCode's own session record, for T3 cross-model evidence.
+  opencodeServingModel = pythonHelper "opencode-serving-model" ../scripts/opencode-serving-model;
+
   # Home Manager overrides the Synthetic key file per host kind.
   agentUsage = pkgs.lib.makeOverridable (
     {
@@ -230,6 +234,7 @@ in
     codexRelease
     opencodeRelease
     opencodeAuthSync
+    opencodeServingModel
     agentUsage
     npmRelease
     t3codeRelease

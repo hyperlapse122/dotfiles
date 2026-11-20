@@ -136,7 +136,10 @@ let
   );
 in
 {
-  home.packages = [ opencode ];
+  home.packages = [
+    opencode
+    tools.opencodeServingModel
+  ];
   my.agents.crossModelPeers = [ "opencode" ];
 
   # OpenCode rewrites its own config (`plugin add` and the settings it saves),

@@ -9,7 +9,8 @@
 
   Verifies, per Home Manager user environment:
   - `opencode` is in user packages as the package this flake builds, at the
-    version `packages/opencode-release.json` pins.
+    version `packages/opencode-release.json` pins, beside the
+    `opencode-serving-model` helper.
   - `opencodeSettings` runs after installPackages, and no Home Manager file
     targets ~/.config/opencode/opencode.json, which OpenCode rewrites.
   - Applied in a scratch HOME over a seed that holds the owner's unpinned
@@ -269,6 +270,9 @@ let
       package = lib.lists.findFirst (p: (p.pname or "") == "opencode") null (
         userConfig.home.packages or [ ]
       );
+      servingModel = lib.any (p: (p.pname or "") == "opencode-serving-model") (
+        userConfig.home.packages or [ ]
+      );
       keyDirectory = userConfig.my.secrets.stateDir or "";
       targeted = lib.any (file: (file.target or "") == settingsFile) (
         lib.attrValues (userConfig.home.file or { })
@@ -278,6 +282,10 @@ let
     ''
       ${lib.optionalString (package == null) ''
         echo 'missing opencode in user packages on ${hostName}' >&2
+        failed=1
+      ''}
+      ${lib.optionalString (!servingModel) ''
+        echo 'missing opencode-serving-model in user packages on ${hostName}' >&2
         failed=1
       ''}
       ${lib.optionalString (package != null) ''

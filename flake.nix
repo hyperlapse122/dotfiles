@@ -582,6 +582,9 @@
           opencode-auth-sync =
             pythonScriptCheck "opencode-auth-sync" ./scripts/opencode-auth-sync
               ./tests/test_opencode_auth_sync.py;
+          opencode-serving-model =
+            pythonScriptCheck "opencode-serving-model" ./scripts/opencode-serving-model
+              ./tests/test_opencode_serving_model.py;
           # The Claude helper runs against the pinned SDK with real Node, so the
           # check carries both instead of letting that test skip.
           agent-usage =
