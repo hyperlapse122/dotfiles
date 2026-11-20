@@ -139,6 +139,16 @@ sys.stdout.buffer.write(response.read()+b'\\n'+str(response.code).encode())
         self.assertEqual(weekly['nextRegenPercent'], 5)
         self.assertNotIn('resetsAt', weekly)
 
+    def test_unnamed_codex_limit_does_not_exhaust_the_account(self):
+        self.data['codex']['rateLimitsByLimitId'] = {
+            'codex': self.data['codex']['rateLimits'],
+            'codex-spark': {'limitName': None, 'primary': {'usedPercent': 100}},
+        }
+        self.save()
+        report = self.invoke()['codex']
+        self.assertEqual(report['remainingPercent'], 20)
+        self.assertEqual(report['skipModels']['codex-spark']['remainingPercent'], 0)
+
     def test_default_output_is_readable_usage_and_regeneration(self):
         result = subprocess.run([sys.executable, str(SCRIPT)], env=self.env,
                                 capture_output=True, text=True, timeout=40)
