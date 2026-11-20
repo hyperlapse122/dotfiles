@@ -32,7 +32,6 @@ SYSTEMCTL = "@SYSTEMCTL@"
 MAX_FRAME = 262144
 MAX_IDENTITIES = 128
 MAX_CONNECTIONS = 128
-ENUM_TIMEOUT = 0.3
 SIGN_TIMEOUT = 120
 PRIMARY_SIGN_TIMEOUT = 10
 UNLOCK_TIMEOUT = 8
@@ -113,9 +112,22 @@ def identity_response(items):
 def load_config(path):
     with open(path, encoding="utf-8") as stream:
         config = json.load(stream)
-    for name in ("public_key", "key_file", "fallback_socket"):
+    for name in ("public_key", "key_file"):
         if not isinstance(config.get(name), str) or not os.path.isabs(config[name]):
             raise DesktopSSHError("SSH configuration requires absolute credential paths")
+    agents = config.get("fallback_agents")
+    if not isinstance(agents, list) or not agents:
+        raise DesktopSSHError("SSH configuration requires fallback agents")
+    for agent in agents:
+        timeout = agent.get("timeout") if isinstance(agent, dict) else None
+        if (not isinstance(agent, dict) or set(agent) != {"socket", "timeout"}
+                or not isinstance(agent["socket"], str)
+                or isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0):
+            raise DesktopSSHError("each fallback agent needs a socket and a positive timeout")
+        # %i is the user ID, as in ssh_config, for sockets under /run/user.
+        agent["socket"] = agent["socket"].replace("%i", str(os.getuid()))
+        if not os.path.isabs(agent["socket"]):
+            raise DesktopSSHError("fallback agent sockets must be absolute paths")
     config["primary_socket"] = f"/run/user/{os.getuid()}/desktop-ssh/agent.sock"
     config["config_path"] = str(path)
     return config
@@ -152,13 +164,26 @@ class Transport:
             self.sock = None
 
 
+class Fallback:
+    """One fallback agent: its connection, its listing budget, and whether it failed."""
+
+    def __init__(self, socket_path, timeout):
+        self.transport = Transport(socket_path)
+        self.timeout = timeout
+        self.failed = False
+
+    def fail(self):
+        self.failed = True
+        self.transport.close()
+
+
 class Composite:
     def __init__(self, config):
         self.config = config
         self.primary = Transport(config["primary_socket"])
-        self.fallback = Transport(config["fallback_socket"])
+        self.fallbacks = [Fallback(agent["socket"], agent["timeout"])
+                          for agent in config["fallback_agents"]]
         self.routes = {}
-        self.fallback_failed = False
 
     def handle(self, payload):
         if payload == b"\x0b":
@@ -167,26 +192,28 @@ class Composite:
                 result = [(declared, b"nix-config host key")]
                 self.routes = {declared: self.primary}
             except DesktopSSHError:
-                declared = None
                 result = []
                 self.routes = {}
                 print("desktop-ssh: primary public key unavailable; restore host key metadata", file=sys.stderr)
-            if not self.fallback_failed:
-                reply = self.fallback.request(payload, ENUM_TIMEOUT)
+            # Fallbacks are asked in order, each within its own budget. One that
+            # stalls or answers badly loses only its own keys, never a later
+            # agent's, and never presents a truncated selection.
+            for fallback in self.fallbacks:
+                if fallback.failed:
+                    continue
+                reply = fallback.transport.request(payload, fallback.timeout)
                 try:
-                    others = identities(reply)
-                    for blob, comment in others:
-                        if blob not in self.routes:
-                            result.append((blob, comment))
-                            self.routes[blob] = self.fallback
-                    if len(result) > MAX_IDENTITIES:
+                    added = [(blob, comment) for blob, comment in identities(reply)
+                             if blob not in self.routes]
+                    added = list(dict(added).items())
+                    if len(result) + len(added) > MAX_IDENTITIES:
                         raise ValueError("too many identities")
                 except ValueError:
-                    self.fallback_failed = True
-                    self.fallback.close()
-                    # Keep primary usable; never present a truncated fallback selection.
-                    result = [(declared, b"nix-config host key")] if declared is not None else []
-                    self.routes = {declared: self.primary} if declared is not None else {}
+                    fallback.fail()
+                    continue
+                result.extend(added)
+                for blob, _ in added:
+                    self.routes[blob] = fallback.transport
             return identity_response(result)
         if payload[:1] == b"\x0d":
             packet = Packet(payload[1:])
@@ -215,17 +242,21 @@ class Composite:
             packet.string()
             if len(packet.data) != 1 or packet.data[0] not in (0, 1):
                 return b"\x1c"
-            reply = self.fallback.request(payload, ENUM_TIMEOUT)
-            if reply == b"\x06":
-                return reply
-            if self.fallback.sock is None:
-                self.fallback_failed = True
-            return b"\x1c"
+            bound = False
+            for fallback in self.fallbacks:
+                if fallback.failed:
+                    continue
+                if fallback.transport.request(payload, fallback.timeout) == b"\x06":
+                    bound = True
+                elif fallback.transport.sock is None:
+                    fallback.failed = True
+            return b"\x06" if bound else b"\x1c"
         return FAILURE
 
     def close(self):
         self.primary.close()
-        self.fallback.close()
+        for fallback in self.fallbacks:
+            fallback.transport.close()
 
 
 class Primary:

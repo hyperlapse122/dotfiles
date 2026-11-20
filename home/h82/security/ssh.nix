@@ -73,7 +73,20 @@ in
       home.file.".config/desktop-ssh/config.json".text = builtins.toJSON {
         public_key = "${publicKey}";
         key_file = "${config.my.user.home}/.ssh/id_ed25519_nix_config";
-        fallback_socket = "${config.my.user.home}/.1password/agent.sock";
+        # Offered in this order after the host key: the YubiKey through
+        # gpg-agent, then 1Password. gpg-agent gets a longer listing budget
+        # because the first listing after the card is inserted reads it
+        # through scdaemon.
+        fallback_agents = [
+          {
+            socket = "/run/user/%i/gnupg/S.gpg-agent.ssh";
+            timeout = 2;
+          }
+          {
+            socket = "${config.my.user.home}/.1password/agent.sock";
+            timeout = 0.3;
+          }
+        ];
       };
       systemd.user.services.desktop-ssh-agent = {
         Unit = {
