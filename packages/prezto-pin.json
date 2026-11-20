@@ -4,9 +4,9 @@
       {
         "path": "",
         "repository": "sorin-ionescu/prezto",
-        "commit": "cff2d01871425b1b80710f8ec6a475c5a53145b4",
-        "url": "https://codeload.github.com/sorin-ionescu/prezto/tar.gz/cff2d01871425b1b80710f8ec6a475c5a53145b4",
-        "sha256": "dfff3d7cb71aaaa07566b253dbe446eeec65e76cf0fd0e7a6141ec50e45deb15"
+        "commit": "a7c61670c3492358bfe1dd793cb891987bbb4f49",
+        "url": "https://codeload.github.com/sorin-ionescu/prezto/tar.gz/a7c61670c3492358bfe1dd793cb891987bbb4f49",
+        "sha256": "02fb3c95334cce0fa8e11917ee53c9ba34abc4ffc6361bad2b9cacd845dba16c"
       },
       {
         "path": "modules/autosuggestions/external",
@@ -53,9 +53,9 @@
       {
         "path": "modules/prompt/external/powerlevel10k",
         "repository": "romkatv/powerlevel10k",
-        "commit": "35833ea15f14b71dbcebc7e54c104d8d56ca5268",
-        "url": "https://codeload.github.com/romkatv/powerlevel10k/tar.gz/35833ea15f14b71dbcebc7e54c104d8d56ca5268",
-        "sha256": "c1316f3b812baa45c0f28feef8856f3e68f5f3d174c4d7253094761926208a64"
+        "commit": "50a35cc8d9f1488d18fb8aea6cddcfc31189cc9f",
+        "url": "https://codeload.github.com/romkatv/powerlevel10k/tar.gz/50a35cc8d9f1488d18fb8aea6cddcfc31189cc9f",
+        "sha256": "83bd7e382fa39d0f29264ea8183ad036cf444be5204d9eb35d3fadf130940272"
       },
       {
         "path": "modules/prompt/external/powerline",
