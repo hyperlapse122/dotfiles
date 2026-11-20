@@ -119,12 +119,12 @@ def load_config(path):
     if not isinstance(agents, list) or not agents:
         raise DesktopSSHError("SSH configuration requires fallback agents")
     for agent in agents:
-        timeout = agent.get("timeout") if isinstance(agent, dict) else None
-        if (not isinstance(agent, dict) or set(agent) != {"socket", "timeout"}
-                or not isinstance(agent["socket"], str)
-                or isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0):
+        if not isinstance(agent, dict) or set(agent) != {"socket", "timeout"}:
             raise DesktopSSHError("each fallback agent needs a socket and a positive timeout")
-        # %i is the user ID, as in ssh_config, for sockets under /run/user.
+        timeout = agent["timeout"]
+        if (not isinstance(agent["socket"], str) or isinstance(timeout, bool)
+                or not isinstance(timeout, (int, float)) or timeout <= 0):
+            raise DesktopSSHError("each fallback agent needs a socket and a positive timeout")
         agent["socket"] = agent["socket"].replace("%i", str(os.getuid()))
         if not os.path.isabs(agent["socket"]):
             raise DesktopSSHError("fallback agent sockets must be absolute paths")
@@ -165,8 +165,6 @@ class Transport:
 
 
 class Fallback:
-    """One fallback agent: its connection, its listing budget, and whether it failed."""
-
     def __init__(self, socket_path, timeout):
         self.transport = Transport(socket_path)
         self.timeout = timeout
@@ -195,17 +193,16 @@ class Composite:
                 result = []
                 self.routes = {}
                 print("desktop-ssh: primary public key unavailable; restore host key metadata", file=sys.stderr)
-            # Fallbacks are asked in order, each within its own budget. One that
-            # stalls or answers badly loses only its own keys, never a later
-            # agent's, and never presents a truncated selection.
             for fallback in self.fallbacks:
                 if fallback.failed:
                     continue
                 reply = fallback.transport.request(payload, fallback.timeout)
                 try:
-                    added = [(blob, comment) for blob, comment in identities(reply)
-                             if blob not in self.routes]
-                    added = list(dict(added).items())
+                    added, seen = [], set(self.routes)
+                    for blob, comment in identities(reply):
+                        if blob not in seen:
+                            seen.add(blob)
+                            added.append((blob, comment))
                     if len(result) + len(added) > MAX_IDENTITIES:
                         raise ValueError("too many identities")
                 except ValueError:
@@ -249,7 +246,7 @@ class Composite:
                 if fallback.transport.request(payload, fallback.timeout) == b"\x06":
                     bound = True
                 elif fallback.transport.sock is None:
-                    fallback.failed = True
+                    fallback.fail()
             return b"\x06" if bound else b"\x1c"
         return FAILURE
 

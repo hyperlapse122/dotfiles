@@ -84,7 +84,6 @@ in
     }
 
     {
-      # 1Password reads the same key selection on Linux and macOS.
       home.file.".config/1Password/ssh/agent.toml".source = ../../../config/1password/agent.toml;
     }
 
@@ -116,7 +115,6 @@ in
         };
       };
 
-      # Starting gpg-agent here makes its SSH socket exist from login.
       launchd.agents.ssh-agent-mux = {
         enable = true;
         config = {
@@ -141,7 +139,7 @@ in
       home.packages = [ (lib.hiPrio tool) ];
       home.file.".config/desktop-ssh/config.json".text = builtins.toJSON {
         public_key = "${publicKey}";
-        key_file = "${config.my.user.home}/.ssh/id_ed25519_nix_config";
+        key_file = "${home}/.ssh/id_ed25519_nix_config";
         # Offered in this order after the host key: the YubiKey through
         # gpg-agent, then 1Password. gpg-agent gets a longer listing budget
         # because the first listing after the card is inserted reads it
@@ -152,7 +150,7 @@ in
             timeout = 2;
           }
           {
-            socket = "${config.my.user.home}/.1password/agent.sock";
+            socket = "${home}/.1password/agent.sock";
             timeout = 0.3;
           }
         ];
