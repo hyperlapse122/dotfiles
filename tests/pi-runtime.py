@@ -64,6 +64,12 @@ with tempfile.TemporaryDirectory() as directory:
         assert sorted(row['id'] for row in declared) == missing, (provider, declared)
         assert all(row['api'] == api and 'baseUrl' not in row for row in declared), declared
         assert 'baseUrl' not in configured['providers'][provider] and 'apiKey' not in configured['providers'][provider]
+        if provider == 'openai':
+            source = {row['id']: row for row in snapshots[provider]}
+            for row in declared:
+                original = source[row['id']]
+                assert row['contextWindow'] == min(original['contextWindow'], 272000), row
+                assert row['maxTokens'] == original['maxTokens'], row
 
     # Every listed model is offered once: the declared ones from models.json, the rest from the catalog.
     for provider in PROVIDERS:

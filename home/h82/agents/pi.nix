@@ -18,9 +18,10 @@ let
     openai = "openai-responses";
     anthropic = "anthropic-messages";
   };
-  providerRows = lib.mapAttrs (
-    provider: _: (builtins.fromJSON (builtins.readFile (./. + "/${provider}-models.json"))).models
-  ) providerApis;
+  providerRows = {
+    openai = import ./openai-models.nix lib;
+    anthropic = (builtins.fromJSON (builtins.readFile ./anthropic-models.json)).models;
+  };
   modelsJson =
     pkgs.runCommand "pi-models.json"
       {
