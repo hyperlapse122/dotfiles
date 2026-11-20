@@ -45,7 +45,7 @@ let
 
   # OpenAI and Anthropic show the same committed lists as Pi. OpenCode's own
   # catalog keeps every other model of these providers.
-  openaiModels = declaredModels (builtins.fromJSON (builtins.readFile ./openai-models.json)).models;
+  openaiModels = declaredModels (import ./openai-models.nix lib);
   anthropicModels = declaredModels (builtins.fromJSON (builtins.readFile ./anthropic-models.json))
     .models;
 
