@@ -90,6 +90,9 @@ try {
   assert.equal(question.executionMode, 'sequential');
   const ask = (params, ui, signal) => question.execute('question', params, signal, undefined, {hasUI: Boolean(ui), ui});
   assert.equal((await ask({question:'Which?'}, undefined)).details.status, 'ui_unavailable');
+  assert.equal(Object.hasOwn(question.parameters.properties.options, 'uniqueItems'), false,
+    'OpenAI rejects uniqueItems in strict tool schemas');
+  await assert.rejects(ask({question:'Which?',options:['A','B','A']}, {}), /choices must be distinct/i);
   let options;
   const selected = await ask({question:'Which?',options:['A','B']}, {
     select: async (_title, choices) => { options = choices; return 'B'; },
