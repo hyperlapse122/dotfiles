@@ -71,8 +71,9 @@ def log(message):
     print(f"provider-models-watch: {message}", file=sys.stderr)
 
 
-def fetch(url, retry_wait, key="", key_variable="", headers=None, redirects=True):
-    extra = () if redirects else ("--max-redirs", "0")
+def fetch(url, retry_wait, key="", key_variable="", headers=None):
+    # A request that carries a key never follows a redirect.
+    extra = ("--max-redirs", "0") if key else ()
     for attempt in (1, 2):
         proc = run_fetch(url, key, key_variable, headers, extra)
         if proc.returncode == 0:
@@ -208,7 +209,6 @@ def main(argv=None):
                 key,
                 provider["key_variable"],
                 provider["headers"],
-                redirects=False,
             )
         listed = listed_rows(args.provider, body)
         models_dev = read_json(args.models_dev) if args.models_dev else fetch(MODELS_DEV_URL, args.retry_wait)

@@ -58,11 +58,8 @@ with tempfile.TemporaryDirectory() as directory:
 
     # The installed models.json declares exactly the listed models Pi's compiled catalog lacks, because a
     # declared row replaces a catalog model and would drop its compat, thinking-level, and cache settings.
-    gaps = json.loads((agents / 'pi-catalog-gaps.json').read_text())
     for provider, api in PROVIDERS.items():
         missing = sorted(row['id'] for row in snapshots[provider] if (provider, row['id']) not in compiled)
-        assert gaps[provider] == missing, (
-            f'pi-catalog-gaps.json lists {gaps[provider]} for {provider} but the compiled catalog lacks {missing}')
         declared = configured['providers'][provider]['models']
         assert sorted(row['id'] for row in declared) == missing, (provider, declared)
         assert all(row['api'] == api and 'baseUrl' not in row for row in declared), declared

@@ -65,6 +65,8 @@ stdenv.mkDerivation {
   nativeInstallCheckInputs = [ pkgs.versionCheckHook ];
   versionCheckKeepEnvironment = [ "HOME" ];
 
+  passthru = { inherit (runtime) modelCatalog; };
+
   meta = {
     description = "Minimal terminal coding agent";
     homepage = "https://github.com/earendil-works/pi";

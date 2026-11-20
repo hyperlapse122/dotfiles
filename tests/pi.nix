@@ -40,6 +40,7 @@ pkgs.runCommand "pi-tests"
         node ${./pi-tools.mjs} ${found} ${entry.user.home-files}/.pi/agent
         python3 ${./pi-wrapper.py} ${found}/bin/pi ${entry.user.home-files}/.pi/agent ${keyDirectory}
         python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state} ${found} ${./pi-trust.mjs}
+        python3 ${./pi-settings.py} ${pkgs.writeText "pi-settings-block.sh" entry.user.home.activation.piSettings.data} ${../scripts/pi-state} ${entry.user.home-files}/.pi/agent ${../home/h82/agents}
       ''
       + lib.optionalString (authActivation == null && !entry.user.my.bootstrap) ''
         echo "missing home.activation.piAuth on production output ${entry.name}" >&2

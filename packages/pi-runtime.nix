@@ -167,6 +167,9 @@ stdenv.mkDerivation {
     runHook postInstallCheck
   '';
 
+  # The compiled catalog, so a consumer can tell which models Pi already defines.
+  passthru = { inherit modelCatalog; };
+
   meta = {
     description = packageJson.description;
     homepage = "https://pi.dev";

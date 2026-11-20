@@ -10,33 +10,51 @@ let
   # The committed lists for the built-in providers. A declared row replaces
   # the model of the same id in Pi's own catalog and drops that model's compat,
   # thinking-level, and cache settings, so models.json declares only the
-  # listed models the compiled catalog lacks (`pi-catalog-gaps.json`, which the
-  # Pi runtime test keeps equal to that set). Each row names the API it is
-  # served over and leaves the provider's endpoint and credentials alone.
-  gaps = builtins.fromJSON (builtins.readFile ./pi-catalog-gaps.json);
-  providerRows =
-    provider: (builtins.fromJSON (builtins.readFile (./. + "/${provider}-models.json"))).models;
-  providerModels =
-    provider: api:
-    map (model: model // { inherit api; }) (
-      builtins.filter (model: builtins.elem model.id gaps.${provider}) (providerRows provider)
-    );
-  openaiModels = providerModels "openai" "openai-responses";
-  anthropicModels = providerModels "anthropic" "anthropic-messages";
+  # listed models the compiled catalog lacks. That set is computed from the
+  # catalog the Pi build pins, so a refreshed list or a Pi bump needs no edit.
+  # Each declared row names the API it is served over and leaves the
+  # provider's endpoint and credentials alone.
+  providerApis = {
+    openai = "openai-responses";
+    anthropic = "anthropic-messages";
+  };
+  providerRows = lib.mapAttrs (
+    provider: _: (builtins.fromJSON (builtins.readFile (./. + "/${provider}-models.json"))).models
+  ) providerApis;
+  modelsJson =
+    pkgs.runCommand "pi-models.json"
+      {
+        nativeBuildInputs = [ pkgs.jq ];
+        synthetic = builtins.toJSON { inherit (catalog) api baseUrl models; };
+        apis = builtins.toJSON providerApis;
+        rows = builtins.toJSON providerRows;
+        passAsFile = [
+          "synthetic"
+          "apis"
+          "rows"
+        ];
+      }
+      ''
+        jq -n \
+          --slurpfile catalog ${pi.modelCatalog} \
+          --slurpfile synthetic "$syntheticPath" \
+          --slurpfile apis "$apisPath" \
+          --slurpfile rows "$rowsPath" '
+          def defined($p): [$catalog[0][$p][]? | select((.type // "chat") == "chat") | .id];
+          {providers: ({synthetic: $synthetic[0]} + ($apis[0] | with_entries(
+            .key as $p | .value as $api | {key: $p, value: {models: [
+              $rows[0][$p][] | select(.id as $id | (defined($p) | index($id)) == null) | . + {api: $api}
+            ]}})))}' > $out
+      '';
   # Cycling and startup selection cover every listed model, declared or not.
   enabledModelArgs = lib.escapeShellArgs (
-    lib.concatMap
-      (
-        provider:
-        lib.concatMap (model: [
-          "--model"
-          "${provider}/${model.id}"
-        ]) (providerRows provider)
-      )
-      [
-        "openai"
-        "anthropic"
-      ]
+    lib.concatMap (
+      provider:
+      lib.concatMap (model: [
+        "--model"
+        "${provider}/${model.id}"
+      ]) providerRows.${provider}
+    ) (lib.attrNames providerApis)
   );
   hiddenModelArgs = lib.escapeShellArgs (
     lib.concatMap (model: [
@@ -81,15 +99,7 @@ in
   home.packages = [ pi ];
   home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/dotfiles-question.ts".source = ./pi-question.ts;
-  home.file.".pi/agent/models.json".text = builtins.toJSON {
-    providers = {
-      synthetic = {
-        inherit (catalog) api baseUrl models;
-      };
-      openai.models = openaiModels;
-      anthropic.models = anthropicModels;
-    };
-  };
+  home.file.".pi/agent/models.json".source = modelsJson;
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
