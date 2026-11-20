@@ -4,25 +4,13 @@
       "id": "chat-latest"
     },
     {
-      "id": "gpt-4"
-    },
-    {
-      "id": "gpt-4-turbo"
-    },
-    {
       "id": "gpt-4.1"
     },
     {
       "id": "gpt-4.1-mini"
     },
     {
-      "id": "gpt-4.1-nano"
-    },
-    {
       "id": "gpt-4o"
-    },
-    {
-      "id": "gpt-4o-2024-05-13"
     },
     {
       "id": "gpt-4o-2024-08-06"
@@ -35,9 +23,6 @@
     },
     {
       "id": "gpt-5"
-    },
-    {
-      "id": "gpt-5-chat-latest"
     },
     {
       "id": "gpt-5-mini"
@@ -61,9 +46,6 @@
       "id": "gpt-5.3-codex"
     },
     {
-      "id": "gpt-5.3-codex-spark"
-    },
-    {
       "id": "gpt-5.4"
     },
     {
@@ -80,9 +62,6 @@
     },
     {
       "id": "gpt-5.5-pro"
-    },
-    {
-      "id": "gpt-5.6-cyber"
     },
     {
       "id": "gpt-5.6-luna"
@@ -109,28 +88,7 @@
       "id": "gpt-6.1-terra"
     },
     {
-      "id": "gpt-daybreak-blue-latest"
-    },
-    {
-      "id": "gpt-daybreak-red-latest"
-    },
-    {
-      "id": "o1"
-    },
-    {
-      "id": "o1-pro"
-    },
-    {
       "id": "o3"
-    },
-    {
-      "id": "o3-mini"
-    },
-    {
-      "id": "o3-pro"
-    },
-    {
-      "id": "o4-mini"
     }
   ]
 }
