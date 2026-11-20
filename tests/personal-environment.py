@@ -25,6 +25,8 @@ def check(mode, root):
         assert re.search(r'^pinentry-program /nix/store/[^/]+-dotfiles-pinentry-[^/]+/bin/(dotfiles-pinentry|pinentry)$', text, re.M)
         assert re.search(r'^default-cache-ttl 0$', text, re.M)
         assert re.search(r'^max-cache-ttl 0$', text, re.M)
+        # The card's authentication subkey is offered as an SSH key.
+        assert re.search(r'^enable-ssh-support$', text, re.M)
     else:
         raise ValueError(mode)
 

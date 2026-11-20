@@ -51,12 +51,29 @@ in
   services.gpg-agent = {
     enable = true;
     pinentry.package = gpgTools.pinentryKeyring;
+    # Off Darwin this also adds the systemd socket the supervised agent serves
+    # SSH on. On Darwin the launchd socket it would add never reaches the agent
+    # (gpg-agent --supervised takes only systemd's sockets), so a client-started
+    # agent serves SSH there and the ssh-agent-mux launcher starts it.
+    enableSshSupport = config.my.kind != "darwin";
+    # zsh exports GPG_TTY itself (shell.nix). With SSH support, this hook
+    # would also run updatestartuptty from every shell, starting an agent
+    # ahead of Prezto's gpg module and moving SSH pinentry to that terminal.
+    enableZshIntegration = false;
     extraConfig = ''
       allow-loopback-pinentry
       default-cache-ttl 0
       max-cache-ttl 0
+    ''
+    + lib.optionalString (config.my.kind == "darwin") ''
+      enable-ssh-support
     '';
   };
+
+  # enableSshSupport would export SSH_AUTH_SOCK from shells, systemd, and
+  # D-Bus. gpg-agent is one member of the SSH key chain that ~/.ssh/config and
+  # desktop-ssh assemble, so it must not replace the session's agent.
+  sshAuthSock.enable = lib.mkForce false;
 
   home.file.".gnupg/scdaemon.conf" = {
     text = ''

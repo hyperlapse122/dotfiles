@@ -472,6 +472,12 @@ let
         lib.hasInfix "IdentityFile ${user.my.secrets.sshKey}" sshText
         && !lib.hasInfix "IdentityAgent" sshText
       ) "${entry.name}: ~/.ssh/config must name the host key and no agent socket")
+      # The supervised launchd agent never receives a launchd SSH socket, so
+      # SSH comes from the client-started agent instead (enable-ssh-support
+      # in gpg-agent.conf, checked by darwin-outputs).
+      (check (
+        !((agentConfig "gpg-agent").Sockets ? Ssh) && !((agentConfig "gpg-agent").RunAtLoad or false)
+      ) "${entry.name}: the gpg-agent launchd job must not declare an SSH socket or run at load")
       (check (
         !(user.services.podman.enable or false)
         && !(agents.minikube.enable or false)
