@@ -12,7 +12,7 @@ import time
 with tempfile.TemporaryDirectory() as directory:
     home = Path(directory)
     agent = home / '.pi/agent'
-    shutil.copytree(sys.argv[2], agent, symlinks=False)
+    shutil.copytree(sys.argv[2], agent, ignore=shutil.ignore_patterns('pi-subagents'))
     for path in [agent, *agent.rglob('*')]:
         path.chmod(path.stat().st_mode | 0o200)
     assert not (agent / 'dotfiles-policy.ts').exists(), 'the policy extension is still installed'

@@ -65,7 +65,10 @@ stdenv.mkDerivation {
   nativeInstallCheckInputs = [ pkgs.versionCheckHook ];
   versionCheckKeepEnvironment = [ "HOME" ];
 
-  passthru = { inherit (runtime) modelCatalog; };
+  passthru = {
+    inherit (runtime) modelCatalog;
+    nodeModules = "${runtime}/lib/pi/node_modules";
+  };
 
   meta = {
     description = "Minimal terminal coding agent";

@@ -73,6 +73,7 @@ let
     openaiKeyFile = "${keyDirectory}/openai_api_key";
     anthropicKeyFile = "${keyDirectory}/anthropic_api_key";
   };
+  subagents = import ../../../packages/pi-subagents.nix { inherit pkgs pi; };
   state = pkgs.writeScriptBin "pi-state" (
     "#!${pkgs.python3}/bin/python3\n"
     + lib.removePrefix "#!/usr/bin/env python3\n" (builtins.readFile ../../../scripts/pi-state)
@@ -101,10 +102,11 @@ in
   home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/dotfiles-question.ts".source = ./pi-question.ts;
   home.file.".pi/agent/models.json".source = modelsJson;
+  home.file.".pi/agent/pi-subagents".source = "${subagents}/lib/node_modules/pi-subagents";
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
-      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} ${hiddenModelArgs} ${enabledModelArgs}
+      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} --subagents ${lib.escapeShellArg "${agent}/pi-subagents"} ${hiddenModelArgs} ${enabledModelArgs}
     fi
   '';
   home.activation.piMcpSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
