@@ -40,22 +40,26 @@ Each recorded judgment included `insufficient_evidence`. Claude also launched a 
 
 ## T3 delegation
 
-The shared template renders these rules separately for T3 launch-time attachment. Ordinary instruction files do not include them.
+The shared template renders these rules separately for T3 launch-time attachment, and every harness receives the same T3 render. Ordinary instruction files do not include them.
 
-Follow T3 Code's orchestration guidance when choosing a delegation tool. Use a provider's native tool for same-provider foreground work when it can carry the required model, settings, and access. Use `delegate_task` for another provider, a worktree, background work, or a task that requests it.
+Follow T3 Code's orchestration guidance when choosing a delegation tool. Route each child by the model class of the model it will run. When the route is the current provider instance, use the harness's native subagent tool only if it can carry the required model, settings, and access; otherwise use `delegate_task` with `target.providerInstanceId` set to the current instance. Use `delegate_task` for another instance, a worktree, background work, or a task that requests it.
 For CE cross-model review, implementation, and reasoning elevation, use T3 delegation in place of explicit acpx, provider CLI, and launcher-script calls. A CE call described as a shell-out is still covered.
 
-Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. The cross-model review exception below applies to access restrictions only. For T3 delegation, choose the child's model and effort as the T3 CE model selection section says and use T3 capability discovery to resolve the target and supported `target.options`. Give each child a self-contained brief with the goal, completion standard, required context, and accessible workspace or artifact paths. Include delegation guidance for children that need it.
+Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. The cross-model review exception below applies to access restrictions only. For T3 delegation, choose the child's route as this section says, its model and effort as the T3 CE model selection section says, and use T3 capability discovery to resolve the target and supported `target.options`. Give each child a self-contained brief with the goal, completion standard, required context, and accessible workspace or artifact paths. Include delegation guidance for children that need it.
+
+| Model class | Native route | Fallback order |
+| --- | --- | --- |
+| Claude | Claude Code (`claudeAgent`) | current instance, Pi, OpenCode |
+| GPT | Codex (`codex`) | current instance, Pi, OpenCode |
+| Synthetic | the current instance when it is Pi or OpenCode, otherwise Pi | current instance, Pi, OpenCode |
+
+Run a child on its class's native route. Fall back only after observed evidence that the route cannot run the child: the child run ended with a usage, rate, or quota limit or an authentication failure; `orchestrator_capabilities` reports the instance disabled or unable to run child tasks; or the instance's catalog lists no model of the class. A T3 wait timeout, a slow child, or a review finding is not that evidence. Then run the child on the first instance in the fallback order that offers the class and whose route has not already failed for this child, choosing its model from the same ladder row. Report each fallback with the failed route, its evidence, and the route used. Never retry a route that CE's rules forbid retrying, such as one that reported the same quota failure twice in this session.
 
 CE cross-model review peers (`ce-doc-review`, `ce-code-review`, and similar skills) require an isolated process: an empty workspace, read-only controls, restricted tool access, and no project context or MCP servers. `delegate_task` cannot enforce that isolation, and the owner accepts the risk. Never skip, downgrade, or declare a peer unavailable because the isolation cannot be provided. Run the peer through `delegate_task` with normal workspace and tool access, a self-contained brief that carries the reviewed material, and an instruction not to modify files. State in the review's coverage that isolation was not enforced. This waives only the isolation: the disclosure of what leaves the machine, an explicit user prohibition on external review, `cross_model_review_mode: off`, and CE's allowlist and route choice still apply.
 
-### OpenCode cross-model reviews
+Cross-model review peers follow the same routes: the peer family's native route first, then the fallback order. An explicit CE target such as `cross_model_peer: codex` or `cross_model_peer: claude` keeps the route CE defines; a family-only request such as "use a GPT model" selects the class. On Pi or OpenCode, pass an exact `provider/model` ID from that instance's catalog. Resolve a model alias only if it names an unambiguous eligible catalog entry; never substitute a different model for a pin. Apply the shared OpenCode recipient rule before dispatching to OpenCode. If no eligible route can run the peer, use CE's coverage and recovery rules.
 
-In T3 OpenCode, `ce-doc-review` and `ce-code-review` use the current OpenCode instance for cross-model peers unless a preference explicitly binds a different harness or route. The skills retain their preference order. An explicit CE target such as `cross_model_peer: codex` keeps its CE route; a request for a GPT model only selects the family. An OpenCode target without a pin uses the first eligible family in CE's default order that the instance offers. An unavailable same-instance route does not automatically fall back to another harness.
-
-Pass the current instance and a catalog-qualified model to `delegate_task`. For example, an OpenAI host can request `anthropic/claude-opus-5-5` through the same OpenCode instance. Claude and GPT models use their respective ladder rows for model selection. OpenCode supplies the supported options and the default effort unless a pin names a supported setting. A model alias must identify one eligible catalog entry.
-
-T3's requested model is not evidence of what ran. If T3 has no executed model, use the completed OpenCode assistant message for that run. In OpenCode 2.3.2, the native message ID in T3 activity matches a `session_message` row with model and usage metadata. Read only those fields. For verified direct first-party routes, the record establishes the serving family, not the exact model returned by the provider. Without usable host evidence, skip automatic routing; without peer evidence, do not count agreement as independently verified.
+Establish the host's serving family before automatic peer dispatch from runtime records, not from the selected model, the catalog, or the model's own claim. On Claude Code and Codex, the harness is the family. On Pi, use the records CE's cross-model worker reads: the provider and model of the latest assistant message in `PI_SESSION_FILE`, otherwise `PI_PROVIDER` and `PI_MODEL`. As CE does, treat the family as unattested when another harness's environment marker is set beside Pi's, because the session record may then belong to an outer or inner harness. On OpenCode, run `opencode-serving-model --family`, which reads the session's latest completed assistant message from OpenCode's own record and maps only the direct `anthropic` and `openai` providers to `claude` and `codex`. For a peer, use T3's executed model when it reports one. Otherwise find the native session or message ID that `t3_thread_read` shows for the child run, then read that session's Pi file under `~/.pi/agent/sessions/` or run `opencode-serving-model --session <id>` or `--message <id>`. Missing or ambiguous host evidence makes the automatic route unavailable, and no other harness is tried for that reason. Missing or ambiguous peer evidence leaves independence unverified and gives no agreement promotion. Report an observed mismatch under CE's existing rules.
 
 Run `ce-code-review` and `ce-simplify-code` in your own context, and delegate only the reviewers and other leaves those skills dispatch; never hand either skill whole to a child. In the brief of a child that runs verification, tell it to wait for a slow command to finish and never to interrupt it. Tell every child that evidence this machine cannot produce, such as a Darwin build on Linux, is recorded as deferred to CI, never as passed, and does not make its return incomplete.
 
@@ -63,28 +67,29 @@ For tasks started through T3, use its lifecycle in place of CE's process runners
 
 Discover eligible tools for the route the task needs, including deferred tools. Follow CE's unavailable-route handling when the route is unavailable or fails. Keep CE's retry, recovery, fallback, and reporting behavior. A T3 wait timeout does not mean the child stopped. Follow T3's lifecycle and CE's recovery prerequisites before replacing work. Each `delegate_task` child is a separate T3 thread.
 
+`opencode-serving-model` is installed with OpenCode from `scripts/opencode-serving-model`. It opens OpenCode's database read-only. Pi needs no helper because CE already reads its session records and environment.
+
 ## T3 CE model selection
 
-When a CE skill uses `delegate_task`, choose the child's model from the ladder of the provider the child runs on. Each rung names a model family; use the newest listed model of that family from T3 capability discovery. A family named without `Flash` excludes Flash models, and a family named with `Pro` includes only Pro models.
+When a CE skill uses `delegate_task`, choose the child's model from the ladder row of the model class it will run, whichever instance serves it. Each rung names a model family; use the newest listed model of that family in the serving instance's catalog from T3 capability discovery. A family named without `Flash` excludes Flash models, and a family named with `Pro` includes only Pro models.
 
-| Provider | Orchestrator | Top child rung | Middle rung | Bottom rung |
+| Model class | Orchestrator | Top child rung | Middle rung | Bottom rung |
 | --- | --- | --- | --- | --- |
 | Claude | Fable | Opus | Sonnet | Haiku |
-| Codex | astra | sol | terra | luna |
-| Synthetic through pi | Kimi | Kimi Pro | GLM | GLM Flash |
+| GPT | astra | sol | terra | luna |
+| Synthetic | Kimi | Kimi Pro | GLM | GLM Flash |
 
 - Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`, and CE's cross-model review peers.
 - Middle rung: implementation workers, CE's mid-tier and generation-tier children, and any CE child whose skill names no tier.
 - Bottom rung: CE's extraction-tier and cheapest-capable children, such as grounding scouts.
 
-Where a CE skill says to inherit the session or parent model, or to omit the model override because model names are unknown, use the ladder instead. A child never runs above the column of the model that delegates it: a role placed higher runs on the delegating model, or on another provider's model in that same column. A child that delegates further applies these rules with its own model as the limit.
+Where a CE skill says to inherit the session or parent model, or to omit the model override because model names are unknown, use the ladder instead. A child never runs above the column of the model that delegates it: a role placed higher runs on the delegating model, or on another class's model in that same column. A child that delegates further applies these rules with its own model as the limit.
 
-Set no effort for a ladder-selected child, so T3's default for that model applies. An effort that a CE skill suggests by default is not a named effort.
-For a Codex child, pass `reasoningEffort` in `target.options`: use `xhigh` for every Terra child regardless of role and for every middle-rung implementation worker; use `high` for other Codex children.
+Set no effort for a ladder-selected Claude or Synthetic child, so the serving harness's default applies. Give a GPT child `xhigh` when it is a terra child or a middle-rung implementation worker and `high` otherwise, passed in `target.options` as the serving harness's option: `reasoningEffort` on Codex, `thinking` on Pi, and `variant` on OpenCode. If that harness lists no matching level for the model, leave the effort unset. An effort that a CE skill suggests by default is not a named effort.
 
 A model or effort that the user's prompt or CE configuration names for a child wins over this section; pass a named effort in `target.options`. CE configuration includes `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, `work_engine_effort`, `plan_model`, and `brainstorm_model`.
 
-If the catalog lists no model for a rung, use the next lower rung of the same provider. If none is listed, use the next higher rung of that provider within the limit above, and only then the delegating model. Name the substitution in your report. Providers without a row and delegations outside CE skills keep their current model selection.
+If the serving instance's catalog lists no model for a rung, use the next lower rung of the same class. If none is listed, use the next higher rung of that class within the limit above, and only then the delegating model. Name the substitution in your report. Models outside these classes and delegations outside CE skills keep their current model selection.
 
 ### Synthetic ladder evidence
 
@@ -96,7 +101,7 @@ On 2026-11-16 the owner retuned the Synthetic row against the Artificial Analysi
 | Synthetic middle | GLM-5.3 Flash | GLM-5.3 | 32 at max (28) | Not measured at Pi's default; 24-25 min at max and 20.5 min at high as a review peer on 2026-10-21 |
 | Synthetic bottom | DeepSeek V4.1 Flash 1017 | GLM-5.3 Flash | 28 (29 at high) | 10-19 min at high as a review peer on 2026-10-21 (DeepSeek: 48 min at max, 101 min at high) |
 
-Synthetic children keep effort unset: Pi lists `thinking` levels only up to high, so the chart's max scores are upper bounds, not the configured setting. The Synthetic middle rung trades GLM-5.3 Flash's speed for GLM-5.3's higher score, and the bottom rung drops DeepSeek, the slowest Synthetic model measured.
+Synthetic children keep effort unset on every harness: Pi lists `thinking` levels only up to high, so the chart's max scores are upper bounds, not the configured setting. The Synthetic middle rung trades GLM-5.3 Flash's speed for GLM-5.3's higher score, and the bottom rung drops DeepSeek, the slowest Synthetic model measured.
 
 ## T3 PR and MR babysitting
 
