@@ -109,7 +109,7 @@ def codex():
         for name in ('primary', 'secondary'):
             entry = snapshot.get(name)
             if entry:
-                model = snapshot.get('limitName') if limit_id not in ('default', 'codex') else None
+                model = (snapshot.get('limitName') or limit_id) if limit_id not in ('default', 'codex') else None
                 windows.append(window(name, entry['usedPercent'], entry.get('resetsAt'),
                                       model=model, durationMins=entry.get('windowDurationMins')))
     return data.get('accountId'), windows
