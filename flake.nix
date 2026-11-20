@@ -627,19 +627,14 @@
               "opencode-go-models-watch"
               ./scripts/opencode-go-models-watch
               ./tests/test_opencode_go_models_watch.py;
-          provider-models-watch =
-            pythonScriptCheckWith
-              {
-                modules = [ ./scripts/catalog_snapshot.py ];
-                setup = ''
-                  mkdir -p home/h82/agents
-                  cp ${./home/h82/agents/openai-models.json} home/h82/agents/openai-models.json
-                  cp ${./home/h82/agents/anthropic-models.json} home/h82/agents/anthropic-models.json
-                '';
-              }
-              "provider-models-watch"
-              ./scripts/provider-models-watch
-              ./tests/test_provider_models_watch.py;
+          provider-models-watch = pythonScriptCheckWith {
+            modules = [ ./scripts/catalog_snapshot.py ];
+            setup = ''
+              mkdir -p home/h82/agents
+              cp ${./home/h82/agents/openai-models.json} home/h82/agents/openai-models.json
+              cp ${./home/h82/agents/anthropic-models.json} home/h82/agents/anthropic-models.json
+            '';
+          } "provider-models-watch" ./scripts/provider-models-watch ./tests/test_provider_models_watch.py;
           # Drives the packaged helper, so a package that lost nokogiri from its
           # interpreter fails here rather than in the update workflow.
           android-sdk-release =
