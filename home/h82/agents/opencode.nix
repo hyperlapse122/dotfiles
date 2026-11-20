@@ -25,26 +25,32 @@ let
     map (model: model.id) lock.models ++ map (row: row.id) syntheticCatalog
   );
 
+  # A model row in Pi's models.json shape, as OpenCode declares it.
+  openCodeModel = model: {
+    inherit (model) name;
+    limit = {
+      context = model.contextWindow;
+      output = model.maxTokens;
+    };
+    cost = {
+      inherit (model.cost) input output;
+      cache = {
+        read = model.cost.cacheRead;
+        write = model.cost.cacheWrite;
+      };
+    };
+  };
+  declaredModels =
+    models: lib.listToAttrs (map (model: lib.nameValuePair model.id (openCodeModel model)) models);
+
+  # OpenAI and Anthropic show the same committed lists as Pi. OpenCode's own
+  # catalog keeps every other model of these providers.
+  openaiModels = declaredModels (builtins.fromJSON (builtins.readFile ./openai-models.json)).models;
+  anthropicModels = declaredModels (builtins.fromJSON (builtins.readFile ./anthropic-models.json))
+    .models;
+
   syntheticModels =
-    lib.listToAttrs (
-      map (
-        model:
-        lib.nameValuePair model.id {
-          inherit (model) name;
-          limit = {
-            context = model.contextWindow;
-            output = model.maxTokens;
-          };
-          cost = {
-            inherit (model.cost) input output;
-            cache = {
-              read = model.cost.cacheRead;
-              write = model.cost.cacheWrite;
-            };
-          };
-        }
-      ) visibleModels
-    )
+    declaredModels visibleModels
     // lib.genAttrs (lib.subtractLists visibleIds hiddenCandidates) (_: {
       disabled = true;
     });
@@ -108,6 +114,22 @@ let
             "models"
           ];
           entries = goModels;
+        }
+        {
+          path = [
+            "providers"
+            "openai"
+            "models"
+          ];
+          entries = openaiModels;
+        }
+        {
+          path = [
+            "providers"
+            "anthropic"
+            "models"
+          ];
+          entries = anthropicModels;
         }
       ];
     }
