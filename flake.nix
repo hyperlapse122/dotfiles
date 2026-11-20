@@ -287,7 +287,7 @@
         t3code-release = agentTools.t3codeRelease;
         synthetic-models-watch = agentTools.syntheticModelsWatch;
         opencode-go-models-watch = agentTools.opencodeGoModelsWatch;
-        pi-provider-locks-watch = agentTools.piProviderLocksWatch;
+        provider-models-watch = agentTools.providerModelsWatch;
         t3code = import ./packages/t3code.nix { inherit pkgs; };
         t3code-cli = import ./packages/t3code-cli.nix { inherit pkgs; };
         android-sdk-release = agentTools.androidSdkRelease;
@@ -627,19 +627,19 @@
               "opencode-go-models-watch"
               ./scripts/opencode-go-models-watch
               ./tests/test_opencode_go_models_watch.py;
-          pi-provider-locks-watch =
+          provider-models-watch =
             pythonScriptCheckWith
               {
                 modules = [ ./scripts/catalog_snapshot.py ];
                 setup = ''
                   mkdir -p home/h82/agents
-                  cp ${./home/h82/agents/pi-openai-model-lock.json} home/h82/agents/pi-openai-model-lock.json
-                  cp ${./home/h82/agents/pi-anthropic-model-lock.json} home/h82/agents/pi-anthropic-model-lock.json
+                  cp ${./home/h82/agents/openai-models.json} home/h82/agents/openai-models.json
+                  cp ${./home/h82/agents/anthropic-models.json} home/h82/agents/anthropic-models.json
                 '';
               }
-              "pi-provider-locks-watch"
-              ./scripts/pi-provider-locks-watch
-              ./tests/test_pi_provider_locks_watch.py;
+              "provider-models-watch"
+              ./scripts/provider-models-watch
+              ./tests/test_provider_models_watch.py;
           # Drives the packaged helper, so a package that lost nokogiri from its
           # interpreter fails here rather than in the update workflow.
           android-sdk-release =

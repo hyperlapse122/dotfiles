@@ -200,9 +200,9 @@ let
   # list.
   opencodeGoModelsWatch = catalogHelper "opencode-go-models-watch" ../scripts/opencode-go-models-watch;
 
-  # Rewrites the committed Pi model-lock snapshots for OpenAI and Anthropic
-  # from each provider's model list and Pi's built-in catalog.
-  piProviderLocksWatch = catalogHelper "pi-provider-locks-watch" ../scripts/pi-provider-locks-watch;
+  # Rewrites the committed OpenAI and Anthropic model lists that Pi and
+  # OpenCode declare, from each provider's model list and models.dev.
+  providerModelsWatch = catalogHelper "provider-models-watch" ../scripts/provider-models-watch;
 
   # Pins the Android SDK packages from Google's repository XML. It is Ruby
   # because it vendors nixpkgs' androidenv update.rb, which parses with
@@ -235,7 +235,7 @@ in
     t3codeRelease
     syntheticModelsWatch
     opencodeGoModelsWatch
-    piProviderLocksWatch
+    providerModelsWatch
     androidSdkRelease
     serveHtml
     ;
