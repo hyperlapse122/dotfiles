@@ -52,6 +52,7 @@ let
   };
 
   darwinOnly = [
+    "google-drive"
     "parallels"
     "tailscale-app"
   ];
