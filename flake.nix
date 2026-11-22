@@ -212,6 +212,10 @@
       packages.aarch64-darwin.decide = import ./packages/decide.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
       };
+      packages.aarch64-darwin.agent-check = import ./packages/agent-check.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+      };
+      checks.aarch64-darwin.agent-check = self.packages.aarch64-darwin.agent-check;
       checks.aarch64-darwin.pinentry-keyring = import ./packages/pinentry-keyring.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
       };
@@ -256,6 +260,7 @@
           )) hosts.nixos
         );
       packages.${system} = {
+        agent-check = import ./packages/agent-check.nix { inherit pkgs; };
         decide = import ./packages/decide.nix { inherit pkgs; };
         disko = inputs.disko.packages.${system}.disko;
         # Exposed so the release-tracking workflow invokes the packaged helper
@@ -1349,6 +1354,7 @@
               {
                 nativeBuildInputs = [
                   pkgs.actionlint
+                  pkgs.git
                   pkgs.gnugrep
                   (pkgs.python3.withPackages (p: [ p.pyyaml ]))
                   pkgs.nix
@@ -1443,21 +1449,25 @@
                   pkgs.bash
                   pkgs.git
                   pkgs.markdownlint-cli2
+                  self.packages.${system}.agent-check
                 ];
               }
               ''
                 export HOME=$TMPDIR
                 mkdir -p scripts tests .githooks
                 cp ${./scripts/lint-staged-markdown} scripts/lint-staged-markdown
+                cp ${./scripts/check-changed-files} scripts/check-changed-files
                 cp ${./tests/lint-staged-markdown.sh} tests/lint-staged-markdown.sh
                 cp ${./.githooks/pre-commit} .githooks/pre-commit
                 cp ${./.markdownlint-cli2.jsonc} .markdownlint-cli2.jsonc
+                cp ${./mise.toml} mise.toml
                 chmod +x scripts/lint-staged-markdown .githooks/pre-commit
                 patchShebangs scripts/lint-staged-markdown .githooks/pre-commit tests/lint-staged-markdown.sh
 
                 bash tests/lint-staged-markdown.sh scripts/lint-staged-markdown .githooks/pre-commit .markdownlint-cli2.jsonc "${tomlVersion}" "${lockVersion}" "${nixpkgsVersion}" "${taskRun}"
                 touch $out
               '';
+          agent-check = self.packages.${system}.agent-check;
           ci-docs-only-paths =
             pkgs.runCommand "ci-docs-only-paths-tests" { nativeBuildInputs = [ pkgs.bash ]; }
               ''

@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: agent-check [--staged | --range BASE HEAD]
+
+Run the repository's agent-check task on local changes by default.
+--staged checks the Git index. --range checks the committed HEAD tree against BASE.
+EOF
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --staged) expected=1; mode=staged ;;
+  --range) expected=3; mode=range ;;
+  "") expected=0; mode=worktree ;;
+  *) usage >&2; exit 2 ;;
+esac
+if [[ $# -ne $expected ]]; then
+  usage >&2
+  exit 2
+fi
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$root"
+root=$(pwd -P)
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT
+
+case $mode in
+  worktree)
+    git diff --cached --no-renames --name-only -z > "$tmp/paths"
+    git diff --no-renames --name-only -z >> "$tmp/paths"
+    git ls-files --others --exclude-standard -z >> "$tmp/paths"
+    ;;
+  staged)
+    git diff --cached --no-renames --name-only -z > "$tmp/paths"
+    ;;
+  range)
+    base=$(git rev-parse --verify --end-of-options "$2^{tree}")
+    head=$(git rev-parse --verify --end-of-options "$3^{commit}")
+    git diff --no-renames --name-only -z "$base" "$head" > "$tmp/paths"
+    ;;
+esac
+[[ -s $tmp/paths ]] || exit 0
+sort -zu "$tmp/paths" > "$tmp/files"
+export AGENT_CHECK_FILES="$tmp/files"
+export AGENT_CHECK_MODE="$mode"
+export PATH="$root/node_modules/.bin:$PATH"
+
+if [[ $mode != worktree ]]; then
+  mkdir "$tmp/tree"
+  if [[ $mode == range ]]; then
+    export GIT_INDEX_FILE="$tmp/index"
+    git read-tree "$head"
+  fi
+  git --work-tree="$tmp/tree" checkout-index --all --prefix="$tmp/tree/"
+  # A hook inherits Git's index and directory overrides. Keep those out of the task.
+  git rev-parse --local-env-vars > "$tmp/git-vars"
+  while IFS= read -r name; do unset "$name"; done < "$tmp/git-vars"
+  cd "$tmp/tree"
+  MISE_TRUSTED_CONFIG_PATHS=$(pwd -P)
+  export MISE_TRUSTED_CONFIG_PATHS
+fi
+
+run_task() {
+  local tasks file status project
+  # A task of the same name from a parent or global mise config is not this project's task.
+  if command -v mise >/dev/null; then
+    project=$(pwd -P)
+    MISE_CEILING_PATHS=$(dirname "$project")
+    export MISE_CEILING_PATHS
+    tasks=$(mise tasks ls --name-only --no-global --hidden) || return
+    if [[ $'\n'$tasks$'\n' == *$'\n'agent-check$'\n'* ]]; then
+      mise run --force --skip-tools agent-check
+      return
+    fi
+  fi
+
+  for file in justfile Justfile .justfile .Justfile; do
+    [[ -f $file ]] || continue
+    tasks=$(just --justfile "$file" --summary) || return
+    if [[ " $tasks " == *" agent-check "* ]]; then
+      just --justfile "$file" agent-check
+      return
+    fi
+    break
+  done
+
+  for file in GNUmakefile makefile Makefile; do
+    [[ -f $file ]] || continue
+    # Query an empty target so discovery does not walk agent-check's prerequisites.
+    status=0
+    make --file "$file" -qp --eval='.PHONY: .agent-check-probe' .agent-check-probe > "$tmp/make-targets" || status=$?
+    [[ $status -le 1 ]] || return "$status"
+    if awk '/^agent-check:/ && previous != "# Not a target:" { found = 1 }
+             { previous = $0 } END { exit !found }' "$tmp/make-targets"; then
+      make --file "$file" agent-check
+      return
+    fi
+    break
+  done
+}
+
+status=0
+run_task > "$tmp/output" 2>&1 || status=$?
+if [[ $status -ne 0 ]]; then
+  head -n 100 "$tmp/output" >&2
+  exit "$status"
+fi

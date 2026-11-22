@@ -93,6 +93,8 @@ What the user, the project's instructions, or a loaded skill asks for still appl
 
 Confirmation before destructive or irreversible actions, and the protection of secrets and stored data, are unchanged.
 
+When a project defines `agent-check`, that is the project's check.
+
 # Decide for CI triage
 
 Read the first relevant CI failure before choosing what to inspect. If the evidence leaves two or more plausible read-only checks and a judgment would change which one you run first, call the `decide` MCP server’s `judge` tool once. Use `choice` with a short description of each candidate and an `insufficient_evidence` option. Send only the evidence needed for the question and permitted for the configured backend.

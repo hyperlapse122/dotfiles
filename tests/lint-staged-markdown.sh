@@ -316,7 +316,7 @@ out=$( (cd "$repo14" && bash "$script") 2>&1 ) || status=$?
 [[ $out == *"docs/x.md"* && $out == *"MD013"* ]] || fail "nested config output incorrect: $out"
 pass "nested markdownlint config applies to staged files beneath it"
 
-# The hook runs the mise task, so the task must run the script under test.
+# The standalone mise task must continue to run the script under test.
 task_script=$(abspath "$(dirname "$script")/../$task_run")
 [[ $task_script == "$script" ]] || fail "mise task lint-staged-markdown runs '$task_run', not $script"
 pass "mise task lint-staged-markdown runs the script under test"
@@ -326,23 +326,14 @@ repo12="$TEST_TMPDIR/repo12"
 make_test_repo "$repo12"
 mkdir -p "$repo12/.githooks"
 cp "$hook" "$repo12/.githooks/pre-commit"
+mkdir -p "$repo12/scripts"
+cp "$(dirname "$script")/check-changed-files" "$repo12/scripts/"
+cp "$script" "$repo12/scripts/lint-staged-markdown"
+cp "$(dirname "$script")/../mise.toml" "$repo12/mise.toml"
 chmod +x "$repo12/.githooks/pre-commit"
-git -C "$repo12" add .githooks/pre-commit
+git -C "$repo12" add .githooks/pre-commit scripts mise.toml
 git -C "$repo12" commit -q -m "add hook"
 git -C "$repo12" config core.hooksPath .githooks
-
-# Setup stub mise that delegates lint-staged-markdown to $script
-stub_mise_dir="$TEST_TMPDIR/stub_mise_bin"
-mkdir -p "$stub_mise_dir"
-cat > "$stub_mise_dir/mise" <<STUB_MISE_EOF
-#!/bin/sh
-if [ "\$1" = "run" ] && [ "\$2" = "lint-staged-markdown" ]; then
-  exec bash "$task_script"
-fi
-echo "Unexpected mise arguments: \$*" >&2
-exit 1
-STUB_MISE_EOF
-chmod +x "$stub_mise_dir/mise"
 
 # Create linked worktree
 wt1="$TEST_TMPDIR/wt1"
@@ -353,7 +344,8 @@ mkdir -p "$wt1/docs"
 printf "%s" "$bad_md_content" > "$wt1/docs/bad.md"
 git -C "$wt1" add docs/bad.md
 commit_status=0
-commit_out=$( PATH="$stub_mise_dir:$PATH" git -C "$wt1" commit -m "commit bad" 2>&1 ) || commit_status=$?
+printf "%s" "$clean_md_content" > "$wt1/docs/bad.md"
+commit_out=$(git -C "$wt1" commit -m "commit bad" 2>&1) || commit_status=$?
 [[ $commit_status -ne 0 ]] || fail "git commit with bad markdown succeeded"
 [[ $commit_out == *"MD032"* ]] || fail "git commit failure output missing MD032"
 pass "git commit in linked worktree with staged bad markdown fails and prints rule"
@@ -361,7 +353,8 @@ pass "git commit in linked worktree with staged bad markdown fails and prints ru
 # Clean commit in linked worktree succeeds
 printf "%s" "$clean_md_content" > "$wt1/docs/bad.md"
 git -C "$wt1" add docs/bad.md
-PATH="$stub_mise_dir:$PATH" git -C "$wt1" commit -q -m "commit clean" || fail "git commit with clean markdown failed"
+printf "%s" "$bad_md_content" > "$wt1/docs/bad.md"
+git -C "$wt1" commit -q -m "commit clean" || fail "git commit with clean markdown failed"
 pass "git commit in linked worktree with clean markdown succeeds"
 
 pass "all lint-staged-markdown scenarios passed"

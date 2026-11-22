@@ -14,10 +14,10 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # its conversation language from its own settings, so its render has a receipt
 # of its own. Every harness receives the same T3 render.
 EXPECTED = {
-    'darwin': '7fcfb4cbe1077145303de2ca21518e65aedadcabe91128905822a8848441bb88',
-    'darwin-claude': '989a9220a1faa6a9dc335d91fa8780a53f727741855081fc67375863b2e91264',
-    'nixos': 'efbf610b2a62282008e6c7bb00ebe0eb6ff220b307337b54f64384f94997d069',
-    'nixos-claude': 'bf862e7b0ec7cfe41c1d98dbce59d51d83ead757890abb6cb5921bd11120cc3a',
+    'darwin': 'bd0b168d0ae01351927f31453c0272a61cd099363c3bae38ff717b15b3ddccde',
+    'darwin-claude': '0b1de0fd13d9a1c4fe247eb18b8edb617abaf0aa577bbe57531572b33135be15',
+    'nixos': 'fad1b116559b04972cc7acc32d2039ff80c8756ff07ee41ac3d92b47ebf8d516',
+    'nixos-claude': 'aab6b42398a18efab3fc02621ea9fff8f13e851ec7e92f05804be37df02e5112',
     't3': 'bbf932cf77a01a4da3649661e5f8e99658eb897a4625bb6f27cfdd4c32ddaf3b',
 }
 

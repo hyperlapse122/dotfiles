@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -z ${AGENT_CHECK_FILES:-} ]]; then
+  exec bash scripts/agent-check
+fi
+
+nix_files=()
+markdown_files=()
+lint_all_markdown=false
+while IFS= read -r -d '' path; do
+  case "${path##*/}" in
+    .markdownlint*) lint_all_markdown=true ;;
+  esac
+  [[ -f $path ]] || continue
+  case $path in
+    *.nix) nix_files+=("./$path") ;;
+    *.md)
+      if [[ $AGENT_CHECK_MODE == staged ]]; then
+        lint_all_markdown=true
+      elif [[ $path != */* || $path == docs/* || $path == .compound-engineering/artifacts/* ]]; then
+        markdown_files+=(":$path")
+      fi
+      ;;
+  esac
+done < "$AGENT_CHECK_FILES"
+
+status=0
+if [[ ${nix_files[0]+set} ]]; then
+  if command -v nixfmt >/dev/null; then
+    nixfmt --check "${nix_files[@]}" || status=$?
+  else
+    nix shell --inputs-from "path:$PWD" nixpkgs#nixfmt -c nixfmt --check "${nix_files[@]}" || status=$?
+  fi
+fi
+if "$lint_all_markdown"; then
+  bash scripts/lint-staged-markdown --snapshot || status=$?
+elif [[ ${markdown_files[0]+set} ]]; then
+  markdownlint-cli2 --no-globs "${markdown_files[@]}" || status=$?
+fi
+exit "$status"

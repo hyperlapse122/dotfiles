@@ -94,6 +94,7 @@ def behavior(w):
                    or (action in {"synchronize", "reopened"} and has_label))
         want = {"changes": pr and (not label_event or added == "full-ci"),
                 "fmt": not label_event,
+                "agent-check": not label_event,
                 "markdown-lint": not label_event and docs_skip}
         want.update({name: not label_event and not docs_skip for name in light})
         want.update({name: closure and not docs_skip for name in heavy})
@@ -153,6 +154,7 @@ mutants = {
     "light jobs on label runs": replace_in(light, "github.event.action != 'labeled' && ", ""),
     "markdown-lint on label runs": replace_in(["markdown-lint"], "github.event.action != 'labeled' && ", ""),
     "fmt on label runs": set_key(["jobs", "fmt", "if"], None),
+    "agent-check on label runs": set_key(["jobs", "agent-check", "if"], None),
     "changes on every label": set_key(["jobs", "changes", "if"], "github.event_name == 'pull_request'"),
 }
 for name in heavy:
@@ -178,6 +180,35 @@ else:
 
 # Evaluate the actual matrix producer with independent host/check fixtures.
 jobs = workflow["jobs"]
+
+# The agent-check job selects the source commit even when the checkout is clean.
+script = next(s["run"] for s in jobs["agent-check"]["steps"] if s.get("name") == "Check committed changes")
+with tempfile.TemporaryDirectory() as tmp:
+    def git(*args):
+        return subprocess.check_output(["git", "-c", "commit.gpgsign=false", "-C", tmp, *args], text=True).strip()
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.name", "Workflow Test")
+    git("config", "user.email", "workflow@example.invalid")
+    git("commit", "-q", "--allow-empty", "-m", "common base")
+    common = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "target branch moved")
+    pr_base = git("rev-parse", "HEAD")
+    git("switch", "-q", "-c", "feature", common)
+    git("commit", "-q", "--allow-empty", "-m", "previous push")
+    before = git("rev-parse", "HEAD")
+    Path(tmp, "package.json").write_text('{"name":"fixture"}\n')
+    git("add", "package.json")
+    git("commit", "-qm", "add manifest")
+    head = git("rev-parse", "HEAD")
+    assert git("status", "--porcelain") == ""
+    for event, base, checkout in [("pull_request", common, pr_base), ("push", before, head)]:
+        env = dict(os.environ, GITHUB_EVENT_NAME=event, PR_BASE=pr_base, PR_HEAD=head,
+                   PUSH_BEFORE=before, HEAD_SHA=checkout)
+        result = subprocess.run(["bash", "-eu", "-c", 'nix() { printf "%s\\n" "$@"; }\n' + script],
+                                cwd=tmp, env=env, check=True, capture_output=True, text=True)
+        assert result.stdout.splitlines()[-3:] == ["--range", base, head], result.stdout
+
 script = next(s["run"] for s in jobs["hosts"]["steps"] if s.get("id") == "list")
 expr = re.search(r"lists=\$\(nix eval --impure --json --expr '(.*?)'\)", script, re.S)[1]
 fixture = '{ nixosConfigurations = { north = {}; north-bootstrap = {}; }; darwinConfigurations = { mac = {}; mac-bootstrap = {}; }; checks.aarch64-darwin.sample = {}; }'

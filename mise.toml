@@ -5,6 +5,9 @@
 [tasks.lint-staged-markdown]
 run = "scripts/lint-staged-markdown"
 
+[tasks.agent-check]
+run = "bash scripts/check-changed-files"
+
 [hooks]
 postinstall = [
   { run = "dotagents --project install" },
