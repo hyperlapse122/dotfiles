@@ -71,10 +71,11 @@ The declared document is a JSON object with these fields:
                                     every entry an earlier apply wrote that
                                     the declaration no longer names is
                                     removed; entries no apply wrote stay
-  hookGroups {preserveSlots: bool, events: {event: group | {}}}
-                                    Reconcile Dotfiles agent quality handlers in
-                                    native JSON settings. Codex keeps empty
-                                    slots because trust uses numeric indices.
+  hookGroups {identity: {statusMessage, commandPrefix, commandSuffix, disabledMatcher},
+              preserveSlots: bool, events: {event: group | {}}}
+                                    Reconcile managed native JSON hook groups.
+                                    Keep empty slots when the harness uses
+                                    numeric indices for trust.
   migrateInstances {from: name, to: name, kinds: [name],
                     retireAntigravity: {profileBinary, registryCommand, instructions}}
                                     T3 Code's move of a retired per-kind
@@ -232,10 +233,16 @@ def declaration(declared, fmt='json'):
     migration = instance_migration(document.get('migrateInstances'), assign, retire, owned, declared)
     hook_groups = document.get('hookGroups')
     if hook_groups is not None:
-        if fmt != 'json' or not isinstance(hook_groups, dict) or set(hook_groups) != {'preserveSlots', 'events'}:
-            raise ValueError('declared hookGroups needs preserveSlots and events in JSON settings')
+        if (fmt != 'json' or not isinstance(hook_groups, dict)
+                or set(hook_groups) != {'identity', 'preserveSlots', 'events'}):
+            raise ValueError('declared hookGroups needs identity, preserveSlots and events in JSON settings')
         if not isinstance(hook_groups['preserveSlots'], bool) or not isinstance(hook_groups['events'], dict):
             raise ValueError('invalid hookGroups declaration')
+        identity = hook_groups['identity']
+        if (not isinstance(identity, dict)
+                or set(identity) != {'statusMessage', 'commandPrefix', 'commandSuffix', 'disabledMatcher'}
+                or not all(isinstance(value, str) and value for value in identity.values())):
+            raise ValueError('invalid hookGroups identity')
         check_top_level(['hooks'], assign, retire, owned)
         check_disjoint(['hooks'], assigned_paths(paths, upserts, prefixes))
     if fmt == 'toml':
@@ -576,18 +583,16 @@ def upsert(entries, key, value):
         entries.append(copy.deepcopy(value))
 
 
-QUALITY_STATUS = 'Dotfiles agent quality'
-QUALITY_SLOT = '^dotfiles-agent-quality-disabled$'
-
-
-def is_quality_handler(handler):
-    if not isinstance(handler, dict) or handler.get('statusMessage') != QUALITY_STATUS:
+def is_managed_hook(handler, identity):
+    if not isinstance(handler, dict) or handler.get('statusMessage') != identity['statusMessage']:
         return False
     command = handler.get('command')
-    return isinstance(command, str) and (
-        command == ':' or (
-            command.startswith('/nix/store/') and '-agent-quality-hook/bin/agent-quality-hook ' in command
-        )
+    if not isinstance(command, str):
+        return False
+    executable, separator, _ = command.partition(' ')
+    return command == ':' or (
+        bool(separator) and executable.startswith(identity['commandPrefix'])
+        and executable.endswith(identity['commandSuffix'])
     )
 
 
@@ -596,6 +601,8 @@ def reconcile_hook_groups(settings, specification):
     if not isinstance(hooks, dict):
         raise ValueError('native hooks must be an object')
     preserve_slots = specification['preserveSlots']
+    identity = specification['identity']
+    disabled_group = {'matcher': identity['disabledMatcher'], 'hooks': []}
     for event, desired in specification['events'].items():
         groups = hooks.get(event, [])
         if not isinstance(groups, list):
@@ -605,19 +612,19 @@ def reconcile_hook_groups(settings, specification):
             if not isinstance(group, dict) or not isinstance(group.get('hooks'), list):
                 continue
             handlers = group['hooks']
-            if preserve_slots and group == {'matcher': QUALITY_SLOT, 'hooks': []}:
+            if preserve_slots and group == disabled_group:
                 if desired:
                     groups[index] = desired
                     break
                 continue
-            managed = [i for i, handler in enumerate(handlers) if is_quality_handler(handler)]
+            managed = [i for i, handler in enumerate(handlers) if is_managed_hook(handler, identity)]
             if not managed:
                 continue
             if len(handlers) == len(managed):
                 if desired:
                     groups[index] = desired
                 elif preserve_slots:
-                    groups[index] = {'matcher': QUALITY_SLOT, 'hooks': []}
+                    groups[index] = copy.deepcopy(disabled_group)
                 else:
                     del groups[index]
                     if not groups:
@@ -627,7 +634,7 @@ def reconcile_hook_groups(settings, specification):
             # their matcher and, for Codex, their handler index within it.
             for slot in reversed(managed):
                 if preserve_slots and slot < len(handlers) - 1:
-                    handlers[slot] = {'type': 'command', 'command': ':', 'statusMessage': QUALITY_STATUS}
+                    handlers[slot] = {'type': 'command', 'command': ':', 'statusMessage': identity['statusMessage']}
                 else:
                     del handlers[slot]
         else:

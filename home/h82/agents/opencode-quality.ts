@@ -21,6 +21,8 @@ export default {
     });
 
     if (!stop) return;
+    // OpenCode admits synthetic input directly to the inbox. Only a prompt
+    // goes through SessionPrompt.prepare and arms this idle hook again.
     const pending = new Set();
     await ctx.session.hook("prompt", (event) => {
       pending.add(event.sessionID);

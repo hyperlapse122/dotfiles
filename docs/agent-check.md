@@ -27,7 +27,7 @@ Run `agent-check` to check staged, unstaged, and untracked changes using the wor
 
 The launcher reports advisory security patterns in changed source and configuration files before running the task. Warnings include the path, line, and rule name. The scanner omits matched text and runs locally in every mode.
 
-For a frontend project, add `impeccable detect src/` to the project task using the affected UI directory. File detection runs offline and exits 2 for primary findings. When edit hooks run the task automatically, put the detector in the staged or CI branch of the task.
+For a frontend project, add `impeccable detect src/` to the project task using the affected UI directory. File detection runs offline and exits 2 for primary findings. Keep slower checks in the staged or CI branch of the task.
 
 ## Run it before commit
 
@@ -43,7 +43,7 @@ pre-commit:
 
 In this repository, run `mise install` and `git config core.hooksPath .githooks`. The hook calls the same task, and Markdown lint reads the index snapshot with the project's configured globs. The standalone `mise run lint-staged-markdown` command still runs the staged Markdown check.
 
-Enable automatic harness execution only where the native hook runs with the session's existing tool permissions or the owner has authorized that project to run with hook privileges. Enabling this repository's Git hook authorizes its project task for commits in that checkout.
+Enabling this repository's Git hook authorizes its project task for commits in that checkout. An explicit `agent-check` run can evaluate project configuration during task discovery, including Makefile includes.
 
 ## Require it in CI
 
@@ -70,21 +70,23 @@ Use `my.agentHooks.<harness>.enable` to turn off a harness integration.
 The harness names are `claude`, `codex`, `pi`, and `opencode`. Each also
 has `preShell`, `freezeTests`, and `postEdit` switches.
 
-Automatic project checks require an exact, canonical checkout root in
+Automatic feedback requires an exact, canonical checkout root in
 `my.agentHooks.trustedProjects`. Use the path returned by
 `git rev-parse --show-toplevel` from a physical working directory
-(`cd -P`). List each worktree separately. An entry authorizes the checkout's
-task, tools, and configuration to execute with the hook process's host
-privileges, including from a restricted harness session. The list starts
-empty. Harness trust, T3 full access, and files inside the checkout grant
-no project-task authorization. Manual `agent-check` remains available.
+(`cd -P`). List each worktree separately. The list starts empty.
 
-In an authorized checkout, native edits run the task and return up to 50
-lines on failure. Set `my.agentHooks.stop = true` to run the task at the
-end of a turn and allow one corrective continuation. A clean checkout or
-a missing task exits quietly. Keep the task quick enough to run after an
-edit. Include a test suite only if the project deliberately opts into its
-cost.
+After a native edit in a listed checkout, the hook scans the edited files
+with the packaged source rules and returns up to 50 lines of advisory
+output. It reads regular files up to 1 MiB and skips symbolic and hard
+links. The hook uses read-only Git metadata and never loads a project task,
+tool, or Git filter as executable code. A listed checkout can still
+contain an agent-edited task, so the allowlist grants only this feedback.
+
+Set `my.agentHooks.stop = true` to request one check at the end of a turn
+when a listed checkout has changes. The request goes to the agent, which
+can run `agent-check` through its normal shell tool under the session's
+permissions. A clean checkout ends quietly. A genuine new user turn can
+receive a new request. You can also run `agent-check` directly.
 
 Review new or changed Codex hooks with `/hooks` in the CLI using the same
 Codex home as T3. A rebuild that changes the command's Nix store path

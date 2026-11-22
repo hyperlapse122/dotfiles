@@ -1,6 +1,7 @@
 """Check rendered hook commands and reconciliation in a disposable repository."""
 import json
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -14,7 +15,9 @@ def json_write(path, data):
 def reconcile(root, merger, enabled, disabled, preserve_slots):
     settings = root / 'home' / 'settings.json'
     settings.parent.mkdir(exist_ok=True)
-    first = {'matcher': 'Write', 'hooks': [{'type': 'command', 'command': 'echo first'}]}
+    first = {'matcher': 'Write', 'hooks': [
+        {'type': 'command', 'command': 'echo first', 'statusMessage': 'Dotfiles agent quality'},
+    ]}
     later = {'matcher': 'Write', 'hooks': [{'type': 'command', 'command': 'echo later'}]}
     seed = {'hooks': {'PostToolUse': [first]}, 'other': {'value': 'keep'}}
     json_write(settings, seed)
@@ -27,6 +30,13 @@ def reconcile(root, merger, enabled, disabled, preserve_slots):
     assert installed['hooks']['PostToolUse'][0] == first
     installed['hooks']['PostToolUse'].append(later)
     json_write(settings, installed)
+    # A new store path updates the managed command in place.
+    previous = json.loads(settings.read_text())
+    handler = previous['hooks']['PostToolUse'][1]['hooks'][0]
+    handler['command'] = re.sub(r'/nix/store/[a-z0-9]{32}-', '/nix/store/' + 'a' * 32 + '-',
+                                handler['command'], count=1)
+    assert previous != installed
+    json_write(settings, previous)
     assert apply(enabled) == installed
 
     removed = apply(disabled)
@@ -41,7 +51,7 @@ def reconcile(root, merger, enabled, disabled, preserve_slots):
     return installed['hooks']
 
 
-def exercise(root, hooks):
+def exercise(root, hooks, harness):
     project = root / 'fixture with spaces'
     project.mkdir()
     git = ['git', '-C', str(project)]
@@ -54,16 +64,16 @@ def exercise(root, hooks):
     makefile.write_text(
         'agent-check:\n'
         f'\t@echo called >> {shlex.quote(str(calls))}\n'
-        "\t@for n in $$(seq 1 75); do echo fixture-$$n >&2; done\n"
-        '\t@exit 1\n'
     )
+    (project / 'fixture.py').touch()
+    (project / '.gitattributes').write_text('fixture.py filter=fixture\n')
     subprocess.run(git + ['add', '.'], check=True)
     subprocess.run(git + ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
                           '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture'], check=True)
 
     def command(event):
         group = next(group for group in hooks[event] if len(group['hooks']) == 1
-                     and group['hooks'][0].get('statusMessage') == 'Dotfiles agent quality')
+                     and '/bin/agent-quality-hook ' in group['hooks'][0]['command'])
         return shlex.split(group['hooks'][0]['command'])
 
     def run(event, tool_name=None, tool_input=None, policy=None, **payload):
@@ -75,11 +85,14 @@ def exercise(root, hooks):
             text=True, capture_output=True,
         )
 
-    for shell in ('git commit --no-verify', 'git commit -nm okay', 'SKIP=hook git -C . commit -m okay'):
+    for shell in ('git commit --no-verify', 'git commit -nm okay', 'SKIP=hook git -C . commit -m okay',
+                  'git commit -nuall', 'git commit -unormal --no-verify', 'git commit -u -n'):
         result = run('PreToolUse', 'Bash', {'command': shell})
         assert result.returncode == 2 and 'pre-commit' in result.stderr, result
-    assert run('PreToolUse', 'Bash', {'command': 'git commit -m "--no-verify"'}).returncode == 0
-    assert run('PreToolUse', 'Bash', {'command': 'git status -n'}).returncode == 0
+    for shell in ('git commit -m "--no-verify"', 'git status -n', 'git commit -u',
+                  'git commit -uno', 'git commit -unormal', 'git commit -uall', 'git commit -auno'):
+        result = run('PreToolUse', 'Bash', {'command': shell})
+        assert result.returncode == 0, result
 
     def patch(source, target):
         return {'command': f'*** Begin Patch\n*** Add File: other.txt\n+fine\n'
@@ -99,26 +112,43 @@ def exercise(root, hooks):
     marker.touch()
     clean = run('Stop', policy=policy_path)
     assert (clean.returncode, clean.stderr) == (0, '') and not calls.exists(), clean
-    (project / 'new.txt').touch()
-    untrusted = run('PostToolUse', 'apply_patch', patch('src/a.txt', 'src/b.txt'), permission_mode='bypassPermissions')
-    assert (untrusted.returncode, untrusted.stderr) == (0, '') and not calls.exists(), untrusted
-    failure = run('PostToolUse', 'apply_patch', patch('src/a.txt', 'src/b.txt'), policy=policy_path)
-    assert failure.returncode == 2 and 'fixture-1' in failure.stderr, failure
-    assert len(failure.stderr.splitlines()) == 50, failure
-    stop = run('Stop', policy=policy_path)
-    assert stop.returncode == 2 and 'fixture-1' in stop.stderr, stop
+    # The ordinary Git status and the old project task could each execute commands here.
+    shell = f'echo called >> {shlex.quote(str(calls))}'
+    subprocess.run(git + ['config', 'core.fsmonitor', shell], check=True)
+    subprocess.run(git + ['config', 'filter.fixture.clean', shell + '; cat'], check=True)
+    (project / 'fixture.py').write_text('eval(value)\n')
+    outside = root / 'outside.py'
+    outside.write_text('eval(value)\n')
+    (project / 'link.py').symlink_to(outside)
+    tool = ('Write', {'file_path': 'fixture.py'}) if harness == 'claude' else (
+        'apply_patch', {'command': '*** Update File: fixture.py\n'})
+    untrusted = run('PostToolUse', *tool, permission_mode='bypassPermissions')
+    assert (untrusted.returncode, untrusted.stdout, untrusted.stderr) == (0, '', ''), untrusted
+    advisory = run('PostToolUse', *tool, policy=policy_path, permission_mode='default')
+    assert advisory.returncode == 0 and not advisory.stderr, advisory
+    output = json.loads(advisory.stdout)
+    assert set(output) == {'hookSpecificOutput'}, output
+    assert output['hookSpecificOutput'] == {
+        'hookEventName': 'PostToolUse',
+        'additionalContext': 'agent-check: warning "fixture.py":1 eval_injection',
+    }, output
+    linked = ('Write', {'file_path': 'link.py'}) if harness == 'claude' else (
+        'apply_patch', {'command': '*** Update File: link.py\n'})
+    skipped = run('PostToolUse', *linked, policy=policy_path)
+    assert (skipped.returncode, skipped.stdout, skipped.stderr) == (0, '', ''), skipped
+    stop = run('Stop', policy=policy_path, permission_mode='default')
+    assert stop.returncode == 2 and 'shell tool' in stop.stderr, stop
     exhausted = run('Stop', policy=policy_path, stop_hook_active=True)
     assert (exhausted.returncode, exhausted.stderr) == (0, ''), exhausted
-    makefile.unlink()
-    missing = run('Stop', policy=policy_path)
-    assert (missing.returncode, missing.stderr) == (0, ''), missing
-    assert calls.read_text().splitlines() == ['called', 'called']
+    assert not calls.exists(), 'automatic quality hooks executed a checkout command'
 
 
 if __name__ == '__main__':
     merger, claude_on, claude_off, codex_on, codex_off = sys.argv[1:]
     with TemporaryDirectory() as directory:
         root = Path(directory).resolve()
-        reconcile(root, merger, claude_on, claude_off, preserve_slots=False)
-        codex = reconcile(root, merger, codex_on, codex_off, preserve_slots=True)
-        exercise(root, codex)
+        for harness, on, off in (('claude', claude_on, claude_off), ('codex', codex_on, codex_off)):
+            fixture = root / harness
+            fixture.mkdir()
+            hooks = reconcile(fixture, merger, on, off, preserve_slots=harness == 'codex')
+            exercise(fixture, hooks, harness)

@@ -34,6 +34,12 @@ let
   edit = if codex then "apply_patch" else "Edit|Write|MultiEdit";
   shell = if codex then "Bash|exec_command|shell_command" else "Bash";
   preTools = lib.concatStringsSep "|" (lib.optional freezeTests edit ++ lib.optional preShell shell);
+  identity = {
+    statusMessage = "Dotfiles agent quality";
+    commandPrefix = "/nix/store/";
+    commandSuffix = "-agent-quality-hook/bin/agent-quality-hook";
+    disabledMatcher = "^dotfiles-agent-quality-disabled$";
+  };
   group =
     enabled: phase: matcher:
     lib.optionalAttrs (enable && enabled) {
@@ -41,7 +47,7 @@ let
         {
           type = "command";
           command = lib.escapeShellArgs ([ executable ] ++ args ++ [ phase ]);
-          statusMessage = "Dotfiles agent quality";
+          inherit (identity) statusMessage;
         }
       ];
     }
@@ -52,6 +58,7 @@ in
 {
   inherit enable;
   hookGroups = {
+    inherit identity;
     preserveSlots = codex;
     events = {
       PreToolUse = group (preTools != "") "pre" preTools;
@@ -71,7 +78,7 @@ in
             const child = execFile(
               ${builtins.toJSON executable},
               [...${builtins.toJSON args}, phase],
-              (error, stdout) => resolve(error?.code === 2 ? stdout.trim() : ""),
+              (error, stdout) => resolve((phase === "post" ? !error : error?.code === 2) ? stdout.trim() : ""),
             );
             child.stdin.on("error", () => {});
             child.stdin.end(JSON.stringify({ cwd, tool_name, tool_input }));

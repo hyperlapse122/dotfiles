@@ -31,19 +31,33 @@ and ran on a subsequent turn. Codex's managed requirements can declare
 pretrusted administrator policy. This user-scoped rollout uses Codex's
 normal approval flow.
 
-The repository check exercises the rendered commands and settings merger.
-It covers clean and missing-task exits, the three common bypass forms,
-both sides of patch renames, reactivation, the diagnostic line cap, and
-the exhausted stop budget. It also checks that an unapproved checkout
-with a marker and a failing task cannot start the task under a bypass
-permission mode. A native Codex turn in a workspace-write sandbox
-also edited the fixture without running its unapproved project task.
+In the initial smoke trial, a native Codex turn in a workspace-write
+sandbox edited the fixture without running its unapproved project task.
 The production and bootstrap Home Manager hook declarations evaluated for
-both hosts. Linux builds and native Linux evidence are deferred to CI. The
-fixtures used temporary homes and did not activate either host.
+both hosts. The fixtures used temporary homes.
+
+## Corrected hook behavior
+
+The repository check now verifies that even a listed checkout's automatic
+hooks cannot start project commands. Claude and Codex return advisory JSON
+at exit 0. Pi and OpenCode append the same advisory to the tool result.
+The settings fixture checks that a new executable path replaces the managed
+command in place and preserves neighboring user hooks and Codex slots.
+
+The lifecycle fixture drives the pinned Pi runtime through RPC and
+OpenCode through ACP with a local scripted provider. Each of two user
+turns in the same session writes a file, receives an advisory, and
+receives one turn-end request to run the check through the shell tool.
+The scripted provider leaves the checkout dirty, so an extra continuation
+would produce an extra model request. In OpenCode 2.3.2, the prompt
+preparation hook arms the request and synthetic input goes straight to
+the inbox. In Pi, the fixture waits for `agent_settled`, which follows
+the extension's last opportunity to request a continuation.
 
 ## Upstream references
 
 - [Codex hook discovery and trust, 0.171.0](https://github.com/openai/codex/blob/rust-v0.171.0/codex-rs/hooks/src/engine/discovery.rs)
 - [Pi extension lifecycle at the managed source revision](https://github.com/earendil-works/pi/blob/faac585884ae2c013a6b1400f3e9e77f10b34bac/packages/coding-agent/docs/extensions.md)
 - [OpenCode plugin interface, 2.3.2](https://github.com/anomalyco/opencode/blob/v2.3.2/packages/plugin/src/README.md)
+- [OpenCode prompt preparation, 2.3.2](https://github.com/anomalyco/opencode/blob/v2.3.2/packages/core/src/session/prompt.ts)
+- [OpenCode synthetic input, 2.3.2](https://github.com/anomalyco/opencode/blob/v2.3.2/packages/core/src/session/synthetic.ts)

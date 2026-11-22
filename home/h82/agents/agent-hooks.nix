@@ -13,17 +13,17 @@ in
       type = types.listOf (types.strMatching "/[^\n]+");
       default = [ ];
       description = ''
-        Exact canonical Git checkout roots the owner authorizes to execute
-        agent-check with the native hook process's host privileges.
+        Exact canonical Git checkout roots opted in to native edit advisories
+        and, if enabled, turn-end requests to run agent-check in the session.
       '';
     };
-    stop = mkEnableOption "a final agent-check with one corrective continuation";
+    stop = mkEnableOption "one turn-end request to run agent-check through the session's shell tool";
   }
   // genAttrs [ "claude" "codex" "pi" "opencode" ] (_: {
     enable = mkEnableOption "native agent quality hooks" // {
       default = true;
     };
-    postEdit = mkEnableOption "agent-check after native edits" // {
+    postEdit = mkEnableOption "local source scan advisories after native edits" // {
       default = true;
     };
     preShell = mkEnableOption "feedback for Git commit hook bypasses" // {
