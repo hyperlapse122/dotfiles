@@ -7,21 +7,21 @@ Usage: agent-check [--registry-policy ABSOLUTE_PATH] [--staged | --range BASE HE
 
 Run the repository's agent-check task on local changes by default.
 --staged checks the Git index. --range checks the committed HEAD tree against BASE.
---registry-policy enables lookups using an approved policy outside the checkout.
+--registry-policy runs only registry lookups using an approved policy outside the checkout.
 EOF
 }
 
-policy=()
+policy=
 if [[ ${1:-} == --registry-policy ]]; then
   if [[ $# -lt 2 || $2 != /* ]]; then
     usage >&2
     exit 2
   fi
-  policy=(--policy "$2")
+  policy=$2
   shift 2
 fi
 if [[ ${inspection[0]+set} != set ]]; then
-  inspection=(python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/agent-check-inspect.py")
+  inspection=(python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/agent-check-inspect.py")
 fi
 
 case "${1:-}" in
@@ -35,15 +35,14 @@ if [[ $# -ne $expected ]]; then
   usage >&2
   exit 2
 fi
+if [[ -n $policy ]]; then
+  PATH="${inspection_path:-$PATH}" exec "${inspection[@]}" --policy "$policy" \
+    --snapshot "$mode" --base "${2:-}" --head "${3:-}"
+fi
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 cd "$root"
 root=$(pwd -P)
-git_dir=$(git rev-parse --absolute-git-dir)
-base=""
-if [[ ${policy[0]+set} && $mode != range ]]; then
-  base=$(git rev-parse --verify 'HEAD^{tree}' 2>/dev/null) || base=""
-fi
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 
@@ -66,8 +65,7 @@ esac
 sort -zu "$tmp/paths" > "$tmp/files"
 export AGENT_CHECK_FILES="$tmp/files"
 export AGENT_CHECK_MODE="$mode"
-check_path=${inspection_path:-$PATH}
-export PATH="$root/node_modules/.bin:$PATH"
+check_path=$PATH
 
 if [[ $mode != worktree ]]; then
   mkdir "$tmp/tree"
@@ -86,8 +84,7 @@ fi
 
 check_and_run() {
   local check_status=0 task_status=0
-  PATH="$check_path" "${inspection[@]}" "${policy[@]}" \
-    --root "$root" --git-dir "$git_dir" --base "$base" --paths "$AGENT_CHECK_FILES" \
+  PATH="$check_path" "${inspection[@]}" --paths "$AGENT_CHECK_FILES" \
     > "$tmp/inspection" || check_status=$?
   "$@" || task_status=$?
   if [[ $task_status -ne 0 ]]; then
@@ -96,8 +93,9 @@ check_and_run() {
   return "$check_status"
 }
 
-run_task() {
-  local tasks file status project
+run_task() (
+  local tasks file project
+  export PATH="$root/node_modules/.bin:$PATH"
   # A task of the same name from a parent or global mise config is not this project's task.
   if command -v mise >/dev/null; then
     project=$(pwd -P)
@@ -122,18 +120,26 @@ run_task() {
 
   for file in GNUmakefile makefile Makefile; do
     [[ -f $file ]] || continue
-    # Query an empty target so discovery does not walk agent-check's prerequisites.
-    status=0
-    make --file "$file" -qp --eval='.PHONY: .agent-check-probe' .agent-check-probe > "$tmp/make-targets" || status=$?
-    [[ $status -le 1 ]] || return "$status"
-    if awk '/^agent-check:/ && previous != "# Not a target:" { found = 1 }
-             { previous = $0 } END { exit !found }' "$tmp/make-targets"; then
+    # Even make -q evaluates expansions and can rebuild included makefiles.
+    if PATH="$check_path" awk '
+      continued { continued = /\\$/; next }
+      { continued = /\\$/ }
+      /^\t/ { next }
+      /^[ ]*((override|export|private)[ ]+)*define[ ]/ { definitions++; next }
+      /^[ ]*endef([ ]|$)/ { definitions--; next }
+      !definitions && /^[ ]*agent-check[ ]*:/ {
+        sub(/^[ ]*agent-check[ ]*::?/, "")
+        sub(/[;#].*$/, "")
+        if ($0 !~ /=/) { found = 1; exit }
+      }
+      END { exit !found }
+    ' "$file"; then
       check_and_run make --file "$file" agent-check
       return
     fi
     break
   done
-}
+)
 
 status=0
 run_task > "$tmp/output" 2>&1 || status=$?

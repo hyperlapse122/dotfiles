@@ -1,12 +1,15 @@
 """Local source warnings and opt-in existence checks for registry dependencies."""
 
 from concurrent.futures import ThreadPoolExecutor
+from functools import cache
 import argparse
 import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
+import sys
 import tempfile
 from urllib.parse import quote, urlsplit
 
@@ -100,6 +103,37 @@ def npm_packages(content):
                 yield name, "", False
 
 
+def npm_config(content):
+    registries = {}
+    for line in content.splitlines():
+        line = line.lstrip("\ufeff \t")
+        if line.startswith(("#", ";")):
+            continue
+        key, separator, value = line.partition("=")
+        key = key.strip()
+        if key.startswith("'") and key.endswith("'"):
+            key = key[1:-1]
+        if key.startswith('"') and key.endswith('"'):
+            key = json.loads(key)
+        if "${" in key:
+            # npm also interpolates keys, so their scope may be unknown.
+            registries[None] = True
+            continue
+        key = key.lower()
+        if not re.fullmatch(r"(?:@[^:\s]+:)?registry(?:\[\])?", key):
+            continue
+        value = value.strip()
+        if value.startswith(('"', "'")) and value.endswith(value[0]):
+            value = value[1:-1]
+        else:
+            value = re.split(r"(?<!\\)[;#]", value, maxsplit=1)[0].strip()
+        # Unknown, interpolated and array values also require a private approval.
+        route_key = key.removesuffix("[]")
+        private = not separator or key.endswith("[]") or value.rstrip("/") != REGISTRIES["npm"]
+        registries[route_key] = registries.get(route_key, False) or private
+    return registries
+
+
 def python_packages(content):
     import tomllib
 
@@ -154,7 +188,7 @@ def go_packages(content):
     with tempfile.NamedTemporaryFile(suffix=".mod") as manifest:
         manifest.write(content.encode())
         manifest.flush()
-        result = subprocess.run(["go", "mod", "edit", "-json", manifest.name], env=env,
+        result = subprocess.run(["go", "mod", "edit", "-json", manifest.name], env=env, cwd="/",
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True)
     module = json.loads(result.stdout)
     replacements = {(entry["Old"]["Path"], entry["Old"].get("Version", "")): entry["New"]
@@ -182,7 +216,16 @@ def registry_policy(path, root):
     policy = json.loads(path.read_text())
     if not isinstance(policy, dict) or policy.keys() - {"public", "private"}:
         raise ValueError("invalid registry policy")
-    return policy
+    token_names = set()
+    for routes in policy.get("private", {}).values():
+        for route in routes.values():
+            if "tokenEnv" in route:
+                name = route["tokenEnv"]
+                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+                    raise ValueError("invalid registry token variable")
+                token_names.add(name)
+    tokens = {name: os.environ.pop(name, "") for name in token_names}
+    return policy, tokens
 
 
 def go_escape(value):
@@ -195,7 +238,7 @@ def request(url, token):
         ["curl", "-q", "--silent", "--globoff", "--noproxy", "*", "--proto", "=https",
          "--connect-timeout", "5", "--max-time", "15", "--max-filesize", "20000000",
          "--header", "@-", "--write-out", "\n%{http_code}", "--url", url],
-        input=headers.encode(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        input=headers.encode(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd="/",
     )
     body, _, status = result.stdout.rpartition(b"\n")
     if result.returncode:
@@ -212,7 +255,7 @@ def request(url, token):
     return "incomplete", {}
 
 
-def approved_route(policy, ecosystem, name, explicitly_private):
+def approved_route(policy, tokens, ecosystem, name, explicitly_private):
     private = policy.get("private", {}).get(ecosystem, {})
     public = policy.get("public", {}).get(ecosystem, [])
     if not isinstance(private, dict) or not isinstance(public, list):
@@ -226,7 +269,7 @@ def approved_route(policy, ecosystem, name, explicitly_private):
                 or "?" in endpoint or "#" in endpoint or any(char.isspace() for char in endpoint)):
             raise ValueError("invalid registry endpoint")
         token_env = route.get("tokenEnv")
-        token = os.environ.get(token_env, "") if token_env else ""
+        token = tokens.get(token_env, "") if token_env else ""
         if token_env and not re.fullmatch(r"[!-~]+", token):
             raise ValueError("registry authentication unavailable")
         return endpoint.rstrip("/"), token, False
@@ -241,8 +284,8 @@ def publication(value):
     return "unavailable"
 
 
-def lookup(policy, ecosystem, name, version, explicitly_private):
-    route = approved_route(policy, ecosystem, name, explicitly_private)
+def lookup(policy, tokens, ecosystem, name, version, explicitly_private):
+    route = approved_route(policy, tokens, ecosystem, name, explicitly_private)
     if route is None:
         return False, f"agent-check: {ecosystem} lookup incomplete (no approved registry for a dependency)"
     endpoint, token, public = route
@@ -282,47 +325,228 @@ def lookup(policy, ecosystem, name, version, explicitly_private):
     return True, f"{label}: publication date {publication(date)}, downloads {downloads}"
 
 
-def baseline(git_dir, tree, name):
-    if not tree:
-        return ""
-    result = subprocess.run(["git", f"--git-dir={git_dir}", "show", f"{tree}:{name}"],
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    return result.stdout.decode() if not result.returncode else ""
-
-
-def inspect(args):
-    policy = registry_policy(args.policy, Path(args.root)) if args.policy else None
+def inspect_source(paths):
     cwd = Path.cwd()
-    pending = {}
-    failures = False
-    for raw in Path(args.paths).read_bytes().split(b"\0"):
+    for raw in Path(paths).read_bytes().split(b"\0"):
         name = os.fsdecode(raw)
         path = cwd / name
-        if not name:
-            continue
         rules = rules_for(name)
-        ecosystem = MANIFESTS.get(path.name) if policy is not None else None
-        if not (rules or ecosystem) or path.resolve() != path or not path.is_file():
-            continue
-        content = path.read_text(errors="replace")
-        warn(name, content, rules)
+        if rules and path.resolve() == path and path.is_file():
+            warn(name, path.read_text(errors="replace"), rules)
+    return 0
+
+
+def git(*args, check=True):
+    result = subprocess.run(
+        ["git", "-c", "core.fsmonitor=false", "--no-replace-objects", "--no-lazy-fetch", *args],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=check,
+    )
+    return result.stdout if not result.returncode else b""
+
+
+class Snapshot:
+    def __init__(self, files, worktree=None):
+        self.files = files
+        self.worktree = worktree
+        self.directories = {str(parent) for name in files for parent in Path(name).parents}
+
+    def read(self, name):
+        if self.worktree is not None:
+            return (self.worktree / name).read_bytes()
+        return git("cat-file", "blob", self.files[name][1])
+
+    def link(self, name):
+        if self.worktree is not None:
+            path = self.worktree / name
+            return os.readlink(path) if path.is_symlink() else None
+        if self.files.get(name, ("", ""))[0] == "120000":
+            return os.fsdecode(self.read(name))
+        return None
+
+    @cache
+    def resolve(self, name):
+        """Return the in-snapshot file and every path consulted along the way."""
+        remaining = name.split("/")
+        parents = []
+        visited = {name}
+        links = 0
+        while remaining:
+            part, *remaining = remaining
+            if part in ("", "."):
+                continue
+            if part == "..":
+                if not parents:
+                    return None, visited
+                parents.pop()
+                continue
+            path = "/".join([*parents, part])
+            visited.add(path)
+            link = self.link(path)
+            if link is None:
+                if remaining and path not in self.directories:
+                    return None, visited
+                parents.append(part)
+                continue
+            links += 1
+            if not link or link.startswith("/") or "\0" in link or links > 40:
+                return None, visited
+            remaining = link.split("/") + remaining
+        resolved = "/".join(parents)
+        visited.add(resolved)
+        if resolved in self.files:
+            if self.worktree is not None:
+                regular = stat.S_ISREG((self.worktree / resolved).lstat().st_mode)
+            else:
+                regular = self.files[resolved][0] in ("100644", "100755")
+            if regular:
+                return resolved, visited
+        return None, visited
+
+
+def git_snapshot(tree=None):
+    if tree is None:
+        records = git("ls-files", "--stage", "-z")
+    else:
+        records = git("ls-tree", "-rz", tree) if tree else b""
+    files = {}
+    for record in records.split(b"\0")[:-1]:
+        fields, name = record.split(b"\t", 1)
+        if tree is None:
+            mode, oid, stage = fields.decode().split()
+            if stage != "0":
+                raise ValueError("unmerged Git index")
+        else:
+            mode, _, oid = fields.decode().split()
+        files[os.fsdecode(name)] = (mode, oid)
+    return Snapshot(files)
+
+
+def selected_snapshots(args, root):
+    if args.snapshot == "range":
+        base = git("rev-parse", "--verify", "--end-of-options", f"{args.base}^{{tree}}").decode().strip()
+        head = git("rev-parse", "--verify", "--end-of-options", f"{args.head}^{{commit}}").decode().strip()
+        selected = git_snapshot(head)
+        diff_args = [base, head]
+    else:
+        base = git("rev-parse", "--verify", "HEAD^{tree}", check=False).decode().strip()
+        diff_args = ["--cached", *([base] if base else [])]
+        if args.snapshot == "staged":
+            selected = git_snapshot()
+        else:
+            names = git("ls-files", "--cached", "--others", "--exclude-standard", "-z")
+            paths = map(os.fsdecode, names.split(b"\0")[:-1])
+            files = {name: None for name in paths if os.path.lexists(root / name)}
+            selected = Snapshot(files, root)
+    previous = git_snapshot(base)
+    if not base:
+        return selected, previous, set(selected.files), {}
+    diff = git("diff", "--no-ext-diff", "--no-textconv", "--find-renames",
+               "--name-status", "-z", *diff_args, "--")
+    fields = iter(diff.split(b"\0")[:-1])
+    changed, renamed = set(), {}
+    for status in fields:
+        name = os.fsdecode(next(fields))
+        changed.add(name)
+        if status.startswith(b"R"):
+            destination = os.fsdecode(next(fields))
+            changed.add(destination)
+            renamed[destination] = name
+    return selected, previous, changed, renamed
+
+
+def manifest_inputs(snapshot, name, ecosystem):
+    names = [name]
+    if ecosystem == "npm":
+        names.extend(str(parent / ".npmrc") for parent in Path(name).parents)
+    used = set()
+    resolved = []
+    for path in names:
+        target, followed = snapshot.resolve(path)
+        used.update(followed)
+        resolved.append(target)
+    return used, list(zip(names, resolved))
+
+
+def read_inputs(snapshot, inputs):
+    if inputs[0][0] not in snapshot.files:
+        return ()
+    contents = []
+    for name, target in inputs:
+        if target is None and name in snapshot.files:
+            raise ValueError("unresolved manifest or config")
+        contents.append(snapshot.read(target) if target is not None else None)
+    return contents
+
+
+def dependencies(contents, ecosystem):
+    if not contents:
+        return
+    manifest, *configs = contents
+    npm_registries = [npm_config(config.decode()) for config in configs if config is not None]
+    for package, version, private in PARSERS[ecosystem](manifest.decode()):
+        scope = package.split("/", 1)[0] + ":registry" if package.startswith("@") else "registry"
+        yield package, version, private or any(
+            registry.get(None) or registry.get(scope, registry.get("registry", False))
+            for registry in npm_registries
+        )
+
+
+def restrict_path(root):
+    entries = []
+    for entry in map(Path, os.get_exec_path()):
+        if entry.is_absolute() and not any(
+            (entry / tool).resolve().is_relative_to(root) for tool in ("git", "go", "curl")
+        ):
+            entries.append(str(entry))
+    if not entries:
+        raise ValueError("no trusted tool path")
+    os.environ["PATH"] = os.pathsep.join(entries)
+
+
+def inspect_registry(args):
+    cwd = Path.cwd()
+    # Filter the normal checkout (including linked worktrees) before starting Git.
+    hint = next((directory for directory in (cwd, *cwd.parents)
+                 if (directory / ".git").exists()), cwd)
+    policy, tokens = registry_policy(args.policy, hint)
+    restrict_path(hint)
+    root = Path(os.fsdecode(git("rev-parse", "--show-toplevel").removesuffix(b"\n"))).resolve()
+    if Path(args.policy).resolve().is_relative_to(root):
+        raise ValueError("registry policy must be outside the checkout")
+    restrict_path(root)
+    os.chdir(root)
+    selected, previous, changed, renamed = selected_snapshots(args, root)
+    pending = {}
+    failures = False
+    worktree = args.snapshot == "worktree"
+    for name in sorted(selected.files) if changed or worktree else ():
+        ecosystem = MANIFESTS.get(Path(name).name)
         if ecosystem is None:
             continue
-        parse = PARSERS[ecosystem]
+        current_paths, current_inputs = manifest_inputs(selected, name, ecosystem)
+        old_name = renamed.get(name, name)
+        old_paths, old_inputs = manifest_inputs(previous, old_name, ecosystem)
+        if not worktree and not changed.intersection(current_paths | old_paths):
+            continue
         try:
-            old = baseline(args.git_dir, args.base, name)
-            existing = {(package, private) for package, _, private in parse(old)} if old else set()
-            for package, version, private in parse(content):
+            before = read_inputs(previous, old_inputs) if MANIFESTS.get(Path(old_name).name) == ecosystem else ()
+            after = read_inputs(selected, current_inputs)
+            # Read live inputs directly. Git's worktree diff can invoke clean filters.
+            if before == after:
+                continue
+            existing = {(package, private) for package, _, private in dependencies(before, ecosystem)}
+            for package, version, private in list(dependencies(after, ecosystem)):
                 if (package, private) not in existing:
                     key = (ecosystem, package, version)
-                    pending[key] = pending.get(key, False) or private
-        except (KeyError, ValueError, TypeError, AttributeError, subprocess.SubprocessError):
+                    pending[key] = pending.get(key, False) or private or (package, True) in existing
+        except (KeyError, ValueError, TypeError, AttributeError, OSError, subprocess.SubprocessError):
             print(f"agent-check: {json.dumps(name)} dependency lookup incomplete (invalid manifest)")
             failures = True
+
     def check_dependency(item):
         (ecosystem, name, version), private = item
         try:
-            return lookup(policy, ecosystem, name, version, private)
+            return lookup(policy, tokens, ecosystem, name, version, private)
         except (KeyError, ValueError, TypeError, AttributeError, OSError):
             return False, f"agent-check: {ecosystem} lookup incomplete (invalid policy, authentication, or response)"
 
@@ -336,16 +560,18 @@ def inspect(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--policy")
-    parser.add_argument("--root", required=True)
-    parser.add_argument("--git-dir", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--policy")
+    mode.add_argument("--paths")
+    parser.add_argument("--snapshot", choices=("worktree", "staged", "range"))
     parser.add_argument("--base", default="")
-    parser.add_argument("--paths", required=True)
+    parser.add_argument("--head", default="")
+    args = parser.parse_args()
     try:
-        return inspect(parser.parse_args())
-    except (OSError, ValueError, RuntimeError):
+        return inspect_registry(args) if args.policy else inspect_source(args.paths)
+    except (OSError, KeyError, ValueError, TypeError, AttributeError, RuntimeError, subprocess.SubprocessError):
         print("agent-check: inspection incomplete (unreadable input or invalid registry policy; "
-              "use an absolute policy path outside the checkout)")
+              "use an absolute policy path outside the checkout)", file=sys.stderr)
         return 1
 
 

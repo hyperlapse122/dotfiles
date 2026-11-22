@@ -17,7 +17,7 @@ pkgs.writeShellApplication {
     nixfmt
   ];
   text = ''
-    inspection=(${python}/bin/python3 ${../scripts/agent-check-inspect.py})
+    inspection=(${python}/bin/python3 -I ${../scripts/agent-check-inspect.py})
     inspection_path="$PATH:${pkgs.lib.makeBinPath [ pkgs.curl ]}"
   ''
   + builtins.readFile ../scripts/agent-check;

@@ -36,14 +36,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
-      - name: Check committed changes
+      - name: Select committed range
+        id: range
         env:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          REGISTRY_POLICY: ${{ vars.AGENT_CHECK_REGISTRY_POLICY }}
         run: |
+          parent_or_empty_tree() {
+            git rev-parse --verify "$1^" 2>/dev/null ||
+              git hash-object -w -t tree --stdin </dev/null
+          }
           case "$GITHUB_EVENT_NAME" in
             pull_request)
               base=$(git merge-base "$PR_BASE" "$PR_HEAD")
@@ -53,21 +57,34 @@ jobs:
               base=$PUSH_BEFORE
               head=$HEAD_SHA
               if [[ $base == 0000000000000000000000000000000000000000 ]]; then
-                base=$(git hash-object -w -t tree --stdin </dev/null)
+                base=$(parent_or_empty_tree "$head")
               elif ! git cat-file -e "$base^{commit}"; then
                 git fetch --no-tags origin "$base"
               fi
               ;;
             workflow_dispatch)
-              base=$(git hash-object -w -t tree --stdin </dev/null)
               head=$HEAD_SHA
+              base=$(parent_or_empty_tree "$head")
               ;;
           esac
+          printf 'base=%s\nhead=%s\n' "$base" "$head" >> "$GITHUB_OUTPUT"
+      - name: Check registry dependencies
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD_SHA: ${{ steps.range.outputs.head }}
+          REGISTRY_POLICY: ${{ vars.AGENT_CHECK_REGISTRY_POLICY }}
+        run: |
           policy=$(mktemp "$RUNNER_TEMP/agent-check-registries.XXXXXX")
           trap 'rm -f -- "$policy"' EXIT
           if [[ -z "$REGISTRY_POLICY" ]]; then REGISTRY_POLICY='{}'; fi
           printf '%s\n' "$REGISTRY_POLICY" > "$policy"
-          nix shell .#agent-check -c agent-check --registry-policy "$policy" --range "$base" "$head"
+          nix shell .#agent-check -c agent-check --registry-policy "$policy" --range "$BASE" "$HEAD_SHA"
+      - name: Run project checks
+        if: "!cancelled() && steps.range.outcome == 'success'"
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD_SHA: ${{ steps.range.outputs.head }}
+        run: nix shell .#agent-check -c agent-check --range "$BASE" "$HEAD_SHA"
 
   markdown-lint:
     needs: changes
