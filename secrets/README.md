@@ -21,6 +21,8 @@ creation_rules:
     age: <MS-7D91 recipient>,<MacBook-Pro-Mac17-9 recipient>
   - path_regex: ^secrets/provider-services\.yaml$
     age: <MS-7D91 recipient>,<MacBook-Pro-Mac17-9 recipient>
+  - path_regex: ^secrets/docker-registry\.yaml$
+    age: <MS-7D91 recipient>
   - path_regex: secrets/wifi\.yaml$
     age: <MS-7D91 recipient>
   - path_regex: secrets/tailscale\.yaml$
@@ -44,6 +46,7 @@ creation_rules:
 Only a host whose recipient appears in a file's rule can decrypt that file:
 
 - `secrets/git-hosting.yaml` and `secrets/provider-services.yaml` are encrypted to both hosts (`MS-7D91` and `MacBook-Pro-Mac17-9`). The legacy `secrets/tokens.yaml` rule has the same recipients for rollback.
+- `secrets/docker-registry.yaml` is optional. Its rule lists only `MS-7D91`, the NixOS host.
 - `secrets/wifi.yaml`, `secrets/tailscale.yaml`, and `secrets/printers.yaml` are encrypted to `MS-7D91` only. The `user-identity-secrets` check (`tests/user-identity-secrets.nix`) fails if a macOS (`darwin`) host recipient appears on `secrets/wifi.yaml` or `secrets/tailscale.yaml`, and `printing` (`tests/printing.nix`) checks `secrets/printers.yaml` against hosts that declare `my.printing.queues`.
 - Each per-host file under `secrets/hosts/<host>/` is encrypted to `<host>`'s recipient alone.
 
@@ -61,7 +64,7 @@ file is a flat YAML map of strings.
 | --- | --- | --- |
 | `git-hosting.yaml` | `github_token` | GitHub CLI and registry credential helper |
 | `git-hosting.yaml` | `gitlab_token`, `jpi_token` | GitLab CLI and registry credential helper |
-| `provider-services.yaml` | `docker_token` | Docker Hub registry helper, NixOS opt-in |
+| `docker-registry.yaml` | `docker_token` | Docker Hub registry helper, NixOS opt-in |
 | `provider-services.yaml` | `tokscale_token` | Tokscale wrapper |
 | `provider-services.yaml` | `synthetic_api_key`, `openai_api_key`, `anthropic_api_key` | Pi and OpenCode |
 | `provider-services.yaml` | `exa_api_key`, `openrouter_api_key` | Pi |
@@ -69,10 +72,12 @@ file is a flat YAML map of strings.
 
 NixOS uses sops-nix to publish enabled fields to `/run/secrets/cli-auth/<field>`
 and writes the user-owned, writable gh and glab configuration after decryption.
-The production profile enables every field except `docker_token`. Darwin
-stages the same fields before Home Manager changes links, then publishes them
+The production profile enables the shared fields. Darwin stages those
+fields before Home Manager changes links, then publishes them
 to `~/.local/state/cli-auth/<field>` and writes the gh and glab configuration
-after link generation. Darwin skips `docker_token`.
+after link generation. On NixOS, `my.cliAuth.enableDockerToken` enables
+publication from `secrets/docker-registry.yaml` to
+`/run/secrets/cli-auth/docker_token` once the ciphertext is provisioned.
 
 `pi-state` and `opencode-auth-sync` read the published provider keys. The
 scheduled catalog job still needs the `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
@@ -104,6 +109,14 @@ For a new field, add its manifest entry and provision the encrypted value in
 that group in the same change. For a new consumer, use the platform's
 published field path. Clear `SOPS_AGE_KEY_CMD` when maintenance is complete.
 
+To provision the optional Docker token, pipe a JSON object with the
+`docker_token` field into `sops encrypt --input-type json --output-type yaml
+--filename-override secrets/docker-registry.yaml`. Write the result to a
+temporary ciphertext file. Verify that encryption succeeded and the SOPS
+metadata lists the intended NixOS recipient before installing the file and
+enabling the option. For later rotations, use the streaming `sops set`
+command with that file and field.
+
 #### Migrate from the legacy layout
 
 On the candidate checkout, leave `secrets/tokens.yaml` in place until the
@@ -115,38 +128,47 @@ work=$(mktemp -d)
 python3 scripts/migrate-cli-credentials.py forward "$work/forward"
 ```
 
-The command writes only verified ciphertext to
-`$work/forward/{git-hosting,provider-services}.yaml`. The new directory
+The command writes verified ciphertext to
+`$work/forward/{git-hosting,provider-services}.yaml`. If the legacy file
+contains `docker_token`, the command moves it to
+`$work/forward/docker-registry.yaml` with the NixOS-only recipients. Revoke
+and replace a token previously encrypted to both hosts. The new directory
 must be absent when the command starts. The tool checks creation rules and
 ciphertext recipient sets, refuses unknown, duplicate, missing required, or
 misgrouped fields, and compares every decrypted output value to its input in
 memory. Classify any unknown field in the manifest before retrying.
 
-After success, copy both encrypted files to their final paths and check the
+After success, copy the encrypted files to their final paths and check the
 recipient metadata before removing the old file from the integration change.
 
 ```sh
 (
   set -eu
-  for group in git-hosting provider-services; do
+  groups=(git-hosting provider-services)
+  if test -f "$work/forward/docker-registry.yaml"; then
+    groups+=(docker-registry)
+  fi
+  for group in "${groups[@]}"; do
     test ! -e "secrets/$group.yaml"
     test ! -L "secrets/$group.yaml"
   done
-  for group in git-hosting provider-services; do
+  for group in "${groups[@]}"; do
     install -m 600 "$work/forward/$group.yaml" "secrets/$group.yaml"
   done
   bash tests/sops-recipients.sh "$PWD"
-  bash tests/user-identity-secrets.sh "$PWD" git-hosting provider-services
-  git add secrets/git-hosting.yaml secrets/provider-services.yaml
+  for group in "${groups[@]}"; do
+    git add "secrets/$group.yaml"
+  done
   git rm secrets/tokens.yaml
+  bash tests/user-identity-secrets.sh "$PWD" git-hosting provider-services
 )
 unset SOPS_AGE_KEY_CMD
 ```
 
-Run the real-output checks with both encrypted inputs staged before applying
+Run the real-output checks with the new ciphertexts staged before applying
 either host. Keep the legacy creation rule for rollback.
 
-#### Roll back with current values
+#### Roll back the repository with current values
 
 Pause rotations and run the reverse transform in the split-layout checkout
 with both current group files present. Use the same tools and key command.
@@ -157,11 +179,26 @@ python3 scripts/migrate-cli-credentials.py reverse "$work/reverse"
 ```
 
 Use `$work/reverse/tokens.yaml` as `secrets/tokens.yaml` in the rollback
-change. Restore the old consumer declarations and retire the split
-ciphertexts together. Run `bash tests/sops-recipients.sh "$PWD"` and verify the
-old-layout outputs with this ciphertext before applying either host. A copy
-of `tokens.yaml` from Git history predates any rotations since the split.
-Clear `SOPS_AGE_KEY_CMD` when finished.
+change. Restore the legacy declarations for shared credentials and retire
+the two shared ciphertexts together. Keep the Docker source, its
+NixOS-only creation rule, and its NixOS declaration if provisioned. The
+reverse command verifies any Docker ciphertext in place and writes only
+shared fields to `tokens.yaml`.
+
+Run `bash tests/sops-recipients.sh "$PWD"` and verify the rollback outputs
+with the current ciphertext before applying either host. Clear
+`SOPS_AGE_KEY_CMD` when finished.
+
+#### Recover after a generation rollback
+
+An older NixOS boot entry, `nixos-rebuild --rollback`, or an older Darwin
+generation uses the ciphertext captured when that generation was built.
+Its activation can republish stale or revoked tokens and overwrite the CLI
+and OpenCode credentials installed by a newer generation. After rotating
+credentials, build and apply a new generation from the desired code and
+current ciphertext. To return to the legacy shared layout, first run the
+repository rollback above. If an older generation already ran, reapply
+the rebuilt generation to republish the current credentials.
 
 ### `secrets/wifi.yaml`
 

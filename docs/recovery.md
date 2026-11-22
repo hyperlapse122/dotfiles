@@ -205,6 +205,7 @@ Stage both files, pass the checks, apply production (`nr switch`), run `systemct
 The repository's `.sops.yaml` splits secret recipients across the two hosts as follows:
 
 - `secrets/git-hosting.yaml` and `secrets/provider-services.yaml` are encrypted to both `MS-7D91` and `MacBook-Pro-Mac17-9`.
+- The optional `secrets/docker-registry.yaml` rule authorizes only `MS-7D91`.
 - `secrets/wifi.yaml`, `secrets/tailscale.yaml`, `secrets/printers.yaml`: encrypted to `MS-7D91` only (`user-identity-secrets` forbids any `darwin` host recipient on these rules).
 - `secrets/hosts/MS-7D91/ssh.yaml` and `secrets/hosts/MS-7D91/wired-network.yaml`: encrypted to `MS-7D91` only.
 - `secrets/hosts/MacBook-Pro-Mac17-9/ssh.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/apple-account.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/tls-inspection-ca.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/wired-network.yaml`: encrypted to `MacBook-Pro-Mac17-9` only.
@@ -224,7 +225,7 @@ Follow these steps in order when a host is lost, compromised, or retired. Treat 
    )
    ```
 
-   For a NixOS host, repeat both commands for `secrets/wifi.yaml`, `secrets/tailscale.yaml`, and `secrets/printers.yaml` if the rule listed that host and still has recipients. Retire files with no remaining consumers along with their declarations and rules.
+   For a NixOS host, also remove its recipient from the optional Docker registry rule. Repeat both commands for `secrets/docker-registry.yaml`, `secrets/wifi.yaml`, `secrets/tailscale.yaml`, and `secrets/printers.yaml` where the file exists and the rule listed that host and still has recipients. Retire files with no remaining consumers along with their declarations and rules.
 3. Once all applicable files are re-keyed and their data keys rotated, reissue every exposed token at its provider. For a NixOS host, also rotate the Wi-Fi passphrases, Tailscale pre-authentication key, and printer credentials. Use the [streaming rotation command](../secrets/README.md#rotate-or-add-a-cli-credential) with the appropriate file and field. Clear `SOPS_AGE_KEY_CMD` when finished.
 
    Complete re-keying and data-key rotation before writing new values. `sops set` encrypts to the recipients already on the file, and `sops updatekeys` keeps the previous data key until `sops rotate -i` replaces it.

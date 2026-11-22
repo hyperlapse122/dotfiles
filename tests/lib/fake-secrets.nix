@@ -8,13 +8,14 @@
   Outputs:
   - key.txt: the fixture's age identity; the CLI credential files and ssh.yaml are
     encrypted to it alone.
-  - other-key.txt: a valid age identity that is not a recipient of either file.
+  - other-key.txt: a second age identity for recipient-isolation tests.
   - recipient.txt: the public recipient of key.txt.
   - git-hosting.yaml and provider-services.yaml: grouped credentials, also
-    available together in legacy tokens.yaml for the migration check. The Tokscale token
-    and the Synthetic API key carry a space and the canary FAKE-CANARY, so a
-    publisher that starts reading either fails, and any log that prints a
-    token is caught.
+    available together in legacy tokens.yaml for the migration check. The
+    Tokscale token and Synthetic API key carry a space and the canary
+    FAKE-CANARY, so a publisher that starts reading either fails, and any
+    log that prints a token is caught.
+  - docker-registry.yaml: the optional Docker token, encrypted to key.txt.
   - ssh.yaml: `ssh_private_key`, a fresh ed25519 key; ssh.pub is its public
     half, for asserting what was published.
   - tls-inspection-ca.yaml: `certificate`, a fresh self-signed CA whose PEM
@@ -52,9 +53,10 @@ pkgs.runCommand "fake-non-nixos-secrets"
     printf '%s\n' "$recipient" > $out/recipient.txt
 
     printf 'github_token: FAKE-CANARY-github\ngitlab_token: FAKE-CANARY-gitlab\njpi_token: FAKE-CANARY-jpi\n' > git-hosting.yaml
-    printf 'docker_token: FAKE-CANARY-docker\ntokscale_token: FAKE-CANARY tokscale\nsynthetic_api_key: FAKE-CANARY pi\nexa_api_key: FAKE-CANARY exa\nopenrouter_api_key: FAKE-CANARY openrouter\nopencode_go_api_key: FAKE-CANARY opencode go\nopenai_api_key: FAKE-CANARY openai\nanthropic_api_key: FAKE-CANARY anthropic\n' > provider-services.yaml
+    printf 'tokscale_token: FAKE-CANARY tokscale\nsynthetic_api_key: FAKE-CANARY pi\nexa_api_key: FAKE-CANARY exa\nopenrouter_api_key: FAKE-CANARY openrouter\nopencode_go_api_key: FAKE-CANARY opencode go\nopenai_api_key: FAKE-CANARY openai\nanthropic_api_key: FAKE-CANARY anthropic\n' > provider-services.yaml
+    printf 'docker_token: FAKE-CANARY-docker\n' > docker-registry.yaml
     cat git-hosting.yaml provider-services.yaml > tokens.yaml
-    for name in git-hosting provider-services tokens; do
+    for name in git-hosting provider-services docker-registry tokens; do
       sops --encrypt --age "$recipient" --input-type yaml --output-type yaml "$name.yaml" > "$out/$name.yaml"
     done
 

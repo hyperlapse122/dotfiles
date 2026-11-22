@@ -54,6 +54,15 @@ def rule_recipients(path):
     return recipients
 
 
+def nixos_recipients():
+    # Match host discovery in lib/hosts.nix: only Darwin hosts have host.nix.
+    return {
+        (Path("secrets/bootstrap") / host.name / "recipient.txt").read_text().strip()
+        for host in Path("hosts").iterdir()
+        if host.is_dir() and not (host / "host.nix").is_file()
+    }
+
+
 def decrypt(path, ciphertext, expected_recipients):
     document = parse(run(["yq", "-o=json", ".", "-"], ciphertext))
     metadata = document.pop("sops")
@@ -84,15 +93,25 @@ def migrate(direction, output):
         for spec in manifest.values()
     }
     required = {field for field, spec in manifest.items() if not spec.get("optional", False)}
-    recipients = rule_recipients(LEGACY)
-    for path in groups.values():
-        if rule_recipients(path) != recipients:
+    required_groups = {manifest[field]["group"] for field in required}
+    restricted_groups = {spec["group"] for spec in manifest.values() if spec.get("darwin") is False}
+    legacy_recipients = rule_recipients(LEGACY)
+    permitted_nixos = legacy_recipients & nixos_recipients()
+    recipients = {LEGACY: legacy_recipients}
+    for group, path in groups.items():
+        recipients[path] = rule_recipients(path)
+        if group in restricted_groups:
+            if not recipients[path] <= permitted_nixos:
+                raise MigrationError(f"{path}: expected only recorded NixOS recipients")
+        elif recipients[path] != legacy_recipients:
             raise MigrationError(f"{path}: creation rule recipients differ from {LEGACY}")
 
     merged = {}
     sources = {None: LEGACY} if direction == "forward" else groups
     for group, path in sources.items():
-        values = decrypt(path, path.read_bytes(), recipients)
+        if group is not None and group not in required_groups and not path.exists():
+            continue
+        values = decrypt(path, path.read_bytes(), recipients[path])
         if values.keys() - manifest.keys():
             raise MigrationError(f"{path}: unknown credential field; classify it before migrating")
         if group is not None and any(manifest[field]["group"] != group for field in values):
@@ -101,11 +120,18 @@ def migrate(direction, output):
     if not required <= merged.keys():
         raise MigrationError("required credential field is missing")
 
-    targets = (
-        {path: {field: value for field, value in merged.items() if manifest[field]["group"] == group}
-         for group, path in groups.items()}
-        if direction == "forward" else {LEGACY: merged}
-    )
+    if direction == "forward":
+        targets = {}
+        for group, path in groups.items():
+            values = {field: value for field, value in merged.items() if manifest[field]["group"] == group}
+            if values:
+                targets[path] = values
+    else:
+        # Roll back shared credentials only. Restricted ciphertext stays in place.
+        targets = {LEGACY: {
+            field: value for field, value in merged.items()
+            if manifest[field]["group"] not in restricted_groups
+        }}
     encrypted = {}
     for path, values in targets.items():
         ciphertext = run(
@@ -113,7 +139,7 @@ def migrate(direction, output):
              "--output-type", "yaml", "--filename-override", str(path)],
             json.dumps(values).encode(),
         )
-        if decrypt(path, ciphertext, recipients) != values:
+        if decrypt(path, ciphertext, recipients[path]) != values:
             raise MigrationError(f"{path}: encrypted round trip changed credential values")
         encrypted[path.name] = ciphertext
 

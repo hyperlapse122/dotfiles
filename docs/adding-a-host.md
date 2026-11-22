@@ -54,7 +54,7 @@ Traits and shared host options live in `modules/shared/host.nix`:
 | `my.wiredNetwork.enable` | Applies the static IPv4, DNS, and IPv6-off settings in `secrets/hosts/<host>/wired-network.yaml` to the wired adapter with the declared MAC on production applies (macOS), or renders the `wired-static` NetworkManager profile from the same file before NetworkManager starts on a production output (NixOS). |
 | `my.dock.hostApps` | List of `.app` paths inserted into the macOS Dock after the personal apps and before Ghostty (`modules/darwin/dock.nix`). |
 
-Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from `secrets/provider-services.yaml` (see `../secrets/README.md`).
+Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from the optional `secrets/docker-registry.yaml` (see [CLI credentials](../secrets/README.md#shared-cli-credentials)).
 
 ## Create bootstrap age material
 
@@ -75,6 +75,7 @@ It generates the age identity in a private runtime directory (`$PREPARE_AGE_RUNT
 
 - Add every host to the `secrets/git-hosting.yaml` and `secrets/provider-services.yaml` rules. Update the legacy `secrets/tokens.yaml` rule with the same recipients for rollback.
 - Only NixOS hosts are added to `secrets/wifi\.yaml$` and `secrets/tailscale\.yaml$` (and to `secrets/printers\.yaml$` when the NixOS host declares `my.printing.queues`). Adding a `darwin` host recipient to `wifi.yaml` or `tailscale.yaml` fails `user-identity-secrets`.
+- Add a recipient to the `secrets/docker-registry.yaml` rule only for a NixOS host authorized to use the Docker token. If the optional file exists, re-key it after changing its recipients.
 
 After updating `.sops.yaml`, re-encrypt each affected file from the repository root with a YubiKey connected. Load the [pinned maintenance tools](../secrets/README.md#rotate-or-add-a-cli-credential), then run the shared updates.
 

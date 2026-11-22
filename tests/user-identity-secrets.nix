@@ -16,7 +16,7 @@
     rule naming it too, fails, and a NixOS host without a recorded recipient fails;
   - a missing host SSH file, or a missing recorded recipient, fails;
   - a shared credential file missing, missing a recipient, or encrypted to
-    an extra recipient fails;
+    an extra recipient fails, as does a Docker token in either shared layout;
   - a host recipient in the wifi.yaml, tailscale.yaml, or printers.yaml rule fails;
   - a wifi.yaml or printers.yaml encrypted to the host while its rule does not name it fails.
 */
@@ -24,7 +24,8 @@
 let
   inherit (pkgs) lib;
   credentials = lib.importJSON ../modules/shared/cli-credentials.json;
-  groups = lib.unique (lib.mapAttrsToList (_: spec: spec.group) credentials);
+  sharedCredentials = lib.filterAttrs (_: spec: spec.darwin or true) credentials;
+  groups = lib.unique (lib.mapAttrsToList (_: spec: spec.group) sharedCredentials);
 in
 pkgs.runCommand "user-identity-secrets-tests"
   {
@@ -89,6 +90,13 @@ pkgs.runCommand "user-identity-secrets-tests"
       encrypt "$nixos" "$tree/secrets/hosts/fakenixos/ssh.yaml"
       encrypt "$nixos_wired_file" "$tree/secrets/hosts/fakenixos/wired-network.yaml"
       case $1 in
+        docker-in-services)
+          yq -i '.docker_token = "ENC[fake]"' "$tree/secrets/provider-services.yaml"
+          ;;
+        docker-in-legacy)
+          cp "$tree/secrets/provider-services.yaml" "$tree/secrets/tokens.yaml"
+          yq -i '.docker_token = "ENC[fake]"' "$tree/secrets/tokens.yaml"
+          ;;
         missing-services) rm "$tree/secrets/provider-services.yaml" ;;
         missing-ssh) rm "$tree/secrets/hosts/fakehost/ssh.yaml" ;;
         missing-recipient) rm "$tree/secrets/bootstrap/fakehost/recipient.txt" ;;
@@ -121,6 +129,8 @@ pkgs.runCommand "user-identity-secrets-tests"
     expect_failure git-not-rekeyed 'secrets/git-hosting.yaml is not encrypted to exactly the recorded bootstrap recipients'
     expect_failure extra-service-recipient 'secrets/provider-services.yaml is not encrypted to exactly the recorded bootstrap recipients'
     expect_failure missing-services 'secrets/provider-services.yaml is missing'
+    expect_failure docker-in-services 'secrets/provider-services.yaml contains docker_token'
+    expect_failure docker-in-legacy 'secrets/tokens.yaml contains docker_token'
     expect_failure in-wifi-rule 'wifi.yaml rule'
     expect_failure in-wifi-rule-comma-space 'wifi.yaml rule'
     expect_failure in-tailscale-rule 'tailscale.yaml rule'

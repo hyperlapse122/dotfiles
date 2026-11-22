@@ -43,7 +43,7 @@ pkgs.testers.nixosTest {
     };
     my.cliAuth = {
       enable = true;
-      sopsFiles = { };
+      sopsFiles.git-hosting = null;
     };
   };
   nodes.machine = { lib, ... }: {

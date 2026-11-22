@@ -77,13 +77,7 @@ in
     enable = lib.mkEnableOption "CLI authentication publication during activation";
     sopsFiles = lib.mkOption {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
-      default = lib.genAttrs groups (
-        group:
-        let
-          file = ../../../secrets + "/${group}.yaml";
-        in
-        if builtins.pathExists file then file else null
-      );
+      default = { };
       description = "Encrypted YAML files indexed by CLI credential group. Missing inputs fail at activation.";
     };
     ageKeyFile = lib.mkOption {
@@ -110,7 +104,7 @@ in
     enableDockerToken = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt docker_token when provisioned.";
+      description = "Decrypt docker_token from the NixOS-only Docker registry ciphertext.";
     };
     enableTokscaleToken = lib.mkOption {
       type = lib.types.bool;
@@ -143,6 +137,13 @@ in
   config = lib.mkMerge [
     {
       environment.systemPackages = [ dockerCredentialHelper ];
+      my.cliAuth.sopsFiles = lib.genAttrs groups (
+        group:
+        let
+          file = ../../../secrets + "/${group}.yaml";
+        in
+        lib.mkDefault (if builtins.pathExists file then file else null)
+      );
     }
     (lib.mkIf cfg.enable (
       lib.mkMerge [

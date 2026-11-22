@@ -14,6 +14,7 @@
 # - secrets/hosts/<host>/ssh.yaml exists.
 # - the shared credential files exist and each is encrypted to the recorded
 #   bootstrap recipients. The rule alone cannot prove a new host can decrypt.
+# - the shared credential files and any legacy rollback file omit docker_token.
 # - the recipient is in neither the rule nor the encrypted file of wifi.yaml,
 #   tailscale.yaml, and printers.yaml, so a Darwin host, whose identity
 #   rests on the FileVault, never decrypts the Wi-Fi,
@@ -94,6 +95,15 @@ for group in "$@"; do
     fail "secrets/$group.yaml is missing"
   elif [[ $(file_recipients "$group" | sort -u) != "$expected" ]]; then
     fail "secrets/$group.yaml is not encrypted to exactly the recorded bootstrap recipients"
+  fi
+done
+
+for group in "$@" tokens; do
+  file=$root/secrets/$group.yaml
+  [[ -f $file ]] || continue
+  has_docker=$(yq -r 'has("docker_token")' "$file")
+  if [[ $has_docker == true ]]; then
+    fail "secrets/$group.yaml contains docker_token; use secrets/docker-registry.yaml"
   fi
 done
 

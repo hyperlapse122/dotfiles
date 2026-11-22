@@ -55,13 +55,20 @@ with tempfile.TemporaryDirectory() as directory:
     os.environ["SOPS_AGE_KEY_FILE"] = str(FIXTURE / "key.txt")
     recipient = (FIXTURE / "recipient.txt").read_text().strip()
     other = run("age-keygen", "-y", FIXTURE / "other-key.txt").decode().strip()
+    for host, key in (("linux", recipient), ("mac", other)):
+        Path("hosts", host).mkdir(parents=True)
+        bootstrap = Path("secrets/bootstrap", host)
+        bootstrap.mkdir(parents=True)
+        (bootstrap / "recipient.txt").write_text(key + "\n")
+    Path("hosts/mac/host.nix").write_text('{ kind = "darwin"; }\n')
     secrets = Path("secrets")
-    secrets.mkdir()
     manifest = Path("modules/shared/cli-credentials.json")
     manifest.parent.mkdir(parents=True)
     shutil.copyfile(MANIFEST, manifest)
     legacy = secrets / "tokens.yaml"
     expected = decrypt(FIXTURE / "tokens.yaml")
+    docker = "docker-registry.yaml"
+    docker_value = decrypt(FIXTURE / docker)["docker_token"]
     recipients = f"{recipient},{other}"
     encrypt_legacy(json.dumps(expected).encode(), legacy, recipients)
 
@@ -70,7 +77,7 @@ with tempfile.TemporaryDirectory() as directory:
     git = "git-hosting.yaml"
     services = "provider-services.yaml"
 
-    def rules(service_recipients):
+    def rules(service_recipients, docker_recipients=recipient):
         Path(".sops.yaml").write_text(
             "creation_rules:\n"
             + "".join(
@@ -80,12 +87,15 @@ with tempfile.TemporaryDirectory() as directory:
                     ("tokens.yaml", recipients),
                     (git, recipients),
                     (services, service_recipients),
+                    (docker, docker_recipients),
                 )
             )
         )
 
     rules(recipient)
     expect_rejection("forward", b"recipients differ")
+    rules(recipients, recipients)
+    expect_rejection("forward", b"expected only recorded NixOS recipients")
     rules(recipients)
     assert migrate("forward", "split").returncode == 0, "forward migration failed"
     split = Path("split")
@@ -94,6 +104,21 @@ with tempfile.TemporaryDirectory() as directory:
     assert decrypt(split / services) == {
         k: v for k, v in expected.items() if k not in git_fields
     }
+
+    # A legacy token, if present, moves to the NixOS recipient alone.
+    encrypt_legacy(json.dumps(dict(expected, docker_token=docker_value)).encode(),
+                   legacy, recipients)
+    assert migrate("forward", "split-with-docker").returncode == 0
+    separated = Path("split-with-docker")
+    assert decrypt(separated / services) == decrypt(split / services)
+    assert decrypt(separated / docker) == {"docker_token": docker_value}
+    darwin_env = {**os.environ, "SOPS_AGE_KEY_FILE": str(FIXTURE / "other-key.txt")}
+    for name, can_decrypt in ((services, True), (docker, False)):
+        result = subprocess.run(
+            ["sops", "decrypt", str(separated / name)], env=darwin_env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        assert (result.returncode == 0) == can_decrypt, name
 
     for name in (git, services):
         shutil.copyfile(split / name, secrets / name)
@@ -105,6 +130,26 @@ with tempfile.TemporaryDirectory() as directory:
     assert migrate("reverse", "merged").returncode == 0, "reverse migration failed"
     assert decrypt(Path("merged/tokens.yaml")) == expected
     assert legacy.read_bytes() == original
+
+    # Roll back shared declarations with the latest values while keeping the
+    # current Docker ciphertext in place and outside the shared legacy file.
+    shutil.copyfile(separated / docker, secrets / docker)
+    rotated_docker = "FAKE-CANARY rotated Docker token"
+    run("sops", "set", "--value-stdin", secrets / docker, '["docker_token"]',
+        data=json.dumps(rotated_docker).encode())
+    original_docker = (secrets / docker).read_bytes()
+    rules(recipients, recipients)
+    expect_rejection("reverse", b"expected only recorded NixOS recipients")
+    rules(recipients)
+    encrypt_legacy(json.dumps({"docker_token": docker_value}).encode(),
+                   secrets / docker, recipients)
+    expect_rejection("reverse", b"ciphertext recipients differ")
+    (secrets / docker).write_bytes(original_docker)
+    assert migrate("reverse", "merged-with-docker").returncode == 0
+    assert list(Path("merged-with-docker").iterdir()) == [Path("merged-with-docker/tokens.yaml")]
+    assert decrypt(Path("merged-with-docker/tokens.yaml")) == expected
+    assert (secrets / docker).read_bytes() == original_docker
+    assert decrypt(secrets / docker) == {"docker_token": rotated_docker}
 
     run("sops", "set", "--value-stdin", secrets / services, '["unknown_field"]',
         data=json.dumps("FAKE-CANARY unknown").encode())

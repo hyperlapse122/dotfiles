@@ -81,13 +81,7 @@ in
   options.my.secrets = {
     credentialFiles = lib.mkOption {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
-      default = lib.genAttrs groups (
-        group:
-        let
-          file = ../../../secrets + "/${group}.yaml";
-        in
-        if builtins.pathExists file then file else null
-      );
+      default = { };
       description = "Encrypted YAML files indexed by CLI credential group.";
     };
     sshKeyFile = lib.mkOption {
@@ -114,6 +108,16 @@ in
   };
 
   config = lib.mkMerge [
+    {
+      my.secrets.credentialFiles = lib.genAttrs groups (
+        group:
+        let
+          file = ../../../secrets + "/${group}.yaml";
+        in
+        lib.mkDefault (if builtins.pathExists file then file else null)
+      );
+    }
+
     (lib.mkIf nonNixos {
       # Needed from the bootstrap output on, since recovery runs there.
       home.packages = [

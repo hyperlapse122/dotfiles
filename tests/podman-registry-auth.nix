@@ -13,9 +13,9 @@ let
         age-keygen -o $out/key.txt
         recipient=$(age-keygen -y $out/key.txt)
         printf 'github_token: FAKE_ghcr_token\ngitlab_token: FAKE_gitlab_token\njpi_token: FAKE_jpi_token\n' > git.yaml
-        printf 'docker_token: FAKE_docker_token\n' > services.yaml
+        printf 'docker_token: FAKE_docker_token\n' > docker-registry.yaml
         sops --encrypt --age "$recipient" --input-type yaml --output-type yaml git.yaml > $out/git-hosting.yaml
-        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml services.yaml > $out/provider-services.yaml
+        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml docker-registry.yaml > $out/docker-registry.yaml
       '';
   authJsonFile = pkgs.writeText "test-auth.json" (
     builtins.toJSON {
@@ -50,10 +50,6 @@ pkgs.testers.nixosTest {
         uid = 1000;
       };
       my.podman.enable = true;
-      my.cliAuth = {
-        enable = false;
-        sopsFiles = { };
-      };
       environment.systemPackages = [
         pkgs.podman
       ];
@@ -84,7 +80,7 @@ pkgs.testers.nixosTest {
         enableDockerToken = true;
         sopsFiles = {
           git-hosting = "${fixtures}/git-hosting.yaml";
-          provider-services = "${fixtures}/provider-services.yaml";
+          docker-registry = "${fixtures}/docker-registry.yaml";
         };
       };
       system.activationScripts.fixture = ''
