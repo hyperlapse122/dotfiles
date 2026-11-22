@@ -12,6 +12,8 @@ import shlex
 import stat
 import sys
 
+# pygit2 initializes OpenSSL even when it only opens a local checkout.
+os.environ["SSL_CERT_FILE"] = "@caBundle@"
 import pygit2
 
 INSPECTOR = '@inspector@'
