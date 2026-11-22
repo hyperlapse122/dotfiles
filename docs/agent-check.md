@@ -25,6 +25,10 @@ Set up each tool before running the task. The launcher puts the checkout's `node
 
 Run `agent-check` to check staged, unstaged, and untracked changes using the working tree. A clean tree or a project without a task exits quietly. A failing task returns its runner's exit status and up to 100 diagnostic lines. The task can read `AGENT_CHECK_MODE` to distinguish `worktree`, `staged`, and `range`.
 
+The launcher reports advisory security patterns in changed source and configuration files before running the task. Warnings include the path, line, and rule name. The scanner omits matched text and runs locally in every mode.
+
+For a frontend project, add `impeccable detect src/` to the project task using the affected UI directory. File detection runs offline and exits 2 for primary findings. When edit hooks run the task automatically, put the detector in the staged or CI branch of the task.
+
 ## Run it before commit
 
 Use `--staged` in a project-managed Git hook. It runs the task and reads files from a temporary checkout of the index, including the staged contents of partially staged files.
@@ -90,3 +94,36 @@ positions when necessary to preserve the identities of unrelated hooks.
 Shell file writes, other tools, and more indirect Git invocations can
 bypass this feedback. Require the CI job for enforcement. The repository's
 `main` branch currently has no required-check rule.
+
+## Approve registry lookups
+
+Pass `--registry-policy /absolute/path/to/registries.json` before the snapshot option to enable network lookups. Keep the policy outside the checkout under the control of the person or system running the check. Without this flag, `agent-check` makes no registry requests. Leave it out of automatic edit and commit hooks.
+
+```json
+{
+  "public": {
+    "npm": ["react", "@types/react"],
+    "python": ["httpx"],
+    "go": ["golang.org/x/text"]
+  },
+  "private": {
+    "npm": {
+      "@team/": { "url": "https://npm.example.org", "tokenEnv": "TEAM_NPM_TOKEN" }
+    },
+    "python": {
+      "team-tools": { "url": "https://python.example.org" }
+    },
+    "go": {
+      "git.example.org/team/": { "url": "https://go.example.org" }
+    }
+  }
+}
+```
+
+Public approvals name individual packages. Use normalized names for Python (`team_tools` becomes `team-tools`). Private routes use an exact name or a prefix ending in `/`. The longest private match wins even when the same dependency appears in `public`. The registry must offer the ecosystem's metadata API over HTTPS. A private token, if required, is read from the named environment variable and sent only to that registry. The launcher uses neither redirects nor fallback registries. Add private routes to the trusted file independently of package-manager settings in the checkout.
+
+The check compares `package.json`, `pyproject.toml`, and `go.mod` with the selected base. It handles npm aliases, Python extras and markers, and Go `require` and `replace` directives. Workspace and local path references, Git dependencies, and direct URLs are skipped. A named Python source requires a private route. A missing package fails the check. A missing approval, authentication failure, or unreachable registry reports incomplete verification and also fails.
+
+Successful lookups report the publication date and download count offered by the approved registry. Public npm reports the package creation date and last week's downloads. PyPI reports the latest release's upload date and the Go proxy reports the queried version's time. Fields the registry does not supply are marked unavailable.
+
+In this repository, the network-enabled CI job reads `AGENT_CHECK_REGISTRY_POLICY` from GitHub Actions repository variables and writes it to the runner's temporary directory. Its default is an empty approval list. Add public approvals there when introducing a dependency. Keep private registry credentials and confidential names out of public pull request workflows. Run authenticated checks only in a trusted environment with owner-provided credentials.

@@ -14,6 +14,18 @@
 {
   upstreams = [
     {
+      input = "context7";
+      ref = "c36522f3d4446288a272aedd727d665f7b8175f2";
+      expectedRev = "c36522f3d4446288a272aedd727d665f7b8175f2";
+      skills = [
+        {
+          name = "find-docs";
+          path = "skills/find-docs";
+          license = "LICENSE";
+        }
+      ];
+    }
+    {
       input = "modern-web-guidance";
       ref = "v1.0.0";
       expectedRev = "4dd968349e54ca45a05dd5c818fb035c9054b022";
@@ -146,7 +158,7 @@
     }
   ];
 
-  # impeccable contributes only its lens references, from the tree its build
+  # impeccable contributes its lens references, from the tree its build
   # renders for plugins, inside the local design-lenses skill. Its SKILL.md,
   # scripts, agents, and workflow references (init, document, live, hooks,
   # doctor, routing, shape, new-work, and the like) are not installed.

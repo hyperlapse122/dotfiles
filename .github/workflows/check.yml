@@ -42,6 +42,7 @@ jobs:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
+          REGISTRY_POLICY: ${{ vars.AGENT_CHECK_REGISTRY_POLICY }}
         run: |
           case "$GITHUB_EVENT_NAME" in
             pull_request)
@@ -62,7 +63,11 @@ jobs:
               head=$HEAD_SHA
               ;;
           esac
-          nix shell .#agent-check -c agent-check --range "$base" "$head"
+          policy=$(mktemp "$RUNNER_TEMP/agent-check-registries.XXXXXX")
+          trap 'rm -f -- "$policy"' EXIT
+          if [[ -z "$REGISTRY_POLICY" ]]; then REGISTRY_POLICY='{}'; fi
+          printf '%s\n' "$REGISTRY_POLICY" > "$policy"
+          nix shell .#agent-check -c agent-check --registry-policy "$policy" --range "$base" "$head"
 
   markdown-lint:
     needs: changes

@@ -3,12 +3,26 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: agent-check [--staged | --range BASE HEAD]
+Usage: agent-check [--registry-policy ABSOLUTE_PATH] [--staged | --range BASE HEAD]
 
 Run the repository's agent-check task on local changes by default.
 --staged checks the Git index. --range checks the committed HEAD tree against BASE.
+--registry-policy enables lookups using an approved policy outside the checkout.
 EOF
 }
+
+policy=()
+if [[ ${1:-} == --registry-policy ]]; then
+  if [[ $# -lt 2 || $2 != /* ]]; then
+    usage >&2
+    exit 2
+  fi
+  policy=(--policy "$2")
+  shift 2
+fi
+if [[ ${inspection[0]+set} != set ]]; then
+  inspection=(python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/agent-check-inspect.py")
+fi
 
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
@@ -25,6 +39,11 @@ fi
 root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 cd "$root"
 root=$(pwd -P)
+git_dir=$(git rev-parse --absolute-git-dir)
+base=""
+if [[ ${policy[0]+set} && $mode != range ]]; then
+  base=$(git rev-parse --verify 'HEAD^{tree}' 2>/dev/null) || base=""
+fi
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 
@@ -47,6 +66,7 @@ esac
 sort -zu "$tmp/paths" > "$tmp/files"
 export AGENT_CHECK_FILES="$tmp/files"
 export AGENT_CHECK_MODE="$mode"
+check_path=${inspection_path:-$PATH}
 export PATH="$root/node_modules/.bin:$PATH"
 
 if [[ $mode != worktree ]]; then
@@ -64,6 +84,18 @@ if [[ $mode != worktree ]]; then
   export MISE_TRUSTED_CONFIG_PATHS
 fi
 
+check_and_run() {
+  local check_status=0 task_status=0
+  PATH="$check_path" "${inspection[@]}" "${policy[@]}" \
+    --root "$root" --git-dir "$git_dir" --base "$base" --paths "$AGENT_CHECK_FILES" \
+    > "$tmp/inspection" || check_status=$?
+  "$@" || task_status=$?
+  if [[ $task_status -ne 0 ]]; then
+    return "$task_status"
+  fi
+  return "$check_status"
+}
+
 run_task() {
   local tasks file status project
   # A task of the same name from a parent or global mise config is not this project's task.
@@ -73,7 +105,7 @@ run_task() {
     export MISE_CEILING_PATHS
     tasks=$(mise tasks ls --name-only --no-global --hidden) || return
     if [[ $'\n'$tasks$'\n' == *$'\n'agent-check$'\n'* ]]; then
-      mise run --force --skip-tools agent-check
+      check_and_run mise run --force --skip-tools agent-check
       return
     fi
   fi
@@ -82,7 +114,7 @@ run_task() {
     [[ -f $file ]] || continue
     tasks=$(just --justfile "$file" --summary) || return
     if [[ " $tasks " == *" agent-check "* ]]; then
-      just --justfile "$file" agent-check
+      check_and_run just --justfile "$file" agent-check
       return
     fi
     break
@@ -96,7 +128,7 @@ run_task() {
     [[ $status -le 1 ]] || return "$status"
     if awk '/^agent-check:/ && previous != "# Not a target:" { found = 1 }
              { previous = $0 } END { exit !found }' "$tmp/make-targets"; then
-      make --file "$file" agent-check
+      check_and_run make --file "$file" agent-check
       return
     fi
     break
@@ -105,6 +137,9 @@ run_task() {
 
 status=0
 run_task > "$tmp/output" 2>&1 || status=$?
+if [[ -f $tmp/inspection ]]; then
+  cat "$tmp/inspection" >&2
+fi
 if [[ $status -ne 0 ]]; then
   head -n 100 "$tmp/output" >&2
   exit "$status"

@@ -78,6 +78,7 @@ let
   # content.
   otherSkillNames = [
     "modern-web-guidance"
+    "find-docs"
     "test-audit"
     "frontend-design"
     "web-design-guidelines"

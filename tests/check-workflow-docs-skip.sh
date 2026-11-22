@@ -204,8 +204,15 @@ with tempfile.TemporaryDirectory() as tmp:
     assert git("status", "--porcelain") == ""
     for event, base, checkout in [("pull_request", common, pr_base), ("push", before, head)]:
         env = dict(os.environ, GITHUB_EVENT_NAME=event, PR_BASE=pr_base, PR_HEAD=head,
-                   PUSH_BEFORE=before, HEAD_SHA=checkout)
-        result = subprocess.run(["bash", "-eu", "-c", 'nix() { printf "%s\\n" "$@"; }\n' + script],
+                   PUSH_BEFORE=before, HEAD_SHA=checkout, RUNNER_TEMP=os.path.dirname(tmp),
+                   REGISTRY_POLICY='{"public":{"npm":["known-package"]}}')
+        recorder = '''nix() {
+            [[ $5 == --registry-policy && $6 != "$PWD/"* ]] || return 1
+            [[ $(cat -- "$6") == "$REGISTRY_POLICY" ]] || return 1
+            printf '%s\\n' "$@"
+        }
+        '''
+        result = subprocess.run(["bash", "-eu", "-c", recorder + script],
                                 cwd=tmp, env=env, check=True, capture_output=True, text=True)
         assert result.stdout.splitlines()[-3:] == ["--range", base, head], result.stdout
 

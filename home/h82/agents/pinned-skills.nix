@@ -34,6 +34,27 @@ let
       ''}
     '';
 
+  ctx7 = lib.getExe (import ../../../packages/ctx7.nix { inherit pkgs; });
+  renderSkill =
+    upstream: skill: destination:
+    copySkill upstream skill destination
+    + lib.optionalString (skill.name == "find-docs") ''
+      awk -v cmd=${esc ctx7} '
+        /^Run commands with / { print "Use the packaged Context7 CLI with public library names and sanitized queries."; next }
+        /^Optionally install globally/ { skip=1 }
+        /^## Workflow/ { skip=0 }
+        /^## Authentication/ {
+          print "## Authentication\n\nLookup works anonymously. The owner can run \140ctx7 login\140 or supply \140CONTEXT7_API_KEY\140 for higher limits. On quota exhaustion, use public upstream documentation.\n"
+          skip=1
+        }
+        /^## Common Mistakes/ { skip=0 }
+        skip { next }
+        /^npx ctx7@latest (library|docs) / { $0=$0 " --json" }
+        { gsub(/npx ctx7@latest/, cmd); print }
+      ' "${destination}/SKILL.md" > "${destination}/find-docs.md"
+      mv "${destination}/find-docs.md" "${destination}/SKILL.md"
+    '';
+
   registered = lib.concatMap (
     upstream: map (skill: { inherit upstream skill; }) upstream.skills
   ) registry.upstreams;
@@ -84,7 +105,7 @@ in
           map (
             { upstream, skill }:
             lib.nameValuePair skill.name (
-              pkgs.runCommand "pinned-skill-${skill.name}" { } (copySkill upstream skill "$out")
+              pkgs.runCommand "pinned-skill-${skill.name}" { } (renderSkill upstream skill "$out")
             )
           ) (lib.filter (entry: !mobile entry) registered)
         )

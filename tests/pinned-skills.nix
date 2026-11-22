@@ -65,6 +65,7 @@ let
 
   publishedNames = [
     "modern-web-guidance"
+    "find-docs"
     "frontend-design"
     "web-design-guidelines"
     "vercel-react-best-practices"
@@ -255,6 +256,21 @@ let
         if ! cmp -s "$dir"/${esc "${name}.md"} ${src}/${esc path}/SKILL.md \
           || ! diff -r ${excludeLicense} --exclude=SKILL.md --exclude=${esc "${name}.md"} "$dir" ${src}/${esc path} >&2; then
           echo ${esc "the files of ~/${target} on ${label} differ from the pinned ${upstream.input} input"} >&2
+          failed=1
+        fi
+      ''
+      + licenseCheck target label src license licenseName upstream
+    else if name == "find-docs" then
+      entriesCheck "~/${target} on ${label}" "$dir" [
+        "LICENSE"
+        "SKILL.md"
+      ]
+      + ''
+        ctx7=${esc (lib.getExe (import ../packages/ctx7.nix { inherit pkgs; }))}
+        if grep -Eq '\b(npx|npm install)\b' "$dir/SKILL.md" \
+          || ! grep -qFx "$ctx7 library <name> \"<query>\" --json" "$dir/SKILL.md" \
+          || ! grep -qFx "$ctx7 docs <libraryId> \"<query>\" --json" "$dir/SKILL.md"; then
+          echo ${esc "~/${target} on ${label} must use the packaged Context7 CLI for lookup"} >&2
           failed=1
         fi
       ''
