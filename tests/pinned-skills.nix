@@ -4,7 +4,7 @@
     import ./tests/pinned-skills.nix { inherit pkgs self fixtures; }
 
   Asserts that the published skills, the local design-lenses
-  wrapper with impeccable's lens references, and the local ux-flows skill reach
+  wrapper with impeccable's lens references, mobile-lenses, and ux-flows reach
   every harness for user `h82` on every Home Manager user environment this
   flake builds (`userEntries` from tests/lib/configurations.nix), unchanged:
 
@@ -29,6 +29,8 @@
     NOTICE.md, and under references/ exactly the lens references named here,
     each byte-identical to the rendered plugin tree of the pinned input, so
     no impeccable workflow reference ships.
+  - mobile-lenses exposes only its wrapper SKILL.md and preserves every upstream
+    file and license under references/, with each upstream entry file renamed.
   - ux-flows matches its in-tree source byte for byte.
 
   The pin assertions compare `flake.lock`, which Nix writes, with the registry
@@ -67,6 +69,14 @@ let
     "web-design-guidelines"
     "vercel-react-best-practices"
     "vercel-composition-patterns"
+    "playwright-best-practices"
+    "ux-writing"
+    "cli-design"
+    "untangle-codebase"
+    "prune-tests"
+  ];
+
+  mobileNames = [
     "vercel-react-native-skills"
     "expo-native-ui"
     "expo-upgrade"
@@ -74,11 +84,6 @@ let
     "expo-animation"
     "expo-router"
     "expo-data-fetching"
-    "playwright-best-practices"
-    "ux-writing"
-    "cli-design"
-    "untangle-codebase"
-    "prune-tests"
   ];
 
   lensReferences = [
@@ -122,6 +127,7 @@ let
 
   allNames = publishedNames ++ [
     "design-lenses"
+    "mobile-lenses"
     "ux-flows"
   ];
 
@@ -227,7 +233,7 @@ let
   '';
 
   published =
-    target: label: name:
+    target: label: name: isMobile:
     let
       entry = registered.${name} or null;
       upstream = if entry == null then { } else entry.upstream;
@@ -237,12 +243,22 @@ let
       license = skill.license or null;
       licenseInside = license != null && lib.hasPrefix "${path}/" license;
       licenseName = if license == null then "LICENSE-SOURCE" else baseNameOf license;
+      excludeLicense = lib.optionalString (!licenseInside) "--exclude=${esc licenseName}";
     in
     if entry == null || src == null then
       ''
         echo ${esc "no registry entry or flake input to compare ~/${target} on ${label} against"} >&2
         failed=1
       ''
+    else if isMobile then
+      ''
+        if ! cmp -s "$dir"/${esc "${name}.md"} ${src}/${esc path}/SKILL.md \
+          || ! diff -r ${excludeLicense} --exclude=SKILL.md --exclude=${esc "${name}.md"} "$dir" ${src}/${esc path} >&2; then
+          echo ${esc "the files of ~/${target} on ${label} differ from the pinned ${upstream.input} input"} >&2
+          failed=1
+        fi
+      ''
+      + licenseCheck target label src license licenseName upstream
     else if (skill ? files) || selectedFiles ? ${name} then
       let
         files = selectedFiles.${name} or [ ];
@@ -261,9 +277,7 @@ let
       + licenseCheck target label src license licenseName upstream
     else
       ''
-        if ! diff -r ${
-          lib.optionalString (!licenseInside) "--exclude=${esc licenseName}"
-        } "$dir" ${src}/${esc path} >&2; then
+        if ! diff -r ${excludeLicense} "$dir" ${src}/${esc path} >&2; then
           echo ${esc "~/${target} on ${label} differs from ${path} of the pinned ${upstream.input} input"} >&2
           failed=1
         fi
@@ -328,6 +342,30 @@ let
         ''
     );
 
+  mobileLenses =
+    target: label:
+    entriesCheck "~/${target} on ${label}" "$dir" [
+      "SKILL.md"
+      "references"
+    ]
+    + entriesCheck "~/${target}/references on ${label}" "$dir/references" mobileNames
+    + ''
+      if ! cmp -s "$dir/SKILL.md" ${../home/h82/agents/skills/mobile-lenses/SKILL.md}; then
+        echo ${esc "the SKILL.md of ~/${target} on ${label} differs from the in-tree mobile-lenses router"} >&2
+        failed=1
+      fi
+      nested=$(find -L "$dir/references" -iname SKILL.md -print)
+      if [ -n "$nested" ]; then
+        echo ${esc "~/${target} on ${label} has nested skill entry files:"} "$nested" >&2
+        failed=1
+      fi
+      router="$dir"
+    ''
+    + lib.concatMapStrings (name: ''
+      dir="$router/references/${name}"
+      ${published "${target}/references/${name}" label name true}
+    '') mobileNames;
+
   materialized =
     label: homeFiles: root: name:
     let
@@ -340,6 +378,8 @@ let
     + (
       if name == "design-lenses" then
         designLenses target label
+      else if name == "mobile-lenses" then
+        mobileLenses target label
       else if name == "ux-flows" then
         ''
           if ! diff -r "$dir" ${../home/h82/agents/skills/ux-flows} >&2; then
@@ -348,7 +388,7 @@ let
           fi
         ''
       else
-        published target label name
+        published target label name false
     );
 
   assertEntry =
@@ -396,8 +436,10 @@ pkgs.runCommand "pinned-skills-tests" { } ''
 
   ${lib.concatMapStrings pinCheck pinned}
 
-  if [ ${esc (lib.concatStringsSep " " (sorted (lib.attrNames registered)))} != ${esc (lib.concatStringsSep " " (sorted publishedNames))} ]; then
-    echo ${esc "the registry's skills must be exactly ${lib.concatStringsSep ", " (sorted publishedNames)}"} >&2
+  if [ ${esc (lib.concatStringsSep " " (sorted (lib.attrNames registered)))} != ${
+    esc (lib.concatStringsSep " " (sorted (publishedNames ++ mobileNames)))
+  } ]; then
+    echo ${esc "the registry's skills must be exactly ${lib.concatStringsSep ", " (sorted (publishedNames ++ mobileNames))}"} >&2
     failed=1
   fi
 

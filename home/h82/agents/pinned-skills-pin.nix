@@ -7,9 +7,10 @@
 # A skill is installed under its SKILL.md frontmatter name, copied from `path`
 # in the input. `files` limits the copy to the entries upstream ships as the
 # skill, for a repository whose root holds other files too; without it the
-# whole directory is copied. Nothing is edited. `license` is the license file
-# copied beside the skill, relative to the input root, or null when upstream
-# has none and `licenseSource` says where its license is declared.
+# whole directory is copied. Entries with `mobile = true` live under
+# mobile-lenses as references with renamed entry files. `license` is the license
+# file copied beside the skill, relative to the input root, or null when
+# upstream has none and `licenseSource` says where its license is declared.
 {
   upstreams = [
     {
@@ -56,6 +57,7 @@
         {
           name = "vercel-react-native-skills";
           path = "skills/react-native-skills";
+          mobile = true;
         }
       ];
       licenseSource = "MIT, declared in the License section of README.md; the repository has no license file";
@@ -70,6 +72,7 @@
             inherit name;
             path = "plugins/expo/skills/${name}";
             license = "LICENSE";
+            mobile = true;
           })
           [
             "expo-native-ui"

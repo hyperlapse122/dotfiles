@@ -8,11 +8,9 @@ let
   registry = import ./pinned-skills-pin.nix;
   esc = lib.escapeShellArg;
 
-  # One store directory per skill holding upstream's files unchanged, plus the
-  # upstream license when it sits outside the skill directory. An upstream with
-  # no license file gets a LICENSE-SOURCE note naming where it declares one.
-  skillTree =
-    upstream: skill:
+  # Preserve the upstream files and include the license alongside them.
+  copySkill =
+    upstream: skill: destination:
     let
       src = "${inputs.${upstream.input}}";
       dir = "${src}/${skill.path}";
@@ -20,21 +18,40 @@ let
       copyFiles =
         if skill ? files then
           lib.concatMapStringsSep "\n" (
-            file: "cp -r --no-preserve=mode ${esc "${dir}/${file}"} $out/"
+            file: ''cp -r --no-preserve=mode ${esc "${dir}/${file}"} "${destination}/"''
           ) skill.files
         else
-          "cp -r --no-preserve=mode ${esc dir}/. $out";
+          ''cp -r --no-preserve=mode ${esc dir}/. "${destination}"'';
     in
-    pkgs.runCommand "pinned-skill-${skill.name}" { } ''
-      mkdir -p $out
+    ''
+      mkdir -p "${destination}"
       ${copyFiles}
       ${lib.optionalString (skill.license != null && !licenseInside) ''
-        cp --no-preserve=mode ${esc "${src}/${skill.license}"} $out/${esc (baseNameOf skill.license)}
+        cp --no-preserve=mode ${esc "${src}/${skill.license}"} "${destination}"/${esc (baseNameOf skill.license)}
       ''}
       ${lib.optionalString (skill.license == null) ''
-        printf '%s\n' ${esc "${upstream.licenseSource}. Source: github:${upstream.input} at ${upstream.expectedRev}."} > $out/LICENSE-SOURCE
+        printf '%s\n' ${esc "${upstream.licenseSource}. Source: github:${upstream.input} at ${upstream.expectedRev}."} > "${destination}/LICENSE-SOURCE"
       ''}
     '';
+
+  registered = lib.concatMap (
+    upstream: map (skill: { inherit upstream skill; }) upstream.skills
+  ) registry.upstreams;
+  mobile = entry: entry.skill.mobile or false;
+  mobileLenses = pkgs.runCommand "mobile-lenses" { } ''
+    mkdir -p "$out"
+    cp ${./skills/mobile-lenses/SKILL.md} "$out/SKILL.md"
+    ${lib.concatMapStringsSep "\n" (
+      { upstream, skill }:
+      let
+        destination = "$out/references/${skill.name}";
+      in
+      copySkill upstream skill destination
+      + ''
+        mv "${destination}/SKILL.md" "${destination}/${skill.name}.md"
+      ''
+    ) (lib.filter mobile registered)}
+  '';
 
   impeccable = registry.impeccable;
   impeccableSrc = "${inputs.${impeccable.input}}";
@@ -52,8 +69,9 @@ let
 
   # listToAttrs keeps one of two entries with the same name, so a duplicate
   # would silently drop an upstream skill.
-  names = lib.concatMap (upstream: map (skill: skill.name) upstream.skills) registry.upstreams ++ [
+  names = map (entry: entry.skill.name) registered ++ [
     "design-lenses"
+    "mobile-lenses"
   ];
   duplicates = lib.unique (lib.filter (name: lib.count (other: other == name) names > 1) names);
 in
@@ -63,12 +81,16 @@ in
       "pinned-skills: the skill name(s) ${lib.concatStringsSep ", " duplicates} appear more than once"
       (
         lib.listToAttrs (
-          lib.concatMap (
-            upstream: map (skill: lib.nameValuePair skill.name (skillTree upstream skill)) upstream.skills
-          ) registry.upstreams
+          map (
+            { upstream, skill }:
+            lib.nameValuePair skill.name (
+              pkgs.runCommand "pinned-skill-${skill.name}" { } (copySkill upstream skill "$out")
+            )
+          ) (lib.filter (entry: !mobile entry) registered)
         )
         // {
           design-lenses = designLenses;
+          mobile-lenses = mobileLenses;
         }
       );
 }
