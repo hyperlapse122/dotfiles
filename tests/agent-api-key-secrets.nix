@@ -68,6 +68,7 @@ let
     entry:
     let
       forcedOff = entry.forcedOff or null;
+      owner = entry.config.my.user.name;
       host' = esc entry.name;
 
       # sops-nix installs through a systemd unit when my.cliAuth is enabled
@@ -104,8 +105,8 @@ let
           ${
             if decrypts then
               ''
-                if [ "$secrets" != "cli-auth/${secret.file} ${secret.file} h82 0400" ]; then
-                  fail ${host'}": expected cli-auth/${secret.file} owned by h82 with mode 0400, got: '$secrets'"
+                if [ "$secrets" != "cli-auth/${secret.file} ${secret.file} ${owner} 0400" ]; then
+                  fail ${host'}": expected cli-auth/${secret.file} owned by ${owner} with mode 0400, got: '$secrets'"
                 fi
                 if [ -z "$publisher" ]; then
                   fail ${host'}": sops-install-secrets no longer runs publish-cli-auth"

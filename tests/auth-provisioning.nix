@@ -26,11 +26,19 @@ pkgs.testers.nixosTest {
   nodes.missing = { ... }: {
     imports = [
       inputs.sops-nix.nixosModules.sops
+      ../modules/shared/host.nix
       ../modules/nixos/system/secrets.nix
     ];
     system.switch.enable = true;
     boot.loader.grub.enable = pkgs.lib.mkForce false;
-    users.users.h82.isNormalUser = true;
+    my.user = {
+      name = "alice";
+      home = "/srv/workspace";
+    };
+    users.users.alice = {
+      isNormalUser = true;
+      home = "/srv/workspace";
+    };
     my.cliAuth = {
       enable = true;
       sopsFile = null;
@@ -39,6 +47,7 @@ pkgs.testers.nixosTest {
   nodes.machine = { lib, ... }: {
     imports = [
       inputs.sops-nix.nixosModules.sops
+      ../modules/shared/host.nix
       ../modules/nixos/system/secrets.nix
       # The OpenCode release is a dynamically linked binary that the
       # production profile runs through nix-ld.
@@ -46,7 +55,12 @@ pkgs.testers.nixosTest {
     ];
     system.switch.enable = true;
     boot.loader.grub.enable = pkgs.lib.mkForce false;
-    users.users.h82 = {
+    my.user = {
+      name = "alice";
+      home = "/srv/workspace";
+    };
+    users.users.alice = {
+      home = "/srv/workspace";
       isNormalUser = true;
       uid = 1000;
     };
@@ -87,11 +101,14 @@ pkgs.testers.nixosTest {
     missing.succeed("test -x /run/current-system/bin/switch-to-configuration")
     missing.fail("/run/current-system/bin/switch-to-configuration switch")
     missing.succeed("journalctl -u sops-install-secrets --no-pager | grep -q 'prepare secrets/tokens.yaml'")
-    missing.fail("test -e /home/h82/.config/gh/hosts.yml")
+    missing.fail("test -e /srv/workspace/.config/gh/hosts.yml")
     machine.start()
     machine.wait_for_unit("multi-user.target")
-    gh = "/home/h82/.config/gh/hosts.yml"
-    glab = "/home/h82/.config/glab-cli/config.yml"
+    unit = machine.succeed("systemctl show sops-install-secrets.service -p RequiresMountsFor --value")
+    assert "/srv/workspace" in unit.split(), unit
+    assert "/var/lib/sops-nix/key.txt" in unit.split(), unit
+    gh = "/srv/workspace/.config/gh/hosts.yml"
+    glab = "/srv/workspace/.config/glab-cli/config.yml"
     switch = "/run/current-system/bin/switch-to-configuration switch"
     def verify():
         config = json.loads(machine.succeed("cat " + gh))
@@ -99,27 +116,29 @@ pkgs.testers.nixosTest {
         hosts = json.loads(machine.succeed("cat " + glab))["hosts"]
         assert hosts["gitlab.com"]["token"] == "FAKE_gitlab"
         assert hosts["git.jpi.app"]["token"] == "FAKE_jpi"
-        machine.succeed("test $(stat -c '%a:%U' " + gh + ") = 600:h82")
+        machine.succeed("test $(stat -c '%a:%U' " + gh + ") = 600:alice")
         machine.succeed("test ! -L " + gh)
+        machine.succeed("test $(stat -c '%a:%U' " + glab + ") = 600:alice")
+        machine.succeed("runuser -u alice -- test -w " + gh + " -a -w " + glab)
         tokscale = "/run/secrets/cli-auth/tokscale_token"
-        machine.succeed("runuser -u h82 -- cat " + tokscale + " | grep -qx 'FAKE tokscale'")
-        machine.succeed("test $(stat -L -c '%a:%U' " + tokscale + ") = 400:h82")
+        machine.succeed("runuser -u alice -- cat " + tokscale + " | grep -qx 'FAKE tokscale'")
+        machine.succeed("test $(stat -L -c '%a:%U' " + tokscale + ") = 400:alice")
         pi_key = "/run/secrets/cli-auth/synthetic_api_key"
-        machine.succeed("runuser -u h82 -- cat " + pi_key + " | grep -qx 'FAKE pi'")
-        machine.succeed("test $(stat -L -c '%a:%U' " + pi_key + ") = 400:h82")
+        machine.succeed("runuser -u alice -- cat " + pi_key + " | grep -qx 'FAKE pi'")
+        machine.succeed("test $(stat -L -c '%a:%U' " + pi_key + ") = 400:alice")
         exa = "/run/secrets/cli-auth/exa_api_key"
-        machine.succeed("runuser -u h82 -- cat " + exa + " | grep -qx 'FAKE exa'")
-        machine.succeed("test $(stat -L -c '%a:%U' " + exa + ") = 400:h82")
+        machine.succeed("runuser -u alice -- cat " + exa + " | grep -qx 'FAKE exa'")
+        machine.succeed("test $(stat -L -c '%a:%U' " + exa + ") = 400:alice")
         openrouter = "/run/secrets/cli-auth/openrouter_api_key"
-        machine.succeed("runuser -u h82 -- cat " + openrouter + " | grep -qx 'FAKE openrouter'")
-        machine.succeed("test $(stat -L -c '%a:%U' " + openrouter + ") = 400:h82")
+        machine.succeed("runuser -u alice -- cat " + openrouter + " | grep -qx 'FAKE openrouter'")
+        machine.succeed("test $(stat -L -c '%a:%U' " + openrouter + ") = 400:alice")
         opencode_go = "/run/secrets/cli-auth/opencode_go_api_key"
-        machine.succeed("runuser -u h82 -- cat " + opencode_go + " | grep -qx 'FAKE opencode go'")
-        machine.succeed("test $(stat -L -c '%a:%U' " + opencode_go + ") = 400:h82")
+        machine.succeed("runuser -u alice -- cat " + opencode_go + " | grep -qx 'FAKE opencode go'")
+        machine.succeed("test $(stat -L -c '%a:%U' " + opencode_go + ") = 400:alice")
         for provider in ("openai", "anthropic"):
             key = "/run/secrets/cli-auth/" + provider + "_api_key"
-            machine.succeed(f"runuser -u h82 -- cat {key} | grep -qx 'FAKE {provider}'")
-            machine.succeed(f"test $(stat -L -c '%a:%U' {key}) = 400:h82")
+            machine.succeed(f"runuser -u alice -- cat {key} | grep -qx 'FAKE {provider}'")
+            machine.succeed(f"test $(stat -L -c '%a:%U' {key}) = 400:alice")
     verify()
     machine.succeed(switch)
     verify()
@@ -138,16 +157,16 @@ pkgs.testers.nixosTest {
     machine.succeed("test $(stat -c '%a:%U:%G' /var/lib/sops-nix/key.txt) = 600:root:root")
     machine.succeed(switch)
     verify()
-    machine.succeed("rm -r /home/h82/.config/gh")
-    machine.succeed("mkdir /root/protected; ln -s /root/protected /home/h82/.config/gh")
+    machine.succeed("rm -r /srv/workspace/.config/gh")
+    machine.succeed("mkdir /root/protected; ln -s /root/protected /srv/workspace/.config/gh")
     machine.fail(switch)
     machine.succeed("test -z \"$(ls -A /root/protected)\"")
-    machine.succeed("rm /home/h82/.config/gh")
+    machine.succeed("rm /srv/workspace/.config/gh")
     machine.succeed(switch)
     verify()
-    machine.succeed("runuser -u h82 -- gh auth token --hostname github.com | grep -qx FAKE_github")
-    machine.succeed("runuser -u h82 -- glab config get token --host gitlab.com | grep -qx FAKE_gitlab")
-    machine.succeed("runuser -u h82 -- glab config get token --host git.jpi.app | grep -qx FAKE_jpi")
+    machine.succeed("runuser -u alice -- env HOME=/srv/workspace gh auth token --hostname github.com | grep -qx FAKE_github")
+    machine.succeed("runuser -u alice -- env HOME=/srv/workspace glab config get token --host gitlab.com | grep -qx FAKE_gitlab")
+    machine.succeed("runuser -u alice -- env HOME=/srv/workspace glab config get token --host git.jpi.app | grep -qx FAKE_jpi")
     journal_output = machine.succeed("journalctl -u sops-install-secrets --no-pager")
     assert "FAKE_github" not in journal_output and "FAKE_gitlab" not in journal_output and "FAKE_jpi" not in journal_output
     assert "FAKE tokscale" not in journal_output
@@ -156,7 +175,7 @@ pkgs.testers.nixosTest {
     assert "FAKE openrouter" not in journal_output
     assert "FAKE openai" not in journal_output and "FAKE anthropic" not in journal_output
     def assert_openai_key(expected):
-        records = json.loads(machine.succeed("runuser -u h82 -- opencode auth export --standalone"))
+        records = json.loads(machine.succeed("runuser -u alice -- env HOME=/srv/workspace opencode auth export --standalone"))
         keys = [entry["value"]["key"] for entry in records
                 if entry["integrationID"] == "openai" and entry["label"] == "nix-config"]
         assert keys == [expected], "SOPS publication did not import the expected fixture"

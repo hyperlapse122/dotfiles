@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 {
   services.desktopManager.plasma6.enable = true;
   services.displayManager.sddm.enable = true;
@@ -22,7 +22,7 @@
 
   programs._1password-gui = {
     enable = true;
-    polkitPolicyOwners = [ "h82" ];
+    polkitPolicyOwners = [ config.my.user.name ];
   };
 
   i18n.inputMethod = {
@@ -181,7 +181,7 @@
 
   environment.etc."xdg/dolphinrc".text = ''
     [General]
-    HomeUrl=/home/h82
+    HomeUrl=${config.my.user.home}
     RememberOpenedTabs=false
   '';
 

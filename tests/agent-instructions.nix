@@ -20,7 +20,7 @@ let
         user =
           (self.nixosConfigurations.${entry.name}.extendModules {
             modules = [ { my.user.gpgKey = lib.mkForce fakeKey; } ];
-          }).config.home-manager.users.h82;
+          }).config.home-manager.users.${entry.config.my.user.name};
       }) configurations.production
     else
       entries;

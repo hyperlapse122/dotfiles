@@ -81,6 +81,10 @@ let
         eth2.vlan = 2;
       };
       my.hostName = config.networking.hostName;
+      my.user = {
+        name = "h82";
+        home = "/home/h82";
+      };
       my.wiredNetwork = {
         enable = true;
         file = "${fixtures}/${file}.yaml";

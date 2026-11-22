@@ -164,6 +164,7 @@
           "ghostty-font"
           "ghostty-service"
           "ghq"
+          "host-options"
           "git-lfs"
           "git-trim"
           "gpg-agent-no-cache"
@@ -968,7 +969,7 @@
               assertConfiguration =
                 entry:
                 let
-                  hasKvmGroup = builtins.elem "kvm" entry.config.users.users.h82.extraGroups;
+                  hasKvmGroup = builtins.elem "kvm" entry.config.users.users.${entry.config.my.user.name}.extraGroups;
                   hasVhostVsock = builtins.elem "vhost_vsock" entry.config.boot.kernelModules;
                 in
                 ''
@@ -978,7 +979,7 @@
                     desktopEntries = [ "com.anthropic.Claude.desktop" ];
                   } entry}
                   ${pkgs.lib.optionalString (!hasKvmGroup) ''
-                    echo 'user h82 missing kvm group on ${entry.name}' >&2
+                    echo 'user ${entry.config.my.user.name} missing kvm group on ${entry.name}' >&2
                     fail=1
                   ''}
                   ${pkgs.lib.optionalString (!hasVhostVsock) ''

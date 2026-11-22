@@ -1,6 +1,6 @@
 /*
   Assembles a NixOS host from its directory: the host's hardware, disk layout,
-  and traits, the shared profile, and the h82 Home Manager user, who sees the
+  and traits, the shared profile, and the configured Home Manager user, who sees the
   same host facts and traits as the system.
 
     mkHost = import ./lib/nixos-host.nix { inherit inputs; };
@@ -60,7 +60,7 @@ lib.nixosSystem {
           ../modules/shared/host.nix
           { my = hostFacts.of config.my; }
         ];
-        home-manager.users.h82 = import ../home/h82;
+        home-manager.users.${config.my.user.name} = import ../home/h82;
       }
     )
   ];

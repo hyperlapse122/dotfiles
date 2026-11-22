@@ -46,12 +46,10 @@
     user = {
       name = lib.mkOption {
         type = lib.types.str;
-        default = "h82";
         description = "The account the user environment is applied to.";
       };
       home = lib.mkOption {
         type = lib.types.str;
-        default = "/home/h82";
         description = "The home directory of that account.";
       };
       gpgKey = lib.mkOption {

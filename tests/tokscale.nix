@@ -126,6 +126,7 @@ let
       );
       publisher = lib.concatStringsSep " " (lib.toList (sopsService.serviceConfig.ExecStartPost or [ ]));
 
+      owner = entry.config.my.user.name;
       host' = esc hostName;
     in
     ''
@@ -252,8 +253,8 @@ let
                     print(secret.get('name'), secret.get('key'), secret.get('owner'), secret.get('mode'))
         PY
         )
-        if [ "$tokscaleSecrets" != "cli-auth/tokscale_token tokscale_token h82 0400" ]; then
-          fail ${host'}": expected cli-auth/tokscale_token owned by h82 with mode 0400, got: '$tokscaleSecrets'"
+        if [ "$tokscaleSecrets" != "cli-auth/tokscale_token tokscale_token ${owner} 0400" ]; then
+          fail ${host'}": expected cli-auth/tokscale_token owned by ${owner} with mode 0400, got: '$tokscaleSecrets'"
         fi
         publisher=$(printf '%s' ${esc publisher} | grep -oE '/nix/store/[^[:space:]]+/bin/publish-cli-auth' | sed -n '1p' || true)
         if [ -z "$publisher" ]; then
