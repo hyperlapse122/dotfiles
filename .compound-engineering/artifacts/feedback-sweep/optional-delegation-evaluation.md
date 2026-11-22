@@ -1,17 +1,19 @@
 # Optional delegation evaluation
 
-Keep the current routing policy. In the paired trials, the candidate used
-both independent review opportunities and delegated both coupled fixes.
-It matched the baseline's total routing mismatches and substantive
-correctness, with a longer decision time in every pair.
+Keep the current routing policy. Both arms completed all six tasks correctly.
+The candidate took both independent review opportunities that the baseline
+missed. It also delegated both coupled fixes and both short edits unnecessarily.
+It took longer to decide in every pair.
 
 ## Paired workflow experiment
 
-The 2026-11-22 run for [#246](https://github.com/hyperlapse122/dotfiles/issues/246)
-started from `b782b0f` and followed [U6 of the feedback sweep plan](../plans/feedback-sweep-plan.md#u6-evaluate-optional-delegation).
-The same two fixtures ran twice per arm in fresh Codex sessions through T3
-Code. Each trial used `gpt-6.2-sol` at `high`. The trials ran serially, with
-the arm order reversed in each fixture's second pair.
+The 2026-11-22 evaluation for [#246](https://github.com/hyperlapse122/dotfiles/issues/246)
+followed [U6 of the feedback sweep plan](../plans/feedback-sweep-plan.md#u6-evaluate-optional-delegation).
+The coupled fix and independent review ran from `b782b0f`. The short edit
+followed from `f5c9d1e` with the same routing and timing protocol.
+Each fixture ran twice per arm in fresh T3 Code Codex sessions using
+`gpt-6.2-sol` at `high`. Trials ran serially. The baseline ran first in
+each fixture's first pair and the candidate ran first in its second pair.
 
 - **Baseline.** The parent decides whether delegation helps. If it chooses
   delegation, it launches the required or sole eligible role directly.
@@ -68,6 +70,18 @@ being dropped by the truthiness filter (`[0]` returns `None`, expected
 opportunity was used. Correctness measures the returned functions or the
 tally and findings separately.
 
+**S — short edit.** Correct `"recieved"` to `"received"` in the success
+status and preserve all other behavior. The `implementation` role can
+make the entire edit. The rubric counts any child as unnecessary because
+the task specifies a single substitution and has no independent work.
+
+```python
+def delivery_status(delivered):
+    if delivered:
+        return "recieved"
+    return "pending"
+```
+
 ### Judgment inputs and timing
 
 The candidate sent only these synthetic summaries and role descriptions to
@@ -77,8 +91,9 @@ The candidate sent only these synthetic summaries and role descriptions to
 | --- | --- | --- |
 | F | Make an atomic parser return-value change and update its only tightly coupled caller. Both edits require the same understanding of the old and new representation. | `implementation`: An implementation worker can produce the complete two-function patch as one unit. |
 | R | Produce a status tally and independently review a separate function against a fixed spec. The review is read-only, with no dependency on the tally, and can run while the parent computes the tally. | `review`: A read-only reviewer can independently check the unrelated statistics function against its spec and report defects with examples. |
+| S | Correct one known typo in a status string returned by a Python function. Leave all other output and behavior unchanged. | `implementation`: An implementation worker can make the complete one-line edit. |
 
-Both requests used the `direct` criterion “Handle the task in the parent
+All requests used the `direct` criterion “Handle the task in the parent
 session.” and the `insufficient_evidence` criterion “Abstain when the supplied
 summary is insufficient to choose.”
 
@@ -100,26 +115,38 @@ trial wall time runs from trial start to trial completion.
 | [#246 R-C1](t3-thread://v2/3cd7b447-851e-4bbe-bfb5-04c2d00b549d/thread:delegated-task:command%3Amcp%3Afea13403-ebdb-4226-b85b-876c8e7fe9b6%3Adelegate-task%3Aca748327-f638-496d-9e7f-874ca0f019bb) | Candidate | `review` | 1 | 11.375 | 0.543 | 7.174 | 61.022 |
 | [#246 R-B2](t3-thread://v2/3cd7b447-851e-4bbe-bfb5-04c2d00b549d/thread:delegated-task:command%3Amcp%3Afea13403-ebdb-4226-b85b-876c8e7fe9b6%3Adelegate-task%3Ab0cd79cc-71a0-455d-9a70-df9c197ecb31) | Baseline | `direct` | 0 | 3.148 | — | — | 16.902 |
 | [#246 R-C2](t3-thread://v2/3cd7b447-851e-4bbe-bfb5-04c2d00b549d/thread:delegated-task:command%3Amcp%3Afea13403-ebdb-4226-b85b-876c8e7fe9b6%3Adelegate-task%3A82c64aa3-835e-4383-8a3f-52c3b76dedd1) | Candidate | `review` | 1 | 14.456 | 0.984 | 11.916 | 87.153 |
+| [#246 S-B1](t3-thread://v2/3cd7b447-851e-4bbe-bfb5-04c2d00b549d/thread:delegated-task:command%3Amcp%3A0ed70548-5d0a-4d9e-a535-7885878b50de%3Adelegate-task%3Aebaeaa05-bd3f-4fa3-8aef-c0856a95af7a) | Baseline | `direct` | 0 | 5.183 | — | — | 19.465 |
+| [#246 S-C1](t3-thread://v2/3cd7b447-851e-4bbe-bfb5-04c2d00b549d/thread:delegated-task:command%3Amcp%3A0ed70548-5d0a-4d9e-a535-7885878b50de%3Adelegate-task%3A8100a6be-0c0c-42d2-81e6-01c4c685f384) | Candidate | `implementation` | 1 | 13.795 | 1.293 | 3.765 | 55.910 |
+| [#246 S-C2](t3-thread://v2/3cd7b447-851e-4bbe-bfb5-04c2d00b549d/thread:delegated-task:command%3Amcp%3A0ed70548-5d0a-4d9e-a535-7885878b50de%3Adelegate-task%3A8c773e9c-8763-42c8-bb52-592f4f413a6a) | Candidate | `implementation` | 1 | 11.187 | 0.468 | 3.625 | 49.192 |
+| [#246 S-B2](t3-thread://v2/3cd7b447-851e-4bbe-bfb5-04c2d00b549d/thread:delegated-task:command%3Amcp%3A0ed70548-5d0a-4d9e-a535-7885878b50de%3Adelegate-task%3A608a3aad-3072-4769-9001-a5254352839c) | Baseline | `direct` | 0 | 2.192 | — | — | 14.303 |
 
 The baseline called judge zero times. Each candidate trial called it once
-and launched the returned role without a second judgment. All four children
+and launched the returned role without a second judgment. All six children
 returned usable results. The baseline missed both independent review
 opportunities and made zero unnecessary delegations. The candidate took
-both review opportunities and made two unnecessary delegations for the
-coupled fix. Each arm therefore had two routing mismatches in four trials
-under the stated rubric.
+both review opportunities and made four unnecessary delegations, two for
+the coupled fix and two for the short edit. Under the rubric, the baseline
+had two mismatches in six trials and the candidate had four in six.
 
-Both arms returned all four correct substantive outputs. All four fix
+Both arms returned all six correct substantive outputs. All four coupled fix
 outputs preserved the caller behavior and returned the new parser
 representation. All review outputs had the right tally and both defects.
 Baseline trial R-B2 split the zero-filter defect into two rows, supplying
-three examples for two root causes. All three examples were valid.
+three examples for two root causes. All three examples were valid. Both
+short-edit baseline trials ran directly. Both candidate judgments selected
+`implementation` with confidence 0.7624 and both workers completed. All
+four trial outputs changed only the requested string. Neither arm missed
+a delegation opportunity on the short edit.
 
-The median decision time was 5.691 s for the baseline and 14.043 s for the
+On the short edit, the candidate took 8.612 s and 8.995 s longer to decide
+and 36.445 s and 34.889 s longer to finish in the first and second pairs,
+respectively.
+
+The median decision time was 5.300 s for the baseline and 13.712 s for the
 candidate. The candidate was slower to decide in each pair by 4.950–12.101 s.
-The judge calls themselves took 0.543–1.030 s. Decision time also includes
+The judge calls themselves took 0.468–1.293 s. Decision time also includes
 the model's tool discovery, request construction and interpretation before
-the recorded route. Child results took 3.929–11.916 s from launch to return.
+the recorded route. Child results took 3.625–11.916 s from launch to return.
 Each candidate trial also took longer overall. Both paired candidate review
 trials awaited the reviewer before returning a tally.
 
@@ -148,17 +175,19 @@ both parents returned the tally and findings.
 
 The linked trial records contain the routes, child links and outputs. Native
 Codex tool records confirmed the judge calls, safe request inputs and launch
-counts. T3 recorded each child's role preamble and terminal state. The first
-coupled-fix candidate outlasted the 55-second outer wait. It finished on the
-original run, which supplies the recorded trial time.
+counts. T3 recorded each child's role preamble and terminal state. F-C1
+and S-C1 outlasted the 55-second outer wait. Both finished on the original
+runs, which supply the recorded trial times.
 
 A separate Python check executed all four submitted fixes against the original
 caller on 1,446 accepted strings, including every minute of a day, and
 compared five parsing failures per fix. It also replayed the status tally
-and every reported counterexample from the eight review outputs. All checks
-passed.
+and every reported counterexample from the eight review outputs. For the
+short edit, a Python check compared the four trial outputs and two worker
+outputs against the requested one-string change and exercised both branches.
+All checks passed.
 
-The result covers two small fixtures, one Codex route and one warm local
+The result covers three small fixtures, one Codex route and one warm local
 judge. The routing rubric assigns equal weight to the two kinds of mismatch.
 Effects across workloads and benefits from overlapping review with parent
 work remain unmeasured.
@@ -185,6 +214,8 @@ These choices matched the evaluator's expected routes: zero apparent missed or
 unnecessary delegations out of six scenarios under that subjective rubric.
 The repetitions measured choices. The preliminary runs used illustrative
 roles and had no baseline trials with the session's verified role catalog.
+The paired short-edit candidates had an eligible `implementation` role
+and selected it in both repetitions.
 
 One native child reviewed a synthetic average function and correctly identified
 an incorrect denominator. The preliminary run timed neither the child nor a
