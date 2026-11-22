@@ -8,7 +8,6 @@ let
   registry = import ./pinned-skills-pin.nix;
   esc = lib.escapeShellArg;
 
-  # Preserve the upstream files and include the license alongside them.
   copySkill =
     upstream: skill: destination:
     let

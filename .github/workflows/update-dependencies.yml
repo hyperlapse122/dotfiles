@@ -272,7 +272,6 @@ jobs:
           # 5. Update the Android SDK pin
           nix run .#android-sdk-release -- --output packages/android-sdk-repo.json
 
-          # Update Anthropic CLI
           nix run .#ant-release -- --output packages/ant-release.json
 
           # 6. Update mise

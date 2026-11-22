@@ -1,5 +1,6 @@
 """Local source warnings and opt-in existence checks for registry dependencies."""
 
+from concurrent.futures import ThreadPoolExecutor
 import argparse
 import json
 import os
@@ -11,7 +12,6 @@ from urllib.parse import quote, urlsplit
 
 
 # The deterministic categories from Anthropic's security-guidance plugin.
-# Emit the rule and location only. Source lines may contain credentials.
 JS = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts", ".vue", ".svelte", ".astro"}
 PYTHON = {".py", ".pyw", ".pyi"}
 WEB = JS | {".html", ".htm"}
@@ -149,7 +149,6 @@ def python_packages(content):
 
 
 def go_packages(content):
-    # Parse the module grammar with Go, with workspace and toolchain lookup off.
     env = dict(os.environ, GOTOOLCHAIN="local", GOWORK="off", GOENV="off",
                GOPROXY="off", GOSUMDB="off", GOFLAGS="")
     with tempfile.NamedTemporaryFile(suffix=".mod") as manifest:
@@ -164,7 +163,6 @@ def go_packages(content):
         original = (entry["Path"], entry["Version"])
         replacement = replacements.get(original, replacements.get((original[0], ""), entry))
         if version := replacement.get("Version"):
-            # Exclude path traversal, URL syntax and control characters.
             name = replacement["Path"]
             if not re.fullmatch(r"[\w.~/-]+", name, re.ASCII) or any(
                 part in {"", ".", ".."} for part in name.split("/")
@@ -246,8 +244,7 @@ def publication(value):
 def lookup(policy, ecosystem, name, version, explicitly_private):
     route = approved_route(policy, ecosystem, name, explicitly_private)
     if route is None:
-        print(f"agent-check: {ecosystem} lookup incomplete (no approved registry for a dependency)")
-        return False
+        return False, f"agent-check: {ecosystem} lookup incomplete (no approved registry for a dependency)"
     endpoint, token, public = route
     encoded = quote(name, safe="@")
     suffix = {
@@ -258,11 +255,9 @@ def lookup(policy, ecosystem, name, version, explicitly_private):
     status, metadata = request(f"{endpoint}/{suffix}", token)
     label = f"agent-check: {ecosystem} {name}"
     if status == "missing":
-        print(f"{label}: missing from approved registry")
-        return False
+        return False, f"{label}: missing from approved registry"
     if status != "found":
-        print(f"{label}: lookup incomplete")
-        return False
+        return False, f"{label}: lookup incomplete"
 
     count = metadata.get("downloads")
     date = None
@@ -281,12 +276,10 @@ def lookup(policy, ecosystem, name, version, explicitly_private):
     elif ecosystem == "go" and metadata.get("Version") == version:
         date = metadata.get("Time")
     else:
-        print(f"{label}: lookup incomplete (unexpected registry response)")
-        return False
+        return False, f"{label}: lookup incomplete (unexpected registry response)"
     downloads = (f"{count} (last week)" if public and ecosystem == "npm" else str(count)
                  ) if type(count) is int and count >= 0 else "unavailable"
-    print(f"{label}: publication date {publication(date)}, downloads {downloads}")
-    return True
+    return True, f"{label}: publication date {publication(date)}, downloads {downloads}"
 
 
 def baseline(git_dir, tree, name):
@@ -326,12 +319,18 @@ def inspect(args):
         except (KeyError, ValueError, TypeError, AttributeError, subprocess.SubprocessError):
             print(f"agent-check: {json.dumps(name)} dependency lookup incomplete (invalid manifest)")
             failures = True
-    for (ecosystem, name, version), private in sorted(pending.items()):
+    def check_dependency(item):
+        (ecosystem, name, version), private = item
         try:
-            failures |= not lookup(policy, ecosystem, name, version, private)
+            return lookup(policy, ecosystem, name, version, private)
         except (KeyError, ValueError, TypeError, AttributeError, OSError):
-            print(f"agent-check: {ecosystem} lookup incomplete (invalid policy, authentication, or response)")
-            failures = True
+            return False, f"agent-check: {ecosystem} lookup incomplete (invalid policy, authentication, or response)"
+
+    if pending:
+        with ThreadPoolExecutor(max_workers=4) as workers:
+            for passed, diagnostic in workers.map(check_dependency, sorted(pending.items())):
+                print(diagnostic)
+                failures |= not passed
     return int(failures)
 
 
