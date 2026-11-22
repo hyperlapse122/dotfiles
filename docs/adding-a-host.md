@@ -54,7 +54,7 @@ Traits and shared host options live in `modules/shared/host.nix`:
 | `my.wiredNetwork.enable` | Applies the static IPv4, DNS, and IPv6-off settings in `secrets/hosts/<host>/wired-network.yaml` to the wired adapter with the declared MAC on production applies (macOS), or renders the `wired-static` NetworkManager profile from the same file before NetworkManager starts on a production output (NixOS). |
 | `my.dock.hostApps` | List of `.app` paths inserted into the macOS Dock after the personal apps and before Ghostty (`modules/darwin/dock.nix`). |
 
-Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from `secrets/tokens.yaml` (see `../secrets/README.md`).
+Other NixOS options keep their own meaning: `my.tailscale.advertiseRoutes` makes the host the tailnet's subnet router, and `my.cliAuth.enableDockerToken` decrypts `docker_token` from the optional `secrets/docker-registry.yaml` (see [CLI credentials](../secrets/README.md#shared-cli-credentials)).
 
 ## Create bootstrap age material
 
@@ -73,21 +73,19 @@ It generates the age identity in a private runtime directory (`$PREPARE_AGE_RUNT
 
 `.sops.yaml` has one creation rule per encrypted file, listing the comma-separated age recipients that may decrypt it:
 
-- Every host (`nixos` or `darwin`) is added to the `secrets/tokens\.yaml$` rule.
+- Add every host to the `secrets/git-hosting.yaml` and `secrets/provider-services.yaml` rules. Update the legacy `secrets/tokens.yaml` rule with the same recipients for rollback.
 - Only NixOS hosts are added to `secrets/wifi\.yaml$` and `secrets/tailscale\.yaml$` (and to `secrets/printers\.yaml$` when the NixOS host declares `my.printing.queues`). Adding a `darwin` host recipient to `wifi.yaml` or `tailscale.yaml` fails `user-identity-secrets`.
+- Add a recipient to the `secrets/docker-registry.yaml` rule only for a NixOS host authorized to use the Docker token. If the optional file exists, re-key it after changing its recipients.
 
-After updating `.sops.yaml`, re-encrypt each affected shared file from the repository root with a YubiKey connected:
+After updating `.sops.yaml`, re-encrypt each affected file from the repository root with a YubiKey connected. Load the [pinned maintenance tools](../secrets/README.md#rotate-or-add-a-cli-credential), then run the shared updates.
 
 ```sh
-nix develop
 export SOPS_AGE_KEY_CMD="sh -c 'for f in secrets/bootstrap/*/age-key.asc; do gpg --batch --no-tty --decrypt -- \"\$f\"; done'"
-sops updatekeys -y secrets/tokens.yaml
-sops updatekeys -y secrets/wifi.yaml
-sops updatekeys -y secrets/tailscale.yaml
-unset SOPS_AGE_KEY_CMD
+sops updatekeys -y secrets/git-hosting.yaml
+sops updatekeys -y secrets/provider-services.yaml
 ```
 
-If the new NixOS host also declares `my.printing.queues`, add its recipient to `secrets/printers\.yaml$` and run `sops updatekeys -y secrets/printers.yaml` as well.
+For a NixOS host, also run `sops updatekeys -y` on `secrets/wifi.yaml` and `secrets/tailscale.yaml`, and on `secrets/printers.yaml` if it declares `my.printing.queues`. Clear `SOPS_AGE_KEY_CMD` after re-keying.
 
 ## Create the desktop SSH key source
 
@@ -148,7 +146,8 @@ A NixOS host whose wired adapter needs a static address on one network sets `my.
 A Nix flake sees only paths tracked by Git. Stage the new host and secret files before evaluating or checking the flake:
 
 ```sh
-git add hosts/<host> secrets/bootstrap/<host> secrets/hosts/<host> .sops.yaml
+git add hosts/<host> secrets/bootstrap/<host> secrets/hosts/<host> .sops.yaml \
+  secrets/git-hosting.yaml secrets/provider-services.yaml secrets/wifi.yaml secrets/tailscale.yaml secrets/printers.yaml
 ```
 
 Confirm that the flake lists both `<host>` and `<host>-bootstrap`:
@@ -229,7 +228,7 @@ Create `hosts/<host>/` with two files. `host.nix` marks the directory as a macOS
 Run these steps on a machine that already has the checkout and a YubiKey:
 
 1. **Create the bootstrap age material** under `secrets/bootstrap/<host>/{age-key.asc,recipient.txt}` using `./scripts/prepare-age-identity` as shown in [Create bootstrap age material](#create-bootstrap-age-material). (On macOS without `/run/user/$(id -u)`, set `PREPARE_AGE_RUNTIME_DIR=$(mktemp -d)` for that run and remove the directory afterward.)
-2. **Add the recipient to `secrets/tokens.yaml` only.** Append the `age1...` string from `secrets/bootstrap/<host>/recipient.txt` to the `secrets/tokens\.yaml$` creation rule in `.sops.yaml` and run `sops updatekeys -y secrets/tokens.yaml`. Do not add a macOS host to `wifi.yaml`, `tailscale.yaml`, or `printers.yaml`.
+2. **Add the recipient to both shared CLI credential rules.** Follow [Add the recipient to `.sops.yaml` and re-encrypt](#add-the-recipient-to-sopsyaml-and-re-encrypt) for `secrets/git-hosting.yaml` and `secrets/provider-services.yaml`, and update the legacy rollback rule. Leave the Wi-Fi, Tailscale, and printer rules scoped to their NixOS consumers.
 3. **Create the host SSH key files** `secrets/hosts/<host>/{ssh.yaml,ssh.pub}` and the `^secrets/hosts/<host>/ssh\.yaml$` rule in `.sops.yaml` as shown in [Create the desktop SSH key source](#create-the-desktop-ssh-key-source).
 4. **Create the Apple Account secret** `secrets/hosts/<host>/apple-account.yaml` for `xcodes`. Add its creation rule to `.sops.yaml` with only `<host>`'s recipient:
 
@@ -253,7 +252,8 @@ Run these steps on a machine that already has the checkout and a YubiKey:
 ### Stage and check the macOS host
 
 ```sh
-git add hosts/<host> secrets/bootstrap/<host> secrets/hosts/<host> .sops.yaml secrets/tokens.yaml
+git add hosts/<host> secrets/bootstrap/<host> secrets/hosts/<host> .sops.yaml \
+  secrets/git-hosting.yaml secrets/provider-services.yaml
 nix eval .#darwinConfigurations --apply builtins.attrNames
 nix fmt -- --ci
 nix flake check
@@ -269,7 +269,7 @@ nix build --no-link .#darwinConfigurations.<host>-bootstrap.system
 These checks guard a macOS host:
 
 - `bootstrap-recipients` (`tests/bootstrap-recipients.nix`) checks `secrets/bootstrap/<host>/` and `.sops.yaml`.
-- `user-identity-secrets` (`tests/user-identity-secrets.nix`) checks that `secrets/hosts/<host>/ssh.yaml` exists, that every file under `secrets/hosts/<host>/` lists only `<host>`'s recipient, that `<host>`'s recipient is on `secrets/tokens.yaml`, and that it is absent from `secrets/wifi.yaml` and `secrets/tailscale.yaml`.
+- `user-identity-secrets` (`tests/user-identity-secrets.nix`) checks that `secrets/hosts/<host>/ssh.yaml` exists, that every file under `secrets/hosts/<host>/` lists only `<host>`'s recipient, that the two shared credential files match the recorded host recipient set, and that the macOS recipient is absent from the NixOS-only files.
 - `sops-recipients` (`tests/sops-recipients.nix`) checks that every encrypted file under `secrets/hosts/<host>/` (including `apple-account.yaml`, `tls-inspection-ca.yaml`, and `wired-network.yaml`) matches its `.sops.yaml` rule.
 - `host-name-guard` (`tests/host-name-guard.nix`) checks that `<host>` does not appear in shared code.
 

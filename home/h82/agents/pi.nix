@@ -6,6 +6,10 @@
   ...
 }:
 let
+  quality = import ./quality-hooks.nix {
+    inherit config pkgs lib;
+    harness = "pi";
+  };
   catalog = (builtins.fromJSON (builtins.readFile ./pi-model-lock.json)).syntheticModelLocks;
   # The committed lists for the built-in providers. A declared row replaces
   # the model of the same id in Pi's own catalog and drops that model's compat,
@@ -101,12 +105,15 @@ in
   home.packages = [ pi ];
   home.file.".pi/agent/dotfiles-web.ts".source = ./pi-web.ts;
   home.file.".pi/agent/dotfiles-question.ts".source = ./pi-question.ts;
+  home.file.".pi/agent/dotfiles-agent-quality.ts" = lib.mkIf quality.enable {
+    source = quality.renderExtension ./pi-quality.ts;
+  };
   home.file.".pi/agent/models.json".source = modelsJson;
   home.file.".pi/agent/pi-subagents".source = "${subagents}/lib/node_modules/pi-subagents";
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
-      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} --subagents ${lib.escapeShellArg "${agent}/pi-subagents"} ${hiddenModelArgs} ${enabledModelArgs}
+      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} --subagents ${lib.escapeShellArg "${agent}/pi-subagents"} ${lib.optionalString quality.enable "--quality"} ${hiddenModelArgs} ${enabledModelArgs}
     fi
   '';
   home.activation.piMcpSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''

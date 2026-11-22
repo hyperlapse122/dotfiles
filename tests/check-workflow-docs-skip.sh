@@ -94,6 +94,7 @@ def behavior(w):
                    or (action in {"synchronize", "reopened"} and has_label))
         want = {"changes": pr and (not label_event or added == "full-ci"),
                 "fmt": not label_event,
+                "agent-check": not label_event,
                 "markdown-lint": not label_event and docs_skip}
         want.update({name: not label_event and not docs_skip for name in light})
         want.update({name: closure and not docs_skip for name in heavy})
@@ -153,6 +154,7 @@ mutants = {
     "light jobs on label runs": replace_in(light, "github.event.action != 'labeled' && ", ""),
     "markdown-lint on label runs": replace_in(["markdown-lint"], "github.event.action != 'labeled' && ", ""),
     "fmt on label runs": set_key(["jobs", "fmt", "if"], None),
+    "agent-check on label runs": set_key(["jobs", "agent-check", "if"], None),
     "changes on every label": set_key(["jobs", "changes", "if"], "github.event_name == 'pull_request'"),
 }
 for name in heavy:
@@ -178,6 +180,76 @@ else:
 
 # Evaluate the actual matrix producer with independent host/check fixtures.
 jobs = workflow["jobs"]
+
+# Execute the range selector and both consumers against real commit histories.
+steps = {s.get("name"): s for s in jobs["agent-check"]["steps"]}
+range_step = steps["Select committed range"]
+registry_step = steps["Check registry dependencies"]
+task_step = steps["Run project checks"]
+with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as runner_temp:
+    output = Path(runner_temp, "output")
+    def git(*args):
+        return subprocess.check_output(["git", "-c", "commit.gpgsign=false", "-C", tmp, *args], text=True).strip()
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.name", "Workflow Test")
+    git("config", "user.email", "workflow@example.invalid")
+    Path(tmp, "package.json").write_text('{"dependencies":{"already-present":"1"}}\n')
+    git("add", "package.json")
+    git("commit", "-qm", "common base")
+    common = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "target branch moved")
+    pr_base = git("rev-parse", "HEAD")
+    git("switch", "-q", "-c", "feature", common)
+    git("commit", "-q", "--allow-empty", "-m", "previous push")
+    before = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "first pushed commit")
+    parent = git("rev-parse", "HEAD")
+    Path(tmp, "sub").mkdir()
+    Path(tmp, "sub/package.json").write_text('{"name":"fixture"}\n')
+    git("add", "sub/package.json")
+    git("commit", "-qm", "add another manifest")
+    head = git("rev-parse", "HEAD")
+    assert git("status", "--porcelain") == ""
+    empty = subprocess.check_output(["git", "-C", tmp, "hash-object", "-t", "tree", "--stdin"],
+                                    input="", text=True).strip()
+    for event, push_before, checkout, base, selected in [
+        ("pull_request", "", pr_base, common, head),
+        ("push", before, head, before, head),
+        ("push", "0" * 40, head, parent, head),
+        ("workflow_dispatch", "", head, parent, head),
+        ("workflow_dispatch", "", common, empty, common),
+    ]:
+        env = dict(os.environ, GITHUB_EVENT_NAME=event, PR_BASE=pr_base, PR_HEAD=head,
+                   PUSH_BEFORE=push_before, HEAD_SHA=checkout, RUNNER_TEMP=runner_temp,
+                   GITHUB_OUTPUT=str(output))
+        output.write_text("")
+        subprocess.run(["bash", "-eu", "-c", range_step["run"]], cwd=tmp, env=env, check=True)
+        assert output.read_text().splitlines() == [f"base={base}", f"head={selected}"], event
+        if base == parent:
+            assert git("diff", "--name-only", base, selected) == "sub/package.json", event
+
+    env.update(BASE=parent, HEAD_SHA=head, REGISTRY_POLICY="")
+    recorder = r'''nix() {
+        if [[ $EXPECT_POLICY == yes ]]; then
+            [[ $5 == --registry-policy && $6 == "$RUNNER_TEMP/"* && $(cat -- "$6") == '{}' ]] || return 1
+            shift 6
+        else
+            [[ $5 == --range && ! -v REGISTRY_POLICY ]] || return 1
+            shift 4
+        fi
+        printf '%s\n' "$@"
+    }
+    '''
+    assert "REGISTRY_POLICY" in registry_step["env"] and "REGISTRY_POLICY" not in task_step["env"]
+    for step, expect_policy in [(registry_step, "yes"), (task_step, "no")]:
+        step_env = dict(env, EXPECT_POLICY=expect_policy)
+        if expect_policy == "no":
+            del step_env["REGISTRY_POLICY"]
+        result = subprocess.run(["bash", "-eu", "-c", recorder + step["run"]],
+                                cwd=tmp, env=step_env, check=True, capture_output=True, text=True)
+        assert result.stdout.splitlines() == ["--range", parent, head], result.stdout
+
 script = next(s["run"] for s in jobs["hosts"]["steps"] if s.get("id") == "list")
 expr = re.search(r"lists=\$\(nix eval --impure --json --expr '(.*?)'\)", script, re.S)[1]
 fixture = '{ nixosConfigurations = { north = {}; north-bootstrap = {}; }; darwinConfigurations = { mac = {}; mac-bootstrap = {}; }; checks.aarch64-darwin.sample = {}; }'

@@ -93,6 +93,8 @@ What the user, the project's instructions, or a loaded skill asks for still appl
 
 Confirmation before destructive or irreversible actions, and the protection of secrets and stored data, are unchanged.
 
+When a project defines `agent-check`, that is the project's check.
+
 # Decide for CI triage
 
 Read the first relevant CI failure before choosing what to inspect. If the evidence leaves two or more plausible read-only checks and a judgment would change which one you run first, call the `decide` MCP server’s `judge` tool once. Use `choice` with a short description of each candidate and an `insufficient_evidence` option. Send only the evidence needed for the question and permitted for the configured backend.
@@ -134,6 +136,9 @@ Plan issue work so that a pull or merge request closes the issue:
 Before starting HTML, CSS, web UI, or browser-side JavaScript work, load and follow the `modern-web-guidance` skill first. This includes web platform code inside frameworks. Use its guidance alongside other applicable design and framework skills.
 
 Follow the skill's trigger and exclusion rules. Backend-only, infrastructure, tooling-only, and native-only tasks do not require it.
+
+Apply the `design-lenses` craft floor to every UI edit. Use `ux-flows` for screen flows and states, and `ux-writing` for interface copy.
+Use `frontend-design` for the visual direction of new screens. Apply the other skills within that direction.
 
 # Refactoring and test cleanup
 

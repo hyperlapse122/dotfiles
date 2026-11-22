@@ -82,6 +82,7 @@ EOF
   printf '{"version": "1.0.0", "agents": []}\n' >"$clone/packages/claude-code-agents.json"
   printf '{"latest": {"cmdline-tools": "19.0"}}\n' >"$clone/packages/android-sdk-repo.json"
   printf '{"version": "2026.10.0"}\n' >"$clone/packages/mise-release.json"
+  printf '{"version": "1.0.0"}\n' >"$clone/packages/ant-release.json"
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
@@ -155,6 +156,9 @@ case "\$*" in
     ;;
   "run .#android-sdk-release -- --output packages/android-sdk-repo.json")
     printf '{"latest": {"cmdline-tools": "20.0", "platform-tools": "36.0.0"}}\n' >packages/android-sdk-repo.json
+    ;;
+  "run .#ant-release -- --output packages/ant-release.json")
+    printf '{"version": "2.0.0"}\n' >packages/ant-release.json
     ;;
   "run .#mise-release -- --output packages/mise-release.json")
     printf '{"version": "2026.10.5"}\n' >packages/mise-release.json
@@ -277,6 +281,7 @@ grep -q 'expectedRev = "2222222222222222222222222222222222222222";' "$clone/home
 grep -q '"2.1.0"' "$clone/packages/claude-code-manifest.json" &&
   grep -q '"Explore"' "$clone/packages/claude-code-agents.json" ||
   fail "update step did not update the Claude Code pin and its agent catalog together"
+[[ $(jq -r .version "$clone/packages/ant-release.json") == 2.0.0 ]] || fail "ant updater did not run"
 grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
 grep -q '"2.3.2"' "$clone/packages/opencode-release.json" ||
@@ -387,6 +392,7 @@ push_script=$(jq -r '.run // empty' <<<"$push_step")
 read -r origin clone <<<"$(setup_clone pin-bumps)"
 base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
 new_t3_version=0.0.46
+printf '{"version": "2.0.0"}\n' >"$clone/packages/ant-release.json"
 printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >"$clone/packages/prezto-pin.json"
 printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
@@ -405,8 +411,9 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
   fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
 commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 8 ]] || fail "expected 8 per-pin commits, found: $commits"
+[[ $(wc -l <<<"$commits") == 9 ]] || fail "expected 9 per-pin commits, found: $commits"
 for expected in \
+  'chore(packages): bump ant to 2.0.0|packages/ant-release.json' \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
   'chore(packages): bump pi to 1.5.0|packages/pi-agents.json packages/pi-release.json' \
   'chore(packages): bump codex to 0.51.0|packages/codex-agents.json packages/codex-release.json' \

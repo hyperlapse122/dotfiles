@@ -60,6 +60,65 @@ def judge_command(file, json_output, headers, **overrides):
     )
 
 
+def focused_options(command):
+    command = click.option('--json', 'json_output', is_flag=True, help='Print the full response as JSON.')(command)
+    command = click.option('-H', '--header', 'headers', multiple=True, type=metadata_header,
+                           metavar='NAME: VALUE', help='Send a Decisions metadata header.')(command)
+    return connection_options(command)
+
+
+def focused(kind, state, question, json_output, headers, overrides):
+    document = {'state': state, 'questions': {'result': {'type': kind, **question}}}
+    document['model'] = overrides['model']
+
+    async def submit(config):
+        if document['model'] is None:
+            document['model'] = config.model
+        await submit_request(config, document, dict(headers), json_output)
+
+    return run_command(submit, overrides, json_output=json_output, cancel_request=True)
+
+
+@cli.command('noul')
+@click.argument('instructions')
+@click.option('--state', required=True, help='Context for the judgment.')
+@focused_options
+def noul_command(state, instructions, json_output, headers, **overrides):
+    """Estimate the probability of a statement."""
+    return focused('noul', state, {'instructions': instructions}, json_output, headers, overrides)
+
+
+@cli.command('choice')
+@click.option('--state', required=True, help='Context for the judgment.')
+@click.option('--alternative', 'alternatives', type=(str, str), multiple=True, required=True,
+              metavar='NAME CRITERION', help='Name an alternative and its criterion. Repeat for each.')
+@focused_options
+def choice_command(state, alternatives, json_output, headers, **overrides):
+    """Choose among named alternatives."""
+    if len(dict(alternatives)) != len(alternatives):
+        raise click.BadParameter('Alternative names must be unique', param_hint='--alternative')
+    return focused('choice', state, {'criteria': dict(alternatives)}, json_output, headers, overrides)
+
+
+@cli.command('score')
+@click.option('--state', required=True, help='Context for the judgment.')
+@click.option('--level', 'levels', multiple=True, required=True, help='Add a level in order from low to high.')
+@focused_options
+def score_command(state, levels, json_output, headers, **overrides):
+    """Score against ordered levels."""
+    return focused('score', state, {'criteria': list(levels)}, json_output, headers, overrides)
+
+
+@cli.command('box')
+@click.argument('instructions')
+@click.option('--image', required=True, help='Image URL or data URL.')
+@focused_options
+def box_command(image, instructions, json_output, headers, **overrides):
+    """Find a bounding box in an image."""
+    state = [{'type': 'image_url', 'image_url': {'url': image}}]
+    return focused('box', state, {'instructions': instructions}, json_output, headers, overrides)
+
+
 @cli.command('info')
 @click.option('--json', 'json_output', is_flag=True, help='Print model information as JSON.')
 @connection_options
@@ -114,6 +173,8 @@ def display(result):
         if isinstance(value, (dict, list)):
             value = json.dumps(value, ensure_ascii=False)
         print(f'{name} ({kind}): {value}')
+        if kind == 'score' and 'legend' in answer:
+            print('  legend: ' + json.dumps(answer['legend'], ensure_ascii=False))
 
 
 async def inspect_model(config):
@@ -187,8 +248,6 @@ async def print_model(config, json_output):
 
 
 async def judge_request(config, file, headers, model_override, json_output):
-    from .ipc import request
-
     if file == '-' and sys.stdin.isatty():
         raise ValueError('Provide a JSON request on stdin or pass a request file')
     try:
@@ -204,6 +263,12 @@ async def judge_request(config, file, headers, model_override, json_output):
             document['model'] = model_override
         else:
             document.setdefault('model', config.model)
+    await submit_request(config, document, headers, json_output)
+
+
+async def submit_request(config, document, headers, json_output):
+    from .ipc import request
+
     if sys.stderr.isatty() and not json_output:
         print('Waiting for the Decisions service…', file=sys.stderr)
     result = await request(config.socket, document, config.timeout, headers=headers)

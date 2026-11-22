@@ -5,6 +5,10 @@
   ...
 }:
 let
+  quality = import ./quality-hooks.nix {
+    inherit config pkgs lib;
+    harness = "opencode";
+  };
   opencode = import ../../../packages/opencode.nix { inherit pkgs; };
   tools = import ../../../packages/agent-tools.nix { inherit pkgs; };
   merger = "${tools.agentSettings}/bin/agent-settings";
@@ -140,6 +144,9 @@ in
     opencode
     tools.opencodeServingModel
   ];
+  xdg.configFile."opencode/plugins/dotfiles-agent-quality.ts" = lib.mkIf quality.enable {
+    source = quality.renderExtension ./opencode-quality.ts;
+  };
   my.agents.crossModelPeers = [ "opencode" ];
 
   # OpenCode rewrites its own config (`plugin add` and the settings it saves),

@@ -105,4 +105,4 @@ completed=1
 
 printf 'prepare-age-identity: wrote secrets/bootstrap/%s/{age-key.asc,recipient.txt}\n' "$host"
 printf 'prepare-age-identity: recipient %s\n' "$recipient"
-printf 'prepare-age-identity: secrets/tokens.yaml is encrypted to one recipient; re-encrypt it to this one before %s can read it\n' "$host"
+printf 'prepare-age-identity: update the recipient rules and re-key every applicable SOPS file for %s. See docs/adding-a-host.md and docs/recovery.md.\n' "$host"

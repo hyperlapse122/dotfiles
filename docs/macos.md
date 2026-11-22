@@ -20,7 +20,7 @@ Before erasing macOS or starting a clean installation, confirm and back up:
 
 ## Prerequisites
 
-A Mac that has no directory under `hosts/` yet needs one first; [adding a host](adding-a-host.md#macos-hosts) creates the host directory, the bootstrap age material, the `secrets/tokens.yaml` recipient, and the per-host secret files (`ssh.yaml`, `apple-account.yaml`, and optional `tls-inspection-ca.yaml` and `wired-network.yaml`). For `MacBook-Pro-Mac17-9`, all of those files are already committed in this repository.
+A Mac that has no directory under `hosts/` yet needs one first; [adding a host](adding-a-host.md#macos-hosts) creates the host directory, the bootstrap age material, the recipients for both shared CLI credential files, and the per-host secret files (`ssh.yaml`, `apple-account.yaml`, and optional `tls-inspection-ca.yaml` and `wired-network.yaml`). The repository already holds the bootstrap and per-host files for `MacBook-Pro-Mac17-9`.
 
 Before starting the setup on the Mac, have:
 
@@ -192,7 +192,7 @@ Fix the checkout before running `nr switch` again.
 
 The user age identity lives at `~/.config/nix-config/age/key.txt`, protected at rest by FileVault. It decrypts:
 
-- `secrets/tokens.yaml` (shared across both hosts);
+- `secrets/git-hosting.yaml` and `secrets/provider-services.yaml` (shared across both hosts);
 - `secrets/hosts/<host>/ssh.yaml` (this Mac's SSH private key);
 - `secrets/hosts/<host>/apple-account.yaml` (this Mac's Apple Account `username` and `password` for `xcodes`);
 - `secrets/hosts/<host>/tls-inspection-ca.yaml` (when `my.tlsInspectionCa.enable = true`);
@@ -375,4 +375,4 @@ These checks do not activate a Mac. Confirm hardware and GUI behavior on the Mac
 
 ## Losing or retiring the Mac
 
-Because `~/.config/nix-config/age/key.txt` and `~/.ssh/id_ed25519_nix_config` sit on the Mac's disk, treat every secret the Mac could decrypt as exposed if the Mac is lost or compromised. Follow [compromise or decommission of a host](recovery.md#compromise-or-decommission-of-a-host) to revoke its SSH key, remove its recipient, re-key and rotate `secrets/tokens.yaml`, and rotate the Apple Account password.
+Because `~/.config/nix-config/age/key.txt` and `~/.ssh/id_ed25519_nix_config` sit on the Mac's disk, treat every secret the Mac could decrypt as exposed if the Mac is lost or compromised. Follow [compromise or decommission of a host](recovery.md#compromise-or-decommission-of-a-host) to revoke its SSH key, remove its recipient, re-key and rotate both shared CLI credential files, and rotate the Apple Account password.

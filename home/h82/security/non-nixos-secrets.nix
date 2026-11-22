@@ -23,6 +23,16 @@ let
   cfg = config.my.secrets;
   inherit (config.my) hostName;
   accounts = import ../../../modules/shared/cli-accounts.nix;
+  credentials = lib.importJSON ../../../modules/shared/cli-credentials.json;
+  groups = lib.unique (
+    lib.mapAttrsToList (_: spec: spec.group) (
+      lib.filterAttrs (_: spec: spec.darwin or true) credentials
+    )
+  );
+  missingGroups = lib.filter (group: (cfg.credentialFiles.${group} or null) == null) groups;
+  missingPaths =
+    map (group: "secrets/${group}.yaml") missingGroups
+    ++ lib.optional (cfg.sshKeyFile == null) "secrets/hosts/${hostName}/ssh.yaml";
 
   gpgTools = import ../../../packages/gpg-tools.nix { inherit pkgs; };
   hostSecrets = "${import ../../../packages/host-secrets.nix { inherit pkgs; }}/bin/host-secrets";
@@ -30,24 +40,29 @@ let
   # keeps the ciphertext in its closure. Null only reaches here when the
   # assertion below already fails.
   storePath = file: if file == null then "" else "${file}";
-  hostSecretsArgs = lib.escapeShellArgs [
-    "--host"
-    hostName
-    "--tokens"
-    (storePath cfg.tokensFile)
-    "--ssh"
-    (storePath cfg.sshKeyFile)
-    "--state-dir"
-    cfg.stateDir
-    "--ssh-key"
-    cfg.sshKey
-    "--github-user"
-    accounts.github
-    "--gitlab-user"
-    accounts.gitlab
-    "--jpi-user"
-    accounts.jpi
-  ];
+  hostSecretsArgs = lib.escapeShellArgs (
+    [
+      "--host"
+      hostName
+      "--ssh"
+      (storePath cfg.sshKeyFile)
+      "--state-dir"
+      cfg.stateDir
+      "--ssh-key"
+      cfg.sshKey
+      "--github-user"
+      accounts.github
+      "--gitlab-user"
+      accounts.gitlab
+      "--jpi-user"
+      accounts.jpi
+    ]
+    ++ lib.concatMap (group: [
+      "--credential-file"
+      group
+      (storePath (cfg.credentialFiles.${group} or null))
+    ]) groups
+  );
 
   registries = import ../../../modules/shared/cli-registries.nix {
     dir = cfg.stateDir;
@@ -64,11 +79,10 @@ let
 in
 {
   options.my.secrets = {
-    tokensFile = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default =
-        if builtins.pathExists ../../../secrets/tokens.yaml then ../../../secrets/tokens.yaml else null;
-      description = "Encrypted token YAML shared by every host.";
+    credentialFiles = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
+      default = { };
+      description = "Encrypted YAML files indexed by CLI credential group.";
     };
     sshKeyFile = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
@@ -94,6 +108,16 @@ in
   };
 
   config = lib.mkMerge [
+    {
+      my.secrets.credentialFiles = lib.genAttrs groups (
+        group:
+        let
+          file = ../../../secrets + "/${group}.yaml";
+        in
+        lib.mkDefault (if builtins.pathExists file then file else null)
+      );
+    }
+
     (lib.mkIf nonNixos {
       # Needed from the bootstrap output on, since recovery runs there.
       home.packages = [
@@ -105,8 +129,8 @@ in
     (lib.mkIf active {
       assertions = [
         {
-          assertion = cfg.tokensFile != null && cfg.sshKeyFile != null;
-          message = "${hostName}: a Darwin production output needs secrets/tokens.yaml and secrets/hosts/${hostName}/ssh.yaml; see docs/adding-a-host.md.";
+          assertion = missingPaths == [ ];
+          message = "${hostName}: a Darwin production output needs ${lib.concatStringsSep ", " missingPaths}; see docs/adding-a-host.md.";
         }
       ];
 

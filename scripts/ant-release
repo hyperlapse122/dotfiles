@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Update the Anthropic CLI release pin from GitHub release checksums."""
+import argparse
+import base64
+import json
+import re
+import subprocess
+import sys
+
+ASSETS = {
+    "x86_64-linux": "linux_amd64.tar.gz",
+    "aarch64-linux": "linux_arm64.tar.gz",
+    "aarch64-darwin": "macos_arm64.zip",
+}
+
+
+def fetch(url):
+    return subprocess.check_output(["curl", "-fsSL", "--max-time", "60", url], text=True)
+
+
+def resolve(release, checksums):
+    tag = release["tag_name"]
+    if not re.fullmatch(r"v\d+(?:\.\d+)*", tag):
+        raise ValueError(f"invalid release tag: {tag}")
+    version = tag[1:]
+    names = {asset["name"] for asset in release["assets"]}
+    systems = {}
+    for system, asset in ASSETS.items():
+        name = f"ant_{version}_{asset}"
+        if name not in names:
+            raise ValueError(f"missing release asset: {name}")
+        matches = re.findall(rf"^([0-9a-fA-F]{{64}})\s+\*?{re.escape(name)}$", checksums, re.MULTILINE)
+        if len(matches) != 1:
+            raise ValueError(f"expected one checksum for {name}")
+        sha = matches[0].lower()
+        systems[system] = {"asset": asset, "sha256": sha, "hash": "sha256-" + base64.b64encode(bytes.fromhex(sha)).decode()}
+    return {"version": version, "systems": systems}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
+    try:
+        release = json.loads(fetch("https://api.github.com/repos/anthropics/anthropic-cli/releases/latest"))
+        version = release["tag_name"].removeprefix("v")
+        checksum_name = f"ant_{version}_checksums.txt"
+        urls = [a["browser_download_url"] for a in release["assets"] if a["name"] == checksum_name]
+        if len(urls) != 1:
+            raise ValueError(f"expected one {checksum_name} asset")
+        pin = resolve(release, fetch(urls[0]))
+        try:
+            with open(args.output, encoding="utf-8") as f:
+                current = json.load(f)["version"]
+            if tuple(map(int, pin["version"].split("."))) <= tuple(map(int, current.split("."))):
+                return 0
+        except FileNotFoundError:
+            pass
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(pin, f, indent=2)
+            f.write("\n")
+    except (subprocess.CalledProcessError, ValueError, KeyError, OSError) as exc:
+        print(f"ant-release: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

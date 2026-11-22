@@ -6,6 +6,10 @@
   ...
 }:
 let
+  quality = import ./quality-hooks.nix {
+    inherit config pkgs lib;
+    harness = "claude";
+  };
   streamTimeoutEnabled =
     config.my.kind == "darwin" && config.my.networkRecovery.enable && !config.my.bootstrap;
   merger = "${
@@ -128,6 +132,7 @@ let
       builtins.toJSON {
         inherit set remove setPaths;
         ownEntries = marketplaceEntries;
+        inherit (quality) hookGroups;
       }
     );
 

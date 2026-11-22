@@ -7,7 +7,10 @@ let
 in
 {
   my.secrets = {
-    tokensFile = "${fakeSecrets}/tokens.yaml";
+    credentialFiles = {
+      git-hosting = "${fakeSecrets}/git-hosting.yaml";
+      provider-services = "${fakeSecrets}/provider-services.yaml";
+    };
     sshKeyFile = "${fakeSecrets}/ssh.yaml";
   };
 }

@@ -11,6 +11,20 @@
 # such as an [env] _.source script in a staged mise.toml.
 set -euo pipefail
 
+lint_snapshot() {
+  local status=0
+  MISE_TRUSTED_CONFIG_PATHS="$(pwd -P)" MISE_SAFE=1 markdownlint-cli2 || status=$?
+  if [[ $status -ne 0 ]]; then
+    printf "To fix: mise exec -- markdownlint-cli2 --no-globs --fix <file> (skip with git commit --no-verify)\n" >&2
+  fi
+  return "$status"
+}
+
+if [[ ${1:-} == --snapshot ]]; then
+  lint_snapshot
+  exit
+fi
+
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
@@ -22,11 +36,5 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
 git checkout-index --all --prefix="$tmpdir/"
-
-status=0
-(cd "$tmpdir" && MISE_TRUSTED_CONFIG_PATHS="$(pwd -P)" MISE_SAFE=1 markdownlint-cli2) || status=$?
-
-if [[ $status -ne 0 ]]; then
-  printf "To fix: mise exec -- markdownlint-cli2 --no-globs --fix <file> (skip with git commit --no-verify)\n" >&2
-  exit "$status"
-fi
+cd "$tmpdir"
+lint_snapshot

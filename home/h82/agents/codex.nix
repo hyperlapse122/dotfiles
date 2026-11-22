@@ -5,6 +5,10 @@
   ...
 }:
 let
+  quality = import ./quality-hooks.nix {
+    inherit config pkgs lib;
+    harness = "codex";
+  };
   merger = "${
     (import ../../../packages/agent-tools.nix { inherit pkgs; }).agentSettings
   }/bin/agent-settings";
@@ -149,6 +153,9 @@ let
       ];
     }
   );
+  hooks = pkgs.writeText "codex-declared-hooks.json" (
+    builtins.toJSON { inherit (quality) hookGroups; }
+  );
 in
 {
   # Codex is a Compound Engineering review route, so its token joins
@@ -166,6 +173,15 @@ in
         --settings ${config.home.homeDirectory}/.codex/config.toml \
         --declared ${declared} \
         --ledger ${config.home.homeDirectory}/.codex/config-ownership.json
+    fi
+  '';
+
+  home.activation.codexHooks = lib.hm.dag.entryAfter [ "codexSettings" ] ''
+    if [[ ! -v DRY_RUN ]]; then
+      hooksFile=${lib.escapeShellArg "${config.home.homeDirectory}/.codex/hooks.json"}
+      if [[ -e "$hooksFile" || ${if quality.enable then "1" else "0"} == 1 ]]; then
+        ${merger} --label 'Codex hooks' --settings "$hooksFile" --declared ${hooks}
+      fi
     fi
   '';
 }

@@ -3,33 +3,27 @@
 
     import ./tests/bootstrap-recipients.nix { inherit pkgs; }
 
-  Asserts that every per-host bootstrap recipient can actually decrypt the
-  encrypted token document.
-
-  Verifies:
-  - Every hosts/<host>/ directory has a secrets/bootstrap/<host>/ directory,
-    and every secrets/bootstrap/<host>/ directory has a hosts/<host>/
-    directory.
-  - Each secrets/bootstrap/<host>/ directory holds both age-key.asc and
-    recipient.txt.
-
-  secrets/tokens.yaml is encrypted to the recipients .sops.yaml names, so a
-  host whose recipient is missing there installs a valid-looking identity and
-  then fails at activation, far from the cause. Regenerating a host's identity
-  without re-encrypting the tokens produces exactly that, and nothing else in
-  the tree notices.
+  Pairs each host with its bootstrap files and checks that the first matching
+  creation rule for every shared CLI credential file grants access to exactly
+  those hosts. The legacy rule supplies the same recipient set for rollback.
+  Docker registry credentials may go only to recorded NixOS recipients.
 */
 { pkgs }:
 let
   inherit (pkgs) lib;
 
   bootstrap = ../secrets/bootstrap;
+  credentials = lib.importJSON ../modules/shared/cli-credentials.json;
+  sharedCredentials = lib.filterAttrs (_: spec: spec.darwin or true) credentials;
+  groups = lib.unique (lib.mapAttrsToList (_: spec: spec.group) sharedCredentials);
+  sharedPaths = map (group: "secrets/${group}.yaml") (groups ++ [ "tokens" ]);
 
   directoriesIn = import ./lib/directories.nix { inherit lib; };
 
   hosts = directoriesIn bootstrap;
 
   hostDirs = directoriesIn ../hosts;
+  nixosHosts = (import ../lib/hosts.nix { inherit lib; } ../hosts).nixos;
 
   hasFile = host: name: builtins.pathExists (bootstrap + "/${host}/${name}");
 
@@ -81,56 +75,60 @@ pkgs.runCommand "bootstrap-recipients-tests"
     ];
   }
   ''
-    set -x
     ${noHosts}
     ${unpaired}
     ${lib.concatStringsSep "\n" (map checkHost hosts)}
-    python3 - ${../.sops.yaml} ${bootstrap} <<'PY'
+    python3 - ${../.sops.yaml} ${bootstrap} ${lib.escapeShellArg (builtins.toJSON nixosHosts)} ${lib.escapeShellArgs sharedPaths} <<'PY'
     import json
+    import os
     import pathlib
-    import re
     import subprocess
     import sys
 
-    def parse_yaml(text):
-        return json.loads(subprocess.check_output(["yq", "-o=json", ".", "-"], input=text, text=True))
-
-    def token_recipients(config):
-        # Use the same Go regexp matching as SOPS and the ciphertext guard.
-        # The first matching rule wins, including a catch-all without a regex.
-        expression = '[.creation_rules[] | . as $rule | select("secrets/tokens.yaml" | test($rule.path_regex // ""))][0].age // ""'
-        value = json.loads(subprocess.check_output(["yq", "-o=json", expression, "-"],
-                                                 input=json.dumps(config), text=True))
+    def rule_recipients(config, path):
+        # SOPS uses the first matching Go regexp, including a catch-all.
+        expression = '[.creation_rules[] | . as $rule | select(strenv(SECRET_PATH) | test($rule.path_regex // ""))][0].age // ""'
+        value = subprocess.check_output(["yq", "-r", expression, "-"], input=config,
+                                        env=dict(os.environ, SECRET_PATH=path), text=True)
         return {item.strip() for item in value.split(",") if item.strip()}
 
-    def permitted(recipient, config):
-        if not re.fullmatch(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}", recipient):
-            return False
-        valid = subprocess.run(["age", "--encrypt", "--recipient", recipient],
-                               input=b"", stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL).returncode == 0
-        return valid and recipient in token_recipients(config)
-
-    recipient = "age1mzqjkevvl4zvp272ecmpvjmp77espnaxz9uedjsmahkz7eecsdeqxkayjk"
-    matching = {"path_regex": r"secrets/tokens\.yaml$", "age": recipient}
-    assert permitted(recipient, {"creation_rules": [matching]})
-    assert not permitted("", {"creation_rules": [matching]})
-    assert not permitted("age1malformed", {"creation_rules": [matching]})
-    assert not permitted(recipient[:-1], {"creation_rules": [matching]})
-    assert not permitted(recipient[:-1] + "q", {"creation_rules": [matching]})
-    assert not permitted(recipient, {"creation_rules": [dict(matching, age=recipient + "suffix")]})
-    assert not permitted(recipient, parse_yaml("# " + recipient + "\ncreation_rules: []"))
-    assert not permitted(recipient, {"creation_rules": [dict(matching, path_regex=r"secrets/wifi\.yaml$")]})
-    assert not permitted(recipient, {"creation_rules": [dict(matching, age=""), matching]})
-    assert not permitted(recipient, {"creation_rules": [{"age": ""}, matching]})
-    assert permitted(recipient, {"creation_rules": [dict(matching, path_regex=r"secrets/wifi\.yaml$"), matching]})
-
-    config = parse_yaml(pathlib.Path(sys.argv[1]).read_text())
+    recorded = {}
     for host in sorted(pathlib.Path(sys.argv[2]).iterdir()):
         if host.is_dir():
-            recorded = (host / "recipient.txt").read_text().strip()
-            if not permitted(recorded, config):
-                sys.exit(f"bootstrap recipient for {host.name} is invalid or absent from the first applicable secrets/tokens.yaml rule")
+            recipient = (host / "recipient.txt").read_text().strip()
+            valid = subprocess.run(["age", "--encrypt", "--recipient", recipient],
+                                   input=b"", stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL).returncode == 0
+            if not valid or not recipient.startswith("age1"):
+                sys.exit(f"bootstrap recipient for {host.name} is invalid")
+            if recipient in recorded.values():
+                sys.exit(f"bootstrap recipient for {host.name} is shared with another host")
+            recorded[host.name] = recipient
+
+    config = pathlib.Path(sys.argv[1]).read_text()
+    for path in sys.argv[4:]:
+        if rule_recipients(config, path) != set(recorded.values()):
+            sys.exit(f"{path}: creation rule recipients must match the recorded bootstrap recipients")
+
+    docker_path = "secrets/docker-registry.yaml"
+    nixos_recipients = {recorded[host] for host in json.loads(sys.argv[3])}
+    docker_recipients = rule_recipients(config, docker_path)
+    if not docker_recipients or not docker_recipients <= nixos_recipients:
+        sys.exit(f"{docker_path}: expected only recorded NixOS recipients")
+
+    fake = "age1mzqjkevvl4zvp272ecmpvjmp77espnaxz9uedjsmahkz7eecsdeqxkayjk"
+    for path in sys.argv[4:]:
+        match = {"path_regex": "^" + path.replace(".", r"\.") + "$", "age": fake}
+        other = {"path_regex": r"^secrets/wifi\.yaml$", "age": ""}
+        fixtures = [
+            ([other, match], {fake}),
+            ([dict(match, age=""), match], set()),
+            ([{"age": ""}, match], set()),
+            ([dict(match, age=fake + "suffix")], {fake + "suffix"}),
+        ]
+        for rules, expected in fixtures:
+            assert rule_recipients(json.dumps({"creation_rules": rules}), path) == expected
+        assert rule_recipients(f"# {fake}\ncreation_rules: []", path) == set()
     PY
     touch $out
   ''

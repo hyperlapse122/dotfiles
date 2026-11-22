@@ -34,17 +34,30 @@ with tempfile.TemporaryDirectory() as directory:
     manifest = legacy / 'package.json'
     manifest.write_text(json.dumps({'name': 'pi-subagents',
         'repository': {'url': 'git+https://github.com/nicobailon/pi-subagents.git'}}))
-    settings_path.write_text(json.dumps({'packages': [unrelated, 'npm:pi-subagents',
-        {'source': 'npm:pi-subagents@0.80.0'}, str(legacy), str(installed / 'pi-subagents')]}))
+    user_extension = 'user-extension.ts'
+    quality_extension = str(agent / 'dotfiles-agent-quality.ts')
+    assert (installed / Path(quality_extension).name).is_file()
+    settings_path.write_text(json.dumps({
+        'packages': [unrelated, 'npm:pi-subagents', {'source': 'npm:pi-subagents@0.80.0'},
+                     str(legacy), str(installed / 'pi-subagents')],
+        'extensions': [user_extension],
+    }))
     for _ in range(2):
         subprocess.run([sys.executable, *call], check=True)
         settings = json.loads(settings_path.read_text())
         assert settings['packages'] == [unrelated, str(plugin), str(subagents)], settings['packages']
         assert json.loads((subagents / 'package.json').read_text())['name'] == 'pi-subagents'
         assert manifest.is_file()
+        assert settings['extensions'][0] == user_extension
+        assert settings['extensions'].count(quality_extension) == 1
 
     listed = [f'{provider}/{row["id"]}'
               for provider in ('openai', 'anthropic')
               for row in json.loads((agents / f'{provider}-models.json').read_text())['models']]
     selected = settings['enabledModels']
     assert sorted(model for model in selected if not model.startswith('synthetic/')) == sorted(listed), selected
+
+    subprocess.run([sys.executable, *[arg for arg in call if arg != '--quality']], check=True)
+    settings = json.loads(settings_path.read_text())
+    assert settings['extensions'][0] == user_extension
+    assert quality_extension not in settings['extensions']

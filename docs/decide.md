@@ -40,6 +40,21 @@ Press Ctrl+C to cancel `decide judge`. The CLI closes its connection, reports th
 
 The managed user environment installs and starts the service. To try the package before applying a host configuration, run `nix run .#decide -- serve` in a separate terminal. `decide serve` runs in the foreground and refuses to replace an existing live service.
 
+## Make one judgment
+
+Use a focused command for a single question:
+
+```sh
+decide noul --state 'The service is accepting requests.' 'Is the service available?'
+decide choice --state 'The service is accepting requests.' --alternative up 'Accepting requests' --alternative down 'Unavailable'
+decide score --state 'The service is accepting requests.' --level 'No action' --level 'Investigate' --level 'Act now'
+decide box --image 'https://example.com/photo.png' 'Find the bicycle'
+```
+
+`choice` takes named alternatives and their criteria. List score levels in order from low to high; the output includes the returned legend when present. `box` accepts an image URL or data URL and returns the model's top, bottom, left and right coordinates. The selected backend and model must support the requested operation and media.
+
+These commands construct a `judge` request with one question named `result`. They accept the same connection, model, metadata header and `--json` options as `judge`; JSON output contains the complete response. Errors and Ctrl+C cancellation follow the same rules as `judge`. Use `judge` for structured state, assets, multiple questions or other request fields.
+
 ## Use the MCP tool
 
 In a new managed Codex, Claude Code, or Pi session, ask the agent to use the `decide` MCP server's `judge` tool. This includes the corresponding managed sessions in T3 Code. Pass the same Decisions request fields shown above. If the request omits `model`, the tool uses the configured default. Successful results include the full Decisions response, and service errors are reported as tool errors.
@@ -131,4 +146,4 @@ The initial M5 Pro run used 64 GiB of unified memory and the real MLX decision h
 
 Native CUDA build and target GPU results are reported separately from deterministic adapter tests. The initial Mac evidence does not establish RTX 3060 memory fit or image inference. Hardware evidence and the current-head repository checks belong in the pull request's validation record.
 
-The full operation remains available through `judge`. Focused primitive entry points are tracked in [#219](https://github.com/hyperlapse122/dotfiles/issues/219). Harness plugins and execution policies such as task delegation, worker model/effort choice and task splitting are separate consumers; [#217](https://github.com/hyperlapse122/dotfiles/issues/217) tracks one proposed router.
+The full operation remains available through `judge`. Harness plugins and execution policies such as task delegation, worker model/effort choice and task splitting are separate consumers; [#217](https://github.com/hyperlapse122/dotfiles/issues/217) tracks one proposed router.

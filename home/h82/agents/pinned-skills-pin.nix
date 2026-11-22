@@ -7,11 +7,24 @@
 # A skill is installed under its SKILL.md frontmatter name, copied from `path`
 # in the input. `files` limits the copy to the entries upstream ships as the
 # skill, for a repository whose root holds other files too; without it the
-# whole directory is copied. Nothing is edited. `license` is the license file
-# copied beside the skill, relative to the input root, or null when upstream
-# has none and `licenseSource` says where its license is declared.
+# whole directory is copied. Entries with `mobile = true` live under
+# mobile-lenses as references with renamed entry files. `license` is the license
+# file copied beside the skill, relative to the input root, or null when
+# upstream has none and `licenseSource` says where its license is declared.
 {
   upstreams = [
+    {
+      input = "context7";
+      ref = "c36522f3d4446288a272aedd727d665f7b8175f2";
+      expectedRev = "c36522f3d4446288a272aedd727d665f7b8175f2";
+      skills = [
+        {
+          name = "find-docs";
+          path = "skills/find-docs";
+          license = "LICENSE";
+        }
+      ];
+    }
     {
       input = "modern-web-guidance";
       ref = "v1.0.0";
@@ -56,6 +69,7 @@
         {
           name = "vercel-react-native-skills";
           path = "skills/react-native-skills";
+          mobile = true;
         }
       ];
       licenseSource = "MIT, declared in the License section of README.md; the repository has no license file";
@@ -70,6 +84,7 @@
             inherit name;
             path = "plugins/expo/skills/${name}";
             license = "LICENSE";
+            mobile = true;
           })
           [
             "expo-native-ui"
@@ -143,7 +158,7 @@
     }
   ];
 
-  # impeccable contributes only its lens references, from the tree its build
+  # impeccable contributes its lens references, from the tree its build
   # renders for plugins, inside the local design-lenses skill. Its SKILL.md,
   # scripts, agents, and workflow references (init, document, live, hooks,
   # doctor, routing, shape, new-work, and the like) are not installed.

@@ -81,6 +81,9 @@ pkgs.stdenvNoCC.mkDerivation {
     test -s "$out/share/zsh/site-functions/_decide"
     spec="$out/share/decide/decide.usage.kdl"
     test "$(${usage} complete-word --file "$spec" -- decide ju)" = judge
+    for command in noul choice score box; do
+      test "$(${usage} complete-word --file "$spec" -- decide "$command")" = "$command"
+    done
     test "$(${usage} complete-word --file "$spec" -- decide serve --no-p)" = --no-preload
     ${testPython}/bin/python3 ${../tests/decide-contract.py}
     ${testPython}/bin/python3 ${../tests/decide-local.py}

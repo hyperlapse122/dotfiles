@@ -7,6 +7,7 @@
 }:
 let
   inherit (pkgs) lib;
+  fakeSecrets = import ./lib/fake-secrets.nix { inherit pkgs; };
   streamTimeoutEffects = pkgs.writeText "claude-stream-timeout-effects.py" ''
     import os, plistlib, re, subprocess, sys, tempfile
     from pathlib import Path
@@ -252,6 +253,31 @@ let
         [ "$stage" = 0 ] && [ "$publish" = 0 ] \
           || bad "bootstrap must run no host-secrets step"
       fi
+      ${lib.optionalString (entry ? fixture && !entry.bootstrap) ''
+          secret_home=$(mktemp -d)
+          install -d -m 700 "$secret_home/.config/nix-config/age"
+          install -m 600 ${fakeSecrets}/key.txt "$secret_home/.config/nix-config/age/key.txt"
+          for phase in Stage Publish; do
+            stepBlock "nixConfigSecrets$phase" >"$secret_home/step"
+            HOME="$secret_home" python3 - ${lib.escapeShellArg user.home.homeDirectory} <<'PY' \
+              || bad "fixture credential activation failed in $phase"
+        import os, shlex, subprocess, sys
+        from pathlib import Path
+
+        home = Path(os.environ["HOME"])
+        argv = shlex.split((home / "step").read_text())
+        for flag in ("--state-dir", "--ssh-key"):
+            index = argv.index(flag) + 1
+            argv[index] = str(home / Path(argv[index]).relative_to(sys.argv[1]))
+        subprocess.run(argv, check=True)
+        PY
+          done
+          grep -qx 'FAKE-CANARY openai' "$secret_home/.local/state/cli-auth/openai_api_key" \
+            && test -w "$secret_home/.config/gh/hosts.yml" \
+            && test -w "$secret_home/.config/glab-cli/config.yml" \
+            || bad "fixture activation did not publish the provider key and writable CLI config"
+          rm -rf -- "$secret_home"
+      ''}
       release=$(step xcodeSkillsRelease); release=''${release:-0}
       install=$(step xcodeSkillsInstall); install=''${install:-0}
       targets=$(step checkLinkTargets); targets=''${targets:-0}

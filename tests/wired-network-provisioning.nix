@@ -104,7 +104,10 @@ let
       };
       my.cliAuth = lib.mkIf identity {
         enable = true;
-        sopsFile = "${fakeSecrets}/tokens.yaml";
+        sopsFiles = {
+          git-hosting = "${fakeSecrets}/git-hosting.yaml";
+          provider-services = "${fakeSecrets}/provider-services.yaml";
+        };
       };
       # Deliberately public fake key. Production never embeds a real key in the store.
       system.activationScripts.fixture = lib.mkIf identity ''

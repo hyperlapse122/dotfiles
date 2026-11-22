@@ -68,6 +68,23 @@
         "type": "github"
       }
     },
+    "context7": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794923405,
+        "narHash": "sha256-5xcJ2MXa0K5PFWJpB6EooMFk3k+EpIslcFWu4WUQb38=",
+        "owner": "upstash",
+        "repo": "context7",
+        "rev": "c36522f3d4446288a272aedd727d665f7b8175f2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "upstash",
+        "repo": "context7",
+        "rev": "c36522f3d4446288a272aedd727d665f7b8175f2",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1781825982,
@@ -370,6 +387,7 @@
         "anthropic-skills": "anthropic-skills",
         "caldo-skills": "caldo-skills",
         "compound-engineering-plugin": "compound-engineering-plugin",
+        "context7": "context7",
         "disko": "disko",
         "expo-skills": "expo-skills",
         "home-manager": "home-manager",

@@ -162,27 +162,19 @@ let
     }
   ];
 
-  expectedDeclared =
-    name: set: remove: setPaths:
-    pkgs.writeText name (
-      builtins.toJSON {
-        inherit set remove setPaths;
-        ownEntries = marketplaceEntries;
-      }
-    );
-
-  merges = decideCommand: [
-    {
+  merges = decideCommand: hookGroups: [
+    (rec {
       attr = "claudeSettings";
       file = ".claude/settings.json";
       declared = {
+        inherit hookGroups;
         set = settingsTier;
         remove = retiredKeys;
         setPaths = settingsPaths;
         ownEntries = marketplaceEntries;
       };
-      expected = expectedDeclared "claude-expected-settings.json" settingsTier retiredKeys settingsPaths;
-    }
+      expected = pkgs.writeText "claude-expected-settings.json" (builtins.toJSON declared);
+    })
     {
       attr = "claudeGlobalConfig";
       file = ".claude.json";
@@ -208,6 +200,11 @@ let
         userConfig.home.packages or [ ]
       );
       decideCommand = if decide == null then "/missing/bin/decide-mcp" else "${decide}/bin/decide-mcp";
+      quality = import ../home/h82/agents/quality-hooks.nix {
+        config = userConfig;
+        inherit pkgs lib;
+        harness = "claude";
+      };
       sessionVariables = userConfig.home.sessionVariables or { };
 
       environmentChecks = lib.concatStringsSep "\n" (
@@ -336,6 +333,9 @@ let
                 };
               };
               expected = {
+                hooks = lib.mapAttrs (_: group: [ group ]) (
+                  lib.filterAttrs (_: group: group != { }) quality.hookGroups.events
+                );
                 activationUnmanaged = "keep";
                 effortLevel = "retired";
                 autoCompactWindow = "retired";
@@ -418,7 +418,7 @@ let
     in
     ''
       ${environmentChecks}
-      ${lib.concatMapStringsSep "\n" mergeChecks (merges decideCommand)}
+      ${lib.concatMapStringsSep "\n" mergeChecks (merges decideCommand quality.hookGroups)}
     '';
 
   # environment.etc exists only on a NixOS system configuration, so this one

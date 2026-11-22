@@ -76,6 +76,10 @@
       url = "github:caldoai/skills/d5b68dace378219890d821adb3685538e2c69b04";
       flake = false;
     };
+    context7 = {
+      url = "github:upstash/context7/c36522f3d4446288a272aedd727d665f7b8175f2";
+      flake = false;
+    };
     impeccable = {
       url = "github:pbakaus/impeccable/skill-v4.8.0";
       flake = false;
@@ -112,6 +116,12 @@
         );
       darwinHosts = variantsOf (import ./lib/darwin-host.nix { inherit inputs; }) hosts.darwin;
       darwinFixtures = import ./tests/lib/darwin-fixtures.nix { inherit inputs; };
+
+      projectTools = pkgs: {
+        agent-browser = import ./packages/agent-browser.nix { inherit pkgs; };
+        ctx7 = import ./packages/ctx7.nix { inherit pkgs; };
+        impeccable = import ./packages/impeccable.nix { inherit pkgs inputs; };
+      };
 
       darwinChecksFor = pkgs: {
         darwin-provisioning =
@@ -209,7 +219,17 @@
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
         inherit self darwinFixtures;
       };
-      packages.aarch64-darwin.decide = import ./packages/decide.nix {
+      packages.aarch64-darwin =
+        let
+          pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        in
+        projectTools pkgs
+        // {
+          decide = import ./packages/decide.nix { inherit pkgs; };
+          agent-check = import ./packages/agent-check.nix { inherit pkgs; };
+        };
+      checks.aarch64-darwin.agent-check = self.packages.aarch64-darwin.agent-check;
+      checks.aarch64-darwin.agent-hooks = import ./tests/agent-hooks.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
       };
       checks.aarch64-darwin.pinentry-keyring = import ./packages/pinentry-keyring.nix {
@@ -255,7 +275,8 @@
             hostName: bootstrap: mkHost { inherit hostName bootstrap; }
           )) hosts.nixos
         );
-      packages.${system} = {
+      packages.${system} = projectTools pkgs // {
+        agent-check = import ./packages/agent-check.nix { inherit pkgs; };
         decide = import ./packages/decide.nix { inherit pkgs; };
         disko = inputs.disko.packages.${system}.disko;
         # Exposed so the release-tracking workflow invokes the packaged helper
@@ -268,6 +289,10 @@
         claude-code-release = agentTools.claudeCodeRelease;
         claude-code-agents = agentTools.claudeCodeAgents;
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
+        ant-release = pkgs.writeScriptBin "ant-release" (
+          "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ./scripts/ant-release
+        );
+        ant = import ./packages/ant.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
         prezto-release = agentTools.preztoRelease;
         mise = import ./packages/mise.nix { inherit pkgs; };
@@ -1345,6 +1370,7 @@
               {
                 nativeBuildInputs = [
                   pkgs.actionlint
+                  pkgs.git
                   pkgs.gnugrep
                   (pkgs.python3.withPackages (p: [ p.pyyaml ]))
                   pkgs.nix
@@ -1439,21 +1465,26 @@
                   pkgs.bash
                   pkgs.git
                   pkgs.markdownlint-cli2
+                  self.packages.${system}.agent-check
                 ];
               }
               ''
                 export HOME=$TMPDIR
                 mkdir -p scripts tests .githooks
                 cp ${./scripts/lint-staged-markdown} scripts/lint-staged-markdown
+                cp ${./scripts/check-changed-files} scripts/check-changed-files
                 cp ${./tests/lint-staged-markdown.sh} tests/lint-staged-markdown.sh
                 cp ${./.githooks/pre-commit} .githooks/pre-commit
                 cp ${./.markdownlint-cli2.jsonc} .markdownlint-cli2.jsonc
+                cp ${./mise.toml} mise.toml
                 chmod +x scripts/lint-staged-markdown .githooks/pre-commit
                 patchShebangs scripts/lint-staged-markdown .githooks/pre-commit tests/lint-staged-markdown.sh
 
                 bash tests/lint-staged-markdown.sh scripts/lint-staged-markdown .githooks/pre-commit .markdownlint-cli2.jsonc "${tomlVersion}" "${lockVersion}" "${nixpkgsVersion}" "${taskRun}"
                 touch $out
               '';
+          agent-check = self.packages.${system}.agent-check;
+          agent-hooks = import ./tests/agent-hooks.nix { inherit pkgs; };
           ci-docs-only-paths =
             pkgs.runCommand "ci-docs-only-paths-tests" { nativeBuildInputs = [ pkgs.bash ]; }
               ''
