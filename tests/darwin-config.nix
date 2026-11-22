@@ -338,8 +338,6 @@ let
       # The vendored test-audit skill shares those roots; its source is the
       # in-tree skill directory inside the flake's source tree.
       testAuditTargets = map (root: "${root}/test-audit") koreanRoots;
-      # The pinned skills and local design-lenses share those roots too;
-      # tests/pinned-skills.nix checks their content on Linux.
       pinnedTargets = lib.concatMap (
         root:
         map (name: "${root}/${name}") [

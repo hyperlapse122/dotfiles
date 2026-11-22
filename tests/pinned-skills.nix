@@ -31,7 +31,6 @@
     no impeccable workflow reference ships.
   - mobile-lenses exposes only its wrapper SKILL.md and preserves every upstream
     file and license under references/, with each upstream entry file renamed.
-  - the ux-flows reference matches its in-tree source byte for byte.
 
   The pin assertions compare `flake.lock`, which Nix writes, with the registry
   in home/h82/agents/pinned-skills-pin.nix, which a person writes: each
