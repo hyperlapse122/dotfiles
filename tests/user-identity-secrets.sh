@@ -12,19 +12,19 @@
 # For every Darwin host (a directory with host.nix), also:
 #
 # - secrets/hosts/<host>/ssh.yaml exists.
-# - the host's recipient is in the tokens.yaml rule and among the recipients
-#   secrets/tokens.yaml is actually encrypted to, so production can decrypt
-#   the tokens it publishes. The rule alone is not enough: a recipient added to
-#   it without `sops updatekeys` passes the rule and fails at the first apply.
+# - the shared credential files exist and each is encrypted to the recorded
+#   bootstrap recipients. The rule alone cannot prove a new host can decrypt.
 # - the recipient is in neither the rule nor the encrypted file of wifi.yaml,
 #   tailscale.yaml, and printers.yaml, so a Darwin host, whose identity
 #   rests on the FileVault, never decrypts the Wi-Fi,
 #   Tailscale, or printer material only NixOS hosts use.
 #
-# usage: user-identity-secrets.sh ROOT
+# usage: user-identity-secrets.sh ROOT GROUP...
 set -euo pipefail
 
-root=${1:?usage: user-identity-secrets.sh ROOT}
+root=${1:?usage: user-identity-secrets.sh ROOT GROUP...}
+shift
+[[ $# -gt 0 ]] || { echo 'no shared credential groups supplied' >&2; exit 1; }
 status=0
 
 fail() {
@@ -49,6 +49,7 @@ file_recipients() {
 shopt -s nullglob
 checked=0
 darwin=0
+recorded=()
 for dir in "$root"/hosts/*/; do
   host=$(basename -- "$dir")
   checked=$((checked + 1))
@@ -59,6 +60,7 @@ for dir in "$root"/hosts/*/; do
     continue
   fi
   recipient=$(tr -d '[:space:]' <"$recipient_file")
+  recorded+=("$recipient")
 
   for host_file in "$root/secrets/hosts/$host"/*.yaml; do
     actual=$(yq -r '.sops.age[].recipient' "$host_file" | sort -u)
@@ -74,14 +76,6 @@ for dir in "$root"/hosts/*/; do
     fail "$host: secrets/hosts/$host/ssh.yaml is missing"
   fi
 
-  tokens_rule_recipients=$(rule_recipients tokens)
-  if ! grep -qxF -- "$recipient" <<<"$tokens_rule_recipients"; then
-    fail "$host: its recipient is not in the tokens.yaml rule of .sops.yaml"
-  fi
-  tokens_file_recipients=$(file_recipients tokens)
-  if ! grep -qxF -- "$recipient" <<<"$tokens_file_recipients"; then
-    fail "$host: secrets/tokens.yaml is not encrypted to its recipient; run sops updatekeys secrets/tokens.yaml"
-  fi
   for other in wifi tailscale printers; do
     other_rule_recipients=$(rule_recipients "$other")
     if grep -qxF -- "$recipient" <<<"$other_rule_recipients"; then
@@ -92,6 +86,15 @@ for dir in "$root"/hosts/*/; do
       fail "$host: secrets/$other.yaml is encrypted to its recipient; Darwin hosts must not decrypt it"
     fi
   done
+done
+
+expected=$(printf '%s\n' "${recorded[@]}" | sort -u)
+for group in "$@"; do
+  if [[ ! -f $root/secrets/$group.yaml ]]; then
+    fail "secrets/$group.yaml is missing"
+  elif [[ $(file_recipients "$group" | sort -u) != "$expected" ]]; then
+    fail "secrets/$group.yaml is not encrypted to exactly the recorded bootstrap recipients"
+  fi
 done
 
 if [[ $darwin -eq 0 ]]; then

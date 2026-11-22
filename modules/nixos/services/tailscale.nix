@@ -67,8 +67,8 @@ in
         };
       }
       (lib.mkIf available {
-        # Independent of modules/nixos/system/secrets.nix's own cliAuth.sopsFile state:
-        # this module must decrypt secrets/tailscale.yaml even when tokens.yaml is
+        # Independent of the CLI credential files:
+        # this module must decrypt secrets/tailscale.yaml even when CLI credential files are
         # absent, so it configures its own age key source rather than relying
         # on cliAuth's `mkIf available` block to have already set one.
         sops.age.keyFile = config.my.cliAuth.ageKeyFile;

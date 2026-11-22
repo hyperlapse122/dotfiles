@@ -7,7 +7,16 @@
 let
   cfg = config.my.cliAuth;
   accounts = import ../../shared/cli-accounts.nix;
-  available = cfg.sopsFile != null;
+  credentials = lib.importJSON ../../shared/cli-credentials.json;
+  enabledCredentials = lib.filterAttrs (
+    _: spec: !(spec ? nixosOption) || cfg.${spec.nixosOption}
+  ) credentials;
+  groups = lib.unique (lib.mapAttrsToList (_: spec: spec.group) credentials);
+  missingGroups = lib.filter (group: (cfg.sopsFiles.${group} or null) == null) (
+    lib.unique (lib.mapAttrsToList (_: spec: spec.group) enabledCredentials)
+  );
+  available = missingGroups == [ ];
+  missingPaths = lib.concatMapStringsSep ", " (group: "secrets/${group}.yaml") missingGroups;
   publisher = import ../../../packages/publish-cli-auth.nix { inherit pkgs; };
   opencode = import ../../../packages/opencode.nix { inherit pkgs; };
   agentTools = import ../../../packages/agent-tools.nix { inherit pkgs; };
@@ -66,11 +75,16 @@ in
 {
   options.my.cliAuth = {
     enable = lib.mkEnableOption "CLI authentication publication during activation";
-    sopsFile = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default =
-        if builtins.pathExists ../../../secrets/tokens.yaml then ../../../secrets/tokens.yaml else null;
-      description = "Encrypted token YAML. Missing input fails at activation, not evaluation.";
+    sopsFiles = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
+      default = lib.genAttrs groups (
+        group:
+        let
+          file = ../../../secrets + "/${group}.yaml";
+        in
+        if builtins.pathExists file then file else null
+      );
+      description = "Encrypted YAML files indexed by CLI credential group. Missing inputs fail at activation.";
     };
     ageKeyFile = lib.mkOption {
       type = lib.types.str;
@@ -96,32 +110,32 @@ in
     enableDockerToken = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt docker_token from secrets/tokens.yaml when provisioned.";
+      description = "Decrypt docker_token when provisioned.";
     };
     enableTokscaleToken = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt tokscale_token from secrets/tokens.yaml for the tokscale wrapper, which reads it at run time.";
+      description = "Decrypt tokscale_token for the tokscale wrapper, which reads it at run time.";
     };
     enableSyntheticApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt synthetic_api_key from secrets/tokens.yaml for Pi's key helper, which reads it at run time.";
+      description = "Decrypt synthetic_api_key for Pi's key helper, which reads it at run time.";
     };
     enableExaApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt exa_api_key from secrets/tokens.yaml for Pi's Exa web tools, which read it at run time.";
+      description = "Decrypt exa_api_key for Pi's Exa web tools, which read it at run time.";
     };
     enableOpenRouterApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt openrouter_api_key from secrets/tokens.yaml for Pi's OpenRouter provider, which reads it at run time.";
+      description = "Decrypt openrouter_api_key for Pi's OpenRouter provider, which reads it at run time.";
     };
     enableOpencodeGoApiKey = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Decrypt opencode_go_api_key from secrets/tokens.yaml for OpenCode's OpenCode Go provider, which activation imports into OpenCode's credential store.";
+      description = "Decrypt opencode_go_api_key for OpenCode's OpenCode Go provider, which activation imports into OpenCode's credential store.";
     };
     enableOpenaiApiKey = lib.mkEnableOption "decryption of the OpenAI API key for OpenCode";
     enableAnthropicApiKey = lib.mkEnableOption "decryption of the Anthropic API key for OpenCode";
@@ -161,7 +175,6 @@ in
         }
         (lib.mkIf available {
           sops = {
-            defaultSopsFile = cfg.sopsFile;
             age = {
               keyFile = cfg.ageKeyFile;
               generateKey = false;
@@ -169,28 +182,15 @@ in
             };
             gnupg.sshKeyPaths = [ ];
             useSystemdActivation = true;
-            secrets =
-              lib.genAttrs
-                (map (name: "cli-auth/${name}") (
-                  [
-                    "github_token"
-                    "gitlab_token"
-                    "jpi_token"
-                  ]
-                  ++ lib.optional cfg.enableDockerToken "docker_token"
-                  ++ lib.optional cfg.enableTokscaleToken "tokscale_token"
-                  ++ lib.optional cfg.enableSyntheticApiKey "synthetic_api_key"
-                  ++ lib.optional cfg.enableExaApiKey "exa_api_key"
-                  ++ lib.optional cfg.enableOpenRouterApiKey "openrouter_api_key"
-                  ++ lib.optional cfg.enableOpencodeGoApiKey "opencode_go_api_key"
-                  ++ lib.optional cfg.enableOpenaiApiKey "openai_api_key"
-                  ++ lib.optional cfg.enableAnthropicApiKey "anthropic_api_key"
-                ))
-                (name: {
-                  key = lib.removePrefix "cli-auth/" name;
-                  owner = config.my.user.name;
-                  mode = "0400";
-                });
+            secrets = lib.mapAttrs' (
+              field: spec:
+              lib.nameValuePair "cli-auth/${field}" {
+                key = field;
+                sopsFile = cfg.sopsFiles.${spec.group};
+                owner = config.my.user.name;
+                mode = "0400";
+              }
+            ) enabledCredentials;
           };
           systemd.services.sops-install-secrets.serviceConfig.ExecStartPost = [
             publishCommand
@@ -200,7 +200,7 @@ in
         (lib.mkIf (!available) {
           systemd.services.sops-install-secrets.serviceConfig.ExecStart =
             pkgs.writeShellScript "missing-cli-secrets" ''
-              echo 'CLI authentication not provisioned: prepare secrets/tokens.yaml and restore the local age identity. See secrets/README.md.' >&2
+              echo 'CLI authentication not provisioned: prepare ${missingPaths} and restore the local age identity. See secrets/README.md.' >&2
               exit 1
             '';
         })

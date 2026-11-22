@@ -204,7 +204,7 @@ Stage both files, pass the checks, apply production (`nr switch`), run `systemct
 
 The repository's `.sops.yaml` splits secret recipients across the two hosts as follows:
 
-- `secrets/tokens.yaml`: encrypted to both `MS-7D91` and `MacBook-Pro-Mac17-9`.
+- `secrets/git-hosting.yaml` and `secrets/provider-services.yaml` are encrypted to both `MS-7D91` and `MacBook-Pro-Mac17-9`.
 - `secrets/wifi.yaml`, `secrets/tailscale.yaml`, `secrets/printers.yaml`: encrypted to `MS-7D91` only (`user-identity-secrets` forbids any `darwin` host recipient on these rules).
 - `secrets/hosts/MS-7D91/ssh.yaml` and `secrets/hosts/MS-7D91/wired-network.yaml`: encrypted to `MS-7D91` only.
 - `secrets/hosts/MacBook-Pro-Mac17-9/ssh.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/apple-account.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/tls-inspection-ca.yaml`, `secrets/hosts/MacBook-Pro-Mac17-9/wired-network.yaml`: encrypted to `MacBook-Pro-Mac17-9` only.
@@ -212,26 +212,22 @@ The repository's `.sops.yaml` splits secret recipients across the two hosts as f
 Follow these steps in order when a host is lost, compromised, or retired. Treat every file whose `.sops.yaml` rule lists that host's recipient as exposed:
 
 1. Revoke the host's SSH public key (`secrets/hosts/<host>/ssh.pub`) on GitHub, GitLab, and every server's `authorized_keys`. If `MacBook-Pro-Mac17-9` is compromised, also rotate the Apple Account password stored in `secrets/hosts/MacBook-Pro-Mac17-9/apple-account.yaml`.
-2. Remove the host's recipient from every shared `.sops.yaml` rule that lists it (`secrets/tokens.yaml` for a macOS host; `secrets/tokens.yaml`, `secrets/wifi.yaml`, `secrets/tailscale.yaml`, and `secrets/printers.yaml` for a NixOS host). From the repository root with a YubiKey connected, re-encrypt each affected shared file to the remaining recipients and rotate its SOPS data key before writing new secret values:
+2. Remove the host's recipient from both shared CLI credential rules and the legacy rollback rule. For a NixOS host, also remove it from the Wi-Fi, Tailscale, and printer rules that list it. Load the [SOPS maintenance tools and key command](../secrets/README.md#rotate-or-add-a-cli-credential). For each affected file that has remaining recipients, re-key it and rotate its SOPS data key before entering new values.
 
    ```sh
-   nix develop
-   export SOPS_AGE_KEY_CMD="sh -c 'for f in secrets/bootstrap/*/age-key.asc; do gpg --batch --no-tty --decrypt -- \"\$f\"; done'"
-   sops updatekeys -y secrets/tokens.yaml
-   sops rotate -i secrets/tokens.yaml
+   (
+     set -eu
+     for file in secrets/git-hosting.yaml secrets/provider-services.yaml; do
+       sops updatekeys -y "$file"
+       sops rotate -i "$file"
+     done
+   )
    ```
 
-   When rotating after a NixOS host compromise, also run `sops updatekeys -y` and `sops rotate -i` on `secrets/wifi.yaml`, `secrets/tailscale.yaml`, and `secrets/printers.yaml` before clearing `SOPS_AGE_KEY_CMD`.
-3. Reissue every exposed token at its provider (and, for a NixOS host, rotate the Wi-Fi passphrases, Tailscale pre-authentication key, and printer credentials), save each new value to a mode `0600` file outside the checkout, pipe it into `sops set --value-stdin`, and remove the temporary file:
+   For a NixOS host, repeat both commands for `secrets/wifi.yaml`, `secrets/tailscale.yaml`, and `secrets/printers.yaml` if the rule listed that host and still has recipients. Retire files with no remaining consumers along with their declarations and rules.
+3. Once all applicable files are re-keyed and their data keys rotated, reissue every exposed token at its provider. For a NixOS host, also rotate the Wi-Fi passphrases, Tailscale pre-authentication key, and printer credentials. Use the [streaming rotation command](../secrets/README.md#rotate-or-add-a-cli-credential) with the appropriate file and field. Clear `SOPS_AGE_KEY_CMD` when finished.
 
-   ```sh
-   python3 -c 'import json, sys; sys.stdout.write(json.dumps(sys.stdin.read().strip()))' < <token-file> \
-     | sops set --value-stdin secrets/tokens.yaml '["<key>"]'
-   rm <token-file>
-   unset SOPS_AGE_KEY_CMD
-   ```
-
-   Keep steps 2 and 3 in this exact order: `sops set` encrypts to the recipients currently on the file, and `sops updatekeys` alone keeps the previous data key until `sops rotate -i` replaces it.
+   Complete re-keying and data-key rotation before writing new values. `sops set` encrypts to the recipients already on the file, and `sops updatekeys` keeps the previous data key until `sops rotate -i` replaces it.
 4. Delete `secrets/hosts/<host>/`, `secrets/bootstrap/<host>/`, `hosts/<host>/`, and the per-host creation rules under `^secrets/hosts/<host>/` in `.sops.yaml`.
 
 `wired-network.yaml` holds no credential, so compromise or decommission rotates nothing for it; the file only reveals the shape of an internal network. A NixOS host restored from a generation that predates the wired network feature comes up on DHCP; applying the current production output restores the static address.
@@ -242,7 +238,19 @@ When this repository restored bare-metal `MS-7D91` and retired the former VMware
 
 ## Replace tokens or a host age identity
 
-To rotate a single token in `secrets/tokens.yaml` without changing recipients, use the `SOPS_AGE_KEY_CMD` and `sops set --value-stdin` pipeline in `../secrets/README.md` and apply the configuration. If a host's local age identity (`/var/lib/sops-nix/key.txt` or `~/.config/nix-config/age/key.txt`) was exposed, remove `secrets/bootstrap/<host>/`, generate a new bootstrap identity with `./scripts/prepare-age-identity`, update `.sops.yaml`, run `sops updatekeys -y` and `sops rotate -i` on every file that host can read, recover the new identity on the host with `./scripts/recover-age-identity`, and rotate the underlying secret values at their providers because the old ciphertext remains in Git history.
+To rotate one CLI credential, use the [streaming rotation command](../secrets/README.md#rotate-or-add-a-cli-credential) and apply the configuration.
+
+When replacing a host's age identity, keep the prior card-encrypted bootstrap
+identity outside the checkout until re-keying succeeds. The host-only files
+may need it for the first decrypt. Generate the replacement with
+`./scripts/prepare-age-identity`, then replace the old recipient in both
+shared rules, the legacy rollback rule, and all host-scoped rules that list
+it. Supply both bootstrap identities to `SOPS_AGE_KEY_CMD` by streaming
+their ciphertext through GPG. Run `sops updatekeys -y` and
+`sops rotate -i` on both shared credential files and every affected
+platform-specific and per-host file. If the old identity was exposed, rotate
+the underlying credentials too, since Git history retains the old ciphertext.
+Use `./scripts/recover-age-identity` on the host after updating the repository.
 
 ## Restore an iPhone or iPad from an IPSW file
 

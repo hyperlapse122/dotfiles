@@ -83,7 +83,7 @@ in
       (lib.mkIf (queues != [ ]) {
         # Same independence from modules/nixos/system/secrets.nix as wifi.nix:
         # this module configures its own age key source so it decrypts
-        # secrets/printers.yaml even when tokens.yaml is absent.
+        # secrets/printers.yaml even when CLI credential files are absent.
         sops.age.keyFile = config.my.cliAuth.ageKeyFile;
         sops.age.generateKey = false;
 

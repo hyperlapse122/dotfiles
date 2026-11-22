@@ -39,12 +39,16 @@ pkgs.runCommand "host-secrets-tests"
     fail() { echo "host-secrets: FAIL: $*" >&2; exit 1; }
     pass() { echo "host-secrets: ok - $*"; }
 
-    # host-secrets with the fixture's arguments; TOKENS and SSH pick the
-    # encrypted files, and the paths follow the current HOME.
-    TOKENS=${secrets}/tokens.yaml
-    SSH=${secrets}/ssh.yaml
+    # The source paths can be swapped for encrypted failure fixtures.
+    use_valid_sources() {
+      GIT=${secrets}/git-hosting.yaml
+      SERVICES=${secrets}/provider-services.yaml
+      SSH=${secrets}/ssh.yaml
+    }
+    use_valid_sources
     hs() {
-      host-secrets "$1" --host fakehost --tokens "$TOKENS" --ssh "$SSH" \
+      host-secrets "$1" --host fakehost --credential-file git-hosting "$GIT" \
+        --credential-file provider-services "$SERVICES" --ssh "$SSH" \
         --state-dir "$HOME/.local/state/cli-auth" --ssh-key "$HOME/.ssh/id_ed25519_nix_config" \
         --github-user gh-user --gitlab-user gl-user --jpi-user jpi-user
     }
@@ -103,11 +107,11 @@ pkgs.runCommand "host-secrets-tests"
     for case in ssh-other tokens-invalid tokens-missing ssh-invalid; do
       fresh_home "$case"
       install_key ${secrets}/key.txt
-      TOKENS=${secrets}/tokens.yaml SSH=${secrets}/ssh.yaml
+      use_valid_sources
       case $case in
         ssh-other) SSH=${secrets}/ssh-other.yaml expected='cannot decrypt the host SSH key' ;;
-        tokens-invalid) TOKENS=${secrets}/tokens-invalid.yaml expected='failed validation' ;;
-        tokens-missing) TOKENS=${secrets}/tokens-missing.yaml expected='cannot decrypt openrouter_api_key' ;;
+        tokens-invalid) GIT=${secrets}/git-hosting-invalid.yaml expected='failed validation' ;;
+        tokens-missing) SERVICES=${secrets}/provider-services-missing.yaml expected='cannot decrypt openrouter_api_key' ;;
         ssh-invalid) SSH=${secrets}/ssh-invalid.yaml expected='not a valid private key' ;;
       esac
       if hs stage >out 2>err; then fail "stage succeeded with $case"; fi
@@ -115,7 +119,7 @@ pkgs.runCommand "host-secrets-tests"
       if grep -q FAKE-CANARY out err; then fail "$case: a token reached the output"; fi
       nothing_published "$case"
     done
-    TOKENS=${secrets}/tokens.yaml SSH=${secrets}/ssh.yaml
+    use_valid_sources
     pass 'a failure after the first decrypt leaves no plaintext and prints no token'
 
     # --- the right identity --------------------------------------------------
@@ -130,6 +134,7 @@ pkgs.runCommand "host-secrets-tests"
       for token in github_token gitlab_token jpi_token tokscale_token synthetic_api_key exa_api_key openrouter_api_key opencode_go_api_key openai_api_key anthropic_api_key; do
         [ "$(stat -c %a "$HOME/.local/state/cli-auth/$token")" = 400 ] || fail "$round: $token is not 0400"
       done
+      [ ! -e "$HOME/.local/state/cli-auth/docker_token" ] || fail "$round: Docker token was published on Darwin"
       [ "$(stat -c %a "$HOME/.local/state/cli-auth")" = 700 ] || fail "$round: the token directory is not 0700"
       for provider in openai anthropic; do
         grep -qx "FAKE-CANARY $provider" "$HOME/.local/state/cli-auth/$provider"_api_key ||
@@ -163,6 +168,20 @@ pkgs.runCommand "host-secrets-tests"
     [ ! -e "$TMPDIR/elsewhere" ] || fail 'the symlink target was written'
     [ ! -e "$HOME/.local/state/.cli-auth-stage" ] || fail 'a refused publish left staging behind'
     pass 'publish refuses a symlinked SSH key path and cleans up'
+
+    # Interrupt publication after it has already moved one staged key. The
+    # next activation must restage all keys and finish publishing.
+    fresh_home interrupted
+    install_key ${secrets}/key.txt
+    hs stage || fail 'stage failed before the interrupted publish case'
+    state="$HOME/.local/state/cli-auth"
+    mkdir -p "$state"
+    mv "$HOME/.local/state/.cli-auth-stage/github_token" "$state/github_token"
+    hs stage && hs publish || fail 'retry after interrupted publication failed'
+    test -w "$HOME/.config/gh/hosts.yml" && test -w "$HOME/.config/glab-cli/config.yml" ||
+      fail 'retry did not install writable CLI configs'
+    test -r "$state/github_token" && test ! -e "$HOME/.local/state/.cli-auth-stage" ||
+      fail 'retry did not finish publishing'
 
     touch $out
   ''

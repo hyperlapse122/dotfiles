@@ -6,11 +6,12 @@
     fakeSecrets = import ./lib/fake-secrets.nix { inherit pkgs; };
 
   Outputs:
-  - key.txt: the fixture's age identity; tokens.yaml and ssh.yaml are
+  - key.txt: the fixture's age identity; the CLI credential files and ssh.yaml are
     encrypted to it alone.
   - other-key.txt: a valid age identity that is not a recipient of either file.
   - recipient.txt: the public recipient of key.txt.
-  - tokens.yaml: the token schema from secrets/README.md. The Tokscale token
+  - git-hosting.yaml and provider-services.yaml: grouped credentials, also
+    available together in legacy tokens.yaml for the migration check. The Tokscale token
     and the Synthetic API key carry a space and the canary FAKE-CANARY, so a
     publisher that starts reading either fails, and any log that prints a
     token is caught.
@@ -50,8 +51,12 @@ pkgs.runCommand "fake-non-nixos-secrets"
     recipient=$(age-keygen -y $out/key.txt)
     printf '%s\n' "$recipient" > $out/recipient.txt
 
-    printf 'github_token: FAKE-CANARY-github\ngitlab_token: FAKE-CANARY-gitlab\njpi_token: FAKE-CANARY-jpi\ntokscale_token: FAKE-CANARY tokscale\nsynthetic_api_key: FAKE-CANARY pi\nexa_api_key: FAKE-CANARY exa\nopenrouter_api_key: FAKE-CANARY openrouter\nopencode_go_api_key: FAKE-CANARY opencode go\nopenai_api_key: FAKE-CANARY openai\nanthropic_api_key: FAKE-CANARY anthropic\n' > tokens.yaml
-    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml tokens.yaml > $out/tokens.yaml
+    printf 'github_token: FAKE-CANARY-github\ngitlab_token: FAKE-CANARY-gitlab\njpi_token: FAKE-CANARY-jpi\n' > git-hosting.yaml
+    printf 'docker_token: FAKE-CANARY-docker\ntokscale_token: FAKE-CANARY tokscale\nsynthetic_api_key: FAKE-CANARY pi\nexa_api_key: FAKE-CANARY exa\nopenrouter_api_key: FAKE-CANARY openrouter\nopencode_go_api_key: FAKE-CANARY opencode go\nopenai_api_key: FAKE-CANARY openai\nanthropic_api_key: FAKE-CANARY anthropic\n' > provider-services.yaml
+    cat git-hosting.yaml provider-services.yaml > tokens.yaml
+    for name in git-hosting provider-services tokens; do
+      sops --encrypt --age "$recipient" --input-type yaml --output-type yaml "$name.yaml" > "$out/$name.yaml"
+    done
 
     ssh-keygen -q -t ed25519 -N "" -C fake-non-nixos-host -f ssh_key
     cp ssh_key.pub $out/ssh.pub
@@ -59,14 +64,14 @@ pkgs.runCommand "fake-non-nixos-secrets"
     sops --encrypt --age "$recipient" --input-type yaml --output-type yaml ssh.yaml > $out/ssh.yaml
 
     # Failure fixtures: the same SSH key encrypted to the other identity only,
-    # tokens whose github_token publish-cli-auth rejects, tokens that lack
+    # Git hosting credentials whose github_token publish-cli-auth rejects, service credentials that lack
     # openrouter_api_key, and an SSH key field that is not a private key.
     other=$(age-keygen -y $out/other-key.txt)
     sops --encrypt --age "$other" --input-type yaml --output-type yaml ssh.yaml > $out/ssh-other.yaml
-    sed 's/^github_token:.*/github_token: FAKE-CANARY has spaces/' tokens.yaml > bad-tokens.yaml
-    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml bad-tokens.yaml > $out/tokens-invalid.yaml
-    grep -v '^openrouter_api_key:' tokens.yaml > short-tokens.yaml
-    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml short-tokens.yaml > $out/tokens-missing.yaml
+    sed 's/^github_token:.*/github_token: FAKE-CANARY has spaces/' git-hosting.yaml > bad-git-hosting.yaml
+    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml bad-git-hosting.yaml > $out/git-hosting-invalid.yaml
+    grep -v '^openrouter_api_key:' provider-services.yaml > short-provider-services.yaml
+    sops --encrypt --age "$recipient" --input-type yaml --output-type yaml short-provider-services.yaml > $out/provider-services-missing.yaml
     printf 'ssh_private_key: not a key\n' > bad-ssh.yaml
     sops --encrypt --age "$recipient" --input-type yaml --output-type yaml bad-ssh.yaml > $out/ssh-invalid.yaml
 

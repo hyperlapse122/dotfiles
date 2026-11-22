@@ -15,9 +15,11 @@ let
         # tokscale_token, synthetic_api_key, exa_api_key,
         # Agent API keys carry a space, which publish-cli-auth rejects if it
         # ever starts reading them while publishing gh and glab credentials.
-        printf 'github_token: FAKE_github\ngitlab_token: FAKE_gitlab\njpi_token: FAKE_jpi\ntokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\nopenai_api_key: FAKE openai\nanthropic_api_key: FAKE anthropic\n' > plain.yaml
-        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml plain.yaml > $out/tokens.yaml
-        sed 's/^openai_api_key:.*/openai_api_key: FAKE rotated openai/' plain.yaml > rotated.yaml
+        printf 'github_token: FAKE_github\ngitlab_token: FAKE_gitlab\njpi_token: FAKE_jpi\n' > git.yaml
+        printf 'tokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\nopenai_api_key: FAKE openai\nanthropic_api_key: FAKE anthropic\n' > services.yaml
+        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml git.yaml > $out/git-hosting.yaml
+        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml services.yaml > $out/provider-services.yaml
+        sed 's/^openai_api_key:.*/openai_api_key: FAKE rotated openai/' services.yaml > rotated.yaml
         sops --encrypt --age "$recipient" --input-type yaml --output-type yaml rotated.yaml > $out/rotated.yaml
       '';
 in
@@ -41,7 +43,7 @@ pkgs.testers.nixosTest {
     };
     my.cliAuth = {
       enable = true;
-      sopsFile = null;
+      sopsFiles = { };
     };
   };
   nodes.machine = { lib, ... }: {
@@ -66,7 +68,10 @@ pkgs.testers.nixosTest {
     };
     my.cliAuth = {
       enable = true;
-      sopsFile = "${fixtures}/tokens.yaml";
+      sopsFiles = {
+        git-hosting = "${fixtures}/git-hosting.yaml";
+        provider-services = "${fixtures}/provider-services.yaml";
+      };
       enableTokscaleToken = true;
       enableSyntheticApiKey = true;
       enableExaApiKey = true;
@@ -75,7 +80,8 @@ pkgs.testers.nixosTest {
       enableOpenaiApiKey = true;
       enableAnthropicApiKey = true;
     };
-    specialisation.rotated.configuration.my.cliAuth.sopsFile = lib.mkForce "${fixtures}/rotated.yaml";
+    specialisation.rotated.configuration.my.cliAuth.sopsFiles.provider-services =
+      lib.mkForce "${fixtures}/rotated.yaml";
     # Deliberately public fake key. Production never embeds a real key in the store.
     system.activationScripts.fixture = ''
       install -d -m 0700 /var/lib/sops-nix
@@ -100,7 +106,7 @@ pkgs.testers.nixosTest {
     missing.wait_for_unit("multi-user.target")
     missing.succeed("test -x /run/current-system/bin/switch-to-configuration")
     missing.fail("/run/current-system/bin/switch-to-configuration switch")
-    missing.succeed("journalctl -u sops-install-secrets --no-pager | grep -q 'prepare secrets/tokens.yaml'")
+    missing.succeed("journalctl -u sops-install-secrets --no-pager | grep -q 'prepare secrets/git-hosting.yaml'")
     missing.fail("test -e /srv/workspace/.config/gh/hosts.yml")
     machine.start()
     machine.wait_for_unit("multi-user.target")
@@ -111,6 +117,7 @@ pkgs.testers.nixosTest {
     glab = "/srv/workspace/.config/glab-cli/config.yml"
     switch = "/run/current-system/bin/switch-to-configuration switch"
     def verify():
+        machine.succeed("runuser -u alice -- test -x /run/secrets -a -x /run/secrets/cli-auth")
         config = json.loads(machine.succeed("cat " + gh))
         assert config["github.com"]["oauth_token"] == "FAKE_github"
         hosts = json.loads(machine.succeed("cat " + glab))["hosts"]

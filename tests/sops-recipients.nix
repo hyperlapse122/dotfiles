@@ -24,10 +24,14 @@
     file each fail.
 */
 { pkgs, self }:
+let
+  fakeSecrets = import ./lib/fake-secrets.nix { inherit pkgs; };
+in
 pkgs.runCommand "sops-recipients-tests"
   {
     nativeBuildInputs = [
       pkgs.age
+      pkgs.python3
       pkgs.sops
       pkgs.yq-go
       pkgs.gnugrep
@@ -35,6 +39,9 @@ pkgs.runCommand "sops-recipients-tests"
     ];
   }
   ''
+    python3 ${./cli-credentials-migration.py} \
+      ${../scripts/migrate-cli-credentials.py} ${../modules/shared/cli-credentials.json} ${fakeSecrets}
+
     check=${./sops-recipients.sh}
 
     bash "$check" ${self}

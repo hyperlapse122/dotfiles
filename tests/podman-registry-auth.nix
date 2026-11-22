@@ -12,8 +12,10 @@ let
         mkdir -p $out
         age-keygen -o $out/key.txt
         recipient=$(age-keygen -y $out/key.txt)
-        printf 'github_token: FAKE_ghcr_token\ngitlab_token: FAKE_gitlab_token\njpi_token: FAKE_jpi_token\ndocker_token: FAKE_docker_token\n' > plain.yaml
-        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml plain.yaml > $out/tokens.yaml
+        printf 'github_token: FAKE_ghcr_token\ngitlab_token: FAKE_gitlab_token\njpi_token: FAKE_jpi_token\n' > git.yaml
+        printf 'docker_token: FAKE_docker_token\n' > services.yaml
+        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml git.yaml > $out/git-hosting.yaml
+        sops --encrypt --age "$recipient" --input-type yaml --output-type yaml services.yaml > $out/provider-services.yaml
       '';
   authJsonFile = pkgs.writeText "test-auth.json" (
     builtins.toJSON {
@@ -50,7 +52,7 @@ pkgs.testers.nixosTest {
       my.podman.enable = true;
       my.cliAuth = {
         enable = false;
-        sopsFile = null;
+        sopsFiles = { };
       };
       environment.systemPackages = [
         pkgs.podman
@@ -80,7 +82,10 @@ pkgs.testers.nixosTest {
       my.cliAuth = {
         enable = true;
         enableDockerToken = true;
-        sopsFile = "${fixtures}/tokens.yaml";
+        sopsFiles = {
+          git-hosting = "${fixtures}/git-hosting.yaml";
+          provider-services = "${fixtures}/provider-services.yaml";
+        };
       };
       system.activationScripts.fixture = ''
         install -d -m 0700 /var/lib/sops-nix
