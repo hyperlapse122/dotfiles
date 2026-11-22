@@ -203,8 +203,18 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Make room for NixOS closures
-        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/share/swift /opt/hostedtoolcache
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/.ghcup /usr/lib/jvm /usr/share/swift /opt/hostedtoolcache
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Build CUDA Ollama before the host checks
+        run: |
+          nix build --out-link "$RUNNER_TEMP/ollama-cuda" --impure --expr '
+            let
+              hosts = builtins.attrValues (builtins.getFlake (toString ./.)).nixosConfigurations;
+              usesCuda = host: !host.config.my.bootstrap && host.config.my.cuda.enable;
+            in map (host: host.pkgs.ollama-cuda) (builtins.filter usesCuda hosts)
+          '
+          # Keep the linked runtime and free its build inputs before unpacking PyTorch.
+          nix store gc
       - name: Build host check shard
         run: nix build --no-link --keep-going --print-build-logs .#checkShards.hosts
 
