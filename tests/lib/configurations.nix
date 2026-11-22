@@ -9,7 +9,7 @@
 
   - `entries`: one `{ name, config, bootstrap, user }` per configuration, where
     `name` is the flake output name, `bootstrap` is `config.my.bootstrap`, and
-    `user` is the `h82` Home Manager configuration (`{ }` when absent, so a
+    `user` is the configured Home Manager configuration (`{ }` when absent, so a
     removed user fails inside the builder rather than during evaluation).
     Checks identify a bootstrap output by `bootstrap`, never by the output
     name, because both outputs of a host share one `networking.hostName`.
@@ -36,7 +36,7 @@
 
   - `userEntries`: one `{ name, kind, bootstrap, user }` per Home Manager
     user environment the flake builds for this architecture: the NixOS
-    configurations' `h82` users (`kind = "nixos"`) and the standalone Home
+    configurations' declared users (`kind = "nixos"`) and the standalone Home
     Manager outputs of the non-NixOS fixture hosts (`kind = "linux"`). Checks
     that assert only Home Manager state run over this list, so they cover
     both host kinds.
@@ -59,7 +59,7 @@ let
     inherit name;
     inherit (host) config;
     bootstrap = host.config.my.bootstrap;
-    user = host.config.home-manager.users.h82 or { };
+    user = host.config.home-manager.users.${host.config.my.user.name} or { };
   };
 
   entries = lib.mapAttrsToList entryOf self.nixosConfigurations;

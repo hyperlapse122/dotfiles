@@ -86,7 +86,9 @@ let
     lib.filterAttrs (name: _: !lib.hasSuffix "-bootstrap" name) self.nixosConfigurations
   );
   nixosNames = lib.unique (
-    lib.concatMap (c: namesOf c.config.home-manager.users.h82.home.packages) nixosConfigs
+    lib.concatMap (
+      c: namesOf c.config.home-manager.users.${c.config.my.user.name}.home.packages
+    ) nixosConfigs
   );
   onePassword = lib.optional (lib.any (
     c: c.config.programs._1password-gui.enable
@@ -1227,10 +1229,11 @@ let
     ) "no NixOS host, so the mobileDevices absence check would pass vacuously")
     (lib.concatMapStrings (
       host:
+      let
+        activation = host.config.home-manager.users.${host.config.my.user.name}.home.activation;
+      in
       check (
-        !host.config.home-manager.users.h82.home.activation ? mobileDevices
-        && !host.config.home-manager.users.h82.home.activation ? xcodeSkillsRelease
-        && !host.config.home-manager.users.h82.home.activation ? xcodeSkillsInstall
+        !activation ? mobileDevices && !activation ? xcodeSkillsRelease && !activation ? xcodeSkillsInstall
       ) "a NixOS host runs the macOS mobileDevices activation step"
     ) nixosConfigs)
   ];

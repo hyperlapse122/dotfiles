@@ -154,6 +154,7 @@ let
       rootfulWantedBy = entry.config.systemd.sockets.podman.wantedBy or null;
 
       hm = entry.user;
+      expectedAuth = pkgs.lib.escapeShellArg "${entry.config.my.user.home}/.config/containers/auth.json";
       sessionAuth = hm.home.sessionVariables.REGISTRY_AUTH_FILE or "";
       sessionDocker = hm.home.sessionVariables.DOCKER_HOST or "";
       userSessionAuth = hm.systemd.user.sessionVariables.REGISTRY_AUTH_FILE or "";
@@ -183,16 +184,16 @@ let
       fi
 
       # 3. Verify REGISTRY_AUTH_FILE and DOCKER_HOST session variables
-      if [ '${sessionAuth}' != "/home/h82/.config/containers/auth.json" ]; then
-        echo "home.sessionVariables.REGISTRY_AUTH_FILE is incorrect on ${hostName}: '${sessionAuth}'" >&2
+      if [ ${pkgs.lib.escapeShellArg sessionAuth} != ${expectedAuth} ]; then
+        echo "home.sessionVariables.REGISTRY_AUTH_FILE is incorrect on ${hostName}" >&2
         failed=1
       fi
       if [ '${sessionDocker}' != "unix://\''${XDG_RUNTIME_DIR}/podman/podman.sock" ]; then
         echo "home.sessionVariables.DOCKER_HOST is incorrect on ${hostName}: '${sessionDocker}'" >&2
         failed=1
       fi
-      if [ '${userSessionAuth}' != "/home/h82/.config/containers/auth.json" ]; then
-        echo "systemd.user.sessionVariables.REGISTRY_AUTH_FILE is incorrect on ${hostName}: '${userSessionAuth}'" >&2
+      if [ ${pkgs.lib.escapeShellArg userSessionAuth} != ${expectedAuth} ]; then
+        echo "systemd.user.sessionVariables.REGISTRY_AUTH_FILE is incorrect on ${hostName}" >&2
         failed=1
       fi
       if [ '${userSessionDocker}' != "unix://\''${XDG_RUNTIME_DIR}/podman/podman.sock" ]; then

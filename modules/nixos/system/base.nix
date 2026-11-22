@@ -23,7 +23,8 @@
     "C.UTF-8/UTF-8"
   ];
   environment.variables.LANGUAGE = "ko_KR:ko:en_US:en";
-  users.users.h82 = {
+  users.users.${config.my.user.name} = {
+    home = config.my.user.home;
     isNormalUser = true;
     description = "Joosung Park";
     extraGroups = [

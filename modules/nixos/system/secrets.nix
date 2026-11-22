@@ -20,8 +20,10 @@ let
     [
       "${pkgs.util-linux}/bin/runuser"
       "-u"
-      "h82"
+      config.my.user.name
       "--"
+      "${pkgs.coreutils}/bin/env"
+      "HOME=${config.my.user.home}"
       "${agentTools.opencodeAuthSync}/bin/opencode-auth-sync"
       "--opencode"
       "${opencode}/bin/opencode"
@@ -34,13 +36,13 @@ let
   publishCommand = lib.escapeShellArgs [
     "${pkgs.util-linux}/bin/runuser"
     "-u"
-    "h82"
+    config.my.user.name
     "--"
     "${publisher}/bin/publish-cli-auth"
     "--source"
     "/run/secrets/cli-auth"
     "--home"
-    "/home/h82"
+    config.my.user.home
     "--github-user"
     cfg.githubUser
     "--gitlab-user"
@@ -146,7 +148,7 @@ in
             unitConfig = {
               DefaultDependencies = "no";
               RequiresMountsFor = [
-                "/home/h82"
+                config.my.user.home
                 cfg.ageKeyFile
               ];
             };
@@ -186,7 +188,7 @@ in
                 ))
                 (name: {
                   key = lib.removePrefix "cli-auth/" name;
-                  owner = "h82";
+                  owner = config.my.user.name;
                   mode = "0400";
                 });
           };

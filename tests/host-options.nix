@@ -29,6 +29,45 @@ let
     user = e.host.config.home-manager.users.${e.host.config.my.user.name};
   }) (import ./lib/darwin-fixtures.nix { inherit (self) inputs; });
 
+  accountFixtures = map (
+    entry:
+    configurations.entryOf "${entry.name} with independent account and home" (
+      self.nixosConfigurations.${entry.name}.extendModules {
+        modules = [
+          {
+            my.user.name = lib.mkForce "alice";
+            my.user.home = lib.mkForce "/srv/workspace";
+          }
+        ];
+      }
+    )
+  ) configurations.entries;
+
+  assertAccountFixture =
+    entry:
+    let
+      account = entry.config.users.users.alice or null;
+      unit = entry.config.systemd.units."home-manager-alice.service" or null;
+      unitDir = if unit == null || !(unit.enable or true) then null else unit.unit or null;
+    in
+    ''
+      ${lib.optionalString (account == null || (account.home or null) != "/srv/workspace") ''
+        echo ${lib.escapeShellArg "${entry.name}: alice's system account does not have /srv/workspace as its home"} >&2
+        fail=1
+      ''}
+      ${lib.optionalString (unitDir == null) ''
+        echo ${lib.escapeShellArg "${entry.name}: home-manager-alice.service is not materialized"} >&2
+        fail=1
+      ''}
+      ${lib.optionalString (unitDir != null) ''
+        unit=${unitDir}/home-manager-alice.service
+        if [ ! -f "$unit" ] || ! grep -Fxq 'User=alice' "$unit" || ! grep -Fxq 'RequiresMountsFor=/srv/workspace' "$unit"; then
+          echo ${lib.escapeShellArg "${entry.name}: Home Manager service does not run as alice with /srv/workspace mounted"} >&2
+          fail=1
+        fi
+      ''}
+    '';
+
   pathsOf =
     prefix: options:
     lib.concatLists (
@@ -72,6 +111,7 @@ pkgs.runCommand "host-options"
       fail=1
     ''}
     ${lib.concatMapStrings assertEntry (configurations.entries ++ darwinFixtures)}
+    ${lib.concatMapStrings assertAccountFixture accountFixtures}
     if grep -rn -w osConfig "$home" >&2; then
       echo 'files under home/ read osConfig, which a standalone Home Manager output does not have' >&2
       fail=1

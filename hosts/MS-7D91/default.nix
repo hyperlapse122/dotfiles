@@ -4,6 +4,8 @@
     ./hardware.nix
     ./disko.nix
   ];
+  my.user.name = "h82";
+  my.user.home = "/home/h82";
   # Enrollment needs a work account, which an installation console never has.
   my.intune.enable = !config.my.bootstrap;
   my.nuphyGem80.enable = true;

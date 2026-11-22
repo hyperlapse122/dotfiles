@@ -358,7 +358,7 @@ let
 
       settingsArg=$(printf '%s' "$script" | tr '\n' ' ' \
         | grep -oE -- '--settings[[:space:]]+[^[:space:]]+' | head -1 | awk '{print $2}' || true)
-      if [ "$settingsArg" != /home/h82/.config/VSCodium/User/settings.json ]; then
+      if [ "$settingsArg" != ${esc "${hm.my.user.home}/.config/VSCodium/User/settings.json"} ]; then
         fail ${host'}": the merger must be pointed at ~/.config/VSCodium/User/settings.json, got: '$settingsArg'"
       fi
 

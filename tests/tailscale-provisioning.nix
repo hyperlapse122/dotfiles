@@ -43,6 +43,7 @@ let
         fsType = "ext4";
       };
       networking.hostName = hostName;
+      my.user.name = "h82";
       environment.systemPackages = [
         pkgs.jq
         pkgs.curl

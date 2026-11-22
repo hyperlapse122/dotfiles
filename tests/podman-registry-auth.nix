@@ -39,6 +39,10 @@ pkgs.testers.nixosTest {
       ];
       system.switch.enable = true;
       boot.loader.grub.enable = pkgs.lib.mkForce false;
+      my.user = {
+        name = "h82";
+        home = "/home/h82";
+      };
       users.users.h82 = {
         isNormalUser = true;
         uid = 1000;
@@ -64,6 +68,10 @@ pkgs.testers.nixosTest {
       ];
       system.switch.enable = true;
       boot.loader.grub.enable = pkgs.lib.mkForce false;
+      my.user = {
+        name = "h82";
+        home = "/home/h82";
+      };
       users.users.h82 = {
         isNormalUser = true;
         uid = 1000;

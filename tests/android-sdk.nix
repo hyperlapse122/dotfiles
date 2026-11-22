@@ -89,21 +89,6 @@ let
     }
   ];
 
-  sdkRoot = "/home/h82/.local/share/android-sdk";
-
-  shellLines = [
-    ''export ANDROID_HOME="${sdkRoot}"''
-    ''export ANDROID_NDK_HOME="${sdkRoot}/ndk/${ndk}"''
-    ''export ANDROID_SDK_ROOT="${sdkRoot}"''
-    ''export PATH="''${PATH:+$PATH:}${sdkRoot}/cmdline-tools/${cmdlineTools}/bin:${sdkRoot}/platform-tools:${sdkRoot}/emulator"''
-  ];
-
-  environmentLines = [
-    "ANDROID_HOME=${sdkRoot}"
-    "ANDROID_NDK_HOME=${sdkRoot}/ndk/${ndk}"
-    "ANDROID_SDK_ROOT=${sdkRoot}"
-  ];
-
   assertEntry =
     entry:
     if entry.user ? home-files then
@@ -116,6 +101,20 @@ let
   assertPresent =
     entry:
     let
+      sdkRoot = "${entry.config.my.user.home}/.local/share/android-sdk";
+
+      shellLines = [
+        ''export ANDROID_HOME="${sdkRoot}"''
+        ''export ANDROID_NDK_HOME="${sdkRoot}/ndk/${ndk}"''
+        ''export ANDROID_SDK_ROOT="${sdkRoot}"''
+        ''export PATH="''${PATH:+$PATH:}${sdkRoot}/cmdline-tools/${cmdlineTools}/bin:${sdkRoot}/platform-tools:${sdkRoot}/emulator"''
+      ];
+
+      environmentLines = [
+        "ANDROID_HOME=${sdkRoot}"
+        "ANDROID_NDK_HOME=${sdkRoot}/ndk/${ndk}"
+        "ANDROID_SDK_ROOT=${sdkRoot}"
+      ];
       hm = entry.user;
       files = "${hm.home-files}";
       shellFile = "${hm.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";

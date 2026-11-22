@@ -10,7 +10,7 @@
   production and bootstrap alike:
   - Home Manager's built home files carry ~/.face and ~/.face.icon with the asset's bytes
     (read by AccountsService for System Settings and by the Plasma session).
-  - The system profile carries share/sddm/faces/h82.face.icon with the asset's bytes
+  - The system profile carries share/sddm/faces/<user>.face.icon with the asset's bytes
     (read by the SDDM greeter, which cannot enter the mode-700 home directory).
 
   The comparisons are byte-for-byte, so they do not depend on the asset's store path.
@@ -41,19 +41,19 @@ let
       ''
     else
       ''
-        echo "${entry.name}: the h82 Home Manager generation is missing" >&2
+        echo "${entry.name}: the configured Home Manager generation is missing" >&2
         failed=1
       '';
 
   assertEntry = entry: ''
     ${assertHomeFiles entry}
 
-    sddmFace="${entry.config.system.path}/share/sddm/faces/h82.face.icon"
+    sddmFace="${entry.config.system.path}/share/sddm/faces/${entry.config.my.user.name}.face.icon"
     if [ ! -e "$sddmFace" ]; then
-      echo "system profile lacks share/sddm/faces/h82.face.icon on ${entry.name}" >&2
+      echo "system profile lacks share/sddm/faces/${entry.config.my.user.name}.face.icon on ${entry.name}" >&2
       failed=1
     elif ! cmp -s "$sddmFace" "${asset}"; then
-      echo "SDDM face for h82 on ${entry.name} differs from home/h82/assets/face.png" >&2
+      echo "SDDM face for ${entry.config.my.user.name} on ${entry.name} differs from home/h82/assets/face.png" >&2
       failed=1
     fi
   '';

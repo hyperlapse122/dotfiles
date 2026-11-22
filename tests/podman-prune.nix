@@ -49,6 +49,7 @@ pkgs.testers.nixosTest {
         ../modules/nixos/services/podman.nix
         ../modules/shared/host.nix
       ];
+      my.user.name = "h82";
       users.users.h82 = {
         isNormalUser = true;
         uid = 1000;
