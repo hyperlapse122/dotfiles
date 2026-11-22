@@ -131,6 +131,7 @@ let
       [
         "chatgpt"
         "ghostty"
+        "ollama-app"
         "1password"
         "parallels"
         "tailscale-app"
@@ -441,7 +442,7 @@ let
         && lib.all guarded masWrapperCalls
       ) "${entry.name}: App Store calls must remain guarded in the primary user's session")
       (check config.homebrew.enable "${entry.name}: homebrew is off, so an apply installs none of the casks")
-      (check (sort casks == sort expectedCasks)
+      (check (sort casks == sort (lib.filter (cask: production || cask != "ollama-app") expectedCasks))
         "${entry.name}: homebrew.casks is ${builtins.toJSON (sort casks)}, the mapping gives ${builtins.toJSON (sort expectedCasks)}"
       )
       (check (config.homebrew.onActivation.cleanup == "none")

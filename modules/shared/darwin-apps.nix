@@ -9,6 +9,7 @@ let
     ghostty.cask = "ghostty";
     google-chrome.cask = "google-chrome";
     libreoffice.cask = "libreoffice";
+    ollama.cask = "ollama-app";
     telegram-desktop.cask = "telegram-desktop";
     yubioath-flutter.cask = "yubico-authenticator";
 

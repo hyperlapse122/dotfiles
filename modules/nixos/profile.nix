@@ -17,6 +17,7 @@
     ./services/intune.nix
     ./services/podman.nix
     ./services/minikube.nix
+    ./services/ollama.nix
     ./services/printing.nix
     ./services/tailscale.nix
     ./services/proton-vpn.nix

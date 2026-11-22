@@ -16,5 +16,8 @@
     ./vscodium.nix
   ]
   # iOS Simulators and Android Virtual Devices are created on macOS only.
-  ++ lib.optionals (hostKind == "darwin") [ ./mobile-devices.nix ];
+  ++ lib.optionals (hostKind == "darwin") [
+    ./mobile-devices.nix
+    ./ollama-darwin.nix
+  ];
 }

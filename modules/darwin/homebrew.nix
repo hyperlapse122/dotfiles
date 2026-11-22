@@ -20,7 +20,7 @@ in
   homebrew = {
     enable = true;
     taps = lib.unique (map tapOf thirdParty);
-    inherit casks;
+    casks = lib.filter (cask: !config.my.bootstrap || cask != "ollama-app") casks;
     brews = [
       "aria2"
       "container"

@@ -122,6 +122,7 @@ let
       network-recovery = import ./network-recovery.nix { inherit pkgs; };
       nixos-wired-network = import ./nixos-wired-network.nix { inherit pkgs; };
       nr = import ./nr.nix { inherit pkgs self; };
+      ollama-user-service = import ./ollama-user-service.nix { inherit pkgs self; };
       opencode = import ./opencode.nix { inherit pkgs self; };
       plasma-taskbar = import ./plasma-taskbar.nix { inherit pkgs self; };
       sops-recipients = import ./sops-recipients.nix { inherit pkgs self; };

@@ -33,14 +33,15 @@ in
     systemd.services."user@".serviceConfig.Delegate = "cpu cpuset io memory pids";
 
     # Type=exec is active once minikube runs, so a first start that pulls
-    # images for minutes does not hold default.target, and with it login.
+    # images for minutes does not hold the graphical session startup.
     # RemainAfterExit keeps the unit active after a successful start, so
     # ExecStop stops the node at session end and its state stays on disk.
     # System accounts, such as the display manager's, have no subordinate ID
     # ranges, so the cluster starts only in the configured account's manager.
     systemd.user.services.minikube = {
       description = "Rootless minikube cluster";
-      wantedBy = [ "default.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
       unitConfig.ConditionUser = config.my.user.name;
       # The wrapped Podman keeps /run/wrappers on PATH for newuidmap.
       path = [ config.virtualisation.podman.package ];
