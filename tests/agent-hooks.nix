@@ -1,21 +1,7 @@
 { pkgs }:
 let
   inherit (pkgs) lib;
-  renderer =
-    harness: enable: trustedProjects:
-    import ../home/h82/agents/quality-hooks.nix {
-      inherit pkgs lib harness;
-      config.my.agentHooks = {
-        inherit trustedProjects;
-        stop = true;
-        ${harness} = {
-          inherit enable;
-          postEdit = true;
-          preShell = true;
-          freezeTests = true;
-        };
-      };
-    };
+  renderer = import ./lib/quality-hook-renderer.nix { inherit pkgs; };
   declaration =
     harness: enable:
     pkgs.writeText "${harness}-quality-settings.json" (
@@ -41,8 +27,9 @@ pkgs.runCommand "agent-hooks-tests"
     python3 ${./agent-hooks.py} ${agentSettings}/bin/agent-settings \
       ${declaration "claude" true} ${declaration "claude" false} \
       ${declaration "codex" true} ${declaration "codex" false}
-    python3 ${./agent-hook-lifecycle.py} \
-      ${pi}/libexec/pi/pi ${extension "pi" ../home/h82/agents/pi-quality.ts} \
-      ${opencode}/bin/opencode ${extension "opencode" ../home/h82/agents/opencode-quality.ts}
+    python3 ${./agent-hook-lifecycle.py} pi ${pi}/libexec/pi/pi ${extension "pi" ../home/h82/agents/pi-quality.ts}
+    ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+      python3 ${./agent-hook-lifecycle.py} opencode ${opencode}/bin/opencode ${extension "opencode" ../home/h82/agents/opencode-quality.ts}
+    ''}
     touch "$out"
   ''

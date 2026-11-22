@@ -172,7 +172,7 @@ def exercise(turns, executable, rendered):
         home = Path(directory).resolve()
         project = home / 'checkout'
         project.mkdir()
-        env = {key: os.environ[key] for key in ('PATH', 'TMPDIR') if key in os.environ}
+        env = {key: os.environ[key] for key in ('PATH', 'TMPDIR', 'NIX_LD', 'NIX_LD_LIBRARY_PATH') if key in os.environ}
         env.update(HOME=str(home), XDG_CACHE_HOME=str(home / 'cache'), XDG_CONFIG_HOME=str(home / 'config'),
                    XDG_DATA_HOME=str(home / 'data'), XDG_STATE_HOME=str(home / 'state'))
         subprocess.run(['git', 'init', '-q', project], env=env, check=True)
@@ -196,6 +196,5 @@ def exercise(turns, executable, rendered):
 
 
 if __name__ == '__main__':
-    pi, pi_extension, opencode, opencode_extension = sys.argv[1:]
-    exercise(pi_turns, pi, pi_extension)
-    exercise(opencode_turns, opencode, opencode_extension)
+    harness, executable, extension = sys.argv[1:]
+    exercise({'pi': pi_turns, 'opencode': opencode_turns}[harness], executable, extension)
