@@ -69,7 +69,7 @@ Gemini 3.8 Flash's speed was the owner's reason for using Antigravity through AC
 
 ### Sources and Research
 
-- The repository's tool retirement policy governs existing user data and mutable settings. [Repository instructions](../../../AGENTS.md#tool-retirement)
+- The repository's tool retirement policy governs existing user data and mutable settings. [Repository instructions](../../../docs/contributing.md#tool-retirement)
 - T3 Code's managed provider and retirement declarations show where configured state survives an upgrade. [T3 Code module](../../../home/h82/t3code.nix)
 - Both video delegation routes are in the shared instruction template. [Instruction template](../../../home/h82/agents/instructions/instructions.md.tmpl)
 - Live quota queries and historical conversation reporting have separate consumers. [Agent usage](../../../scripts/agent-usage) and [Tokscale wrapper](../../../scripts/tokscale)
@@ -133,7 +133,7 @@ nix build --no-link \
   .#checks.x86_64-linux.update-dependencies-reconcile
 ```
 
-Use the repository's pre-push checks and full CI policy in [AGENTS.md](../../../AGENTS.md#build-and-development-commands).
+Use the repository's pre-push checks and full CI policy in [Contributing](../../../docs/contributing.md#build-and-development-commands).
 
 ---
 

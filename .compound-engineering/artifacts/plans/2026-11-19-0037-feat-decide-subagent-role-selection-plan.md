@@ -40,7 +40,7 @@ Managed coding agents can see subagent metadata in more than one place. The role
 
 **Role eligibility**
 
-- R1. The current workflow decides whether to delegate and retains its required roles, permissions, launch route, provider, model, and reasoning effort. [Agent routing rules](../../../docs/agent-routing.md#t3-delegation)
+- R1. The current workflow decides whether to delegate and retains its required roles, permissions, launch route, provider, model, and reasoning effort. [Agent routing rules](../../../home/h82/agents/instructions/t3-guide.md#t3-delegation)
 - R2. The parent considers roles that the current session can launch through that route and whose descriptions and tool restrictions fit the task.
 - R3. Claude Code uses the pinned built-in catalog as its starting point and checks availability in the running session. [Claude Code catalog](../../../packages/claude-code-agents.json)
 
