@@ -1,7 +1,7 @@
 schema_version: 1
 sources:
   gh-issues:
-    cursor: "2026-11-07T07:43:28Z"
+    cursor: "2026-11-19T14:44:20Z"
 items:
   "gh-issues:hyperlapse122/dotfiles#10":
     source: "gh-issues"
@@ -24,6 +24,222 @@ items:
     origin: "https://github.com/hyperlapse122/dotfiles/issues/10"
     verified_default_branch: "main"
     verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
+  "gh-issues:hyperlapse122/dotfiles#198":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "chore(home): verify codex reads the shared skill root"
+    body: "chore(home): verify codex reads the shared skill root — Verify Codex’s shared skill root and description-listing behavior on both hosts, moving the root if needed."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:23Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#198"
+    media: []
+    needs_product_decision: false
+    number: 198
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/198"
+    outstanding_questions: []
+    requirement_id: "R20"
+    updatedAt: "2026-11-17T01:24:23Z"
+  "gh-issues:hyperlapse122/dotfiles#199":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add code anti-slop rules and a code-noslop skill"
+    body: "feat(home): add code anti-slop rules and a code-noslop skill — Add shared code-writing rules and a code-noslop skill, with instruction receipts and trigger evaluation."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:24Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#199"
+    media: []
+    needs_product_decision: false
+    number: 199
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/199"
+    outstanding_questions: []
+    requirement_id: "R21"
+    updatedAt: "2026-11-17T01:24:24Z"
+  "gh-issues:hyperlapse122/dotfiles#200":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): route ui work to the installed ui skills"
+    body: "feat(home): route ui work to the installed ui skills — Route UI changes to the installed design, flow, and writing skills through shared instructions."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:24Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#200"
+    media: []
+    needs_product_decision: false
+    number: 200
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/200"
+    outstanding_questions: []
+    requirement_id: "R22"
+    updatedAt: "2026-11-17T01:24:24Z"
+  "gh-issues:hyperlapse122/dotfiles#201":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add an agent-check convention for every harness"
+    body: "feat(home): add an agent-check convention for every harness — Establish a shared agent-check convention, helper, template fact, and per-project setup guidance for all harnesses."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:25Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#201"
+    media: []
+    needs_product_decision: false
+    number: 201
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/201"
+    outstanding_questions: []
+    requirement_id: "R23"
+    updatedAt: "2026-11-17T01:24:25Z"
+  "gh-issues:hyperlapse122/dotfiles#202":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add my.agentHooks with a post-edit check"
+    body: "feat(home): add my.agentHooks with a post-edit check — Define shared agentHooks and render post-edit agent-check behavior for four harnesses after verifying harness-specific support."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:26Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#202"
+    media: []
+    needs_product_decision: false
+    number: 202
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/202"
+    outstanding_questions: []
+    requirement_id: "R24"
+    updatedAt: "2026-11-17T01:24:26Z"
+  "gh-issues:hyperlapse122/dotfiles#203":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add an opt-in stop gate to my.agentHooks"
+    body: "feat(home): add an opt-in stop gate to my.agentHooks — Add an opt-in turn-end hook that runs agent-check on changed projects with attempt limits and fast exits."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:26Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#203"
+    media: []
+    needs_product_decision: false
+    number: 203
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/203"
+    outstanding_questions: []
+    requirement_id: "R25"
+    updatedAt: "2026-11-17T01:24:26Z"
+  "gh-issues:hyperlapse122/dotfiles#204":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): block --no-verify commits from agents"
+    body: "feat(home): block --no-verify commits from agents — Add harness hooks to block common pre-commit bypass flags, with Claude Code safety constraints and CI as the backstop."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:27Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#204"
+    media: []
+    needs_product_decision: false
+    number: 204
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/204"
+    outstanding_questions: []
+    requirement_id: "R26"
+    updatedAt: "2026-11-17T01:24:27Z"
+  "gh-issues:hyperlapse122/dotfiles#205":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add an opt-in hook that protects test files"
+    body: "feat(home): add an opt-in hook that protects test files — Add an opt-in hook that blocks edits to test files when a project freeze marker is present."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:28Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#205"
+    media: []
+    needs_product_decision: false
+    number: 205
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/205"
+    outstanding_questions: []
+    requirement_id: "R27"
+    updatedAt: "2026-11-17T01:24:28Z"
+  "gh-issues:hyperlapse122/dotfiles#206":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): package impeccable detect as a ui slop gate"
+    body: "feat(home): package impeccable detect as a ui slop gate — Package impeccable detect offline and document its use as a UI quality gate."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:28Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#206"
+    media: []
+    needs_product_decision: false
+    number: 206
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/206"
+    outstanding_questions: []
+    requirement_id: "R28"
+    updatedAt: "2026-11-17T01:24:28Z"
+  "gh-issues:hyperlapse122/dotfiles#207":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "refactor(home): fold expo and rn skills into one router skill"
+    body: "refactor(home): fold expo and rn skills into one router skill — Consolidate Expo and React Native skill descriptions behind one router skill and evaluate mobile-task triggering."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:29Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#207"
+    media: []
+    needs_product_decision: false
+    number: 207
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/207"
+    outstanding_questions: []
+    requirement_id: "R29"
+    updatedAt: "2026-11-17T01:24:29Z"
+  "gh-issues:hyperlapse122/dotfiles#208":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add a browser cli for render checks"
+    body: "feat(home): add a browser cli for render checks — Add a browser CLI for rendered UI checks, update design-lenses usage, and optionally define shared Chrome DevTools MCP support."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:29Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#208"
+    media: []
+    needs_product_decision: true
+    number: 208
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/208"
+    outstanding_questions: ["Which browser CLI should projects use for render checks, and when should T3 sessions use their preview tools?"]
+    requirement_id: "R30"
+    updatedAt: "2026-11-17T01:24:29Z"
+  "gh-issues:hyperlapse122/dotfiles#209":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add security patterns and dependency existence checks"
+    body: "feat(home): add security patterns and dependency existence checks — Add deterministic security-pattern and dependency-existence checks to agent-check and CI."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:30Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#209"
+    media: []
+    needs_product_decision: false
+    number: 209
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/209"
+    outstanding_questions: []
+    requirement_id: "R31"
+    updatedAt: "2026-11-17T01:24:30Z"
   "gh-issues:hyperlapse122/dotfiles#21":
     source: "gh-issues"
     status: "closed"
@@ -45,6 +261,132 @@ items:
     origin: "https://github.com/hyperlapse122/dotfiles/issues/21"
     verified_default_branch: "main"
     verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
+  "gh-issues:hyperlapse122/dotfiles#210":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add context7 in cli and skill mode"
+    body: "feat(home): add context7 in cli and skill mode — Package the ctx7 CLI and skill, and resolve credential handling before enabling it."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:31Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#210"
+    media: []
+    needs_product_decision: true
+    number: 210
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/210"
+    outstanding_questions: ["How should projects store the Context7 OAuth credentials and API key?"]
+    requirement_id: "R32"
+    updatedAt: "2026-11-17T01:24:31Z"
+  "gh-issues:hyperlapse122/dotfiles#211":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "docs: document project-scope shadcn and figma skills"
+    body: "docs: document project-scope shadcn and figma skills — Document project-scoped shadcn and Figma skills and determine each harness’s discovery behavior."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:31Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#211"
+    media: []
+    needs_product_decision: false
+    number: 211
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/211"
+    outstanding_questions: []
+    requirement_id: "R33"
+    updatedAt: "2026-11-17T01:24:31Z"
+  "gh-issues:hyperlapse122/dotfiles#212":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "chore(home): track agent quality gates"
+    body: "chore(home): track agent quality gates — Track deterministic agent quality gates across four harnesses, including prerequisite and dependent issues."
+    author_class: "teammate"
+    createdAt: "2026-11-17T01:24:32Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#212"
+    media: []
+    needs_product_decision: true
+    number: 212
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/212"
+    outstanding_questions: ["Which of the Tier 2 quality checks in #203–#211 should proceed after review?"]
+    requirement_id: "R34"
+    updatedAt: "2026-11-17T01:24:32Z"
+  "gh-issues:hyperlapse122/dotfiles#217":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): route agent turns to a model chosen per task with JEV"
+    body: "feat(home): route agent turns to a model chosen per task with JEV — Explore a JEV-based per-turn model and effort router for Claude Code, Codex, and T3 sessions, including secrets, precedence, privacy, and measurement."
+    author_class: "teammate"
+    createdAt: "2026-11-17T14:31:58Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#217"
+    media: []
+    needs_product_decision: true
+    number: 217
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/217"
+    outstanding_questions: ["When should JEV override an explicit thread model or an advisor, what session data may it send, and how should usage savings be measured?"]
+    requirement_id: "R35"
+    updatedAt: "2026-11-17T14:31:58Z"
+  "gh-issues:hyperlapse122/dotfiles#219":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add focused Decisions entry points"
+    body: "feat(home): add focused Decisions entry points — Explore focused terminal entry points for Decisions primitives while preserving judge as the shared semantics and IPC contract."
+    author_class: "teammate"
+    createdAt: "2026-11-17T18:03:33Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#219"
+    media: []
+    needs_product_decision: true
+    number: 219
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/219"
+    outstanding_questions: ["What names and responsibilities should the terminal entry points have for probability, choice, score, and box requests?"]
+    requirement_id: "R36"
+    updatedAt: "2026-11-17T18:03:33Z"
+  "gh-issues:hyperlapse122/dotfiles#230":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "Catalog built-in Antigravity CLI and ACP subagents"
+    body: "Catalog built-in Antigravity CLI and ACP subagents — Build release-bound catalogs of native subagents for pinned agy and ACP distributions, including conditional roles and reproducible CI extraction."
+    author_class: "teammate"
+    createdAt: "2026-11-18T05:06:23Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#230"
+    media: []
+    needs_product_decision: false
+    number: 230
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/230"
+    outstanding_questions: []
+    requirement_id: "R37"
+    updatedAt: "2026-11-18T05:06:23Z"
+  "gh-issues:hyperlapse122/dotfiles#246":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): evaluate decide for optional subagent delegation"
+    body: "feat(home): evaluate decide for optional subagent delegation — Evaluate whether decide should choose between optional direct execution and eligible subagent roles, including representative comparisons and latency."
+    author_class: "teammate"
+    createdAt: "2026-11-18T15:36:20Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#246"
+    media: []
+    needs_product_decision: false
+    number: 246
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/246"
+    outstanding_questions: []
+    requirement_id: "R38"
+    updatedAt: "2026-11-18T15:36:20Z"
   "gh-issues:hyperlapse122/dotfiles#25":
     source: "gh-issues"
     status: "closed"
@@ -66,6 +408,42 @@ items:
     origin: "https://github.com/hyperlapse122/dotfiles/issues/25"
     verified_default_branch: "main"
     verified_default_branch_head: "bbd745817d48b61beebaa5341947f87a92f135d2"
+  "gh-issues:hyperlapse122/dotfiles#250":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "feat(home): add the ant cli for the claude api"
+    body: "feat(home): add the ant cli for the claude api — Package and pin the Anthropic ant CLI from release archives, install it with shell completions, and add scheduled updates and install checks."
+    author_class: "teammate"
+    createdAt: "2026-11-19T09:26:14Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#250"
+    media: []
+    needs_product_decision: false
+    number: 250
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/250"
+    outstanding_questions: []
+    requirement_id: "R39"
+    updatedAt: "2026-11-19T09:27:14Z"
+  "gh-issues:hyperlapse122/dotfiles#254":
+    source: "gh-issues"
+    status: "in_plan"
+    sensitive: false
+    title: "Redesign SOPS secret layout and credential provisioning"
+    body: "Redesign SOPS secret layout and credential provisioning — Redesign the SOPS secret layout and credential declarations by ownership and recipient, with safe migration, rollback, and fake-secret checks."
+    author_class: "teammate"
+    createdAt: "2026-11-19T14:44:20Z"
+    existing_ack: true
+    existing_closeout: false
+    id: "hyperlapse122/dotfiles#254"
+    media: []
+    needs_product_decision: true
+    number: 254
+    origin: "https://github.com/hyperlapse122/dotfiles/issues/254"
+    outstanding_questions: ["Which credentials should be grouped together, and which recipients and consumers need access to each group?"]
+    requirement_id: "R40"
+    updatedAt: "2026-11-19T14:44:20Z"
   "gh-issues:hyperlapse122/dotfiles#29":
     source: "gh-issues"
     status: "closed"
@@ -353,10 +731,13 @@ items:
     source_state: "closed"
   "gh-issues:hyperlapse122/dotfiles#97":
     source: "gh-issues"
-    status: "in_plan"
+    status: "closed"
     sensitive: false
     title: "Prefer T3 Code delegation tools over native subagent tools in T3 launches"
     body: "Prefer T3 Code delegation tools over native subagent tools in T3 launches — add a T3-only preference through existing Codex, Claude, and pi addition paths; retain Grok’s documented limitation and clarify precedence and skill-dispatched agents."
+    fix_ref: "#101"
+    verified_merge_sha: "77f4f142fce41afa90b4e27bd01137ceac58a34b"
+    verified_at: "2026-11-22T05:04:30.002788+00:00"
     author_class: "teammate"
     cursor: "2026-11-07T07:43:28Z"
     existing_ack: true
@@ -365,24 +746,24 @@ items:
     fix_claims: []
     id: "hyperlapse122/dotfiles#97"
     media: []
-    needs_product_decision: true
+    needs_product_decision: false
     origin: "https://github.com/hyperlapse122/dotfiles/issues/97"
-    outstanding_questions: ["How should the delegation preference interact with T3’s existing same-provider native-tool guidance?", "Should the preference also cover agents dispatched internally by skills?"]
+    outstanding_questions: []
     requirement_id: "R19"
 last_run:
-  timestamp: "2026-11-08T12:39:47Z"
+  timestamp: "2026-11-22T05:04:45Z"
   outcome: "completed"
-  writer: "sweep-codex-t3-a4c3d514-20261108-1"
+  writer: "codex-t3-e52ba3a0-20261122-a8f1"
   counts:
     gh-issues:
       ack_deferred: 0
-      acknowledged: 1
+      acknowledged: 21
       closed: 1
-      deferred_product_questions: 2
-      ingested: 1
+      deferred_product_questions: 6
+      ingested: 21
       manual_stuck: 0
-      needs_attention: 1
-      new: 1
-      open: 1
+      needs_attention: 6
+      new: 21
+      open: 21
       recordings_analyzed: 0
-      source_closed: 1
+      source_closed: 0
