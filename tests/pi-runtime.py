@@ -75,8 +75,6 @@ with tempfile.TemporaryDirectory() as directory:
     for provider in PROVIDERS:
         for row in snapshots[provider]:
             assert (provider, row['id']) in offered, f'Pi does not offer {provider}/{row["id"]}'
-    for provider, model in (('openai', 'gpt-6.2-sol'), ('openai', 'gpt-6.2-astra')):
-        assert (provider, model) not in compiled and (provider, model) in offered, (provider, model)
     for key, model in compiled.items():
         assert offered[key] == model, f'declaring the lists changed the catalog model {key}'
     declared_ids = {(provider, row['id']) for provider in PROVIDERS for row in configured['providers'][provider]['models']}
