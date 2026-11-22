@@ -168,7 +168,7 @@ jobs:
     needs: [changes, check-shard-names]
     if: *run-light-checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
@@ -199,7 +199,7 @@ jobs:
       || ((github.event.action == 'synchronize' || github.event.action == 'reopened') && contains(github.event.pull_request.labels.*.name, 'full-ci')))))
       && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.docs_only != 'true')
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Make room for NixOS closures
@@ -291,7 +291,7 @@ jobs:
     needs: [changes, hosts]
     if: *run-closure-checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
