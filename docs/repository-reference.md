@@ -25,7 +25,7 @@ Key directories and files:
 
 ## Local Ollama models in Pi
 
-Pi starts with Synthetic. To use local inference, run `/model` in Pi and choose the Ollama entry for your host. The NixOS desktop uses `ollama/pi-qwen3:4b-32k`; the Mac uses `ollama/pi-qwen3-coder:30b-64k`. Pi sends that model's inference requests to the local server. Network-backed tools such as web search still need a connection.
+Pi starts with Synthetic. To use local inference, run `/model` in Pi and choose the Ollama entry for your host. The NixOS desktop uses `ollama/pi-qwen3:4b-instruct-32k`; the Mac uses `ollama/pi-qwen3-coder:30b-64k`. To start directly with the local model, run `pi --model` followed by its full name. This form also works when the staged Synthetic key is missing. Pi sends that model's inference requests to the local server. Network-backed tools such as web search still need a connection.
 
 The first setup needs internet access to download about 2.5 GB on NixOS or 19 GB on the Mac. Run `ollama list` to see when the `pi-` model appears. It shares its weights with the downloaded base model. After that, it works offline and enters memory on demand. If a download fails, restore connectivity and the provisioning job will retry.
 

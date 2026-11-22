@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the pinned Pi with the switches that keep it from asking pi.dev for a
 # newer version or sending telemetry. The Nix package replaces the @...@
-# constant. Builtins only, so the wrapper needs nothing on PATH.
+# constants with absolute store paths.
 set -euo pipefail
 
 PI='@PI@'
@@ -18,28 +18,14 @@ export no_proxy="${lower_no_proxy:+$lower_no_proxy,}127.0.0.1,localhost,::1"
 
 case "$*" in --version|--help) exec "$PI" "$@" ;; esac
 agent="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
-provider=''
-model=''
-next_value=''
-for arg in "$@"; do
-  if [[ -n "$next_value" ]]; then
-    case "$next_value" in
-      provider) provider="$arg" ;;
-      model) model="$arg" ;;
-    esac
-    next_value=''
-  else
-    case "$arg" in
-      --) break ;;
-      --provider) next_value=provider ;;
-      --provider=*) provider="${arg#--provider=}" ;;
-      --model) next_value=model ;;
-      --model=*) model="${arg#--model=}" ;;
-    esac
-  fi
-done
 key_args=(--key "$key_path")
-if [[ "$provider" == ollama && -n "$model" && ( "$model" != */* || "$model" == ollama/* ) && ! -e "$key_path" ]]; then
+if [[ ! -e "$key_path" ]] && '@NODE@' --input-type=module -e '
+  import { parseArgs } from "@PI_ARGS@";
+  const { provider, model } = parseArgs(process.argv.slice(1));
+  const qualified = model?.startsWith("ollama/") && model.length > "ollama/".length;
+  const local = provider === "ollama" ? model && (!model.includes("/") || qualified) : !provider && qualified;
+  process.exitCode = local ? 0 : 1;
+' -- "$@"; then
   key_args=()
 fi
 '@STATE@' --agent "$agent" "${key_args[@]}" --credential 'openai=@OPENAI_KEY@' --credential 'anthropic=@ANTHROPIC_KEY@' --auth-only

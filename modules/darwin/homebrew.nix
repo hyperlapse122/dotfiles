@@ -1,6 +1,6 @@
 { config, lib, ... }:
 let
-  inherit (import ../shared/darwin-apps.nix) casks tapOf;
+  inherit (import ../shared/darwin-apps.nix) apps casks tapOf;
   thirdParty = lib.filter (cask: tapOf cask != null) casks;
 in
 {
@@ -20,7 +20,7 @@ in
   homebrew = {
     enable = true;
     taps = lib.unique (map tapOf thirdParty);
-    casks = lib.filter (cask: !config.my.bootstrap || cask != "ollama-app") casks;
+    casks = lib.filter (cask: !config.my.bootstrap || cask != apps.ollama.cask) casks;
     brews = [
       "aria2"
       "container"

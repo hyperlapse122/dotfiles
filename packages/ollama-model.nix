@@ -2,7 +2,7 @@ kind:
 let
   models = {
     nixos = {
-      baseModel = "qwen3:4b";
+      baseModel = "qwen3:4b-instruct";
       contextWindow = 32768;
     };
     darwin = {

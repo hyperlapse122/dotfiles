@@ -59,7 +59,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert 'ollama' not in configured['providers']
         assert not any(provider == 'ollama' for provider, _ in offered)
     else:
-        model_id, context = (('pi-qwen3:4b-32k', 32768) if kind == 'nixos'
+        model_id, context = (('pi-qwen3:4b-instruct-32k', 32768) if kind == 'nixos'
                              else ('pi-qwen3-coder:30b-64k', 65536))
         local = configured['providers']['ollama']
         assert local['baseUrl'] == 'http://127.0.0.1:11434/v1'

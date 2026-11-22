@@ -1,4 +1,3 @@
-# The service manager retries if Ollama or the registry is unavailable.
 api() {
     local endpoint=$1
     shift
@@ -20,8 +19,6 @@ if ! has_model "$base_model"; then
     api pull --json "$pull" | jq -e '.status == "success"' >/dev/null
 fi
 
-# Ollama reuses the downloaded weight blobs. The model parameter sets the
-# actual serving window for Pi's OpenAI-compatible requests on either host.
 create=$(jq -nc --arg model "$pi_model" --arg base "$base_model" --argjson context "$context_window" \
     '{model: $model, from: $base, parameters: {num_ctx: $context}, stream: false}')
 api create --json "$create" | jq -e '.status == "success"' >/dev/null

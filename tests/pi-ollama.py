@@ -77,18 +77,17 @@ try:
         env = dict(PATH=os.environ['PATH'], HOME=directory, PI_CODING_AGENT_DIR=str(agent),
                    HTTP_PROXY=cloud_endpoint, HTTPS_PROXY=cloud_endpoint, http_proxy=cloud_endpoint, https_proxy=cloud_endpoint,
                    NO_PROXY='example.invalid', no_proxy='example.invalid')
-        command = [str(executable), '--offline', '--no-extensions', '--no-session', '--print',
-                   '--provider', 'ollama', '--model', local['models'][0]['id'], 'Read fixture.txt.']
-        result = subprocess.run(command, cwd=home, env=env, capture_output=True, text=True, timeout=60)
-        if result.returncode != 0:
-            listing = subprocess.run([str(executable), '--offline', '--provider', 'ollama', '--model', local['models'][0]['id'], '--list-models'], cwd=home, env=env,
-                                     capture_output=True, text=True, timeout=30)
-            raise AssertionError((result.stdout, result.stderr, listing.stderr))
-        assert 'Local tool round trip complete.' in result.stdout, (result.stdout, result.stderr)
-        assert len(requests) == 2 and all(path == '/local/v1/chat/completions' for path, _ in requests), requests
-        assert all(body.get('max_tokens') == 4096 and 'max_completion_tokens' not in body for _, body in requests), requests
-        assert any(message.get('role') == 'tool' and 'safe local fixture' in str(message.get('content'))
-                   for message in requests[1][1]['messages']), requests[1]
+        model_id = local['models'][0]['id']
+        base = [str(executable), '--offline', '--no-extensions', '--no-session', '--print']
+        for selection in (['--provider', 'ollama', '--model', model_id], ['--model', 'ollama/' + model_id]):
+            requests.clear()
+            command = [*base, *selection, 'Read fixture.txt.']
+            result = subprocess.run(command, cwd=home, env=env, capture_output=True, text=True, timeout=60)
+            assert result.returncode == 0 and 'Local tool round trip complete.' in result.stdout, (result.stdout, result.stderr)
+            assert len(requests) == 2 and all(path == '/local/v1/chat/completions' for path, _ in requests), requests
+            assert all(body.get('max_tokens') == 4096 and 'max_completion_tokens' not in body for _, body in requests), requests
+            assert any(message.get('role') == 'tool' and 'safe local fixture' in str(message.get('content'))
+                       for message in requests[1][1]['messages']), requests[1]
         auth['synthetic'] = {'type': 'api_key', 'key': 'FAKE'}
         (agent / 'auth.json').write_text(json.dumps(auth))
         requests.clear()
@@ -102,7 +101,8 @@ try:
         ordinary = subprocess.run([str(executable), '--offline', '--no-session', '--print', 'test'],
                                   cwd=home, env=env, capture_output=True, text=True, timeout=30)
         assert ordinary.returncode != 0, ordinary.stdout
-        for selection in (['--provider', 'ollama'], ['--provider', 'ollama', '--model', 'synthetic/test']):
+        for selection in (['--provider', 'ollama'], ['--provider', 'ollama', '--model', 'synthetic/test'],
+                          ['--system-prompt', '--model', 'ollama/' + model_id], ['--model=ollama/' + model_id]):
             result = subprocess.run([str(executable), '--offline', '--no-session', '--print', *selection, 'test'],
                                     cwd=home, env=env, capture_output=True, text=True, timeout=30)
             assert result.returncode != 0 and 'Cannot reconcile Pi state' in result.stderr, result.stderr

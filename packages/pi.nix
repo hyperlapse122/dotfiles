@@ -53,6 +53,8 @@ stdenv.mkDerivation {
     install -Dm755 ${../scripts/pi-state} $out/bin/pi-state
     substituteInPlace $out/bin/pi-state --replace-fail '/usr/bin/env python3' '${pkgs.python3}/bin/python3'
     substituteInPlace $out/bin/pi \
+      --replace-fail '@NODE@' '${lib.getExe pkgs.nodejs_22}' \
+      --replace-fail '@PI_ARGS@' '${runtime}/lib/pi/node_modules/@earendil-works/pi-coding-agent/dist/cli/args.js' \
       --replace-fail '@STATE@' "$out/bin/pi-state" \
       --replace-fail '@KEY@' '${syntheticKeyFile}' \
       --replace-fail '@EXA_KEY@' '${exaKeyFile}' \
