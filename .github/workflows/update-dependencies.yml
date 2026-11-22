@@ -351,66 +351,39 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -n "$(git status --porcelain packages/claude-desktop-version.json)" ]; then
-            NEW_VER=$(jq -r .version packages/claude-desktop-version.json)
-            git add packages/claude-desktop-version.json
-            git commit -m "chore(packages): bump claude-desktop to $NEW_VER"
-          fi
+          commit_version() {
+            local package="$1" pin="$2"
+            shift 2
+            local version
+            version=$(jq -r .version "$pin")
+            git add -- "$pin" "$@"
+            git commit -m "chore(packages): bump $package to $version"
+          }
 
-          if [ -n "$(git status --porcelain packages/claude-code-manifest.json)" ]; then
-            NEW_VER=$(jq -r .version packages/claude-code-manifest.json)
-            git add packages/claude-code-manifest.json packages/claude-code-agents.json
-            git commit -m "chore(packages): bump claude-code to $NEW_VER"
-          fi
+          commit_if_pin_changed() {
+            local package="$1" pin="$2"
+            shift 2
+            if [ -n "$(git status --porcelain -- "$pin")" ]; then
+              commit_version "$package" "$pin" "$@"
+            fi
+          }
 
-          if [ -n "$(git status --porcelain packages/codex-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/codex-release.json)
-            git add packages/codex-release.json packages/codex-agents.json
-            git commit -m "chore(packages): bump codex to $NEW_VER"
-          fi
-
-          if [ -n "$(git status --porcelain packages/pi-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/pi-release.json)
-            git add packages/pi-release.json packages/pi-agents.json
-            git commit -m "chore(packages): bump pi to $NEW_VER"
-          fi
-
+          commit_if_pin_changed claude-desktop packages/claude-desktop-version.json
+          commit_if_pin_changed claude-code packages/claude-code-manifest.json packages/claude-code-agents.json
+          commit_if_pin_changed codex packages/codex-release.json packages/codex-agents.json
+          commit_if_pin_changed pi packages/pi-release.json packages/pi-agents.json
           for npm_package in acpx claude-agent-sdk; do
-            if [ -n "$(git status --porcelain "packages/$npm_package-release.json" "packages/$npm_package/package-lock.json")" ]; then
-              NEW_VER=$(jq -r .version "packages/$npm_package-release.json")
-              git add "packages/$npm_package-release.json" "packages/$npm_package/package-lock.json"
-              git commit -m "chore(packages): bump $npm_package to $NEW_VER"
+            pin="packages/$npm_package-release.json"
+            lock="packages/$npm_package/package-lock.json"
+            if [ -n "$(git status --porcelain -- "$pin" "$lock")" ]; then
+              commit_version "$npm_package" "$pin" "$lock"
             fi
           done
-          if [ -n "$(git status --porcelain packages/t3code-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/t3code-release.json)
-            git add packages/t3code-release.json
-            git commit -m "chore(packages): bump t3code to $NEW_VER"
-          fi
-
-          if [ -n "$(git status --porcelain packages/opencode-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/opencode-release.json)
-            git add packages/opencode-release.json
-            git commit -m "chore(packages): bump opencode to $NEW_VER"
-          fi
-
-          if [ -n "$(git status --porcelain packages/chatgpt-version.json)" ]; then
-            NEW_VER=$(jq -r .version packages/chatgpt-version.json)
-            git add packages/chatgpt-version.json
-            git commit -m "chore(packages): bump chatgpt to $NEW_VER"
-          fi
-
-          if [ -n "$(git status --porcelain packages/ant-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/ant-release.json)
-            git add packages/ant-release.json
-            git commit -m "chore(packages): bump ant to $NEW_VER"
-          fi
-
-          if [ -n "$(git status --porcelain packages/mise-release.json)" ]; then
-            NEW_VER=$(jq -r .version packages/mise-release.json)
-            git add packages/mise-release.json
-            git commit -m "chore(packages): bump mise to $NEW_VER"
-          fi
+          commit_if_pin_changed t3code packages/t3code-release.json
+          commit_if_pin_changed opencode packages/opencode-release.json
+          commit_if_pin_changed chatgpt packages/chatgpt-version.json
+          commit_if_pin_changed ant packages/ant-release.json
+          commit_if_pin_changed mise packages/mise-release.json
 
           if [ -n "$(git status --porcelain packages/prezto-pin.json)" ]; then
             NEW_REV=$(jq -r '.zshLock.archives[0].commit' packages/prezto-pin.json)

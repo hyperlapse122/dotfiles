@@ -68,8 +68,7 @@ let
     ]) (import ./pi-hidden-models.nix)
   );
   agent = "${config.home.homeDirectory}/.pi/agent";
-  keyDirectory =
-    if config.my.kind == "nixos" then "/run/secrets/cli-auth" else config.my.secrets.stateDir;
+  keyDirectory = import ../security/cli-auth-directory.nix config.my;
   pi = import ../../../packages/pi.nix {
     inherit pkgs;
     syntheticKeyFile = "${keyDirectory}/synthetic_api_key";

@@ -301,7 +301,7 @@ let
     '';
 in
 pkgs.runCommand "codex-settings-tests" { nativeBuildInputs = [ pkgs.diffutils ]; } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failed=0
 
   ${lib.concatMapStringsSep "\n" assertHost configurations.userEntries}

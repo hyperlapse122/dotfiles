@@ -34,6 +34,8 @@ import sys
 import tarfile
 import tempfile
 
+from release_pin import pinned_version, version_tuple
+
 DEFAULT_SOURCE_URL = "https://registry.npmjs.org"
 DEFAULT_STEP_TIMEOUT = 600
 TARBALL_PREFIX = DEFAULT_SOURCE_URL + "/"
@@ -188,22 +190,6 @@ def lock_and_hash(base, manifest):
         if not DEPS_HASH_PATTERN.fullmatch(deps_hash):
             raise Failure(f"prefetch-npm-deps printed no sha256 hash: {deps_hash!r}")
     return lock_text, deps_hash
-
-
-def version_tuple(version):
-    if not isinstance(version, str):
-        raise ValueError(f"not a version string: {version!r}")
-    return tuple(int(part) for part in version.split("."))
-
-
-def pinned_version(path):
-    """Return the version already pinned at path, or None when unreadable."""
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            current = json.load(f)
-        return current.get("version")
-    except Exception:
-        return None
 
 
 def write_atomically(path, text):

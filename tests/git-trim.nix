@@ -1,11 +1,11 @@
 /*
   Check interface:
 
-    import ./tests/git-trim.nix { inherit pkgs self fixtures; }
+    import ./tests/git-trim.nix { inherit pkgs self; }
 
   Asserts that `git trim` only deletes local branches, and never rewrites a
   checkout's HEAD, for user `h82` on every Home Manager user
-  `tests/lib/configurations.nix` yields (NixOS and non-NixOS hosts, bootstrap
+  `tests/lib/configurations.nix` yields (NixOS hosts, bootstrap
   outputs included). The bootstrap outputs import the same Home Manager profile
   and git-trim is meant
   to reach them too, so they are checked rather than assumed identical: a
@@ -44,12 +44,11 @@
 {
   pkgs,
   self,
-  fixtures ? [ ],
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   esc = value: lib.escapeShellArg (toString value);
 
@@ -68,7 +67,7 @@ let
     '';
 in
 pkgs.runCommand "git-trim-tests" { nativeBuildInputs = [ pkgs.git ]; } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failures=$PWD/failures
   : > "$failures"
 

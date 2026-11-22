@@ -8,13 +8,12 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
   executeActivation = import ./lib/agent-activation.nix { inherit pkgs; };
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   esc = value: lib.escapeShellArg (toString value);
 
@@ -588,9 +587,7 @@ let
   # The module reaches lib.hm, which only Home Manager's extended lib carries.
   hmLib = import "${self.inputs.home-manager}/modules/lib/stdlib-extended.nix" lib;
 
-  # The module on its own, so the assertion's message and the packages it
-  # would otherwise let through can be read. NixOS is the control: there the
-  # desktop app installs and nothing fails.
+  # Evaluate the module on each supported host kind.
   moduleWith =
     module: kind:
     let
@@ -601,10 +598,6 @@ let
             ../modules/shared/host.nix
             module
             {
-              options.assertions = lib.mkOption {
-                type = lib.types.listOf lib.types.unspecified;
-                default = [ ];
-              };
               options.home.packages = lib.mkOption {
                 type = lib.types.listOf lib.types.package;
                 default = [ ];
@@ -640,7 +633,6 @@ let
     in
     {
       inherit config;
-      failed = map (a: a.message) (lib.filter (a: !a.assertion) config.assertions);
       desktopInstalled = lib.elem "t3code-desktop" (map lib.getName config.home.packages);
       updaterOff =
         let
@@ -672,17 +664,11 @@ let
       darwin = moduleOn "darwin";
     in
     lib.concatStrings [
-      (lib.optionalString (nixos.failed != [ ]) (
-        fail "NixOS with my.t3.desktop.enable: assertions fail: ${builtins.toJSON nixos.failed}"
-      ))
       (lib.optionalString (!nixos.desktopInstalled) (
         fail "NixOS with my.t3.desktop.enable: the T3 Code desktop package is not added"
       ))
       (lib.optionalString nixos.updaterOff (
         fail "NixOS with my.t3.desktop.enable: the macOS updater-off launchd agent is declared"
-      ))
-      (lib.optionalString (darwin.failed != [ ]) (
-        fail "macOS with my.t3.desktop.enable: assertions fail: ${builtins.toJSON darwin.failed}"
       ))
       (lib.optionalString (!darwin.desktopInstalled) (
         fail "macOS with my.t3.desktop.enable: the T3 Code desktop package is not added"

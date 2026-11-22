@@ -372,7 +372,7 @@ pkgs.runCommand "opencode-tests"
     ];
   }
   ''
-    ${lib.optionalString (entries == null) configurations.userGuard}
+    ${lib.optionalString (entries == null) configurations.guard}
     failed=0
 
     ${lib.concatMapStringsSep "\n" assertHost (

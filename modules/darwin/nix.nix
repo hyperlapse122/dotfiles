@@ -1,6 +1,6 @@
 { lib, ... }:
 {
-  # nix.conf is the flake's to own, as on NixOS and the non-NixOS Linux hosts,
+  # nix.conf is the flake's to own, as on NixOS,
   # so the upstream multi-user installer's daemon runs with the shared
   # settings. The installer's own /etc/nix/nix.conf is moved aside once before
   # the first apply (docs/macos.md).

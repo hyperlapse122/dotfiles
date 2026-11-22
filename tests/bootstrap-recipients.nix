@@ -18,7 +18,7 @@ let
   groups = lib.unique (lib.mapAttrsToList (_: spec: spec.group) sharedCredentials);
   sharedPaths = map (group: "secrets/${group}.yaml") (groups ++ [ "tokens" ]);
 
-  directoriesIn = import ./lib/directories.nix { inherit lib; };
+  directoriesIn = import ../lib/directories.nix { inherit lib; };
 
   hosts = directoriesIn bootstrap;
 

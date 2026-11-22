@@ -45,7 +45,7 @@
 
   Whether the merge preserves undeclared keys is not assertable from evaluated
   configuration at all -- it is behaviour of the packaged script. The
-  `agent-settings` check in flake.nix runs that script against a seeded,
+  `agent-settings` check runs that script against a seeded,
   divergent settings file instead.
 
   Every lookup carries an `or` fallback so a mutation that removes an entry or
@@ -438,7 +438,6 @@ in
 pkgs.runCommand "claude-tests" { nativeBuildInputs = [ pkgs.diffutils ]; } ''
   set -x
   ${lib.optionalString (entries == null) configurations.guard}
-  ${lib.optionalString (entries == null) configurations.userGuard}
   failed=0
 
   ${lib.concatMapStringsSep "\n" assertUser userEntries}

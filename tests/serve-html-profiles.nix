@@ -1,11 +1,11 @@
 /*
   Check interface:
 
-    import ./tests/serve-html-profiles.nix { inherit pkgs self fixtures; }
+    import ./tests/serve-html-profiles.nix { inherit pkgs self; }
 
   Asserts that `serve-html`, the command the shared agent instructions tell
   agents under T3 Code to open local HTML with, is on PATH for every Home
-  Manager user `tests/lib/configurations.nix` yields (NixOS and non-NixOS
+  Manager user `tests/lib/configurations.nix` yields (NixOS
   hosts, production and bootstrap alike), by reading each user's built
   home.path rather than the home.packages option. tests/test_serve_html.py
   covers what the helper does; this check proves the profile holds it.
@@ -22,12 +22,11 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   package = (import ../packages/agent-tools.nix { inherit pkgs; }).serveHtml or null;
   helper = lib.optionalString (package != null) (lib.getExe package);
@@ -39,7 +38,7 @@ let
   '';
 in
 pkgs.runCommand "serve-html-profiles-tests" { } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failures=$PWD/failures
   : > "$failures"
   ${lib.optionalString (helper == "") ''

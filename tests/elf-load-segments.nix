@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/elf-load-segments.nix { inherit pkgs self fixtures; }
+    import ./tests/elf-load-segments.nix { inherit pkgs self; }
 
   Scans every ELF file in the closures of every configuration
   `tests/lib/configurations.nix` yields, production and bootstrap alike, and
@@ -16,12 +16,11 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   roots = map (entry: entry.config.system.build.toplevel) configurations.entries;
 

@@ -39,7 +39,7 @@ pkgs.runCommand "desktop-ssh-tests"
     ];
   }
   ''
-    ${configurations.userGuard}
+    ${configurations.guard}
     python ${./check_desktop_ssh_config.py} --root ${../.} --entries ${pkgs.writeText "desktop-ssh-entries.json" (builtins.toJSON entries)}
     export DESKTOP_SSH_SCRIPT=${package}/bin/desktop-ssh
     python ${./test_desktop_ssh.py}

@@ -23,11 +23,9 @@ let
 
   pythonHelper = name: src: helperWith name src pkgs.python3;
 
-  # The catalog scripts import scripts/catalog_snapshot.py from their own
-  # directory, so each is installed beside it under libexec and linked into
-  # bin.
-  catalogHelper =
-    name: src:
+  # A symlink in bin keeps the script beside its Python import in libexec.
+  helperWithModule =
+    module: name: src:
     pkgs.stdenvNoCC.mkDerivation {
       pname = name;
       version = "1";
@@ -35,13 +33,16 @@ let
       nativeBuildInputs = [ pkgs.python3 ];
       installPhase = ''
         install -Dm755 ${src} $out/libexec/${name}/${name}
-        install -Dm644 ${../scripts/catalog_snapshot.py} $out/libexec/${name}/catalog_snapshot.py
+        install -Dm644 ${module} $out/libexec/${name}/${baseNameOf module}
         patchShebangs $out/libexec/${name}/${name}
         mkdir -p $out/bin
         ln -s ../libexec/${name}/${name} $out/bin/${name}
       '';
       meta.mainProgram = name;
     };
+
+  catalogHelper = helperWithModule ../scripts/catalog_snapshot.py;
+  releaseHelper = helperWithModule ../scripts/release_pin.py;
 
   # tomlkit is what lets the TOML mode rewrite a file such as Codex's
   # config.toml without dropping the comments and tables it does not own. The
@@ -74,7 +75,7 @@ let
 
   # Resolves the latest claude-code release manifest from Anthropic's own
   # release endpoints.
-  claudeCodeRelease = pythonHelper "claude-code-release" ../scripts/claude-code-release;
+  claudeCodeRelease = releaseHelper "claude-code-release" ../scripts/claude-code-release;
 
   # Extracts the catalog of subagents built into the Claude Code binary. The
   # wrapper puts the claude-code package built from the current manifest on
@@ -112,7 +113,7 @@ let
 
   # Resolves the latest mise release from the SHASUMS256.txt asset of its
   # latest GitHub release.
-  miseRelease = pythonHelper "mise-release" ../scripts/mise-release;
+  miseRelease = releaseHelper "mise-release" ../scripts/mise-release;
 
   preztoRelease = (pythonHelper "prezto-release" ../scripts/prezto-release).overrideAttrs (old: {
     nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
@@ -131,14 +132,12 @@ let
     '';
   });
 
-  # Resolves the latest Codex release and its musl asset digest from the
-  # GitHub releases API.
-  piRelease = pythonHelper "pi-release" ../scripts/pi-release;
+  piRelease = releaseHelper "pi-release" ../scripts/pi-release;
 
-  codexRelease = pythonHelper "codex-release" ../scripts/codex-release;
+  codexRelease = releaseHelper "codex-release" ../scripts/codex-release;
 
   # Resolves the newest stable OpenCode v2 release from the GitHub release list.
-  opencodeRelease = pythonHelper "opencode-release" ../scripts/opencode-release;
+  opencodeRelease = releaseHelper "opencode-release" ../scripts/opencode-release;
 
   # Seeds OpenCode's credential store from the published API key files.
   opencodeAuthSync = pythonHelper "opencode-auth-sync" ../scripts/opencode-auth-sync;
@@ -180,7 +179,7 @@ let
   # runner needs neither.
   npmRelease = pkgs.symlinkJoin {
     name = "npm-release";
-    paths = [ (pythonHelper "npm-release" ../scripts/npm-release) ];
+    paths = [ (releaseHelper "npm-release" ../scripts/npm-release) ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram $out/bin/npm-release \

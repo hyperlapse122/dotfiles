@@ -1,11 +1,11 @@
 /*
   Check interface:
 
-    import ./tests/kubernetes-tools.nix { inherit pkgs self fixtures; }
+    import ./tests/kubernetes-tools.nix { inherit pkgs self; }
 
   Asserts that kubectl, helm, and minikube reach user `h82` with their zsh
   completions on every Home Manager user `tests/lib/configurations.nix` yields
-  (NixOS and non-NixOS hosts, production and bootstrap alike).
+  (NixOS hosts, production and bootstrap alike).
 
   Each tool runs from home.path and must print its client version, because an
   existence test alone passes for a binary that exists but does not work.
@@ -22,12 +22,11 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   esc = value: lib.escapeShellArg (toString value);
 
@@ -41,7 +40,7 @@ let
     '';
 in
 pkgs.runCommand "kubernetes-tools-tests" { } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failures=$PWD/failures
   : > "$failures"
 

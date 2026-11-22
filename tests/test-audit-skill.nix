@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/test-audit-skill.nix { inherit pkgs self fixtures; }
+    import ./tests/test-audit-skill.nix { inherit pkgs self; }
 
   Asserts that the vendored test-audit skill reaches Claude Code, Codex, and OpenCode for user
   `h82` on every host this flake declares, and that its text stays
@@ -12,7 +12,7 @@
     OpenCode                  ~/.config/opencode/skills/test-audit
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
-  NixOS and non-NixOS Linux user environments are both covered, and the
+  NixOS user environments are covered, and the
   helper's guard fails the build when that list is empty. The exact population
   of each root, test-audit included, is tests/korean-skills.nix's to check.
 
@@ -47,7 +47,6 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
@@ -88,7 +87,7 @@ let
 
   source = ../home/h82/agents/skills/test-audit;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   homeFile =
     label: userConfig: target:
@@ -185,7 +184,7 @@ let
 in
 pkgs.runCommand "test-audit-skill-tests" { } ''
   set -x
-  ${configurations.userGuard}
+  ${configurations.guard}
   failed=0
 
   for file in ${lib.escapeShellArgs markdownFiles}; do

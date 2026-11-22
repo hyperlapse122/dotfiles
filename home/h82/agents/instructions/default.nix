@@ -9,7 +9,6 @@ let
   renderer = import ../../../../packages/text-template.nix { inherit pkgs; };
 
   helper = (import ../../../../packages/agent-tools.nix { inherit pkgs; }).agentInstructions;
-  live = config.my.kind != "linux";
   context = pkgs.writeText "agent-instructions-context.json" (
     builtins.toJSON (
       (hostFacts.of config.my)
@@ -41,35 +40,16 @@ let
     ''}
     ${command} --home "$HOME"
   '';
-  rendered = pkgs.runCommand "agent-instructions" { } ''
-    ${command} --home "$out"
-  '';
-  targets = {
-    claude = ".claude/CLAUDE.md";
-    codex = ".codex/AGENTS.md";
-    pi = ".pi/agent/AGENTS.md";
-    opencode = ".config/opencode/AGENTS.md";
-  };
+
 in
 {
   home.file = {
     ".local/share/nix-config/claude-code-agents.json".source =
       ../../../../packages/claude-code-agents.json;
-  }
-  // (
-    if live then
-      { ".local/share/nix-config/refresh-agent-instructions".source = refresh; }
-    else
-      lib.mapAttrs' (
-        delivery: target:
-        lib.nameValuePair "agent-instructions-${delivery}" {
-          inherit target;
-          source = "${rendered}/${target}";
-        }
-      ) targets
-  );
+    ".local/share/nix-config/refresh-agent-instructions".source = refresh;
+  };
 
-  home.activation.agentInstructions = lib.mkIf live (
+  home.activation.agentInstructions = (
     lib.hm.dag.entryAfter
       ([ "installPackages" ] ++ lib.optional (config.my.kind == "nixos") "kdeSession")
       ''

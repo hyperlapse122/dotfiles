@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/session-variables.nix { inherit pkgs self fixtures; }
+    import ./tests/session-variables.nix { inherit pkgs self; }
 
   Asserts that every configuration renders the Testcontainers, Turborepo, and
   telemetry opt-out session variables into both files that carry the h82
@@ -10,7 +10,7 @@
   user manager reads.
 
   Verifies, on every Home Manager user `tests/lib/configurations.nix` yields
-  (NixOS and non-NixOS hosts, production and bootstrap alike):
+  (NixOS hosts, production and bootstrap alike):
   - the h82 Home Manager generation exists.
   - environment.d/10-home-manager.conf is materialized in the generation's
     home-files, so a disabled or retargeted entry fails here rather than
@@ -30,12 +30,11 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
   expectedPeers = import ./lib/cross-model-peers.nix { inherit lib; };
 
   expectedVariables = {
@@ -91,7 +90,7 @@ let
 in
 pkgs.runCommand "session-variables-tests" { nativeBuildInputs = [ pkgs.gnugrep ]; } ''
   set -x
-  ${configurations.userGuard}
+  ${configurations.guard}
   failed=0
 
   # CE matches each token against `,<list>,`, so a space beside a comma, an

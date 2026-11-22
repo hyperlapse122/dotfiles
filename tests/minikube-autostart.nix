@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/minikube-autostart.nix { inherit pkgs self fixtures; }
+    import ./tests/minikube-autostart.nix { inherit pkgs self; }
 
   Asserts that every NixOS configuration with `my.minikube.enable` starts a
   rootless minikube cluster from h82's user manager, and that nothing else
@@ -32,12 +32,11 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
   # Each output is judged by its own trait, so a host may opt out. Every
   # bootstrap output is asserted off on its own, so a default that drops its
   # bootstrap clause fails even though the trait split would then call those
@@ -168,7 +167,6 @@ in
 pkgs.runCommand "minikube-autostart-tests" { } ''
   ${configurations.guard}
   ${minikube.guard}
-  ${configurations.userGuard}
   failed=0
 
   ${lib.concatMapStringsSep "\n" assertEnabled minikube.enabled}

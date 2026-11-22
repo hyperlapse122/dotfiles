@@ -1,7 +1,7 @@
 /*
   VM check set interface:
 
-    import ./tests/vm-checks.nix { inherit pkgs inputs linuxFixtures; }
+    import ./tests/vm-checks.nix { inherit pkgs inputs; }
 
   The VM tests, each needing /dev/kvm and the `nixos-test` and `kvm`
   system features. flake.nix exposes them as

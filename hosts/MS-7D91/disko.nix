@@ -1,3 +1,12 @@
+let
+  compressedSubvolume = mountpoint: {
+    inherit mountpoint;
+    mountOptions = [
+      "compress=zstd"
+      "noatime"
+    ];
+  };
+in
 {
   disko.devices.disk.main = {
     type = "disk";
@@ -30,34 +39,10 @@
               type = "btrfs";
               extraArgs = [ "-f" ];
               subvolumes = {
-                "/root" = {
-                  mountpoint = "/";
-                  mountOptions = [
-                    "compress=zstd"
-                    "noatime"
-                  ];
-                };
-                "/home" = {
-                  mountpoint = "/home";
-                  mountOptions = [
-                    "compress=zstd"
-                    "noatime"
-                  ];
-                };
-                "/nix" = {
-                  mountpoint = "/nix";
-                  mountOptions = [
-                    "compress=zstd"
-                    "noatime"
-                  ];
-                };
-                "/log" = {
-                  mountpoint = "/var/log";
-                  mountOptions = [
-                    "compress=zstd"
-                    "noatime"
-                  ];
-                };
+                "/root" = compressedSubvolume "/";
+                "/home" = compressedSubvolume "/home";
+                "/nix" = compressedSubvolume "/nix";
+                "/log" = compressedSubvolume "/var/log";
                 "/swap" = {
                   mountpoint = "/swap";
                   mountOptions = [

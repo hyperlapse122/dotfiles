@@ -164,17 +164,12 @@ let
   # trusted schema domain, a Copilot toggle, a new SSH host), so an object is
   # declared leaf by leaf rather than owned whole. Arrays have no element-wise
   # form and are owned.
-  leaves =
-    path: value:
-    if lib.isAttrs value then
-      lib.concatLists (lib.mapAttrsToList (key: leaves (path ++ [ key ])) value)
-    else
-      [ { inherit path value; } ];
+  leaves = import ../settings-leaves.nix { inherit lib; };
 
   declared = pkgs.writeText "vscodium-declared-settings.json" (
     builtins.toJSON {
       set = lib.filterAttrs (_: value: !(lib.isAttrs value || lib.isList value)) settings;
-      setPaths = leaves [ ] (lib.filterAttrs (_: lib.isAttrs) settings);
+      setPaths = leaves (lib.filterAttrs (_: lib.isAttrs) settings);
       own = lib.filterAttrs (_: lib.isList) settings;
     }
   );

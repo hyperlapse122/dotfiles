@@ -6,9 +6,6 @@
   run the flake's own builds through the user profile. The T3 Code
   declared settings are merged into its
   own settings files on activation.
-
-  The desktop app runs on NixOS and macOS. A non-NixOS Linux host that enables
-  it fails the assertion below rather than a build.
 */
 {
   config,
@@ -18,9 +15,7 @@
 }:
 let
   cfg = config.my.t3;
-  nixos = config.my.kind == "nixos";
   darwin = config.my.kind == "darwin";
-  desktopSupported = nixos || darwin;
 
   agentTools = import ../../packages/agent-tools.nix { inherit pkgs; };
   merger = "${agentTools.agentSettings}/bin/agent-settings";
@@ -286,71 +281,43 @@ let
   # The app and the CLI rewrite both files at runtime, so the keys are merged
   # in rather than owned by a store symlink. An object T3 Code may extend is
   # declared leaf by leaf, as home/h82/dev/vscodium.nix does.
-  leaves =
-    path: value:
-    if lib.isAttrs value then
-      lib.concatLists (lib.mapAttrsToList (key: leaves (path ++ [ key ])) value)
-    else
-      [ { inherit path value; } ];
+  leaves = import ./settings-leaves.nix { inherit lib; };
 
-  declaration =
-    {
-      values,
-      owned ? { },
-      remove ? [ ],
-      removePaths ? [ ],
-      prefixEntries ? [ ],
-      upsertPaths ? [ ],
-      migrateInstances ? null,
-      ownEntries ? [ ],
-    }:
-    {
-      inherit remove;
-      set = lib.filterAttrs (_: value: !lib.isAttrs value) values;
-      setPaths = leaves [ ] (lib.filterAttrs (_: lib.isAttrs) values);
-      own = owned;
-    }
-    // lib.optionalAttrs (removePaths != [ ]) { inherit removePaths; }
-    // lib.optionalAttrs (prefixEntries != [ ]) { inherit prefixEntries; }
-    // lib.optionalAttrs (upsertPaths != [ ]) { inherit upsertPaths; }
-    // lib.optionalAttrs (ownEntries != [ ]) { inherit ownEntries; }
-    // lib.optionalAttrs (migrateInstances != null) { inherit migrateInstances; };
+  declaration = values: {
+    remove = [ ];
+    set = lib.filterAttrs (_: value: !lib.isAttrs value) values;
+    setPaths = leaves (lib.filterAttrs (_: lib.isAttrs) values);
+    own = { };
+  };
   merges = {
     t3codeSettings = {
       file = "settings.json";
       ledger = "t3code-settings-ownership.json";
       declared = pkgs.writeText "t3code-declared-settings.json" (
-        builtins.toJSON (declaration {
-          values = settings;
-          owned = modelSelections;
-          remove = retiredKeys;
-          removePaths = retiredPaths;
-          upsertPaths = [ opencodeInstructions ];
-          migrateInstances = instanceMigration;
-        })
+        builtins.toJSON (
+          (declaration settings)
+          // {
+            own = modelSelections;
+            remove = retiredKeys;
+            removePaths = retiredPaths;
+            upsertPaths = [ opencodeInstructions ];
+            migrateInstances = instanceMigration;
+          }
+        )
       );
     };
     t3codeClientSettings = {
       file = "client-settings.json";
       declared = pkgs.writeText "t3code-declared-client-settings.json" (
-        builtins.toJSON (declaration {
-          values = clientSettings;
-        })
+        builtins.toJSON (declaration clientSettings)
       );
     };
   };
 in
 {
-  assertions = [
-    {
-      assertion = cfg.desktop.enable -> desktopSupported;
-      message = "${config.my.hostName}: my.t3.desktop.enable: the T3 Code desktop app runs on NixOS and macOS only; enable my.t3.cli.enable on a non-NixOS Linux host.";
-    }
-  ];
-
   home.packages =
     lib.optionals cfg.cli.enable [ (import ../../packages/t3code-cli.nix { inherit pkgs; }) ]
-    ++ lib.optionals (cfg.desktop.enable && desktopSupported) [
+    ++ lib.optionals (cfg.desktop.enable) [
       (import ../../packages/t3code.nix { inherit pkgs; })
     ];
 

@@ -6,29 +6,13 @@
 }:
 let
   cfg = config.my.wiredNetwork;
-  inherit (config.my) hostName;
-  active = cfg.enable && !config.my.bootstrap;
+  shared = import ../shared/wired-network.nix { inherit config lib; };
   tool = lib.getExe (import ../../packages/macos-wired-network.nix { inherit pkgs; });
 in
 {
-  options.my.wiredNetwork.file = lib.mkOption {
-    type = lib.types.nullOr lib.types.path;
-    default =
-      let
-        file = ../../secrets/hosts + "/${hostName}/wired-network.yaml";
-      in
-      if builtins.pathExists file then file else null;
-    description = "Encrypted YAML declaring the wired adapter's `mac`, `ipv4_address`, `ipv4_subnet_mask`, `ipv4_router`, and `dns_servers`, decrypted with the host identity at activation.";
-  };
+  imports = [ shared.module ];
 
-  config = lib.mkIf active {
-    assertions = [
-      {
-        assertion = cfg.file != null;
-        message = "${hostName}: my.wiredNetwork.enable needs secrets/hosts/${hostName}/wired-network.yaml; see docs/macos.md.";
-      }
-    ];
-
+  config = lib.mkIf shared.active {
     # Last, after the Homebrew, Xcode, and container steps, so the brief wired
     # drop a rewrite can cause never interrupts their downloads. No echo here:
     # an unplugged or already matching adapter must leave the switch silent.

@@ -12,8 +12,9 @@ incomplete release nor a downgrade ever reaches the pin file.
 import argparse
 import json
 import re
-import subprocess
 import sys
+
+from release_pin import Failure, fetch, version_tuple
 
 DEFAULT_BASE_URL = "https://downloads.claude.ai/claude-code-releases"
 
@@ -23,23 +24,6 @@ DEFAULT_BASE_URL = "https://downloads.claude.ai/claude-code-releases"
 TARGET_PLATFORMS = ("linux-x64", "linux-arm64")
 
 VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+)*$")
-
-
-class Failure(Exception):
-    """A refusal that should stop the caller with a readable message."""
-
-
-def fetch(url):
-    """Fetch one URL with curl and return the raw body."""
-    proc = subprocess.run(
-        ["curl", "-sfL", "--max-time", "60", url],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        raise Failure(f"fetching {url} failed with status {proc.returncode}")
-    return proc.stdout
 
 
 def fetch_latest_version(base_url):
@@ -79,12 +63,6 @@ def require_target_platforms(manifest, version):
                 f"manifest for {version}'s {platform!r} entry is missing "
                 "'binary' or 'checksum'; refusing to write an incomplete pin"
             )
-
-
-def version_tuple(version):
-    if not isinstance(version, str):
-        raise ValueError(f"not a version string: {version!r}")
-    return tuple(int(part) for part in version.split("."))
 
 
 def main(argv=None):
