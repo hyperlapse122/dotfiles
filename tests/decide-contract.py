@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 import os
@@ -104,6 +105,85 @@ class Contract(unittest.IsolatedAsyncioTestCase):
             await Judge(OpenRouter(api_key='test-key', endpoint=self.url)).judge(invalid)
         self.assertEqual(caught.exception.status, 400)
         self.assertEqual(self.received, [])
+
+
+    async def test_focused_commands_match_judge_over_ipc(self):
+        from decide.server import Service
+
+        class EchoBackend:
+            def __init__(self):
+                self.requests = []
+
+            async def judge(self, document, *, headers=None):
+                self.requests.append(document)
+                kind = document['questions']['result']['type']
+                if document['state'] == 'unsupported':
+                    raise DecisionError(400, {'error': {'code': 400, 'message': 'unsupported media'}})
+                answers = {
+                    'noul': {'type': 'noul', 'noul': 0.73},
+                    'choice': {'type': 'choice', 'choice': 'a'},
+                    'score': {'type': 'score', 'score': 0.5, 'legend': {'0': {'label': 'low'}}},
+                    'box': {'type': 'box', 'box': {'top': 0.1, 'bottom': 0.8, 'left': 0.2, 'right': 0.9}},
+                }
+                return {'model': document['model'], 'answers': {'result': answers[kind]}, 'usage': {'input_tokens': 1, 'output_tokens': 0}}
+
+        backend = EchoBackend()
+        with tempfile.TemporaryDirectory() as directory:
+            sock = str(Path(directory) / 's.sock')
+            service = Service(Judge(backend), sock)
+            await service.start()
+            self.addAsyncCleanup(service.close)
+            executable = os.environ.get('DECIDE_TEST_CLI')
+            command = [executable] if executable else [sys.executable, '-m', 'decide']
+            env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path))
+
+            async def run(*args, input=None):
+                process = await asyncio.create_subprocess_exec(*command, *args, stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
+                out, err = await process.communicate(input)
+                return process.returncode, out.decode(), err.decode()
+
+            cases = [
+                ('noul', ['--state', 'ready', 'Is it ready?'], 'ready', {'type': 'noul', 'instructions': 'Is it ready?'}),
+                ('choice', ['--state', 'ready', '--alternative', 'a', 'yes', '--alternative', 'b', 'no'], 'ready', {'type': 'choice', 'criteria': {'a': 'yes', 'b': 'no'}}),
+                ('score', ['--state', 'ready', '--level', 'low', '--level', 'high'], 'ready', {'type': 'score', 'criteria': ['low', 'high']}),
+                ('box', ['--image', 'https://example.com/x.png', 'Find object'], [{'type': 'image_url', 'image_url': {'url': 'https://example.com/x.png'}}], {'type': 'box', 'instructions': 'Find object'}),
+            ]
+            for kind, args, state, question in cases:
+                with self.subTest(kind=kind):
+                    document = {'model': 'test/model', 'state': state, 'questions': {'result': question}}
+                    common = ['--socket', sock, '--model', 'test/model', '--json']
+                    focused = await run(kind, *common, *args)
+                    judge = await run('judge', *common, '-', input=json.dumps(document).encode())
+                    self.assertEqual(focused, judge)
+                    self.assertEqual(focused[0], 0, focused[2])
+                    self.assertEqual(backend.requests[-2:], [document, document])
+
+            code, out, err = await run('score', '--socket', sock, '--model', 'test/model', '--state', 'ready', '--level', 'low', '--level', 'high')
+            self.assertEqual(code, 0, err)
+            self.assertIn('0.5', out)
+            self.assertIn('low', out)
+
+            focused = await run('noul', '--socket', sock, '--model', 'test/model', '--json', '--state', 'unsupported', 'Ready?')
+            document = {'model': 'test/model', 'state': 'unsupported', 'questions': {'result': {'type': 'noul', 'instructions': 'Ready?'}}}
+            judge = await run('judge', '--socket', sock, '--model', 'test/model', '--json', '-', input=json.dumps(document).encode())
+            self.assertEqual(focused, judge)
+            self.assertEqual(json.loads(focused[2])['error']['message'], 'unsupported media')
+
+            from decide.mlx import MLX
+            await service.close()
+            service = Service(Judge(MLX('/unused')), sock)
+            await service.start()
+            self.addAsyncCleanup(service.close)
+            document = {'model': MLX.model, 'state': [{'type': 'image_url', 'image_url': {'url': 'https://example.com/x.png'}}],
+                        'questions': {'result': {'type': 'box', 'instructions': 'Find object'}}}
+            common = ['--socket', sock, '--model', MLX.model, '--json']
+            focused = await run('box', *common, '--image', 'https://example.com/x.png', 'Find object')
+            judge = await run('judge', *common, '-', input=json.dumps(document).encode())
+            self.assertEqual(focused, judge)
+            self.assertEqual(focused[0], 1)
+            self.assertEqual(json.loads(focused[2])['error']['code'], 400)
+
 
     async def test_config_keeps_packaged_backend_and_runtime_settings(self):
         with tempfile.TemporaryDirectory() as directory:
