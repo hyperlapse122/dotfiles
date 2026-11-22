@@ -36,7 +36,10 @@ pkgs.runCommand "pi-tests"
       ''
       + lib.optionalString (found != null) ''
         test -x ${found}/bin/pi
-        python3 ${./pi-runtime.py} ${found}/libexec/pi/pi ${entry.user.home-files}/.pi/agent ${../home/h82/agents}
+        python3 ${./pi-runtime.py} ${found}/libexec/pi/pi ${entry.user.home-files}/.pi/agent ${../home/h82/agents} ${entry.user.my.kind} ${
+          if entry.user.my.bootstrap then "bootstrap" else "production"
+        }
+        python3 ${./pi-ollama.py} ${found}/bin/pi ${entry.user.home-files}/.pi/agent ${keyDirectory}
         node ${./pi-tools.mjs} ${found} ${entry.user.home-files}/.pi/agent
         python3 ${./pi-wrapper.py} ${found}/bin/pi ${entry.user.home-files}/.pi/agent ${keyDirectory}
         python3 ${./pi-state.py} ${entry.user.home-files}/.pi/agent ${../scripts/pi-state} ${found} ${./pi-trust.mjs}

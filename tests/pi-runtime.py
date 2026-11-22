@@ -8,7 +8,7 @@ import sys
 import tempfile
 import time
 
-pi, installed, agents = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+pi, installed, agents, kind, profile = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], sys.argv[5]
 PROVIDERS = {'openai': 'openai-responses', 'anthropic': 'anthropic-messages'}
 
 
@@ -55,6 +55,20 @@ with tempfile.TemporaryDirectory() as directory:
     # Pi's compiled catalog alone, then with the installed models.json.
     compiled = available(directory, {'providers': synthetic})
     offered = available(directory, configured)
+    if profile == 'bootstrap':
+        assert 'ollama' not in configured['providers']
+        assert not any(provider == 'ollama' for provider, _ in offered)
+    else:
+        model_id, context = (('pi-qwen3:4b-32k', 32768) if kind == 'nixos'
+                             else ('pi-qwen3-coder:30b-64k', 65536))
+        local = configured['providers']['ollama']
+        assert local['baseUrl'] == 'http://127.0.0.1:11434/v1'
+        assert local['api'] == 'openai-completions' and local['apiKey'] == 'ollama-local'
+        assert len(local['models']) == 1
+        model = local['models'][0]
+        assert model['id'] == model_id and model['contextWindow'] == context and model['maxTokens'] == 4096
+        assert model['compat']['maxTokensField'] == 'max_tokens'
+        assert ('ollama', model_id) in offered
 
     # The installed models.json declares exactly the listed models Pi's compiled catalog lacks, because a
     # declared row replaces a catalog model and would drop its compat, thinking-level, and cache settings.

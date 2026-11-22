@@ -11,6 +11,30 @@ let
     harness = "pi";
   };
   catalog = (builtins.fromJSON (builtins.readFile ./pi-model-lock.json)).syntheticModelLocks;
+  localModel = import ../../../packages/ollama-model.nix config.my.kind;
+  localProvider = lib.optionalAttrs (!config.my.bootstrap) {
+    ollama = {
+      api = "openai-completions";
+      baseUrl = "http://127.0.0.1:11434/v1";
+      apiKey = "ollama-local";
+      models = [
+        {
+          id = localModel.model;
+          name = "Ollama ${localModel.model}";
+          reasoning = false;
+          input = [ "text" ];
+          cost = {
+            input = 0;
+            output = 0;
+            cacheRead = 0;
+            cacheWrite = 0;
+          };
+          inherit (localModel) contextWindow maxTokens;
+          compat.maxTokensField = "max_tokens";
+        }
+      ];
+    };
+  };
   # The committed lists for the built-in providers. A declared row replaces
   # the model of the same id in Pi's own catalog and drops that model's compat,
   # thinking-level, and cache settings, so models.json declares only the
@@ -33,10 +57,12 @@ let
         synthetic = builtins.toJSON { inherit (catalog) api baseUrl models; };
         apis = builtins.toJSON providerApis;
         rows = builtins.toJSON providerRows;
+        local = builtins.toJSON localProvider;
         passAsFile = [
           "synthetic"
           "apis"
           "rows"
+          "local"
         ];
       }
       ''
@@ -44,9 +70,10 @@ let
           --slurpfile catalog ${pi.modelCatalog} \
           --slurpfile synthetic "$syntheticPath" \
           --slurpfile apis "$apisPath" \
-          --slurpfile rows "$rowsPath" '
+          --slurpfile rows "$rowsPath" \
+          --slurpfile local "$localPath" '
           def defined($p): [$catalog[0][$p][]? | select((.type // "chat") == "chat") | .id];
-          {providers: ({synthetic: $synthetic[0]} + ($apis[0] | with_entries(
+          {providers: ({synthetic: $synthetic[0]} + $local[0] + ($apis[0] | with_entries(
             .key as $p | .value as $api | {key: $p, value: {models: [
               $rows[0][$p][] | select(.id as $id | (defined($p) | index($id)) == null) | . + {api: $api}
             ]}})))}' > $out
@@ -112,7 +139,9 @@ in
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
-      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} --subagents ${lib.escapeShellArg "${agent}/pi-subagents"} ${lib.optionalString quality.enable "--quality"} ${hiddenModelArgs} ${enabledModelArgs}
+      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} --subagents ${lib.escapeShellArg "${agent}/pi-subagents"} ${lib.optionalString quality.enable "--quality"} ${
+        lib.optionalString (!config.my.bootstrap) "--local-model ${lib.escapeShellArg localModel.model}"
+      } ${hiddenModelArgs} ${enabledModelArgs}
     fi
   '';
   home.activation.piMcpSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''

@@ -5,13 +5,42 @@
 set -euo pipefail
 
 PI='@PI@'
+key_path='@KEY@'
 
 export PI_SKIP_VERSION_CHECK=1
 export PI_TELEMETRY=0
 unset EXA_API_KEY
 export DOTFILES_PI_EXA_KEY_FILE='@EXA_KEY@'
+upper_no_proxy="${NO_PROXY-${no_proxy-}}"
+lower_no_proxy="${no_proxy-${NO_PROXY-}}"
+export NO_PROXY="${upper_no_proxy:+$upper_no_proxy,}127.0.0.1,localhost,::1"
+export no_proxy="${lower_no_proxy:+$lower_no_proxy,}127.0.0.1,localhost,::1"
 
 case "$*" in --version|--help) exec "$PI" "$@" ;; esac
 agent="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
-'@STATE@' --agent "$agent" --key '@KEY@' --credential 'openai=@OPENAI_KEY@' --credential 'anthropic=@ANTHROPIC_KEY@' --auth-only
+provider=''
+model=''
+next_value=''
+for arg in "$@"; do
+  if [[ -n "$next_value" ]]; then
+    case "$next_value" in
+      provider) provider="$arg" ;;
+      model) model="$arg" ;;
+    esac
+    next_value=''
+  else
+    case "$arg" in
+      --) break ;;
+      --provider) next_value=provider ;;
+      --provider=*) provider="${arg#--provider=}" ;;
+      --model) next_value=model ;;
+      --model=*) model="${arg#--model=}" ;;
+    esac
+  fi
+done
+key_args=(--key "$key_path")
+if [[ "$provider" == ollama && -n "$model" && ( "$model" != */* || "$model" == ollama/* ) && ! -e "$key_path" ]]; then
+  key_args=()
+fi
+'@STATE@' --agent "$agent" "${key_args[@]}" --credential 'openai=@OPENAI_KEY@' --credential 'anthropic=@ANTHROPIC_KEY@' --auth-only
 exec "$PI" --extension "$agent/dotfiles-web.ts" --extension "$agent/dotfiles-question.ts" "$@"
