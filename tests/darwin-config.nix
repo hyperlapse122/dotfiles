@@ -349,6 +349,7 @@ let
           "vercel-react-best-practices"
           "vercel-composition-patterns"
           "mobile-lenses"
+          "find-docs"
           "playwright-best-practices"
           "ux-writing"
           "cli-design"
