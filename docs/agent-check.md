@@ -52,3 +52,41 @@ agent-check --range "$base" "$head"
 The range checks the committed head tree, so it finds changes even when the checkout is clean. The CI job should propagate the task's failure and run without `SKIP` or `continue-on-error`. Require the job in the protected branch's status checks so that skipping the local hook with `git commit --no-verify` still leaves a required check.
 
 This repository's `Nix` workflow runs the `agent-check` job alongside its whole-tree and host checks. Set `agent-check` as a required status check when enabling the branch protection.
+
+## Configure native hooks
+
+Home Manager configures the four harnesses through `my.agentHooks`. The
+pre-command hook catches common `git commit --no-verify`, `git commit -n`,
+and `SKIP=… git commit` forms. Create `.agents/freeze-tests` at the Git
+root to protect test and spec directories and conventional test file names
+from native edit tools. Patch checks cover additions, updates, deletions,
+and both paths in a rename.
+
+Use `my.agentHooks.<harness>.enable` to turn off a harness integration.
+The harness names are `claude`, `codex`, `pi`, and `opencode`. Each also
+has `preShell`, `freezeTests`, and `postEdit` switches.
+
+Automatic project checks require an exact, canonical checkout root in
+`my.agentHooks.trustedProjects`. Use the path returned by
+`git rev-parse --show-toplevel` from a physical working directory
+(`cd -P`). List each worktree separately. An entry authorizes the checkout's
+task, tools, and configuration to execute with the hook process's host
+privileges, including from a restricted harness session. The list starts
+empty. Harness trust, T3 full access, and files inside the checkout grant
+no project-task authorization. Manual `agent-check` remains available.
+
+In an authorized checkout, native edits run the task and return up to 50
+lines on failure. Set `my.agentHooks.stop = true` to run the task at the
+end of a turn and allow one corrective continuation. A clean checkout or
+a missing task exits quietly. Keep the task quick enough to run after an
+edit. Include a test suite only if the project deliberately opts into its
+cost.
+
+Review new or changed Codex hooks with `/hooks` in the CLI using the same
+Codex home as T3. A rebuild that changes the command's Nix store path
+requires review again. Disabling the managed hooks retains their empty
+positions when necessary to preserve the identities of unrelated hooks.
+
+Shell file writes, other tools, and more indirect Git invocations can
+bypass this feedback. Require the CI job for enforcement. The repository's
+`main` branch currently has no required-check rule.

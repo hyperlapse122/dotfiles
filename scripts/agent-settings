@@ -19,7 +19,7 @@ place through tomlkit, so the user's comments and the tables the declaration
 does not name keep their bytes.  TOML has no null, so a declared null is
 refused before anything is touched.
 
-The declared document is a JSON object with up to ten fields:
+The declared document is a JSON object with these fields:
 
   set       {name: scalar}          top-level keys to assign
   remove    [name]                  top-level keys to drop
@@ -71,6 +71,10 @@ The declared document is a JSON object with up to ten fields:
                                     every entry an earlier apply wrote that
                                     the declaration no longer names is
                                     removed; entries no apply wrote stay
+  hookGroups {preserveSlots: bool, events: {event: group | {}}}
+                                    Reconcile Dotfiles agent quality handlers in
+                                    native JSON settings. Codex keeps empty
+                                    slots because trust uses numeric indices.
   migrateInstances {from: name, to: name, kinds: [name],
                     retireAntigravity: {profileBinary, registryCommand, instructions}}
                                     T3 Code's move of a retired per-kind
@@ -154,7 +158,7 @@ def private_directory(path):
 ANY_VALUE = object()
 
 FIELDS = {'set', 'remove', 'setPaths', 'removePaths', 'removeEntries', 'upsertPaths', 'prefixEntries', 'own',
-          'ownEntries', 'migrateInstances'}
+          'ownEntries', 'migrateInstances', 'hookGroups'}
 
 
 def describe(path):
@@ -177,7 +181,7 @@ def strings(value):
 
 def declaration(declared, fmt='json'):
     """Parse the rendered declaration into (assign, retire, paths, removals, owned, upserts, prefixes, migration, drops,
-    entry_sets).
+    entry_sets, hook_groups).
 
     `remove` is how a key leaves the declared set.  Dropping it from `set`
     alone would leave its last written value on every machine forever, because
@@ -226,6 +230,14 @@ def declaration(declared, fmt='json'):
     entry_sets = owned_entry_sets(document.get('ownEntries', []), assign, retire, owned, paths, upserts, prefixes,
                                   removals, drops, declared)
     migration = instance_migration(document.get('migrateInstances'), assign, retire, owned, declared)
+    hook_groups = document.get('hookGroups')
+    if hook_groups is not None:
+        if fmt != 'json' or not isinstance(hook_groups, dict) or set(hook_groups) != {'preserveSlots', 'events'}:
+            raise ValueError('declared hookGroups needs preserveSlots and events in JSON settings')
+        if not isinstance(hook_groups['preserveSlots'], bool) or not isinstance(hook_groups['events'], dict):
+            raise ValueError('invalid hookGroups declaration')
+        check_top_level(['hooks'], assign, retire, owned)
+        check_disjoint(['hooks'], assigned_paths(paths, upserts, prefixes))
     if fmt == 'toml':
         # A prefix entry's null means "append nothing", and a removal's values
         # only match; neither is written, so only the assigned values are held
@@ -236,7 +248,7 @@ def declaration(declared, fmt='json'):
                        | {describe(entry_set.path) for entry_set in entry_sets if holds_null(entry_set.entries)})
         if nulls:
             raise ValueError('TOML cannot hold a declared null: {}'.format(', '.join(nulls)))
-    return assign, retire, paths, removals, owned, upserts, prefixes, migration, drops, entry_sets
+    return assign, retire, paths, removals, owned, upserts, prefixes, migration, drops, entry_sets, hook_groups
 
 
 def check_path(path, declared):
@@ -564,8 +576,72 @@ def upsert(entries, key, value):
         entries.append(copy.deepcopy(value))
 
 
+QUALITY_STATUS = 'Dotfiles agent quality'
+QUALITY_SLOT = '^dotfiles-agent-quality-disabled$'
+
+
+def is_quality_handler(handler):
+    if not isinstance(handler, dict) or handler.get('statusMessage') != QUALITY_STATUS:
+        return False
+    command = handler.get('command')
+    return isinstance(command, str) and (
+        command == ':' or (
+            command.startswith('/nix/store/') and '-agent-quality-hook/bin/agent-quality-hook ' in command
+        )
+    )
+
+
+def reconcile_hook_groups(settings, specification):
+    hooks = settings.get('hooks', {})
+    if not isinstance(hooks, dict):
+        raise ValueError('native hooks must be an object')
+    preserve_slots = specification['preserveSlots']
+    for event, desired in specification['events'].items():
+        groups = hooks.get(event, [])
+        if not isinstance(groups, list):
+            raise ValueError(f'native hook event {event} must be a list')
+        desired = copy.deepcopy(desired)
+        for index, group in enumerate(groups):
+            if not isinstance(group, dict) or not isinstance(group.get('hooks'), list):
+                continue
+            handlers = group['hooks']
+            if preserve_slots and group == {'matcher': QUALITY_SLOT, 'hooks': []}:
+                if desired:
+                    groups[index] = desired
+                    break
+                continue
+            managed = [i for i, handler in enumerate(handlers) if is_quality_handler(handler)]
+            if not managed:
+                continue
+            if len(handlers) == len(managed):
+                if desired:
+                    groups[index] = desired
+                elif preserve_slots:
+                    groups[index] = {'matcher': QUALITY_SLOT, 'hooks': []}
+                else:
+                    del groups[index]
+                    if not groups:
+                        del hooks[event]
+                break
+            # An owner can add a handler to a managed matcher group. Keep
+            # their matcher and, for Codex, their handler index within it.
+            for slot in reversed(managed):
+                if preserve_slots and slot < len(handlers) - 1:
+                    handlers[slot] = {'type': 'command', 'command': ':', 'statusMessage': QUALITY_STATUS}
+                else:
+                    del handlers[slot]
+        else:
+            if desired:
+                groups.append(desired)
+        if groups:
+            hooks[event] = groups
+
+    if hooks:
+        settings['hooks'] = hooks
+
+
 def apply(current, assign, retire, paths, owned=None, upserts=None, migration=None, prefixes=None,
-          removals=None, drops=None, entry_sets=None):
+          removals=None, drops=None, entry_sets=None, hook_groups=None):
     """Return `current` with the declaration applied, leaving `current` alone.
 
     The whole document is deep-copied and the copy edited in place.  The
@@ -684,6 +760,8 @@ def apply(current, assign, retire, paths, owned=None, upserts=None, migration=No
                            if not (isinstance(entry, dict) and key in entry
                                    and any(type(entry[key]) is type(value) and entry[key] == value
                                            for value in values))]
+    if hook_groups is not None:
+        reconcile_hook_groups(merged, hook_groups)
     return merged
 
 
@@ -916,7 +994,7 @@ def record(ledger, text):
 
 def merge(settings, declared, fmt='json', ledger=None):
     (assign, retire, paths, removals, owned, upserts, prefixes, migration, drops,
-     entry_sets) = declaration(declared, fmt)
+     entry_sets, hook_groups) = declaration(declared, fmt)
     migrations = {removal.migration for removal in removals if removal.migration is not None}
     keeps_ledger = bool(entry_sets or migrations)
     if keeps_ledger and ledger is None:
@@ -933,7 +1011,7 @@ def merge(settings, declared, fmt='json', ledger=None):
     # concurrent write be overwritten.
     apply(read(settings), assign=assign, retire=retire, paths=paths, owned=owned,
           upserts=upserts, migration=migration, prefixes=prefixes, removals=removals, drops=drops,
-          entry_sets=entry_sets)
+          entry_sets=entry_sets, hook_groups=hook_groups)
     private_directory(settings.parent)
     with settings_lock(settings):
         recorded, completed = recover_ledger(ledger, settings) if keeps_ledger else ({}, [])
@@ -950,7 +1028,7 @@ def merge(settings, declared, fmt='json', ledger=None):
             current = read(settings)
             merged = apply(current, assign=assign, retire=retire, paths=paths, owned=owned,
                            upserts=upserts, migration=migration, prefixes=prefixes, removals=removals,
-                           drops=drops, entry_sets=entry_sets)
+                           drops=drops, entry_sets=entry_sets, hook_groups=hook_groups)
             if merged == current and before is not None:
                 try:
                     os.chmod(settings, 0o600)

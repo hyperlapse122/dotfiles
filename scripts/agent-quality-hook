@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""Apply the shared quality checks to native harness hook input."""
+from itertools import groupby, islice
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+import tempfile
+
+GIT = '@git@'
+AGENT_CHECK = '@agentCheck@'
+SHELL_TOOLS = {'bash', 'shell', 'exec_command', 'shell_command'}
+EDIT_TOOLS = {'edit', 'write', 'multiedit', 'apply_patch', 'patch'}
+PATCH_PATH = re.compile(r'^\*\*\* (?:Add File:|Update File:|Delete File:|Move to:)\s+(.+)$')
+TEST_NAME = re.compile(r'(?i:^test_|(?:_test|\.test|\.spec)\.[^.]+$)|Tests?\.swift$')
+ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=')
+GIT_ENV = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+
+
+def git_root(cwd):
+    result = subprocess.run(
+        [GIT, 'rev-parse', '--show-toplevel'], cwd=cwd, env=GIT_ENV,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+    )
+    if result.returncode == 0:
+        return Path(os.fsdecode(result.stdout.rstrip(b'\n'))).resolve()
+
+
+def skips_hooks(command):
+    lexer = shlex.shlex(command.replace('\\\n', ''), posix=True, punctuation_chars=';&|()\n')
+    lexer.whitespace = ' \t\r'
+    lexer.whitespace_split = True
+    lexer.commenters = '#'
+    try:
+        words = list(lexer)
+    except ValueError:
+        return False
+
+    for separator, segment in groupby(words, lambda word: bool(re.fullmatch(r'[;&|()\n]+', word))):
+        if separator:
+            continue
+        args = iter(segment)
+        skip = False
+        for arg in args:
+            if arg in {'env', 'command', 'exec', 'then', 'do', 'else', '!'}:
+                continue
+            if not ASSIGNMENT.match(arg):
+                break
+            skip |= arg.startswith('SKIP=')
+        else:
+            continue
+        if Path(arg).name != 'git':
+            continue
+        for arg in args:
+            if arg in {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'}:
+                next(args, None)
+            elif not arg.startswith('-'):
+                break
+        else:
+            continue
+        if arg != 'commit':
+            continue
+        if skip:
+            return True
+        for arg in args:
+            if arg == '--':
+                break
+            if arg == '--no-verify':
+                return True
+            if arg in {'--message', '--file', '--author', '--date', '--reuse-message',
+                       '--reedit-message', '--fixup', '--squash', '--template',
+                       '--trailer', '--pathspec-from-file'}:
+                next(args, None)
+            elif arg.startswith('-') and not arg.startswith('--'):
+                for index, flag in enumerate(arg[1:], 1):
+                    if flag == 'n':
+                        return True
+                    if flag in 'mFCctS':
+                        if index == len(arg) - 1 and flag != 'S':
+                            next(args, None)
+                        break
+    return False
+
+
+def edit_paths(tool, inputs):
+    if tool in {'apply_patch', 'patch'}:
+        patch = inputs.get('patch') or inputs.get('patchText') or inputs.get('command')
+        if isinstance(patch, str):
+            for line in patch.splitlines():
+                if matched := PATCH_PATH.match(line):
+                    yield matched[1]
+    else:
+        path = inputs.get('file_path') or inputs.get('path') or inputs.get('filePath')
+        if isinstance(path, str) and path:
+            yield path
+
+
+def frozen_path(cwd, paths):
+    root = git_root(cwd)
+    for path in paths:
+        absolute = cwd / path
+        targets = {Path(os.path.abspath(absolute)), absolute.resolve()}
+        for target in targets:
+            directory = target.parent
+            while not directory.is_dir():
+                directory = directory.parent
+            for project in {root, git_root(directory)} - {None}:
+                if target.is_relative_to(project) and (project / '.agents/freeze-tests').is_file():
+                    parts = target.relative_to(project).parts
+                    if any(part.casefold() in {'test', 'tests', '__tests__', 'spec', 'specs'}
+                           for part in parts[:-1]) or TEST_NAME.search(target.name):
+                        return path
+
+
+def run_check(cwd, trusted_projects):
+    if not trusted_projects:
+        return None
+    root = git_root(cwd)
+    if root is None or str(root) not in trusted_projects:
+        return None
+    with tempfile.TemporaryFile() as output:
+        result = subprocess.run(
+            [AGENT_CHECK], cwd=root, env=GIT_ENV, stdout=output, stderr=output, check=False,
+        )
+        if result.returncode:
+            output.seek(0)
+            lines = b''.join(islice(output, 49)).decode(errors='replace').rstrip()
+            return f'agent-check failed ({result.returncode}).' + (f'\n{lines}' if lines else '')
+    return None
+
+
+def feedback(options, phase, payload):
+    tool = (payload.get('tool_name') or '').lower()
+    inputs = payload.get('tool_input') or {}
+    if phase == 'pre' and options['preShell'] and tool in SHELL_TOOLS:
+        command = inputs.get('command')
+        if isinstance(command, str) and skips_hooks(command):
+            return 'Run git commit with its pre-commit hooks enabled. Remove the bypass flag or SKIP assignment.'
+    directory = payload.get('cwd')
+    if not isinstance(directory, str) or not os.path.isabs(directory):
+        return None
+    cwd = Path(directory)
+    if phase == 'pre' and options['freezeTests'] and tool in EDIT_TOOLS:
+        path = frozen_path(cwd, edit_paths(tool, inputs))
+        if path:
+            return f'Test files are frozen by .agents/freeze-tests. Leave {path!r} untouched.'
+    if phase == 'post' and options['postEdit'] and tool in EDIT_TOOLS:
+        return run_check(cwd, options['trustedProjects'])
+    if phase == 'stop' and options['stop'] and not payload.get('stop_hook_active'):
+        return run_check(cwd, options['trustedProjects'])
+    return None
+
+
+def main():
+    spec, harness, phase = sys.argv[1:]
+    options = json.loads(Path(spec).read_text())
+    try:
+        reason = feedback(options, phase, json.load(sys.stdin))
+    except (OSError, ValueError, RuntimeError):
+        return
+    if reason:
+        print(reason, file=sys.stderr if harness in {'claude', 'codex'} else sys.stdout)
+        sys.exit(2)
+
+
+if __name__ == '__main__':
+    main()

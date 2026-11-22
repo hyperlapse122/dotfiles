@@ -3,6 +3,7 @@
   home.packages = [ (import ../../../packages/ant.nix { inherit pkgs; }) ];
   imports = [
     ./agent-check.nix
+    ./agent-hooks.nix
     ./agent-plugins.nix
     ./claude.nix
     ./codex.nix

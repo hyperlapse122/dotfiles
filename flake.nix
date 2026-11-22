@@ -216,6 +216,9 @@
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
       };
       checks.aarch64-darwin.agent-check = self.packages.aarch64-darwin.agent-check;
+      checks.aarch64-darwin.agent-hooks = import ./tests/agent-hooks.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+      };
       checks.aarch64-darwin.pinentry-keyring = import ./packages/pinentry-keyring.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
       };
@@ -1468,6 +1471,7 @@
                 touch $out
               '';
           agent-check = self.packages.${system}.agent-check;
+          agent-hooks = import ./tests/agent-hooks.nix { inherit pkgs; };
           ci-docs-only-paths =
             pkgs.runCommand "ci-docs-only-paths-tests" { nativeBuildInputs = [ pkgs.bash ]; }
               ''
