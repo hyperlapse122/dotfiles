@@ -6,30 +6,14 @@
 }:
 let
   cfg = config.my.wiredNetwork;
-  inherit (config.my) hostName;
-  active = cfg.enable && !config.my.bootstrap;
+  shared = import ../shared/wired-network.nix { inherit config lib; };
   tool = lib.getExe (import ../../packages/nixos-wired-network.nix { inherit pkgs; });
   identity = config.my.cliAuth.ageKeyFile;
 in
 {
-  options.my.wiredNetwork.file = lib.mkOption {
-    type = lib.types.nullOr lib.types.path;
-    default =
-      let
-        file = ../../secrets/hosts + "/${hostName}/wired-network.yaml";
-      in
-      if builtins.pathExists file then file else null;
-    description = "Encrypted YAML declaring the wired adapter's `mac`, `ipv4_address`, `ipv4_subnet_mask`, `ipv4_router`, and `dns_servers`, decrypted with the host identity when the profile is rendered.";
-  };
+  imports = [ shared.module ];
 
-  config = lib.mkIf active {
-    assertions = [
-      {
-        assertion = cfg.file != null;
-        message = "${hostName}: my.wiredNetwork.enable needs secrets/hosts/${hostName}/wired-network.yaml; see secrets/README.md.";
-      }
-    ];
-
+  config = lib.mkIf shared.active {
     # Runs before NetworkManager so the profile exists when NetworkManager
     # first reads its connection directories; a profile added after the wired
     # device has activated is not applied until it reconnects. It needs only

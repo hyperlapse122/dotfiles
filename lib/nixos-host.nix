@@ -4,7 +4,7 @@
   same host facts and traits as the system.
 
     mkHost = import ./lib/nixos-host.nix { inherit inputs; };
-    mkHost { hostName, bootstrap } -> nixosSystem
+    mkHost { hostName, dir, bootstrap } -> nixosSystem
 */
 { inputs }:
 let
@@ -12,7 +12,11 @@ let
   hostFacts = import ./host-facts.nix { inherit lib; };
   kind = "nixos";
 in
-{ hostName, bootstrap }:
+{
+  hostName,
+  dir,
+  bootstrap,
+}:
 lib.nixosSystem {
   system = "x86_64-linux";
   specialArgs = { inherit inputs; };
@@ -23,7 +27,7 @@ lib.nixosSystem {
     inputs.lanzaboote.nixosModules.lanzaboote
     # The host directory precedes the profile so list-valued options keep the
     # merge order they had when each host imported the profile itself.
-    ../hosts/${hostName}
+    dir
     ../modules/nixos/profile.nix
     (
       { config, ... }:

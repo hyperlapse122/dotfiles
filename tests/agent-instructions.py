@@ -79,14 +79,10 @@ def exercise(template, helper, renderer, kind):
 
 def main():
     template = Path(sys.argv[1]).read_text()
-    helper, renderer = sys.argv[5:7]
+    helper, renderer = sys.argv[3:5]
     for kind in ('nixos', 'darwin'):
         exercise(template, helper, renderer, kind)
     for entry in json.loads(Path(sys.argv[2]).read_text()):
-        if entry['kind'] == 'linux':
-            for item in entry['paths']:
-                receipt(body(Path(item['path']).parents[len(Path(item['target']).parts)-1], item['delivery']), entry['kind'], item['delivery'])
-            continue
         assert entry['key'] in Path(entry['git']).read_text(), entry['name']
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

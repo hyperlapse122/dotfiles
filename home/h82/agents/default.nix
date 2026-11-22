@@ -21,10 +21,8 @@
     ./pinned-skills.nix
     ./skills.nix
     ./tanstack-intent.nix
-    ./test-audit.nix
     ./tokscale.nix
     ./usage.nix
-    ./ux-flows.nix
     ./xcode-skills.nix
   ];
 }

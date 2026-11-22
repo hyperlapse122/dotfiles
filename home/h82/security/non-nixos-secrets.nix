@@ -74,8 +74,8 @@ let
   };
 
   # Darwin decrypts secrets with a user-owned identity.
-  nonNixos = config.my.kind == "darwin";
-  active = nonNixos && !config.my.bootstrap;
+  darwin = config.my.kind == "darwin";
+  active = darwin && !config.my.bootstrap;
 in
 {
   options.my.secrets = {
@@ -86,11 +86,7 @@ in
     };
     sshKeyFile = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
-      default =
-        let
-          file = ../../../secrets/hosts + "/${hostName}/ssh.yaml";
-        in
-        if builtins.pathExists file then file else null;
+      default = import ../../../lib/host-secret-file.nix hostName "ssh.yaml";
       description = "Encrypted YAML holding this host's SSH private key as ssh_private_key.";
     };
     sshKey = lib.mkOption {
@@ -118,7 +114,7 @@ in
       );
     }
 
-    (lib.mkIf nonNixos {
+    (lib.mkIf darwin {
       # Needed from the bootstrap output on, since recovery runs there.
       home.packages = [
         gpgTools.installUserAgeIdentity

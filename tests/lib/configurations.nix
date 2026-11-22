@@ -36,12 +36,8 @@
 
   - `userEntries`: one `{ name, kind, bootstrap, user }` per Home Manager
     user environment the flake builds for this architecture: the NixOS
-    configurations' declared users (`kind = "nixos"`) and the standalone Home
-    Manager outputs of the non-NixOS fixture hosts (`kind = "linux"`). Checks
-    that assert only Home Manager state run over this list, so they cover
-    both host kinds.
-  - `userGuard`: fails the builder when `userEntries` holds no bootstrap
-    output or no entry of either kind.
+    configurations' declared users (`kind = "nixos"`). Checks that assert
+    only Home Manager state run over this list.
 
   Trait options are read without `or` fallbacks: the shared profile imports
   every trait module, so each trait option exists on every configuration and a
@@ -50,7 +46,6 @@
 {
   pkgs,
   self,
-  fixtures ? [ ],
 }:
 let
   inherit (pkgs) lib;
@@ -84,8 +79,6 @@ let
       }
     );
 
-  linuxFixtures = [ ];
-
   production = lib.filter (entry: !entry.bootstrap) entries;
 
   userEntries = map (entry: {
@@ -97,27 +90,11 @@ in
   inherit
     entries
     entryOf
-    linuxFixtures
     production
     userEntries
     withTraitForcedOff
     withTraitForcedOn
     ;
-
-  userGuard =
-    let
-      missing = lib.filter (kind: !lib.any (entry: entry.kind == kind) userEntries) [
-        "nixos"
-      ];
-    in
-    lib.optionalString (missing != [ ]) ''
-      echo ${lib.escapeShellArg "tests/lib/configurations.nix: no Home Manager user of kind ${lib.concatStringsSep ", " missing}, so this check would cover no such host"} >&2
-      exit 1
-    ''
-    + lib.optionalString (lib.all (entry: !entry.bootstrap) userEntries) ''
-      echo 'tests/lib/configurations.nix: no Home Manager user comes from a bootstrap output, so this check would cover none' >&2
-      exit 1
-    '';
 
   bootstraps = lib.filter (entry: entry.bootstrap) entries;
 

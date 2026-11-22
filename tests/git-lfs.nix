@@ -1,10 +1,10 @@
 /*
   Check interface:
 
-    import ./tests/git-lfs.nix { inherit pkgs self fixtures; }
+    import ./tests/git-lfs.nix { inherit pkgs self; }
 
   Asserts that Git LFS works for user `h82` on every Home Manager user
-  `tests/lib/configurations.nix` yields (NixOS and non-NixOS hosts, bootstrap
+  `tests/lib/configurations.nix` yields (NixOS hosts, bootstrap
   outputs included), without a
   mutable ~/.gitconfig or a manual `git lfs install`. The profile enables
   Home Manager's programs.git.lfs, which installs git-lfs and renders the
@@ -42,12 +42,11 @@
 {
   pkgs,
   self,
-  fixtures ? [ ],
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   esc = value: lib.escapeShellArg (toString value);
 
@@ -73,7 +72,7 @@ pkgs.runCommand "git-lfs-tests"
     ];
   }
   ''
-    ${configurations.userGuard}
+    ${configurations.guard}
     failures=$PWD/failures
     : > "$failures"
 

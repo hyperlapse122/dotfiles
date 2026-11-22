@@ -1,11 +1,11 @@
 /*
   Check interface:
 
-    import ./tests/mise-settings.nix { inherit pkgs self fixtures; }
+    import ./tests/mise-settings.nix { inherit pkgs self; }
 
   Asserts that mise uses precompiled runtime binaries from an immutable,
   Nix-managed global config for user `h82` on every Home Manager user
-  `tests/lib/configurations.nix` yields (NixOS and non-NixOS hosts, bootstrap
+  `tests/lib/configurations.nix` yields (NixOS hosts, bootstrap
   outputs included). The bootstrap outputs import the same Home Manager profile
   and the setting is meant to reach them too, so they are checked rather than
   assumed identical: a change that gates the profile on `my.bootstrap` fails
@@ -52,12 +52,11 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   pinnedMise = "${import ../packages/mise.nix { inherit pkgs; }}/bin/mise";
 
@@ -91,7 +90,7 @@ let
     '';
 in
 pkgs.runCommand "mise-settings-tests" { nativeBuildInputs = [ pkgs.jq ]; } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failures=$PWD/failures
   : > "$failures"
 

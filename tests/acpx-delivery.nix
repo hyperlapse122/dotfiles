@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/acpx-delivery.nix { inherit pkgs self fixtures; }
+    import ./tests/acpx-delivery.nix { inherit pkgs self; }
 
   Asserts that `acpx` is on PATH for every Home Manager user
   `tests/lib/configurations.nix` yields (NixOS production and bootstrap
@@ -20,12 +20,11 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   package = import ../packages/acpx.nix { inherit pkgs; };
   binary = lib.getExe package;
@@ -37,7 +36,7 @@ let
   '';
 in
 pkgs.runCommand "acpx-delivery-tests" { } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failures=$PWD/failures
   : > "$failures"
 

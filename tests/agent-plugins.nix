@@ -17,7 +17,7 @@
 
   - The wiring's command sequence lives in the packaged `agent-plugin-sync`
     helper, not in the activation script, so its order, rollback, readback and
-    pruning are proven by the `agent-plugin-sync` check in flake.nix, which
+    pruning are proven by the `agent-plugin-sync` check, which
     drives the real script against a fake agent CLI. Asserting the order here
     would only re-read a string this check also builds.
   - What activation *materializes* is this check's job: that the entry exists,
@@ -253,7 +253,7 @@ pkgs.runCommand "agent-plugins-tests"
   }
   ''
     set -x
-    ${lib.optionalString (entries == null) configurations.userGuard}
+    ${lib.optionalString (entries == null) configurations.guard}
     failed=0
 
     # Reads one flag's value out of a rendered activation script. The `|| true`

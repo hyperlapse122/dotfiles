@@ -20,7 +20,7 @@
 let
   inherit (pkgs) lib;
 
-  directoriesIn = import ./lib/directories.nix { inherit lib; };
+  directoriesIn = import ../lib/directories.nix { inherit lib; };
 
   # Fixture hosts stand in for real ones in checks, so their names stay out of
   # code for the same reason.

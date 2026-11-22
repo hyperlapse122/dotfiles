@@ -1,11 +1,11 @@
 /*
   Check interface:
 
-    import ./tests/cargo-settings.nix { inherit pkgs self fixtures; }
+    import ./tests/cargo-settings.nix { inherit pkgs self; }
 
   Asserts that `sccache` and the Cargo `build.rustc-wrapper` declared set reach
-  user `h82` (or the fixture host's `my.user.name`) on every Home Manager user
-  `tests/lib/configurations.nix` yields (NixOS and non-NixOS Linux hosts,
+  configured user on every Home Manager user
+  `tests/lib/configurations.nix` yields (NixOS hosts,
   production and bootstrap outputs alike).
 
   Verifies, per user environment:
@@ -34,12 +34,11 @@
 {
   pkgs,
   self,
-  fixtures ? import ./lib/linux-fixtures.nix { inherit (self) inputs; },
 }:
 let
   inherit (pkgs) lib;
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   esc = value: lib.escapeShellArg (toString value);
 
@@ -168,7 +167,7 @@ let
     '';
 in
 pkgs.runCommand "cargo-settings-tests" { } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failed=0
 
   ${lib.concatMapStringsSep "\n" assertHost configurations.userEntries}

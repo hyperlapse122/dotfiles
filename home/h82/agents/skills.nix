@@ -31,6 +31,11 @@ in
     '';
   };
 
+  config.my.agentSkills = {
+    test-audit = ./skills/test-audit;
+    ux-flows = ./skills/ux-flows;
+  };
+
   # One link per root and skill, to the skill directory itself: Codex skips a
   # SKILL.md that is a symlink, so the files inside must not be linked one by
   # one with `recursive = true`.

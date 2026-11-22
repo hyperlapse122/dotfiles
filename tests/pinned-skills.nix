@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/pinned-skills.nix { inherit pkgs self fixtures; }
+    import ./tests/pinned-skills.nix { inherit pkgs self; }
 
   Asserts that the published skills, the local design-lenses
   wrapper with impeccable's lens references, mobile-lenses, and ux-flows reach
@@ -55,7 +55,6 @@
 {
   pkgs,
   self,
-  fixtures,
 }:
 let
   inherit (pkgs) lib;
@@ -146,7 +145,7 @@ let
 
   lock = builtins.fromJSON (builtins.readFile ../flake.lock);
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   # The registry entry and upstream of each published skill, by name.
   registered = lib.listToAttrs (
@@ -447,7 +446,7 @@ let
     '';
 in
 pkgs.runCommand "pinned-skills-tests" { } ''
-  ${configurations.userGuard}
+  ${configurations.guard}
   failed=0
 
   ${lib.concatMapStrings pinCheck pinned}

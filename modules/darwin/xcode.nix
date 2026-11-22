@@ -9,6 +9,7 @@ let
   inherit (config.my) hostName;
   active = !config.my.bootstrap;
   tool = lib.getExe (import ../../packages/macos-xcode.nix { inherit pkgs; });
+  caVariables = lib.concatStringsSep "," (import ./ca-bundle-variables.nix);
   tlsEnvironment = lib.optionalString config.my.tlsInspectionCa.enable (
     "SSL_CERT_FILE=${lib.escapeShellArg config.environment.variables.SSL_CERT_FILE} "
   );
@@ -16,11 +17,7 @@ in
 {
   options.my.xcode.appleAccountFile = lib.mkOption {
     type = lib.types.nullOr lib.types.path;
-    default =
-      let
-        file = ../../secrets/hosts + "/${hostName}/apple-account.yaml";
-      in
-      if builtins.pathExists file then file else null;
+    default = import ../../lib/host-secret-file.nix hostName "apple-account.yaml";
     description = "Encrypted YAML holding the Apple Account `username` and `password` for `xcodes`, decrypted in memory with the host identity at activation.";
   };
 
@@ -36,7 +33,7 @@ in
     ];
 
     system.activationScripts.postActivation.text = lib.mkBefore ''
-      ${tlsEnvironment}/usr/bin/sudo --preserve-env=SSL_CERT_FILE,NIX_SSL_CERT_FILE,NODE_EXTRA_CA_CERTS,REQUESTS_CA_BUNDLE,CURL_CA_BUNDLE,GIT_SSL_CAINFO --user=${lib.escapeShellArg config.my.user.name} --set-home ${tool} \
+      ${tlsEnvironment}/usr/bin/sudo --preserve-env=${caVariables} --user=${lib.escapeShellArg config.my.user.name} --set-home ${tool} \
         --source ${lib.escapeShellArg "${cfg.appleAccountFile}"} \
         --identity ${lib.escapeShellArg "${config.my.user.home}/.config/nix-config/age/key.txt"} \
         --owner ${lib.escapeShellArg config.my.user.name}

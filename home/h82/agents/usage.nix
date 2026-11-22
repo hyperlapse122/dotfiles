@@ -5,11 +5,7 @@ in
 {
   home.packages = [
     (tools.agentUsage.override {
-      syntheticKeyFile =
-        if config.my.kind == "nixos" then
-          "/run/secrets/cli-auth/synthetic_api_key"
-        else
-          "${config.my.secrets.stateDir}/synthetic_api_key";
+      syntheticKeyFile = "${import ../security/cli-auth-directory.nix config.my}/synthetic_api_key";
     })
   ];
 }

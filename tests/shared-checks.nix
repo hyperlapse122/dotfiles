@@ -1,0 +1,32 @@
+{ pkgs, inputs }:
+let
+  inherit (inputs) self;
+  darwinFixtures = import ./lib/darwin-fixtures.nix { inherit inputs; };
+in
+{
+  agent-check = self.packages.${pkgs.stdenv.hostPlatform.system}.agent-check;
+  agent-hooks = import ./agent-hooks.nix { inherit pkgs; };
+  pinentry-keyring = import ../packages/pinentry-keyring.nix { inherit pkgs; };
+  decide = import ./decide.nix { inherit pkgs self darwinFixtures; };
+  darwin-provisioning =
+    pkgs.runCommand "darwin-provisioning-tests"
+      {
+        nativeBuildInputs = [
+          pkgs.python3
+          pkgs.bash
+          pkgs.jq
+        ];
+      }
+      ''
+        python3 ${./test_darwin_provisioning.py} ${../scripts/macos-xcode.py} ${../scripts/macos-container.sh} ${../scripts/macos-container-state.sh}
+        touch "$out"
+      '';
+
+  darwin-config = import ./darwin-config.nix {
+    inherit
+      pkgs
+      self
+      darwinFixtures
+      ;
+  };
+}

@@ -18,23 +18,12 @@ let
   variables = {
     NODE_USE_SYSTEM_CA = "1";
   }
-  // lib.genAttrs [
-    "SSL_CERT_FILE"
-    "NIX_SSL_CERT_FILE"
-    "NODE_EXTRA_CA_CERTS"
-    "REQUESTS_CA_BUNDLE"
-    "CURL_CA_BUNDLE"
-    "GIT_SSL_CAINFO"
-  ] (_: bundle);
+  // lib.genAttrs (import ./ca-bundle-variables.nix) (_: bundle);
 in
 {
   options.my.tlsInspectionCa.certificateFile = lib.mkOption {
     type = lib.types.nullOr lib.types.path;
-    default =
-      let
-        file = ../../secrets/hosts + "/${hostName}/tls-inspection-ca.yaml";
-      in
-      if builtins.pathExists file then file else null;
+    default = import ../../lib/host-secret-file.nix hostName "tls-inspection-ca.yaml";
     description = "Encrypted YAML holding the TLS inspection CA as `certificate`, decrypted with the host identity.";
   };
 

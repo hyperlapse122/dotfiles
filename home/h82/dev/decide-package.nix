@@ -9,9 +9,5 @@ import ../../../packages/decide.nix {
       "cuda"
     else
       "openrouter";
-  openrouterKeyFile =
-    if config.my.kind == "darwin" then
-      "${config.my.secrets.stateDir}/openrouter_api_key"
-    else
-      "/run/secrets/cli-auth/openrouter_api_key";
+  openrouterKeyFile = "${import ../security/cli-auth-directory.nix config.my}/openrouter_api_key";
 }

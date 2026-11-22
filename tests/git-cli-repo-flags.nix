@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/git-cli-repo-flags.nix { inherit pkgs self fixtures; }
+    import ./tests/git-cli-repo-flags.nix { inherit pkgs self; }
 
   Runs the gh and glab packages each Home Manager user installs the way the
   shared agent instructions tell an agent to name a repository outside a
@@ -37,13 +37,10 @@
 {
   pkgs,
   self,
-  fixtures ? null,
 }:
 let
   inherit (pkgs) lib;
-  configurations = import ./lib/configurations.nix (
-    { inherit pkgs self; } // lib.optionalAttrs (fixtures != null) { inherit fixtures; }
-  );
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   packageOf =
     user: pname: lib.findFirst (p: (p.pname or null) == pname) null (user.home.packages or [ ]);
@@ -127,7 +124,7 @@ pkgs.runCommand "git-cli-repo-flags" { } ''
     expect glab-repo-delete "DELETE /api/v4/projects/group%2Fproject " "glab repo delete does not name the project"
   }
 
-  ${configurations.userGuard}
+  ${configurations.guard}
   ${lib.concatMapStrings probeEntry configurations.userEntries}
 
   if [ -s "$failures" ]; then

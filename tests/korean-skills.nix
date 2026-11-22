@@ -1,7 +1,7 @@
 /*
   Check interface:
 
-    import ./tests/korean-skills.nix { inherit pkgs self fixtures; }
+    import ./tests/korean-skills.nix { inherit pkgs self; }
 
   Asserts that the three korean-skills skills reach every harness for user
   `h82` on every host this flake declares, and that their pin still names the
@@ -13,7 +13,7 @@
     OpenCode                  ~/.config/opencode/skills/<name>
 
   The user list is `userEntries` from `tests/lib/configurations.nix`, so the
-  NixOS and non-NixOS Linux user environments are both covered, and the
+  NixOS user environments are covered, and the
   helper's guard fails the build when that list is empty.
 
   Verifies, per Home Manager user:
@@ -60,7 +60,6 @@
   entries ? null,
   pkgs,
   self,
-  fixtures ? [ ],
 }:
 let
   inherit (pkgs) lib;
@@ -115,7 +114,7 @@ let
   lockedRev = lockNode.locked.rev or "";
   originalRef = lockNode.original.ref or "";
 
-  configurations = import ./lib/configurations.nix { inherit pkgs self fixtures; };
+  configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
   sorted = lib.sort lib.lessThan;
 
@@ -266,7 +265,7 @@ let
 in
 pkgs.runCommand "korean-skills-tests" { } ''
   set -x
-  ${lib.optionalString (entries == null) configurations.userGuard}
+  ${lib.optionalString (entries == null) configurations.guard}
   failed=0
 
   if [ -z ${esc lockedRev} ]; then

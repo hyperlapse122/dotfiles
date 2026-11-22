@@ -14,7 +14,7 @@ Use the machine's distinctive model identifier, such as the DMI product name (`M
 
 ## Create the NixOS host directory
 
-A directory under `hosts/` without a `host.nix` file (or with `kind = "nixos"`) is a NixOS host. Create `hosts/<host>/` with three files:
+A directory under `hosts/` without a `host.nix` file is a NixOS host. Create `hosts/<host>/` with three files:
 
 - `hardware.nix`: kernel modules, firmware, CPU microcode, and graphics drivers. The production configuration loads the GPU's KMS driver early: add it (for example `i915`, `amdgpu`, or `nvidia` / `nvidia_modeset` / `nvidia_drm`) to `boot.initrd.kernelModules` under `lib.mkIf (!config.my.bootstrap)`; the `boot-splash` check (`tests/boot-splash.nix`) fails otherwise. Start from `nixos-generate-config --no-filesystems --show-hardware-config` run on the target from the installation media, then keep only what the machine needs.
 - `disko.nix`: the disk layout. Copy `hosts/MS-7D91/disko.nix` to keep the shared layout (a 2 GiB ESP with partlabel `disk-main-ESP`, then a LUKS2 `cryptroot` container with partlabel `disk-main-luks` holding Btrfs subvolumes for `/root` (`/`), `/home`, `/nix`, `/log` (`/var/log`), and `/swap` with a 64 GiB swapfile), and change only `device` to the target disk's `/dev/disk/by-id/` path.
