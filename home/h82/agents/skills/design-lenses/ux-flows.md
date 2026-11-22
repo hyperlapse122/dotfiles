@@ -1,8 +1,3 @@
----
-name: ux-flows
-description: "Designing or reviewing how a person moves through something they operate: user flows, navigation and information architecture, and the state inventory of each step (empty, loading, partial, error, success, recovery), for screens, CLIs, prompts, and notifications. Use while brainstorming, planning, building, or reviewing such work."
----
-
 # UX Flows
 
 Design the path before the screen. A flow that ignores the person's actual task

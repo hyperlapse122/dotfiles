@@ -79,6 +79,7 @@ let
   designLenses = pkgs.runCommand "design-lenses" { } ''
     mkdir -p $out/references
     cp --no-preserve=mode ${./skills/design-lenses/SKILL.md} $out/SKILL.md
+    cp --no-preserve=mode ${./skills/design-lenses/ux-flows.md} $out/references/ux-flows.md
     ${lib.concatMapStringsSep "\n" (
       file:
       "cp --no-preserve=mode ${esc "${impeccableSrc}/${impeccable.referencePath}/${file}"} $out/references/"

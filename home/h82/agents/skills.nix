@@ -33,7 +33,6 @@ in
 
   config.my.agentSkills = {
     test-audit = ./skills/test-audit;
-    ux-flows = ./skills/ux-flows;
   };
 
   # One link per root and skill, to the skill directory itself: Codex skips a

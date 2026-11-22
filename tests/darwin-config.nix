@@ -338,9 +338,8 @@ let
       # The vendored test-audit skill shares those roots; its source is the
       # in-tree skill directory inside the flake's source tree.
       testAuditTargets = map (root: "${root}/test-audit") koreanRoots;
-      # The pinned skills and the local design-lenses and
-      # ux-flows skills share those roots too; tests/pinned-skills.nix checks
-      # their content on Linux.
+      # The pinned skills and local design-lenses share those roots too;
+      # tests/pinned-skills.nix checks their content on Linux.
       pinnedTargets = lib.concatMap (
         root:
         map (name: "${root}/${name}") [
@@ -357,7 +356,6 @@ let
           "untangle-codebase"
           "prune-tests"
           "design-lenses"
-          "ux-flows"
         ]
       ) koreanRoots;
       # Resolved targets of enabled entries, not attribute names. The source is
