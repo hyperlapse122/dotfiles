@@ -1,5 +1,6 @@
-{ ... }:
+{ pkgs, ... }:
 {
+  home.packages = [ (import ../../../packages/ant.nix { inherit pkgs; }) ];
   imports = [
     ./agent-plugins.nix
     ./claude.nix

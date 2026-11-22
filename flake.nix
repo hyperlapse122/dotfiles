@@ -268,6 +268,10 @@
         claude-code-release = agentTools.claudeCodeRelease;
         claude-code-agents = agentTools.claudeCodeAgents;
         claude-code = import ./packages/claude-code.nix { inherit pkgs; };
+        ant-release = pkgs.writeScriptBin "ant-release" (
+          "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ./scripts/ant-release
+        );
+        ant = import ./packages/ant.nix { inherit pkgs; };
         mise-release = agentTools.miseRelease;
         prezto-release = agentTools.preztoRelease;
         mise = import ./packages/mise.nix { inherit pkgs; };

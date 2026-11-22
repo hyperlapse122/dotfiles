@@ -1,0 +1,20 @@
+{
+  "version": "2.12.1",
+  "systems": {
+    "x86_64-linux": {
+      "asset": "linux_amd64.tar.gz",
+      "sha256": "0ff27598096a89bb75c44c0f96e6be8eba405b6426febd54839391eafa6da69e",
+      "hash": "sha256-D/J1mAlqibt1xEwPlua+jrpAW2Qm/r1Ug5OR6vptpp4="
+    },
+    "aarch64-linux": {
+      "asset": "linux_arm64.tar.gz",
+      "sha256": "2f203d4b3abd9305f094d31a0e9aa2b17e67a20a08145bf46d69f471a9f666c3",
+      "hash": "sha256-LyA9Szq9kwXwlNMaDpqisX5nogoIFFv0bWn0can2ZsM="
+    },
+    "aarch64-darwin": {
+      "asset": "macos_arm64.zip",
+      "sha256": "94261d6e0dfa5a953d7264ccc09fcd41d698afb8a7fb8c07d0284bff9bdc88c4",
+      "hash": "sha256-lCYdbg36WpU9cmTMwJ/NQdaYr7in+4wH0ChL/5vciMQ="
+    }
+  }
+}
