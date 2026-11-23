@@ -37,7 +37,7 @@ pkgs.stdenv.mkDerivation {
   doInstallCheck = true;
   installCheckPhase = ''
     runHook preInstallCheck
-    HOME="$TMPDIR" OLLAMA_HOST=127.0.0.1:1 "$out/bin/ollama" --version 2>&1 | grep -F -- "$version"
+    HOME="$TMPDIR" OLLAMA_HOST=127.0.0.1:1 "$out/bin/ollama" --version 2>&1 | grep -Fx -- "Warning: client version is $version"
     "$out/lib/ollama/llama-server" --version
     runHook postInstallCheck
   '';
