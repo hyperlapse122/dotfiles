@@ -129,6 +129,7 @@ let
     (lib.concatMapStrings
       (cask: check (lib.elem cask mapping.casks) "${cask} is not among the macOS casks")
       [
+        "adguard"
         "chatgpt"
         "ghostty"
         "ollama-app"
