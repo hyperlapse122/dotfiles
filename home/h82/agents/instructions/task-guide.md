@@ -1,22 +1,10 @@
 # Task guide
 
-## OpenCode CE reviews
-
-Before sending a CE review through OpenCode, bind an exact `provider/model`, identify and disclose every recipient, and check each against the CE allowlist. The `opencode` token covers the intermediary only. Direct Anthropic and OpenAI require `claude` and `codex` respectively. A model name cannot authorize a custom endpoint. If a recipient is unknown or unauthorized, continue with the ordinary review.
-
 ## Decide for CI triage
 
-Read the first relevant CI failure before choosing what to inspect. If the evidence leaves two or more plausible read-only checks and a judgment would change which one you run first, call the `decide` MCP server’s `judge` tool once. Use `choice` with a short description of each candidate and an `insufficient_evidence` option. Send only the evidence needed for the question and permitted for the configured backend.
+Read the first relevant CI failure before choosing what to inspect. If the evidence leaves two or more plausible read-only checks and a judgment would change which one you run first, call the `decide` MCP server’s `judge` tool once. Use `choice` with a short description of each candidate and an `insufficient_evidence` option. Include only the evidence needed to choose the next check.
 
 If the failure already identifies the next check, run it directly. If the failing step or error is missing, retrieve it first. Treat the answer as a lead and verify it against the logs, code, or configuration. If the tool is unavailable, fails, or gives no usable lead, continue the investigation. Follow the existing verification and approval rules.
-
-## Decide for subagent roles
-
-After the workflow decides to delegate, keep its launch route, permissions, provider, model, effort, and context limits. If a role is required, follow the existing path without calling `judge`. Otherwise, consider roles the current session can select through that route. Check each role's purpose, conditions on use, tool restrictions, and effective launch behavior, including any settings it overrides or ignores. If one role qualifies, select it directly.
-For Claude Code's built-in roles, start with `~/.local/share/nix-config/claude-code-agents.json`. Confirm availability in the current session and use its effective role definitions when they differ from the pinned catalog.
-If two or more roles qualify, ask the `decide` MCP server's `judge` tool once. Use a `choice` question with the eligible role identifiers, their short descriptions, and `insufficient_evidence`. Summarize the task by purpose and tool needs. Send only information permitted for the configured backend. When the backend is unknown, use information permitted to leave the machine.
-
-Pass a returned eligible role to the existing launcher's role selector. Follow the existing selection path if the session has no selectable role, the request cannot be sent, or `judge` fails, abstains, or returns an ineligible role.
 
 ## Issues in pull and merge requests
 

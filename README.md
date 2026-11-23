@@ -59,7 +59,7 @@ nr switch
 - [Updates and recovery](docs/recovery.md): routine switches, rollbacks, LUKS and Secure Boot backup/repair from installation media, YubiKey replacement, desktop SSH key recovery/rotation, host decommission, and iPhone/iPad IPSW restore.
 - [Adding a host](docs/adding-a-host.md): create a NixOS or macOS host directory, its bootstrap age material, per-host secrets, and `.sops.yaml` rules.
 - [Flutter development](docs/flutter.md): terminal and T3 workflows, target builds, DevTools and managed SDK updates.
-- [Agent routing](docs/agent-routing.md): T3 task guidance, external review recipients, and launch-time instruction composition.
+- [Agent routing](docs/agent-routing.md): T3 task guidance, CE review peers, and launch-time instruction composition.
 - [Shell configuration](docs/shell.md): Prezto parity, automatic updates, and migration of existing startup files.
 - [Codex app connectors and Computer Use](docs/codex.md): how Codex app connectors and Computer Use are disabled.
 - [Secret file conventions](secrets/README.md): sops/age layout, recipient rules, and recovery pipelines.

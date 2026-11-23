@@ -42,7 +42,7 @@ Managed coding agents can see subagent metadata in more than one place. The role
 
 - R1. The current workflow decides whether to delegate and retains its required roles, permissions, launch route, provider, model, and reasoning effort. [Agent routing rules](../../../home/h82/agents/instructions/t3-guide.md#t3-delegation)
 - R2. The parent considers roles that the current session can launch through that route and whose descriptions and tool restrictions fit the task.
-- R3. Claude Code uses the pinned built-in catalog as its starting point and checks availability in the running session. [Claude Code catalog](../../../packages/claude-code-agents.json)
+- R3. Claude Code uses the pinned built-in catalog as its starting point and checks availability in the running session. [Claude Code catalog](https://github.com/hyperlapse122/dotfiles/blob/8da1e5b/packages/claude-code-agents.json)
 
 **Judgment and launch**
 
@@ -94,7 +94,7 @@ flowchart TD
 ### Sources / Research
 
 - The existing CI triage rule is a precedent for asking one `choice` question with an abstention option and applying a fallback. [Decide for CI triage](../../../docs/agent-routing.md)
-- The pinned catalogs record the built-ins for Codex and an empty built-in roster for Pi. The running session supplies the evidence for R9. [Codex catalog](../../../packages/codex-agents.json) · [Pi catalog](../../../packages/pi-agents.json)
+- The pinned catalogs record the built-ins for Codex and an empty built-in roster for Pi. The running session supplies the evidence for R9. [Codex catalog](https://github.com/hyperlapse122/dotfiles/blob/8da1e5b/packages/codex-agents.json) · [Pi catalog](https://github.com/hyperlapse122/dotfiles/blob/8da1e5b/packages/pi-agents.json)
 
 ---
 

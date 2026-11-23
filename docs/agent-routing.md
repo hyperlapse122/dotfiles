@@ -1,6 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, language, and action triggers for the installed task guide. Delegation uses CE and harness defaults or the user’s explicit selection; dotfiles does not assign child models or efforts, check quota before delegation, or substitute providers. Interactive session defaults and standalone usage tools remain separate. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
+The ordinary user instruction files share scope and verification, language, and action triggers for the installed task guide. Delegation uses the role, model, and reasoning effort selected by CE or the harness unless the user specifies them. Interactive session defaults and standalone usage tools remain separate. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
 
 The shared instructions identify `agent-check` as the project's check when the project defines it. The Home Manager helper runs that task for manual checks, Git hooks, and CI. [Project setup](agent-check.md)
 
@@ -40,33 +40,9 @@ Disposable Git projects on macOS and NixOS confirmed the following with syntheti
 | OpenCode 2.3.2 | Found both from a nested directory. |
 | Claude Code 2.1.329 | Found both through `.claude/skills/` directory links at the project root. |
 
-## OpenCode review recipients
+## CE review peers
 
-Before delegation to any external provider, the shared instructions require disclosure of the material and every recipient and authorization for both. A CE peer allowlist does not by itself authorize the material.
-
-The shared `CROSS_MODEL_PEERS` list includes `claude`, `codex`, and `opencode` where those harnesses are installed. This makes the OpenCode route selectable in standalone and T3 sessions without changing the default peer in other harnesses. The installed [task guide](../home/h82/agents/instructions/task-guide.md#opencode-ce-reviews) defines its recipient checks.
-
-## Decide for subagent roles
-
-Once a workflow has decided to delegate, the parent uses the role selector on the existing launch route. A required role or a sole eligible role goes directly to the launcher. With two or more eligible roles, the parent asks `judge` once using `choice` and passes the selected role to the launcher. The existing selection path handles sessions without a role choice and any unavailable or unusable judgment.
-
-The parent checks role purpose, conditions, tools, and compatibility with required launch settings before asking. Claude Code starts with the pinned catalog at `~/.local/share/nix-config/claude-code-agents.json` and applies the session's effective definitions. The request contains a short task summary and eligible role descriptions that the configured backend may receive. It includes an `insufficient_evidence` option. [Pinned catalog](../packages/claude-code-agents.json) · [Decide backends](decide.md#backends-and-models)
-
-A Claude Code `fork` uses the parent's model and full conversation. It qualifies only when the workflow permits those effective settings. [Claude Code fork behavior](https://code.claude.com/docs/en/sub-agents#how-forks-differ-from-other-subagents)
-
-T3 0.1.9's `delegate_task` applies its `role` as guidance in the child prompt. Provider, model, effort, and tool access come from the launch route. A native launch inside T3 uses the harness's own selector when available. [T3 child prompt construction](https://github.com/pingdotgg/t3code/blob/v0.1.9/apps/server/src/mcp/delegatedTaskModes.ts#L90-L94)
-
-### Session checks
-
-These checks used the pinned harnesses, staged policy, synthetic Markdown fixtures, and local MLX judgments on macOS. Role availability depends on the active launch tool and session permissions.
-
-| Harness | Standalone | Managed T3 Code |
-| --- | --- | --- |
-| Claude Code | The parent sent `Explore` and `general-purpose` for a native file lookup. `judge` chose `Explore`, and the launch passed `subagent_type: Explore`. | The native planning task sent `Plan` and `general-purpose`. `judge` chose `Plan`, and the launch passed `subagent_type: Plan`. |
-| Codex | The tested `spawn_agent` exposed no role selector. It launched through its default path without judgment. | The tested native tool exposed no role selector. On a task routed to `delegate_task`, `judge` chose `research` from `general` and `research`, and the launch passed `role: research`. |
-| Pi | The managed `pi-subagents` extension offers named agents in terminal Pi and full-access T3 Pi. | On a task routed to `delegate_task`, `judge` chose `research` from `general` and `research`, and the launch passed `role: research`. |
-
-Each recorded judgment included `insufficient_evidence`. Claude also launched a required `Explore` role and a sole eligible `Explore` role without judgment. When the session denied the MCP call, Claude used its default selection path and completed the task.
+The shared `CROSS_MODEL_PEERS` list includes `claude`, `codex`, and `opencode` where those harnesses are installed. CE uses this list when selecting a peer for cross-model review.
 
 ## T3 task guidance
 
@@ -86,7 +62,7 @@ Activation removes the retired Grok Build launch configuration and disables the 
 
 Activation disables the former managed Antigravity ACP provider and removes its launch override on upgrade. Saved credentials and conversations stay on disk.
 
-T3 cannot enforce a read-only delegate. The T3 guide describes the owner's exception for CE cross-model review and its disclosure requirements.
+T3 cannot enforce a read-only delegate. The T3 guide describes the owner's exception for CE cross-model review.
 
 Close T3 before applying and relaunch it afterward. Repository checks execute the rendered activation and inspect launch arguments and instruction files. These checks establish activation output; they do not establish signed-in provider behavior, model compliance, or the T3 desktop experience on either host.
 
