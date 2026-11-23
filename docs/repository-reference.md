@@ -111,13 +111,7 @@ Before calling a D-Bus method through a dbus-python proxy, or debugging a deskto
 
 Before changing the shared agent instructions template, its renderer in `packages/text-template/`, or a check that relies on it failing closed, read [Go text/template's missingkey=error misses index lookups and printed nulls](../.compound-engineering/artifacts/solutions/logic-errors/go-text-template-missingkey-error-misses-index-and-printed-nulls.md).
 
-Before changing which model or reasoning effort a cross-model review peer runs on, or ranking Synthetic models as reviewers, read [benchmark a cross-model review peer in T3 Code before changing its model or effort, and never rank models on one sample](../.compound-engineering/artifacts/solutions/best-practices/benchmark-cross-model-review-peers-in-t3-code-before-changing-them.md).
-
-Before changing the reasoning effort of delegated Codex children, or treating a delegated child's summary as proof of its output, read [delegated Codex children gave up once in 30 runs at T3's default effort and never at high](../.compound-engineering/artifacts/solutions/best-practices/codex-child-give-up-rate-by-reasoning-effort.md).
-
-Before changing the model or effort of a delegated Codex implementation worker, read [the 30-run replay that selected Terra at xhigh](../.compound-engineering/artifacts/solutions/best-practices/codex-implementation-worker-tier-on-investigation-units.md), including its preparation requirements and limits.
-
-Before proposing the Codex `priority` service tier (fast mode) for the review peer or another delegated Codex role, or budgeting Codex usage for a peer benchmark, read [the Codex priority service tier costs 2.5x subscription usage, so the review peer stays on the default tier](../.compound-engineering/artifacts/solutions/best-practices/codex-priority-tier-costs-2-5x-subscription-usage-for-review-peer.md).
+Before treating a delegated child's summary as proof of its output, read [delegated Codex children gave up once in 30 runs](../.compound-engineering/artifacts/solutions/best-practices/codex-child-give-up-rate-by-reasoning-effort.md).
 
 Before promising that a declared MCP server reaches a T3 Code provider, read [T3 Code's ACP agent sessions ignore user-level MCP config](../.compound-engineering/artifacts/solutions/integration-issues/t3-acp-sessions-ignore-user-mcp-config.md).
 

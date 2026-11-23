@@ -1,6 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, writing, language, and action triggers for the installed task guide. They set no model or effort. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
+The ordinary user instruction files share scope and verification, language, and action triggers for the installed task guide. Delegation uses CE and harness defaults or the user’s explicit selection; dotfiles does not assign child models or efforts, check quota before delegation, or substitute providers. Interactive session defaults and standalone usage tools remain separate. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
 
 The shared instructions identify `agent-check` as the project's check when the project defines it. The Home Manager helper runs that task for manual checks, Git hooks, and CI. [Project setup](agent-check.md)
 
@@ -8,19 +8,15 @@ The shared instructions call for one `decide` judgment during CI triage when the
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
-For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive a trigger for the installed task guide through their normal baseline instruction paths.
-
-Every UI edit applies the `design-lenses` craft floor. Flows and states, including CLI prompts and notifications, use `design-lenses`, and interface copy uses `ux-writing`. For new screens, `frontend-design` sets the visual direction and the other skills work within it.
-
-Expo and React Native work uses `mobile-lenses`. Its single discovery entry points to seven pinned references. Each reference keeps its upstream files and license information in its own directory. When an upstream guide names another skill, use the router's table to find that guide.
-
-Nix installs `untangle-codebase` and `prune-tests` in all four user skill roots. The shared instructions direct agents to read `untangle-codebase` for structural refactoring and `prune-tests` alongside `test-audit` for test audits and cleanup. `untangle-codebase` retains the upstream model-invocation opt-out. Agents can read its criteria directly within the scope of the request.
+Shared guidance is exposed through domain entries: `web-lenses`, `engineering-lenses`, `design-lenses`, `mobile-lenses`, and `writing-lenses`. `project-skills` discovers version-matched guidance supplied by installed project dependencies. Open the entry for the work and follow its references; grouped guides do not each occupy a user-scope discovery entry.
 
 Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both NixOS and macOS. The package honors user-level `~/.acpx/config.json` and skips project-local `.acpxrc.json` when resolving configuration.
 
 ## Project skills for shadcn and Figma
 
-In a project that uses shadcn (`components.json`), keep the shadcn skill in `.agents/skills/shadcn/`. In a project that implements Figma designs, keep Figma's design-to-code skill in `.agents/skills/figma-design-to-code/`. Copy the complete skill directories, including `SKILL.md` and any referenced files. If the project's pinned Figma skill has an older name, use that name for its directory and link. Figma tool access comes from the project's own integration. [shadcn skill](https://ui.shadcn.com/docs/skills) · [Figma design-to-code skill](https://github.com/figma/mcp-server-guide/tree/main/skills/figma-design-to-code)
+Project-owned skills remain in their project's scope. For an Intent-compatible dependency, use `project-skills` to find guidance visible in the working project; absent or incompatible guidance falls back to a compatible installed reference or version-matched official documentation. Do not install dependencies or create project skills or instructions as part of discovery.
+
+The following historical checks used synthetic project-owned skills and do not imply that this repository manages skills in other checkouts.
 
 Disposable Git projects on macOS and NixOS confirmed the following with synthetic `shadcn` and `implement-design` skills.
 
@@ -30,14 +26,6 @@ Disposable Git projects on macOS and NixOS confirmed the following with syntheti
 | Pi 1.5.2 | Found both from a nested directory with `--approve`. With `--no-approve`, Pi skipped them. |
 | OpenCode 2.3.2 | Found both from a nested directory. |
 | Claude Code 2.1.329 | Found both through `.claude/skills/` directory links at the project root. |
-
-For projects that use Claude Code, create relative links for the skill directories present in that checkout. From the project root, for example:
-
-```sh
-mkdir -p .claude/skills
-ln -s ../../.agents/skills/shadcn .claude/skills/shadcn
-ln -s ../../.agents/skills/figma-design-to-code .claude/skills/figma-design-to-code
-```
 
 ## OpenCode review recipients
 
@@ -67,7 +55,7 @@ Each recorded judgment included `insufficient_evidence`. Claude also launched a 
 
 ## T3 task guidance
 
-The authoritative [T3 guide](../home/h82/agents/instructions/t3-guide.md) covers delegation, CE model selection, PR and MR watching, multi-PR threads, and visual options. Home Manager installs it at `~/.local/share/nix-config/agent-instructions/t3-guide.md` for use outside this checkout. The [task guide](../home/h82/agents/instructions/task-guide.md) covers personal procedures and is installed beside it.
+The authoritative [T3 guide](../home/h82/agents/instructions/t3-guide.md) covers T3 delegation, PR and MR watching, multi-PR threads, and visual options. Home Manager installs it at `~/.local/share/nix-config/agent-instructions/t3-guide.md` for use outside this checkout. The [task guide](../home/h82/agents/instructions/task-guide.md) covers personal procedures and is installed beside it.
 
 ## Native T3 launches
 

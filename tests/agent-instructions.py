@@ -14,11 +14,11 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # its conversation language from its own settings, so its render has a receipt
 # of its own. Every harness receives the same T3 render.
 EXPECTED = {
-    'darwin': '296f175fc5a3aaa4fc0fac6f51dc0253095a3431ddfb1f12af4901fc24bad8b6',
-    'darwin-claude': '7ff57613d415c7f44fa19e048a6fa528e07c6435cc39f48b7bd59ffb6198b6b1',
-    'nixos': '296f175fc5a3aaa4fc0fac6f51dc0253095a3431ddfb1f12af4901fc24bad8b6',
-    'nixos-claude': '7ff57613d415c7f44fa19e048a6fa528e07c6435cc39f48b7bd59ffb6198b6b1',
-    't3': '2a743d9ae649a1ef5924fd74ace8a2768833072c1cdbed0de1f2957ffc4ae259',
+    'darwin': '4da5662c8cc0a76b44ab111c9e724146d6089bd6a5b786f4d5ab3847c68be765',
+    'darwin-claude': '79863ccd27cb6a5ac17cb89058eb87391375553541b180b40e2319bffb4e6cf0',
+    'nixos': '4da5662c8cc0a76b44ab111c9e724146d6089bd6a5b786f4d5ab3847c68be765',
+    'nixos-claude': '79863ccd27cb6a5ac17cb89058eb87391375553541b180b40e2319bffb4e6cf0',
+    't3': 'fdac77eac9098f73477bf1d9efd24f87c8cb67b17c5016ca828167445ac53d05',
 }
 
 
@@ -43,6 +43,25 @@ def check_receipt(text, kind, harness=None):
             raise AssertionError('policy mutation escaped validation')
 
 
+def check_delegation_policy(native, guide):
+    # OpenCode can relay to a second recipient; both the intermediary and the
+    # actual provider must be authorized before material leaves the machine.
+    for required in (
+        'identify and disclose every recipient',
+        'check each against the CE allowlist',
+        'The `opencode` token covers the intermediary only',
+        'Direct Anthropic and OpenAI require `claude` and `codex` respectively',
+        'A model name cannot authorize a custom endpoint',
+        'If a recipient is unknown or unauthorized, continue with the ordinary review',
+    ):
+        assert required in native, required
+    assert 'CE or harness defaults for delegation' in guide
+    assert 'Apply the shared OpenCode recipient rule' in guide
+    for retired in ('T3 CE model selection', 'agent-usage --json', 'Fallback order',
+                    'Top child rung', 'reasoningEffort'):
+        assert retired not in guide, retired
+
+
 def check_guides(home, native, t3):
     guides = home / '.local/share/nix-config/agent-instructions'
     for text, name, passage in (
@@ -52,6 +71,20 @@ def check_guides(home, native, t3):
         assert f'~/.local/share/nix-config/agent-instructions/{name}' in text
         assert passage not in text
         assert passage in (guides / name).read_text()
+    guide = (guides / 't3-guide.md').read_text()
+    check_delegation_policy(native, guide)
+    for bad_native, bad_guide in (
+        (native.replace('check each against the CE allowlist', ''), guide),
+        (native.replace('Direct Anthropic and OpenAI require `claude` and `codex` respectively', ''), guide),
+        (native, guide + '\nagent-usage --json'),
+        (native, guide.replace('Apply the shared OpenCode recipient rule', '')),
+    ):
+        try:
+            check_delegation_policy(bad_native, bad_guide)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError('delegation policy mutation escaped validation')
 
 
 def exercise(template, helper, renderer, kind):
