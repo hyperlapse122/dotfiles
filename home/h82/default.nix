@@ -19,7 +19,10 @@ in
   ]
   ++ gui [ ./desktop ]
   # macOS gets the same terminal configuration, but none of the KDE desktop.
-  ++ lib.optionals (hostKind == "darwin") [ ./desktop/terminal.nix ]
+  ++ lib.optionals (hostKind == "darwin") [
+    ./desktop/firefox-darwin.nix
+    ./desktop/terminal.nix
+  ]
   ++ [
     ./dev
     ./security

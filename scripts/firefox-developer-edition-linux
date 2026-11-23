@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -eu
+
+install_dir="$HOME/.local/opt/firefox-developer-edition"
+
+if [ ! -e "$install_dir" ] && [ ! -L "$install_dir" ]; then
+  mkdir -p "$(dirname "$install_dir")"
+  stage=$(mktemp -d "$(dirname "$install_dir")/.firefox-download.XXXXXXXX")
+  trap 'rm -rf -- "$stage"' EXIT
+  curl --fail --location --silent --show-error --connect-timeout 15 --max-time 600 \
+    --proto =https --proto-redir =https \
+    'https://download.mozilla.org/?product=firefox-devedition-latest-ssl&os=linux64&lang=ko' \
+    --output "$stage/firefox.tar.xz"
+  python3 - "$stage/firefox.tar.xz" "$stage" <<'PY'
+import pathlib
+import sys
+import tarfile
+
+archive, destination = sys.argv[1:]
+with tarfile.open(archive, "r:xz") as tar:
+    for member in tar:
+        path = pathlib.PurePosixPath(member.name)
+        if not path.parts or path.parts[0] != "firefox" or ".." in path.parts:
+            raise ValueError("Unexpected path in Firefox archive")
+    tar.extractall(destination, filter="data")
+PY
+  if [ ! -x "$stage/firefox/firefox" ] || [ ! -f "$stage/firefox/application.ini" ]; then
+    echo 'Firefox Developer Edition download is incomplete. Try again.' >&2
+    exit 1
+  fi
+  # GNU mv uses an atomic no-replace rename, so a concurrent install wins intact.
+  mv --no-clobber --no-target-directory "$stage/firefox" "$install_dir"
+fi
+
+if [ ! -x "$install_dir/firefox" ]; then
+  echo "Firefox Developer Edition is not executable at $install_dir. Check the installation and try again." >&2
+  exit 1
+fi
+
+if [ "${1-}" = "--install-only" ]; then
+  exit 0
+fi
+exec "$install_dir/firefox" "$@"
