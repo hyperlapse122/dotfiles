@@ -7,6 +7,7 @@ pkgs.testers.nixosTest {
       ../modules/nixos/services/ollama.nix
       ../modules/nixos/services/minikube.nix
     ];
+    services.ollama.package = pkgs.ollama;
     nixpkgs.overlays = [
       (final: prev: {
         ollama = final.writeShellScriptBin "ollama" ''

@@ -246,6 +246,10 @@ jobs:
           for pin in bun-pin overlay-fonts; do
             nix run .#overlay-release -- --output "packages/$pin.json"
           done
+          if ! nix run .#overlay-release -- --output packages/ollama-release.json; then
+            echo "::warning title=Ollama update skipped::Ollama release refresh failed; keeping the current pin."
+            git checkout -- packages/ollama-release.json
+          fi
 
           # 3. Update Claude Desktop
           nix run .#claude-desktop-release -- --output packages/claude-desktop-version.json
@@ -403,7 +407,7 @@ jobs:
             git commit -m "chore(agents): bump compound-engineering to $NEW_TAG"
           fi
 
-          for pin in bun-pin overlay-fonts; do
+          for pin in bun-pin overlay-fonts ollama-release; do
             if [ -n "$(git status --porcelain "packages/$pin.json")" ]; then
               git add "packages/$pin.json"
               git commit -m "chore(packages): refresh $pin"

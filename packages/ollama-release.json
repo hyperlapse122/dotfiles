@@ -1,0 +1,9 @@
+{
+  "tag": "v0.40.17",
+  "targets": {
+    "linux-amd64": {
+      "sha256": "1df9d6228bac5a22e420b242708c0d10e5b886db97bab99d446a41760f4e79af",
+      "url": "https://github.com/ollama/ollama/releases/download/v0.40.17/ollama-linux-amd64.tar.zst"
+    }
+  }
+}

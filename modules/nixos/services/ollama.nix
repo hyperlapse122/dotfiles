@@ -5,7 +5,7 @@
   ...
 }:
 let
-  ollama = if config.my.cuda.enable then pkgs.ollama-cuda else pkgs.ollama;
+  ollama = config.services.ollama.package;
   provision = import ../../../packages/ollama-provision.nix {
     inherit pkgs;
     kind = "nixos";
@@ -13,6 +13,12 @@ let
 in
 {
   config = lib.mkIf (!config.my.bootstrap) {
+    services.ollama.package = lib.mkDefault (
+      import ../../../packages/ollama.nix {
+        inherit pkgs;
+        cudaSupport = config.my.cuda.enable;
+      }
+    );
     users.users.${config.my.user.name}.linger = true;
     environment.systemPackages = [ ollama ];
 

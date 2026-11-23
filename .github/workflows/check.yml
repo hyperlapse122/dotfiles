@@ -206,8 +206,6 @@ jobs:
         name: Make room for NixOS closures
         run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /usr/local/.ghcup /usr/lib/jvm /usr/share/swift /opt/hostedtoolcache
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
-      - name: Build CUDA Ollama before the host checks
-        run: ./scripts/ci-prebuild-ollama
       - name: Build host check shard
         run: nix build --no-link --keep-going --print-build-logs .#checkShards.hosts
 
@@ -306,10 +304,6 @@ jobs:
         with:
           extra_nix_config: |
             system-features = big-parallel benchmark
-      - name: Build CUDA Ollama for the target
-        env:
-          TARGET: ${{ matrix.target }}
-        run: ./scripts/ci-prebuild-ollama "$TARGET"
       - name: Build host configuration without secrets
         # The target comes from hosts/ directory names, so it reaches the
         # shell as data rather than being spliced into the script.

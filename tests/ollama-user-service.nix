@@ -18,7 +18,10 @@ let
       inherit (entry) config name;
       user = config.my.user.name;
       units = etcSource config "systemd/user";
-      package = if config.my.cuda.enable then hostPkgs.ollama-cuda else hostPkgs.ollama;
+      package = import ../packages/ollama.nix {
+        pkgs = hostPkgs;
+        cudaSupport = config.my.cuda.enable;
+      };
       service = "${toString units}/ollama.service";
       provision = "${toString units}/ollama-provision.service";
       hasPackage = builtins.any (p: toString p == toString package) config.environment.systemPackages;
