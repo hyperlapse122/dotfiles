@@ -1,4 +1,4 @@
-"""Exercise the packaged agent-check against disposable Git repositories."""
+"""Exercise the checkout-local agent-check against disposable Git repositories."""
 
 import json
 import os
@@ -26,16 +26,10 @@ def fixture(root):
                        ("commit.gpgsign", "false")):
         run("git", "config", key, value, cwd=repo)
     (repo / "tracked file").write_text("committed\n")
-    (repo / "check").write_text(f"#!{shutil.which('bash')}\n" + '''\
-set -eu
-while IFS= read -r -d '' file; do
-    printf '%s=%s\\n' "$file" "$(cat -- "$file")" >&2
-done < "$AGENT_CHECK_FILES"
-agent-check-fixture-tool >&2
-for ((i = 0; i < 150; i++)); do printf 'diagnostic %d\\n' "$i" >&2; done
-exit 17
-''')
-    (repo / "check").chmod(0o755)
+    (repo / "mise.toml").write_text("[settings]\n")
+    (repo / "scripts").mkdir()
+    for name in ("agent-check", "agent-check-inspect.py", "check-changed-files", "lint-staged-markdown"):
+        shutil.copy2(HELPER.parent / name, repo / "scripts" / name)
     run("git", "add", ".", cwd=repo)
     run("git", "commit", "-qm", "base", cwd=repo)
     return repo
@@ -43,69 +37,88 @@ exit 17
 
 def exercise(root):
     repo = fixture(root)
-    def check(*args, expected=0):
-        return run(HELPER, *args, cwd=repo, expected=expected)
-    assert check() == ""
-    (repo / "untracked file").write_text("untracked\n")
-    (repo / "Makefile").write_text(
-        "include generated.mk\ngenerated.mk:\n\t@touch generated.mk\nall: agent-check\n"
-    )
-    assert check() == ""
-    assert not (repo / "generated.mk").exists()
-    (repo / "Makefile").unlink()
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    nixfmt = bin_dir / "nixfmt"
+    nixfmt.write_text(f"#!{shutil.which('bash')}\n" + """\
+set -eu
+shift
+for file in "$@"; do
+    printf '%s=%s\n' "$file" "$(cat -- "$file")"
+    if grep -q BAD "$file"; then exit 1; fi
+done
+""")
+    nixfmt.chmod(0o755)
+    # Model a shim that requires temporary trust only in the snapshot.
+    python = bin_dir / "python3"
+    snapshot_record = root / "snapshot-record"
+    python.write_text(f"#!{shutil.which('bash')}\n" + f"""\
+set -eu
+if [[ "$PWD" != '{repo}' ]]; then
+    [[ "${{MISE_TRUSTED_CONFIG_PATHS:-}}" == "$(pwd -P)" && "${{MISE_SAFE:-}}" == 1 ]] || exit 91
+    printf '%s\n' "$PWD" >> '{snapshot_record}'
+fi
+exec '{sys.executable}' "$@"
+""")
+    python.chmod(0o755)
+    env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+    def check(*args, cwd=repo, expected=0):
+        return run(cwd / "scripts/agent-check", *args, cwd=cwd, expected=expected, env=env)
 
-    # The task uses a local tool even if the launcher appends its own tools.
-    (repo / ".git/info/exclude").write_text("/node_modules/\n")
-    local_bin = repo / "node_modules/.bin"
-    local_bin.mkdir(parents=True)
-    tool = local_bin / "agent-check-fixture-tool"
-    tool.write_text(f"#!{shutil.which('bash')}\nprintf 'project tool\\n'\n")
-    tool.chmod(0o755)
-    shadow_git = local_bin / "git"
-    shadow_git.write_text(f"#!{shutil.which('bash')}\necho 'checkout-local git ran' >&2\nexit 98\n")
-    shadow_git.chmod(0o755)
-    (repo / "tracked file").write_text("staged\n")
-    (repo / "mise.toml").write_text('[tasks.agent-check]\nrun = "./check"\n')
-    run("git", "add", "tracked file", "mise.toml", cwd=repo)
-    (repo / "tracked file").write_text("working copy\n")
-    (repo / "mise.toml").write_text('[tasks.agent-check]\nrun = "exit 19"\n')
+    assert check() == ""
+    other = root / "unrelated"
+    other.mkdir()
+    run("git", "init", "-q", cwd=other)
+    (other / "unrelated.py").write_text("subprocess.run(task, shell=True)\n")
+    output = run(repo / "scripts/agent-check", cwd=other, expected=1, env=env)
+    assert "run from this dotfiles checkout" in output and "python_subprocess_shell" not in output, output
+    (repo / "sample.nix").write_text("GOOD working\n")
+    assert check() == ""  # Successful project output stays quiet.
+    (repo / "sample.nix").write_text("BAD staged\n")
+    run("git", "add", "sample.nix", cwd=repo)
+    (repo / "sample.nix").write_text("GOOD working\n")
+    output = check("--staged", expected=1)
+    assert "BAD staged" in output and "GOOD working" not in output, output
+    assert (repo / "sample.nix").read_text() == "GOOD working\n"
+    assert run("git", "show", ":sample.nix", cwd=repo) == "BAD staged\n"
+    run("git", "commit", "-qm", "add sample", cwd=repo)
+    output = check("--range", "HEAD^", "HEAD", expected=1)
+    assert "BAD staged" in output and "GOOD working" not in output, output
 
+    # The selected tree supplies its own project-check implementation.
+    project_check = repo / "scripts/check-changed-files"
+    project_check.write_text("#!/usr/bin/env bash\nfor ((i=1; i<=150; i++)); do echo diagnostic-$i; done\nexit 17\n")
+    (repo / "warning.py").write_text("subprocess.run(task, shell=True)\n")
+    run("git", "add", "scripts/check-changed-files", "warning.py", cwd=repo)
+    project_check.write_text("#!/usr/bin/env bash\nexit 19\n")
     output = check("--staged", expected=17)
-    assert "tracked file=staged" in output and "untracked file=" not in output, output
-    assert "project tool" in output and len(output.splitlines()) <= 101, output
-    assert (repo / "tracked file").read_text() == "working copy\n"
-    assert run("git", "show", ":tracked file", cwd=repo) == "staged\n"
-
-    (repo / "mise.toml").unlink()
-    run("git", "reset", "-q", "HEAD", "mise.toml", cwd=repo)
-    (repo / "Makefile").write_text(".PHONY: agent-check\nagent-check:\n\t@./check\n")
-    # GNU Make represents a failing recipe with exit code 2.
-    output = check(expected=2)
-    assert "tracked file=working copy" in output and "untracked file=untracked" in output, output
-    (repo / "justfile").write_text("agent-check:\n    @./check\n")
-    (repo / "Makefile").unlink()
-    output = check(expected=17)
-    assert "tracked file=working copy" in output, output
-    (repo / "justfile").unlink()
-
-    (repo / "mise.toml").write_text('[tasks.agent-check]\nrun = "./check"\n')
-    (repo / "package.json").write_text('{"name":"fixture"}\n')
-    run("git", "add", "mise.toml", "package.json", "tracked file", "untracked file", cwd=repo)
-    run("git", "commit", "-qm", "add manifest", cwd=repo)
-    assert run("git", "status", "--porcelain", cwd=repo) == ""
-    assert check() == ""
-    assert 'package.json={"name":"fixture"}' in check("--range", "HEAD^", "HEAD", expected=17)
-
-    (repo / "package.json").write_text("dirty manifest\n")
-    (repo / "mise.toml").unlink()
+    assert "python_subprocess_shell" in output and "diagnostic-100" in output, output
+    assert "diagnostic-101" not in output and len(output.splitlines()) == 101, output
+    assert snapshot_record.read_text().splitlines(), "snapshot shim was not called"
+    run("git", "commit", "-qm", "change project check", cwd=repo)
     output = check("--range", "HEAD^", "HEAD", expected=17)
-    assert 'package.json={"name":"fixture"}' in output, output
-    assert "checkout-local git ran" not in output, output
+    assert "python_subprocess_shell" in output and "diagnostic-100" in output, output
+    assert "diagnostic-101" not in output and len(output.splitlines()) == 101, output
+    run("git", "restore", "scripts/check-changed-files", cwd=repo)
+    # Restore the real project checker for the linked-worktree test.
+    shutil.copy2(HELPER.parent / "check-changed-files", project_check)
+    run("git", "add", "scripts/check-changed-files", cwd=repo)
+    run("git", "commit", "-qm", "restore project check", cwd=repo)
+
+    # A linked checkout's script wins over an executable with the same name on PATH.
+    linked = root / "linked worktree"
+    run("git", "worktree", "add", "-q", "-b", "linked", str(linked), cwd=repo)
+    competitor = bin_dir / "agent-check"
+    competitor.write_text(f"#!{shutil.which('bash')}\necho wrong-checker >&2\nexit 98\n")
+    competitor.chmod(0o755)
+    (linked / "sample.nix").write_text("BAD linked\n")
+    output = check(cwd=linked, expected=1)
+    assert "BAD linked" in output and "wrong-checker" not in output, output
 
 
 def exercise_checks(root):
     repo = fixture(root)
-    (repo / "Makefile").write_text(".PHONY: agent-check\nagent-check:\n\t@true\n")
+    helper = repo / "scripts/agent-check"
     (repo / "package.json").write_text('{"dependencies":{"already-present":"1"}}')
     run("git", "add", ".", cwd=repo)
     run("git", "commit", "-qm", "declare an existing dependency", cwd=repo)
@@ -181,11 +194,11 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
     curl.chmod(0o755)
     env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}", CALLS=str(calls),
                TEST_TOKEN="fake-test-token")
-    offline = run(HELPER, cwd=repo, env=env)
+    offline = run(helper, cwd=repo, env=env)
     assert "python_subprocess_shell" in offline and "hardcoded_credential" in offline, offline
     assert "fixture-plaintext-must-not-print" not in offline and not calls.exists(), offline
     run("git", "add", ".", cwd=repo)
-    assert "python_subprocess_shell" in run(HELPER, "--staged", cwd=repo, env=env)
+    assert "python_subprocess_shell" in run(helper, "--staged", cwd=repo, env=env)
     assert not calls.exists()
     run("git", "commit", "-qm", "add dependencies", cwd=repo)
     assert run("git", "status", "--porcelain", cwd=repo) == ""
@@ -201,9 +214,8 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
         shadow.write_text(f"#!{shutil.which('bash')}\ntouch '{root / 'project-tool-ran'}'\nexit 99\n")
         shadow.chmod(0o755)
     (repo / ".git/info/exclude").write_text("/node_modules/\n")
-    env["PATH"] = f"{local_bin}:{env['PATH']}"
     (repo / "package.json").write_text('{"dependencies":{"dirty-only":"1"}}')
-    output = run(HELPER, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
+    output = run(helper, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
                  cwd=repo, env=env)
     assert "downloads 18 (last week)" in output and "downloads 9" in output, output
     assert all(day in output for day in ("2026-01-02", "2026-02-03", "2026-03-04")), output
@@ -229,7 +241,7 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
         "missing-pkg": "*", "unavailable-pkg": "*", "@unapproved/private": "*",
         "@team/missing-private": "*",
     }}))
-    output = run(HELPER, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
+    output = run(helper, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
     assert "missing-pkg: missing" in output and "unavailable-pkg: lookup incomplete" in output, output
     assert "fixture-plaintext-must-not-print" not in output and "@unapproved/private" not in output
     assert "no approved registry" in output and "@team/missing-private: missing" in output, output
@@ -237,12 +249,12 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
 
     (repo / "policy.json").write_text(json.dumps(policy))
     count = calls.read_bytes()
-    output = run(HELPER, "--registry-policy", repo / "policy.json", cwd=repo, env=env, expected=1)
+    output = run(helper, "--registry-policy", repo / "policy.json", cwd=repo, env=env, expected=1)
     assert "outside the checkout" in output and calls.read_bytes() == count, output
 
     (repo / "Makefile").unlink()
     (repo / "mise.toml").unlink()
-    output = run(HELPER, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
+    output = run(helper, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
     assert "missing-pkg: missing" in output, output
 
     # The index's scope wins over the unstaged config and conflicting public approval.
@@ -253,10 +265,10 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
     run("git", "add", "package.json", ".npmrc", cwd=repo)
     (repo / ".npmrc").write_text("@sealed:registry=https://registry.npmjs.org/\n")
     count = calls.read_bytes()
-    output = run(HELPER, "--registry-policy", policy_file, "--staged", cwd=repo, env=env, expected=1)
+    output = run(helper, "--registry-policy", policy_file, "--staged", cwd=repo, env=env, expected=1)
     assert "no approved registry" in output and calls.read_bytes() == count, output
     (repo / ".npmrc").write_text('@${FIXTURE_SCOPE}:registry=https://private.example.invalid/\n')
-    output = run(HELPER, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
+    output = run(helper, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
     assert "no approved registry" in output and calls.read_bytes() == count, output
 
     # A default registry change alone can reroute an existing unscoped package.
@@ -268,7 +280,7 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
     run("git", "commit", "-qm", "establish public npm route", cwd=repo)
     (repo / "registry.data").write_text("registry=https://private.example.invalid/\n")
     run("git", "add", "registry.data", cwd=repo)
-    output = run(HELPER, "--registry-policy", policy_file, "--staged", cwd=repo, env=env, expected=1)
+    output = run(helper, "--registry-policy", policy_file, "--staged", cwd=repo, env=env, expected=1)
     assert "no approved registry" in output and calls.read_bytes() == count, output
 
     # A rename keeps the old manifest's dependency set, even with no approvals.
@@ -277,7 +289,7 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
     run("git", "mv", "package.json", "sub/package.json", cwd=repo)
     run("git", "commit", "-qm", "move manifest", cwd=repo)
     policy_file.write_text("{}")
-    assert run(HELPER, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
+    assert run(helper, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
                cwd=repo, env=env) == ""
     assert calls.read_bytes() == count
 
@@ -289,20 +301,20 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
     (repo / "manifest.data").write_text('{"dependencies":{"public-pkg":"1","unapproved":"1"}}')
     run("git", "add", "manifest.data", cwd=repo)
     run("git", "commit", "-qm", "change link target", cwd=repo)
-    output = run(HELPER, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
+    output = run(helper, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
                  cwd=repo, env=env, expected=1)
     assert output.count("no approved registry") == 1, output
     (repo / "package.json").unlink()
     (repo / "package.json").symlink_to("../outside.json")
     (root / "outside.json").write_text('{"dependencies":{"public-pkg":"1"}}')
-    output = run(HELPER, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
+    output = run(helper, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
     assert "invalid manifest" in output and calls.read_bytes() == count, output
 
 
 
 with tempfile.TemporaryDirectory() as directory:
     exercise(Path(directory))
-print("agent-check: clean, missing task, index, worktree, failure, and commit range passed")
+print("agent-check: checkout, index, linked worktree, and commit range passed")
 
 with tempfile.TemporaryDirectory() as directory:
     exercise_checks(Path(directory))

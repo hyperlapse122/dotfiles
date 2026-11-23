@@ -186,6 +186,8 @@ steps = {s.get("name"): s for s in jobs["agent-check"]["steps"]}
 range_step = steps["Select committed range"]
 registry_step = steps["Check registry dependencies"]
 task_step = steps["Run project checks"]
+assert task_step.get("if") == "!cancelled() && steps.range.outcome == 'success'"
+assert not registry_step.get("continue-on-error", False)
 with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as runner_temp:
     output = Path(runner_temp, "output")
     def git(*args):
@@ -231,6 +233,7 @@ with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as runn
 
     env.update(BASE=parent, HEAD_SHA=head, REGISTRY_POLICY="")
     recorder = r'''nix() {
+        [[ $1 == develop && $2 == .#agent-check && $3 == -c && $4 == ./scripts/agent-check ]] || return 1
         if [[ $EXPECT_POLICY == yes ]]; then
             [[ $5 == --registry-policy && $6 == "$RUNNER_TEMP/"* && $(cat -- "$6") == '{}' ]] || return 1
             shift 6

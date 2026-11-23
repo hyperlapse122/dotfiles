@@ -4,7 +4,20 @@ let
   darwinFixtures = import ./lib/darwin-fixtures.nix { inherit inputs; };
 in
 {
-  agent-check = self.packages.${pkgs.stdenv.hostPlatform.system}.agent-check;
+  agent-check =
+    pkgs.runCommand "agent-check-tests"
+      {
+        nativeBuildInputs = import ../packages/agent-check.nix { inherit pkgs; };
+      }
+      ''
+        export HOME="$TMPDIR/home"
+        mkdir -p "$HOME"
+        cp -r ${../scripts} scripts
+        chmod -R u+w scripts
+        patchShebangs scripts/agent-check
+        python3 ${./agent-check.py} "$PWD/scripts/agent-check"
+        touch "$out"
+      '';
   agent-hooks = import ./agent-hooks.nix { inherit pkgs; };
   project-skills =
     let

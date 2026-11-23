@@ -49,7 +49,9 @@
           pkgs.bash
           pkgs.git
           pkgs.markdownlint-cli2
-          self.packages.${system}.agent-check
+          (pkgs.python3.withPackages (ps: [ ps.packaging ]))
+          pkgs.coreutils
+          pkgs.nixfmt
         ];
       }
       ''
@@ -57,12 +59,14 @@
         mkdir -p scripts tests .githooks
         cp ${../scripts/lint-staged-markdown} scripts/lint-staged-markdown
         cp ${../scripts/check-changed-files} scripts/check-changed-files
+        cp ${../scripts/agent-check} scripts/agent-check
+        cp ${../scripts/agent-check-inspect.py} scripts/agent-check-inspect.py
         cp ${./lint-staged-markdown.sh} tests/lint-staged-markdown.sh
         cp ${../.githooks/pre-commit} .githooks/pre-commit
         cp ${../.markdownlint-cli2.jsonc} .markdownlint-cli2.jsonc
         cp ${../mise.toml} mise.toml
-        chmod +x scripts/lint-staged-markdown .githooks/pre-commit
-        patchShebangs scripts/lint-staged-markdown .githooks/pre-commit tests/lint-staged-markdown.sh
+        chmod +x scripts/lint-staged-markdown scripts/agent-check .githooks/pre-commit
+        patchShebangs scripts/lint-staged-markdown scripts/agent-check .githooks/pre-commit tests/lint-staged-markdown.sh
 
         bash tests/lint-staged-markdown.sh scripts/lint-staged-markdown .githooks/pre-commit .markdownlint-cli2.jsonc "${tomlVersion}" "${lockVersion}" "${nixpkgsVersion}" "${taskRun}"
         touch $out
