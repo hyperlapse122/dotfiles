@@ -146,4 +146,4 @@ The initial M5 Pro run used 64 GiB of unified memory and the real MLX decision h
 
 Native CUDA build and target GPU results are reported separately from deterministic adapter tests. The initial Mac evidence does not establish RTX 3060 memory fit or image inference. Hardware evidence and the current-head repository checks belong in the pull request's validation record.
 
-The full operation remains available through `judge`. Harness plugins and execution policies such as task delegation, worker model/effort choice and task splitting are separate consumers; [#217](https://github.com/hyperlapse122/dotfiles/issues/217) tracks one proposed router.
+The full operation remains available through `judge`. The shared task guide uses it to choose between plausible next checks during CI triage. [CI triage guidance](../home/h82/agents/instructions/task-guide.md#decide-for-ci-triage)

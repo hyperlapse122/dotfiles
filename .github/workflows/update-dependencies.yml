@@ -202,14 +202,15 @@ jobs:
           git config user.email 'github-actions[bot]@users.noreply.github.com'
 
           update_harness_release() {
-            local harness=$1 label=$2 pin=$3 log
-            if log=$(nix run ".#$harness-release" -- --output "$pin" 2>&1); then
-              printf '%s\n' "$log"
-            else
-              printf '%s\n' "$log" >&2
-              echo "::warning title=$label update skipped::$harness-release failed; keeping $pin. ${log##*$'\n'}"
+            local harness=$1 label=$2 pin=$3 log status=0
+            log=$(mktemp)
+            nix run ".#$harness-release" -- --output "$pin" 2>"$log" || status=$?
+            cat "$log" >&2
+            if [ "$status" -ne 0 ]; then
+              echo "::warning title=$label update skipped::$harness-release failed; keeping $pin. $(tail -n 1 "$log")"
               git checkout -- "$pin"
             fi
+            rm -f "$log"
           }
 
           # 1. Update flake inputs
