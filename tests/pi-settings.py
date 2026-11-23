@@ -8,6 +8,7 @@ import sys
 import tempfile
 
 block, state, installed, agents = sys.argv[1], sys.argv[2], Path(sys.argv[3]), Path(sys.argv[4])
+bash = sys.argv[5]
 
 lines = [line for line in Path(block).read_text().splitlines() if '/bin/pi-state' in line and '--plugin' in line]
 assert len(lines) == 1, lines
@@ -41,11 +42,13 @@ with tempfile.TemporaryDirectory() as directory:
         'packages': [unrelated, 'npm:pi-subagents', {'source': 'npm:pi-subagents@0.80.0'},
                      str(legacy), str(installed / 'pi-subagents')],
         'extensions': [user_extension],
+        'shellPath': '/old/bash',
         'compaction': {'reserveTokens': 20000, 'modelOverrides': {'other/model': {'reserveTokens': 123}}},
     }))
     for _ in range(2):
         subprocess.run([sys.executable, *call], check=True)
         settings = json.loads(settings_path.read_text())
+        assert settings['shellPath'] == bash
         assert settings['packages'] == [unrelated, str(plugin), str(subagents)], settings['packages']
         assert json.loads((subagents / 'package.json').read_text())['name'] == 'pi-subagents'
         assert manifest.is_file()

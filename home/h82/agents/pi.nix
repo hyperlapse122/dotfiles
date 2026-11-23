@@ -139,7 +139,7 @@ in
   home.activation.piSettings = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
       ${pi}/libexec/pi/pi install ${inputs.compound-engineering-plugin}
-      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} --subagents ${lib.escapeShellArg "${agent}/pi-subagents"} ${lib.optionalString quality.enable "--quality"} ${
+      ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --plugin ${inputs.compound-engineering-plugin} --subagents ${lib.escapeShellArg "${agent}/pi-subagents"} --shell-path ${lib.escapeShellArg "${pkgs.bash}/bin/bash"} ${lib.optionalString quality.enable "--quality"} ${
         lib.optionalString (!config.my.bootstrap) "--local-model ${lib.escapeShellArg localModel.model}"
       } ${hiddenModelArgs} ${enabledModelArgs}
     fi
