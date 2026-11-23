@@ -27,11 +27,11 @@ let
   declaredPaths = [
     {
       path = [ "model" ];
-      value = "gpt-6.2-sol";
+      value = "gpt-6.2-astra";
     }
     {
       path = [ "model_reasoning_effort" ];
-      value = "high";
+      value = "ultra";
     }
     {
       path = [ "service_tier" ];
