@@ -201,21 +201,16 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
 
-          update_harness_catalog() {
-            local harness=$1 label=$2 pin="packages/$1-release.json" catalog="packages/$1-agents.json"
-            local log status=0 message
+          update_harness_release() {
+            local harness=$1 label=$2 pin=$3 log status=0
             log=$(mktemp)
             nix run ".#$harness-release" -- --output "$pin" 2>"$log" || status=$?
-            if [ "$status" -eq 0 ] && [ -n "$(git status --porcelain "$pin")" ]; then
-              nix run ".#$harness-agents" -- --output "$catalog" 2>>"$log" || status=$?
-            fi
             cat "$log" >&2
-            message=$(tail -n 1 "$log")
-            rm -f "$log"
             if [ "$status" -ne 0 ]; then
-              echo "::warning title=$label update skipped::$label release or agent catalog extraction failed. Keeping $pin and $catalog. $message"
-              git checkout -- "$pin" "$catalog"
+              echo "::warning title=$label update skipped::$harness-release failed; keeping $pin. $(tail -n 1 "$log")"
+              git checkout -- "$pin"
             fi
+            rm -f "$log"
           }
 
           # 1. Update flake inputs
@@ -254,24 +249,8 @@ jobs:
           # 3. Update Claude Desktop
           nix run .#claude-desktop-release -- --output packages/claude-desktop-version.json
 
-          # 4. Update Claude Code. A new pin carries the catalog of built-in
-          # agents extracted from the binary that pin installs, so the two
-          # files move together. When the release or the extraction fails,
-          # both keep their current contents, the warning carries the
-          # failing command's message, and the other updates go through.
-          claude_code_status=0
-          claude_code_log=$(mktemp)
-          nix run .#claude-code-release -- --output packages/claude-code-manifest.json 2>"$claude_code_log" || claude_code_status=$?
-          if [ "$claude_code_status" -eq 0 ] && [ -n "$(git status --porcelain packages/claude-code-manifest.json)" ]; then
-            nix run .#claude-code-agents -- --output packages/claude-code-agents.json 2>>"$claude_code_log" || claude_code_status=$?
-          fi
-          cat "$claude_code_log" >&2
-          claude_code_message=$(tail -n 1 "$claude_code_log")
-          rm -f "$claude_code_log"
-          if [ "$claude_code_status" -ne 0 ]; then
-            echo "::warning title=Claude Code update skipped::Claude Code release or agent catalog extraction failed; keeping the current pins in packages/claude-code-manifest.json and packages/claude-code-agents.json. $claude_code_message"
-            git checkout -- packages/claude-code-manifest.json packages/claude-code-agents.json
-          fi
+          # 4. Update Claude Code
+          update_harness_release claude-code "Claude Code" packages/claude-code-manifest.json
 
           # 5. Update the Android SDK pin
           nix run .#android-sdk-release -- --output packages/android-sdk-repo.json
@@ -302,8 +281,8 @@ jobs:
             git checkout -- packages/t3code-release.json
           fi
 
-          # 9. Update Pi and verify its native roster from the new source pin.
-          update_harness_catalog pi Pi
+          # 9. Update Pi
+          update_harness_release pi Pi packages/pi-release.json
 
           # 10. Update the npm packages: the shared ACP client and the Claude
           # Agent SDK that agent-usage reads Claude limits through. Each pin
@@ -322,8 +301,8 @@ jobs:
             fi
           done
 
-          # 11. Update Codex and extract the roster from the new source pin.
-          update_harness_catalog codex Codex
+          # 11. Update Codex
+          update_harness_release codex Codex packages/codex-release.json
 
           # 12. Update OpenCode. A release can be listed before its archives
           # and digests are, so a failure keeps the current pin and lets the
@@ -373,9 +352,9 @@ jobs:
           }
 
           commit_if_pin_changed claude-desktop packages/claude-desktop-version.json
-          commit_if_pin_changed claude-code packages/claude-code-manifest.json packages/claude-code-agents.json
-          commit_if_pin_changed codex packages/codex-release.json packages/codex-agents.json
-          commit_if_pin_changed pi packages/pi-release.json packages/pi-agents.json
+          commit_if_pin_changed claude-code packages/claude-code-manifest.json
+          commit_if_pin_changed codex packages/codex-release.json
+          commit_if_pin_changed pi packages/pi-release.json
           for npm_package in acpx claude-agent-sdk; do
             pin="packages/$npm_package-release.json"
             lock="packages/$npm_package/package-lock.json"

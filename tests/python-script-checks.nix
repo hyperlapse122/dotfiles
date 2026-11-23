@@ -53,12 +53,6 @@ in
   claude-code-release =
     releaseScriptCheck "claude-code-release" ../scripts/claude-code-release
       ./test_claude_code_release.py;
-  claude-code-agents =
-    pythonScriptCheck "claude-code-agents" ../scripts/claude-code-agents
-      ./test_claude_code_agents.py;
-  harness-agents =
-    pythonScriptCheck "harness-agents" ../scripts/harness-agents
-      ./test_harness_agents.py;
   mise-release = releaseScriptCheck "mise-release" ../scripts/mise-release ./test_mise_release.py;
   prezto-release =
     pythonScriptCheck "prezto-release" ../scripts/prezto-release

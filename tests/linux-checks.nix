@@ -107,7 +107,6 @@ let
       };
       claude = import ./claude.nix { inherit pkgs self; };
       claude-code = import ./claude-code.nix { inherit pkgs self; };
-      claude-code-agents-catalog = import ./claude-code-agents-catalog.nix { inherit pkgs agentTools; };
       claude-desktop = import ./claude-desktop.nix { inherit pkgs self; };
       codex = import ./codex.nix { inherit pkgs self; };
       codex-settings = import ./codex-settings.nix { inherit pkgs self; };
@@ -115,7 +114,6 @@ let
       firefox-developer-edition = import ./firefox-developer-edition.nix { inherit pkgs self; };
       git-cli-repo-flags = import ./git-cli-repo-flags.nix { inherit pkgs self; };
       grok-absent = import ./grok-absent.nix { inherit pkgs self darwinFixtures; };
-      harness-agents-catalog = import ./harness-agents-catalog.nix { inherit pkgs agentTools; };
       host-name-guard = import ./host-name-guard.nix { inherit pkgs self; };
       host-secrets = import ./host-secrets.nix { inherit pkgs; };
       kde-power = import ./kde-power.nix { inherit pkgs self; };

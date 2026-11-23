@@ -31,7 +31,7 @@ An LFG run on `gpt-6-astra` stopped twice on 2026-11-12 because two delegated Co
 - The `gpt-6.1-sol` review child had been handed the whole `ce-code-review` skill. It read several files in one command, two outputs were cut at the default 10,000 tokens per call, and it returned `failed` after 22 seconds and 30 reasoning tokens. The cut output held the skill's own rule to read a shortened result again.
 - In 278 delegated Codex children recorded from 2026-11-10 to 2026-11-13, 104 of the 112 `gpt-6.1-sol` children that finished had also received truncated output. Truncation is routine and does not by itself make a child give up.
 
-The shared instructions told orchestrators to pass no effort for a ladder-selected child, which gives `gpt-6.1-sol` and `gpt-6.1-terra` children T3's default of `low` and `gpt-6-luna` children `medium`. The measurement below asked whether `high` reduces give-ups.
+The shared instructions told orchestrators to pass no effort for a ladder-selected child, which gave `gpt-6.1-sol` and `gpt-6.1-terra` children T3's default of `low` and `gpt-6-luna` children `medium`. The measurement below asked whether `high` reduces give-ups.
 
 ## Guidance
 
@@ -70,9 +70,9 @@ The one give-up was `M161 scout d-07` (T3 thread ending `5ad57688-8745-4471-9490
 
 Total tokens are mostly cached input. Uncached input was 0.6 M for the ten default reviews and 1.7 M for the ten `high` reviews; output was 16 K against 104 K. The owner's other Codex sessions ran on the same account during the measurement, so no subscription-window percentage is recorded.
 
-## Decision
+## Decision on 2026-11-13
 
-The plan's rule changes the effort for Codex children when the default arm has at least one give-up and the raised arm has at most half as many, over the three shapes combined. The counts are 1 and 0, so the rule applies, and the T3-only instructions now pass `high` for a ladder-selected Codex child.
+The default arm recorded one give-up and the raised arm recorded zero across the three task shapes. This met the plan's pre-agreed threshold, so the T3 instructions at the time selected `high` for ladder-selected Codex children. Dotfiles retired the ladder on 2026-11-23.
 
 The evidence for that change is one event in 30 runs. It cannot separate a real difference from chance, and the measured briefs, which each named an output file, did not reproduce the give-up rate of the session record (22 of 140 `gpt-6.1-terra` children at default effort, counted by a wording match on each child's final message and not checked by hand). The cost is certain: about eight times the tokens and six times the wall time on an open-ended review. Read the decision as "the pre-agreed threshold was met", not as "high effort is shown to prevent give-ups".
 
@@ -82,7 +82,6 @@ Without the counts, the next change repeats the guess: that children give up bec
 
 ## When to Apply
 
-- Before changing the Codex effort sentence in the T3 CE model selection section, repeat this measurement and compare it with the table above.
 - When a delegated child's return is the only evidence of its work, check the named artifact before treating the return as complete.
 - When measuring again, reuse the three briefs and the judging rules so the numbers stay comparable. This measurement ran in the shared checkout with one scratch directory per run instead of one worktree per run; every task wrote only under its own directory, and the checkout was clean after every batch.
 

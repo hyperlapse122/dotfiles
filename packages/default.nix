@@ -20,7 +20,6 @@ in
   claude-desktop-release = agentTools.claudeDesktopRelease;
   claude-desktop = import ./claude-desktop.nix { inherit pkgs; };
   claude-code-release = agentTools.claudeCodeRelease;
-  claude-code-agents = agentTools.claudeCodeAgents;
   claude-code = import ./claude-code.nix { inherit pkgs; };
   ant-release = pkgs.writeScriptBin "ant-release" (
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../scripts/ant-release
@@ -33,10 +32,8 @@ in
     "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../scripts/overlay-release
   );
   pi-release = agentTools.piRelease;
-  pi-agents = agentTools.piAgents;
   pi = import ./pi.nix { inherit pkgs; };
   codex-release = agentTools.codexRelease;
-  codex-agents = agentTools.codexAgents;
   codex = import ./codex.nix { inherit pkgs; };
   opencode-release = agentTools.opencodeRelease;
   opencode = import ./opencode.nix { inherit pkgs; };

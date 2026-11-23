@@ -22,11 +22,7 @@ tokens over ten runs. Terra/xhigh succeeded 9/10 times; Sol/high succeeded 10/10
 Their medians were 2,145,125 and 2,610,341 total tokens. Terra/high succeeded 0/10
 and was ineligible, despite its lower token use.
 
-This branch changes the T3-only instructions to request `xhigh` for middle-rung
-Codex implementation workers. Other Codex children retain `high`, and an explicit
-user or CE configuration effort still takes precedence. The model ladder stays
-unchanged. This is the agreed threshold's outcome on these tasks, not a general
-ranking of the models.
+At the time, the T3 instructions selected `xhigh` for middle-rung Codex implementation workers. Other Codex children used `high` unless the user or CE configuration chose another effort. Dotfiles retired that ladder on 2026-11-23. The experiment measured the named tasks and settings.
 
 ## Context and protocol
 
@@ -160,7 +156,7 @@ unrelated configuration. The protected source stayed clean on main at
   differences. One Terra/xhigh wide run returned without changes; Sol/high had no
   measured failures. Neither count establishes reliability on unrelated tasks.
 - The tasks required investigation. Settled implementation units were not
-  measured, although the approved instruction change applies to all middle-rung
+  measured, although the instruction change at the time applied to all middle-rung
   Codex implementation workers. The sample supplies no measured benefit there.
 - The copy assertions test uniqueness, not every semantic claim in the help text.
   The original verification commands were run once by the scorer; worker recovery
