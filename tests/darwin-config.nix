@@ -158,6 +158,9 @@ let
       activation = user.home.activation;
       pnames = namesOf user.home.packages;
       casks = map (cask: cask.name) config.homebrew.casks;
+      firefoxCask = lib.findFirst (
+        cask: cask.name == "firefox@developer-edition"
+      ) { } config.homebrew.casks;
       taps = map (tap: tap.name) config.homebrew.taps;
       thirdParty = lib.filter (cask: mapping.tapOf cask != null) expectedCasks;
       sessionVariables = user.home.sessionVariables;
@@ -423,6 +426,9 @@ let
         && lib.all guarded masWrapperCalls
       ) "${entry.name}: App Store calls must remain guarded in the primary user's session")
       (check config.homebrew.enable "${entry.name}: homebrew is off, so an apply installs none of the casks")
+      (check (
+        firefoxCask.args.language or null == "ko" && firefoxCask.args.appdir or null == "/Applications"
+      ) "${entry.name}: Homebrew must install Korean Firefox Developer Edition in /Applications")
       (check (sort casks == sort (lib.filter (cask: production || cask != "ollama-app") expectedCasks))
         "${entry.name}: homebrew.casks is ${builtins.toJSON (sort casks)}, the mapping gives ${builtins.toJSON (sort expectedCasks)}"
       )

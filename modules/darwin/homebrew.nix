@@ -2,6 +2,7 @@
 let
   inherit (import ../shared/darwin-apps.nix) apps casks tapOf;
   thirdParty = lib.filter (cask: tapOf cask != null) casks;
+  enabledCasks = lib.filter (cask: !config.my.bootstrap || cask != apps.ollama.cask) casks;
 in
 {
   # nix-homebrew installs Homebrew itself on the first apply, so a new Mac
@@ -20,7 +21,19 @@ in
   homebrew = {
     enable = true;
     taps = lib.unique (map tapOf thirdParty);
-    casks = lib.filter (cask: !config.my.bootstrap || cask != apps.ollama.cask) casks;
+    casks = map (
+      name:
+      if name == apps.firefox-developer-edition.cask then
+        {
+          inherit name;
+          args = {
+            appdir = "/Applications";
+            language = "ko";
+          };
+        }
+      else
+        name
+    ) enabledCasks;
     brews = [
       "aria2"
       "container"
