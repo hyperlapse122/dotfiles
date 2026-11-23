@@ -18,8 +18,6 @@ let
         export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_DIRS="${browser}/share"
         installDir="$HOME/.local/opt/firefox-developer-edition"
         mkdir -p "$XDG_CONFIG_HOME" "$installDir"
-        # Stand in for a copy that Firefox has already updated. Its next launch
-        # must receive the original link even when activation runs again.
         cat > "$installDir/firefox" <<'BROWSER'
         #!${pkgs.runtimeShell}
         printf '%s\n' "$@" > "$HOME/opened-links"

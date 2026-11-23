@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Install the signed Mozilla app in the user's Applications directory."""
-
 import ctypes
 import errno
 import fcntl
