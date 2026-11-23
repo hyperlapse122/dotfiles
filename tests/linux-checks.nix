@@ -50,6 +50,7 @@ let
     nix-cleanup = import ./nix-cleanup.nix { inherit pkgs self; };
     nixos-wired-network-config = import ./nixos-wired-network-config.nix { inherit pkgs self; };
     nvidia-closure = import ./nvidia-closure.nix { inherit pkgs self; };
+    official-skills = import ./official-skills.nix { inherit pkgs self; };
     pi = import ./pi.nix { inherit pkgs self; };
     pinned-skills = import ./pinned-skills.nix { inherit pkgs self; };
     podman-containers = import ./podman-containers.nix { inherit pkgs self; };

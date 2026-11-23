@@ -15,6 +15,7 @@
     ./cross-model-peers.nix
     ./fff.nix
     ./opencode.nix
+    ./official-skills.nix
     ./pi.nix
     ./instructions
     ./korean-skills.nix
