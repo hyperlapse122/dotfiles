@@ -8,14 +8,18 @@ let
       browser = lib.findFirst (
         p: lib.getName p == "firefox-developer-edition"
       ) null entry.user.home.packages;
+      chrome = lib.findFirst (p: lib.getName p == "google-chrome") null entry.user.home.packages;
       activation = entry.user.home.activation.defaultBrowser.data or "";
     in
     if browser == null then
       ''echo "missing Firefox Developer Edition launcher on ${entry.name}" >&2; exit 1''
+    else if chrome == null then
+      ''echo "missing Google Chrome on ${entry.name}" >&2; exit 1''
     else
       ''
         export HOME=$(mktemp -d)
-        export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_DIRS="${pkgs.google-chrome}/share:${browser}/share"
+        export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_DIRS="${chrome}/share:${browser}/share"
+        test -f "${chrome}/share/applications/google-chrome.desktop"
         installDir="$HOME/.local/opt/firefox-developer-edition"
         mkdir -p "$XDG_CONFIG_HOME"
         cat > "$XDG_CONFIG_HOME/mimeapps.list" <<'MIME'
