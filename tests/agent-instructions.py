@@ -82,6 +82,9 @@ def check_guides(home, native, t3):
         assert passage not in text
         assert passage in (guides / name).read_text()
     task = (guides / 'task-guide.md').read_text()
+    ci_triage, = (section for section in task.split('\n## ')
+                  if 'ci triage' in section.partition('\n')[0].lower())
+    assert '`decide' not in ci_triage and '`judge`' not in ci_triage, ci_triage
     guide = (guides / 't3-guide.md').read_text()
     check_delegation_policy(native, task, guide)
     for bad_native, bad_task, bad_guide in (
