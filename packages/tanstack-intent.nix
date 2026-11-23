@@ -1,7 +1,6 @@
-# TanStack Intent's CLI, which finds the agent skills TanStack packages ship in
-# a project's node_modules and loads the one an agent asks for. The npm
-# tarball bundles its dependencies into dist/, so it installs as-is with no
-# dependency fetch; the pin in tanstack-intent-release.json moves by hand.
+# TanStack Intent finds skills shipped with project dependencies. Its npm
+# tarball bundles its dependencies in dist/. Update tanstack-intent-release.json
+# to change the installed version.
 { pkgs }:
 
 let
