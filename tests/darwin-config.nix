@@ -1101,7 +1101,7 @@ let
         t3:
         [
           "/System/Applications/Apps.app"
-          "/Applications/Google Chrome.app"
+          "/Applications/Firefox Developer Edition.app"
           "/System/Applications/App Store.app"
           "/System/Applications/Mail.app"
           "/System/Applications/Calendar.app"
