@@ -127,6 +127,13 @@ let
     }
     {
       path = [
+        "env"
+        "CLAUDE_CODE_SHELL"
+      ];
+      value = "${pkgs.bash}/bin/bash";
+    }
+    {
+      path = [
         "enabledPlugins"
         "cc-plugin-you-should-know@builtin"
       ];
@@ -305,6 +312,7 @@ let
                 disableClaudeAiConnectors = false;
                 env = {
                   DISABLE_AUTOUPDATER = "0";
+                  CLAUDE_CODE_SHELL = "/old/shell";
                   OWNER = "keep";
                 };
                 extraKnownMarketplaces = {
@@ -352,6 +360,7 @@ let
                 disableClaudeAiConnectors = true;
                 env = {
                   DISABLE_AUTOUPDATER = "1";
+                  CLAUDE_CODE_SHELL = "${pkgs.bash}/bin/bash";
                   OWNER = "keep";
                 };
                 extraKnownMarketplaces.other.source = {
