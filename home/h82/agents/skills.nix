@@ -1,5 +1,6 @@
 {
   config,
+  pkgs,
   lib,
   ...
 }:
@@ -31,9 +32,27 @@ in
     '';
   };
 
-  config.my.agentSkills = {
-    test-audit = ./skills/test-audit;
+  options.my.agentSkillReferences = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.attrsOf lib.types.path);
+    internal = true;
+    default = { };
+    description = "References grouped by domain and guide name.";
   };
+
+  config.my.agentSkills = lib.mapAttrs (
+    domain: references:
+    pkgs.runCommand domain { } ''
+      mkdir -p "$out/references"
+      cp -r --no-preserve=mode ${./skills + "/${domain}"}/. "$out/"
+      ${lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (name: source: ''
+          mkdir -p "$out/references/${name}"
+          cp -r --no-preserve=mode ${source}/. "$out/references/${name}/"
+          mv "$out/references/${name}/SKILL.md" "$out/references/${name}/${name}.md"
+        '') references
+      )}
+    ''
+  ) config.my.agentSkillReferences;
 
   # One link per root and skill, to the skill directory itself: Codex skips a
   # SKILL.md that is a symlink, so the files inside must not be linked one by

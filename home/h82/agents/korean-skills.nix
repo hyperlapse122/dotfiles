@@ -19,5 +19,7 @@ let
   '';
 in
 {
-  my.agentSkills = lib.genAttrs registry.skills (name: "${skillTree}/${name}");
+  my.agentSkillReferences.writing-lenses = lib.genAttrs registry.skills (
+    name: "${skillTree}/${name}"
+  );
 }

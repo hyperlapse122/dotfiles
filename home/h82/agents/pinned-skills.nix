@@ -97,21 +97,36 @@ let
   duplicates = lib.unique (lib.filter (name: lib.count (other: other == name) names > 1) names);
 in
 {
-  my.agentSkills =
+  my.agentSkillReferences =
     lib.throwIf (duplicates != [ ])
       "pinned-skills: the skill name(s) ${lib.concatStringsSep ", " duplicates} appear more than once"
       (
-        lib.listToAttrs (
-          map (
-            { upstream, skill }:
-            lib.nameValuePair skill.name (
-              pkgs.runCommand "pinned-skill-${skill.name}" { } (renderSkill upstream skill "$out")
-            )
-          ) (lib.filter (entry: !mobile entry) registered)
-        )
-        // {
-          design-lenses = designLenses;
-          mobile-lenses = mobileLenses;
-        }
+        lib.foldl' (
+          groups:
+          { upstream, skill }:
+          let
+            domain =
+              if builtins.elem skill.name [ "ux-writing" ] then
+                "writing-lenses"
+              else if
+                builtins.elem skill.name [
+                  "find-docs"
+                  "cli-design"
+                  "untangle-codebase"
+                  "prune-tests"
+                ]
+              then
+                "engineering-lenses"
+              else
+                "web-lenses";
+            source = pkgs.runCommand "pinned-skill-${skill.name}" { } (renderSkill upstream skill "$out");
+          in
+          lib.recursiveUpdate groups { ${domain}.${skill.name} = source; }
+        ) { } (lib.filter (entry: !mobile entry) registered)
       );
+
+  my.agentSkills = {
+    design-lenses = designLenses;
+    mobile-lenses = mobileLenses;
+  };
 }
