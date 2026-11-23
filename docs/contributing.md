@@ -17,8 +17,9 @@ Maintain the module map and topic-specific reading list in the [repository refer
 
 ## Harness plugin and skill integration
 
+- When selecting a shared skill, search by task and publisher in this checkout, then pin the chosen source in Nix. [Find a shared skill](skills/find-skills/SKILL.md)
 - Every repository-managed AI harness must register, install, and enable the pinned Compound Engineering plugin (`home/h82/agents/agent-plugin-pins.nix`, `flake.nix` input `compound-engineering-plugin`) at user scope through its supported native mechanism during Home Manager activation (`home/h82/agents/agent-plugins.nix` for Claude Code and Codex; `home/h82/agents/pi.nix` for Pi; `home/h82/agents/opencode.nix` for OpenCode).
-- Every repository-managed AI harness must discover each standalone shared user-scope skill (`humanizer`, `grammar-checker`, and `style-guide` from `home/h82/agents/korean-skills.nix`, plus the skills from `home/h82/agents/pinned-skills.nix` and the local skills in `home/h82/agents/skills.nix`) exactly once through its skill root in `home/h82/agents/skills.nix` (`.claude/skills`, `.codex/skills`, `.pi/agent/skills`, `.config/opencode/skills`).
+- Every repository-managed AI harness must discover each shared domain entry and ungrouped skill exactly once through its skill root in `home/h82/agents/skills.nix` (`.claude/skills`, `.codex/skills`, `.pi/agent/skills`, `.config/opencode/skills`).
 - On macOS production hosts, activation runs `xcrun agent skills export` for the selected Xcode into `~/.local/state/nix-config/xcode-skills` and links the skills into the four skill roots. The repository names no Xcode skill and commits none of their files; declared skills win name collisions, and a failed export warns and keeps the previous skills. NixOS and bootstrap get none.
 
 ## Temporary containers and local Kubernetes

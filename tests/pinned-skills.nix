@@ -1,56 +1,4 @@
-/*
-  Check interface:
-
-    import ./tests/pinned-skills.nix { inherit pkgs self; }
-
-  Asserts that the published skills, the local design-lenses
-  wrapper with impeccable's lens references and ux-flows, and mobile-lenses reach
-  every harness for user `h82` on every Home Manager user environment this
-  flake builds (`userEntries` from tests/lib/configurations.nix), unchanged:
-
-    Claude Code               ~/.claude/skills/<name>
-    Codex                     ~/.codex/skills/<name>
-    Pi                        ~/.pi/agent/skills/<name>
-    OpenCode                  ~/.config/opencode/skills/<name>
-
-  Verifies, per Home Manager user:
-  - each delivery has one enabled home.file per skill; tests/korean-skills.nix
-    owns each root's exact population.
-  - each materialized skill holds a SKILL.md that is not a symlink, whose
-    frontmatter `name` equals the directory name and whose `description` is
-    not empty.
-  - each published skill holds exactly the entries its registry entry selects
-    plus its license, each byte-identical to the pinned input: the whole
-    skill directory, or only the listed `files` of a repository whose root
-    holds other things too. A license outside the skill directory matches the
-    input's license file; an upstream with no license file carries a
-    non-empty LICENSE-SOURCE note instead.
-  - design-lenses holds the in-tree wrapper SKILL.md, impeccable's LICENSE and
-    NOTICE.md, and under references/ exactly the lens references named here,
-    each byte-identical to the rendered plugin tree of the pinned input, so
-    no impeccable workflow reference ships.
-  - mobile-lenses exposes only its wrapper SKILL.md and preserves every upstream
-    file and license under references/, with each upstream entry file renamed.
-
-  The pin assertions compare `flake.lock`, which Nix writes, with the registry
-  in home/h82/agents/pinned-skills-pin.nix, which a person writes: each
-  upstream's expected revision must equal the locked revision and its ref the
-  ref the lock recorded, so a moved tag turns this red instead of arriving as
-  a lock diff. The registry's skill names must equal the names written here.
-
-  Expected names, roots, and lens references are written here, not read from
-  the module, so a mutation of the module turns this red. Every lookup carries
-  an `or` fallback and each store path is interpolated only inside its present
-  branch, so a removed declaration fails inside the builder rather than during
-  evaluation. See
-  .compound-engineering/artifacts/solutions/best-practices/unguarded-derivation-interpolation-defeats-nix-check-mutation-testing.md
-  and
-  .compound-engineering/artifacts/solutions/best-practices/nix-check-reads-option-value-not-materialized-output.md
-
-  Globs are never expanded in the builder: stdenv's nullglob would make an
-  `ls <glob>` assertion succeed on no match. See
-  .compound-engineering/artifacts/solutions/logic-errors/stdenv-nullglob-makes-ls-glob-assertions-vacuous.md
-*/
+# Checks the pinned reference trees, licenses, domain entries, and their materialization in all four harness roots.
 {
   pkgs,
   self,
@@ -112,8 +60,50 @@ let
     "typeset.md"
   ];
 
-  # A skill whose repository root holds more than the skill installs only the
-  # entries upstream packages as the skill (ux-writing's build-skill.sh).
+  linkAliases = {
+    vercel-react-best-practices = [
+      {
+        path = "async-defer-await.md";
+        target = "rules/async-defer-await.md";
+      }
+      {
+        path = "async-cheap-condition-before-await.md";
+        target = "rules/async-cheap-condition-before-await.md";
+      }
+      {
+        path = "server-hoist-static-io.md";
+        target = "rules/server-hoist-static-io.md";
+      }
+    ];
+    playwright-best-practices = [
+      {
+        path = "advanced/error-testing.md";
+        target = "../debugging/error-testing.md";
+      }
+      {
+        path = "advanced/service-workers.md";
+        target = "../browser-apis/service-workers.md";
+      }
+      {
+        path = "browser-apis/error-testing.md";
+        target = "../debugging/error-testing.md";
+      }
+      {
+        path = "debugging/service-workers.md";
+        target = "../browser-apis/service-workers.md";
+      }
+      {
+        path = "debugging/assertions-waiting.md";
+        target = "../core/assertions-waiting.md";
+      }
+      {
+        path = "infrastructure-ci-cd/fixtures-hooks.md";
+        target = "../core/fixtures-hooks.md";
+      }
+    ];
+  };
+
+  # ux-writing's build-skill.sh packages only these entries from the repository root.
   selectedFiles = {
     ux-writing = [
       "SKILL.md"
@@ -124,7 +114,24 @@ let
     ];
   };
 
-  allNames = publishedNames ++ [
+  groups = {
+    web-lenses = [
+      "modern-web-guidance"
+      "frontend-design"
+      "web-design-guidelines"
+      "vercel-react-best-practices"
+      "vercel-composition-patterns"
+      "playwright-best-practices"
+    ];
+    engineering-lenses = [
+      "find-docs"
+      "cli-design"
+      "untangle-codebase"
+      "prune-tests"
+    ];
+    writing-lenses = [ "ux-writing" ];
+  };
+  allNames = builtins.attrNames groups ++ [
     "design-lenses"
     "mobile-lenses"
   ];
@@ -248,25 +255,59 @@ let
         echo ${esc "no registry entry or flake input to compare ~/${target} on ${label} against"} >&2
         failed=1
       ''
-    else if isMobile then
-      ''
+    else if isMobile && name != "find-docs" then
+      lib.optionalString ((skill ? files) && sorted skill.files != sorted (selectedFiles.${name} or [ ]))
+        ''
+          echo ${esc "unexpected selected files for ${name}"} >&2
+          failed=1
+        ''
+      + ''
+        comparison="$dir"
+        ${lib.optionalString (linkAliases ? ${name}) ''
+          comparison=$(mktemp -d)
+          cp -r --no-preserve=mode "$dir"/. "$comparison"/
+          ${lib.concatMapStrings (link: ''
+            if [ ! -L "$dir"/${esc link.path} ] || [ "$(readlink "$dir"/${esc link.path})" != ${esc link.target} ] || [ ! -f "$dir"/${esc link.path} ]; then
+              echo ${esc "~/${target}/${link.path} on ${label} must resolve to ${link.target}"} >&2
+              failed=1
+            fi
+            rm -f "$comparison"/${esc link.path}
+          '') linkAliases.${name}}
+        ''}
         if ! cmp -s "$dir"/${esc "${name}.md"} ${src}/${esc path}/SKILL.md \
-          || ! diff -r ${excludeLicense} --exclude=SKILL.md --exclude=${esc "${name}.md"} "$dir" ${src}/${esc path} >&2; then
+          ${
+            if skill ? files then
+              ""
+            else
+              "|| ! diff -r ${excludeLicense} --exclude=SKILL.md --exclude=${esc "${name}.md"} \"$comparison\" ${src}/${esc path} >&2"
+          }; then
           echo ${esc "the files of ~/${target} on ${label} differ from the pinned ${upstream.input} input"} >&2
           failed=1
         fi
+        ${lib.optionalString (linkAliases ? ${name}) ''rm -rf "$comparison"''}
       ''
+      + lib.optionalString (skill ? files) (
+        lib.concatMapStrings (
+          file:
+          lib.optionalString (file != "SKILL.md") ''
+            if ! diff -r "$dir"/${esc file} ${src}/${esc "${path}/${file}"} >&2; then
+              echo ${esc "~/${target}/${file} differs from its pinned source"} >&2
+              failed=1
+            fi
+          ''
+        ) (skill.files or [ ])
+      )
       + licenseCheck target label src license licenseName upstream
     else if name == "find-docs" then
       entriesCheck "~/${target} on ${label}" "$dir" [
         "LICENSE"
-        "SKILL.md"
+        "find-docs.md"
       ]
       + ''
         ctx7=${esc (lib.getExe (import ../packages/ctx7.nix { inherit pkgs; }))}
-        if grep -Eq '\b(npx|npm install)\b' "$dir/SKILL.md" \
-          || ! grep -qFx "$ctx7 library <name> \"<query>\" --json" "$dir/SKILL.md" \
-          || ! grep -qFx "$ctx7 docs <libraryId> \"<query>\" --json" "$dir/SKILL.md"; then
+        if grep -Eq '\b(npx|npm install)\b' "$dir/find-docs.md" \
+          || ! grep -qFx "$ctx7 library <name> \"<query>\" --json" "$dir/find-docs.md" \
+          || ! grep -qFx "$ctx7 docs <libraryId> \"<query>\" --json" "$dir/find-docs.md"; then
           echo ${esc "~/${target} on ${label} must use the packaged Context7 CLI for lookup"} >&2
           failed=1
         fi
@@ -400,7 +441,22 @@ let
       else if name == "mobile-lenses" then
         mobileLenses target label
       else
-        published target label name false
+        ''
+          if ! cmp -s "$dir/SKILL.md" ${../home/h82/agents/skills}/${name}/SKILL.md; then
+            echo ${esc "the router ~/${target} on ${label} differs from its source"} >&2
+            failed=1
+          fi
+          nested=$(find -L "$dir/references" -iname SKILL.md -print)
+          if [ -n "$nested" ]; then
+            echo ${esc "nested skill entry files in ~/${target} on ${label}:"} "$nested" >&2
+            failed=1
+          fi
+          router="$dir"
+        ''
+        + lib.concatMapStrings (member: ''
+          dir="$router/references/${member}"
+          ${published "${target}/references/${member}" label member true}
+        '') groups.${name}
     );
 
   assertEntry =

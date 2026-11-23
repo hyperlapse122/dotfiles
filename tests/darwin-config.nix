@@ -329,31 +329,18 @@ let
         ".pi/agent/skills"
         ".config/opencode/skills"
       ];
-      koreanNames = [
-        "humanizer"
-        "grammar-checker"
-        "style-guide"
-      ];
-      koreanTargets = lib.concatMap (root: map (name: "${root}/${name}") koreanNames) koreanRoots;
-      # The vendored test-audit skill shares those roots; its source is the
-      # in-tree skill directory inside the flake's source tree.
-      testAuditTargets = map (root: "${root}/test-audit") koreanRoots;
-      pinnedTargets = lib.concatMap (
+      domainTargets = lib.concatMap (
         root:
         map (name: "${root}/${name}") [
-          "modern-web-guidance"
-          "frontend-design"
-          "web-design-guidelines"
-          "vercel-react-best-practices"
-          "vercel-composition-patterns"
-          "mobile-lenses"
-          "find-docs"
-          "playwright-best-practices"
-          "ux-writing"
-          "cli-design"
-          "untangle-codebase"
-          "prune-tests"
+          "web-lenses"
+          "engineering-lenses"
+          "writing-lenses"
           "design-lenses"
+          "mobile-lenses"
+          "service-lenses"
+          "platform-lenses"
+          "toolchain-lenses"
+          "project-skills"
         ]
       ) koreanRoots;
       # Resolved targets of enabled entries, not attribute names. The source is
@@ -361,8 +348,6 @@ let
       # is built, and the store path is never interpolated.
       enabledFiles = lib.filter (file: file.enable) (lib.attrValues user.home.file);
       enabledTargets = map (file: file.target) enabledFiles;
-      koreanFilesAt = target: lib.filter (file: file.target == target) enabledFiles;
-      koreanSourceOf = file: plain (toString (file.source or ""));
       underDir = dir: target: target == dir || lib.hasPrefix "${dir}/" target;
       koreanUnderRoots = lib.filter (
         target: lib.any (root: underDir root target) koreanRoots
@@ -749,35 +734,8 @@ let
       (check (config.homebrew.masApps == { } && !(config.programs.mas.enable or false))
         "${entry.name}: homebrew.masApps must stay empty and programs.mas off; both can abort or end activation"
       )
-      (lib.concatMapStrings (
-        target:
-        let
-          name = baseNameOf target;
-          files = koreanFilesAt target;
-        in
-        check
-          (
-            lib.length files == 1
-            && lib.hasSuffix "-korean-skills-v1.0.0/${name}" (koreanSourceOf (lib.head files))
-          )
-          "${entry.name}: ${target} must be exactly one enabled home.file whose source is the ${name} directory of the korean-skills-v1.0.0 tree, got ${builtins.toJSON (map koreanSourceOf files)}"
-      ) koreanTargets)
-      (lib.concatMapStrings (
-        target:
-        let
-          files = koreanFilesAt target;
-        in
-        check
-          (
-            lib.length files == 1
-            && lib.hasSuffix "/home/h82/agents/skills/test-audit" (koreanSourceOf (lib.head files))
-          )
-          "${entry.name}: ${target} must be exactly one enabled home.file whose source is the in-tree test-audit skill directory, got ${builtins.toJSON (map koreanSourceOf files)}"
-      ) testAuditTargets)
-      (check (sort koreanUnderRoots == sort (koreanTargets ++ testAuditTargets ++ pinnedTargets))
-        "${entry.name}: the targets under the skill roots must be exactly ${
-          builtins.toJSON (koreanTargets ++ testAuditTargets ++ pinnedTargets)
-        }, got ${builtins.toJSON (sort koreanUnderRoots)}"
+      (check (sort koreanUnderRoots == sort domainTargets)
+        "${entry.name}: the targets under the skill roots must be exactly ${builtins.toJSON domainTargets}, got ${builtins.toJSON (sort koreanUnderRoots)}"
       )
       (check (koreanElsewhere == [ ])
         "${entry.name}: Korean skills must not be installed under .agents/skills, got ${builtins.toJSON koreanElsewhere}"

@@ -1,6 +1,6 @@
 # Audit workflow
 
-- Use after [authoring gate](../SKILL.md#authoring-gate).
+- Use after [authoring gate](../test-audit.md#authoring-gate).
 - Whole-subsystem campaigns: also require [CAMPAIGN.md](../CAMPAIGN.md).
 
 ## Junk patterns

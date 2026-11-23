@@ -1,49 +1,4 @@
-/*
-  Check interface:
-
-    import ./tests/test-audit-skill.nix { inherit pkgs self; }
-
-  Asserts that the vendored test-audit skill reaches Claude Code, Codex, and OpenCode for user
-  `h82` on every host this flake declares, and that its text stays
-  generalized and attributed:
-
-    Claude Code               ~/.claude/skills/test-audit
-    Codex                     ~/.codex/skills/test-audit
-    OpenCode                  ~/.config/opencode/skills/test-audit
-
-  The user list is `userEntries` from `tests/lib/configurations.nix`, so the
-  NixOS user environments are covered, and the
-  helper's guard fails the build when that list is empty. The exact population
-  of each root, test-audit included, is tests/korean-skills.nix's to check.
-
-  Verifies, per Home Manager user:
-  - each delivery has one enabled Home Manager entry found by resolved target;
-  - each target exists in the materialized `home-files`, holds a SKILL.md
-    whose frontmatter `name` is test-audit and whose `description` is not
-    empty, a CAMPAIGN.md, a references/audit.md, and a LICENSE that starts with
-    "MIT License", and matches the in-tree source
-    home/h82/agents/skills/test-audit byte for byte. See
-    .compound-engineering/artifacts/solutions/best-practices/nix-check-reads-option-value-not-materialized-output.md
-  - each target's SKILL.md in `home-files` is not a symlink, because Codex
-    skips a SKILL.md symlink.
-
-  Once, over the in-tree source:
-  - none of the three Markdown files contains a token of OpenClaw's own
-    tooling, matched case-insensitively anywhere, so a negated sentence that
-    names one still fails. See
-    .compound-engineering/artifacts/solutions/best-practices/substring-sentence-check-passes-a-negated-instruction.md
-    The source holds no store path, so no store hash can spell a token.
-  - the last line of SKILL.md is the attribution line naming the upstream,
-    its path, and the revision written here.
-
-  The expected values are written here, not read from the module, so a
-  mutation of the module turns this red. Every lookup carries an `or`
-  fallback and each store path is interpolated only inside its present
-  branch, so a removed declaration fails inside the builder rather than
-  during evaluation. Globs are never expanded in the builder, because of
-  stdenv's nullglob. The builder collects every failure instead of exiting at
-  the first.
-*/
+# Checks the adapted test-audit reference, its support files, attribution, and delivery under engineering-lenses in all four harness roots.
 {
   pkgs,
   self,
@@ -59,6 +14,7 @@ let
     ".claude/skills"
     ".codex/skills"
     ".config/opencode/skills"
+    ".pi/agent/skills"
   ];
 
   upstream = "openclaw/openclaw";
@@ -68,7 +24,7 @@ let
   attribution = "Adapted from `${upstream}` (MIT), `${upstreamPath}` at revision `${rev}`; license in `LICENSE`.";
 
   markdownFiles = [
-    "SKILL.md"
+    "test-audit.md"
     "CAMPAIGN.md"
     "references/audit.md"
   ];
@@ -85,7 +41,7 @@ let
     "native maintainer workflow"
   ];
 
-  source = ../home/h82/agents/skills/test-audit;
+  source = ../home/h82/agents/skills/engineering-lenses/references/test-audit;
 
   configurations = import ./lib/configurations.nix { inherit pkgs self; };
 
@@ -118,24 +74,24 @@ let
   materialized =
     label: homeFiles: root:
     let
-      target = "${root}/${name}";
+      target = "${root}/engineering-lenses/references/${name}";
     in
     ''
       dir=${homeFiles}/${target}
-      if [ -L "$dir/SKILL.md" ]; then
-        echo ${esc "the SKILL.md of ~/${target} on ${label} is a symlink in home-files; link the skill directory, not its files"} >&2
+      if [ -L "$dir/test-audit.md" ]; then
+        echo ${esc "the test-audit.md of ~/${target} on ${label} is a symlink in home-files; link the skill directory, not its files"} >&2
         failed=1
       fi
-      if [ ! -f "$dir/SKILL.md" ]; then
-        echo ${esc "~/${target} on ${label} holds no SKILL.md in home-files"} >&2
+      if [ ! -f "$dir/test-audit.md" ]; then
+        echo ${esc "~/${target} on ${label} holds no test-audit.md in home-files"} >&2
         failed=1
       else
-        actual=${frontmatter "name" ''"$dir/SKILL.md"''}
+        actual=${frontmatter "name" ''"$dir/test-audit.md"''}
         if [ "$actual" != ${esc name} ]; then
-          echo ${esc "the SKILL.md of ~/${target} on ${label} must declare name ${name}, got:"} "'$actual'" >&2
+          echo ${esc "the test-audit.md of ~/${target} on ${label} must declare name ${name}, got:"} "'$actual'" >&2
           failed=1
         fi
-        description=${frontmatter "description" ''"$dir/SKILL.md"''}
+        description=${frontmatter "description" ''"$dir/test-audit.md"''}
         # A YAML value that parses to nothing (quotes around nothing or only
         # whitespace, null, ~) is empty too: Codex drops such a skill.
         description=$(printf '%s' "$description" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/; s/^[[:space:]]+//; s/[[:space:]]+$//')
@@ -143,9 +99,13 @@ let
           "" | null | Null | NULL | "~") description= ;;
         esac
         if [ -z "$description" ]; then
-          echo ${esc "the SKILL.md of ~/${target} on ${label} declares no description"} >&2
+          echo ${esc "the test-audit.md of ~/${target} on ${label} declares no description"} >&2
           failed=1
         fi
+      fi
+      if ! grep -qF '(test-audit.md)' "$dir/CAMPAIGN.md" || ! grep -qF '(../test-audit.md#authoring-gate)' "$dir/references/audit.md"; then
+        echo ${esc "~/${target} on ${label} has broken links to its entry"} >&2
+        failed=1
       fi
       for file in CAMPAIGN.md references/audit.md; do
         if [ ! -f "$dir/$file" ]; then
@@ -161,7 +121,7 @@ let
         failed=1
       fi
       if ! diff -r "$dir" ${source} >&2; then
-        echo ${esc "~/${target} on ${label} differs from home/h82/agents/skills/test-audit"} >&2
+        echo ${esc "~/${target} on ${label} differs from home/h82/agents/skills/engineering-lenses/references/test-audit"} >&2
         failed=1
       fi
     '';
@@ -173,7 +133,7 @@ let
       userConfig = entry.user;
       homeFiles = userConfig.home-files or null;
     in
-    lib.concatMapStrings (root: homeFile label userConfig "${root}/${name}") roots
+    lib.concatMapStrings (root: homeFile label userConfig "${root}/engineering-lenses") roots
     + lib.optionalString (homeFiles == null) ''
       echo ${esc "no materialized home-files on ${label}"} >&2
       failed=1
@@ -189,7 +149,7 @@ pkgs.runCommand "test-audit-skill-tests" { } ''
 
   for file in ${lib.escapeShellArgs markdownFiles}; do
     if [ ! -f ${source}/"$file" ]; then
-      echo "home/h82/agents/skills/test-audit holds no $file" >&2
+      echo "home/h82/agents/skills/engineering-lenses/references/test-audit holds no $file" >&2
       failed=1
       continue
     fi
@@ -197,17 +157,17 @@ pkgs.runCommand "test-audit-skill-tests" { } ''
       status=0
       grep -qiF -- "$token" ${source}/"$file" || status=$?
       if [ "$status" = 0 ]; then
-        echo "home/h82/agents/skills/test-audit/$file names '$token', which belongs to OpenClaw's own tooling" >&2
+        echo "home/h82/agents/skills/engineering-lenses/references/test-audit/$file names '$token', which belongs to OpenClaw's own tooling" >&2
         failed=1
       elif [ "$status" != 1 ]; then
-        echo "could not search home/h82/agents/skills/test-audit/$file for '$token'" >&2
+        echo "could not search home/h82/agents/skills/engineering-lenses/references/test-audit/$file for '$token'" >&2
         failed=1
       fi
     done
   done
 
-  if [ ! -f ${source}/SKILL.md ] || [ "$(tail -n 1 ${source}/SKILL.md)" != ${esc attribution} ]; then
-    echo ${esc "the last line of home/h82/agents/skills/test-audit/SKILL.md must be: ${attribution}"} >&2
+  if [ ! -f ${source}/test-audit.md ] || [ "$(tail -n 1 ${source}/test-audit.md)" != ${esc attribution} ]; then
+    echo ${esc "the last line of home/h82/agents/skills/engineering-lenses/references/test-audit/test-audit.md must be: ${attribution}"} >&2
     failed=1
   fi
 

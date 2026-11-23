@@ -16,8 +16,12 @@ let
       cp -r --no-preserve=mode ${inputs.korean-skills}/skills/${name}/. $out/${name}
       cp --no-preserve=mode ${inputs.korean-skills}/LICENSE $out/${name}/LICENSE
     '') registry.skills}
+    sed -i 's@\.\./\.\./\.\./style-guide/references/tone-consistency\.md@../../style-guide/references/tone-consistency.md@g' \
+      "$out/humanizer/references/structure-patterns.md"
   '';
 in
 {
-  my.agentSkills = lib.genAttrs registry.skills (name: "${skillTree}/${name}");
+  my.agentSkillReferences.writing-lenses = lib.genAttrs registry.skills (
+    name: "${skillTree}/${name}"
+  );
 }

@@ -37,6 +37,19 @@ let
   renderSkill =
     upstream: skill: destination:
     copySkill upstream skill destination
+    + lib.optionalString (skill.name == "vercel-react-best-practices") ''
+      ln -s rules/async-defer-await.md "${destination}/async-defer-await.md"
+      ln -s rules/async-cheap-condition-before-await.md "${destination}/async-cheap-condition-before-await.md"
+      ln -s rules/server-hoist-static-io.md "${destination}/server-hoist-static-io.md"
+    ''
+    + lib.optionalString (skill.name == "playwright-best-practices") ''
+      ln -s ../debugging/error-testing.md "${destination}/advanced/error-testing.md"
+      ln -s ../browser-apis/service-workers.md "${destination}/advanced/service-workers.md"
+      ln -s ../debugging/error-testing.md "${destination}/browser-apis/error-testing.md"
+      ln -s ../browser-apis/service-workers.md "${destination}/debugging/service-workers.md"
+      ln -s ../core/assertions-waiting.md "${destination}/debugging/assertions-waiting.md"
+      ln -s ../core/fixtures-hooks.md "${destination}/infrastructure-ci-cd/fixtures-hooks.md"
+    ''
     + lib.optionalString (skill.name == "find-docs") ''
       awk -v cmd=${esc ctx7} '
         /^Run commands with / { print "Use the packaged Context7 CLI with public library names and sanitized queries."; next }
@@ -97,21 +110,36 @@ let
   duplicates = lib.unique (lib.filter (name: lib.count (other: other == name) names > 1) names);
 in
 {
-  my.agentSkills =
+  my.agentSkillReferences =
     lib.throwIf (duplicates != [ ])
       "pinned-skills: the skill name(s) ${lib.concatStringsSep ", " duplicates} appear more than once"
       (
-        lib.listToAttrs (
-          map (
-            { upstream, skill }:
-            lib.nameValuePair skill.name (
-              pkgs.runCommand "pinned-skill-${skill.name}" { } (renderSkill upstream skill "$out")
-            )
-          ) (lib.filter (entry: !mobile entry) registered)
-        )
-        // {
-          design-lenses = designLenses;
-          mobile-lenses = mobileLenses;
-        }
+        lib.foldl' (
+          groups:
+          { upstream, skill }:
+          let
+            domain =
+              if builtins.elem skill.name [ "ux-writing" ] then
+                "writing-lenses"
+              else if
+                builtins.elem skill.name [
+                  "find-docs"
+                  "cli-design"
+                  "untangle-codebase"
+                  "prune-tests"
+                ]
+              then
+                "engineering-lenses"
+              else
+                "web-lenses";
+            source = pkgs.runCommand "pinned-skill-${skill.name}" { } (renderSkill upstream skill "$out");
+          in
+          lib.recursiveUpdate groups { ${domain}.${skill.name} = source; }
+        ) { } (lib.filter (entry: !mobile entry) registered)
       );
+
+  my.agentSkills = {
+    design-lenses = designLenses;
+    mobile-lenses = mobileLenses;
+  };
 }

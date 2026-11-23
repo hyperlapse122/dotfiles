@@ -1,5 +1,9 @@
 # Task guide
 
+## OpenCode CE reviews
+
+Before sending a CE review through OpenCode, bind an exact `provider/model`, identify and disclose every recipient, and check each against the CE allowlist. The `opencode` token covers the intermediary only. Direct Anthropic and OpenAI require `claude` and `codex` respectively. A model name cannot authorize a custom endpoint. If a recipient is unknown or unauthorized, continue with the ordinary review.
+
 ## Decide for CI triage
 
 Read the first relevant CI failure before choosing what to inspect. If the evidence leaves two or more plausible read-only checks and a judgment would change which one you run first, call the `decide` MCP server’s `judge` tool once. Use `choice` with a short description of each candidate and an `insufficient_evidence` option. Send only the evidence needed for the question and permitted for the configured backend.
@@ -29,19 +33,6 @@ Plan issue work so that a pull or merge request closes the issue:
 - When one pull or merge request cannot close the issue, plan several from the start. Each one before the last mentions the issue with `Related to #N`, and the one that completes it closes it with `Closes #N`.
 - Leave an assigned issue open after its planned pull or merge requests merge only when the user narrowed the scope. The last one then mentions the issue and lists what remains.
 - An issue you found only by searching never widens the scope. Close it only when the change fully resolves it; otherwise mention it.
-
-## Web development skills
-
-Before starting HTML, CSS, web UI, or browser-side JavaScript work, load and follow the `modern-web-guidance` skill first. This includes web platform code inside frameworks. Use its guidance alongside other applicable design and framework skills.
-
-Follow the skill's trigger and exclusion rules. Backend-only, infrastructure, tooling-only, and native-only tasks do not require it.
-
-Apply the `design-lenses` craft floor to every UI edit. Use `design-lenses` for flows and states, including CLI prompts and notifications, and `ux-writing` for interface copy.
-Use `frontend-design` for the visual direction of new screens. Apply the other skills within that direction.
-
-## Refactoring and test cleanup
-
-When asked to refactor code structure, read `untangle-codebase/SKILL.md` in your user skill directory and use its criteria for coupling and grouping related code. When asked to audit or prune tests, read `prune-tests/SKILL.md` there alongside `test-audit` and follow the repository's testing policy. Apply the guidance within the scope of the request.
 
 ## Temporary containers and local Kubernetes
 

@@ -1,61 +1,4 @@
-/*
-  Check interface:
-
-    import ./tests/korean-skills.nix { inherit pkgs self; }
-
-  Asserts that the three korean-skills skills reach every harness for user
-  `h82` on every host this flake declares, and that their pin still names the
-  revision this repository expects:
-
-    Claude Code               ~/.claude/skills/<name>
-    Codex                     ~/.codex/skills/<name>
-    Pi                        ~/.pi/agent/skills/<name>
-    OpenCode                  ~/.config/opencode/skills/<name>
-
-  The user list is `userEntries` from `tests/lib/configurations.nix`, so the
-  NixOS user environments are covered, and the
-  helper's guard fails the build when that list is empty.
-
-  Verifies, per Home Manager user:
-  - each delivery has an enabled Home Manager entry found by resolved target.
-  - each target exists in the materialized `home-files`, holds a SKILL.md whose
-    frontmatter `name` equals the directory name and whose `description` is
-    not empty, holds a LICENSE that starts with "MIT License", and matches the
-    pinned input byte for byte: the skill directory without LICENSE against
-    `skills/<name>` (so `references/` and `examples/` are there too), and
-    LICENSE against the input's root LICENSE. See
-    .compound-engineering/artifacts/solutions/best-practices/nix-check-reads-option-value-not-materialized-output.md
-  - each target's SKILL.md in `home-files` is not a symlink, because Codex
-    skips a SKILL.md symlink: home/h82/agents/skills.nix links the skill
-    directory itself, never its files with `recursive = true`.
-  - no enabled target is ~/.codex/skills/.system or under it, which Codex
-    owns.
-  - every root declares the three Korean skills and the contributed skills;
-    native plugins supply their own skills separately;
-  - no shared skills are delivered to ~/.agents/skills.
-
-  The pin assertion compares two genuinely separate sources: `flake.lock`,
-  which Nix writes, and the pin file in home/h82/agents/korean-skills-pin.nix,
-  which a person writes. A tag is mutable and a relock re-resolves the ref, so the
-  tag alone is not a pin -- if upstream moves it, the lock's revision changes
-  and this assertion goes red instead of the change arriving as a lock diff.
-  The registry's tag must equal the ref the lock recorded, and its skill list
-  must equal the list written here.
-
-  The expected names and roots are written here, not read from the module, so
-  a mutation of the module turns this red. Every lookup carries an `or`
-  fallback and each store path is interpolated only inside its present branch,
-  so a removed declaration fails inside the builder rather than during
-  evaluation. See
-  .compound-engineering/artifacts/solutions/best-practices/unguarded-derivation-interpolation-defeats-nix-check-mutation-testing.md
-
-  Globs are never expanded in the builder: stdenv's nullglob would make an
-  `ls <glob>` assertion succeed on no match. See
-  .compound-engineering/artifacts/solutions/logic-errors/stdenv-nullglob-makes-ls-glob-assertions-vacuous.md
-
-  The builder collects every failure instead of exiting at the first, so one
-  red build names every broken assertion across every configuration.
-*/
+# Checks the pinned Korean writing references, their licenses, and the exact shared domain targets in all four materialized harness roots.
 {
   entries ? null,
   pkgs,
@@ -76,20 +19,15 @@ let
   # these; tests/test-audit-skill.nix and tests/pinned-skills.nix check their
   # content.
   otherSkillNames = [
-    "modern-web-guidance"
-    "find-docs"
-    "test-audit"
-    "frontend-design"
-    "web-design-guidelines"
-    "vercel-react-best-practices"
-    "vercel-composition-patterns"
-    "mobile-lenses"
-    "playwright-best-practices"
-    "ux-writing"
-    "cli-design"
-    "untangle-codebase"
-    "prune-tests"
+    "web-lenses"
+    "engineering-lenses"
+    "writing-lenses"
     "design-lenses"
+    "mobile-lenses"
+    "service-lenses"
+    "platform-lenses"
+    "toolchain-lenses"
+    "project-skills"
   ];
 
   roots = [
@@ -154,15 +92,15 @@ let
   materialized =
     label: homeFiles: root: name:
     let
-      target = "${root}/${name}";
+      target = "${root}/writing-lenses/references/${name}";
     in
     ''
       dir=${homeFiles}/${target}
-      if [ -L "$dir/SKILL.md" ]; then
+      if [ -L "$dir/${name}.md" ]; then
         echo ${esc "the SKILL.md of ~/${target} on ${label} is a symlink in home-files; link the skill directory, not its files"} >&2
         failed=1
       fi
-      if [ ! -f "$dir/SKILL.md" ]; then
+      if [ ! -f "$dir/${name}.md" ]; then
         echo ${esc "~/${target} on ${label} holds no SKILL.md in home-files"} >&2
         failed=1
       else
@@ -170,7 +108,7 @@ let
           NR == 1 && $0 != "---" { exit }
           NR > 1 && $0 == "---" { exit }
           NR > 1 && /^name:/ { sub(/^name:[ ]*/, ""); print; exit }
-        ' "$dir/SKILL.md")
+        ' "$dir/${name}.md")
         if [ "$actual" != ${esc name} ]; then
           echo ${esc "the SKILL.md of ~/${target} on ${label} must declare name ${name}, got:"} "'$actual'" >&2
           failed=1
@@ -179,7 +117,7 @@ let
           NR == 1 && $0 != "---" { exit }
           NR > 1 && $0 == "---" { exit }
           NR > 1 && /^description:/ { sub(/^description:[ ]*/, ""); print; exit }
-        ' "$dir/SKILL.md")
+        ' "$dir/${name}.md")
         # A YAML value that parses to nothing (quotes around nothing or only
         # whitespace, null, ~) is empty too: Codex drops such a skill.
         description=$(printf '%s' "$description" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/; s/^[[:space:]]+//; s/[[:space:]]+$//')
@@ -204,10 +142,23 @@ let
       failed=1
     ''
     + lib.optionalString (upstream != null) ''
-      if ! diff -r --exclude=LICENSE "$dir" ${upstream}/skills/${name} >&2; then
+      comparison="$dir"
+      ${lib.optionalString (name == "humanizer") ''
+        comparison=$(mktemp -d)
+        cp -r --no-preserve=mode "$dir"/. "$comparison"/
+        if ! sed 's@\.\./\.\./\.\./style-guide/references/tone-consistency\.md@../../style-guide/references/tone-consistency.md@g' ${upstream}/skills/humanizer/references/structure-patterns.md | cmp -s - "$dir/references/structure-patterns.md" \
+          || ! grep -Fq '](../../style-guide/references/tone-consistency.md)' "$dir/references/structure-patterns.md" \
+          || [ ! -f "$dir/references/../../style-guide/references/tone-consistency.md" ]; then
+          echo ${esc "the style-guide reference in ~/${target} on ${label} must resolve to the installed guide"} >&2
+          failed=1
+        fi
+        cp --no-preserve=mode ${upstream}/skills/humanizer/references/structure-patterns.md "$comparison/references/structure-patterns.md"
+      ''}
+      if ! cmp -s "$dir/${name}.md" ${upstream}/skills/${name}/SKILL.md || ! diff -r --exclude=LICENSE --exclude=SKILL.md --exclude=${name}.md "$comparison" ${upstream}/skills/${name} >&2; then
         echo ${esc "~/${target} on ${label} differs from skills/${name} of the pinned input"} >&2
         failed=1
       fi
+      ${lib.optionalString (name == "humanizer") ''rm -rf "$comparison"''}
       if [ -f "$dir/LICENSE" ] && ! cmp -s "$dir/LICENSE" ${upstream}/LICENSE; then
         echo ${esc "the LICENSE of ~/${target} on ${label} differs from the pinned input's LICENSE"} >&2
         failed=1
@@ -222,13 +173,10 @@ let
       homeFiles = userConfig.home-files or null;
     in
     lib.concatMapStrings (
-      root: lib.concatMapStrings (name: homeFile label userConfig "${root}/${name}") skillNames
-    ) roots
-    + lib.concatMapStrings (
       root:
       let
         found = targetsUnder userConfig root;
-        expected = sorted (map (name: "${root}/${name}") (skillNames ++ otherSkillNames));
+        expected = sorted (map (name: "${root}/${name}") otherSkillNames);
       in
       lib.optionalString (found != expected) ''
         echo ${esc "~/${root} on ${label} must hold exactly ${lib.concatStringsSep ", " expected}, got: ${lib.concatStringsSep ", " found}"} >&2

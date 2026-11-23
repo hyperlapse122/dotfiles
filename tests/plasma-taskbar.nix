@@ -4,7 +4,7 @@
     import ./tests/plasma-taskbar.nix { inherit pkgs self; }
 
   Asserts that the KDE Plasma applets activation script declares the pinned taskbar
-  launchers in the specified order (Google Chrome, Dolphin, Ghostty, then
+  launchers in the specified order (the preferred browser, Dolphin, Ghostty, then
   T3 Code when its desktop app is installed).
 
   Verifies, on every configuration `tests/lib/configurations.nix` yields,

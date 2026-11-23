@@ -6,6 +6,14 @@ in
 {
   agent-check = self.packages.${pkgs.stdenv.hostPlatform.system}.agent-check;
   agent-hooks = import ./agent-hooks.nix { inherit pkgs; };
+  project-skills =
+    let
+      module = import ../home/h82/agents/tanstack-intent.nix { inherit pkgs; };
+    in
+    pkgs.runCommand "project-skills-tests" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+      python3 ${./project-skills.py} ${module.my.agentSkills.project-skills}/SKILL.md
+      touch "$out"
+    '';
   pinentry-keyring = import ../packages/pinentry-keyring.nix { inherit pkgs; };
   decide = import ./decide.nix { inherit pkgs self darwinFixtures; };
   darwin-provisioning =

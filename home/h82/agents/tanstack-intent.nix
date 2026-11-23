@@ -1,6 +1,11 @@
 { pkgs, ... }:
+let
+  intent = import ../../../packages/tanstack-intent.nix { inherit pkgs; };
+in
 {
-  # The shared instructions tell agents to load a TanStack package's skills
-  # with `intent list` and `intent load` in a project that depends on one.
-  home.packages = [ (import ../../../packages/tanstack-intent.nix { inherit pkgs; }) ];
+  home.packages = [ intent ];
+  my.agentSkills.project-skills = pkgs.writeTextDir "SKILL.md" (
+    builtins.replaceStrings [ "@intent@" "@jq@" ] [ (pkgs.lib.getExe intent) (pkgs.lib.getExe pkgs.jq) ]
+      (builtins.readFile ./skills/project-skills/SKILL.md)
+  );
 }

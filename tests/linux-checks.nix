@@ -39,7 +39,6 @@ let
     git-trim = import ./git-trim.nix { inherit pkgs self; };
     gpg-agent-no-cache = import ./gpg-agent-no-cache.nix { inherit pkgs self; };
     host-options = import ./host-options.nix { inherit pkgs self; };
-    intune = import ./intune.nix { inherit pkgs self; };
     iphone-restore = import ./iphone-restore.nix { inherit pkgs self; };
     kde-theme = import ./kde-theme.nix { inherit pkgs self; };
     kernel-sysctl = import ./kernel-sysctl.nix { inherit pkgs self; };
@@ -50,6 +49,7 @@ let
     nix-cleanup = import ./nix-cleanup.nix { inherit pkgs self; };
     nixos-wired-network-config = import ./nixos-wired-network-config.nix { inherit pkgs self; };
     nvidia-closure = import ./nvidia-closure.nix { inherit pkgs self; };
+    official-skills = import ./official-skills.nix { inherit pkgs self; };
     pi = import ./pi.nix { inherit pkgs self; };
     pinned-skills = import ./pinned-skills.nix { inherit pkgs self; };
     podman-containers = import ./podman-containers.nix { inherit pkgs self; };
@@ -112,6 +112,7 @@ let
       codex = import ./codex.nix { inherit pkgs self; };
       codex-settings = import ./codex-settings.nix { inherit pkgs self; };
       desktop-packages = import ./desktop-packages.nix { inherit pkgs self; };
+      firefox-developer-edition = import ./firefox-developer-edition.nix { inherit pkgs self; };
       git-cli-repo-flags = import ./git-cli-repo-flags.nix { inherit pkgs self; };
       grok-absent = import ./grok-absent.nix { inherit pkgs self darwinFixtures; };
       harness-agents-catalog = import ./harness-agents-catalog.nix { inherit pkgs agentTools; };

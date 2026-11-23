@@ -19,7 +19,10 @@ in
   ]
   ++ gui [ ./desktop ]
   # macOS gets the same terminal configuration, but none of the KDE desktop.
-  ++ lib.optionals (hostKind == "darwin") [ ./desktop/terminal.nix ]
+  ++ lib.optionals (hostKind == "darwin") [
+    ./desktop/firefox-darwin.nix
+    ./desktop/terminal.nix
+  ]
   ++ [
     ./dev
     ./security
@@ -62,9 +65,6 @@ in
       (import ../../packages/claude-desktop.nix { inherit pkgs; })
       (import ../../packages/chatgpt.nix { inherit pkgs; })
     ]
-    # Signs in through the identity broker that modules/nixos/services/intune.nix
-    # installs under the same trait.
-    ++ lib.optionals (nixos && config.my.intune.enable) [ pkgs.microsoft-edge ]
     ++ [
       (import ../../packages/claude-code.nix { inherit pkgs; })
       (import ../../packages/codex.nix { inherit pkgs; })
