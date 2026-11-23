@@ -83,6 +83,7 @@ EOF
   printf '{"latest": {"cmdline-tools": "19.0"}}\n' >"$clone/packages/android-sdk-repo.json"
   printf '{"version": "2026.10.0"}\n' >"$clone/packages/mise-release.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/ant-release.json"
+  printf '{"tag": "v0.40.16"}\n' >"$clone/packages/ollama-release.json"
   printf '{"zshLock":{"archives":[{"commit":"1111111111111111111111111111111111111111"}]}}\n' >"$clone/packages/prezto-pin.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
@@ -194,6 +195,14 @@ case "\$*" in
   "run .#overlay-release -- --output packages/bun-pin.json"|"run .#overlay-release -- --output packages/overlay-fonts.json")
     echo "\$*" >>"$clone/overlay-calls.log"
     ;;
+  "run .#overlay-release -- --output packages/ollama-release.json")
+    if [[ " \${FAIL_SOFT:-} " == *" ollama "* ]]; then
+      printf '{"tag": "partial' >packages/ollama-release.json
+      echo "overlay-release: missing Ollama asset" >&2
+      exit 1
+    fi
+    printf '{"tag": "v0.40.17"}\n' >packages/ollama-release.json
+    ;;
   "run .#pi-release -- --output packages/pi-release.json")
     if [[ " \${FAIL_SOFT:-} " == *" pi "* ]]; then
       printf '{"version": "partial' >packages/pi-release.json
@@ -282,6 +291,7 @@ grep -q '"2.1.0"' "$clone/packages/claude-code-manifest.json" &&
   grep -q '"Explore"' "$clone/packages/claude-code-agents.json" ||
   fail "update step did not update the Claude Code pin and its agent catalog together"
 [[ $(jq -r .version "$clone/packages/ant-release.json") == 2.0.0 ]] || fail "ant updater did not run"
+[[ $(jq -r .tag "$clone/packages/ollama-release.json") == v0.40.17 ]] || fail "Ollama updater did not run"
 grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
   fail "update step did not update packages/t3code-release.json"
 grep -q '"2.3.2"' "$clone/packages/opencode-release.json" ||
@@ -302,9 +312,9 @@ grep -q '"9.9.9"' "$clone/packages/claude-agent-sdk-release.json" &&
 [[ $(wc -l <"$clone/overlay-calls.log") == 2 ]] || fail 'missing imported pin updater'
 pass 'the update step runs flake update, compound-engineering-plugin pin/lock update, and all release updaters'
 
-read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code opencode pi acpx claude-agent-sdk codex")"
+read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code opencode pi acpx claude-agent-sdk codex ollama")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
-for title in "ChatGPT update skipped" "T3 Code update skipped" "OpenCode update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped"; do
+for title in "ChatGPT update skipped" "T3 Code update skipped" "OpenCode update skipped" "Pi update skipped" "acpx update skipped" "claude-agent-sdk update skipped" "Codex update skipped" "Ollama update skipped"; do
   grep -q "^::warning title=$title::" "$scratch/update-soft-fail-step.log" ||
     fail "missing warning for '$title': $(cat "$scratch/update-soft-fail-step.log")"
 done
@@ -314,6 +324,7 @@ grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm6
   packages/chatgpt-version.json \
   packages/t3code-release.json \
   packages/opencode-release.json \
+  packages/ollama-release.json \
   packages/pi-release.json \
   packages/acpx-release.json \
   packages/acpx/package-lock.json \
@@ -321,7 +332,7 @@ grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm6
   packages/claude-agent-sdk/package-lock.json \
   packages/codex-release.json) ]] ||
   fail "soft-failing updaters left partial changes in their pin or lock files"
-pass 'soft-failing updaters (chatgpt, t3code, opencode, pi, acpx, claude-agent-sdk, codex) warn, restore their files, and let the step continue'
+pass 'soft-failing updaters (chatgpt, t3code, opencode, pi, acpx, claude-agent-sdk, codex, ollama) warn, restore their files, and let the step continue'
 
 for failing in claude-code:claude-code-release claude-code-agents:claude-code-agents; do
   command=${failing#*:} failing=${failing%%:*}
@@ -393,6 +404,7 @@ read -r origin clone <<<"$(setup_clone pin-bumps)"
 base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
 new_t3_version=0.0.46
 printf '{"version": "2.0.0"}\n' >"$clone/packages/ant-release.json"
+printf '{"tag": "v0.40.17"}\n' >"$clone/packages/ollama-release.json"
 printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >"$clone/packages/prezto-pin.json"
 printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
@@ -411,9 +423,10 @@ sed -i 's/1111111111111111111111111111111111111111/22222222222222222222222222222
 (cd "$clone" && bash -e -c "$push_script") >"$scratch/pin-bumps-step.log" 2>&1 ||
   fail "the push step failed on the per-pin updates: $(tail -n 5 "$scratch/pin-bumps-step.log")"
 commits=$("$git_bin" -C "$clone" log --reverse --format='%H %s' "$base_sha..HEAD")
-[[ $(wc -l <<<"$commits") == 9 ]] || fail "expected 9 per-pin commits, found: $commits"
+[[ $(wc -l <<<"$commits") == 10 ]] || fail "expected 10 per-pin commits, found: $commits"
 for expected in \
   'chore(packages): bump ant to 2.0.0|packages/ant-release.json' \
+  'chore(packages): refresh ollama-release|packages/ollama-release.json' \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
   'chore(packages): bump pi to 1.5.0|packages/pi-agents.json packages/pi-release.json' \
   'chore(packages): bump codex to 0.51.0|packages/codex-agents.json packages/codex-release.json' \
@@ -428,6 +441,6 @@ for expected in \
   files=$("$git_bin" -C "$clone" show --format= --name-only "$sha" | sort | paste -sd ' ')
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
-pass 'the Prezto, claude-code, t3code, opencode, pi, acpx, and compound-engineering changes each land as their own commit with only their files'
+pass 'the Prezto, claude-code, t3code, opencode, ollama, pi, acpx, and compound-engineering changes each land as their own commit with only their files'
 
 python3 "$runner" "$workflow" "$publisher" "$verifier"
