@@ -17,7 +17,7 @@ in
   config.system.defaults.dock = {
     persistent-apps = [
       "/System/Applications/Apps.app"
-      "/Applications/Firefox Developer Edition.app"
+      "/Applications/Google Chrome.app"
       "/System/Applications/App Store.app"
       "/System/Applications/Mail.app"
       "/System/Applications/Calendar.app"

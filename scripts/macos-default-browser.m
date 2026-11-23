@@ -18,7 +18,7 @@ static void selectScheme(NSUInteger index) {
                   toOpenURLsWithScheme:scheme
                      completionHandler:^(NSError *error) {
     if (error) {
-      NSLog(@"Could not set Firefox Developer Edition for %@: %@", scheme, error);
+      NSLog(@"Could not set %@ for %@: %@", application.path, scheme, error);
       exit(1);
     }
     selectScheme(index + 1);

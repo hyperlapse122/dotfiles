@@ -161,6 +161,7 @@ let
       firefoxCask = lib.findFirst (
         cask: cask.name == "firefox@developer-edition"
       ) { } config.homebrew.casks;
+      chromeCask = lib.findFirst (cask: cask.name == "google-chrome") { } config.homebrew.casks;
       taps = map (tap: tap.name) config.homebrew.taps;
       thirdParty = lib.filter (cask: mapping.tapOf cask != null) expectedCasks;
       sessionVariables = user.home.sessionVariables;
@@ -173,6 +174,7 @@ let
         map (file: file.target) (lib.filter (file: file.enable) (lib.attrValues user.xdg.configFile))
       );
       agents = user.launchd.agents;
+      chromeAgent = agents.google-chrome-default or { };
       agentConfig = name: agents.${name}.config or { };
       peers = expectedPeers user.home.packages;
       peerAgent = agents.cross-model-peers or { };
@@ -429,6 +431,13 @@ let
       (check (
         firefoxCask.args.language or null == "ko" && firefoxCask.args.appdir or null == "/Applications"
       ) "${entry.name}: Homebrew must install Korean Firefox Developer Edition in /Applications")
+      (check (
+        chromeCask.args.appdir or null == "/Applications"
+        && chromeAgent.enable or false
+        && chromeAgent.config.RunAtLoad or false
+        && chromeAgent.config.LimitLoadToSessionType or null == "Aqua"
+        && lib.last (chromeAgent.config.ProgramArguments or [ "" ]) == "/Applications/Google Chrome.app"
+      ) "${entry.name}: the GUI login agent must select the Chrome bundle installed by Homebrew")
       (check (sort casks == sort (lib.filter (cask: production || cask != "ollama-app") expectedCasks))
         "${entry.name}: homebrew.casks is ${builtins.toJSON (sort casks)}, the mapping gives ${builtins.toJSON (sort expectedCasks)}"
       )
@@ -1101,7 +1110,7 @@ let
         t3:
         [
           "/System/Applications/Apps.app"
-          "/Applications/Firefox Developer Edition.app"
+          "/Applications/Google Chrome.app"
           "/System/Applications/App Store.app"
           "/System/Applications/Mail.app"
           "/System/Applications/Calendar.app"

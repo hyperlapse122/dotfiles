@@ -34,7 +34,7 @@ nr switch
 
 ## Included tools
 
-- **Firefox Developer Edition** opens web links on both machines. On NixOS, the first launch downloads the Korean build from Mozilla into `~/.local/opt/firefox-developer-edition`.
+- **Google Chrome** opens web links on both platforms and is pinned in the macOS Dock and KDE taskbar. Firefox Developer Edition is also available. On NixOS, its first launch downloads the Korean build from Mozilla into `~/.local/opt/firefox-developer-edition`.
 - **Shell and terminal**: zsh (with Prezto modules and extra completions), Ghostty (`Jetendard` font stack), `gh`, `glab`, `ghq` (`~/src`), `ripgrep`, `fd`, `bat`, `eza`, `fzf`, `jq`, `yq-go`, `direnv`, and `mise`.
 - **Fonts**: Pretendard (`Pretendard` and `Pretendard Variable`), Jetendard, D2Coding and D2Coding Nerd Font, Monoplex KR Nerd, Kopub, Nanum Square Round, Noto Sans/Serif CJK, and Twemoji.
 - **Security and signing**: GnuPG with `gpg-git` (card-status wakeup wrapper) and `dotfiles-pinentry` (`packages/pinentry-keyring.nix`), which stores each YubiKey's OpenPGP user PIN in Secret Service (`kdewallet`) on NixOS or the macOS Keychain under `dotfiles.pinentry.openpgp` (`yubikey:<serial>:user`) and falls back to `pinentry-qt` or `pinentry_mac`. 1Password GUI and CLI, Kleopatra (NixOS), and `sops` + `age`.

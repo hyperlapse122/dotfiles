@@ -23,11 +23,18 @@ in
     taps = lib.unique (map tapOf thirdParty);
     casks = map (
       name:
-      if name == apps.firefox-developer-edition.cask then
+      if
+        lib.elem name [
+          apps.firefox-developer-edition.cask
+          apps.google-chrome.cask
+        ]
+      then
         {
           inherit name;
           args = {
             appdir = "/Applications";
+          }
+          // lib.optionalAttrs (name == apps.firefox-developer-edition.cask) {
             language = "ko";
           };
         }

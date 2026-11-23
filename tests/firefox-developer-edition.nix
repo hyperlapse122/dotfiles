@@ -8,30 +8,30 @@ let
       browser = lib.findFirst (
         p: lib.getName p == "firefox-developer-edition"
       ) null entry.user.home.packages;
-      activation = entry.user.home.activation.firefoxDeveloperEdition.data or "";
+      activation = entry.user.home.activation.defaultBrowser.data or "";
     in
     if browser == null then
       ''echo "missing Firefox Developer Edition launcher on ${entry.name}" >&2; exit 1''
     else
       ''
         export HOME=$(mktemp -d)
-        export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_DIRS="${browser}/share"
+        export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_DIRS="${pkgs.google-chrome}/share:${browser}/share"
         installDir="$HOME/.local/opt/firefox-developer-edition"
         mkdir -p "$XDG_CONFIG_HOME"
         cat > "$XDG_CONFIG_HOME/mimeapps.list" <<'MIME'
         [Default Applications]
-        x-scheme-handler/http=old-browser.desktop
-        x-scheme-handler/https=old-browser.desktop
+        x-scheme-handler/http=firefox-developer-edition.desktop
+        x-scheme-handler/https=firefox-developer-edition.desktop
         text/html=my-editor.desktop
         MIME
         cp "$XDG_CONFIG_HOME/mimeapps.list" "$XDG_CONFIG_HOME/kde-mimeapps.list"
         ${pkgs.runtimeShell} -eu ${pkgs.writeText "activate-browser" activation}
         test ! -e "$HOME/.local/opt"
-        test "$(kreadconfig6 --file kdeglobals --group General --key BrowserApplication)" = "$desktopId"
+        test "$(kreadconfig6 --file kdeglobals --group General --key BrowserApplication)" = google-chrome.desktop
         for file in mimeapps.list kde-mimeapps.list; do
           for scheme in http https; do
             handler=$(kreadconfig6 --file "$file" --group 'Default Applications' --key "x-scheme-handler/$scheme")
-            test "''${handler%;}" = "$desktopId"
+            test "''${handler%;}" = google-chrome.desktop
           done
           test "$(kreadconfig6 --file "$file" --group 'Default Applications' --key text/html)" = my-editor.desktop
         done
