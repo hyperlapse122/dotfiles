@@ -4,6 +4,8 @@ The flake manages a NixOS desktop and a nix-darwin Mac. Before working in a cove
 
 Modules, Home Manager, and checks branch on traits, `my.kind`, and `my.bootstrap`, never host names. Home Manager reads `config.my.*` directly, never `osConfig`. Write repository documentation in English. Apply `ce-noslop` to top-level reports, summaries, and handoffs.
 
+For changes in this repository, run `./scripts/agent-check` from the checkout root. Use `nix develop .#agent-check -c ./scripts/agent-check` to supply its pinned tools. [Project checks](docs/agent-check.md)
+
 ## First-action boundaries
 
 Never evaluate or build with real plaintext credentials or expose secret values. Protect stored user data and obtain confirmation before destructive or irreversible actions.

@@ -35,7 +35,7 @@ Maintain the module map and topic-specific reading list in the [repository refer
 - `nix fmt -- --ci`: check formatting without edits.
 - `nix flake check`: run declared checks (`checks.x86_64-linux` / `checks.aarch64-darwin`). NixOS VM tests are kept separate under `vmChecks`.
 - `nix build --no-link .#vmChecks.all`: build every NixOS VM test; requires Linux with `/dev/kvm`. Build one with `.#vmChecks.<name>`.
-- Pre-commit hook: `.githooks/pre-commit` runs `agent-check --staged`. The mise task checks Nix formatting and runs Markdown lint with `.markdownlint-cli2.jsonc`. Enable it with `git config core.hooksPath .githooks`. [Agent check setup](agent-check.md)
+- Pre-commit hook: `.githooks/pre-commit` runs the checkout's `scripts/agent-check --staged` to check Nix formatting and lint Markdown from the index. Enable it with `git config core.hooksPath .githooks`. [Agent check setup](agent-check.md)
 
 Before each push, run `git diff --check`, lint changed Markdown with `markdownlint-cli2`, run `nix fmt -- --ci` where the flake exposes a formatter (`formatter.aarch64-darwin` is absent, so macOS leaves formatting to a Linux builder or CI's `fmt` job), and run the relevant checks supported by the local builder. Classify the complete branch diff from the PR merge-base (`scripts/ci-docs-only-paths` marks a PR docs-only only when every changed path sits under `docs/`, `.compound-engineering/artifacts/`, or root-level `*.md`). Record local results and checks deferred to CI separately.
 
