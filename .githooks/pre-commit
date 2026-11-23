@@ -1,3 +1,2 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
 exec ./scripts/agent-check --staged

@@ -34,7 +34,7 @@ if [[ ${nix_files[0]+set} ]]; then
   fi
 fi
 if "$lint_all_markdown"; then
-  bash "$(dirname "${BASH_SOURCE[0]}")/lint-staged-markdown" --snapshot || status=$?
+  bash scripts/lint-staged-markdown --snapshot || status=$?
 elif [[ ${markdown_files[0]+set} ]]; then
   markdownlint-cli2 --no-globs "${markdown_files[@]}" || status=$?
 fi

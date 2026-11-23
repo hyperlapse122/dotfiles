@@ -284,7 +284,7 @@ jobs:
           # 9. Update Pi
           update_harness_release pi Pi packages/pi-release.json
 
-          # 10. Update acpx and restore both files if the update fails.
+          # 10. Update acpx
           if ! nix run .#npm-release -- --package acpx \
             --output packages/acpx-release.json \
             --lock packages/acpx/package-lock.json; then

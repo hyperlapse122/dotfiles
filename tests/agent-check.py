@@ -100,7 +100,6 @@ exec '{sys.executable}' "$@"
     assert "python_subprocess_shell" in output and "diagnostic-100" in output, output
     assert "diagnostic-101" not in output and len(output.splitlines()) == 101, output
     run("git", "restore", "scripts/check-changed-files", cwd=repo)
-    # Restore the real project checker for the linked-worktree test.
     shutil.copy2(HELPER.parent / "check-changed-files", project_check)
     run("git", "add", "scripts/check-changed-files", cwd=repo)
     run("git", "commit", "-qm", "restore project check", cwd=repo)
@@ -214,6 +213,7 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
         shadow.write_text(f"#!{shutil.which('bash')}\ntouch '{root / 'project-tool-ran'}'\nexit 99\n")
         shadow.chmod(0o755)
     (repo / ".git/info/exclude").write_text("/node_modules/\n")
+    env["PATH"] = f"{local_bin}:{env['PATH']}"
     (repo / "package.json").write_text('{"dependencies":{"dirty-only":"1"}}')
     output = run(helper, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
                  cwd=repo, env=env)
