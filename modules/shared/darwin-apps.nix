@@ -6,6 +6,7 @@ let
     chatgpt.cask = "chatgpt";
     claude-desktop.cask = "claude";
     discord.cask = "discord";
+    firefox-developer-edition.cask = "firefox@developer-edition";
     ghostty.cask = "ghostty";
     google-chrome.cask = "google-chrome";
     libreoffice.cask = "libreoffice";
@@ -19,7 +20,6 @@ let
     t3code-cli.nix = "home/h82/t3code.nix, the my.t3.cli trait";
     t3code-desktop.nix = "home/h82/t3code.nix, the my.t3.desktop trait, from the stable pin";
 
-    firefox-developer-edition.leftOut = "the Linux launcher supplies NixOS libraries. home/h82/desktop/firefox-darwin.nix installs Mozilla's macOS app";
     kleopatra.leftOut = "a KDE GnuPG front end; gpg on the command line covers macOS";
     ksshaskpass.leftOut = "the KDE askpass; macOS has no KDE session";
     okular.leftOut = "a KDE document viewer; macOS has Preview";
