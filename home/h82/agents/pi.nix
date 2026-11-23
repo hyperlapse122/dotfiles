@@ -74,9 +74,9 @@ let
           --slurpfile local "$localPath" '
           def defined($p): [$catalog[0][$p][]? | select((.type // "chat") == "chat") | .id];
           {providers: ({synthetic: $synthetic[0]} + $local[0] + ($apis[0] | with_entries(
-            .key as $p | .value as $api | {key: $p, value: {models: [
+            .key as $p | .value as $api | .value = {models: [
               $rows[0][$p][] | select(.id as $id | (defined($p) | index($id)) == null) | . + {api: $api}
-            ]}})))}' > $out
+            ]} | select(.value.models | length > 0))))}' > $out
       '';
   # Cycling and startup selection cover every listed model, declared or not.
   enabledModelArgs = lib.escapeShellArgs (

@@ -63,7 +63,7 @@ try:
         cloud_endpoint = f'http://127.0.0.1:{cloud.server_port}'
         local['baseUrl'] = endpoint + '/local/v1'
         for provider in ('synthetic', 'openai', 'anthropic'):
-            models['providers'][provider]['baseUrl'] = cloud_endpoint + '/cloud/' + provider
+            models['providers'].setdefault(provider, {})['baseUrl'] = cloud_endpoint + '/cloud/' + provider
         (agent / 'models.json').write_text(json.dumps(models))
         auth = {provider: {'type': 'api_key', 'key': 'FAKE'} for provider in ('openai', 'anthropic')}
         (agent / 'auth.json').write_text(json.dumps(auth))
