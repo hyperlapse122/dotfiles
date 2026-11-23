@@ -29,5 +29,4 @@
   podman-prune = import ./podman-prune.nix { inherit pkgs; };
   nvidia-cdi = import ./nvidia-cdi.nix { inherit pkgs; };
   ollama-boot = import ./ollama-boot.nix { inherit pkgs; };
-  intune-os-identity = import ./intune-os-identity.nix { inherit pkgs; };
 }

@@ -39,7 +39,6 @@ let
     git-trim = import ./git-trim.nix { inherit pkgs self; };
     gpg-agent-no-cache = import ./gpg-agent-no-cache.nix { inherit pkgs self; };
     host-options = import ./host-options.nix { inherit pkgs self; };
-    intune = import ./intune.nix { inherit pkgs self; };
     iphone-restore = import ./iphone-restore.nix { inherit pkgs self; };
     kde-theme = import ./kde-theme.nix { inherit pkgs self; };
     kernel-sysctl = import ./kernel-sysctl.nix { inherit pkgs self; };

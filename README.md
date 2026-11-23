@@ -34,6 +34,7 @@ nr switch
 
 ## Included tools
 
+- **Firefox Developer Edition** opens web links on both machines. On NixOS, the first launch downloads the Korean build from Mozilla into `~/.local/opt/firefox-developer-edition`.
 - **Shell and terminal**: zsh (with Prezto modules and extra completions), Ghostty (`Jetendard` font stack), `gh`, `glab`, `ghq` (`~/src`), `ripgrep`, `fd`, `bat`, `eza`, `fzf`, `jq`, `yq-go`, `direnv`, and `mise`.
 - **Fonts**: Pretendard (`Pretendard` and `Pretendard Variable`), Jetendard, D2Coding and D2Coding Nerd Font, Monoplex KR Nerd, Kopub, Nanum Square Round, Noto Sans/Serif CJK, and Twemoji.
 - **Security and signing**: GnuPG with `gpg-git` (card-status wakeup wrapper) and `dotfiles-pinentry` (`packages/pinentry-keyring.nix`), which stores each YubiKey's OpenPGP user PIN in Secret Service (`kdewallet`) on NixOS or the macOS Keychain under `dotfiles.pinentry.openpgp` (`yubikey:<serial>:user`) and falls back to `pinentry-qt` or `pinentry_mac`. 1Password GUI and CLI, Kleopatra (NixOS), and `sops` + `age`.
@@ -56,7 +57,6 @@ nr switch
 - [Fresh installation (NixOS)](docs/install.md): back up, verify disk IDs, partition with `disko`, install `MS-7D91-bootstrap`, recover the age identity, enroll Secure Boot and TPM2, and switch to `MS-7D91`.
 - [macOS hosts](docs/macos.md): back up, reinstall macOS, install Nix, apply `MacBook-Pro-Mac17-9-bootstrap`, recover the user age identity, and switch to `MacBook-Pro-Mac17-9`.
 - [Updates and recovery](docs/recovery.md): routine switches, rollbacks, LUKS and Secure Boot backup/repair from installation media, YubiKey replacement, desktop SSH key recovery/rotation, host decommission, and iPhone/iPad IPSW restore.
-- [Microsoft Intune on NixOS](docs/intune.md): what `my.intune.enable` installs, how to enroll `MS-7D91`, and what to do when a compliance check fails.
 - [Adding a host](docs/adding-a-host.md): create a NixOS or macOS host directory, its bootstrap age material, per-host secrets, and `.sops.yaml` rules.
 - [Flutter development](docs/flutter.md): terminal and T3 workflows, target builds, DevTools and managed SDK updates.
 - [Agent routing](docs/agent-routing.md): T3 task guidance, external review recipients, and launch-time instruction composition.
