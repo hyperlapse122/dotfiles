@@ -10,9 +10,9 @@ let
   }/bin/agent-settings";
 
   # Cargo and the user both write under ~/.cargo/ and may maintain registries,
-  # aliases, or build flags in ~/.cargo/config.toml, so activation assigns only
-  # the default wrapper key and leaves everything else intact. Pointing at the
-  # active Home Manager profile symlink gives GUI tools and non-login services
+  # aliases, or build flags in ~/.cargo/config.toml, so activation merges the
+  # managed keys into the existing file. The active Home Manager profile
+  # symlink gives GUI tools and non-login services
   # an absolute path without embedding a transient store hash that rollbacks or
   # garbage collection could invalidate.
   # Retiring sccache requires a removePaths entry for build.rustc-wrapper rather
@@ -28,7 +28,16 @@ let
           ];
           value = "${config.home.profileDirectory}/bin/sccache";
         }
-      ];
+      ]
+      ++ lib.optional (config.my.kind == "darwin") {
+        # The Nix GCC on PATH cannot link libiconv from the macOS SDK.
+        path = [
+          "target"
+          "aarch64-apple-darwin"
+          "linker"
+        ];
+        value = "/usr/bin/clang";
+      };
     }
   );
 in

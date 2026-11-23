@@ -199,6 +199,7 @@ let
     body = Path(sys.argv[1]).read_text()
     original = sys.argv[2]
     wrapper = sys.argv[3]
+    apple_target = {"aarch64-apple-darwin": {"linker": "/usr/bin/clang"}}
     with tempfile.TemporaryDirectory() as work:
         home = Path(work) / "home"
         target = home / ".cargo/config.toml"
@@ -211,7 +212,10 @@ let
             return subprocess.run(["bash", "-euo", "pipefail", "-c", redirected], env=env, capture_output=True, text=True)
         result = run()
         assert result.returncode == 0, result.stderr
-        assert tomllib.loads(target.read_text()) == {"build": {"rustc-wrapper": wrapper}}, "Cargo activation did not initialize missing config.toml"
+        assert tomllib.loads(target.read_text()) == {
+            "build": {"rustc-wrapper": wrapper},
+            "target": apple_target,
+        }, "Cargo activation did not initialize the wrapper and Apple linker"
         target.write_text('# user comment\n[build]\njobs = 4\nrustc-wrapper = "old"\n[alias]\nb = "build"\n[net]\ngit-fetch-with-cli = true\n')
         result = run()
         assert result.returncode == 0, result.stderr
@@ -219,9 +223,10 @@ let
         assert "# user comment" in rendered, "Cargo activation dropped user TOML comment"
         assert tomllib.loads(rendered) == {
             "build": {"jobs": 4, "rustc-wrapper": wrapper},
+            "target": apple_target,
             "alias": {"b": "build"},
             "net": {"git-fetch-with-cli": True},
-        }, "Cargo activation did not apply build.rustc-wrapper and preserve unmanaged state"
+        }, "Cargo activation did not apply managed settings and preserve unmanaged state"
         protected = b'[build\nmalformed = true\n'
         target.write_bytes(protected)
         result = run()
