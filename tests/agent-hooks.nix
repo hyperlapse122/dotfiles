@@ -6,10 +6,10 @@ let
     harness: enable:
     pkgs.writeText "${harness}-quality-settings.json" (
       builtins.toJSON {
-        inherit (renderer harness enable [ ]) hookGroups;
+        inherit (renderer harness enable) hookGroups;
       }
     );
-  extension = harness: source: (renderer harness true [ "/fixture-checkout" ]).renderExtension source;
+  extension = harness: source: (renderer harness true).renderExtension source;
   inherit (import ../packages/agent-tools.nix { inherit pkgs; }) agentSettings;
   pi = import ../packages/pi.nix { inherit pkgs; };
   opencode = import ../packages/opencode.nix { inherit pkgs; };

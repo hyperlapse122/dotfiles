@@ -5,19 +5,14 @@
   harness,
 }:
 let
-  inherit (config.my.agentHooks) trustedProjects stop;
   inherit (config.my.agentHooks.${harness})
     enable
-    postEdit
     preShell
     freezeTests
     ;
   policy = pkgs.writeText "${harness}-agent-hook-policy.json" (
     builtins.toJSON {
       inherit
-        trustedProjects
-        stop
-        postEdit
         preShell
         freezeTests
         ;
@@ -62,8 +57,8 @@ in
     preserveSlots = codex;
     events = {
       PreToolUse = group (preTools != "") "pre" preTools;
-      PostToolUse = group postEdit "post" edit;
-      Stop = group stop "stop" "";
+      PostToolUse = { };
+      Stop = { };
     };
   };
   renderExtension =
@@ -72,13 +67,12 @@ in
       ''
         import { execFile } from "node:child_process";
 
-        const stop = ${builtins.toJSON stop};
         function check(phase, cwd, tool_name, tool_input) {
           return new Promise((resolve) => {
             const child = execFile(
               ${builtins.toJSON executable},
               [...${builtins.toJSON args}, phase],
-              (error, stdout) => resolve((phase === "post" ? !error : error?.code === 2) ? stdout.trim() : ""),
+              (error, stdout) => resolve(error?.code === 2 ? stdout.trim() : ""),
             );
             child.stdin.on("error", () => {});
             child.stdin.end(JSON.stringify({ cwd, tool_name, tool_input }));

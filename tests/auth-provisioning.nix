@@ -1,9 +1,7 @@
 { pkgs, inputs }:
 let
   renderer = import ./lib/quality-hook-renderer.nix { inherit pkgs; };
-  opencodeExtension =
-    (renderer "opencode" true [ "/fixture-checkout" ]).renderExtension
-      ../home/h82/agents/opencode-quality.ts;
+  opencodeExtension = (renderer "opencode" true).renderExtension ../home/h82/agents/opencode-quality.ts;
   fixtures =
     pkgs.runCommand "fake-auth-secrets"
       {
