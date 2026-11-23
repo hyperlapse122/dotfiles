@@ -95,6 +95,7 @@ let
   declared = pkgs.writeText "opencode-declared-settings.json" (
     builtins.toJSON {
       set.update = "disable";
+      set.shell = "${pkgs.bash}/bin/bash";
       prefixEntries = [
         {
           path = [ "plugins" ];

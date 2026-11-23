@@ -95,6 +95,13 @@ let
     }
     {
       path = [
+        "env"
+        "CLAUDE_CODE_SHELL"
+      ];
+      value = "${pkgs.bash}/bin/bash";
+    }
+    {
+      path = [
         "enabledPlugins"
         "cc-plugin-you-should-know@builtin"
       ];

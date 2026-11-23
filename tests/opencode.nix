@@ -15,7 +15,7 @@
     targets ~/.config/opencode/opencode.json, which OpenCode rewrites.
   - Applied in a scratch HOME over a seed that holds the owner's unpinned
     Compound Engineering plugin entry, another plugin, a user key, and a user
-    model, the merge sets `update` to `disable`, leaves one pinned Compound
+    model, the merge sets `update` to `disable` and `shell` to Nix Bash, leaves one pinned Compound
     Engineering entry beside the other plugin, writes the Synthetic models Pi
     shows with the rest disabled, writes every model of the Go snapshot and of the OpenAI and Anthropic lists (disabling none), and
     keeps the user's key and model. Running the activation in the scratch HOME
@@ -164,6 +164,7 @@ let
 
   declared = {
     set.update = "disable";
+    set.shell = "${pkgs.bash}/bin/bash";
     prefixEntries = [
       {
         path = [ "plugins" ];
@@ -217,6 +218,7 @@ let
 
   seed = {
     update = "notify";
+    shell = "/bin/zsh";
     userKey = "keep me";
     plugins = [
       "${repository}.git"
@@ -237,6 +239,7 @@ let
 
   applied = {
     update = "disable";
+    shell = "${pkgs.bash}/bin/bash";
     userKey = "keep me";
     plugins = [
       "other-plugin@npm:other-plugin"

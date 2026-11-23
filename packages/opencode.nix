@@ -20,7 +20,10 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
 
   # Each archive holds one bare binary with no top-level directory.
   sourceRoot = ".";
-  nativeBuildInputs = lib.optional (lib.hasSuffix ".zip" platform.asset) pkgs.unzip;
+  nativeBuildInputs = [
+    pkgs.makeWrapper
+  ]
+  ++ lib.optional (lib.hasSuffix ".zip" platform.asset) pkgs.unzip;
 
   # The binary is a Bun executable with its script appended to the file, so
   # stripping or any other fixup rewrites it into a bare Bun runtime. It is
@@ -28,10 +31,13 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   # linked Linux build through nix-ld, and no patching step can break.
   dontFixup = true;
 
+  # The GUI's persistent terminals read SHELL even when the agent tool has a configured shell.
   installPhase = ''
     runHook preInstall
 
-    install -Dm755 opencode $out/bin/opencode
+    install -Dm755 opencode $out/libexec/opencode
+    makeWrapper $out/libexec/opencode $out/bin/opencode \
+      --set SHELL ${pkgs.bash}/bin/bash
 
     runHook postInstall
   '';
@@ -46,7 +52,7 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   # lacks, so only Darwin runs the binary here. The comparison guards the
   # unmodified install on both systems.
   postInstallCheck = ''
-    cmp opencode "$out/bin/opencode"
+    cmp opencode "$out/libexec/opencode"
   '';
 
   meta = {
