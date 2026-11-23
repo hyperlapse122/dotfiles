@@ -1,28 +1,29 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
+unset CDPATH
 
 usage() {
-  cat <<'EOF'
-Usage: agent-check [--registry-policy ABSOLUTE_PATH] [--staged | --range BASE HEAD]
+  printf '%s\n' 'Usage: agent-check [--registry-policy ABSOLUTE_PATH] [--staged | --range BASE HEAD]
 
-Run the repository's agent-check task on local changes by default.
+Check local changes in this dotfiles checkout by default.
 --staged checks the Git index. --range checks the committed HEAD tree against BASE.
---registry-policy runs only registry lookups using an approved policy outside the checkout.
-EOF
+--registry-policy runs only registry lookups using an approved policy outside the checkout.'
 }
 
 policy=
-if [[ ${1:-} == --registry-policy ]]; then
-  if [[ $# -lt 2 || $2 != /* ]]; then
-    usage >&2
-    exit 2
-  fi
+if [ "${1:-}" = --registry-policy ]; then
+  case ${2:-} in
+    /*) ;;
+    *) usage >&2; exit 2 ;;
+  esac
   policy=$2
   shift 2
 fi
-if [[ ${inspection[0]+set} != set ]]; then
-  inspection=(python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/agent-check-inspect.py")
-fi
+case $0 in
+  */*) script_dir=${0%/*} ;;
+  *) script_dir=. ;;
+esac
+script_dir=$(cd -- "$script_dir" && pwd -P)
 
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
@@ -31,18 +32,30 @@ case "${1:-}" in
   "") expected=0; mode=worktree ;;
   *) usage >&2; exit 2 ;;
 esac
-if [[ $# -ne $expected ]]; then
+if [ "$#" -ne "$expected" ]; then
   usage >&2
   exit 2
 fi
-if [[ -n $policy ]]; then
-  PATH="${inspection_path:-$PATH}" exec "${inspection[@]}" --policy "$policy" \
+if [ -n "$policy" ]; then
+  # Only the pinned interpreter may start with registry credentials in its environment.
+  case ${AGENT_CHECK_PYTHON:-} in
+    /nix/store/*/bin/python3) ;;
+    *) printf '%s\n' 'agent-check: run registry checks with nix develop .#agent-check' >&2; exit 1 ;;
+  esac
+  exec "$AGENT_CHECK_PYTHON" -I "$script_dir/agent-check-inspect.py" --policy "$policy" \
     --snapshot "$mode" --base "${2:-}" --head "${3:-}"
 fi
-
-root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+checkout_root=$(cd "$script_dir/.." && pwd -P)
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  printf 'agent-check: run from this dotfiles checkout\n' >&2
+  exit 1
+}
+root=$(cd "$root" && pwd -P)
+if [ "$root" != "$checkout_root" ]; then
+  printf 'agent-check: run from this dotfiles checkout\n' >&2
+  exit 1
+fi
 cd "$root"
-root=$(pwd -P)
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 
@@ -61,15 +74,14 @@ case $mode in
     git diff --no-renames --name-only -z "$base" "$head" > "$tmp/paths"
     ;;
 esac
-[[ -s $tmp/paths ]] || exit 0
+[ -s "$tmp/paths" ] || exit 0
 sort -zu "$tmp/paths" > "$tmp/files"
 export AGENT_CHECK_FILES="$tmp/files"
 export AGENT_CHECK_MODE="$mode"
-check_path=$PATH
 
-if [[ $mode != worktree ]]; then
+if [ "$mode" != worktree ]; then
   mkdir "$tmp/tree"
-  if [[ $mode == range ]]; then
+  if [ "$mode" = range ]; then
     export GIT_INDEX_FILE="$tmp/index"
     git read-tree "$head"
   fi
@@ -78,75 +90,18 @@ if [[ $mode != worktree ]]; then
   git rev-parse --local-env-vars > "$tmp/git-vars"
   while IFS= read -r name; do unset "$name"; done < "$tmp/git-vars"
   cd "$tmp/tree"
-  MISE_TRUSTED_CONFIG_PATHS=$(pwd -P)
-  export MISE_TRUSTED_CONFIG_PATHS
+  # mise shims need to resolve tools in the temporary checkout.
+  export MISE_TRUSTED_CONFIG_PATHS="$(pwd -P)"
+  export MISE_SAFE=1
 fi
 
-check_and_run() {
-  local check_status=0 task_status=0
-  PATH="$check_path" "${inspection[@]}" --paths "$AGENT_CHECK_FILES" \
-    > "$tmp/inspection" || check_status=$?
-  "$@" || task_status=$?
-  if [[ $task_status -ne 0 ]]; then
-    return "$task_status"
-  fi
-  return "$check_status"
-}
-
-run_task() (
-  local tasks file project
-  export PATH="$root/node_modules/.bin:$PATH"
-  # A task of the same name from a parent or global mise config is not this project's task.
-  if command -v mise >/dev/null; then
-    project=$(pwd -P)
-    MISE_CEILING_PATHS=$(dirname "$project")
-    export MISE_CEILING_PATHS
-    tasks=$(mise tasks ls --name-only --no-global --hidden) || return
-    if [[ $'\n'$tasks$'\n' == *$'\n'agent-check$'\n'* ]]; then
-      check_and_run mise run --force --skip-tools agent-check
-      return
-    fi
-  fi
-
-  for file in justfile Justfile .justfile .Justfile; do
-    [[ -f $file ]] || continue
-    tasks=$(just --justfile "$file" --summary) || return
-    if [[ " $tasks " == *" agent-check "* ]]; then
-      check_and_run just --justfile "$file" agent-check
-      return
-    fi
-    break
-  done
-
-  for file in GNUmakefile makefile Makefile; do
-    [[ -f $file ]] || continue
-    # Even make -q evaluates expansions and can rebuild included makefiles.
-    if PATH="$check_path" awk '
-      continued { continued = /\\$/; next }
-      { continued = /\\$/ }
-      /^\t/ { next }
-      /^[ ]*((override|export|private)[ ]+)*define[ ]/ { definitions++; next }
-      /^[ ]*endef([ ]|$)/ { definitions--; next }
-      !definitions && /^[ ]*agent-check[ ]*:/ {
-        sub(/^[ ]*agent-check[ ]*::?/, "")
-        sub(/[;#].*$/, "")
-        if ($0 !~ /=/) { found = 1; exit }
-      }
-      END { exit !found }
-    ' "$file"; then
-      check_and_run make --file "$file" agent-check
-      return
-    fi
-    break
-  done
-)
-
-status=0
-run_task > "$tmp/output" 2>&1 || status=$?
-if [[ -f $tmp/inspection ]]; then
-  cat "$tmp/inspection" >&2
-fi
-if [[ $status -ne 0 ]]; then
+inspection_status=0
+task_status=0
+python3 -I "$script_dir/agent-check-inspect.py" --paths "$AGENT_CHECK_FILES" > "$tmp/inspection" || inspection_status=$?
+bash scripts/check-changed-files > "$tmp/output" 2>&1 || task_status=$?
+cat "$tmp/inspection" >&2
+if [ "$task_status" -ne 0 ]; then
   head -n 100 "$tmp/output" >&2
-  exit "$status"
+  exit "$task_status"
 fi
+exit "$inspection_status"

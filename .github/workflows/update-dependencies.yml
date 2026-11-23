@@ -284,22 +284,13 @@ jobs:
           # 9. Update Pi
           update_harness_release pi Pi packages/pi-release.json
 
-          # 10. Update the npm packages: the shared ACP client and the Claude
-          # Agent SDK that agent-usage reads Claude limits through. Each pin
-          # moves with its regenerated lock file, so a failure restores both
-          # and lets the other updates through, as Pi's does.
-          for npm_package in acpx claude-agent-sdk; do
-            case "$npm_package" in
-              claude-agent-sdk) registry_name=@anthropic-ai/claude-agent-sdk ;;
-              *) registry_name=$npm_package ;;
-            esac
-            if ! nix run .#npm-release -- --package "$registry_name" \
-              --output "packages/$npm_package-release.json" \
-              --lock "packages/$npm_package/package-lock.json"; then
-              echo "::warning title=$npm_package update skipped::npm-release failed; keeping the current pin in packages/$npm_package-release.json."
-              git checkout -- "packages/$npm_package-release.json" "packages/$npm_package/package-lock.json"
-            fi
-          done
+          # 10. Update acpx
+          if ! nix run .#npm-release -- --package acpx \
+            --output packages/acpx-release.json \
+            --lock packages/acpx/package-lock.json; then
+            echo "::warning title=acpx update skipped::npm-release failed; keeping the current pin in packages/acpx-release.json."
+            git checkout -- packages/acpx-release.json packages/acpx/package-lock.json
+          fi
 
           # 11. Update Codex
           update_harness_release codex Codex packages/codex-release.json
@@ -355,13 +346,9 @@ jobs:
           commit_if_pin_changed claude-code packages/claude-code-manifest.json
           commit_if_pin_changed codex packages/codex-release.json
           commit_if_pin_changed pi packages/pi-release.json
-          for npm_package in acpx claude-agent-sdk; do
-            pin="packages/$npm_package-release.json"
-            lock="packages/$npm_package/package-lock.json"
-            if [ -n "$(git status --porcelain -- "$pin" "$lock")" ]; then
-              commit_version "$npm_package" "$pin" "$lock"
-            fi
-          done
+          if [ -n "$(git status --porcelain -- packages/acpx-release.json packages/acpx/package-lock.json)" ]; then
+            commit_version acpx packages/acpx-release.json packages/acpx/package-lock.json
+          fi
           commit_if_pin_changed t3code packages/t3code-release.json
           commit_if_pin_changed opencode packages/opencode-release.json
           commit_if_pin_changed chatgpt packages/chatgpt-version.json

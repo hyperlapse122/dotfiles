@@ -1,4 +1,4 @@
-"""Drive both pinned runtimes through edits and two turns on one session."""
+"""Drive both pinned runtimes through guarded calls in one session."""
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -13,12 +13,12 @@ from threading import Thread
 import time
 
 
-PROMPTS = ('Write the first fixture.', 'Write the second fixture.')
-FOLLOW_UP = 'Run agent-check from the project root using your shell tool before finishing.'
+PROMPTS = ('Try the commit.', 'Write a frozen test.', 'Write a normal file.')
+FOLLOW_UP = 'Run agent-check from the project root'
 
 
 @contextmanager
-def model_server():
+def model_server(harness):
     requests = []
 
     class Model(BaseHTTPRequestHandler):
@@ -32,13 +32,15 @@ def model_server():
             if body.get('tools'):
                 requests.append(last)
             if body.get('tools') and any(prompt in last for prompt in PROMPTS):
-                number = 1 if PROMPTS[0] in last else 2
+                number = next(i for i, prompt in enumerate(PROMPTS) if prompt in last)
+                name, arguments = [
+                    ('bash' if harness == 'pi' else 'shell', {'command': 'git commit --no-verify'}),
+                    ('write', {'path': 'tests/fixture.txt', 'content': 'fixture\n'}),
+                    ('write', {'path': 'fixture.txt', 'content': 'fixture\n'}),
+                ][number]
                 call = {
-                    'index': 0, 'id': f'call_write_{number}', 'type': 'function',
-                    'function': {
-                        'name': 'write',
-                        'arguments': json.dumps({'path': f'fixture-{number}.py', 'content': 'eval(value)\n'}),
-                    },
+                    'index': 0, 'id': f'call_{number}', 'type': 'function',
+                    'function': {'name': name, 'arguments': json.dumps(arguments)},
                 }
                 delta, reason = {'tool_calls': [call]}, 'tool_calls'
             else:
@@ -167,8 +169,8 @@ def opencode_turns(executable, project, env, extension, url, assert_turn):
             assert_turn(number)
 
 
-def exercise(turns, executable, rendered):
-    with TemporaryDirectory() as directory, model_server() as (url, requests):
+def exercise(harness, turns, executable, rendered):
+    with TemporaryDirectory() as directory, model_server(harness) as (url, requests):
         home = Path(directory).resolve()
         project = home / 'checkout'
         project.mkdir()
@@ -176,25 +178,36 @@ def exercise(turns, executable, rendered):
         env.update(HOME=str(home), XDG_CACHE_HOME=str(home / 'cache'), XDG_CONFIG_HOME=str(home / 'config'),
                    XDG_DATA_HOME=str(home / 'data'), XDG_STATE_HOME=str(home / 'state'))
         subprocess.run(['git', 'init', '-q', project], env=env, check=True)
-        policy = home / 'policy.json'
-        extension = home / 'quality.ts'
+        marker = project / '.agents/freeze-tests'
+        marker.parent.mkdir()
+        marker.touch()
+        (project / 'tests').mkdir()
+        # Supply the former trust settings to show a previously opted-in
+        # checkout no longer receives turn-end feedback.
         source = Path(rendered).read_text()
         original_policy = Path(re.search(r'"/nix/store/[^"]+-agent-hook-policy\.json"', source)[0][1:-1])
-        policy.write_text(json.dumps(dict(json.loads(original_policy.read_text()), trustedProjects=[str(project)])))
+        policy = home / 'policy.json'
+        policy.write_text(json.dumps(dict(json.loads(original_policy.read_text()),
+                                          trustedProjects=[str(project)], postEdit=True, stop=True)))
+        extension = home / 'quality.ts'
         extension.write_text(source.replace(str(original_policy), str(policy)))
 
         def assert_turn(number):
-            turn = requests[(number - 1) * 3:]
-            assert len(turn) == 3, turn
-            first, tool_result, stop = turn
+            turn = requests[(number - 1) * 2:]
+            assert len(turn) == 2, turn
+            first, tool_result = turn
             assert PROMPTS[number - 1] in first, first
-            assert 'eval_injection' in tool_result and f'fixture-{number}.py' in tool_result, tool_result
-            assert FOLLOW_UP in stop, stop
-            assert (project / f'fixture-{number}.py').read_text() == 'eval(value)\n'
+            assert FOLLOW_UP not in tool_result, tool_result
+            if number == 1:
+                assert 'pre-commit' in tool_result, tool_result
+            elif number == 2:
+                assert 'frozen' in tool_result and not (project / 'tests/fixture.txt').exists(), tool_result
+            else:
+                assert (project / 'fixture.txt').read_text() == 'fixture\n'
 
         turns(executable, project, env, extension, url, assert_turn)
 
 
 if __name__ == '__main__':
     harness, executable, extension = sys.argv[1:]
-    exercise({'pi': pi_turns, 'opencode': opencode_turns}[harness], executable, extension)
+    exercise(harness, {'pi': pi_turns, 'opencode': opencode_turns}[harness], executable, extension)

@@ -6,7 +6,7 @@
 run = "scripts/lint-staged-markdown"
 
 [tasks.agent-check]
-run = "bash scripts/check-changed-files"
+run = "./scripts/agent-check"
 
 [hooks]
 postinstall = [

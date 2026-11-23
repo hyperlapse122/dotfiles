@@ -1,23 +1,17 @@
 #!/usr/bin/env python3
 """Apply the shared quality checks to native harness hook input."""
-from contextlib import ExitStack, redirect_stdout
-from io import StringIO
 from itertools import groupby
 import json
 import os
 from pathlib import Path
 import re
-import runpy
 import shlex
-import stat
 import sys
 
 # pygit2 initializes OpenSSL even when it only opens a local checkout.
 os.environ["SSL_CERT_FILE"] = "@caBundle@"
 import pygit2
 
-INSPECTOR = '@inspector@'
-MAX_SOURCE_BYTES = 1024 * 1024
 SHELL_TOOLS = {'bash', 'shell', 'exec_command', 'shell_command'}
 EDIT_TOOLS = {'edit', 'write', 'multiedit', 'apply_patch', 'patch'}
 PATCH_PATH = re.compile(r'^\*\*\* (?:Add File:|Update File:|Delete File:|Move to:)\s+(.+)$')
@@ -125,40 +119,6 @@ def frozen_path(cwd, paths):
                         return path
 
 
-def scan_edits(root, cwd, paths):
-    inspector = runpy.run_path(INSPECTOR)
-    warnings = StringIO()
-    with redirect_stdout(warnings):
-        for path in dict.fromkeys(paths):
-            absolute = Path(os.path.abspath(cwd / path))
-            if absolute == root or not absolute.is_relative_to(root):
-                continue
-            relative = str(absolute.relative_to(root))
-            rules = inspector['rules_for'](relative)
-            if not rules:
-                continue
-            try:
-                with ExitStack() as opened:
-                    # Hold each directory open so a concurrent symlink swap
-                    # cannot redirect the scanner outside the checkout.
-                    directory = os.open('/', os.O_DIRECTORY)
-                    opened.callback(os.close, directory)
-                    for component in absolute.parts[1:-1]:
-                        directory = os.open(component, os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
-                        opened.callback(os.close, directory)
-                    fd = os.open(absolute.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
-                    with os.fdopen(fd, 'rb') as source:
-                        metadata = os.fstat(fd)
-                        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-                            continue
-                        content = source.read(MAX_SOURCE_BYTES + 1)
-                    if len(content) <= MAX_SOURCE_BYTES:
-                        inspector['warn'](relative, content.decode(errors='replace'), rules)
-            except OSError:
-                continue
-    return '\n'.join(warnings.getvalue().splitlines()[:50])
-
-
 def feedback(options, phase, payload):
     tool = (payload.get('tool_name') or '').lower()
     inputs = payload.get('tool_input') or {}
@@ -174,17 +134,6 @@ def feedback(options, phase, payload):
         path = frozen_path(cwd, edit_paths(tool, inputs))
         if path:
             return f'Test files are frozen by .agents/freeze-tests. Leave {path!r} untouched.'
-    post = phase == 'post' and options['postEdit'] and tool in EDIT_TOOLS
-    stop = phase == 'stop' and options['stop'] and not payload.get('stop_hook_active')
-    if options['trustedProjects'] and (post or stop):
-        root, repo = open_checkout(cwd)
-        if root is not None and str(root) in options['trustedProjects']:
-            if post:
-                return scan_edits(root, cwd.resolve(), edit_paths(tool, inputs))
-            # libgit2 status does not execute external filters or fsmonitor hooks.
-            if repo.status(untracked_files='normal'):
-                return ('Run agent-check from the project root using your shell tool before finishing. '
-                        'Use your current session permissions and report if the check cannot run.')
     return None
 
 
@@ -197,14 +146,8 @@ def main():
         return
     if not reason:
         return
-    if phase == 'post':
-        if harness in {'claude', 'codex'}:
-            print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PostToolUse', 'additionalContext': reason}}))
-        else:
-            print(reason)
-    else:
-        print(reason, file=sys.stderr if harness in {'claude', 'codex'} else sys.stdout)
-        sys.exit(2)
+    print(reason, file=sys.stderr if harness in {'claude', 'codex'} else sys.stdout)
+    sys.exit(2)
 
 
 if __name__ == '__main__':

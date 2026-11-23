@@ -108,7 +108,7 @@ pkgs.runCommand "agent-instructions-tests"
       (import ../packages/agent-tools.nix { inherit pkgs; }).agentInstructions
     }/bin/agent-instructions ${
       (import ../packages/text-template.nix { inherit pkgs; })
-    }/bin/text-template; then
+    }/bin/text-template ${./lib/agent-instruction-receipts.json}; then
       failed=1
     fi
     if [ "$failed" != "0" ]; then

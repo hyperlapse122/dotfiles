@@ -1,8 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, language, and action triggers for the installed task guide. Delegation uses the role, model, and reasoning effort selected by CE or the harness unless the user specifies them. Interactive session defaults and standalone usage tools remain separate. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
-
-The shared instructions identify `agent-check` as the project's check when the project defines it. The Home Manager helper runs that task for manual checks, Git hooks, and CI. [Project setup](agent-check.md)
+The ordinary user instruction files share scope and verification, language, and action triggers for the installed task guide. Delegation uses the role, model, and reasoning effort selected by CE or the harness unless the user specifies them. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
 
 During CI triage, the agent reads the first relevant failure, chooses the next read-only check from that evidence, and verifies its conclusions against logs, code, or configuration. [CI triage guide](../home/h82/agents/instructions/task-guide.md#ci-triage)
 
@@ -11,6 +9,12 @@ The language rules make Korean the default conversation language and English the
 Shared guidance is exposed through domain entries: `web-lenses`, `engineering-lenses`, `design-lenses`, `mobile-lenses`, `writing-lenses`, `service-lenses`, `platform-lenses`, and `toolchain-lenses`. `project-skills` discovers version-matched guidance supplied by installed project dependencies. Open the entry for the work and follow its references; grouped guides do not each occupy a user-scope discovery entry.
 
 Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both NixOS and macOS. The package honors user-level `~/.acpx/config.json` and skips project-local `.acpxrc.json` when resolving configuration.
+
+## Native edit and commit guards
+
+Home Manager configures the `preShell` and `freezeTests` guards for Claude Code, Codex, Pi, and OpenCode. The first catches common attempts to skip Git commit hooks. To protect test files from native edits, create `.agents/freeze-tests` at the Git root. Protection covers test and spec directories, conventional test filenames, and both paths of a rename. Set `my.agentHooks.<harness>.enable` to false to disable both guards, or configure them individually.
+
+Review changed Codex hook commands with `/hooks` in the CLI using the same Codex home as T3. A rebuild that changes the command's Nix store path requires review again. Empty positions can remain in Codex settings to preserve the identities of unrelated hooks.
 
 ## Checking shared skill discovery
 

@@ -112,33 +112,6 @@ let
   # OpenCode's own session record, for T3 cross-model evidence.
   opencodeServingModel = pythonHelper "opencode-serving-model" ../scripts/opencode-serving-model;
 
-  # Home Manager overrides the Synthetic key file per host kind.
-  agentUsage = pkgs.lib.makeOverridable (
-    {
-      syntheticKeyFile ? "/run/secrets/cli-auth/synthetic_api_key",
-    }:
-    let
-      sdk = import ./claude-agent-sdk.nix { inherit pkgs; };
-      runtimePath = pkgs.lib.makeBinPath [
-        (import ./codex.nix { inherit pkgs; })
-        (import ./claude-code.nix { inherit pkgs; })
-        pkgs.nodejs_24
-        pkgs.curl
-      ];
-    in
-    (pythonHelper "agent-usage" ../scripts/agent-usage).overrideAttrs (old: {
-      nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
-      installPhase = old.installPhase + ''
-        install -Dm644 ${../scripts/agent-usage-claude.mjs} \
-          $out/bin/agent-usage-claude.mjs
-        wrapProgram $out/bin/agent-usage \
-          --prefix PATH : ${runtimePath} \
-          --set AGENT_USAGE_SYNTHETIC_KEY_FILE ${pkgs.lib.escapeShellArg syntheticKeyFile} \
-          --set NODE_PATH ${sdk}/lib/node_modules
-      '';
-    })
-  ) { };
-
   # Resolves the latest release of an npm package that ships no lock file,
   # such as acpx, and regenerates its lock file and npmDepsHash.
   # npm and prefetch-npm-deps come from the store so the update workflow's
@@ -197,7 +170,6 @@ in
     opencodeRelease
     opencodeAuthSync
     opencodeServingModel
-    agentUsage
     npmRelease
     t3codeRelease
     syntheticModelsWatch

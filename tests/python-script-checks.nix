@@ -67,19 +67,6 @@ in
   opencode-serving-model =
     pythonScriptCheck "opencode-serving-model" ../scripts/opencode-serving-model
       ./test_opencode_serving_model.py;
-  # The Claude helper runs against the pinned SDK with real Node, so the
-  # check carries both instead of letting that test skip.
-  agent-usage =
-    (pythonScriptCheckWith {
-      nativeBuildInputs = [ pkgs.nodejs_24 ];
-      modules = [ ../scripts/agent-usage-claude.mjs ];
-      setup = ''
-        export NODE_PATH=${import ../packages/claude-agent-sdk.nix { inherit pkgs; }}/lib/node_modules
-      '';
-    })
-      "agent-usage"
-      ../scripts/agent-usage
-      ./test_agent_usage.py;
   npm-release = releaseScriptCheck "npm-release" ../scripts/npm-release ./test_npm_release.py;
   t3code-release =
     pythonScriptCheck "t3code-release" ../scripts/t3code-release

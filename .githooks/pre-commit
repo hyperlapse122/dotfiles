@@ -1,5 +1,2 @@
 #!/bin/sh
-if command -v agent-check >/dev/null 2>&1; then
-  exec agent-check --staged
-fi
-exec bash scripts/agent-check --staged
+exec ./scripts/agent-check --staged

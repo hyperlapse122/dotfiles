@@ -138,18 +138,26 @@
       };
 
       formatter.${linux} = linuxPkgs.nixfmt-tree;
-      devShells.${linux}.default = linuxPkgs.mkShell {
-        packages = with linuxPkgs; [
-          age
-          sops
-          gnupg
-          git
-          nixfmt
-          libsecret
-          shellcheck
-          python3
-          yubikey-manager
-        ];
+      devShells.${linux} = {
+        agent-check = linuxPkgs.mkShell (import ./packages/agent-check.nix { pkgs = linuxPkgs; });
+        default = linuxPkgs.mkShell {
+          packages = with linuxPkgs; [
+            age
+            sops
+            gnupg
+            git
+            nixfmt
+            libsecret
+            shellcheck
+            python3
+            yubikey-manager
+          ];
+        };
       };
+      devShells.${darwin}.agent-check = darwinPkgs.mkShell (
+        import ./packages/agent-check.nix {
+          pkgs = darwinPkgs;
+        }
+      );
     };
 }

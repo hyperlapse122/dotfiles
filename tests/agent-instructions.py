@@ -9,34 +9,23 @@ import tempfile
 
 DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
               'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md'}
-# Independent content receipts: negation, repetition, deletion and foreign text
-# all change the complete normative body, including its order. Claude Code gets
-# its conversation language from its own settings, so its render has a receipt
-# of its own. Every harness receives the same T3 render.
-EXPECTED = {
-    'darwin': '4148dccf9299d578a2905cf6add39370f24c088c65d49c98d7276a5a3ae1850b',
-    'darwin-claude': 'bc87d2da0e63f4432b271c9b34e64511d34081ea215f36ff44a410a4a6b2248b',
-    'nixos': '4148dccf9299d578a2905cf6add39370f24c088c65d49c98d7276a5a3ae1850b',
-    'nixos-claude': 'bc87d2da0e63f4432b271c9b34e64511d34081ea215f36ff44a410a4a6b2248b',
-    't3': 'fdac77eac9098f73477bf1d9efd24f87c8cb67b17c5016ca828167445ac53d05',
-}
 
 
 def body(home, harness):
     return (home / DELIVERIES[harness]).read_text()
 
 
-def receipt(text, kind, harness=None):
+def receipt(text, receipts, kind, harness=None):
     variant = f'{kind}-{harness}'
-    key = variant if variant in EXPECTED else kind
-    assert hashlib.sha256(text.encode()).hexdigest() == EXPECTED[key], key
+    key = variant if variant in receipts else kind
+    assert hashlib.sha256(text.encode()).hexdigest() == receipts[key], key
 
 
-def check_receipt(text, kind, harness=None):
-    receipt(text, kind, harness)
+def check_receipt(text, receipts, kind, harness=None):
+    receipt(text, receipts, kind, harness)
     for bad in (text + '\nForeign instructions.\n', 'Do not ' + text, text + text):
         try:
-            receipt(bad, kind, harness)
+            receipt(bad, receipts, kind, harness)
         except AssertionError:
             pass
         else:
@@ -65,7 +54,7 @@ def check_guides(home, native, t3):
         assert retired not in guide, retired
 
 
-def exercise(template, helper, renderer, kind):
+def exercise(template, helper, renderer, kind, receipts):
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         source = root / 'instructions.tmpl'
@@ -82,7 +71,7 @@ def exercise(template, helper, renderer, kind):
         assert not (root / '.gemini').exists(), 'retired Gemini instructions were delivered'
         for harness in DELIVERIES:
             text = body(root, harness)
-            check_receipt(text, kind, harness)
+            check_receipt(text, receipts, kind, harness)
             assert 'T3 delegation' not in text
         source.write_text(template + '\n# Branch probe\n' + ''.join(
             '{{ if .' + harness + ' }}\n' + harness + '-only\n{{ end }}' for harness in DELIVERIES))
@@ -96,14 +85,15 @@ def exercise(template, helper, renderer, kind):
             context.write_text(json.dumps({'t3': True, **{name: name == harness for name in DELIVERIES}}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
             assert 'T3 task guidance' in t3 and 'Writing and language' not in t3
-            check_receipt(t3, 't3', harness)
+            check_receipt(t3, receipts, 't3', harness)
 
 
 def main():
     template = Path(sys.argv[1]).read_text()
     helper, renderer = sys.argv[3:5]
+    receipts = json.loads(Path(sys.argv[5]).read_text())
     for kind in ('nixos', 'darwin'):
-        exercise(template, helper, renderer, kind)
+        exercise(template, helper, renderer, kind, receipts)
     for entry in json.loads(Path(sys.argv[2]).read_text()):
         assert entry['key'] in Path(entry['git']).read_text(), entry['name']
         with tempfile.TemporaryDirectory() as directory:
@@ -119,7 +109,7 @@ def main():
             context.write_text('{"t3": true}')
             t3 = subprocess.check_output([renderer, sys.argv[1], str(context)], text=True)
             for harness in DELIVERIES:
-                receipt(body(home, harness), entry['kind'], harness)
+                receipt(body(home, harness), receipts, entry['kind'], harness)
                 check_guides(home, body(home, harness), t3)
 
 

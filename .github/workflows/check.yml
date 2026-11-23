@@ -78,13 +78,13 @@ jobs:
           trap 'rm -f -- "$policy"' EXIT
           if [[ -z "$REGISTRY_POLICY" ]]; then REGISTRY_POLICY='{}'; fi
           printf '%s\n' "$REGISTRY_POLICY" > "$policy"
-          nix shell .#agent-check -c agent-check --registry-policy "$policy" --range "$BASE" "$HEAD_SHA"
+          nix develop .#agent-check -c ./scripts/agent-check --registry-policy "$policy" --range "$BASE" "$HEAD_SHA"
       - name: Run project checks
         if: "!cancelled() && steps.range.outcome == 'success'"
         env:
           BASE: ${{ steps.range.outputs.base }}
           HEAD_SHA: ${{ steps.range.outputs.head }}
-        run: nix shell .#agent-check -c agent-check --range "$BASE" "$HEAD_SHA"
+        run: nix develop .#agent-check -c ./scripts/agent-check --range "$BASE" "$HEAD_SHA"
 
   markdown-lint:
     needs: changes

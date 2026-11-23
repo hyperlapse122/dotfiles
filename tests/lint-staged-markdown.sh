@@ -328,6 +328,8 @@ mkdir -p "$repo12/.githooks"
 cp "$hook" "$repo12/.githooks/pre-commit"
 mkdir -p "$repo12/scripts"
 cp "$(dirname "$script")/check-changed-files" "$repo12/scripts/"
+cp "$(dirname "$script")/agent-check" "$repo12/scripts/"
+cp "$(dirname "$script")/agent-check-inspect.py" "$repo12/scripts/"
 cp "$script" "$repo12/scripts/lint-staged-markdown"
 cp "$(dirname "$script")/../mise.toml" "$repo12/mise.toml"
 chmod +x "$repo12/.githooks/pre-commit"
@@ -339,6 +341,12 @@ git -C "$repo12" config core.hooksPath .githooks
 wt1="$TEST_TMPDIR/wt1"
 git -C "$repo12" worktree add -q -b wt1-branch "$wt1"
 
+# A competing global helper must not be called by the hook.
+mkdir -p "$TEST_TMPDIR/competing-bin"
+printf '#!/usr/bin/env bash\necho competing-agent-check >&2\nexit 99\n' > "$TEST_TMPDIR/competing-bin/agent-check"
+chmod +x "$TEST_TMPDIR/competing-bin/agent-check"
+export PATH="$TEST_TMPDIR/competing-bin:$PATH"
+
 # Bad commit in linked worktree fails and prints rule
 mkdir -p "$wt1/docs"
 printf "%s" "$bad_md_content" > "$wt1/docs/bad.md"
@@ -348,6 +356,7 @@ printf "%s" "$clean_md_content" > "$wt1/docs/bad.md"
 commit_out=$(git -C "$wt1" commit -m "commit bad" 2>&1) || commit_status=$?
 [[ $commit_status -ne 0 ]] || fail "git commit with bad markdown succeeded"
 [[ $commit_out == *"MD032"* ]] || fail "git commit failure output missing MD032"
+[[ $commit_out != *"competing-agent-check"* ]] || fail "hook invoked competing global agent-check"
 pass "git commit in linked worktree with staged bad markdown fails and prints rule"
 
 # Clean commit in linked worktree succeeds
