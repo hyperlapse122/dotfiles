@@ -67,7 +67,7 @@ The model and effort ladder was retired in commit `0076c3b`. A separate rule sti
 
 ### How This Work Fits Together
 
-This plan retires dotfiles' role selection and the catalogs that supported it. The harnesses continue to provide subagents, including Pi's managed subagent extension. Removing the required `decide` call from CI failure triage is a separate follow-up. [Issue #300](https://github.com/hyperlapse122/dotfiles/issues/300)
+This plan retires dotfiles' role selection and the catalogs that supported it. The harnesses continue to provide subagents, including Pi's managed subagent extension. CI failure triage was handled separately. PR #301 removed its required `decide` call while this change was in review. [Issue #300](https://github.com/hyperlapse122/dotfiles/issues/300) · [PR #301](https://github.com/hyperlapse122/dotfiles/pull/301)
 
 ---
 
@@ -79,7 +79,7 @@ This plan retires dotfiles' role selection and the catalogs that supported it. T
 
 - KTD1. Remove the role-selection section from the shared guide and its trigger from the native template. Use the existing CE and harness delegation rules. Covers R1–R3. (session-settled: user-directed — chosen over retiring only the model ladder: the owner also wants role selection to follow workflow and harness defaults.)
 - KTD2. Remove all three catalogs and release only the harness pins. Drop Codex's source fetch used by its roster extractor. Keep Pi's source pin because its package builds from source. Covers R4–R5. (session-settled: user-directed — chosen over keeping repository-only snapshots: the owner also wants to end their maintenance.)
-- KTD3. Remove the repository-specific review approval procedure from repository, native, and T3 instructions. Preserve CE peer configuration, the T3 isolation exception and its coverage report, and CI triage pending issue #300. Covers R7.
+- KTD3. Remove the repository-specific review approval procedure from repository, native, and T3 instructions. Preserve CE peer configuration, the T3 isolation exception and its coverage report, and the CI triage behavior delivered separately for issue #300. Covers R7.
 
 ---
 

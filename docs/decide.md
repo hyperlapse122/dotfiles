@@ -145,5 +145,3 @@ OpenRouter [documents stream cancellation](https://openrouter.ai/docs/api_refere
 The initial M5 Pro run used 64 GiB of unified memory and the real MLX decision head. A Korean text example returned `rain=0.9767` and selected Seoul; a red image returned `red=0.985` and selected red. The text request took 13.277 seconds including model loading, and the image request took 1.395 seconds. Observed MLX peak memory was 11,072,467,604 bytes, about 10.31 GiB. These examples demonstrate that path, not general Korean accuracy, calibration or performance.
 
 Native CUDA build and target GPU results are reported separately from deterministic adapter tests. The initial Mac evidence does not establish RTX 3060 memory fit or image inference. Hardware evidence and the current-head repository checks belong in the pull request's validation record.
-
-The full operation remains available through `judge`. The shared task guide uses it to choose between plausible next checks during CI triage. [CI triage guidance](../home/h82/agents/instructions/task-guide.md#decide-for-ci-triage)

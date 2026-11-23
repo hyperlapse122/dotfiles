@@ -1,10 +1,8 @@
 # Task guide
 
-## Decide for CI triage
+## CI triage
 
-Read the first relevant CI failure before choosing what to inspect. If the evidence leaves two or more plausible read-only checks and a judgment would change which one you run first, call the `decide` MCP server’s `judge` tool once. Use `choice` with a short description of each candidate and an `insufficient_evidence` option. Summarize the failure and candidate checks without including secrets or private log contents.
-
-If the failure already identifies the next check, run it directly. If the failing step or error is missing, retrieve it first. Treat the answer as a lead and verify it against the logs, code, or configuration. If the tool is unavailable, fails, or gives no usable lead, continue the investigation. Follow the existing verification and approval rules.
+Read the first relevant CI failure. If the failing step or error is missing, retrieve it first. Use the failure evidence to choose the next read-only check, even when several checks are plausible. Verify your conclusions against the logs, code, or configuration. Follow the existing verification and approval rules.
 
 ## Issues in pull and merge requests
 

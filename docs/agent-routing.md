@@ -4,7 +4,7 @@ The ordinary user instruction files share scope and verification, language, and 
 
 The shared instructions identify `agent-check` as the project's check when the project defines it. The Home Manager helper runs that task for manual checks, Git hooks, and CI. [Project setup](agent-check.md)
 
-The shared instructions call for one `decide` judgment during CI triage when the failure evidence leaves multiple plausible read-only checks and the answer would change which check runs first. The agent verifies the suggested lead and continues the investigation if the tool yields no usable answer. [Decide MCP tool](decide.md#use-the-mcp-tool)
+During CI triage, the agent reads the first relevant failure, chooses the next read-only check from that evidence, and verifies its conclusions against logs, code, or configuration. [CI triage guide](../home/h82/agents/instructions/task-guide.md#ci-triage)
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
