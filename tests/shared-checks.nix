@@ -5,15 +5,15 @@ let
 in
 {
   agent-check =
-    pkgs.runCommand "agent-check-tests"
-      {
-        nativeBuildInputs = import ../packages/agent-check.nix { inherit pkgs; };
-      }
+    pkgs.runCommand "agent-check-tests" (import ../packages/agent-check.nix { inherit pkgs; })
       ''
         export HOME="$TMPDIR/home"
-        mkdir -p "$HOME"
-        cp -r ${../scripts} scripts
-        chmod -R u+w scripts
+        mkdir -p "$HOME" scripts
+        cp ${../scripts/agent-check} scripts/agent-check
+        cp ${../scripts/agent-check-inspect.py} scripts/agent-check-inspect.py
+        cp ${../scripts/check-changed-files} scripts/check-changed-files
+        cp ${../scripts/lint-staged-markdown} scripts/lint-staged-markdown
+        chmod u+w scripts/*
         patchShebangs scripts/agent-check
         python3 ${./agent-check.py} "$PWD/scripts/agent-check"
         touch "$out"

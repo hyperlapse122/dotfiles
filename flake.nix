@@ -139,9 +139,7 @@
 
       formatter.${linux} = linuxPkgs.nixfmt-tree;
       devShells.${linux} = {
-        agent-check = linuxPkgs.mkShell {
-          packages = import ./packages/agent-check.nix { pkgs = linuxPkgs; };
-        };
+        agent-check = linuxPkgs.mkShell (import ./packages/agent-check.nix { pkgs = linuxPkgs; });
         default = linuxPkgs.mkShell {
           packages = with linuxPkgs; [
             age
@@ -156,8 +154,10 @@
           ];
         };
       };
-      devShells.${darwin}.agent-check = darwinPkgs.mkShell {
-        packages = import ./packages/agent-check.nix { pkgs = darwinPkgs; };
-      };
+      devShells.${darwin}.agent-check = darwinPkgs.mkShell (
+        import ./packages/agent-check.nix {
+          pkgs = darwinPkgs;
+        }
+      );
     };
 }

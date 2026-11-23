@@ -511,6 +511,9 @@ def inspect_registry(args):
     policy, tokens = registry_policy(args.policy, hint)
     restrict_path(hint)
     root = Path(os.fsdecode(git("rev-parse", "--show-toplevel").removesuffix(b"\n"))).resolve()
+    if root != Path(__file__).resolve().parent.parent:
+        print("agent-check: run from this dotfiles checkout", file=sys.stderr)
+        return 1
     if Path(args.policy).resolve().is_relative_to(root):
         raise ValueError("registry policy must be outside the checkout")
     restrict_path(root)

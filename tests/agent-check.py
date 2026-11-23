@@ -201,19 +201,28 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
     assert not calls.exists()
     run("git", "commit", "-qm", "add dependencies", cwd=repo)
     assert run("git", "status", "--porcelain", cwd=repo) == ""
-    # Policy mode must not evaluate task definitions or run a project executable.
-    (repo / "Makefile").write_text("agent-check:\n\t@exit 97\n")
-    (repo / "mise.toml").write_text('[tasks.agent-check]\nrun = "exit 98"\n')
-    run("git", "add", "Makefile", "mise.toml", cwd=repo)
+    # Registry mode must work even when the project's offline checks fail.
+    project_check = repo / "scripts/check-changed-files"
+    project_check.write_text("#!/bin/sh\nexit 97\n")
+    run("git", "add", "scripts/check-changed-files", cwd=repo)
     run("git", "commit", "--amend", "--no-edit", "-q", cwd=repo)
     local_bin = repo / "node_modules/.bin"
     local_bin.mkdir(parents=True)
-    for name in ("curl", "mise"):
-        shadow = local_bin / name
-        shadow.write_text(f"#!{shutil.which('bash')}\ntouch '{root / 'project-tool-ran'}'\nexit 99\n")
-        shadow.chmod(0o755)
+    for name in ("git", "python3", "curl"):
+        shutil.copy2(shutil.which("false"), local_bin / name)
     (repo / ".git/info/exclude").write_text("/node_modules/\n")
     env["PATH"] = f"{local_bin}:{env['PATH']}"
+    unpinned = env.copy()
+    unpinned.pop("AGENT_CHECK_PYTHON")
+    unpinned.pop("TEST_TOKEN")
+    output = run(helper, "--registry-policy", policy_file, cwd=repo, env=unpinned, expected=1)
+    assert "nix develop .#agent-check" in output and not calls.exists(), output
+    other = root / "unrelated"
+    other.mkdir()
+    run("git", "init", "-q", cwd=other)
+    output = run(helper, "--registry-policy", policy_file, cwd=other, expected=1,
+                 env=env | {"PATH": os.environ["PATH"]})
+    assert "run from this dotfiles checkout" in output and not calls.exists(), output
     (repo / "package.json").write_text('{"dependencies":{"dirty-only":"1"}}')
     output = run(helper, "--registry-policy", policy_file, "--range", "HEAD^", "HEAD",
                  cwd=repo, env=env)
@@ -233,7 +242,6 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
         "https://proxy.golang.org/example.com/!public/@v/v1.2.3.info",
     }
     assert "fake-test-token" not in output and "fixture-password" not in output, output
-    assert not (root / "project-tool-ran").exists()
 
     policy["public"]["npm"] += ["missing-pkg", "unavailable-pkg", "@team/missing-private"]
     policy_file.write_text(json.dumps(policy))
@@ -252,8 +260,7 @@ sys.stdout.write(json.dumps(body) + "\\n" + str(status))
     output = run(helper, "--registry-policy", repo / "policy.json", cwd=repo, env=env, expected=1)
     assert "outside the checkout" in output and calls.read_bytes() == count, output
 
-    (repo / "Makefile").unlink()
-    (repo / "mise.toml").unlink()
+    project_check.unlink()
     output = run(helper, "--registry-policy", policy_file, cwd=repo, env=env, expected=1)
     assert "missing-pkg: missing" in output, output
 

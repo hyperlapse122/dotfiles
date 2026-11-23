@@ -28,7 +28,7 @@ nix develop .#agent-check -c ./scripts/agent-check --range "$base" "$head"
 
 ## Approve registry lookups
 
-The registry step checks dependencies separately from the offline project checks. Keep its policy outside the checkout under the control of the person or system authorizing the lookups. Pass the absolute path to the policy before the snapshot selection.
+The registry step requires the development shell, which supplies the pinned Python interpreter. Keep the policy outside the checkout under the control of the person or system authorizing the lookups. Pass its absolute path before the snapshot selection.
 
 ```bash
 nix develop .#agent-check -c ./scripts/agent-check --registry-policy /absolute/path/to/registries.json --range "$base" "$head"
