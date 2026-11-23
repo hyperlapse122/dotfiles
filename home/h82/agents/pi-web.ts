@@ -73,8 +73,8 @@ async function request(endpoint, body, signal, requestedUrls) {
 export default function (pi) {
   pi.registerTool({
     name: "web_search", label: "Web search",
-    description: "Search the public web with Exa. Returns titles, source URLs and extracts for citations.",
-    promptSnippet: "Search the web and cite returned source URLs.",
+    description: "Search the public web via Exa; returns titles, URLs and extracts.",
+    promptSnippet: "Search the web; cite source URLs.",
     parameters: Type.Object({ query: Type.String({ minLength: 1 }),
       count: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })) }),
     async execute(_id, { query, count = 5 }, signal) {
@@ -85,8 +85,8 @@ export default function (pi) {
   });
   pi.registerTool({
     name: "web_fetch", label: "Web fetch",
-    description: "Read one to five public HTTP(S) pages through Exa. Returns content with source URLs and per-URL failures.",
-    promptSnippet: "Read public web pages and cite their source URLs.",
+    description: "Fetch 1–5 public HTTP(S) URLs via Exa; returns content and per-URL failures.",
+    promptSnippet: "Fetch pages; cite source URLs.",
     parameters: Type.Object({ urls: Type.Array(Type.String(), { minItems: 1, maxItems: 5 }) }),
     async execute(_id, { urls }, signal) {
       if (!Array.isArray(urls) || urls.length < 1 || urls.length > 5 || !urls.every(publicUrl))

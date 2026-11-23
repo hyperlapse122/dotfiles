@@ -41,6 +41,7 @@ with tempfile.TemporaryDirectory() as directory:
         'packages': [unrelated, 'npm:pi-subagents', {'source': 'npm:pi-subagents@0.80.0'},
                      str(legacy), str(installed / 'pi-subagents')],
         'extensions': [user_extension],
+        'compaction': {'reserveTokens': 20000, 'modelOverrides': {'other/model': {'reserveTokens': 123}}},
     }))
     for _ in range(2):
         subprocess.run([sys.executable, *call], check=True)
@@ -55,6 +56,16 @@ with tempfile.TemporaryDirectory() as directory:
               for provider in ('openai', 'anthropic')
               for row in json.loads((agents / f'{provider}-models.json').read_text())['models']]
     selected = settings['enabledModels']
+    assert settings['defaultProvider'] == 'synthetic'
+    assert 'synthetic/' + settings['defaultModel'] in selected or 'synthetic/*' in selected
+    local = json.loads((agent / 'models.json').read_text())['providers'].get('ollama')
+    if local:
+        model = local['models'][0]
+        listed.append('ollama/' + model['id'])
+        assert settings['compaction']['modelOverrides']['ollama/' + model['id']] == {
+            'reserveTokens': 8192, 'keepRecentTokens': 8192}
+    assert settings['compaction']['reserveTokens'] == 20000
+    assert settings['compaction']['modelOverrides']['other/model'] == {'reserveTokens': 123}
     assert sorted(model for model in selected if not model.startswith('synthetic/')) == sorted(listed), selected
 
     subprocess.run([sys.executable, *[arg for arg in call if arg != '--quality']], check=True)

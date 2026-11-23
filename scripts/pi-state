@@ -18,6 +18,14 @@ def read(path):
     return value
 
 
+def object_setting(parent, key):
+    if parent.get(key) is None:
+        parent[key] = {}
+    if not isinstance(parent[key], dict):
+        raise ValueError(f'Pi setting {key} must be an object')
+    return parent[key]
+
+
 def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, temporary = tempfile.mkstemp(dir=path.parent)
@@ -62,6 +70,7 @@ def main():
     parser.add_argument('--credential', action='append', default=[], metavar='PROVIDER=FILE')
     parser.add_argument('--hide-model', action='append', default=[])
     parser.add_argument('--model', action='append', default=[], metavar='PROVIDER/ID')
+    parser.add_argument('--local-model')
     args = parser.parse_args()
     agent = args.agent
     if not args.auth_only:
@@ -103,7 +112,11 @@ def main():
         value['defaultProjectTrust'] = 'ask'
         value['defaultProvider'] = 'synthetic'
         synthetic = [f'synthetic/{model}' for model in visible_ids] if hidden_models else ['synthetic/*']
-        value['enabledModels'] = synthetic + args.model
+        value['enabledModels'] = synthetic + args.model + ([f'ollama/{args.local_model}'] if args.local_model else [])
+        if args.local_model:
+            compaction = object_setting(value, 'compaction')
+            overrides = object_setting(compaction, 'modelOverrides')
+            overrides[f'ollama/{args.local_model}'] = {'reserveTokens': 8192, 'keepRecentTokens': 8192}
         write(agent / 'settings.json', value)
     updates = {}
     if args.key:

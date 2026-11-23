@@ -90,7 +90,6 @@ let
     "untangle-codebase"
     "prune-tests"
     "design-lenses"
-    "ux-flows"
   ];
 
   roots = [

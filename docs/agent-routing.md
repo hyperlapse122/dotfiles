@@ -1,6 +1,6 @@
 # Agent routing
 
-The ordinary user instruction files share scope and verification, issue linking in pull and merge requests, web development, writing, language, and temporary-resource rules. They set no model or effort. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
+The ordinary user instruction files share scope and verification, writing, language, and action triggers for the installed task guide. They set no model or effort. Claude Code, Codex, Pi, and OpenCode each receive their own render; OpenCode's is the shared base render with no branch of its own.
 
 The shared instructions identify `agent-check` as the project's check when the project defines it. The Home Manager helper runs that task for manual checks, Git hooks, and CI. [Project setup](agent-check.md)
 
@@ -8,9 +8,9 @@ The shared instructions call for one `decide` judgment during CI triage when the
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
-For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive this common rule through their normal baseline instruction paths.
+For HTML, CSS, web UI, and browser-side JavaScript work, including web platform code inside frameworks, the shared instructions require `modern-web-guidance` first alongside other applicable design and framework skills. The upstream skill defines its trigger and exclusion rules. Nix pins the unchanged skill files; its `npx modern-web-guidance@latest` commands select the npm tool independently. CLI and T3 sessions receive a trigger for the installed task guide through their normal baseline instruction paths.
 
-Every UI edit applies the `design-lenses` craft floor. Screen flows and states use `ux-flows`, and interface copy uses `ux-writing`. For new screens, `frontend-design` sets the visual direction and the other skills work within it.
+Every UI edit applies the `design-lenses` craft floor. Flows and states, including CLI prompts and notifications, use `design-lenses`, and interface copy uses `ux-writing`. For new screens, `frontend-design` sets the visual direction and the other skills work within it.
 
 Expo and React Native work uses `mobile-lenses`. Its single discovery entry points to seven pinned references. Each reference keeps its upstream files and license information in its own directory. When an upstream guide names another skill, use the router's table to find that guide.
 
@@ -65,98 +65,9 @@ These checks used the pinned harnesses, staged policy, synthetic Markdown fixtur
 
 Each recorded judgment included `insufficient_evidence`. Claude also launched a required `Explore` role and a sole eligible `Explore` role without judgment. When the session denied the MCP call, Claude used its default selection path and completed the task.
 
-## T3 delegation
+## T3 task guidance
 
-The shared template renders these rules separately for T3 launch-time attachment, and every harness receives the same T3 render. Ordinary instruction files do not include them.
-
-Follow T3 Code's orchestration guidance when choosing a delegation tool. Route each child by the model class of the model it will run. When the route is the current provider instance, use the harness's native subagent tool only if it can carry the required model, settings, and access; otherwise use `delegate_task` with `target.providerInstanceId` set to the current instance. Use `delegate_task` for another instance, a worktree, background work, or a task that requests it.
-For CE cross-model review, implementation, and reasoning elevation, use T3 delegation in place of explicit acpx, provider CLI, and launcher-script calls. A CE call described as a shell-out is still covered.
-
-Preserve CE's decisions about whether to delegate, provider selection, role, scope, access restrictions, output, and result validation. The cross-model review exception below applies to access restrictions only. For T3 delegation, choose the child's route as this section says, its model and effort as the T3 CE model selection section says, and use T3 capability discovery to resolve the target and supported `target.options`. Give each child a self-contained brief with the goal, completion standard, required context, and accessible workspace or artifact paths. Include delegation guidance for children that need it.
-
-For the current environment, call `orchestrator_capabilities({})` for the short list or `orchestrator_capabilities({"search":"terra"})` to find a model by name. Omit unused fields; an empty string is a value, not an omission. To query another host, pass its `environmentId` from `t3_environment_links`, not a guessed name such as `local` or `self`.
-
-| Model class | Native route | Fallback order |
-| --- | --- | --- |
-| Claude | Claude Code (`claudeAgent`) | current instance, Pi, OpenCode |
-| GPT | Codex (`codex`) | current instance, Pi, OpenCode |
-| Synthetic | the current instance when it is Pi or OpenCode, otherwise Pi | current instance, Pi, OpenCode |
-
-Before dispatching to a class's native route, run `agent-usage --json` on the target host. Use the report for the subscription that route actually uses. Skip the model call only if `status` is `ok` and an inference window that applies to the whole account or the requested model has `remainingPercent` equal to zero. Ignore a window whose reset or regeneration time has passed. A low but nonzero balance, an auxiliary resource limit, a stale or unknown reading, or a failed lookup is not proof of exhaustion. If the account or model scope is uncertain, try the native route.
-
-Run a child on its class's native route unless the preflight confirms exhaustion or other observed evidence rules it out: the child run ended with a usage, rate, or quota limit or an authentication failure; `orchestrator_capabilities` reports the instance disabled or unable to run child tasks; or the instance's catalog lists no model of the class. A T3 wait timeout, a slow child, or a review finding is not that evidence. Then run the child on the first instance in the fallback order that offers the class and whose route has not already failed for this child, choosing its model from the same ladder row. Report each fallback with the failed route, its evidence, and the route used. Never retry a route that CE's rules forbid retrying, such as one that reported the same quota failure twice in this session.
-
-CE cross-model review peers (`ce-doc-review`, `ce-code-review`, and similar skills) require an isolated process: an empty workspace, read-only controls, restricted tool access, and no project context or MCP servers. `delegate_task` cannot enforce that isolation, and the owner accepts the risk. Never skip, downgrade, or declare a peer unavailable because the isolation cannot be provided. Run the peer through `delegate_task` with normal workspace and tool access, a self-contained brief that carries the reviewed material, and an instruction not to modify files. State in the review's coverage that isolation was not enforced. This waives only the isolation: the disclosure of what leaves the machine, an explicit user prohibition on external review, `cross_model_review_mode: off`, and CE's allowlist and route choice still apply.
-
-Cross-model review peers follow the same routes: the peer family's native route first, then the fallback order. An explicit CE target such as `cross_model_peer: codex` or `cross_model_peer: claude` keeps the route CE defines; a family-only request such as "use a GPT model" selects the class. On Pi or OpenCode, pass an exact `provider/model` ID from that instance's catalog. Resolve a model alias only if it names an unambiguous eligible catalog entry; never substitute a different model for a pin. Apply the shared OpenCode recipient rule before dispatching to OpenCode. If no eligible route can run the peer, use CE's coverage and recovery rules.
-
-Establish the host's serving family before automatic peer dispatch from runtime records, not from the selected model, the catalog, or the model's own claim. On Claude Code and Codex, the harness is the family. On Pi, use the records CE's cross-model worker reads: the provider and model of the latest assistant message in `PI_SESSION_FILE`, otherwise `PI_PROVIDER` and `PI_MODEL`. As CE does, treat the family as unattested when another harness's environment marker is set beside Pi's, because the session record may then belong to an outer or inner harness. On OpenCode, run `opencode-serving-model --family`, which reads the session's latest completed assistant message from OpenCode's own record and maps only the direct `anthropic` and `openai` providers to `claude` and `codex`. For a peer, use T3's executed model when it reports one. Otherwise find the native session or message ID that `t3_thread_read` shows for the child run, then read that session's Pi file under `~/.pi/agent/sessions/` or run `opencode-serving-model --session <id>` or `--message <id>`. Missing or ambiguous host evidence makes the automatic route unavailable, and no other harness is tried for that reason. Missing or ambiguous peer evidence leaves independence unverified and gives no agreement promotion. Report an observed mismatch under CE's existing rules.
-
-Run `ce-code-review` and `ce-simplify-code` in your own context, and delegate only the reviewers and other leaves those skills dispatch; never hand either skill whole to a child. In the brief of a child that runs verification, tell it to wait for a slow command to finish and never to interrupt it. Tell every child that evidence this machine cannot produce, such as a Darwin build on Linux, is recorded as deferred to CI, never as passed, and does not make its return incomplete.
-
-For tasks started through T3, use its lifecycle in place of CE's process runners, polling, cancellation, and transport receipts. Do not run the legacy transport alongside a T3 task. Do not fabricate controller receipts or treat task completion as proof of CE validation or serving-model identity. The scope, integration, and verification checks a CE skill prescribes still apply under T3 transport; if their contract cannot be satisfied for a reason other than the waived isolation, use CE's existing unavailable-route handling before starting incompatible transport machinery.
-
-Discover eligible tools for the route the task needs, including deferred tools. Follow CE's unavailable-route handling when the route is unavailable or fails. Keep CE's retry, recovery, fallback, and reporting behavior. A T3 wait timeout does not mean the child stopped. Follow T3's lifecycle and CE's recovery prerequisites before replacing work. Each `delegate_task` child is a separate T3 thread.
-
-`opencode-serving-model` is installed with OpenCode from `scripts/opencode-serving-model`. It opens OpenCode's database read-only. Pi needs no helper because CE already reads its session records and environment.
-
-## T3 CE model selection
-
-When a CE skill uses `delegate_task`, choose the child's model from the ladder row of the model class it will run, whichever instance serves it. Each rung names a model family; use the newest listed model of that family in the serving instance's catalog from T3 capability discovery. A family named without `Flash` excludes Flash models, and a family named with `Pro` includes only Pro models.
-
-| Model class | Orchestrator | Top child rung | Middle rung | Bottom rung |
-| --- | --- | --- | --- | --- |
-| Claude | Fable | Opus | Sonnet | Haiku |
-| GPT | astra | sol | terra | luna |
-| Synthetic | Kimi | Kimi Pro | GLM | GLM Flash |
-
-- Top child rung: reviewers that CE assigns to the session or parent model, such as `correctness-reviewer`, `security-reviewer`, and `adversarial-reviewer`, and CE's cross-model review peers.
-- Middle rung: implementation workers, CE's mid-tier and generation-tier children, and any CE child whose skill names no tier.
-- Bottom rung: CE's extraction-tier and cheapest-capable children, such as grounding scouts.
-
-Where a CE skill says to inherit the session or parent model, or to omit the model override because model names are unknown, use the ladder instead. A child never runs above the column of the model that delegates it: a role placed higher runs on the delegating model, or on another class's model in that same column. A child that delegates further applies these rules with its own model as the limit.
-
-Set no effort for a ladder-selected Claude or Synthetic child, so the serving harness's default applies. Give a GPT child `xhigh` when it is a terra child or a middle-rung implementation worker and `high` otherwise, passed in `target.options` as the serving harness's option: `reasoningEffort` on Codex, `thinking` on Pi, and `variant` on OpenCode. If that harness lists no matching level for the model, leave the effort unset. An effort that a CE skill suggests by default is not a named effort.
-
-A model or effort that the user's prompt or CE configuration names for a child wins over this section; pass a named effort in `target.options`. CE configuration includes `cross_model_model`, `cross_model_effort`, `work_engine_preferences`, `work_engine_effort`, `plan_model`, and `brainstorm_model`.
-
-If the serving instance's catalog lists no model for a rung, use the next lower rung of the same class. If none is listed, use the next higher rung of that class within the limit above, and only then the delegating model. Name the substitution in your report. Models outside these classes and delegations outside CE skills keep their current model selection.
-
-### Synthetic ladder evidence
-
-On 2026-11-16 the owner retuned the Synthetic row against the Artificial Analysis Intelligence Index v5.0.1 chart dated 15 Nov '26, which covered the models this machine can reach. No new local benchmark ran for this change.
-
-| Rung | Before | After | AA score after (before) | Local timing |
-| --- | --- | --- | --- | --- |
-| Synthetic top | GLM-5.3 | Kimi K3.1 Pro | 46 (32 at max) | Not measured; Kimi K3 high took 10-14 min as a review peer on 2026-10-21 |
-| Synthetic middle | GLM-5.3 Flash | GLM-5.3 | 32 at max (28) | Not measured at Pi's default; 24-25 min at max and 20.5 min at high as a review peer on 2026-10-21 |
-| Synthetic bottom | DeepSeek V4.1 Flash 1017 | GLM-5.3 Flash | 28 (29 at high) | 10-19 min at high as a review peer on 2026-10-21 (DeepSeek: 48 min at max, 101 min at high) |
-
-Synthetic children keep effort unset on every harness: Pi lists `thinking` levels only up to high, so the chart's max scores are upper bounds, not the configured setting. The Synthetic middle rung trades GLM-5.3 Flash's speed for GLM-5.3's higher score, and the bottom rung drops DeepSeek, the slowest Synthetic model measured.
-
-## T3 PR and MR babysitting
-
-When `ce-babysit-pr` runs in T3 Code, directly or through another skill, use `watch_pull_request` and `unwatch_pull_request` for its watch lifecycle. This replaces `pr-snapshot watch`, CLI `--watch` commands, polling loops, background detectors, and scheduled wakeups. Keep `gh` for GitHub and `glab` for GitLab reads and authorized mutations.
-
-Handle existing feedback and failures before the first wait, and refresh the target before waiting again so work arriving during a tick is handled. Arm the T3 watch with the full PR or MR URL and end the turn. It stays active across wakes and pushes; resume the skill's tick on fresh state without re-arming unless T3 reports that the watch stopped. Call `unwatch_pull_request` at a true stop, when changing the watched target, or before handing the work back to the user.
-
-Resolve the forge from the target URL or repository remote. Apply the babysit workflow to GitHub PRs and GitLab MRs; for GitLab, replace the GitHub-only entry gates in `ce-babysit-pr` and its delegated skills with the corresponding GitLab operations. Use `glab mr` and `glab api` for state, logs, replies, discussion resolution, and authorized changes.
-
-For GitLab, replace GitHub-only snapshot and feedback helpers with fresh reads of the head SHA, discussions and notes with their revisions, pipelines and jobs, approvals, mergeability, and base and branch state. Persist feedback IDs and source revisions, head-scoped CI marks and action claims, typed feedback decisions, and residuals across T3 wakes. Pass the relevant state and this forge substitution to delegated feedback and CI work.
-
-The watcher supplies wakeups; the skill still owns feedback-before-CI ordering, stale-head handling, action claims, readiness, budgets, and mutation authority. Preserve those rules with forge-equivalent evidence and operations, including positively confirmed stack management where required. Report a required evidence or operation gap as a blocker rather than treating it as satisfied or dropping the rule.
-
-## T3 multi-PR threads
-
-T3 Code auto-settles a thread once all of its linked pull requests have merged, which can happen between one merge and the next pull request of a multi-PR plan. When the plan for a task has more than one pull or merge request, pin the thread with `t3_thread_organize` (`action: pin`) when you create the first one. Auto-settle skips pinned threads; settling or snoozing does not keep the thread active. After the last planned pull or merge request merges, unpin the thread (`action: unpin`), but only if you pinned it. T3 Code does not report whether a thread is already pinned, so leave it pinned when the user says they pinned it. When you hand the work back while planned pull or merge requests remain, leave the thread pinned and say so in your report.
-
-## T3 visual options
-
-When a skill such as `ce-brainstorm` or `ce-prototype` presents visual options, create wireframes directly without asking whether to use text or a visual. This standing preference overrides a skill's per-decision text-versus-visual opt-in.
-
-Write self-contained HTML and use T3 Code's `html_preview` followed by `html_render` to show the options inline in the current thread. Use this display path instead of the skill's local display server for these comparisons. After showing the options, collect the user's choice or revisions through the normal question tool or chat.
-
-When a prototype question depends on visual finish or hands-on interaction, preserve the fidelity and interaction needed to answer it.
+The authoritative [T3 guide](../home/h82/agents/instructions/t3-guide.md) covers delegation, CE model selection, PR and MR watching, multi-PR threads, and visual options. Home Manager installs it at `~/.local/share/nix-config/agent-instructions/t3-guide.md` for use outside this checkout. The [task guide](../home/h82/agents/instructions/task-guide.md) covers personal procedures and is installed beside it.
 
 ## Native T3 launches
 
@@ -172,7 +83,7 @@ Activation removes the retired Grok Build launch configuration and disables the 
 
 Activation disables the former managed Antigravity ACP provider and removes its launch override on upgrade. Saved credentials and conversations stay on disk.
 
-T3 cannot enforce a read-only delegate. A read-only brief or worktree isolation does not supply that guarantee; CE workflows requiring enforced read-only access use their existing unavailable-route handling.
+T3 cannot enforce a read-only delegate. The T3 guide describes the owner's exception for CE cross-model review and its disclosure requirements.
 
 Close T3 before applying and relaunch it afterward. Repository checks execute the rendered activation and inspect launch arguments and instruction files. These checks establish activation output; they do not establish signed-in provider behavior, model compliance, or the T3 desktop experience on either host.
 

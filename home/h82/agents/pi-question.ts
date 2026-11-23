@@ -3,8 +3,8 @@ import { Type } from "typebox";
 export default function (pi) {
   pi.registerTool({
     name: "question", label: "Question",
-    description: "Ask the user one question, with optional choices or a typed answer. Cancellation and unavailable UI are not answers.",
-    promptSnippet: "Ask the user a question through a native dialog.",
+    description: "Ask one question with optional choices or typed input. Cancellation and unavailable UI are not answers.",
+    promptSnippet: "Ask a question in a native dialog.",
     executionMode: "sequential",
     parameters: Type.Object({ question: Type.String({ minLength: 1 }),
       options: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 10 })) }),

@@ -14,11 +14,11 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # its conversation language from its own settings, so its render has a receipt
 # of its own. Every harness receives the same T3 render.
 EXPECTED = {
-    'darwin': 'bd0b168d0ae01351927f31453c0272a61cd099363c3bae38ff717b15b3ddccde',
-    'darwin-claude': '0b1de0fd13d9a1c4fe247eb18b8edb617abaf0aa577bbe57531572b33135be15',
-    'nixos': 'fad1b116559b04972cc7acc32d2039ff80c8756ff07ee41ac3d92b47ebf8d516',
-    'nixos-claude': 'aab6b42398a18efab3fc02621ea9fff8f13e851ec7e92f05804be37df02e5112',
-    't3': 'bbf932cf77a01a4da3649661e5f8e99658eb897a4625bb6f27cfdd4c32ddaf3b',
+    'darwin': '296f175fc5a3aaa4fc0fac6f51dc0253095a3431ddfb1f12af4901fc24bad8b6',
+    'darwin-claude': '7ff57613d415c7f44fa19e048a6fa528e07c6435cc39f48b7bd59ffb6198b6b1',
+    'nixos': '296f175fc5a3aaa4fc0fac6f51dc0253095a3431ddfb1f12af4901fc24bad8b6',
+    'nixos-claude': '7ff57613d415c7f44fa19e048a6fa528e07c6435cc39f48b7bd59ffb6198b6b1',
+    't3': '2a743d9ae649a1ef5924fd74ace8a2768833072c1cdbed0de1f2957ffc4ae259',
 }
 
 
@@ -41,6 +41,17 @@ def check_receipt(text, kind, harness=None):
             pass
         else:
             raise AssertionError('policy mutation escaped validation')
+
+
+def check_guides(home, native, t3):
+    guides = home / '.local/share/nix-config/agent-instructions'
+    for text, name, passage in (
+        (native, 'task-guide.md', 'Read the first relevant CI failure'),
+        (t3, 't3-guide.md', 'Arm the T3 watch with the full PR or MR URL'),
+    ):
+        assert f'~/.local/share/nix-config/agent-instructions/{name}' in text
+        assert passage not in text
+        assert passage in (guides / name).read_text()
 
 
 def exercise(template, helper, renderer, kind):
@@ -73,7 +84,7 @@ def exercise(template, helper, renderer, kind):
         for harness in (None, 'claude', 'codex', 'pi', 'opencode'):
             context.write_text(json.dumps({'t3': True, **{name: name == harness for name in DELIVERIES}}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
-            assert 'T3 delegation' in t3 and 'Writing skills' not in t3
+            assert 'T3 task guidance' in t3 and 'Writing and language' not in t3
             check_receipt(t3, 't3', harness)
 
 
@@ -90,8 +101,15 @@ def main():
             env = dict(os.environ, HOME=str(home))
             env.pop('DRY_RUN', None)
             subprocess.run(['bash', '-eu', '-c', script], env=env, check=True)
+            guides = home / '.local/share/nix-config/agent-instructions'
+            guides.parent.mkdir(parents=True, exist_ok=True)
+            guides.symlink_to(entry['guides'], target_is_directory=True)
+            context = home / 't3.json'
+            context.write_text('{"t3": true}')
+            t3 = subprocess.check_output([renderer, sys.argv[1], str(context)], text=True)
             for harness in DELIVERIES:
                 receipt(body(home, harness), entry['kind'], harness)
+                check_guides(home, body(home, harness), t3)
 
 
 if __name__ == '__main__':

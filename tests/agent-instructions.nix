@@ -58,6 +58,8 @@ let
     in
     lib.concatMapStrings (target: homeFile name user target 0) (deliveryPaths ++ retiredPaths)
     + homeFile name user ".local/share/nix-config/refresh-agent-instructions" 1
+    + homeFile name user ".local/share/nix-config/agent-instructions/task-guide.md" 1
+    + homeFile name user ".local/share/nix-config/agent-instructions/t3-guide.md" 1
     + lib.optionalString ((user.my.user.gpgKey or null) == null) ''
       echo ${esc "my.user.gpgKey is unset on ${name}"} >&2
       failed=1
@@ -77,6 +79,7 @@ let
         kind = entry.user.my.kind;
         activation = entry.user.home.activation.agentInstructions.data or "";
         git = "${entry.user.home-files}/.config/git/config";
+        guides = "${entry.user.home-files}/.local/share/nix-config/agent-instructions";
       }) presentEntries
     )
   );

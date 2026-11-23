@@ -1,6 +1,6 @@
 ---
 name: mobile-lenses
-description: Build, debug, upgrade, or tune Expo and React Native apps. Covers native screens and controls (@expo/ui), Expo Router navigation, animations and gestures, network requests and caching in Expo, Expo SDK migrations, and React Native performance. Use for mobile app code, including Expo Router routes that also render on web.
+description: Build, debug, or tune Expo and React Native apps, including Expo Router web routes, native UI, navigation, animation, networking, and migrations.
 ---
 
 # Expo and React Native

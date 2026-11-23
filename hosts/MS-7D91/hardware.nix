@@ -22,6 +22,12 @@
   services.fstrim.enable = true;
   zramSwap.enable = false;
 
+  # The desktop's RTX 3060 needs only the Ampere SM 8.6 kernels.
+  nixpkgs.overlays = [
+    (_: prev: {
+      ollama-cuda = prev.ollama-cuda.override { cudaArches = [ "sm_86" ]; };
+    })
+  ];
   services.xserver.videoDrivers = [ "nvidia" ];
   hardware.nvidia = {
     modesetting.enable = true;

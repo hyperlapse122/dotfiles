@@ -1,18 +1,19 @@
 ---
 name: design-lenses
-description: "Refining, hardening, or reviewing an interface people see or operate: layout, typography, color, motion, responsive and native adaptation, copy clarity, empty and error states, onboarding, accessibility, and performance. Read the matching lens reference before the edit or review."
+description: "Design or review interfaces and user flows, including screens, CLIs, prompts, and notifications. Read the relevant reference."
 ---
 
 # Design Lenses
 
-Each file under `references/` is one lens from impeccable (Apache-2.0, see
-`LICENSE` and `NOTICE.md`), installed unchanged. Read the lens that matches the
+The UX flow guide is maintained here. The other references come from impeccable
+(Apache-2.0, see `LICENSE` and `NOTICE.md`) and are installed unchanged. Read the lens that matches the
 work, apply it, then check the result against it before calling the work done.
 
 ## Pick the lens
 
 | Work | Read |
 | --- | --- |
+| User flows, navigation, and states for screens, CLIs, prompts, or notifications | `references/ux-flows.md` |
 | Any UI edit, however small: the quality floor and absolute bans | `references/craft-floor.md` |
 | Surface whose visitor is doing a task (app UI, dashboard, settings, tools) | `references/mode-operate.md`, `references/operate.md` |
 | Surface that must persuade (landing, pricing, marketing) | `references/mode-persuade.md` |
@@ -74,4 +75,4 @@ the project's own design system, tokens, and neighboring screens instead.
 
 - The project's design system, components, and tokens win over every lens.
 - Interface copy follows `ux-writing` over `clarify.md`; flows and state
-  inventories follow `ux-flows`; CLI output follows `cli-design`.
+  inventories follow `references/ux-flows.md`; CLI output follows `cli-design`.

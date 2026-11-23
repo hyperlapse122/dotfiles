@@ -4,7 +4,7 @@
     import ./tests/pinned-skills.nix { inherit pkgs self; }
 
   Asserts that the published skills, the local design-lenses
-  wrapper with impeccable's lens references, mobile-lenses, and ux-flows reach
+  wrapper with impeccable's lens references and ux-flows, and mobile-lenses reach
   every harness for user `h82` on every Home Manager user environment this
   flake builds (`userEntries` from tests/lib/configurations.nix), unchanged:
 
@@ -31,7 +31,6 @@
     no impeccable workflow reference ships.
   - mobile-lenses exposes only its wrapper SKILL.md and preserves every upstream
     file and license under references/, with each upstream entry file renamed.
-  - ux-flows matches its in-tree source byte for byte.
 
   The pin assertions compare `flake.lock`, which Nix writes, with the registry
   in home/h82/agents/pinned-skills-pin.nix, which a person writes: each
@@ -128,7 +127,6 @@ let
   allNames = publishedNames ++ [
     "design-lenses"
     "mobile-lenses"
-    "ux-flows"
   ];
 
   roots = [
@@ -329,8 +327,14 @@ let
       "SKILL.md"
       "references"
     ]
-    + entriesCheck "~/${target}/references on ${label}" "$dir/references" lensReferences
+    + entriesCheck "~/${target}/references on ${label}" "$dir/references" (
+      lensReferences ++ [ "ux-flows.md" ]
+    )
     + ''
+      if ! cmp -s "$dir/references/ux-flows.md" ${../home/h82/agents/skills/design-lenses/ux-flows.md}; then
+        echo ${esc "the ux-flows reference of ~/${target} on ${label} differs from its source"} >&2
+        failed=1
+      fi
       if ! cmp -s "$dir/SKILL.md" ${../home/h82/agents/skills/design-lenses/SKILL.md}; then
         echo ${esc "the SKILL.md of ~/${target} on ${label} differs from the in-tree design-lenses wrapper"} >&2
         failed=1
@@ -395,13 +399,6 @@ let
         designLenses target label
       else if name == "mobile-lenses" then
         mobileLenses target label
-      else if name == "ux-flows" then
-        ''
-          if ! diff -r "$dir" ${../home/h82/agents/skills/ux-flows} >&2; then
-            echo ${esc "~/${target} on ${label} differs from the in-tree ux-flows skill"} >&2
-            failed=1
-          fi
-        ''
       else
         published target label name false
     );

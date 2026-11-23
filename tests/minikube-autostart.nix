@@ -11,7 +11,7 @@
     Type=exec unit that stays active after a successful start, runs only in
     the configured account's manager, starts and stops minikube, carries the
     MINIKUBE_* settings and the wrapped Podman on its PATH, and is wanted by
-    default.target. Type=exec keeps a slow first start from holding login.
+    graphical-session.target. Type=exec keeps a slow first start from holding login.
   - The materialized user@.service drop-in delegates the cpuset and io
     controllers the rootless node needs.
   - The login environment (set-environment and pam/environment) carries the
@@ -107,6 +107,7 @@ let
           "Type=exec"
           "RemainAfterExit=true"
           "ConditionUser=${user}"
+          "PartOf=graphical-session.target"
         ]
       }
       if ! grep -qx 'ExecStart=/nix/store/[^ ]*-minikube-[^ ]*/bin/minikube start' "$service"; then
@@ -131,9 +132,12 @@ let
           fi
         '') expectedVariables
       )}
-      wanted=${esc "${userUnits}/default.target.wants/minikube.service"}
+      wanted=${esc "${userUnits}/graphical-session.target.wants/minikube.service"}
       if [ "$(readlink "$wanted")" != ../minikube.service ]; then
-        ${fail "${name}: default.target does not want minikube.service"}
+        ${fail "${name}: graphical-session.target does not want minikube.service"}
+      fi
+      if [ -L ${esc "${userUnits}/default.target.wants/minikube.service"} ]; then
+        ${fail "${name}: default.target wants minikube before graphical login"}
       fi
       if ! grep -qx 'Delegate=cpu cpuset io memory pids' ${esc "${systemUnits}/user@.service.d/overrides.conf"}; then
         ${fail "${name}: user@.service does not delegate the cpuset and io controllers"}
@@ -152,7 +156,7 @@ let
         ;
     in
     ''
-      if [ -e ${esc "${userUnits}/minikube.service"} ] || [ -L ${esc "${userUnits}/default.target.wants/minikube.service"} ]; then
+      if [ -e ${esc "${userUnits}/minikube.service"} ] || [ -L ${esc "${userUnits}/graphical-session.target.wants/minikube.service"} ] || [ -L ${esc "${userUnits}/default.target.wants/minikube.service"} ]; then
         ${fail "${name}: minikube is off but a minikube user unit exists"}
       fi
       if grep -q '^Delegate=.*cpuset' ${esc "${systemUnits}/user@.service.d/overrides.conf"} 2>/dev/null; then

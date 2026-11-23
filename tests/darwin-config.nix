@@ -131,6 +131,7 @@ let
       [
         "chatgpt"
         "ghostty"
+        "ollama-app"
         "1password"
         "parallels"
         "tailscale-app"
@@ -337,9 +338,6 @@ let
       # The vendored test-audit skill shares those roots; its source is the
       # in-tree skill directory inside the flake's source tree.
       testAuditTargets = map (root: "${root}/test-audit") koreanRoots;
-      # The pinned skills and the local design-lenses and
-      # ux-flows skills share those roots too; tests/pinned-skills.nix checks
-      # their content on Linux.
       pinnedTargets = lib.concatMap (
         root:
         map (name: "${root}/${name}") [
@@ -356,7 +354,6 @@ let
           "untangle-codebase"
           "prune-tests"
           "design-lenses"
-          "ux-flows"
         ]
       ) koreanRoots;
       # Resolved targets of enabled entries, not attribute names. The source is
@@ -441,7 +438,7 @@ let
         && lib.all guarded masWrapperCalls
       ) "${entry.name}: App Store calls must remain guarded in the primary user's session")
       (check config.homebrew.enable "${entry.name}: homebrew is off, so an apply installs none of the casks")
-      (check (sort casks == sort expectedCasks)
+      (check (sort casks == sort (lib.filter (cask: production || cask != "ollama-app") expectedCasks))
         "${entry.name}: homebrew.casks is ${builtins.toJSON (sort casks)}, the mapping gives ${builtins.toJSON (sort expectedCasks)}"
       )
       (check (config.homebrew.onActivation.cleanup == "none")
