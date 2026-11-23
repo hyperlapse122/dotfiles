@@ -32,6 +32,7 @@ let
     ".config/opencode/AGENTS.md"
   ];
   retiredPaths = [
+    ".local/share/nix-config/claude-code-agents.json"
     ".gemini/config/rules"
     ".t3/instructions/claude-code/CLAUDE.md"
     ".grok/AGENTS.md"
@@ -96,11 +97,6 @@ pkgs.runCommand "agent-instructions-tests"
     ''}
     failed=0
     ${lib.concatMapStrings assertEntry userEntries}
-    ${lib.concatMapStrings (entry: ''
-      if ! cmp ${esc "${entry.user.home-files}/.local/share/nix-config/claude-code-agents.json"} ${../packages/claude-code-agents.json}; then
-        failed=1
-      fi
-    '') presentEntries}
     ${lib.optionalString
       (entries == null && !(lib.any (entry: (entry.user.my.user.gpgKey or null) == fakeKey) userEntries))
       ''

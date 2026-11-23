@@ -44,8 +44,6 @@ let
 in
 {
   home.file = {
-    ".local/share/nix-config/claude-code-agents.json".source =
-      ../../../../packages/claude-code-agents.json;
     ".local/share/nix-config/refresh-agent-instructions".source = refresh;
     ".local/share/nix-config/agent-instructions/task-guide.md".source = ./task-guide.md;
     ".local/share/nix-config/agent-instructions/t3-guide.md".source = ./t3-guide.md;
