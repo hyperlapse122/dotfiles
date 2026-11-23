@@ -37,6 +37,7 @@ let
   };
 
   darwinOnly = [
+    "adguard"
     "google-drive"
     "parallels"
     "tailscale-app"
