@@ -20,7 +20,7 @@ in
   ++ gui [ ./desktop ]
   # macOS gets the same terminal configuration, but none of the KDE desktop.
   ++ lib.optionals (hostKind == "darwin") [
-    ./desktop/firefox-darwin.nix
+    ./desktop/chrome-darwin.nix
     ./desktop/terminal.nix
   ]
   ++ [

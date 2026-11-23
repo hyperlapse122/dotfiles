@@ -97,16 +97,4 @@ in
       ];
     })
   ];
-
-  home.activation.firefoxDeveloperEdition = lib.hm.dag.entryAfter [ "installPackages" ] ''
-    if [[ ! -v DRY_RUN ]]; then
-      ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kdeglobals --group General \
-        --key BrowserApplication firefox-developer-edition.desktop
-      for mime in x-scheme-handler/http x-scheme-handler/https; do
-        ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kde-mimeapps.list \
-          --group "Default Applications" --key "$mime" firefox-developer-edition.desktop
-        XDG_CURRENT_DESKTOP=X-Generic ${pkgs.xdg-utils}/bin/xdg-mime default firefox-developer-edition.desktop "$mime"
-      done
-    fi
-  '';
 }
