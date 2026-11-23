@@ -1,6 +1,7 @@
 { pkgs, users }:
 let
   renderer = import ../../packages/text-template.nix { inherit pkgs; };
+  receipts = builtins.fromJSON (builtins.readFile ./agent-instruction-receipts.json);
 in
 pkgs.writeText "t3code-launch-manifest.json" (
   builtins.toJSON (
@@ -15,7 +16,7 @@ pkgs.writeText "t3code-launch-manifest.json" (
       helper = ../../scripts/agent-instructions;
       template = ../../home/h82/agents/instructions/instructions.md.tmpl;
       renderer = "${renderer}/bin/text-template";
-      baselineHash = "64fac3b08118044a8d47c1bc091631dedaada38f0264d5d830ec575a0a3bc586";
+      baselineHash = receipts.darwin-claude;
     }) users
   )
 )
