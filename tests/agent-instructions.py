@@ -14,10 +14,10 @@ DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
 # its conversation language from its own settings, so its render has a receipt
 # of its own. Every harness receives the same T3 render.
 EXPECTED = {
-    'darwin': '4da5662c8cc0a76b44ab111c9e724146d6089bd6a5b786f4d5ab3847c68be765',
-    'darwin-claude': '79863ccd27cb6a5ac17cb89058eb87391375553541b180b40e2319bffb4e6cf0',
-    'nixos': '4da5662c8cc0a76b44ab111c9e724146d6089bd6a5b786f4d5ab3847c68be765',
-    'nixos-claude': '79863ccd27cb6a5ac17cb89058eb87391375553541b180b40e2319bffb4e6cf0',
+    'darwin': '5d1142298eb42f41a3546e227a07fc9ed1b9ae76a0525cbc6c5b90cdc233beb3',
+    'darwin-claude': '64fac3b08118044a8d47c1bc091631dedaada38f0264d5d830ec575a0a3bc586',
+    'nixos': '5d1142298eb42f41a3546e227a07fc9ed1b9ae76a0525cbc6c5b90cdc233beb3',
+    'nixos-claude': '64fac3b08118044a8d47c1bc091631dedaada38f0264d5d830ec575a0a3bc586',
     't3': 'fdac77eac9098f73477bf1d9efd24f87c8cb67b17c5016ca828167445ac53d05',
 }
 
@@ -43,10 +43,19 @@ def check_receipt(text, kind, harness=None):
             raise AssertionError('policy mutation escaped validation')
 
 
-def check_delegation_policy(native, guide):
-    # OpenCode can relay to a second recipient; both the intermediary and the
-    # actual provider must be authorized before material leaves the machine.
+def check_delegation_policy(native, task, t3):
+    # Both documents are installed for every harness; OpenCode can relay to a
+    # second recipient, so the pre-send trigger and each boundary must survive.
     for required in (
+        'OpenCode CE reviews, or temporary container',
+        'read the matching section of `~/.local/share/nix-config/agent-instructions/task-guide.md`',
+        'If the guide is unavailable, pause that action',
+        'disclose the material to be sent and every recipient',
+        'Verify authorization for that material and each recipient; do not send without it',
+    ):
+        assert required in native, required
+    for required in (
+        'Before sending a CE review through OpenCode, bind an exact `provider/model`',
         'identify and disclose every recipient',
         'check each against the CE allowlist',
         'The `opencode` token covers the intermediary only',
@@ -54,12 +63,13 @@ def check_delegation_policy(native, guide):
         'A model name cannot authorize a custom endpoint',
         'If a recipient is unknown or unauthorized, continue with the ordinary review',
     ):
-        assert required in native, required
-    assert 'CE or harness defaults for delegation' in guide
-    assert 'Apply the shared OpenCode recipient rule' in guide
+        assert required in task, required
+    assert 'CE or harness defaults for delegation' in t3
+    assert 'shared external-provider disclosure and authorization rule' in t3
+    assert 'Apply the shared OpenCode recipient rule' in t3
     for retired in ('T3 CE model selection', 'agent-usage --json', 'Fallback order',
                     'Top child rung', 'reasoningEffort'):
-        assert retired not in guide, retired
+        assert retired not in t3, retired
 
 
 def check_guides(home, native, t3):
@@ -71,16 +81,22 @@ def check_guides(home, native, t3):
         assert f'~/.local/share/nix-config/agent-instructions/{name}' in text
         assert passage not in text
         assert passage in (guides / name).read_text()
+    task = (guides / 'task-guide.md').read_text()
     guide = (guides / 't3-guide.md').read_text()
-    check_delegation_policy(native, guide)
-    for bad_native, bad_guide in (
-        (native.replace('check each against the CE allowlist', ''), guide),
-        (native.replace('Direct Anthropic and OpenAI require `claude` and `codex` respectively', ''), guide),
-        (native, guide + '\nagent-usage --json'),
-        (native, guide.replace('Apply the shared OpenCode recipient rule', '')),
+    check_delegation_policy(native, task, guide)
+    for bad_native, bad_task, bad_guide in (
+        (native.replace('OpenCode CE reviews, or temporary container', 'temporary container'), task, guide),
+        (native.replace('disclose the material to be sent and every recipient', ''), task, guide),
+        (native.replace('Verify authorization for that material and each recipient; do not send without it', ''), task, guide),
+        (native, task.replace('check each against the CE allowlist', ''), guide),
+        (native, task.replace('Direct Anthropic and OpenAI require `claude` and `codex` respectively', ''), guide),
+        (native, task.replace('A model name cannot authorize a custom endpoint', ''), guide),
+        (native, task, guide + '\nagent-usage --json'),
+        (native, task, guide.replace('shared external-provider disclosure and authorization rule', '')),
+        (native, task, guide.replace('Apply the shared OpenCode recipient rule', '')),
     ):
         try:
-            check_delegation_policy(bad_native, bad_guide)
+            check_delegation_policy(bad_native, bad_task, bad_guide)
         except AssertionError:
             pass
         else:

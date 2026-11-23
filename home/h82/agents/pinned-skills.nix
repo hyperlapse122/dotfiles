@@ -37,6 +37,19 @@ let
   renderSkill =
     upstream: skill: destination:
     copySkill upstream skill destination
+    + lib.optionalString (skill.name == "vercel-react-best-practices") ''
+      ln -s rules/async-defer-await.md "${destination}/async-defer-await.md"
+      ln -s rules/async-cheap-condition-before-await.md "${destination}/async-cheap-condition-before-await.md"
+      ln -s rules/server-hoist-static-io.md "${destination}/server-hoist-static-io.md"
+    ''
+    + lib.optionalString (skill.name == "playwright-best-practices") ''
+      ln -s ../debugging/error-testing.md "${destination}/advanced/error-testing.md"
+      ln -s ../browser-apis/service-workers.md "${destination}/advanced/service-workers.md"
+      ln -s ../debugging/error-testing.md "${destination}/browser-apis/error-testing.md"
+      ln -s ../browser-apis/service-workers.md "${destination}/debugging/service-workers.md"
+      ln -s ../core/assertions-waiting.md "${destination}/debugging/assertions-waiting.md"
+      ln -s ../core/fixtures-hooks.md "${destination}/infrastructure-ci-cd/fixtures-hooks.md"
+    ''
     + lib.optionalString (skill.name == "find-docs") ''
       awk -v cmd=${esc ctx7} '
         /^Run commands with / { print "Use the packaged Context7 CLI with public library names and sanitized queries."; next }

@@ -83,6 +83,12 @@ let
         {
           source = "gitlab";
           paths = [ "." ];
+          files = [
+            "SKILL.md"
+            "references"
+            "examples"
+            "scripts"
+          ];
         }
         {
           source = "flux";
@@ -182,6 +188,7 @@ let
         map (path: {
           inherit (entry) source;
           inherit path;
+          files = entry.files or [ "." ];
           name = if entry.source == "gitlab" then "gitlab-ci-skill" else baseNameOf path;
         }) entry.paths
       ) group.entries;
@@ -196,7 +203,7 @@ let
 
           # ${name}
 
-          Match the reference to the task and the installed product version. Project instructions, user authorization, and existing dependency versions take precedence. These are fixed snapshots; verify release-specific APIs against the project's documentation. Read the relevant guide and its linked local assets only when needed.
+          Choose the guide that matches the task and the installed product version. Read its local references as needed. Follow project instructions and user permissions. Nix manages shared skills. Use `project-skills` for guides bundled with a dependency, or consult the documentation for the installed release.
 
         ''
         + lib.concatMapStringsSep "\n" (
@@ -221,10 +228,15 @@ let
             in
             ''
               mkdir -p "${dest}"
-              cp -r --no-preserve=mode ${esc "${src.src}/${r.path}"}/. "${dest}/"
+              cp -r --no-preserve=mode ${
+                lib.escapeShellArgs (map (f: "${src.src}/${r.path}/${f}") r.files)
+              } "${dest}/"
               mv "${dest}/SKILL.md" "${dest}/guide.md"
               ${lib.optionalString (r.source == "cloudflare") ''
-                sed -i "s@/SKILL\.md@/guide.md@g" "${dest}/guide.md"
+                sed -Ei 's@\(\.\./([a-z0-9-]+)/SKILL\.md@(../\1/guide.md@g' "${dest}/guide.md"
+              ''}
+              ${lib.optionalString (r.name == "nextjs-on-cloudflare") ''
+                ${lib.getExe pkgs.patch} --silent "${dest}/guide.md" < ${./official-skills/vinext-read-local.patch}
               ''}
               ${lib.optionalString (r.name == "grafana-oss") ''
                 cp --no-preserve=mode ${esc "${src.src}/skills/grafana-cloud/admin/references/sso.md"} "${dest}/references/sso.md"

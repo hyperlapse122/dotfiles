@@ -35,14 +35,19 @@ def project(directory, version, *, visible=True, installed=True):
 
 
 def snapshot(directory):
-    return {p.relative_to(directory): p.read_bytes() for p in directory.rglob("*") if p.is_file()}
+    return {
+        path.relative_to(directory): path.read_bytes() if path.is_file() else None
+        for path in directory.rglob("*")
+    }
 
 
 guide = Path(sys.argv[1]).read_text()
 listing, loading, locating = re.findall(r"^```sh\n(.*?)\n```$", guide, re.M | re.S)
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
-    env = {**os.environ, "HOME": temp, "package": "@example/widget", "use": "@example/widget#setup"}
+    home = root / "home"
+    home.mkdir()
+    env = {**os.environ, "HOME": str(home), "package": "@example/widget", "use": "@example/widget#setup"}
 
     def run(command, cwd, *, check=True):
         return subprocess.run(["bash", "-euo", "pipefail", "-c", command], cwd=cwd,
@@ -64,3 +69,5 @@ with tempfile.TemporaryDirectory() as temp:
         assert not run(listing, cwd).stdout.strip()
         assert run(loading, cwd, check=False).returncode != 0
         assert snapshot(cwd) == before
+
+    assert snapshot(home) == {}, "Intent lookup wrote to the user home"

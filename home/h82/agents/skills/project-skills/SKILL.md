@@ -23,4 +23,4 @@ When the guide names a relative reference, resolve it from the directory contain
 @intent@ load "$use" --path
 ```
 
-Respect the workspace's visibility settings. If no compatible entry is visible or a conflict prevents resolution, use a compatible guide in the installed domain skills or consult the dependency's versioned official documentation. Leave dependencies, project instructions and hooks alone during lookup.
+Use only these read commands during lookup, including when Intent suggests setup or an update. Respect the workspace's visibility settings. If no compatible entry is visible or a conflict prevents resolution, use a compatible guide in the installed domain skills or consult the dependency's versioned official documentation. Leave dependencies, project instructions and hooks alone.

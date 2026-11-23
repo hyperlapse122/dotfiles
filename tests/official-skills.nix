@@ -53,7 +53,9 @@ pkgs.runCommand "official-skills-tests" { nativeBuildInputs = [ pkgs.python3 ]; 
               for guide in (directory / "references").glob("*/guide.md"):
                   assert any(p.is_file() for p in guide.parent.glob("LICENSE*")), guide
               for guide in (directory / "references").rglob("*.md"):
-                  for target in re.findall(r"\]\(([^ )]+)", guide.read_text()):
+                  content = guide.read_text()
+                  assert not re.search(r"\bnpx\s+(?:-y\s+)?skills(?:@\S+)?\s+(?:add|update|remove)\b", content), guide
+                  for target in re.findall(r"\]\(([^ )]+)", content):
                       parsed = urlsplit(target)
                       path = unquote(parsed.path)
                       if not path or parsed.scheme or path.startswith("/"):

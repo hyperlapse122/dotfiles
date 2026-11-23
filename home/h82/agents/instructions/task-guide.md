@@ -1,5 +1,9 @@
 # Task guide
 
+## OpenCode CE reviews
+
+Before sending a CE review through OpenCode, bind an exact `provider/model`, identify and disclose every recipient, and check each against the CE allowlist. The `opencode` token covers the intermediary only. Direct Anthropic and OpenAI require `claude` and `codex` respectively. A model name cannot authorize a custom endpoint. If a recipient is unknown or unauthorized, continue with the ordinary review.
+
 ## Decide for CI triage
 
 Read the first relevant CI failure before choosing what to inspect. If the evidence leaves two or more plausible read-only checks and a judgment would change which one you run first, call the `decide` MCP server’s `judge` tool once. Use `choice` with a short description of each candidate and an `insufficient_evidence` option. Send only the evidence needed for the question and permitted for the configured backend.

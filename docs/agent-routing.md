@@ -8,9 +8,22 @@ The shared instructions call for one `decide` judgment during CI triage when the
 
 The language rules make Korean the default conversation language and English the default for artifacts such as documents, code comments, and commit messages. A language named in the conversation or the project's instructions, or the language of existing content, takes precedence for artifacts. Claude Code's render leaves out the conversation rule because its `language` setting already sets the conversation language; it keeps the artifact rule.
 
-Shared guidance is exposed through domain entries: `web-lenses`, `engineering-lenses`, `design-lenses`, `mobile-lenses`, and `writing-lenses`. `project-skills` discovers version-matched guidance supplied by installed project dependencies. Open the entry for the work and follow its references; grouped guides do not each occupy a user-scope discovery entry.
+Shared guidance is exposed through domain entries: `web-lenses`, `engineering-lenses`, `design-lenses`, `mobile-lenses`, `writing-lenses`, `service-lenses`, `platform-lenses`, and `toolchain-lenses`. `project-skills` discovers version-matched guidance supplied by installed project dependencies. Open the entry for the work and follow its references; grouped guides do not each occupy a user-scope discovery entry.
 
 Shared Home Manager configuration installs [acpx](../packages/acpx.nix) on both NixOS and macOS. The package honors user-level `~/.acpx/config.json` and skips project-local `.acpxrc.json` when resolving configuration.
+
+## Checking shared skill discovery
+
+On Linux, fresh homes with the same harness binaries listed all 17 shared entries before grouping and all nine afterwards, once each. The counts exclude built-in and plugin skills. These checks used a non-project working directory and sent no model prompt.
+
+| Harness | How to read the session's skill list |
+| --- | --- |
+| Claude Code 2.1.330 | Inspect the stream-JSON initialization response with user settings enabled. Bare mode skips user skills. |
+| Codex 0.171.0 | Call `skills/list` on the app server. |
+| Pi 1.6.0 | Inspect the skill commands returned by the offline RPC `get_commands` request. |
+| OpenCode 2.3.2 | Start a loopback server with temporary local authentication. Read `/api/skill` for the working directory, passing `location[directory]`. Use a bounded wait for the expected entries. The API can return HTTP 200 with only built-in entries while it is still loading directory skills. |
+
+Home Manager and T3 launch checks cover the managed skill roots and per-launch instruction delivery. The counts above come from standalone processes.
 
 ## Project skills for shadcn and Figma
 
@@ -29,7 +42,9 @@ Disposable Git projects on macOS and NixOS confirmed the following with syntheti
 
 ## OpenCode review recipients
 
-The shared `CROSS_MODEL_PEERS` list includes `claude`, `codex`, and `opencode` where those harnesses are installed. This makes the OpenCode route selectable in standalone and T3 sessions without changing the default peer in other harnesses. Before either CE review skill uses OpenCode, it must select an exact `provider/model` and disclose the recipients. If the allowlist is set, the OpenCode token authorizes the route, not the downstream provider. Direct Anthropic and OpenAI calls also need `claude` and `codex`, respectively. An unknown or unauthorized route is unavailable.
+Before delegation to any external provider, the shared instructions require disclosure of the material and every recipient and authorization for both. A CE peer allowlist does not by itself authorize the material.
+
+The shared `CROSS_MODEL_PEERS` list includes `claude`, `codex`, and `opencode` where those harnesses are installed. This makes the OpenCode route selectable in standalone and T3 sessions without changing the default peer in other harnesses. The installed [task guide](../home/h82/agents/instructions/task-guide.md#opencode-ce-reviews) defines its recipient checks.
 
 ## Decide for subagent roles
 

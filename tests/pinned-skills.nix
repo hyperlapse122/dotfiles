@@ -60,8 +60,50 @@ let
     "typeset.md"
   ];
 
-  # A skill whose repository root holds more than the skill installs only the
-  # entries upstream packages as the skill (ux-writing's build-skill.sh).
+  linkAliases = {
+    vercel-react-best-practices = [
+      {
+        path = "async-defer-await.md";
+        target = "rules/async-defer-await.md";
+      }
+      {
+        path = "async-cheap-condition-before-await.md";
+        target = "rules/async-cheap-condition-before-await.md";
+      }
+      {
+        path = "server-hoist-static-io.md";
+        target = "rules/server-hoist-static-io.md";
+      }
+    ];
+    playwright-best-practices = [
+      {
+        path = "advanced/error-testing.md";
+        target = "../debugging/error-testing.md";
+      }
+      {
+        path = "advanced/service-workers.md";
+        target = "../browser-apis/service-workers.md";
+      }
+      {
+        path = "browser-apis/error-testing.md";
+        target = "../debugging/error-testing.md";
+      }
+      {
+        path = "debugging/service-workers.md";
+        target = "../browser-apis/service-workers.md";
+      }
+      {
+        path = "debugging/assertions-waiting.md";
+        target = "../core/assertions-waiting.md";
+      }
+      {
+        path = "infrastructure-ci-cd/fixtures-hooks.md";
+        target = "../core/fixtures-hooks.md";
+      }
+    ];
+  };
+
+  # ux-writing's build-skill.sh packages only these entries from the repository root.
   selectedFiles = {
     ux-writing = [
       "SKILL.md"
@@ -220,16 +262,29 @@ let
           failed=1
         ''
       + ''
+        comparison="$dir"
+        ${lib.optionalString (linkAliases ? ${name}) ''
+          comparison=$(mktemp -d)
+          cp -r --no-preserve=mode "$dir"/. "$comparison"/
+          ${lib.concatMapStrings (link: ''
+            if [ ! -L "$dir"/${esc link.path} ] || [ "$(readlink "$dir"/${esc link.path})" != ${esc link.target} ] || [ ! -f "$dir"/${esc link.path} ]; then
+              echo ${esc "~/${target}/${link.path} on ${label} must resolve to ${link.target}"} >&2
+              failed=1
+            fi
+            rm -f "$comparison"/${esc link.path}
+          '') linkAliases.${name}}
+        ''}
         if ! cmp -s "$dir"/${esc "${name}.md"} ${src}/${esc path}/SKILL.md \
           ${
             if skill ? files then
               ""
             else
-              "|| ! diff -r ${excludeLicense} --exclude=SKILL.md --exclude=${esc "${name}.md"} \"$dir\" ${src}/${esc path} >&2"
+              "|| ! diff -r ${excludeLicense} --exclude=SKILL.md --exclude=${esc "${name}.md"} \"$comparison\" ${src}/${esc path} >&2"
           }; then
           echo ${esc "the files of ~/${target} on ${label} differ from the pinned ${upstream.input} input"} >&2
           failed=1
         fi
+        ${lib.optionalString (linkAliases ? ${name}) ''rm -rf "$comparison"''}
       ''
       + lib.optionalString (skill ? files) (
         lib.concatMapStrings (

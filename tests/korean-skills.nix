@@ -142,10 +142,23 @@ let
       failed=1
     ''
     + lib.optionalString (upstream != null) ''
-      if ! cmp -s "$dir/${name}.md" ${upstream}/skills/${name}/SKILL.md || ! diff -r --exclude=LICENSE --exclude=SKILL.md --exclude=${name}.md "$dir" ${upstream}/skills/${name} >&2; then
+      comparison="$dir"
+      ${lib.optionalString (name == "humanizer") ''
+        comparison=$(mktemp -d)
+        cp -r --no-preserve=mode "$dir"/. "$comparison"/
+        if ! sed 's@\.\./\.\./\.\./style-guide/references/tone-consistency\.md@../../style-guide/references/tone-consistency.md@g' ${upstream}/skills/humanizer/references/structure-patterns.md | cmp -s - "$dir/references/structure-patterns.md" \
+          || ! grep -Fq '](../../style-guide/references/tone-consistency.md)' "$dir/references/structure-patterns.md" \
+          || [ ! -f "$dir/references/../../style-guide/references/tone-consistency.md" ]; then
+          echo ${esc "the style-guide reference in ~/${target} on ${label} must resolve to the installed guide"} >&2
+          failed=1
+        fi
+        cp --no-preserve=mode ${upstream}/skills/humanizer/references/structure-patterns.md "$comparison/references/structure-patterns.md"
+      ''}
+      if ! cmp -s "$dir/${name}.md" ${upstream}/skills/${name}/SKILL.md || ! diff -r --exclude=LICENSE --exclude=SKILL.md --exclude=${name}.md "$comparison" ${upstream}/skills/${name} >&2; then
         echo ${esc "~/${target} on ${label} differs from skills/${name} of the pinned input"} >&2
         failed=1
       fi
+      ${lib.optionalString (name == "humanizer") ''rm -rf "$comparison"''}
       if [ -f "$dir/LICENSE" ] && ! cmp -s "$dir/LICENSE" ${upstream}/LICENSE; then
         echo ${esc "the LICENSE of ~/${target} on ${label} differs from the pinned input's LICENSE"} >&2
         failed=1
