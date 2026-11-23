@@ -9,25 +9,25 @@ importers:
   .:
     dependencies:
       '@sentry/dotagents':
-        specifier: 3.3.0
-        version: 3.3.0
+        specifier: 3.4.0
+        version: 3.4.0
 
 packages:
 
-  '@clack/core@1.5.1':
-    resolution: {integrity: sha512-iHTrHA8MtVuLl2TfZySmcKv1qO2PoyC9Z7pfSDozEuV5vtY3/wcOPKJXlqJ5Oq2Cx5DDGQGAMVx6HZfRRoVEbQ==}
+  '@clack/core@1.6.0':
+    resolution: {integrity: sha512-4GZynIB2IIe431odxesswvWTCP6orvqd6e2b07b3VFWBQRqUqIHc/EPIZwFoKS692QBp+ooPuXKaJV8g4kXuYA==}
     engines: {node: '>= 20.12.0'}
 
-  '@clack/prompts@1.8.1':
-    resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
+  '@clack/prompts@1.9.0':
+    resolution: {integrity: sha512-tEj8X2No2A1c9NDnZECxiiJ8TP3vmFlN9tLlLeSaMqVW4tUmVG2R4qpv/eP4zymWxnymYLkLcIYVV0VcWj3RCQ==}
     engines: {node: '>= 20.12.0'}
 
-  '@sentry/dotagents-lib@3.3.0':
-    resolution: {integrity: sha512-A/venGOGqDKqGTEb9Iw9785Q+JlCUhmEfa6YfJ1lu0lI7fz1LiMVgjD750ajm7Z1ymhg5clktwnMqUEvj/iMQA==}
+  '@sentry/dotagents-lib@3.4.0':
+    resolution: {integrity: sha512-2WC8i7sn8dyTJ4kzDnJGKCuUovuYesBJf1BHQ+dJhJy2973TqFjSABUjQc9LgnyCIHdafS1f3OiDBCpTNlvMcQ==}
     engines: {node: '>=20'}
 
-  '@sentry/dotagents@3.3.0':
-    resolution: {integrity: sha512-uZOD+Lixmq4UTRpfFbsAAzHHRhswPuBZQanmpmPLM+1OwlCV4Y2GiX/hACfOwzXbOQK9wfhuAR1QETTKjZkvoQ==}
+  '@sentry/dotagents@3.4.0':
+    resolution: {integrity: sha512-wgi06ThbH/BAWFHEy8kZNnkDe67z0TLaR54pg66vRN0lBQ0fb59swsDuuOUyk1f9ibcm4OwQ0Sj6wioZ5TaDQQ==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -47,11 +47,12 @@ packages:
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
 
-  sisteransi@1.0.5:
-    resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
+  sisteransi@2.0.0:
+    resolution: {integrity: sha512-2WCqLdt12eN6ehLI50S2/ZxoowXU3DD1KVPRyVP0WEsFahrGZZmCdq1K59qjJljMRIDTwx1D9YaRK+hDneBUMg==}
+    engines: {node: '>=20'}
 
-  smol-toml@1.9.0:
-    resolution: {integrity: sha512-hpd+HLON7HdZXqYchMM/+LaTTbdK0AU3NngIJ4KVyWbY9bfQqdL9cD+4yf6dUoU2Ap4VsU0JkQi6FxAI1B2mXQ==}
+  smol-toml@1.9.1:
+    resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
     engines: {node: '>= 18'}
 
   yaml@2.9.1:
@@ -59,35 +60,37 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
 
-  '@clack/core@1.5.1':
+  '@clack/core@1.6.0':
     dependencies:
-      fast-wrap-ansi: 0.2.2
-      sisteransi: 1.0.5
-
-  '@clack/prompts@1.8.1':
-    dependencies:
-      '@clack/core': 1.5.1
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
-      sisteransi: 1.0.5
+      sisteransi: 2.0.0
 
-  '@sentry/dotagents-lib@3.3.0':
+  '@clack/prompts@1.9.0':
+    dependencies:
+      '@clack/core': 1.6.0
+      fast-string-width: 3.0.2
+      fast-wrap-ansi: 0.2.2
+      sisteransi: 2.0.0
+
+  '@sentry/dotagents-lib@3.4.0':
     dependencies:
       yaml: 2.9.1
+      zod: 4.6.7
 
-  '@sentry/dotagents@3.3.0':
+  '@sentry/dotagents@3.4.0':
     dependencies:
-      '@clack/prompts': 1.8.1
-      '@sentry/dotagents-lib': 3.3.0
+      '@clack/prompts': 1.9.0
+      '@sentry/dotagents-lib': 3.4.0
       chalk: 5.6.2
       jsonc-parser: 3.3.1
-      smol-toml: 1.9.0
-      zod: 4.6.5
+      smol-toml: 1.9.1
+      zod: 4.6.7
 
   chalk@5.6.2: {}
 
@@ -103,10 +106,10 @@ snapshots:
 
   jsonc-parser@3.3.1: {}
 
-  sisteransi@1.0.5: {}
+  sisteransi@2.0.0: {}
 
-  smol-toml@1.9.0: {}
+  smol-toml@1.9.1: {}
 
   yaml@2.9.1: {}
 
-  zod@4.6.5: {}
+  zod@4.6.7: {}

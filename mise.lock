@@ -3,13 +3,13 @@
 lockfile_version = 3
 
 [[tools."npm:@sentry/dotagents"]]
-version = "3.3.0"
-aube = { path = ".mise/locks/npm-sentry-dotagents/3.3.0", digest = "sha256:018f05fef8ff31daf7d2eb53fc74b7720cd0ae84feda2125eb7dc3e4a8f1e009" }
+version = "3.4.0"
+aube = { path = ".mise/locks/npm-sentry-dotagents/3.4.0", digest = "sha256:db5200c964be1196dc7fa07a0dc463dcb86eeb9cb924fa27e814c7a7bafabe79" }
 backend = "npm:@sentry/dotagents"
 specifiers = ["latest"]
 
 [[tools."npm:markdownlint-cli2"]]
 version = "0.24.0"
-aube = { path = ".mise/locks/npm-markdownlint-cli2/0.24.0", digest = "sha256:a0011c3d108f98555e9459eece07e5d9115965a7913a8f0c94c1ef68a95da3e5" }
+aube = { path = ".mise/locks/npm-markdownlint-cli2/0.24.0", digest = "sha256:ab75cceabb8a59ea2839f65804736285d7fa0e4cb38c6604447c39ba202f1168" }
 backend = "npm:markdownlint-cli2"
 specifiers = ["0.24.0"]

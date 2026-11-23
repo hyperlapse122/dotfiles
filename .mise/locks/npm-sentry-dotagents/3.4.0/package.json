@@ -2,6 +2,6 @@
   "name": "mise-npm-install",
   "private": true,
   "dependencies": {
-    "@sentry/dotagents": "3.3.0"
+    "@sentry/dotagents": "3.4.0"
   }
 }
