@@ -71,7 +71,7 @@ The authoritative [T3 guide](../home/h82/agents/instructions/t3-guide.md) covers
 
 ## Native T3 launches
 
-`home/h82/t3code.nix` merges the captured server and client preferences into writable T3 settings. New threads use Codex `gpt-6.2-sol` at `high` effort, with Claude Opus 5.5 as fallback. Threads start with full access in a worktree. Inactive worktree cleanup uses five days. The interface uses Pretendard Variable; code and terminals use Jetendard. Baseline-only settings remain declared unless the overlay replaces them, and unrelated user settings survive application.
+`home/h82/t3code.nix` merges the captured server and client preferences into writable T3 settings. New threads use Codex `gpt-6.2-astra` at `ultra` effort, with Claude Opus 5.5 as fallback. Threads start with full access in a worktree. Inactive worktree cleanup uses five days. The interface uses Pretendard Variable; code and terminals use Jetendard. Baseline-only settings remain declared unless the overlay replaces them, and unrelated user settings survive application.
 
 T3 Code uses Claude Code `claude-haiku-5-5` at its native effort as its shared text generation model. It asks for Conventional Commit-style titles when generating or regenerating a thread title. Commit messages, PR text, branch names, and voice transcript cleanup use the shared model unless their settings select another one. Review guides follow the source control writer selection when one is set and otherwise use the shared model, so no review guide selection is declared and activation removes a stored one. This selection does not turn on review guides.
 
