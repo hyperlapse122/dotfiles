@@ -23,7 +23,6 @@
     ./skills.nix
     ./tanstack-intent.nix
     ./tokscale.nix
-    ./usage.nix
     ./xcode-skills.nix
   ];
 }
