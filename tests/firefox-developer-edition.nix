@@ -17,12 +17,7 @@ let
         export HOME=$(mktemp -d)
         export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_DIRS="${browser}/share"
         installDir="$HOME/.local/opt/firefox-developer-edition"
-        mkdir -p "$XDG_CONFIG_HOME" "$installDir"
-        cat > "$installDir/firefox" <<'BROWSER'
-        #!${pkgs.runtimeShell}
-        printf '%s\n' "$@" > "$HOME/opened-links"
-        BROWSER
-        chmod +x "$installDir/firefox"
+        mkdir -p "$XDG_CONFIG_HOME"
         cat > "$XDG_CONFIG_HOME/mimeapps.list" <<'MIME'
         [Default Applications]
         x-scheme-handler/http=old-browser.desktop
@@ -31,6 +26,7 @@ let
         MIME
         cp "$XDG_CONFIG_HOME/mimeapps.list" "$XDG_CONFIG_HOME/kde-mimeapps.list"
         ${pkgs.runtimeShell} -eu ${pkgs.writeText "activate-browser" activation}
+        test ! -e "$HOME/.local/opt"
         test "$(kreadconfig6 --file kdeglobals --group General --key BrowserApplication)" = "$desktopId"
         for file in mimeapps.list kde-mimeapps.list; do
           for scheme in http https; do
@@ -41,6 +37,12 @@ let
         done
         desktopFile="${browser}/share/applications/$desktopId"
         desktop-file-validate "$desktopFile"
+        mkdir -p "$installDir"
+        cat > "$installDir/firefox" <<'BROWSER'
+        #!${pkgs.runtimeShell}
+        printf '%s\n' "$@" > "$HOME/opened-links"
+        BROWSER
+        chmod +x "$installDir/firefox"
         gio launch "$desktopFile" "$link"
         timeout 10 ${pkgs.runtimeShell} -c 'until test -s "$HOME/opened-links"; do sleep .05; done'
         test "$(cat "$HOME/opened-links")" = "$link"

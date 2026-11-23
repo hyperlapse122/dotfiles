@@ -3,10 +3,11 @@ set -eu
 
 install_dir="$HOME/.local/opt/firefox-developer-edition"
 
-if [ ! -e "$install_dir" ] && [ ! -L "$install_dir" ]; then
+install_firefox() (
   mkdir -p "$(dirname "$install_dir")"
   stage=$(mktemp -d "$(dirname "$install_dir")/.firefox-download.XXXXXXXX")
   trap 'rm -rf -- "$stage"' EXIT
+  trap 'exit 1' HUP INT TERM
   curl --fail --location --silent --show-error --connect-timeout 15 --max-time 600 \
     --proto =https --proto-redir =https \
     'https://download.mozilla.org/?product=firefox-devedition-latest-ssl&os=linux64&lang=ko' \
@@ -30,6 +31,10 @@ PY
   fi
   # GNU mv uses an atomic no-replace rename, so a concurrent install wins intact.
   mv --no-clobber --no-target-directory "$stage/firefox" "$install_dir"
+)
+
+if [ ! -e "$install_dir" ] && [ ! -L "$install_dir" ]; then
+  install_firefox
 fi
 
 if [ ! -x "$install_dir/firefox" ]; then
@@ -37,7 +42,4 @@ if [ ! -x "$install_dir/firefox" ]; then
   exit 1
 fi
 
-if [ "${1-}" = "--install-only" ]; then
-  exit 0
-fi
 exec "$install_dir/firefox" "$@"

@@ -35,25 +35,6 @@ def writable(app):
     return os.access(app, os.W_OK) and os.access(app / "Contents/MacOS/firefox", os.W_OK)
 
 
-def candidates(destination):
-    yield destination
-    yield Path("/Applications") / APP_NAME
-    try:
-        result = subprocess.run(
-            ["/usr/bin/mdfind", f'kMDItemCFBundleIdentifier == "{IDENTIFIER}"'],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-        )
-        for path in result.stdout.splitlines():
-            app = Path(path)
-            if app.is_relative_to(Path.home()):
-                yield app
-    except (OSError, subprocess.SubprocessError):
-        pass
-
-
 def publish(source, destination):
     # renamex_np with RENAME_EXCL refuses even an empty existing destination.
     libc = ctypes.CDLL(None, use_errno=True)
@@ -67,7 +48,7 @@ def publish(source, destination):
 
 def provision(destination):
     existing = None
-    for app in candidates(destination):
+    for app in (destination, Path("/Applications") / APP_NAME):
         if official(app):
             if writable(app):
                 return app

@@ -72,7 +72,7 @@ let
     desktopName = "Firefox Developer Edition";
     genericName = "Web Browser";
     exec = "${launcher}/bin/firefox-developer-edition %U";
-    icon = "${config.home.homeDirectory}/.local/opt/firefox-developer-edition/browser/chrome/icons/default/default128.png";
+    icon = "web-browser";
     categories = [
       "Network"
       "WebBrowser"
@@ -100,9 +100,6 @@ in
 
   home.activation.firefoxDeveloperEdition = lib.hm.dag.entryAfter [ "installPackages" ] ''
     if [[ ! -v DRY_RUN ]]; then
-      if ! ${launcher}/bin/firefox-developer-edition --install-only; then
-        echo 'Firefox Developer Edition could not be installed. Open it to retry.' >&2
-      fi
       ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kdeglobals --group General \
         --key BrowserApplication firefox-developer-edition.desktop
       for mime in x-scheme-handler/http x-scheme-handler/https; do
