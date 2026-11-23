@@ -79,7 +79,6 @@ EOF
 EOF
   printf '{"version": "1.0.0"}\n' >"$clone/packages/claude-desktop-version.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/claude-code-manifest.json"
-  printf '{"version": "1.0.0", "agents": []}\n' >"$clone/packages/claude-code-agents.json"
   printf '{"latest": {"cmdline-tools": "19.0"}}\n' >"$clone/packages/android-sdk-repo.json"
   printf '{"version": "2026.10.0"}\n' >"$clone/packages/mise-release.json"
   printf '{"version": "1.0.0"}\n' >"$clone/packages/ant-release.json"
@@ -89,13 +88,11 @@ EOF
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
   printf '{"version": "2.3.1", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
   printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
-  printf '{"version": "1.4.0", "agents": []}\n' >"$clone/packages/pi-agents.json"
   printf '{"version": "0.20.0"}\n' >"$clone/packages/acpx-release.json"
   printf '{"lockfileVersion": 3, "name": "acpx"}\n' >"$clone/packages/acpx/package-lock.json"
   printf '{"version": "0.3.311"}\n' >"$clone/packages/claude-agent-sdk-release.json"
   printf '{"lockfileVersion": 3, "name": "claude-agent-sdk"}\n' >"$clone/packages/claude-agent-sdk/package-lock.json"
   printf '{"version": "0.50.0"}\n' >"$clone/packages/codex-release.json"
-  printf '{"version": "0.50.0", "agents": []}\n' >"$clone/packages/codex-agents.json"
   printf 'base\n' >"$clone/tracked.txt"
   "$git_bin" -C "$clone" add -A
   "$git_bin" -C "$clone" commit -qm init
@@ -140,20 +137,7 @@ case "\$*" in
       echo "claude-code-release: manifest for 2.1.0 lacks linux-arm64" >&2
       exit 1
     fi
-    if [[ " \${UNCHANGED:-} " == *" claude-code "* ]]; then
-      echo "claude-code-release: already up to date" >&2
-      exit 0
-    fi
     printf '{"version": "2.1.0"}\n' >packages/claude-code-manifest.json
-    ;;
-  "run .#claude-code-agents -- --output packages/claude-code-agents.json")
-    echo "claude-code-agents" >>"$clone/claude-code-agents-calls.log"
-    if [[ " \${FAIL_SOFT:-} " == *" claude-code-agents "* ]]; then
-      printf '{"version": "partial' >packages/claude-code-agents.json
-      echo "claude-code-agents: Explore: disallowedTools: ft: exported by 2 modules" >&2
-      exit 1
-    fi
-    printf '{"version": "2.1.0", "agents": [{"agentType": "Explore"}]}\n' >packages/claude-code-agents.json
     ;;
   "run .#android-sdk-release -- --output packages/android-sdk-repo.json")
     printf '{"latest": {"cmdline-tools": "20.0", "platform-tools": "36.0.0"}}\n' >packages/android-sdk-repo.json
@@ -209,7 +193,6 @@ case "\$*" in
       echo "pi-release: release v1.5.0 has no pi-linux-arm64" >&2
       exit 1
     fi
-    if [[ " \${UNCHANGED:-} " == *" pi "* ]]; then exit 0; fi
     printf '{"version": "1.5.0", "platforms": {}}\n' >packages/pi-release.json
     ;;
   "run .#npm-release -- --package acpx --output packages/acpx-release.json --lock packages/acpx/package-lock.json")
@@ -240,21 +223,7 @@ case "\$*" in
       echo "codex-release: missing darwin asset" >&2
       exit 1
     fi
-    if [[ " \${UNCHANGED:-} " == *" codex "* ]]; then exit 0; fi
     printf '{"version": "0.51.0"}\n' >packages/codex-release.json
-    ;;
-  "run .#codex-agents -- --output packages/codex-agents.json"|"run .#pi-agents -- --output packages/pi-agents.json")
-    catalog=\$5
-    harness=\${catalog#packages/}
-    harness=\${harness%-agents.json}
-    echo "\$harness" >>"$clone/harness-catalog-calls.log"
-    if [[ " \${FAIL_SOFT:-} " == *" \$harness-agents "* ]]; then
-      printf '{"version": "partial' >"\$catalog"
-      echo "\$harness-agents: unsupported registry" >&2
-      exit 1
-    fi
-    version=\$(jq -r .version "packages/\$harness-release.json")
-    printf '{"version": "%s", "agents": []}\n' "\$version" >"\$catalog"
     ;;
   *)
     echo "unexpected nix invocation: \$*" >&2
@@ -287,9 +256,8 @@ grep -q 'tag = "compound-engineering-v2.68.0";' "$clone/home/h82/agents/agent-pl
   fail "update step did not update tag in home/h82/agents/agent-plugin-pins.nix"
 grep -q 'expectedRev = "2222222222222222222222222222222222222222";' "$clone/home/h82/agents/agent-plugin-pins.nix" ||
   fail "update step did not update expectedRev in home/h82/agents/agent-plugin-pins.nix"
-grep -q '"2.1.0"' "$clone/packages/claude-code-manifest.json" &&
-  grep -q '"Explore"' "$clone/packages/claude-code-agents.json" ||
-  fail "update step did not update the Claude Code pin and its agent catalog together"
+grep -q '"2.1.0"' "$clone/packages/claude-code-manifest.json" ||
+  fail "update step did not update packages/claude-code-manifest.json"
 [[ $(jq -r .version "$clone/packages/ant-release.json") == 2.0.0 ]] || fail "ant updater did not run"
 [[ $(jq -r .tag "$clone/packages/ollama-release.json") == v0.40.17 ]] || fail "Ollama updater did not run"
 grep -q '0.0.47' "$clone/packages/t3code-release.json" ||
@@ -298,9 +266,8 @@ grep -q '"2.3.2"' "$clone/packages/opencode-release.json" ||
   fail "update step did not update packages/opencode-release.json"
 grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
   fail "update step did not update packages/pi-release.json"
-grep -q '"1.5.0"' "$clone/packages/pi-agents.json" &&
-  grep -q '"0.51.0"' "$clone/packages/codex-agents.json" ||
-  fail "update step did not regenerate the Codex and Pi catalogs"
+grep -q '"0.51.0"' "$clone/packages/codex-release.json" ||
+  fail "update step did not update packages/codex-release.json"
 grep -q '"9.9.9"' "$clone/packages/acpx-release.json" &&
   grep -q '"new": true' "$clone/packages/acpx/package-lock.json" ||
   fail "update step did not update acpx pin and lock file"
@@ -334,52 +301,15 @@ grep -q '^::warning title=T3 Code update skipped::.*lists 0 t3-0.0.47-linux-arm6
   fail "soft-failing updaters left partial changes in their pin or lock files"
 pass 'soft-failing updaters (chatgpt, t3code, opencode, pi, acpx, claude-agent-sdk, codex, ollama) warn, restore their files, and let the step continue'
 
-for failing in claude-code:claude-code-release claude-code-agents:claude-code-agents; do
-  command=${failing#*:} failing=${failing%%:*}
-  read -r status clone <<<"$(run_update_step "update-$failing-failure" "FAIL_SOFT=$failing")"
-  ((status == 0)) || fail "a failing $failing aborted the update step: $(cat "$scratch/update-$failing-failure-step.log")"
-  grep -q "^::warning title=Claude Code update skipped::.*$command: " "$scratch/update-$failing-failure-step.log" ||
-    fail "the Claude Code warning does not carry the $failing message: $(cat "$scratch/update-$failing-failure-step.log")"
-  [[ -z $("$git_bin" -C "$clone" status --porcelain packages/claude-code-manifest.json packages/claude-code-agents.json) ]] ||
-    fail "a failing $failing left the Claude Code pin or agent catalog changed"
-  grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
-    fail "a failing $failing stopped the updates after it"
-done
-[[ ! -e $scratch/update-claude-code-failure-clone/claude-code-agents-calls.log ]] ||
-  fail 'the agent catalog was extracted after the Claude Code release failed'
-pass 'a failing Claude Code release or agent extraction warns with its message, restores both files, and lets the step continue'
-
-read -r status clone <<<"$(run_update_step update-claude-code-unchanged "UNCHANGED=claude-code")"
-((status == 0)) || fail "an unchanged Claude Code pin aborted the update step: $(cat "$scratch/update-claude-code-unchanged-step.log")"
-[[ ! -e $clone/claude-code-agents-calls.log ]] ||
-  fail 'the agent catalog was extracted although the Claude Code pin did not change'
-pass 'an unchanged Claude Code pin skips the agent catalog extraction'
-
-for harness in codex pi; do
-  title=Codex
-  other=pi
-  other_version=1.5.0
-  if [[ $harness == pi ]]; then
-    title=Pi
-    other=codex
-    other_version=0.51.0
-  fi
-  read -r status clone <<<"$(run_update_step "update-$harness-agents-failure" "FAIL_SOFT=$harness-agents")"
-  ((status == 0)) || fail "a failing $harness catalog aborted the update step"
-  grep -q "^::warning title=$title update skipped::.*$harness-agents: unsupported registry" "$scratch/update-$harness-agents-failure-step.log" ||
-    fail "the $harness warning did not report the extraction error"
-  [[ -z $("$git_bin" -C "$clone" status --porcelain "packages/$harness-release.json" "packages/$harness-agents.json") ]] ||
-    fail "a failing $harness catalog changed its pin or catalog"
-  [[ $(jq -r .version "$clone/packages/$other-agents.json") == "$other_version" ]] ||
-    fail "a failing $harness catalog prevented the $other update"
-done
-pass 'Codex and Pi catalog failures restore their own files while the independent update proceeds'
-
-read -r status clone <<<"$(run_update_step update-harness-pins-unchanged "UNCHANGED=codex pi")"
-((status == 0)) || fail "unchanged Codex and Pi pins aborted the update step"
-[[ ! -e $clone/harness-catalog-calls.log ]] ||
-  fail 'a native agent catalog was extracted although its pin did not change'
-pass 'unchanged Codex and Pi pins skip their catalog extractions'
+read -r status clone <<<"$(run_update_step update-claude-code-failure "FAIL_SOFT=claude-code")"
+((status == 0)) || fail "a failing Claude Code release aborted the update step"
+grep -q '^::warning title=Claude Code update skipped::.*manifest for 2.1.0 lacks linux-arm64' "$scratch/update-claude-code-failure-step.log" ||
+  fail "the Claude Code warning omitted the release error"
+[[ -z $("$git_bin" -C "$clone" status --porcelain packages/claude-code-manifest.json) ]] ||
+  fail "a failing Claude Code release left a partial pin"
+grep -q '"1.5.0"' "$clone/packages/pi-release.json" ||
+  fail "a failing Claude Code release stopped the Pi update"
+pass 'a failing Claude Code release warns, restores the manifest, and lets later updates continue'
 
 read -r status _ <<<"$(run_update_step update-bad-rev "LOCKED_REV=null")"
 ((status != 0)) || fail "update step accepted a non-hex locked revision for compound-engineering-plugin"
@@ -408,13 +338,10 @@ printf '{"tag": "v0.40.17"}\n' >"$clone/packages/ollama-release.json"
 printf '{"zshLock":{"archives":[{"commit":"2222222222222222222222222222222222222222"}]}}\n' >"$clone/packages/prezto-pin.json"
 printf '{"version": "%s"}\n' "$new_t3_version" >"$clone/packages/t3code-release.json"
 printf '{"version": "1.5.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
-printf '{"version": "1.5.0", "agents": []}\n' >"$clone/packages/pi-agents.json"
 printf '{"version": "0.51.0"}\n' >"$clone/packages/codex-release.json"
-printf '{"version": "0.51.0", "agents": []}\n' >"$clone/packages/codex-agents.json"
 printf '{"version": "0.21.0"}\n' >"$clone/packages/acpx-release.json"
 printf '{"version": "2.3.2", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
 printf '{"version": "2.1.0"}\n' >"$clone/packages/claude-code-manifest.json"
-printf '{"version": "2.1.0", "agents": [{"agentType": "Explore"}]}\n' >"$clone/packages/claude-code-agents.json"
 printf '{"lockfileVersion": 3, "name": "acpx", "new": true}\n' >"$clone/packages/acpx/package-lock.json"
 sed -i 's/compound-engineering-v2.67.0/compound-engineering-v2.68.0/' \
   "$clone/flake.nix" "$clone/home/h82/agents/agent-plugin-pins.nix"
@@ -428,9 +355,9 @@ for expected in \
   'chore(packages): bump ant to 2.0.0|packages/ant-release.json' \
   'chore(packages): refresh ollama-release|packages/ollama-release.json' \
   'chore(packages): refresh prezto to 222222222222|packages/prezto-pin.json' \
-  'chore(packages): bump pi to 1.5.0|packages/pi-agents.json packages/pi-release.json' \
-  'chore(packages): bump codex to 0.51.0|packages/codex-agents.json packages/codex-release.json' \
-  'chore(packages): bump claude-code to 2.1.0|packages/claude-code-agents.json packages/claude-code-manifest.json' \
+  'chore(packages): bump pi to 1.5.0|packages/pi-release.json' \
+  'chore(packages): bump codex to 0.51.0|packages/codex-release.json' \
+  'chore(packages): bump claude-code to 2.1.0|packages/claude-code-manifest.json' \
   'chore(packages): bump acpx to 0.21.0|packages/acpx-release.json packages/acpx/package-lock.json' \
   "chore(packages): bump t3code to $new_t3_version|packages/t3code-release.json" \
   'chore(packages): bump opencode to 2.3.2|packages/opencode-release.json' \
