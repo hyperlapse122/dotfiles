@@ -15,6 +15,7 @@
     ./cross-model-peers.nix
     ./fff.nix
     ./opencode.nix
+    ./omp.nix
     ./official-skills.nix
     ./pi.nix
     ./instructions
