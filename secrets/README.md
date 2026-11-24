@@ -85,6 +85,12 @@ Actions secrets. For registry pulls, `github_token` needs `read:packages` or
 `write:packages`, and `gitlab_token` needs `read_registry` or `write_registry`.
 Public usernames live in [cli-accounts.nix](../modules/shared/cli-accounts.nix).
 
+`omp-auth-sync` replaces omp's stored key for each provider it imports and
+keeps OAuth logins, which omp tries first. A failed OAuth refresh therefore
+falls back to the managed API key. Turning a key option off or removing a
+field stops the import but leaves the last imported key in omp's credential
+store; remove it with `/logout` in omp.
+
 #### Rotate or add a CLI credential
 
 Run SOPS maintenance from the repository root as the owner. On either
