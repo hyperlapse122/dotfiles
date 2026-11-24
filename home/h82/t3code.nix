@@ -250,15 +250,22 @@ let
       options = [
         {
           id = "effort";
-          value = "high";
+          value = "medium";
         }
       ];
     };
-    # Another provider, because T3 Code falls back only when the default
-    # model's usage window is exhausted and the fallback model's is not.
+    # Another provider (Synthetic through Pi), because T3 Code falls back only
+    # when the default model's usage window is exhausted and the fallback
+    # model's is not. "high" is the highest thinking level Pi offers for it.
     fallbackModelSelection = {
-      instanceId = "codex";
-      model = "gpt-6.2-astra";
+      instanceId = "pi";
+      model = "synthetic/hf:zai-org/GLM-5.3-Flash";
+      options = [
+        {
+          id = "thinking";
+          value = "high";
+        }
+      ];
     };
     textGenerationModelSelection = {
       instanceId = "claudeAgent";

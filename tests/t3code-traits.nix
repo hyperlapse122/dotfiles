@@ -352,13 +352,19 @@ let
         options = [
           {
             id = "effort";
-            value = "high";
+            value = "medium";
           }
         ];
       };
       fallbackModelSelection = {
-        instanceId = "codex";
-        model = "gpt-6.2-astra";
+        instanceId = "pi";
+        model = "synthetic/hf:zai-org/GLM-5.3-Flash";
+        options = [
+          {
+            id = "thinking";
+            value = "high";
+          }
+        ];
       };
       textGenerationModelSelection = {
         instanceId = "claudeAgent";
