@@ -237,6 +237,25 @@ jobs:
             sed -i "s#expectedRev = \"[0-9a-f]*\";#expectedRev = \"$rev\";#" home/h82/agents/agent-plugin-pins.nix
           fi
 
+          # Update omp. A release can be published before its binaries and
+          # digests are, so a resolver failure keeps the current pin. A new
+          # pin moves the omp input to the same release tag, and the lock must
+          # name the commit the pin recorded.
+          if ! nix run .#omp-release -- --output packages/omp-release.json; then
+            echo "::warning title=omp update skipped::omp-release failed; keeping the current pin in packages/omp-release.json."
+            git checkout -- packages/omp-release.json
+          elif [ -n "$(git status --porcelain -- packages/omp-release.json)" ]; then
+            omp_tag="v$(jq -r .version packages/omp-release.json)"
+            sed -i "s#github:can1357/oh-my-pi/v[0-9][0-9.]*\"#github:can1357/oh-my-pi/$omp_tag\"#" flake.nix
+            nix flake lock --update-input omp
+            omp_pinned=$(jq -r .rev packages/omp-release.json)
+            omp_locked=$(jq -r '.nodes.omp.locked.rev' flake.lock)
+            if [ "$omp_locked" != "$omp_pinned" ]; then
+              echo "the omp input locked $omp_locked, but packages/omp-release.json pins $omp_pinned for $omp_tag" >&2
+              exit 1
+            fi
+          fi
+
           # Refresh the imported application and font asset pins.
           for pin in bun-pin overlay-fonts; do
             nix run .#overlay-release -- --output "packages/$pin.json"
@@ -354,6 +373,7 @@ jobs:
           commit_if_pin_changed chatgpt packages/chatgpt-version.json
           commit_if_pin_changed ant packages/ant-release.json
           commit_if_pin_changed mise packages/mise-release.json
+          commit_if_pin_changed omp packages/omp-release.json flake.nix flake.lock
 
           if [ -n "$(git status --porcelain packages/prezto-pin.json)" ]; then
             NEW_REV=$(jq -r '.zshLock.archives[0].commit' packages/prezto-pin.json)

@@ -5,7 +5,10 @@
   ...
 }:
 let
-  completions = import ../../../packages/zsh-completions.nix { inherit pkgs; };
+  completions = import ../../../packages/zsh-completions.nix {
+    inherit pkgs;
+    omp = config.programs.omp.package;
+  };
   mise = config.programs.mise;
   # The condition under which the Home Manager module writes globalConfig to
   # mise/config.toml.
