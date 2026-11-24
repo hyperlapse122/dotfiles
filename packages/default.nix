@@ -36,6 +36,7 @@ in
   codex = import ./codex.nix { inherit pkgs; };
   opencode-release = agentTools.opencodeRelease;
   opencode = import ./opencode.nix { inherit pkgs; };
+  omp-release = agentTools.ompRelease;
   npm-release = agentTools.npmRelease;
   acpx = import ./acpx.nix { inherit pkgs; };
   tanstack-intent = import ./tanstack-intent.nix { inherit pkgs; };
