@@ -337,8 +337,8 @@
       "id": "hy4-preview",
       "name": "Hy4 preview",
       "limit": {
-        "context": 1024000,
-        "output": 64000
+        "context": 1048576,
+        "output": 65536
       },
       "cost": {
         "text": {
