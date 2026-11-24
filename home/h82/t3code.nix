@@ -254,9 +254,11 @@ let
         }
       ];
     };
+    # Another provider, because T3 Code falls back only when the default
+    # model's usage window is exhausted and the fallback model's is not.
     fallbackModelSelection = {
-      instanceId = "claudeAgent";
-      model = "claude-opus-5-5";
+      instanceId = "codex";
+      model = "gpt-6.2-astra";
     };
     textGenerationModelSelection = {
       instanceId = "claudeAgent";
