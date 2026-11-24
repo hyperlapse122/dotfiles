@@ -65,6 +65,7 @@ lib.nixosSystem {
           { my = hostFacts.of config.my; }
         ];
         home-manager.users.${config.my.user.name} = import ../home/h82;
+        my.cliAuth.ompPackage = config.home-manager.users.${config.my.user.name}.programs.omp.package;
       }
     )
   ];

@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Seed omp's credential store from published API key files.
+
+Each `--credential PROVIDER=KEYFILE` names an omp provider and the file that
+holds its key. The keys go to `omp auth import -` as login-sourced API keys in
+one export document on standard input. omp replaces every stored API key of an
+imported provider and keeps OAuth logins, so a later OAuth login for the same
+provider still takes precedence, and a rotated key replaces the old one.
+
+No key reaches an argument list, the environment, a file, or any output. A
+missing, unreadable, or empty key file stops the run before omp is touched.
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+
+
+class Failure(Exception):
+    """A refusal that should stop the run with a readable message."""
+
+
+def read_key(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            key = f.read().strip()
+    except OSError as exc:
+        raise Failure(f"cannot read the key file {path}: {exc.strerror}") from None
+    if not key:
+        raise Failure(f"the key file {path} is empty")
+    return key
+
+
+def sync(binary, credentials):
+    document = {
+        "version": 1,
+        "credentials": [
+            {"provider": provider, "credential": {"type": "api_key", "key": read_key(path), "source": "login"}}
+            for provider, path in credentials
+        ],
+    }
+    proc = subprocess.run(
+        [binary, "auth", "import", "-"],
+        input=json.dumps(document),
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise Failure(f"omp auth import failed (status {proc.returncode})")
+
+
+def credential(text):
+    provider, separator, path = text.partition("=")
+    if not separator or not provider or not path:
+        raise argparse.ArgumentTypeError("expected PROVIDER=KEYFILE")
+    return provider, path
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--omp", required=True, help="the omp binary to run")
+    parser.add_argument(
+        "--credential",
+        action="append",
+        type=credential,
+        required=True,
+        metavar="PROVIDER=KEYFILE",
+        help="an omp provider and the file holding its key; repeatable",
+    )
+    args = parser.parse_args(argv)
+    try:
+        sync(args.omp, args.credential)
+    except Failure as exc:
+        print(f"omp-auth-sync: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

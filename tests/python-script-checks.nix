@@ -65,6 +65,7 @@ in
   opencode-auth-sync =
     pythonScriptCheck "opencode-auth-sync" ../scripts/opencode-auth-sync
       ./test_opencode_auth_sync.py;
+  omp-auth-sync = pythonScriptCheck "omp-auth-sync" ../scripts/omp-auth-sync ./test_omp_auth_sync.py;
   opencode-serving-model =
     pythonScriptCheck "opencode-serving-model" ../scripts/opencode-serving-model
       ./test_opencode_serving_model.py;

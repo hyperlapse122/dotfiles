@@ -108,6 +108,9 @@ let
   # Seeds OpenCode's credential store from the published API key files.
   opencodeAuthSync = pythonHelper "opencode-auth-sync" ../scripts/opencode-auth-sync;
 
+  # Seeds omp's credential store from the published API key files.
+  ompAuthSync = pythonHelper "omp-auth-sync" ../scripts/omp-auth-sync;
+
   # Names the provider and model that served an OpenCode session, from
   # OpenCode's own session record, for T3 cross-model evidence.
   opencodeServingModel = pythonHelper "opencode-serving-model" ../scripts/opencode-serving-model;
@@ -171,6 +174,7 @@ in
     codexRelease
     opencodeRelease
     opencodeAuthSync
+    ompAuthSync
     opencodeServingModel
     ompRelease
     npmRelease

@@ -143,7 +143,7 @@ Run these steps on the Mac, in order, from a local GUI login session, never over
     The production switch:
     - decrypts `secrets/hosts/<host>/tls-inspection-ca.yaml` into `/etc/ssl/nix-config/` and ensures macOS admin SSL trust when `my.tlsInspectionCa.enable` is on (approve the macOS authorization dialog if prompted);
     - installs and selects Xcode through `xcodes` using the Apple Account decrypted in memory from `secrets/hosts/<host>/apple-account.yaml` (complete any interactive Apple Account 2FA or `sudo` prompt if asked);
-    - publishes the CLI tokens, `gh` and `glab` configuration, the Synthetic, OpenAI, and Anthropic keys Pi uses, OpenCode's Synthetic, OpenCode Go, OpenAI, and Anthropic keys, and the host SSH key (see [Secrets and authentication](#secrets-and-authentication));
+    - publishes the CLI tokens, `gh` and `glab` configuration, the Synthetic, OpenAI, and Anthropic keys Pi uses, OpenCode's Synthetic, OpenCode Go, OpenAI, and Anthropic keys, omp's Synthetic, OpenRouter, OpenAI, Anthropic, OpenCode Go, and Exa keys, and the host SSH key (see [Secrets and authentication](#secrets-and-authentication));
     - records `variant=production` in `/etc/nix-config-host`.
 
 13. **Exclude the host SSH private key from Time Machine by path.** Because `host-secrets` replaces `~/.ssh/id_ed25519_nix_config` atomically on every apply, a sticky file exclusion would be lost on the next switch; use a fixed-path exclusion (`-p`) with `sudo`:
@@ -206,6 +206,7 @@ Production activation publishes:
 - CLI and registry tokens under `~/.local/state/cli-auth/` (`github_token`, `gitlab_token`, `jpi_token`, `tokscale_token`, `synthetic_api_key`, `exa_api_key`, `openrouter_api_key`, `opencode_go_api_key`, `openai_api_key`, `anthropic_api_key`);
 - the `synthetic`, `openai`, and `anthropic` provider keys in `~/.pi/agent/auth.json`;
 - the `synthetic`, `opencode-go`, `openai`, and `anthropic` credentials in OpenCode's credential store, under the label `nix-config`;
+- the `synthetic`, `openrouter`, `openai`, `anthropic`, `opencode-go`, and `exa` API keys in omp's credential store, where an OAuth login for the same provider still takes precedence;
 - the host SSH private key at `~/.ssh/id_ed25519_nix_config`.
 
 ### YubiKey PIN

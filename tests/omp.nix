@@ -14,6 +14,12 @@
   - The ompConfig activation, executed in a scratch HOME, installs a
     ~/.omp/agent/config.yml byte-identical to the declared mapping below, which
     catches both drift toward omp's runtime writes and omissions.
+  - On a production macOS output, the ompAuth activation runs after secret
+    publication and the settings copy. Executed against a recording stub, it
+    hands omp-auth-sync the managed omp and each published key file under its
+    omp provider, does nothing on a dry run, and fails when the import fails.
+    Bootstrap and NixOS outputs carry no ompAuth; NixOS imports from
+    sops-install-secrets instead (tests/agent-api-key-secrets.nix).
 
   And once: the `omp` input in flake.lock is locked to the tag
   `v<version>` and the revision packages/omp-release.json pins, so the Home
@@ -66,6 +72,60 @@ let
     setupVersion = 3;
   };
 
+  authSync = "${
+    (import ../packages/agent-tools.nix { inherit pkgs; }).ompAuthSync
+  }/bin/omp-auth-sync";
+  providerKeyFiles = {
+    synthetic = "synthetic_api_key";
+    openrouter = "openrouter_api_key";
+    openai = "openai_api_key";
+    anthropic = "anthropic_api_key";
+    opencode-go = "opencode_go_api_key";
+    exa = "exa_api_key";
+  };
+
+  assertAuth =
+    entry: user:
+    let
+      hostName = entry.name;
+      auth = user.home.activation.ompAuth or null;
+      expected = [
+        "--omp"
+        (builtins.unsafeDiscardStringContext "${toString omp}/bin/omp")
+      ]
+      ++ lib.concatLists (
+        lib.mapAttrsToList (provider: file: [
+          "--credential"
+          "${provider}=${user.my.secrets.stateDir or ""}/${file}"
+        ]) providerKeyFiles
+      );
+      expectAuth = (entry.kind or "") == "darwin" && !(entry.bootstrap or true);
+    in
+    ''
+      ${lib.optionalString (expectAuth && auth == null) ''
+        echo 'missing home.activation.ompAuth on production output ${hostName}' >&2
+        failed=1
+      ''}
+      ${lib.optionalString (!expectAuth && auth != null) ''
+        echo 'unexpected ompAuth on ${hostName}' >&2
+        failed=1
+      ''}
+      ${lib.optionalString (expectAuth && auth != null) ''
+        for step in nixConfigSecretsPublish ompConfig; do
+          case ${esc " ${toString (auth.after or [ ])} "} in
+            *" $step "*) ;;
+            *) echo "ompAuth must run after $step on ${hostName}" >&2; failed=1 ;;
+          esac
+        done
+        if ! python3 ${./omp-activation.py} ${
+          pkgs.writeText "omp-auth-block.sh" (builtins.unsafeDiscardStringContext (auth.data or ""))
+        } ${authSync} ${pkgs.writeText "omp-auth-expected.json" (builtins.toJSON expected)}; then
+          echo 'the ompAuth activation did not run as expected on ${hostName}' >&2
+          failed=1
+        fi
+      ''}
+    '';
+
   assertEntry =
     entry:
     let
@@ -107,29 +167,71 @@ let
           failed=1
         fi
       ''}
+      ${assertAuth entry user}
     '';
 in
-pkgs.runCommand "omp-tests" { nativeBuildInputs = [ pkgs.diffutils ]; } ''
-  failed=0
+pkgs.runCommand "omp-tests"
+  {
+    nativeBuildInputs = [
+      pkgs.diffutils
+      pkgs.jq
+      pkgs.python3
+    ];
+  }
+  ''
+    failed=0
 
-  ${lib.optionalString (entries == [ ]) ''
-    echo 'no Home Manager user environments to check' >&2
-    failed=1
-  ''}
+    ${lib.optionalString (entries == [ ]) ''
+      echo 'no Home Manager user environments to check' >&2
+      failed=1
+    ''}
+    ${lib.optionalString
+      (
+        lib.any (entry: (entry.kind or "") == "darwin") entries
+        && !lib.any (entry: (entry.kind or "") == "darwin" && !(entry.bootstrap or true)) entries
+      )
+      ''
+        echo 'no production macOS output to check ompAuth on' >&2
+        failed=1
+      ''
+    }
 
-  if [ ${esc lockedRev} != ${esc pinnedRev} ] || [ -z ${esc pinnedRev} ]; then
-    echo ${esc "the omp input drifted from the pinned release: packages/omp-release.json pins '${pinnedRev}', flake.lock locked '${lockedRev}'"} >&2
-    failed=1
-  fi
-  if [ ${esc lockedRef} != ${esc "v${pinnedVersion}"} ]; then
-    echo ${esc "the omp input must name the pinned release tag: flake.lock records ref '${lockedRef}', expected 'v${pinnedVersion}'"} >&2
-    failed=1
-  fi
+    if [ ${esc lockedRev} != ${esc pinnedRev} ] || [ -z ${esc pinnedRev} ]; then
+      echo ${esc "the omp input drifted from the pinned release: packages/omp-release.json pins '${pinnedRev}', flake.lock locked '${lockedRev}'"} >&2
+      failed=1
+    fi
+    if [ ${esc lockedRef} != ${esc "v${pinnedVersion}"} ]; then
+      echo ${esc "the omp input must name the pinned release tag: flake.lock records ref '${lockedRef}', expected 'v${pinnedVersion}'"} >&2
+      failed=1
+    fi
 
-  ${lib.concatMapStringsSep "\n" assertEntry entries}
+    ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+      # The pinned omp itself must accept omp-auth-sync's import: a managed key
+      # replaces the provider's stored key while that provider's OAuth login and
+      # another provider's key stay. Only Darwin runs it, because the Linux
+      # release binary needs the host's nix-ld loader, which the sandbox lacks.
+      export HOME=$TMPDIR/omp-store
+      mkdir -p "$HOME"
+      printf '%s' '{"version":1,"credentials":[{"provider":"synthetic","credential":{"type":"api_key","key":"FAKE hand","source":"login"}},{"provider":"deepseek","credential":{"type":"api_key","key":"FAKE other","source":"login"}},{"provider":"anthropic","credential":{"type":"oauth","access":"FAKE a","refresh":"FAKE r","expires":1}}]}' \
+        | ${omp}/bin/omp auth import - 2>/dev/null
+      printf 'FAKE managed synthetic\n' > "$HOME/synthetic"
+      printf 'FAKE managed anthropic\n' > "$HOME/anthropic"
+      if ! ${authSync} --omp ${omp}/bin/omp --credential "synthetic=$HOME/synthetic" --credential "anthropic=$HOME/anthropic"; then
+        echo 'omp-auth-sync failed against the pinned omp' >&2
+        failed=1
+      fi
+      stored=$(${omp}/bin/omp auth export 2>/dev/null | jq -c '[.credentials[] | [.provider, .credential.type, (.credential.key // .credential.access), (.credential.source // null)]] | sort')
+      want='[["anthropic","api_key","FAKE managed anthropic","login"],["anthropic","oauth","FAKE a",null],["deepseek","api_key","FAKE other","login"],["synthetic","api_key","FAKE managed synthetic","login"]]'
+      if [ "$stored" != "$want" ]; then
+        echo "the pinned omp stored $stored after the import, expected $want" >&2
+        failed=1
+      fi
+    ''}
 
-  if [ "$failed" != "0" ]; then
-    exit 1
-  fi
-  touch $out
-''
+    ${lib.concatMapStringsSep "\n" assertEntry entries}
+
+    if [ "$failed" != "0" ]; then
+      exit 1
+    fi
+    touch $out
+  ''

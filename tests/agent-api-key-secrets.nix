@@ -10,43 +10,49 @@ let
   configurations = import ./lib/configurations.nix { inherit pkgs self; };
   esc = value: lib.escapeShellArg (toString value);
   # The API keys a production configuration decrypts, each with the option
-  # that gates it.
+  # that gates it and the omp provider that sops-install-secrets imports it as.
   apiKeySecrets = [
     {
       label = "Synthetic";
       match = "synthetic";
       file = "synthetic_api_key";
       option = "my.cliAuth.enableSyntheticApiKey";
+      omp = "synthetic";
     }
     {
       label = "Exa";
       match = "exa_api";
       file = "exa_api_key";
       option = "my.cliAuth.enableExaApiKey";
+      omp = "exa";
     }
     {
       label = "OpenRouter";
       match = "openrouter";
       file = "openrouter_api_key";
       option = "my.cliAuth.enableOpenRouterApiKey";
+      omp = "openrouter";
     }
     {
       label = "OpenCode Go";
       match = "opencode_go";
       file = "opencode_go_api_key";
       option = "my.cliAuth.enableOpencodeGoApiKey";
+      omp = "opencode-go";
     }
     {
       label = "OpenAI";
       match = "openai_api";
       file = "openai_api_key";
       option = "my.cliAuth.enableOpenaiApiKey";
+      omp = "openai";
     }
     {
       label = "Anthropic";
       match = "anthropic_api";
       file = "anthropic_api_key";
       option = "my.cliAuth.enableAnthropicApiKey";
+      omp = "anthropic";
     }
   ];
 
@@ -79,7 +85,10 @@ let
         lib.toList (sopsService.serviceConfig.ExecStart or [ ])
         ++ [ (entry.config.system.activationScripts.setupSecrets.text or "") ]
       );
-      publisher = lib.concatStringsSep " " (lib.toList (sopsService.serviceConfig.ExecStartPost or [ ]));
+      postSteps = lib.toList (sopsService.serviceConfig.ExecStartPost or [ ]);
+      publisher = lib.concatStringsSep " " postSteps;
+      ompSteps = lib.filter (step: lib.hasInfix "/bin/omp-auth-sync " step) postSteps;
+      ompImport = lib.concatStringsSep "\n" ompSteps;
     in
     ''
       manifests=$(printf '%s' ${esc installers} | grep -oE '/nix/store/[^[:space:]]+-manifest\.json' || true)
@@ -87,6 +96,10 @@ let
         fail ${host'}": found no sops manifest"
       fi
       publisher=$(printf '%s' ${esc publisher} | grep -oE '/nix/store/[^[:space:]]+/bin/publish-cli-auth' | head -1 || true)
+      omp_import=${esc ompImport}
+      ${lib.optionalString (lib.length ompSteps != 1) ''
+        fail ${host'}": sops-install-secrets must run omp-auth-sync exactly once, found ${toString (lib.length ompSteps)}"
+      ''}
       ${lib.concatMapStringsSep "\n" (
         secret:
         let
@@ -113,11 +126,17 @@ let
                 elif grep -q ${secret.file} "$publisher"; then
                   fail ${host'}": publish-cli-auth must not read the ${secret.label} API key"
                 fi
+                if ! printf '%s' "$omp_import" | grep -qF -- "--credential '${secret.omp}=/run/secrets/cli-auth/${secret.file}'"; then
+                  fail ${host'}": the omp import does not receive the ${secret.label} API key as ${secret.omp}"
+                fi
               ''
             else
               ''
                 if [ -n "$secrets" ]; then
                   fail ${host'}": a configuration with ${secret.option} off must not decrypt the ${secret.label} secret, got: '$secrets'"
+                fi
+                if printf '%s' "$omp_import" | grep -qF -- "'${secret.omp}="; then
+                  fail ${host'}": a configuration with ${secret.option} off must not import the ${secret.label} key into omp"
                 fi
               ''
           }
