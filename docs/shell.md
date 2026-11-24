@@ -37,7 +37,7 @@ The table records repository and sandbox evidence; actual-machine checks remain 
 | Color style | Already supplied | The pinned Home Manager Prezto module emits the enabled color style; the interactive check queries it. Prezto retains its upstream behavior for dumb terminals. |
 | Conditional modules | Restored | Git requires `git`; Homebrew requires Darwin and `brew`; GPG requires `gpg-agent` and both SSH guard conditions. Generated module selection is executed with present and absent command fixtures. |
 | GPG_TTY | Already supplied | Interactive startup exports a nonempty terminal TTY; PTY checks verify it and preserve an existing SSH-agent socket under each guard. |
-| Completions | Verified | The package supplies codex, gh, glab, ghq, mise, and usage functions; interactive shells verify all six registrations and function definitions. Bash executes `_init_completion` through Home Manager's bash-completion package. |
+| Completions | Verified | The package supplies codex, gh, glab, ghq, mise, omp, and usage functions; interactive shells verify all seven registrations and function definitions. Bash executes `_init_completion` through Home Manager's bash-completion package. |
 | mise activation | Already supplied | Home Manager emits mise's zsh activation; runtime checks require its shell hook. |
 | Environment | Completed | `NODE_USE_SYSTEM_CA=1` is retained and local binaries precede profile tools. Mise may prepend its shims, as it did after the old environment loader. The retired chezmoi helper-bin path is unnecessary for store-managed tools. |
 | Single initialization | Verified | Login and non-login shells initialize Prezto exactly once, checked through execution tracing. History keeps its XDG state path, 10,000-entry limits, extended format, duplicate handling, and sharing. |
@@ -83,6 +83,6 @@ nix build --no-link .#checks.x86_64-linux.update-dependencies-reconcile
 ```
 
 Actual-host verification remains pending until the owner applies the intended generation and checks both machines.
-In each actual terminal, open login and non-login zsh sessions and confirm the sorin prompt, emacs bindings, six CLI completions, mise activation, and absence of startup errors.
+In each actual terminal, open login and non-login zsh sessions and confirm the sorin prompt, emacs bindings, seven CLI completions, mise activation, and absence of startup errors.
 Use history across two sessions to confirm persistence and sharing, and check that the intended SSH-agent socket remains selected.
 Repository checks and CI do not establish those hardware results.

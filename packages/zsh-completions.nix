@@ -1,4 +1,4 @@
-{ pkgs }:
+{ pkgs, omp }:
 pkgs.runCommand "personal-zsh-completions" { nativeBuildInputs = [ pkgs.zsh ]; } ''
     export HOME=$TMPDIR/home
   mkdir -p "$HOME" $out/share/zsh/site-functions
@@ -11,6 +11,7 @@ pkgs.runCommand "personal-zsh-completions" { nativeBuildInputs = [ pkgs.zsh ]; }
     ${
       import ./mise.nix { inherit pkgs; }
     }/bin/mise completion zsh > $out/share/zsh/site-functions/_mise
+    ${omp}/bin/omp completions zsh > $out/share/zsh/site-functions/_omp
     ${pkgs.usage}/bin/usage --completions zsh > $out/share/zsh/site-functions/_usage
   for file in $out/share/zsh/site-functions/*; do
     zsh -n "$file"
@@ -19,7 +20,7 @@ pkgs.runCommand "personal-zsh-completions" { nativeBuildInputs = [ pkgs.zsh ]; }
     fpath=("$1" $fpath)
     autoload -Uz compinit
     compinit -D
-    for completionCommand in codex gh glab ghq mise usage; do
+    for completionCommand in codex gh glab ghq mise omp usage; do
       [[ ''${_comps[$completionCommand]-} == _$completionCommand ]] || exit 1
     done
   ' zsh "$out/share/zsh/site-functions"
