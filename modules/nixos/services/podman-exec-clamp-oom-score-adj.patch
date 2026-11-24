@@ -1,0 +1,27 @@
+--- a/libpod/oci_conmon_exec_common.go
++++ b/libpod/oci_conmon_exec_common.go
+@@ -24,6 +24,7 @@
+ 	"go.podman.io/podman/v6/pkg/errorhandling"
+ 	"go.podman.io/podman/v6/pkg/lookup"
+ 	"go.podman.io/podman/v6/pkg/pidhandle"
++	"go.podman.io/storage/pkg/unshare"
+ 	"golang.org/x/sys/unix"
+ )
+ 
+@@ -690,6 +691,16 @@
+ 	pspec.SelinuxLabel = c.config.ProcessLabel
+ 	pspec.Args = options.Cmd
+ 
++	// An unprivileged process cannot lower its oom_score_adj below the floor
++	// it inherited, so crun fails with EACCES when the stored value is lower.
++	if pspec.OOMScoreAdj != nil && unshare.IsRootless() {
++		clamped, err := maybeClampOOMScoreAdj(*pspec.OOMScoreAdj)
++		if err != nil {
++			return nil, err
++		}
++		pspec.OOMScoreAdj = &clamped
++	}
++
+ 	// We need to default this to false else it will inherit terminal as true
+ 	// from the container.
+ 	pspec.Terminal = false

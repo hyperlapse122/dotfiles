@@ -87,6 +87,20 @@ pkgs.runCommand "t3code-tests" { } ''
     fail=1
   fi
 
+  # Podman's pre-main join removes a pause.pid it cannot open, and the
+  # sandbox cannot open the host's, so the directory must stay read-only
+  # there. Expanded under the fake runtime directory like CONTAINER_HOST.
+  libpodTmp=$(
+    XDG_RUNTIME_DIR=${fakeRuntimeDir}
+    line=$(grep -E '^[[:space:]]*--ro-bind-try [^ ]*libpod/tmp' ${desktop}/bin/t3code-desktop) || exit 0
+    eval "set -- $line"
+    printf '%s %s' "$2" "$3"
+  )
+  if [ "$libpodTmp" != "${fakeRuntimeDir}/libpod/tmp ${fakeRuntimeDir}/libpod/tmp" ]; then
+    echo "t3code-desktop sandbox does not bind the session's libpod/tmp read-only: '$libpodTmp'" >&2
+    fail=1
+  fi
+
   entry=${desktop}/share/applications/t3code.desktop
   if [ ! -f "$entry" ]; then
     echo "t3code-desktop ships no t3code.desktop entry" >&2
