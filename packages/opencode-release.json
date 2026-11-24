@@ -1,15 +1,15 @@
 {
-  "version": "2.3.2",
+  "version": "2.4.1",
   "platforms": {
     "x86_64-linux": {
       "asset": "opencode-linux-x64.tar.gz",
-      "sha256": "563b5d663637226b6e3bb4bb6803281bc39b0d2cd88db06d674b6420aab009b0",
-      "hash": "sha256-VjtdZjY3ImtuO7S7aAMoG8ObDSzYjbBtZ0tkIKqwCbA="
+      "sha256": "9ddd18e3faf64eaeccf6a0fcbc96a5c7a14520ae5fd5b61e5be51d894f478b47",
+      "hash": "sha256-nd0Y4/r2Tq7M9qD8vJalx6FFIK5f1bYeW+UdiU9Hi0c="
     },
     "aarch64-darwin": {
       "asset": "opencode-darwin-arm64.zip",
-      "sha256": "31ab5a06a29edc7e49b895f35c2b64ebfe7c7f0437b0f2581b006efcd79fee1a",
-      "hash": "sha256-MataBqKe3H5JuJXzXCtk6/58fwQ3sPJYGwBu/Nef7ho="
+      "sha256": "95a101eda95108478f1db43cff8fcbd4811f6c0e79af1e167301843c6a48d731",
+      "hash": "sha256-laEB7alRCEePHbQ8/4/L1IEfbA55rx4WcwGEPGpI1zE="
     }
   }
 }
