@@ -55,6 +55,7 @@ setup_clone() {
   cat >"$clone/flake.nix" <<'EOF'
 {
   inputs.compound-engineering-plugin.url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v2.67.0";
+  inputs.omp.url = "github:can1357/oh-my-pi/v19.1.1";
 }
 EOF
   cat >"$clone/flake.lock" <<'EOF'
@@ -63,6 +64,11 @@ EOF
     "compound-engineering-plugin": {
       "locked": {
         "rev": "1111111111111111111111111111111111111111"
+      }
+    },
+    "omp": {
+      "locked": {
+        "rev": "3333333333333333333333333333333333333333"
       }
     }
   }
@@ -87,6 +93,7 @@ EOF
   printf '{"version": "1.0.0"}\n' >"$clone/packages/chatgpt-version.json"
   printf '{"version": "0.0.45"}\n' >"$clone/packages/t3code-release.json"
   printf '{"version": "2.3.1", "platforms": {}}\n' >"$clone/packages/opencode-release.json"
+  printf '{"version": "19.1.1", "rev": "3333333333333333333333333333333333333333", "platforms": {}}\n' >"$clone/packages/omp-release.json"
   printf '{"version": "1.4.0", "platforms": {}}\n' >"$clone/packages/pi-release.json"
   printf '{"version": "0.20.0"}\n' >"$clone/packages/acpx-release.json"
   printf '{"lockfileVersion": 3, "name": "acpx"}\n' >"$clone/packages/acpx/package-lock.json"
@@ -124,6 +131,20 @@ case "\$*" in
   "flake lock --update-input compound-engineering-plugin")
     jq --arg rev "\${LOCKED_REV:-2222222222222222222222222222222222222222}" \
       '.nodes["compound-engineering-plugin"].locked.rev = \$rev' flake.lock >flake.lock.tmp
+    mv flake.lock.tmp flake.lock
+    ;;
+  "run .#omp-release -- --output packages/omp-release.json")
+    if [[ " \${FAIL_SOFT:-} " == *" omp "* ]]; then
+      printf '{"version": "partial' >packages/omp-release.json
+      echo "omp-release: release v19.2.0 lists 0 omp-linux-x64 assets" >&2
+      exit 1
+    fi
+    if [[ \${OMP_UNCHANGED:-0} == 1 ]]; then exit 0; fi
+    printf '{"version": "19.2.0", "rev": "4444444444444444444444444444444444444444", "platforms": {}}\n' >packages/omp-release.json
+    ;;
+  "flake lock --update-input omp")
+    jq --arg rev "\${OMP_LOCKED_REV:-4444444444444444444444444444444444444444}" \
+      '.nodes.omp.locked.rev = \$rev' flake.lock >flake.lock.tmp
     mv flake.lock.tmp flake.lock
     ;;
   "run .#claude-desktop-release -- --output packages/claude-desktop-version.json")
@@ -263,6 +284,43 @@ grep -q '"9.9.9"' "$clone/packages/acpx-release.json" &&
 [[ $(wc -l <"$clone/overlay-calls.log") == 2 ]] || fail 'missing imported pin updater'
 pass 'the update step runs flake update, compound-engineering-plugin pin/lock update, and all release updaters'
 
+grep -q 'github:can1357/oh-my-pi/v19.2.0"' "$clone/flake.nix" ||
+  fail "update step did not move the omp input to the new release tag: $(cat "$clone/flake.nix")"
+[[ $(jq -r '.nodes.omp.locked.rev' "$clone/flake.lock") == 4444444444444444444444444444444444444444 ]] ||
+  fail 'update step did not relock the omp input'
+grep -qx 'flake lock --update-input omp' "$scratch/update-all-nix.log" ||
+  fail 'update step did not relock only the omp input'
+pass 'a new omp pin moves the flake tag and relocks the omp input'
+
+read -r status clone <<<"$(run_update_step update-omp-unchanged OMP_UNCHANGED=1)"
+((status == 0)) || fail "an unchanged omp pin aborted the update step: $(cat "$scratch/update-omp-unchanged-step.log")"
+grep -q 'github:can1357/oh-my-pi/v19.1.1"' "$clone/flake.nix" ||
+  fail 'an unchanged omp pin moved the flake tag'
+if grep -qx 'flake lock --update-input omp' "$scratch/update-omp-unchanged-nix.log"; then
+  fail 'an unchanged omp pin relocked the omp input'
+fi
+pass 'an unchanged omp pin leaves the flake tag and lock alone'
+
+read -r status clone <<<"$(run_update_step update-omp-soft-fail FAIL_SOFT=omp)"
+((status == 0)) || fail "a failing omp release aborted the update step: $(cat "$scratch/update-omp-soft-fail-step.log")"
+grep -q '^::warning title=omp update skipped::' "$scratch/update-omp-soft-fail-step.log" ||
+  fail "missing omp warning: $(cat "$scratch/update-omp-soft-fail-step.log")"
+[[ -z $("$git_bin" -C "$clone" status --porcelain packages/omp-release.json) ]] ||
+  fail 'a failing omp release left a partial pin'
+grep -q 'github:can1357/oh-my-pi/v19.1.1"' "$clone/flake.nix" ||
+  fail 'a failing omp release moved the flake tag'
+if grep -qx 'flake lock --update-input omp' "$scratch/update-omp-soft-fail-nix.log"; then
+  fail 'a failing omp release relocked the omp input'
+fi
+pass 'a failing omp release warns, restores its pin, and leaves the flake tag alone'
+
+read -r status _ <<<"$(run_update_step update-omp-rev-mismatch OMP_LOCKED_REV=5555555555555555555555555555555555555555)"
+((status != 0)) || fail 'update step accepted an omp lock that differs from the pinned revision'
+grep -q 'the omp input locked 5555555555555555555555555555555555555555, but packages/omp-release.json pins 4444444444444444444444444444444444444444' \
+  "$scratch/update-omp-rev-mismatch-step.log" ||
+  fail "update step did not name both omp revisions: $(cat "$scratch/update-omp-rev-mismatch-step.log")"
+pass 'the update step stops when the omp lock differs from the pinned revision'
+
 read -r status clone <<<"$(run_update_step update-soft-fail "FAIL_SOFT=chatgpt t3code opencode pi acpx codex ollama")"
 ((status == 0)) || fail "soft-failing updaters aborted the update step: $(cat "$scratch/update-soft-fail-step.log")"
 for title in "ChatGPT update skipped" "T3 Code update skipped" "OpenCode update skipped" "Pi update skipped" "acpx update skipped" "Codex update skipped" "Ollama update skipped"; do
@@ -351,5 +409,20 @@ for expected in \
   [[ $files == "$want" ]] || fail "'$subject' carries $files, want $want"
 done
 pass 'the Prezto, claude-code, t3code, opencode, ollama, pi, acpx, and compound-engineering changes each land as their own commit with only their files'
+
+read -r origin clone <<<"$(setup_clone omp-bump)"
+base_sha=$("$git_bin" -C "$clone" rev-parse HEAD)
+printf '{"version": "19.2.0", "rev": "4444444444444444444444444444444444444444", "platforms": {}}\n' >"$clone/packages/omp-release.json"
+sed -i 's#oh-my-pi/v19.1.1#oh-my-pi/v19.2.0#' "$clone/flake.nix"
+sed -i 's/3333333333333333333333333333333333333333/4444444444444444444444444444444444444444/' "$clone/flake.lock"
+(cd "$clone" && bash -e -c "$push_script") >"$scratch/omp-bump-step.log" 2>&1 ||
+  fail "the push step failed on the omp update: $(tail -n 5 "$scratch/omp-bump-step.log")"
+commits=$("$git_bin" -C "$clone" log --format='%H %s' "$base_sha..HEAD")
+[[ $(wc -l <<<"$commits") == 1 && $commits == *' chore(packages): bump omp to 19.2.0' ]] ||
+  fail "expected one omp bump commit, found: $commits"
+files=$("$git_bin" -C "$clone" show --format= --name-only HEAD | sort | paste -sd ' ')
+[[ $files == 'flake.lock flake.nix packages/omp-release.json' ]] ||
+  fail "the omp bump carries $files, want flake.lock flake.nix packages/omp-release.json"
+pass 'an omp update lands as one commit carrying its pin, the flake tag, and the lock'
 
 python3 "$runner" "$workflow" "$publisher" "$verifier"
