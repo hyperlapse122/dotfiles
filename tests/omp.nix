@@ -205,25 +205,28 @@ pkgs.runCommand "omp-tests"
       failed=1
     fi
 
-    # The pinned omp itself must accept omp-auth-sync's import: a managed key
-    # replaces the provider's stored key while that provider's OAuth login and
-    # another provider's key stay.
-    export HOME=$TMPDIR/omp-store
-    mkdir -p "$HOME"
-    printf '%s' '{"version":1,"credentials":[{"provider":"synthetic","credential":{"type":"api_key","key":"FAKE hand","source":"login"}},{"provider":"deepseek","credential":{"type":"api_key","key":"FAKE other","source":"login"}},{"provider":"anthropic","credential":{"type":"oauth","access":"FAKE a","refresh":"FAKE r","expires":1}}]}' \
-      | ${omp}/bin/omp auth import - 2>/dev/null
-    printf 'FAKE managed synthetic\n' > "$HOME/synthetic"
-    printf 'FAKE managed anthropic\n' > "$HOME/anthropic"
-    if ! ${authSync} --omp ${omp}/bin/omp --credential "synthetic=$HOME/synthetic" --credential "anthropic=$HOME/anthropic"; then
-      echo 'omp-auth-sync failed against the pinned omp' >&2
-      failed=1
-    fi
-    stored=$(${omp}/bin/omp auth export 2>/dev/null | jq -c '[.credentials[] | [.provider, .credential.type, (.credential.key // .credential.access), (.credential.source // null)]] | sort')
-    want='[["anthropic","api_key","FAKE managed anthropic","login"],["anthropic","oauth","FAKE a",null],["deepseek","api_key","FAKE other","login"],["synthetic","api_key","FAKE managed synthetic","login"]]'
-    if [ "$stored" != "$want" ]; then
-      echo "the pinned omp stored $stored after the import, expected $want" >&2
-      failed=1
-    fi
+    ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+      # The pinned omp itself must accept omp-auth-sync's import: a managed key
+      # replaces the provider's stored key while that provider's OAuth login and
+      # another provider's key stay. Only Darwin runs it, because the Linux
+      # release binary needs the host's nix-ld loader, which the sandbox lacks.
+      export HOME=$TMPDIR/omp-store
+      mkdir -p "$HOME"
+      printf '%s' '{"version":1,"credentials":[{"provider":"synthetic","credential":{"type":"api_key","key":"FAKE hand","source":"login"}},{"provider":"deepseek","credential":{"type":"api_key","key":"FAKE other","source":"login"}},{"provider":"anthropic","credential":{"type":"oauth","access":"FAKE a","refresh":"FAKE r","expires":1}}]}' \
+        | ${omp}/bin/omp auth import - 2>/dev/null
+      printf 'FAKE managed synthetic\n' > "$HOME/synthetic"
+      printf 'FAKE managed anthropic\n' > "$HOME/anthropic"
+      if ! ${authSync} --omp ${omp}/bin/omp --credential "synthetic=$HOME/synthetic" --credential "anthropic=$HOME/anthropic"; then
+        echo 'omp-auth-sync failed against the pinned omp' >&2
+        failed=1
+      fi
+      stored=$(${omp}/bin/omp auth export 2>/dev/null | jq -c '[.credentials[] | [.provider, .credential.type, (.credential.key // .credential.access), (.credential.source // null)]] | sort')
+      want='[["anthropic","api_key","FAKE managed anthropic","login"],["anthropic","oauth","FAKE a",null],["deepseek","api_key","FAKE other","login"],["synthetic","api_key","FAKE managed synthetic","login"]]'
+      if [ "$stored" != "$want" ]; then
+        echo "the pinned omp stored $stored after the import, expected $want" >&2
+        failed=1
+      fi
+    ''}
 
     ${lib.concatMapStringsSep "\n" assertEntry entries}
 
