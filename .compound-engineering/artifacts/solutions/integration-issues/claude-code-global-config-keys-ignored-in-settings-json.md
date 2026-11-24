@@ -42,7 +42,7 @@ Find the code that reads the key. Do not rely on where the key is listed. In Cla
 
 The fix declares such keys in their own tier. A second activation entry runs the same `agent-settings` merger against `~/.claude.json`. See `globalConfigTier` and `home.activation.claudeGlobalConfig` in `home/h82/agents/claude.nix`. `tests/claude.nix` runs the same assertions (activation present, target file, declared JSON) for both merges.
 
-`advisorModel` works from `settings.json`. The repository declared it, retired it, and declares it again as `opus` in `settingsTier` of `home/h82/agents/claude.nix`, beside `model` and `effortLevel`. The settings schema has an entry for it: `advisorModel:()=>...describe("Advisor model for the server-side advisor tool.")`.
+`advisorModel` works from `settings.json`. The repository declared it, retired it, and declares it again, now as `fable`, in `settingsTier` of `home/h82/agents/claude.nix`, beside `model` and `effortLevel`. The settings schema has an entry for it: `advisorModel:()=>...describe("Advisor model for the server-side advisor tool.")`.
 
 To check a key, extract strings from the unwrapped binary (`bin/.claude-wrapped` in the `claude-code` store path) and search them with Python `re`. In this environment `grep` is `ugrep`, which rejects the long-line patterns this needs.
 

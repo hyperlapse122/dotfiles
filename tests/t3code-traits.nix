@@ -348,7 +348,7 @@ let
     own = {
       defaultModelSelection = {
         instanceId = "claudeAgent";
-        model = "claude-sonnet-5-5";
+        model = "claude-opus-5-5";
         options = [
           {
             id = "effort";
@@ -357,8 +357,8 @@ let
         ];
       };
       fallbackModelSelection = {
-        instanceId = "claudeAgent";
-        model = "claude-opus-5-5";
+        instanceId = "codex";
+        model = "gpt-6.2-astra";
       };
       textGenerationModelSelection = {
         instanceId = "claudeAgent";

@@ -57,10 +57,12 @@ let
     disableClaudeAiConnectors = true;
     # A rebuild resets these three to their declared values, so a /model,
     # /effort, or advisor choice made in a session lasts until the next
-    # switch. The context window stays the user's.
-    model = "sonnet";
+    # switch. The [1m] suffix selects the 1M-token context window, so the
+    # window is declared too. T3 Code's Claude sessions read this user
+    # settings file, so they get the same advisor.
+    model = "opus[1m]";
     effortLevel = "high";
-    advisorModel = "opus";
+    advisorModel = "fable";
   };
 
   # Leaves assigned inside nested objects of settings.json. A plugin is enabled
