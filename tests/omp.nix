@@ -4,6 +4,12 @@
 # mapping. The exact-file comparison is the declared-set contract: the
 # installed file must equal the declared mapping, catching both drift toward
 # omp's runtime writes and omissions.
+#
+# Every production output also carries ompAuth, which runs after secret
+# publication and the settings copy. Executed against a recording stub, it
+# hands omp-auth-sync the managed omp and each published key file under its
+# omp provider, does nothing on a dry run, and fails when the import fails.
+# Bootstrap outputs publish no keys and carry no ompAuth.
 {
   pkgs,
   entries,
@@ -31,12 +37,70 @@ let
     update.auto = false;
     symbolPreset = "nerd";
   };
+
+  authSync = "${
+    (import ../packages/agent-tools.nix { inherit pkgs; }).ompAuthSync
+  }/bin/omp-auth-sync";
+  providerFiles = {
+    synthetic = "synthetic_api_key";
+    openrouter = "openrouter_api_key";
+    openai = "openai_api_key";
+    anthropic = "anthropic_api_key";
+    opencode-go = "opencode_go_api_key";
+    exa = "exa_api_key";
+  };
+
+  assertAuth =
+    entry:
+    let
+      auth = entry.user.home.activation.ompAuth or null;
+      keyDirectory = entry.user.my.secrets.stateDir or "";
+      # The check compares text only, so it carries no build dependency on omp.
+      omp = builtins.unsafeDiscardStringContext "${entry.user.programs.omp.package}/bin/omp";
+      expected = [
+        "--omp"
+        omp
+      ]
+      ++ lib.concatLists (
+        lib.mapAttrsToList (provider: file: [
+          "--credential"
+          "${provider}=${keyDirectory}/${file}"
+        ]) providerFiles
+      );
+    in
+    if entry.bootstrap then
+      lib.optionalString (auth != null) ''
+        echo 'unexpected ompAuth on bootstrap output ${entry.name}' >&2
+        failed=1
+      ''
+    else if auth == null then
+      ''
+        echo 'missing home.activation.ompAuth on production output ${entry.name}' >&2
+        failed=1
+      ''
+    else
+      ''
+        for step in nixConfigSecretsPublish ompConfig; do
+          case " ${toString (auth.after or [ ])} " in
+            *" $step "*) ;;
+            *) echo "ompAuth must run after $step on ${entry.name}" >&2; failed=1 ;;
+          esac
+        done
+        if ! python3 ${./omp-activation.py} ${
+          pkgs.writeText "omp-auth-block.sh" (builtins.unsafeDiscardStringContext (auth.data or ""))
+        } ${authSync} ${pkgs.writeText "omp-auth-expected.json" (builtins.toJSON expected)}; then
+          echo 'the ompAuth activation did not run as expected on ${entry.name}' >&2
+          failed=1
+        fi
+      '';
 in
 pkgs.runCommand "omp-declared-settings"
   {
     inherit activationBlock expectedYaml;
+    nativeBuildInputs = [ pkgs.python3 ];
   }
   ''
+    failed=0
     home=$TMPDIR/home
     mkdir -p "$home"
     run() { "$@"; }
@@ -45,7 +109,13 @@ pkgs.runCommand "omp-declared-settings"
     if ! cmp -s "$home/.omp/agent/config.yml" "$expectedYaml"; then
       echo "omp config drifted from the declared settings:" >&2
       diff "$expectedYaml" "$home/.omp/agent/config.yml" >&2 || true
-      exit 1
+      failed=1
     fi
+    ${lib.optionalString (!lib.any (entry: !entry.bootstrap) entries) ''
+      echo 'no production output to check ompAuth on' >&2
+      failed=1
+    ''}
+    ${lib.concatMapStringsSep "\n" assertAuth entries}
+    if [ "$failed" != 0 ]; then exit 1; fi
     touch "$out"
   ''
