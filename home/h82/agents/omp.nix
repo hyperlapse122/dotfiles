@@ -10,8 +10,7 @@ let
     (import ../../../packages/agent-tools.nix { inherit pkgs; }).ompAuthSync
   }/bin/omp-auth-sync";
   keyDirectory = config.my.secrets.stateDir;
-  # The omp provider each published key file belongs to.
-  credentials = {
+  providerKeyFiles = {
     synthetic = "synthetic_api_key";
     openrouter = "openrouter_api_key";
     openai = "openai_api_key";
@@ -36,8 +35,8 @@ in
     };
   };
 
-  # Imports the published API keys into omp's credential store. NixOS runs
-  # the same import after SOPS publication, without waiting for Home Manager.
+  # NixOS runs the same import after SOPS publication, without waiting for
+  # Home Manager.
   home.activation.ompAuth = lib.mkIf (config.my.kind == "darwin" && !config.my.bootstrap) (
     lib.hm.dag.entryAfter [ "nixConfigSecretsPublish" "ompConfig" ] ''
       if [[ ! -v DRY_RUN ]]; then
@@ -47,7 +46,7 @@ in
               lib.mapAttrsToList (provider: file: [
                 "--credential"
                 "${provider}=${keyDirectory}/${file}"
-              ]) credentials
+              ]) providerKeyFiles
             )
           )
         }

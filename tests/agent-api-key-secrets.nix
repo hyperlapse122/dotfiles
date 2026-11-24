@@ -87,8 +87,6 @@ let
       );
       postSteps = lib.toList (sopsService.serviceConfig.ExecStartPost or [ ]);
       publisher = lib.concatStringsSep " " postSteps;
-      # The post-publication steps that import keys into omp, as the argument
-      # lists systemd runs. Exactly one is expected.
       ompSteps = lib.filter (step: lib.hasInfix "/bin/omp-auth-sync " step) postSteps;
       ompImport = lib.concatStringsSep "\n" ompSteps;
     in

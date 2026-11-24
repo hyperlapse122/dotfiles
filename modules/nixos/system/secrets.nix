@@ -25,23 +25,30 @@ let
     ++ lib.optional cfg.enableOpencodeGoApiKey "opencode-go=/run/secrets/cli-auth/opencode_go_api_key"
     ++ lib.optional cfg.enableOpenaiApiKey "openai=/run/secrets/cli-auth/openai_api_key"
     ++ lib.optional cfg.enableAnthropicApiKey "anthropic=/run/secrets/cli-auth/anthropic_api_key";
-  opencodeCommand = lib.escapeShellArgs (
-    [
-      "${pkgs.util-linux}/bin/runuser"
-      "-u"
-      config.my.user.name
-      "--"
-      "${pkgs.coreutils}/bin/env"
-      "HOME=${config.my.user.home}"
-      "${agentTools.opencodeAuthSync}/bin/opencode-auth-sync"
-      "--opencode"
+  # Runs a credential importer as the user, handing it each published key file.
+  userCredentialSync =
+    helper: flag: binary: specs:
+    lib.escapeShellArgs (
+      [
+        "${pkgs.util-linux}/bin/runuser"
+        "-u"
+        config.my.user.name
+        "--"
+        "${pkgs.coreutils}/bin/env"
+        "HOME=${config.my.user.home}"
+        helper
+        flag
+        binary
+      ]
+      ++ lib.concatMap (spec: [
+        "--credential"
+        spec
+      ]) specs
+    );
+  opencodeCommand =
+    userCredentialSync "${agentTools.opencodeAuthSync}/bin/opencode-auth-sync" "--opencode"
       "${opencode}/bin/opencode"
-    ]
-    ++ lib.concatMap (spec: [
-      "--credential"
-      spec
-    ]) opencodeCredentials
-  );
+      opencodeCredentials;
   ompCredentials =
     lib.optional cfg.enableSyntheticApiKey "synthetic=/run/secrets/cli-auth/synthetic_api_key"
     ++ lib.optional cfg.enableOpenRouterApiKey "openrouter=/run/secrets/cli-auth/openrouter_api_key"
@@ -49,23 +56,9 @@ let
     ++ lib.optional cfg.enableAnthropicApiKey "anthropic=/run/secrets/cli-auth/anthropic_api_key"
     ++ lib.optional cfg.enableOpencodeGoApiKey "opencode-go=/run/secrets/cli-auth/opencode_go_api_key"
     ++ lib.optional cfg.enableExaApiKey "exa=/run/secrets/cli-auth/exa_api_key";
-  ompCommand = lib.escapeShellArgs (
-    [
-      "${pkgs.util-linux}/bin/runuser"
-      "-u"
-      config.my.user.name
-      "--"
-      "${pkgs.coreutils}/bin/env"
-      "HOME=${config.my.user.home}"
-      "${agentTools.ompAuthSync}/bin/omp-auth-sync"
-      "--omp"
-      "${cfg.ompPackage}/bin/omp"
-    ]
-    ++ lib.concatMap (spec: [
-      "--credential"
-      spec
-    ]) ompCredentials
-  );
+  ompCommand =
+    userCredentialSync "${agentTools.ompAuthSync}/bin/omp-auth-sync" "--omp" "${cfg.ompPackage}/bin/omp"
+      ompCredentials;
   publishCommand = lib.escapeShellArgs [
     "${pkgs.util-linux}/bin/runuser"
     "-u"
