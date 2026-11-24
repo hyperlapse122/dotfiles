@@ -1,6 +1,7 @@
 ---
 title: Rootless Podman pause process started inside an agent bubblewrap sandbox poisons the host Podman service
 date: "2026-09-28"
+last_updated: "2026-11-24"
 category: integration-issues
 module: T3 Code desktop package (packages/t3code.nix) and rootless Podman
 problem_type: integration_issue
@@ -11,13 +12,15 @@ symptoms:
   - "podman pull fails with: potentially insufficient UIDs or GIDs available in user namespace (requested 0:42 for /etc/shadow) ... lchown /etc/shadow: invalid argument"
   - "podman info warns: cannot find UID/GID for user h82: open /etc/subuid"
   - "The host /etc has /etc/containers/policy.json and a subuid entry for h82, yet Podman reports both missing"
+  - "Every podman or docker call in a T3 Code agent session, remote mode included, prints: pause.pid file refers to PID <n> which is not a pause process ... Removing /run/user/1000/libpod/tmp/pause.pid"
+  - "Hundreds of leftover 'podman pause' processes, each in its own podman-pause-*.scope under the user manager"
 root_cause: config_error
 resolution_type: config_change
 related_components:
   - infrastructure
   - testing_framework
 retire_when: "T3 Code no longer runs agent terminals inside a bubblewrap FHS sandbox; check whether packages/t3code.nix still builds with appimageTools.wrapType2 and a T3 Code agent terminal still shows a tmpfs /etc in findmnt"
-tags: ["podman", "rootless", "bubblewrap", "orca", "t3code", "pause-process", "user-namespace", "container-host", "testcontainers"]
+tags: ["podman", "rootless", "bubblewrap", "orca", "t3code", "pause-process", "user-namespace", "container-host", "testcontainers", "pause-pid", "ro-bind"]
 ---
 
 # Rootless Podman pause process started inside an agent bubblewrap sandbox poisons the host Podman service
@@ -44,6 +47,9 @@ Orca IDE, where this was first seen, shipped as a bubblewrap FHS sandbox, and it
 
   A bare `sh` in `systemd-run` fails with status `203/EXEC`, because the transient unit has no `PATH`. Use the absolute path.
 - **Hand-writing `~/.config/containers/policy.json`.** That got past the first error, but the next one, missing subuid ranges, comes from the same poisoned namespace. A user-level file cannot supply it.
+- **Relying on `CONTAINER_HOST` alone (issue #306).** Remote mode does not keep a sandboxed `podman` away from the host's pause process; see "Remote mode is not enough" below.
+- **A tmpfs over `$XDG_RUNTIME_DIR/libpod` in the sandbox (issue #306).** It hides `pause.pid` from remote calls, but a local `podman` run there (for example with `env -u CONTAINER_HOST`) finds no `alive` file, takes that for a reboot, and runs `refresh()` against the shared database. During the investigation that marked every running container, minikube included, as `Exited` while their processes kept running.
+- **Binding all of `$XDG_RUNTIME_DIR/libpod` read-only (issue #306).** Podman sets the sticky bit on that directory at every start, so even remote calls fail with `set sticky bit on: chmod /run/user/1000/libpod: read-only file system`.
 
 ## Solution
 
@@ -91,6 +97,16 @@ podman system migrate   # or: kill "$(cat "$XDG_RUNTIME_DIR/libpod/tmp/pause.pid
 
 Then restart the app (Orca then, T3 Code now) so it runs the new wrapper.
 
+### Remote mode is not enough (issue #306)
+
+The verification below held for Podman at the time, but with Podman 6.1.4 a remote call still reaches for the pause process. Podman's C constructor runs before `main`, before the remote-mode decision, and joins the namespaces named in `$XDG_RUNTIME_DIR/libpod/tmp/pause.pid` (in the Podman source tree, `pkg/rootless/rootless_linux.c`: the join shortcut that calls `open_namespace` and then `check_stale_pause_pid`). From the bubblewrap sandbox's own user namespace it cannot open the host pause process's `/proc/<pid>/ns/user`, nor its `/proc/<pid>/environ`, so `is_pause_process` reports false and the constructor unlinks `pause.pid`. Every `podman --version` in a T3 Code session did this.
+
+With `pause.pid` gone, each later socket activation of the host's `podman.service` creates another pause process (162 had accumulated on the desktop). If a sandboxed `podman` runs locally in that gap (an agent that unsets `CONTAINER_HOST`), it writes a pause process with the one-ID map described above, and the host service joins it: `lchown ... 65534:65534 ... invalid argument` came back that way.
+
+`packages/t3code.nix` now also passes `--ro-bind-try "$XDG_RUNTIME_DIR/libpod/tmp" "$XDG_RUNTIME_DIR/libpod/tmp"`. The unlink and any sandbox-made `pause.pid` fail with `EROFS`, while remote calls need nothing in that directory. The warning line still prints, but the file stays. `-try` skips the bind when the directory does not exist yet at launch, before any Podman use since boot. `tests/t3code.nix` expands the bind under a fake `XDG_RUNTIME_DIR` and fails when it is missing or baked in at build time.
+
+The Testcontainers health-check timeouts reported in the same issue had a separate, host-wide cause (exec did not clamp `oom_score_adj`); the comment on `virtualisation.podman.package` in `modules/nixos/services/podman.nix` and `tests/podman-exec-oom.nix` cover it.
+
 ### Verification (this session)
 
 After the stale pause process was killed, with `CONTAINER_HOST` exported by hand in an existing Orca terminal to stand in for the new wrapper (Orca itself was not restarted):
@@ -103,7 +119,7 @@ After the stale pause process was killed, with `CONTAINER_HOST` exported by hand
 
 ## Why This Works
 
-The fault is not in the host's configuration. It is in which process creates the shared namespace holder first. The sandbox cannot build a correct rootless user namespace: its `/etc` lacks `subuid`/`subgid`, and `no_new_privs` blocks the setuid ID-mapping helpers. Because Podman reuses the pause process, one bad start stays in place for the rest of the user session. Remote mode means Orca never starts a local Podman at all, so the host service's own pause process, created with the host's `/etc` and full subuid range, is the only one.
+The fault is not in the host's configuration. It is in which process creates the shared namespace holder first. The sandbox cannot build a correct rootless user namespace: its `/etc` lacks `subuid`/`subgid`, and `no_new_privs` blocks the setuid ID-mapping helpers. Because Podman reuses the pause process, one bad start stays in place for the rest of the user session. Remote mode means Orca never starts a local Podman at all, so the host service's own pause process, created with the host's `/etc` and full subuid range, is the only one. That held for the Podman of the time; for Podman 6.1.4 it also takes the read-only `libpod/tmp` bind described under "Remote mode is not enough".
 
 Trade-off: Podman's local-only subcommands (`podman unshare`, `podman mount`, `podman system migrate`, `podman system reset`) do not work inside Orca terminals. Run them from a host terminal.
 
