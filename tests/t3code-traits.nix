@@ -347,16 +347,12 @@ let
     ];
     own = {
       defaultModelSelection = {
-        instanceId = "codex";
-        model = "gpt-6.2-astra";
+        instanceId = "claudeAgent";
+        model = "claude-sonnet-5-5";
         options = [
           {
-            id = "reasoningEffort";
-            value = "ultra";
-          }
-          {
-            id = "serviceTier";
-            value = "default";
+            id = "effort";
+            value = "high";
           }
         ];
       };

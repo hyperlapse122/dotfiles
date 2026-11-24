@@ -55,6 +55,12 @@ let
     # any settings source, so a project-level file cannot turn it back on, and
     # it does not depend on how the session's environment was built.
     disableClaudeAiConnectors = true;
+    # A rebuild resets these three to their declared values, so a /model,
+    # /effort, or advisor choice made in a session lasts until the next
+    # switch. The context window stays the user's.
+    model = "sonnet";
+    effortLevel = "high";
+    advisorModel = "opus";
   };
 
   # Leaves assigned inside nested objects of settings.json. A plugin is enabled
@@ -129,9 +135,7 @@ let
   # assigns, so dropping a key from settingsTier alone would leave its last
   # written value on every machine forever. Move it here instead, and delete
   # the entry once every host has rebuilt past it.
-  retiredKeys = [
-    "advisorModel"
-  ];
+  retiredKeys = [ ];
 
   renderDeclared =
     name: set: remove: setPaths:
