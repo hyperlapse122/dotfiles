@@ -5,8 +5,8 @@
 
   Pins the shape of home/h82/agents/synthetic-models.nix, the one source of
   every Synthetic model the repository uses: each `id` starts with `hf:` and
-  its family is the one its org maps to, every role an entry has (GLM-5.3 and
-  GLM-5.3 Flash have none) runs at `low`, `high`, or `max`, the efforts these
+  its family is the one its org maps to, every role an entry has (GLM-5.3 has
+  none) runs at `low`, `high`, or `max`, the efforts these
   models offer (never `medium`), each lineage pattern matches its own `id` and its
   first capture group is a version under both Nix `builtins.match` and Python
   `re.fullmatch`, and the top-level selections name existing entries. It also

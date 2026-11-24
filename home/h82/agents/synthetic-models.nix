@@ -28,7 +28,10 @@
     id = "hf:zai-org/GLM-5.3-Flash";
     family = "glm";
     lineage = "hf:zai-org/GLM-([0-9]+([.][0-9]+)?)-Flash";
-    roles = { };
+    # T3 Code's fallback selection (home/h82/t3code.nix).
+    roles = {
+      t3-fallback = "high";
+    };
     defaultEffort = "high";
   };
 

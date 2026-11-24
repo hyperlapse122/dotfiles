@@ -18,6 +18,7 @@ let
   darwin = config.my.kind == "darwin";
 
   agentTools = import ../../packages/agent-tools.nix { inherit pkgs; };
+  t3Fallback = (import ./agents/synthetic-models.nix).glmFlash;
   merger = "${agentTools.agentSettings}/bin/agent-settings";
   t3 = cfg.cli.enable || cfg.desktop.enable;
   profileDirectory = config.home.profileDirectory or "${config.home.homeDirectory}/.nix-profile";
@@ -256,14 +257,16 @@ let
     };
     # Another provider (Synthetic through Pi), because T3 Code falls back only
     # when the default model's usage window is exhausted and the fallback
-    # model's is not. "high" is the highest thinking level Pi offers for it.
+    # model's is not. The model and its effort come from synthetic-models.nix,
+    # so catalog drift reconciliation covers them; "high" is the highest
+    # thinking level Pi offers for this model.
     fallbackModelSelection = {
       instanceId = "pi";
-      model = "synthetic/hf:zai-org/GLM-5.3-Flash";
+      model = "synthetic/${t3Fallback.id}";
       options = [
         {
           id = "thinking";
-          value = "high";
+          value = t3Fallback.roles.t3-fallback;
         }
       ];
     };
