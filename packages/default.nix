@@ -8,6 +8,7 @@ in
   ctx7 = import ./ctx7.nix { inherit pkgs; };
   decide = import ./decide.nix { inherit pkgs; };
   impeccable = import ./impeccable.nix { inherit pkgs inputs; };
+  omp = import ./omp.nix { inherit pkgs; };
 }
 // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
   disko = inputs.disko.packages.${system}.disko;

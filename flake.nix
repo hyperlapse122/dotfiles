@@ -27,10 +27,13 @@
     # Installs Homebrew itself on a macOS host, so the first apply needs no
     # manual Homebrew install; nix-darwin's homebrew module installs the casks.
     nix-homebrew.url = "github:zhaofengli/nix-homebrew";
-    # Installs the omp coding agent CLI on both hosts through its Home
-    # Manager module (home/h82/agents/omp.nix), which owns ~/.omp/agent/config.yml.
+    # Supplies the Home Manager module (home/h82/agents/omp.nix), which owns
+    # ~/.omp/agent/config.yml; the CLI itself is the release binary pinned in
+    # packages/omp-release.json. The URL names that release's tag, so a relock
+    # holds still until the update workflow moves the tag, and the omp check
+    # fails when the locked revision differs from the pinned one.
     omp = {
-      url = "github:can1357/oh-my-pi";
+      url = "github:can1357/oh-my-pi/v19.1.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Pinned to a release tag rather than a branch, and the registry in
