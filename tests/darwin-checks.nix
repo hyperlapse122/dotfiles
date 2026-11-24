@@ -9,12 +9,7 @@ let
 in
 import ./shared-checks.nix { inherit pkgs inputs; }
 // {
-  agent-unmanaged = import ./agent-unmanaged.nix {
-    inherit pkgs entries;
-    systems = map (
-      host: pkgs.writeText "system-activation" host.config.system.activationScripts.script.text
-    ) (builtins.attrValues self.darwinConfigurations);
-  };
+  agent-unmanaged = import ./agent-unmanaged.nix { inherit pkgs entries; };
   zsh-prezto = import ./zsh-prezto.nix { inherit pkgs entries; };
   omp = import ./omp.nix {
     inherit pkgs entries;

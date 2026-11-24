@@ -112,6 +112,8 @@ let
   # OpenCode's own session record, for T3 cross-model evidence.
   opencodeServingModel = pythonHelper "opencode-serving-model" ../scripts/opencode-serving-model;
 
+  ompRelease = releaseHelper "omp-release" ../scripts/omp-release;
+
   # Resolves the latest release of an npm package that ships no lock file,
   # such as acpx, and regenerates its lock file and npmDepsHash.
   # npm and prefetch-npm-deps come from the store so the update workflow's
@@ -170,6 +172,7 @@ in
     opencodeRelease
     opencodeAuthSync
     opencodeServingModel
+    ompRelease
     npmRelease
     t3codeRelease
     syntheticModelsWatch

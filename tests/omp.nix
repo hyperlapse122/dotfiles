@@ -1,9 +1,30 @@
-# omp's declared settings, executed rather than scraped: the generated
-# activation block runs in a scratch HOME and the installed
-# ~/.omp/agent/config.yml is compared byte-for-byte against the declared
-# mapping. The exact-file comparison is the declared-set contract: the
-# installed file must equal the declared mapping, catching both drift toward
-# omp's runtime writes and omissions.
+/*
+  Check interface:
+
+    import ./tests/omp.nix { inherit pkgs entries; }
+
+  `entries` is the `{ name, user, ... }` list of the Home Manager user
+  environments this architecture builds (tests/lib/configurations.nix
+  `userEntries` on Linux, the darwin configurations' users on macOS).
+
+  Verifies, per entry:
+  - omp in user packages is the release binary packages/omp.nix installs, at
+    the version packages/omp-release.json pins, not the upstream module's
+    source-built default.
+  - The ompConfig activation, executed in a scratch HOME, installs a
+    ~/.omp/agent/config.yml byte-identical to the declared mapping below, which
+    catches both drift toward omp's runtime writes and omissions.
+
+  And once: the `omp` input in flake.lock is locked to the tag
+  `v<version>` and the revision packages/omp-release.json pins, so the Home
+  Manager module and the binary come from the same release. The two files are
+  read separately; nothing derives one from the other.
+
+  Every lookup carries an `or` fallback and every conditional block sits
+  behind `lib.optionalString`, so a removed declaration fails inside the
+  builder rather than during evaluation. The builder collects every failure
+  instead of exiting at the first.
+*/
 {
   pkgs,
   entries,
@@ -11,41 +32,104 @@
 let
   inherit (pkgs) lib;
 
-  # Every darwin host imports the same shared user layer, so one generated
-  # config file covers them all.
-  firstUser = (lib.head entries).user;
-  activationData = firstUser.home.activation.ompConfig.data or "";
-  activationBlock =
-    lib.throwIf (activationData == "") "omp-check: the darwin activation carries no ompConfig step"
-      (pkgs.writeText "omp-activation-block.sh" activationData);
+  esc = value: lib.escapeShellArg (toString value);
+
+  omp = import ../packages/omp.nix { inherit pkgs; };
+  pin = builtins.fromJSON (builtins.readFile ../packages/omp-release.json);
+  lockNode = (builtins.fromJSON (builtins.readFile ../flake.lock)).nodes.omp or { };
+  lockedRev = lockNode.locked.rev or "";
+  lockedRef = lockNode.original.ref or "";
+  pinnedRev = pin.rev or "";
+  pinnedVersion = pin.version or "";
 
   # The expected file runs the same generator over the same mapping, so the
   # comparison is byte-exact; any drift between omp.nix and this mapping
   # fails here rather than on a host.
   expectedYaml = (pkgs.formats.yaml { }).generate "expected-omp-config.yml" {
-    modelRoles.default = "synthetic/hf:zai-org/GLM-5.3-Flash";
+    modelRoles = {
+      default = "openrouter/deepseek/deepseek-v4.1-flash-1017:max";
+      smol = "openrouter/deepseek/deepseek-v4.1-flash-1017:auto";
+      slow = "openrouter/anthropic/claude-opus-5.5:medium";
+      judge = "ollama/clef-flash:latest";
+      dictation = "openrouter/openai/whisper-large-v3";
+      speech = "local/phonon-31m";
+      image = "openrouter/bytedance-seed/seedream-5-5";
+      web = "web/parallel";
+    };
+    defaultThinkingLevel = "auto";
     composer.shape = "band";
     composer.tokenRate = true;
     theme.dark = "titanium";
     theme.light = "light";
     update.auto = false;
     symbolPreset = "nerd";
+    setupVersion = 3;
   };
+
+  assertEntry =
+    entry:
+    let
+      hostName = entry.name;
+      user = entry.user or { };
+      package = lib.lists.findFirst (p: (p.pname or "") == "omp") null (user.home.packages or [ ]);
+      activationData = user.home.activation.ompConfig.data or "";
+    in
+    ''
+      ${lib.optionalString (package == null) ''
+        echo 'missing omp in user packages on ${hostName}' >&2
+        failed=1
+      ''}
+      ${lib.optionalString (package != null) ''
+        # Compares output paths as strings, so a wrong package (such as the
+        # module's source-built default) fails here without being built.
+        if [ ${esc (builtins.unsafeDiscardStringContext (toString package))} != ${esc (builtins.unsafeDiscardStringContext (toString omp))} ]; then
+          echo ${esc "omp on ${hostName} is not the release binary packages/omp.nix installs"} >&2
+          failed=1
+        fi
+        if [ ${esc (package.version or "")} != ${esc pinnedVersion} ]; then
+          echo ${esc "omp on ${hostName} is not the pinned version ${pinnedVersion}"} >&2
+          failed=1
+        fi
+      ''}
+      ${lib.optionalString (activationData == "") ''
+        echo 'missing home.activation.ompConfig on ${hostName}' >&2
+        failed=1
+      ''}
+      ${lib.optionalString (activationData != "") ''
+        home=$TMPDIR/${esc hostName}
+        mkdir -p "$home"
+        if ! (export HOME="$home"; run() { "$@"; }; source ${pkgs.writeText "omp-activation-block.sh" activationData}); then
+          echo 'the ompConfig activation failed on ${hostName}' >&2
+          failed=1
+        elif ! cmp -s "$home/.omp/agent/config.yml" ${expectedYaml}; then
+          echo 'omp config drifted from the declared settings on ${hostName}:' >&2
+          diff ${expectedYaml} "$home/.omp/agent/config.yml" >&2 || true
+          failed=1
+        fi
+      ''}
+    '';
 in
-pkgs.runCommand "omp-declared-settings"
-  {
-    inherit activationBlock expectedYaml;
-  }
-  ''
-    home=$TMPDIR/home
-    mkdir -p "$home"
-    run() { "$@"; }
-    export HOME="$home"
-    source "$activationBlock"
-    if ! cmp -s "$home/.omp/agent/config.yml" "$expectedYaml"; then
-      echo "omp config drifted from the declared settings:" >&2
-      diff "$expectedYaml" "$home/.omp/agent/config.yml" >&2 || true
-      exit 1
-    fi
-    touch "$out"
-  ''
+pkgs.runCommand "omp-tests" { nativeBuildInputs = [ pkgs.diffutils ]; } ''
+  failed=0
+
+  ${lib.optionalString (entries == [ ]) ''
+    echo 'no Home Manager user environments to check' >&2
+    failed=1
+  ''}
+
+  if [ ${esc lockedRev} != ${esc pinnedRev} ] || [ -z ${esc pinnedRev} ]; then
+    echo ${esc "the omp input drifted from the pinned release: packages/omp-release.json pins '${pinnedRev}', flake.lock locked '${lockedRev}'"} >&2
+    failed=1
+  fi
+  if [ ${esc lockedRef} != ${esc "v${pinnedVersion}"} ]; then
+    echo ${esc "the omp input must name the pinned release tag: flake.lock records ref '${lockedRef}', expected 'v${pinnedVersion}'"} >&2
+    failed=1
+  fi
+
+  ${lib.concatMapStringsSep "\n" assertEntry entries}
+
+  if [ "$failed" != "0" ]; then
+    exit 1
+  fi
+  touch $out
+''

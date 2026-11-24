@@ -61,6 +61,7 @@ in
   opencode-release =
     releaseScriptCheck "opencode-release" ../scripts/opencode-release
       ./test_opencode_release.py;
+  omp-release = releaseScriptCheck "omp-release" ../scripts/omp-release ./test_omp_release.py;
   opencode-auth-sync =
     pythonScriptCheck "opencode-auth-sync" ../scripts/opencode-auth-sync
       ./test_opencode_auth_sync.py;

@@ -18,9 +18,6 @@ let
     agent-instructions = import ./agent-instructions.nix { inherit pkgs self; };
     agent-unmanaged = import ./agent-unmanaged.nix {
       inherit pkgs;
-      systems = map (
-        entry: pkgs.writeText "system-activation" entry.config.system.activationScripts.script
-      ) configurations.entries;
       entries = configurations.userEntries;
     };
     android-sdk = import ./android-sdk.nix { inherit pkgs self; };
@@ -122,6 +119,10 @@ let
       nixos-wired-network = import ./nixos-wired-network.nix { inherit pkgs; };
       nr = import ./nr.nix { inherit pkgs self; };
       ollama-user-service = import ./ollama-user-service.nix { inherit pkgs self; };
+      omp = import ./omp.nix {
+        inherit pkgs;
+        entries = configurations.userEntries;
+      };
       opencode = import ./opencode.nix { inherit pkgs self; };
       plasma-taskbar = import ./plasma-taskbar.nix { inherit pkgs self; };
       sops-recipients = import ./sops-recipients.nix { inherit pkgs self; };
