@@ -250,6 +250,27 @@
       }
     },
     {
+      "id": "hungerg-free",
+      "name": "HungerG Free",
+      "limit": {
+        "context": 1000000,
+        "output": 65536
+      },
+      "cost": {
+        "text": {
+          "input": {
+            "price": 0,
+            "cache": {
+              "read": 0
+            }
+          },
+          "output": {
+            "price": 0
+          }
+        }
+      }
+    },
+    {
       "id": "hy3",
       "name": "Hy3",
       "limit": {
