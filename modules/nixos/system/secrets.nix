@@ -42,6 +42,30 @@ let
       spec
     ]) opencodeCredentials
   );
+  ompCredentials =
+    lib.optional cfg.enableSyntheticApiKey "synthetic=/run/secrets/cli-auth/synthetic_api_key"
+    ++ lib.optional cfg.enableOpenRouterApiKey "openrouter=/run/secrets/cli-auth/openrouter_api_key"
+    ++ lib.optional cfg.enableOpenaiApiKey "openai=/run/secrets/cli-auth/openai_api_key"
+    ++ lib.optional cfg.enableAnthropicApiKey "anthropic=/run/secrets/cli-auth/anthropic_api_key"
+    ++ lib.optional cfg.enableOpencodeGoApiKey "opencode-go=/run/secrets/cli-auth/opencode_go_api_key"
+    ++ lib.optional cfg.enableExaApiKey "exa=/run/secrets/cli-auth/exa_api_key";
+  ompCommand = lib.escapeShellArgs (
+    [
+      "${pkgs.util-linux}/bin/runuser"
+      "-u"
+      config.my.user.name
+      "--"
+      "${pkgs.coreutils}/bin/env"
+      "HOME=${config.my.user.home}"
+      "${agentTools.ompAuthSync}/bin/omp-auth-sync"
+      "--omp"
+      "${cfg.ompPackage}/bin/omp"
+    ]
+    ++ lib.concatMap (spec: [
+      "--credential"
+      spec
+    ]) ompCredentials
+  );
   publishCommand = lib.escapeShellArgs [
     "${pkgs.util-linux}/bin/runuser"
     "-u"
@@ -133,6 +157,11 @@ in
     };
     enableOpenaiApiKey = lib.mkEnableOption "decryption of the OpenAI API key for OpenCode";
     enableAnthropicApiKey = lib.mkEnableOption "decryption of the Anthropic API key for OpenCode";
+    ompPackage = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      description = "The omp package whose credential store receives the enabled provider API keys after decryption; null imports none.";
+    };
   };
   config = lib.mkMerge [
     {
@@ -196,7 +225,8 @@ in
           systemd.services.sops-install-secrets.serviceConfig.ExecStartPost = [
             publishCommand
           ]
-          ++ lib.optional (opencodeCredentials != [ ]) opencodeCommand;
+          ++ lib.optional (opencodeCredentials != [ ]) opencodeCommand
+          ++ lib.optional (cfg.ompPackage != null && ompCredentials != [ ]) ompCommand;
         })
         (lib.mkIf (!available) {
           systemd.services.sops-install-secrets.serviceConfig.ExecStart =

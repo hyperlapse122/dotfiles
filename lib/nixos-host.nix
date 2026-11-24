@@ -65,6 +65,9 @@ lib.nixosSystem {
           { my = hostFacts.of config.my; }
         ];
         home-manager.users.${config.my.user.name} = import ../home/h82;
+        # sops-install-secrets imports the decrypted API keys into the user's
+        # omp, which Home Manager installs.
+        my.cliAuth.ompPackage = config.home-manager.users.${config.my.user.name}.programs.omp.package;
       }
     )
   ];
