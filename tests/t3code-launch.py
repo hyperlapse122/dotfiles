@@ -50,7 +50,7 @@ def validate(home, expected_opencode_addition):
     assert (home / relative).read_text() == expected_opencode_addition
     assert 'omp' not in providers and settings['unrelated'] == {'keep': True}
     assert providers['custom-grok'] == {'driver': 'grok', 'enabled': False}
-    assert settings['defaultModelSelection'] == {'instanceId': 'codex', 'model': 'gpt-6.2-astra', 'options': [{'id': 'reasoningEffort', 'value': 'ultra'}, {'id': 'serviceTier', 'value': 'default'}]}
+    assert settings['defaultModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-sonnet-5-5', 'options': [{'id': 'effort', 'value': 'high'}]}
     assert settings['fallbackModelSelection'] == {'instanceId': 'claudeAgent', 'model': 'claude-opus-5-5'}
     assert settings['defaultThreadEnvMode'] == 'worktree'
     client = json.loads((home / '.t3/userdata/client-settings.json').read_text())

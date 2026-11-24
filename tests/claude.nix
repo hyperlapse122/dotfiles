@@ -31,8 +31,8 @@
     passing silently.
   - the JSON this repository renders for each merge carries every declared key
     and nested path at its declared value and lists every retired key for
-    removal. It declares no effort, so an effort level already in the file,
-    top-level or per model, survives the merge.
+    removal. It declares a top-level effort level, but not a per-model one, so
+    an effort level stored per model survives the merge.
     Asserting the rendered file rather than the Nix attribute set keeps the
     check on what activation actually feeds the merger.
   - no environment.etc entry declares claude-code/managed-settings.json, on
@@ -89,11 +89,12 @@ let
     inputNeededNotifEnabled = false;
     cleanupPeriodDays = 30;
     disableClaudeAiConnectors = true;
+    model = "sonnet";
+    effortLevel = "high";
+    advisorModel = "opus";
   };
 
-  retiredKeys = [
-    "advisorModel"
-  ];
+  retiredKeys = [ ];
 
   marketplaceEntries = [
     {
@@ -345,9 +346,7 @@ let
                   lib.filterAttrs (_: group: group != { }) quality.hookGroups.events
                 );
                 activationUnmanaged = "keep";
-                effortLevel = "retired";
                 autoCompactWindow = "retired";
-                model = "divergent";
                 language = "korean";
                 autoMemoryEnabled = false;
                 syncClaudeAiSkills = false;
@@ -358,6 +357,9 @@ let
                 inputNeededNotifEnabled = false;
                 cleanupPeriodDays = 30;
                 disableClaudeAiConnectors = true;
+                model = "sonnet";
+                effortLevel = "high";
+                advisorModel = "opus";
                 env = {
                   DISABLE_AUTOUPDATER = "1";
                   CLAUDE_CODE_SHELL = "${pkgs.bash}/bin/bash";
