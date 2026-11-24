@@ -89,9 +89,9 @@ let
     inputNeededNotifEnabled = false;
     cleanupPeriodDays = 30;
     disableClaudeAiConnectors = true;
-    model = "sonnet";
+    model = "opus[1m]";
     effortLevel = "high";
-    advisorModel = "opus";
+    advisorModel = "fable";
   };
 
   retiredKeys = [ ];
@@ -357,9 +357,9 @@ let
                 inputNeededNotifEnabled = false;
                 cleanupPeriodDays = 30;
                 disableClaudeAiConnectors = true;
-                model = "sonnet";
+                model = "opus[1m]";
                 effortLevel = "high";
-                advisorModel = "opus";
+                advisorModel = "fable";
                 env = {
                   DISABLE_AUTOUPDATER = "1";
                   CLAUDE_CODE_SHELL = "${pkgs.bash}/bin/bash";
