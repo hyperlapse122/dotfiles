@@ -72,9 +72,24 @@ else
     # process from that view, and the host's Podman service then joins it and
     # fails image pulls. Remote mode sends every podman and docker call to the
     # host service instead.
+    #
+    # Remote mode alone does not keep Podman out of the host's state. Before
+    # main, every podman call tries to join the namespaces in pause.pid, and
+    # the sandbox's separate user namespace cannot open the host pause
+    # process, so Podman takes it for a recycled PID and deletes pause.pid.
+    # The host service then starts a new pause process on every later
+    # activation, and a podman run in the sandbox without CONTAINER_HOST
+    # can leave one that holds the sandbox's one-ID map. Binding libpod/tmp
+    # read-only makes both writes fail, while remote calls need nothing
+    # there. Do not make the whole libpod directory read-only: Podman sets
+    # its sticky bit on every start. A tmpfs is wrong too: a local podman
+    # that finds no alive file takes it for a reboot and resets every
+    # container's state in the shared database. The bind is skipped when
+    # the directory does not exist yet, before any Podman use since boot.
     extraBwrapArgs = [
       "--setenv T3CODE_DISABLE_AUTO_UPDATE 1"
       ''--setenv CONTAINER_HOST "unix://$XDG_RUNTIME_DIR/podman/podman.sock"''
+      ''--ro-bind-try "$XDG_RUNTIME_DIR/libpod/tmp" "$XDG_RUNTIME_DIR/libpod/tmp"''
       # Keep the system CA bundle available to binaries T3 Code spawns.
       "--setenv SSL_CERT_FILE /etc/ssl/certs/ca-certificates.crt"
     ];

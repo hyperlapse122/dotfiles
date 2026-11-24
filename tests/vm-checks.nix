@@ -27,6 +27,7 @@
   tailscale-provisioning = import ./tailscale-provisioning.nix { inherit pkgs inputs; };
   podman-registry-auth = import ./podman-registry-auth.nix { inherit pkgs inputs; };
   podman-prune = import ./podman-prune.nix { inherit pkgs; };
+  podman-exec-oom = import ./podman-exec-oom.nix { inherit pkgs; };
   nvidia-cdi = import ./nvidia-cdi.nix { inherit pkgs; };
   ollama-boot = import ./ollama-boot.nix { inherit pkgs; };
 }

@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -15,6 +16,17 @@ in
     virtualisation.podman = {
       enable = true;
       dockerCompat = true;
+      # The Docker-compatible API stores oom_score_adj 0 for every container
+      # whose client sends none, as Testcontainers does. Rootless Podman clamps
+      # that value to its own when the container starts, but exec copies the
+      # stored value unclamped, and an unprivileged crun cannot go below the
+      # floor of 100 the user manager inherits from user@.service. Every exec,
+      # health checks included, then fails with "write to
+      # /proc/self/oom_score_adj: Permission denied". The patch clamps exec the
+      # same way start does; tests/podman-exec-oom.nix covers it.
+      package = pkgs.podman.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ./podman-exec-clamp-oom-score-adj.patch ];
+      });
     };
 
     # Disable the rootful systemd socket so only the rootless user socket is active.
