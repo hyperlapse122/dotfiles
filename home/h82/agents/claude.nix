@@ -61,7 +61,7 @@ let
     # window is declared too. T3 Code's Claude sessions read this user
     # settings file, so they get the same advisor.
     model = "opus[1m]";
-    effortLevel = "high";
+    effortLevel = "medium";
     advisorModel = "fable";
   };
 

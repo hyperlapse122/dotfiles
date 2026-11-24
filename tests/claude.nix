@@ -90,7 +90,7 @@ let
     cleanupPeriodDays = 30;
     disableClaudeAiConnectors = true;
     model = "opus[1m]";
-    effortLevel = "high";
+    effortLevel = "medium";
     advisorModel = "fable";
   };
 
@@ -358,7 +358,7 @@ let
                 cleanupPeriodDays = 30;
                 disableClaudeAiConnectors = true;
                 model = "opus[1m]";
-                effortLevel = "high";
+                effortLevel = "medium";
                 advisorModel = "fable";
                 env = {
                   DISABLE_AUTOUPDATER = "1";
