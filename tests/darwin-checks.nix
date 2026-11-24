@@ -17,6 +17,9 @@ import ./shared-checks.nix { inherit pkgs inputs; }
   };
   zsh-prezto = import ./zsh-prezto.nix { inherit pkgs entries; };
   omp = import ./omp.nix {
+    inherit pkgs entries;
+  };
+  nix-settings = import ./nix-settings.nix {
     inherit pkgs;
     configurations = self.darwinConfigurations;
   };
