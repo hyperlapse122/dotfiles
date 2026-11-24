@@ -373,10 +373,7 @@ jobs:
           commit_if_pin_changed chatgpt packages/chatgpt-version.json
           commit_if_pin_changed ant packages/ant-release.json
           commit_if_pin_changed mise packages/mise-release.json
-
-          if [ -n "$(git status --porcelain -- packages/omp-release.json)" ]; then
-            commit_version omp packages/omp-release.json flake.nix flake.lock
-          fi
+          commit_if_pin_changed omp packages/omp-release.json flake.nix flake.lock
 
           if [ -n "$(git status --porcelain packages/prezto-pin.json)" ]; then
             NEW_REV=$(jq -r '.zshLock.archives[0].commit' packages/prezto-pin.json)

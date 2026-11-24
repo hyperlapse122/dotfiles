@@ -19,7 +19,6 @@ from release_pin import Failure, fetch, hex_to_sri, pinned_version, version_tupl
 
 API = "https://api.github.com/repos/can1357/oh-my-pi"
 
-# Every system a host in this flake can be, and the binary installed on it.
 TARGET_ASSETS = {
     "x86_64-linux": "omp-linux-x64",
     "aarch64-darwin": "omp-darwin-arm64",
@@ -38,7 +37,6 @@ def load_json(body, what):
 
 
 def resolve(api):
-    """Return the pin for the latest stable release."""
     item = load_json(fetch(f"{api}/releases/latest"), "release response")
     if not isinstance(item, dict):
         raise Failure("release response is not a JSON object")

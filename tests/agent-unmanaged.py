@@ -1,4 +1,3 @@
-"""Reject retired agent binaries and deliveries in materialized profiles."""
 import json
 from pathlib import Path
 import sys

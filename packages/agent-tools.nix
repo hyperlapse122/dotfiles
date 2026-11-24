@@ -108,12 +108,11 @@ let
   # Seeds OpenCode's credential store from the published API key files.
   opencodeAuthSync = pythonHelper "opencode-auth-sync" ../scripts/opencode-auth-sync;
 
-  # Resolves the newest stable omp release and the commit its tag names.
-  ompRelease = releaseHelper "omp-release" ../scripts/omp-release;
-
   # Names the provider and model that served an OpenCode session, from
   # OpenCode's own session record, for T3 cross-model evidence.
   opencodeServingModel = pythonHelper "opencode-serving-model" ../scripts/opencode-serving-model;
+
+  ompRelease = releaseHelper "omp-release" ../scripts/omp-release;
 
   # Resolves the latest release of an npm package that ships no lock file,
   # such as acpx, and regenerates its lock file and npmDepsHash.
