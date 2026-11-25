@@ -210,7 +210,6 @@ let
         p: (p.pname or "") == "docker-credential-sops"
       ) null user.home.packages;
       routingTable = credentialHelper.routingTable or { };
-      codex = lib.findFirst (p: (p.pname or "") == "codex") null user.home.packages;
       sshText = plain user.my.ssh.configFile.drvAttrs.text;
       home = config.my.user.home;
       # Each config line without indentation, past the managed-file marker.
@@ -239,7 +238,6 @@ let
       }";
       pinentry = user.services.gpg-agent.pinentry.package;
       vscodiumData = plain (activation.vscodiumSettings.data or "");
-      codexData = plain (activation.codexSettings.data or "");
       cargoData = plain (activation.cargoSettings.data or "");
       markerEntry = lib.findFirst (e: (e.enable or false) && (e.target or "") == "nix-config-host") null (
         lib.attrValues (config.environment.etc or { })
@@ -330,7 +328,6 @@ let
       # literals, so a mutated registry or root cannot move the expectation.
       koreanRoots = [
         ".claude/skills"
-        ".codex/skills"
         ".pi/agent/skills"
         ".config/opencode/skills"
       ];
@@ -360,7 +357,6 @@ let
       koreanElsewhere = lib.filter (underDir ".agents/skills") enabledTargets;
       xcodeRoots = [
         ".claude/skills"
-        ".codex/skills"
         ".pi/agent/skills"
         ".config/opencode/skills"
       ];
@@ -454,16 +450,6 @@ let
       )
       (check (routingTable ? "docker.io" && !(routingTable ? "https://index.docker.io/v1/"))
         "${entry.name}: the credential helper must route docker.io and no longer the Docker Hub index alias"
-      )
-      (check (codex != null) "${entry.name}: codex must be installed")
-      (check (lib.elem "codex" peers) "${entry.name}: codex is installed, so CROSS_MODEL_PEERS must allow it")
-      (check
-        (
-          lib.elem "installPackages" (activation.codexSettings.after or [ ])
-          && lib.hasInfix "--format toml" codexData
-          && lib.hasInfix "--settings ${config.my.user.home}/.codex/config.toml" codexData
-        )
-        "${entry.name}: activation must merge the declared Codex settings into ~/.codex/config.toml as TOML after installPackages"
       )
       (check (lib.elem "sccache" pnames) "${entry.name}: sccache must be installed")
       (check

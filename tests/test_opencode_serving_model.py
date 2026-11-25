@@ -102,7 +102,7 @@ class ServingModelTest(unittest.TestCase):
     def test_family_maps_direct_providers_only(self):
         cases = {
             "anthropic": "claude",
-            "openai": "codex",
+            "openai": "unknown",
             "synthetic": "unknown",
             "opencode-go": "unknown",
         }

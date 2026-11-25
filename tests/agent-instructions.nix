@@ -27,7 +27,6 @@ let
   fakeKey = "0123456789ABCDEF0123456789ABCDEF01234567";
   deliveryPaths = [
     ".claude/CLAUDE.md"
-    ".codex/AGENTS.md"
     ".pi/agent/AGENTS.md"
     ".config/opencode/AGENTS.md"
   ];

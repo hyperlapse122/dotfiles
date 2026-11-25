@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 
-DELIVERIES = {'claude': '.claude/CLAUDE.md', 'codex': '.codex/AGENTS.md',
+DELIVERIES = {'claude': '.claude/CLAUDE.md',
               'pi': '.pi/agent/AGENTS.md', 'opencode': '.config/opencode/AGENTS.md'}
 
 
@@ -81,7 +81,7 @@ def exercise(template, helper, renderer, kind, receipts):
             assert harness + '-only' in text
             assert all(other + '-only' not in text for other in DELIVERIES if other != harness)
         source.write_text(template)
-        for harness in (None, 'claude', 'codex', 'pi', 'opencode'):
+        for harness in (None, 'claude', 'pi', 'opencode'):
             context.write_text(json.dumps({'t3': True, **{name: name == harness for name in DELIVERIES}}))
             t3 = subprocess.check_output([renderer, str(source), str(context)], text=True)
             assert 'T3 task guidance' in t3 and 'Writing and language' not in t3

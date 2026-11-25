@@ -32,13 +32,9 @@ let
 
   roots = [
     ".claude/skills"
-    ".codex/skills"
     ".pi/agent/skills"
     ".config/opencode/skills"
   ];
-
-  # Codex keeps its bundled skills here; no declared skill may land on it.
-  codexSystemDir = ".codex/skills/.system";
 
   forbiddenRoots = [
     ".agents/skills"
@@ -119,7 +115,7 @@ let
           NR > 1 && /^description:/ { sub(/^description:[ ]*/, ""); print; exit }
         ' "$dir/${name}.md")
         # A YAML value that parses to nothing (quotes around nothing or only
-        # whitespace, null, ~) is empty too: Codex drops such a skill.
+        # whitespace, null, ~) is empty and invalid.
         description=$(printf '%s' "$description" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/; s/^[[:space:]]+//; s/[[:space:]]+$//')
         case "$description" in
           "" | null | Null | NULL | "~") description= ;;
@@ -183,15 +179,6 @@ let
         failed=1
       ''
     ) roots
-    + (
-      let
-        found = targetsUnder userConfig codexSystemDir;
-      in
-      lib.optionalString (found != [ ]) ''
-        echo ${esc "~/${codexSystemDir} on ${label} belongs to Codex, but these targets are declared there: ${lib.concatStringsSep ", " found}"} >&2
-        failed=1
-      ''
-    )
     + lib.optionalString (homeFiles == null) ''
       echo ${esc "no materialized home-files on ${label}"} >&2
       failed=1

@@ -12,9 +12,8 @@ import sys
 os.environ["SSL_CERT_FILE"] = "@caBundle@"
 import pygit2
 
-SHELL_TOOLS = {'bash', 'shell', 'exec_command', 'shell_command'}
-EDIT_TOOLS = {'edit', 'write', 'multiedit', 'apply_patch', 'patch'}
-PATCH_PATH = re.compile(r'^\*\*\* (?:Add File:|Update File:|Delete File:|Move to:)\s+(.+)$')
+SHELL_TOOLS = {'bash', 'shell'}
+EDIT_TOOLS = {'edit', 'write', 'multiedit'}
 TEST_NAME = re.compile(r'(?i:^test_|(?:_test|\.test|\.spec)\.[^.]+$)|Tests?\.swift$')
 ASSIGNMENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=')
 
@@ -89,16 +88,9 @@ def skips_hooks(command):
 
 
 def edit_paths(tool, inputs):
-    if tool in {'apply_patch', 'patch'}:
-        patch = inputs.get('patch') or inputs.get('patchText') or inputs.get('command')
-        if isinstance(patch, str):
-            for line in patch.splitlines():
-                if matched := PATCH_PATH.match(line):
-                    yield matched[1]
-    else:
-        path = inputs.get('file_path') or inputs.get('path') or inputs.get('filePath')
-        if isinstance(path, str) and path:
-            yield path
+    path = inputs.get('file_path') or inputs.get('path') or inputs.get('filePath')
+    if isinstance(path, str) and path:
+        yield path
 
 
 def frozen_path(cwd, paths):
@@ -146,7 +138,7 @@ def main():
         return
     if not reason:
         return
-    print(reason, file=sys.stderr if harness in {'claude', 'codex'} else sys.stdout)
+    print(reason, file=sys.stderr if harness == 'claude' else sys.stdout)
     sys.exit(2)
 
 

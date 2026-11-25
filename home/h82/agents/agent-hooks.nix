@@ -6,7 +6,7 @@ let
     ;
 in
 {
-  options.my.agentHooks = genAttrs [ "claude" "codex" "pi" "opencode" ] (_: {
+  options.my.agentHooks = genAttrs [ "claude" "pi" "opencode" ] (_: {
     enable = mkEnableOption "native agent quality hooks" // {
       default = true;
     };

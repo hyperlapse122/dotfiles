@@ -104,8 +104,6 @@ let
       claude = import ./claude.nix { inherit pkgs self; };
       claude-code = import ./claude-code.nix { inherit pkgs self; };
       claude-desktop = import ./claude-desktop.nix { inherit pkgs self; };
-      codex = import ./codex.nix { inherit pkgs self; };
-      codex-settings = import ./codex-settings.nix { inherit pkgs self; };
       desktop-packages = import ./desktop-packages.nix { inherit pkgs self; };
       firefox-developer-edition = import ./firefox-developer-edition.nix { inherit pkgs self; };
       git-cli-repo-flags = import ./git-cli-repo-flags.nix { inherit pkgs self; };

@@ -93,25 +93,19 @@ def exercise(root, hooks, harness):
         result = run('PreToolUse', 'Bash', {'command': shell})
         assert result.returncode == 0, result
 
-    def patch(source, target):
-        return {'command': f'*** Begin Patch\n*** Add File: other.txt\n+fine\n'
-                           f'*** Update File: {source}\n*** Move to: {target}\n@@\n-old\n+new\n'
-                           '*** End Patch'}
-
-    for source, target in [('tests/a.txt', 'src/a.txt'), ('src/a.txt', 'tests/a.txt')]:
-        result = run('PreToolUse', 'apply_patch', patch(source, target))
-        assert result.returncode == 2 and 'frozen' in result.stderr, result
-    assert run('PreToolUse', 'apply_patch', patch('src/a.txt', 'src/b.txt')).returncode == 0
+    result = run('PreToolUse', 'Edit', {'file_path': 'tests/a.txt'})
+    assert result.returncode == 2 and 'frozen' in result.stderr, result
+    assert run('PreToolUse', 'Edit', {'file_path': 'src/a.txt'}).returncode == 0
     marker.unlink()
-    assert run('PreToolUse', 'apply_patch', patch('src/a.txt', 'tests/a.txt')).returncode == 0
+    assert run('PreToolUse', 'Edit', {'file_path': 'tests/a.txt'}).returncode == 0
 
 
 if __name__ == '__main__':
-    merger, claude_on, claude_off, codex_on, codex_off = sys.argv[1:]
+    merger, claude_on, claude_off = sys.argv[1:]
     with TemporaryDirectory() as directory:
         root = Path(directory).resolve()
-        for harness, on, off in (('claude', claude_on, claude_off), ('codex', codex_on, codex_off)):
+        for harness, on, off in (('claude', claude_on, claude_off),):
             fixture = root / harness
             fixture.mkdir()
-            hooks = reconcile(fixture, merger, on, off, preserve_slots=harness == 'codex')
+            hooks = reconcile(fixture, merger, on, off, preserve_slots=False)
             exercise(fixture, hooks, harness)

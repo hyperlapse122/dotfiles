@@ -8,10 +8,10 @@ declared document a configuration's activation passes to it:
 
 The real merger runs on a settings.json an earlier generation wrote, with the
 instance disabled, an OPENCODE_CONFIG_CONTENT entry the owner had set, another
-environment entry, and hidden-model preferences for OpenCode and Codex. The
+environment entry, and hidden-model preferences for OpenCode. The
 merged file must hold the instance enabled with a binary path, replace the
 owner's OPENCODE_CONFIG_CONTENT with the one that lists the T3-only instruction
-file, keep the other environment entry, leave both preferences alone, and drop
+file, keep the other environment entry, leave the preference alone, and drop
 the retired provider, also on a second run.
 
 Every failure is printed, and the exit status is 1 when there is any.
@@ -42,7 +42,6 @@ def main(merger, declared_path):
         'providerModelPreferences': {
             'omp': {'hiddenModels': ['default']},
             'opencode': {'hiddenModels': ['synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017@low']},
-            'codex': {'hiddenModels': ['gpt-6-luna']},
         },
     }
     with tempfile.TemporaryDirectory() as work:
@@ -80,9 +79,6 @@ def main(merger, declared_path):
             if {'name': 'KEEP_ME', 'value': '1', 'sensitive': False} not in environment:
                 problems.append('the {} merge dropped the instance\'s other environment entry'.format(attempt))
             preferences = merged.get('providerModelPreferences', {})
-            if preferences.get('codex') != {'hiddenModels': ['gpt-6-luna']}:
-                problems.append('the {} merge changed another provider\'s model preference: {!r}'.format(
-                    attempt, preferences.get('codex')))
             if preferences.get('opencode') != seeded['providerModelPreferences']['opencode']:
                 problems.append('the {} merge changed the owner\'s OpenCode model preference: {!r}'.format(
                     attempt, preferences.get('opencode')))

@@ -30,9 +30,6 @@ def validate(home, expected_opencode_addition):
     # Native discovery reads CLAUDE.md in both launch modes. Only the T3
     # arguments attach an extra file; no native config or CLI wrapper is changed.
     assert baseline + addition != baseline
-    codex = shlex.split(providers['codex']['config']['launchArgs'])
-    assert 'developer_instructions=' in codex[codex.index('-c') + 1]
-    assert '--disable' not in codex
     pi = shlex.split(providers['pi']['config']['launchArgs'])
     assert Path(pi[pi.index('--append-system-prompt') + 1]).read_text() == addition
     assert providers['pi']['enabled'] is True

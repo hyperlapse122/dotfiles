@@ -7,7 +7,6 @@ let
   configurations = import ./lib/configurations.nix { inherit pkgs self; };
   roots = [
     ".claude/skills"
-    ".codex/skills"
     ".pi/agent/skills"
     ".config/opencode/skills"
   ];

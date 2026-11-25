@@ -12,7 +12,6 @@ let
 
   roots = [
     ".claude/skills"
-    ".codex/skills"
     ".config/opencode/skills"
     ".pi/agent/skills"
   ];
@@ -93,7 +92,7 @@ let
         fi
         description=${frontmatter "description" ''"$dir/test-audit.md"''}
         # A YAML value that parses to nothing (quotes around nothing or only
-        # whitespace, null, ~) is empty too: Codex drops such a skill.
+        # whitespace, null, ~) is empty and invalid.
         description=$(printf '%s' "$description" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/; s/^[[:space:]]+//; s/[[:space:]]+$//')
         case "$description" in
           "" | null | Null | NULL | "~") description= ;;

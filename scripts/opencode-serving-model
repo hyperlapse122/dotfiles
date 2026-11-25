@@ -17,7 +17,7 @@ from pathlib import Path
 
 # Only direct first-party providers identify the vendor that answered. An
 # intermediary such as opencode-go or a custom endpoint does not.
-FAMILIES = {"anthropic": "claude", "openai": "codex"}
+FAMILIES = {"anthropic": "claude"}
 
 
 def fail(message):
@@ -33,7 +33,7 @@ def main():
     parser.add_argument(
         "--family",
         action="store_true",
-        help="print the CE family token (claude, codex, or unknown) instead of provider/model",
+        help="print the CE family token (claude or unknown) instead of provider/model",
     )
     args = parser.parse_args()
 

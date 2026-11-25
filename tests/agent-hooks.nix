@@ -25,8 +25,7 @@ pkgs.runCommand "agent-hooks-tests"
     export HOME="$TMPDIR/home"
     mkdir -p "$HOME"
     python3 ${./agent-hooks.py} ${agentSettings}/bin/agent-settings \
-      ${declaration "claude" true} ${declaration "claude" false} \
-      ${declaration "codex" true} ${declaration "codex" false}
+      ${declaration "claude" true} ${declaration "claude" false}
     python3 ${./agent-hook-lifecycle.py} pi ${pi}/libexec/pi/pi ${extension "pi" ../home/h82/agents/pi-quality.ts}
     ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
       python3 ${./agent-hook-lifecycle.py} opencode ${opencode}/bin/opencode ${extension "opencode" ../home/h82/agents/opencode-quality.ts}

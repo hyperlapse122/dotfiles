@@ -11,7 +11,6 @@
     ./agent-hooks.nix
     ./agent-plugins.nix
     ./claude.nix
-    ./codex.nix
     ./cross-model-peers.nix
     ./fff.nix
     ./opencode.nix
