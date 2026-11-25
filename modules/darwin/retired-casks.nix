@@ -3,37 +3,20 @@ let
   user = config.system.primaryUser;
   prefix = config.homebrew.prefix;
   brew = "${prefix}/bin/brew";
-  retired = [
-    "chatgpt"
-    "grok-bot"
-    "orca"
-    "wifiman"
-  ];
+  retired = [ ];
   # Taps whose every cask is retired. Taps stay mutable (homebrew.nix), so
   # nothing else removes one the configuration stops naming. The tap list is
   # matched as whole lines in the shell, not through a pipe into grep -q,
   # which can report a miss under pipefail when grep exits early.
-  retiredTaps = [ "stablyai/orca" ];
+  retiredTaps = [ ];
 in
 {
   # A cask the configuration no longer lists stays installed, because
   # homebrew.onActivation.cleanup is "none"; this step removes the retired
-  # ones. It never passes --zap, so the app's user data stays in place: the
-  # grok-bot cask declares only `app "Grok Bot.app"` and a `zap trash:` list
-  # of ~/Library paths, and no `uninstall` stanza (homebrew-cask
-  # Casks/g/grok-bot.rb at 37b48ceb2d85), so uninstall removes the app bundle
-  # and Homebrew's own records and nothing under ~/Library. The wifiman
-  # cask's uninstall stanza unloads the wifiman-desktop launchd job, removes
-  # the files of its ui.wifiman.com and WiFimanNetworkHelper pkg receipts,
-  # and deletes /Applications/WiFiman Desktop.app; its ~/Library paths are
-  # listed only under `zap trash:` (homebrew-cask Casks/w/wifiman.rb at
-  # 73f9e052fa66). Orca is no longer
-  # managed, and its user data is preserved. The orca cask is
-  # named by its bare token, the name its Caskroom directory carries, and is
-  # uninstalled before its stablyai/orca tap is removed. --force only
-  # unpins a pinned cask, tolerates a missing or occupied app path, and purges
-  # the cask's Caskroom directory (brew cask/installer.rb, cask/uninstall.rb);
-  # it never runs the zap stanza.
+  # ones. It never passes --zap, so the app's user data stays in place:
+  # --force only unpins a pinned cask, tolerates a missing or occupied app
+  # path, and purges the cask's Caskroom directory (brew
+  # cask/installer.rb, cask/uninstall.rb); it never runs the zap stanza.
   #
   # Homebrew refuses to run as root and `launchctl asuser` leaves the process
   # root, so brew runs through sudo as the primary user the way nix-darwin's
