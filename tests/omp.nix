@@ -53,10 +53,11 @@ let
   # fails here rather than on a host.
   expectedYaml = (pkgs.formats.yaml { }).generate "expected-omp-config.yml" {
     modelRoles = {
-      default = "openrouter/deepseek/deepseek-v4.1-flash-1017:max";
-      smol = "openrouter/deepseek/deepseek-v4.1-flash-1017:auto";
-      slow = "openrouter/anthropic/claude-opus-5.5:medium";
-      judge = "ollama/clef-flash:latest";
+      default = "opencode-go/glm-5.3-flash:max";
+      smol = "opencode-go/deepseek-v4.1-flash:max";
+      slow = "opencode-go/glm-5.3:max";
+      judge = "openrouter/cloudflare/clef-flash:auto";
+      vision = "opencode-go/kimi-k3.1-pro:auto";
       dictation = "openrouter/openai/whisper-large-v3";
       speech = "local/phonon-31m";
       image = "openrouter/bytedance-seed/seedream-5-5";
@@ -65,11 +66,37 @@ let
     defaultThinkingLevel = "auto";
     composer.shape = "band";
     composer.tokenRate = true;
+    composer.predictionAlternatives = false;
     theme.dark = "titanium";
     theme.light = "light";
     update.auto = false;
     symbolPreset = "nerd";
     setupVersion = 3;
+    statusLine.sessionAccent = true;
+    statusLine.transparent = false;
+    terminal.showProgress = false;
+    tui.textSizing = true;
+    tui.hyperlinks = "auto";
+    tui.tight = false;
+    tui.imeSafeCursor = true;
+    display.shimmer = "kitt";
+    display.subagentLivePreview = false;
+    title.icons = "boring";
+    spelling.autocomplete = "smollm";
+    stt.enabled = false;
+    startup.checkUpdate = false;
+    power.sleepPrevention = "idle";
+    compaction.idleEnabled = true;
+    ttsr.contextMode = "keep";
+    astGrep.enabled = true;
+    speechgen.enabled = true;
+    generate_image.enabled = true;
+    computer.enabled = true;
+    github.enabled = true;
+    security.enabled = true;
+    disassembler.backend = "ghidra";
+    todo.reminders = false;
+    secrets.enabled = true;
   };
 
   authSync = "${

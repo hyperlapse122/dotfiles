@@ -28,10 +28,11 @@ in
     package = import ../../../packages/omp.nix { inherit pkgs; };
     settings = {
       modelRoles = {
-        default = "openrouter/deepseek/deepseek-v4.1-flash-1017:max";
-        smol = "openrouter/deepseek/deepseek-v4.1-flash-1017:auto";
-        slow = "openrouter/anthropic/claude-opus-5.5:medium";
-        judge = "ollama/clef-flash:latest";
+        default = "opencode-go/glm-5.3-flash:max";
+        smol = "opencode-go/deepseek-v4.1-flash:max";
+        slow = "opencode-go/glm-5.3:max";
+        judge = "openrouter/cloudflare/clef-flash:auto";
+        vision = "opencode-go/kimi-k3.1-pro:auto";
         dictation = "openrouter/openai/whisper-large-v3";
         speech = "local/phonon-31m";
         image = "openrouter/bytedance-seed/seedream-5-5";
