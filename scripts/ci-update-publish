@@ -42,8 +42,29 @@ sync_main() {
   fi
 }
 
-verify
+summary_size=0
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$GITHUB_STEP_SUMMARY" ]; then
+  summary_size=$(wc -c < "$GITHUB_STEP_SUMMARY" | tr -d ' ')
+fi
+
+verified=0
+if verify; then
+  verified=1
+fi
+before=$(git rev-parse HEAD)
 sync_main
+if [ "$verified" -eq 0 ] && [ "$(git rev-parse HEAD)" != "$before" ]; then
+  # The retry verified the rebased candidate; drop the superseded attempt's
+  # failure report from this step's summary.
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -f "$GITHUB_STEP_SUMMARY" ]; then
+    truncate -s "$summary_size" "$GITHUB_STEP_SUMMARY" || true
+  fi
+fi
+if [ "$verified" -eq 0 ] && [ "$(git rev-parse HEAD)" = "$before" ]; then
+  record_stage verification
+  echo 'Verification failed and main has not moved; nothing newer to retry against.'
+  exit 1
+fi
 if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then
   echo 'No candidate commits remain after synchronization.'
   exit 0
