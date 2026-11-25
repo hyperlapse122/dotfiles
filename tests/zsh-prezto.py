@@ -112,7 +112,7 @@ def check(entry):
           [[ -z ${PARITY_OLD_ROOT_RC-} ]] || fail 'old root zshrc was unexpectedly sourced'
           (( $+functions[prompt_sorin_setup] )) || fail 'sorin did not load'
           [[ $(bindkey '^A') == *beginning-of-line* ]] || fail 'emacs bindings missing'
-          for cmd in codex gh glab ghq mise omp usage; do
+          for cmd in gh glab ghq mise omp usage; do
             [[ ${_comps[$cmd]-} == _$cmd ]] || fail "completion missing for $cmd"
             (( $+functions[_$cmd] )) || fail "completion function missing for $cmd"
           done

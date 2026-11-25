@@ -304,10 +304,7 @@ jobs:
             git checkout -- packages/acpx-release.json packages/acpx/package-lock.json
           fi
 
-          # 11. Update Codex
-          update_harness_release codex Codex packages/codex-release.json
-
-          # 12. Update OpenCode. A release can be listed before its archives
+          # 11. Update OpenCode. A release can be listed before its archives
           # and digests are, so a failure keeps the current pin and lets the
           # other updates through.
           if ! nix run .#opencode-release -- --output packages/opencode-release.json; then
@@ -356,7 +353,6 @@ jobs:
 
           commit_if_pin_changed claude-desktop packages/claude-desktop-version.json
           commit_if_pin_changed claude-code packages/claude-code-manifest.json
-          commit_if_pin_changed codex packages/codex-release.json
           commit_if_pin_changed pi packages/pi-release.json
           if [ -n "$(git status --porcelain -- packages/acpx-release.json packages/acpx/package-lock.json)" ]; then
             commit_version acpx packages/acpx-release.json packages/acpx/package-lock.json

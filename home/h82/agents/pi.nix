@@ -43,11 +43,9 @@ let
   # Each declared row names the API it is served over and leaves the
   # provider's endpoint and credentials alone.
   providerApis = {
-    openai = "openai-responses";
     anthropic = "anthropic-messages";
   };
   providerRows = {
-    openai = import ./openai-models.nix lib;
     anthropic = (builtins.fromJSON (builtins.readFile ./anthropic-models.json)).models;
   };
   modelsJson =

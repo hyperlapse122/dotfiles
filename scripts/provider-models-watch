@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build the model list Pi and OpenCode declare for OpenAI or Anthropic.
+"""Build the model list Pi and OpenCode declare for Anthropic.
 
-`--provider openai|anthropic` fetches that provider's model list with its API
+`--provider anthropic` fetches that provider's model list with its API
 key, keeps the ids that fully match the provider's id filter, takes each
 model's details from models.dev, and prints the result, or with
 `--snapshot FILE` rewrites the committed snapshot and leaves FILE untouched
@@ -11,19 +11,18 @@ The snapshot is `{"models": [...]}` sorted by `id`. A row has the shape of a
 Pi `models.json` entry: `id`, `name`, `reasoning`, `input`, `cost` (`input`,
 `output`, `cacheRead`, `cacheWrite`), `contextWindow`, and `maxTokens`.
 
-OpenAI ids must fully match `gpt-(?:[0-9.]+)-(?:\\w+)` and have a version of
-6.1 or higher. Anthropic ids must fully match `claude-(?:\\w+)-(?:[0-9\\-.]+)`
-and be active. For Anthropic, the list API's `max_input_tokens` and
-`max_tokens` replace models.dev's context and output limits when they are not
-null; cost always comes from models.dev. An id that passes the filter but has
-no usable models.dev entry stays out of the snapshot and is named on stderr.
+Anthropic ids must fully match `claude-(?:\\w+)-(?:[0-9\\-.]+)` and be active.
+The list API's `max_input_tokens` and `max_tokens` replace models.dev's context
+and output limits when they are not null; cost always comes from models.dev.
+An id that passes the filter but has no usable models.dev entry stays out of
+the snapshot and is named on stderr.
 
-The key comes from OPENAI_API_KEY or ANTHROPIC_API_KEY and travels on the fetch
-command's stdin, never in its argv. Key-bearing requests go to one fixed URL
-and refuse redirects, so a custom key header never reaches another host. The
-models.dev fetch carries no key. The helper refuses to write, and exits
-non-zero, when a fetch fails twice, when a list is not in the expected shape,
-or when no model remains.
+The key comes from ANTHROPIC_API_KEY and travels on the fetch command's stdin,
+never in its argv. Key-bearing requests go to one fixed URL and refuse
+redirects, so a custom key header never reaches another host. The models.dev
+fetch carries no key. The helper refuses to write, and exits non-zero, when a
+fetch fails twice, when a list is not in the expected shape, or when no model
+remains.
 
 `--catalog FILE` reads the provider list from a file and `--models-dev FILE`
 reads the models.dev document from a file instead of fetching them.
@@ -50,14 +49,7 @@ from catalog_snapshot import (  # noqa: E402
 DEFAULT_RETRY_WAIT = 30
 ANTHROPIC_VERSION = "2026-10-21"
 MODELS_DEV_URL = "https://models.dev/api.json"
-OPENAI_FLOOR = (6, 1)
 PROVIDERS = {
-    "openai": {
-        "key_variable": "OPENAI_API_KEY",
-        "url": "https://api.openai.com/v1/models",
-        "headers": ["Authorization: Bearer {key}"],
-        "filter": re.compile(r"gpt-([0-9.]+)-\w+"),
-    },
     "anthropic": {
         "key_variable": "ANTHROPIC_API_KEY",
         "url": "https://api.anthropic.com/v1/models?lifecycle=active&limit=1000",
@@ -96,7 +88,7 @@ def listed_rows(provider, body):
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, list):
         raise Failure(f"the {provider} list has no data list")
-    if provider == "anthropic" and body.get("has_more") is True:
+    if body.get("has_more") is True:
         raise Failure("the anthropic list reports more pages than one request returns")
     rows = {}
     for row in data:
@@ -104,24 +96,14 @@ def listed_rows(provider, body):
         if not isinstance(model_id, str) or model_id == "":
             log(f"skipping a {provider} list entry without an id")
             continue
-        if provider == "anthropic" and row.get("lifecycle", "active") != "active":
+        if row.get("lifecycle", "active") != "active":
             continue
         rows[model_id] = row
     return rows
 
 
 def passes_filter(provider, model_id):
-    match = PROVIDERS[provider]["filter"].fullmatch(model_id)
-    if not match:
-        return False
-    if provider != "openai":
-        return True
-    parts = match.group(1).split(".")
-    if len(parts) > 2 or not all(part.isascii() and part.isdigit() for part in parts):
-        log(f"{model_id} has a version this tool cannot read; leaving it out")
-        return False
-    version = (int(parts[0]), int(parts[1]) if len(parts) == 2 else 0)
-    return version >= OPENAI_FLOOR
+    return PROVIDERS[provider]["filter"].fullmatch(model_id) is not None
 
 
 def number(value, default=0):
@@ -131,11 +113,10 @@ def number(value, default=0):
 def model_row(provider, model_id, details, listed):
     limit = details.get("limit") if isinstance(details.get("limit"), dict) else {}
     context, output = limit.get("context"), limit.get("output")
-    if provider == "anthropic":
-        if is_int(listed.get("max_input_tokens")):
-            context = listed["max_input_tokens"]
-        if is_int(listed.get("max_tokens")):
-            output = listed["max_tokens"]
+    if is_int(listed.get("max_input_tokens")):
+        context = listed["max_input_tokens"]
+    if is_int(listed.get("max_tokens")):
+        output = listed["max_tokens"]
     if not (is_int(context) and context > 0 and is_int(output) and output > 0):
         raise Failure("no usable context and output limits")
     modalities = details.get("modalities")

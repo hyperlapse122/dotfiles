@@ -54,7 +54,6 @@ in
   prezto-release =
     pythonScriptCheck "prezto-release" ../scripts/prezto-release
       ./test_prezto_release.py;
-  codex-release = releaseScriptCheck "codex-release" ../scripts/codex-release ./test_codex_release.py;
   opencode-release =
     releaseScriptCheck "opencode-release" ../scripts/opencode-release
       ./test_opencode_release.py;

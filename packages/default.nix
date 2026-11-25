@@ -31,8 +31,6 @@ in
   );
   pi-release = agentTools.piRelease;
   pi = import ./pi.nix { inherit pkgs; };
-  codex-release = agentTools.codexRelease;
-  codex = import ./codex.nix { inherit pkgs; };
   opencode-release = agentTools.opencodeRelease;
   opencode = import ./opencode.nix { inherit pkgs; };
   omp-release = agentTools.ompRelease;
