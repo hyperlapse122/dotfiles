@@ -21,13 +21,11 @@ with tempfile.TemporaryDirectory() as directory:
     exa = home / 'exa'
     synthetic.write_text('FAKE-synthetic')
     exa.write_text('FAKE-exa')
-    openai = home / 'openai'
-    openai.write_text('FAKE-openai')
     anthropic = home / 'anthropic'
     anthropic.write_text('FAKE-anthropic')
     wrapper = Path(sys.argv[1]).read_text()
     for published, fake in [(sys.argv[3] + '/synthetic_api_key', synthetic), (sys.argv[3] + '/exa_api_key', exa),
-                            (sys.argv[3] + '/openai_api_key', openai), (sys.argv[3] + '/anthropic_api_key', anthropic)]:
+                            (sys.argv[3] + '/anthropic_api_key', anthropic)]:
         assert wrapper.count(published) == 1, 'Host wrapper does not name the published key path'
         wrapper = wrapper.replace(published, str(fake))
     executable = home / 'pi'
@@ -123,8 +121,8 @@ with tempfile.TemporaryDirectory() as directory:
                 assert b'FAKE-exa' not in path.read_bytes(), 'Exa key persisted into Pi state'
         assert not (agent / 'trust.json').exists(), '--approve persisted a trust decision'
         auth = json.loads((agent / 'auth.json').read_text())
-        assert {name: auth[name]['key'] for name in ('synthetic', 'openai', 'anthropic')} == {
-            'synthetic': 'FAKE-synthetic', 'openai': 'FAKE-openai', 'anthropic': 'FAKE-anthropic'}, 'Wrapper did not stage every published key'
+        assert {name: auth[name]['key'] for name in ('synthetic', 'anthropic')} == {
+            'synthetic': 'FAKE-synthetic', 'anthropic': 'FAKE-anthropic'}, 'Wrapper did not stage every published key'
     finally:
         process.stdin.close()
         try:

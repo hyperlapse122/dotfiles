@@ -96,7 +96,6 @@ in
     modules = [ ../scripts/catalog_snapshot.py ];
     setup = ''
       mkdir -p home/h82/agents
-      cp ${../home/h82/agents/openai-models.json} home/h82/agents/openai-models.json
       cp ${../home/h82/agents/anthropic-models.json} home/h82/agents/anthropic-models.json
     '';
   } "provider-models-watch" ../scripts/provider-models-watch ./test_provider_models_watch.py;

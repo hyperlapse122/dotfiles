@@ -18,10 +18,10 @@ let
         # Agent API keys carry a space, which publish-cli-auth rejects if it
         # ever starts reading them while publishing gh and glab credentials.
         printf 'github_token: FAKE_github\ngitlab_token: FAKE_gitlab\njpi_token: FAKE_jpi\n' > git.yaml
-        printf 'tokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\nopenai_api_key: FAKE openai\nanthropic_api_key: FAKE anthropic\n' > services.yaml
+        printf 'tokscale_token: FAKE tokscale\nsynthetic_api_key: FAKE pi\nexa_api_key: FAKE exa\nopenrouter_api_key: FAKE openrouter\nopencode_go_api_key: FAKE opencode go\nanthropic_api_key: FAKE anthropic\n' > services.yaml
         sops --encrypt --age "$recipient" --input-type yaml --output-type yaml git.yaml > $out/git-hosting.yaml
         sops --encrypt --age "$recipient" --input-type yaml --output-type yaml services.yaml > $out/provider-services.yaml
-        sed 's/^openai_api_key:.*/openai_api_key: FAKE rotated openai/' services.yaml > rotated.yaml
+        sed 's/^anthropic_api_key:.*/anthropic_api_key: FAKE rotated anthropic/' services.yaml > rotated.yaml
         sops --encrypt --age "$recipient" --input-type yaml --output-type yaml rotated.yaml > $out/rotated.yaml
       '';
 in
@@ -79,7 +79,6 @@ pkgs.testers.nixosTest {
       enableExaApiKey = true;
       enableOpenRouterApiKey = true;
       enableOpencodeGoApiKey = true;
-      enableOpenaiApiKey = true;
       enableAnthropicApiKey = true;
     };
     specialisation.rotated.configuration.my.cliAuth.sopsFiles.provider-services =
@@ -145,7 +144,7 @@ pkgs.testers.nixosTest {
         opencode_go = "/run/secrets/cli-auth/opencode_go_api_key"
         machine.succeed("runuser -u alice -- cat " + opencode_go + " | grep -qx 'FAKE opencode go'")
         machine.succeed("test $(stat -L -c '%a:%U' " + opencode_go + ") = 400:alice")
-        for provider in ("openai", "anthropic"):
+        for provider in ("anthropic",):
             key = "/run/secrets/cli-auth/" + provider + "_api_key"
             machine.succeed(f"runuser -u alice -- cat {key} | grep -qx 'FAKE {provider}'")
             machine.succeed(f"test $(stat -L -c '%a:%U' {key}) = 400:alice")
@@ -183,14 +182,14 @@ pkgs.testers.nixosTest {
     assert "FAKE pi" not in journal_output
     assert "FAKE exa" not in journal_output
     assert "FAKE openrouter" not in journal_output
-    assert "FAKE openai" not in journal_output and "FAKE anthropic" not in journal_output
-    def assert_openai_key(expected):
+    assert "FAKE anthropic" not in journal_output
+    def assert_anthropic_key(expected):
         records = json.loads(machine.succeed("runuser -u alice -- env HOME=/srv/workspace opencode auth export --standalone"))
         keys = [entry["value"]["key"] for entry in records
-                if entry["integrationID"] == "openai" and entry["label"] == "nix-config"]
+                if entry["integrationID"] == "anthropic" and entry["label"] == "nix-config"]
         assert keys == [expected], "SOPS publication did not import the expected fixture"
 
-    assert_openai_key("FAKE openai")
+    assert_anthropic_key("FAKE anthropic")
     with subtest("OpenCode quality hook lifecycle through the system nix-ld loader"):
         machine.succeed("runuser -u alice -- python3 ${./agent-hook-lifecycle.py} opencode /run/current-system/sw/bin/opencode ${opencodeExtension}")
     # A failed switch still repoints /run/current-system at the specialisation,
@@ -199,9 +198,9 @@ pkgs.testers.nixosTest {
     rotate = rotated + "/bin/switch-to-configuration switch"
     machine.succeed("mv /var/lib/sops-nix/key.txt /var/lib/sops-nix/key.backup")
     machine.fail(rotate)
-    assert_openai_key("FAKE openai")
+    assert_anthropic_key("FAKE anthropic")
     machine.succeed("install -m 0600 /var/lib/sops-nix/key.backup /var/lib/sops-nix/key.txt")
     machine.succeed(rotate)
-    assert_openai_key("FAKE rotated openai")
+    assert_anthropic_key("FAKE rotated anthropic")
   '';
 }

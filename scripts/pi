@@ -28,5 +28,5 @@ if [[ ! -e "$key_path" ]] && '@NODE@' --input-type=module -e '
 ' -- "$@"; then
   key_args=()
 fi
-'@STATE@' --agent "$agent" "${key_args[@]}" --credential 'openai=@OPENAI_KEY@' --credential 'anthropic=@ANTHROPIC_KEY@' --auth-only
+'@STATE@' --agent "$agent" "${key_args[@]}" --credential 'anthropic=@ANTHROPIC_KEY@' --auth-only
 exec "$PI" --extension "$agent/dotfiles-web.ts" --extension "$agent/dotfiles-question.ts" "$@"

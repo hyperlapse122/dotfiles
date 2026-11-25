@@ -82,7 +82,7 @@ The OpenAI subscription is ending. Today the configuration installs the ChatGPT 
 
 ### Success Criteria
 
-- A repository-wide search of tracked active configuration finds no `openai_api_key`, `enableOpenaiApiKey`, `OPENAI_API_KEY`, `@OPENAI_KEY@`, `openai=`, `api.openai.com`, ChatGPT package or cask, or Codex harness reference outside R6's retention allowlist, R7's history, and the pinned generated omp completion at `packages/zsh-completions/_omp`.
+- A repository-wide search of tracked active configuration finds no `openai_api_key`, `enableOpenaiApiKey`, `OPENAI_API_KEY`, `@OPENAI_KEY@`, `openai=`, `api.openai.com`, ChatGPT package or cask, or Codex harness reference outside R6's retention allowlist, R7's history, the pinned generated omp completion at `packages/zsh-completions/_omp`, and removal assertions or retirement notes that name the removed surfaces.
 - Both host configurations evaluate and build.
 - The dependency-update workflow names no OpenAI secret.
 
@@ -359,7 +359,7 @@ flowchart TB
 | Residual search | `rg -n -i 'openai_api_key\|enableOpenaiApiKey\|OPENAI_API_KEY\|@OPENAI_KEY@\|openai=\|api\.openai\.com\|chatgpt\|codex'` over tracked active paths | U6 |
 | Darwin evidence | CI `checks.aarch64-darwin.darwin-outputs` and `darwinConfigurations` build | U1, U2, U5 |
 
-The residual search allowlist is R6's third-party model and protocol references, R7's `.compound-engineering/artifacts` history, the pinned generated omp completion at `packages/zsh-completions/_omp`, and the untracked plugin checkout. Any other hit is a defect.
+The residual search allowlist is R6's third-party model and protocol references, R7's `.compound-engineering/artifacts` history, the pinned generated omp completion at `packages/zsh-completions/_omp`, removal assertions and retirement notes that name the removed surfaces, and the untracked plugin checkout. Any other hit is a defect.
 
 ## Definition of Done
 

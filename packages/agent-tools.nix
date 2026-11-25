@@ -143,8 +143,8 @@ let
   # list.
   opencodeGoModelsWatch = catalogHelper "opencode-go-models-watch" ../scripts/opencode-go-models-watch;
 
-  # Rewrites the committed OpenAI and Anthropic model lists that Pi and
-  # OpenCode declare, from each provider's model list and models.dev.
+  # Rewrites the committed Anthropic model list that Pi and OpenCode declare,
+  # from the provider's model list and models.dev.
   providerModelsWatch = catalogHelper "provider-models-watch" ../scripts/provider-models-watch;
 
   # Pins the Android SDK packages from Google's repository XML. It is Ruby

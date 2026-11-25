@@ -167,31 +167,31 @@ class OpencodeAuthSyncTestCase(unittest.TestCase):
         self.assertEqual(len(self.stored()), 3)
 
     def test_rotation_keeps_the_selected_account(self):
-        key = self.write_key("openai_api_key", "FAKE-CANARY new OpenAI key")
+        key = self.write_key("anthropic_api_key", "FAKE-CANARY new Anthropic key")
         for managed_active in (True, False):
             with self.subTest(managed_active=managed_active):
                 other = account(
-                    "openai", "personal key", label="personal", active=not managed_active, credential_id="personal-id"
+                    "anthropic", "personal key", label="personal", active=not managed_active, credential_id="personal-id"
                 )
-                self.store.write_text(json.dumps([account("openai", "old key", active=managed_active), other]))
-                proc = self.run_sync([("openai", key)])
+                self.store.write_text(json.dumps([account("anthropic", "old key", active=managed_active), other]))
+                proc = self.run_sync([("anthropic", key)])
                 self.assertEqual(proc.returncode, 0, proc.stderr)
                 self.assertCountEqual(
                     self.stored(),
-                    [account("openai", "FAKE-CANARY new OpenAI key", active=managed_active), other],
+                    [account("anthropic", "FAKE-CANARY new Anthropic key", active=managed_active), other],
                 )
 
     def test_retry_restores_selection_after_an_import_or_switch_failure(self):
-        key = self.write_key("openai_api_key", "FAKE-CANARY new OpenAI key")
+        key = self.write_key("anthropic_api_key", "FAKE-CANARY new Anthropic key")
         for verb in ("import", "switch"):
             with self.subTest(verb=verb):
-                other = account("openai", "personal key", label="personal", active=False, credential_id="personal-id")
-                self.store.write_text(json.dumps([account("openai", "old key"), other]))
-                proc = self.run_sync([("openai", key)], {"FAKE_FAIL": verb})
+                other = account("anthropic", "personal key", label="personal", active=False, credential_id="personal-id")
+                self.store.write_text(json.dumps([account("anthropic", "old key"), other]))
+                proc = self.run_sync([("anthropic", key)], {"FAKE_FAIL": verb})
                 self.assertEqual(proc.returncode, 1, proc.stderr)
-                proc = self.run_sync([("openai", key)])
+                proc = self.run_sync([("anthropic", key)])
                 self.assertEqual(proc.returncode, 0, proc.stderr)
-                self.assertCountEqual(self.stored(), [account("openai", "FAKE-CANARY new OpenAI key"), other])
+                self.assertCountEqual(self.stored(), [account("anthropic", "FAKE-CANARY new Anthropic key"), other])
 
     def test_a_missing_or_empty_key_file_stops_before_opencode_runs(self):
         missing = self.root / "absent"

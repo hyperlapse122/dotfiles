@@ -117,34 +117,6 @@ jobs:
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 10
-      - name: Refresh the OpenAI model list
-        shell: bash
-        run: |
-          set -euo pipefail
-          snapshot=home/h82/agents/openai-models.json
-          if [ -z "${OPENAI_API_KEY:-}" ]; then
-            echo '::warning::OPENAI_API_KEY is not set; keeping the current OpenAI model list.'
-            exit 1
-          fi
-          if ! nix run .#provider-models-watch -- --provider openai --snapshot "$snapshot"; then
-            git restore -- "$snapshot"
-            echo '::warning::OpenAI model list refresh failed; keeping the committed snapshot.'
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain -- "$snapshot")" ]; then
-            git add -- "$snapshot"
-            git commit -m 'chore(agents): refresh the openai model list' -- "$snapshot"
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-          fi
-        id: openai_models
-        if: "!cancelled() && steps.prepare_catalogs.outcome == 'success'"
-        continue-on-error: true
-        working-directory: ${{ runner.temp }}/updates/catalogs
-        timeout-minutes: 5
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       - name: Refresh the Anthropic model list
         shell: bash
         run: |
@@ -179,7 +151,7 @@ jobs:
           set -euo pipefail
           bash "$GITHUB_WORKSPACE/scripts/ci-update-publish" catalogs "$RUNNER_TEMP/updates/catalogs-logs"
         id: publish_catalogs
-        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true' || steps.openai_models.outputs.changed == 'true' || steps.anthropic_models.outputs.changed == 'true')"
+        if: "!cancelled() && (steps.catalog.outputs.changed == 'true' || steps.go_catalog.outputs.changed == 'true' || steps.anthropic_models.outputs.changed == 'true')"
         continue-on-error: true
         working-directory: ${{ runner.temp }}/updates/catalogs
         timeout-minutes: 40
@@ -505,11 +477,10 @@ jobs:
             echo '## Maintenance results'
             printf 'Catalog refresh: %s; changed: %s; publication: %s\n' "$CATALOG" "$CATALOG_CHANGED" "$CATALOG_PUSH"
             printf 'OpenCode Go catalog refresh: %s; changed: %s\n' "$GO_CATALOG" "$GO_CATALOG_CHANGED"
-            printf 'OpenAI model list refresh: %s; changed: %s\n' "$OPENAI_MODELS" "$OPENAI_MODELS_CHANGED"
             printf 'Anthropic model list refresh: %s; changed: %s\n' "$ANTHROPIC_MODELS" "$ANTHROPIC_MODELS_CHANGED"
             printf 'Dependencies: %s; changed: %s; publication: %s; reconciliation: %s\n' "$DEPENDENCIES" "$DEPENDENCIES_CHANGED" "$DEPENDENCIES_PUSH" "$RECONCILE"
           } >> "$GITHUB_STEP_SUMMARY"
-          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$OPENAI_MODELS" "$ANTHROPIC_MODELS" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
+          for outcome in "$PREPARE_CATALOGS" "$PREPARE_DEPENDENCIES" "$CATALOG" "$GO_CATALOG" "$ANTHROPIC_MODELS" "$CATALOG_PUSH" "$DEPENDENCIES" "$COMMIT" "$DEPENDENCIES_PUSH" "$RECONCILE" "$CLEANUP"; do
             if [ "$outcome" = failure ] || [ "$outcome" = cancelled ]; then
               exit 1
             fi
@@ -522,8 +493,6 @@ jobs:
           CATALOG_CHANGED: ${{ steps.catalog.outputs.changed }}
           GO_CATALOG: ${{ steps.go_catalog.outcome }}
           GO_CATALOG_CHANGED: ${{ steps.go_catalog.outputs.changed }}
-          OPENAI_MODELS: ${{ steps.openai_models.outcome }}
-          OPENAI_MODELS_CHANGED: ${{ steps.openai_models.outputs.changed }}
           ANTHROPIC_MODELS: ${{ steps.anthropic_models.outcome }}
           ANTHROPIC_MODELS_CHANGED: ${{ steps.anthropic_models.outputs.changed }}
           CATALOG_PUSH: ${{ steps.publish_catalogs.outcome }}

@@ -123,7 +123,7 @@ if args[:2] == ['run', '.#opencode-go-models-watch']:
     sys.exit(1 if c.get('go_catalog_fetch_fail') else 0)
 if args[:2] == ['run', '.#provider-models-watch']:
     provider = args[args.index('--provider') + 1]
-    event('model-list-fetch', provider=provider, secrets=sorted(k for k in ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'SYNTHETIC_API_KEY', 'GH_TOKEN_FOR_UPDATES') if os.environ.get(k)))
+    event('model-list-fetch', provider=provider, secrets=sorted(k for k in ('ANTHROPIC_API_KEY', 'SYNTHETIC_API_KEY', 'GH_TOKEN_FOR_UPDATES') if os.environ.get(k)))
     if c.get('pi_' + provider + '_change', False):
         pathlib.Path(args[args.index('--snapshot') + 1]).write_text('{"data":[{"id":"new-' + provider + '"}]}\n')
     sys.exit(1 if c.get('pi_' + provider + '_fetch_fail') else 0)
@@ -166,7 +166,7 @@ if args and args[0] in ('fmt', 'flake', 'build'):
             if '--no-link' not in args:
                 raise SystemExit('verification rooted completed closures')
             disk.write_text(str(used + active))
-    if any(os.environ.get(k) for k in ('GH_TOKEN_FOR_UPDATES', 'SYNTHETIC_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY')):
+    if any(os.environ.get(k) for k in ('GH_TOKEN_FOR_UPDATES', 'SYNTHETIC_API_KEY', 'ANTHROPIC_API_KEY')):
         event('secret-leak')
         sys.exit(95)
     print('verification ' + scope + ' ' + args[0] + ' round ' + str(round))
@@ -217,7 +217,6 @@ class Fixture:
             'flake.nix': '{\n  inputs.compound-engineering-plugin.url = "github:EveryInc/compound-engineering-plugin/compound-engineering-v2.67.0";\n}\n',
             'home/h82/agents/synthetic-catalog.json': '{"data":[{"id":"old"}]}\n',
             'home/h82/agents/opencode-go-catalog.json': '{"data":[{"id":"old-go"}]}\n',
-            'home/h82/agents/openai-models.json': '{"data":[{"id":"old-openai"}]}\n',
             'home/h82/agents/anthropic-models.json': '{"data":[{"id":"old-anthropic"}]}\n',
             'scripts/ci-update-publish': publisher,
             'scripts/ci-update-verify': verifier,
@@ -256,10 +255,9 @@ class Fixture:
             path.chmod(0o755)
         self.env.update(PATH=str(self.bin) + os.pathsep + os.environ['PATH'], TEST_CONTROL=str(self.control), GITHUB_WORKSPACE=str(self.repo), RUNNER_TEMP=str(self.root / 'runner'), GITHUB_STEP_SUMMARY=str(self.root / 'summary'), GITHUB_REPOSITORY='example/dotfiles', GITHUB_RUN_ID='1729', GITHUB_RUN_ATTEMPT='1')
         Path(self.env['RUNNER_TEMP']).mkdir()
-        self.secrets = {'GH_TOKEN_FOR_UPDATES': 'fake-update-token', 'SYNTHETIC_API_KEY': 'fake-catalog-key', 'OPENAI_API_KEY': 'fake-openai-key', 'ANTHROPIC_API_KEY': 'fake-anthropic-key'}
+        self.secrets = {'GH_TOKEN_FOR_UPDATES': 'fake-update-token', 'SYNTHETIC_API_KEY': 'fake-catalog-key', 'ANTHROPIC_API_KEY': 'fake-anthropic-key'}
         if self.controls.get('missing_token'): del self.secrets['GH_TOKEN_FOR_UPDATES']
         if self.controls.get('missing_catalog_key'): del self.secrets['SYNTHETIC_API_KEY']
-        if self.controls.get('missing_openai_key'): del self.secrets['OPENAI_API_KEY']
         if self.controls.get('missing_anthropic_key'): del self.secrets['ANTHROPIC_API_KEY']
         self.workflow = workflow
         self.part = part
@@ -401,7 +399,7 @@ def behavioral_tests(workflow, publisher, verifier):
             require(bool(f.events_of(selected)) if selected else not f.job_ran, 'manual selection did not run its part')
             require(not f.events_of(other), 'manual selection ran another producer')
             require(bool(f.events_of('go-catalog-fetch')) == (part == 'catalogs'), 'the Go catalog refresh follows the catalogs selection')
-            require({e['provider'] for e in f.events_of('model-list-fetch')} == ({'openai', 'anthropic'} if part == 'catalogs' else set()), 'the model list refreshes follow the catalogs selection')
+            require({e['provider'] for e in f.events_of('model-list-fetch')} == ({'anthropic'} if part == 'catalogs' else set()), 'the model list refreshes follow the catalogs selection')
             require(f.expression(workflow['jobs']['watch']['if']) == (part == 'drift'), 'drift selection gate is wrong')
         exercise(workflow, publisher, verifier, 'manual ' + part, selection, part=part)
     exercise(workflow, publisher, verifier, 'scheduled all-parts run', happy, part='', event='schedule')
@@ -446,32 +444,28 @@ def behavioral_tests(workflow, publisher, verifier):
         require(not f.ok, 'catalog failure was hidden')
         require('new-go' in f.remote('home/h82/agents/opencode-go-catalog.json'), 'Synthetic failure blocked the Go snapshot')
     exercise(workflow, publisher, verifier, 'Synthetic failure does not block the Go snapshot', synthetic_failure_keeps_go, part='catalogs', catalog_fetch_fail=True, go_catalog_change=True)
-    for changed, untouched in (('openai', 'anthropic'), ('anthropic', 'openai')):
-        def pi_lock_published(f, changed=changed, untouched=untouched):
-            require(f.ok, 'a successful model list refresh failed the workflow')
-            require('new-' + changed in f.remote(f'home/h82/agents/{changed}-models.json'), f'the {changed} list was not published')
-            require('old-' + untouched in f.remote(f'home/h82/agents/{untouched}-models.json'), f'an unchanged {untouched} list was rewritten')
-            require(any('provider-models-watch' in a for e in f.events_of('verify') if e['scope'] == 'catalogs' for a in e['args']), 'the model list check is not a catalog verification target')
-            log = f.call('--git-dir', str(f.origin), 'log', '--format=%s', f'{f.base}..main').splitlines()
-            require(log == [f'chore(agents): refresh the {changed} model list'], f'the {changed} list needs its own commit: ' + repr(log))
-            verify_before_push(f)
-        exercise(workflow, publisher, verifier, f'a {changed} model list change alone publishes after verification', pi_lock_published, part='catalogs', catalog_change=False, deps_change=False, **{f'pi_{changed}_change': True})
+    def pi_lock_published(f):
+        require(f.ok, 'a successful model list refresh failed the workflow')
+        require('new-anthropic' in f.remote('home/h82/agents/anthropic-models.json'), 'the anthropic list was not published')
+        require(any('provider-models-watch' in a for e in f.events_of('verify') if e['scope'] == 'catalogs' for a in e['args']), 'the model list check is not a catalog verification target')
+        log = f.call('--git-dir', str(f.origin), 'log', '--format=%s', f'{f.base}..main').splitlines()
+        require(log == ['chore(agents): refresh the anthropic model list'], 'the anthropic list needs its own commit: ' + repr(log))
+        verify_before_push(f)
+    exercise(workflow, publisher, verifier, 'an anthropic model list change alone publishes after verification', pi_lock_published, part='catalogs', catalog_change=False, deps_change=False, pi_anthropic_change=True)
     def pi_missing_anthropic(f):
         require(not f.ok, 'a missing Anthropic secret was hidden')
-        require('new-openai' in f.remote('home/h82/agents/openai-models.json'), 'a missing Anthropic secret blocked the OpenAI list')
         require('old-anthropic' in f.remote('home/h82/agents/anthropic-models.json'), 'the Anthropic list changed without its secret')
-        require({e['provider'] for e in f.events_of('model-list-fetch')} == {'openai'}, 'the Anthropic refresh ran without its secret')
+        require(not f.events_of('model-list-fetch'), 'the Anthropic refresh ran without its secret')
         require('::warning::ANTHROPIC_API_KEY is not set' in f.log, 'the missing secret was not named')
-    exercise(workflow, publisher, verifier, 'a missing Anthropic key keeps its list and refreshes the others', pi_missing_anthropic, part='catalogs', catalog_change=False, deps_change=False, pi_openai_change=True, pi_anthropic_change=True, missing_anthropic_key=True)
+    exercise(workflow, publisher, verifier, 'a missing Anthropic key keeps its list', pi_missing_anthropic, part='catalogs', catalog_change=False, deps_change=False, pi_anthropic_change=True, missing_anthropic_key=True)
     def pi_failure_keeps_others(f):
         require(not f.ok, 'a model list failure was hidden')
-        require('old-openai' in f.remote('home/h82/agents/openai-models.json'), 'a failed OpenAI list leaked')
-        require('new-anthropic' in f.remote('home/h82/agents/anthropic-models.json'), 'an OpenAI failure blocked the Anthropic list')
+        require('old-anthropic' in f.remote('home/h82/agents/anthropic-models.json'), 'a failed Anthropic list leaked')
         require('new' in f.remote('home/h82/agents/synthetic-catalog.json') and 'updated dependency' in f.remote('tracked.txt'), 'a model list failure blocked other updates')
-    exercise(workflow, publisher, verifier, 'a model list failure does not block the other updates', pi_failure_keeps_others, pi_openai_change=True, pi_openai_fetch_fail=True, pi_anthropic_change=True)
+    exercise(workflow, publisher, verifier, 'a model list failure does not block the other updates', pi_failure_keeps_others, pi_anthropic_change=True, pi_anthropic_fetch_fail=True)
     def pi_secrets_scoped(f):
         runs = {e['provider']: e['secrets'] for e in f.events_of('model-list-fetch')}
-        require(runs == {'openai': ['OPENAI_API_KEY'], 'anthropic': ['ANTHROPIC_API_KEY']}, 'each model list step must see only its own key: ' + repr(runs))
+        require(runs == {'anthropic': ['ANTHROPIC_API_KEY']}, 'each model list step must see only its own key: ' + repr(runs))
     exercise(workflow, publisher, verifier, 'each model list step sees only its own provider key', pi_secrets_scoped, part='catalogs', catalog_change=False, deps_change=False)
     def dependency_failure(f):
         require(not f.ok, 'dependency failure was hidden')

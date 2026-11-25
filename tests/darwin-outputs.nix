@@ -283,7 +283,7 @@ let
         subprocess.run(argv, check=True)
         PY
           done
-          grep -qx 'FAKE-CANARY openai' "$secret_home/.local/state/cli-auth/openai_api_key" \
+          grep -qx 'FAKE-CANARY anthropic' "$secret_home/.local/state/cli-auth/anthropic_api_key" \
             && test -w "$secret_home/.config/gh/hosts.yml" \
             && test -w "$secret_home/.config/glab-cli/config.yml" \
             || bad "fixture activation did not publish the provider key and writable CLI config"

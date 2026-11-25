@@ -172,7 +172,6 @@ in
         ${authSync} --opencode ${opencode}/bin/opencode \
           --credential synthetic=${lib.escapeShellArg "${keyDirectory}/synthetic_api_key"} \
           --credential opencode-go=${lib.escapeShellArg "${keyDirectory}/opencode_go_api_key"} \
-          --credential openai=${lib.escapeShellArg "${keyDirectory}/openai_api_key"} \
           --credential anthropic=${lib.escapeShellArg "${keyDirectory}/anthropic_api_key"}
       fi
     ''

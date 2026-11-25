@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert settings['extensions'].count(quality_extension) == 1
 
     listed = [f'{provider}/{row["id"]}'
-              for provider in ('openai', 'anthropic')
+              for provider in ('anthropic',)
               for row in json.loads((agents / f'{provider}-models.json').read_text())['models']]
     selected = settings['enabledModels']
     assert settings['defaultProvider'] == 'synthetic'

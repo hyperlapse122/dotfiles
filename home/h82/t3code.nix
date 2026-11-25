@@ -344,8 +344,7 @@ in
   home.activation = lib.mkIf t3 (
     {
       t3codeInstructions =
-        lib.hm.dag.entryAfter
-          [ "t3codeSettings" "t3codeClientSettings" "agentInstructions" "codexSettings" ]
+        lib.hm.dag.entryAfter [ "t3codeSettings" "t3codeClientSettings" "agentInstructions" ]
           ''
             if [[ ! -v DRY_RUN ]]; then
               install -d -m 700 "${config.home.homeDirectory}/.t3/userdata/instructions"

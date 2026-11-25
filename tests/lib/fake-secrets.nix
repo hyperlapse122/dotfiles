@@ -53,7 +53,7 @@ pkgs.runCommand "fake-non-nixos-secrets"
     printf '%s\n' "$recipient" > $out/recipient.txt
 
     printf 'github_token: FAKE-CANARY-github\ngitlab_token: FAKE-CANARY-gitlab\njpi_token: FAKE-CANARY-jpi\n' > git-hosting.yaml
-    printf 'tokscale_token: FAKE-CANARY tokscale\nsynthetic_api_key: FAKE-CANARY pi\nexa_api_key: FAKE-CANARY exa\nopenrouter_api_key: FAKE-CANARY openrouter\nopencode_go_api_key: FAKE-CANARY opencode go\nopenai_api_key: FAKE-CANARY openai\nanthropic_api_key: FAKE-CANARY anthropic\n' > provider-services.yaml
+    printf 'tokscale_token: FAKE-CANARY tokscale\nsynthetic_api_key: FAKE-CANARY pi\nexa_api_key: FAKE-CANARY exa\nopenrouter_api_key: FAKE-CANARY openrouter\nopencode_go_api_key: FAKE-CANARY opencode go\nanthropic_api_key: FAKE-CANARY anthropic\n' > provider-services.yaml
     printf 'docker_token: FAKE-CANARY-docker\n' > docker-registry.yaml
     cat git-hosting.yaml provider-services.yaml > tokens.yaml
     for name in git-hosting provider-services docker-registry tokens; do

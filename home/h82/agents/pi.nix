@@ -98,7 +98,6 @@ let
     inherit pkgs;
     syntheticKeyFile = "${keyDirectory}/synthetic_api_key";
     exaKeyFile = "${keyDirectory}/exa_api_key";
-    openaiKeyFile = "${keyDirectory}/openai_api_key";
     anthropicKeyFile = "${keyDirectory}/anthropic_api_key";
   };
   subagents = import ../../../packages/pi-subagents.nix { inherit pkgs pi; };
@@ -157,7 +156,6 @@ in
         if [[ ! -v DRY_RUN ]]; then
           ${state}/bin/pi-state --agent ${lib.escapeShellArg agent} --auth-only \
             --key ${lib.escapeShellArg "${keyDirectory}/synthetic_api_key"} \
-            --credential ${lib.escapeShellArg "openai=${keyDirectory}/openai_api_key"} \
             --credential ${lib.escapeShellArg "anthropic=${keyDirectory}/anthropic_api_key"}
         fi
       ''

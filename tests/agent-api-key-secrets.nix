@@ -41,13 +41,6 @@ let
       omp = "opencode-go";
     }
     {
-      label = "OpenAI";
-      match = "openai_api";
-      file = "openai_api_key";
-      option = "my.cliAuth.enableOpenaiApiKey";
-      omp = "openai";
-    }
-    {
       label = "Anthropic";
       match = "anthropic_api";
       file = "anthropic_api_key";

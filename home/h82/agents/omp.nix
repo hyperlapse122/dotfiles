@@ -13,7 +13,6 @@ let
   providerKeyFiles = {
     synthetic = "synthetic_api_key";
     openrouter = "openrouter_api_key";
-    openai = "openai_api_key";
     anthropic = "anthropic_api_key";
     opencode-go = "opencode_go_api_key";
     exa = "exa_api_key";
