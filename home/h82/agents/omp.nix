@@ -28,15 +28,34 @@ in
     package = import ../../../packages/omp.nix { inherit pkgs; };
     settings = {
       modelRoles = {
-        default = "opencode-go/glm-5.3-flash:max";
-        smol = "opencode-go/deepseek-v4.1-flash:max";
-        slow = "opencode-go/glm-5.3:max";
-        judge = "openrouter/cloudflare/clef-flash:auto";
-        vision = "opencode-go/kimi-k3.1-pro:auto";
-        dictation = "openrouter/openai/whisper-large-v3";
-        speech = "local/phonon-31m";
+        default = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:high";
+        smol = "synthetic/hf:openai/gpt-oss-120b:low";
+        slow = "synthetic/hf:moonshotai/Kimi-K3.1-Pro:max";
+        vision = "synthetic/hf:thinkingmachines/Inkling-2-Mini:low";
+        plan = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:max";
+        commit = "synthetic/hf:openai/gpt-oss-120b:low";
+        tiny = "synthetic/hf:openai/gpt-oss-120b:low";
+        memory = "synthetic/hf:thinkingmachines/Inkling-2-Mini:low";
+        task = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:max";
+        advisor = "synthetic/hf:deepseek-ai/DeepSeek-V4.1-Flash-1017:max";
+        widget = "synthetic/hf:openai/gpt-oss-120b:low";
         image = "openrouter/bytedance-seed/seedream-5-5";
-        web = "web/parallel";
+        web = "web/synthetic";
+        speech = "local/phonon-31m";
+        dictation = "local/whisper-large-v3-turbo";
+        judge = "ollama/clef-flash:latest,synthetic/hf:thinkingmachines/Inkling-2-Mini";
+      };
+      retry.fallbackChains = {
+        image = [ ];
+        web = [ ];
+        speech = [ ];
+        dictation = [ ];
+        judge = [ "synthetic/hf:thinkingmachines/Inkling-2-Mini" ];
+      };
+      mnemopi = {
+        embeddingModel = "qwen3-embedding:8b";
+        embeddingApiUrl = "http://127.0.0.1:11434/v1";
+        embeddingQueryPrefix = "Instruct: Given a question, retrieve stored memories that answer it\nQuery: ";
       };
       defaultThinkingLevel = "auto";
       composer.shape = "band";
