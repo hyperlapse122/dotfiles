@@ -28,6 +28,12 @@ Turning a feature off and disabling one thing that feature produces are differen
 
 Jobs that a finished run skips by design, such as the Nix jobs on a docs-only change, are part of that run's result rather than missing evidence. Readiness is judged on evidence in this sense rather than on a quiet period, because a quiet period measures that the pull request stopped moving, not that anything checked it.
 
+## Scheduled maintenance
+
+**Candidate** — the change a scheduled maintenance run prepares in its own worktree before publication: refreshed dependency pins, catalog snapshots, or model lists. A candidate is verified before it is pushed, catalogs publish before dependencies, and a failed candidate is left on a reconciliation branch instead of main.
+
+**Reconciliation PR** — the pull request opened when a maintenance run cannot publish its candidate, carrying that candidate for a human to repair. It is built from the main the run started with, so its failure logs can describe a base main has since replaced; a later failing run updates it, and it never merges itself.
+
 ## Signing key
 
 **Card stub** — a keyring entry that records where a private key lives rather than holding it. The key material sits on a hardware token and cannot be read back out, so the entry names the token instead. Signing and decryption still work through it, and a listing distinguishes a stub from a real secret key, which matters because operations that move a key onto a token consume the local copy: once every entry is a stub, there is nothing left to move onto the next token.
