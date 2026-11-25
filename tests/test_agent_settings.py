@@ -820,7 +820,7 @@ class TomlTests(unittest.TestCase):
         self.seed('model = "unterminated\n')
         result = self.run_script()
         self.assertEqual(result.returncode, 1)
-        self.assertIn('Example settings merge failed', result.stderr)
+        self.assertIn('Test settings merge failed', result.stderr)
         self.assertIn(str(self.settings), result.stderr)
         self.assertNotIn('Traceback', result.stderr)
         self.assertEqual(self.settings.read_text(), 'model = "unterminated\n')
