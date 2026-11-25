@@ -180,7 +180,7 @@ if args and args[0] in ('fmt', 'flake', 'build'):
             sys.exit(1)
         os.killpg(os.getpgrp(), signal.SIGKILL)
     fail = c.get('verify_fail')
-    if fail == scope or (scope == 'dependencies' and fail == args[0]) or (fail == 'after-rebase' and round > 1): sys.exit(1)
+    if fail == scope or (scope == 'dependencies' and fail == args[0]) or (fail == 'after-rebase' and round > 1) or (fail == 'before-rebase' and round == 1): sys.exit(1)
     if c.get('interaction_fail') and scope == 'dependencies' and 'new' in pathlib.Path('home/h82/agents/synthetic-catalog.json').read_text(): sys.exit(1)
     event('verified-command', scope=scope, command=args[0], sha=git('rev-parse', 'HEAD'))
     sys.exit(0)
@@ -469,6 +469,7 @@ def behavioral_tests(workflow, publisher, verifier):
     exercise(workflow, publisher, verifier, 'each model list step sees only its own provider key', pi_secrets_scoped, part='catalogs', catalog_change=False, deps_change=False)
     def dependency_failure(f):
         require(not f.ok, 'dependency failure was hidden')
+        require(f.steps['publish_dependencies']['outputs'].get('failure_stage') == 'verification', 'unchanged-main failure lost its verification stage')
         require('new' in f.remote('home/h82/agents/synthetic-catalog.json'), 'dependency failure blocked catalog publication')
         require('base dependency' in f.remote('tracked.txt'), 'failed dependency leaked to main')
         require(any(e['args'][:2] == ['pr', 'create'] for e in f.events_of('gh')), 'dependency failure did not reconcile')
@@ -529,6 +530,14 @@ def behavioral_tests(workflow, publisher, verifier):
         require('concurrent' in f.remote('concurrent.txt'), 'concurrent main commit lost')
         verify_before_push(f)
     exercise(workflow, publisher, verifier, 'diverged main is rebased and reverified', diverged, part='catalogs', move_fetch=2)
+    def superseded_failure(f):
+        require(f.ok, 'a failure against a superseded base was not retried')
+        require(not any(e['args'][:2] in (['pr', 'create'], ['pr', 'edit']) for e in f.events_of('gh')), 'superseded failure reached reconciliation')
+        rounds = {e['round'] for e in f.events_of('verify') if e['scope'] == 'dependencies'}
+        require(rounds == {1, 2}, 'superseded failure was not reverified exactly once: ' + repr(rounds))
+        require('concurrent' in f.remote('concurrent.txt'), 'concurrent main commit was lost')
+        verify_before_push(f)
+    exercise(workflow, publisher, verifier, 'a failure against a superseded base retries instead of reconciling', superseded_failure, part='dependencies', move_fetch=2, verify_fail='before-rebase')
     def rebased_failure(f):
         require(not f.ok, 'post-rebase failure was hidden')
         require(not f.events_of('push-attempt'), 'failed rebased candidate reached push')
@@ -618,15 +627,20 @@ def mutation_tests(workflow, publisher, verifier):
     ]:
         require(before in verifier, 'missing bounded verification mutation anchor: ' + name)
         caught(name, workflow, publisher, verifier.replace(before, after, 1), bounded_verification, expected, part='dependencies', bounded_disk=True)
-    initial = 'verify\nsync_main\n'
+    initial = 'if verify; then'
     require(initial in publisher, 'missing initial verification mutation anchor')
-    caught('initial verification removed', workflow, publisher.replace(initial, 'sync_main\n', 1), verifier, verify_before_push, 'pushed SHA was not verified', part='catalogs')
+    caught('initial verification removed', workflow, publisher.replace(initial, 'if true; then', 1), verifier, verify_before_push, 'pushed SHA was not verified', part='catalogs')
     anchor = '      verify\n'
     require(anchor in publisher, 'missing rebase verification mutation anchor')
     caught('post-rebase verification removed', workflow, publisher.replace(anchor, '      :\n'), verifier, verify_before_push, 'pushed SHA was not verified', part='catalogs', move_fetch=2)
     call = 'bash "$helpers/ci-update-verify" "$scope" "$logs/$attempt"'
     require(call in publisher, 'missing verification failure mutation anchor')
     caught('verification failure ignored', workflow, publisher.replace(call, call + ' || true'), verifier, no_push, 'failed verification reached push', part='catalogs', verify_fail='catalogs')
+    retry = 'before=$(git rev-parse HEAD)\nsync_main\nif [ "$verified" -eq 0 ] && [ "$(git rev-parse HEAD)" = "$before" ]; then\n  record_stage verification\n  echo \'Verification failed and main has not moved; nothing newer to retry against.\'\n  exit 1\nfi'
+    require(retry in publisher, 'missing superseded-base retry mutation anchor')
+    def stale_retried(f):
+        require(f.ok, 'a failure against a superseded base was not retried')
+    caught('superseded-base retry removed', workflow, publisher.replace(retry, 'if [ "$verified" -eq 0 ]; then\n  record_stage verification\n  exit 1\nfi\nsync_main', 1), verifier, stale_retried, 'a failure against a superseded base was not retried', part='dependencies', move_fetch=2, verify_fail='before-rebase')
     wf = copy.deepcopy(workflow)
     step = next(s for s in wf['jobs']['update-dependencies']['steps'] if s.get('id') == 'publish_catalogs')
     step['if'] = step['if'].replace("steps.catalog.outputs.changed == 'true'", "steps.catalog.outputs.changed != 'unknown'")

@@ -42,8 +42,17 @@ sync_main() {
   fi
 }
 
-verify
+verified=0
+if verify; then
+  verified=1
+fi
+before=$(git rev-parse HEAD)
 sync_main
+if [ "$verified" -eq 0 ] && [ "$(git rev-parse HEAD)" = "$before" ]; then
+  record_stage verification
+  echo 'Verification failed and main has not moved; nothing newer to retry against.'
+  exit 1
+fi
 if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]; then
   echo 'No candidate commits remain after synchronization.'
   exit 0
